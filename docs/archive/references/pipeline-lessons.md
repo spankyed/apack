@@ -235,6 +235,39 @@ Rules that pay for themselves:
   repo-wide rule mandating the fixture was then built on that premise and deleted (`487a8c115`). "X is the
   whole point" cannot be checked; "Y fails when Z" can.
 
+## A stall that was a disk
+
+On 2026-11-11 `test:native` failed four local runs of five in the Linux test container, each time on a
+different case and each time with the same sentence: *stalled: its worker's process tree used no CPU for
+120s*. Nothing in that sentence says what the tree was waiting for, and reading the cases found nothing,
+because the cases were not at fault.
+
+**What a stall could not say.** A process waiting on a disk, a file event that never arrived and a child that
+hung all spend no CPU and write nothing. The report now carries what tells them apart: the waits the test had
+not met, in the words the test gave them (`settles` records its last failure, `unmetWaits`); what its event
+loop held open; and each process of the tree with its state and, on Linux, where each of its threads sleeps
+in the kernel (`describeTree`).
+
+**What it said the first time it was asked.** The only process in the tree was the test's own worker, asleep
+in `btrfs_…`, with no wait of its own unmet: blocked in the filesystem. The container's disk is an image on an
+external drive (`docs/references/guides/docker-storage.md`), and the native cases write each captured
+compiler to it — unwritten data rose to 380–660 MB and fell to nothing about once a minute through a run.
+While the filesystem takes a flush that size, whatever touches it waits: three read-only `docker exec`
+probes of the container took 30, 43 and 63 s where the rest took under one, and a one-byte durable write on
+that disk takes 1–2 s at rest and took 13 s behind 1.5 GB of unwritten data.
+
+**The rule had been a clock after all.** *No CPU and no output for 120 s* is a measure of the tree only while
+the machine answers it. So a watch asks, after every reading that found no work, whether the tree is waiting
+on storage (`storageHold`: a process in the uninterruptible state, or a thread asleep in a function of a
+filesystem that lives on a disk or of the layer that queues writes to one) and does not count the interval
+if it is. Held to `STORAGE_ALLOWANCE_FACTOR` idle windows between two pieces of work, because a disk that
+never answers is a run that never ends. Asked of a child writing 1.2 GB in the container, it found the child
+held in 33 of 92 looks; asked while the child only slept, in none of 79.
+
+**What it did not fix.** The next run allowed 44 s of storage waits and failed anyway, on a watcher case that
+ran 43 minutes, spent 22 of them on CPU, printed nothing and then went idle with 1,767 file watches open
+and nothing of its own unmet. That is a second failure, which the old sentence had reported as the same one.
+
 ## A stamp directory has one writer
 
 **The rule.** A cache of "this passed against these inputs" is only sound while one process writes it. Two

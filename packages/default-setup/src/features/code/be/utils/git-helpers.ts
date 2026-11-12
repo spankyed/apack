@@ -1,16 +1,16 @@
 import type { Reply } from '@apackdev/sdk/events';
 import type { OutgoingCodeEvents } from '../contract.ts'
 import { answer } from '../answer.ts'
-import { GitRepository } from '../services/git.ts'
+import type { AppGitRepository } from '../services/app-git-repository.ts'
 
 type ErrorEventType = 'commit.ERROR_RECEIVED' | 'pr.ERROR'
 
 /** Whether the system has a repository; without one, says so to whoever asked (\`answer\`) */
-export function requireGitRepository<T extends { gitRepository: GitRepository | null }>(
+export function requireGitRepository<T extends { gitRepository: AppGitRepository | null }>(
   context: T,
   reply: Reply<OutgoingCodeEvents> | undefined,
   errorEventType: ErrorEventType = 'commit.ERROR_RECEIVED'
-): context is T & { gitRepository: GitRepository } {
+): context is T & { gitRepository: AppGitRepository } {
   if (!context.gitRepository) {
     const message = 'No directory selected. Please select a directory first.'
 

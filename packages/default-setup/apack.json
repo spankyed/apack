@@ -659,6 +659,12 @@
             "logGitCommands": {
               "type": "boolean"
             },
+            "trustedRepositories": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "terminalScripts": {
               "type": "array",
               "items": {
@@ -736,6 +742,7 @@
             "autoFetchRemote",
             "autoFetchIntervalSeconds",
             "logGitCommands",
+            "trustedRepositories",
             "terminalScripts",
             "terminalTargets",
             "showStashes",
@@ -814,6 +821,7 @@
           "autoFetchRemote": false,
           "autoFetchIntervalSeconds": 180,
           "logGitCommands": false,
+          "trustedRepositories": [],
           "terminalScripts": [
             {
               "id": "ts_default_1",

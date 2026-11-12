@@ -1,9 +1,13 @@
 # The git engine in a repository of its own
 
-Status: deferred by request, 2026-11-11. Nothing here has started, and deferral is not permission to start.
-Revisit when the [conditions for starting](#conditions-for-starting) hold. What is added to the engine once it
-has moved is a separate plan, [five additions to the git engine](git-engine-additions.md), which starts after
-this one is done.
+Status: done, 2026-11-11. The engine is [spankyed/apack-git](https://github.com/spankyed/apack-git), the pack
+depends on it through `vendor/apack-git`, and no engine source remains here
+([the git engine](../../references/git-engine.md)). The last "Done when", the sibling's CI on macOS, Linux and
+Windows at the pinned commit, holds at `84d652c`.
+
+What is added to the engine now that it has moved is
+[five additions to the git engine](../../plans/deferred/git-engine-additions.md), and after it
+[version 1](../../plans/deferred/git-engine-version-1.md).
 
 Compiled 2026-11-11 from `master` at `292ff4a3dd`. File names, line counts and what other packages do are as
 of that day: read them again before starting.

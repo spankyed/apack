@@ -4,8 +4,8 @@ import { viewWrites, writeAnswered, writeSent, writing, type ViewWrites } from '
 import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
-import { withStaged, withUnstaged } from './staging.ts';
-import type { CommitFailure, ConflictKind, DiffHunk, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
+import { withStaged, withUnstaged } from 'apack-git/staging';
+import type { CommitFailure, ConflictKind, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -47,6 +47,15 @@ export interface CodeCommitContext {
   selectedGitFile: GitStatusFile | null
   commitMessage: string
   revertDialogFile: GitStatusFile | null
+  /**
+   * Which of what a discard would remove cannot be brought back, as last asked: kept with the rows it was asked
+   * of, so a dialog shows only the answer to its own question
+   */
+  discardPreview: { paths: string[]; notKept: string[] } | null
+  /** The last discard that kept what it removed, which the panel offers to undo until it is dismissed or undone */
+  lastDiscard: { id: string; paths: string[]; notKept: string[] } | null
+  /** What undoing a discard left as it was, because it had changed or been made again since */
+  discardLeft: string[]
   availableBranches: string[]
   branchInput: string
   isCheckingOutBranch: boolean
@@ -66,7 +75,7 @@ export interface CodeCommitContext {
   /** What can be done about the sign-in the remote asked for when fetching stopped */
   fetchSignIn: SignInHelp | null
   /** What is known of the failure `gitError` words: the command to run again, and the sign-in a remote asked for */
-  gitFailure: Pick<CommitFailure, 'during' | 'signIn'> | null
+  gitFailure: Pick<CommitFailure, 'during' | 'signIn' | 'trust'> | null
   /** Whether the GitHub CLI was asked to give git its sign-in and has not answered */
   isSettingUpSignIn: boolean
   /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
@@ -180,8 +189,15 @@ export type Event =
   | { type: 'commit.FILES_STAGED'; paths: string[] }
   | { type: 'commit.FILES_UNSTAGED'; paths: string[] }
   | { type: 'commit.COMMIT_SUCCESS'; message: string }
-  | { type: 'commit.FILE_REVERTED'; path: string }
-  | { type: 'commit.FILES_REVERTED'; paths: string[] }
+  | { type: 'commit.FILE_REVERTED'; data: { path: string; kept: DiscardKept } }
+  | { type: 'commit.FILES_REVERTED'; data: { paths: string[]; kept: DiscardKept } }
+  | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
+  | { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }
+  | { type: 'commit.UNDO_DISCARD' }
+  | { type: 'commit.DISMISS_DISCARD' }
+  | { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }
+  | { type: 'commit.TRUST_REPOSITORY' }
+  | { type: 'commit.REPOSITORY_TRUSTED'; data: { repository: string } }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.SET_UP_SIGN_IN'; host: string }
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
@@ -360,11 +376,43 @@ export const commitState = setup({
       selectedGitFile: null,
     }),
 
-    toggleRevertDialog: assign({
-      revertDialogFile: ({ event }) => {
-        const ev = event as { type: 'commit.TOGGLE_REVERT_DIALOG'; file?: GitStatusFile }
-        return ev.file || null
+    toggleRevertDialog: enqueueActions(({ event, enqueue }) => {
+      const { file } = event as { type: 'commit.TOGGLE_REVERT_DIALOG'; file?: GitStatusFile }
+      enqueue.assign({ revertDialogFile: file || null })
+      // What of it cannot be brought back is asked for as the dialog opens, and said in it
+      if (file) enqueue(() => { sendToSystem('code', { type: 'commit.PREVIEW_DISCARD', paths: [file.path] }) })
+    }),
+
+    previewDiscard: ({ event }) => {
+      const { paths } = event as { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
+      sendToSystem('code', { type: 'commit.PREVIEW_DISCARD', paths })
+    },
+
+    setDiscardPreview: assign({
+      discardPreview: ({ event }) => (event as { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }).data,
+    }),
+
+    /** A discard that kept something is offered to be undone; one that kept nothing leaves the last offer as it was */
+    setLastDiscard: assign(({ context, event }) => {
+      const { data } = event as { type: 'commit.FILE_REVERTED'; data: { path: string; kept: DiscardKept } } | { type: 'commit.FILES_REVERTED'; data: { paths: string[]; kept: DiscardKept } }
+      const paths = 'paths' in data ? data.paths : [data.path]
+      return {
+        lastDiscard: data.kept.id ? { id: data.kept.id, paths, notKept: data.kept.notKept } : context.lastDiscard,
+        discardLeft: [],
+        discardPreview: null,
       }
+    }),
+
+    undoDiscard: ({ context }) => {
+      if (context.lastDiscard) sendToSystem('code', { type: 'commit.RESTORE_DISCARDED', id: context.lastDiscard.id })
+    },
+
+    dismissDiscard: assign({ lastDiscard: null, discardLeft: [] }),
+
+    /** Undone: the offer goes, and what was left alone is said until it is dismissed */
+    handleDiscardRestored: assign(({ context, event }) => {
+      const { id, left } = (event as { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }).data
+      return context.lastDiscard?.id === id ? { lastDiscard: null, discardLeft: left } : {}
     }),
 
     revertFile: ({ context }) => {
@@ -486,8 +534,8 @@ export const commitState = setup({
         return ev.data.message
       },
       gitFailure: ({ event }) => {
-        const { during, signIn } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
-        return { during, signIn }
+        const { during, signIn, trust } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
+        return { during, signIn, trust }
       },
       isSettingUpSignIn: false,
       isApplyingHunk: false,
@@ -501,6 +549,15 @@ export const commitState = setup({
     }),
 
     dismissError: assign({ gitError: null, gitFailure: null }),
+
+    /** The user trusts the repository the panel was refused in: said to the backend, which remembers it */
+    trustRepository: ({ context }) => {
+      const repository = context.gitFailure?.trust?.repository
+      if (repository) sendToSystem('code', { type: 'commit.TRUST_REPOSITORY', repository })
+    },
+
+    /** Trusted: the refusal goes, and the status that was never read is asked for */
+    repositoryTrusted: assign({ gitError: null, gitFailure: null }),
 
     /** Opens an untracked folder's row, asking for what is in it, or closes it */
     toggleFolder: enqueueActions(({ context, event, enqueue }) => {
@@ -777,6 +834,9 @@ export const commitState = setup({
     selectedGitFile: null,
     commitMessage: '',
     revertDialogFile: null,
+    discardPreview: null,
+    lastDiscard: null,
+    discardLeft: [],
     availableBranches: [],
     branchInput: '',
     isCheckingOutBranch: false,
@@ -890,10 +950,31 @@ export const commitState = setup({
           actions: 'revertFiles'
         },
         'commit.FILE_REVERTED': {
-          actions: ['handleFileReverted', 'refreshGitStatus']
+          actions: ['handleFileReverted', 'setLastDiscard', 'refreshGitStatus']
         },
         'commit.FILES_REVERTED': {
-          actions: 'refreshGitStatus'
+          actions: ['setLastDiscard', 'refreshGitStatus']
+        },
+        'commit.PREVIEW_DISCARD': {
+          actions: 'previewDiscard'
+        },
+        'commit.DISCARD_PREVIEWED': {
+          actions: 'setDiscardPreview'
+        },
+        'commit.UNDO_DISCARD': {
+          actions: 'undoDiscard'
+        },
+        'commit.DISMISS_DISCARD': {
+          actions: 'dismissDiscard'
+        },
+        'commit.DISCARD_RESTORED': {
+          actions: ['handleDiscardRestored', 'refreshGitStatus']
+        },
+        'commit.TRUST_REPOSITORY': {
+          actions: 'trustRepository'
+        },
+        'commit.REPOSITORY_TRUSTED': {
+          actions: ['repositoryTrusted', 'refreshGitStatus']
         },
         'commit.RESOLVE_CONFLICT': {
           actions: 'resolveConflict'

@@ -20,7 +20,7 @@
 // names a path under `@apackdev/source` and nothing else, so `publishedManifest` drops it and no pack can resolve
 // it. This is repo-internal test support, not something a pack author reaches for.
 
-import { fromNow, processWork, workSignal } from '../progress.ts';
+import { fromNow, processWork, trackWait, workSignal } from '../progress.ts';
 
 /**
  * How long a waiter gives up after.
@@ -109,11 +109,23 @@ export function _whenSatisfied<T>(
  *
  * A poll the guard outlived keeps trying until its file's process exits: it holds no vitest hook to stop on, since
  * this module ships in the SDK, whose manifest does not declare vitest. Its timer is unref'd, so it holds nothing open.
+ *
+ * **What it is still waiting for is kept where the guard can read it** (`unmetWaits`). A wait with no clock of its
+ * own never fails by itself, so when the guard ends its test the failure is the guard's, and a guard that could say
+ * only that nothing happened would leave out the one sentence the test wrote about what was meant to.
  */
 export function settles<T>(check: () => T | Promise<T>, { interval = 50 }: { interval?: number } = {}): Promise<T> {
   return new Promise<T>((resolve) => {
+    const wait = trackWait();
     const attempt = async (): Promise<void> => {
-      try { resolve(await check()); } catch { setTimeout(() => { void attempt(); }, interval).unref(); }
+      try {
+        const found = await check();
+        wait.met();
+        resolve(found);
+      } catch (error) {
+        wait.unmet(error);
+        setTimeout(() => { void attempt(); }, interval).unref();
+      }
     };
     void attempt();
   });

@@ -33,6 +33,11 @@ const FIXTURES: Record<string, string> = {
       const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
       try { await new Promise((resolve) => child.on('exit', resolve)); } finally { child.kill('SIGKILL'); }
     });`,
+  // A wait with no clock of its own, for something that never happens: what the test says it is waiting for is
+  // the one sentence a stall would otherwise leave out
+  'unmet.spec.ts': `import { expect, it } from 'vitest';
+    import { settles } from ${JSON.stringify(path.join(REPO_ROOT, 'packages/apack-sdk/src/testing/waiting.ts'))};
+    it('waits for what never happens', async () => { await settles(() => expect(0, 'the watcher started no rebuild').toBe(1)); });`,
   // Longer on the clock than vitest's own 5s default, working throughout: what a busy machine does to a test
   'slow.spec.ts': `import { it } from 'vitest';
     it('is slow and working', async () => {
@@ -105,7 +110,7 @@ const outcome = (report: Report, file: string, test: string) =>
 describe('with the CPU ceiling on', () => {
   let report: Report;
   beforeAll(async () => {
-    report = await runFixtures('ceiling', ['awaits.spec.ts', 'faked.spec.ts', 'hook.spec.ts', 'child.spec.ts', 'slow.spec.ts', 'spin.spec.ts', 'concurrent.spec.ts']);
+    report = await runFixtures('ceiling', ['awaits.spec.ts', 'faked.spec.ts', 'hook.spec.ts', 'child.spec.ts', 'unmet.spec.ts', 'slow.spec.ts', 'spin.spec.ts', 'concurrent.spec.ts']);
   });
 
   it('fails a test that awaits forever, as itself, and runs the next one', () => {
@@ -125,6 +130,25 @@ describe('with the CPU ceiling on', () => {
 
   it('counts a child that sleeps as no progress', () => {
     expect(outcome(report, 'child.spec.ts', 'waits on a child that sleeps')!.failureMessages.join('\n')).toContain('stalled');
+  });
+
+  // Unix alone: Windows has no listing that says what state a process is in
+  it.skipIf(process.platform === 'win32')('says what each process the stalled test started was doing', () => {
+    const said = outcome(report, 'child.spec.ts', 'waits on a child that sleeps')!.failureMessages.join('\n');
+    // The child the test is waiting on, asleep rather than waiting on a disk, with the command it was started as
+    expect(said).toMatch(/pid \d+ \(parent \d+\) S\S*, \S+ CPU in \S+.*: .*setInterval/);
+  });
+
+  it('says what a stalled test was still waiting for, in the words the test gave it', () => {
+    const file = report.testResults.find((result) => result.name.endsWith('unmet.spec.ts'))!;
+    expect(file.assertionResults, `the fixture did not load: ${file.message}`).not.toEqual([]);
+    const said = outcome(report, 'unmet.spec.ts', 'waits for what never happens')!.failureMessages.join('\n');
+    expect(said).toContain('stalled');
+    expect(said).toMatch(/Still waiting for:\n {2}the watcher started no rebuild.*\(tried \d+ times over \d+s\)/);
+  });
+
+  it('says so when a stalled test had no wait of its own', () => {
+    expect(outcome(report, 'awaits.spec.ts', 'awaits forever')!.failureMessages.join('\n')).toContain('No wait of its own was unmet');
   });
 
   it('leaves a test alone that is slow on the clock and working', () => {

@@ -137,6 +137,15 @@ describe('a bounded spawn that stops making progress', () => {
     expect(result.ms).toBeLessThan(15_000);
   });
 
+  // Unix alone: Windows has no listing that says what state a process is in
+  it.skipIf(process.platform === 'win32')('says what each process of a stalled tree was doing, before it ends them', async () => {
+    const [command, args] = node('setInterval(() => {}, 5) // the-one-that-waits');
+    const result = await boundedSpawn(command, args, 30_000, { idleMs: 2_000 });
+    expect(result.stalled).toBe(true);
+    // The process it started, asleep on an event rather than waiting on a disk, and what it was running
+    expect(result.output).toMatch(/Its process tree when it was found doing nothing[^\n]*\n {2}pid \d+ \(parent \d+\) S\S*, \S+ CPU in \S+[^\n]*the-one-that-waits/);
+  });
+
   it('counts output as progress for a tree that is only waiting', async () => {
     const [command, args] = node('let n = 0; const t = setInterval(() => { console.log(n); if (++n === 8) clearInterval(t); }, 500)');
     const result = await boundedSpawn(command, args, 30_000, { idleMs: 1_500 });

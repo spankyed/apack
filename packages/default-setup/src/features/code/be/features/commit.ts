@@ -5,8 +5,8 @@ import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
-import { GitRepository, NOTHING_CHANGED, StashConflictError, changedAnything } from '../services/git.ts'
-import { GitError } from '../services/git-errors.ts'
+import { GitError, NOTHING_CHANGED, StashConflictError, UntrustedError, changedAnything } from 'apack-git'
+import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { setUpGitSignIn } from '../services/gh-cli.ts'
 import { isHostName } from '../services/sign-in.ts'
 import type { CommitFailure, GitProgress, OperationMove, RepositoryChange } from '../types.ts'
@@ -19,7 +19,7 @@ const surfaceId = 'code' as const
 // Outgoing events to frontend
 
 export interface CodeCommitSystemContext {
-  gitRepository: GitRepository | null
+  gitRepository: AppGitRepository | null
   /** The code system, which routes a `pr.*` event to its pull request child */
   code?: AnyActorRef
 }
@@ -33,6 +33,9 @@ export type Event =
   | { type: 'commit.GET_CURRENT_BRANCH' }
   | { type: 'commit.REVERT_FILE'; path: string }
   | { type: 'commit.REVERT_FILES'; paths: string[] }
+  | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
+  | { type: 'commit.RESTORE_DISCARDED'; id: string }
+  | { type: 'commit.TRUST_REPOSITORY'; repository: string }
   | { type: 'commit.GET_ALL_BRANCHES' }
   | { type: 'commit.CHECKOUT_BRANCH'; branchName: string }
   | { type: 'commit.PUBLISH_BRANCH' }
@@ -58,7 +61,7 @@ export type Event =
   | { type: 'commit.LOG_LIST' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
-  | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository }
+  | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository }
   | { type: 'commit.GIT_STATUS_CHANGED' }
   /** A hint that the repository changed. `reconcile` says it comes from someone who knows a change is likely, not from a file event */
   | { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED'; reconcile?: boolean; byWindow?: boolean }
@@ -72,11 +75,16 @@ const progressTo = (reply: Parameters<typeof answer>[0], during: 'push' | 'pull'
 /** What the panel is told of a command that failed: git's words, and why it failed where git said */
 function failureOf(error: unknown): CommitFailure {
   const message = error instanceof Error ? error.message : String(error)
-  return { message, ...(error instanceof GitError && error.code && { code: error.code }) }
+  return {
+    message,
+    ...(error instanceof GitError && error.code && { code: error.code }),
+    // Refused before git was run: what the repository would have had it run, for the panel to ask about
+    ...(error instanceof UntrustedError && error.repository && { trust: { repository: error.repository, asks: error.asks } }),
+  }
 }
 
 /** The same for a push or a pull, which the panel can run again, with what can be done when the remote asked for a sign-in */
-async function remoteFailureOf(error: unknown, during: 'push' | 'pull', repository: GitRepository): Promise<CommitFailure> {
+async function remoteFailureOf(error: unknown, during: 'push' | 'pull', repository: AppGitRepository): Promise<CommitFailure> {
   const failure = failureOf(error)
   const signIn = failure.code === 'authentication' ? await repository.signInHelp().catch(() => undefined) : undefined
   return { ...failure, during, ...(signIn && { signIn }) }
@@ -86,7 +94,7 @@ async function remoteFailureOf(error: unknown, during: 'push' | 'pull', reposito
  * Fetches from the remote when a fetch is due, behind whoever asked, and has the repository checked once it has:
  * what the fetch brought is then announced like any other change. Nobody waits on the network for an answer.
  */
-function fetchInBackground(repository: GitRepository, commit: { send(event: Event): void }): void {
+function fetchInBackground(repository: AppGitRepository, commit: { send(event: Event): void }): void {
   const suspended = repository.isAutoFetchSuspended
   void repository.fetchIfDue().then((fetched) => {
     // What a fetch brought is one thing to announce. That fetching has stopped, or started again, is another
@@ -101,7 +109,7 @@ export const commitSystem = setup({
   types: {
     context: {} as CodeCommitSystemContext,
     events: {} as Event,
-    input: {} as { baseDirectory: string | null; gitRepository?: GitRepository | null; code?: AnyActorRef }
+    input: {} as { baseDirectory: string | null; gitRepository?: AppGitRepository | null; code?: AnyActorRef }
   },
   actors: {
     /**
@@ -115,15 +123,15 @@ export const commitSystem = setup({
      * from being announced a second time. One check runs at a time, and whatever arrives during it is one more.
      */
     statusRefresh: fromCallback<
-      | { type: 'REFRESH'; repository: GitRepository | null }
-      | { type: 'CHECK'; repository: GitRepository | null; everything: boolean; refreshIndex: boolean; byWindow: boolean }
-      | { type: 'ASKED'; repository: GitRepository | null }
+      | { type: 'REFRESH'; repository: AppGitRepository | null }
+      | { type: 'CHECK'; repository: AppGitRepository | null; everything: boolean; refreshIndex: boolean; byWindow: boolean }
+      | { type: 'ASKED'; repository: AppGitRepository | null }
     >(({ receive, sendBack }) => {
       /**
        * `everything` when there is no watcher's event to go by, and the whole repository is read again;
        * `refreshIndex` when this is a moment git's index may be written at
        */
-      type Request = { repository: GitRepository | null; written: boolean; everything: boolean; refreshIndex: boolean };
+      type Request = { repository: AppGitRepository | null; written: boolean; everything: boolean; refreshIndex: boolean };
       const both = (one: Request, other: Request | undefined): Request => (other?.repository !== one.repository ? one : {
         repository: one.repository, written: one.written || other.written,
         everything: one.everything || other.everything, refreshIndex: one.refreshIndex || other.refreshIndex,
@@ -372,10 +380,10 @@ export const commitSystem = setup({
 
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.revertFile(ev.path).then(() => {
+      context.gitRepository.revertFile(ev.path).then((kept) => {
         answer(reply, {
           type: 'commit.FILE_REVERTED',
-          data: { path: ev.path }
+          data: { path: ev.path, kept }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
         broadcastToSurface(surfaceId, {
@@ -399,10 +407,10 @@ export const commitSystem = setup({
 
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.revertFiles(ev.paths).then(() => {
+      context.gitRepository.revertFiles(ev.paths).then((kept) => {
         answer(reply, {
           type: 'commit.FILES_REVERTED',
-          data: { paths: ev.paths }
+          data: { paths: ev.paths, kept }
         })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
         for (const path of ev.paths) {
@@ -660,6 +668,54 @@ export const commitSystem = setup({
       })
     },
 
+    /** Which of what discarding these rows would remove is too large to keep a copy of, for the window about to ask */
+    previewDiscard: ({ event, context, reply }) => {
+      const { paths } = event as { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.discardNotKept(paths).then((notKept) => {
+        answer(reply, { type: 'commit.DISCARD_PREVIEWED', data: { paths, notKept } })
+      }, (error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      })
+    },
+
+    /**
+     * Remembers that the user trusts this repository, after which git runs there as it does anywhere. Only the
+     * repository the panel is over: the path arrives from a window, and trust is not handed out by name
+     */
+    trustRepository: ({ event, context, self, reply }) => {
+      const { repository: named } = event as { type: 'commit.TRUST_REPOSITORY'; repository: string }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.readTrust().then(({ repository }) => {
+        if (!repository || repository !== named) throw new Error('That is not the repository this panel is showing')
+        trustRepository(repository)
+        answer(reply, { type: 'commit.REPOSITORY_TRUSTED', data: { repository } })
+        // Its watches were not opened while it was refused, and the status was never read
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        context.code?.send({ type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+      }).catch((error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      })
+    },
+
+    /** Puts back what a discard kept: a write like the discard it undoes, announced the same way */
+    restoreDiscarded: ({ event, context, self, reply }) => {
+      const { id } = event as { type: 'commit.RESTORE_DISCARDED'; id: string }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.restoreDiscarded(id).then((restored) => {
+        answer(reply, { type: 'commit.DISCARD_RESTORED', data: { id, ...restored } })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        for (const path of restored.restored) {
+          broadcastToSurface(surfaceId, { type: 'explorer.FILE_CHANGED_EXTERNALLY', data: { path, changeType: 'change', modifiedAt: new Date() } })
+        }
+      }, (error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      })
+    },
+
     /** The files in an untracked folder the panel lists as one row, for the window that opened it */
     listUntracked: ({ event, context, reply }) => {
       const { path: folder } = event as { type: 'commit.LIST_UNTRACKED'; path: string }
@@ -716,7 +772,7 @@ export const commitSystem = setup({
 
     updateBaseDirectory: assign({
       gitRepository: ({ event }) => {
-        const ev = event as { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: GitRepository }
+        const ev = event as { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository }
         return ev.gitRepository
       },
     }),
@@ -970,7 +1026,7 @@ export const commitSystem = setup({
   context: ({ input }) => {
     const baseDir = input?.baseDirectory
     return {
-      gitRepository: input?.gitRepository || (baseDir ? new GitRepository(baseDir) : null),
+      gitRepository: input?.gitRepository || (baseDir ? openGitRepository(baseDir) : null),
       code: input?.code
     }
   },
@@ -994,6 +1050,15 @@ export const commitSystem = setup({
         },
         'commit.REVERT_FILES': {
           actions: 'revertFiles'
+        },
+        'commit.PREVIEW_DISCARD': {
+          actions: 'previewDiscard'
+        },
+        'commit.RESTORE_DISCARDED': {
+          actions: 'restoreDiscarded'
+        },
+        'commit.TRUST_REPOSITORY': {
+          actions: 'trustRepository'
         },
         'commit.RESOLVE_CONFLICT': {
           actions: 'resolveConflict'
