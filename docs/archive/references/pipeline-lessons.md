@@ -321,9 +321,22 @@ A listing is as old as the view that took it. A link created in a directory betw
 first read is recorded as a plain path, and the view's own recheck, which lists afresh, refuses the build as
 changed where it used to be accepted.
 
-**Not measured.** None of this was timed in the Linux test container, where the whole read cost minutes, so what
-a watcher's first reading costs there with digests kept is unknown, and with it whether digests kept on disk
-across watchers would pay.
+**In the Linux test container the cost is the first touch of the bytes, not the reading.** Measured 2026-11-12
+in a fresh container (2 cores, 6 GiB, container load 1.0, the Mac at 5 with another container run beside it), each
+tree read whole twice and then with digests kept:
+
+    the compiler package (12,387 files)                 first 131.46s | again 0.58s | digests kept 0.41s
+    the built-in pack's declared dependencies (36,156)  first 524.21s | again 1.40s | digests kept 1.15s
+
+Eleven minutes to read 650 MB that the kernel had not yet read from the VM's disk, and two seconds once it had.
+So what a watcher case spent minutes in was never hashing: it was a first reading, or a reading after the
+container's memory limit had pushed those pages out. Kept digests buy little there once the pages are in memory
+(0.58s to 0.41s) and everything when they are not, but only for the watcher that already holds them, and a
+watcher's first reading is the one that is whole. A later pass end to end was 3.94s, 3.08s of it the module-input
+reading; the yielding first read held the event loop 38ms at most.
+
+Not measured: a first reading that takes only each file's stat with nothing of the tree in memory, which is what
+digests kept on disk across watchers would cost. It is the figure that decides them.
 
 ## A stamp directory has one writer
 
