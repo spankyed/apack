@@ -163,6 +163,29 @@ or the contrast-on configuration, so the GPU renderer is not started, and D5 clo
   paints less.
 - The Mac was under load from other work throughout, so its figures are upper bounds.
 
+## Phase 5 — rectangular selection (2026-11-12)
+
+Source: broker `session/terminal-parity-view` at `6fe0ef1` (the view change); the monorepo pins it in `vendor/apack-terminal.rev`.
+
+**What it does.** A drag that begins with Alt held selects the rectangle between its two cells: each line covers the same
+columns, and the text is each line's own columns joined by newlines, each asked of the source as its own span. On a Mac,
+Option sets the same modifier, so Option-drag is the same gesture (decision D8). A drag without Alt is the linear selection
+it was before, and a word or line selection is never a block. No app change is needed: the view takes the modifier from
+the pointer.
+
+| Behaviour | Check | Result |
+|---|---|---|
+| The rectangle covers the same columns on each line from its first to its last, and nothing below it | `covers the same columns on every line from its first to its last, and nothing beyond them` (`view/tests/block-selection.spec.ts`) | pass |
+| The same rectangle dragged up and to the left | `is the same rectangle dragged up and to the left as down and to the right` | pass |
+| Copied as each line's own columns, joined by newlines | `is copied as each line's own columns, joined by newlines` | pass |
+| A drag without Alt is the linear selection it was | `is not made by a drag without Alt, which selects the text between its ends` | pass |
+| Mutation: copy ignores the block | the copy case | fails, as it should; file restored |
+| The whole view suite | `npx vitest run` in `view/` | 346 of 346 |
+| Typecheck and format | `npm run typecheck` in `view/`; `cargo fmt --all -- --check` | pass |
+
+**What this does not establish.** Alt-drag has not been tried in a real window. Each line is asked for on its own, so a block
+of many lines makes many asks; the cost is not measured.
+
 ## What this does not establish
 
 - **Real-window behaviour of the clipboard write.** The write path is proven at the bridge and the handler with stubs. No
