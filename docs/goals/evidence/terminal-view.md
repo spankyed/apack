@@ -335,8 +335,9 @@ ran, that it wrote nothing, and what it put on stderr; and one that answers slow
 
 The local run over the branch before the reads: 923 mutants, 767 caught, 47 missed, 11 timeouts, 98
 unviable. Its 47 survivors were answered in the broker's fix round by tests or by exclusions that say
-why. **The code the three reads added has not been through the mutation tool here**; the broker's own
-`mutants` job on its pull request is its first pass.
+why. **A full pass over the branch with the three reads' code in it** ran 1,506 mutants and left 100 the
+suite still passed. Each was answered by a test, by removing code nothing needed, or by an exclusion that
+says why, and two defects the pass led to were fixed (`apack-terminal` `9c6962b`).
 
 ### Not done
 
