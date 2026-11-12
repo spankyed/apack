@@ -56,6 +56,14 @@ export interface _HostBridge {
     showItemInFolder: (filePath: string) => Promise<void>;
     openPath: (filePath: string) => Promise<void>;
   };
+  clipboard: {
+    /**
+     * Puts `text` on the system clipboard, from the main process, which needs no focus. A window's own write is refused
+     * by the browser while its document is not focused, and a program's write arrives when the person is elsewhere.
+     * Answers whether the text was written: text too large to hold is refused, not cut.
+     */
+    writeText: (text: string) => Promise<boolean>;
+  };
   media: {
     upload: (entityId: string, base64Data: string, mimeType: string) => Promise<string>;
     delete: (entityId: string, filename: string) => Promise<void>;

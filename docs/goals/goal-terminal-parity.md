@@ -58,7 +58,10 @@ Out:
 - Phase 0 is done. Its results are in [the evidence record](../references/evidence/terminal-parity.md): kitty
   keys and the cursor key into a real pty pass, the view's wheel and auto-scroll tests pass, and OSC 52 reaches
   the broker's client. The app side of OSC 52 is Phase 1's defect, not a Phase 0 result.
-- Next deliverable: Phase 1 (OSC 52 writes reach the clipboard, decision D1).
+- Phase 1 is done, with its results in the evidence record: the main process writes the clipboard, the window no
+  longer checks focus, and a read request is answered nothing. Its limits (an 8 MiB refusal shown to nobody, and
+  one write per window) are stated there.
+- Next deliverable: Phase 2 (copy-on-select, decision D3).
 - Unresolved: none. Nothing in this goal depends on a manual step; see D6.
 
 ## Decisions

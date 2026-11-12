@@ -351,6 +351,10 @@ export interface _HostBridge {
         getActiveTab: () => Promise<number | null>;
     };
     // (undocumented)
+    clipboard: {
+        writeText: (text: string) => Promise<boolean>;
+    };
+    // (undocumented)
     fileUtils: {
         selectDirectory: () => Promise<string | null>;
         selectPath: (options?: {
