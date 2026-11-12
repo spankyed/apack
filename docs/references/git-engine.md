@@ -74,6 +74,7 @@ commit feature (`failureOf`).
 | `signing-failed`, `unrelated-histories`, `nothing-to-commit`, `branch-exists` | A sentence that says what to do |
 | `host-refused` | A hosting service refused a push for a rule of its own (`GH001`, `GH006`, `GH007`, `GH013`); the host's own words are kept |
 | `aborted` | The user stopped it: nothing failed, and nothing is shown as a failure |
+| `content-missing` | A file diff needs a version a partial clone was not given. Says so and offers to download it |
 
 ## Stopping a command
 
@@ -86,6 +87,18 @@ Stopping asks git to end, so it lets go of its locks, along with the helpers it 
 helper), found from the process table by their parents, since git does not end them when it is signalled. Any
 still there after a grace are ended outright. On Windows the git started and everything under it are ended
 outright by its id. A command stopped before its turn starts no git.
+
+## A read never reaches the network
+
+A partial clone was given less than everything, and git fetches what it lacks when a command needs it. The
+engine's reads wait behind nothing and cannot be stopped, so they fetch nothing: each runs with
+`GIT_NO_LAZY_FETCH` (git 2.45 and later), and what it lacks is answered with `content-missing`. In a partial clone
+a file at a revision is read with `git show`, because the git kept open for reading files answers "missing" alike
+for a file that is not there and for one whose content was never fetched.
+
+A read is let fetch only inside `fetchingMissing(read)`, where it waits in line with the fetches and pushes. On a
+git older than 2.45, which cannot be told not to fetch, every read in a partial clone waits in that line. Writes
+(a checkout, a merge) fetch what they need, as git does.
 
 ## How what the watcher names is held
 
