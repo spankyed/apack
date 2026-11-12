@@ -111,6 +111,13 @@ more than one (`LIST_REPOSITORIES`, `commit.REPOSITORIES_RECEIVED`); choosing on
 worktree switch does, and the picker goes on listing what is under the folder the user opened (`openedDirectory`).
 A submodule's row in its parent's status says how it differs (`submodule`).
 
+## A conflict's three sides
+
+`conflictSides(path)` reads a conflicted file's base, ours and theirs from the index's stages, beside the working
+file and where its conflicts are marked; `resolveConflict` takes a side, a side that deleted the file, or content
+written in its place. The diff a window asks for of a conflicted file carries the three sides (`GitDiff.conflict`),
+and the editor shows them in place of the markers, with the side to take.
+
 ## Copies of the working tree
 
 **A copy is kept outside the repository, and nothing of the repository's is written to keep it.** Each repository

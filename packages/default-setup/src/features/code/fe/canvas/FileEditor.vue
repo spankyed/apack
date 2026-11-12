@@ -137,8 +137,14 @@
           />
         </div>
 
+        <ConflictView
+          v-if="activeConflict"
+          :path="activeDiff!.path"
+          :conflict="activeConflict"
+          @resolve="(side) => emit('resolveConflict', activeDiff!.path, side)"
+        />
         <!-- Monaco editor for both regular files and diffs -->
-        <div v-show="!isTerminal(activeFile) && !isImage(activeFile) && !isVideoFile(activeFile) && !isBinaryFile && !isRichText(activeFile) && !isDeletedFile && !isImageDiff" class="h-full overflow-hidden flex flex-col">
+        <div v-show="!activeConflict && !isTerminal(activeFile) && !isImage(activeFile) && !isVideoFile(activeFile) && !isBinaryFile && !isRichText(activeFile) && !isDeletedFile && !isImageDiff" class="h-full overflow-hidden flex flex-col">
           <DiffHunkBar
             v-if="diffHunks.length > 0"
             :hunks="diffHunks"
@@ -182,6 +188,7 @@ import TerminalView from './TerminalView.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import DeletedFileView from './DeletedFileView.vue'
 import DiffHunkBar from './DiffHunkBar.vue'
+import ConflictView from './ConflictView.vue'
 import VideoPlayer from './VideoPlayer.vue'
 import Tabs from './Tabs.vue'
 import { isEditableDiff, type OpenFile, type TerminalTab, type TabGroup } from '#features/code/fe/state.ts'
@@ -232,6 +239,7 @@ const emit = defineEmits<{
   editorMount: []
   editorFileReady: []
   applyHunk: [path: string, staged: boolean, hunk: string]
+  resolveConflict: [path: string, side: 'ours' | 'theirs']
 }>()
 
 // Helper to check if a file is a terminal
@@ -314,6 +322,8 @@ const activeDslParams = computed(() => {
 
 /** The diff the active tab shows, and the pieces of it that can be staged one at a time */
 const activeDiff = computed(() => (isDiffFile.value ? getDiffContent(activeFile.value) : null))
+/** A conflicted file's three sides, which are shown in place of the diff */
+const activeConflict = computed(() => activeDiff.value?.conflict ?? null)
 const diffHunks = computed(() => (activeDiff.value?.hunks ?? []).filter(hunk => !props.appliedHunks?.includes(hunk.id)))
 
 const revealLine = (line: number) => {

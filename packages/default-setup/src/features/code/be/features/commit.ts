@@ -331,6 +331,9 @@ export const commitSystem = setup({
 
         // The pieces of the change that can be staged one at a time, cut by git from the file as it is now
         const hunks = ev.path && !isImage ? await context.gitRepository!.getHunks(ev.path, ev.staged || false) : []
+        // A conflicted file is shown as its three sides, in place of the markers git wrote into one file
+        const sides = fileStatus?.status === 'unmerged' && ev.path && !isImage ? await context.gitRepository!.conflictSides(ev.path).catch(() => undefined) : undefined
+        const conflict = sides && !sides.binary ? { base: sides.base, ours: sides.ours, theirs: sides.theirs } : undefined
 
         answer(reply, {
           type: 'commit.DIFF_RECEIVED',
@@ -340,6 +343,7 @@ export const commitSystem = setup({
             originalContent,
             modifiedContent,
             isImage,
+            ...(conflict && { conflict }),
             hunks
           }
         })

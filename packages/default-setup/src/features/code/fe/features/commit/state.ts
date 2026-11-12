@@ -37,6 +37,8 @@ export interface GitDiff {
   isImage?: boolean
   /** The pieces of the change that can be staged, or unstaged, one at a time */
   hunks?: DiffHunk[]
+  /** A conflicted file's three sides, shown in place of the diff: each `null` where that side has no such file */
+  conflict?: { base: string | null; ours: string | null; theirs: string | null }
 }
 
 export interface CodeCommitContext {
