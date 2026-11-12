@@ -28,10 +28,10 @@
             </code>
           </div>
           <template v-if="undoable">
-            <p class="text-sm text-neutral-400" data-testid="discard-undoable">
+            <p v-if="!noneKept" class="text-sm text-neutral-400" data-testid="discard-undoable">
               What this removes is kept, and Undo brings it back for as long as git keeps it: about two weeks.
             </p>
-            <div v-if="notKept?.length" class="mt-3 text-sm text-yellow-500" data-testid="discard-not-kept">
+            <div v-if="notKept?.length" class="text-sm text-yellow-500" :class="{ 'mt-3': !noneKept }" data-testid="discard-not-kept">
               <AlertCircle class="inline w-4 h-4 mr-1" />
               Too large to keep a copy of, so {{ notKept.length === 1 ? 'this cannot' : 'these cannot' }} be brought back:
               <ul class="mt-1 ml-5 list-disc">
@@ -66,6 +66,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { AlertCircle } from 'lucide-vue-next'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 
@@ -80,6 +81,9 @@ const props = defineProps<{
   /** The paths it would remove that are too large to keep a copy of */
   notKept?: string[]
 }>()
+
+/** Whether nothing of what this removes can be kept, so there is nothing for Undo to bring back */
+const noneKept = computed(() => (props.notKept?.length ?? 0) > 0 && props.notKept!.length >= (props.file ? 1 : props.fileCount ?? 0))
 
 const emit = defineEmits<{
   confirm: []

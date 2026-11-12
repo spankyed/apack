@@ -56,6 +56,8 @@ export interface CodeCommitContext {
   lastDiscard: { id: string; paths: string[]; notKept: string[] } | null
   /** What undoing a discard left as it was, because it had changed or been made again since */
   discardLeft: string[]
+  /** The folder what is held here was read from: the code surface's, as of the last time it started */
+  directory: string
   availableBranches: string[]
   branchInput: string
   isCheckingOutBranch: boolean
@@ -711,10 +713,17 @@ export const commitState = setup({
       progress: null
     }),
 
-    handleCodeStartup: ({ self }) => {
-      // Check if we have a directory from parent context
-      const parentContext = getParentContext(self)
-      if (parentContext?.baseDirectory) {
+    handleCodeStartup: enqueueActions(({ context, enqueue, self }) => {
+      const directory: string = getParentContext(self)?.baseDirectory || ''
+      // What the panel holds is one folder's: its rows, what git last refused there and the discard it offers to
+      // undo say nothing about another, so they go when the folder is another one
+      if (directory !== context.directory) {
+        enqueue.assign({
+          directory, gitStatus: [], gitError: null, gitFailure: null, revertDialogFile: null,
+          discardPreview: null, lastDiscard: null, discardLeft: [],
+        })
+      }
+      if (directory) {
         // Refresh git status when directory is available
         self.send({ type: 'commit.REFRESH_STATUS' })
         sendToSystem('code', { type: 'commit.STASH_LIST' })
@@ -722,7 +731,7 @@ export const commitState = setup({
         sendToSystem('code', { type: 'commit.GET_ALL_BRANCHES' })
         sendToSystem('code', { type: 'commit.LOG_LIST' })
       }
-    },
+    }),
 
     stashPush: ({ event }) => {
       const ev = event as { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean }
@@ -837,6 +846,7 @@ export const commitState = setup({
     discardPreview: null,
     lastDiscard: null,
     discardLeft: [],
+    directory: '',
     availableBranches: [],
     branchInput: '',
     isCheckingOutBranch: false,
