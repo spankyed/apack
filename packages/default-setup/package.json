@@ -25,6 +25,7 @@
     "content-parity:update": "UPDATE_CONTENT_GOLDEN=1 npm test -- tests/content"
   },
   "dependencies": {
+    "@antv/g6": "^5.0.48",
     "@apackdev/ears": "*",
     "@apackdev/sdk": "*",
     "@apackdev/ui": "*",

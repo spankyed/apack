@@ -10,7 +10,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 const roundTripJourney=process.env.CLAUDE_RESEARCH_AGENT_ROUNDTRIP==='1'
 const referenceJourney = process.env.CLAUDE_RESEARCH_AGENT_REFERENCE === '1'||roundTripJourney
 const imeJourney = process.env.CLAUDE_RESEARCH_AGENT_IME === '1'
-let terminalScreen: import('@xterm/xterm').Terminal | undefined
+let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test.afterEach(async({appPage,electronApp},info)=>{
   if(!roundTripJourney||info.status===info.expectedStatus)return

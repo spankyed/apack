@@ -7,7 +7,7 @@ import {stripVTControlCharacters} from 'node:util'
 import {resolveAppEnvironment} from '@apackdev/sdk/env'
 import {test,expect} from '@apackdev/testing'
 const workspace=process.env.CLAUDE_RESEARCH_WORKSPACE,onboarding=process.env.CLAUDE_RESEARCH_ONBOARDING
-let screenTerminal:import('@xterm/xterm').Terminal|undefined
+let screenTerminal:import('@app/claude-terminal-xterm').Terminal|undefined
 test.afterEach(()=>screenTerminal?.dispose())
 test.skip(!workspace||!onboarding,'Explicit private native composer cold-reopen fixture required')
 test('restores original pre-Plan context after cold restart and exits Plan through native and print composing',async({app,appPage,electronApp},testInfo)=>{

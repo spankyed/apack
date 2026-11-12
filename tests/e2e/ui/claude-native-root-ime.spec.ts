@@ -42,7 +42,7 @@ test('commits root Client IME text once across original native redraws', async (
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
   const input = section.locator('textarea.xterm-helper-textarea')
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
+  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
   const dimensions = () => input.evaluate(element => { const root = element.closest('.xterm')!, box = root.querySelector('.xterm-screen')!.getBoundingClientRect(), font = getComputedStyle(root.querySelector('.xterm-char-measure-element')!), canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`; return Math.round(box.width / context.measureText('W').width) })
   await expect.poll(dimensions).toBeGreaterThan(1)
   const terminal = new Terminal({ cols: await dimensions(), rows: 200, allowProposedApi: true })

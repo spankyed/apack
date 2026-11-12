@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@xterm/xterm').Terminal | undefined
+let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('edits exact native source at reference URI and fence carets without losing linked context', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)

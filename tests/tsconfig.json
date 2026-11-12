@@ -20,5 +20,5 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["node"]
   },
-  "include": ["_support/**/*.ts", "e2e/**/*.ts", "performance/**/*.ts", "acceptance/**/*.ts", "../playwright.config.ts"]
+  "include": ["_support/**/*.ts", "e2e/**/*.ts", "performance/**/*.ts", "acceptance/**/*.ts", "../playwright.config.ts", "../packages/default-setup/src/features/threads/fe/chat/vendor/webterm-kitty/xterm.d.ts"]
 }

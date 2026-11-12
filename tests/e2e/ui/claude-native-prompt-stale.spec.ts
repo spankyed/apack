@@ -6,7 +6,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@xterm/xterm').Terminal | undefined
+let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('refuses retired native completion and addressed fill without losing fresh drafts', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
@@ -34,7 +34,7 @@ test('refuses retired native completion and addressed fill without losing fresh 
   const input = section.locator('textarea.xterm-helper-textarea')
   // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
+  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
   const dimensions = await input.evaluate(element => { const root = element.closest('.xterm')!, screen = root.querySelector('.xterm-screen')!.getBoundingClientRect(), style = getComputedStyle(root.querySelector('.xterm-char-measure-element')!); const canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`; return { cols: Math.round(screen.width / context.measureText('W').width), rows: 200 } })
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
   terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })

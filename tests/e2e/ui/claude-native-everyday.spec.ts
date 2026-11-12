@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@xterm/xterm').Terminal | undefined
+let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('completes an everyday native review across Agent, approval, question and interruption recovery', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(150000)

@@ -42,7 +42,7 @@ test('retires a crashed pending approval and permits a fresh same-session decisi
   const input = section.locator('textarea.xterm-helper-textarea')
   ;(globalThis as any).self ??= globalThis
   const {Terminal}=createRequire(import.meta.url)('@app/claude-terminal-xterm')
-  let terminalScreen: import('@xterm/xterm').Terminal | undefined, screenOwner: string | undefined,lastSequence=0
+  let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined, screenOwner: string | undefined,lastSequence=0
   async function screenText(native:any){
     if(!native?.state?.ownerId)return ''
     if(screenOwner!==native.state.ownerId){

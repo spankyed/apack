@@ -18,7 +18,7 @@ const dialogMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_DIALOG === '1'
 const paneMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_PANES === '1'
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@xterm/xterm').Terminal | undefined
+let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
 test.afterEach(async ({appPage}, testInfo) => {
   if (testInfo.status !== testInfo.expectedStatus) {
     await appPage.screenshot({path:testInfo.outputPath('native-action-keys-failure.png')}).catch(() => {})
