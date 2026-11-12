@@ -5,12 +5,52 @@ import { createHash } from 'node:crypto';
 export type BuildInputKind = 'file' | 'directory' | 'entries';
 export type BuildInputObserver = (file: string, kind: BuildInputKind) => void;
 
+/**
+ * Names that are never an authored input, wherever in the pack they sit. Each is something a tool writes into a
+ * folder without the pack having been touched, so counting it would make a build stale for having been looked at
+ * and a watcher rebuild for a file nobody wrote.
+ */
+const NEVER_AUTHORED = new Set([
+  // Version control's own folders
+  '.git', '.hg', '.svn', '.jj',
+  'node_modules',
+  // What macOS and Windows write into a folder shown in a file browser
+  '.DS_Store', 'Thumbs.db', 'desktop.ini',
+  // Vim's test of whether it can write beside the file being saved
+  '4913',
+  // Tool caches
+  '.eslintcache', '.turbo', '.vite',
+]);
+
+/**
+ * The same, for names that vary: what an editor or the system leaves beside a file while it is open or being
+ * saved, and caches named after what they cache. Each is matched against one name, never a path.
+ */
+const NEVER_AUTHORED_PATTERNS: readonly RegExp[] = [
+  /^\._/, // macOS, beside each file on a volume that cannot hold its metadata
+  /\.sw[op]$/, // Vim's swap files
+  /~$/, // an editor's backup of the file before a save
+  /^\.#/, // Emacs, while a file has unsaved changes
+  /^#.*#$/, // Emacs autosave
+  /\.tsbuildinfo$/, // TypeScript's incremental build
+  /^npm-debug\.log/,
+  /^\.nfs[0-9a-f]+$/i, // a file deleted while open, on a network volume
+];
+
+/**
+ * Folders at the pack's root that hold what a build, the tooling or a test run wrote. Only at the root: a source
+ * folder of the same name further in is the author's.
+ */
+const BUILT_AT_ROOT = new Set(['dist', '.apack', 'coverage', 'test-results', 'playwright-report']);
+
+const neverAuthored = (name: string) => NEVER_AUTHORED.has(name) || NEVER_AUTHORED_PATTERNS.some(pattern => pattern.test(name));
+
 /** Whether a pack-relative path belongs to authored inputs, shared by builds and watchers. */
 export function isPackInputPath(relative: string, generated = false): boolean {
   const parts = relative.split(/[\\/]/);
-  return !parts.some(part => part === '.git' || part === 'node_modules')
-    && parts[0] !== 'dist' && parts[0] !== '.apack'
-    && (generated || parts[0] !== 'src' || parts[1] !== '__generated__');
+  if (parts.some(neverAuthored)) return false;
+  if (BUILT_AT_ROOT.has(parts[0]!)) return false;
+  return generated || parts[0] !== 'src' || parts[1] !== '__generated__';
 }
 
 /** Authored files, regardless of extension or source folder; build/dependency trees are separate inputs. */
