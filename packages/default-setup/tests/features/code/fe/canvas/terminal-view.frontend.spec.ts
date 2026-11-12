@@ -80,4 +80,34 @@ describe('the canvas terminal host', () => {
 
     expect(lastView().focused, 'the surface asked for focus and nothing was focused').toBe(1)
   })
+
+  it('lists the shell\'s commands newest first, highlights one that failed, and copies or runs one again on request', async () => {
+    const info = terminal()
+    surface = startCodeSurface({ terminals: [info] })
+    surface.mount(TerminalView, { terminalInfo: info })
+    await surface.settle()
+    const view = lastView()
+    const command = (id: number, text: string, outcome: object) => ({ id, command: text, cwd: null, startedMs: null, finishedMs: null, outcome, prompt: 0, output: 1, end: 2 })
+    view.options.onCommands?.([
+      command(1, 'ls', { kind: 'exited', code: 0 }),
+      command(2, 'make', { kind: 'exited', code: 2 }),
+    ] as never)
+    await surface.settle()
+
+    const toggle = surface.root.querySelector<HTMLButtonElement>('[data-testid="command-blocks-toggle"]')
+    expect(toggle?.textContent?.trim()).toBe('Commands (2)')
+    toggle!.click()
+    await surface.settle()
+
+    const rows = [...surface.root.querySelectorAll<HTMLElement>('[data-testid="command-block"]')]
+    expect(rows.map((row) => row.querySelector('.font-mono')?.textContent?.trim())).toEqual(['make', 'ls'])
+    expect(rows[0]!.dataset.failed, 'a command with a non-zero status is highlighted').toBe('true')
+    expect(rows[1]!.dataset.failed).toBeUndefined()
+
+    rows[0]!.querySelectorAll('button')[0]!.click()
+    rows[0]!.querySelectorAll('button')[1]!.click()
+    await surface.settle()
+    expect(view.copiedCommands).toEqual([2])
+    expect(view.typed).toEqual(['make\r'])
+  })
 })

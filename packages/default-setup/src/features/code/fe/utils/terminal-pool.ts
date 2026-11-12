@@ -1,4 +1,7 @@
-import { BrokerViews, TerminalView, xtermPalette, type Detector, type Theme } from 'apack-terminal-view'
+import { BrokerViews, TerminalView, xtermPalette, type Command, type Detector, type Theme } from 'apack-terminal-view'
+
+/** A command the shell marked, as the view holds it: a host draws its command blocks from these without importing the view */
+export type { Command }
 import { openLink, terminalViews, type TerminalViewStream } from '@apackdev/sdk/fe'
 import type { TerminalInfo } from '../features/terminal/state.ts'
 import { TERMINAL_COLORS, TERMINAL_THEME } from '../../be/terminal-colors.ts'
@@ -154,6 +157,15 @@ export interface TerminalAttachment {
   copyLastOutput(): Promise<boolean>
   /** Whether the shell has marked any command, which is what the command actions need */
   hasCommands(): boolean
+  /** The commands the shell has marked, as the view last heard them, oldest first */
+  commands(): readonly Command[]
+  /** Copies what one command printed, answering whether there was any to copy */
+  copyCommand(command: Command): Promise<boolean>
+  /**
+   * Types a command's text into the shell and presses Enter, as the person would: it runs again. The shell is the one that
+   * decides what that means, which for a command with effects is the person's to choose here.
+   */
+  rerun(text: string): void
   /** Only where the user asked for it: an attach is not a request */
   focus(): void
   /**
@@ -189,6 +201,8 @@ export interface TerminalAttachmentHandlers {
   onFollowingChange?(following: boolean): void
   /** A path a program printed was clicked: the file it names, and where in it when the program said */
   onOpenPath?(path: string, at: { line: number; column: number } | undefined): void
+  /** The commands the shell has marked, each time they are heard: the list a host draws its command blocks from */
+  onCommands?(commands: readonly Command[]): void
 }
 
 const exitedNotice = (info: TerminalInfo, code: number | null) =>
@@ -378,6 +392,7 @@ class TerminalPool {
       },
       confirmPaste: (text) => this.confirmPaste(entry, text),
       copyOnSelect: this.copyOnSelect,
+      onCommands: (commands) => entry.handlers.onCommands?.(commands),
     })
     view.element.dataset.apackTerminal = entry.terminalId
     entry.view = view
@@ -604,6 +619,9 @@ class TerminalPool {
       find: () => this.openFind(entry),
       copyLastOutput: () => this.copyLastOutput(entry),
       hasCommands: () => (entry.view?.commands.length ?? 0) > 0,
+      commands: () => entry.view?.commands ?? [],
+      copyCommand: (command) => entry.view?.copyCommand(command) ?? Promise.resolve(false),
+      rerun: (text) => { entry.view?.typeText(`${text}\r`) },
       focus: () => entry.view?.focus(),
       refit: () => { if (!released) entry.view?.fit() },
       followOutput: () => entry.view?.follow(),

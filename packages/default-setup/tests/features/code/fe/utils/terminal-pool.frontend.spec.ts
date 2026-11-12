@@ -138,6 +138,30 @@ describe('a shell replaced under a terminal', () => {
   })
 })
 
+describe('the commands of a terminal, as its host draws them', () => {
+  it('are heard by the host as the shell marks them, and running one again types its text and Enter', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const heard: number[][] = []
+    const attachment = terminalPool.attach(info.id, host(), { onCommands: (commands) => { heard.push(commands.map((command) => command.id)) } })!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    view.options.onCommands?.([{ id: 3, command: 'make', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'exited', code: 2 }, prompt: 0, output: 1, end: 2 }] as never)
+    expect(heard).toEqual([[3]])
+
+    attachment.rerun('make')
+    expect(view.typed).toEqual(['make\r'])
+  })
+
+  it('has one command\'s output copied on request, by that command', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const attachment = terminalPool.attach(info.id, host(), {})!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    expect(await attachment.copyCommand({ id: 9 } as never)).toBe(true)
+    expect(view.copiedCommands).toEqual([9])
+  })
+})
+
 describe('whether a selection is copied as the pointer is let go', () => {
   it('is given to every view, the ones already up as well as those made after it is set', () => {
     const up = terminal()

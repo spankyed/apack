@@ -11,6 +11,12 @@ export interface FakeView {
   /** Whether a selection is copied as the pointer is let go, as the view was last told */
   readonly copyOnSelect: boolean
   setCopyOnSelect(on: boolean): void
+  /** What was typed into the program, as text, in order */
+  readonly typed: string[]
+  /** The commands that were asked to have their output copied, by id, in order */
+  readonly copiedCommands: number[]
+  typeText(text: string): void
+  copyCommand(command: { id: number }): Promise<boolean>
   readonly element: HTMLDivElement
   readonly options: ViewOptions
   /** The element it is mounted in, or `null` while no host has it */
@@ -130,6 +136,10 @@ export function viewModule(): Record<string, unknown> {
     }
     focus(): void { this.focused += 1 }
     setCopyOnSelect(on: boolean): void { this.copyOnSelect = on }
+    readonly typed: string[] = []
+    readonly copiedCommands: number[] = []
+    typeText(text: string): void { this.typed.push(text) }
+    async copyCommand(command: { id: number }): Promise<boolean> { this.copiedCommands.push(command.id); return true }
     fit(): void { this.fits += 1 }
     follow(): void { this.followed += 1; this.options.onFollowingChange?.(true) }
     clear(): void { this.cleared += 1 }
