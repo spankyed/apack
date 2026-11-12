@@ -8,6 +8,9 @@ import type { Command, ViewOptions } from 'apack-terminal-view'
 
 export interface FakeView {
   readonly session: string
+  /** Whether a selection is copied as the pointer is let go, as the view was last told */
+  readonly copyOnSelect: boolean
+  setCopyOnSelect(on: boolean): void
   readonly element: HTMLDivElement
   readonly options: ViewOptions
   /** The element it is mounted in, or `null` while no host has it */
@@ -103,8 +106,11 @@ export function viewModule(): Record<string, unknown> {
     current = 0
     commands: Command[] = []
     readonly selectedOutputs: number[] = []
+    /** Whether a selection is copied as the pointer is let go, as the view was last told */
+    copyOnSelect: boolean
 
     constructor(source: { session: string }, readonly options: ViewOptions) {
+      this.copyOnSelect = options.copyOnSelect ?? false
       this.session = source.session
       views.push(this)
     }
@@ -123,6 +129,7 @@ export function viewModule(): Record<string, unknown> {
       this.disposed = true
     }
     focus(): void { this.focused += 1 }
+    setCopyOnSelect(on: boolean): void { this.copyOnSelect = on }
     fit(): void { this.fits += 1 }
     follow(): void { this.followed += 1; this.options.onFollowingChange?.(true) }
     clear(): void { this.cleared += 1 }

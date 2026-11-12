@@ -219,6 +219,14 @@ const restartedNotice = (pid: number | null) =>
 
 class TerminalPool {
   private entries = new Map<string, PoolEntry>()
+  /** Whether a selection is copied as the pointer is let go: set from the feature's setting, and given to every view made */
+  private copyOnSelect = false
+
+  /** Changes the copy-on-release setting of every view, now and as each is made. It follows the feature's setting. */
+  setCopyOnSelect(on: boolean): void {
+    this.copyOnSelect = on
+    for (const entry of this.entries.values()) entry.view?.setCopyOnSelect(on)
+  }
   /**
    * Every terminal as the surface last described it (`describe`), which is what a host mounted with an
    * older description is drawn from
@@ -369,6 +377,7 @@ class TerminalPool {
         else openLink(link.target)
       },
       confirmPaste: (text) => this.confirmPaste(entry, text),
+      copyOnSelect: this.copyOnSelect,
     })
     view.element.dataset.apackTerminal = entry.terminalId
     entry.view = view

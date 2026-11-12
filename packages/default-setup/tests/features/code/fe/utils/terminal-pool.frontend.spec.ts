@@ -138,6 +138,27 @@ describe('a shell replaced under a terminal', () => {
   })
 })
 
+describe('whether a selection is copied as the pointer is let go', () => {
+  it('is given to every view, the ones already up as well as those made after it is set', () => {
+    const up = terminal()
+    terminalPool.ensure(up)
+    const viewOf = (session: string | undefined) => views.filter((view) => view.session === session).at(-1)!
+    try {
+      terminalPool.setCopyOnSelect(true)
+      expect(viewOf(up.session).copyOnSelect, 'a view already up was not told').toBe(true)
+
+      const later = terminal()
+      terminalPool.ensure(later)
+      expect(viewOf(later.session).options.copyOnSelect, 'a view made after was not given it').toBe(true)
+
+      terminalPool.setCopyOnSelect(false)
+      expect(viewOf(up.session).copyOnSelect).toBe(false)
+    } finally {
+      terminalPool.setCopyOnSelect(false)
+    }
+  })
+})
+
 describe('what a host is told', () => {
   it('is the fit once it has settled, so a drag is one resize of the pty and not one a frame', async () => {
     vi.useFakeTimers()

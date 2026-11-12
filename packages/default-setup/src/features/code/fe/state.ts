@@ -803,6 +803,11 @@ const codeState = setup({
       }
     }),
 
+    // The terminal views are the pool's, so the setting reaches them through it, as it changes
+    applyCopyOnSelect: ({ context }) => {
+      terminalPool.setCopyOnSelect(context.settings?.copyOnSelect === true)
+    },
+
     handleSettingsUpdate: assign(({ event, context }) => {
       const ev = event as { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
 
@@ -1405,7 +1410,7 @@ const codeState = setup({
         },
         // Handle settings updates
         FEATURE_SETTINGS_UPDATED: {
-          actions: ['handleSettingsUpdate']
+          actions: ['handleSettingsUpdate', 'applyCopyOnSelect']
         },
         // Route events to child machines
         '*': {
