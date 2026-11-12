@@ -298,8 +298,11 @@ Measured 2026-11-11 on the Mac (10 cores, load 9), an unchanged tree read a seco
     the compiler package                    read whole 1.11s | digests kept 0.30s
     the built-in pack's declared dependencies   read whole 4.46s | digests kept 0.71s
 
-A watcher's first reading is still whole. What remains of a later pass, 7.7s end to end at that load, is mostly the
-TypeScript program each pass builds to find the pack's modules (4.4s), which this did not touch. The kept digests
+A watcher's first reading is still whole, taken before its first pass without holding the event loop (`warm`: 55ms
+at most between turns of it). What remains of a later pass, 7.7s end to end at that load, is mostly the
+module-input reading (4.4s), which this did not touch. A CPU profile of that reading puts under 5% of it in
+TypeScript's parser and about 45% in filesystem calls, 21% of the whole in the `realpath` the compiler file view
+takes of every input to prove nothing was replaced. The kept digests
 hold 16 MB.
 
 ## A stamp directory has one writer

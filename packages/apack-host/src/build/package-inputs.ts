@@ -70,8 +70,10 @@ interface PackageInputOptions {
   readonly digests?: PackageDigestCache;
 }
 
-/** A file's timestamps are trusted to show a later write only once it has gone this long unwritten. */
+/** The coarsest tick a filesystem keeps a file's times in: two writes inside one leave the same times behind. */
 const UNSETTLED_MS = 2_000;
+/** How far a filesystem's clock may stand from this process's before a file's age stops meaning anything. */
+const CLOCK_ALLOWANCE_MS = 24 * 60 * 60 * 1_000;
 
 export interface PackageDigestCache {
   /** The digest held for a file that has not moved since it was taken, and how to hold the one read now. */
@@ -80,26 +82,34 @@ export interface PackageDigestCache {
 
 /**
  * Content digests keyed by what the filesystem says of each file: its size, both its timestamps and its inode. A
- * file is read again when any of them moved, so a stale entry needs a write that restored all four. A file written
- * within `UNSETTLED_MS` of being read is not held at all, because a second write inside one tick of the
- * filesystem's clock leaves the same timestamps behind. It belongs to one reader for as long as that reader lives;
- * a build takes its own bytes and never reads this.
+ * file is read again when any of them moved, and a program cannot put a file's change time back.
+ *
+ * A digest answers only once its bytes are known to have been read after the tick of the file's last write, since
+ * a second write inside that tick leaves the same times behind. A file whose times are older than
+ * `CLOCK_ALLOWANCE_MS` was: no mount's clock is that far from this one. Any younger file is read a second time,
+ * at least `UNSETTLED_MS` after this reader first saw it as it is, and that reading is the one kept. The wait is
+ * counted on this process's own clock, which runs at the filesystem's rate wherever the two stand, so nothing
+ * here compares one clock with the other closer than a day.
+ *
+ * It belongs to one reader for as long as that reader lives; a build takes its own bytes and never reads this.
  */
-export function createPackageDigestCache(now: () => number = Date.now): PackageDigestCache {
-  const held = new Map<string, { size: bigint; mtimeNs: bigint; ctimeNs: bigint; ino: bigint; digest: string }>();
+export function createPackageDigestCache(clock: { now?: () => number; elapsed?: () => number } = {}): PackageDigestCache {
+  const { now = Date.now, elapsed = () => performance.now() } = clock;
+  const held = new Map<string, { size: bigint; mtimeNs: bigint; ctimeNs: bigint; ino: bigint; digest: string; seen: number; settled: boolean }>();
   return {
     lookup(file) {
-      const at = now();
+      const old = BigInt(Math.floor(now()) - CLOCK_ALLOWANCE_MS) * 1_000_000n;
+      const at = elapsed();
       const { size, mtimeNs, ctimeNs, ino, mode } = fs.statSync(file, { bigint: true });
       const entry = held.get(file);
-      const current = entry && entry.size === size && entry.mtimeNs === mtimeNs && entry.ctimeNs === ctimeNs && entry.ino === ino;
+      const same = !!entry && entry.size === size && entry.mtimeNs === mtimeNs && entry.ctimeNs === ctimeNs && entry.ino === ino;
+      const seen = same ? entry!.seen : at;
       return {
-        digest: current ? entry.digest : undefined,
+        digest: same && entry!.settled ? entry!.digest : undefined,
         mode: Number(mode),
         record(digest) {
-          const settled = BigInt(Math.floor(at) - UNSETTLED_MS) * 1_000_000n;
-          if (mtimeNs < settled && ctimeNs < settled) held.set(file, { size, mtimeNs, ctimeNs, ino, digest });
-          else held.delete(file);
+          const settled = (mtimeNs < old && ctimeNs < old) || (same && at - seen >= UNSETTLED_MS);
+          held.set(file, { size, mtimeNs, ctimeNs, ino, digest, seen, settled });
         },
       };
     },

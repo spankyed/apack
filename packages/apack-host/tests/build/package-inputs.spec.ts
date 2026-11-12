@@ -298,8 +298,8 @@ it('reads an owner\'s graph whole when that owner asks for it, whatever the defa
   expect(dependencies.flatMap(node => node.unread)).toEqual([]);
 });
 
-/** A reader whose clock runs a minute ahead, so a fixture written a moment ago counts as long unwritten. */
-const settledDigests = () => createPackageDigestCache(() => Date.now() + 60_000);
+/** A reader whose clock runs days ahead, so a fixture written a moment ago counts as long unwritten. */
+const settledDigests = () => createPackageDigestCache({ now: () => Date.now() + 3 * 24 * 60 * 60 * 1_000 });
 const readsOf = (reads: { mock: { calls: unknown[][] } }, file: string) => reads.mock.calls.filter(([read]) => read === file).length;
 
 it('answers with kept digests exactly as a fresh read does, through every kind of edit', () => {
@@ -347,17 +347,22 @@ it('does not read a file again that nothing has touched, and reads one again tha
   expect(readsOf(yielding, helper) + readsOf(yielding, compiler)).toBe(0);
 });
 
-it('keeps no digest of a file written a moment before it was read', () => {
+it('reads a lately written file a second time, a tick of the filesystem later, before keeping its digest', () => {
   const pack = tree();
   const owners = [{ id: 'compiler', directory: pack.root, development: true, contents: true }];
   const helper = fs.realpathSync.native(path.join(pack.root, 'node_modules/helper/index.js'));
-  // A reader whose clock stands a second after the write, however long this machine took to get here
-  const written = Math.max(fs.statSync(helper).mtimeMs, fs.statSync(helper).ctimeMs);
-  const digests = createPackageDigestCache(() => written + 1_000);
-  readPackageInputs(owners, { digests });
+  let elapsed = 0;
+  const digests = createPackageDigestCache({ elapsed: () => elapsed });
+  const expected = readPackageInputs(owners).hash;
   const reads = vi.spyOn(fs, 'readFileSync');
-  readPackageInputs(owners, { digests });
-  expect(readsOf(reads, helper)).toBe(1);
+  const read = () => { expect(readPackageInputs(owners, { digests }).hash).toBe(expected); return readsOf(reads, helper); };
+  expect(read()).toBe(1);
+  elapsed = 1_000;
+  expect(read()).toBe(2);
+  elapsed = 2_500;
+  expect(read()).toBe(3);
+  elapsed = 60_000;
+  expect(read()).toBe(3);
 });
 
 it('hands a capture its bytes whatever digests are kept', () => {

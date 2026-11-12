@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { readCompilerModuleInputs } from './compiler-module-inputs.ts';
-import { createPackageDigestCache, readFileDigest, readPackageInputs, type PackageDigestCache } from '@apackdev/host/build/package-inputs';
+import { createPackageDigestCache, readFileDigest, readPackageInputs, readPackageInputsAsync, type PackageDigestCache } from '@apackdev/host/build/package-inputs';
 import { physicalWatchPath, relativeCompilerPath, resolveCompilerPath, type CompilerInputObservations } from '@apackdev/host/build/compiler-inputs';
 import { compilerPackageDirectory, readEsbuildOverride } from './compiler-installation.ts';
 import { readCompilerRuntimeInputs } from './compiler-runtime.ts';
@@ -77,6 +77,11 @@ interface CompilerWatchTools {
   changed(file: string | undefined, event: string): void;
   /** What this watcher has already read of the package trees every pass signs again. */
   readonly digests: PackageDigestCache;
+  /**
+   * Reads those trees once without holding the event loop, so the first pass finds their digests kept. It decides
+   * nothing: a tree it cannot read is left for that pass to refuse.
+   */
+  warm(signal?: AbortSignal): Promise<void>;
 }
 
 function readCompilerWatchTools(root: string, observer?: BuildInputObserver, digests?: PackageDigestCache) {
@@ -114,6 +119,12 @@ export function createCompilerWatchTools(root: string): CompilerWatchTools {
   let environment: string | undefined;
   return {
     digests,
+    async warm(signal) {
+      for (const owner of [{ id: 'compiler', directory: compilerPackageDirectory(), contents: true }, { id: 'pack', directory: root, development: true }]) {
+        try { await readPackageInputsAsync([owner], { digests, signal }); }
+        catch (error) { if (signal?.aborted) throw error; }
+      }
+    },
     read(observe) {
       const current = compilerEnvironmentIdentity();
       if (!cached || environment !== current) {
