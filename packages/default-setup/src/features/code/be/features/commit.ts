@@ -60,7 +60,7 @@ export type Event =
   | { type: 'commit.SET_UP_SIGN_IN'; host: string; during?: 'push' | 'pull' }
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
   | { type: 'commit.LIST_UNTRACKED'; path: string }
-  | { type: 'commit.LOG_LIST' }
+  | { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
   | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository }
@@ -92,6 +92,9 @@ function answerUndoable(repo: AppGitRepository, reply: Parameters<typeof answer>
     () => {},
   )
 }
+
+/** How many commits a page of the panel's history holds */
+const LOG_PAGE = 100
 
 /** The most changed files whose lines are counted with the status: past it the list is scrolled, not read */
 const COUNTED_FILES = 500
@@ -1011,13 +1014,14 @@ export const commitSystem = setup({
       })
     },
 
-    logList: ({ context, reply }) => {
+    logList: ({ event, context, reply }) => {
+      const { cursor, path: file } = event as { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.gitLog().then((commits) => {
+      context.gitRepository.history({ cursor, path: file, limit: LOG_PAGE }).then((page) => {
         answer(reply, {
           type: 'commit.LOG_LIST_RECEIVED',
-          data: { commits }
+          data: { commits: page.commits, ...(page.cursor && { cursor: page.cursor }), ...(file && { path: file }), ...(cursor && { continued: true }) },
         })
       }).catch((error: any) => {
         answer(reply, {

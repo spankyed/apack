@@ -125,6 +125,14 @@ command a side; the commit panel's status answer carries it (`counts`, for up to
 shows it. `changesIn(commit)` and `stashChanges(index)` list what a commit or a stash changed with the same counts; a
 stash in the panel's list opens to show its files before it is applied (`commit.GET_STASH_CHANGES`).
 
+## History that can be drawn
+
+`history({ refs, cursor, path, limit })` pages the log in topological order, each commit with its parents and the
+refs at it; the cursor walks from where the first page stood, so a ref moving between pages neither repeats nor drops
+a commit, and `path` follows a file across its renames. The commit panel's log reads it a hundred commits a page
+(`commit.LOG_LIST` with `cursor` for Load more), draws lanes beside the commits (`laneRows`), and shows one file's
+history when an editor tab asks for it (`commit.SHOW_FILE_HISTORY`).
+
 ## Copies of the working tree
 
 **A copy is kept outside the repository, and nothing of the repository's is written to keep it.** Each repository

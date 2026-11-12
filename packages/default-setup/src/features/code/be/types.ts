@@ -446,6 +446,17 @@ export interface ChangedFile {
   binary: boolean
 }
 
+/** A commit as the panel's history draws it: with every parent, and the refs that point at it */
+export interface HistoryCommit {
+  hash: string
+  parents: string[]
+  authorName: string
+  authorEmail: string
+  date: string
+  subject: string
+  refs: string[]
+}
+
 /** A repository found under the folder the user opened, as the panel's picker lists it */
 export interface RepositoryUnder {
   path: string

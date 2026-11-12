@@ -845,17 +845,6 @@ interface CommitFailure {
     };
 }
 
-interface CommitLogEntry {
-    hash: string;
-    shortHash: string;
-    subject: string;
-    body: string;
-    authorName: string;
-    authorEmail: string;
-    date: string;
-    refs: string;
-}
-
 type Condition = {
     predicate?: Predicate;
     label?: string;
@@ -1733,6 +1722,17 @@ interface GitStatusFile {
     };
 }
 
+/** A commit as the panel's history draws it: with every parent, and the refs that point at it */
+interface HistoryCommit {
+    hash: string;
+    parents: string[];
+    authorName: string;
+    authorEmail: string;
+    date: string;
+    subject: string;
+    refs: string[];
+}
+
 interface ImageReference {
     url: string;
     name: string;
@@ -1992,8 +1992,12 @@ type IncomingCommitEvents = {
     type: 'commit.SET_UP_SIGN_IN';
     host: string;
     during?: 'pull' | 'push';
-} | {
+}
+/** A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history */
+ | {
     type: 'commit.LOG_LIST';
+    cursor?: string;
+    path?: string;
 } | {
     type: 'commit.REVERT_COMMIT';
     hash: string;
@@ -3428,10 +3432,15 @@ type OutgoingCommitEvents =
     };
 } | {
     type: 'commit.ALL_CONFLICTS_RESOLVED';
-} | {
+}
+/** A page of history, saying which file's it is and whether it goes on from a cursor; `cursor` for the next */
+ | {
     type: 'commit.LOG_LIST_RECEIVED';
     data: {
-        commits: CommitLogEntry[];
+        commits: HistoryCommit[];
+        cursor?: string;
+        path?: string;
+        continued?: boolean;
     };
 } | {
     type: 'commit.REVERT_COMMIT_SUCCESS';
