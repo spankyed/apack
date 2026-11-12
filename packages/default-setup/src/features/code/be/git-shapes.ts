@@ -21,7 +21,9 @@ export const SHAPES_AGREE: {
   worktree: Same<Engine.WorktreeEntry, Contract.WorktreeEntry>
   commit: Same<Engine.CommitLogEntry, Contract.CommitLogEntry>
   errorCode: Same<Engine.GitErrorCode, Contract.GitErrorCode>
+  discardKept: Same<Engine.DiscardKept, Contract.DiscardKept>
+  discardRestored: Same<Engine.DiscardRestored, Contract.DiscardRestored>
 } = {
   statusFile: true, conflict: true, operation: true, move: true, part: true, change: true, progress: true, hunk: true,
-  stash: true, worktree: true, commit: true, errorCode: true,
+  stash: true, worktree: true, commit: true, errorCode: true, discardKept: true, discardRestored: true,
 }

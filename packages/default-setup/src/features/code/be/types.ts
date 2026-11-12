@@ -167,6 +167,21 @@ export interface GitDiff {
   hunks?: DiffHunk[]
 }
 
+/** What a discard kept of what it removed, which can be put back for as long as git keeps it */
+export interface DiscardKept {
+  /** Names what was kept, to put it back. Absent when nothing was: every file was too large, or there was none */
+  id?: string
+  /** The paths removed without a copy, each too large to keep one of: from the top of the checkout */
+  notKept: string[]
+}
+
+/** What putting a discard back did, by path from the top of the checkout */
+export interface DiscardRestored {
+  restored: string[]
+  /** Changed or made again since the discard, and left as they are */
+  left: string[]
+}
+
 export interface StashEntry {
   index: number
   ref: string

@@ -225,6 +225,13 @@ neither watcher needs to be exact.
   `app/i/` too. A folder that is a repository of its own lists nothing and is not removed, which is said.
   A folder row reads as changed whenever it is read, by a read of everything too, and a window reads again
   the diffs it has open under a folder the news names.
+- **A discard keeps what it removes, and the panel offers it back.** Before a changed file is checked out
+  again, or an untracked file or folder deleted, the engine writes what is about to go into git's object store
+  as a tree built with an index of its own (its `discards.ts`), and the answer to the discard carries its id:
+  the panel offers Undo (`commit.RESTORE_DISCARDED`), which leaves alone and names what has changed or been
+  made again since. The user's index, refs and stash are not touched. A file over 10 MB is removed without a
+  copy, which the confirmation says before the discard (`commit.PREVIEW_DISCARD`). Nothing refers to the tree,
+  so git keeps it for about two weeks, which the panel says; when the copy cannot be taken, nothing is removed.
 - **A push, a pull and a checkout say how far along they are** to the window that asked (`commit.PROGRESS`):
   git is run with `--progress` and its error stream read as it arrives (the engine's `progress.ts`), and what it says of
   a failure is taken with the progress left out.

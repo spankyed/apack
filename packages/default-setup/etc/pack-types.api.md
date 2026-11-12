@@ -1176,6 +1176,21 @@ interface DirectoryContent {
     files: FileInfo[];
 }
 
+/** What a discard kept of what it removed, which can be put back for as long as git keeps it */
+interface DiscardKept {
+    /** Names what was kept, to put it back. Absent when nothing was: every file was too large, or there was none */
+    id?: string;
+    /** The paths removed without a copy, each too large to keep one of: from the top of the checkout */
+    notKept: string[];
+}
+
+/** What putting a discard back did, by path from the top of the checkout */
+interface DiscardRestored {
+    restored: string[];
+    /** Changed or made again since the discard, and left as they are */
+    left: string[];
+}
+
 interface DocumentDTO {
     id: EARS.EntityId;
     name: string;
@@ -1814,6 +1829,16 @@ type IncomingCommitEvents = {
 } | {
     type: 'commit.REVERT_FILES';
     paths: string[];
+}
+/** Which of what discarding these rows would remove cannot be brought back, for the window about to ask */
+ | {
+    type: 'commit.PREVIEW_DISCARD';
+    paths: string[];
+}
+/** Puts back what a discard kept, by the id its answer carried */
+ | {
+    type: 'commit.RESTORE_DISCARDED';
+    id: string;
 } | {
     type: 'commit.GET_ALL_BRANCHES';
 } | {
@@ -3156,12 +3181,25 @@ type OutgoingCommitEvents =
     type: 'commit.FILE_REVERTED';
     data: {
         path: string;
+        kept: DiscardKept;
     };
 } | {
     type: 'commit.FILES_REVERTED';
     data: {
         paths: string[];
+        kept: DiscardKept;
     };
+} | {
+    type: 'commit.DISCARD_PREVIEWED';
+    data: {
+        paths: string[];
+        notKept: string[];
+    };
+} | {
+    type: 'commit.DISCARD_RESTORED';
+    data: {
+        id: string;
+    } & DiscardRestored;
 } | {
     type: 'commit.ERROR_RECEIVED';
     data: CommitFailure;
