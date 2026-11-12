@@ -6,6 +6,8 @@
         <div
           ref="container"
           :class="['h-full w-full p-2', bellFlashing ? 'bg-neutral-600' : 'bg-[#1e1e1e]']"
+          @dragover="onDragOver"
+          @drop="onDrop"
           :data-bell-flash="bellFlashing ? 'true' : undefined"
         ></div>
         <ScrollToBottomFob :visible="showScrollFob" @click="scrollToBottom()" />
@@ -128,6 +130,7 @@ import { terminalPool, type TerminalAttachment, type Command } from '#features/c
 import TerminalMenuExtras from '#features/code/fe/features/terminal/TerminalMenuExtras.vue'
 import TerminalRewind from '#features/code/fe/features/terminal/TerminalRewind.vue'
 import { panelChild } from '../features/children.ts';
+import { dropShellOf, dropText } from '../utils/drop-text.ts';
 
 /* --------------------------------------------------------------------------
  * Props & actor -------------------------------------------------------------------------- */
@@ -199,6 +202,34 @@ const pasteClipboard = () => {
 }
 
 const selectAll = () => attachment?.selectAll()
+
+/* --------------------------------------------------------------------------
+ * Drops ---------------------------------------------------------------------
+ * Files dropped on the terminal insert their paths as a paste, quoted for the shell it runs (D9). Only a
+ * drag that carries files is taken: text dragged in is left to the browser, and nothing here takes focus. */
+const carriesFiles = (event: DragEvent): boolean => Array.from(event.dataTransfer?.types ?? []).includes('Files')
+
+const onDragOver = (event: DragEvent) => {
+  if (!carriesFiles(event)) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+}
+
+const onDrop = (event: DragEvent) => {
+  if (!carriesFiles(event)) return
+  // Taken even when nothing is inserted: a file dropped on the page would otherwise open in the window
+  event.preventDefault()
+  const shell = dropShellOf(props.terminalInfo.shell)
+  const getPath = window.electronAPI?.fileUtils?.getPathForFile
+  if (shell === undefined || !getPath || !attachment) return
+  const paths: string[] = []
+  for (const file of Array.from(event.dataTransfer?.files ?? [])) {
+    const path: string = getPath(file)
+    if (path) paths.push(path)
+  }
+  const text = dropText(paths, shell)
+  if (text) attachment.paste(text)
+}
 
 const clearTerminal = () => attachment?.clear()
 
