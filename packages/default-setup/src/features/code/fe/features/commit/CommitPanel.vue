@@ -212,7 +212,7 @@
       class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
       <span class="flex-1">
-        Discarded {{ lastDiscard.paths.length === 1 ? lastDiscard.paths[0] : `${lastDiscard.paths.length} changes` }}. Git keeps what was removed for about two weeks.
+        Discarded {{ lastDiscard.paths.length === 1 ? lastDiscard.paths[0] : `${lastDiscard.paths.length} changes` }}. What was removed is kept for 14 days.
         <template v-if="lastDiscard.notKept.length > 0">
           {{ lastDiscard.notKept.length === 1 ? 'One file was' : `${lastDiscard.notKept.length} files were` }} too large to keep.
         </template>

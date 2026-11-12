@@ -102,6 +102,20 @@ A read is let fetch only inside `fetchingMissing(read)`, where it waits in line 
 git that cannot be told not to fetch, every read in a partial clone waits in that line. Writes
 (a checkout, a merge) fetch what they need, as git does.
 
+## Copies of the working tree
+
+**A copy is kept outside the repository, and nothing of the repository's is written to keep it.** Each repository
+has a store of its own: a bare git directory that borrows the repository's objects. The app names its place
+(`RepositoryTies.checkpointDirectory`): under the pack's own data (`getDataDirPath('checkpoints')`), one store per
+repository by the real path of its common git directory. A checkpoint (`checkpoint(paths?)`) is a commit there.
+Commands run against the repository's own git directory, so what the tree, `info/exclude` and the user's own
+excludes ignore is left out as it is by the user's git, with an index of the store's and objects written into the
+store. `changedSince` and `restoreCheckpoint` compare and put back.
+
+A file over `KEPT_FILE_LIMIT` (10 MB) is left out, named, and never put back or removed. Checkpoints are kept for
+14 days, and the oldest are dropped first while a store is over 1 GB. A discard keeps what it removes as a
+checkpoint of those files, so a prune of the repository does not lose it.
+
 ## How what the watcher names is held
 
 A watched repository reads only the paths its watcher named. Beside the listed cases (`noted-paths.spec.ts`), the
