@@ -18,7 +18,7 @@ six `@xterm/*` packages are gone from this repository.
 > `0fa3d577a561` (2026-11-06), 5,511 commits later. Phase 0a compared the new broker core with the broker's
 > *previous* parser and never with the window, so the claim was not tested, and a later comparison found
 > the two disagreeing on the cursor's column for 7 of 19 strings.
-> [The integration review](../../issues/ISSUE-ghostty-integration-review.md) has the measurements.
+> [The integration review](../issues/ISSUE-ghostty-integration-review.md) has the measurements.
 `vendor/apack-terminal.rev` names the merged broker. `xterm-256color` stays as the advertised `TERM`,
 being a terminfo name and not a dependency.
 
