@@ -25,6 +25,7 @@ export interface OpenOptions {
   record?: string
   restore?: boolean
   images?: boolean
+  marksKey?: string
 }
 
 export interface OpenedSession {
@@ -179,8 +180,10 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       cwd: reportedCwds.get(id) ?? null,
       command: null,
       running: false,
-      exitStatus: null,
+      outcome: null,
       finished: finishedCommands.get(id) ?? 0,
+      vouched: false,
+      refused: 0,
     }),
     pause: async () => { flow.push({ id, kind: 'pause' }) },
     resume: async () => { flow.push({ id, kind: 'resume' }) },
@@ -294,7 +297,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     // Both halves of the fact: what `facts()` answers afterwards, and the event that says it happened
     reportsCommandFinished: (id) => {
       finishedCommands.set(id, (finishedCommands.get(id) ?? 0) + 1)
-      listenersFor(id).onEvent?.({ kind: 'commandFinished', exitStatus: 0 })
+      listenersFor(id).onEvent?.({ kind: 'commandFinished', outcome: { kind: 'exited', code: 0 } })
     },
     deferResize: (id) => {
       let release = () => {}

@@ -2,6 +2,7 @@ import { featureSettings } from '#generated/settings.ts';
 
 import { newId } from '#generated/ears.ts';
 import * as path from 'path'
+import { randomBytes } from 'node:crypto'
 import type { TerminalInfo, TerminalCreate } from '../types.ts'
 import type { TerminalEntity } from '../repository/index.ts'
 import { EARS } from '#generated/ears.ts'
@@ -13,7 +14,7 @@ import { resolveAppEnvironment } from '@apackdev/sdk/env'
 import { TERMINAL_COLORS } from '../terminal-colors.ts'
 import { directoryToStart, shellToStart, submitFor } from './known-shells.ts'
 import { cwdAsReported } from '../utils/osc-cwd.ts'
-import { integrationDirectory, integrationFor } from './shell-integration.ts'
+import { integrationDirectory, integrationFor, MARKS_KEY_VARIABLE } from './shell-integration.ts'
 
 const logger = createLogger('terminal');
 
@@ -521,8 +522,16 @@ class TerminalService {
     // **Arranged before the shell starts, not typed into it after** (D3, F14). `undefined` means this
     // platform or shell has no arrangement yet, and the session is started exactly as the user would.
     const integration = await this.arrangeIntegration(shell, settings)
+    // **A key of its own for every shell whose hook vouches for its marks**, given to the shell and to
+    // the host and kept nowhere else: the hook puts it on the marks a command's record is made from, and
+    // the host believes no mark without it — so nothing printed into the terminal can say a command
+    // ended, or how. A shell with no such hook — none arranged, integration switched off, one whose hook
+    // has no language to carry a key — is given none, and what it reports stays a claim.
+    const marksKey = integration?.keyed ? randomBytes(16).toString('hex') : undefined
     return services.terminal.open({
-      cols, rows, shell, cwd, args: integration?.args, env: integration?.env, colors: TERMINAL_COLORS,
+      cols, rows, shell, cwd, args: integration?.args, colors: TERMINAL_COLORS,
+      env: marksKey ? { ...integration?.env, [MARKS_KEY_VARIABLE]: marksKey } : integration?.env,
+      ...(marksKey && { marksKey }),
       ...this.drawn(id, settings, restore),
     }, listeners)
   }

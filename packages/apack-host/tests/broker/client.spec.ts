@@ -252,6 +252,25 @@ describe('the broker client', () => {
     ]);
   });
 
+  it('gives the broker the key a session\'s marks are vouched with, and none for a session that has none', async () => {
+    // Which kind of session it is is decided by this one field, so the frame is what a case here can see.
+    // `apack-terminal/tests/broker.rs` is where what a key changes is proven
+    const fake = await recordingBroker({
+      ...GREETS,
+      spawn: [{ kind: 'spawned', session: 's-1', pid: 1 }, { kind: 'spawned', session: 's-2', pid: 2 }],
+    });
+    const marksKey = '00112233445566778899aabbccddeeff';
+    await fake.broker.open({ cols: 80, rows: 24, marksKey }, { onOutput() {}, onExit() {} });
+    await fake.broker.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+
+    const spawns = await settles(() => {
+      const sent = fake.requests().filter(request => (request as { kind: string }).kind === 'spawn');
+      if (sent.length < 2) throw new Error(`only ${sent.length} spawns reached the broker`);
+      return sent as Array<{ marks_key: string | null }>;
+    });
+    expect(spawns.map(spawn => spawn.marks_key)).toEqual([marksKey, null]);
+  });
+
   it('asks whether a pid is inside a session, and takes only the answer about that pid', async () => {
     // **The pid is the correlation.** The session cannot be: a caller admitting several claims has more
     // than one of these outstanding, so the first frame here is an answer about a pid nobody asked about
@@ -515,15 +534,15 @@ setInterval(() => {}, 1_000);
       .rejects.toThrow(/could not listen: its directory is open to other users/);
   });
   /**
-   * **A reported status of nothing is not a status of zero**, which is the one thing a typecheck cannot catch
-   * here: the wire is `exit_status` and the contract is `exitStatus`, and a mapping that filled an absent
-   * value with a default would report every command as having succeeded.
+   * **No command having ended is not a command having succeeded**, which is the one thing a typecheck cannot
+   * catch here: a mapping that filled an absent outcome with a default would report a session that has run
+   * nothing as one whose last command exited.
    */
-  it("reports a session's facts as the shell stated them, a missing status included", async () => {
+  it("reports a session's facts as the broker told them, no outcome included", async () => {
     const fake = await broker({
       ...OPENS,
       facts: [
-        { kind: 'facts', session: 's-1', cwd: '/home/me/w d', command: 'cargo test', running: true, exit_status: null, finished: 0 },
+        { kind: 'facts', session: 's-1', cwd: '/home/me/w d', command: 'cargo test', running: true, outcome: null, finished: 0, vouched: true, refused: 0 },
       ],
     });
     const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
@@ -532,8 +551,10 @@ setInterval(() => {}, 1_000);
       cwd: '/home/me/w d',
       command: 'cargo test',
       running: true,
-      exitStatus: null,
+      outcome: null,
       finished: 0,
+      vouched: true,
+      refused: 0,
       // A broker that answers no foreground says so as `null`, never as a missing field: a caller reading
       // `facts.foreground?.name` cannot tell those apart, and one reading `'foreground' in facts` would
       // get a different answer on Windows than on a shell this broker could not measure
@@ -553,8 +574,10 @@ setInterval(() => {}, 1_000);
           cwd: null,
           command: null,
           running: false,
-          exit_status: null,
+          outcome: null,
           finished: 7,
+          vouched: false,
+          refused: 2,
           foreground: { pid: 4321, name: 'vim' },
         },
       ],
@@ -565,20 +588,37 @@ setInterval(() => {}, 1_000);
       cwd: null,
       command: null,
       running: false,
-      exitStatus: null,
+      outcome: null,
       finished: 7,
+      vouched: false,
+      refused: 2,
       foreground: { pid: 4321, name: 'vim' },
     });
   });
 
-  it('reports a reported status as the number it was', async () => {
-    const fake = await broker({
-      ...OPENS,
-      facts: [{ kind: 'facts', session: 's-1', cwd: null, command: null, running: false, exit_status: 130, finished: 1 }],
-    });
-    const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+  /**
+   * **How a command ended is passed on as the broker told it, kind and all.** The kind is what says
+   * whether a status is one — a mapping that kept the number and dropped who said it would hand a caller
+   * a claim as an exit.
+   */
+  it('reports how the last command ended as the kind of outcome the broker told', async () => {
+    const outcomes = [
+      { kind: 'exited', code: 130 },
+      { kind: 'claimed', code: 0 },
+      { kind: 'claimed', code: null },
+      { kind: 'unknown', why: 'superseded' },
+    ] as const;
+    for (const outcome of outcomes) {
+      const fake = await broker({
+        ...OPENS,
+        facts: [{ kind: 'facts', session: 's-1', cwd: null, command: null, running: false, outcome, finished: 1, vouched: outcome.kind !== 'claimed', refused: 0 }],
+      });
+      const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
 
-    expect((await session.facts()).exitStatus).toBe(130);
+      expect((await session.facts()).outcome).toEqual(outcome);
+      // One broker a turn: only the last one started is the one the case's end stops
+      await fake.close();
+    }
   });
 
   it("searches a session's screen and gives each answer to the session that asked", async () => {
