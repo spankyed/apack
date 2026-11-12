@@ -444,7 +444,8 @@ export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
 export const GIT_ERROR_CODES = [
   'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
-  'unsafe-ownership', 'untrusted',
+  'unsafe-ownership', 'signing-failed', 'unrelated-histories', 'nothing-to-commit', 'branch-exists', 'host-refused',
+  'untrusted',
 ] as const
 export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
 
