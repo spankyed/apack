@@ -50,7 +50,11 @@ Out:
 
 ## Current handoff
 
-- Branch: `session/terminal-parity-goal` (this document), from `master` 32ca2031a2.
+- Worktrees (created 2026-11-12, each on its own branch):
+  - `monorepo-worktrees.noindex/terminal-parity` on `session/terminal-parity-work`: the Code surface, settings, Electron main and preload. Its `vendor/apack-terminal` links to the broker worktree below.
+  - `apack-terminal-worktrees.noindex/terminal-parity` on `session/terminal-parity-view`: the view and the broker. Changes to it are committed there and pinned from the monorepo only after they land.
+  - This document: `monorepo-worktrees.noindex/native-stall` on `session/terminal-parity-goal`, PR #444.
+- Pin: the monorepo's `master` pins the broker at `efe5d84`, which is 24 commits behind the broker's `master`. Bump `vendor/apack-terminal.rev` in the same change that lands the first view commit.
 - Next deliverable: Phase 0. It has no code dependencies.
 - Proven: the source findings above. Nothing run end to end yet.
 - Unresolved: none blocking. D6 is a manual step for the person; see Phase 6.
