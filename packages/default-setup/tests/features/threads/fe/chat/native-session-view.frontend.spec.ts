@@ -3,14 +3,15 @@ import { createApp, h, ref, computed, nextTick, type App } from 'vue'
 import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-terminal-views.ts'
 import ClaudeNativeSession from '#features/threads/fe/chat/ClaudeNativeSession.vue'
 const actor = vi.hoisted(() => ({ send: vi.fn() }))
+const drawing = vi.hoisted(() => ({ focus: vi.fn() }))
 const links = vi.hoisted(() => ({ open: vi.fn() }))
 const activeSurface = ref({ id: 'default-setup/threads' })
 const state = ref({ context: { nativeTerminalViews: {} as Record<string, ClaudeTerminalViewSnapshot> } })
 vi.mock('@apackdev/sdk/fe', () => ({ useSurface: () => actor, useShell: () => ({ activeSurface }), openLink: links.open }))
 vi.mock('@xstate/vue', () => ({ useSelector: (_actor: unknown, select: (value: typeof state.value) => unknown) => computed(() => select(state.value)) }))
-vi.mock('#extensions/terminal/pool.ts', () => ({ mountNativeTerminal: () => ({ detach: vi.fn(), focus: vi.fn(),setInputBlocked:vi.fn(), fit: () => ({ columns: 100, rows: 30 }), write: vi.fn() }) }))
+vi.mock('#extensions/terminal/pool.ts', () => ({ mountNativeTerminal: () => ({ detach: vi.fn(), focus: drawing.focus,setInputBlocked:vi.fn(), fit: () => ({ columns: 100, rows: 30 }), write: vi.fn() }) }))
 let app: App | undefined
-beforeEach(() => { actor.send.mockClear(); links.open.mockClear(); activeSurface.value = { id: 'default-setup/threads' }; state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
+beforeEach(() => { actor.send.mockClear(); links.open.mockClear(); drawing.focus.mockClear(); activeSurface.value = { id: 'default-setup/threads' }; state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); vi.unstubAllGlobals() })
 async function fixture(continuation?:import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation) {
   const active = vi.fn(), root = document.createElement('div'); document.body.append(root)
@@ -595,4 +596,18 @@ it('keeps a pending native open minimized after navigation, until the user expli
   f.publish({ ...main, task: { ownerId: 'owner', taskId: '@main-view', revision: request.revision, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()
   Array.from(section.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === 'Use native interface' || button.textContent?.includes('Use native interface'))!.click(); await nextTick()
   expect(section.classList.contains('native-session--expanded')).toBe(true)
+})
+
+it.each(['main', 'background'] as const)('keeps canvas focus when a late %s drawing arrives after navigation', async kind => {
+  const f = await fixture()
+  const attachment = { requestId: 'late-attachment', revision: 1, sessionId: 'session', continuedInSessionId: 'child-session', status: 'opening' as const }
+  f.publish(kind === 'main' ? { opening: true, openingId: 'late-main', output: [] } : { ...f.snapshot, attachment }); await nextTick()
+  activeSurface.value = { id: 'default-setup/code' }; await nextTick()
+  const field = document.createElement('input'); document.body.append(field); field.focus()
+  drawing.focus.mockClear()
+  if (kind === 'main') f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, terminalSession: { id: 'late-main-drawing', target: null } } })
+  else f.publish({ ...f.snapshot, attachment: { ...attachment, status: 'ready', state: { id: 'late-child-owner', jobId: 'job', sessionId: 'child-session', cwd: '/child', clientPid: 92, status: 'live', output: [], terminalSession: { id: 'late-child-drawing', target: null } } } })
+  await nextTick(); await nextTick(); await nextTick()
+  expect(drawing.focus).not.toHaveBeenCalled()
+  expect(document.activeElement).toBe(field)
 })

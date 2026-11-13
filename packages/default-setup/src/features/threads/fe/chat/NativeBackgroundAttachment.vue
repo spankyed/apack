@@ -26,7 +26,7 @@ watch(() => props.attachment.state, async state => {
   if (attached !== state.id) {
     detach();attached=state.id
     terminal=mountNativeTerminal(state.id,state.terminalSession,viewport.value,size=>{if(props.attachment.state?.id===state.id)emit('resize',state.id,size)},state.inputBlocked===true)
-    terminal.focus()
+    if (props.expanded) terminal.focus()
   }
   terminal?.setInputBlocked(state.inputBlocked===true)
 },{immediate:true,flush:'post'})

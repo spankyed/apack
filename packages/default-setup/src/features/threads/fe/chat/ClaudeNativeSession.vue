@@ -336,7 +336,7 @@ watch([view, active], async ([value, showing]) => {
   if (attachedOwner !== ownerId||attachedSession!==sessionKey) {
     detach(); attachedOwner = ownerId; attachedSession=sessionKey
     terminal = mountNativeTerminal(ownerId, session, viewport.value, size => actor.send({ type: 'CLAUDE_TERMINAL_RESIZE', ...identity(), ownerId, ...size }), value?.state?.inputBlocked===true)
-    terminal.focus()
+    if (expanded.value) terminal.focus()
   }
   terminal?.setInputBlocked(value?.state?.inputBlocked===true)
 }, { flush: 'post' })
