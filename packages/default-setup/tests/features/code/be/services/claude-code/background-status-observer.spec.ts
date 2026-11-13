@@ -82,7 +82,7 @@ it('keeps formatter output independent of the parent and refuses retired policy/
   const config={command:'cat',shellPrefix:null,policy:'personal'}
   const first=await f.post('/background-status',{...f.message(token),formatter:config});expect(first.code).toBe(200)
   const prefix=first.value.shellPrefix,producer=JSON.parse(Buffer.from(prefix.slice(prefix.lastIndexOf(' -')+2),'base64url').toString())
-  const output={...producer,startedAt:'10',stdout:'original child status'}
+  const output={...producer,startedAt:'10',totalCostUsd:0.001,stdout:'original child status'}
   expect((await f.post('/background-formatter',output)).code).toBe(200);expect(f.observer.value?.statusLine).toBe('original child status')
   await f.observer.releaseParent();expect((await f.post('/background-status',{...f.message(token,2),formatter:config})).code).toBe(200)
   expect(f.observer.value?.statusLine).toBe('original child status')
@@ -90,7 +90,7 @@ it('keeps formatter output independent of the parent and refuses retired policy/
   expect(f.observer.value?.statusLine).toBeUndefined();expect((await f.post('/background-formatter',{...output,startedAt:'20'})).code).toBe(409)
   const fresh=await f.post('/background-status',{...f.message(token,4),formatter:config})
   const next=fresh.value.shellPrefix,current=JSON.parse(Buffer.from(next.slice(next.lastIndexOf(' -')+2),'base64url').toString())
-  f.replace();expect((await f.post('/background-formatter',{...current,startedAt:'30',stdout:'wrong worker'})).code).toBe(409)
+  f.replace();expect((await f.post('/background-formatter',{...current,startedAt:'30',totalCostUsd:0.001,stdout:'wrong worker'})).code).toBe(409)
  }finally{await f.observer.close()}
 })
 
@@ -107,7 +107,7 @@ it.skipIf(process.platform==='win32')('recovers the same private endpoint after 
   const message=(token:string)=>({sessionId:child,pid:119,token,sequence:1,metadata:{model:'sonnet',turns:2},usage:{startedAt:1},formatter:{command:'printf native',shellPrefix:null,policy:'{}'}})
   const first=await post('/background-status',message(registered.token));expect(first.code).toBe(200)
   const oldConfig=JSON.parse(Buffer.from(first.value.shellPrefix.split(' -').at(-1),'base64url').toString())
-  const captured={...oldConfig,stdout:'old native output',startedAt:'1'}
+  const captured={...oldConfig,stdout:'old native output',startedAt:'1',totalCostUsd:0.001}
   expect((await post('/background-formatter',captured)).code).toBe(200)
   const plugin=join(endpoint.directory,'original-module');await writeFile(plugin,'retained original plugin')
   const exited=once(processOwner,'exit');processOwner.kill('SIGKILL');await exited
@@ -133,7 +133,7 @@ it('publishes refreshed usage and its unchanged valid formatter as one snapshot'
   const formatter={command:'printf steady',shellPrefix:null,policy:'{}'}
   const first=await f.post('/background-status',{...f.message(registered.token),formatter})
   const config=JSON.parse(Buffer.from(first.value.shellPrefix.split(' -').at(-1),'base64url').toString())
-  expect((await f.post('/background-formatter',{...config,startedAt:'1',stdout:'Native steady status'})).code).toBe(200)
+  expect((await f.post('/background-formatter',{...config,startedAt:'1',totalCostUsd:0.001,stdout:'Native steady status'})).code).toBe(200)
   expect(f.observer.value?.statusLine).toBe('Native steady status')
   const detach=f.observer.subscribe(()=>snapshots.push(f.observer.value))
   expect((await f.post('/background-status',{...f.message(registered.token,2),metadata:{model:'sonnet',turns:3},formatter})).code).toBe(200)
@@ -151,7 +151,7 @@ it('clears an old formatter immediately when a new lease overtakes a pending sta
  try{
   const lease=(await f.post('/background-register',{sessionId:child,pid:119})).value.token,formatter={command:'printf steady',shellPrefix:null,policy:'{}'}
   const configured=await f.post('/background-status',{...f.message(lease),formatter}),config=JSON.parse(Buffer.from(configured.value.shellPrefix.split(' -').at(-1),'base64url').toString())
-  await f.post('/background-formatter',{...config,startedAt:'1',stdout:'Old lease output'})
+  await f.post('/background-formatter',{...config,startedAt:'1',totalCostUsd:0.001,stdout:'Old lease output'})
   f.observer.subscribe(()=>snapshots.push(f.observer.value))
   f.authorities[0].identify.mockImplementationOnce(()=>{started();return held})
   pending=f.post('/background-status',{...f.message(lease,2),formatter});await ready
@@ -292,4 +292,26 @@ it('still removes unclaimed startup files at the existing registration deadline'
   await vi.advanceTimersByTimeAsync(1);expect(f.observer.available).toBe(false)
   await f.observer.close();await expect(access(startup)).rejects.toThrow()
  } finally {await f.observer.close();vi.useRealTimers()}
+})
+
+it('does not combine a helper observation with an earlier or later native cost snapshot',async()=>{
+ const f=await fixture()
+ try{
+  const lease=(await f.post('/background-register',{sessionId:child,pid:119})).value.token
+  const formatter={command:'printf cost',shellPrefix:null,policy:'{}'}
+  const first=await f.post('/background-status',{...f.message(lease),formatter})
+  const config=JSON.parse(Buffer.from(first.value.shellPrefix.split(' -').at(-1),'base64url').toString())
+  expect((await f.post('/background-formatter',{...config,startedAt:'1',totalCostUsd:0.001,stdout:'Cost $0.001'})).code).toBe(200)
+  expect(f.observer.value?.statusLine).toBe('Cost $0.001')
+  expect((await f.post('/background-formatter',{...config,startedAt:'2',totalCostUsd:0.002,stdout:'Cost $0.002'})).code).toBe(200)
+  expect(f.observer.value).toMatchObject({totalCostUsd:0.001})
+  expect(f.observer.value?.statusLine).toBeUndefined()
+  await f.post('/background-status',{...f.message(lease,2),usage:{startedAt:1,cost:{usd:0.002}},formatter})
+  expect(f.observer.value).toMatchObject({totalCostUsd:0.002,statusLine:'Cost $0.002'})
+  await f.post('/background-status',{...f.message(lease,3),usage:{startedAt:1,cost:{usd:0.003}},formatter})
+  expect(f.observer.value?.totalCostUsd).toBe(0.003)
+  expect(f.observer.value?.statusLine).toBeUndefined()
+  await f.post('/background-formatter',{...config,startedAt:'3',totalCostUsd:0.003,stdout:'Cost $0.003'})
+  expect(f.observer.value).toMatchObject({totalCostUsd:0.003,statusLine:'Cost $0.003'})
+ }finally{await f.observer.close()}
 })

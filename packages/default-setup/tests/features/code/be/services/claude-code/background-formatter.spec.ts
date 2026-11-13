@@ -32,7 +32,7 @@ async function fixture() {
 it('streams the exact native helper input/output and publishes only its bound session',async()=>{
  const f=await fixture(),reply=f.formatter.configure(message())!,result=await f.run(reply.shellPrefix!,'cat')
  expect(result.code).toBe(0);expect(result.stdout).toEqual(input);expect(f.exports).toHaveLength(1)
- expect(f.exports[0]).toMatchObject({path:'/background-formatter',token:'broker-token',body:{sessionId:message().sessionId,pid:119,token:'lease',stdout:input.toString()}})
+ expect(f.exports[0]).toMatchObject({path:'/background-formatter',token:'broker-token',body:{sessionId:message().sessionId,pid:119,token:'lease',totalCostUsd:0,stdout:input.toString()}})
  expect(f.formatter.matches(f.exports[0].body)).toBe(true)
 })
 it('preserves native existing-prefix quoting and flags, including executable paths containing apostrophes',async()=>{
@@ -66,15 +66,15 @@ it('refuses foreign-session helper output while preserving its bytes',async()=>{
 })
 it('retains one generation through identical polls and invalidates output on helper/policy/lease changes',()=>{
  const f=createClaudeBackgroundFormatter({launcher:'/owned/launcher',socketPath:'/owned/socket',brokerToken:'private',changed:vi.fn()})
- const first=f.configure(message())!,old={...config(first.shellPrefix!),startedAt:'1',stdout:'original status'}
+ const first=f.configure(message())!,old={...config(first.shellPrefix!),startedAt:'1',totalCostUsd:0.001,stdout:'original status'}
  f.accept(old);expect(f.value).toBe('original status');expect(f.configure(message())).toEqual(first)
  const next=f.configure(message('cat',null,'managed'))!;expect(next).not.toEqual(first);expect(f.value).toBeUndefined();expect(()=>f.accept(old)).toThrow('generation expired')
- const fresh={...config(next.shellPrefix!),startedAt:'2',stdout:'managed status'};f.accept(fresh)
+ const fresh={...config(next.shellPrefix!),startedAt:'2',totalCostUsd:0.001,stdout:'managed status'};f.accept(fresh)
  f.configure({...message('cat',null,'managed'),token:'new-lease'});expect(f.value).toBeUndefined();expect(()=>f.accept(fresh)).toThrow()
 })
 it('restores the exact user prefix when native policy withdraws the configured command',()=>{
  const f=createClaudeBackgroundFormatter({launcher:'/owned/launcher',socketPath:'/owned/socket',brokerToken:'private',changed:vi.fn()})
- const old={...config(f.configure(message('cat','user -flag'))!.shellPrefix!),startedAt:'1',stdout:'old'};f.accept(old)
+ const old={...config(f.configure(message('cat','user -flag'))!.shellPrefix!),startedAt:'1',totalCostUsd:0.001,stdout:'old'};f.accept(old)
  expect(f.configure(message(null,'user -flag','hooks-disabled'))).toEqual({shellPrefix:'user -flag',originalPrefix:'user -flag'});expect(f.value).toBeUndefined();expect(()=>f.accept(old)).toThrow()
  f.reset();expect(f.matches(old)).toBe(false)
 })
@@ -90,15 +90,15 @@ it('unwraps only its own same-worker observer after a native hook reload',()=>{
 it('refuses a late older helper even while the native helper generation is unchanged',()=>{
  const f=createClaudeBackgroundFormatter({launcher:'/owned/launcher',socketPath:'/owned/socket',brokerToken:'private',changed:vi.fn()})
  const producer=config(f.configure(message())!.shellPrefix!)
- f.accept({...producer,startedAt:'20',stdout:'new output'});expect(()=>f.accept({...producer,startedAt:'10',stdout:'late old output'})).toThrow()
+ f.accept({...producer,startedAt:'20',totalCostUsd:0.001,stdout:'new output'});expect(()=>f.accept({...producer,startedAt:'10',totalCostUsd:0.001,stdout:'late old output'})).toThrow()
  expect(f.value).toBe('new output')
 })
 
 it('matches original native line normalization and withdraws an empty successful helper result',()=>{
  const f=createClaudeBackgroundFormatter({launcher:'/owned/launcher',socketPath:'/owned/socket',brokerToken:'private',changed:vi.fn()})
  const producer=config(f.configure(message())!.shellPrefix!)
- f.accept({...producer,startedAt:'1',stdout:'  first  \n \n second \n'});expect(f.value).toBe('first\nsecond')
- f.accept({...producer,startedAt:'2',stdout:' \n '});expect(f.value).toBeUndefined()
+ f.accept({...producer,startedAt:'1',totalCostUsd:0.001,stdout:'  first  \n \n second \n'});expect(f.value).toBe('first\nsecond')
+ f.accept({...producer,startedAt:'2',totalCostUsd:0.001,stdout:' \n '});expect(f.value).toBeUndefined()
 })
 
 it('hides the internal prefix and restores the original Electron-mode environment before delegation',async()=>{
@@ -107,4 +107,31 @@ it('hides the internal prefix and restores the original Electron-mode environmen
  const environment={...process.env,CLAUDE_CODE_SHELL_PREFIX:prefix,ELECTRON_RUN_AS_NODE:'original-value'}
  const result=await f.run(prefix,command,input,environment)
  expect(result.code).toBe(0);expect(result.stdout.toString()).toBe('unset:original-value')
+})
+
+it('rejects invalid helper-input costs without replacing a valid observation',()=>{
+ const f=createClaudeBackgroundFormatter({launcher:'/owned/launcher',socketPath:'/owned/socket',brokerToken:'private',changed:vi.fn()})
+ const producer=config(f.configure(message())!.shellPrefix!)
+ f.accept({...producer,startedAt:'1',totalCostUsd:0.001,stdout:'Valid status'})
+ for(const totalCostUsd of [undefined,null,-1,Infinity,NaN,'0.001']) {
+  expect(()=>f.accept({...producer,startedAt:'2',totalCostUsd,stdout:'Invalid status'})).toThrow()
+ }
+ expect(f.value).toBe('Valid status');expect(f.matchesCost(0.001)).toBe(true)
+ expect(f.matchesCost(0.002)).toBe(false);expect(f.matchesCost(undefined)).toBe(false)
+})
+it('preserves native helper bytes without publishing malformed original input cost',async()=>{
+ const f=await fixture(),reply=f.formatter.configure(message())!
+ const malformed=Buffer.from(JSON.stringify({...JSON.parse(input.toString()),cost:{total_cost_usd:-1}}))
+ const result=await f.run(reply.shellPrefix!,'cat',malformed)
+ expect(result.code).toBe(0);expect(result.stdout).toEqual(malformed);expect(f.exports).toEqual([])
+})
+it('unwraps an authenticated surviving worker prefix across immutable launcher updates',()=>{
+ const options={socketPath:'/owned/socket',brokerToken:'private',changed:vi.fn()}
+ const old=createClaudeBackgroundFormatter({...options,launcher:'/owned/'+ 'a'.repeat(64)})
+ const previous=old.configure(message('cat','original -flag'))!.shellPrefix!
+ const current=createClaudeBackgroundFormatter({...options,launcher:'/owned/'+ 'b'.repeat(64)})
+ const updated=current.configure({...message('cat',previous),token:'fresh-lease'})!
+ expect(updated.originalPrefix).toBe('original -flag')
+ const unrelated='/unowned/'+ 'a'.repeat(64)+' -'+previous.split(' -').at(-1)
+ expect(current.configure(message('cat',unrelated))!.originalPrefix).toBe(unrelated)
 })

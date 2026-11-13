@@ -272,7 +272,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
       const value = status.value
       if (!value) return
       const current = childUi && childUi.registration === status.registration && childUi.identity === JSON.stringify(status.identity) ? childUi : undefined
-      return {...value, ...(formatterRegistration === status.registration && formatterSequence === status.sequence && formatter?.value !== undefined ? {statusLine: formatter.value} : {}),
+      return {...value, ...(formatterRegistration === status.registration && formatterSequence === status.sequence && formatter?.matchesCost(value.totalCostUsd) && formatter.value !== undefined ? {statusLine: formatter.value} : {}),
         ...(current ? {agents: current.helper.tasks.filter(task => task.statusText !== undefined)} : {})}
     },
     get available() { return !closed },

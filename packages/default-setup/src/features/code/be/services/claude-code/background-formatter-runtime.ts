@@ -21,8 +21,8 @@ const result=await new Promise(resolve=>{child.once('error',()=>resolve({code:12
 for(const[signal,handler]of handlers)process.off(signal,handler);
 if(observed&&!result.signal&&inputBytes<=65536){
  let payload;try{payload=JSON.parse(Buffer.concat(input).toString());}catch{}
- if(payload?.session_id===config.sessionId&&typeof payload.version==='string'&&payload.cost&&payload.context_window&&!payload.hook_event_name){
-  await new Promise(resolve=>{const request=http.request({socketPath:config.socketPath,path:'/background-formatter',method:'POST',headers:{'x-apack-native-token':config.brokerToken,'content-type':'application/json'},timeout:150},response=>{response.resume();response.on('end',resolve);});request.on('timeout',()=>{request.destroy();resolve();});request.on('error',resolve);request.end(JSON.stringify({sessionId:config.sessionId,pid:config.pid,token:config.token,generation:config.generation,startedAt,code:result.code,truncated:outputBytes>32768,stdout:result.code===0&&outputBytes<=32768?Buffer.concat(output).toString('utf8'):''}));});
+ if(payload?.session_id===config.sessionId&&typeof payload.version==='string'&&payload.cost&&typeof payload.cost.total_cost_usd==='number'&&Number.isFinite(payload.cost.total_cost_usd)&&payload.cost.total_cost_usd>=0&&payload.context_window&&!payload.hook_event_name){
+  await new Promise(resolve=>{const request=http.request({socketPath:config.socketPath,path:'/background-formatter',method:'POST',headers:{'x-apack-native-token':config.brokerToken,'content-type':'application/json'},timeout:150},response=>{response.resume();response.on('end',resolve);});request.on('timeout',()=>{request.destroy();resolve();});request.on('error',resolve);request.end(JSON.stringify({sessionId:config.sessionId,pid:config.pid,token:config.token,generation:config.generation,startedAt,totalCostUsd:payload.cost.total_cost_usd,code:result.code,truncated:outputBytes>32768,stdout:result.code===0&&outputBytes<=32768?Buffer.concat(output).toString('utf8'):''}));});
  }
 }
 if(result.signal)process.kill(process.pid,result.signal);else process.exitCode=result.code??1;
