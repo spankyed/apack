@@ -128,7 +128,7 @@ export interface HostRuntimeServices {
     inference: InferenceService;
     onboarding: OnboardingService;
     runHistory: RunHistory;
-    secrets: SecretsService;
+    secrets: SecretsAdmin;
     settings: SettingsAdmin;
     terminal: TerminalService;
 }

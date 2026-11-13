@@ -45,7 +45,7 @@ const runtime: HostRuntime = {
       generateText: unused, streamText: unused, createAgent: unused, embed: unused, embedMany: unused,
       generateImage: unused, generateSpeech: unused, transcribe: unused, rerank: unused,
     },
-    secrets: { status: unused, list: unused, select: unused, rename: unused, delete: unused },
+    secrets: { status: unused, list: unused, select: unused, rename: unused, delete: unused, forPack: unused },
     filesystem: { writeFile: unused, readFile: unused, exists: unused, mkdir: unused, readDir: unused, remove: unused, rename: unused, stat: unused },
     terminal: { open: unused, adopt: unused, sessions: unused, rewind: unused, at: unused },
     settings: {

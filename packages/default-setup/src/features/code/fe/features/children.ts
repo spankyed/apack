@@ -6,6 +6,7 @@ import type { AnyActorRef, AnyEventObject, EventFrom } from 'xstate';
 import type { CodeActionsActor } from './actions/state.ts';
 import type { CommitActor } from './commit/state.ts';
 import type { ExplorerActor } from './explorer/state.ts';
+import type { CodeGitHubActor } from './github/state.ts';
 import type { CodePromptsActor } from './prompts/state.ts';
 import type { PullRequestActor } from './pull-request/state.ts';
 import type { SearchActor } from './search/state.ts';
@@ -20,11 +21,12 @@ export interface CodeChildren {
   search: SearchActor;
   codeActions: CodeActionsActor;
   codePrompts: CodePromptsActor;
+  github: CodeGitHubActor;
 }
 
 /** Those ids at runtime, for the code that reaches every child in turn */
 export const CODE_CHILD_IDS = [
-  'explorer', 'terminal', 'commit', 'pr', 'search', 'codeActions', 'codePrompts',
+  'explorer', 'terminal', 'commit', 'pr', 'search', 'codeActions', 'codePrompts', 'github',
 ] as const satisfies readonly (keyof CodeChildren)[];
 
 /**

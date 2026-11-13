@@ -1,4 +1,4 @@
-import { _captureHostServices, type SettingsService, type PackServiceAccess } from '@apackdev/sdk/services';
+import { _captureHostServices, type SecretsAdmin, type SecretsService, type SettingsService, type PackServiceAccess } from '@apackdev/sdk/services';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import type { SettingsTarget } from '@apackdev/sdk/types';
 import type { _packServiceSelection } from '@apackdev/sdk/framework';
@@ -91,9 +91,18 @@ export function createPackServiceBinding({ caller, selection, settings, provider
     cache.set(value, facade);
     return facade;
   };
+  // The host's secrets bound to this caller, one per host binding, so a provider check sees the same value each time
+  const ownSecrets = new WeakMap<SecretsAdmin, SecretsService>();
+  const boundToCaller = (name: string, value: unknown): unknown => {
+    if (name !== 'secrets' || value === undefined) return value;
+    const admin = value as SecretsAdmin;
+    let bound = ownSecrets.get(admin);
+    if (!bound) ownSecrets.set(admin, bound = admin.forPack(caller));
+    return bound;
+  };
   const createServices = (attributed?: ReturnType<typeof host.forAction>) => {
     const resolve = (packId: string, name: string): ProviderService | undefined => {
-      const source = packId === 'host' ? { generation: host, value: attributed && Object.hasOwn(attributed, name) ? Reflect.get(attributed, name) : host.get(name) } : provider(packId, name);
+      const source = packId === 'host' ? { generation: host, value: boundToCaller(name, attributed && Object.hasOwn(attributed, name) ? Reflect.get(attributed, name) : host.get(name)) } : provider(packId, name);
       return source && { generation: source.generation, value: overrides?.has(name) ? overrides.get(name) : source.value };
     };
     const supplied = Object.create(null) as Record<string, unknown>;

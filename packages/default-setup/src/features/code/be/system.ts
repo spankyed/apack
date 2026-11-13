@@ -35,6 +35,7 @@ import { explorerSystem } from './features/explorer.ts'
 import { searchSystem } from './features/search.ts'
 import { commitSystem } from './features/commit.ts'
 import { pullRequestSystem } from './features/pull-request.ts'
+import { githubSystem } from './features/github.ts'
 import { terminalSystem } from './features/terminal.ts'
 import { actionsSystem } from './features/actions.ts'
 import { promptsSystem } from './features/prompts.ts'
@@ -87,6 +88,7 @@ export const systemMachine = setup({
     searchSystem,
     commitSystem,
     pullRequestSystem,
+    githubSystem,
     terminalSystem,
     actionsSystem,
     promptsSystem
@@ -128,6 +130,7 @@ export const systemMachine = setup({
           baseDirectory: context.baseDirectory
         }
       });
+      enqueue.spawnChild('githubSystem', { id: 'github' });
       enqueue.spawnChild('actionsSystem', { id: 'codeActions' });
       enqueue.spawnChild('promptsSystem', { id: 'codePrompts' });
     }),

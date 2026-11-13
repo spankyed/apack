@@ -1,6 +1,6 @@
 # GitHub without the GitHub CLI
 
-Status: planned, 2026-11-12. Not started.
+Status: phase 1 built against a stand-in, 2026-11-13; waiting on the OAuth App's client id.
 
 ```text
 # Goal: the code feature reaches GitHub on its own sign-in, and no longer runs gh
@@ -77,4 +77,20 @@ hands it an environment, as it does today.
 
 ## Current handoff
 
-Nothing started. Next: register the OAuth App (Needs from the user), then phase 1.
+**Phase 1 is built and its specs pass against a stand-in for GitHub.** What is done:
+
+- `services.secrets` has a pack-owned face, `own` (`get`, `set`, `delete`), bound to the pack the host admitted
+  (`packages/apack-host/src/packs/service-binding.ts`) and kept in the secrets file beside the user's keys,
+  encrypted alike (`secrets/store.ts`, `owned`). Another pack cannot read one: `apack-host`'s
+  `tests/secrets/store.spec.ts`.
+- The device flow is `services.github` (`code/be/services/github.ts`), over GitHub's endpoints and a wait it is
+  handed; the code system's `github` child (`code/be/features/github.ts`) runs it and keeps the token as the
+  pack's own secret; the code feature's Settings form shows the code, then the account with Sign out
+  (`code/fe/features/github/`).
+- Against a stand-in (`tests/features/code/be/_support/github-stand-in.ts`): the code is shown, polling honours
+  `slow_down` with and without an interval, `expired_token`, a refusal and a cancel end it, the token lands in the
+  store, and Sign out removes it.
+
+**Not done: the drive against github.com.** `GITHUB_CLIENT_ID` is `undefined` until the OAuth App is registered
+(Needs from the user), and sign-in says the build has none. Next: set the client id, drive one sign-in against
+github.com, then phase 2.

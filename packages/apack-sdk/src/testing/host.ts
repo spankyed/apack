@@ -12,7 +12,7 @@ import type { LogEvent, SystemErrorEvent } from '../logger/index.ts';
 import { _createRunHistory, type RunHistory } from '../services/run-history.ts';
 import { _openTestRunHistory } from './run-history.ts';
 import type { OnboardingService } from '../services/onboarding.ts';
-import type { SecretMetadata, SecretProvider, SecretsService } from '../services/secrets.ts';
+import type { SecretMetadata, SecretProvider, SecretsAdmin } from '../services/secrets.ts';
 import { _secretRules } from '../services/secrets-rules.ts';
 
 /** The test app's root event bus: what clients (and the test) send the backend, and what it sends them */
@@ -64,6 +64,8 @@ testRootEvents.onOutgoing(({ event }) => {
 
 let testSecrets: SecretMetadata[] = [];
 let testSecretCount = 0;
+/** Each pack's own secrets, by pack and then by name: values, unlike the user's keys, since a pack reads its own */
+const ownedSecrets = new Map<string, Map<string, string>>();
 
 /** Stores a key (no value: unit tests never reach a provider) as Settings → Secrets would; returns it */
 export function addTestSecret(provider: SecretProvider, label: string): SecretMetadata {
@@ -83,6 +85,7 @@ const memoryOnboarding: OnboardingService = {
 /** @internal Empties the test host's stored keys and starts onboarding over */
 export function resetTestHostState(): void {
   testSecrets = [];
+  ownedSecrets.clear();
   onboarded = false;
   testHistory?.database.close();
   testHistory = undefined;
@@ -101,12 +104,27 @@ export const testRunHistory = (): RunHistory => {
 };
 
 /** The user's keys in memory, keeping the host's rules */
-const memorySecrets: SecretsService = {
-  status: () => ({ protection: 'os-keystore', backend: 'memory' }),
+const memoryUserSecrets = {
+  status: () => ({ protection: 'os-keystore', backend: 'memory' }) as const,
   list: () => testSecrets.map((secret) => ({ ...secret })),
-  select: (id) => { testSecrets = _secretRules.select(testSecrets, id, Date.now()); },
-  rename: (id, label) => { testSecrets = _secretRules.rename(testSecrets, id, label, Date.now()); },
-  delete: (id) => { testSecrets = _secretRules.remove(testSecrets, id); },
+  select: (id: string) => { testSecrets = _secretRules.select(testSecrets, id, Date.now()); },
+  rename: (id: string, label: string) => { testSecrets = _secretRules.rename(testSecrets, id, label, Date.now()); },
+  delete: (id: string) => { testSecrets = _secretRules.remove(testSecrets, id); },
+};
+const memorySecrets: SecretsAdmin = {
+  ...memoryUserSecrets,
+  forPack: (packId) => ({
+    ...memoryUserSecrets,
+    own: {
+      get: (name) => ownedSecrets.get(packId)?.get(name),
+      set: (name, value) => {
+        let held = ownedSecrets.get(packId);
+        if (!held) ownedSecrets.set(packId, held = new Map());
+        held.set(name, value);
+      },
+      delete: (name) => { ownedSecrets.get(packId)?.delete(name); },
+    },
+  }),
 };
 
 /** The SYSTEM_ERROR events systems reported with `reportError` (without `step`) since the last call; clears them */

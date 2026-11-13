@@ -27,7 +27,7 @@ export type { TerminalService, TerminalSession, TerminalListeners, TerminalEvent
   from './terminal.ts';
 export { commandSucceeded } from './terminal.ts';
 export type { SettingsChange, SettingsService, SettingsAdmin } from './settings.ts';
-export type { SecretMetadata, SecretProvider, SecretsProtection, SecretsService, SecretsSnapshot, SecretsStatus } from './secrets.ts';
+export type { OwnSecrets, SecretMetadata, SecretProvider, SecretsAdmin, SecretsProtection, SecretsService, SecretsSnapshot, SecretsStatus, UserSecrets } from './secrets.ts';
 export { _secretRules, _secretProviderLabel, _toSecretMetadata } from './secrets-rules.ts';
 export type { ModelId, ProviderName } from './models.ts';
 export { embedPending, embedSearchText, type EmbedPendingResult } from './embeddings.ts';
@@ -95,7 +95,7 @@ export interface HostServices {
   runHistory: RunHistory;
   /** Model calls (text, agents, embeddings, images, speech, transcription, reranking) with the user's provider keys */
   inference: InferenceService;
-  /** The user's API keys, without their values: list, select, rename, delete */
+  /** The user's API keys, without their values (list, select, rename, delete), and the calling pack's own secrets */
   secrets: SecretsService;
   /** Files and folders on the user's disk */
   filesystem: FilesystemService;
