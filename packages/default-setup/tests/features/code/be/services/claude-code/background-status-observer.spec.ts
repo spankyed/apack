@@ -190,9 +190,10 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  const {chmod}=await import('node:fs/promises');await chmod(join(observer.directory,'workers'),0o700)
  await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
  await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath,mainObservationClaimed:false,generations:{main:'main-generation',subagent:'subagent-generation'}}),{mode:0o600})
+ let policyReady=false
  const helperPolicy={allowManagedHooksOnly:false,disableAllHooks:false}
  const helperPolicyFields=new Function('effective','policy',claudeTerminalHelperPolicyRuntime+'\nreturn nativeHelperPolicySnapshot(effective,policy)')
- const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,...helperPolicyFields({statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}},{...helperPolicy,statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}})}:{attached:true}}))})
+ const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);if(value.request?.subtype==='apack_owner_snapshot'&&!policyReady){res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,error:'Native policy binding not ready'}));return}res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,...helperPolicyFields({statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}},{...helperPolicy,statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}})}:{attached:true}}))})
  await new Promise<void>(resolve=>native.listen(socketPath,resolve))
  try {
   expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
@@ -205,6 +206,8 @@ it('binds child drawing and reverse prompts to the original worker and retires t
   expect(await observer.desktopTransport()).toBe(transport);expect(observer.desktopOwner).toBe(desktop)
   const helperSnapshot=(sequence:number)=>({sessionId:child,pid:119,token:lease,sequence,metadata:{model:'sonnet',turns:2},usage:{startedAt:1,cost:{usd:0.00042}},formatter:{command:'main-caption',shellPrefix:null,policy:JSON.stringify(helperPolicy)},helpers:{command:'caption-helper',policyKey:JSON.stringify([helperPolicy.allowManagedHooksOnly,helperPolicy.disableAllHooks,false]),agents:[{id:'reviewer',type:'general-purpose',status:'running'}]}})
   const configured=await post('/background-status',helperSnapshot(1));expect(configured.code).toBe(200)
+  expect(observer.value?.statusLine).toBeUndefined();policyReady=true
+  expect((await post('/background-status',helperSnapshot(2))).code).toBe(200)
   expect(observer.value?.statusLine).toBe('Original startup caption')
   const prefix=configured.value.shellPrefix,formatterConfig=JSON.parse(Buffer.from(prefix.slice(prefix.lastIndexOf(' -')+2),'base64url').toString())
   expect((await post('/background-formatter',{...formatterConfig,startedAt:'10',totalCostUsd:0.00042,code:0,stdout:'Fresh same-cost caption'})).code).toBe(200)
@@ -220,10 +223,10 @@ it('binds child drawing and reverse prompts to the original worker and retires t
   helperPolicy.allowManagedHooksOnly=true
   expect((await post('/native-status',{...helperOutput,startedAt:'11'},token)).code).toBe(409)
   expect(observer.value?.agents).toEqual([])
-  expect((await post('/background-status',helperSnapshot(2))).code).toBe(200)
+  expect((await post('/background-status',helperSnapshot(3))).code).toBe(200)
   expect(observer.value?.statusLine).toBeUndefined()
   helperPolicy.allowManagedHooksOnly=false
-  expect((await post('/background-status',helperSnapshot(3))).code).toBe(200)
+  expect((await post('/background-status',helperSnapshot(4))).code).toBe(200)
   const restoredGeneration=JSON.parse(await readFile(join(worker,'observer.json'),'utf8')).generations.subagent
   const mainGeneration=JSON.parse(await readFile(join(worker,'observer.json'),'utf8')).generations.main
   expect((await post('/native-status',startupMain,token)).code).toBe(409)

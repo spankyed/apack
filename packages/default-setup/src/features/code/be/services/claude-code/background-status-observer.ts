@@ -168,7 +168,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
         if (helperRoute) {
           if (value.kind === 'main') {
             try { const accepted = await acceptMain(held, value); changed(true); return reply(accepted ? 200 : 409, {}) }
-            catch { held.main.clear(); changed(true); return reply(409, {}) }
+            catch { return reply(409, {}) }
           }
           if (value.kind !== 'subagent') return reply(409, {})
           try {
@@ -230,7 +230,10 @@ export async function createClaudeBackgroundStatusObserver(options: {
             const mainCommand = main?.command ?? null
             if (mainCommand !== null && (typeof mainCommand !== 'string' || mainCommand.length > 32768)) return reply(400, {})
             const startup = held.main.configure(mainCommand as string | null, snapshot.policyKey)
-            if (startup && typeof startup === 'object' && !Array.isArray(startup)) await acceptMain(held, startup as Record<string, unknown>)
+            if (startup && typeof startup === 'object' && !Array.isArray(startup)) {
+              try { if (!await acceptMain(held, startup as Record<string, unknown>)) held.main.discardStartup() }
+              catch { /* Native UI binding may still be starting. This same lease retries on its next status report. */ }
+            }
             if (closed || childUi !== held || registration !== status.registration || sequence !== status.sequence) return reply(409, {})
           }
           if (value.formatter && !formatter) {

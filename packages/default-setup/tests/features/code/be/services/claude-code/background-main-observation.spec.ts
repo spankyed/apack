@@ -13,7 +13,7 @@ function fixture(){
 }
 it('claims the original startup result once and pairs only its exact input cost',()=>{
  const f=fixture();writeFileSync(join(f.root,'startup-main.json'),JSON.stringify(event),{mode:0o600})
- const startup=f.main.configure(event.command,event.policyKey) as Record<string,unknown>;expect(startup).toEqual(event);expect(f.main.accept(startup)).toBe(true)
+ const startup=f.main.configure(event.command,event.policyKey) as Record<string,unknown>;expect(startup).toEqual(event);expect(f.main.configure(event.command,event.policyKey)).toEqual(event);expect(f.main.value(0.00042)).toBeUndefined();expect(f.main.accept(startup)).toBe(true);expect(f.main.configure(event.command,event.policyKey)).toBeUndefined()
  expect(f.main.value(0.00042)).toBe(event.stdout.trim());expect(f.main.value(0.00056)).toBeUndefined();expect(f.main.value(undefined)).toBeUndefined()
  expect(JSON.parse(readFileSync(f.configPath,'utf8'))).toMatchObject({mainObservationClaimed:true,generations:{main:event.generation,subagent:'independent'}})
  writeFileSync(join(f.root,'startup-main.json'),JSON.stringify(event),{mode:0o600})

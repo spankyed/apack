@@ -5,11 +5,12 @@ import {dirname, join} from 'node:path'
 /** One original worker's main helper; native policy and process identity are checked by its owner. */
 export function createClaudeBackgroundMainObservation(options: {configPath: string; sessionId: string; pid: number}) {
   let key: string | undefined, generation: string | undefined, command: string | null = null, policyKey: string | undefined
+  let startupResult: unknown
   let latest: bigint | undefined, result: {cost: number; text?: string} | undefined
   return {
     configure(nextCommand: string | null, nextPolicy: string): unknown {
       const nextKey = JSON.stringify([nextCommand, nextPolicy])
-      if (nextKey === key) return
+      if (nextKey === key) return startupResult
       const config = JSON.parse(readFileSync(options.configPath, 'utf8'))
       if (typeof config.generations?.main !== 'string' || typeof config.mainObservationClaimed !== 'boolean') throw Error('Invalid native main-helper startup scope')
       // A fresh process may have finished before registration. Every subsequent owner/epoch gets a
@@ -19,7 +20,7 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
       const temporary = options.configPath + '.' + randomUUID()
       writeFileSync(temporary, JSON.stringify({...config, mainObservationClaimed: true, generations: {...config.generations, main: generation}}), {mode: 0o600, flag: 'wx'})
       renameSync(temporary, options.configPath)
-      key = nextKey; command = nextCommand; policyKey = nextPolicy; latest = undefined; result = undefined
+      key = nextKey; command = nextCommand; policyKey = nextPolicy; latest = undefined; result = undefined; startupResult = undefined
       if (!startup) return
       const path = join(dirname(options.configPath), 'startup-main.json')
       try {
@@ -27,7 +28,8 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
         if (!stat.isFile() || stat.uid !== process.getuid?.() || (stat.mode & 0o077) !== 0 || stat.size > 262144) throw Error('Unowned native main-helper startup result')
         const value: unknown = JSON.parse(readFileSync(path, 'utf8'))
         unlinkSync(path)
-        return value
+        startupResult = value
+        return startupResult
       } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     },
     accept(value: Record<string, unknown>) {
@@ -38,15 +40,16 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
         || !(Number.isSafeInteger(value.code) || value.code === null && typeof value.signal === 'string') || typeof value.truncated !== 'boolean' || typeof value.stdout !== 'string' || Buffer.byteLength(value.stdout) > 32768) return false
       const started = BigInt(value.startedAt)
       if (latest !== undefined && started <= latest) return false
-      latest = started
+      latest = started; startupResult = undefined
       const text = value.code === 0 && !value.truncated && !value.signal ? value.stdout.trim().split('\n').flatMap(line => line.trim() || []).join('\n') || undefined : undefined
       result = {cost: value.totalCostUsd, text}
       return true
     },
+    discardStartup() { startupResult = undefined },
     matchesPolicy(nextCommand: unknown, nextPolicy: string) { return key !== undefined && command === nextCommand && policyKey === nextPolicy },
     get startedAt() { return latest },
     matchesCost(cost: number | undefined) { return result !== undefined && result.cost === cost },
     value(cost: number | undefined) { return result?.cost === cost ? result?.text : undefined },
-    clear() { key = undefined; generation = undefined; latest = undefined; result = undefined; command = null; policyKey = undefined },
+    clear() { key = undefined; generation = undefined; latest = undefined; result = undefined; command = null; policyKey = undefined; startupResult = undefined },
   }
 }
