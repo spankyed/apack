@@ -20,6 +20,8 @@ export interface GitStatusFile {
   conflict?: ConflictKind
   /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
   isDirectory?: boolean
+  /** The file's name is not text, so git cannot be asked about it by name here */
+  nameNotText?: true
 }
 
 /** What an open folder row lists: the files in it that git would list, each by its path from the top of the checkout */

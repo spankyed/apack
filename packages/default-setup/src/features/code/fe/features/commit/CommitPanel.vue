@@ -1292,21 +1292,24 @@ const amend = () => {
   commitActor?.send({ type: 'commit.AMEND', ...(message && { message }) })
 }
 
+/** The paths of these files that git can be asked about by name: one whose name is not text is refused, and left out */
+const byName = (files: GitStatusFile[]): string[] => files.filter(file => !file.nameNotText).map(file => file.path)
+
 const stageAll = () => {
-  commitActor?.send({ type: 'commit.STAGE_FILES', paths: unstagedFiles.value.map((f: GitStatusFile) => f.path) })
+  commitActor?.send({ type: 'commit.STAGE_FILES', paths: byName(unstagedFiles.value) })
 }
 
 const unstageAll = () => {
-  commitActor?.send({ type: 'commit.UNSTAGE_FILES', paths: stagedFiles.value.map((f: GitStatusFile) => f.path) })
+  commitActor?.send({ type: 'commit.UNSTAGE_FILES', paths: byName(stagedFiles.value) })
 }
 
 const openDiscardAllDialog = () => {
-  commitActor?.send({ type: 'commit.PREVIEW_DISCARD', paths: unstagedFiles.value.map((f: GitStatusFile) => f.path) })
+  commitActor?.send({ type: 'commit.PREVIEW_DISCARD', paths: byName(unstagedFiles.value) })
   showDiscardAllDialog.value = true
 }
 
 const confirmDiscardAll = () => {
-  commitActor?.send({ type: 'commit.REVERT_FILES', paths: unstagedFiles.value.map((f: GitStatusFile) => f.path) })
+  commitActor?.send({ type: 'commit.REVERT_FILES', paths: byName(unstagedFiles.value) })
   showDiscardAllDialog.value = false
 }
 
