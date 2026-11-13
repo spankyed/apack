@@ -56,4 +56,38 @@ describe('what a bell may show as a system notification', () => {
     expect(listener({}, 'Terminal', 7)).toBe(false);
     expect(notifications.shown).toEqual([{title: 'Terminal', body: 'Rang the bell'}]);
   });
+
+  describe('one notification for one bell, however many windows heard it', () => {
+    // Every unfocused window asks for the same bell; the handler is the one place they meet.
+    let at = 0;
+    const askAt = (time: number, title: unknown, body: unknown): unknown => {
+      at = time;
+      return ipcMain.handlers.get('notify:show')!({}, title, body);
+    };
+    beforeEach(() => {
+      at = 0;
+      registerNotifyHandler(ipcMain, () => at);
+    });
+
+    it('shows two identical asks inside the window as one notification', () => {
+      expect(askAt(0, 'Terminal', 'Rang the bell')).toBe(true);
+      expect(askAt(400, 'Terminal', 'Rang the bell')).toBe(false);
+      expect(notifications.shown).toEqual([{title: 'Terminal', body: 'Rang the bell'}]);
+    });
+
+    it('shows an ask with different text inside the window', () => {
+      expect(askAt(0, 'Terminal', 'Rang the bell')).toBe(true);
+      expect(askAt(400, 'Terminal', 'Another bell')).toBe(true);
+      expect(notifications.shown).toEqual([
+        {title: 'Terminal', body: 'Rang the bell'},
+        {title: 'Terminal', body: 'Another bell'},
+      ]);
+    });
+
+    it('shows an identical ask after the window has passed', () => {
+      expect(askAt(0, 'Terminal', 'Rang the bell')).toBe(true);
+      expect(askAt(1000, 'Terminal', 'Rang the bell')).toBe(true);
+      expect(notifications.shown).toHaveLength(2);
+    });
+  });
 });

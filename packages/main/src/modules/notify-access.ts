@@ -26,7 +26,30 @@ export function showNotification(title: unknown, body: unknown): boolean {
   return true;
 }
 
-/** Answers the window's `notify:show` request with `showNotification` */
-export function registerNotifyHandler(ipc: Pick<IpcMain, 'handle'>): void {
-  ipc.handle('notify:show', (_event, title: unknown, body: unknown) => showNotification(title, body));
+/**
+ * The window within which a notification with the same title and body is shown once. Every window showing the code
+ * surface receives a terminal's bell, so one bell reaches this handler once per unfocused window; the first ask shows
+ * and the repeats inside this window show nothing. Identity is the text alone, so two different bells with the same
+ * text inside the window show once.
+ */
+export const DUPLICATE_NOTIFICATION_WINDOW_MS = 1000;
+
+/**
+ * Answers the window's `notify:show` request with `showNotification`, showing an identical notification once per
+ * `DUPLICATE_NOTIFICATION_WINDOW_MS`. `now` is the clock the window is measured on.
+ */
+export function registerNotifyHandler(ipc: Pick<IpcMain, 'handle'>, now: () => number = Date.now): void {
+  const lastShown = new Map<string, number>();
+  ipc.handle('notify:show', (_event, title: unknown, body: unknown) => {
+    if (notificationProblem(title, body) !== undefined) return false;
+    const at = now();
+    for (const [key, shownAt] of lastShown) {
+      if (at - shownAt >= DUPLICATE_NOTIFICATION_WINDOW_MS) lastShown.delete(key);
+    }
+    const key = JSON.stringify([title, body]);
+    if (lastShown.has(key)) return false;
+    const shown = showNotification(title, body);
+    if (shown) lastShown.set(key, at);
+    return shown;
+  });
 }
