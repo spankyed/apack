@@ -642,3 +642,18 @@ it('still carries out an accepted Stop when its requesting window immediately de
     expect(f.send).toHaveBeenCalledTimes(count)
   } finally { f.views.clear() }
 })
+
+it('validates credit commands and publishes each request acknowledgement without changing dialog identity',async()=>{
+ const f=fixture()
+ try{
+  f.views.handle(mount,'one',f.send)
+  const notice={id:'credit',revision:randomUUID(),sessionId:f.owner.state.sessionId,kind:'fable_overage_consent_prompt' as const,title:'Usage credits',paragraphs:[],snapshot:{revision:'a'.repeat(64),rows:[],editor:{kind:'information' as const,revision:'a'.repeat(64),title:'Usage credits',description:'Loading…'}}}
+  f.owner.state.notice=notice
+  const response={id:notice.id,revision:notice.revision,sessionId:notice.sessionId,decision:'credit' as const,credit:{requestId:randomUUID(),operation:{kind:'read' as const}}}
+  f.views.handle({...mount,type:'CLAUDE_TERMINAL_NOTICE',ownerId:f.owner.state.ownerId,notice:{...response,credit:{...response.credit,requestId:'invalid'}}},'one',f.send)
+  expect(f.owner.answerNotice).not.toHaveBeenCalled()
+  f.views.handle({...mount,type:'CLAUDE_TERMINAL_NOTICE',ownerId:f.owner.state.ownerId,notice:response},'one',f.send)
+  expect(f.owner.answerNotice).toHaveBeenCalledExactlyOnceWith(response)
+  await vi.waitFor(()=>expect(f.send).toHaveBeenLastCalledWith(expect.objectContaining({noticeAnswer:expect.objectContaining({id:notice.id,revision:notice.revision,requestId:response.credit.requestId,status:'done'})})))
+ }finally{f.views.clear()}
+})

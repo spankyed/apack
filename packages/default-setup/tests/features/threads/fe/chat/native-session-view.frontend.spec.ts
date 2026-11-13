@@ -520,3 +520,19 @@ it('shows native effort failure/success literally without making the outcome act
  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...notice,severity:'feedback',paragraphs:['Original effort saved']}}});await nextTick();expect(result.getAttribute('role')).toBe('status');expect(result.textContent).toBe('Original effort saved')
  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:undefined}});await nextTick();expect(f.root.querySelector('[aria-label="Claude effort result"]')).toBeNull()
 })
+
+it('mounts credit consent as a distinct composer form and fences stale rendered choices',async()=>{
+ const f=await fixture()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ const notice:Extract<ClaudeNativeNotice,{kind:'fable_overage_consent_prompt'}>={id:'credit-dialog',revision:crypto.randomUUID(),sessionId:crypto.randomUUID(),kind:'fable_overage_consent_prompt',title:'Usage credits',paragraphs:[],snapshot:{revision:'a'.repeat(64),rows:[],editor:{kind:'choice',revision:'a'.repeat(64),title:'Original usage credits',disabled:false,options:[{value:'confirm',label:'Original choice',disabled:false}]}}}
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick();await nextTick()
+ const card=f.root.querySelector('[aria-label="Claude Code usage credits"]')!;expect(card).not.toBeNull();expect(card.textContent).not.toContain('0 settings')
+ const old=[...card.querySelectorAll('button')].find(button=>button.textContent==='Original choice')!
+ const editor=notice.snapshot.editor;if(editor?.kind!=='choice')throw Error('wrong fixture')
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...notice,snapshot:{...notice.snapshot,revision:'b'.repeat(64),editor:{...editor,revision:'b'.repeat(64),options:[{value:'confirm',label:'New native stage',disabled:false}]}}}}})
+ actor.send.mockClear();old.click();expect(actor.send).not.toHaveBeenCalled();await nextTick();await nextTick()
+ actor.send.mockClear();const current=[...f.root.querySelectorAll('button')].find(button=>button.textContent==='New native stage')!;current.click()
+ expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ownerId:'owner',notice:expect.objectContaining({decision:'credit',credit:expect.objectContaining({operation:expect.objectContaining({revision:'b'.repeat(64),command:{action:'select',value:'confirm'}})})})}))
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{id:'fable-consent-result',revision:crypto.randomUUID(),sessionId:notice.sessionId,kind:'credit_consent_result',severity:'feedback',title:'Usage credits',paragraphs:['Original native credit feedback']}}});await nextTick()
+ expect(f.root.querySelector('[aria-label="Claude usage credit result"]')?.textContent).toContain('Original native credit feedback');expect(f.root.querySelector('[aria-label="Claude Code usage credits"]')).toBeNull()
+})

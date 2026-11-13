@@ -1063,6 +1063,8 @@ interface ClaudeConversationTurn {
     activity: ClaudeNestedActivity;
 }
 
+type ClaudeCreditRequest = z.infer<typeof claudeCreditRequest>;
+
 type ClaudeFileRewind = z.infer<typeof ClaudeFileRewindSchema>;
 
 /** Native rewind verdict; a successful control response may still reject the checkpoint. */
@@ -1575,13 +1577,298 @@ declare const ClaudeNativeMessageRetirementsSchema: z.ZodArray<z.ZodObject<{
 
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
-type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
+type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & ({
+    decision: 'credit';
+    credit: ClaudeCreditRequest;
+} | {
     selectedValues?: string[];
     decision: 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_leave' | 'auto_rules_pick' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'background_confirm' | 'background_stay' | 'browser_allow' | 'browser_cancel' | 'browser_deny' | 'browser_domain' | 'cancelled' | 'chrome_cancel' | 'chrome_continue' | 'chrome_install' | 'chrome_never' | 'chrome_not_now' | 'chrome_skip' | 'chrome_wait' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'computer_accessibility' | 'computer_allow' | 'computer_cancel' | 'computer_deny' | 'computer_retry' | 'computer_screen_recording' | 'continue' | 'disable' | 'edit_prompt' | 'effort_accept' | 'effort_decline' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'policy_approve' | 'policy_reject' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'yes';
-};
+});
 
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
 declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    kind: z.ZodLiteral<"fable_overage_consent_prompt">;
+    snapshot: z.ZodObject<{
+        ide: z.ZodOptional<z.ZodObject<{
+            stage: z.ZodEnum<{
+                selection: "selection";
+                enable: "enable";
+                disable: "disable";
+                connecting: "connecting";
+                finished: "finished";
+            }>;
+            title: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+            paragraphs: z.ZodArray<z.ZodString>;
+            options: z.ZodArray<z.ZodObject<{
+                value: z.ZodString;
+                label: z.ZodString;
+                description: z.ZodOptional<z.ZodString>;
+            }, z.core.$strict>>;
+            selectedValue: z.ZodOptional<z.ZodString>;
+            disabled: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>>;
+        help: z.ZodOptional<z.ZodObject<{
+            selectedTab: z.ZodEnum<{
+                General: "General";
+                Commands: "Commands";
+                "Custom commands": "Custom commands";
+            }>;
+            tabs: z.ZodArray<z.ZodEnum<{
+                General: "General";
+                Commands: "Commands";
+                "Custom commands": "Custom commands";
+            }>>;
+            paragraphs: z.ZodArray<z.ZodString>;
+            commands: z.ZodArray<z.ZodObject<{
+                name: z.ZodString;
+                label: z.ZodString;
+                description: z.ZodString;
+            }, z.core.$strict>>;
+            links: z.ZodArray<z.ZodString>;
+        }, z.core.$strict>>;
+        frame: z.ZodOptional<z.ZodObject<{
+            selectedTab: z.ZodEnum<{
+                Status: "Status";
+                Config: "Config";
+                Usage: "Usage";
+                Stats: "Stats";
+            }>;
+            tabs: z.ZodArray<z.ZodEnum<{
+                Status: "Status";
+                Config: "Config";
+                Usage: "Usage";
+                Stats: "Stats";
+            }>>;
+            hidden: z.ZodBoolean;
+            usage: z.ZodOptional<z.ZodObject<{
+                startedAt: z.ZodNumber;
+                context: z.ZodObject<{
+                    window: z.ZodNumber;
+                    tokens: z.ZodOptional<z.ZodNumber>;
+                    percent: z.ZodOptional<z.ZodNumber>;
+                }, z.core.$strict>;
+                cost: z.ZodOptional<z.ZodObject<{
+                    usd: z.ZodNumber;
+                }, z.core.$strict>>;
+                rateLimits: z.ZodArray<z.ZodObject<{
+                    kind: z.ZodString;
+                    percentUsed: z.ZodNumber;
+                    resetsAt: z.ZodOptional<z.ZodString>;
+                }, z.core.$strict>>;
+            }, z.core.$strict>>;
+            stats: z.ZodOptional<z.ZodObject<{
+                view: z.ZodOptional<z.ZodEnum<{
+                    Overview: "Overview";
+                    Models: "Models";
+                }>>;
+                range: z.ZodOptional<z.ZodEnum<{
+                    all: "all";
+                    "7d": "7d";
+                    "30d": "30d";
+                }>>;
+                loading: z.ZodBoolean;
+                copyState: z.ZodOptional<z.ZodEnum<{
+                    error: "error";
+                    idle: "idle";
+                    pending: "pending";
+                    saved: "saved";
+                }>>;
+                insight: z.ZodOptional<z.ZodString>;
+                calendar: z.ZodOptional<z.ZodString>;
+                outcome: z.ZodEnum<{
+                    error: "error";
+                    success: "success";
+                    loading: "loading";
+                    empty: "empty";
+                    unavailable: "unavailable";
+                }>;
+                problem: z.ZodOptional<z.ZodString>;
+                data: z.ZodOptional<z.ZodObject<{
+                    totalSessions: z.ZodNumber;
+                    totalMessages: z.ZodNumber;
+                    totalDays: z.ZodNumber;
+                    activeDays: z.ZodNumber;
+                    streaks: z.ZodOptional<z.ZodObject<{
+                        currentStreak: z.ZodNumber;
+                        longestStreak: z.ZodNumber;
+                        currentStreakStart: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+                        longestStreakStart: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+                        longestStreakEnd: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+                    }, z.core.$strict>>;
+                    longestSession: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+                        sessionId: z.ZodString;
+                        duration: z.ZodNumber;
+                        messageCount: z.ZodNumber;
+                        timestamp: z.ZodString;
+                    }, z.core.$strict>>>;
+                    firstSessionDate: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+                    lastSessionDate: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+                    peakActivityDay: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+                    peakActivityHour: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
+                    dailyModelTokens: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                        date: z.ZodString;
+                        tokensByModel: z.ZodRecord<z.ZodString, z.ZodNumber>;
+                    }, z.core.$strict>>>;
+                    allTimeActivity: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                        date: z.ZodString;
+                        messageCount: z.ZodNumber;
+                        sessionCount: z.ZodNumber;
+                        toolCallCount: z.ZodNumber;
+                    }, z.core.$strict>>>;
+                    modelUsage: z.ZodRecord<z.ZodString, z.ZodObject<{
+                        inputTokens: z.ZodNumber;
+                        outputTokens: z.ZodNumber;
+                        cacheReadInputTokens: z.ZodNumber;
+                        cacheCreationInputTokens: z.ZodNumber;
+                        costUSD: z.ZodNumber;
+                    }, z.core.$strict>>;
+                    dailyActivity: z.ZodArray<z.ZodObject<{
+                        date: z.ZodString;
+                        messageCount: z.ZodNumber;
+                        sessionCount: z.ZodNumber;
+                        toolCallCount: z.ZodNumber;
+                    }, z.core.$strict>>;
+                }, z.core.$strict>>;
+            }, z.core.$strict>>;
+            diagnostics: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            status: z.ZodOptional<z.ZodArray<z.ZodArray<z.ZodObject<{
+                label: z.ZodString;
+                value: z.ZodString;
+            }, z.core.$strict>>>>;
+        }, z.core.$strict>>;
+        editor: z.ZodOptional<z.ZodDiscriminatedUnion<[z.ZodObject<{
+            kind: z.ZodLiteral<"information">;
+            revision: z.ZodString;
+            title: z.ZodString;
+            description: z.ZodString;
+        }, z.core.$strict>, z.ZodObject<{
+            kind: z.ZodLiteral<"choice">;
+            description: z.ZodOptional<z.ZodString>;
+            consent: z.ZodOptional<z.ZodObject<{
+                links: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                description: z.ZodString;
+                cancelLabel: z.ZodString;
+                defaultFocusValue: z.ZodOptional<z.ZodString>;
+            }, z.core.$strict>>;
+            revision: z.ZodString;
+            title: z.ZodOptional<z.ZodString>;
+            value: z.ZodOptional<z.ZodString>;
+            previewValue: z.ZodOptional<z.ZodString>;
+            model: z.ZodOptional<z.ZodObject<{
+                draftEffort: z.ZodOptional<z.ZodString>;
+                focusValue: z.ZodOptional<z.ZodString>;
+                description: z.ZodString;
+                effortText: z.ZodString;
+                canAdjustEffort: z.ZodBoolean;
+                fastModeNotice: z.ZodOptional<z.ZodString>;
+            }, z.core.$strict>>;
+            canPreview: z.ZodOptional<z.ZodBoolean>;
+            canToggleSyntax: z.ZodOptional<z.ZodBoolean>;
+            preview: z.ZodOptional<z.ZodObject<{
+                theme: z.ZodObject<{
+                    text: z.ZodString;
+                    inverseText: z.ZodString;
+                }, z.core.$strict>;
+                text: z.ZodString;
+                ansi: z.ZodOptional<z.ZodString>;
+                lines: z.ZodArray<z.ZodString>;
+                caption: z.ZodString;
+            }, z.core.$strict>>;
+            disabled: z.ZodBoolean;
+            options: z.ZodArray<z.ZodObject<{
+                value: z.ZodString;
+                label: z.ZodString;
+                description: z.ZodOptional<z.ZodString>;
+                descriptionAnsi: z.ZodOptional<z.ZodString>;
+                disabled: z.ZodBoolean;
+                canEdit: z.ZodOptional<z.ZodBoolean>;
+                canReset: z.ZodOptional<z.ZodBoolean>;
+            }, z.core.$strict>>;
+        }, z.core.$strict>, z.ZodObject<{
+            kind: z.ZodLiteral<"group">;
+            revision: z.ZodString;
+            title: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+            disabled: z.ZodBoolean;
+            rows: z.ZodArray<z.ZodObject<{
+                key: z.ZodString;
+                label: z.ZodString;
+                kind: z.ZodEnum<{
+                    boolean: "boolean";
+                    choice: "choice";
+                }>;
+                value: z.ZodUnion<readonly [z.ZodBoolean, z.ZodString]>;
+                disabled: z.ZodBoolean;
+                options: z.ZodOptional<z.ZodArray<z.ZodObject<{
+                    value: z.ZodString;
+                    label: z.ZodString;
+                    disabled: z.ZodBoolean;
+                }, z.core.$strict>>>;
+            }, z.core.$strict>>;
+        }, z.core.$strict>, z.ZodObject<{
+            kind: z.ZodLiteral<"form">;
+            live: z.ZodOptional<z.ZodObject<{
+                id: z.ZodString;
+                feedback: z.ZodOptional<z.ZodObject<{
+                    text: z.ZodString;
+                    tone: z.ZodEnum<{
+                        error: "error";
+                        success: "success";
+                    }>;
+                }, z.core.$strict>>;
+            }, z.core.$strict>>;
+            consent: z.ZodOptional<z.ZodObject<{
+                links: z.ZodOptional<z.ZodArray<z.ZodString>>;
+                cancelLabel: z.ZodString;
+                focusField: z.ZodLiteral<"answer">;
+                problem: z.ZodOptional<z.ZodString>;
+            }, z.core.$strict>>;
+            revision: z.ZodString;
+            title: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+            submitLabel: z.ZodString;
+            fields: z.ZodArray<z.ZodObject<{
+                key: z.ZodString;
+                label: z.ZodString;
+                value: z.ZodString;
+            }, z.core.$strict>>;
+        }, z.core.$strict>], "kind">>;
+        commitPending: z.ZodOptional<z.ZodBoolean>;
+        refreshPending: z.ZodOptional<z.ZodBoolean>;
+        dismissible: z.ZodOptional<z.ZodBoolean>;
+        revision: z.ZodString;
+        rows: z.ZodArray<z.ZodObject<{
+            key: z.ZodString;
+            label: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+            kind: z.ZodEnum<{
+                number: "number";
+                boolean: "boolean";
+                text: "text";
+                choice: "choice";
+            }>;
+            value: z.ZodUnion<readonly [z.ZodBoolean, z.ZodString, z.ZodNumber, z.ZodNull]>;
+            options: z.ZodOptional<z.ZodArray<z.ZodString>>;
+            editorAvailable: z.ZodOptional<z.ZodBoolean>;
+            isLocked: z.ZodBoolean;
+            lockReason: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>>;
+    }, z.core.$strict>;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"credit_consent_result">;
+    severity: z.ZodLiteral<"feedback">;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"chrome_install_upsell">;
     preferredChoice: z.ZodLiteral<"chrome_not_now">;
     choices: z.ZodArray<z.ZodObject<{
@@ -2934,6 +3221,7 @@ type ClaudeTerminalViewSnapshot = {
     noticeAnswer?: {
         id: string;
         revision: string;
+        requestId?: string;
         status: 'done' | 'error' | 'pending';
         problem?: string;
     };
@@ -10085,6 +10373,55 @@ declare function claimClaudeBackgroundCheckpoint(options: {
     retire(): Promise<void>;
 } | undefined>;
 
+declare const claudeCreditRequest: z.ZodObject<{
+    requestId: z.ZodString;
+    operation: z.ZodUnion<readonly [z.ZodObject<{
+        kind: z.ZodLiteral<"read">;
+    }, z.core.$strict>, z.ZodObject<{
+        kind: z.ZodLiteral<"editor">;
+        revision: z.ZodString;
+        editorRevision: z.ZodString;
+        command: z.ZodDiscriminatedUnion<[z.ZodObject<{
+            action: z.ZodLiteral<"change">;
+            formId: z.ZodString;
+            key: z.ZodString;
+            value: z.ZodString;
+        }, z.core.$strict>, z.ZodObject<{
+            action: z.ZodLiteral<"setGroup">;
+            key: z.ZodString;
+            value: z.ZodUnion<readonly [z.ZodBoolean, z.ZodString]>;
+        }, z.core.$strict>, z.ZodObject<{
+            action: z.ZodLiteral<"select">;
+            value: z.ZodString;
+        }, z.core.$strict>, z.ZodObject<{
+            action: z.ZodLiteral<"preview">;
+            value: z.ZodString;
+        }, z.core.$strict>, z.ZodObject<{
+            action: z.ZodEnum<{
+                themeEdit: "themeEdit";
+                themeReset: "themeReset";
+            }>;
+            value: z.ZodString;
+        }, z.core.$strict>, z.ZodObject<{
+            action: z.ZodLiteral<"toggleSyntax">;
+        }, z.core.$strict>, z.ZodObject<{
+            action: z.ZodLiteral<"focusModel">;
+            value: z.ZodString;
+        }, z.core.$strict>, z.ZodObject<{
+            action: z.ZodLiteral<"adjustEffort">;
+            direction: z.ZodEnum<{
+                left: "left";
+                right: "right";
+            }>;
+        }, z.core.$strict>, z.ZodObject<{
+            action: z.ZodLiteral<"save">;
+            values: z.ZodRecord<z.ZodString, z.ZodString>;
+        }, z.core.$strict>, z.ZodObject<{
+            action: z.ZodLiteral<"cancel">;
+        }, z.core.$strict>], "action">;
+    }, z.core.$strict>]>;
+}, z.core.$strict>;
+
 declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
     kind: z.ZodLiteral<"ideSelect">;
     revision: z.ZodString;
@@ -11271,8 +11608,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

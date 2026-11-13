@@ -1,3 +1,4 @@
+import {claudeCreditRequest} from '../../../common/native-credit.ts'
 import { resolveAppEnvironment } from '@apackdev/sdk/env'
 import type { TerminalSession } from '@apackdev/sdk/services'
 import { services } from '#generated/services.ts'
@@ -401,8 +402,16 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async answerNotice(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native notice session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_native_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, ...(response.decision === 'auto_rules_select' ? { selected_values: response.selectedValues } : {}) }) as { answered?: unknown; handoffPending?: unknown }
+        if(response.decision==='credit')claudeCreditRequest.parse(response.credit)
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_native_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, ...(response.decision === 'credit' ? {credit:response.credit} : response.decision === 'auto_rules_select' ? { selected_values: response.selectedValues } : {}) }) as { answered?: unknown; handoffPending?: unknown; notice?: unknown }
         if (result.answered !== true) throw new Error('Native notice was not acknowledged')
+        if(response.decision==='credit'){
+          if(!Object.hasOwn(result,'notice'))throw Error('Native credit state was not acknowledged')
+          const next=result.notice===null?undefined:ClaudeNativeNoticeSchema.parse(result.notice)
+          if(next&&(next.kind!=='fable_overage_consent_prompt'||next.id!==response.id||next.revision!==response.revision||next.sessionId!==response.sessionId))throw Error('Native credit response changed owner')
+          if(notice?.id===response.id&&notice.revision===response.revision){notice=next;changed()}
+          return
+        }
         if (response.decision === 'background_confirm' || response.decision === 'background_stay') {
           if (typeof result.handoffPending !== 'boolean') throw new Error('Native agents progress was not acknowledged')
           handoffPending = result.handoffPending; changed()

@@ -77,15 +77,15 @@ import NativeSettingsStats from './NativeSettingsStats.vue'
 import NativeSettingsEditor from './NativeSettingsEditor.vue'
 import { useNativeSettingsForm } from './native-settings-form.ts'
 import type { ClaudeSettingsOperation, ClaudeSettingsView, ClaudeSettingValue } from '#features/code/common/native-settings.ts'
-const props = withDefaults(defineProps<{ state?: ClaudeSettingsView; ownerLabel?: string; subject?: 'settings' | 'model' | 'theme' }>(), {subject:'settings'})
-const panelTitle = computed(() => props.subject === 'model' ? 'Claude Code model' : props.subject === 'theme' ? 'Claude Code theme' : 'Claude Code settings')
+const props = withDefaults(defineProps<{ state?: ClaudeSettingsView; ownerLabel?: string; subject?: 'settings' | 'model' | 'theme' | 'credits' }>(), {subject:'settings'})
+const panelTitle = computed(() => props.subject === 'credits' ? 'Claude Code usage credits' : props.subject === 'model' ? 'Claude Code model' : props.subject === 'theme' ? 'Claude Code theme' : 'Claude Code settings')
 const closeLabel = computed(() => {
   if(props.subject==='settings')return 'Close settings'
   const snapshot=props.state?.snapshot,editor=snapshot?.editor
   if(snapshot?.dismissible===false)return 'Close'
-  if(snapshot?.refreshPending)return 'Cancel model change'
+  if(snapshot?.refreshPending)return props.subject==='credits'?'Cancel':'Cancel model change'
   if(editor?.kind==='form'||editor?.kind==='choice'&&editor.consent)return editor.consent?.cancelLabel||'Cancel'
-  return props.subject==='theme'?'Close theme selection':'Close model selection'
+  return props.subject==='credits'?'Cancel':props.subject==='theme'?'Close theme selection':'Close model selection'
 })
 const emit = defineEmits<{ operate: [action: ClaudeSettingsOperation]; close: [] }>()
 const search = ref(''), searchInput = ref<HTMLInputElement>(), drafts = ref<Record<string, string>>({})
@@ -101,7 +101,7 @@ const pending = computed(() => props.state?.status === 'pending' || props.state?
 const editorPending=computed(()=>pending.value&&!liveForm.editing.value)
 const footerStatus=computed(()=>{
   if(pending.value||props.state?.snapshot?.refreshPending)return 'Waiting for Claude Code…'
-  if(props.subject==='theme')return undefined
+  if(props.subject==='theme'||props.subject==='credits')return undefined
   if(props.subject==='model'){const editor=props.state?.snapshot?.editor;return editor?.kind==='choice'&&editor.model?'Choose a model':undefined}
   if(props.state?.savedKey)return 'Saved by Claude Code'
   return activeTab.value==='Config'?`${rows.value.length} settings`:activeTab.value

@@ -10,6 +10,8 @@
       </template>
     </NativeBackgroundSession>
     <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
+    <NativeCreditConsent v-if="!active && view?.state?.notice?.kind === 'fable_overage_consent_prompt'" :key="JSON.stringify([view.state.ownerId,view.state.notice.sessionId,view.state.notice.id,view.state.notice.revision])" :notice="view.state.notice" :answer="view.noticeAnswer" @answer="answerCredit" />
+    <section v-if="!active && view?.state?.notice?.kind === 'credit_consent_result'" role="status" aria-label="Claude usage credit result" class="rounded-lg border border-neutral-700/50 bg-neutral-900/40 px-3 py-2 text-xs leading-relaxed text-neutral-200"><p v-for="(paragraph,index) in view.state.notice.paragraphs" :key="index" class="whitespace-pre-wrap break-words">{{ paragraph }}</p></section>
     <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
     <NativeSandboxNetworkReview v-if="!active && view?.state?.notice?.kind === 'sandbox_network_access'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerSandboxNetwork" />
     <section v-if="!active && view?.state?.notice?.kind === 'newer_model_inline'" role="status" aria-label="Claude model offer" class="rounded-lg border border-neutral-700/50 bg-neutral-900/40 px-3 py-2 text-xs leading-relaxed">
@@ -132,6 +134,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import NativeCreditConsent from './NativeCreditConsent.vue'
 import NativeBackgroundReview from './NativeBackgroundReview.vue'
 import NativeBackgroundSession from './NativeBackgroundSession.vue'
 import NativeBackgroundComposer from './NativeBackgroundComposer.vue'
@@ -169,6 +172,13 @@ const managedPolicyDeclined = computed(() => {
   return !!intent && current?.state?.ownerId === intent.ownerId && current.state.exitCode === 1 && ['error', 'exited'].includes(current.state.status)
     && parseClaudeDocument(current.output.filter(chunk => chunk.sequence > intent.afterSequence).map(chunk => chunk.text).join('')).map(span => span.text).join('').replace(/\s+/g, ' ').includes('Managed settings were not approved; exiting without applying them.')
 })
+function answerCredit(response: ClaudeNativeNoticeResponse) {
+  const state=view.value?.state,notice=state?.notice
+  if(response.decision!=='credit'||!state||!notice||active.value||noticePending.value||notice.kind!=='fable_overage_consent_prompt'||notice.id!==response.id||notice.revision!==response.revision||notice.sessionId!==response.sessionId)return
+  const operation=response.credit.operation
+  if(operation.kind==='editor'&&(operation.revision!==notice.snapshot.revision||operation.editorRevision!==notice.snapshot.editor?.revision))return
+  actor.send({type:'CLAUDE_TERMINAL_NOTICE',...identity(),ownerId:state.ownerId,notice:response})
+}
 function answerManagedSecurity(response: ClaudeNativeNoticeResponse) {
   const state = view.value?.state, notice = state?.notice
   if (!state || notice?.kind !== 'managed_settings_security' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
@@ -194,7 +204,7 @@ function answerLeftArrow(panel: NonNullable<typeof leftArrowPanel.value>, reques
   if (panel !== leftArrowPanel.value || !state || noticePending.value || panel.ownerId !== state.ownerId || request.panelId !== panel.id || request.revision !== panel.revision) return
   actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision: request.decision === 'confirm' ? 'background_confirm' : 'background_stay' } })
 }
-function answerNotice(panel: (typeof noticePanels.value)[number], decision: ClaudeNativeNoticeResponse['decision'], selectedValues?: string[]) {
+function answerNotice(panel: (typeof noticePanels.value)[number], decision: Exclude<ClaudeNativeNoticeResponse['decision'],'credit'>, selectedValues?: string[]) {
   const state = view.value?.state, notice = state?.notice
   if (!state || !notice || active.value || noticePending.value || state.ownerId !== panel.ownerId || notice.kind !== panel.kind || notice.id !== panel.id || notice.revision !== panel.revision || notice.sessionId !== panel.sessionId || !isClaudeNativeNoticeDecision(notice, decision)) return
   actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision, ...(decision === 'auto_rules_select' ? { selectedValues } : {}) } })
@@ -249,7 +259,7 @@ const displayActive = computed(() => active.value || !!view.value?.attachment)
 const noticePanels = computed(() => {
   if (active.value) return []
   const state = view.value?.state, notice = state?.notice
-  if (!state || !notice || notice.kind === 'newer_model_inline' || notice.kind === 'effort_preference_result' || notice.kind === 'managed_settings_security' || notice.kind === 'sandbox_network_access' || notice.kind === 'left_arrow_confirm') return []
+  if (!state || !notice || notice.kind === 'fable_overage_consent_prompt' || notice.kind === 'credit_consent_result' || notice.kind === 'newer_model_inline' || notice.kind === 'effort_preference_result' || notice.kind === 'managed_settings_security' || notice.kind === 'sandbox_network_access' || notice.kind === 'left_arrow_confirm') return []
   return [{ key: JSON.stringify([state.ownerId, notice.sessionId, notice.id, notice.kind]), ownerId: state.ownerId, id: notice.id, revision: notice.revision, sessionId: notice.sessionId, kind: notice.kind, notice }]
 })
 const noticeElements = ref<HTMLElement[]>([])

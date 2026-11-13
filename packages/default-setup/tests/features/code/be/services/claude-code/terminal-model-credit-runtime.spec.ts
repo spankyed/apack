@@ -1,14 +1,15 @@
-import {createHash as hash} from 'node:crypto'
+import {createHash as hash,randomUUID} from 'node:crypto'
 import {runInNewContext} from 'node:vm'
 import {claudeTerminalSettingsRuntime} from '#features/code/be/services/claude-code/terminal-settings-runtime.ts'
 import {claudeSettingsSnapshot} from '#features/code/common/native-settings.ts'
 
 // Authored component doubles; recovered vendor functions are never executed in these unit tests.
 const hashes={"purchase":"0906db370d45290c9b4083fbd3e873f174a74a9e9e1bc6fbad7bdc8359b292fa","admin":"cab1f72231e70b850f08407699d300878d571c548e6b6029dc57e44323a032ab","purchaseState":"fbac9686170ff3ab8b9f9b8f20d83b38fbed7f8bfbeeace2e4efd7df731cb13d","error":"f3ff348f7d1a370b4536dc5ab296a22bdfd019bcc24667219dec9cb1fbf00a3a","bundles":"8a8a1d5a2ab3ff3bac0c0dc289085c45fe6f27719f3ace279d2f8eccb627c598","quote":"21606cc022bcb4b9922ddaf35717cc1fb5a6fbf72239548682238917e99a7352","custom":"006fc145844b84a7a194debf37f4b45cc2de16bf2a40f30f59ad51e73426d7c4","polling":"f59e60934afe94e192a16ea80e8c82af56ba0e4173c4ca6bb9a8af3e27e75063","success":"fcaf327cac916530a62ada2644520018e693463ed395d6a5a5904bb3ac710199","charge":"b996fe2d447d523db0d24dee7cf857be60744b76f5374313c29bf430a363170a","amount":"926846743b72ce0b0abee6a10cdd9267d02eb633952b2b97912a9b4b05ac5a04","selectState":"c56325760953719a87f1c8604b3c1e09832b32b94154c60d4fb82c7d2827be7f","plainSelect":"e53297200fcc89a19d65b4d7f50123c6aed6f916c7cc94acf242348de025b8f9"}
-function fixture(kind:'amount'|'charge'|'admin'|'admin-pending'|'bundles'|'quote'|'processing',accessible=false){
+function fixture(kind:'amount'|'charge'|'admin'|'admin-pending'|'bundles'|'quote'|'processing',accessible=false,midSession=false){
  function root(){} function credits(){} function purchaseState(){} function amount(){} function charge(){} function admin(){} function bundles(){} function quote(){} function selectState(){} function plainSelect(){} function selector(){} function input(){} function modal(){}
  const functions={purchaseState,amount,charge,admin,bundles,quote,selectState,plainSelect},known=new Map<string,string>([[String(root),'405f67fa75ab4e41349e4bafd0eca3af174269e4da6cbf7d885bcf7f9204e5a8'],[String(credits),'504f383e60d828a4e21a6d606ae63de22de7bee656f5ce384a7ba423d91f83cf'],[String(selector),'e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5']])
  for(const [name,fn]of Object.entries(functions))known.set(String(fn),hashes[name as keyof typeof hashes])
+ if(midSession)known.set(String(root),'78992b85babbb53889dc3395168432c43d1f0d96d895324d1691d195539b0dea')
  let active=true,closed=false,value='75',refused=false,afterChange:(()=>void)|undefined,beforeText:(()=>void)|undefined
  const confirm=vi.fn(()=>{closed=true}),cancel=vi.fn(()=>{closed=true}),change=vi.fn((next:string)=>{queueMicrotask(()=>{value=next;renderInput();afterChange?.()})}),submit=vi.fn((_next:string)=>{if(value==='confirm'){closed=true;confirm()}}),select=vi.fn((_next:string)=>{closed=true})
  const onDone=vi.fn(),id='11111111-1111-4111-8111-111111111111',entry={kind:'panel',commandName:'model',clientId:'owned',nodeId:'node',dialogId:'dialog',originalType:root,originalProps:{onDone},get closed(){return closed},answered:false,current:()=>{if(!active)throw Error('Native view changed')},store:{getState:()=>({open:closed?[]:[{id:'dialog',kind:'local_jsx',payload:{nodeId:'node'}}]})}}
@@ -42,13 +43,16 @@ function fixture(kind:'amount'|'charge'|'admin'|'admin-pending'|'bundles'|'quote
   credit.child={type:admin,memoizedProps:{wouldTakeAnswer:()=>true},updateQueue:{memoCache:{data:[adminCache]}},child:kind==='admin-pending'?{type:'progress',memoizedProps:{message:'Sending request to your admin…'}}:{type:modal,memoizedProps:view.props}}
  }else credit.child=purchase
  const owner:any={type:root,memoizedProps:entry.originalProps,child:credit},render=(node:any):string=>node==null?'':Array.isArray(node)?node.map(render).join('\n'):typeof node==='object'?(node.props?.borderStyle==='single'?'TERMINAL_INPUT_BORDER\n':'')+render(node.props?.children):String(node)
- const api=runInNewContext(claudeTerminalSettingsRuntime+';({nativeSettings})',{
-  process:{stdout:{}},setTimeout,clearTimeout,AbortController,URL,agentCommandDialogs:new Map([[id,entry]]),stripVTControlCharacters:(value:string)=>value,
+ const creditPayload={overagesEnabled:false,model:'fable',modelName:'Fable'},creditItem={id:'mid-credit',kind:'fable_overage_consent_prompt',payload:creditPayload},creditStore={getState:()=>({open:closed?[]:[creditItem]})},creditContext={surface:'terminal',toolContext:()=>({dialogStore:creditStore})}
+ if(midSession){owner.memoizedProps={payload:creditPayload,answer:onDone};credit.memoizedProps={variant:'mid-session',model:'fable',modelName:'Fable'}}
+ const api=runInNewContext(claudeTerminalSettingsRuntime+';({nativeSettings,nativeCreditDialog,projectNativeCreditDialog,operateNativeCreditDialog})',{
+  originalContext:creditContext,randomUUID,configUrl:'config',readFileSync:()=>JSON.stringify({sessionId:id}),process:{stdout:{}},setTimeout,clearTimeout,AbortController,URL,agentCommandDialogs:new Map([[id,entry]]),stripVTControlCharacters:(value:string)=>value,
   createHash:()=>({value:'',update(value:string){this.value=value;return this},digest(){return known.get(this.value)??hash('sha256').update(this.value).digest('hex')}}),
   nativeGenericPermissionText:async(_n:unknown,node:unknown)=>{beforeText?.();return render(node)},
- }) as {nativeSettings(n:unknown,request:unknown,abort:AbortController):Promise<{snapshot:any}>}
- const n={gate:{_Jo:vi.fn(async()=>{})},themeRoots:{ai:()=>({get:()=>({container:{current:owner}})})}},read=()=>api.nativeSettings(n,{client_id:'owned',panel_id:id,operation:'read'},new AbortController()),act=(snapshot:any,command:unknown)=>api.nativeSettings(n,{client_id:'owned',panel_id:id,operation:'editor',revision:snapshot.revision,editor_revision:snapshot.editor.revision,command},new AbortController())
- return {read,act,confirm,cancel,change,submit,select,options,state,cache,control,renderInput,replaceForm:()=>{purchase.child={...control}},rotateCredit:(replacement=state)=>{const previous=owner.child,current={...previous,memoizedState:{memoizedState:replacement,next:null},alternate:previous};previous.alternate=current;previous.memoizedState=null;owner.child=current},setRefused:(next:boolean)=>{refused=next},retire:()=>{active=false},afterChange:(fn:()=>void)=>{afterChange=fn},beforeText:(fn:()=>void)=>{beforeText=fn}}
+ }) as {nativeSettings(n:unknown,request:unknown,abort:AbortController):Promise<{snapshot:any}>;nativeCreditDialog(n:unknown):unknown;projectNativeCreditDialog(n:unknown,entry:unknown,signal:AbortSignal):Promise<any>;operateNativeCreditDialog(n:unknown,request:unknown,abort:AbortController):Promise<any>}
+ const n={questionOptions:{q:()=>id},gate:{_Jo:vi.fn(async()=>{})},themeRoots:{ai:()=>({get:()=>({container:{current:owner}})})}},read=()=>api.nativeSettings(n,{client_id:'owned',panel_id:id,operation:'read'},new AbortController()),act=(snapshot:any,command:unknown)=>api.nativeSettings(n,{client_id:'owned',panel_id:id,operation:'editor',revision:snapshot.revision,editor_revision:snapshot.editor.revision,command},new AbortController())
+ const readCredit=()=>api.projectNativeCreditDialog(n,api.nativeCreditDialog(n),new AbortController().signal),actCredit=(notice:any,command:unknown)=>api.operateNativeCreditDialog(n,{id:notice.id,revision:notice.revision,session_id:notice.sessionId,credit:{operation:{kind:'editor',revision:notice.snapshot.revision,editorRevision:notice.snapshot.editor.revision,command}}},new AbortController())
+ return {readCredit,actCredit,read,act,confirm,cancel,change,submit,select,options,state,cache,control,renderInput,replaceForm:()=>{purchase.child={...control}},rotateCredit:(replacement=state)=>{const previous=owner.child,current={...previous,memoizedState:{memoizedState:replacement,next:null},alternate:previous};previous.alternate=current;previous.memoizedState=null;owner.child=current},setRefused:(next:boolean)=>{refused=next},retire:()=>{active=false},afterChange:(fn:()=>void)=>{afterChange=fn},beforeText:(fn:()=>void)=>{beforeText=fn}}
 }
 
 it('acknowledges the original amount draft before native validation and never substitutes a charge callback',async()=>{
@@ -139,4 +143,27 @@ it('refuses submission when the native form is replaced during draft acknowledge
  const f=fixture('amount'),{snapshot}=await f.read();f.afterChange(f.replaceForm)
  await expect(f.act(snapshot,{action:'save',values:{answer:'100'}})).rejects.toThrow('form replaced')
  expect(f.change).toHaveBeenCalledExactlyOnceWith('100');expect(f.submit).not.toHaveBeenCalled();expect(f.confirm).not.toHaveBeenCalled()
+})
+
+it('routes mid-session live drafts through the same native acknowledgement without submitting a charge',async()=>{
+ const f=fixture('charge',false,true),notice=await f.readCredit(),editor=notice.snapshot.editor
+ const result=await f.actCredit(notice,{action:'change',formId:editor.live.id,key:'answer',value:'confirm'})
+ expect(result).toMatchObject({answered:true,notice:{id:notice.id,revision:notice.revision,snapshot:{editor:{fields:[{key:'answer',value:'confirm'}]}}}})
+ expect(f.change).toHaveBeenCalledExactlyOnceWith('confirm');expect(f.submit).not.toHaveBeenCalled()
+ await expect(f.actCredit(result.notice,{action:'save',values:{answer:'confirm'}})).resolves.toEqual({answered:true,notice:null})
+ expect(f.submit).toHaveBeenCalledExactlyOnceWith('confirm');expect(f.confirm).toHaveBeenCalledOnce()
+})
+it('preserves native admin default focus and resolves only after the original callback settles',async()=>{
+ const f=fixture('admin',false,true),notice=await f.readCredit()
+ expect(notice.snapshot.editor.consent.defaultFocusValue).toBe('cancel')
+ await expect(f.actCredit(notice,{action:'select',value:'confirm'})).resolves.toEqual({answered:true,notice:null})
+ expect(f.confirm).toHaveBeenCalledOnce()
+})
+it('keeps non-cancellable native purchase progress mounted and rejects stale or unrelated actions',async()=>{
+ const f=fixture('processing',false,true),notice=await f.readCredit()
+ expect(notice.snapshot).toMatchObject({refreshPending:true,dismissible:false,editor:{kind:'information',description:'Processing payment…'}})
+ await expect(f.actCredit(notice,{action:'cancel'})).rejects.toThrow('unavailable')
+ await expect(f.actCredit({...notice,revision:randomUUID()},{action:'cancel'})).rejects.toThrow('expired')
+ await expect(f.actCredit(notice,{action:'themeReset',value:'foreign'})).rejects.toThrow('unavailable')
+ expect(f.cancel).not.toHaveBeenCalled()
 })

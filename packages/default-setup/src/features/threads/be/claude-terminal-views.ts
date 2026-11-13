@@ -1,3 +1,4 @@
+import {claudeCreditRequest} from '#features/code/common/native-credit.ts'
 import type {ClaudeBackgroundAttachment} from '#features/code/be/services/claude-code/background-attachment.ts'
 import type {ClaudeBackgroundAttachmentSnapshot} from '#features/code/common/native-background.ts'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
@@ -86,7 +87,7 @@ export type ClaudeTerminalViewSnapshot = {
   attachment?: ClaudeBackgroundAttachmentView
   background?: ClaudeBackgroundSessionState
   mcpOperation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string }
-  noticeAnswer?: { id: string; revision: string; status: 'pending' | 'done' | 'error'; problem?: string }
+  noticeAnswer?: { id: string; revision: string; requestId?: string; status: 'pending' | 'done' | 'error'; problem?: string }
   task?: ClaudeTerminalTaskState
   stop?: ClaudeTerminalStopState
   submission?: ClaudeTerminalSubmissionState
@@ -383,7 +384,8 @@ export function createClaudeTerminalViews(dependencies: {
       if (event.type === 'CLAUDE_TERMINAL_NOTICE') {
         const notice = owner.state.notice, response = event.notice
         if (!notice || !response || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId || !isClaudeNativeNoticeDecision(notice, response.decision) || target.noticeAnswer?.status === 'pending') return
-        const answer: NonNullable<ClaudeTerminalViewSnapshot['noticeAnswer']> = { id: response.id, revision: response.revision, status: 'pending' }
+        if(response.decision==='credit'&&!claudeCreditRequest.safeParse(response.credit).success)return
+        const answer: NonNullable<ClaudeTerminalViewSnapshot['noticeAnswer']> = { id: response.id, revision: response.revision, status: 'pending',...(response.decision==='credit'?{requestId:response.credit.requestId}:{}) }
         target.noticeAnswer = answer; publish(key, target)
         const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.noticeAnswer === answer
         void owner.answerNotice(response).then(() => { if (current()) { target.noticeAnswer = { ...answer, status: 'done' }; publish(key, target) } }).catch(error => { if (current()) { target.noticeAnswer = { ...answer, status: 'error', problem: error instanceof Error ? error.message : 'Native notice decision failed' }; publish(key, target) } })

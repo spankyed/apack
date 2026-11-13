@@ -141,3 +141,19 @@ it('retains native review through picking/selection refresh, forwards only selec
   f.request.mockResolvedValueOnce({answered:true});await owner.answerNotice({id:next.id,revision:next.revision,sessionId:next.sessionId,decision:'auto_rules_submit'});expect(owner.state.notice).toBeUndefined()
  }finally{await prepared.dispose()}
 })
+
+it('keeps credit transitions mounted and retires only an explicitly settled native dialog',async()=>{
+ const {prepared,owner,notice}=await fixture()
+ try{
+  const credit={id:notice.id,revision:notice.revision,sessionId:notice.sessionId,kind:'fable_overage_consent_prompt' as const,title:'Usage credits',paragraphs:[],snapshot:{revision:'a'.repeat(64),rows:[],editor:{kind:'information' as const,revision:'a'.repeat(64),title:'Usage credits',description:'Looking up balance…'}}}
+  f.request.mockResolvedValueOnce({notice:credit,handoffPending:false,retirements:[]});await owner.refreshNotice()
+  const response={id:credit.id,revision:credit.revision,sessionId:credit.sessionId,decision:'credit' as const,credit:{requestId:randomUUID(),operation:{kind:'read' as const}}}
+  const updated={...credit,snapshot:{...credit.snapshot,refreshPending:true,dismissible:false,editor:{...credit.snapshot.editor,description:'Processing payment…'}}}
+  f.request.mockResolvedValueOnce({answered:true,notice:updated});await owner.answerNotice(response)
+  expect(owner.state.notice).toEqual(updated)
+  expect(f.request).toHaveBeenLastCalledWith({subtype:'apack_answer_native_notice',id:response.id,revision:response.revision,session_id:response.sessionId,decision:'credit',credit:response.credit})
+  f.request.mockResolvedValueOnce({answered:true});await expect(owner.answerNotice(response)).rejects.toThrow('credit state was not acknowledged');expect(owner.state.notice).toEqual(updated)
+  f.request.mockResolvedValueOnce({answered:true,notice:{...updated,sessionId:randomUUID()}});await expect(owner.answerNotice(response)).rejects.toThrow('changed owner');expect(owner.state.notice).toEqual(updated)
+  f.request.mockResolvedValueOnce({answered:true,notice:null});await owner.answerNotice(response);expect(owner.state.notice).toBeUndefined()
+ }finally{await prepared.dispose()}
+})
