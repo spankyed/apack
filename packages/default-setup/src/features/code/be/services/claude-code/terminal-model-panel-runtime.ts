@@ -1,3 +1,4 @@
+import {claudeTerminalCreditDialogRuntime} from './terminal-credit-dialog-runtime.ts'
 import {claudeTerminalModelCreditRuntime} from './terminal-model-credit-runtime.ts'
 
 /** Present the original /model picker, confirmations and pending controls in its owned dialog. */
@@ -17,8 +18,10 @@ function nativeModelFibers(root){
  while(pending.length){const fiber=pending.pop();if(!fiber||seen.has(fiber))continue;if(seen.size>=4096)throw Error('Native model tree exceeded bound');seen.add(fiber);result.push(fiber);for(let child=fiber.child;child;child=child.sibling){if(pending.includes(child))throw Error('Native model tree contains a cycle');pending.push(child);}}
  return result;
 }
+${claudeTerminalCreditDialogRuntime}
 function nativeModelPanelFrame(n,entry){
  entry.current();
+ if(entry.kind==='credit-dialog')return nativeCreditDialogFrame(n,entry);
  if(entry.closed||entry.answered||entry.commandName!=='model'||typeof entry.originalProps?.onDone!=='function'||!nativeModelPanelHashes.root.includes(nativeModelFunctionHash(entry.originalType)))throw Error('Native model panel expired or changed');
  const root=n.themeRoots.ai().get(process.stdout)?.container?.current;
  const owners=nativeModelFibers(root).filter(fiber=>fiber.type===entry.originalType&&fiber.memoizedProps?.onDone===entry.originalProps.onDone);
@@ -97,7 +100,7 @@ async function nativeModelPanelOperation(n,entry,request,abort){
 }
 async function afterNativeModelAction(n,entry,before,signal){
  const deadline=Date.now()+500;
- while(!entry.closed){try{const after=await readNativeModelPanel(n,entry,signal);if(after.snapshot.revision!==before.snapshot.revision||Date.now()>=deadline)return {snapshot:after.snapshot};}catch(error){signal.throwIfAborted();if(Date.now()>=deadline)throw error;}await new Promise(resolve=>setTimeout(resolve,20));}
+ while(!entry.closed){try{const after=await readNativeModelPanel(n,entry,signal);if(after.snapshot.revision!==before.snapshot.revision||Date.now()>=deadline)return {snapshot:after.snapshot};}catch(error){signal.throwIfAborted();if(entry.closed)break;if(Date.now()>=deadline)throw error;}await new Promise(resolve=>setTimeout(resolve,20));}
  return {snapshot:before.snapshot};
 }
 `
