@@ -1,3 +1,4 @@
+import { claudeTerminalAutoModeSafetyRuntime } from './terminal-auto-mode-safety-runtime.ts'
 import { claudeTerminalComputerPermissionRuntime } from './terminal-computer-permission-runtime.ts'
 import { claudeTerminalChromeSetupRuntime } from './terminal-chrome-setup-runtime.ts'
 import { claudeTerminalHelperPolicyRuntime } from './terminal-helper-policy-runtime.ts'
@@ -548,6 +549,7 @@ ${claudeTerminalLeftArrowRuntime}
 ${claudeTerminalSandboxNetworkRuntime}
 ${claudeTerminalBrowserPermissionRuntime}
 ${claudeTerminalComputerPermissionRuntime}
+${claudeTerminalAutoModeSafetyRuntime}
 ${claudeTerminalChromeSetupRuntime}
 ${claudeTerminalManagedSecurityRuntime}
 ${claudeTerminalAutocompactOfferRuntime}
@@ -755,6 +757,7 @@ async function readNativeNoticeSnapshot(n){
   const policy=nativeManagedSecurity(n);if(policy.item)return {notice:await projectNativeManagedSecurity(n,policy),retirements:policy.startup?[]:nativeRefusalRetirements(n,policy.store)};if(policy.startup)return {notice:null,retirements:[]};
   const refusal=nativeRefusal(n);await restoreNativeRefusalDraft(n,refusal.store);refusal.retirements=nativeRefusalRetirements(n,refusal.store);if(refusal.item)return {notice:await projectNativeRefusal(n,refusal),retirements:refusal.retirements};
   const chrome=nativeChromeSetup(n);if(chrome.item)return {notice:await projectNativeChromeSetup(n,chrome),retirements:refusal.retirements};
+  const autoSafety=nativeAutoModeSafety(n);if(autoSafety.item)return {notice:await projectNativeAutoModeSafety(n,autoSafety),retirements:refusal.retirements};
   const computer=nativeComputerPermission(n);if(computer.item)return {notice:await projectNativeComputerPermission(n,computer),retirements:refusal.retirements};
   const browser=nativeBrowserPermission(n);if(browser.item)return {notice:await projectNativeBrowserPermission(n,browser),retirements:refusal.retirements};
   const network=nativeSandboxNetwork(n);if(network.item)return {notice:await projectNativeSandboxNetwork(n,network),retirements:refusal.retirements};
@@ -840,6 +843,7 @@ async function control(request,abort){
   if(['policy_approve','policy_reject'].includes(request.decision)){await answerNativeManagedSecurity(n,request);return {answered:true};}
   if(['compact_previous','compact_next','compact_accept','compact_keep','compact_dismiss'].includes(request.decision)){await answerNativeAutocompactOffer(n,request,abort);return {answered:true};}
   if(['chrome_install','chrome_not_now','chrome_never','chrome_continue','chrome_wait','chrome_skip','chrome_cancel'].includes(request.decision)){answerNativeChromeSetup(n,request);return {answered:true};}
+  if(['auto_nudge_accept','auto_nudge_decline','auto_review_accept','auto_review_decline','auto_rules_all','auto_rules_pick','auto_rules_leave','auto_rules_select','auto_rules_submit','auto_safety_cancel'].includes(request.decision)){await answerNativeAutoModeSafety(n,request,abort);return {answered:true};}
   if(['computer_deny','computer_allow','computer_accessibility','computer_screen_recording','computer_retry','computer_cancel'].includes(request.decision)){answerNativeComputerPermission(n,request);return {answered:true};}
   if(['browser_allow','browser_domain','browser_deny','browser_cancel'].includes(request.decision)){answerNativeBrowserPermission(n,request);return {answered:true};}
   if(['sandbox_allow','sandbox_remember','sandbox_deny','sandbox_cancel'].includes(request.decision)){answerNativeSandboxNetwork(n,request);return {answered:true};}

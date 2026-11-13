@@ -127,3 +127,17 @@ it.each(['computer_accessibility','computer_screen_recording'] as const)('keeps 
   f.request.mockResolvedValueOnce({answered:true});await owner.answerNotice({id:next.id,revision:next.revision,sessionId:next.sessionId,decision:'computer_cancel'});expect(owner.state.notice).toBeUndefined()
  }finally{await prepared.dispose()}
 })
+
+it('retains native review through picking/selection refresh, forwards only selected values, and clears after final submit',async()=>{
+ const {prepared,owner,notice}=await fixture()
+ try{
+  const review={id:notice.id,revision:randomUUID(),sessionId:notice.sessionId,kind:'auto_mode_flagged_allow',phase:'review',title:'Review rules that skip checks',paragraphs:['Original warnings'],rules:[],selectedValues:[],choices:[{value:'auto_rules_all',label:'Remove them all'},{value:'auto_rules_pick',label:'Pick which to remove'},{value:'auto_rules_leave',label:'Leave them'}]}
+  f.request.mockResolvedValueOnce({notice:review,handoffPending:false,retirements:[]});await owner.refreshNotice()
+  const pick={...review,revision:randomUUID(),phase:'pick',rules:[{value:'Bash(*)',label:'Original Bash(*)'}],choices:[{value:'auto_rules_submit',label:'Remove selected'}]}
+  f.request.mockResolvedValueOnce({answered:true}).mockResolvedValueOnce({notice:pick,handoffPending:false,retirements:[]});await owner.answerNotice({id:review.id,revision:review.revision,sessionId:review.sessionId,decision:'auto_rules_pick'});expect(owner.state.notice).toEqual(pick)
+  const next={...pick,revision:randomUUID(),selectedValues:['Bash(*)']}
+  f.request.mockResolvedValueOnce({answered:true}).mockResolvedValueOnce({notice:next,handoffPending:false,retirements:[]});await owner.answerNotice({id:pick.id,revision:pick.revision,sessionId:pick.sessionId,decision:'auto_rules_select',selectedValues:['Bash(*)']});expect(owner.state.notice).toEqual(next)
+  expect(f.request.mock.calls.filter(([request])=>request.subtype==='apack_answer_native_notice').at(-1)![0]).toMatchObject({id:pick.id,revision:pick.revision,session_id:pick.sessionId,decision:'auto_rules_select',selected_values:['Bash(*)']})
+  f.request.mockResolvedValueOnce({answered:true});await owner.answerNotice({id:next.id,revision:next.revision,sessionId:next.sessionId,decision:'auto_rules_submit'});expect(owner.state.notice).toBeUndefined()
+ }finally{await prepared.dispose()}
+})

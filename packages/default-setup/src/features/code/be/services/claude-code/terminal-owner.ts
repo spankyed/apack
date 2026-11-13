@@ -401,13 +401,13 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async answerNotice(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native notice session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_native_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision }) as { answered?: unknown; handoffPending?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_native_notice', id: response.id, revision: response.revision, session_id: response.sessionId, decision: response.decision, ...(response.decision === 'auto_rules_select' ? { selected_values: response.selectedValues } : {}) }) as { answered?: unknown; handoffPending?: unknown }
         if (result.answered !== true) throw new Error('Native notice was not acknowledged')
         if (response.decision === 'background_confirm' || response.decision === 'background_stay') {
           if (typeof result.handoffPending !== 'boolean') throw new Error('Native agents progress was not acknowledged')
           handoffPending = result.handoffPending; changed()
         }
-        if (response.decision === 'compact_previous' || response.decision === 'compact_next' || response.decision === 'computer_accessibility' || response.decision === 'computer_screen_recording') { await this.refreshNotice(); return }
+        if (response.decision === 'auto_rules_pick' || response.decision === 'auto_rules_select' || response.decision === 'compact_previous' || response.decision === 'compact_next' || response.decision === 'computer_accessibility' || response.decision === 'computer_screen_recording') { await this.refreshNotice(); return }
         if (notice?.id === response.id && notice.revision === response.revision) { notice = undefined; changed() }
       },
       async readJournal() {

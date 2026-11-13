@@ -15,7 +15,7 @@
     <section v-if="!active && view?.state?.notice?.kind === 'newer_model_inline'" role="status" aria-label="Claude model offer" class="rounded-lg border border-neutral-700/50 bg-neutral-900/40 px-3 py-2 text-xs leading-relaxed">
       <NativeStatusText :text="view.state.notice.ansi" />
     </section>
-    <section v-for="panel in noticePanels" :key="panel.key" ref="noticeElements" :role="['resume_return', 'newer_model_offer', 'cold_resume_quota', 'permission_browser', 'computer_use_approval', 'chrome_install_upsell', 'chrome_install_setup'].includes(panel.kind) ? 'dialog' : undefined" :data-native-notice="panel.notice.kind" :aria-label="panel.notice.kind === 'computer_use_approval' ? 'Claude computer permission' : panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'chrome_install_setup' ? 'Claude browser setup' : panel.notice.kind === 'permission_browser' ? 'Claude browser permission' : panel.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : panel.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : panel.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : panel.notice.kind === 'cold_resume_quota' ? 'Claude quota offer' : panel.notice.kind === 'newer_model_offer' ? 'Claude newer model offer' : panel.notice.kind === 'resume_return' ? 'Claude resume offer' : panel.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : panel.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': panel.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(panel, panel.notice.kind === 'computer_use_approval' ? 'computer_cancel' : panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'chrome_install_setup' ? 'chrome_cancel' : panel.notice.kind === 'permission_browser' ? 'browser_cancel' : panel.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : panel.notice.kind === 'cold_resume_quota' ? 'quota_dismiss' : panel.notice.kind === 'newer_model_offer' ? 'newer_dismiss' : panel.notice.kind === 'resume_return' ? 'resume_dismiss' : panel.notice.kind === 'goal_proposal' ? 'goal_decline' : panel.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : panel.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
+    <section v-for="panel in noticePanels" :key="panel.key" ref="noticeElements" :role="['resume_return', 'newer_model_offer', 'cold_resume_quota', 'permission_browser', 'computer_use_approval', 'auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow', 'chrome_install_upsell', 'chrome_install_setup'].includes(panel.kind) ? 'dialog' : undefined" :data-native-notice="panel.notice.kind" :aria-label="['auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow'].includes(panel.notice.kind) ? 'Claude auto-mode review' : panel.notice.kind === 'computer_use_approval' ? 'Claude computer permission' : panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'chrome_install_setup' ? 'Claude browser setup' : panel.notice.kind === 'permission_browser' ? 'Claude browser permission' : panel.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : panel.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : panel.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : panel.notice.kind === 'cold_resume_quota' ? 'Claude quota offer' : panel.notice.kind === 'newer_model_offer' ? 'Claude newer model offer' : panel.notice.kind === 'resume_return' ? 'Claude resume offer' : panel.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : panel.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': panel.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(panel, ['auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow'].includes(panel.notice.kind) ? 'auto_safety_cancel' : panel.notice.kind === 'computer_use_approval' ? 'computer_cancel' : panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'chrome_install_setup' ? 'chrome_cancel' : panel.notice.kind === 'permission_browser' ? 'browser_cancel' : panel.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : panel.notice.kind === 'cold_resume_quota' ? 'quota_dismiss' : panel.notice.kind === 'newer_model_offer' ? 'newer_dismiss' : panel.notice.kind === 'resume_return' ? 'resume_dismiss' : panel.notice.kind === 'goal_proposal' ? 'goal_decline' : panel.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : panel.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
       <div class="native-notice__body" tabindex="0">
         <header v-if="panel.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
           <h3>{{ panel.notice.title }}</h3>
@@ -39,7 +39,15 @@
           <p v-for="(paragraph, index) in panel.notice.paragraphs" :key="index">{{ paragraph }}</p>
           <p v-if="panel.notice.kind === 'auto_mode_server_fallback'" class="native-notice__url">{{ panel.notice.helpUrl }}</p>
         </template>
+        <fieldset v-if="panel.notice.kind === 'auto_mode_flagged_allow' && panel.notice.phase === 'pick'" class="space-y-2" :disabled="noticePending">
+          <legend class="mb-2 font-medium">Rules to remove</legend>
+          <label v-for="(rule, index) in panel.notice.rules" :key="index" class="flex items-start gap-2 whitespace-pre-wrap break-words">
+            <input type="checkbox" class="mt-1 shrink-0" :checked="panel.notice.selectedValues.includes(rule.value)" @change="selectAutoRule(panel, rule.value, ($event.target as HTMLInputElement).checked)" />
+            <span class="min-w-0">{{ rule.label }}</span>
+          </label>
+        </fieldset>
       </div>
+      <p v-if="noticePending && ['auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow'].includes(panel.kind)" role="status" class="native-notice__identity">Waiting for Claude…</p>
       <p v-if="noticeProblem" role="alert" class="native-problem">{{ noticeProblem }}</p>
       <div v-if="panel.notice.kind === 'autocompact_offer'" class="native-notice__actions" role="group" aria-label="Autocompact size">
         <button type="button" class="native-button" :disabled="noticePending || !panel.notice.canPrevious" @click="answerNotice(panel, 'compact_previous')">Smaller</button>
@@ -50,6 +58,7 @@
         <template v-if="panel.notice.kind !== 'auto_mode_server_fallback'">
           <button v-for="choice in panel.notice.choices" :key="choice.value" :data-native-choice="choice.value" :aria-label="choice.label" type="button" class="native-button" :class="{ 'native-button--return': choice.value === 'yes' }" :disabled="noticePending" @click="answerNotice(panel, choice.value)">{{ choice.label }}<span v-if="['cold_resume_quota', 'chrome_install_upsell', 'chrome_install_setup'].includes(panel.notice.kind) && 'description' in choice && choice.description" class="block text-[11px] font-normal text-neutral-400">{{ choice.description }}</span></button>
           <button v-if="panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'chrome_install_setup'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'chrome_cancel')">Cancel</button>
+          <button v-if="['auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow'].includes(panel.notice.kind)" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'auto_safety_cancel')">Cancel</button>
           <button v-if="panel.notice.kind === 'computer_use_approval'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'computer_cancel')">Cancel</button>
           <button v-if="panel.notice.kind === 'permission_browser'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'browser_cancel')">Cancel</button>
           <button v-if="panel.notice.kind === 'refusal_fallback_prompt'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'cancelled')">Cancel</button>
@@ -125,6 +134,7 @@ import NativeBackgroundComposer from './NativeBackgroundComposer.vue'
 import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
 import type { ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundTurnInterruptRequest } from '#features/code/common/native-background.ts'
 import { claudeBillingText } from '#features/code/common/native-billing.ts'
+import { describeClaudeUiProblem } from '#features/code/common/native-ui-problem.ts'
 import { isClaudeNativeNoticeDecision, type ClaudeNativeNoticeResponse } from '#features/code/common/native-notice.ts'
 import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent, PopoverClose } from 'reka-ui'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
@@ -148,7 +158,7 @@ const views = useSelector(actor, state => state.context.nativeTerminalViews)
 const view = computed(() => views.value[mountId])
 
 const noticePending = computed(() => view.value?.noticeAnswer?.status === 'pending' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision)
-const noticeProblem = computed(() => view.value?.noticeAnswer?.status === 'error' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision ? view.value.noticeAnswer.problem : undefined)
+const noticeProblem = computed(() => view.value?.noticeAnswer?.status === 'error' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision ? describeClaudeUiProblem(view.value.noticeAnswer.problem) : undefined)
 const managedPolicyExit = ref<{ ownerId: string; afterSequence: number }>()
 const managedPolicyDeclined = computed(() => {
   const current = view.value, intent = managedPolicyExit.value
@@ -180,10 +190,16 @@ function answerLeftArrow(panel: NonNullable<typeof leftArrowPanel.value>, reques
   if (panel !== leftArrowPanel.value || !state || noticePending.value || panel.ownerId !== state.ownerId || request.panelId !== panel.id || request.revision !== panel.revision) return
   actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision: request.decision === 'confirm' ? 'background_confirm' : 'background_stay' } })
 }
-function answerNotice(panel: (typeof noticePanels.value)[number], decision: ClaudeNativeNoticeResponse['decision']) {
+function answerNotice(panel: (typeof noticePanels.value)[number], decision: ClaudeNativeNoticeResponse['decision'], selectedValues?: string[]) {
   const state = view.value?.state, notice = state?.notice
   if (!state || !notice || active.value || noticePending.value || state.ownerId !== panel.ownerId || notice.kind !== panel.kind || notice.id !== panel.id || notice.revision !== panel.revision || notice.sessionId !== panel.sessionId || !isClaudeNativeNoticeDecision(notice, decision)) return
-  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision } })
+  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision, ...(decision === 'auto_rules_select' ? { selectedValues } : {}) } })
+}
+function selectAutoRule(panel: (typeof noticePanels.value)[number], value: string, checked: boolean) {
+  if (panel.notice.kind !== 'auto_mode_flagged_allow' || panel.notice.phase !== 'pick' || !panel.notice.rules.some(rule => rule.value === value)) return
+  const selected = new Set(panel.notice.selectedValues)
+  if (checked) selected.add(value); else selected.delete(value)
+  answerNotice(panel, 'auto_rules_select', [...selected])
 }
 const workspaceName = computed(() => view.value?.state?.cwd?.split(/[\\/]/).filter(Boolean).at(-1) || 'Current workspace')
 const launchProblem = computed(() => managedPolicyDeclined.value ? 'Claude Code closed because you declined the managed settings.' : view.value?.problem || view.value?.state?.problem || (view.value?.state?.status === 'error' ? 'Claude Code disconnected unexpectedly. Reopen the native interface to continue this session.' : undefined))
@@ -234,8 +250,10 @@ const noticePanels = computed(() => {
 })
 const noticeElements = ref<HTMLElement[]>([])
 let resumeFocus: { ownerId: string; sessionId: string; section: HTMLElement; previous: HTMLElement | null } | undefined
-watch(() => noticePanels.value.find(panel => ['resume_return', 'newer_model_offer', 'permission_browser', 'computer_use_approval', 'chrome_install_upsell', 'chrome_install_setup'].includes(panel.kind) || panel.notice.kind === 'cold_resume_quota' && panel.notice.trigger === 'resume' && panel.notice.preferredChoice !== undefined), async (panel, previous) => {
-  if (panel && previous && panel.ownerId === previous.ownerId && panel.sessionId === previous.sessionId && panel.id === previous.id) return
+watch(() => noticePanels.value.find(panel => ['resume_return', 'newer_model_offer', 'permission_browser', 'computer_use_approval', 'auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow', 'chrome_install_upsell', 'chrome_install_setup'].includes(panel.kind) || panel.notice.kind === 'cold_resume_quota' && panel.notice.trigger === 'resume' && panel.notice.preferredChoice !== undefined), async (panel, previous) => {
+  const sameDialog = panel && previous && panel.ownerId === previous.ownerId && panel.sessionId === previous.sessionId && panel.id === previous.id
+  const phaseChanged = panel?.notice.kind === 'auto_mode_flagged_allow' && previous?.notice.kind === 'auto_mode_flagged_allow' && panel.notice.phase !== previous.notice.phase
+  if (sameDialog && !phaseChanged) return
   const retained = resumeFocus; resumeFocus = undefined
   if (!panel) {
     await nextTick()
@@ -247,10 +265,11 @@ watch(() => noticePanels.value.find(panel => ['resume_return', 'newer_model_offe
   if (!noticePanels.value.includes(panel) || !document.hasFocus()) return
   const section = noticeElements.value.find(element => element.dataset.nativeNotice === panel.kind)
   if (!section) return
-  resumeFocus = { ownerId: panel.ownerId, sessionId: panel.sessionId, section, previous: document.activeElement instanceof HTMLElement ? document.activeElement : null }
-  const preferred = panel.notice.kind === 'cold_resume_quota' || panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'computer_use_approval' ? panel.notice.preferredChoice : undefined
+  resumeFocus = { ownerId: panel.ownerId, sessionId: panel.sessionId, section, previous: sameDialog && retained ? retained.previous : document.activeElement instanceof HTMLElement ? document.activeElement : null }
+  const preferred = panel.notice.kind === 'cold_resume_quota' || panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'computer_use_approval' || panel.notice.kind === 'auto_default_nudge' || panel.notice.kind === 'auto_mode_setup_review' || panel.notice.kind === 'auto_mode_flagged_allow' ? panel.notice.preferredChoice : undefined
   const button = preferred ? Array.from(section.querySelectorAll<HTMLButtonElement>('button')).find(button => button.dataset.nativeChoice === preferred) : section.querySelector<HTMLButtonElement>('button')
-  button?.focus({ preventScroll: true })
+  const picker = panel.notice.kind === 'auto_mode_flagged_allow' && panel.notice.phase === 'pick' ? section.querySelector<HTMLInputElement>('input[type=checkbox]') : undefined
+  ;(picker ?? button)?.focus({ preventScroll: true })
 }, { immediate: true })
 const viewport = ref<HTMLElement>()
 let terminal: ReturnType<typeof mountNativeTerminal> | undefined, observer: ResizeObserver | undefined

@@ -256,6 +256,10 @@ const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: 
  {notice:{...identity,kind:'resume_return',choices:[{value:'resume_compact',label:'Resume from summary'},{value:'resume_continue',label:'Resume full session as-is'},{value:'resume_never',label:"Don't ask me again"}]},button:'Resume from summary',decision:'resume_compact'},
  {notice:{...identity,kind:'newer_model_offer',choices:[{value:'newer_keep',label:'Keep current model'},{value:'newer_accept',label:'Resume on newer model'}]},button:'Resume on newer model',decision:'newer_accept'},
  {notice:{...identity,kind:'cold_resume_quota',trigger:'idle',preferredChoice:'quota_new_conversation',choices:[{value:'quota_resume',label:'Resume'},{value:'quota_new_conversation',label:'Start a new conversation',description:'Original pointer disclosure'}]},button:'Resume',decision:'quota_resume'},
+ {notice:{...identity,kind:'auto_default_nudge',preferredChoice:'auto_nudge_decline',choices:[{value:'auto_nudge_accept',label:'Make default'},{value:'auto_nudge_decline',label:'Keep current mode'}]},button:'Keep current mode',decision:'auto_nudge_decline'},
+ {notice:{...identity,kind:'auto_mode_setup_review',choices:[{value:'auto_review_accept',label:'Save setup'},{value:'auto_review_decline',label:'Discard'}]},button:'Save setup',decision:'auto_review_accept'},
+ {notice:{...identity,kind:'auto_mode_flagged_allow',phase:'review',rules:[],selectedValues:[],preferredChoice:'auto_rules_all',choices:[{value:'auto_rules_all',label:'Remove them all'},{value:'auto_rules_pick',label:'Pick which to remove'},{value:'auto_rules_leave',label:'Leave them'}]},button:'Pick which to remove',decision:'auto_rules_pick'},
+ {notice:{...identity,kind:'auto_mode_flagged_allow',phase:'pick',rules:[{value:'Bash(*)',label:'Original Bash(*)'}],selectedValues:[],choices:[{value:'auto_rules_submit',label:'Remove selected'}]},button:'Remove selected',decision:'auto_rules_submit'},
  {notice:{...identity,kind:'computer_use_approval',phase:'apps',preferredChoice:'computer_deny',choices:[{value:'computer_deny',label:'Deny'},{value:'computer_allow',label:'Allow for this session (1 app)'}]},button:'Deny',decision:'computer_deny'},
  {notice:{...identity,kind:'computer_use_approval',phase:'os_permissions',choices:[{value:'computer_accessibility',label:'Open Accessibility'},{value:'computer_retry',label:'Try again'}]},button:'Open Accessibility',decision:'computer_accessibility'},
  {notice:{...identity,kind:'permission_browser',toolName:'mcp__claude-in-chrome__navigate',requestId:'browser-tool',choices:[{value:'browser_allow',label:'Allow'},{value:'browser_domain',label:'Allow domain for this session'},{value:'browser_deny',label:'Deny'}]},button:'Allow',decision:'browser_allow'},
@@ -473,5 +477,25 @@ it('preserves native computer consent warnings, deny focus and OS phase ownershi
   f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:os}})
   actor.send.mockClear();stale.click();expect(actor.send).not.toHaveBeenCalled();await nextTick();expect(card.textContent).not.toContain('Allow for this session');expect(card.textContent).toContain('Try again')
   card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({id:os.id,revision:'os-phase',sessionId:os.sessionId,decision:'computer_cancel'})
+ }finally{focus.mockRestore()}
+})
+
+it('keeps native rule selection, phase focus and original return focus without stale checkbox consent',async()=>{
+ const focus=vi.spyOn(document,'hasFocus').mockReturnValue(true)
+ try{
+  const f=await fixture(),base=ownedNoticeCases.find(row=>row.notice.kind==='auto_mode_flagged_allow'&&row.notice.phase==='review')!.notice
+  if(base.kind!=='auto_mode_flagged_allow')throw Error('Missing native rule review')
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+  const previous=document.createElement('input');f.root.append(previous);previous.focus()
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:base}});await nextTick();await nextTick()
+  const card=f.root.querySelector<HTMLElement>('[aria-label="Claude auto-mode review"]')!;expect(document.activeElement?.textContent).toBe('Remove them all')
+  const pick={...base,revision:'picker',phase:'pick' as const,preferredChoice:undefined,rules:[{value:'Bash(*)',label:'Bash(*) <script>'},{value:'Read(**)',label:'Read(**)'}],selectedValues:['Read(**)'],choices:[{value:'auto_rules_submit' as const,label:'Remove selected'}]}
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:pick}});await nextTick();await nextTick()
+  const inputs=[...card.querySelectorAll<HTMLInputElement>('input[type=checkbox]')];expect(inputs.map(input=>input.checked)).toEqual([false,true]);expect(document.activeElement).toBe(inputs[0]);expect(card.querySelector('script')).toBeNull()
+  actor.send.mockClear();inputs[0]!.click();expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ownerId:'owner',notice:{id:pick.id,revision:'picker',sessionId:pick.sessionId,decision:'auto_rules_select',selectedValues:['Read(**)','Bash(*)']}}))
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:pick},noticeAnswer:{id:pick.id,revision:pick.revision,status:'pending'}});await nextTick();expect(card.querySelector<HTMLFieldSetElement>('fieldset')!.disabled).toBe(true);expect(card.querySelector('[role=status]')?.textContent).toBe('Waiting for Claude…');expect([...card.querySelectorAll('button')].every(button=>button.disabled)).toBe(true)
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:pick},noticeAnswer:{id:pick.id,revision:pick.revision,status:'error',problem:'Native UI request timed out'}});await nextTick();expect(card.querySelector('[role=alert]')?.textContent).toBe('Claude has not responded yet. You can retry or open the native interface.');
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...pick,revision:'fresh-selection',selectedValues:['Bash(*)']}}});actor.send.mockClear();inputs[1]!.dispatchEvent(new Event('change',{bubbles:true}));expect(actor.send).not.toHaveBeenCalled();await nextTick();expect([...card.querySelectorAll<HTMLInputElement>('input')].map(input=>input.checked)).toEqual([true,false])
+  card.querySelector<HTMLButtonElement>('button')!.focus();f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:undefined}});await nextTick();await nextTick();expect(document.activeElement).toBe(previous)
  }finally{focus.mockRestore()}
 })
