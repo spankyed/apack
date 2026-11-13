@@ -1,7 +1,7 @@
 # Goal: terminal view parity, and command blocks
 
 **Status: done.** Merged to `master`: spankyed/apack#446 (merge `f73228e602`) and spankyed/apack-terminal#16 (merge `3a2140cc8d`), with `vendor/apack-terminal.rev` pinned to `3a2140cc8d`. Owner: the terminal view (`vendor/apack-terminal/view`) and the Code surface
-(`packages/default-setup/src/features/code`). Builds on [the view goal](../archive/goals/goal-terminal-view.md), which is merged.
+(`packages/default-setup/src/features/code`). Builds on [the view goal](goal-terminal-view.md), which is merged.
 
 ## Prompt
 
@@ -55,19 +55,19 @@ Out:
   - `apack-terminal-worktrees.noindex/terminal-parity` on `session/terminal-parity-view`: the view and the broker. Changes to it are committed there and pinned from the monorepo only after they land.
   - This document: `monorepo-worktrees.noindex/native-stall` on `session/terminal-parity-goal`, PR #444.
 - Pin: `master` pins the broker at `3a2140cc8d`, a commit on the broker's `master`.
-- Phase 0 is done. Its results are in [the evidence record](../references/evidence/terminal-parity.md): kitty
+- Phase 0 is done. Its results are in [the evidence record](../../references/evidence/terminal-parity.md): kitty
   keys and the cursor key into a real pty pass, the view's wheel and auto-scroll tests pass, and OSC 52 reaches
   the broker's client. The app side of OSC 52 is Phase 1's defect, not a Phase 0 result.
 - Phase 1 is done, with its results in the evidence record: the main process writes the clipboard, the window no
   longer checks focus, and a read request is answered nothing. Its limits (an 8 MiB refusal shown to nobody, and
   one write per window) are stated there.
-- Phase 2 is done in code and checks: [the evidence record](../references/evidence/terminal-parity.md#phase-2--copy-on-select-2026-11-12).
+- Phase 2 is done in code and checks: [the evidence record](../../references/evidence/terminal-parity.md#phase-2--copy-on-select-2026-11-12).
   The broker pull request (spankyed/apack-terminal#16) merged as `3a2140cc8d`; the app pins that commit.
-- Phase 3 is done in code and checks: [the evidence record](../references/evidence/terminal-parity.md#phase-3--minimum-contrast-ratio-2026-11-12). The app pins the view commit that carries it.
-- Phase 4 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-4--the-canvas-painter-under-heavy-output-and-the-gpu-decision-2026-11-12). Neither machine's p95 frame exceeds 16 ms, so the GPU renderer (D5) is not built.
-- Phase 5 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-5--rectangular-selection-2026-11-12). The app pins the view commit that carries it.
-- Phase 6 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-6--the-accessible-document-2026-11-12). The VoiceOver checklist is written there; running it is a follow-up, not a condition.
-- Phase 7 is done: [the evidence record](../references/evidence/terminal-parity.md#phase-7--command-blocks-2026-11-12). Every phase's done-when condition is met in code and checks, and both pull requests are merged.
+- Phase 3 is done in code and checks: [the evidence record](../../references/evidence/terminal-parity.md#phase-3--minimum-contrast-ratio-2026-11-12). The app pins the view commit that carries it.
+- Phase 4 is done: [the evidence record](../../references/evidence/terminal-parity.md#phase-4--the-canvas-painter-under-heavy-output-and-the-gpu-decision-2026-11-12). Neither machine's p95 frame exceeds 16 ms, so the GPU renderer (D5) is not built.
+- Phase 5 is done: [the evidence record](../../references/evidence/terminal-parity.md#phase-5--rectangular-selection-2026-11-12). The app pins the view commit that carries it.
+- Phase 6 is done: [the evidence record](../../references/evidence/terminal-parity.md#phase-6--the-accessible-document-2026-11-12). The VoiceOver checklist is written there; running it is a follow-up, not a condition.
+- Phase 7 is done: [the evidence record](../../references/evidence/terminal-parity.md#phase-7--command-blocks-2026-11-12). Every phase's done-when condition is met in code and checks, and both pull requests are merged.
 - Next deliverable: none. The goal is complete. The VoiceOver run (D6) is a follow-up, recorded in the evidence record when done.
 - Unresolved: none. Nothing in this goal depends on a manual step; see D6.
 
@@ -207,7 +207,7 @@ Phases 7.1 and 7.2 need only the Code surface. Phase 7.3 needs the view primitiv
 
 ## Constraints
 
-- `PROTOCOL_VERSION` stays 1 (see [the view goal](../archive/goals/goal-terminal-view.md)).
+- `PROTOCOL_VERSION` stays 1 (see [the view goal](goal-terminal-view.md)).
 - No backward-compatibility shims. A changed contract moves every caller in the same change.
 - Mutation-check the guards. A test that restates its implementation does not count.
 - Validate in the bounded way CLAUDE.md describes: focused specs during a phase, the chain at a converged checkpoint.

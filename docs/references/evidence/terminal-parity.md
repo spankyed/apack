@@ -1,6 +1,6 @@
 # Terminal parity: evidence
 
-Checkpoint log for [the terminal parity goal](../../goals/goal-terminal-parity.md). Each entry records its date,
+Checkpoint log for [the terminal parity goal](../../archive/goals/goal-terminal-parity.md). Each entry records its date,
 source commits, exact commands and results, and what it does not establish.
 
 ## Phase 0 — verify what is present (2026-11-12)
