@@ -380,7 +380,7 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 :global(.claude-native-lsp-details header button) { color: #aaa59e; font-size: 11px; cursor: pointer; }
 :global(.claude-native-lsp-details p) { margin: 0 0 8px; }
 .native-notice__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-.native-session { --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
+.native-session { container-type: inline-size; container-name: claude-native; --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
 .native-session--expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
 /* Native consent and question screens need more rows than the compact split allows. */
 @media (max-height: 700px), (max-width: 720px) {
@@ -424,7 +424,6 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 .native-problem { grid-column: 1 / -1; margin: 0; color: #e9a3a0; font-size: 11px; overflow-wrap: anywhere; }
 @media (max-width: 760px) {
   .native-session { padding: 12px; }
-  .native-session--expanded, .native-session--child { left: 0; }
   .native-header { flex-wrap: wrap; gap: 12px; padding-bottom: 12px; }
   .native-identity { flex: 1; }
   .native-controls { margin-left: auto; gap: 4px; }
@@ -432,6 +431,18 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
   .native-interface-label { display: none; }
   .native-viewport { padding: 12px; }
   .native-activity { gap: 12px; padding-top: 12px; }
+}
+@container claude-native (max-width: 760px) {
+  .native-header { flex-wrap: wrap; gap: 12px; padding-bottom: 12px; }
+  .native-identity { flex: 1; }
+  .native-controls { margin-left: auto; gap: 4px; }
+  .native-state { margin-right: 4px; }
+  .native-interface-label { display: none; }
+}
+@container claude-native (max-width: 520px) {
+  .native-controls { width: 100%; flex-wrap: wrap; justify-content: flex-end; }
+  .native-state { margin-right: auto; }
+  .native-console { min-height: 0; }
 }
 @media (max-width: 440px) {
   .native-controls { width: 100%; justify-content: flex-end; }
