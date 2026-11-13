@@ -11,7 +11,7 @@
     </NativeBackgroundSession>
     <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
     <NativeCreditConsent v-if="!active && view?.state?.notice?.kind === 'fable_overage_consent_prompt'" :key="JSON.stringify([view.state.ownerId,view.state.notice.sessionId,view.state.notice.id,view.state.notice.revision])" :notice="view.state.notice" :answer="view.noticeAnswer" @answer="answerCredit" />
-    <section v-if="!active && view?.state?.notice?.kind === 'credit_consent_result'" role="status" aria-label="Claude usage credit result" class="rounded-lg border border-neutral-700/50 bg-neutral-900/40 px-3 py-2 text-xs leading-relaxed text-neutral-200"><p v-for="(paragraph,index) in view.state.notice.paragraphs" :key="index" class="whitespace-pre-wrap break-words">{{ paragraph }}</p></section>
+    <section v-if="!active && view?.state?.notice?.kind === 'credit_consent_result'" role="status" aria-label="Claude usage credit result" class="rounded-lg border border-neutral-700/50 bg-neutral-900/40 px-3 py-2 text-xs leading-relaxed text-neutral-200"><p v-for="(paragraph,index) in view.state.notice.paragraphs" :key="index" class="whitespace-pre-wrap break-words"><NativeConsentDisclosure :text="paragraph" :links="view.state.notice.links" /></p></section>
     <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
     <NativeSandboxNetworkReview v-if="!active && view?.state?.notice?.kind === 'sandbox_network_access'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerSandboxNetwork" />
     <section v-if="!active && view?.state?.notice?.kind === 'newer_model_inline'" role="status" aria-label="Claude model offer" class="rounded-lg border border-neutral-700/50 bg-neutral-900/40 px-3 py-2 text-xs leading-relaxed">
@@ -135,6 +135,7 @@
 </template>
 <script setup lang="ts">
 import NativeCreditConsent from './NativeCreditConsent.vue'
+import NativeConsentDisclosure from './NativeConsentDisclosure.vue'
 import NativeBackgroundReview from './NativeBackgroundReview.vue'
 import NativeBackgroundSession from './NativeBackgroundSession.vue'
 import NativeBackgroundComposer from './NativeBackgroundComposer.vue'

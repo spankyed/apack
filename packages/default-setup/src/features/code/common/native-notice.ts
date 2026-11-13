@@ -10,7 +10,7 @@ const body = { title: z.string().max(16000), paragraphs: z.array(z.string().max(
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
 export const ClaudeNativeNoticeSchema = z.discriminatedUnion('kind', [
   z.object({...identity,...body,kind:z.literal('fable_overage_consent_prompt'),snapshot:claudeSettingsSnapshot.refine(snapshot=>!!snapshot.editor,'Native credit editor required')}),
-  z.object({...identity,...body,kind:z.literal('credit_consent_result'),severity:z.literal('feedback')}),
+  z.object({...identity,...body,kind:z.literal('credit_consent_result'),severity:z.literal('feedback'),links:z.array(z.string().url().max(4096).regex(/^https?:\/\//)).max(16)}),
   z.object({ ...identity, ...body, kind: z.literal('chrome_install_upsell'), preferredChoice: z.literal('chrome_not_now'), choices: z.array(z.object({ value: z.enum(['chrome_install', 'chrome_not_now', 'chrome_never']), label: z.string().min(1).max(4000), description: z.string().max(4000).optional() })).length(3) }),
   z.object({ ...identity, ...body, kind: z.literal('chrome_install_setup'), phase: z.enum(['waiting_install', 'connecting', 'stalled', 'connected', 'failed']), installPageOpened: z.boolean(), choices: z.array(z.object({ value: z.enum(['chrome_continue', 'chrome_wait', 'chrome_skip']), label: z.string().min(1).max(4000), description: z.string().max(4000).optional() })).min(1).max(2) }),
   z.object({ ...identity, ...body, kind: z.literal('effort_preference_result'), severity: z.enum(['warning', 'feedback']) }),

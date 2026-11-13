@@ -1,4 +1,6 @@
 import {createHash,randomUUID} from 'node:crypto'
+import {stripVTControlCharacters} from 'node:util'
+import {ClaudeNativeNoticeSchema} from '#features/code/common/native-notice.ts'
 import {runInNewContext} from 'node:vm'
 import {claudeTerminalModelPanelRuntime} from '#features/code/be/services/claude-code/terminal-model-panel-runtime.ts'
 
@@ -14,7 +16,7 @@ function fixture(){
  const binding={surface:'terminal',toolContext:()=>({dialogStore:store,getAppState:()=>({notifications})})}
  const n={runtime:{ey:()=>binding},questionOptions:{q:()=>session},themeRoots:{ai:()=>({get:()=>({container:{current:owner}})})}}
  const api=runInNewContext(claudeTerminalModelPanelRuntime+';({nativeCreditDialog,nativeModelPanelFrame,afterNativeModelAction,nativeCreditConsentResult})',{
-  nativeViewFacts:()=>({view}),randomUUID,originalContext:undefined,process:{stdout:{}},AbortController,configUrl:'config',readFileSync:()=>JSON.stringify({sessionId:'owned'}),
+  nativeViewFacts:()=>({view}),randomUUID,URL,stripVTControlCharacters,originalContext:undefined,process:{stdout:{}},AbortController,configUrl:'config',readFileSync:()=>JSON.stringify({sessionId:'owned'}),
   createHash:()=>({value:'',update(value:string){this.value=value;return this},digest(){return hashes.get(this.value)??createHash('sha256').update(this.value).digest('hex')}}),
  }) as {nativeCreditConsentResult(n:unknown):any;nativeCreditDialog(n:unknown):any;nativeModelPanelFrame(n:unknown,entry:unknown):unknown;afterNativeModelAction(n:unknown,entry:unknown,before:unknown,signal:AbortSignal):Promise<unknown>}
  return {api,n,item,owner,renderer,answer,notifications,view,read:()=>api.nativeCreditDialog(n),setOpen:(value:typeof open)=>{open=value},replaceStore:()=>{store={getState:()=>({open})}},changeSession:()=>{session='foreign'}}
@@ -83,4 +85,9 @@ it('reissues the native drawing when the original host renews its answer callbac
  const fresh=f.read();expect(fresh.revision).not.toBe(old.revision);expect(fresh.answer).toBe(f.owner.memoizedProps.answer)
  expect(f.api.nativeModelPanelFrame(f.n,fresh)).toBe(f.owner)
  expect(f.answer).not.toHaveBeenCalled()
+})
+
+it('preserves original external credit feedback and exposes only native HTTP links',()=>{
+ const f=fixture();f.setOpen([]);const url='https://claude.ai/settings/usage?from=cc_cli_limit_message',text='Visit '+url+' to turn on usage credits.';f.notifications.current={key:'fable-consent-result',kind:'feedback',text};const result=f.api.nativeCreditConsentResult(f.n);expect(result.paragraphs).toEqual([text]);expect(result.links).toEqual([url]);expect(ClaudeNativeNoticeSchema.safeParse({...result,sessionId:randomUUID()}).success).toBe(true);
+ for(const links of [['javascript:alert(1)'],['file:///tmp/credits'],Array(17).fill(url)])expect(ClaudeNativeNoticeSchema.safeParse({...result,sessionId:randomUUID(),links}).success).toBe(false)
 })

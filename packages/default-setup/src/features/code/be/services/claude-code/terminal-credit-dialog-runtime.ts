@@ -75,6 +75,6 @@ function nativeCreditConsentResult(n){
  const notice=context.getAppState().notifications?.current;
  if(notice?.key!=='fable-consent-result'||notice.kind!=='feedback'||typeof notice.text!=='string'||!notice.text||notice.text.length>16000||notice.jsx!==undefined)return absent();
  if(nativeCreditResultFrame?.notice!==notice||nativeCreditResultFrame?.sessionId!==sessionId||nativeCreditResultFrame?.text!==notice.text)nativeCreditResultFrame={notice,sessionId,text:notice.text,revision:randomUUID()};
- return {id:notice.key,revision:nativeCreditResultFrame.revision,sessionId,kind:'credit_consent_result',severity:'feedback',title:'Usage credits',paragraphs:[notice.text]};
+ return {id:notice.key,revision:nativeCreditResultFrame.revision,sessionId,kind:'credit_consent_result',severity:'feedback',title:'Usage credits',paragraphs:[notice.text],links:nativeModelCreditLinks(notice.text)};
 }
 `

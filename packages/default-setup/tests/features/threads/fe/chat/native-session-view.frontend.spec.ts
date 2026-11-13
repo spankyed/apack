@@ -3,12 +3,13 @@ import { createApp, h, ref, computed, nextTick, type App } from 'vue'
 import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-terminal-views.ts'
 import ClaudeNativeSession from '#features/threads/fe/chat/ClaudeNativeSession.vue'
 const actor = vi.hoisted(() => ({ send: vi.fn() }))
+const links = vi.hoisted(() => ({ open: vi.fn() }))
 const state = ref({ context: { nativeTerminalViews: {} as Record<string, ClaudeTerminalViewSnapshot> } })
-vi.mock('@apackdev/sdk/fe', () => ({ useSurface: () => actor }))
+vi.mock('@apackdev/sdk/fe', () => ({ useSurface: () => actor, openLink: links.open }))
 vi.mock('@xstate/vue', () => ({ useSelector: (_actor: unknown, select: (value: typeof state.value) => unknown) => computed(() => select(state.value)) }))
 vi.mock('#features/threads/fe/chat/native-terminal-pool.ts', () => ({ mountNativeTerminal: () => ({ detach: vi.fn(), focus: vi.fn(), fit: () => ({ columns: 100, rows: 30 }), write: vi.fn() }) }))
 let app: App | undefined
-beforeEach(() => { actor.send.mockClear(); state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
+beforeEach(() => { actor.send.mockClear(); links.open.mockClear(); state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); vi.unstubAllGlobals() })
 async function fixture(continuation?:import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation) {
   const active = vi.fn(), root = document.createElement('div'); document.body.append(root)
@@ -533,6 +534,10 @@ it('mounts credit consent as a distinct composer form and fences stale rendered 
  actor.send.mockClear();old.click();expect(actor.send).not.toHaveBeenCalled();await nextTick();await nextTick()
  actor.send.mockClear();const current=[...f.root.querySelectorAll('button')].find(button=>button.textContent==='New native stage')!;current.click()
  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({ownerId:'owner',notice:expect.objectContaining({decision:'credit',credit:expect.objectContaining({operation:expect.objectContaining({revision:'b'.repeat(64),command:{action:'select',value:'confirm'}})})})}))
- f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{id:'fable-consent-result',revision:crypto.randomUUID(),sessionId:notice.sessionId,kind:'credit_consent_result',severity:'feedback',title:'Usage credits',paragraphs:['Original native credit feedback']}}});await nextTick()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{id:'fable-consent-result',revision:crypto.randomUUID(),sessionId:notice.sessionId,kind:'credit_consent_result',severity:'feedback',links:[],title:'Usage credits',paragraphs:['Original native credit feedback']}}});await nextTick()
  expect(f.root.querySelector('[aria-label="Claude usage credit result"]')?.textContent).toContain('Original native credit feedback');expect(f.root.querySelector('[aria-label="Claude Code usage credits"]')).toBeNull()
+})
+
+it('keeps external credit feedback exact and opens its native URL through normal app navigation',async()=>{
+ const f=await fixture();f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick();const url='https://claude.ai/settings/usage?from=cc_cli_limit_message',text='Visit '+url+' to turn on credits. <img src=x>';f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{id:'fable-consent-result',revision:crypto.randomUUID(),sessionId:crypto.randomUUID(),kind:'credit_consent_result',severity:'feedback',title:'Usage credits',paragraphs:[text],links:[url]}}});await nextTick();const result=f.root.querySelector('[aria-label="Claude usage credit result"]')!;expect(result.textContent).toBe(text);expect(result.querySelector('img')).toBeNull();const link=result.querySelector('a')!;expect(link.getAttribute('href')).toBe(url);actor.send.mockClear();link.dispatchEvent(new MouseEvent('click',{button:0,bubbles:true,cancelable:true}));link.dispatchEvent(new MouseEvent('auxclick',{button:1,bubbles:true,cancelable:true}));expect(links.open).toHaveBeenCalledTimes(2);expect(links.open).toHaveBeenLastCalledWith(url);expect(actor.send).not.toHaveBeenCalled()
 })

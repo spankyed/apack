@@ -1863,6 +1863,7 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"credit_consent_result">;
     severity: z.ZodLiteral<"feedback">;
+    links: z.ZodArray<z.ZodString>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
     id: z.ZodString;
@@ -4867,11 +4868,11 @@ type EdgeEntity = FlowEdge;
 type Effort = z.infer<typeof EffortSchema>;
 
 declare const EffortSchema: z.ZodEnum<{
-    max: "max";
     low: "low";
     medium: "medium";
     high: "high";
     xhigh: "xhigh";
+    max: "max";
 }>;
 
 type Endpoint = {
