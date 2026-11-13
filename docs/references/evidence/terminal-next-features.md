@@ -528,3 +528,95 @@ confirmed with `cmp`):
   attribute is tested in the DOM, not by a screen reader.
 - Finding: `Screen::search` (`screen.rs:1282`, ceiling 100) is not on the view's path, and its doc says it bounds
   every search. It is left alone here; it answers the protocol request and is a separate question.
+
+## Phase 3 and 4 — app wiring (2026-11-12)
+
+The broker and view halves are on the pin (`vendor/apack-terminal.rev` = `e7d0cfb`). This section is the app's half: the
+Code settings that choose the cursor and the link preview, the request that sends the cursor default, and the view options
+the pool makes each view with. No Electron window was run, so nothing below is checked by eye.
+
+### Decisions
+
+- **Blink is two values, and the unset one is the broker's reset value.** `cursorBlink` is `default` (unset), `on`, `off` or
+  `program`. The broker's `SetCursorDefaults` gets `on` for unset and `on`, `off` and `program` as they are, so a reset returns
+  to a blinking cursor for the default (D8). The view's override (`cursorBlink`) is `on` or `off` as chosen, and `program` for
+  unset, so a program's own DECSCUSR choice holds until it resets. `cursorDefaultsOf` and `viewSettingsOf` hold this mapping.
+- **The stored value for "unset" is the string `default`**, not an absent key, so the form has a selectable option and the
+  schema stays a plain enum. Absent is also read as unset.
+- **The cursor default is sent by the backend, not the window.** Only the backend holds the broker's control connection; a
+  window's pool holds the view stream, which has no request for it. The code feature sends `set_cursor_defaults` after every
+  session it obtains: at spawn (`open`), when a surviving session is taken up (`adopt`, both paths), and to every live
+  terminal when the code settings change (`applyCursorDefaults`, called from the code system's `updateSettings`).
+  The SDK's `TerminalSession.setCursorDefaults` and the host's `BrokerSession.setCursorDefaults` carry it; the request
+  carries no reply, so a failed send is logged rather than failing the spawn.
+- **The view options are read at construction, so a change makes the views again.** The view has `cursorInactive`,
+  `cursorBlink` and `linkPreview` as construction options and no setters for them (the one setter it has is
+  `setCopyOnSelect`). `TerminalPool.setViewSettings` records the new values and calls `draw` on every entry that has a
+  view; `draw` disposes the old view and mounts the new one in the same container, as a shell replacement already does.
+  A change that equals the current values makes no view. Views not yet drawn take the values as they are made.
+  Cost: a view made again loses its scroll position and any selection. Not measured.
+- **Inactive shape is one of the view's four shapes** (`block`, `bar`, `underline`, `hollow`), default `hollow`. Only the
+  active shape goes through the broker, since the broker reports the shape a program set, and that is the frame's cursor.
+- **Link preview**: `off`, `osc8` (declared links only) or `all`, default `osc8`, passed to the view as `linkPreview`. Its
+  setting copy says it takes effect in terminals opened after the change. That was true before this section, since it was
+  written before `setViewSettings` existed; with `setViewSettings` it is now true of every terminal, so that sentence in
+  `settings.vue` is stale and should be corrected in the next settings edit.
+
+### Changes
+
+- `packages/default-setup/apack.json`: `cursorStyle`, `cursorInactiveStyle`, `cursorBlink`, `linkPreview` in the code
+  schema and defaults (`bar`, `hollow`, `default`, `osc8`); none added to `required`, as only the defaults are needed.
+- `packages/default-setup/src/features/code/fe/settings.vue`: four selects after the copy-on-selection setting.
+  `npm run generate:entries -w @app/default-setup` changed only the generated settings (gitignored); `facade:update` moved
+  only `etc/pack-types.api.md`, by four optional keys.
+- `packages/apack-sdk/src/services/terminal.ts`, `index.ts`, `etc/services.api.md` (`api:update`: 1 of 31 reports, the
+  diff is the new type and method): `TerminalCursorStyle`, `TerminalCursorBlink`, `TerminalSession.setCursorDefaults`.
+- `packages/apack-host/src/broker/client.ts`: `BrokerSession.setCursorDefaults`, sending `set_cursor_defaults`.
+  `packages/apack-host/src/services/terminal.ts`: forwarded in `expose`.
+- `packages/default-setup/src/features/code/be/services/terminal.ts`: `cursorDefaultsOf`, `arrangeCursor`,
+  `applyCursorDefaults`; `open` split into `open` (arranges) and `spawn`. `be/system.ts`: `updateSettings` calls
+  `applyCursorDefaults`.
+- `packages/default-setup/src/features/code/fe/utils/terminal-pool.ts`: `ViewSettings`, `viewSettingsOf`,
+  `setViewSettings`; `draw` passes the three options. `fe/state.ts`: `applyViewSettings` beside `applyCopyOnSelect`, on
+  `CODE_STARTED` and `FEATURE_SETTINGS_UPDATED`.
+- Tests: `tests/features/code/be/terminal-cursor-defaults.spec.ts` (new, 5 cases),
+  `tests/features/code/be/_support/terminal-broker.ts` (records `cursors`),
+  `tests/features/code/fe/utils/terminal-pool.frontend.spec.ts` (4 new cases), `tests/features/code/fe/state.spec.ts` (1 new
+  case; the pool mock keeps the real `viewSettingsOf`).
+
+### Commands and counts
+
+- `npm run spec -- .../be/terminal-cursor-defaults.spec.ts`: 5 passed, 0 failed.
+- The other backend terminal specs (`be/terminal-*.spec.ts`, 14 files, run as 11 plus the cases above): 63 passed, 0
+  failed, across the 11 listed; the 4 others with the broker-client spec gave 31 and 26 passed.
+  `packages/apack-host/tests/broker/client.spec.ts`: 26 passed.
+- `terminal-pool.frontend.spec.ts`: 40 of 40 passed (35 before, 4 added here).
+- `state.spec.ts`: 20 of 20 passed (1 added here).
+- `npm run typecheck:pack`: exit 0, zero errors (the baseline was exit 0 before this section too).
+- `npm run typecheck:sdk` and `npm run typecheck:host`: passed.
+- `npm run chain` was not run, as instructed.
+
+### Mutation
+
+Each mutant was made in the source file, its named spec run, and the file restored from a copy under the scratchpad and
+confirmed with `cmp` (identical in both cases).
+
+- Cursor default not sent (the `setCursorDefaults` call in `arrangeCursor` replaced by a no-op): 3 of 5 failed in
+  `terminal-cursor-defaults.spec.ts`: the spawn case, the program-decides case and the settings-change case.
+- `linkPreview` default changed from `osc8` to `all` in `viewSettingsOf`: 2 of 40 failed in
+  `terminal-pool.frontend.spec.ts`: the defaults case and the unknown-values case.
+
+### Gaps
+
+- **No Electron run.** The form's selects, the cursor shape and blink, and the link underline and preview were not looked
+  at in a window.
+- **The settings copy for the link preview is stale** (see Decisions) and is left for the next settings edit, which the
+  next person should make.
+- **View recreation on a settings change** loses scroll and selection in each drawn terminal. Not measured, and not
+  avoided: a setter in the view would be the fix, and it is a view-side change.
+- **`cursorBlink` `default` is stored, not absent.** The form and the schema agree; an external edit of the settings
+  file that removes the key reads as `default` too, but was not tested.
+- **The `TerminalSession.setCursorDefaults` contract is not exercised against the real broker** in an integration run.
+  The host client spec covers the connection only at the level it covered before.
+- **A target's sessions** also receive the cursor default at spawn and on change (the same `arrangeCursor`), which assumes
+  the target's broker understands `set_cursor_defaults` at the same protocol version. Not tested on a target.
