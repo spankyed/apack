@@ -3353,6 +3353,7 @@ type OutgoingCommitEvents =
         commitsAhead: number;
         commitsBehind: number;
         watching: boolean;
+        watchSilent?: boolean;
         operation?: RepositoryOperation;
         fetchSuspended?: boolean;
         signIn?: SignInHelp;
