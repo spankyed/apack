@@ -721,3 +721,51 @@ Run in a window, with a real input method, and record each result here:
 - **Browser repositioning on a timer** (xterm's `setTimeout` reposition) is not done; the field moves on paint only.
 - **The `_compositionSuffix` case** of xterm (reconversion of text around the caret) is handled only by position in the
   field, which holds only what the composition put there; no real reconversion was tested.
+
+## Gaps closed (2026-11-12)
+
+Branch `session/next-features-gaps` (local, not pushed; worktree `apack-terminal-worktrees.noindex/gaps`), cut from
+`origin/master` at `3b8ef5c`. Commits: `304f399` `fix(vt): a case-sensitive search goes to the end of the history
+before its cap`, and `849a1f0` `feat(view): setters change the cursor and link settings on a view that is up`.
+Nothing is pushed or merged, no PR is open, and `vendor/apack-terminal.rev` is not moved.
+
+### Gap A: a case-sensitive search missed an old exact match (Phase 6)
+
+- **Cause.** `vt/reads.rs` `find` stopped feeding the core once it had 2,000 case-insensitive matches, and the exact
+  filter ran only on those. An exact match older than them was never seen.
+- **Fix.** The 2,000 stop applies to a case-insensitive search only. A case-sensitive search runs to the end of the
+  history. The filter is lazy, so it reads match text only until it has 2,000 exact matches. The 1,000 display cap in
+  the view (D3) is unchanged.
+- **Test.** `a_case_sensitive_search_finds_an_exact_match_older_than_the_case_insensitive_cap` (`tests/view_reads.rs`):
+  the oldest line is the only exact `needle`, and 40,000 later lines read `Needle`. The exact search returns the oldest
+  line. The case-insensitive search still returns 2,000.
+- **Mutation.** The 2,000 stop restored for the case-sensitive path (`let enough = total >= SEARCH_MATCHES;`). The new
+  test fails at its exact-match assertion (`left: []`). A first version with 2,500 later lines did not fail, because the
+  core's first part already reached the oldest line, so the history was widened to span several parts. File restored, `cmp` identical.
+- **Counts.** `cargo test --test suite`: 444 passed, 0 failed (443 before, plus the new test). `cargo fmt --all --check`
+  exit 0. `cargo clippy --all-targets -- -D warnings` exit 0.
+
+### Gap B: cursor and link settings remade the view (Phase 3, link preview)
+
+- **Change.** `view/src/view.ts`: the inactive cursor shape, the blink mode and the link preview are fields, set from the
+  constructor options (which still work). New `setCursorInactive(style)`, `setCursorBlink(mode)` and `setLinkPreview(mode)`
+  take effect on the existing view. `setCursorBlink` restarts the blink phase as typing does. `setLinkPreview` updates
+  the title of the link under the pointer. None of them remakes the view.
+- **Tests.** Three in `view/tests/view.spec.ts` ('cursor settings changed on a view that is up') and one in
+  `view/tests/interaction.spec.ts` (`setLinkPreview`). Each checks the next paint or title, the element's identity, the
+  selection, and the scroll position, including a scrolled-up view.
+- **Mutation.** Each setter in turn was given `this.follow(); this.selection.clear()`, which is what a rebuild does to
+  scroll and selection. Each mutant's own test fails: `setCursorInactive`, `setCursorBlink` (its first test) and
+  `setLinkPreview`. Each file restored, `cmp` identical.
+- **Counts.** View `npm test`: 393 passed, 17 files (4 new). `npx tsc --noEmit` exit 0. Broker suite as above.
+
+### Remaining limits
+
+- **The app still remakes views.** It must switch from remaking views to these setters. That is a separate app change,
+  made after this branch merges and `vendor/apack-terminal.rev` moves to it. Until then the app's pinned view has no setters.
+- **A blink change restarts the blink phase.** A change to any blink mode shows the cursor at once.
+- **Case-sensitive cost is not measured.** Such a search reads every match of the needle in the history, and keeps all
+  the case-insensitive matches it finds. The exact filter reads text only as far as 2,000 exact matches.
+- **`Request::Search` is untouched.** `Screen::search` (`screen.rs`, ceiling 100) has no case flag and is not on the
+  view's path.
+- **Not seen in a real window.** The cursor's look and the link title's timing are checked in jsdom only.
