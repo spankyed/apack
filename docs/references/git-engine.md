@@ -251,6 +251,10 @@ A watch that is open and not delivering is evidence, not a timer: checks keep fi
 and past a bound the snapshot says so (`watchSilent`). The commit panel's notice for a watch that could not be
 opened says this as well, for as long as the statuses it is sent say it.
 
+A watch that has just opened is not yet delivering either, and the platform says nothing when it starts to:
+`startWatching` resolves once the watches are open, and two seconds later the watcher reports the checkout once
+as one in which anything may have changed, which is what covers an edit made in between (`catchUpAfterMs`).
+
 ## Working on both at once
 
 The link points at a checkout, so an edit there is what a local build here uses once the engine is built
