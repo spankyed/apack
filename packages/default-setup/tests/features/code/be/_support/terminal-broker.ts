@@ -10,7 +10,7 @@
 // So fidelity lives here once. A case records what it cares about by reading the slice it wants off the
 // returned object; nothing is per-spec except which slice it reads.
 import { mockService } from '@apackdev/testing/harness'
-import type { TerminalCellSize, TerminalColors, TerminalCommand, TerminalService, TerminalTarget, TerminalEvent, TerminalListeners, TerminalRewind, TerminalSession, TerminalSessionSummary, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalColors, TerminalCommand, TerminalCursorBlink, TerminalCursorStyle, TerminalService, TerminalTarget, TerminalEvent, TerminalListeners, TerminalRewind, TerminalSession, TerminalSessionSummary, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
 
 /** The options the service was opened with, whole, so a case reads the field it is about */
 export interface OpenOptions {
@@ -52,6 +52,8 @@ export interface RecordingBroker {
   readonly terminated: readonly string[]
   /** `pause()` and `resume()` as they were called, in order, so a case reads the sequence and not a count */
   readonly flow: ReadonlyArray<{ id: string; kind: 'pause' | 'resume' }>
+  /** Each cursor default sent (`SetCursorDefaults`), in order, with the session it was sent to */
+  readonly cursors: ReadonlyArray<{ id: string; style: TerminalCursorStyle; blink: TerminalCursorBlink }>
   /** The signals sent, with what each was aimed at */
   readonly signalled: ReadonlyArray<{ id: string; signal: TerminalSignal; scope: TerminalSignalScope }>
   /** The pids a session was asked about, in order */
@@ -128,6 +130,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const written: Array<{ id: string; data: string }> = []
   const terminated: string[] = []
   const flow: Array<{ id: string; kind: 'pause' | 'resume' }> = []
+  const cursors: Array<{ id: string; style: TerminalCursorStyle; blink: TerminalCursorBlink }> = []
   const signalled: Array<{ id: string; signal: TerminalSignal; scope: TerminalSignalScope }> = []
   const askedOwns: Array<{ id: string; pid: number }> = []
   const owned = new Map<string, Set<number>>()
@@ -185,6 +188,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       vouched: false,
       refused: 0,
     }),
+    setCursorDefaults: async (style: TerminalCursorStyle, blink: TerminalCursorBlink) => { cursors.push({ id, style, blink }) },
     pause: async () => { flow.push({ id, kind: 'pause' }) },
     resume: async () => { flow.push({ id, kind: 'resume' }) },
     // **Its own process is inside its tree**, which is the edge a walk gets wrong by starting a hop up;
@@ -277,7 +281,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     return found
   }
   return {
-    opened, resized, written, terminated, adopted, flow, signalled, askedOwns, rewound,
+    opened, resized, written, terminated, adopted, flow, cursors, signalled, askedOwns, rewound,
     get kept() { return [...kept] },
     reportsCommands: (id, commands) => { commandsOf.set(id, commands) },
     refuseRewind: (why = 'there is no recording to look back through') => { rewindRefusal = why },

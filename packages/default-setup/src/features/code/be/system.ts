@@ -20,6 +20,7 @@ import type { AppSettings } from '@apackdev/sdk/types';
 import { services } from '#generated/services.ts';
 import { broadcastToSurface } from '#generated/events.ts';
 import { clearCliPathCache, isCliName, testCli } from './utils/resolve-cli.ts';
+import { terminalService } from './services/terminal.ts';
 import { createLogger, setDebugEnabled } from '@apackdev/sdk/logger';
 
 const cliLogger = createLogger('code');
@@ -234,6 +235,9 @@ export const systemMachine = setup({
 
       // The resolved paths are cached, so a change to this feature's settings is where the cache is dropped
       clearCliPathCache();
+
+      // A live terminal keeps the cursor it was given until it is told the setting changed
+      terminalService.applyCursorDefaults(ev.settings);
 
       // A new default moves the explorer there at once; the same default arriving again leaves the user's browsing alone
       if (ev.settings.defaultBaseDirectory &&
