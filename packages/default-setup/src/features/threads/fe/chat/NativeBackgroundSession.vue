@@ -124,12 +124,12 @@ const panels = computed(() => {
 })
 </script>
 <style scoped>
-.background-session { display: grid; flex-shrink: 0; gap: 5px; min-width: 0; margin-bottom: 0; padding: 8px 12px; border: 1px solid #ffffff14; border-radius: 10px; background: #ffffff03; }
+.background-session { container-type: inline-size; container-name: claude-background; display: grid; flex-shrink: 0; gap: 5px; min-width: 0; margin-bottom: 0; padding: 8px 12px; border: 1px solid #ffffff14; border-radius: 10px; background: #ffffff03; }
 .background-session--composing { display: flex; flex: 1; flex-direction: column; min-height: 0; overflow: hidden; }
 .background-session--composing > :not(.background-session__composer) { flex-shrink: 0; }
 .background-session__composer {display:flex;flex:1;min-height:0;min-width:0}
-.background-session__heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
-.background-session__body { flex: 1; min-width: 0; }
+.background-session__heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.background-session__body { flex: 1 1 160px; min-width: 0; }
 h3 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; color: #dcd8d2; font-size: 12px; line-height: 16px; font-weight: 500; }
 p { margin: 0; color: #aaa59e; font-size: 11px; line-height: 16px; }
 .background-session__body p { color: #96918a; }
@@ -137,7 +137,7 @@ p { margin: 0; color: #aaa59e; font-size: 11px; line-height: 16px; }
 .background-session__formatter { max-height: 72px; overflow-y: auto; overscroll-behavior: contain; color: #aaa59e; font-size: 11px; line-height: 15px; }
 .background-session__formatter:focus-visible { outline: 2px solid #8cabe8; outline-offset: 2px; }
 .background-session__problem { color: #e4aaa1; overflow-wrap: anywhere; }
-.background-session__controls { display: flex; flex-shrink: 0; align-items: center; gap: 4px; }
+.background-session__controls { display: flex; flex-wrap: wrap; max-width: 100%; flex-shrink: 0; align-items: center; gap: 4px; }
 .background-session__controls svg { width: 13px; height: 13px; flex-shrink: 0; stroke-width: 1.7; }
 .background-session__reply { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; row-gap: 4px; min-width: 0; margin-top: 2px; }
 .background-session__reply-heading { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: #a29d96; font-size: 11px; line-height: 14px; }
@@ -150,6 +150,10 @@ button:hover { background: #ffffff08; color: #e2ded8; }
 button:focus-visible { outline: 2px solid #8cabe8; outline-offset: 2px; }
 button:disabled { opacity: .5; }
 .background-session__stop:hover { border-color: #c9797340; background: #c9797310; color: #edb6af; }
+@container claude-background (max-width: 600px) {
+  .background-session__control-label { display: none; }
+  .background-session__controls button { width: 30px; padding-inline: 5px; }
+}
 @media (max-width: 720px), (max-height: 700px) {
   .background-session__control-label { display: none; }
   .background-session__controls button { width: 30px; padding-inline: 5px; }

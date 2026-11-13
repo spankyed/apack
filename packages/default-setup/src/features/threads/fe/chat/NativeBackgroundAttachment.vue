@@ -34,11 +34,11 @@ onBeforeUnmount(detach)
 </script>
 <style scoped>
 .child-terminal {display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;color:#dedbd7}
-header {display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 0}
+header {display:flex;flex-shrink:0;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 0}
 h3 {font-size:13px;font-weight:600;margin:0} p {font-size:11px;color:#aaa59e;line-height:1.5;overflow-wrap:anywhere}
 button {min-height:30px;padding:5px 9px;border:1px solid #ffffff26;border-radius:7px;font-size:11px}button:focus-visible {outline:2px solid #8cabe8;outline-offset:2px}
-.child-terminal__viewport {flex:1;min-height:144px;min-width:0;overflow:hidden;padding:10px;background:#191919;border:1px solid #ffffff1a;border-radius:10px}
+.child-terminal__viewport {flex:1;min-height:0;min-width:0;overflow:hidden;padding:10px;background:#191919;border:1px solid #ffffff1a;border-radius:10px}
 .child-terminal__size {display:none}
 @media (max-height:700px), (max-width:720px) {.child-terminal__size {display:inline-flex}}
-.child-terminal__hint {padding:8px 0;margin:0}
+.child-terminal__hint {flex-shrink:0;padding:8px 0;margin:0}
 </style>
