@@ -616,3 +616,74 @@ confirmed with `cmp` (identical in both cases).
   The host client spec covers the connection only at the level it covered before.
 - **A target's sessions** also receive the cursor default at spawn and on change (the same `arrangeCursor`), which assumes
   the target's broker understands `set_cursor_defaults` at the same protocol version. Not tested on a target.
+
+## Phase 7 — IME and composition
+
+Branch `session/next-features-ime` in `apack-terminal` (worktree `apack-terminal-worktrees.noindex/ime`), from broker
+`origin/master` at `e7d0cfb`. View commit `e218707` (`feat(view): composition sends once at its end, positioned at the
+cursor and clears the selection`). Files: `view/src/input.ts`, `view/src/view.ts` (one line wiring the selection clear),
+`view/tests/input.spec.ts`.
+
+### What changed
+
+- **Sent by position, at composition end.** The composition's text is the field's text between the caret at
+  `compositionstart` and what follows it. Text already in the field, and text after the caret, are never sent. The
+  send is at `compositionend`; `inserted` still ignores input while composing.
+- **Enter during composition** sends the composed text so far, then Enter, and prevents the newline in the field. The
+  composition itself is left to the input method.
+- **Keys 229, 16, 17, 18 and 20** send nothing during composition and do not end it (nothing on a keydown ends it).
+- **Selection clears** at `compositionstart` (`compositionStarted` option, wired to `selection.clear()` in the view).
+- **Duplicate suppression.** A key's text is remembered, and an input event carrying the same text is not sent again.
+- **Positioning.** The field sits at the cursor's cell while composing (the existing `moveTo` from the cursor row, fold
+  header row kept); its height is at least 1 px.
+
+### Tests
+
+- View suite before the change: 17 files, 377 tests passing (`npm ci` then `npm test`, `npx tsc --noEmit` exit 0).
+- After: 17 files, 389 tests passing; `tsc --noEmit` exit 0. Twelve tests added in a `composition` block of
+  `view/tests/input.spec.ts`: once at end after updates; a repeated string composed twice; a repeated string diffed by
+  caret position; text before composition and after the caret not sent; Enter sends the text then Enter; 229 during
+  composition sends nothing and does not end it; 229 outside composition sends no key; shift, control, alt and caps
+  lock do not end composition; a keydown and the input it reports send once; selection clears at start; the field sits
+  at the cursor's cell with at least 1 px; a zero-height row still gives a 1 px field.
+- Two existing fixtures were corrected: they put an uncommitted or empty value in the textarea at `compositionend`. A
+  real browser holds the committed text there, which is what the send now reads. Their assertions are unchanged.
+
+### Mutation
+
+Each mutant was a copy under `/private/tmp/claude-501/-Users-spankyed-Develop-Projects-apack-monorepo/cbf295d0-79cb-4bdf-99e6-760919d3dad1/scratchpad/ime-mutants/`,
+copied over `view/src/input.ts`, its spec file (`tests/input.spec.ts`) run, and the original restored and confirmed with
+`cmp` (identical each time).
+
+- Send during composition (the `inserted` composition guard removed): 4 of 37 failed in `input.spec.ts`: the
+  composed-once test, the many-updates test, the 229-processing test and the modifiers test.
+- First-occurrence diff (the composed text taken as the field minus its pre-composition value with `replace`): 2 of 37
+  failed: the caret-position repeated-string test, and the Enter test (the end-of-composition path diffs against an empty
+  pre-value and resends the committed text). The repeated-string-twice test passed under this mutant, so it does not
+  by itself catch the first-occurrence bug; the caret test does.
+- 229 guard removed from `read()`: 1 of 37 failed, the 229-outside-composition test.
+
+### Manual checklist (D6 follow-up, not run)
+
+Run in a window, with a real input method, and record each result here:
+
+1. **Japanese (romaji, kana, kanji).** Type `nihon`, convert with Space, press Enter.
+   - Candidate window opens at the cursor.
+   - `日本` appears once in the program's line.
+   - Enter during composition: record what happened (does the kana preedit get sent, or the committed text).
+2. **Chinese (pinyin).** Type `ni hao`, pick a candidate with a number key.
+   - Candidate window at the cursor; the chosen characters appear once.
+3. **Dead key (macOS).** Option-e, then e.
+   - The accent `é` appears once; no stray `e` or duplicate.
+
+### Gaps
+
+- **No real input method was run.** Everything above is driven by synthetic events in jsdom; browser ordering of
+  `keydown` (229 or `Process`), `compositionend` and `input` is assumed, not observed.
+- **Enter during composition** can double-send in Chrome if the input method still commits the text after the forced
+  send: the preedit goes out at Enter and the committed text at `compositionend`. Only the checklist can show this.
+- **Safari** delivers keydown 229 after `compositionend`, and 229 is treated as not-a-key, so an Enter that Safari
+  reports only as 229 is dropped. This follows the spec's rule for 229; it is a known cost, not checked.
+- **Browser repositioning on a timer** (xterm's `setTimeout` reposition) is not done; the field moves on paint only.
+- **The `_compositionSuffix` case** of xterm (reconversion of text around the caret) is handled only by position in the
+  field, which holds only what the composition put there; no real reconversion was tested.
