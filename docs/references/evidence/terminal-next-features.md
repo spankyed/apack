@@ -160,6 +160,19 @@ Each mutant was a copy in the scratchpad, copied over the file, run, and the ori
 - Every window showing the code surface receives the bell. An unfocused window each asks for a notification, so two
   unfocused windows can show two. The `NOTIFIED` path avoids this with a shared tag; the bell path does not yet.
 
+### Phase 2 gap closed
+
+The two-windows gap above is closed in the main process: `registerNotifyHandler` in
+`packages/main/src/modules/notify-access.ts` shows an identical title and body once per 1000 ms. Commit `e51bcbb09e`.
+
+- `npm run spec -- packages/main/tests/notify-access.spec.ts`: 11 passed (3 new: two identical asks inside the window show
+  one; different text inside the window is shown; an identical ask after 1000 ms is shown).
+- `npm run typecheck:pack`: exit 0. `tsc --noEmit` in `packages/main`: exit 0.
+- Mutation: the dedupe guard removed in a mutant copy under the scratchpad. The duplicate test fails (1 failed, 10
+  passed); the original was restored and `cmp` reports it identical.
+
+Remaining limit: dedupe is by text, so two different bells with the same text within a second show once.
+
 ## Phase 3 — cursor style and blink (2026-11-12)
 
 Broker commits on `session/next-features-broker` (worktree `apack-terminal-worktrees.noindex/next-features`, on top of
