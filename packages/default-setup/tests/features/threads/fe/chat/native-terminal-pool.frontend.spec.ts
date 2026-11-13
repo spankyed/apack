@@ -250,8 +250,8 @@ it('recovers mounted drawings once on a previously working shared connection and
   expect(f.connections.length).toBe(count + 1)
   const nextA = f.views.at(-2)!,
     nextB = f.views.at(-1)!
-  expect(hostA.firstElementChild).toBe(nextA.element)
-  expect(hostB.firstElementChild).toBe(nextB.element)
+  expect(hostA.firstElementChild?.firstElementChild).toBe(nextA.element)
+  expect(hostB.firstElementChild?.firstElementChild).toBe(nextB.element)
   expect(oldA.dispose).toHaveBeenCalledOnce()
   expect(oldB.dispose).toHaveBeenCalledOnce()
   const raw = f.connections.at(-1)!.open.mock.results[0].value

@@ -26,6 +26,7 @@ type Entry = {
   view: TerminalView
   drawing?: object
   container?: HTMLElement
+  host?: HTMLElement
   lease?: object
   resize?: (size: ClaudeNativeTerminalSize) => void
   size?: ClaudeNativeTerminalSize
@@ -81,7 +82,7 @@ function connection(target: string | null, retry = true): Connection {
       entry.connection = connection(entry.session.target, false)
       entry.sent = undefined
       entry.view = createDrawing(entry)
-      entry.view.mount(entry.container)
+      entry.view.mount(entry.host!)
       if (focused) entry.view.focus()
     }
   }
@@ -96,6 +97,8 @@ function dispose(entry: Entry) {
   entry.resize = undefined
   clearTimeout(entry.timer)
   entry.view.dispose()
+  entry.host?.remove()
+  entry.host = undefined
 }
 /** Preserve the native transition gate while the broker remains the only key encoder. */
 function ownedInput(
@@ -237,8 +240,15 @@ export function mountNativeTerminal(
   target.inputBlocked = inputBlocked
   target.resize = resize
   target.container = container
+  // The view measures its parent client box. Keep caller padding/borders outside
+  // that box so the CLI never receives columns or rows the drawing clips.
+  target.host?.remove()
+  const host = document.createElement('div')
+  host.style.cssText = 'width:100%;height:100%;min-width:0;min-height:0'
+  container.append(host)
+  target.host = host
   target.sent = undefined
-  target.view.mount(container)
+  target.view.mount(host)
   return {
     focus() {
       if (target.lease === lease) target.view.focus()
@@ -253,6 +263,8 @@ export function mountNativeTerminal(
       target.resize = undefined
       clearTimeout(target.timer)
       target.view.unmount()
+      target.host?.remove()
+      target.host = undefined
     },
   }
 }
