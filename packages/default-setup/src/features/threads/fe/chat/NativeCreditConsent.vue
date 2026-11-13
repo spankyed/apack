@@ -35,4 +35,6 @@ onBeforeUnmount(()=>{if(root.value?.contains(document.activeElement)&&previous i
 <style scoped>
 .native-credit-consent { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .native-credit-consent :deep(.native-credit-panel) { margin: 0 0 8px; flex: 1; max-height: none; }
+.native-credit-consent :deep(.native-credit-panel > header),
+.native-credit-consent :deep(.native-credit-panel > footer) { padding-block: 4px; }
 </style>
