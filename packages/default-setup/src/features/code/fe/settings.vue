@@ -342,8 +342,8 @@
               Show where a link goes when the pointer is over it
             </label>
             <p class="mt-1 text-xs text-neutral-600">
-              Links a program declared with a hyperlink sequence, only, or every link in the terminal, or none. Takes effect
-              in terminals opened after the change
+              Links a program declared with a hyperlink sequence, only, or every link in the terminal, or none. Applies to
+              every open terminal at once
             </p>
           </div>
           <select
