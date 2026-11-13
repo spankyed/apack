@@ -189,20 +189,28 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  // mkdir's intermediates use the process umask; the private workers parent is explicit.
  const {chmod}=await import('node:fs/promises');await chmod(join(observer.directory,'workers'),0o700)
  await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
- await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath,generations:{subagent:'subagent-generation'}}),{mode:0o600})
+ await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath,mainObservationClaimed:false,generations:{main:'main-generation',subagent:'subagent-generation'}}),{mode:0o600})
  const helperPolicy={allowManagedHooksOnly:false,disableAllHooks:false}
  const helperPolicyFields=new Function('effective','policy',claudeTerminalHelperPolicyRuntime+'\nreturn nativeHelperPolicySnapshot(effective,policy)')
- const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,...helperPolicyFields({subagentStatusLine:{type:'command',command:'caption-helper'}},{...helperPolicy,subagentStatusLine:{type:'command',command:'caption-helper'}})}:{attached:true}}))})
+ const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,...helperPolicyFields({statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}},{...helperPolicy,statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}})}:{attached:true}}))})
  await new Promise<void>(resolve=>native.listen(socketPath,resolve))
  try {
   expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
+  const startupMain={sessionId:child,parentPid:119,kind:'main',generation:'main-generation',policyKey:'[false,false,false]',command:'main-caption',startedAt:'9',totalCostUsd:0.00042,code:0,truncated:false,stdout:'Original startup caption'}
+  await writeFile(join(worker,'startup-main.json'),JSON.stringify(startupMain),{mode:0o600})
   const lease=(await post('/background-register',{sessionId:child,pid:119})).value.token
   const [transport,parallelTransport]=await Promise.all([observer.desktopTransport(),observer.desktopTransport()]);expect(transport).toBeDefined();expect(parallelTransport).toBe(transport)
   const desktop=observer.desktopOwner!
   expect(desktop).toMatchObject({parentSessionId:parent,identity:original,transport})
   expect(await observer.desktopTransport()).toBe(transport);expect(observer.desktopOwner).toBe(desktop)
-  const helperSnapshot=(sequence:number)=>({sessionId:child,pid:119,token:lease,sequence,metadata:{model:'sonnet',turns:2},usage:{startedAt:1},helpers:{command:'caption-helper',policyKey:JSON.stringify([helperPolicy.allowManagedHooksOnly,helperPolicy.disableAllHooks,false]),agents:[{id:'reviewer',type:'general-purpose',status:'running'}]}})
-  expect((await post('/background-status',helperSnapshot(1))).code).toBe(200)
+  const helperSnapshot=(sequence:number)=>({sessionId:child,pid:119,token:lease,sequence,metadata:{model:'sonnet',turns:2},usage:{startedAt:1,cost:{usd:0.00042}},formatter:{command:'main-caption',shellPrefix:null,policy:JSON.stringify(helperPolicy)},helpers:{command:'caption-helper',policyKey:JSON.stringify([helperPolicy.allowManagedHooksOnly,helperPolicy.disableAllHooks,false]),agents:[{id:'reviewer',type:'general-purpose',status:'running'}]}})
+  const configured=await post('/background-status',helperSnapshot(1));expect(configured.code).toBe(200)
+  expect(observer.value?.statusLine).toBe('Original startup caption')
+  const prefix=configured.value.shellPrefix,formatterConfig=JSON.parse(Buffer.from(prefix.slice(prefix.lastIndexOf(' -')+2),'base64url').toString())
+  expect((await post('/background-formatter',{...formatterConfig,startedAt:'10',totalCostUsd:0.00042,code:0,stdout:'Fresh same-cost caption'})).code).toBe(200)
+  expect(observer.value?.statusLine).toBe('Fresh same-cost caption')
+  expect((await post('/background-formatter',{...formatterConfig,startedAt:'11',totalCostUsd:0.00042,code:1,stdout:''})).code).toBe(200)
+  expect(observer.value?.statusLine).toBeUndefined()
   const helperOutput={sessionId:child,parentPid:119,kind:'subagent',generation:'subagent-generation',policyKey:'[false,false,false]',command:'caption-helper',startedAt:'10',code:0,truncated:false,tasks:[{id:'reviewer',status:'running'}],stdout:JSON.stringify({id:'reviewer',content:'Release review caption'})}
   expect((await post('/native-status',helperOutput)).code).toBe(403)
   expect((await post('/native-status',helperOutput,token)).code).toBe(200)
@@ -213,9 +221,15 @@ it('binds child drawing and reverse prompts to the original worker and retires t
   expect((await post('/native-status',{...helperOutput,startedAt:'11'},token)).code).toBe(409)
   expect(observer.value?.agents).toEqual([])
   expect((await post('/background-status',helperSnapshot(2))).code).toBe(200)
+  expect(observer.value?.statusLine).toBeUndefined()
   helperPolicy.allowManagedHooksOnly=false
   expect((await post('/background-status',helperSnapshot(3))).code).toBe(200)
   const restoredGeneration=JSON.parse(await readFile(join(worker,'observer.json'),'utf8')).generations.subagent
+  const mainGeneration=JSON.parse(await readFile(join(worker,'observer.json'),'utf8')).generations.main
+  expect((await post('/native-status',startupMain,token)).code).toBe(409)
+  expect((await post('/native-status',{...startupMain,generation:mainGeneration,startedAt:'14',stdout:'Current main caption'},token)).code).toBe(200)
+  expect((await post('/native-status',{...startupMain,startedAt:'15'},token)).code).toBe(409)
+  expect(observer.value?.statusLine).toBe('Current main caption')
   expect(restoredGeneration).not.toBe(helperOutput.generation)
   expect((await post('/native-status',{...helperOutput,startedAt:'12'},token)).code).toBe(409)
   expect((await post('/native-status',{...helperOutput,generation:restoredGeneration,startedAt:'13'},token)).code).toBe(200)

@@ -62,6 +62,7 @@ export function createClaudeBackgroundFormatter(options: {launcher: string; sock
     // The native helper and plugin usage poll run independently. Do not pair one observation's
     // text with another observation's total, even while the worker/policy generation is unchanged.
     matchesCost(totalCostUsd: number | undefined) { return !!current && typeof totalCostUsd === 'number' && current.totalCostUsd === totalCostUsd },
+    get startedAt() { return current?.startedAt },
     get value() { return current?.stdout },
     reset() { if (current) { current = undefined; options.changed() } },
   }

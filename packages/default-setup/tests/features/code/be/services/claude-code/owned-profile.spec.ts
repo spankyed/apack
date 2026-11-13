@@ -52,7 +52,7 @@ test('boots only a matching app child, retains its PID and reaps retired bootstr
   const plugin = join(observer, 'plugin'), sessionId = '11111111-1111-4111-8111-111111111111'
   await mkdir(plugin, {mode: 0o700})
   await writeFile(join(observer, 'child-ui-launch.json'), JSON.stringify({directory: observer, configDir: profile.configDir, executable: await realpath(process.execPath), socketPath: join(observer, 'status.sock'), token: 'a'.repeat(64)}), {mode: 0o600})
-  await writeFile(join(observer, 'child-ui-template.mjs'), 'export function readNativeHelperPolicy(){return "[false,false,false]"};globalThis.childUiStarted = JSON.parse((await import("node:fs")).readFileSync(new URL("./observer.json",import.meta.url),"utf8")).sessionId;', {mode: 0o600})
+  await writeFile(join(observer, 'child-ui-template.mjs'), 'export async function prepareNativeHelperPolicy(){};export function readNativeHelperPolicy(){return "[false,false,false]"};globalThis.childUiStarted = JSON.parse((await import("node:fs")).readFileSync(new URL("./observer.json",import.meta.url),"utf8")).sessionId;', {mode: 0o600})
   await writeFile(join(observer, 'child-helper-template.mjs'), claudeTerminalStatusRuntime + '\nglobalThis.childHelperStarted=true;', {mode: 0o600})
   const code = 'const marker=process.env.BUN_OPTIONS.split("--preload=").at(-1); import(require("node:url").pathToFileURL(marker).href).then(()=>console.log(JSON.stringify({pid:process.pid,sessionId:globalThis.childUiStarted,helper:globalThis.childHelperStarted,bun:process.env.BUN_OPTIONS})));'
   for (const originalBunOptions of ['original-options', undefined]) {
@@ -113,4 +113,22 @@ test('resolves the owned worker executable using the launch PATH and cwd without
  await prepareClaudeOwnedChildUi({...options,executable:'./bin/claude',searchPath:''})
  expect((await descriptor()).executable).toBe(await realpath(join(bin,'native')))
  await expect(prepareClaudeOwnedChildUi({...options,searchPath:blocked})).rejects.toThrow('selected Claude executable is unavailable')
+})
+
+
+test('retains original main-helper I/O before registration without changing streams or executing it twice',async()=>{
+ const root=await directory('cc-startup-result-'),sessionId='11111111-1111-4111-8111-111111111111'
+ await writeFile(join(root,'observer.json'),JSON.stringify({socketPath:join(root,'absent.sock'),token:'private',sessionId,jobSessionId:sessionId,uiSocketPath:join(root,'ui.sock'),mainObservationClaimed:false,generations:{main:'startup',subagent:'other'}}),{mode:0o600})
+ await writeFile(join(root,'ui.mjs'),'let ready=false;export async function prepareNativeHelperPolicy(){ready=true};export function readNativeHelperPolicy(){if(!ready)throw Error("policy not prepared");return "[false,false,false]"}',{mode:0o600})
+ await writeFile(join(root,'status.mjs'),claudeTerminalStatusRuntime,{mode:0o600})
+ const helper=join(root,'original-helper.mjs')
+ await writeFile(helper,`import{appendFileSync}from'node:fs';let raw='';for await(const chunk of process.stdin)raw+=chunk;appendFileSync(${JSON.stringify(join(root,'executions.jsonl'))},raw+'\\n');process.stdout.write('Configured Ω🙂\\n');`,{mode:0o600})
+ const payload={session_id:sessionId,version:'2.1.302',cost:{total_cost_usd:0.00042},context_window:{}}
+ const code=`await import(${JSON.stringify('file://'+join(root,'status.mjs'))});const{spawn}=await import('node:child_process');const child=spawn(process.execPath,[${JSON.stringify(helper)}]);let stdout='';child.stdout.on('data',chunk=>stdout+=chunk);child.stdin.end(${JSON.stringify(JSON.stringify(payload))});const exit=await new Promise(resolve=>child.once('close',resolve));console.log(JSON.stringify({pid:process.pid,stdout,exit}));`
+ const ran=await execFileWhileWorking(process.execPath,['--input-type=module','-e',code],{timeout:10000});const result=JSON.parse(ran.stdout)
+ expect(result).toMatchObject({stdout:'Configured Ω🙂\n',exit:0})
+ const cached=JSON.parse(await readFile(join(root,'startup-main.json'),'utf8'))
+ expect(cached).toMatchObject({kind:'main',sessionId,parentPid:result.pid,generation:'startup',policyKey:'[false,false,false]',totalCostUsd:0.00042,code:0,truncated:false,stdout:result.stdout})
+ expect((await readFile(join(root,'executions.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line))).toEqual([payload])
+ expect((await readdir(root)).filter(name=>name.startsWith('startup-main'))).toEqual(['startup-main.json'])
 })

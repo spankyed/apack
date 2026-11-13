@@ -1,3 +1,4 @@
+import {createClaudeBackgroundMainObservation} from './background-main-observation.ts'
 import type { ClaudeBackgroundStatus } from '../../../common/native-background.ts'
 import { createClaudeBackgroundHelperProjection } from './background-helper-projection.ts'
 import { writeFileSync, renameSync } from 'node:fs'
@@ -70,8 +71,8 @@ export async function createClaudeBackgroundStatusObserver(options: {
   let formatter: ReturnType<typeof createClaudeBackgroundFormatter> | undefined
   let launcher: Promise<string> | undefined
   let formatterRegistration = -1, formatterSequence = -1
-  let childUi: {registration: number; identity: string; token: string; transport: ClaudeTerminalUiTransport; bridge: ReturnType<typeof createClaudeTerminalUiTransport>; owner: ClaudeBackgroundDesktopOwner; helper: ReturnType<typeof createClaudeBackgroundHelperProjection>; helperConfigPath: string; helperGeneration: string; helperKey?: string; finish(): void} | undefined
-  const retireChildUi = () => { const held = childUi; childUi = undefined; held?.helper.clear(); held?.owner.controls.close(); held?.bridge.close(); held?.finish() }
+  let childUi: {registration: number; identity: string; token: string; transport: ClaudeTerminalUiTransport; bridge: ReturnType<typeof createClaudeTerminalUiTransport>; owner: ClaudeBackgroundDesktopOwner; helper: ReturnType<typeof createClaudeBackgroundHelperProjection>; main: ReturnType<typeof createClaudeBackgroundMainObservation>; helperConfigPath: string; helperGeneration: string; helperKey?: string; finish(): void} | undefined
+  const retireChildUi = () => { const held = childUi; childUi = undefined; held?.helper.clear(); held?.main.clear(); held?.owner.controls.close(); held?.bridge.close(); held?.finish() }
   async function childUiCurrent() {
     const held = childUi, identity = status.identity
     if (!held || !identity || closed || held.registration !== status.registration || held.identity !== JSON.stringify(identity)) return
@@ -110,7 +111,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
     const configInfo = await lstat(proof.configPath)
     if (!configInfo.isFile() || configInfo.uid !== process.getuid?.() || (configInfo.mode & 0o077) !== 0 || configInfo.size > 65536) throw new Error('Unowned background UI startup config')
     const config = JSON.parse(await readFile(proof.configPath, 'utf8'))
-    if (!config.generations || typeof config.generations.subagent !== 'string' || !config.generations.subagent) throw new Error('Background helper generation is invalid')
+    if (!config.generations || typeof config.generations.main !== 'string' || typeof config.mainObservationClaimed !== 'boolean' || typeof config.generations.subagent !== 'string' || !config.generations.subagent) throw new Error('Background helper generation is invalid')
     if (config.jobSessionId !== identity.sessionId || typeof config.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(config.sessionId) || config.uiSocketPath !== join(proof.configPath.slice(0, -'/observer.json'.length), 'ui.sock') || typeof config.token !== 'string' || !/^[a-f0-9]{64}$/.test(config.token)) throw new Error('Background UI scope is invalid')
     if (closed || registration !== status.registration || JSON.stringify(status.identity) !== JSON.stringify(identity)) throw new Error('Background UI owner changed')
     retireChildUi()
@@ -134,9 +135,20 @@ export async function createClaudeBackgroundStatusObserver(options: {
     let finish!: () => void
     const done = new Promise<void>(resolve => { finish = resolve })
     const owner: ClaudeBackgroundDesktopOwner = {id: randomBytes(16).toString('hex'), parentSessionId, identity: Object.freeze({...identity}), registration, transport, done, get controls() { return controls }}
-    childUi = {registration, identity: scope, token: config.token, bridge, transport, owner, helper: createClaudeBackgroundHelperProjection(), helperConfigPath: proof.configPath, helperGeneration: config.generations.subagent, finish}
+    childUi = {registration, identity: scope, token: config.token, bridge, transport, owner, helper: createClaudeBackgroundHelperProjection(), main: createClaudeBackgroundMainObservation({configPath: proof.configPath, sessionId: identity.activeSessionId, pid: identity.pid}), helperConfigPath: proof.configPath, helperGeneration: config.generations.subagent, finish}
     const controls = createClaudeBackgroundControls({sessionId: identity.activeSessionId, transport, changed: () => changed(true)})
     return transport
+  }
+  async function acceptMain(held: NonNullable<typeof childUi>, value: Record<string, unknown>) {
+    const observed = await held.transport.request({subtype: 'apack_owner_snapshot', policy_only: true, follow_native_session: true}) as {sessionId?: unknown; statusCommand?: unknown; hooksDisabled?: unknown; policy?: {allowManagedHooksOnly?: unknown; disableAllHooks?: unknown}}
+    if (await childUiCurrent() !== held) return false
+    if (typeof observed.policy?.allowManagedHooksOnly !== 'boolean' || typeof observed.policy.disableAllHooks !== 'boolean' || typeof observed.hooksDisabled !== 'boolean') {
+      held.main.clear(); changed(true); return false
+    }
+    const policyKey = JSON.stringify([observed.policy.allowManagedHooksOnly, observed.policy.disableAllHooks, observed.hooksDisabled])
+    if (!held.main.matchesPolicy(observed.statusCommand, policyKey)) { held.main.clear(); changed(true); return false }
+    if (observed.sessionId !== value.sessionId || observed.statusCommand !== value.command || policyKey !== value.policyKey) return false
+    return held.main.accept(value)
   }
   const server = createServer(async (request, response) => {
     const reply = (code: number, value: unknown) => { if (!response.destroyed && !response.writableEnded) { response.writeHead(code, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)) } }
@@ -146,7 +158,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
       if (closed || request.method !== 'POST' || (uiRoute ? !childUi || request.headers['x-apack-native-token'] !== childUi.token : request.headers['x-apack-native-token'] !== token)) return reply(403, {})
       let bytes = 0
       const chunks: Buffer[] = []
-      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/ui-host' ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : request.url === '/background-formatter' ? 262144 : 65536)) return reply(413, {}); chunks.push(Buffer.from(chunk)) }
+      for await (const chunk of request) { bytes += chunk.length; if (bytes > (request.url === '/ui-host' ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : request.url === '/background-formatter' || helperRoute ? 262144 : 65536)) return reply(413, {}); chunks.push(Buffer.from(chunk)) }
       if (closed) return reply(409, {})
       const value = JSON.parse(Buffer.concat(chunks).toString('utf8'))
       if (!value || typeof value !== 'object' || Array.isArray(value)) return reply(400, {})
@@ -154,6 +166,10 @@ export async function createClaudeBackgroundStatusObserver(options: {
         const held = await childUiCurrent()
         if (!held || request.headers['x-apack-native-token'] !== held.token) return reply(409, {})
         if (helperRoute) {
+          if (value.kind === 'main') {
+            try { const accepted = await acceptMain(held, value); changed(true); return reply(accepted ? 200 : 409, {}) }
+            catch { held.main.clear(); changed(true); return reply(409, {}) }
+          }
           if (value.kind !== 'subagent') return reply(409, {})
           try {
             const observed = await held.transport.request({subtype: 'apack_owner_snapshot', policy_only: true, follow_native_session: true}) as {sessionId?: unknown; subagentCommand?: unknown; hooksDisabled?: unknown; policy?: {allowManagedHooksOnly?: unknown; disableAllHooks?: unknown}}
@@ -210,6 +226,12 @@ export async function createClaudeBackgroundStatusObserver(options: {
             held.helperKey = key
             if (!held.helper.configure({sessionId: value.sessionId as string, pid: value.pid as number, generation: held.helperGeneration,
               command: snapshot.command as string | null, policyKey: snapshot.policyKey, agents: snapshot.agents})) return reply(400, {})
+            const main = value.formatter as {command?: unknown} | undefined
+            const mainCommand = main?.command ?? null
+            if (mainCommand !== null && (typeof mainCommand !== 'string' || mainCommand.length > 32768)) return reply(400, {})
+            const startup = held.main.configure(mainCommand as string | null, snapshot.policyKey)
+            if (startup && typeof startup === 'object' && !Array.isArray(startup)) await acceptMain(held, startup as Record<string, unknown>)
+            if (closed || childUi !== held || registration !== status.registration || sequence !== status.sequence) return reply(409, {})
           }
           if (value.formatter && !formatter) {
             launcher ??= installClaudeBackgroundFormatterLauncher()
@@ -272,7 +294,12 @@ export async function createClaudeBackgroundStatusObserver(options: {
       const value = status.value
       if (!value) return
       const current = childUi && childUi.registration === status.registration && childUi.identity === JSON.stringify(status.identity) ? childUi : undefined
-      return {...value, ...(formatterRegistration === status.registration && formatterSequence === status.sequence && formatter?.matchesCost(value.totalCostUsd) && formatter.value !== undefined ? {statusLine: formatter.value} : {}),
+      const formatted = formatterRegistration === status.registration && formatterSequence === status.sequence && formatter?.matchesCost(value.totalCostUsd)
+      // Both producers use the same host monotonic clock. A later execution, including a failed
+      // one, supersedes startup text even when its input cost has not changed.
+      const nativeLatest = current?.main.matchesCost(value.totalCostUsd) && (!formatted || formatter?.startedAt === undefined || current.main.startedAt! >= formatter.startedAt)
+      const text = nativeLatest ? current?.main.value(value.totalCostUsd) : formatted ? formatter?.value : undefined
+      return {...value, ...(text !== undefined ? {statusLine: text} : {}),
         ...(current ? {agents: current.helper.tasks.filter(task => task.statusText !== undefined)} : {})}
     },
     get available() { return !closed },
