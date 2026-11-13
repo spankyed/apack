@@ -160,6 +160,10 @@ remotes with their addresses and the tags. The snapshot's `refs` part says when 
 is checked out and the local branches, so a fetch that moves a remote's branch is news of the refs alone. The branch
 picker shows each local branch's standing (`commit.BRANCHES_RECEIVED` `standing`).
 
+The commit panel lists the tags in its branch picker, each pushed (`pushTag`) or deleted there, and makes one at a
+commit of its history (`createTag`); a local branch is renamed from its row in the picker (`renameBranch`), and a
+changed file's menu stashes that file alone (`stashPush` with its path).
+
 ## Blame
 
 `blame(path, { revision, onLines })` reads `git blame --incremental`, handing each group of lines on as git finds it,

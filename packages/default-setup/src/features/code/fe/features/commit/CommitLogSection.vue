@@ -77,6 +77,9 @@
                   <Trash2 class="w-3 h-3 text-neutral-400" />
                 </button>
               </template>
+              <button data-testid="tag-commit" @click.stop="startTag(entry.hash)" class="p-0.5 hover:bg-neutral-700 rounded" title="Tag this commit">
+                <Tag class="w-3 h-3 text-neutral-400" />
+              </button>
               <button v-if="!inCheckout.has(entry.hash)" data-testid="cherry-pick" @click.stop="commitActor.send({ type: 'commit.START_OPERATION', kind: 'cherry-pick', target: entry.hash })" class="p-0.5 hover:bg-neutral-700 rounded" title="Pick this commit onto what is checked out">
                 <Cherry class="w-3 h-3 text-neutral-400" />
               </button>
@@ -90,6 +93,20 @@
                 <Copy class="w-3 h-3 text-neutral-400" />
               </button>
             </div>
+          </div>
+          <!-- A tag being made at this commit -->
+          <div v-if="tagging === entry.hash" class="mt-1.5 ml-5 flex items-center gap-1">
+            <input
+              ref="tagInput"
+              v-model="tagName"
+              data-testid="tag-name"
+              placeholder="Tag name"
+              @keydown.enter="createTag(entry.hash)"
+              @keydown.escape="tagging = null"
+              class="flex-1 min-w-0 px-2 py-0.5 text-xs bg-neutral-900 border border-neutral-700 rounded text-neutral-200"
+            />
+            <button class="px-2 py-0.5 text-[11px] rounded text-neutral-400 hover:bg-neutral-800" @click="tagging = null">Cancel</button>
+            <button data-testid="tag-save" :disabled="!tagName.trim()" class="px-2 py-0.5 text-[11px] rounded text-neutral-200 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-40" @click="createTag(entry.hash)">Tag</button>
           </div>
           <!-- A reword, over the commit's whole message once it is read -->
           <div v-if="rewording?.hash === entry.hash" class="mt-1.5 ml-5 flex flex-col gap-1">
@@ -138,7 +155,7 @@ import { ref, computed, nextTick, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { CommitLogEntry } from '#features/code/fe/features/commit/state.ts'
-import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X, Cherry, Pencil, FoldVertical, Trash2 } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X, Cherry, Pencil, FoldVertical, Trash2, Tag } from 'lucide-vue-next'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import HistoryGraph from '#features/code/fe/features/commit/HistoryGraph.vue'
@@ -154,6 +171,21 @@ const commitActor = panelChild(codeActor, 'commit')!
 
 const commitLog = useSelector(commitActor, (state) => state.context.commitLog) as import('vue').Ref<CommitLogEntry[]>
 const logCursor = useSelector(commitActor, (state) => state.context.logCursor)
+/** The commit a tag is being made at, and the name typed for it */
+const tagging = ref<string | null>(null)
+const tagName = ref('')
+const tagInput = ref<HTMLInputElement[] | null>(null)
+const startTag = (hash: string) => {
+  tagging.value = hash
+  tagName.value = ''
+  nextTick(() => tagInput.value?.[0]?.focus())
+}
+const createTag = (hash: string) => {
+  const name = tagName.value.trim()
+  if (!name) return
+  commitActor.send({ type: 'commit.CREATE_TAG', name, commit: hash })
+  tagging.value = null
+}
 const rewording = useSelector(commitActor, (state) => state.context.rewording)
 /** The reword's text as edited, until it is saved or another commit is reworded */
 const rewordText = ref<string | null>(null)

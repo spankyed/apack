@@ -81,7 +81,14 @@ export type IncomingCommitEvents =
   | { type: 'commit.PUBLISH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
   | { type: 'commit.GENERATE_MESSAGE' }
-  | { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean }
+  /** Stash what is changed: only what is staged, or only `paths`, when asked */
+  | { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean; paths?: string[] }
+  /** Make a tag at `commit` (what is checked out when none), annotated when `message` is given */
+  | { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
+  | { type: 'commit.DELETE_TAG'; name: string }
+  /** Push a tag to the remote */
+  | { type: 'commit.PUSH_TAG'; name: string }
+  | { type: 'commit.RENAME_BRANCH'; name: string; to: string }
   | { type: 'commit.STASH_LIST' }
   | { type: 'commit.STASH_APPLY'; index: number }
   | { type: 'commit.STASH_POP'; index: number }
@@ -163,7 +170,11 @@ export type OutgoingCommitEvents =
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
   | { type: 'commit.BRANCH_RETRIEVED'; data: { branch: string } }
   /** The branches, and how each local one stands against what it follows, by its name */
-  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[]; standing?: Record<string, BranchStandingOf> } }
+  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[]; standing?: Record<string, BranchStandingOf>; tags?: { name: string; commit: string }[] } }
+  | { type: 'commit.TAG_CREATED'; data: { name: string } }
+  | { type: 'commit.TAG_DELETED'; data: { name: string } }
+  | { type: 'commit.TAG_PUSHED'; data: { name: string } }
+  | { type: 'commit.BRANCH_RENAMED'; data: { name: string; to: string } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PULLED'; data: { branchName: string } }

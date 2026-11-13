@@ -85,6 +85,8 @@ export interface CodeCommitContext {
   /** The folder what is held here was read from: the code surface's, as of the last time it started */
   directory: string
   availableBranches: string[]
+  /** The repository's tags and the commit each is at */
+  tags: { name: string; commit: string }[]
   /** How each local branch stands against what it follows, by name */
   branchStanding: Record<string, { upstream?: string; upstreamGone?: boolean; ahead: number; behind: number }>
   branchInput: string
@@ -266,7 +268,15 @@ export type Event =
   | { type: 'commit.TOGGLE_FOLDER'; path: string }
   | { type: 'commit.UNTRACKED_LISTED'; data: { path: string } & OpenFolder }
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
-  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[]; standing?: CodeCommitContext['branchStanding'] } }
+  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[]; standing?: CodeCommitContext['branchStanding']; tags?: { name: string; commit: string }[] } }
+  | { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
+  | { type: 'commit.DELETE_TAG'; name: string }
+  | { type: 'commit.PUSH_TAG'; name: string }
+  | { type: 'commit.RENAME_BRANCH'; name: string; to: string }
+  | { type: 'commit.TAG_CREATED'; data: { name: string } }
+  | { type: 'commit.TAG_DELETED'; data: { name: string } }
+  | { type: 'commit.TAG_PUSHED'; data: { name: string } }
+  | { type: 'commit.BRANCH_RENAMED'; data: { name: string; to: string } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
   | { type: 'commit.STOP_PUSH' }
@@ -276,7 +286,7 @@ export type Event =
   | { type: 'commit.GENERATE_MESSAGE' }
   | { type: 'commit.GENERATING_MESSAGE' }
   | { type: 'commit.MESSAGE_GENERATED'; data: { message: string } }
-  | { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean }
+  | { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean; paths?: string[] }
   | { type: 'commit.STASH_LIST' }
   | { type: 'commit.STASH_APPLY'; index: number }
   | { type: 'commit.STASH_POP'; index: number }
@@ -361,6 +371,7 @@ type OfOneFolder =
   | 'rewording'
   | 'discardLeft'
   | 'availableBranches'
+  | 'tags'
   | 'branchStanding'
   | 'branchInput'
   | 'hasUpstream'
@@ -409,6 +420,7 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   rewording: null,
   discardLeft: [],
   availableBranches: [],
+  tags: [],
   branchStanding: {},
   branchInput: '',
   hasUpstream: true,
@@ -944,7 +956,25 @@ export const commitState = setup({
 
     setCheckingOutBranch: assign({ isCheckingOutBranch: true }),
 
+    createTag: ({ event }) => {
+      const { name, commit, message } = event as { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
+      sendToSystem('code', { type: 'commit.CREATE_TAG', name, ...(commit && { commit }), ...(message && { message }) })
+    },
+    deleteTag: ({ event }) => {
+      const { name } = event as { type: 'commit.DELETE_TAG'; name: string }
+      sendToSystem('code', { type: 'commit.DELETE_TAG', name })
+    },
+    pushTag: ({ event }) => {
+      const { name } = event as { type: 'commit.PUSH_TAG'; name: string }
+      sendToSystem('code', { type: 'commit.PUSH_TAG', name })
+    },
+    renameBranch: ({ event }) => {
+      const { name, to } = event as { type: 'commit.RENAME_BRANCH'; name: string; to: string }
+      sendToSystem('code', { type: 'commit.RENAME_BRANCH', name, to })
+    },
+
     handleBranchesReceived: assign({
+      tags: ({ event }) => (event as { type: 'commit.BRANCHES_RECEIVED'; data: { tags?: { name: string; commit: string }[] } }).data.tags ?? [],
       branchStanding: ({ event }) => (event as { type: 'commit.BRANCHES_RECEIVED'; data: { standing?: CodeCommitContext['branchStanding'] } }).data.standing ?? {},
       availableBranches: ({ event }) => {
         const ev = event as { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
@@ -997,8 +1027,8 @@ export const commitState = setup({
     }),
 
     stashPush: ({ event }) => {
-      const ev = event as { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean }
-      sendToSystem('code', { type: 'commit.STASH_PUSH', message: ev.message, stagedOnly: ev.stagedOnly })
+      const ev = event as { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean; paths?: string[] }
+      sendToSystem('code', { type: 'commit.STASH_PUSH', message: ev.message, stagedOnly: ev.stagedOnly, ...(ev.paths && { paths: ev.paths }) })
     },
 
     setStashing: assign({ isStashing: true }),
@@ -1391,6 +1421,13 @@ export const commitState = setup({
           guard: 'answersTheBranchesAsked',
           actions: 'handleBranchesReceived'
         },
+        'commit.CREATE_TAG': { actions: 'createTag' },
+        'commit.DELETE_TAG': { actions: 'deleteTag' },
+        'commit.PUSH_TAG': { actions: 'pushTag' },
+        'commit.RENAME_BRANCH': { actions: 'renameBranch' },
+        'commit.TAG_CREATED': { actions: ['getAllBranches', 'requestLogList'] },
+        'commit.TAG_DELETED': { actions: ['getAllBranches', 'requestLogList'] },
+        'commit.BRANCH_RENAMED': { actions: ['getAllBranches', 'requestLogList'] },
         'commit.BRANCH_CHECKOUT_SUCCESS': {
           actions: ['handleBranchCheckoutSuccess', 'getAllBranches']
         },
