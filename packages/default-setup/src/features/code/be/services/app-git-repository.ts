@@ -3,6 +3,7 @@
 // files as data URLs for a window, the words a failed push or pull is said in, and what the engine is handed to
 // run with.
 import * as path from 'path'
+import { createHash } from 'node:crypto'
 import { createLogger, setDebugEnabled } from '@apackdev/sdk/logger'
 import { execFileWhileWorking, processWork, watchWork } from '@apackdev/sdk/progress'
 import {
@@ -11,7 +12,9 @@ import {
 } from 'apack-git'
 import type { RepositoryHandle, WatcherHandle } from '../types.ts'
 import { featureSettings } from '#generated/settings.ts'
+import { getDataDirPath } from '#generated/paths.ts'
 import { agentChildEnvironment } from './shell-environment.ts'
+import { resolveGitPath } from '../utils/resolve-cli.ts'
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
 
 const logger = createLogger('git')
@@ -54,6 +57,8 @@ export const APP_TIES: RepositoryTies = {
   run: (file, args, options) => execFileWhileWorking(file, args, options),
   watchProcess: (pid, onStalled, idleMs) => watchWork({ work: processWork(pid), idleMs, onRefused: onStalled }),
   isTrusted: repository => trustedRepositories().includes(repository),
+  // Copies of a working tree, kept with the pack's own data: one store a repository, by its common git directory
+  checkpointDirectory: commonDir => path.join(getDataDirPath('checkpoints'), createHash('sha256').update(commonDir).digest('hex').slice(0, 24)),
   log: {
     warn: (message, data) => logger.warn(message, data),
     error: (message, data) => logger.error(message, data),
@@ -79,9 +84,15 @@ function getImageMimeType(filePath: string): string | null {
   return IMAGE_MIME_TYPES[ext] || null
 }
 
+/** What a hosting service said when it refused a push, which git carries back on a line it begins `remote:` */
+const hostSaid = (printed: string): string | undefined =>
+  /^remote: error: (GH0\d\d: .*?)\s*$/m.exec(printed)?.[1]
+
 /** What a push or a pull that failed is said to have failed on, for the reasons that have plainer words than git's */
-function saidOfRemote(code: GitErrorCode | undefined): string | undefined {
+function saidOfRemote(code: GitErrorCode | undefined, printed: string): string | undefined {
   switch (code) {
+    case 'unrelated-histories': return 'This branch and the remote branch share no commit, so git will not bring them together. Merge with `--allow-unrelated-histories` from a terminal if they belong together.'
+    case 'host-refused': return `The host refused the push: ${hostSaid(printed) ?? 'it gave a rule of its own.'}`
     case 'authentication': return 'The remote asked for a sign-in that git does not have.'
     case 'permission': return 'Permission denied. Check your repository access rights.'
     case 'remote-unreachable': return 'Cannot connect to remote repository. Check your network connection and the remote\'s address.'
@@ -95,7 +106,24 @@ function saidOfRemote(code: GitErrorCode | undefined): string | undefined {
 
 /** A push or a pull that failed, in the words the panel shows, carrying why it failed */
 const remoteFailure = (verb: 'push' | 'pull', error: unknown): unknown =>
-  error instanceof GitError ? new GitError(`Failed to ${verb}: ${saidOfRemote(error.code) ?? error.message}`, error.code) : error
+  // Stopped by the user, which is no failure and has no plainer words to be put in
+  error instanceof GitError && error.code === 'aborted' ? error : error instanceof GitError ? new GitError(`Failed to ${verb}: ${saidOfRemote(error.code, error.message) ?? error.message}`, error.code) : error
+
+/** What a commit or a branch that failed is said to have failed on, where the panel has plainer words than git's */
+function saidOfLocal(code: GitErrorCode | undefined): string | undefined {
+  switch (code) {
+    case 'signing-failed': return 'The commit could not be signed: the signing program failed or could not be run. Check `gpg.program` and that its key is unlocked, or commit from a terminal to see what it said.'
+    case 'nothing-to-commit': return 'There is nothing staged to commit.'
+    case 'branch-exists': return 'A branch of that name already exists. Choose another name, or use the existing branch.'
+    default: return undefined
+  }
+}
+
+/** A local write that failed, in the words the panel shows where it has them, carrying why it failed */
+const localFailure = (error: unknown): unknown => {
+  const said = error instanceof GitError ? saidOfLocal(error.code) : undefined
+  return said && error instanceof GitError ? new GitError(said, error.code) : error
+}
 
 /** How long the branch a pull request is based on is kept before it is worked out again */
 const PR_BASE_KEPT_MS = 5000
@@ -153,7 +181,7 @@ export class AppGitRepository extends GitRepository {
    * git would use it. Nothing where there is no remote, or it is a path here.
    */
   async signInHelp(): Promise<SignInHelp | undefined> {
-    const address = await this.getRemoteUrl()
+    const address = await this.readRemoteUrl()
     return address ? signInHelpFor(address) : undefined
   }
 
@@ -202,11 +230,39 @@ export class AppGitRepository extends GitRepository {
     }
   }
 
-  override async pushBranch(onProgress?: (progress: GitProgress) => void): Promise<void> {
-    await super.pushBranch(onProgress).catch((error: unknown) => { throw remoteFailure('push', error) })
+  override async commit(message: string): Promise<void> {
+    await super.commit(message).catch((error: unknown) => { throw localFailure(error) })
+  }
+
+  override async worktreeAdd(wtPath: string, branch?: string, createBranch?: boolean): Promise<string> {
+    return super.worktreeAdd(wtPath, branch, createBranch).catch((error: unknown) => { throw localFailure(error) })
+  }
+
+  /** The push running, which `stopPush` stops */
+  private pushing: AbortController | undefined
+
+  override async pushBranch(onProgress?: (progress: GitProgress) => void, signal?: AbortSignal): Promise<void> {
+    const pushing = new AbortController()
+    this.pushing = pushing
+    try {
+      await super.pushBranch(onProgress, signal ? AbortSignal.any([signal, pushing.signal]) : pushing.signal)
+        .catch((error: unknown) => { throw remoteFailure('push', error) })
+    } finally {
+      if (this.pushing === pushing) this.pushing = undefined
+    }
     // A push moved the remote's refs here too, so a fetch is not due
     this.lastFetchTimestamp = Date.now()
     this.suspend(false)
+  }
+
+  /**
+   * Stops the push running, ending git and what it started; the push then rejects coded `aborted`. Whether there
+   * was one to stop. Only a push: a stopped push leaves the working tree and the index as they were
+   */
+  stopPush(): boolean {
+    if (!this.pushing) return false
+    this.pushing.abort()
+    return true
   }
 
   override async pullBranch(onProgress?: (progress: GitProgress) => void): Promise<void> {
@@ -239,11 +295,11 @@ export class AppGitRepository extends GitRepository {
     }
 
     // What the branch was made from is known where it was written down, and guessed from the commits otherwise
-    const current = await this.getCurrentBranch().catch(() => 'HEAD')
+    const current = await this.readCurrentBranch().catch(() => 'HEAD')
     const remembered = current === 'HEAD' ? undefined : await this.rememberedBaseOf(current).catch(() => undefined)
     if (remembered) return keep(remembered)
 
-    const defaultBase = await this.getBaseBranch({ preferUpstream: false })
+    const defaultBase = await this.findBaseBranch({ preferUpstream: false })
 
     // Try to find a closer parent branch via merge-base distance
     try {
@@ -262,10 +318,10 @@ export class AppGitRepository extends GitRepository {
    * smaller commit distance than main/master.
    */
   private async findClosestParentBranch(defaultBase: string): Promise<string | null> {
-    const currentBranch = await this.getCurrentBranch()
+    const currentBranch = await this.readCurrentBranch()
 
     // Only check branches whose tip is within recent commits AND merged into HEAD
-    const candidates = await this.getNearbyMergedBranches(PARENT_BRANCH_SEARCH_DEPTH)
+    const candidates = await this.findNearbyMergedBranches(PARENT_BRANCH_SEARCH_DEPTH)
     const filtered = candidates.filter(b =>
       b !== currentBranch && b !== defaultBase && b !== 'HEAD'
     )
@@ -273,8 +329,8 @@ export class AppGitRepository extends GitRepository {
 
     // For merged branches, tip = merge-base, so rev-list --count <branch>..HEAD gives distance directly
     const [defaultDistance, ...distances] = await Promise.all([
-      this.getCommitDistance(defaultBase),
-      ...filtered.map(b => this.getCommitDistance(b)),
+      this.readCommitDistance(defaultBase),
+      ...filtered.map(b => this.readCommitDistance(b)),
     ])
 
     if (defaultDistance === undefined || defaultDistance <= 0) return null
@@ -302,9 +358,9 @@ export class AppGitRepository extends GitRepository {
   async getFileContentAsDataUrl(filePath: string, version: 'HEAD' | 'working' | 'index' = 'working'): Promise<string> {
     const mimeType = getImageMimeType(filePath)
     if (!mimeType) {
-      return this.getFileContent(filePath, version)
+      return this.readFileContent(filePath, version)
     }
-    const buffer = await this.getFileBytes(filePath, version)
+    const buffer = await this.readFileBytes(filePath, version)
     if (!buffer || (version !== 'working' && buffer.length === 0)) return ''
     return `data:${mimeType};base64,${buffer.toString('base64')}`
   }
@@ -313,20 +369,24 @@ export class AppGitRepository extends GitRepository {
   async getFileContentFromBranchAsDataUrl(filePath: string, branch: string): Promise<string> {
     const mimeType = getImageMimeType(filePath)
     if (!mimeType) {
-      return this.getFileContentFromBranch(filePath, branch)
+      return this.readFileContentFromBranch(filePath, branch)
     }
     try {
-      const buffer = await this.getFileBytesFromBranch(filePath, branch)
+      const buffer = await this.readFileBytesFromBranch(filePath, branch)
       if (!buffer || buffer.length === 0) return ''
       return `data:${mimeType};base64,${buffer.toString('base64')}`
-    } catch {
+    } catch (error) {
+      // An image a partial clone was not given is said to be missing, as any other file is, and not shown as none
+      if ((error as { code?: string }).code === 'content-missing') throw error
       return ''
     }
   }
 }
 
 /** The repository of a working directory, as this app runs it */
-export const openGitRepository = (workingDirectory: string): AppGitRepository => new AppGitRepository(workingDirectory)
+/** A working directory's repository, run with the git the user set or the first found (`resolveGitPath`) */
+export const openGitRepository = (workingDirectory: string): AppGitRepository =>
+  new AppGitRepository(workingDirectory, { ...APP_TIES, git: resolveGitPath() })
 
 /** The watcher of a working directory's repository, logging where this app logs */
 export const openGitWatcher = (workingDirectory: string): GitWatcherService =>

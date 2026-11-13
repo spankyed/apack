@@ -75,20 +75,21 @@
       <!-- Branch Info -->
       <div class="px-4 py-2 border-b border-neutral-800 bg-neutral-800/50">
       <!-- Create Branch Mode -->
-      <div v-if="isCreatingBranch" class="flex items-center gap-1.5">
+      <div v-if="isCreatingBranch || renamingBranch" class="flex items-center gap-1.5">
         <input
           ref="newBranchInput"
           v-model="newBranchName"
+          data-testid="branch-name-input"
           @keyup.enter="confirmCreateBranch"
           @keyup.escape="cancelCreateBranch"
-          placeholder="New branch name..."
+          :placeholder="renamingBranch ? `Rename ${renamingBranch} to...` : 'New branch name...'"
           class="flex-1 min-w-0 px-3 py-1.5 text-xs bg-neutral-900 border border-neutral-700 rounded text-neutral-100 placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
         />
         <button
           @click="confirmCreateBranch"
           :disabled="!newBranchName.trim()"
           class="p-1.5 rounded transition-colors text-green-400 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Create branch"
+          :title="renamingBranch ? 'Rename branch' : 'Create branch'"
         >
           <Check :size="14" />
         </button>
@@ -137,7 +138,7 @@
           @click="commitsAhead > 0 ? commitActor?.send({ type: 'commit.PUSH_BRANCH' }) : commitActor?.send({ type: 'commit.PULL_BRANCH' })"
           :disabled="isPulling || isPushing || !hasUpstream"
           class="relative p-1 rounded transition-colors text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          :title="commitsAhead > 0 ? 'Push' : 'Pull latest'"
+          :title="syncTitle"
         >
           <Loader2 v-if="isPulling || isPushing" :size="14" class="animate-spin" />
           <ArrowUpFromLine v-else-if="commitsAhead > 0" :size="14" />
@@ -176,24 +177,94 @@
             @mousedown.prevent="selectBranch(branch)"
             @mouseenter="highlightedBranchIndex = Number(index)"
             :class="[
-              'px-3 py-2 cursor-pointer flex items-center gap-2',
+              'group px-3 py-2 cursor-pointer flex items-center gap-2',
               index === highlightedBranchIndex ? 'bg-neutral-800' : 'hover:bg-neutral-800'
             ]"
           >
             <GitBranch :size="12" class="text-neutral-400" />
             <span class="text-xs text-neutral-300">{{ branch }}</span>
-            <CheckCircle v-if="branch === gitBranch" :size="12" class="ml-auto text-green-500" />
+            <span v-if="branchStanding[branch]?.upstreamGone" class="text-[10px] text-amber-400" title="What it followed is gone from the remote">gone</span>
+            <span v-else-if="branchStanding[branch] && (branchStanding[branch].ahead || branchStanding[branch].behind)" class="text-[10px] tabular-nums text-neutral-500" :title="`Against ${branchStanding[branch].upstream}`">
+              <span v-if="branchStanding[branch].ahead">↑{{ branchStanding[branch].ahead }}</span>
+              <span v-if="branchStanding[branch].behind">↓{{ branchStanding[branch].behind }}</span>
+            </span>
+            <span v-if="branch === gitBranch" class="ml-auto flex items-center gap-1">
+              <button
+                data-testid="rename-branch"
+                @mousedown.stop.prevent="startRenameBranch(branch)"
+                :title="`Rename ${branch}`"
+                class="p-0.5 hover:bg-neutral-700 rounded opacity-0 group-hover:opacity-100"
+              ><Pencil :size="12" class="text-neutral-400" /></button>
+              <CheckCircle :size="12" class="text-green-500" />
+            </span>
+            <span v-else class="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
+              <button
+                v-if="branchStanding[branch]"
+                data-testid="rename-branch"
+                @mousedown.stop.prevent="startRenameBranch(branch)"
+                :title="`Rename ${branch}`"
+                class="p-0.5 hover:bg-neutral-700 rounded"
+              ><Pencil :size="12" class="text-neutral-400" /></button>
+              <button
+                data-testid="merge-branch"
+                @mousedown.stop.prevent="startOperation('merge', branch)"
+                @mouseenter="commitActor.send({ type: 'commit.PREVIEW_MERGE', target: branch })"
+                :disabled="isStartingOperation || !!operation"
+                :title="mergeTitle(branch)"
+                class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"
+              ><GitMerge :size="12" class="text-neutral-400" /></button>
+              <button
+                data-testid="rebase-onto-branch"
+                @mousedown.stop.prevent="startOperation('rebase', branch)"
+                :disabled="isStartingOperation || !!operation"
+                :title="`Rebase ${gitBranch} onto ${branch}`"
+                class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"
+              ><GitPullRequestArrow :size="12" class="text-neutral-400" /></button>
+            </span>
           </div>
+          <template v-if="tags.length > 0 && !branchInput">
+            <div class="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wide text-neutral-500 border-t border-neutral-800">Tags</div>
+            <div v-for="tag in tags" :key="tag.name" data-testid="tag-row" class="group px-3 py-1.5 flex items-center gap-2 hover:bg-neutral-800" @mousedown.prevent>
+              <Tag :size="12" class="text-neutral-400" />
+              <span class="text-xs text-neutral-300">{{ tag.name }}</span>
+              <span class="text-[10px] text-neutral-500 font-mono">{{ tag.commit.slice(0, 7) }}</span>
+              <span class="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                <button data-testid="push-tag" @mousedown.stop.prevent="commitActor.send({ type: 'commit.PUSH_TAG', name: tag.name })" :title="`Push ${tag.name}`" class="p-0.5 hover:bg-neutral-700 rounded"><Upload :size="12" class="text-neutral-400" /></button>
+                <button data-testid="delete-tag" @mousedown.stop.prevent="commitActor.send({ type: 'commit.DELETE_TAG', name: tag.name })" :title="`Delete ${tag.name} here`" class="p-0.5 hover:bg-neutral-700 rounded"><Trash2 :size="12" class="text-neutral-400" /></button>
+              </span>
+            </div>
+          </template>
         </div>
       </div>
     </div>
 
-    <!-- The repository's file watches are not open, so nothing here changes until it is asked again -->
+    <!-- The repository's file watches are not open, or are open and not delivering, so what is shown may be behind -->
     <div
-      v-if="!isWatchingRepository && !gitError"
+      v-if="(!isWatchingRepository || isWatchSilent) && !gitError"
+      data-testid="watch-notice"
       class="px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
-      Live updates are off for this repository. It is read again when you return to this window or press Refresh.
+      <template v-if="!isWatchingRepository">Live updates are off for this repository.</template>
+      <template v-else>Live updates are not arriving for this repository: changes keep turning up that the watch never reported, as a network drive or the system's limit on watches can cause.</template>
+      It is read again when you return to this window or press Refresh.
+    </div>
+
+    <!-- A whole status took longer than its budget, and git has speed-ups for it that are off here -->
+    <div
+      v-if="slowStatus && !gitError"
+      data-testid="slow-status"
+      class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      <span class="flex-1">
+        Reading this repository's status took {{ (slowStatus.ms / 1000).toFixed(1) }}s.
+        Git can make it faster by {{ slowStatusRemedy }}, which is written to this repository's settings.
+      </span>
+      <button
+        data-testid="speed-up-status"
+        :disabled="isSpeedingUpStatus"
+        class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700 disabled:opacity-40"
+        @click="commitActor?.send({ type: 'commit.SPEED_UP_STATUS' })"
+      >Turn on</button>
     </div>
 
     <!-- Fetching by itself has stopped, so what is shown of the remote is as old as the last fetch that worked -->
@@ -205,6 +276,60 @@
       <SignInHelp v-if="fetchSignIn" class="mt-2" :help="fetchSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
     </div>
 
+    <!-- More than one repository under the folder: the panel works in the one chosen -->
+    <div v-if="repositories.length > 1" data-testid="repository-picker" class="flex items-center gap-2 px-3 py-1.5 text-xs border-b border-neutral-800 text-neutral-400">
+      <span class="shrink-0">Repository</span>
+      <select
+        class="flex-1 min-w-0 bg-neutral-900 border border-neutral-700 rounded px-1 py-0.5 text-neutral-200"
+        :value="directory"
+        @change="commitActor?.send({ type: 'commit.SELECT_REPOSITORY', path: ($event.target as HTMLSelectElement).value })"
+      >
+        <option v-for="repository in repositories" :key="repository.path" :value="repository.path">
+          {{ repository.relative || 'This folder' }}{{ repository.kind === 'top' || repository.kind === 'nested' ? '' : ` (${repository.kind})` }}
+        </option>
+      </select>
+    </div>
+
+    <!-- The last write here that can be taken back: a commit, a reset, a dropped or cleared stash -->
+    <div
+      v-if="lastUndoable && !gitError"
+      data-testid="write-undo"
+      class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
+    >
+      <span class="flex-1">
+        <template v-if="undoConfirmation">{{ undoConfirmation }}</template>
+        <template v-else>Done: {{ lastUndoable.summary }}.</template>
+      </span>
+      <button
+        v-if="undoConfirmation"
+        data-testid="write-undo-anyway"
+        class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700"
+        @click="commitActor?.send({ type: 'commit.UNDO_LAST', evenIfPublished: true })"
+      >Undo here anyway</button>
+      <button
+        v-else
+        data-testid="write-undo-button"
+        class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700"
+        @click="commitActor?.send({ type: 'commit.UNDO_LAST' })"
+      >Undo</button>
+      <button class="p-0.5 rounded hover:bg-neutral-700" title="Dismiss" @click="commitActor?.send({ type: 'commit.DISMISS_UNDO' })"><X :size="12" /></button>
+    </div>
+
+    <!-- An amend or a rewrite of commits a remote branch already holds: done here only once the user says so -->
+    <div
+      v-if="rewriteConfirmation"
+      data-testid="rewrite-confirmation"
+      class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-amber-300"
+    >
+      <span class="flex-1">{{ rewriteConfirmation.message }}</span>
+      <button
+        data-testid="rewrite-anyway"
+        class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700"
+        @click="commitActor?.send({ type: 'commit.CONFIRM_REWRITE' })"
+      >Rewrite here anyway</button>
+      <button class="p-0.5 rounded hover:bg-neutral-700" title="Dismiss" @click="commitActor?.send({ type: 'commit.DISMISS_REWRITE' })"><X :size="12" /></button>
+    </div>
+
     <!-- A discard kept what it removed, which is offered back until it is dismissed -->
     <div
       v-if="lastDiscard && !gitError"
@@ -212,7 +337,7 @@
       class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-neutral-400"
     >
       <span class="flex-1">
-        Discarded {{ lastDiscard.paths.length === 1 ? lastDiscard.paths[0] : `${lastDiscard.paths.length} changes` }}. Git keeps what was removed for about two weeks.
+        Discarded {{ lastDiscard.paths.length === 1 ? lastDiscard.paths[0] : `${lastDiscard.paths.length} changes` }}. What was removed is kept for 14 days.
         <template v-if="lastDiscard.notKept.length > 0">
           {{ lastDiscard.notKept.length === 1 ? 'One file was' : `${lastDiscard.notKept.length} files were` }} too large to keep.
         </template>
@@ -279,6 +404,7 @@
 
     <!-- Git was not run, because the repository would have it run something and has not been trusted -->
     <TrustRequest v-if="trustRequest" :request="trustRequest" @trust="commitActor?.send({ type: 'commit.TRUST_REPOSITORY' })" />
+    <OwnershipRequest v-if="ownershipRequest" :directory="ownershipRequest.directory" @trust="commitActor?.send({ type: 'commit.TRUST_OWNERSHIP' })" />
 
     <!-- Git Error (only show non-directory errors) -->
     <div v-else-if="gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
@@ -287,7 +413,7 @@
           ref="errorContentRef"
           class="flex-1 text-sm text-red-400 whitespace-pre-wrap break-words"
           :class="{ 'max-h-24 overflow-hidden': !isErrorExpanded }"
-        >{{ gitError }}</div>
+        >{{ gitError }}<pre v-if="refusingHook?.output" data-testid="hook-output" class="mt-1.5 p-2 rounded bg-neutral-950/60 text-xs font-mono text-neutral-300 whitespace-pre-wrap">{{ refusingHook.output }}</pre></div>
         <button
           @click="dismissError"
           class="shrink-0 p-0.5 rounded text-red-400 hover:text-red-200 hover:bg-red-900/40 transition-colors"
@@ -378,11 +504,22 @@
         >
           {{ actionButtonText }}
         </button>
+        <!-- A push waiting on the network can be stopped: what it leaves is the checkout as it was -->
+        <button
+          v-if="shouldShowActionButton && isPushing"
+          data-testid="stop-push"
+          class="w-full px-3 py-1 mt-1 text-xs rounded text-neutral-300 bg-neutral-800 hover:bg-neutral-700"
+          @click="commitActor?.send({ type: 'commit.STOP_PUSH' })"
+        >
+          Stop pushing
+        </button>
 
         <button
           v-else
           @click="commit"
           :disabled="!canCommit"
+          :title="whyNot.commit ?? undefined"
+          data-testid="commit-button"
           :class="[
             'w-full px-3 py-1.5 rounded text-sm font-medium transition-colors',
             canCommit
@@ -392,13 +529,23 @@
         >
           Commit
         </button>
+        <button
+          v-if="hasCommits && !isPushing"
+          data-testid="amend-button"
+          @click="amend"
+          :disabled="!!operation"
+          class="w-full mt-1 px-3 py-1 rounded text-xs text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 disabled:opacity-40"
+          title="Amend the last commit with what is staged, and with this message if one is written"
+        >
+          Amend last commit
+        </button>
       </div>
     </div>
 
     <!-- File Changes -->
     <div class="flex-1 overflow-y-auto">
       <!-- Nothing is known of a repository git was not run in, so it is not said to be clean -->
-      <div v-if="trustRequest && gitStatus.length === 0" />
+      <div v-if="gitNeverRan && gitStatus.length === 0" />
       <EmptyState
         v-else-if="gitStatus.length === 0"
         :icon="GitCommit"
@@ -420,6 +567,7 @@
               v-for="file in stagedFiles"
               :key="`staged-${file.path}`"
               :file="file"
+              :count="lineCounts[`${file.staged}:${file.path}`]"
               :isSelected="selectedGitFile?.path === file.path && selectedGitFile?.staged === file.staged"
               @select="selectFile"
               @openFile="openFile"
@@ -432,6 +580,9 @@
               <template #menuItems>
                 <ContextMenuItem @select="unstageFile(file)" :class="MENU_ITEM_CLASS">
                   <Minus class="w-4 h-4" /> Unstage
+                </ContextMenuItem>
+                <ContextMenuItem @select="stashFile(file)" :class="MENU_ITEM_CLASS">
+                  <Archive class="w-4 h-4" /> Stash this file
                 </ContextMenuItem>
               </template>
             </GitFileItem>
@@ -510,6 +661,7 @@
               <!-- A file in an open folder is a row under the folder's, which is one row for all of it -->
               <GitFileItem
                 :file="file"
+                :count="lineCounts[`${file.staged}:${file.path}`]"
                 :isSelected="selectedGitFile?.path === file.path && selectedGitFile?.staged === file.staged"
                 @select="file.isDirectory ? toggleFolder(file) : selectFile(file)"
                 @openFile="openFile"
@@ -533,6 +685,9 @@
                 <template #menuItems>
                   <ContextMenuItem @select="stageFile(file)" :class="MENU_ITEM_CLASS">
                     <Plus class="w-4 h-4" /> Stage
+                  </ContextMenuItem>
+                  <ContextMenuItem v-if="!file.isDirectory" @select="stashFile(file)" :class="MENU_ITEM_CLASS">
+                    <Archive class="w-4 h-4" /> Stash this file
                   </ContextMenuItem>
                   <ContextMenuItem @select="openRevertDialog(file)" :class="MENU_ITEM_DANGER_CLASS">
                     <RotateCcw class="w-4 h-4" /> Discard Changes
@@ -611,6 +766,9 @@
                 <div class="text-[11px] text-neutral-500 truncate">{{ stash.ref }} · {{ formatStashBranch(stash.message) }} · {{ formatStashDate(stash.date) }}</div>
               </div>
               <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                <button @click.stop="commitActor?.send({ type: 'commit.TOGGLE_STASH_FILES', index: stash.index })" class="p-0.5 hover:bg-neutral-700 rounded" title="Show its files" data-testid="stash-files-toggle">
+                  <FileText class="w-3 h-3 text-neutral-400" />
+                </button>
                 <button @click.stop="copyStashMessage(stash)" class="p-0.5 hover:bg-neutral-700 rounded" title="Copy message">
                   <Copy class="w-3 h-3 text-neutral-400" />
                 </button>
@@ -620,6 +778,13 @@
                 <button @click.stop="openDropStashDialog(stash.index)" class="p-0.5 hover:bg-neutral-700 rounded" title="Drop">
                   <Trash2 class="w-3 h-3 text-red-400" />
                 </button>
+              </div>
+            </div>
+            <!-- What the stash holds, read without applying it -->
+            <div v-if="stashFiles[stash.index]" class="mt-1 pl-2 space-y-0.5" data-testid="stash-files" @click.stop>
+              <div v-for="file in stashFiles[stash.index]" :key="file.path" class="flex items-center gap-2 text-[11px] font-mono text-neutral-400">
+                <span class="truncate flex-1" :title="file.path">{{ file.path }}</span>
+                <span v-if="!file.binary" class="tabular-nums flex-shrink-0"><span class="text-green-500/80">+{{ file.added }}</span> <span class="text-red-500/80">-{{ file.removed }}</span></span>
               </div>
             </div>
           </div>
@@ -749,6 +914,7 @@
 </template>
 
 <script setup lang="ts">
+import { whatCanBeDone, type Availability, type UnavailableReason } from 'apack-git/availability'
 
 import { computed, ref, nextTick, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
@@ -756,7 +922,7 @@ import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { ConflictKind, OperationMove } from '#features/code/be/types.ts'
-import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock } from 'lucide-vue-next'
+import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText, GitPullRequestArrow, Pencil, Tag, Upload, Archive } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS } from '#features/code/fe/features/explorer/constants.ts'
 import GitFileItem from '#features/code/fe/features/commit/GitFileItem.vue'
@@ -765,6 +931,7 @@ import NoDirectoryState from '#features/code/fe/features/NoDirectoryState.vue'
 import EmptyState from '#features/code/fe/features/EmptyState.vue'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
 import TrustRequest from '#features/code/fe/features/commit/TrustRequest.vue'
+import OwnershipRequest from '#features/code/fe/features/commit/OwnershipRequest.vue'
 import SignInHelp from '#features/code/fe/features/commit/SignInHelp.vue'
 import CommitLogSection from '#features/code/fe/features/commit/CommitLogSection.vue'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
@@ -788,22 +955,56 @@ const { showMenu, menuPos, sectionMenuItems, onSectionContextMenu } = useSection
 const gitStatus = useSelector(commitActor, (state) => state.context.gitStatus)
 const gitBranch = useSelector(commitActor, (state) => state.context.gitBranch)
 const gitError = useSelector(commitActor, (state) => state.context.gitError)
+/** The hook of the repository's that refused the last command, whose output is shown as its own */
+const refusingHook = useSelector(commitActor, (state) => state.context.gitFailure?.hook ?? null)
 const isGitLoading = useSelector(commitActor, (state) => state.context.isGitLoading)
 const selectedGitFile = useSelector(commitActor, (state) => state.context.selectedGitFile)
 const commitMessage = useSelector(commitActor, (state) => state.context.commitMessage)
 const revertDialogFile = useSelector(commitActor, (state) => state.context.revertDialogFile)
 const discardPreview = useSelector(commitActor, (state) => state.context.discardPreview)
 const lastDiscard = useSelector(commitActor, (state) => state.context.lastDiscard)
+const lastUndoable = useSelector(commitActor, (state) => state.context.lastUndoable)
+const repositories = useSelector(commitActor, (state) => state.context.repositories)
+const directory = useSelector(commitActor, (state) => state.context.directory)
+const undoConfirmation = useSelector(commitActor, (state) => state.context.undoConfirmation)
+const rewriteConfirmation = useSelector(commitActor, (state) => state.context.rewriteConfirmation)
+const hasCommits = useSelector(commitActor, (state) => state.context.commitLog.length > 0)
 const discardLeft = useSelector(commitActor, (state) => state.context.discardLeft)
 /** What discarding these rows would remove that cannot be brought back, once that has been answered for these rows */
 const notKeptOf = (paths: string[]): string[] =>
   (discardPreview.value && discardPreview.value.paths.join('\0') === paths.join('\0') ? discardPreview.value.notKept : [])
 const availableBranches = useSelector(commitActor, (state) => state.context.availableBranches)
+const pullPreview = useSelector(commitActor, (state) => state.context.pullPreview)
+/** What a pull would do, said before the click */
+const pullTitle = computed(() => {
+  const preview = pullPreview.value
+  if (!preview) return 'Pull latest'
+  switch (preview.kind) {
+    case 'fast-forward': return 'Pull: a fast-forward'
+    case 'clean': return 'Pull: merges cleanly'
+    case 'conflicts': return `Pull: would conflict in ${preview.files.join(', ')}`
+    case 'up-to-date': return 'Pull: nothing to bring in'
+    default: return 'Pull latest'
+  }
+})
+const branchStanding = useSelector(commitActor, (state) => state.context.branchStanding)
+const tags = useSelector(commitActor, (state) => state.context.tags)
 const branchInput = useSelector(commitActor, (state) => state.context.branchInput)
 const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.isCheckingOutBranch)
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
 const isStatusTruncated = useSelector(commitActor, (state) => state.context.isStatusTruncated)
 const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
+const isWatchSilent = useSelector(commitActor, (state) => state.context.isWatchSilent)
+const slowStatus = useSelector(commitActor, (state) => state.context.slowStatus)
+const isSpeedingUpStatus = useSelector(commitActor, (state) => state.context.isSpeedingUpStatus)
+/** What turning the speed-ups on would turn on, of those that are off */
+const slowStatusRemedy = computed(() => {
+  const off = [
+    ...(slowStatus.value && !slowStatus.value.fileMonitor && slowStatus.value.fileMonitorAvailable ? ['watching for changes itself'] : []),
+    ...(slowStatus.value && !slowStatus.value.untrackedCache ? ['remembering untracked files'] : []),
+  ]
+  return off.join(' and ')
+})
 const operation = useSelector(commitActor, (state) => state.context.operation)
 const isFetchSuspended = useSelector(commitActor, (state) => state.context.isFetchSuspended)
 const fetchSignIn = useSelector(commitActor, (state) => state.context.fetchSignIn)
@@ -812,13 +1013,37 @@ const isSettingUpSignIn = useSelector(commitActor, (state) => state.context.isSe
 const errorSignIn = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.signIn ?? null : null))
 // The refusal belongs to the error it came with, and goes when that error does
 const trustRequest = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.trust ?? null : null))
+const ownershipRequest = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.ownership ?? null : null))
+/** The failures for which git read nothing, so the panel says nothing of the working tree */
+const NOTHING_READ = new Set(['untrusted', 'unsafe-ownership', 'git-not-found', 'developer-tools-missing', 'git-too-old'])
+const gitNeverRan = useSelector(commitActor, (state) => !!state.context.gitError && NOTHING_READ.has(state.context.gitFailure?.code ?? ''))
 const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
+const isStartingOperation = useSelector(commitActor, (state) => state.context.isStartingOperation)
+const mergePreview = useSelector(commitActor, (state) => state.context.mergePreview)
+/** What merging a branch in would do, said before the click once it is known */
+const mergeTitle = (branch: string): string => {
+  const known = mergePreview.value?.target === branch ? mergePreview.value.preview : undefined
+  const merging = `Merge ${branch} into ${gitBranch.value}`
+  switch (known?.kind) {
+    case 'fast-forward': return `${merging}: a fast-forward`
+    case 'clean': return `${merging}: merges cleanly`
+    case 'conflicts': return `${merging}: would conflict in ${known.files.join(', ')}`
+    case 'up-to-date': return `${merging}: nothing to bring in`
+    default: return merging
+  }
+}
+const startOperation = (kind: 'merge' | 'rebase', target: string) => {
+  showBranchDropdown.value = false
+  commitActor.send({ type: 'commit.START_OPERATION', kind, target })
+}
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)
 const isPushing = useSelector(commitActor, (state) => state.context.isPushing)
 const isPulling = useSelector(commitActor, (state) => state.context.isPulling)
 const isGeneratingMessage = useSelector(commitActor, (state) => state.context.isGeneratingMessage)
 const stashList = useSelector(commitActor, (state) => state.context.stashList)
+const lineCounts = useSelector(commitActor, (state) => state.context.lineCounts)
+const stashFiles = useSelector(commitActor, (state) => state.context.stashFiles)
 const isStashing = useSelector(commitActor, (state) => state.context.isStashing)
 const worktreeList = useSelector(commitActor, (state) => state.context.worktreeList)
 const isWorktreeLoading = useSelector(commitActor, (state) => state.context.isWorktreeLoading)
@@ -934,7 +1159,27 @@ const unstagedRows = computed(() => unstagedFiles.value.flatMap((file: GitStatus
   return [file, ...(open?.files ?? []).map(path => ({ path, status: 'untracked' as const, staged: false, inFolder: true }))]
 }))
 const toggleFolder = (file: GitStatusFile) => commitActor?.send({ type: 'commit.TOGGLE_FOLDER', path: file.path })
-const canCommit = computed(() => commitMessage.value.trim() && stagedFiles.value.length > 0)
+const hasIdentity = useSelector(commitActor, (state) => state.context.hasIdentity)
+
+/** What can be done now, and why not, from what the panel holds of the repository: worded here, decided by the engine */
+const canBeDone = computed(() => whatCanBeDone({
+  files: gitStatus.value, truncated: isStatusTruncated.value, branch: gitBranch.value, hasUpstream: hasUpstream.value,
+  ahead: commitsAhead.value, behind: commitsBehind.value, hasIdentity: hasIdentity.value, ...(operation.value && { operation: operation.value }),
+}))
+const REASONS: Record<UnavailableReason, string> = {
+  'nothing-staged': 'Nothing is staged to commit.',
+  conflicts: 'Settle the conflicts first.',
+  'no-identity': 'Git has no name and email to commit with: set user.name and user.email.',
+  'operation-in-progress': 'Carry on with what git is in the middle of, or give it up, first.',
+  'no-upstream': 'This branch follows no remote branch: publish it first.',
+  diverged: 'This branch and the one it follows have both moved on: pull first.',
+  'up-to-date': 'There is nothing to do: it is up to date.',
+}
+const reasonOf = (availability: Availability) => (availability.possible ? null : REASONS[availability.reason])
+const whyNot = computed(() => ({ commit: reasonOf(canBeDone.value.commit), push: reasonOf(canBeDone.value.push), pull: reasonOf(canBeDone.value.pull) }))
+const syncTitle = computed(() => (commitsAhead.value > 0 ? whyNot.value.push ?? 'Push' : whyNot.value.pull ?? pullTitle.value))
+
+const canCommit = computed(() => commitMessage.value.trim() && stagedFiles.value.length > 0 && hasIdentity.value)
 
 const isNoDirectoryError = computed(() => {
   return gitError.value?.includes('No directory selected')
@@ -1041,21 +1286,30 @@ const handleActionButton = () => {
   }
 }
 
+/** Amends the last commit with what is staged, and with the message box's words when there are any */
+const amend = () => {
+  const message = commitMessage.value?.trim()
+  commitActor?.send({ type: 'commit.AMEND', ...(message && { message }) })
+}
+
+/** The paths of these files that git can be asked about by name: one whose name is not text is refused, and left out */
+const byName = (files: GitStatusFile[]): string[] => files.filter(file => !file.nameNotText).map(file => file.path)
+
 const stageAll = () => {
-  commitActor?.send({ type: 'commit.STAGE_FILES', paths: unstagedFiles.value.map((f: GitStatusFile) => f.path) })
+  commitActor?.send({ type: 'commit.STAGE_FILES', paths: byName(unstagedFiles.value) })
 }
 
 const unstageAll = () => {
-  commitActor?.send({ type: 'commit.UNSTAGE_FILES', paths: stagedFiles.value.map((f: GitStatusFile) => f.path) })
+  commitActor?.send({ type: 'commit.UNSTAGE_FILES', paths: byName(stagedFiles.value) })
 }
 
 const openDiscardAllDialog = () => {
-  commitActor?.send({ type: 'commit.PREVIEW_DISCARD', paths: unstagedFiles.value.map((f: GitStatusFile) => f.path) })
+  commitActor?.send({ type: 'commit.PREVIEW_DISCARD', paths: byName(unstagedFiles.value) })
   showDiscardAllDialog.value = true
 }
 
 const confirmDiscardAll = () => {
-  commitActor?.send({ type: 'commit.REVERT_FILES', paths: unstagedFiles.value.map((f: GitStatusFile) => f.path) })
+  commitActor?.send({ type: 'commit.REVERT_FILES', paths: byName(unstagedFiles.value) })
   showDiscardAllDialog.value = false
 }
 
@@ -1166,6 +1420,11 @@ const startCreateBranch = () => {
 const confirmCreateBranch = () => {
   const name = newBranchName.value.trim()
   if (!name) return
+  if (renamingBranch.value) {
+    if (name !== renamingBranch.value) commitActor?.send({ type: 'commit.RENAME_BRANCH', name: renamingBranch.value, to: name })
+    cancelCreateBranch()
+    return
+  }
   commitActor?.send({ type: 'commit.UPDATE_BRANCH_INPUT', input: name })
   commitActor?.send({ type: 'commit.CHECKOUT_BRANCH' })
   isCreatingBranch.value = false
@@ -1175,7 +1434,22 @@ const confirmCreateBranch = () => {
 
 const cancelCreateBranch = () => {
   isCreatingBranch.value = false
+  renamingBranch.value = null
   newBranchName.value = ''
+}
+
+/** The local branch being renamed, in the branch name box */
+const renamingBranch = ref<string | null>(null)
+const startRenameBranch = (branch: string) => {
+  showBranchDropdown.value = false
+  renamingBranch.value = branch
+  newBranchName.value = branch
+  nextTick(() => newBranchInput.value?.select())
+}
+
+/** Stashes one file's changes, leaving the rest as they are */
+const stashFile = (file: GitStatusFile) => {
+  commitActor?.send({ type: 'commit.STASH_PUSH', message: `${file.path}`, paths: [file.path] })
 }
 
 // Stash handlers

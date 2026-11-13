@@ -5,7 +5,7 @@
  * again after each of these writes, so nothing here tells a window anything.
  */
 
-import { EARS } from '#generated/ears.ts';
+import { EARS, getAttr } from '#generated/ears.ts';
 
 import { repository } from '#generated/repository.ts';
 import type { ArtifactType } from '#features/threads/be/types.ts';
@@ -30,6 +30,11 @@ export interface UpdateArtifactOptions {
  */
 export function create(options: CreateArtifactOptions): { artifactId: EARS.EntityId } {
   return repository.chatCommands.createArtifact(options);
+}
+
+/** An artifact's content as it is stored, or nothing when there is no such artifact */
+export function contentOf(artifactId: EARS.EntityId): unknown {
+  return getAttr(artifactId, 'content');
 }
 
 /**
@@ -64,9 +69,10 @@ export function findOrCreateByType(
   return { artifactId, created: true };
 }
 
-/** `services.artifact`: a thread's artifact writes */
+/** `services.artifact`: a thread's artifact writes, and the content one holds */
 export const artifactService = {
   create,
   update,
   findOrCreateByType,
+  contentOf,
 };

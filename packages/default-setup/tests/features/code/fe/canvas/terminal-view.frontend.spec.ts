@@ -66,6 +66,23 @@ describe('the canvas terminal host', () => {
     expect(surface.sent.filter((event) => event.type === 'terminal.INPUT')).toEqual([])
   })
 
+  it('paints the flash while the state says the terminal is flashing, and no longer once it does not', async () => {
+    const info = terminal()
+    surface = startCodeSurface({ terminals: [info] })
+    surface.mount(TerminalView, { terminalInfo: info })
+    await surface.settle()
+    const container = () => surface!.root.querySelector<HTMLElement>('[data-bell-flash]') ?? null
+    expect(container(), 'a terminal not flashing is painted as one').toBeNull()
+
+    await surface.setBells({ [info.id]: 'flashing' })
+    expect(container(), 'the flash was not painted').not.toBeNull()
+    expect(container()!.classList.contains('bg-neutral-600')).toBe(true)
+
+    // The window that is still open after the flash is not a flash: the state ends it, and the paint follows
+    await surface.setBells({ [info.id]: 'quiet' })
+    expect(container(), 'the flash was still painted after it ended').toBeNull()
+  })
+
   it('takes no focus when it mounts, and focuses when the surface asks it to', async () => {
     const info = terminal()
     surface = startCodeSurface({ terminals: [info] })
@@ -79,5 +96,35 @@ describe('the canvas terminal host', () => {
     view.value!.focus()
 
     expect(lastView().focused, 'the surface asked for focus and nothing was focused').toBe(1)
+  })
+
+  it('lists the shell\'s commands newest first, highlights one that failed, and copies or runs one again on request', async () => {
+    const info = terminal()
+    surface = startCodeSurface({ terminals: [info] })
+    surface.mount(TerminalView, { terminalInfo: info })
+    await surface.settle()
+    const view = lastView()
+    const command = (id: number, text: string, outcome: object) => ({ id, command: text, cwd: null, startedMs: null, finishedMs: null, outcome, prompt: 0, output: 1, end: 2 })
+    view.options.onCommands?.([
+      command(1, 'ls', { kind: 'exited', code: 0 }),
+      command(2, 'make', { kind: 'exited', code: 2 }),
+    ] as never)
+    await surface.settle()
+
+    const toggle = surface.root.querySelector<HTMLButtonElement>('[data-testid="command-blocks-toggle"]')
+    expect(toggle?.textContent?.trim()).toBe('Commands (2)')
+    toggle!.click()
+    await surface.settle()
+
+    const rows = [...surface.root.querySelectorAll<HTMLElement>('[data-testid="command-block"]')]
+    expect(rows.map((row) => row.querySelector('.font-mono')?.textContent?.trim())).toEqual(['make', 'ls'])
+    expect(rows[0]!.dataset.failed, 'a command with a non-zero status is highlighted').toBe('true')
+    expect(rows[1]!.dataset.failed).toBeUndefined()
+
+    rows[0]!.querySelectorAll('button')[0]!.click()
+    rows[0]!.querySelectorAll('button')[1]!.click()
+    await surface.settle()
+    expect(view.copiedCommands).toEqual([2])
+    expect(view.typed).toEqual(['make\r'])
   })
 })

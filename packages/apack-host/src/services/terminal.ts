@@ -227,6 +227,7 @@ function expose(held: Broker, session: BrokerSession, target: string | null): Te
     scrollback: held.history,
     write: (data) => session.write(data),
     resize: (cols, rows, cell) => session.resize(cols, rows, cell),
+    setCursorDefaults: (style, blink) => session.setCursorDefaults(style, blink),
     // Projected rather than passed, so the broker's `foreground` — a measurement, and a host shape — stays
     // out of the pack-facing contract
     facts: async () => {

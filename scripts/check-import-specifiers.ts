@@ -569,6 +569,7 @@ const EMULATOR_STAND_INS = [
   'packages/default-setup/tests/features/code/fe/_support/terminal-view.ts',
   'packages/default-setup/tests/features/code/fe/utils/terminal-pool.frontend.spec.ts',
   'packages/default-setup/tests/features/code/fe/canvas/terminal-view.frontend.spec.ts',
+  'packages/default-setup/tests/features/code/fe/canvas/terminal-view-drop.frontend.spec.ts',
   'packages/default-setup/tests/features/code/fe/features/terminal/panel-terminal-section.frontend.spec.ts',
 ] as const;
 

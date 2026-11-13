@@ -24,6 +24,20 @@ export default {
         ]],
         "Client Ready",
       ),
+      // A turn's diff artifact asks for the turn to be taken back, whichever agent ran it
+      on(
+        "user.turn.takeBack",
+        [[
+          action("Take Back Turn", {
+            label: "take back turn",
+            map: {
+              checkpoint: "$.event.data.payload.checkpoint",
+              artifactId: "$.event.data.payload.artifactId",
+            },
+          }),
+        ]],
+        "Take back a turn",
+      ),
     ],
   },
 } satisfies FlowDSL;

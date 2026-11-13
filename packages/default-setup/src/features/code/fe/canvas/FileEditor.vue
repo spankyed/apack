@@ -137,8 +137,14 @@
           />
         </div>
 
+        <ConflictView
+          v-if="activeConflict"
+          :path="activeDiff!.path"
+          :conflict="activeConflict"
+          @resolve="(side) => emit('resolveConflict', activeDiff!.path, side)"
+        />
         <!-- Monaco editor for both regular files and diffs -->
-        <div v-show="!isTerminal(activeFile) && !isImage(activeFile) && !isVideoFile(activeFile) && !isBinaryFile && !isRichText(activeFile) && !isDeletedFile && !isImageDiff" class="h-full overflow-hidden flex flex-col">
+        <div v-show="!activeConflict && !isTerminal(activeFile) && !isImage(activeFile) && !isVideoFile(activeFile) && !isBinaryFile && !isRichText(activeFile) && !isDeletedFile && !isImageDiff" class="h-full overflow-hidden flex flex-col">
           <DiffHunkBar
             v-if="diffHunks.length > 0"
             :hunks="diffHunks"
@@ -163,6 +169,7 @@
               :modified-content="diffModifiedContent"
               :read-only="isDiffReadOnly"
               :dsl-params="activeDslParams"
+              :blame="blameLabels"
               class="h-full"
               @mount="emit('editorMount')"
               @file-ready="emit('editorFileReady')"
@@ -182,6 +189,7 @@ import TerminalView from './TerminalView.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import DeletedFileView from './DeletedFileView.vue'
 import DiffHunkBar from './DiffHunkBar.vue'
+import ConflictView from './ConflictView.vue'
 import VideoPlayer from './VideoPlayer.vue'
 import Tabs from './Tabs.vue'
 import { isEditableDiff, type OpenFile, type TerminalTab, type TabGroup } from '#features/code/fe/state.ts'
@@ -189,6 +197,10 @@ import { nativeVideoExtensions } from '#features/code/fe/utils/file-icons.ts'
 import type { ActionTab } from '#features/code/fe/features/actions/state.ts'
 import type { PromptTab } from '#features/code/fe/features/prompts/state.ts'
 import type { GitDiff } from '#features/code/fe/features/commit/state.ts'
+import { useSurface } from '@apackdev/sdk/fe'
+import { useSelector } from '@xstate/vue'
+import type { CodeState } from '#features/code/fe/state.ts'
+import { panelChild } from '#features/code/fe/features/children.ts'
 
 // Props
 const props = defineProps<{
@@ -232,6 +244,7 @@ const emit = defineEmits<{
   editorMount: []
   editorFileReady: []
   applyHunk: [path: string, staged: boolean, hunk: string]
+  resolveConflict: [path: string, side: 'ours' | 'theirs']
 }>()
 
 // Helper to check if a file is a terminal
@@ -295,6 +308,20 @@ const getDiffContent = (file: OpenFile | TerminalTab | ActionTab | PromptTab | u
   return file && 'gitDiff' in file ? file.gitDiff ?? null : null
 }
 
+// Who last changed each line of the file shown, when blame was asked for it: its path is from the top of the folder
+const codeActor: CodeState = useSurface()
+const blame = useSelector(panelChild(codeActor, 'commit')!, (state) => state.context.blame)
+const blameLabels = computed(() => {
+  const asked = blame.value
+  const base = props.baseDirectory
+  if (!asked || !props.activeFilePath || !base || props.activeFilePath !== `${base}/${asked.path}`) return undefined
+  return asked.lines.map(({ line, author, date, summary, commit }) => ({
+    line,
+    label: `${author.slice(0, 14).padEnd(14, ' ')} ${date.slice(0, 10)}`,
+    title: `${commit.slice(0, 7)} ${summary}`,
+  }))
+})
+
 // Computed
 const activeFile = computed(() =>
   props.openFiles.find(f => f.path === props.activeFilePath)
@@ -314,6 +341,8 @@ const activeDslParams = computed(() => {
 
 /** The diff the active tab shows, and the pieces of it that can be staged one at a time */
 const activeDiff = computed(() => (isDiffFile.value ? getDiffContent(activeFile.value) : null))
+/** A conflicted file's three sides, which are shown in place of the diff */
+const activeConflict = computed(() => activeDiff.value?.conflict ?? null)
 const diffHunks = computed(() => (activeDiff.value?.hunks ?? []).filter(hunk => !props.appliedHunks?.includes(hunk.id)))
 
 const revealLine = (line: number) => {

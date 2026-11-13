@@ -1,5 +1,8 @@
-import { BrokerViews, TerminalView, xtermPalette, type Detector, type Theme } from 'apack-terminal-view'
-import { openLink, terminalViews, type TerminalViewStream } from '@apackdev/sdk/fe'
+import { BrokerViews, TerminalView, xtermPalette, type Command, type CursorBlink, type CursorShape, type Detector, type LinkPreview, type Theme } from 'apack-terminal-view'
+
+/** A command the shell marked, as the view holds it: a host draws its command blocks from these without importing the view */
+export type { Command }
+import { terminalViews, type TerminalViewStream } from '@apackdev/sdk/fe'
 import type { TerminalInfo } from '../features/terminal/state.ts'
 import { TERMINAL_COLORS, TERMINAL_THEME } from '../../be/terminal-colors.ts'
 
@@ -41,6 +44,15 @@ const MAC = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator
  * **In the shape `cwd` is in**, which is the shell's own: a directory with a drive letter or a UNC host is
  * a Windows one, where either slash separates and the answer is written with backslashes.
  */
+/**
+ * A link a program printed, detected or declared with a hyperlink sequence, opened by the main process under the
+ * terminal's own policy (`shell:openTerminalLink`). Not the in-app browser: the policy refuses what the browser would
+ * take, and a refusal is the main process's to log.
+ */
+export function openProgramLink(url: string): void {
+  void window.electronAPI?.shell.openTerminalLink(url).catch(() => false)
+}
+
 export function resolvePath(cwd: string, named: string): string {
   const drive = (path: string) => /^(?:[A-Za-z]:|[\\/]{2}[^\\/]+[\\/]+[^\\/]+)/.exec(path)?.[0]
   const windows = drive(cwd) !== undefined || drive(named) !== undefined
@@ -104,6 +116,35 @@ const paths: Detector = {
   },
 }
 
+/**
+ * What a view is made with that the window's settings decide. A view takes these at construction, and a drawn view is
+ * given a change through its setter (`setViewSettings`).
+ */
+export interface ViewSettings {
+  /** The cursor drawn while the terminal does not have the keyboard */
+  readonly cursorInactive: CursorShape
+  /** `on` and `off` override what a program asks; `program` leaves the blink to the program */
+  readonly cursorBlink: CursorBlink
+  /** Which links show where they open when the pointer is over them */
+  readonly linkPreview: LinkPreview
+}
+
+/**
+ * The view settings the code settings give. A value that is unset, or not one the view knows, is the default:
+ * a hollow inactive cursor, the program's own blink (the broker's reset value already blinks), and the links a
+ * program declared.
+ */
+export function viewSettingsOf(settings: { cursorInactiveStyle?: string; cursorBlink?: string; linkPreview?: string } | undefined): ViewSettings {
+  const inactive = settings?.cursorInactiveStyle
+  const blink = settings?.cursorBlink
+  const preview = settings?.linkPreview
+  return {
+    cursorInactive: inactive === 'block' || inactive === 'bar' || inactive === 'underline' || inactive === 'hollow' ? inactive : 'hollow',
+    cursorBlink: blink === 'on' || blink === 'off' || blink === 'program' ? blink : 'program',
+    linkPreview: preview === 'off' || preview === 'osc8' || preview === 'all' ? preview : 'osc8',
+  }
+}
+
 interface PoolEntry {
   terminalId: string
   /** The terminal as it was last described, which is what its view is drawn again from */
@@ -123,6 +164,8 @@ interface PoolEntry {
   attachedContainer: HTMLElement | null
   /** What the host showing this terminal asked to hear. Replaced by each host that attaches */
   handlers: TerminalAttachmentHandlers
+  /** The commands whose output is folded away, by id: kept with the entry so a view made again folds them again */
+  folded: Set<number>
   /** Whether the view was following its output when the last host let go, which the next one starts from */
   following: boolean
   /** The connection its view is drawn over ended and was not made again (`lost`) */
@@ -154,6 +197,19 @@ export interface TerminalAttachment {
   copyLastOutput(): Promise<boolean>
   /** Whether the shell has marked any command, which is what the command actions need */
   hasCommands(): boolean
+  /** The commands the shell has marked, as the view last heard them, oldest first */
+  commands(): readonly Command[]
+  /** Copies what one command printed, answering whether there was any to copy */
+  copyCommand(command: Command): Promise<boolean>
+  /**
+   * Types a command's text into the shell and presses Enter, as the person would: it runs again. The shell is the one that
+   * decides what that means, which for a command with effects is the person's to choose here.
+   */
+  rerun(text: string): void
+  /** Whether a command's output is folded away in the terminal */
+  isFolded(command: Command): boolean
+  /** Folds a command's output away, or shows it again: its header is one row where the output starts */
+  setFolded(command: Command, folded: boolean): void
   /** Only where the user asked for it: an attach is not a request */
   focus(): void
   /**
@@ -189,6 +245,8 @@ export interface TerminalAttachmentHandlers {
   onFollowingChange?(following: boolean): void
   /** A path a program printed was clicked: the file it names, and where in it when the program said */
   onOpenPath?(path: string, at: { line: number; column: number } | undefined): void
+  /** The commands the shell has marked, each time they are heard: the list a host draws its command blocks from */
+  onCommands?(commands: readonly Command[]): void
 }
 
 const exitedNotice = (info: TerminalInfo, code: number | null) =>
@@ -219,6 +277,33 @@ const restartedNotice = (pid: number | null) =>
 
 class TerminalPool {
   private entries = new Map<string, PoolEntry>()
+  /** Whether a selection is copied as the pointer is let go: set from the feature's setting, and given to every view made */
+  private copyOnSelect = false
+  /** The settings views are made with: the cursor when unfocused and its blink, and which links show a preview */
+  private viewSettings: ViewSettings = viewSettingsOf(undefined)
+
+  /** Changes the copy-on-release setting of every view, now and as each is made. It follows the feature's setting. */
+  setCopyOnSelect(on: boolean): void {
+    this.copyOnSelect = on
+    for (const entry of this.entries.values()) entry.view?.setCopyOnSelect(on)
+  }
+
+  /**
+   * Gives every view the settings they are made with. A view already drawn takes a changed setting through its setter,
+   * so it keeps its element, selection and scroll position; a view that is not drawn takes them as it is made.
+   */
+  setViewSettings(next: ViewSettings): void {
+    const current = this.viewSettings
+    if (next.cursorInactive === current.cursorInactive && next.cursorBlink === current.cursorBlink && next.linkPreview === current.linkPreview) return
+    this.viewSettings = next
+    for (const entry of this.entries.values()) {
+      const view = entry.view
+      if (!view) continue
+      if (next.cursorInactive !== current.cursorInactive) view.setCursorInactive(next.cursorInactive)
+      if (next.cursorBlink !== current.cursorBlink) view.setCursorBlink(next.cursorBlink)
+      if (next.linkPreview !== current.linkPreview) view.setLinkPreview(next.linkPreview)
+    }
+  }
   /**
    * Every terminal as the surface last described it (`describe`), which is what a host mounted with an
    * older description is drawn from
@@ -366,13 +451,42 @@ class TerminalPool {
       // what may be opened; a path is the feature's to resolve against where the shell is
       onLink: (link) => {
         if (link.kind === 'path') this.openPath(entry, link.target)
-        else openLink(link.target)
+        else openProgramLink(link.target)
       },
       confirmPaste: (text) => this.confirmPaste(entry, text),
+      copyOnSelect: this.copyOnSelect,
+      cursorInactive: this.viewSettings.cursorInactive,
+      cursorBlink: this.viewSettings.cursorBlink,
+      linkPreview: this.viewSettings.linkPreview,
+      onCommands: (commands) => {
+        this.applyFolds(entry)
+        entry.handlers.onCommands?.(commands)
+      },
     })
     view.element.dataset.apackTerminal = entry.terminalId
     entry.view = view
+    this.applyFolds(entry)
     if (mounted) view.mount(entry.wrapper)
+  }
+
+  /**
+   * Folds the output of each command the entry has folded, where the view has its position. A command whose output has no
+   * end yet is not folded: its output is still arriving.
+   */
+  private applyFolds(entry: PoolEntry): void {
+    if (!entry.view) return
+    const folds = entry.view.commands
+      .filter((command) => entry.folded.has(command.id) && command.output !== null && command.end !== null && command.end - 1 > command.output)
+      .map((command) => ({ first: command.output!, last: command.end! - 1 }))
+      .sort((a, b) => a.first - b.first)
+    // The view refuses overlapping folds by throwing, and that throw would surface inside the shell's command callback.
+    // Two commands cannot share output rows, so an overlap is a stale position: the earlier fold is kept and the later dropped.
+    const kept: { first: number; last: number }[] = []
+    for (const fold of folds) {
+      if (kept.length > 0 && fold.first <= kept[kept.length - 1]!.last) continue
+      kept.push(fold)
+    }
+    entry.view.setFolds(kept)
   }
 
   /**
@@ -423,11 +537,17 @@ class TerminalPool {
     input.style.cssText = 'width:180px;padding:3px 6px;border-radius:4px;border:1px solid #555;background:#1e1e1e;color:inherit;font:inherit;outline:none'
     const count = document.createElement('span')
     count.dataset.terminalFindCount = ''
+    // Announced as it changes, so a screen reader hears the count and the match it is on
+    count.setAttribute('role', 'status')
+    count.setAttribute('aria-live', 'polite')
     count.style.cssText = 'min-width:56px;text-align:center;color:#999'
+    let matchCase = false
     const said = () => {
-      const { current, total } = entry.view?.found ?? { current: 0, total: 0 }
-      count.textContent = input.value === '' ? '' : total === 0 ? 'No results' : `${current} of ${total}`
+      const { current, total, more } = entry.view?.found ?? { current: 0, total: 0, more: false }
+      // Past the highlights the view holds, the total is what it holds and says there are more
+      count.textContent = input.value === '' ? '' : total === 0 ? 'No results' : `${current} of ${more ? `${total}+` : total}`
     }
+    const search = () => entry.view?.find(input.value, { matchCase }).then(said)
     const step = (direction: -1 | 1) => {
       entry.view?.findNext(direction)
       said()
@@ -447,7 +567,7 @@ class TerminalPool {
       return made
     }
     input.addEventListener('input', () => {
-      void entry.view?.find(input.value).then(said)
+      void search()
     })
     bar.addEventListener('keydown', (event) => {
       // Typed here, not at the program under the bar
@@ -455,7 +575,15 @@ class TerminalPool {
       if (event.key === 'Escape') close()
       else if (event.key === 'Enter') step(event.shiftKey ? -1 : 1)
     })
-    bar.append(input, count, button('↑', 'Older match', () => step(1)), button('↓', 'Newer match', () => step(-1)), button('✕', 'Close', close))
+    // Whether the needle's letters must match in their own case; off, either case matches
+    const caseToggle = button('Aa', 'Match case', () => {
+      matchCase = !matchCase
+      caseToggle.setAttribute('aria-pressed', String(matchCase))
+      caseToggle.style.background = matchCase ? '#555' : 'transparent'
+      if (input.value !== '') void search()
+    })
+    caseToggle.setAttribute('aria-pressed', 'false')
+    bar.append(input, caseToggle, count, button('↑', 'Older match', () => step(1)), button('↓', 'Newer match', () => step(-1)), button('✕', 'Close', close))
     entry.wrapper.appendChild(bar)
     input.focus()
   }
@@ -536,7 +664,7 @@ class TerminalPool {
     wrapper.appendChild(notice)
     const entry: PoolEntry = {
       terminalId: info.id, info, session: undefined, pid: info.pid, view: null, wrapper, notice,
-      attachedContainer: null, handlers: {}, following: true, unreachable: false,
+      attachedContainer: null, handlers: {}, following: true, unreachable: false, folded: new Set(),
     }
     this.entries.set(info.id, entry)
     this.draw(entry, info)
@@ -595,6 +723,15 @@ class TerminalPool {
       find: () => this.openFind(entry),
       copyLastOutput: () => this.copyLastOutput(entry),
       hasCommands: () => (entry.view?.commands.length ?? 0) > 0,
+      commands: () => entry.view?.commands ?? [],
+      copyCommand: (command) => entry.view?.copyCommand(command) ?? Promise.resolve(false),
+      isFolded: (command) => entry.folded.has(command.id),
+      setFolded: (command, folded) => {
+        if (folded) entry.folded.add(command.id)
+        else entry.folded.delete(command.id)
+        this.applyFolds(entry)
+      },
+      rerun: (text) => { entry.view?.typeText(`${text}\r`) },
       focus: () => entry.view?.focus(),
       refit: () => { if (!released) entry.view?.fit() },
       followOutput: () => entry.view?.follow(),

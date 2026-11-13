@@ -28,6 +28,8 @@ export interface PendingApproval {
 export interface CodexThreadState {
   /** Codex app-server thread ID — for resume. */
   threadId?: string;
+  /** The copy of the working tree taken as the running turn started, which its diff is read against */
+  turnCheckpoint?: string;
   /** Active turn ID — for interrupt. */
   turnId?: string;
   /** Current apack assistant message receiving Codex stream updates. */

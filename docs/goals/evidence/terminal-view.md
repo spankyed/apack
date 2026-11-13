@@ -1,6 +1,6 @@
 # Evidence: one interpreter, and a view over the rows it sends
 
-Results for [the goal](../goal-terminal-view.md), by phase. Each reading carries its date and conditions.
+Results for [the goal](../../archive/goals/goal-terminal-view.md), by phase. Each reading carries its date and conditions.
 
 ## Phase 0 — owed checks and baselines, on `master`'s code
 

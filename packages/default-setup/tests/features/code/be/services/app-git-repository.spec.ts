@@ -241,11 +241,11 @@ it('logs each command with how long it took and why it failed when asked to, and
   const logged: string[] = [];
   const stop = onLog((event) => { if (event.source === GIT_COMMAND_LOG) logged.push(event.message); });
   try {
-    await repo.getCurrentBranch();
+    await repo.readCurrentBranch();
     expect(logged, 'not asked to').toEqual([]);
 
     setDebugEnabled(GIT_COMMAND_LOG, true);
-    await repo.getCurrentBranch();
+    await repo.readCurrentBranch();
     fs.rmSync(remote, { recursive: true, force: true });
     await repo.pushBranch().catch(() => {});
 

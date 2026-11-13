@@ -39,8 +39,8 @@ import os from 'os'
 export interface CliServiceType {
   git: {
     commit(message: string): Promise<void>
-    getStatus(): Promise<GitStatusFile[]>
-    getCurrentBranch(): Promise<string>
+    readStatus(): Promise<GitStatusFile[]>
+    readCurrentBranch(): Promise<string>
     getWorkingDir(): string
     /**
      * Return the unified diff for the working copy vs HEAD. Pass a list of
@@ -48,7 +48,13 @@ export interface CliServiceType {
      * the Claude Code chat action to assemble a `diff` artifact after file-
      * mutating tool calls (Write/Edit/NotebookEdit).
      */
-    getDiff(paths?: string[]): Promise<string>
+    readDiff(paths?: string[]): Promise<string>
+    /** A copy of the working tree, kept outside the repository: its id, for `changedSince` and `restoreCheckpoint` */
+    checkpoint(): Promise<string>
+    /** What differs now from a copy, each file with whether it was added, modified or deleted since */
+    changedSince(id: string): Promise<{ path: string; change: 'added' | 'modified' | 'deleted' }[]>
+    /** Puts the working tree back as a copy has it, removing what was made since */
+    restoreCheckpoint(id: string): Promise<void>
   }
   gh: {
     findPRForBranch(branch?: string): Promise<GhPullRequest | null>
@@ -193,27 +199,36 @@ function createCliService(): CliServiceType {
       async commit(message: string): Promise<void> {
         await getGitRepo().commit(message)
       },
-      async getStatus(): Promise<GitStatusFile[]> {
-        return getGitRepo().getStatus()
+      async readStatus(): Promise<GitStatusFile[]> {
+        return getGitRepo().readStatus()
       },
-      async getCurrentBranch(): Promise<string> {
-        return getGitRepo().getCurrentBranch()
+      async readCurrentBranch(): Promise<string> {
+        return getGitRepo().readCurrentBranch()
       },
       getWorkingDir(): string {
         return resolveCwd()
       },
-      async getDiff(paths?: string[]): Promise<string> {
+      async readDiff(paths?: string[]): Promise<string> {
         const repo = getGitRepo()
         if (!paths || paths.length === 0) {
-          return repo.getDiff()
+          return repo.readDiff()
         }
-        return repo.getDiffMulti(paths)
+        return repo.readDiffs(paths)
+      },
+      async checkpoint(): Promise<string> {
+        return (await getGitRepo().checkpoint()).id
+      },
+      async changedSince(id: string) {
+        return getGitRepo().changedSince(id)
+      },
+      async restoreCheckpoint(id: string): Promise<void> {
+        await getGitRepo().restoreCheckpoint(id)
       },
     },
     gh: {
       async findPRForBranch(branch?: string): Promise<GhPullRequest | null> {
         const cwd = resolveCwd()
-        const branchName = branch || await getGitRepo().getCurrentBranch()
+        const branchName = branch || await getGitRepo().readCurrentBranch()
         return ghCli.findPRForBranch(cwd, branchName)
       },
       async getPRDetails(number: number, repo?: { owner: string; name: string }): Promise<GhPullRequest & { comments: GhPRComment[] }> {

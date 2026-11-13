@@ -554,6 +554,15 @@ export interface DiffArtifactContent {
   }>;
   /** Aggregate summary e.g. "12 files, +420 -87". */
   summary: string;
+  /**
+   * For an agent's turn, what it changed against the copy of the working tree taken as it started, which taking
+   * it back restores (`Take Back Turn`); `takenBack` once it has been
+   */
+  turn?: {
+    checkpoint: string;
+    changes: { path: string; change: 'added' | 'modified' | 'deleted' }[];
+    takenBack?: boolean;
+  };
 }
 
 /** A plan artifact's status: the plan-approval block moves it from draft */

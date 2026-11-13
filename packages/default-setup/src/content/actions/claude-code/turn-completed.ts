@@ -14,6 +14,7 @@ import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
 import { getClaudeState, updateClaudeState, updateChatState, endGoal } from './_helpers/thread-context.ts';
 import { parseUnifiedDiff } from './_helpers/parse-diff.ts';
+import { turnChanges } from '../_helpers/turn-changes.ts';
 
 export const meta: ActionMeta = {
   label: 'CC: Turn Completed',
@@ -172,17 +173,20 @@ export async function action(
   // ─── Diff artifact ────────────────────────────────────────────────
   let artifactId: string | undefined;
   try {
-    const paths = Array.isArray(mutatedPaths) ? mutatedPaths : [];
+    // What the turn changed, read against the copy taken as it started: every file, whatever wrote it. Without a
+    // copy, the files the agent's own tools wrote
+    const turn = await turnChanges(services, ccState?.turnCheckpoint);
+    const paths = turn ? turn.changes.map(change => change.path) : Array.isArray(mutatedPaths) ? mutatedPaths : [];
     if (paths.length > 0) {
       log.debug('collecting diff for mutated files', { paths });
-      const unified = await services.cli.git.getDiff(paths);
+      const unified = await services.cli.git.readDiff(paths);
       const parsed = parseUnifiedDiff(unified);
-      if (parsed.files.length > 0) {
-        const diffTitle = deriveDiffTitle(parsed.files);
+      if (parsed.files.length > 0 || (turn?.changes.length ?? 0) > 0) {
+        const diffTitle = deriveDiffTitle(parsed.files.length > 0 ? parsed.files : paths.map(path => ({ path })));
         const result = services.artifact.create({
           artifactType: 'diff',
           title: diffTitle,
-          content: parsed,
+          content: { ...parsed, ...(turn && { turn }) },
           threadId: threadId as EntityId,
         });
         artifactId = result.artifactId;

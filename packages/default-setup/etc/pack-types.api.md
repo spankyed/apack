@@ -224,6 +224,18 @@ type AvailableSettings = PackFeatureSettings & {
 
 type BaseEntity = _apackdev_ears.BaseEntity;
 
+/** Who last changed one line of a file, as `git blame` answers it */
+interface BlameLine {
+    line: number;
+    commit: string;
+    author: string;
+    authorEmail: string;
+    date: string;
+    summary: string;
+    originalLine: number;
+    originalPath: string;
+}
+
 interface BlockConfig {
     type: string;
     props: Record<string, any>;
@@ -418,6 +430,15 @@ type BrainInternalEvents = {
     isFlow?: boolean;
 };
 
+/** How a local branch stands against the branch it follows */
+interface BranchStandingOf {
+    upstream?: string;
+    /** Its upstream is gone from the remote's last fetched branches */
+    upstreamGone?: boolean;
+    ahead: number;
+    behind: number;
+}
+
 interface BreadcrumbItem {
     id: EARS.EntityId | null;
     name: string;
@@ -509,6 +530,16 @@ interface CanUseToolRequest {
     decision_reason?: string;
     title?: string;
     description?: string;
+}
+
+/** A file a stash or a commit changed, with its count */
+interface ChangedFile {
+    path: string;
+    status: 'added' | 'copied' | 'deleted' | 'modified' | 'renamed' | 'typechange';
+    originalPath?: string;
+    added: number;
+    removed: number;
+    binary: boolean;
 }
 
 /**
@@ -749,8 +780,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    plan: "plan";
                     default: "default";
+                    plan: "plan";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1569,8 +1600,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"chrome_install_setup">;
     phase: z.ZodEnum<{
-        failed: "failed";
         connecting: "connecting";
+        failed: "failed";
         waiting_install: "waiting_install";
         stalled: "stalled";
         connected: "connected";
@@ -1845,8 +1876,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                plan: "plan";
                 default: "default";
+                plan: "plan";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -3502,8 +3533,8 @@ type ClaudeUiViewRequest = ({
 interface CliServiceType {
     git: {
         commit(message: string): Promise<void>;
-        getStatus(): Promise<GitStatusFile[]>;
-        getCurrentBranch(): Promise<string>;
+        readStatus(): Promise<GitStatusFile[]>;
+        readCurrentBranch(): Promise<string>;
         getWorkingDir(): string;
         /**
          * Return the unified diff for the working copy vs HEAD. Pass a list of
@@ -3511,7 +3542,16 @@ interface CliServiceType {
          * the Claude Code chat action to assemble a `diff` artifact after file-
          * mutating tool calls (Write/Edit/NotebookEdit).
          */
-        getDiff(paths?: string[]): Promise<string>;
+        readDiff(paths?: string[]): Promise<string>;
+        /** A copy of the working tree, kept outside the repository: its id, for `changedSince` and `restoreCheckpoint` */
+        checkpoint(): Promise<string>;
+        /** What differs now from a copy, each file with whether it was added, modified or deleted since */
+        changedSince(id: string): Promise<{
+            path: string;
+            change: 'added' | 'deleted' | 'modified';
+        }[]>;
+        /** Puts the working tree back as a copy has it, removing what was made since */
+        restoreCheckpoint(id: string): Promise<void>;
     };
     gh: {
         findPRForBranch(branch?: string): Promise<GhPullRequest | null>;
@@ -3780,6 +3820,11 @@ interface CodeSystemContext {
      * the code settings change, the browsed `baseDirectory` included, so only a new default moves the explorer.
      */
     defaultBaseDirectory: string | null;
+    /**
+     * The folder the user opened, which the repository picker lists the repositories under: the base directory, until
+     * the picker moves it into one of them
+     */
+    openedDirectory: string | null;
     gitRepository: RepositoryHandle | null;
     gitWatcher: WatcherHandle | null;
 }
@@ -3874,17 +3919,16 @@ interface CommitFailure {
     signIn?: SignInHelp;
     /** What the repository would have git run, when the command was not run because the repository is not trusted */
     trust?: TrustRequest;
-}
-
-interface CommitLogEntry {
-    hash: string;
-    shortHash: string;
-    subject: string;
-    body: string;
-    authorName: string;
-    authorEmail: string;
-    date: string;
-    refs: string;
+    /** The repository git will not read because another user owns it, as git named it */
+    ownership?: {
+        directory: string;
+    };
+    /** A hook of the repository's that refused the command: its name, the code it exited with and what it printed */
+    hook?: {
+        name: string;
+        exitCode: number;
+        output: string;
+    };
 }
 
 type Condition = {
@@ -4646,7 +4690,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "untrusted"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted", "content-missing", "published", "hook-refused", "name-not-text"];
 
 interface GhPRComment {
     id: string;
@@ -4730,6 +4774,15 @@ interface GitDiff {
     isImage?: boolean;
     /** The pieces of the change that can be staged, or unstaged, one at a time: none for a file that is not plainly modified */
     hunks?: DiffHunk[];
+    /**
+     * For a conflicted file, its three sides as the index holds them: the version both started from, ours and
+     * theirs, each `null` where that side has no such file. Absent for a file that is not text
+     */
+    conflict?: {
+        base: string | null;
+        ours: string | null;
+        theirs: string | null;
+    };
 }
 
 type GitErrorCode = (typeof GIT_ERROR_CODES)[number];
@@ -4753,6 +4806,25 @@ interface GitStatusFile {
     conflict?: ConflictKind;
     /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
     isDirectory?: boolean;
+    /** For a submodule's row, how it differs: on another commit, files it tracks changed, files it does not track */
+    submodule?: {
+        commit: boolean;
+        modified: boolean;
+        untracked: boolean;
+    };
+    /** The file's name is not text, so it is listed and nothing can be done to it here (`name-not-text`) */
+    nameNotText?: true;
+}
+
+/** A commit as the panel's history draws it: with every parent, and the refs that point at it */
+interface HistoryCommit {
+    hash: string;
+    parents: string[];
+    authorName: string;
+    authorEmail: string;
+    date: string;
+    subject: string;
+    refs: string[];
 }
 
 interface ImageReference {
@@ -4849,6 +4921,16 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
     type: 'SET_BASE_DIRECTORY';
     path: string;
     fromUserNavigation?: boolean;
+    fromPicker?: boolean;
+}
+/** The repositories under the folder the user opened: its own, nested ones, submodules and linked worktrees */
+ | {
+    type: 'LIST_REPOSITORIES';
+}
+/** Works in one of them: it becomes the base directory, and the folder the user opened is still what is listed */
+ | {
+    type: 'SELECT_REPOSITORY';
+    path: string;
 }
 /** Settings → Providers: resolve a CLI and store where it was found, in this feature's own settings */
  | {
@@ -4913,6 +4995,14 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.TRUST_REPOSITORY';
     repository: string;
+}
+/** Stops the push running: git and what it started are ended, and the push is answered as stopped */
+ | {
+    type: 'commit.STOP_PUSH';
+}
+/** The user trusts the repository git refused for who owns it: added to their safe.directory */
+ | {
+    type: 'commit.TRUST_OWNERSHIP';
 } | {
     type: 'commit.GET_ALL_BRANCHES';
 } | {
@@ -4924,10 +5014,36 @@ type IncomingCommitEvents = {
     type: 'commit.PULL_BRANCH';
 } | {
     type: 'commit.GENERATE_MESSAGE';
-} | {
+}
+/** Stash what is changed: only what is staged, or only `paths`, when asked */
+ | {
     type: 'commit.STASH_PUSH';
     message?: string;
     stagedOnly?: boolean;
+    paths?: string[];
+}
+/** Make a tag at `commit` (what is checked out when none), annotated when `message` is given */
+ | {
+    type: 'commit.CREATE_TAG';
+    name: string;
+    commit?: string;
+    message?: string;
+} | {
+    type: 'commit.DELETE_TAG';
+    name: string;
+}
+/** Push a tag to the remote */
+ | {
+    type: 'commit.PUSH_TAG';
+    name: string;
+} | {
+    type: 'commit.RENAME_BRANCH';
+    name: string;
+    to: string;
+}
+/** Turn on git's own file monitor and untracked cache here, which the user clicked for: it writes the repository's config */
+ | {
+    type: 'commit.SPEED_UP_STATUS';
 } | {
     type: 'commit.STASH_LIST';
 } | {
@@ -4941,6 +5057,21 @@ type IncomingCommitEvents = {
     index: number;
 } | {
     type: 'commit.STASH_CLEAR';
+}
+/** The files a stash holds, to look into before applying it */
+ | {
+    type: 'commit.GET_STASH_CHANGES';
+    index: number;
+}
+/** Who last changed each line of a file, from the top of the folder, for the editor's gutter */
+ | {
+    type: 'commit.GET_BLAME';
+    path: string;
+}
+/** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
+ | {
+    type: 'commit.UNDO_LAST';
+    evenIfPublished?: boolean;
 } | {
     type: 'commit.WORKTREE_LIST';
 } | {
@@ -4971,6 +5102,36 @@ type IncomingCommitEvents = {
     type: 'commit.MOVE_OPERATION';
     move: OperationMove;
 }
+/** Merge a branch in, rebase onto one, or pick a commit onto what is checked out */
+ | {
+    type: 'commit.START_OPERATION';
+    kind: StartableOperation;
+    target: string;
+}
+/** Amend the last commit with what is staged, and `message` in place of its own when given */
+ | {
+    type: 'commit.AMEND';
+    message?: string;
+    evenIfPublished?: boolean;
+}
+/** A commit's whole message, for rewording it */
+ | {
+    type: 'commit.GET_COMMIT_MESSAGE';
+    hash: string;
+}
+/** Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it */
+ | {
+    type: 'commit.REWRITE_COMMIT';
+    hash: string;
+    action: RewriteAction;
+    message?: string;
+    evenIfPublished?: boolean;
+}
+/** What merging a branch in would do, before it is done */
+ | {
+    type: 'commit.PREVIEW_MERGE';
+    target: string;
+}
 /** The files in an untracked folder that is listed as one row */
  | {
     type: 'commit.LIST_UNTRACKED';
@@ -4988,8 +5149,12 @@ type IncomingCommitEvents = {
     type: 'commit.SET_UP_SIGN_IN';
     host: string;
     during?: 'pull' | 'push';
-} | {
+}
+/** A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history */
+ | {
     type: 'commit.LOG_LIST';
+    cursor?: string;
+    path?: string;
 } | {
     type: 'commit.REVERT_COMMIT';
     hash: string;
@@ -5328,11 +5493,14 @@ type IncomingPullRequestEvents = {
     type: 'pr.GET_BRANCH_DIFF';
     baseBranch?: string;
     headBranch?: string;
-} | {
+}
+/** `fetchMissing`: content a partial clone was not given is fetched for this diff, where it is otherwise answered as missing */
+ | {
     type: 'pr.GET_BRANCH_FILE_DIFF';
     path: string;
     baseBranch: string;
     headBranch?: string;
+    fetchMissing?: boolean;
 } | {
     type: 'pr.LIST_OPEN_PRS';
 } | {
@@ -5778,6 +5946,15 @@ declare class LibraryService {
 interface LibrarySystemContext {
 }
 
+/** How many lines a changed file adds and removes, as git counts them, staged or not: none for a file that is not text */
+interface LineCount {
+    path: string;
+    staged: boolean;
+    added: number;
+    removed: number;
+    binary: boolean;
+}
+
 /** A page of the app server's MCP server statuses */
 type ListMcpServersParams = {
     cursor?: string | null;
@@ -5839,6 +6016,14 @@ type LogsInternalEvents = {
 };
 
 type LogsSettings = SettingsOf<'logs'>;
+
+/** What merging a branch into what is checked out would do: a pull's, before it is made */
+type MergePreview = {
+    kind: 'clean' | 'fast-forward' | 'unknown' | 'up-to-date';
+} | {
+    kind: 'conflicts';
+    files: string[];
+};
 
 interface MessageEntity extends BaseEntity {
     entityType: EARS.Entity.Message;
@@ -6211,6 +6396,15 @@ type OutgoingCodeEvents = {
     type: 'BASE_DIRECTORY_CHANGED';
     baseDirectory: string;
 }
+/** What `LIST_REPOSITORIES` found, for the window that asked; `current` is the one the panels show */
+ | {
+    type: 'commit.REPOSITORIES_RECEIVED';
+    data: {
+        repositories: RepositoryUnder[];
+        truncated: boolean;
+        current: string | null;
+    };
+}
 /** What testing a CLI found, for the Settings view that asked (the host declares its surface takes it) */
  | {
     type: 'CLI_TEST_RESULT';
@@ -6232,12 +6426,17 @@ type OutgoingCommitEvents =
     type: 'commit.STATUS_RECEIVED';
     data: {
         files: GitStatusFile[];
+        counts?: LineCount[];
+        pullPreview?: MergePreview;
+        hasIdentity?: boolean;
+        slowStatus?: SlowStatus;
         truncated: boolean;
         branch: string;
         hasUpstream: boolean;
         commitsAhead: number;
         commitsBehind: number;
         watching: boolean;
+        watchSilent?: boolean;
         operation?: RepositoryOperation;
         fetchSuspended?: boolean;
         signIn?: SignInHelp;
@@ -6248,6 +6447,42 @@ type OutgoingCommitEvents =
     type: 'commit.OPERATION_MOVED';
     data: {
         move: OperationMove;
+    };
+}
+/** It ran, or it stopped on a conflict, which the status then describes as in progress */
+ | {
+    type: 'commit.OPERATION_STARTED';
+    data: {
+        kind: StartableOperation;
+        target: string;
+        stopped: boolean;
+    };
+} | {
+    type: 'commit.MERGE_PREVIEWED';
+    data: {
+        target: string;
+        preview: MergePreview;
+    };
+} | {
+    type: 'commit.AMENDED';
+} | {
+    type: 'commit.COMMIT_MESSAGE_RECEIVED';
+    data: {
+        hash: string;
+        message: string;
+    };
+} | {
+    type: 'commit.COMMIT_REWRITTEN';
+    data: {
+        hash: string;
+        action: RewriteAction;
+    };
+}
+/** A remote branch already holds commits the amend or rewrite would change: done only once the user says to go on */
+ | {
+    type: 'commit.REWRITE_NEEDS_CONFIRMATION';
+    data: {
+        message: string;
     };
 } | {
     type: 'commit.DIFF_RECEIVED';
@@ -6296,6 +6531,15 @@ type OutgoingCommitEvents =
         repository: string;
     };
 } | {
+    type: 'commit.OWNERSHIP_TRUSTED';
+    data: {
+        directory: string;
+    };
+}
+/** A push the user stopped, answered to the window that pushed: nothing failed */
+ | {
+    type: 'commit.PUSH_STOPPED';
+} | {
     type: 'commit.ERROR_RECEIVED';
     data: CommitFailure;
 } | {
@@ -6332,10 +6576,46 @@ type OutgoingCommitEvents =
     data: {
         branch: string;
     };
-} | {
+}
+/** The branches, and how each local one stands against what it follows, by its name */
+ | {
     type: 'commit.BRANCHES_RECEIVED';
     data: {
         branches: string[];
+        standing?: Record<string, BranchStandingOf>;
+        tags?: {
+            name: string;
+            commit: string;
+        }[];
+    };
+} | {
+    type: 'commit.TAG_CREATED';
+    data: {
+        name: string;
+    };
+} | {
+    type: 'commit.TAG_DELETED';
+    data: {
+        name: string;
+    };
+} | {
+    type: 'commit.TAG_PUSHED';
+    data: {
+        name: string;
+    };
+} | {
+    type: 'commit.BRANCH_RENAMED';
+    data: {
+        name: string;
+        to: string;
+    };
+}
+/** Which of the two were turned on: the file monitor only where git has one for this system */
+ | {
+    type: 'commit.STATUS_SPED_UP';
+    data: {
+        fileMonitor: boolean;
+        untrackedCache: boolean;
     };
 } | {
     type: 'commit.BRANCH_CHECKOUT_SUCCESS';
@@ -6373,6 +6653,20 @@ type OutgoingCommitEvents =
     data: {
         stashes: StashEntry[];
     };
+}
+/** The files a stash holds, read without applying it, for the window that asked */
+ | {
+    type: 'commit.STASH_CHANGES_RECEIVED';
+    data: {
+        index: number;
+        files: ChangedFile[];
+    };
+} | {
+    type: 'commit.BLAME_RECEIVED';
+    data: {
+        path: string;
+        lines: BlameLine[];
+    };
 } | {
     type: 'commit.STASH_SUCCESS';
     data: {
@@ -6401,10 +6695,15 @@ type OutgoingCommitEvents =
     };
 } | {
     type: 'commit.ALL_CONFLICTS_RESOLVED';
-} | {
+}
+/** A page of history, saying which file's it is and whether it goes on from a cursor; `cursor` for the next */
+ | {
     type: 'commit.LOG_LIST_RECEIVED';
     data: {
-        commits: CommitLogEntry[];
+        commits: HistoryCommit[];
+        cursor?: string;
+        path?: string;
+        continued?: boolean;
     };
 } | {
     type: 'commit.REVERT_COMMIT_SUCCESS';
@@ -6415,6 +6714,27 @@ type OutgoingCommitEvents =
     type: 'commit.RESET_COMMIT_SUCCESS';
     data: {
         hash: string;
+    };
+}
+/** What `commit.UNDO_LAST` would take back, after a write that can be: nothing when there is none */
+ | {
+    type: 'commit.UNDOABLE_RECEIVED';
+    data: {
+        id: string;
+        summary: string;
+    } | null;
+} | {
+    type: 'commit.UNDONE';
+    data: {
+        id: string;
+        summary: string;
+    };
+}
+/** The commit to be undone is already on a remote branch: undone only once the user says so, and this says why */
+ | {
+    type: 'commit.UNDO_NEEDS_CONFIRMATION';
+    data: {
+        message: string;
     };
 };
 
@@ -6807,6 +7127,15 @@ type OutgoingPullRequestEvents = {
 } | {
     type: 'pr.FILE_DIFF_RECEIVED';
     data: GitDiff & {
+        baseBranch: string;
+        headBranch?: string;
+    };
+}
+/** A file's diff needs content this partial clone was not given, which is fetched only when the user asks */
+ | {
+    type: 'pr.FILE_CONTENT_MISSING';
+    data: {
+        path: string;
         baseBranch: string;
         headBranch?: string;
     };
@@ -7494,8 +7823,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    plan: "plan";
     default: "default";
+    plan: "plan";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -7810,7 +8139,7 @@ interface QuickOpenResult$1 {
  * checked out, the commit it is on and every branch and tag, which a log and a pull request are read from; its
  * stashes; its worktrees.
  */
-declare const REPOSITORY_PARTS: readonly ["status", "diffs", "history", "stashes", "worktrees"];
+declare const REPOSITORY_PARTS: readonly ["status", "diffs", "history", "stashes", "worktrees", "refs"];
 
 type RateLimitLine = z.infer<typeof RateLimitLineSchema>;
 
@@ -7867,6 +8196,14 @@ interface RepositoryOperation {
 
 type RepositoryPart = (typeof REPOSITORY_PARTS)[number];
 
+/** A repository found under the folder the user opened, as the panel's picker lists it */
+interface RepositoryUnder {
+    path: string;
+    /** From the folder the user opened: empty for its own */
+    relative: string;
+    kind: 'nested' | 'submodule' | 'top' | 'worktree';
+}
+
 type ResultLine = z.infer<typeof ResultLineSchema>;
 
 /** Native result: per-input usage/duration_ms, with cumulative process cost/modelUsage. */
@@ -7890,6 +8227,9 @@ declare const ResultLineSchema: z.ZodObject<{
     structured_output: z.ZodOptional<z.ZodUnknown>;
     errors: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$loose>;
+
+/** What the panel does to one commit of the history: give it a new message, fold it into the one before it, or drop it */
+type RewriteAction = 'drop' | 'reword' | 'squash';
 
 /** A run node as the Brain surface shows it: with where its blueprint is, to reveal it in the Flows surface */
 type RunNodeDetails = RunNode & {
@@ -8066,6 +8406,19 @@ type Simplify<T> = {
     [K in keyof T]: T[K];
 } & {};
 
+/**
+ * A whole status took longer than its budget, and git's own file monitor or its untracked cache is off, either of
+ * which would make it faster
+ */
+interface SlowStatus {
+    ms: number;
+    budgetMs: number;
+    fileMonitor: boolean;
+    untrackedCache: boolean;
+    /** Whether git has a file monitor of its own on this system, which turning the speed-ups on would turn on */
+    fileMonitorAvailable: boolean;
+}
+
 interface SpawnStreamOptions {
     cwd?: string;
     /**
@@ -8077,6 +8430,9 @@ interface SpawnStreamOptions {
     signal?: AbortSignal;
     cliPath?: string;
 }
+
+/** What the panel can begin: merging a branch in, replaying what is checked out onto one, or picking a commit onto it */
+type StartableOperation = 'cherry-pick' | 'merge' | 'rebase';
 
 interface StashEntry {
     index: number;
@@ -8922,6 +9278,13 @@ declare namespace __FeatureSettings_Code {
         };
         restoreTerminals: boolean;
         terminalClipboardWrite: boolean;
+        copyOnSelect: boolean;
+        cursorStyle?: "bar" | "block" | "underline";
+        cursorInactiveStyle?: "bar" | "block" | "hollow" | "underline";
+        cursorBlink?: "default" | "off" | "on" | "program";
+        linkPreview?: "all" | "off" | "osc8";
+        bellFlash: boolean;
+        bellNotification: boolean;
         defaultBaseDirectory: string | null;
         baseDirectory: string | null;
         enableShellIntegration: boolean;
@@ -9689,11 +10052,11 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
 declare const claudeSettingsSnapshot: z.ZodObject<{
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
-            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
+            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -9768,8 +10131,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -10019,6 +10382,9 @@ declare function configuredRecentThreads(): {
     limit: number;
     sortOrder: RecentThreadsSortOrder;
 };
+
+/** An artifact's content as it is stored, or nothing when there is no such artifact */
+declare function contentOf(artifactId: EARS.EntityId): unknown;
 
 /**
  * Create an artifact, linked to `threadId` when it names one
@@ -10682,6 +11048,7 @@ declare const featureServices: {
         create: typeof create;
         update: typeof update;
         findOrCreateByType: typeof findOrCreateByType;
+        contentOf: typeof contentOf;
     };
     threads: {
         updateChatState: typeof updateChatState;
@@ -10783,8 +11150,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

@@ -553,6 +553,12 @@ export interface TerminalCommand {
 }
 
 // @public
+export type TerminalCursorBlink = 'on' | 'off' | 'program';
+
+// @public
+export type TerminalCursorStyle = 'block' | 'bar' | 'underline';
+
+// @public
 export type TerminalEvent =
 /** The program named its terminal. Empty when it took the name back */
     {
@@ -662,6 +668,7 @@ export interface TerminalSession {
     readonly restored: boolean;
     resume(): Promise<void>;
     readonly scrollback: number;
+    setCursorDefaults(style: TerminalCursorStyle, blink: TerminalCursorBlink): Promise<void>;
     signal(signal: TerminalSignal, scope: TerminalSignalScope): Promise<void>;
     readonly target: string | null;
     terminate(): Promise<void>;

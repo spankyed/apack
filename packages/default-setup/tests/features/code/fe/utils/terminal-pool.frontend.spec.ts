@@ -13,7 +13,7 @@ vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-v
 const { views, lastView, connections, fakeStream } = await import('../_support/terminal-view.ts')
 type FakeStream = ReturnType<typeof fakeStream>
 const { terminalInfo } = await import('../_support/terminal-host.ts')
-const { terminalPool, RESIZE_SETTLE_MS } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool, RESIZE_SETTLE_MS, viewSettingsOf } = await import('#features/code/fe/utils/terminal-pool.ts')
 
 let stopRuntime: (() => void) | undefined
 let next = 0
@@ -138,6 +138,169 @@ describe('a shell replaced under a terminal', () => {
   })
 })
 
+describe('the output of a command, folded away', () => {
+  it('is one header row where the output starts, folded again when the view is made again, and never while it is still arriving', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const attachment = terminalPool.attach(info.id, host(), {})!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    const done = { id: 4, command: 'make', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'exited', code: 0 }, prompt: 0, output: 1, end: 9 }
+    const running = { id: 5, command: 'tail -f', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'running' }, prompt: 9, output: 10, end: null }
+    // The view holds the commands before it tells a host of them, as it does
+    view.commands = [done, running] as never
+    view.options.onCommands?.([done, running] as never)
+
+    attachment.setFolded(done as never, true)
+    attachment.setFolded(running as never, true)
+    expect(attachment.isFolded(done as never)).toBe(true)
+    expect(view.folds).toEqual([{ first: 1, last: 8 }])
+
+    attachment.setFolded(done as never, false)
+    expect(view.folds).toEqual([])
+  })
+})
+
+describe('folds that overlap', () => {
+  it('reach the view as the earlier one alone, since the view refuses an overlap and a command callback must not throw', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const attachment = terminalPool.attach(info.id, host(), {})!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    const first = { id: 6, command: 'a', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'exited', code: 0 }, prompt: 0, output: 1, end: 9 }
+    const overlapping = { id: 7, command: 'b', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'exited', code: 0 }, prompt: 5, output: 5, end: 12 }
+    view.commands = [first, overlapping] as never
+    view.options.onCommands?.([first, overlapping] as never)
+
+    expect(() => {
+      attachment.setFolded(first as never, true)
+      attachment.setFolded(overlapping as never, true)
+    }).not.toThrow()
+    expect(view.folds).toEqual([{ first: 1, last: 8 }])
+  })
+})
+
+describe('the commands of a terminal, as its host draws them', () => {
+  it('are heard by the host as the shell marks them, and running one again types its text and Enter', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const heard: number[][] = []
+    const attachment = terminalPool.attach(info.id, host(), { onCommands: (commands) => { heard.push(commands.map((command) => command.id)) } })!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    view.options.onCommands?.([{ id: 3, command: 'make', cwd: null, startedMs: null, finishedMs: null, outcome: { kind: 'exited', code: 2 }, prompt: 0, output: 1, end: 2 }] as never)
+    expect(heard).toEqual([[3]])
+
+    attachment.rerun('make')
+    expect(view.typed).toEqual(['make\r'])
+  })
+
+  it('has one command\'s output copied on request, by that command', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const attachment = terminalPool.attach(info.id, host(), {})!
+    const view = views.filter((candidate) => candidate.session === info.session).at(-1)!
+    expect(await attachment.copyCommand({ id: 9 } as never)).toBe(true)
+    expect(view.copiedCommands).toEqual([9])
+  })
+})
+
+describe('whether a selection is copied as the pointer is let go', () => {
+  it('is given to every view, the ones already up as well as those made after it is set', () => {
+    const up = terminal()
+    terminalPool.ensure(up)
+    const viewOf = (session: string | undefined) => views.filter((view) => view.session === session).at(-1)!
+    try {
+      terminalPool.setCopyOnSelect(true)
+      expect(viewOf(up.session).copyOnSelect, 'a view already up was not told').toBe(true)
+
+      const later = terminal()
+      terminalPool.ensure(later)
+      expect(viewOf(later.session).options.copyOnSelect, 'a view made after was not given it').toBe(true)
+
+      terminalPool.setCopyOnSelect(false)
+      expect(viewOf(up.session).copyOnSelect).toBe(false)
+    } finally {
+      terminalPool.setCopyOnSelect(false)
+    }
+  })
+})
+
+describe('the cursor and link settings a view is made with', () => {
+  it('are the defaults until a setting says otherwise: a hollow inactive cursor, the program decides the blink, and declared links', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    expect(lastView().options.cursorInactive).toBe('hollow')
+    expect(lastView().options.cursorBlink).toBe('program')
+    expect(lastView().options.linkPreview, 'the link preview a view is made with, unset').toBe('osc8')
+  })
+
+  it('come from the code settings, and an unknown value is the default', () => {
+    expect(viewSettingsOf({ cursorInactiveStyle: 'underline', cursorBlink: 'on', linkPreview: 'all' }))
+      .toEqual({ cursorInactive: 'underline', cursorBlink: 'on', linkPreview: 'all' })
+    expect(viewSettingsOf({ cursorInactiveStyle: 'sparkle', cursorBlink: 'default', linkPreview: 'everything' } as never))
+      .toEqual({ cursorInactive: 'hollow', cursorBlink: 'program', linkPreview: 'osc8' })
+    expect(viewSettingsOf(undefined)).toEqual({ cursorInactive: 'hollow', cursorBlink: 'program', linkPreview: 'osc8' })
+  })
+
+  it('reach a view made after they are set, from the constructor', () => {
+    try {
+      terminalPool.setViewSettings({ cursorInactive: 'bar', cursorBlink: 'off', linkPreview: 'all' })
+      const info = terminal()
+      terminalPool.ensure(info)
+      expect(lastView().options).toMatchObject({ cursorInactive: 'bar', cursorBlink: 'off', linkPreview: 'all' })
+    } finally {
+      terminalPool.setViewSettings(viewSettingsOf(undefined))
+    }
+  })
+
+  /**
+   * A view already drawn is given the change through its setter and is not made again: its element stays where it
+   * is in the host, and it is neither disposed nor mounted again, so its selection and scroll position stay.
+   */
+  it.each([
+    ['cursorInactive', { cursorInactive: 'bar' as const }, 'setCursorInactive', 'bar'],
+    ['cursorBlink', { cursorBlink: 'off' as const }, 'setCursorBlink', 'off'],
+    ['linkPreview', { linkPreview: 'all' as const }, 'setLinkPreview', 'all'],
+  ])('changing %s calls its setter on a drawn view and keeps that view', (_name, change, setter, value) => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const container = host()
+    const attachment = terminalPool.attach(info.id, container)!
+    const before = lastView()
+    const drawn = views.length
+    const mounts = before.mounts
+
+    try {
+      terminalPool.setViewSettings({ ...viewSettingsOf(undefined), ...change })
+      expect(before.settingChanges).toEqual([{ setter, value }])
+      expect(lastView(), 'the view was made again').toBe(before)
+      expect(views.length, 'a view was made').toBe(drawn)
+      expect(before.disposed, 'the view was disposed').toBe(false)
+      expect(before.mounts, 'the view was mounted again').toBe(mounts)
+      expect(container.contains(before.element), 'the view left its host').toBe(true)
+      expect(attachment.release()).toBe(true)
+    } finally {
+      terminalPool.setViewSettings(viewSettingsOf(undefined))
+    }
+  })
+
+  it('call no setter for a setting that does not change', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const before = lastView()
+    terminalPool.setViewSettings(viewSettingsOf(undefined))
+    expect(before.settingChanges).toEqual([])
+    expect(lastView()).toBe(before)
+  })
+
+  it('do not remake a view when they do not change', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const before = lastView()
+    terminalPool.setViewSettings(viewSettingsOf(undefined))
+    expect(lastView()).toBe(before)
+  })
+})
+
 describe('what a host is told', () => {
   it('is the fit once it has settled, so a drag is one resize of the pty and not one a frame', async () => {
     vi.useFakeTimers()
@@ -238,6 +401,36 @@ describe('finding text in a terminal', () => {
     view.matches = 0
     typeInto(input, 'nowhere')
     await vi.waitFor(() => { expect(bar(mountedIn)!.querySelector('[data-terminal-find-count]')!.textContent).toBe('No results') })
+  })
+
+  it('announces the count, matches the case the person asked for, and says 1000+ past the thousand it holds', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const mountedIn = host()
+    const attachment = terminalPool.attach(info.id, mountedIn)!
+    const view = lastView()
+    view.matches = 1500
+    attachment.find()
+    const input = bar(mountedIn)!.querySelector('input')!
+    const count = bar(mountedIn)!.querySelector<HTMLElement>('[data-terminal-find-count]')!
+    expect(count.getAttribute('role')).toBe('status')
+    expect(count.getAttribute('aria-live')).toBe('polite')
+
+    typeInto(input, 'Error')
+    await vi.waitFor(() => { expect(count.textContent).toBe('1 of 1000+') })
+    expect(view.matchCases).toEqual([false])
+
+    const toggle = bar(mountedIn)!.querySelector<HTMLButtonElement>('button[aria-label="Match case"]')!
+    toggle.click()
+    expect(toggle.getAttribute('aria-pressed')).toBe('true')
+    await vi.waitFor(() => { expect(view.matchCases.at(-1)).toBe(true) })
+    expect(view.searches.at(-1), 'the toggle searched again for what was typed').toBe('Error')
+
+    // Shift+Enter from the newest goes round to the oldest held match, which is the thousandth
+    press(input, 'Enter', { shiftKey: true })
+    expect(count.textContent).toBe('1000 of 1000+')
+    press(input, 'Enter')
+    expect(count.textContent).toBe('1 of 1000+')
   })
 
   it('closes on Escape, with nothing left marked and the terminal typed at again', async () => {
@@ -484,5 +677,39 @@ describe('a path a program printed', () => {
     expect(resolvePath('C:\\Users\\me\\app', '..\\lib\\a.ts')).toBe('C:\\Users\\me\\lib\\a.ts')
     expect(resolvePath('C:\\Users\\me', 'D:\\work\\b.rs')).toBe('D:\\work\\b.rs')
     expect(resolvePath('C:\\Users\\me', '\\Windows\\win.ini')).toBe('C:\\Windows\\win.ini')
+  })
+})
+
+describe('a link a program printed', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('goes to the main process under the terminal\'s own policy, whether it was detected or declared', () => {
+    const openTerminalLink = vi.fn(async () => true)
+    vi.stubGlobal('electronAPI', { shell: { openTerminalLink } })
+    const info = terminal()
+    terminalPool.ensure(info)
+    const opened: string[] = []
+    terminalPool.attach(info.id, host(), { onOpenPath: (path) => { opened.push(path) } })
+    const click = (kind: string, target: string) => lastView().options.onLink!({ kind, target, start: 0, end: 0 } as never, new MouseEvent('click'))
+
+    click('url', 'https://example.com/docs')
+    click('declared', 'mailto:someone@example.com')
+
+    expect(openTerminalLink.mock.calls).toEqual([['https://example.com/docs'], ['mailto:someone@example.com']])
+    expect(opened, 'a link was opened as a file').toEqual([])
+  })
+
+  it('a path still goes to the file opener and not to the link bridge', () => {
+    const openTerminalLink = vi.fn(async () => true)
+    vi.stubGlobal('electronAPI', { shell: { openTerminalLink } })
+    const info = terminal({ cwd: '/work/app' })
+    terminalPool.ensure(info)
+    const opened: string[] = []
+    terminalPool.attach(info.id, host(), { onOpenPath: (path) => { opened.push(path) } })
+
+    lastView().options.onLink!({ kind: 'path', target: 'src/a.ts:3', start: 0, end: 0 } as never, new MouseEvent('click'))
+
+    expect(opened).toEqual(['/work/app/src/a.ts'])
+    expect(openTerminalLink).not.toHaveBeenCalled()
   })
 })

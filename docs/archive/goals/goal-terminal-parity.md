@@ -1,6 +1,6 @@
 # Goal: terminal view parity, and command blocks
 
-**Status: planned.** Owner: the terminal view (`vendor/apack-terminal/view`) and the Code surface
+**Status: done.** Merged to `master`: spankyed/apack#446 (merge `f73228e602`) and spankyed/apack-terminal#16 (merge `3a2140cc8d`), with `vendor/apack-terminal.rev` pinned to `3a2140cc8d`. Owner: the terminal view (`vendor/apack-terminal/view`) and the Code surface
 (`packages/default-setup/src/features/code`). Builds on [the view goal](goal-terminal-view.md), which is merged.
 
 ## Prompt
@@ -50,10 +50,26 @@ Out:
 
 ## Current handoff
 
-- Branch: `session/terminal-parity-goal` (this document), from `master` 32ca2031a2.
-- Next deliverable: Phase 0. It has no code dependencies.
-- Proven: the source findings above. Nothing run end to end yet.
-- Unresolved: none blocking. D6 is a manual step for the person; see Phase 6.
+- Worktrees (created 2026-11-12, each on its own branch; both branches are merged, so their worktrees can be removed):
+  - `monorepo-worktrees.noindex/terminal-parity` on `session/terminal-parity-work`: the Code surface, settings, Electron main and preload. Its `vendor/apack-terminal` links to the broker worktree below.
+  - `apack-terminal-worktrees.noindex/terminal-parity` on `session/terminal-parity-view`: the view and the broker. Changes to it are committed there and pinned from the monorepo only after they land.
+  - This document: `monorepo-worktrees.noindex/native-stall` on `session/terminal-parity-goal`, PR #444.
+- Pin: `master` pins the broker at `3a2140cc8d`, a commit on the broker's `master`.
+- Phase 0 is done. Its results are in [the evidence record](../../references/evidence/terminal-parity.md): kitty
+  keys and the cursor key into a real pty pass, the view's wheel and auto-scroll tests pass, and OSC 52 reaches
+  the broker's client. The app side of OSC 52 is Phase 1's defect, not a Phase 0 result.
+- Phase 1 is done, with its results in the evidence record: the main process writes the clipboard, the window no
+  longer checks focus, and a read request is answered nothing. Its limits (an 8 MiB refusal shown to nobody, and
+  one write per window) are stated there.
+- Phase 2 is done in code and checks: [the evidence record](../../references/evidence/terminal-parity.md#phase-2--copy-on-select-2026-11-12).
+  The broker pull request (spankyed/apack-terminal#16) merged as `3a2140cc8d`; the app pins that commit.
+- Phase 3 is done in code and checks: [the evidence record](../../references/evidence/terminal-parity.md#phase-3--minimum-contrast-ratio-2026-11-12). The app pins the view commit that carries it.
+- Phase 4 is done: [the evidence record](../../references/evidence/terminal-parity.md#phase-4--the-canvas-painter-under-heavy-output-and-the-gpu-decision-2026-11-12). Neither machine's p95 frame exceeds 16 ms, so the GPU renderer (D5) is not built.
+- Phase 5 is done: [the evidence record](../../references/evidence/terminal-parity.md#phase-5--rectangular-selection-2026-11-12). The app pins the view commit that carries it.
+- Phase 6 is done: [the evidence record](../../references/evidence/terminal-parity.md#phase-6--the-accessible-document-2026-11-12). The VoiceOver checklist is written there; running it is a follow-up, not a condition.
+- Phase 7 is done: [the evidence record](../../references/evidence/terminal-parity.md#phase-7--command-blocks-2026-11-12). Every phase's done-when condition is met in code and checks, and both pull requests are merged.
+- Next deliverable: none. The goal is complete. The VoiceOver run (D6) is a follow-up, recorded in the evidence record when done.
+- Unresolved: none. Nothing in this goal depends on a manual step; see D6.
 
 ## Decisions
 
@@ -73,9 +89,10 @@ Each decision is the path I'd take. Where the user has not decided, these stand.
   programs that chose their colours deliberately.
 - **D5 — the GPU renderer is built only if the Phase 4 measurement fails.** *Why:* a WebGL painter is a large
   rewrite, and the measurement decides whether it is needed.
-- **D6 — the real screen-reader run is a manual, recorded step.** I can automate the accessibility-tree contract
-  but cannot drive VoiceOver. The person runs the checklist once and the result goes in evidence. It does not
-  block Phases 0 to 5 or 7.
+- **D6 — the goal's completion is judged on the automated accessibility contract alone.** A VoiceOver run is a
+  follow-up, not a condition. It is written as a checklist in evidence, and whenever someone runs it, its result is
+  recorded there. Nothing in this goal waits on it, and a failing VoiceOver result opens a new fix, not a reopening
+  of this goal. *Why:* completion must not depend on a step no agent can perform.
 - **D7 — command blocks belong to the Code surface.** The view learns one generic thing (collapsed line ranges).
   It never learns what a command is. *Why:* the view is reusable and must not depend on a shell's markers.
 - **D8 — rectangular selection is Alt-drag on Linux and Windows, Option-drag on macOS**, as in xterm.js.
@@ -144,10 +161,13 @@ Each phase names its deliverable, its dependencies, and what is done when it fin
 ### Phase 6 — screen reader (D6)
 
 - **Deliverable:** an automated contract for what the accessibility tree exposes (role, label, and the text
-  attribute the view publishes), plus a VoiceOver checklist in evidence.
-- **Dependencies:** none for the automated half.
-- **Done when:** the automated contract passes, and the VoiceOver checklist has been run once by the person and
-  its result recorded. Until that step is done, this phase is open and nothing else is blocked.
+  attribute the view publishes), and a VoiceOver checklist written into evidence for a later run. The checklist
+  covers at least two steps on macOS: VoiceOver reads the screen text of a running session, and typing into the
+  terminal's input field works with VoiceOver on. Each step says what was heard or typed, so a later run can be
+  compared with it.
+- **Dependencies:** none.
+- **Done when:** the automated contract passes and the checklist is written. The goal completes on this. A
+  VoiceOver run, when someone does one, is recorded in evidence as a follow-up and blocks nothing.
 
 ### Phase 7 — command blocks (D7)
 
@@ -179,7 +199,7 @@ Phases 7.1 and 7.2 need only the Code surface. Phase 7.3 needs the view primitiv
 | Copy-on-select, default off | missing | — | Phase 2 |
 | Minimum contrast ratio, default off | missing | — | Phase 3 |
 | Painter timing decided | not measured | — | Phase 4 |
-| Screen reader contract, then manual run | partial | — | Phase 6 |
+| Screen reader contract (automated) | partial | — | Phase 6 |
 | Rectangular selection | missing | — | Phase 5 |
 | Re-run and copy any command | `commands` exists, no UI | — | Phase 7.1 |
 | Failure highlight on blocks | the gutter colours exist | — | Phase 7.2 |

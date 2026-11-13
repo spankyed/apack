@@ -13,8 +13,10 @@ import { createActor } from 'xstate'
 import type { OpenFile } from '#features/code/fe/contract.ts'
 
 vi.mock('#generated/events.ts', () => ({ sendToSystem: vi.fn(), broadcastToSurface: vi.fn(), sendToSurface: vi.fn() }))
-vi.mock('#features/code/fe/utils/terminal-pool.ts', () => ({
-  terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn(), disposeAll: vi.fn() },
+vi.mock('#features/code/fe/utils/terminal-pool.ts', async (importOriginal) => ({
+  // The real `viewSettingsOf` is the mapping under test; only the pool is replaced
+  ...(await importOriginal<typeof import('#features/code/fe/utils/terminal-pool.ts')>()),
+  terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn(), disposeAll: vi.fn(), setCopyOnSelect: vi.fn(), setViewSettings: vi.fn() },
 }))
 vi.mock('#features/code/fe/utils/terminal-events.ts', () => ({
   terminalEventBus: { emit: vi.fn(), clearOutput: vi.fn(), prunePersistedOutputs: vi.fn() },
@@ -316,5 +318,40 @@ describe('an open diff read again', () => {
     actor.send({ type: 'REFRESH_DIFF_TAB', diff: unstaged('second edit\n') })
 
     expect(contextOf(actor).openFiles.map(file => file.path)).toEqual([])
+  })
+})
+
+describe("the feature's settings reaching the terminals", () => {
+  it('gives the saved copy-on-selection setting to the terminal pool when the surface starts, not only when it next changes', () => {
+    const actor = started()
+    vi.mocked(terminalPool.setCopyOnSelect).mockClear()
+
+    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work', settings: { copyOnSelect: true } } } as never)
+    expect(terminalPool.setCopyOnSelect, 'the saved value reaches the terminals at start').toHaveBeenLastCalledWith(true)
+  })
+
+  it('gives the copy-on-selection setting to the terminal pool as it changes, and off when it is not set', () => {
+    const actor = started()
+    vi.mocked(terminalPool.setCopyOnSelect).mockClear()
+
+    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { copyOnSelect: true } } as never)
+    expect(terminalPool.setCopyOnSelect).toHaveBeenLastCalledWith(true)
+
+    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { copyOnSelect: false } } as never)
+    expect(terminalPool.setCopyOnSelect).toHaveBeenLastCalledWith(false)
+
+    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: {} } as never)
+    expect(terminalPool.setCopyOnSelect, 'a setting that is not there is off, not left as it was').toHaveBeenLastCalledWith(false)
+  })
+
+  it('gives the cursor and link settings to the terminal pool at start and as they change, with their defaults when unset', () => {
+    const actor = started()
+    vi.mocked(terminalPool.setViewSettings).mockClear()
+
+    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work', settings: { cursorInactiveStyle: 'underline', cursorBlink: 'off', linkPreview: 'all' } } } as never)
+    expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'underline', cursorBlink: 'off', linkPreview: 'all' })
+
+    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { cursorBlink: 'program' } } as never)
+    expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'hollow', cursorBlink: 'program', linkPreview: 'osc8' })
   })
 })

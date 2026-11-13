@@ -17,7 +17,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
 
 const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 
-const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
+const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false, refs: false };
 /** What the panel asked the backend for, in order */
 const asked = () => sendToSystem.mock.calls.map(([, event]) => (event as { type: string }).type);
 /** A panel in a window that shows the code surface, which is when it follows the repository */

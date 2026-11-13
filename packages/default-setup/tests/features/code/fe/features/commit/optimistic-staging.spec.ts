@@ -21,7 +21,7 @@ beforeEach(() => sendToSystem.mockReset());
 
 const edited: GitStatusFile = { path: 'a.ts', status: 'modified', staged: false };
 const staged: GitStatusFile = { path: 'a.ts', status: 'modified', staged: true };
-const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
+const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false, refs: false };
 
 /** The asks of one kind the panel has made of the backend, by the call each was made under, oldest first */
 const asked = (type: string): string[] => sendToSystem.mock.calls

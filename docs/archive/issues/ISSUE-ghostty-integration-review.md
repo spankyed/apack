@@ -89,7 +89,7 @@ only moving the window's core fixes — **open**.
 
 ## What ended each item (2026-11-11)
 
-[The terminal-view goal](../../goals/goal-terminal-view.md) took the last entry of the list above — the window
+[The terminal-view goal](../goals/goal-terminal-view.md) took the last entry of the list above — the window
 pulling frames instead of parsing bytes — as its design, and that ended most of the rest: a window draws rows
 the broker sends and interprets nothing, so there is no second core to disagree with the first.
 

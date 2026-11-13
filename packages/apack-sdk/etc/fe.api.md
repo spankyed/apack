@@ -383,6 +383,10 @@ export interface _HostBridge {
         getActiveTab: () => Promise<number | null>;
     };
     // (undocumented)
+    clipboard: {
+        writeText: (text: string) => Promise<boolean>;
+    };
+    // (undocumented)
     fileUtils: {
         selectDirectory: () => Promise<string | null>;
         selectPath: (options?: {
@@ -398,6 +402,10 @@ export interface _HostBridge {
         upload: (entityId: string, base64Data: string, mimeType: string) => Promise<string>;
         delete: (entityId: string, filename: string) => Promise<void>;
         deleteAll: (entityId: string) => Promise<void>;
+    };
+    // (undocumented)
+    notify: {
+        show: (title: string, body: string) => Promise<boolean>;
     };
     // (undocumented)
     performance: {
@@ -429,6 +437,7 @@ export interface _HostBridge {
     // (undocumented)
     shell: {
         openExternal: (url: string) => Promise<void>;
+        openTerminalLink: (url: string) => Promise<boolean>;
         showItemInFolder: (filePath: string) => Promise<void>;
         openPath: (filePath: string) => Promise<void>;
     };

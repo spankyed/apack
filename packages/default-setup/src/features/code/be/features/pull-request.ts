@@ -25,7 +25,7 @@ export interface CodePullRequestSystemContext {
 export type Event =
   | { type: 'pr.GET_BASE_BRANCH' }
   | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string }
-  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string }
+  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; fetchMissing?: boolean }
   | { type: 'pr.LIST_OPEN_PRS' }
   | { type: 'pr.SELECT_PR'; number: number }
   | { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
@@ -88,10 +88,10 @@ export const pullRequestSystem = setup({
     input: {} as { baseDirectory: string | null; gitRepository?: AppGitRepository | null; code?: AnyActorRef }
   },
   actions: handlers.actions({
-    getBaseBranch: ({ context, reply }) => {
+    findBaseBranch: ({ context, reply }) => {
       const emit = answering(reply)
       withRepo(context, emit,
-        repo => repo.getBaseBranch({ preferUpstream: false }),
+        repo => repo.findBaseBranch({ preferUpstream: false }),
         branch => emit({ type: 'pr.BASE_BRANCH_RECEIVED', data: { branch } })
       )
     },
@@ -104,18 +104,18 @@ export const pullRequestSystem = setup({
       )
     },
 
-    getBranchDiff: ({ event, context, reply }) => {
+    readBranchDiff: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string }
       withRepo(context, emit,
         async repo => {
-          const base = ev.baseBranch ? Promise.resolve(ev.baseBranch) : repo.getBaseBranch({ preferUpstream: false })
+          const base = ev.baseBranch ? Promise.resolve(ev.baseBranch) : repo.findBaseBranch({ preferUpstream: false })
           const head = ev.headBranch ? `origin/${ev.headBranch}` : undefined
           if (ev.headBranch) {
             await repo.fetchRemoteBranch(ev.headBranch)
           }
           const baseBranch = await base
-          const files = await repo.getBranchDiff(baseBranch, head)
+          const files = await repo.readBranchDiff(baseBranch, head)
           return { files, baseBranch }
         },
         ({ files, baseBranch }) => emit({ type: 'pr.BRANCH_DIFF_RECEIVED', data: { files, baseBranch, headBranch: ev.headBranch } })
@@ -124,34 +124,39 @@ export const pullRequestSystem = setup({
 
     getBranchFileDiff: ({ event, context, reply }) => {
       const emit = answering(reply)
-      const ev = event as { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string }
+      const ev = event as { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; fetchMissing?: boolean }
       const target = ev.headBranch ? `origin/${ev.headBranch}` : 'HEAD'
+      const where = { path: ev.path, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
       withRepo(context, emit,
-        async repo => {
-          if (ev.headBranch) {
-            await repo.fetchRemoteBranch(ev.headBranch)
-          }
-          const isImage = repo.isImageFile(ev.path)
-          const getContent = isImage
-            ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
-            : (p: string, b: string) => repo.getFileContentFromBranch(p, b)
-          // A side that is missing reads as empty, which is right for a file one branch does not have and wrong
-          // for a branch that is not there: that is an error, said as one
-          if (!await repo.commitsExist(ev.baseBranch, target)) {
-            throw new Error(`Failed to get file diff between branches: ${ev.baseBranch} or ${target} is not a commit here`)
-          }
-          // The editor draws the change from the file's two sides, so those are what is read: no patch is made
-          const [originalContent, modifiedContent] = await Promise.all([
-            getContent(ev.path, ev.baseBranch),
-            getContent(ev.path, target),
-          ])
-          return { originalContent, modifiedContent, isImage }
-        },
+        repo => ev.fetchMissing ? repo.fetchingMissing(() => read(repo)) : read(repo),
         ({ originalContent, modifiedContent, isImage }) => emit({
           type: 'pr.FILE_DIFF_RECEIVED',
           data: { path: ev.path, staged: false, originalContent, modifiedContent, isImage, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
-        })
+        }),
+        error => error?.code === 'content-missing'
+          ? emit({ type: 'pr.FILE_CONTENT_MISSING', data: where })
+          : emitError(emit, error?.message ?? String(error)),
       )
+      async function read(repo: AppGitRepository) {
+        if (ev.headBranch) {
+          await repo.fetchRemoteBranch(ev.headBranch)
+        }
+        const isImage = repo.isImageFile(ev.path)
+        const getContent = isImage
+          ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
+          : (p: string, b: string) => repo.readFileContentFromBranch(p, b)
+        // A side that is missing reads as empty, which is right for a file one branch does not have and wrong
+        // for a branch that is not there: that is an error, said as one
+        if (!await repo.commitsExist(ev.baseBranch, target)) {
+          throw new Error(`Failed to get file diff between branches: ${ev.baseBranch} or ${target} is not a commit here`)
+        }
+        // The editor draws the change from the file's two sides, so those are what is read: no patch is made
+        const [originalContent, modifiedContent] = await Promise.all([
+          getContent(ev.path, ev.baseBranch),
+          getContent(ev.path, target),
+        ])
+        return { originalContent, modifiedContent, isImage }
+      }
     },
 
     // --- GitHub CLI actions ---
@@ -203,7 +208,7 @@ export const pullRequestSystem = setup({
       const emit = answering(reply)
       const ev = event as { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
       withRepo(context, emit,
-        repo => repo.getCurrentBranch().then(head =>
+        repo => repo.readCurrentBranch().then(head =>
           ghCli.createPR(repo.getWorkingDir(), { title: ev.title, body: ev.body, base: ev.base, head, draft: ev.draft })
         ),
         pr => emit({ type: 'pr.PR_CREATED', data: { pr } })
@@ -290,7 +295,7 @@ export const pullRequestSystem = setup({
       withRepo(context, emit,
         async repo => {
           const cwd = repo.getWorkingDir()
-          const branch = await repo.getCurrentBranch()
+          const branch = await repo.readCurrentBranch()
           const pr = await ghCli.findPRForBranch(cwd, branch)
           if (pr?.body) {
             pr.body = await ghCli.resolveGitHubAssetUrls(pr.body, cwd)
@@ -305,9 +310,9 @@ export const pullRequestSystem = setup({
     getPRAutofill: ({ context, reply }) => {
       const emit = answering(reply)
       withRepo(context, emit,
-        repo => Promise.all([repo.getPRBaseBranch(), repo.getCurrentBranch()])
+        repo => Promise.all([repo.getPRBaseBranch(), repo.readCurrentBranch()])
           .then(([baseBranch, currentBranch]) =>
-            repo.getCommitsBetweenBranches(baseBranch).then(commits => ({ currentBranch, commits }))
+            repo.readCommitsBetween(baseBranch).then(commits => ({ currentBranch, commits }))
           ),
         ({ currentBranch, commits }) => {
           let title = ''
@@ -490,8 +495,8 @@ export const pullRequestSystem = setup({
   states: {
     idle: {
       on: {
-        'pr.GET_BASE_BRANCH': { actions: 'getBaseBranch' },
-        'pr.GET_BRANCH_DIFF': { actions: 'getBranchDiff' },
+        'pr.GET_BASE_BRANCH': { actions: 'findBaseBranch' },
+        'pr.GET_BRANCH_DIFF': { actions: 'readBranchDiff' },
         'pr.GET_BRANCH_FILE_DIFF': { actions: 'getBranchFileDiff' },
         'pr.LIST_OPEN_PRS': { actions: 'listOpenPRs' },
         'pr.SELECT_PR': { actions: 'selectPR' },

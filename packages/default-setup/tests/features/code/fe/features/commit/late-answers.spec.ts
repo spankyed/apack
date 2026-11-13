@@ -25,7 +25,7 @@ beforeEach(() => {
 
 const stash = (of: string) => ({ index: 0, ref: 'stash@{0}', message: of, date: '' });
 const worktree = (of: string) => ({ path: of, head: 'abc', branch: 'main', isBare: false, isCurrent: true, isMain: true, isLocked: false });
-const commit = (of: string) => ({ hash: of, shortHash: of, subject: of, body: '', authorName: '', authorEmail: '', date: '', refs: '' });
+const commit = (of: string) => ({ hash: of, parents: [], subject: of, authorName: '', authorEmail: '', date: '', refs: [] });
 
 /** Each list: the event that asks for it, where the panel holds it, and an answer naming what it is of */
 const LISTS = [

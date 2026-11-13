@@ -25,6 +25,7 @@ import { createThinkingWriter } from './_helpers/thinking-writer.ts';
 import { getClaudeState, persistClaudeState, setRunning, enqueueMessage, killTurn, ensureSessionMarker, updateChatState, extractStaleSessionId, markSessionBroken } from './_helpers/thread-context.ts';
 import { consumeConversationTurn, finalizeSessionError } from './_helpers/stream-consumer.ts';
 import { buildSessionBootstrapPrompt } from '../_helpers/session-bootstrap.ts';
+import { checkpointTurn } from '../_helpers/turn-changes.ts';
 
 export const meta: ActionMeta = {
   label: 'Claude Code Chat',
@@ -496,6 +497,7 @@ export async function action(
       ? await owner.handle.setPermissionMode(effectivePermissionMode)
       : await owner.handle.getPermissionMode();
     if (acknowledgedMode !== effectivePermissionMode) throw new Error('Native composer permission mode was not acknowledged');
+    const turnCheckpoint = owner.busy ? undefined : await checkpointTurn(services);
     if (services.cli.claudeCode.getConversation(threadId)?.owner !== owner || owner.closing) throw new Error('Claude conversation changed while applying composer phase');
     persistClaudeState(services, threadId, { permissionMode: acknowledgedMode, prePlanMode: acknowledgedMode === 'plan' ? prePlanMode : undefined });
     if (owner.busy) {
@@ -506,6 +508,7 @@ export async function action(
       writer.finalize('Message queued while Claude Code continues its native work.');
       return { success: true, queued: true };
     }
+    persistClaudeState(services, threadId, { turnCheckpoint });
     owner.start(prompt, turn => consumeConversationTurn(turn, {
       services, threadId, text, phase, userMessageId, submittedPrompt: promptText,
       resumeSessionId: resumeSessionId ?? undefined, sessionCwd,

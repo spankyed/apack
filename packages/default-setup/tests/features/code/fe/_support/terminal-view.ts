@@ -8,8 +8,25 @@ import type { Command, ViewOptions } from 'apack-terminal-view'
 
 export interface FakeView {
   readonly session: string
+  /** Whether a selection is copied as the pointer is let go, as the view was last told */
+  readonly copyOnSelect: boolean
+  setCopyOnSelect(on: boolean): void
+  /** What was typed into the program, as text, in order */
+  readonly typed: string[]
+  /** The commands that were asked to have their output copied, by id, in order */
+  readonly copiedCommands: number[]
+  typeText(text: string): void
+  /** The folds the view was last given: each run of lines, first to last */
+  readonly folds: Array<{ first: number; last: number }>
+  setFolds(folds: Array<{ first: number; last: number }>): void
+  copyCommand(command: { id: number }): Promise<boolean>
   readonly element: HTMLDivElement
   readonly options: ViewOptions
+  /** The setter calls a view was given after it was made, in order: which setter, and the value it was given */
+  readonly settingChanges: Array<{ setter: 'setCursorInactive' | 'setCursorBlink' | 'setLinkPreview'; value: string }>
+  setCursorInactive(style: string): void
+  setCursorBlink(mode: string): void
+  setLinkPreview(mode: string): void
   /** The element it is mounted in, or `null` while no host has it */
   mountedIn: HTMLElement | null
   mounts: number
@@ -23,6 +40,8 @@ export interface FakeView {
   copies: number
   /** What the view was asked to find, in order, and how many matches each search is said to have */
   readonly searches: string[]
+  /** Whether each search asked for the needle's own case */
+  readonly matchCases: boolean[]
   matches: number
   /** Which match it is on, from one */
   current: number
@@ -99,12 +118,16 @@ export function viewModule(): Record<string, unknown> {
     readonly pasted: string[] = []
     copies = 0
     readonly searches: string[] = []
+    readonly matchCases: boolean[] = []
     matches = 0
     current = 0
     commands: Command[] = []
     readonly selectedOutputs: number[] = []
+    /** Whether a selection is copied as the pointer is let go, as the view was last told */
+    copyOnSelect: boolean
 
     constructor(source: { session: string }, readonly options: ViewOptions) {
+      this.copyOnSelect = options.copyOnSelect ?? false
       this.session = source.session
       views.push(this)
     }
@@ -123,23 +146,37 @@ export function viewModule(): Record<string, unknown> {
       this.disposed = true
     }
     focus(): void { this.focused += 1 }
+    setCopyOnSelect(on: boolean): void { this.copyOnSelect = on }
+    readonly settingChanges: Array<{ setter: 'setCursorInactive' | 'setCursorBlink' | 'setLinkPreview'; value: string }> = []
+    setCursorInactive(style: string): void { this.settingChanges.push({ setter: 'setCursorInactive', value: style }) }
+    setCursorBlink(mode: string): void { this.settingChanges.push({ setter: 'setCursorBlink', value: mode }) }
+    setLinkPreview(mode: string): void { this.settingChanges.push({ setter: 'setLinkPreview', value: mode }) }
+    readonly typed: string[] = []
+    readonly copiedCommands: number[] = []
+    typeText(text: string): void { this.typed.push(text) }
+    folds: Array<{ first: number; last: number }> = []
+    setFolds(folds: Array<{ first: number; last: number }>): void { this.folds = folds.map((fold) => ({ ...fold })) }
+    async copyCommand(command: { id: number }): Promise<boolean> { this.copiedCommands.push(command.id); return true }
     fit(): void { this.fits += 1 }
     follow(): void { this.followed += 1; this.options.onFollowingChange?.(true) }
     clear(): void { this.cleared += 1 }
     selectAll(): void { this.selectedAll += 1 }
     async paste(text: string): Promise<void> { this.pasted.push(text) }
     async copy(): Promise<boolean> { this.copies += 1; return true }
-    async find(needle: string): Promise<number> {
+    async find(needle: string, options: { matchCase?: boolean } = {}): Promise<number> {
       this.searches.push(needle)
-      const total = needle === '' ? 0 : this.matches
+      this.matchCases.push(options.matchCase ?? false)
+      const total = needle === '' ? 0 : Math.min(this.matches, 1000)
       this.current = total > 0 ? 1 : 0
       return total
     }
-    get found(): { current: number; total: number } {
-      return { current: this.current, total: this.searches.at(-1) ? this.matches : 0 }
+    get found(): { current: number; total: number; more: boolean } {
+      const searched = this.searches.at(-1) !== undefined
+      return { current: this.current, total: searched ? Math.min(this.matches, 1000) : 0, more: searched && this.matches > 1000 }
     }
     findNext(direction: -1 | 1 = 1): void {
-      if (this.matches > 0) this.current = ((this.current - 1 + direction + this.matches) % this.matches) + 1
+      const held = Math.min(this.matches, 1000)
+      if (held > 0) this.current = ((this.current - 1 + direction + held) % held) + 1
     }
     selectOutput(command: Command): boolean {
       this.selectedOutputs.push(command.id)

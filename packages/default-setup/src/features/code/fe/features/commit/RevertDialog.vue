@@ -29,7 +29,7 @@
           </div>
           <template v-if="undoable">
             <p v-if="!noneKept" class="text-sm text-neutral-400" data-testid="discard-undoable">
-              What this removes is kept, and Undo brings it back for as long as git keeps it: about two weeks.
+              What this removes is kept, and Undo brings it back for 14 days.
             </p>
             <div v-if="notKept?.length" class="text-sm text-yellow-500" :class="{ 'mt-3': !noneKept }" data-testid="discard-not-kept">
               <AlertCircle class="inline w-4 h-4 mr-1" />

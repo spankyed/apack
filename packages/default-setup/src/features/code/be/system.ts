@@ -20,13 +20,14 @@ import type { AppSettings } from '@apackdev/sdk/types';
 import { services } from '#generated/services.ts';
 import { broadcastToSurface } from '#generated/events.ts';
 import { clearCliPathCache, isCliName, testCli } from './utils/resolve-cli.ts';
+import { terminalService } from './services/terminal.ts';
 import { createLogger, setDebugEnabled } from '@apackdev/sdk/logger';
 
 const cliLogger = createLogger('code');
 import { setup, enqueueActions, assign, sendTo, type AnyActorRef } from 'xstate'
 
 import { defineSystem } from '@apackdev/sdk/framework'
-import { GIT_COMMAND_LOG, openGitRepository, openGitWatcher, repositoryHandle, repositoryOf, watcherHandle, watcherOf } from './services/app-git-repository.ts'
+import { AppGitRepository, GIT_COMMAND_LOG, openGitRepository, openGitWatcher, repositoryHandle, repositoryOf, watcherHandle, watcherOf } from './services/app-git-repository.ts'
 import { gitWatcherActor } from './git-watcher-actor.ts'
 
 // child systems; their events come from the contract, which is where every child's now live
@@ -146,8 +147,23 @@ export const systemMachine = setup({
       }
     },
 
+    /** What the repository picker lists, for the window that asked: everything under the folder the user opened */
+    listRepositories: ({ context, reply }) => {
+      const folder = context.openedDirectory ?? context.baseDirectory
+      if (!folder) return
+      void AppGitRepository.repositoriesUnder(folder).then(
+        ({ repositories, truncated }) => reply?.({ type: 'commit.REPOSITORIES_RECEIVED', data: { repositories, truncated, current: context.baseDirectory } }),
+        () => reply?.({ type: 'commit.REPOSITORIES_RECEIVED', data: { repositories: [], truncated: false, current: context.baseDirectory } }),
+      )
+    },
+
     updateBaseDirectory: assign({
       baseDirectory: ({ event }) => codeSpec.typeOf('SET_BASE_DIRECTORY', event).path,
+      // A folder the user opened is what the picker lists; one the picker chose is a repository inside it
+      openedDirectory: ({ event, context }) => {
+        const ev = codeSpec.typeOf('SET_BASE_DIRECTORY', event)
+        return ev.fromPicker ? context.openedDirectory : ev.path
+      },
       gitRepository: ({ event, context }) => {
         const ev = codeSpec.typeOf('SET_BASE_DIRECTORY', event)
         // Clear the old repository's cache before creating new one
@@ -228,6 +244,9 @@ export const systemMachine = setup({
 
       // The resolved paths are cached, so a change to this feature's settings is where the cache is dropped
       clearCliPathCache();
+
+      // A live terminal keeps the cursor it was given until it is told the setting changed
+      terminalService.applyCursorDefaults(ev.settings);
 
       // A new default moves the explorer there at once; the same default arriving again leaves the user's browsing alone
       if (ev.settings.defaultBaseDirectory &&
@@ -314,6 +333,7 @@ export const systemMachine = setup({
     return {
       baseDirectory: baseDir,
       defaultBaseDirectory: codeSettings?.defaultBaseDirectory ?? null,
+      openedDirectory: baseDir,
       gitRepository: repositoryHandle(gitRepo),
       gitWatcher: watcherHandle(baseDir ? openGitWatcher(baseDir) : null)
     }
@@ -349,6 +369,13 @@ export const systemMachine = setup({
           },
           { actions: 'rememberBaseDirectory' },
         ],
+        LIST_REPOSITORIES: { actions: 'listRepositories' },
+        SELECT_REPOSITORY: {
+          actions: ({ event, self }) => {
+            const ev = event as { type: 'SELECT_REPOSITORY'; path: string }
+            self.send({ type: 'SET_BASE_DIRECTORY', path: ev.path, fromUserNavigation: true, fromPicker: true })
+          },
+        },
         // Worktree switch is intercepted here to change baseDirectory
         'commit.WORKTREE_SWITCH': {
           actions: ({ event, self }) => {

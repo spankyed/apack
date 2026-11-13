@@ -115,7 +115,7 @@ it('says nothing when reading an open diff again fails, and still says when a di
   getParentContext.mockReturnValue({ openFiles: [{ path: 'diff:a.ts:unstaged', isDiff: true, gitFile: { path: 'a.ts', staged: false } }] });
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.SHOWN' });
-  const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
+  const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false, refs: false };
 
   actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, diffs: true, files: ['a.ts'] } });
   const [, , { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];

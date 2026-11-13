@@ -127,3 +127,27 @@ describe('looking back through a terminal', () => {
     expect(sent()).toEqual([])
   })
 })
+
+describe("what a program's clipboard write does in a window", () => {
+  it('is handed to the main process, whether or not this window has the focus', () => {
+    const writeText = vi.fn(() => Promise.resolve(true))
+    vi.stubGlobal('electronAPI', { clipboard: { writeText } })
+    const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(false)
+    const { actor } = started()
+
+    actor.send({ type: 'terminal.CLIPBOARD', data: { terminalId: 't-1', text: 'copied by a program' } })
+    expect(writeText).toHaveBeenCalledWith('copied by a program')
+
+    focused.mockRestore()
+  })
+
+  it('that the main process refuses, or fails to take, leaves the window as it was: no error reaches it', async () => {
+    const writeText = vi.fn(() => Promise.reject(new Error('ipc failed')))
+    vi.stubGlobal('electronAPI', { clipboard: { writeText } })
+    const { actor } = started()
+
+    expect(() => actor.send({ type: 'terminal.CLIPBOARD', data: { terminalId: 't-1', text: 'x' } })).not.toThrow()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(writeText).toHaveBeenCalledWith('x')
+  })
+})

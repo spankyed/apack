@@ -29,7 +29,7 @@ import { searchState } from './features/search/state.ts';
 import { commitState } from './features/commit/state.ts';
 import { pullRequestState } from './features/pull-request/state.ts';
 import { terminalState, type TerminalInfo } from './features/terminal/state.ts';
-import { terminalPool } from './utils/terminal-pool.ts';
+import { terminalPool, viewSettingsOf } from './utils/terminal-pool.ts';
 import { actionsState } from './features/actions/state.ts';
 import { promptsState } from './features/prompts/state.ts';
 import type { KeyboardShortcut } from '@apackdev/sdk/types';
@@ -805,6 +805,16 @@ const codeState = setup({
       }
     }),
 
+    // The terminal views are the pool's, so the setting reaches them through it, as it changes
+    applyCopyOnSelect: ({ context }) => {
+      terminalPool.setCopyOnSelect(context.settings?.copyOnSelect === true)
+    },
+
+    // The views take their cursor and link settings when they are made, so a change makes them again
+    applyViewSettings: ({ context }) => {
+      terminalPool.setViewSettings(viewSettingsOf(context.settings))
+    },
+
     handleSettingsUpdate: assign(({ event, context }) => {
       const ev = event as { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
 
@@ -1421,11 +1431,12 @@ const codeState = setup({
         },
         // The answer, handed to every feature, each of which asks for what its panel shows
         CODE_STARTED: {
-          actions: ['handleCodeConnected', 'broadcastToAllFeatures']
+          // The saved settings reach the terminals at start, as they do when they change
+          actions: ['handleCodeConnected', 'applyCopyOnSelect', 'applyViewSettings', 'broadcastToAllFeatures']
         },
         // Handle settings updates
         FEATURE_SETTINGS_UPDATED: {
-          actions: ['handleSettingsUpdate']
+          actions: ['handleSettingsUpdate', 'applyCopyOnSelect', 'applyViewSettings']
         },
         // Route events to child machines
         '*': {

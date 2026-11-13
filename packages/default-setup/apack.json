@@ -618,6 +618,49 @@
             "terminalClipboardWrite": {
               "type": "boolean"
             },
+            "copyOnSelect": {
+              "type": "boolean"
+            },
+            "cursorStyle": {
+              "type": "string",
+              "enum": [
+                "block",
+                "bar",
+                "underline"
+              ]
+            },
+            "cursorInactiveStyle": {
+              "type": "string",
+              "enum": [
+                "block",
+                "bar",
+                "underline",
+                "hollow"
+              ]
+            },
+            "cursorBlink": {
+              "type": "string",
+              "enum": [
+                "default",
+                "on",
+                "off",
+                "program"
+              ]
+            },
+            "linkPreview": {
+              "type": "string",
+              "enum": [
+                "off",
+                "osc8",
+                "all"
+              ]
+            },
+            "bellFlash": {
+              "type": "boolean"
+            },
+            "bellNotification": {
+              "type": "boolean"
+            },
             "defaultBaseDirectory": {
               "type": [
                 "string",
@@ -735,6 +778,9 @@
             "hotkeys",
             "restoreTerminals",
             "terminalClipboardWrite",
+            "copyOnSelect",
+            "bellFlash",
+            "bellNotification",
             "defaultBaseDirectory",
             "baseDirectory",
             "enableShellIntegration",
@@ -815,6 +861,13 @@
           },
           "restoreTerminals": true,
           "terminalClipboardWrite": true,
+          "copyOnSelect": false,
+          "cursorStyle": "bar",
+          "cursorInactiveStyle": "hollow",
+          "cursorBlink": "default",
+          "linkPreview": "osc8",
+          "bellFlash": true,
+          "bellNotification": false,
           "defaultBaseDirectory": null,
           "baseDirectory": null,
           "enableShellIntegration": true,

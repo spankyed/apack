@@ -35,6 +35,7 @@
       :is-applying-hunk="isApplyingHunk"
       :applied-hunks="appliedHunks"
       @apply-hunk="applyHunk"
+      @resolve-conflict="resolveConflict"
       @select-file="selectFile"
       @close-file="closeFile"
       @content-change="handleContentChange"
@@ -130,6 +131,7 @@ const tabGroups = useSelector(actor, (state) => state.context.tabGroups)
 const isApplyingHunk = useSelector(commitActor, (state) => state?.context.isApplyingHunk === true)
 const appliedHunks = useSelector(commitActor, (state) => state?.context.appliedHunks ?? [])
 const applyHunk = (path: string, staged: boolean, hunk: string) => commitActor?.send({ type: 'commit.APPLY_HUNK', path, staged, hunk })
+const resolveConflict = (path: string, strategy: 'ours' | 'theirs') => commitActor?.send({ type: 'commit.RESOLVE_CONFLICT', path, strategy })
 
 const fileEditorRef = ref<InstanceType<typeof FileEditor>>()
 const pendingRevealLine = useSelector(actor, (state) => state.context.pendingRevealLine)

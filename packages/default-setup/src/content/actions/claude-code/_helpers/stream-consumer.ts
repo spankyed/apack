@@ -585,7 +585,7 @@ export async function consumeStream(
           let planBranch: string | undefined;
           let planPR: string | undefined;
           try {
-            planBranch = await services.cli.git.getCurrentBranch();
+            planBranch = await services.cli.git.readCurrentBranch();
             const pr = await services.cli.gh.findPRForBranch(planBranch);
             if (pr?.number) planPR = String(pr.number);
           } catch { /* non-critical */ }

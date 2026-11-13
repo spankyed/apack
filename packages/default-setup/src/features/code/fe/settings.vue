@@ -268,6 +268,151 @@
 
         <div class="flex items-center justify-between">
           <div class="flex-1">
+            <label for="terminal-copy-on-select" class="text-sm font-medium text-neutral-200">
+              Copy a selection when you let go
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              Text you select in a terminal is copied to your clipboard as soon as you finish selecting it, so there is no
+              copy to press. Off, you copy it yourself
+            </p>
+          </div>
+          <input
+            id="terminal-copy-on-select"
+            v-model="copyOnSelect"
+            type="checkbox"
+            @change="emit('update-setting', { path: ['copyOnSelect'], value: copyOnSelect })"
+            class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <label for="terminal-cursor-style" class="text-sm font-medium text-neutral-200">
+              Cursor shape
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              The shape of the cursor in a terminal that has the keyboard. A program can change it, and the change holds
+              until the program resets it
+            </p>
+          </div>
+          <select
+            id="terminal-cursor-style"
+            v-model="cursorStyle"
+            @change="emit('update-setting', { path: ['cursorStyle'], value: cursorStyle })"
+            class="bg-neutral-800 border border-neutral-600 rounded px-2 py-1 text-sm text-neutral-200 focus:outline-none focus:border-blue-600"
+          >
+            <option value="block">Block</option>
+            <option value="bar">Bar</option>
+            <option value="underline">Underline</option>
+          </select>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <label for="terminal-cursor-inactive-style" class="text-sm font-medium text-neutral-200">
+              Cursor shape when the terminal does not have the keyboard
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              The shape of the cursor in a terminal that is showing but not focused
+            </p>
+          </div>
+          <select
+            id="terminal-cursor-inactive-style"
+            v-model="cursorInactiveStyle"
+            @change="emit('update-setting', { path: ['cursorInactiveStyle'], value: cursorInactiveStyle })"
+            class="bg-neutral-800 border border-neutral-600 rounded px-2 py-1 text-sm text-neutral-200 focus:outline-none focus:border-blue-600"
+          >
+            <option value="hollow">Hollow block</option>
+            <option value="block">Block</option>
+            <option value="bar">Bar</option>
+            <option value="underline">Underline</option>
+          </select>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <label for="terminal-cursor-blink" class="text-sm font-medium text-neutral-200">
+              Blink the cursor
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              Default blinks, unless a program has chosen otherwise. On or off holds for every program; Program decides
+              follows what the program asked for
+            </p>
+          </div>
+          <select
+            id="terminal-cursor-blink"
+            v-model="cursorBlink"
+            @change="emit('update-setting', { path: ['cursorBlink'], value: cursorBlink })"
+            class="bg-neutral-800 border border-neutral-600 rounded px-2 py-1 text-sm text-neutral-200 focus:outline-none focus:border-blue-600"
+          >
+            <option value="default">Default (blinks)</option>
+            <option value="on">On</option>
+            <option value="off">Off</option>
+            <option value="program">Program decides</option>
+          </select>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <label for="terminal-link-preview" class="text-sm font-medium text-neutral-200">
+              Show where a link goes when the pointer is over it
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              Links a program declared with a hyperlink sequence, only, or every link in the terminal, or none. Applies to
+              every open terminal at once
+            </p>
+          </div>
+          <select
+            id="terminal-link-preview"
+            v-model="linkPreview"
+            @change="emit('update-setting', { path: ['linkPreview'], value: linkPreview })"
+            class="bg-neutral-800 border border-neutral-600 rounded px-2 py-1 text-sm text-neutral-200 focus:outline-none focus:border-blue-600"
+          >
+            <option value="osc8">Declared links only</option>
+            <option value="all">All links</option>
+            <option value="off">Off</option>
+          </select>
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <label for="terminal-bell-flash" class="text-sm font-medium text-neutral-200">
+              Flash the terminal when it rings the bell
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              A terminal whose program rings the bell flashes its background briefly. Repeated bells within half a second
+              flash once
+            </p>
+          </div>
+          <input
+            id="terminal-bell-flash"
+            v-model="bellFlash"
+            type="checkbox"
+            @change="emit('update-setting', { path: ['bellFlash'], value: bellFlash })"
+            class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <label for="terminal-bell-notification" class="text-sm font-medium text-neutral-200">
+              Notify me when a terminal rings the bell while the app is in the background
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              Sends a system notification when a terminal rings the bell and this window does not have focus
+            </p>
+          </div>
+          <input
+            id="terminal-bell-notification"
+            v-model="bellNotification"
+            type="checkbox"
+            @change="emit('update-setting', { path: ['bellNotification'], value: bellNotification })"
+            class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
             <label for="enable-shell-integration" class="text-sm font-medium text-neutral-200">
               Enable shell integration
             </label>
@@ -609,6 +754,13 @@ const hotkeys = useSettingsDraft(() => props.settings?.hotkeys ?? {})
 
 const restoreTerminals = useSettingsDraft(() => props.settings?.restoreTerminals ?? true)
 const terminalClipboardWrite = useSettingsDraft(() => props.settings?.terminalClipboardWrite ?? true)
+const copyOnSelect = useSettingsDraft(() => props.settings?.copyOnSelect ?? false)
+const cursorStyle = useSettingsDraft(() => props.settings?.cursorStyle ?? 'bar')
+const cursorInactiveStyle = useSettingsDraft(() => props.settings?.cursorInactiveStyle ?? 'hollow')
+const cursorBlink = useSettingsDraft(() => props.settings?.cursorBlink ?? 'default')
+const linkPreview = useSettingsDraft(() => props.settings?.linkPreview ?? 'osc8')
+const bellFlash = useSettingsDraft(() => props.settings?.bellFlash ?? true)
+const bellNotification = useSettingsDraft(() => props.settings?.bellNotification ?? false)
 const enableShellIntegration = useSettingsDraft(() => props.settings?.enableShellIntegration ?? false)
 const confirmTerminalClose = useSettingsDraft(() => props.settings?.confirmTerminalClose ?? true)
 const closeTerminalOnTabClose = useSettingsDraft(() => props.settings?.closeTerminalOnTabClose ?? true)

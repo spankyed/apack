@@ -79,6 +79,10 @@ export interface GitStatusFile {
   conflict?: ConflictKind
   /** An untracked folder, listed as one row: git tracks nothing in it. Its path ends with `/` */
   isDirectory?: boolean
+  /** For a submodule's row, how it differs: on another commit, files it tracks changed, files it does not track */
+  submodule?: { commit: boolean; modified: boolean; untracked: boolean }
+  /** The file's name is not text, so it is listed and nothing can be done to it here (`name-not-text`) */
+  nameNotText?: true
 }
 
 /**
@@ -125,7 +129,7 @@ export interface GitCommitInfo {
  * checked out, the commit it is on and every branch and tag, which a log and a pull request are read from; its
  * stashes; its worktrees.
  */
-export const REPOSITORY_PARTS = ['status', 'diffs', 'history', 'stashes', 'worktrees'] as const
+export const REPOSITORY_PARTS = ['status', 'diffs', 'history', 'stashes', 'worktrees', 'refs'] as const
 export type RepositoryPart = (typeof REPOSITORY_PARTS)[number]
 
 /** Which parts of a repository differ from when it was last checked */
@@ -165,6 +169,11 @@ export interface GitDiff {
   isImage?: boolean
   /** The pieces of the change that can be staged, or unstaged, one at a time: none for a file that is not plainly modified */
   hunks?: DiffHunk[]
+  /**
+   * For a conflicted file, its three sides as the index holds them: the version both started from, ours and
+   * theirs, each `null` where that side has no such file. Absent for a file that is not text
+   */
+  conflict?: { base: string | null; ours: string | null; theirs: string | null }
 }
 
 /** What a discard kept of what it removed, which can be put back for as long as git keeps it */
@@ -420,6 +429,89 @@ export type CodeConnectedData = {
   settings?: CodeSettings;
 };
 
+/** How many lines a changed file adds and removes, as git counts them, staged or not: none for a file that is not text */
+export interface LineCount {
+  path: string
+  staged: boolean
+  added: number
+  removed: number
+  binary: boolean
+}
+
+/** A file a stash or a commit changed, with its count */
+export interface ChangedFile {
+  path: string
+  status: 'added' | 'deleted' | 'modified' | 'renamed' | 'copied' | 'typechange'
+  originalPath?: string
+  added: number
+  removed: number
+  binary: boolean
+}
+
+/** A commit as the panel's history draws it: with every parent, and the refs that point at it */
+export interface HistoryCommit {
+  hash: string
+  parents: string[]
+  authorName: string
+  authorEmail: string
+  date: string
+  subject: string
+  refs: string[]
+}
+
+/** How a local branch stands against the branch it follows */
+export interface BranchStandingOf {
+  upstream?: string
+  /** Its upstream is gone from the remote's last fetched branches */
+  upstreamGone?: boolean
+  ahead: number
+  behind: number
+}
+
+/** Who last changed one line of a file, as `git blame` answers it */
+export interface BlameLine {
+  line: number
+  commit: string
+  author: string
+  authorEmail: string
+  date: string
+  summary: string
+  originalLine: number
+  originalPath: string
+}
+
+/** What the panel does to one commit of the history: give it a new message, fold it into the one before it, or drop it */
+export type RewriteAction = 'reword' | 'squash' | 'drop'
+
+/** What the panel can begin: merging a branch in, replaying what is checked out onto one, or picking a commit onto it */
+export type StartableOperation = 'merge' | 'rebase' | 'cherry-pick'
+
+/**
+ * A whole status took longer than its budget, and git's own file monitor or its untracked cache is off, either of
+ * which would make it faster
+ */
+export interface SlowStatus {
+  ms: number
+  budgetMs: number
+  fileMonitor: boolean
+  untrackedCache: boolean
+  /** Whether git has a file monitor of its own on this system, which turning the speed-ups on would turn on */
+  fileMonitorAvailable: boolean
+}
+
+/** What merging a branch into what is checked out would do: a pull's, before it is made */
+export type MergePreview =
+  | { kind: 'up-to-date' | 'fast-forward' | 'clean' | 'unknown' }
+  | { kind: 'conflicts'; files: string[] }
+
+/** A repository found under the folder the user opened, as the panel's picker lists it */
+export interface RepositoryUnder {
+  path: string
+  /** From the folder the user opened: empty for its own */
+  relative: string
+  kind: 'top' | 'nested' | 'submodule' | 'worktree'
+}
+
 export interface CodeSystemContext {
   baseDirectory: string | null
   /**
@@ -427,6 +519,11 @@ export interface CodeSystemContext {
    * the code settings change, the browsed `baseDirectory` included, so only a new default moves the explorer.
    */
   defaultBaseDirectory: string | null
+  /**
+   * The folder the user opened, which the repository picker lists the repositories under: the base directory, until
+   * the picker moves it into one of them
+   */
+  openedDirectory: string | null
   gitRepository: RepositoryHandle | null
   gitWatcher: WatcherHandle | null
 }
@@ -444,7 +541,8 @@ export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
 export const GIT_ERROR_CODES = [
   'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
-  'untrusted',
+  'aborted', 'git-not-found', 'developer-tools-missing', 'git-too-old', 'unsafe-ownership', 'signing-failed', 'unrelated-histories', 'nothing-to-commit', 'branch-exists', 'host-refused',
+  'untrusted', 'content-missing', 'published', 'hook-refused', 'name-not-text',
 ] as const
 export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
 
@@ -473,6 +571,10 @@ export interface CommitFailure {
   signIn?: SignInHelp
   /** What the repository would have git run, when the command was not run because the repository is not trusted */
   trust?: TrustRequest
+  /** The repository git will not read because another user owns it, as git named it */
+  ownership?: { directory: string }
+  /** A hook of the repository's that refused the command: its name, the code it exited with and what it printed */
+  hook?: { name: string; exitCode: number; output: string }
 }
 
 export type { ClaudeUiClientEvent, ClaudeUiNoticeEvent, ClaudeUiNotices, ClaudeUiScrollEvent, ClaudeUiScrollState, ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiNode, ClaudeUiMountState, ClaudeUiFieldEvent, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRow, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './services/claude-code/ui-presentation.ts'

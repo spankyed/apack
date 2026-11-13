@@ -3,10 +3,10 @@
 // and one `Contract` per feature would collide there. Codegen reads this without running anything.
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
-  CodeConnectedData, CodeSystemError, CommitFailure, CommitLogEntry, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
+  CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
-  SearchResult, StashEntry, TerminalInfo, WorktreeEntry,
+  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
@@ -72,17 +72,36 @@ export type IncomingCommitEvents =
   | { type: 'commit.RESTORE_DISCARDED'; id: string }
   /** The user trusts the repository to have git run what its own configuration and hooks name */
   | { type: 'commit.TRUST_REPOSITORY'; repository: string }
+  /** Stops the push running: git and what it started are ended, and the push is answered as stopped */
+  | { type: 'commit.STOP_PUSH' }
+  /** The user trusts the repository git refused for who owns it: added to their safe.directory */
+  | { type: 'commit.TRUST_OWNERSHIP' }
   | { type: 'commit.GET_ALL_BRANCHES' }
   | { type: 'commit.CHECKOUT_BRANCH'; branchName: string }
   | { type: 'commit.PUBLISH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
   | { type: 'commit.GENERATE_MESSAGE' }
-  | { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean }
+  /** Stash what is changed: only what is staged, or only `paths`, when asked */
+  | { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean; paths?: string[] }
+  /** Make a tag at `commit` (what is checked out when none), annotated when `message` is given */
+  | { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
+  | { type: 'commit.DELETE_TAG'; name: string }
+  /** Push a tag to the remote */
+  | { type: 'commit.PUSH_TAG'; name: string }
+  | { type: 'commit.RENAME_BRANCH'; name: string; to: string }
+  /** Turn on git's own file monitor and untracked cache here, which the user clicked for: it writes the repository's config */
+  | { type: 'commit.SPEED_UP_STATUS' }
   | { type: 'commit.STASH_LIST' }
   | { type: 'commit.STASH_APPLY'; index: number }
   | { type: 'commit.STASH_POP'; index: number }
   | { type: 'commit.STASH_DROP'; index: number }
   | { type: 'commit.STASH_CLEAR' }
+  /** The files a stash holds, to look into before applying it */
+  | { type: 'commit.GET_STASH_CHANGES'; index: number }
+  /** Who last changed each line of a file, from the top of the folder, for the editor's gutter */
+  | { type: 'commit.GET_BLAME'; path: string }
+  /** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
+  | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.WORKTREE_LIST' }
   | { type: 'commit.WORKTREE_ADD'; path: string; branch?: string; createBranch?: boolean }
   | { type: 'commit.WORKTREE_REMOVE'; path: string; force?: boolean }
@@ -92,13 +111,24 @@ export type IncomingCommitEvents =
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   /** Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up */
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+  /** Merge a branch in, rebase onto one, or pick a commit onto what is checked out */
+  | { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
+  /** Amend the last commit with what is staged, and `message` in place of its own when given */
+  | { type: 'commit.AMEND'; message?: string; evenIfPublished?: boolean }
+  /** A commit's whole message, for rewording it */
+  | { type: 'commit.GET_COMMIT_MESSAGE'; hash: string }
+  /** Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it */
+  | { type: 'commit.REWRITE_COMMIT'; hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }
+  /** What merging a branch in would do, before it is done */
+  | { type: 'commit.PREVIEW_MERGE'; target: string }
   /** The files in an untracked folder that is listed as one row */
   | { type: 'commit.LIST_UNTRACKED'; path: string }
   /** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
   /** Have the GitHub CLI give git its sign-in for this host */
   | { type: 'commit.SET_UP_SIGN_IN'; host: string; during?: 'push' | 'pull' }
-  | { type: 'commit.LOG_LIST' }
+  /** A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history */
+  | { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
 
@@ -110,9 +140,17 @@ export type OutgoingCommitEvents =
    * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
    * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
    */
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean; signIn?: SignInHelp } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; pullPreview?: MergePreview; hasIdentity?: boolean; slowStatus?: SlowStatus; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; watchSilent?: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean; signIn?: SignInHelp } }
   /** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
   | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
+  /** It ran, or it stopped on a conflict, which the status then describes as in progress */
+  | { type: 'commit.OPERATION_STARTED'; data: { kind: StartableOperation; target: string; stopped: boolean } }
+  | { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }
+  | { type: 'commit.AMENDED' }
+  | { type: 'commit.COMMIT_MESSAGE_RECEIVED'; data: { hash: string; message: string } }
+  | { type: 'commit.COMMIT_REWRITTEN'; data: { hash: string; action: RewriteAction } }
+  /** A remote branch already holds commits the amend or rewrite would change: done only once the user says to go on */
+  | { type: 'commit.REWRITE_NEEDS_CONFIRMATION'; data: { message: string } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; data: { paths: string[] } }
   | { type: 'commit.FILES_UNSTAGED'; data: { paths: string[] } }
@@ -122,6 +160,9 @@ export type OutgoingCommitEvents =
   | { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }
   | { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }
   | { type: 'commit.REPOSITORY_TRUSTED'; data: { repository: string } }
+  | { type: 'commit.OWNERSHIP_TRUSTED'; data: { directory: string } }
+  /** A push the user stopped, answered to the window that pushed: nothing failed */
+  | { type: 'commit.PUSH_STOPPED' }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
   /** How far along a push, a pull or a checkout is, for the window that asked for it */
@@ -130,7 +171,14 @@ export type OutgoingCommitEvents =
   /** Git signs in to this host through the GitHub CLI now */
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
   | { type: 'commit.BRANCH_RETRIEVED'; data: { branch: string } }
-  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
+  /** The branches, and how each local one stands against what it follows, by its name */
+  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[]; standing?: Record<string, BranchStandingOf>; tags?: { name: string; commit: string }[] } }
+  | { type: 'commit.TAG_CREATED'; data: { name: string } }
+  | { type: 'commit.TAG_DELETED'; data: { name: string } }
+  | { type: 'commit.TAG_PUSHED'; data: { name: string } }
+  | { type: 'commit.BRANCH_RENAMED'; data: { name: string; to: string } }
+  /** Which of the two were turned on: the file monitor only where git has one for this system */
+  | { type: 'commit.STATUS_SPED_UP'; data: { fileMonitor: boolean; untrackedCache: boolean } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PULLED'; data: { branchName: string } }
@@ -143,21 +191,31 @@ export type OutgoingCommitEvents =
    */
   | { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
   | { type: 'commit.STASH_LIST_RECEIVED'; data: { stashes: StashEntry[] } }
+  /** The files a stash holds, read without applying it, for the window that asked */
+  | { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }
+  | { type: 'commit.BLAME_RECEIVED'; data: { path: string; lines: BlameLine[] } }
   | { type: 'commit.STASH_SUCCESS'; data: { message: string } }
   | { type: 'commit.WORKTREE_LIST_RECEIVED'; data: { worktrees: WorktreeEntry[] } }
   | { type: 'commit.WORKTREE_ADDED'; data: { path: string; branch: string } }
   | { type: 'commit.WORKTREE_REMOVED'; data: { path: string } }
   | { type: 'commit.CONFLICT_RESOLVED'; data: { path: string } }
   | { type: 'commit.ALL_CONFLICTS_RESOLVED' }
-  | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[] } }
+  /** A page of history, saying which file's it is and whether it goes on from a cursor; `cursor` for the next */
+  | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: HistoryCommit[]; cursor?: string; path?: string; continued?: boolean } }
   | { type: 'commit.REVERT_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'commit.RESET_COMMIT_SUCCESS'; data: { hash: string } }
+  /** What `commit.UNDO_LAST` would take back, after a write that can be: nothing when there is none */
+  | { type: 'commit.UNDOABLE_RECEIVED'; data: { id: string; summary: string } | null }
+  | { type: 'commit.UNDONE'; data: { id: string; summary: string } }
+  /** The commit to be undone is already on a remote branch: undone only once the user says so, and this says why */
+  | { type: 'commit.UNDO_NEEDS_CONFIRMATION'; data: { message: string } }
 
 // ── pull-request ─────────────────────────────────────────────────────────
 export type IncomingPullRequestEvents =
   | { type: 'pr.GET_BASE_BRANCH' }
   | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string }
-  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string }
+  /** `fetchMissing`: content a partial clone was not given is fetched for this diff, where it is otherwise answered as missing */
+  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; fetchMissing?: boolean }
   | { type: 'pr.LIST_OPEN_PRS' }
   | { type: 'pr.SELECT_PR'; number: number }
   | { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
@@ -185,6 +243,8 @@ export type OutgoingPullRequestEvents =
   | { type: 'pr.BASE_BRANCH_RECEIVED'; data: { branch: string } }
   | { type: 'pr.BRANCH_DIFF_RECEIVED'; data: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
   | { type: 'pr.FILE_DIFF_RECEIVED'; data: GitDiff & { baseBranch: string; headBranch?: string } }
+  /** A file's diff needs content this partial clone was not given, which is fetched only when the user asks */
+  | { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string } }
   | { type: 'pr.ERROR'; message: string }
   | { type: 'pr.STATUS_CHANGED'; data: { timestamp: Date } }
   /** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */
@@ -337,7 +397,11 @@ export type IncomingCodeEvents =
   | IncomingTerminalEvents
   | IncomingActionsEvents
   | IncomingPromptsEvents
-  | { type: 'SET_BASE_DIRECTORY'; path: string; fromUserNavigation?: boolean }
+  | { type: 'SET_BASE_DIRECTORY'; path: string; fromUserNavigation?: boolean; fromPicker?: boolean }
+  /** The repositories under the folder the user opened: its own, nested ones, submodules and linked worktrees */
+  | { type: 'LIST_REPOSITORIES' }
+  /** Works in one of them: it becomes the base directory, and the folder the user opened is still what is listed */
+  | { type: 'SELECT_REPOSITORY'; path: string }
   /** Settings → Providers: resolve a CLI and store where it was found, in this feature's own settings */
   | { type: 'TEST_CLI_PROVIDER'; provider: string }
   | { type: 'PREPARE_CLAUDE_PROFILE_SETUP' }
@@ -369,6 +433,8 @@ export type OutgoingCodeEvents =
    * it starts from and for what its panels show. News, with no listing on it.
    */
   | { type: 'BASE_DIRECTORY_CHANGED'; baseDirectory: string }
+  /** What `LIST_REPOSITORIES` found, for the window that asked; `current` is the one the panels show */
+  | { type: 'commit.REPOSITORIES_RECEIVED'; data: { repositories: RepositoryUnder[]; truncated: boolean; current: string | null } }
   /** What testing a CLI found, for the Settings view that asked (the host declares its surface takes it) */
   | { type: 'CLI_TEST_RESULT'; provider: string; success: boolean; error?: string; resolvedPath?: string }
 

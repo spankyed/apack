@@ -53,9 +53,21 @@ const apiPort = getApiPort();
 const apiToken = ipcRenderer.sendSync('api:token') as string;
 const startupId = getStartupId();
 
+// Clipboard: the main process writes it, so no focus is needed (see packages/main/src/modules/clipboard-access.ts)
+const clipboard = {
+  writeText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text) as Promise<boolean>,
+} satisfies _HostBridge['clipboard'];
+
+// System notifications: the main process shows them, since a window cannot while it is not focused (see packages/main/src/modules/notify-access.ts)
+const notify = {
+  show: (title: string, body: string) => ipcRenderer.invoke('notify:show', title, body) as Promise<boolean>,
+} satisfies _HostBridge['notify'];
+
 // Shell utilities
 const shell = {
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  // A link a terminal printed: its own policy in the main process, which asks about schemes other than http, https and mailto
+  openTerminalLink: (url: string) => ipcRenderer.invoke('shell:openTerminalLink', url) as Promise<boolean>,
   showItemInFolder: (filePath: string) => ipcRenderer.invoke('shell:showItemInFolder', filePath),
   openPath: (filePath: string) => ipcRenderer.invoke('shell:openPath', filePath),
 } satisfies _HostBridge['shell'];
@@ -321,6 +333,8 @@ const electronAPI = {
   surfaces,
   fileUtils,
   shell,
+  clipboard,
+  notify,
   media,
   speechRecognition,
   zoom,

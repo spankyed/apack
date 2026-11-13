@@ -12,11 +12,16 @@
         <div class="flex-1 min-w-0 flex items-center gap-1.5">
           <slot name="prefix" />
           <span class="text-sm font-medium text-neutral-200 truncate min-w-0">{{ fileDisplay.filename }}</span>
+          <span v-if="file.nameNotText" data-testid="name-not-text" class="flex-shrink-0 text-[10px] text-amber-400" title="Its name is not valid text, so git cannot be asked about it by name here: it is left out of Stage all, Unstage all and Discard all">name not text</span>
           <span v-if="fileDisplay.directory" dir="rtl" class="text-xs text-neutral-500 truncate min-w-0 shrink-[9999]">
             {{ fileDisplay.directory }}
           </span>
         </div>
         <slot name="statusBadge">
+          <span v-if="count && !count.binary && (count.added || count.removed)" class="flex-shrink-0 text-[10px] tabular-nums space-x-0.5" data-testid="line-count">
+            <span v-if="count.added" class="text-green-500/80">+{{ count.added }}</span>
+            <span v-if="count.removed" class="text-red-500/80">-{{ count.removed }}</span>
+          </span>
           <span :class="getStatusColor(file.status)" class="flex-shrink-0 w-4 text-xs font-medium">
             {{ getStatusIcon(file.status) }}
           </span>
@@ -65,6 +70,8 @@ import { MENU_ITEM_CLASS, MENU_CONTENT_CLASS, MENU_SEPARATOR_CLASS } from '#feat
 const props = defineProps<{
   file: GitStatusFile
   isSelected: boolean
+  /** How many lines the file adds and removes, as git counts them, when it is counted */
+  count?: { added: number; removed: number; binary: boolean }
 }>()
 
 defineEmits<{

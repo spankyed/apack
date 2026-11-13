@@ -32,7 +32,9 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
     setModel: vi.fn(async () => {}),
   } as unknown as QueryHandle;
   const opened = vi.fn(async (key, launchKey, _options, consume) => store.openConversation(key, launchKey, async () => native, consume));
-  mockService<Services, 'cli'>('cli', { claudeCode: { profile: () => defaultConfigDir ? {configDir:defaultConfigDir} : {}, openConversation: opened, getNativeTerminal: store.getNativeTerminal, getConversation: store.getConversation, getNativeLaunch: store.getNativeLaunch,
+  let checkpointNumber = 0;
+  const checkpoint = vi.fn(async () => `checkpoint-${++checkpointNumber}`);
+  mockService<Services, 'cli'>('cli', { git: { checkpoint, changedSince: vi.fn(async () => []) } as never, claudeCode: { profile: () => defaultConfigDir ? {configDir:defaultConfigDir} : {}, openConversation: opened, getNativeTerminal: store.getNativeTerminal, getConversation: store.getConversation, getNativeLaunch: store.getNativeLaunch,
     isConversationBusy: store.isConversationBusy, closeIdleConversation: store.closeIdleConversation,
     getHandle: store.getHandle, isCurrentTurn: store.isCurrentTurn, clearHandle: store.clearHandle, storeHandle: store.storeHandle,
     sessionExists: vi.fn(async () => true),
@@ -78,6 +80,7 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
   expect(await invoke('first', user1.id)).toMatchObject({ streaming: true });
   if (mode === 'source') expect(opened.mock.calls[0]![2].model).toBe(stagedModel ? 'sonnet' : undefined);
   await finish(1);
+  expect(getClaudeState(services, id)?.turnCheckpoint).toBe('checkpoint-1');
   expect(getClaudeState(services, id)?.profile).toEqual(initialProfile);
   expect(opened.mock.calls[0]![2].env).toEqual({CLAUDE_CONFIG_DIR: initialProfile.configDir,CLAUDE_SECURESTORAGE_CONFIG_DIR:undefined});
   defaultConfigDir = '/fixture/other-profile';
@@ -91,6 +94,7 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
   const user2 = repository.chatCommands.addMessage({ threadId: id, sender: 'user', text: 'second' });
   expect(await invoke('second', user2.id)).toMatchObject({ streaming: true });
   await finish(2);
+  expect(getClaudeState(services, id)?.turnCheckpoint).toBe('checkpoint-2');
   expect(opened).toHaveBeenCalledOnce();
   expect(getClaudeState(services, id)?.profile).toEqual(initialProfile);
   expect(native.send).toHaveBeenCalledTimes(2);
@@ -127,6 +131,7 @@ it.each([['source', false, false], ['compiled flow', false, false], ['source', t
     expect(messages.find(message => message.id === user1.id)?.context?.claudeNativeUserMessage).toEqual({ uuid: 'input-1', sessionId: 'fixture-session', text: 'input 1', origin: { kind: 'unclassified' } });
     expect(messages.find(message => message.id === user2.id)?.context?.claudeNativeUserMessage).toEqual({ uuid: 'input-2', sessionId: 'fixture-session', text: 'input 2', origin: { kind: 'unclassified' } });
   }
+  expect(checkpoint).toHaveBeenCalledTimes(2);
   expect(messages.filter(message => message.sender === 'assistant').map(message => message.text)).toEqual(['reply 1', ...(mode === 'source' ? ['Model selection accepted: haiku. The next turn will report the effective model.'] : []), 'reply 2', 'native autonomous work']);
   expect(await store.closeIdleConversation(id)).toBe(true);
   expect(store.getHandle(id)).toBeUndefined();
@@ -140,7 +145,7 @@ it('preserves native assistant rows when one provider reply becomes several tran
   const native = { events: events as AsyncIterable<StreamLine>, send: vi.fn(() => 'input-paired'),
     hasPendingBackgroundTasks: () => false, getPermissionMode: vi.fn(async () => 'acceptEdits'), close: vi.fn(async () => events.end()), kill: vi.fn(() => events.end()),
   } as unknown as QueryHandle;
-  mockService<Services, 'cli'>('cli', { claudeCode: { profile: () => ({configDir:'/fixture/claude-profile'}),
+  mockService<Services, 'cli'>('cli', { git: { checkpoint: vi.fn(async () => undefined) } as never, claudeCode: { profile: () => ({configDir:'/fixture/claude-profile'}),
     openConversation: (key, launchKey, _options, consume) => store.openConversation(key, launchKey, async () => native, consume),
     getNativeTerminal: store.getNativeTerminal, getConversation: store.getConversation, getNativeLaunch: store.getNativeLaunch, isConversationBusy: store.isConversationBusy,
     getHandle: store.getHandle, isCurrentTurn: store.isCurrentTurn, clearHandle: store.clearHandle, storeHandle: store.storeHandle,
@@ -185,7 +190,7 @@ it.each([['Plan','acceptEdits',undefined,'plan','acceptEdits'],['Edit','plan','a
  const events=new PassThrough({objectMode:true})
  const native={events:events as AsyncIterable<StreamLine>,send:vi.fn(()=>'phase-input'),hasPendingBackgroundTasks:()=>false,getPermissionMode:vi.fn(async()=>target),setPermissionMode:vi.fn(async mode=>mode),close:vi.fn(async()=>events.end()),kill:vi.fn(()=>events.end())} as unknown as QueryHandle
  const opened=vi.fn(async(key,launchKey,_options,consume)=>store.openConversation(key,launchKey,async()=>native,consume))
- mockService<Services,'cli'>('cli',{claudeCode:{ profile: () => ({configDir:'/fixture/claude-profile'}),openConversation:opened,getNativeTerminal:store.getNativeTerminal,getConversation:store.getConversation,getNativeLaunch:store.getNativeLaunch,isConversationBusy:store.isConversationBusy,closeIdleConversation:store.closeIdleConversation,getHandle:store.getHandle,isCurrentTurn:store.isCurrentTurn,clearHandle:store.clearHandle,storeHandle:store.storeHandle,sessionExists:vi.fn(async()=>true)} as never})
+ mockService<Services,'cli'>('cli',{git:{checkpoint:vi.fn(async()=>undefined)} as never,claudeCode:{ profile: () => ({configDir:'/fixture/claude-profile'}),openConversation:opened,getNativeTerminal:store.getNativeTerminal,getConversation:store.getConversation,getNativeLaunch:store.getNativeLaunch,isConversationBusy:store.isConversationBusy,closeIdleConversation:store.closeIdleConversation,getHandle:store.getHandle,isCurrentTurn:store.isCurrentTurn,clearHandle:store.clearHandle,storeHandle:store.storeHandle,sessionExists:vi.fn(async()=>true)} as never})
  mockService<Services,'chat'>('chat',{...chatService,resolveReferences:vi.fn(async()=>({textPrefix:'',imageBlocks:[]}))} as never)
  mockService<Services,'threads'>('threads',{updateChatState:vi.fn()})
  mockService<Services,'logger'>('logger',{debug:vi.fn(),info:vi.fn(),warn:vi.fn(),error:vi.fn()})

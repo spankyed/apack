@@ -40,6 +40,8 @@ export interface CodeSurfaceHarness {
   setTerminals(terminals: TerminalInfo[]): Promise<void>
   /** What each terminal's program has said off its screen, as the child actor holds it */
   setActivity(activity: Record<string, TerminalActivity>): Promise<void>
+  /** The bells the terminal child holds as flashing or in their window, as the state keeps them */
+  setBells(bells: Record<string, 'flashing' | 'quiet'>): Promise<void>
   /** The recording this window has open to look back through, or none */
   setRewind(rewind: TerminalRewindView | null): Promise<void>
   selectPanelTerminal(terminalId: string | null): Promise<void>
@@ -65,15 +67,16 @@ export function startCodeSurface(options: CodeSurfaceOptions = {}): CodeSurfaceH
 
   const terminalMachine = createMachine({
     types: {} as {
-      context: { terminals: TerminalInfo[]; activity: Record<string, TerminalActivity>; rewind: TerminalRewindView | null }
+      context: { terminals: TerminalInfo[]; activity: Record<string, TerminalActivity>; rewind: TerminalRewindView | null; bells: Record<string, 'flashing' | 'quiet'> }
       events: AnyEventObject
     },
     id: 'terminal',
-    context: { terminals: options.terminals ?? [], activity: {}, rewind: null },
+    context: { terminals: options.terminals ?? [], activity: {}, rewind: null, bells: {} },
     on: {
       'test.TERMINALS': { actions: assign({ terminals: ({ event }) => event.terminals as TerminalInfo[] }) },
       'test.ACTIVITY': { actions: assign({ activity: ({ event }) => event.activity as Record<string, TerminalActivity> }) },
       'test.REWIND': { actions: assign({ rewind: ({ event }) => event.rewind as TerminalRewindView | null }) },
+      'test.BELLS': { actions: assign({ bells: ({ event }) => event.bells as Record<string, 'flashing' | 'quiet'> }) },
       '*': { actions: ({ event }) => { sent.push(event) } },
     },
   })
@@ -137,6 +140,10 @@ export function startCodeSurface(options: CodeSurfaceOptions = {}): CodeSurfaceH
     },
     async setActivity(activity) {
       terminal.send({ type: 'test.ACTIVITY', activity })
+      await settle()
+    },
+    async setBells(bells) {
+      terminal.send({ type: 'test.BELLS', bells })
       await settle()
     },
     async setRewind(rewind) {

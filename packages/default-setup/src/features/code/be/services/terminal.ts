@@ -5,11 +5,12 @@ import * as path from 'path'
 import { randomBytes } from 'node:crypto'
 import type { TerminalInfo, TerminalCreate } from '../types.ts'
 import type { TerminalEntity } from '../repository/index.ts'
+import type { CodeSettings } from '../types.ts'
 import { EARS } from '#generated/ears.ts'
 import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts'
-import type { TerminalCellSize, TerminalEvent, TerminalRewind, TerminalSession, TerminalSessionSummary } from '@apackdev/sdk/services'
+import type { TerminalCellSize, TerminalCursorBlink, TerminalCursorStyle, TerminalEvent, TerminalRewind, TerminalSession, TerminalSessionSummary } from '@apackdev/sdk/services'
 import { resolveAppEnvironment } from '@apackdev/sdk/env'
 import { TERMINAL_COLORS } from '../terminal-colors.ts'
 import { directoryToStart, shellToStart, submitFor } from './known-shells.ts'
@@ -212,6 +213,21 @@ export interface TerminalHandlers {
  * Where a terminal's recording is kept: what its shell printed, so the terminal can be reopened where it
  * left off and looked back through. Inside the app's own data directory, in a file only the user reads.
  */
+/**
+ * The cursor a session starts with and returns to on a reset, from the code settings.
+ *
+ * **Blink is the broker's reset value, and the view's override is the app's own.** Unset (`default`) resets to a
+ * blinking cursor, as the broker's `On` does, and a program's choice holds until it resets (D8). `on` and `off`
+ * are sent as they are, and the view applies them over what a program asks; `program` leaves the blink to the program.
+ */
+export function cursorDefaultsOf(settings: CodeSettings | undefined): { style: TerminalCursorStyle; blink: TerminalCursorBlink } {
+  const blink = settings?.cursorBlink
+  return {
+    style: settings?.cursorStyle ?? 'bar',
+    blink: blink === 'off' || blink === 'program' ? blink : 'on',
+  }
+}
+
 export function recordingFor(id: string, userDataDir = resolveAppEnvironment().userDataDir): string {
   return path.join(userDataDir, 'apack', 'terminal-recordings', `${id}.recording`)
 }
@@ -426,6 +442,7 @@ class TerminalService {
       const resumed = target && there
         ? await services.terminal.at({ command: target.command }).adopt(there.id, listeners).catch(() => undefined)
         : undefined
+      if (resumed) await this.arrangeCursor(resumed, settings)
       // Otherwise a new shell, started under what the last one printed: usually what it was restarted to read
       const session = resumed ?? await this.open(id, { shell, cwd, cols, rows, target }, true, settings, listeners)
       // **Closed while its shell was being started**: the terminal is gone, and the shell that was for it
@@ -509,6 +526,34 @@ class TerminalService {
    * with neither — the hook is a file and the recording a path, and both would be this machine's.
    */
   private async open(
+    id: string,
+    where: { shell: string; cwd: string; cols: number; rows: number; target?: { command: string[] } },
+    restore: boolean,
+    settings: ReturnType<ReturnType<typeof featureSettings.forFeature<'code'>>['get']>,
+    listeners: { onEvent(event: TerminalEvent): void; onExit(code: number | null): void },
+  ): Promise<TerminalSession> {
+    const session = await this.spawn(id, where, restore, settings, listeners)
+    await this.arrangeCursor(session, settings)
+    return session
+  }
+
+  /**
+   * Sends a session the cursor default the settings give (`SetCursorDefaults`). A session is given it at spawn and
+   * when taken up again, and every live one is given it again when the settings change (`applyCursorDefaults`).
+   */
+  private async arrangeCursor(session: TerminalSession, settings: CodeSettings | undefined): Promise<void> {
+    const { style, blink } = cursorDefaultsOf(settings)
+    await session.setCursorDefaults(style, blink).catch((error: unknown) => logger.error('Could not set the cursor default of a terminal', { error }))
+  }
+
+  /** Every live terminal is given the cursor default the settings now give */
+  applyCursorDefaults(settings: CodeSettings | undefined): void {
+    for (const terminal of this.terminals.values()) {
+      if (terminal.state.kind === 'live') void this.arrangeCursor(terminal.state.session, settings)
+    }
+  }
+
+  private async spawn(
     id: string,
     where: { shell: string; cwd: string; cols: number; rows: number; target?: { command: string[] } },
     restore: boolean,
@@ -940,6 +985,7 @@ class TerminalService {
         onEvent: (event) => handlers.onEvent(row.id, event),
         onExit: (code) => this.exited(row.id, opening, code, handlers),
       })
+      await this.arrangeCursor(taken, featureSettings.forFeature('code').get())
       const info: Terminal['info'] = {
         id: row.id,
         title: row.title,
