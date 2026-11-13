@@ -480,6 +480,9 @@ export interface BlameLine {
   originalPath: string
 }
 
+/** What the panel can begin: merging a branch in, replaying what is checked out onto one, or picking a commit onto it */
+export type StartableOperation = 'merge' | 'rebase' | 'cherry-pick'
+
 /** What merging a branch into what is checked out would do: a pull's, before it is made */
 export type MergePreview =
   | { kind: 'up-to-date' | 'fast-forward' | 'clean' | 'unknown' }

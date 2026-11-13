@@ -66,6 +66,9 @@
               <div class="text-[11px] text-neutral-500 truncate">{{ entry.hash.slice(0, 7) }} · {{ entry.authorName }} · {{ formatCommitDate(entry.date) }}</div>
             </div>
             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              <button v-if="!inCheckout.has(entry.hash)" data-testid="cherry-pick" @click.stop="commitActor.send({ type: 'commit.START_OPERATION', kind: 'cherry-pick', target: entry.hash })" class="p-0.5 hover:bg-neutral-700 rounded" title="Pick this commit onto what is checked out">
+                <Cherry class="w-3 h-3 text-neutral-400" />
+              </button>
               <button @click.stop="openRevertCommitDialog(entry)" class="p-0.5 hover:bg-neutral-700 rounded" title="Revert this commit">
                 <Undo2 class="w-3 h-3 text-neutral-400" />
               </button>
@@ -102,7 +105,7 @@ import { ref, computed, nextTick } from 'vue'
 import { useSelector } from '@xstate/vue'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { CommitLogEntry } from '#features/code/fe/features/commit/state.ts'
-import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X, Cherry } from 'lucide-vue-next'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import HistoryGraph from '#features/code/fe/features/commit/HistoryGraph.vue'
@@ -120,6 +123,15 @@ const commitLog = useSelector(commitActor, (state) => state.context.commitLog) a
 const logCursor = useSelector(commitActor, (state) => state.context.logCursor)
 const logPath = useSelector(commitActor, (state) => state.context.logPath)
 const lanes = computed(() => laneRows(commitLog.value))
+/** The commits shown that what is checked out already holds, which there is nothing to pick from: children come first */
+const inCheckout = computed(() => {
+  const held = new Set<string>()
+  for (const entry of commitLog.value) {
+    if (entry.refs.some(ref => ref === 'HEAD' || ref.startsWith('HEAD ->'))) held.add(entry.hash)
+    if (held.has(entry.hash)) for (const parent of entry.parents) held.add(parent)
+  }
+  return held
+})
 const graphWidth = computed(() => Math.min(lanes.value.at(-1)?.width ?? 1, 8))
 
 // Search state

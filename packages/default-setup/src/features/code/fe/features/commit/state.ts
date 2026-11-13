@@ -5,7 +5,7 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from 'apack-git/staging';
-import type { BlameLine, ChangedFile, MergePreview, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp } from '../../../be/types.ts';
+import type { BlameLine, ChangedFile, MergePreview, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, SignInHelp, StartableOperation } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -48,6 +48,8 @@ export interface CodeCommitContext {
   hasIdentity: boolean
   /** What a pull would do, when there is something to pull */
   pullPreview: MergePreview | null
+  /** What merging a branch in would do, for the branch last asked about */
+  mergePreview: { target: string; preview: MergePreview } | null
   gitError: string | null
   isGitLoading: boolean
   selectedGitFile: GitStatusFile | null
@@ -92,6 +94,8 @@ export interface CodeCommitContext {
   operation: RepositoryOperation | null
   /** Whether git was asked to move that on and has not answered */
   isMovingOperation: boolean
+  /** Whether a merge, a rebase or a cherry-pick was begun and has not answered */
+  isStartingOperation: boolean
   /** Whether fetching by itself has stopped: what is shown of the remote is as old as the last fetch that worked */
   isFetchSuspended: boolean
   /** What can be done about the sign-in the remote asked for when fetching stopped */
@@ -288,6 +292,10 @@ export type Event =
   | { type: 'commit.ALL_CONFLICTS_RESOLVED' }
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
   | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
+  | { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
+  | { type: 'commit.OPERATION_STARTED'; data: { kind: StartableOperation; target: string; stopped: boolean } }
+  | { type: 'commit.PREVIEW_MERGE'; target: string }
+  | { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }
   | { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
   | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[]; cursor?: string; path?: string; continued?: boolean } }
   /** The next page of the history the log shows */
@@ -310,6 +318,7 @@ type OfOneFolder =
   | 'gitBranch'
   | 'hasIdentity'
   | 'pullPreview'
+  | 'mergePreview'
   | 'gitError'
   | 'selectedGitFile'
   | 'revertDialogFile'
@@ -354,6 +363,7 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   gitBranch: '',
   hasIdentity: true,
   pullPreview: null,
+  mergePreview: null,
   gitError: null,
   selectedGitFile: null,
   revertDialogFile: null,
@@ -734,7 +744,8 @@ export const commitState = setup({
       isPushing: false,
       isPulling: false,
       isGeneratingMessage: false,
-      isMovingOperation: false
+      isMovingOperation: false,
+      isStartingOperation: false
     }),
 
     dismissError: assign({ gitError: null, gitFailure: null }),
@@ -815,6 +826,22 @@ export const commitState = setup({
 
     // Where that left the repository is in its status, which the backend announces as changed
     handleOperationMoved: assign({ isMovingOperation: false }),
+
+    /** Has git merge a branch in, rebase onto one or pick a commit: one that stops on a conflict shows as in progress */
+    startOperation: enqueueActions(({ event, enqueue }) => {
+      const { kind, target } = event as { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
+      enqueue.assign({ isStartingOperation: true, gitError: null })
+      enqueue(() => { sendToSystem('code', { type: 'commit.START_OPERATION', kind, target }) })
+    }),
+
+    handleOperationStarted: assign({ isStartingOperation: false }),
+
+    previewMerge: ({ event }) => {
+      const { target } = event as { type: 'commit.PREVIEW_MERGE'; target: string }
+      sendToSystem('code', { type: 'commit.PREVIEW_MERGE', target })
+    },
+
+    handleMergePreviewed: assign({ mergePreview: ({ event }) => (event as { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }).data }),
 
     requestGenerateMessage: () => {
       sendToSystem('code', { type: 'commit.GENERATE_MESSAGE' })
@@ -1046,6 +1073,7 @@ export const commitState = setup({
     isCheckingOutBranch: false,
     isWatchingRepository: true,
     isMovingOperation: false,
+    isStartingOperation: false,
     isSettingUpSignIn: false,
     isApplyingHunk: false,
     isShown: false,
@@ -1257,6 +1285,18 @@ export const commitState = setup({
         },
         'commit.OPERATION_MOVED': {
           actions: 'handleOperationMoved'
+        },
+        'commit.START_OPERATION': {
+          actions: 'startOperation'
+        },
+        'commit.OPERATION_STARTED': {
+          actions: ['handleOperationStarted', 'requestLogList']
+        },
+        'commit.PREVIEW_MERGE': {
+          actions: 'previewMerge'
+        },
+        'commit.MERGE_PREVIEWED': {
+          actions: 'handleMergePreviewed'
         },
         'commit.CLEAR_DIFF': {
           actions: 'clearGitDiff'

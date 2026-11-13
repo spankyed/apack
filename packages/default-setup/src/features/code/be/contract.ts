@@ -6,7 +6,7 @@ import type {
   CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
-  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview,
+  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
@@ -102,6 +102,10 @@ export type IncomingCommitEvents =
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   /** Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up */
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+  /** Merge a branch in, rebase onto one, or pick a commit onto what is checked out */
+  | { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
+  /** What merging a branch in would do, before it is done */
+  | { type: 'commit.PREVIEW_MERGE'; target: string }
   /** The files in an untracked folder that is listed as one row */
   | { type: 'commit.LIST_UNTRACKED'; path: string }
   /** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
@@ -124,6 +128,9 @@ export type OutgoingCommitEvents =
   | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; pullPreview?: MergePreview; hasIdentity?: boolean; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean; signIn?: SignInHelp } }
   /** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
   | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
+  /** It ran, or it stopped on a conflict, which the status then describes as in progress */
+  | { type: 'commit.OPERATION_STARTED'; data: { kind: StartableOperation; target: string; stopped: boolean } }
+  | { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; data: { paths: string[] } }
   | { type: 'commit.FILES_UNSTAGED'; data: { paths: string[] } }

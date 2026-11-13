@@ -131,7 +131,17 @@ stash in the panel's list opens to show its files before it is applied (`commit.
 refs at it; the cursor walks from where the first page stood, so a ref moving between pages neither repeats nor drops
 a commit, and `path` follows a file across its renames. The commit panel's log reads it a hundred commits a page
 (`commit.LOG_LIST` with `cursor` for Load more), draws lanes beside the commits (`laneRows`), and shows one file's
-history when an editor tab asks for it (`commit.SHOW_FILE_HISTORY`).
+history when an editor tab asks for it (`commit.SHOW_FILE_HISTORY`). The panel's whole history is of every local branch
+with what is checked out, so another branch's commits are there to pick; a file's is of what is checked out.
+
+## Merging, rebasing and picking
+
+`merge(target)`, `rebaseOnto(target)` and `cherryPick(commits)` each take a checkpoint first and are written in the
+journal, so undo takes one back; one that stops on a conflict throws, and is the operation in progress the snapshot
+describes, carried on or given up with `moveOperation`. The branch picker offers a merge and a rebase on each other
+branch, the merge's button titled with what it would do (`commit.PREVIEW_MERGE`), and the history offers a pick on
+each commit that what is checked out does not hold (`commit.START_OPERATION`, answered `commit.OPERATION_STARTED` with
+whether it stopped). None is begun while another is in progress.
 
 ## Branches, remotes and tags
 

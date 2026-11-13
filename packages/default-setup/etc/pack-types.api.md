@@ -2009,6 +2009,17 @@ type IncomingCommitEvents = {
     type: 'commit.MOVE_OPERATION';
     move: OperationMove;
 }
+/** Merge a branch in, rebase onto one, or pick a commit onto what is checked out */
+ | {
+    type: 'commit.START_OPERATION';
+    kind: StartableOperation;
+    target: string;
+}
+/** What merging a branch in would do, before it is done */
+ | {
+    type: 'commit.PREVIEW_MERGE';
+    target: string;
+}
 /** The files in an untracked folder that is listed as one row */
  | {
     type: 'commit.LIST_UNTRACKED';
@@ -3306,6 +3317,21 @@ type OutgoingCommitEvents =
     type: 'commit.OPERATION_MOVED';
     data: {
         move: OperationMove;
+    };
+}
+/** It ran, or it stopped on a conflict, which the status then describes as in progress */
+ | {
+    type: 'commit.OPERATION_STARTED';
+    data: {
+        kind: StartableOperation;
+        target: string;
+        stopped: boolean;
+    };
+} | {
+    type: 'commit.MERGE_PREVIEWED';
+    data: {
+        target: string;
+        preview: MergePreview;
     };
 } | {
     type: 'commit.DIFF_RECEIVED';
@@ -5130,6 +5156,9 @@ interface SignInHelp {
 type Simplify<T> = {
     [K in keyof T]: T[K];
 } & {};
+
+/** What the panel can begin: merging a branch in, replaying what is checked out onto one, or picking a commit onto it */
+type StartableOperation = 'cherry-pick' | 'merge' | 'rebase';
 
 interface StashEntry {
     index: number;

@@ -6,10 +6,11 @@ import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
 import { GitError, GitUnusableError, HookRefusedError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from 'apack-git'
+import type { HistoryPage } from 'apack-git'
 import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { setUpGitSignIn } from '../services/gh-cli.ts'
 import { isHostName } from '../services/sign-in.ts'
-import type { CommitFailure, GitProgress, OperationMove, RepositoryChange } from '../types.ts'
+import type { CommitFailure, GitProgress, OperationMove, RepositoryChange, StartableOperation } from '../types.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
 
 const surfaceId = 'code' as const
@@ -58,6 +59,8 @@ export type Event =
   | { type: 'commit.MARK_RESOLVED'; path: string }
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
+  | { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
+  | { type: 'commit.PREVIEW_MERGE'; target: string }
   | { type: 'commit.SET_UP_SIGN_IN'; host: string; during?: 'push' | 'pull' }
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
   | { type: 'commit.LIST_UNTRACKED'; path: string }
@@ -541,6 +544,39 @@ export const commitSystem = setup({
         answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
       }).finally(() => {
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+      })
+    },
+
+    startOperation: ({ event, context, self, reply }) => {
+      const { kind, target } = event as { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
+      if (!requireGitRepository(context, reply)) return
+      const repository = context.gitRepository
+
+      repository.readSnapshot().then(async ({ operation }) => {
+        if (operation) throw new Error(`A ${operation.kind} of ${operation.subject} is in progress: carry it on or give it up first.`)
+        const started = kind === 'merge' ? repository.merge(target) : kind === 'rebase' ? repository.rebaseOnto(target) : repository.cherryPick([target])
+        // One that stops on a conflict is left in progress, which the status describes, to be carried on or given up
+        const stopped = await started.then(() => false, async (error: unknown) => {
+          if ((await repository.readSnapshot().catch(() => undefined))?.operation) return true
+          throw error
+        })
+        answer(reply, { type: 'commit.OPERATION_STARTED', data: { kind, target, stopped } })
+        if (!stopped) await answerUndoable(repository, reply)
+      }).catch((error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
+      }).finally(() => {
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+      })
+    },
+
+    previewMerge: ({ event, context, reply }) => {
+      const { target } = event as { type: 'commit.PREVIEW_MERGE'; target: string }
+      if (!requireGitRepository(context, reply)) return
+
+      context.gitRepository.previewMerge(target).then((preview) => {
+        answer(reply, { type: 'commit.MERGE_PREVIEWED', data: { target, preview } })
+      }, (error: unknown) => {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
       })
     },
 
@@ -1042,7 +1078,18 @@ export const commitSystem = setup({
       const { cursor, path: file } = event as { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.history({ cursor, path: file, limit: LOG_PAGE }).then((page) => {
+      const repository = context.gitRepository
+      // The whole history is of every local branch with what is checked out, so another branch's commits are there
+      // to be picked; a file's is of what is checked out, and a later page carries on from its cursor
+      const refs = cursor || file ? Promise.resolve(undefined) : repository.refsModel().then(
+        ({ branches }) => { const local = branches.filter(branch => !branch.remote); return local.length ? ['HEAD', ...local.map(branch => branch.name)] : undefined },
+        () => undefined,
+      )
+      // A branch checked out with no commit yet has no HEAD to start from, and its history is empty
+      refs.then(refs => repository.history({ refs, cursor, path: file, limit: LOG_PAGE }).catch(async (error: unknown): Promise<HistoryPage> => {
+        if (refs && !(await repository.commitsExist('HEAD'))) return { commits: [] }
+        throw error
+      })).then((page) => {
         answer(reply, {
           type: 'commit.LOG_LIST_RECEIVED',
           data: { commits: page.commits, ...(page.cursor && { cursor: page.cursor }), ...(file && { path: file }), ...(cursor && { continued: true }) },
@@ -1201,6 +1248,12 @@ export const commitSystem = setup({
         },
         'commit.MOVE_OPERATION': {
           actions: 'moveOperation'
+        },
+        'commit.START_OPERATION': {
+          actions: 'startOperation'
+        },
+        'commit.PREVIEW_MERGE': {
+          actions: 'previewMerge'
         },
         'commit.SET_UP_SIGN_IN': {
           actions: 'setUpSignIn'
