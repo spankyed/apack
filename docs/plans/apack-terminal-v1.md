@@ -172,10 +172,22 @@ Routes A and B were run in the first pass, which C then stalled (`C:\apack-setup
 with the same program (`ONLY_D`, `C:\apack-setup\w3-d-run.log`, which exited within its watchdog). Each route was
 tested with one blocked reader, which is the shape the `keeping` cases use, not a shape with many readers.
 
-Consequence for step 2: a blocked read can be ended from another thread, by disconnecting the server end (B) or by
-cancelling the read's I/O (A for a synchronous read, D for an overlapped one). The keeping suite must end its reads
-that way and never by closing the handle the read is blocked on. Step 2 is not done: the suite is not ported and
-has not run on the VM.
+**Second pass, the broker's own shape.** The broker parks its read on the server end, the end it accepted, so B
+above does not apply to it. Route E ran that shape with `DisconnectNamedPipe` on the same server end: the call never
+returned, and the watchdog stopped the process with no result (`C:\apack-setup\w3-e-run.log`). The likely cause is the
+one C shows: a synchronous call on a handle waits behind a read pending on that handle. Two routes that do not wait
+behind it unblocked the same shape, each run once:
+
+- **F, `CancelIoEx`** on the synchronous server handle: returned 1; the read failed with `ERROR_OPERATION_ABORTED` (995).
+  **Unblocked.** (`C:\apack-setup\w3-f-run.log`)
+- **G, `CancelSynchronousIo`** on the reader's thread handle: returned 1; the read failed with 995. **Unblocked.**
+  (`C:\apack-setup\w3-g-run.log`)
+
+**Consequence for step 2.** The keeping suite ends its reads by cancelling their I/O (F for the broker's handle), and
+never by disconnecting the pipe or closing the handle the read is blocked on. The broker's `hang_up` for a named pipe
+now calls `CancelIoEx` on the stream's handle: the change is on branch `fix/windows-hang-up` in `vendor/apack-terminal`,
+type-checks only with the VM's zig toolchain, and is **not yet built or tested on Windows**. Step 2 is not done: the
+suite is not ported and has not run on the VM.
 
 ### W4. Clean up test brokers that the proxy starts, on Windows
 - **Why:** on Windows the cleanup for brokers a proxy starts is a no-op (`tests/reaper.rs`). A killed or failing
