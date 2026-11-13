@@ -66,6 +66,12 @@ door's, each moving `vendor/apack-git.rev`. Items 18, 20 and 24 have no app half
 none, and the app's bulk Stage, Unstage and Discard all leave a refused name out (#467), since one such path
 failed the whole batch.
 
+Two readings of the condition are the user's word, given on 2026-11-12. **The chain is master's**: the item
+branches merged without a chain run of their own, and master at `5ea403a8ea`, holding all of them, passed the local
+chain (`--no-native`) and strict run 43339669292, every job green; the user took that as each item's chain. **An
+item the plan gives no app half has landed on its engine pull request alone** — 18, 20 and 24 (apack-git #15, #19,
+#23), each green on all three platforms.
+
 What the work found that the plan did not say:
 
 - **History from several refs never worked.** `tipsOf` resolved them with `rev-parse --verify`, which takes one
@@ -81,6 +87,6 @@ What the work found that the plan did not say:
   the door, and five dead `GitRepository` methods went. Reads named `get*` are `read*` or `find*`.
 
 Left as found, outside this goal: the synthetic diff of an untracked text file counts one line too many;
-`getDiffMulti`'s path checks assume `/` and treat a file in an untracked folder as tracked; `StashConflictError`
+`readDiffs`' path checks assume `/` and treat a file in an untracked folder as tracked; `StashConflictError`
 carries no code. Under three concurrent chains the external-pack fork spec's Electron sometimes did no work for
 120 s after `will-quit`; it passed alone and as the chain runs it on a quieter machine.
