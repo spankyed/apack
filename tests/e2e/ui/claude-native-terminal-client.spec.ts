@@ -4,6 +4,12 @@ import { pathToFileURL } from 'node:url'
 import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
+test.afterEach(async ({ appPage }) => {
+  if (!appPage.isClosed()) await appPage.evaluate(() => {
+    const restore = (window as any).__restoreNativePictureDraws;
+    if (restore) restore();
+  });
+});
 test('uses original terminal Client drawings, controls and lifetimes in the app', async ({ app, appPage, electronApp }, testInfo) => {
   test.setTimeout(120000)
   const nativeWindow=await electronApp.browserWindow(appPage)
@@ -145,7 +151,43 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
   if(process.env.CLAUDE_RESEARCH_IMAGE_PIXELS==='1'){
     const image=appPage.locator('[data-native-placement="InfoNotice"] [data-native-image]').first(),receipts=async()=>JSON.parse(await readFile(join(workspace!,'native-image-blits.json'),'utf8').catch(()=>'[]'))
     const pixel=()=>image.evaluate(element=>{const source=element.querySelector('img,canvas') as HTMLImageElement|HTMLCanvasElement;if(!source)return [];if(source instanceof HTMLImageElement&&!source.complete)return [];const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;const c=canvas.getContext('2d')!;try{c.drawImage(source,0,0,2,2);return Array.from(c.getImageData(0,0,1,1).data)}catch{return []}})
-    const terminalPixels=()=>section.locator('.webterm-kitty-overlay').evaluateAll(elements=>elements.flatMap(element=>Array.from(element.querySelectorAll('canvas')).filter(canvas=>canvas.getBoundingClientRect().width>0).map(canvas=>{try{return Array.from(canvas.getContext('2d')!.getImageData(Math.floor(canvas.width/2),Math.floor(canvas.height/2),1,1).data)}catch{return []}})))
+    // The broker's 2D painter uses drawImage for pictures and fillText for characters.
+    // Observe actual picture destinations, then read the finished canvas there; scanning
+    // arbitrary canvas pixels could mistake an orange character for the expected image.
+    await appPage.evaluate(() => {
+      const original = CanvasRenderingContext2D.prototype.drawImage;
+      const pictures = new WeakMap<HTMLCanvasElement, { x: number; y: number; width: number; height: number; pixel: number[] }[]>();
+      (window as any).__nativePictureDraws = pictures;
+      (window as any).__restoreNativePictureDraws = () => {
+        CanvasRenderingContext2D.prototype.drawImage = original;
+        delete (window as any).__nativePictureDraws;
+        delete (window as any).__restoreNativePictureDraws;
+      };
+      CanvasRenderingContext2D.prototype.drawImage = function (image: CanvasImageSource, ...coordinates: number[]) {
+        const args = [image, ...coordinates];
+        Reflect.apply(original, this, args);
+        if (!this.canvas.closest('[data-native-terminal]') || args.length !== 9 || !(args[0] instanceof ImageBitmap)) return;
+        const [picture, sx, sy, sw, sh, dx, dy, dw, dh] = args as [ImageBitmap, number, number, number, number, number, number, number, number];
+        const point = new DOMPoint(dx + dw / 2, dy + dh / 2).matrixTransform(this.getTransform());
+        if (point.x < 0 || point.y < 0 || point.x >= this.canvas.width || point.y >= this.canvas.height) return;
+        const sample = document.createElement('canvas'); sample.width = sample.height = 1;
+        const context = sample.getContext('2d')!;
+        Reflect.apply(original, context, [picture, sx + sw / 2, sy + sh / 2, 1, 1, 0, 0, 1, 1]);
+        const held = pictures.get(this.canvas) ?? [];
+        held.push({ x: Math.floor(point.x), y: Math.floor(point.y), width: this.canvas.width, height: this.canvas.height, pixel: Array.from(context.getImageData(0, 0, 1, 1).data) });
+        pictures.set(this.canvas, held.slice(-64));
+      };
+    });
+    const terminalPixels = () => section.locator('[data-native-terminal] canvas').evaluateAll(elements => elements.flatMap(element => {
+      const canvas = element as HTMLCanvasElement;
+      if (canvas.getBoundingClientRect().width <= 0) return [];
+      const draws = (window as any).__nativePictureDraws?.get(canvas) ?? [];
+      return draws.flatMap((draw: { x: number; y: number; width: number; height: number; pixel: number[] }) => {
+        if (draw.width !== canvas.width || draw.height !== canvas.height) return [];
+        const pixel = Array.from(canvas.getContext('2d')!.getImageData(draw.x, draw.y, 1, 1).data);
+        return pixel.every((channel, index) => channel === draw.pixel[index]) ? [pixel] : [];
+      });
+    }));
     try{await expect.poll(pixel).toEqual([255,136,0,255])}catch(error){await writeFile(join(workspace!,'native-image-pixel-failure.json'),JSON.stringify({errors,state:await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeUiViews,native:c.nativeTerminalViews}})}));await capture({path:testInfo.outputPath('native-image-pixel-failure.png')});throw error}const draft='Keep my release notes while the original image changes.';await composer.fill(draft)
     await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(1);expect((await receipts())[0].result).toEqual({});await expect.poll(pixel).toEqual([0,136,255,255])
     for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await capture({path:testInfo.outputPath('native-image-pixels-'+size.width+'.png')})}
