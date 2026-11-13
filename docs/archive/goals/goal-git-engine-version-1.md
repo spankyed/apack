@@ -78,8 +78,9 @@ What the work found that the plan did not say:
   name; item 16's history over every local branch found it (apack-git #24).
 - **A reword from the history would have dropped a commit's body**, since the history carries the subject alone;
   `commitMessage` reads the whole message (apack-git #25).
-- **`startWatching` resolved before its watches were in place**, so an edit made just after was never reported;
-  item 25's example program found it, and it resolves two turns later (apack-git #26).
+- **`startWatching` resolved before its watches delivered**, so an edit made just after was never reported;
+  item 25's example program found it. Waiting two turns (apack-git #26) did not cover a loaded Mac, where the gap
+  was up to half a second; the watcher now reports the checkout once two seconds after opening (apack-git #28).
 - **Linux has no file monitor of git's own**, so a slow status there with the untracked cache on is the engine's
   fact and nothing for the app to offer; the app offers only what it can turn on (#465).
 - **The door was reviewed by a generator, not by reading.** `REFERENCE.md` is written from the entries, and CI
