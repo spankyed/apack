@@ -562,8 +562,8 @@ type ChatState = 'error' | 'idle' | 'paused' | 'success' | 'working';
 interface CliServiceType {
     git: {
         commit(message: string): Promise<void>;
-        getStatus(): Promise<GitStatusFile[]>;
-        getCurrentBranch(): Promise<string>;
+        readStatus(): Promise<GitStatusFile[]>;
+        readCurrentBranch(): Promise<string>;
         getWorkingDir(): string;
         /**
          * Return the unified diff for the working copy vs HEAD. Pass a list of
@@ -571,7 +571,7 @@ interface CliServiceType {
          * the Claude Code chat action to assemble a `diff` artifact after file-
          * mutating tool calls (Write/Edit/NotebookEdit).
          */
-        getDiff(paths?: string[]): Promise<string>;
+        readDiff(paths?: string[]): Promise<string>;
         /** A copy of the working tree, kept outside the repository: its id, for `changedSince` and `restoreCheckpoint` */
         checkpoint(): Promise<string>;
         /** What differs now from a copy, each file with whether it was added, modified or deleted since */

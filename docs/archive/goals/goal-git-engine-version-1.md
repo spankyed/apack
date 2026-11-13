@@ -1,8 +1,9 @@
 # The git engine's version 1
 
-Status: active, 2026-11-12. Items 1 and 2 landed before this goal; item 3 is next. The design and every item's
-Done when are in [the plan](../plans/git-engine-version-1.md); this goal owns the order, the checkpoints and
-when it is finished.
+> **Done 2026-11-12.** Items 3 to 25 of [the plan](../plans/git-engine-version-1.md) landed, each with an engine
+> pull request green on macOS, Linux and Windows and the app's half merged on the chain; none was dropped.
+> [`docs/references/git-engine.md`](../../references/git-engine.md) describes the result. The Outcome below says
+> what each landed as and what was found on the way.
 
 ```text
 # Goal: the git engine's version 1, item by item, each merged as it lands
@@ -57,7 +58,29 @@ Out of scope: everything under the plan's "Left out of version 1", and another l
 | Scale | 20 to 23 | merged; the readings of 20 recorded in the engine's README |
 | The door | 24, 25 | merged; reference generated, example program in the engine's repository |
 
-## Current handoff
+## Outcome
 
-Nothing started. Next: item 3, a read never reaches the network, from apack-git master `f2f4074937` and monorepo
-`53bfeea029`.
+Landed 2026-11-12, every item 3 to 25, none dropped. The engine's halves are apack-git pull requests merged on its
+CI (macOS, Linux, Windows, git 2.35.0, Debian 12's and Apple's); the app's halves are apack #449 to #467 and the
+door's, each moving `vendor/apack-git.rev`. Items 18, 20 and 24 have no app half, by the plan; 23's plan named
+none, and the app's bulk Stage, Unstage and Discard all leave a refused name out (#467), since one such path
+failed the whole batch.
+
+What the work found that the plan did not say:
+
+- **History from several refs never worked.** `tipsOf` resolved them with `rev-parse --verify`, which takes one
+  name; item 16's history over every local branch found it (apack-git #24).
+- **A reword from the history would have dropped a commit's body**, since the history carries the subject alone;
+  `commitMessage` reads the whole message (apack-git #25).
+- **`startWatching` resolved before its watches were in place**, so an edit made just after was never reported;
+  item 25's example program found it, and it resolves two turns later (apack-git #26).
+- **Linux has no file monitor of git's own**, so a slow status there with the untracked cache on is the engine's
+  fact and nothing for the app to offer; the app offers only what it can turn on (#465).
+- **The door was reviewed by a generator, not by reading.** `REFERENCE.md` is written from the entries, and CI
+  fails on an export or public member no spec uses; of 42 such values, those the app uses got cases, the rest left
+  the door, and five dead `GitRepository` methods went. Reads named `get*` are `read*` or `find*`.
+
+Left as found, outside this goal: the synthetic diff of an untracked text file counts one line too many;
+`getDiffMulti`'s path checks assume `/` and treat a file in an untracked folder as tracked; `StashConflictError`
+carries no code. Under three concurrent chains the external-pack fork spec's Electron sometimes did no work for
+120 s after `will-quit`; it passed alone and as the chain runs it on a quieter machine.

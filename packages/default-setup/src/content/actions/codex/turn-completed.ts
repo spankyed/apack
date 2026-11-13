@@ -86,7 +86,7 @@ export async function action(params: Record<string, any>, services: Services) {
   const paths = turn ? turn.changes.map(change => change.path) : Array.isArray(mutatedPaths) ? mutatedPaths : [];
   if (paths.length > 0) {
     try {
-      const parsed = parseUnifiedDiff(await services.cli.git.getDiff(paths));
+      const parsed = parseUnifiedDiff(await services.cli.git.readDiff(paths));
       if (parsed.files.length > 0 || (turn?.changes.length ?? 0) > 0) {
         const named = parsed.files.length > 0 ? parsed.files.map(f => f.path) : paths;
         const basenames = named.map(f => f.split('/').pop() ?? f);
