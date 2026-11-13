@@ -1,6 +1,6 @@
 # Goal: the next terminal features
 
-**Status: in progress.** Phase 0 is done; see [the evidence record](../references/evidence/terminal-next-features.md). Start only after [the terminal parity goal](../archive/goals/goal-terminal-parity.md) is closed
+**Status: implemented.** All seven phases have their work, evidence and gap notes in [the evidence record](../references/evidence/terminal-next-features.md). Open, and needing a person at a real window: the IME checklist (D6), and the real-app checks listed in the evidence. Phase 0 is done; see [the evidence record](../references/evidence/terminal-next-features.md). Start only after [the terminal parity goal](../archive/goals/goal-terminal-parity.md) is closed
 (it is closed on `master` as of 2026-11-12; its strict-chain run is the last check on it).
 Owner: the terminal view and broker (`vendor/apack-terminal`) and the Code surface
 (`packages/default-setup/src/features/code`).
