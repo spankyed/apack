@@ -28,7 +28,7 @@ beforeEach(()=>{
   f.open.mockImplementation(async(_options:unknown,listeners:{onOutput:(text:string)=>void;onExit:(code:number|null,signal:string|null)=>void})=>{
     f.output=listeners.onOutput;f.exit=listeners.onExit
     return {
-      id:'broker-1',pid:12345,scrollback:1000,write:f.write,resize:f.resize,terminate:f.terminate,
+      id:'broker-1',target:null,pid:12345,scrollback:1000,write:f.write,resize:f.resize,terminate:f.terminate,
       pause:vi.fn(async()=>{}),resume:vi.fn(async()=>{}),
       // A signal that ends the client is what ends the session, as it does for the real broker: the process
       // it started is in its own group
@@ -44,6 +44,9 @@ it('launches the exact linked job in its own cwd without another resume writer o
     expect(f.open).toHaveBeenCalledWith(expect.objectContaining({shell:process.execPath,args:['attach',job.id],cwd:job.cwd}),expect.anything())
     expect(f.open.mock.calls[0][0].env.ANTHROPIC_API_KEY).toBeUndefined()
     expect(owner.snapshot.sessionId).toBe(job.sessionId)
+    expect(owner.snapshot.terminalSession).toEqual({id:'broker-1',target:null})
+    expect(owner.snapshot.terminalSession.id).not.toBe(owner.snapshot.id)
+    expect(owner.snapshot.terminalSession.id).not.toBe(job.sessionId)
   } finally {await owner.close()}
 })
 it('refuses changed child identity before starting any native client',async()=>{

@@ -84,7 +84,7 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
   options.signal?.addEventListener('abort', abort, {once:true})
   if (options.signal?.aborted) {await close(); throw new Error('Background attachment cancelled')}
   return {
-    get snapshot(): ClaudeBackgroundAttachmentSnapshot {return {id, jobId:session.id, sessionId:session.sessionId, cwd:session.cwd, clientPid:client.pid, status:ended?'exited':'live', exitCode, output:[...chunks]}},
+    get snapshot(): ClaudeBackgroundAttachmentSnapshot {return {id, terminalSession:{id:client.id,target:client.target}, jobId:session.id, sessionId:session.sessionId, cwd:session.cwd, clientPid:client.pid, status:ended?'exited':'live', exitCode, output:[...chunks]}},
     subscribe(listener) {listeners.add(listener); return () => listeners.delete(listener)},
     input(ownerId,text) {if (ownerId !== id || ended || closing || typeof text !== 'string' || text.length > 32768) return false; bestEffort(client.write(text)); return true},
     resize(ownerId,columns,rows) {if (ownerId !== id || ended || closing || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false; bestEffort(client.resize(columns,rows)); return true},

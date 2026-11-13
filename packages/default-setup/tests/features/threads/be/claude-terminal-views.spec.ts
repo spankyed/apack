@@ -396,7 +396,7 @@ describe('background session view lifetime', () => {
 async function attachmentFixture() {
   let link = {sessionId:randomUUID(),continuedInSessionId:randomUUID(),timestamp:'2026-10-30T09:00:00Z'}, listener:(()=>void)|undefined
   const job = {id:'abcdef12',sessionId:link.continuedInSessionId,cwd:'/child',state:'working' as const,pid:99}
-  const child = {snapshot:{id:randomUUID(),jobId:job.id,sessionId:job.sessionId,cwd:job.cwd,clientPid:123,status:'live' as const,output:[{sequence:1,text:'original child'}]},subscribe:vi.fn((value:()=>void)=>{listener=value;return vi.fn()}),input:vi.fn(),resize:vi.fn(),close:vi.fn(async()=>{})}
+  const child = {snapshot:{id:randomUUID(),terminalSession:{id:'child-broker-1',target:null},jobId:job.id,sessionId:job.sessionId,cwd:job.cwd,clientPid:123,status:'live' as const,output:[{sequence:1,text:'original child'}]},subscribe:vi.fn((value:()=>void)=>{listener=value;return vi.fn()}),input:vi.fn(),resize:vi.fn(),close:vi.fn(async()=>{})}
   const openAttachment = vi.fn(async(_continuation:typeof link,_jobId:string,_threadId:string,_signal:AbortSignal)=>child), background = vi.fn(async()=>job), send = vi.fn()
   const views = createClaudeTerminalViews({get:()=>undefined,open:vi.fn(),continuation:()=>link,background,openAttachment})
   views.handle(mount,'one',send)

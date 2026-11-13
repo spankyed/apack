@@ -20,8 +20,9 @@ it.each([
   native.open.mockImplementation(async (_options, listeners) => nativeSession(listeners))
   const prepared = await prepareClaudeNativeTerminal({ sessionId: '11111111-1111-1111-1111-111111111111', cwd: tmpdir(), cliPath: process.execPath,
     permissionMode: 'default', settings: { effective: {}, sources: [] }, env: { FORCE_COLOR: color, FORCE_HYPERLINK: links } })
-  await prepared.start()
+  const owner = await prepared.start()
   try {
+    expect(owner.state.terminalSession).toEqual({id:'native-1',target:null})
     expect(native.open).toHaveBeenCalledWith(expect.objectContaining({ shell: process.execPath, env: expect.objectContaining({ FORCE_COLOR: expectedColor, FORCE_HYPERLINK: expectedLinks }) }), expect.anything())
   } finally { await prepared.dispose() }
   expect(native.closeBridge).toHaveBeenCalledOnce()

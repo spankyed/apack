@@ -30,7 +30,16 @@ export interface ClaudeNativeFocusProjection {
   hidden: string[]
 }
 
+/** The broker-issued drawing address; independent of Claude session IDs and process IDs. */
+export interface ClaudeNativeTerminalSession {
+  id: string
+  target: string | null
+}
+
 export interface ClaudeNativeTerminalState {
+  /** Absent before the host has opened its terminal; never derive it from a PID or owner ID. */
+  terminalSession?: ClaudeNativeTerminalSession
+
   /** Original background gesture is reviewing, deferring or forking; independent of process exit. */
   handoffPending?: boolean
 

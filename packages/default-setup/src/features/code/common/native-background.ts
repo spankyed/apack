@@ -50,6 +50,7 @@ export interface ClaudeBackgroundReviewState {
 
 /** An attach client is separate from the background worker it displays. */
 export interface ClaudeBackgroundAttachmentSnapshot {
+  terminalSession: import('./native-terminal.ts').ClaudeNativeTerminalSession
   id: string
   jobId: string
   sessionId: string

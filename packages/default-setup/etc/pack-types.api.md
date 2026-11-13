@@ -590,6 +590,7 @@ interface ClaudeBackgroundAttachment {
 
 /** An attach client is separate from the background worker it displays. */
 interface ClaudeBackgroundAttachmentSnapshot {
+    terminalSession: ClaudeNativeTerminalSession;
     id: string;
     jobId: string;
     sessionId: string;
@@ -1591,11 +1592,11 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     snapshot: z.ZodObject<{
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
+                finished: "finished";
                 selection: "selection";
                 enable: "enable";
                 disable: "disable";
                 connecting: "connecting";
-                finished: "finished";
             }>;
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
@@ -1670,8 +1671,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 loading: z.ZodBoolean;
                 copyState: z.ZodOptional<z.ZodEnum<{
                     error: "error";
-                    idle: "idle";
                     pending: "pending";
+                    idle: "idle";
                     saved: "saved";
                 }>>;
                 insight: z.ZodOptional<z.ZodString>;
@@ -1889,8 +1890,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"chrome_install_setup">;
     phase: z.ZodEnum<{
-        connecting: "connecting";
         failed: "failed";
+        connecting: "connecting";
         waiting_install: "waiting_install";
         stalled: "stalled";
         connected: "connected";
@@ -1913,8 +1914,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"effort_preference_result">;
     severity: z.ZodEnum<{
-        feedback: "feedback";
         warning: "warning";
+        feedback: "feedback";
     }>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -2617,7 +2618,15 @@ interface ClaudeNativeTerminalRecord {
     };
 }
 
+/** The broker-issued drawing address; independent of Claude session IDs and process IDs. */
+interface ClaudeNativeTerminalSession {
+    id: string;
+    target: string | null;
+}
+
 interface ClaudeNativeTerminalState {
+    /** Absent before the host has opened its terminal; never derive it from a PID or owner ID. */
+    terminalSession?: ClaudeNativeTerminalSession;
     /** Original background gesture is reviewing, deferring or forking; independent of process exit. */
     handoffPending?: boolean;
     /** Available after the native dialog store has been observed; retained through owned shutdown. */
@@ -4868,11 +4877,11 @@ type EdgeEntity = FlowEdge;
 type Effort = z.infer<typeof EffortSchema>;
 
 declare const EffortSchema: z.ZodEnum<{
+    max: "max";
     low: "low";
     medium: "medium";
     high: "high";
     xhigh: "xhigh";
-    max: "max";
 }>;
 
 type Endpoint = {
@@ -10511,11 +10520,11 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
 declare const claudeSettingsSnapshot: z.ZodObject<{
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
+            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
-            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -10590,8 +10599,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
