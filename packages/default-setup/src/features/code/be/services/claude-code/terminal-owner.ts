@@ -407,7 +407,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           if (typeof result.handoffPending !== 'boolean') throw new Error('Native agents progress was not acknowledged')
           handoffPending = result.handoffPending; changed()
         }
-        if (response.decision === 'compact_previous' || response.decision === 'compact_next') { await this.refreshNotice(); return }
+        if (response.decision === 'compact_previous' || response.decision === 'compact_next' || response.decision === 'computer_accessibility' || response.decision === 'computer_screen_recording') { await this.refreshNotice(); return }
         if (notice?.id === response.id && notice.revision === response.revision) { notice = undefined; changed() }
       },
       async readJournal() {

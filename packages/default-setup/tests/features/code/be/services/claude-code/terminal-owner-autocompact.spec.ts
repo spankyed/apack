@@ -111,3 +111,19 @@ it('keeps a resumed owner live when its journal replays an earlier handoff and s
     expect(owner.state.notice).toBeUndefined()
   } finally { await prepared.dispose() }
 })
+
+it.each(['computer_accessibility','computer_screen_recording'] as const)('keeps computer permission guidance mounted through %s acknowledgement and refresh',async decision=>{
+ const {prepared,owner,notice}=await fixture()
+ try{
+  const computer={id:notice.id,revision:randomUUID(),sessionId:notice.sessionId,kind:'computer_use_approval',phase:'os_permissions',title:'Computer Use needs macOS permissions',paragraphs:['Original OS permissions guidance'],choices:[{value:'computer_accessibility',label:'Open Accessibility'},{value:'computer_screen_recording',label:'Open Screen Recording'},{value:'computer_retry',label:'Try again'}]}
+  f.request.mockResolvedValueOnce({notice:computer,handoffPending:false,retirements:[]});await owner.refreshNotice()
+  let resolve!:(value:unknown)=>void
+  f.request.mockResolvedValueOnce({answered:true}).mockImplementationOnce(()=>new Promise(done=>{resolve=done}))
+  const action=owner.answerNotice({id:computer.id,revision:computer.revision,sessionId:computer.sessionId,decision})
+  await vi.waitFor(()=>expect(resolve).toBeTypeOf('function'))
+  expect(owner.state.notice).toEqual(computer)
+  const next={...computer,revision:randomUUID(),paragraphs:['Original refreshed OS status']}
+  resolve({notice:next,handoffPending:false,retirements:[]});await action;expect(owner.state.notice).toEqual(next)
+  f.request.mockResolvedValueOnce({answered:true});await owner.answerNotice({id:next.id,revision:next.revision,sessionId:next.sessionId,decision:'computer_cancel'});expect(owner.state.notice).toBeUndefined()
+ }finally{await prepared.dispose()}
+})
