@@ -1,4 +1,4 @@
-import { BrokerViews, TerminalView, xtermPalette, type Command, type Detector, type Theme } from 'apack-terminal-view'
+import { BrokerViews, TerminalView, xtermPalette, type Command, type CursorBlink, type CursorShape, type Detector, type LinkPreview, type Theme } from 'apack-terminal-view'
 
 /** A command the shell marked, as the view holds it: a host draws its command blocks from these without importing the view */
 export type { Command }
@@ -114,6 +114,35 @@ const paths: Detector = {
     }
     return found
   },
+}
+
+/**
+ * What a view is made with that the window's settings decide. A view takes these at construction and has no setter for
+ * them, so a change is applied by making the views again (`setViewSettings`).
+ */
+export interface ViewSettings {
+  /** The cursor drawn while the terminal does not have the keyboard */
+  readonly cursorInactive: CursorShape
+  /** `on` and `off` override what a program asks; `program` leaves the blink to the program */
+  readonly cursorBlink: CursorBlink
+  /** Which links show where they open when the pointer is over them */
+  readonly linkPreview: LinkPreview
+}
+
+/**
+ * The view settings the code settings give. A value that is unset, or not one the view knows, is the default:
+ * a hollow inactive cursor, the program's own blink (the broker's reset value already blinks), and the links a
+ * program declared.
+ */
+export function viewSettingsOf(settings: { cursorInactiveStyle?: string; cursorBlink?: string; linkPreview?: string } | undefined): ViewSettings {
+  const inactive = settings?.cursorInactiveStyle
+  const blink = settings?.cursorBlink
+  const preview = settings?.linkPreview
+  return {
+    cursorInactive: inactive === 'block' || inactive === 'bar' || inactive === 'underline' || inactive === 'hollow' ? inactive : 'hollow',
+    cursorBlink: blink === 'on' || blink === 'off' || blink === 'program' ? blink : 'program',
+    linkPreview: preview === 'off' || preview === 'osc8' || preview === 'all' ? preview : 'osc8',
+  }
 }
 
 interface PoolEntry {
@@ -250,11 +279,26 @@ class TerminalPool {
   private entries = new Map<string, PoolEntry>()
   /** Whether a selection is copied as the pointer is let go: set from the feature's setting, and given to every view made */
   private copyOnSelect = false
+  /** The settings views are made with: the cursor when unfocused and its blink, and which links show a preview */
+  private viewSettings: ViewSettings = viewSettingsOf(undefined)
 
   /** Changes the copy-on-release setting of every view, now and as each is made. It follows the feature's setting. */
   setCopyOnSelect(on: boolean): void {
     this.copyOnSelect = on
     for (const entry of this.entries.values()) entry.view?.setCopyOnSelect(on)
+  }
+
+  /**
+   * Gives every view the settings the views take at construction. Those have no setter, so a view already drawn is made
+   * again, in the same container, when one of them changes; a view that is not drawn takes them as it is made.
+   */
+  setViewSettings(next: ViewSettings): void {
+    const current = this.viewSettings
+    if (next.cursorInactive === current.cursorInactive && next.cursorBlink === current.cursorBlink && next.linkPreview === current.linkPreview) return
+    this.viewSettings = next
+    for (const entry of this.entries.values()) {
+      if (entry.view) this.draw(entry, entry.info)
+    }
   }
   /**
    * Every terminal as the surface last described it (`describe`), which is what a host mounted with an
@@ -407,6 +451,9 @@ class TerminalPool {
       },
       confirmPaste: (text) => this.confirmPaste(entry, text),
       copyOnSelect: this.copyOnSelect,
+      cursorInactive: this.viewSettings.cursorInactive,
+      cursorBlink: this.viewSettings.cursorBlink,
+      linkPreview: this.viewSettings.linkPreview,
       onCommands: (commands) => {
         this.applyFolds(entry)
         entry.handlers.onCommands?.(commands)

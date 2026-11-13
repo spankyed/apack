@@ -13,7 +13,7 @@ vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-v
 const { views, lastView, connections, fakeStream } = await import('../_support/terminal-view.ts')
 type FakeStream = ReturnType<typeof fakeStream>
 const { terminalInfo } = await import('../_support/terminal-host.ts')
-const { terminalPool, RESIZE_SETTLE_MS } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool, RESIZE_SETTLE_MS, viewSettingsOf } = await import('#features/code/fe/utils/terminal-pool.ts')
 
 let stopRuntime: (() => void) | undefined
 let next = 0
@@ -221,6 +221,52 @@ describe('whether a selection is copied as the pointer is let go', () => {
     } finally {
       terminalPool.setCopyOnSelect(false)
     }
+  })
+})
+
+describe('the cursor and link settings a view is made with', () => {
+  it('are the defaults until a setting says otherwise: a hollow inactive cursor, the program decides the blink, and declared links', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    expect(lastView().options.cursorInactive).toBe('hollow')
+    expect(lastView().options.cursorBlink).toBe('program')
+    expect(lastView().options.linkPreview, 'the link preview a view is made with, unset').toBe('osc8')
+  })
+
+  it('come from the code settings, and an unknown value is the default', () => {
+    expect(viewSettingsOf({ cursorInactiveStyle: 'underline', cursorBlink: 'on', linkPreview: 'all' }))
+      .toEqual({ cursorInactive: 'underline', cursorBlink: 'on', linkPreview: 'all' })
+    expect(viewSettingsOf({ cursorInactiveStyle: 'sparkle', cursorBlink: 'default', linkPreview: 'everything' } as never))
+      .toEqual({ cursorInactive: 'hollow', cursorBlink: 'program', linkPreview: 'osc8' })
+    expect(viewSettingsOf(undefined)).toEqual({ cursorInactive: 'hollow', cursorBlink: 'program', linkPreview: 'osc8' })
+  })
+
+  it('reach a view made after they are set, and a view already drawn is made again in the same host with them', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const container = host()
+    const attachment = terminalPool.attach(info.id, container)!
+    const before = lastView()
+
+    try {
+      terminalPool.setViewSettings({ cursorInactive: 'bar', cursorBlink: 'off', linkPreview: 'all' })
+      const after = lastView()
+      expect(after, 'the view was made again').not.toBe(before)
+      expect(before.disposed, 'the view it replaces was disposed').toBe(true)
+      expect(after.options).toMatchObject({ cursorInactive: 'bar', cursorBlink: 'off', linkPreview: 'all' })
+      expect(container.contains(after.element), 'the new view is in the host the old one was in').toBe(true)
+      expect(attachment.release()).toBe(true)
+    } finally {
+      terminalPool.setViewSettings(viewSettingsOf(undefined))
+    }
+  })
+
+  it('do not remake a view when they do not change', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const before = lastView()
+    terminalPool.setViewSettings(viewSettingsOf(undefined))
+    expect(lastView()).toBe(before)
   })
 })
 
