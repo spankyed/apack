@@ -256,6 +256,7 @@ const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: 
  {notice:{...identity,kind:'resume_return',choices:[{value:'resume_compact',label:'Resume from summary'},{value:'resume_continue',label:'Resume full session as-is'},{value:'resume_never',label:"Don't ask me again"}]},button:'Resume from summary',decision:'resume_compact'},
  {notice:{...identity,kind:'newer_model_offer',choices:[{value:'newer_keep',label:'Keep current model'},{value:'newer_accept',label:'Resume on newer model'}]},button:'Resume on newer model',decision:'newer_accept'},
  {notice:{...identity,kind:'cold_resume_quota',trigger:'idle',preferredChoice:'quota_new_conversation',choices:[{value:'quota_resume',label:'Resume'},{value:'quota_new_conversation',label:'Start a new conversation',description:'Original pointer disclosure'}]},button:'Resume',decision:'quota_resume'},
+ {notice:{...identity,kind:'effort_medium_nudge',model:'claude-opus-5-5',warning:'Original effort warning',preferredChoice:'effort_decline',choices:[{value:'effort_decline',label:'Keep high'},{value:'effort_accept',label:'Use medium'}]},button:'Use medium',decision:'effort_accept'},
  {notice:{...identity,kind:'auto_default_nudge',preferredChoice:'auto_nudge_decline',choices:[{value:'auto_nudge_accept',label:'Make default'},{value:'auto_nudge_decline',label:'Keep current mode'}]},button:'Keep current mode',decision:'auto_nudge_decline'},
  {notice:{...identity,kind:'auto_mode_setup_review',choices:[{value:'auto_review_accept',label:'Save setup'},{value:'auto_review_decline',label:'Discard'}]},button:'Save setup',decision:'auto_review_accept'},
  {notice:{...identity,kind:'auto_mode_flagged_allow',phase:'review',rules:[],selectedValues:[],preferredChoice:'auto_rules_all',choices:[{value:'auto_rules_all',label:'Remove them all'},{value:'auto_rules_pick',label:'Pick which to remove'},{value:'auto_rules_leave',label:'Leave them'}]},button:'Pick which to remove',decision:'auto_rules_pick'},
@@ -498,4 +499,24 @@ it('keeps native rule selection, phase focus and original return focus without s
   f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...pick,revision:'fresh-selection',selectedValues:['Bash(*)']}}});actor.send.mockClear();inputs[1]!.dispatchEvent(new Event('change',{bubbles:true}));expect(actor.send).not.toHaveBeenCalled();await nextTick();expect([...card.querySelectorAll<HTMLInputElement>('input')].map(input=>input.checked)).toEqual([true,false])
   card.querySelector<HTMLButtonElement>('button')!.focus();f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:undefined}});await nextTick();await nextTick();expect(document.activeElement).toBe(previous)
  }finally{focus.mockRestore()}
+})
+
+it('keeps original effort warning/default focus, grace errors and native decline on Escape',async()=>{
+ const focus=vi.spyOn(document,'hasFocus').mockReturnValue(true)
+ try{
+  const f=await fixture(),base=ownedNoticeCases.find(row=>row.notice.kind==='effort_medium_nudge')!.notice
+  if(base.kind!=='effort_medium_nudge')throw Error('Missing effort preference fixture')
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick();f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:base}});await nextTick();await nextTick()
+  const card=f.root.querySelector<HTMLElement>('[aria-label="Claude effort preference"]')!;expect(card.querySelector('[role=note]')?.textContent).toBe(base.warning);expect(document.activeElement?.textContent).toBe('Keep high')
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:base},noticeAnswer:{id:base.id,revision:base.revision,status:'pending'}});await nextTick();expect(card.querySelector('[role=status]')?.textContent).toBe('Waiting for Claude…');expect([...card.querySelectorAll('button')].every(button=>button.disabled)).toBe(true)
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:base},noticeAnswer:{id:base.id,revision:base.revision,status:'error',problem:'Native effort preference is not ready for input'}});await nextTick();expect(card.querySelector('[role=alert]')?.textContent).toContain('not ready for input');card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({id:base.id,revision:base.revision,sessionId:base.sessionId,decision:'effort_decline'})
+ }finally{focus.mockRestore()}
+})
+
+it('shows native effort failure/success literally without making the outcome actionable',async()=>{
+ const f=await fixture();f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ const notice={...identity,kind:'effort_preference_result' as const,severity:'warning' as const,paragraphs:['Nothing changed <script>']}
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick();const result=f.root.querySelector('[aria-label="Claude effort result"]')!;expect(result.getAttribute('role')).toBe('alert');expect(result.textContent).toContain('Nothing changed <script>');expect(result.querySelector('button,script')).toBeNull();expect(f.root.querySelector('[data-native-notice]')).toBeNull()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{...notice,severity:'feedback',paragraphs:['Original effort saved']}}});await nextTick();expect(result.getAttribute('role')).toBe('status');expect(result.textContent).toBe('Original effort saved')
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:undefined}});await nextTick();expect(f.root.querySelector('[aria-label="Claude effort result"]')).toBeNull()
 })

@@ -486,6 +486,8 @@ export const claudeNativeLinuxBindings: {
   "functionNames": {
     "Lst": "Wst",
     "sCe": "vCe",
+    "WCo": "o_o",
+    "KSe": "USe",
     "WSe": "LSe",
     "YWt": "FWt",
     "Iyn": "pyn",
@@ -551,6 +553,8 @@ export const claudeNativeLinuxBindings: {
   "functionHashes": {
     "73991c6e58be63f833bd28c99cb9d1475bf4d61c9506e61c601135dad12e4850": "e09dae1fdfa38d5ebb554f4376ac455cb892e6fa2c41f691416082597948d93c",
     "1881b29f0df68643fbbddd89ecc94dda427c4ac21e596c4d73aadf6494b7e411": "b9a953839986e5303d9ebc26230ebd370573038ae9b103b63d785f5e9b4a14db",
+    "31de5abb44ffd78579919bfd0574f3f08c124efcc60007f3344c240ca2b2faa6": "57bbe855416429d7ad078be8d45455e83d8edff6dd06a60337849e3718252381",
+    "2443a2be7a2af0dae5d76bfca389432c87abd845f0ff59ba3958aaf9790ab720": "5571e4b8d40e9823f41113b3a3c50b00cec61cbf562a672e91af2c0d872fe4cf",
     "2a6dc28b03f51681cb4abed041acf275283c52da83129398812f4e96364dd7c5": "c215dee32ed6ea4e7fcf4b42feb85cac1bfd4dc8b989ed286071d8a17cfc85db",
     "a51adcf0434842a2eabe95dd3f62a191f631770fd7d5ba361b8cf5179ea966b0": "68b4e1aaef03533ec5dc4cfb72dd42bcd7bf0b5a36fc33d8438fc06812e2fd87",
     "678153e182e122b019c14ab6666de60caebad605ecd4613b3e9d8da5fa78c76e": "0f7b1f3ac5931f888adb2dbfe684a0372b6bf54854bc7c4528b73e67a8c689ab",
