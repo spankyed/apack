@@ -97,7 +97,7 @@ export interface CodeCommitContext {
   /** What can be done about the sign-in the remote asked for when fetching stopped */
   fetchSignIn: SignInHelp | null
   /** What is known of the failure `gitError` words: the command to run again, and the sign-in a remote asked for */
-  gitFailure: Pick<CommitFailure, 'code' | 'during' | 'signIn' | 'trust' | 'ownership'> | null
+  gitFailure: Pick<CommitFailure, 'code' | 'during' | 'signIn' | 'trust' | 'ownership' | 'hook'> | null
   /** Whether the GitHub CLI was asked to give git its sign-in and has not answered */
   isSettingUpSignIn: boolean
   /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
@@ -723,8 +723,8 @@ export const commitState = setup({
         return ev.data.message
       },
       gitFailure: ({ event }) => {
-        const { code, during, signIn, trust, ownership } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
-        return { code, during, signIn, trust, ownership }
+        const { code, during, signIn, trust, ownership, hook } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
+        return { code, during, signIn, trust, ownership, hook }
       },
       isSettingUpSignIn: false,
       isApplyingHunk: false,

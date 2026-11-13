@@ -864,6 +864,12 @@ interface CommitFailure {
     ownership?: {
         directory: string;
     };
+    /** A hook of the repository's that refused the command: its name, the code it exited with and what it printed */
+    hook?: {
+        name: string;
+        exitCode: number;
+        output: string;
+    };
 }
 
 type Condition = {
@@ -1963,6 +1969,7 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.GET_STASH_CHANGES';
     index: number;
+}
 /** Who last changed each line of a file, from the top of the folder, for the editor's gutter */
  | {
     type: 'commit.GET_BLAME';
@@ -3281,8 +3288,8 @@ type OutgoingCommitEvents =
     data: {
         files: GitStatusFile[];
         counts?: LineCount[];
-        hasIdentity?: boolean;
         pullPreview?: MergePreview;
+        hasIdentity?: boolean;
         truncated: boolean;
         branch: string;
         hasUpstream: boolean;

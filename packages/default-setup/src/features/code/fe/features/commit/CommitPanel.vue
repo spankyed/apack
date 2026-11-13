@@ -332,7 +332,7 @@
           ref="errorContentRef"
           class="flex-1 text-sm text-red-400 whitespace-pre-wrap break-words"
           :class="{ 'max-h-24 overflow-hidden': !isErrorExpanded }"
-        >{{ gitError }}</div>
+        >{{ gitError }}<pre v-if="refusingHook?.output" data-testid="hook-output" class="mt-1.5 p-2 rounded bg-neutral-950/60 text-xs font-mono text-neutral-300 whitespace-pre-wrap">{{ refusingHook.output }}</pre></div>
         <button
           @click="dismissError"
           class="shrink-0 p-0.5 rounded text-red-400 hover:text-red-200 hover:bg-red-900/40 transition-colors"
@@ -858,6 +858,8 @@ const { showMenu, menuPos, sectionMenuItems, onSectionContextMenu } = useSection
 const gitStatus = useSelector(commitActor, (state) => state.context.gitStatus)
 const gitBranch = useSelector(commitActor, (state) => state.context.gitBranch)
 const gitError = useSelector(commitActor, (state) => state.context.gitError)
+/** The hook of the repository's that refused the last command, whose output is shown as its own */
+const refusingHook = useSelector(commitActor, (state) => state.context.gitFailure?.hook ?? null)
 const isGitLoading = useSelector(commitActor, (state) => state.context.isGitLoading)
 const selectedGitFile = useSelector(commitActor, (state) => state.context.selectedGitFile)
 const commitMessage = useSelector(commitActor, (state) => state.context.commitMessage)
