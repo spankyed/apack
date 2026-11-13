@@ -266,6 +266,21 @@
       <button class="p-0.5 rounded hover:bg-neutral-700" title="Dismiss" @click="commitActor?.send({ type: 'commit.DISMISS_UNDO' })"><X :size="12" /></button>
     </div>
 
+    <!-- An amend or a rewrite of commits a remote branch already holds: done here only once the user says so -->
+    <div
+      v-if="rewriteConfirmation"
+      data-testid="rewrite-confirmation"
+      class="flex items-center gap-2 px-3 py-2 text-xs border-b border-neutral-800 text-amber-300"
+    >
+      <span class="flex-1">{{ rewriteConfirmation.message }}</span>
+      <button
+        data-testid="rewrite-anyway"
+        class="px-2 py-0.5 rounded text-neutral-200 bg-neutral-800 hover:bg-neutral-700"
+        @click="commitActor?.send({ type: 'commit.CONFIRM_REWRITE' })"
+      >Rewrite here anyway</button>
+      <button class="p-0.5 rounded hover:bg-neutral-700" title="Dismiss" @click="commitActor?.send({ type: 'commit.DISMISS_REWRITE' })"><X :size="12" /></button>
+    </div>
+
     <!-- A discard kept what it removed, which is offered back until it is dismissed -->
     <div
       v-if="lastDiscard && !gitError"
@@ -464,6 +479,16 @@
           ]"
         >
           Commit
+        </button>
+        <button
+          v-if="hasCommits && !isPushing"
+          data-testid="amend-button"
+          @click="amend"
+          :disabled="!!operation"
+          class="w-full mt-1 px-3 py-1 rounded text-xs text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 disabled:opacity-40"
+          title="Amend the last commit with what is staged, and with this message if one is written"
+        >
+          Amend last commit
         </button>
       </div>
     </div>
@@ -887,6 +912,8 @@ const lastUndoable = useSelector(commitActor, (state) => state.context.lastUndoa
 const repositories = useSelector(commitActor, (state) => state.context.repositories)
 const directory = useSelector(commitActor, (state) => state.context.directory)
 const undoConfirmation = useSelector(commitActor, (state) => state.context.undoConfirmation)
+const rewriteConfirmation = useSelector(commitActor, (state) => state.context.rewriteConfirmation)
+const hasCommits = useSelector(commitActor, (state) => state.context.commitLog.length > 0)
 const discardLeft = useSelector(commitActor, (state) => state.context.discardLeft)
 /** What discarding these rows would remove that cannot be brought back, once that has been answered for these rows */
 const notKeptOf = (paths: string[]): string[] =>
@@ -1190,6 +1217,12 @@ const handleActionButton = () => {
   } else {
     commitActor?.send({ type: 'commit.PUSH_BRANCH' })
   }
+}
+
+/** Amends the last commit with what is staged, and with the message box's words when there are any */
+const amend = () => {
+  const message = commitMessage.value?.trim()
+  commitActor?.send({ type: 'commit.AMEND', ...(message && { message }) })
 }
 
 const stageAll = () => {

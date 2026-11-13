@@ -66,6 +66,17 @@
               <div class="text-[11px] text-neutral-500 truncate">{{ entry.hash.slice(0, 7) }} · {{ entry.authorName }} · {{ formatCommitDate(entry.date) }}</div>
             </div>
             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              <template v-if="inCheckout.has(entry.hash) && entry.parents.length === 1">
+                <button data-testid="reword-commit" @click.stop="commitActor.send({ type: 'commit.START_REWORD', hash: entry.hash })" class="p-0.5 hover:bg-neutral-700 rounded" title="Reword this commit">
+                  <Pencil class="w-3 h-3 text-neutral-400" />
+                </button>
+                <button data-testid="squash-commit" @click.stop="commitActor.send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'squash' })" class="p-0.5 hover:bg-neutral-700 rounded" title="Fold this commit into the one before it, keeping that one's message">
+                  <FoldVertical class="w-3 h-3 text-neutral-400" />
+                </button>
+                <button data-testid="drop-commit" @click.stop="commitActor.send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'drop' })" class="p-0.5 hover:bg-neutral-700 rounded" title="Drop this commit, keeping those after it">
+                  <Trash2 class="w-3 h-3 text-neutral-400" />
+                </button>
+              </template>
               <button v-if="!inCheckout.has(entry.hash)" data-testid="cherry-pick" @click.stop="commitActor.send({ type: 'commit.START_OPERATION', kind: 'cherry-pick', target: entry.hash })" class="p-0.5 hover:bg-neutral-700 rounded" title="Pick this commit onto what is checked out">
                 <Cherry class="w-3 h-3 text-neutral-400" />
               </button>
@@ -78,6 +89,28 @@
               <button @click.stop="copyCommitHash(entry)" class="p-0.5 hover:bg-neutral-700 rounded" title="Copy commit hash">
                 <Copy class="w-3 h-3 text-neutral-400" />
               </button>
+            </div>
+          </div>
+          <!-- A reword, over the commit's whole message once it is read -->
+          <div v-if="rewording?.hash === entry.hash" class="mt-1.5 ml-5 flex flex-col gap-1">
+            <textarea
+              v-if="rewording.message !== null"
+              data-testid="reword-message"
+              :value="rewording.message"
+              @input="rewordText = ($event.target as HTMLTextAreaElement).value"
+              @keydown.escape="commitActor.send({ type: 'commit.CANCEL_REWORD' })"
+              rows="3"
+              class="w-full px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-neutral-200 resize-y"
+            />
+            <div v-else class="text-[11px] text-neutral-500">Reading its message…</div>
+            <div class="flex gap-1 justify-end">
+              <button class="px-2 py-0.5 text-[11px] rounded text-neutral-400 hover:bg-neutral-800" @click="commitActor.send({ type: 'commit.CANCEL_REWORD' })">Cancel</button>
+              <button
+                data-testid="reword-save"
+                :disabled="rewording.message === null || !(rewordText ?? rewording.message).trim()"
+                class="px-2 py-0.5 text-[11px] rounded text-neutral-200 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-40"
+                @click="commitActor.send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'reword', message: rewordText ?? rewording.message! })"
+              >Reword</button>
             </div>
           </div>
         </div>
@@ -101,11 +134,11 @@
 <script setup lang="ts">
 import { useSurface } from '@apackdev/sdk/fe'
 
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { CommitLogEntry } from '#features/code/fe/features/commit/state.ts'
-import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X, Cherry } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X, Cherry, Pencil, FoldVertical, Trash2 } from 'lucide-vue-next'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import HistoryGraph from '#features/code/fe/features/commit/HistoryGraph.vue'
@@ -121,6 +154,10 @@ const commitActor = panelChild(codeActor, 'commit')!
 
 const commitLog = useSelector(commitActor, (state) => state.context.commitLog) as import('vue').Ref<CommitLogEntry[]>
 const logCursor = useSelector(commitActor, (state) => state.context.logCursor)
+const rewording = useSelector(commitActor, (state) => state.context.rewording)
+/** The reword's text as edited, until it is saved or another commit is reworded */
+const rewordText = ref<string | null>(null)
+watch(() => rewording.value?.hash, () => { rewordText.value = null })
 const logPath = useSelector(commitActor, (state) => state.context.logPath)
 const lanes = computed(() => laneRows(commitLog.value))
 /** The commits shown that what is checked out already holds, which there is nothing to pick from: children come first */

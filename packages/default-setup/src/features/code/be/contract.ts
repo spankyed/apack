@@ -6,7 +6,7 @@ import type {
   CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
-  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation,
+  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
@@ -104,6 +104,12 @@ export type IncomingCommitEvents =
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
   /** Merge a branch in, rebase onto one, or pick a commit onto what is checked out */
   | { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
+  /** Amend the last commit with what is staged, and `message` in place of its own when given */
+  | { type: 'commit.AMEND'; message?: string; evenIfPublished?: boolean }
+  /** A commit's whole message, for rewording it */
+  | { type: 'commit.GET_COMMIT_MESSAGE'; hash: string }
+  /** Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it */
+  | { type: 'commit.REWRITE_COMMIT'; hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }
   /** What merging a branch in would do, before it is done */
   | { type: 'commit.PREVIEW_MERGE'; target: string }
   /** The files in an untracked folder that is listed as one row */
@@ -131,6 +137,11 @@ export type OutgoingCommitEvents =
   /** It ran, or it stopped on a conflict, which the status then describes as in progress */
   | { type: 'commit.OPERATION_STARTED'; data: { kind: StartableOperation; target: string; stopped: boolean } }
   | { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }
+  | { type: 'commit.AMENDED' }
+  | { type: 'commit.COMMIT_MESSAGE_RECEIVED'; data: { hash: string; message: string } }
+  | { type: 'commit.COMMIT_REWRITTEN'; data: { hash: string; action: RewriteAction } }
+  /** A remote branch already holds commits the amend or rewrite would change: done only once the user says to go on */
+  | { type: 'commit.REWRITE_NEEDS_CONFIRMATION'; data: { message: string } }
   | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
   | { type: 'commit.FILES_STAGED'; data: { paths: string[] } }
   | { type: 'commit.FILES_UNSTAGED'; data: { paths: string[] } }
