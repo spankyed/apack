@@ -109,6 +109,13 @@ The Windows status today, in plain terms:
   task, not part of this one.
 - **Size:** small.
 
+**Result (2026-11-13, met).** On the VM, through the broker (`apack-terminal` 0.1.0 built with Zig 0.17.0), one
+PowerShell session with the app's own shell integration (`integrationFor`, the marks key the app gives a keyed shell)
+ran 10,000 typed `Write-Output` commands in 156 s, in 50-command chunks. The session's listener saw 10,000
+`commandStarted` and 10,000 `commandFinished` events: all in order, none missing or duplicated, every outcome
+`exited` with code 0. The broker keeps 256 commands (`COMMANDS_KEPT`), and those 256 match the last 256 written.
+Script: `.apack/w1-order.ts` on the VM (run by `tsx`, source condition); result file `C:\apack-setup\w1-result.json`.
+
 ### W2. The app's own code path on Windows, without a window
 - **Why:** the hooks are arranged by the app (`packages/default-setup/.../shell-integration.ts`), not by the
   broker. On the VM the hook file was generated from the app's code and run through the broker directly. The
