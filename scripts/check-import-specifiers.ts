@@ -1022,7 +1022,7 @@ const RULE_LIST = [
     over: PACK_CODE_DIRS,
     repoOnly: { kind: 'inapplicable', note: "Its subject is the pack's own seam to its terminal emulator, which is this pack's choice and not a contract any other pack is held to" },
     find: findEmulatorImports,
-    rule: "Only the shared terminal pool imports the terminal emulator: a host that draws a terminal holds a TerminalAttachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
+    rule: "Only the shared terminal pool imports the terminal emulator: a host that draws a terminal holds an attachment, so replacing the emulator is a swap behind one module rather than a second rewrite of ownership",
   },
   {
     id: 'findSchemeRegistrations',

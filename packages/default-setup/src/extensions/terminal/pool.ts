@@ -17,8 +17,9 @@ import { CLAUDE_NATIVE_TERMINAL_COLORS, TERMINAL_COLORS, TERMINAL_THEME } from '
  * back to be encoded where the terminal's modes are known. So there is no emulator in a window, no copy of
  * the scrollback to keep in step, and nothing a window can get wrong about what a program meant.
  *
- * One connection to the broker carries every terminal this window shows (`terminalViews`,
- * `@apackdev/sdk/fe`). A view is made for a terminal's session and outlives the hosts that show it: a host
+ * Each lifecycle pool shares its connection to a broker (`terminalViews`, `@apackdev/sdk/fe`).
+ * Shell replacement notices and native transition gates stay independent. A view is made for a session
+ * and outlives the hosts that show it: a host
  * mounts it into its container and unmounts it on the way out, and while no host has it mounted the broker
  * sends it nothing at all.
  */
