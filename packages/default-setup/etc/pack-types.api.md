@@ -1973,6 +1973,10 @@ type IncomingCommitEvents = {
     type: 'commit.RENAME_BRANCH';
     name: string;
     to: string;
+}
+/** Turn on git's own file monitor and untracked cache here, which the user clicked for: it writes the repository's config */
+ | {
+    type: 'commit.SPEED_UP_STATUS';
 } | {
     type: 'commit.STASH_LIST';
 } | {
@@ -3342,6 +3346,7 @@ type OutgoingCommitEvents =
         counts?: LineCount[];
         pullPreview?: MergePreview;
         hasIdentity?: boolean;
+        slowStatus?: SlowStatus;
         truncated: boolean;
         branch: string;
         hasUpstream: boolean;
@@ -3519,6 +3524,14 @@ type OutgoingCommitEvents =
     data: {
         name: string;
         to: string;
+    };
+}
+/** Which of the two were turned on: the file monitor only where git has one for this system */
+ | {
+    type: 'commit.STATUS_SPED_UP';
+    data: {
+        fileMonitor: boolean;
+        untrackedCache: boolean;
     };
 } | {
     type: 'commit.BRANCH_CHECKOUT_SUCCESS';
@@ -5246,6 +5259,19 @@ interface SignInHelp {
 type Simplify<T> = {
     [K in keyof T]: T[K];
 } & {};
+
+/**
+ * A whole status took longer than its budget, and git's own file monitor or its untracked cache is off, either of
+ * which would make it faster
+ */
+interface SlowStatus {
+    ms: number;
+    budgetMs: number;
+    fileMonitor: boolean;
+    untrackedCache: boolean;
+    /** Whether git has a file monitor of its own on this system, which turning the speed-ups on would turn on */
+    fileMonitorAvailable: boolean;
+}
 
 /** What the panel can begin: merging a branch in, replaying what is checked out onto one, or picking a commit onto it */
 type StartableOperation = 'cherry-pick' | 'merge' | 'rebase';

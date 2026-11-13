@@ -6,7 +6,7 @@ import type {
   CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
-  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction,
+  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
@@ -89,6 +89,8 @@ export type IncomingCommitEvents =
   /** Push a tag to the remote */
   | { type: 'commit.PUSH_TAG'; name: string }
   | { type: 'commit.RENAME_BRANCH'; name: string; to: string }
+  /** Turn on git's own file monitor and untracked cache here, which the user clicked for: it writes the repository's config */
+  | { type: 'commit.SPEED_UP_STATUS' }
   | { type: 'commit.STASH_LIST' }
   | { type: 'commit.STASH_APPLY'; index: number }
   | { type: 'commit.STASH_POP'; index: number }
@@ -138,7 +140,7 @@ export type OutgoingCommitEvents =
    * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
    * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
    */
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; pullPreview?: MergePreview; hasIdentity?: boolean; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean; signIn?: SignInHelp } }
+  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; pullPreview?: MergePreview; hasIdentity?: boolean; slowStatus?: SlowStatus; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean; signIn?: SignInHelp } }
   /** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
   | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
   /** It ran, or it stopped on a conflict, which the status then describes as in progress */
@@ -175,6 +177,8 @@ export type OutgoingCommitEvents =
   | { type: 'commit.TAG_DELETED'; data: { name: string } }
   | { type: 'commit.TAG_PUSHED'; data: { name: string } }
   | { type: 'commit.BRANCH_RENAMED'; data: { name: string; to: string } }
+  /** Which of the two were turned on: the file monitor only where git has one for this system */
+  | { type: 'commit.STATUS_SPED_UP'; data: { fileMonitor: boolean; untrackedCache: boolean } }
   | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
   | { type: 'commit.BRANCH_PULLED'; data: { branchName: string } }

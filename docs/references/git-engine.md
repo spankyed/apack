@@ -191,6 +191,13 @@ ran and the code it exited with. A command a hook refused throws `HookRefusedErr
 hook's name, its exit code and what it printed; the commit panel says which hook refused and shows its output under
 that, rather than git's words around it.
 
+## A slow status
+
+A whole status that took longer than its budget, with git's own file monitor or its untracked cache off, says so in
+the snapshot (`slowStatus`). The commit panel offers to turn them on while one it can turn on is off — the file
+monitor only on macOS and Windows, where git has one — and `speedUpStatus` writes them to the repository's own
+settings on the user's click (`commit.SPEED_UP_STATUS`).
+
 ## Copies of the working tree
 
 **A copy is kept outside the repository, and nothing of the repository's is written to keep it.** Each repository

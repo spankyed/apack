@@ -43,6 +43,7 @@ export type Event =
   | { type: 'commit.PULL_BRANCH' }
   | { type: 'commit.GENERATE_MESSAGE' }
   | { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean; paths?: string[] }
+  | { type: 'commit.SPEED_UP_STATUS' }
   | { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
   | { type: 'commit.DELETE_TAG'; name: string }
   | { type: 'commit.PUSH_TAG'; name: string }
@@ -150,6 +151,18 @@ async function rewriteOf(repository: AppGitRepository, hash: string, action: Rew
   }
   throw new Error(found ? 'The first commit has nothing before it to be folded into.' : 'That commit is not among the last ones of what is checked out.')
 }
+
+/**
+ * Whether turning git's speed-ups on would change anything for a slow status: its untracked cache is off, or its
+ * file monitor is, on a system git has one for (macOS and Windows). Linux has none, so a status that is slow with the
+ * cache on is offered nothing
+ */
+function canSpeedUp({ fileMonitor, untrackedCache }: { fileMonitor: boolean; untrackedCache: boolean }): boolean {
+  return !untrackedCache || (!fileMonitor && FILE_MONITOR_HERE)
+}
+
+/** Whether git has a file monitor of its own on this system */
+const FILE_MONITOR_HERE = process.platform === 'darwin' || process.platform === 'win32'
 
 /** How many commits a page of the panel's history holds */
 const LOG_PAGE = 100
@@ -325,7 +338,7 @@ export const commitSystem = setup({
           const pullPreview = snapshot.hasUpstream && snapshot.behind > 0 ? await repository.previewMerge('@{upstream}').catch(() => undefined) : undefined
           answer(reply, {
             type: 'commit.STATUS_RECEIVED',
-            data: { files: snapshot.files, ...(counts && { counts }), ...(pullPreview && { pullPreview }), hasIdentity: snapshot.hasIdentity, truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, signIn: repository.autoFetchSignIn, watching: !repository.hasWatchFailed, operation: snapshot.operation, fetchSuspended: repository.isAutoFetchSuspended }
+            data: { files: snapshot.files, ...(counts && { counts }), ...(pullPreview && { pullPreview }), hasIdentity: snapshot.hasIdentity, ...(snapshot.slowStatus && canSpeedUp(snapshot.slowStatus) && { slowStatus: { ...snapshot.slowStatus, fileMonitorAvailable: FILE_MONITOR_HERE } }), truncated: snapshot.truncated, branch: snapshot.branch, hasUpstream: snapshot.hasUpstream, commitsAhead: snapshot.ahead, commitsBehind: snapshot.behind, signIn: repository.autoFetchSignIn, watching: !repository.hasWatchFailed, operation: snapshot.operation, fetchSuspended: repository.isAutoFetchSuspended }
           })
           // The window has its answer: what the remote has is fetched behind it, and announced if it differs
           fetchInBackground(repository, self)
@@ -1075,6 +1088,15 @@ export const commitSystem = setup({
       }, (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }))
     },
 
+    /** Turns on git's own file monitor and untracked cache for the repository, on the user's click: it writes its config */
+    speedUpStatus: ({ context, self, reply }) => {
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.speedUpStatus().then((turnedOn) => {
+        answer(reply, { type: 'commit.STATUS_SPED_UP', data: turnedOn })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+      }, (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }))
+    },
+
     stashList: ({ context, reply }) => {
       if (!requireGitRepository(context, reply)) return
 
@@ -1440,6 +1462,7 @@ export const commitSystem = setup({
         'commit.DELETE_TAG': { actions: 'deleteTag' },
         'commit.PUSH_TAG': { actions: 'pushTag' },
         'commit.RENAME_BRANCH': { actions: 'renameBranch' },
+        'commit.SPEED_UP_STATUS': { actions: 'speedUpStatus' },
         'commit.STASH_LIST': {
           actions: 'stashList'
         },
