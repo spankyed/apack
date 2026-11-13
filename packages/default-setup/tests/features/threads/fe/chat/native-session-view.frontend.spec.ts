@@ -4,12 +4,13 @@ import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-ter
 import ClaudeNativeSession from '#features/threads/fe/chat/ClaudeNativeSession.vue'
 const actor = vi.hoisted(() => ({ send: vi.fn() }))
 const links = vi.hoisted(() => ({ open: vi.fn() }))
+const activeSurface = ref({ id: 'default-setup/threads' })
 const state = ref({ context: { nativeTerminalViews: {} as Record<string, ClaudeTerminalViewSnapshot> } })
-vi.mock('@apackdev/sdk/fe', () => ({ useSurface: () => actor, openLink: links.open }))
+vi.mock('@apackdev/sdk/fe', () => ({ useSurface: () => actor, useShell: () => ({ activeSurface }), openLink: links.open }))
 vi.mock('@xstate/vue', () => ({ useSelector: (_actor: unknown, select: (value: typeof state.value) => unknown) => computed(() => select(state.value)) }))
 vi.mock('#extensions/terminal/pool.ts', () => ({ mountNativeTerminal: () => ({ detach: vi.fn(), focus: vi.fn(),setInputBlocked:vi.fn(), fit: () => ({ columns: 100, rows: 30 }), write: vi.fn() }) }))
 let app: App | undefined
-beforeEach(() => { actor.send.mockClear(); links.open.mockClear(); state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
+beforeEach(() => { actor.send.mockClear(); links.open.mockClear(); activeSurface.value = { id: 'default-setup/threads' }; state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); vi.unstubAllGlobals() })
 async function fixture(continuation?:import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation) {
   const active = vi.fn(), root = document.createElement('div'); document.body.append(root)
@@ -540,4 +541,58 @@ it('mounts credit consent as a distinct composer form and fences stale rendered 
 
 it('keeps external credit feedback exact and opens its native URL through normal app navigation',async()=>{
  const f=await fixture();f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick();const url='https://claude.ai/settings/usage?from=cc_cli_limit_message',text='Visit '+url+' to turn on credits. <img src=x>';f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:{id:'fable-consent-result',revision:crypto.randomUUID(),sessionId:crypto.randomUUID(),kind:'credit_consent_result',severity:'feedback',title:'Usage credits',paragraphs:[text],links:[url]}}});await nextTick();const result=f.root.querySelector('[aria-label="Claude usage credit result"]')!;expect(result.textContent).toBe(text);expect(result.querySelector('img')).toBeNull();const link=result.querySelector('a')!;expect(link.getAttribute('href')).toBe(url);actor.send.mockClear();link.dispatchEvent(new MouseEvent('click',{button:0,bubbles:true,cancelable:true}));link.dispatchEvent(new MouseEvent('auxclick',{button:1,bubbles:true,cancelable:true}));expect(links.open).toHaveBeenCalledTimes(2);expect(links.open).toHaveBeenLastCalledWith(url);expect(actor.send).not.toHaveBeenCalled()
+})
+
+it.each(['live', 'exited'] as const)('reveals another surface without retiring the %s native owner', async status => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status } }); await nextTick()
+  const section = f.root.querySelector('[aria-label="Claude native interface"]')!
+  const viewport = f.root.querySelector('[aria-label="Claude terminal"]')
+  expect(section.classList.contains('native-session--expanded')).toBe(true)
+  // A fresh shell description of the same surface is not navigation.
+  activeSurface.value = { id: 'default-setup/threads' }; await nextTick()
+  expect(section.classList.contains('native-session--expanded')).toBe(true)
+  actor.send.mockClear()
+  activeSurface.value = { id: 'default-setup/code' }; await nextTick()
+  expect(section.classList.contains('native-session--expanded')).toBe(false)
+  expect(f.root.querySelector('[aria-label="Claude terminal"]')).toBe(viewport)
+  expect(f.active).toHaveBeenLastCalledWith(true)
+  activeSurface.value = { id: 'default-setup/threads' }; await nextTick()
+  expect(section.classList.contains('native-session--expanded')).toBe(false)
+  Array.from(section.querySelectorAll('button')).find(button => button.textContent === 'Expand')!.click(); await nextTick()
+  expect(section.classList.contains('native-session--expanded')).toBe(true)
+  expect(actor.send.mock.calls.map(([event]) => event.type)).not.toContain('CLAUDE_TERMINAL_STOP')
+  expect(actor.send.mock.calls.map(([event]) => event.type)).not.toContain('CLAUDE_TERMINAL_TASK')
+  expect(actor.send.mock.calls.map(([event]) => event.type)).not.toContain('CLAUDE_TERMINAL_UNMOUNT')
+})
+
+it('minimizes an attached background drawing on navigation and expands it without closing its client', async () => {
+  const f = await fixture()
+  f.publish({ ...f.snapshot, attachment: { requestId: 'attached', revision: 1, sessionId: 'session', continuedInSessionId: 'child-session', status: 'ready', state: { id: 'attach-owner', jobId: 'job', sessionId: 'child-session', cwd: '/child', clientPid: 91, status: 'live', output: [], terminalSession: { id: 'child-drawing', target: null } } } }); await nextTick(); await nextTick()
+  const section = f.root.querySelector('[aria-label="Claude native interface"]')!
+  const child = f.root.querySelector('[aria-label="Background Claude terminal"]')!
+  expect(section.classList.contains('native-session--child-expanded')).toBe(true)
+  actor.send.mockClear()
+  activeSurface.value = { id: 'default-setup/code' }; await nextTick()
+  expect(section.classList.contains('native-session--child-expanded')).toBe(false)
+  expect(f.root.querySelector('[aria-label="Background Claude terminal"]')).toBe(child)
+  Array.from(child.querySelectorAll('button')).find(button => button.textContent === 'Expand')!.click(); await nextTick()
+  expect(section.classList.contains('native-session--child-expanded')).toBe(true)
+  expect(actor.send.mock.calls.map(([event]) => event.type)).not.toContain('CLAUDE_BACKGROUND_CLOSE')
+  expect(actor.send.mock.calls.map(([event]) => event.type)).not.toContain('CLAUDE_TERMINAL_TASK')
+})
+
+it('keeps a pending native open minimized after navigation, until the user explicitly opens it again', async () => {
+  const f = await fixture()
+  const main = { ...f.snapshot, state: { ...f.snapshot.state!, view: { kind: 'main' as const, revision: 3 } } }
+  f.publish({ ...main, opening: true, openingId: 'opening-after-navigation' }); await nextTick()
+  activeSurface.value = { id: 'default-setup/code' }; await nextTick()
+  f.publish(main); await nextTick()
+  const section = f.root.querySelector('[aria-label="Claude native interface"]')!
+  expect(section.classList.contains('native-session--expanded')).toBe(false)
+  Array.from(section.querySelectorAll('button')).find(button => button.textContent?.includes('Back to conversation'))!.click(); await nextTick()
+  const request = actor.send.mock.calls.at(-1)![0]
+  f.publish({ ...main, task: { ownerId: 'owner', taskId: '@main-view', revision: request.revision, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()
+  Array.from(section.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === 'Use native interface' || button.textContent?.includes('Use native interface'))!.click(); await nextTick()
+  expect(section.classList.contains('native-session--expanded')).toBe(true)
 })

@@ -1,5 +1,5 @@
 <template>
-  <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-launch--credit': !displayActive && view?.state?.notice?.kind === 'fable_overage_consent_prompt', 'native-session--expanded': active && expanded, 'native-session--child': !!view?.attachment, 'native-launch--background-composing': backgroundComposing, 'native-launch--background': !!continuation && !active && !view?.attachment }]" aria-label="Claude native interface">
+  <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-launch--credit': !displayActive && view?.state?.notice?.kind === 'fable_overage_consent_prompt', 'native-session--expanded': active && expanded, 'native-session--child': !!view?.attachment, 'native-session--child-expanded': !!view?.attachment && expanded, 'native-launch--background-composing': backgroundComposing, 'native-launch--background': !!continuation && !active && !view?.attachment }]" aria-label="Claude native interface">
     <NativeBackgroundReview v-for="panel in leftArrowPanel ? [leftArrowPanel] : []" :key="JSON.stringify([panel.ownerId, panel.sessionId, panel.id])" :panel-id="panel.id" :state="panel.state" @answer="answerLeftArrow(panel, $event)" />
     <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" :attached="!!view?.attachment" :info="view?.backgroundInfo" :can-reply="view?.canReplyBackground === true" @operate="operateBackground" @open="openBackground" @composing="backgroundComposing = $event">
       <template #composer="composer">
@@ -9,7 +9,7 @@
         <button v-if="!active && !view?.attachment && view?.state?.notice?.kind !== 'refusal_fallback_prompt'" type="button" class="native-button native-parent-interface" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" aria-label="Use native interface" title="Open parent native interface" @click="open"><span aria-hidden="true" class="native-command">›_</span></button>
       </template>
     </NativeBackgroundSession>
-    <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
+    <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" :expanded="expanded" @toggle-expanded="expanded = !expanded" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
     <NativeCreditConsent v-if="!active && view?.state?.notice?.kind === 'fable_overage_consent_prompt'" :key="JSON.stringify([view.state.ownerId,view.state.notice.sessionId,view.state.notice.id,view.state.notice.revision])" :notice="view.state.notice" :answer="view.noticeAnswer" @answer="answerCredit" />
     <section v-if="!active && view?.state?.notice?.kind === 'credit_consent_result'" role="status" aria-label="Claude usage credit result" class="rounded-lg border border-neutral-700/50 bg-neutral-900/40 px-3 py-2 text-xs leading-relaxed text-neutral-200"><p v-for="(paragraph,index) in view.state.notice.paragraphs" :key="index" class="whitespace-pre-wrap break-words"><NativeConsentDisclosure :text="paragraph" :links="view.state.notice.links" /></p></section>
     <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
@@ -147,7 +147,7 @@ import { isClaudeNativeNoticeDecision, type ClaudeNativeNoticeResponse } from '#
 import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent, PopoverClose } from 'reka-ui'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
-import { useSurface } from '@apackdev/sdk/fe'
+import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from '#extensions/terminal/pool.ts'
 import NativeBackgroundAttachment from './NativeBackgroundAttachment.vue'
@@ -256,6 +256,11 @@ const requested = ref(false)
 const ended = computed(() => ['exited', 'error'].includes(view.value?.state?.status ?? ''))
 const active = computed(() => !!view.value?.state && !view.value.opening && requested.value && !dismissed.value)
 const displayActive = computed(() => active.value || !!view.value?.attachment)
+const { activeSurface } = useShell()
+// Navigation reveals its canvas without changing the native owner, draft or connection.
+watch(() => activeSurface.value.id, () => {
+  if (requested.value || view.value?.attachment) expanded.value = false
+})
 // Rendered actions retain their original owner and revision until Vue replaces the panel.
 const noticePanels = computed(() => {
   if (active.value) return []
@@ -299,12 +304,13 @@ function operateBackground(target: ClaudeNativeContinuation, request: ClaudeBack
 let attachmentRevision = 0
 function openBackground(target: ClaudeNativeContinuation, jobId: string) {
   if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.attachment) return
+  expanded.value = true
   actor.send({type:'CLAUDE_BACKGROUND_OPEN',...identity(),sessionId:target.sessionId,continuedInSessionId:target.continuedInSessionId,jobId,revision:++attachmentRevision})
 }
 function closeBackground(requestId: string) {actor.send({type:'CLAUDE_BACKGROUND_CLOSE',...identity(),requestId})}
 function inputBackground(attachmentId: string,text: string) {actor.send({type:'CLAUDE_BACKGROUND_INPUT',...identity(),attachmentId,text})}
 function resizeBackground(attachmentId: string,size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize) {actor.send({type:'CLAUDE_BACKGROUND_RESIZE',...identity(),attachmentId,...size})}
-function open() { returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false; actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() }) }
+function open() { expanded.value = true; returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false; actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() }) }
 function cancelOpen() {
   const openingId = view.value?.openingId
   if (!openingId || view.value?.cancelling) return
@@ -378,7 +384,7 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 .native-session--expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
 /* Native consent and question screens need more rows than the compact split allows. */
 @media (max-height: 700px), (max-width: 720px) {
-  .native-session--child { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
+  .native-session--child-expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
 }
 .native-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 20px; padding: 4px 4px 18px; }
 .native-identity { display: flex; align-items: center; min-width: 0; gap: 12px; }

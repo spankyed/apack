@@ -2,6 +2,7 @@
   <section aria-label="Background Claude terminal" class="child-terminal">
     <header>
       <div><h3>Background session</h3><p :title="attachment.state?.cwd">{{ attachment.status === 'opening' ? 'Opening connection…' : attachment.state?.status === 'exited' ? 'Connection ended' : attachment.status === 'error' ? 'Connection unavailable' : 'Connected to Claude' }}</p></div>
+      <button type="button" class="child-terminal__size" :aria-expanded="expanded" @click="emit('toggle-expanded')">{{ expanded ? 'Minimize' : 'Expand' }}</button>
       <button type="button" @click="emit('close', attachment.requestId)">{{ attachment.status === 'opening' ? 'Cancel' : 'Close connection' }}</button>
     </header>
     <p v-if="attachment.problem" role="alert">{{ attachment.problem }}</p>
@@ -13,8 +14,8 @@
 import {ref, watch, nextTick, onBeforeUnmount} from 'vue'
 import type {ClaudeBackgroundAttachmentView} from '#features/threads/be/claude-terminal-views.ts'
 import {mountNativeTerminal} from '#extensions/terminal/pool.ts'
-const props = defineProps<{attachment: ClaudeBackgroundAttachmentView}>()
-const emit = defineEmits<{close:[requestId:string]; input:[attachmentId:string,text:string]; resize:[attachmentId:string,size:import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize]}>()
+const props = defineProps<{attachment: ClaudeBackgroundAttachmentView; expanded: boolean}>()
+const emit = defineEmits<{'toggle-expanded': []; close:[requestId:string]; input:[attachmentId:string,text:string]; resize:[attachmentId:string,size:import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize]}>()
 const viewport = ref<HTMLElement>()
 let terminal: ReturnType<typeof mountNativeTerminal> | undefined, attached: string | undefined
 function detach() {terminal?.detach();terminal=undefined;attached=undefined}
@@ -37,5 +38,7 @@ header {display:flex;align-items:center;justify-content:space-between;flex-wrap:
 h3 {font-size:13px;font-weight:600;margin:0} p {font-size:11px;color:#aaa59e;line-height:1.5;overflow-wrap:anywhere}
 button {min-height:30px;padding:5px 9px;border:1px solid #ffffff26;border-radius:7px;font-size:11px}button:focus-visible {outline:2px solid #8cabe8;outline-offset:2px}
 .child-terminal__viewport {flex:1;min-height:144px;min-width:0;overflow:hidden;padding:10px;background:#191919;border:1px solid #ffffff1a;border-radius:10px}
+.child-terminal__size {display:none}
+@media (max-height:700px), (max-width:720px) {.child-terminal__size {display:inline-flex}}
 .child-terminal__hint {padding:8px 0;margin:0}
 </style>
