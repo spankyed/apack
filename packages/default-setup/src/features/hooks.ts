@@ -34,7 +34,13 @@ export const onInit = () => {
  * leave unfinished are marked stopped in the run history, as a kill marks them
  */
 export const onShutdown = () => {
-  services.runHistory.stopActive();
+  const failures: unknown[] = [];
+  const dispose = (cleanup: () => void) => {
+    try { cleanup(); } catch (error) { failures.push(error); }
+  };
+  // A runtime can lose service admission before shutdown (for example during Restore Pack). Its
+  // rejected history write must remain visible without skipping process-local cleanup.
+  dispose(() => services.runHistory.stopActive());
   // **Nothing here ends a terminal, and nothing in this process may.** A session outlives the API on
   // purpose: restarting it must not take a user's shells down, which is the whole of the lifetime rule.
   // What ends them is the app's own hold on the broker closing — a descriptor closes on process death
@@ -42,14 +48,16 @@ export const onShutdown = () => {
   // leaving ends them, which is what keeps a dev run or a test from leaving a shell behind. The only
   // deliberate end is the user closing a terminal, which is `terminalService.kill`.
   // What does end here is this process's own follow of the windows, which is not a session.
-  stopTerminalSizing?.();
+  const stopSizing = stopTerminalSizing;
   stopTerminalSizing = undefined;
+  if (stopSizing) dispose(stopSizing);
   //
   // The Claude Code integration's own children are a different matter: a handle is this process's, so a
   // handle left running is leaked rather than persisted, and the views it fed have nobody to reach.
-  clearClaudeUiViews();
-  killAllHandles();
-  clearAllSchedules();
-  removeAllAdHocListeners();
-  clearFlowActorRegistry();
+  dispose(clearClaudeUiViews);
+  dispose(killAllHandles);
+  dispose(clearAllSchedules);
+  dispose(removeAllAdHocListeners);
+  dispose(clearFlowActorRegistry);
+  if (failures.length) throw new AggregateError(failures, 'Default pack shutdown cleanup failed');
 };
