@@ -153,6 +153,42 @@ The broker's exe was built on the VM with Zig 0.17.0 (the version the repo's Win
 - **Done when:** the suite passes on the VM, or the beta label and its evidence are written.
 - **Size:** medium to large, depending on the spike.
 
+**Spike result (2026-11-13, step 1 done; step 2 open).** A throwaway Rust program on the VM
+(`C:\apack-setup\w3-spike`, `windows-sys` 0.59) puts a reader thread in a blocked `ReadFile` on a real named pipe,
+waits 300 ms, then tries one route from another thread, with a 3 s deadline on the outcome:
+
+- **A, `CancelSynchronousIo`** on the reader's thread handle (the reader duplicated its own real handle for this):
+  the call returned 1 and the read failed with `ERROR_OPERATION_ABORTED` (995). **Unblocked.**
+- **B, `DisconnectNamedPipe`** on the server end: returned 1; the read failed with `ERROR_PIPE_NOT_CONNECTED` (233).
+  **Unblocked.**
+- **C, `CloseHandle`** on the client handle being read: the closing thread never returned from the call. The process
+  printed nothing after it and was still alive about two hours later with no CPU use. **Not a route.** This is
+  inferred from the log: the call was the only one on that thread before the silence, and the earlier handle closes
+  in B returned at once.
+- **D, overlapped `ReadFile`** (`FILE_FLAG_OVERLAPPED`) with `CancelIoEx` on the handle: the call returned 1; the wait
+  returned 0 with error 995. **Unblocked.**
+
+Routes A and B were run in the first pass, which C then stalled (`C:\apack-setup\w3-spike.log`); D was run alone
+with the same program (`ONLY_D`, `C:\apack-setup\w3-d-run.log`, which exited within its watchdog). Each route was
+tested with one blocked reader, which is the shape the `keeping` cases use, not a shape with many readers.
+
+**Second pass, the broker's own shape.** The broker parks its read on the server end, the end it accepted, so B
+above does not apply to it. Route E ran that shape with `DisconnectNamedPipe` on the same server end: the call never
+returned, and the watchdog stopped the process with no result (`C:\apack-setup\w3-e-run.log`). The likely cause is the
+one C shows: a synchronous call on a handle waits behind a read pending on that handle. Two routes that do not wait
+behind it unblocked the same shape, each run once:
+
+- **F, `CancelIoEx`** on the synchronous server handle: returned 1; the read failed with `ERROR_OPERATION_ABORTED` (995).
+  **Unblocked.** (`C:\apack-setup\w3-f-run.log`)
+- **G, `CancelSynchronousIo`** on the reader's thread handle: returned 1; the read failed with 995. **Unblocked.**
+  (`C:\apack-setup\w3-g-run.log`)
+
+**Consequence for step 2.** The keeping suite ends its reads by cancelling their I/O (F for the broker's handle), and
+never by disconnecting the pipe or closing the handle the read is blocked on. The broker's `hang_up` for a named pipe
+now calls `CancelIoEx` on the stream's handle: the change is on branch `fix/windows-hang-up` in `vendor/apack-terminal`,
+type-checks only with the VM's zig toolchain, and is **not yet built or tested on Windows**. Step 2 is not done: the
+suite is not ported and has not run on the VM.
+
 ### W4. Clean up test brokers that the proxy starts, on Windows
 - **Why:** on Windows the cleanup for brokers a proxy starts is a no-op (`tests/reaper.rs`). A killed or failing
   test can leave a broker running.
