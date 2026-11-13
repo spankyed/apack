@@ -89,6 +89,27 @@ the pin `3a2140c`. Nothing is pushed or merged; the app pin still names `3a2140c
 - Mutation check: disabling the shown-rows branch in `fetch` makes
   `lines_fetched_while_the_program_is_holding_the_screen_are_those_from_before_the_hold` fail; restored, it passes.
 
+### Hold timeout measurement (2026-11-12)
+
+Commit `fad909e` on `session/next-features-measure` (from `origin/master`, `3b8ef5c`, where the broker work is merged
+as #24 and #25) adds `benches/hold.rs`. Command: `cargo bench --bench hold` in the `next-features-measure` worktree.
+It reports and never fails.
+
+- **Machine:** `uname -m` arm64; 10 cores; **loaded**. Load average was 44.2 at the start of the session and 33 to
+  36 during the runs (`uptime`), so the cost figures are upper bounds on an idle machine.
+- **Release cost**, a full 200x50 repaint of coloured text inside `2026h`/`2026l`, timed from the hold's start to its
+  release as the broker publishes it (`Screen::feed`), 200 runs. Run 1: p50 491 us, p95 621 us, max 805 us. Run 2:
+  p50 475 us, p95 536 us, max 647 us. This is parse and publish cost. It is not how long a real program holds the
+  screen, which the program sets.
+- **View fetch** of the whole screen after release, the same 200 runs: run 1 p50 409 us, p95 487 us, max 769 us;
+  run 2 p50 398 us, p95 456 us, max 615 us.
+- **Never-released hold**, a program that writes `2026h` and nothing else, 5 runs: the view receives the broker's
+  frame at 1.003 s and 1.001 s, and at most 1.006 s (run 2: p50 1.001 s, max 1.006 s). The limit fires.
+
+**Decision:** `HOLD_LIMIT` stays at one second (`src/holds.rs:27`). The measured release cost is well under a
+millisecond, so a 1 s ceiling does not come near a repaint. Nothing measured says a longer or shorter limit is
+needed, and the hold length of a real full-screen program was not measured.
+
 ### Not done in Phase 1
 
 - The view paint loop (`view/src`) was not changed. Nothing in the view needed it, since frames are withheld in the broker.
