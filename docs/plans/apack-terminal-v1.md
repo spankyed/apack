@@ -121,6 +121,17 @@ The Windows status today, in plain terms:
 - **Size:** medium. It may need a headless harness; if the API cannot run headless on the VM, record why and say
   so before moving on.
 
+**Result (2026-11-13, partly met).** The API runs headless on the VM (`packages/api` dist, `SHIPPED_PACKS_DIR`
+set to `packages`, `APACK_ENV=development`, own data dir), loads the default-setup pack, and the app's
+terminal service opens a PowerShell through the broker over the named pipe (`terminal.CREATED`, `TITLED`).
+Typed input reaches the shell: a command typed through `terminal.TERMINAL_INPUT` wrote a marker file
+(`Set-Content`) that the VM then holds with the expected text. The app lists each terminal as `recorded: true`
+(`terminal.TERMINALS_LISTED`). **Not met:** the app's recorded command list with statuses cannot be read back
+on Windows. The rewind answers with a session (`terminal.REWOUND`) but no frames arrive, and no recording file
+is written under the data dir; the design says recordings and kept sessions run nowhere on Windows. That is W3.
+The broker's exe was built on the VM with Zig 0.17.0 (the version the repo's Windows CI installs), staged by
+`cargo xtask package`. Shells left by a run were gone once the API stopped.
+
 ### W3. Kept sessions and recordings on Windows
 - **Why:** the `keeping` suite (15 cases) runs only on POSIX. Each case ends by closing a connection that a reader
   thread is blocked reading. A named pipe cannot be shut down one way, so the usual method does not apply.
