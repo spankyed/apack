@@ -347,7 +347,7 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 <style scoped>
 .native-button.native-parent-interface { min-height: 30px; width: 32px; padding-inline: 5px; border: 1px solid #ffffff1a; }
 .native-launch { display: flex; flex-direction: column; flex-shrink: 0; justify-content: flex-end; padding: 6px 20px; }
-.native-launch--credit { flex: 0 0 min(28rem, 65%); min-height: 0; max-height: calc(100% - 12rem); }
+.native-launch--credit { flex: 0 0 min(28rem, 65%); min-height: 0; max-height: calc(100% - 15rem); }
 .native-launch--background { flex-shrink: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; justify-content: flex-start; }
 .native-launch--background-composing { flex: 1; overflow: hidden; }
 .native-launch__actions { justify-content: flex-end; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
