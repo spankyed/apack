@@ -1,5 +1,5 @@
 <template>
- <div ref="root" class="native-credit-consent">
+ <div ref="root" data-native-command-panel class="native-credit-consent">
   <NativeSettingsPanel :key="panelKey" class="native-credit-panel" subject="credits" :state="state" @operate="operate" />
  </div>
 </template>
