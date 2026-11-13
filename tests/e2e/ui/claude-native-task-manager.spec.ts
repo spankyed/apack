@@ -34,10 +34,10 @@ test('opens original task management from the default composer and stops its bac
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
   const resize = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
@@ -101,9 +101,9 @@ test('opens original task management from the default composer and stops its bac
     let paint:string|undefined
     if(await taskPanel.isVisible()){
       await expect(taskPanel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport({ratio:1})
-      await expect(taskPanel.locator('.xterm-rows')).toContainText('Shell details')
-      await expect(taskPanel.locator('.xterm-rows')).toContainText(/x\s+to\s+stop/i)
-      paint=await taskPanel.locator('.xterm-rows').innerText()
+      await expect(taskPanel.locator("[data-terminal-text]")).toContainText('Shell details')
+      await expect(taskPanel.locator("[data-terminal-text]")).toContainText(/x\s+to\s+stop/i)
+      paint=await taskPanel.locator("[data-terminal-text]").innerText()
     }
     else {await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport()}
     await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
@@ -178,7 +178,7 @@ test('opens original task management from the default composer and stops its bac
   await expect.poll(taskScreen).toMatch(/native-bash-wait\.py|Write disposable synthetic fixture/)
   managerScreens=[]
   for(const width of [1100,680]){await capture('manager',width);managerScreens.push({width,text:await taskScreen()})}
-  const keyboard=taskPanel.locator('textarea.xterm-helper-textarea')
+  const keyboard=taskPanel.locator("textarea[aria-label=\"Terminal input\"]")
   const stopHint=/(?:\[)?(ctrl\+[ksx]|[ksx])(?:\])?\s+(?:to\s+)?(?:kill|stop)/i
   let text=await taskScreen()
   if(!stopHint.test(text)&&/enter\s+(?:to\s+)?(?:view|select|inspect)/i.test(text)){

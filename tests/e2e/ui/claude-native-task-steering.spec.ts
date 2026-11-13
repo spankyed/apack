@@ -38,7 +38,7 @@ test('replies to the native Agent while running and resumes it after completion'
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   let theme = false, security = false, navigated = false, trusted = false
   await expect.poll(async () => {
     const current = await context(), native = current.native
@@ -199,7 +199,7 @@ test('replies to the native Agent while running and resumes it after completion'
   const nativePanel=focused.getByRole('dialog',{name:'Native /usage panel',exact:true})
   await expect(nativePanel).toBeVisible()
   await expect(focused.getByRole('button',{name:'Back to conversation',exact:true})).toBeDisabled()
-  const panelKeys=nativePanel.locator('.xterm-helper-textarea'),panelRows=nativePanel.locator('.xterm-rows')
+  const panelKeys=nativePanel.locator("[aria-label=\"Terminal input\"]"),panelRows=nativePanel.locator("[data-terminal-text]")
   await expect(panelKeys).toBeFocused()
   await expect.poll(()=>panelRows.innerText()).toContain('Total cost:')
   const usageText=await panelRows.innerText()
@@ -243,8 +243,8 @@ test('replies to the native Agent while running and resumes it after completion'
   await focused.getByRole('button',{name:'Send to Agent',exact:true}).click()
   const helpPanel=focused.getByRole('dialog',{name:'Native /help panel',exact:true})
   await expect(helpPanel).toBeVisible()
-  await expect.poll(()=>helpPanel.locator('.xterm-rows').innerText()).toContain('General')
-  const helpText=await helpPanel.locator('.xterm-rows').innerText()
+  await expect.poll(()=>helpPanel.locator("[data-terminal-text]").innerText()).toContain('General')
+  const helpText=await helpPanel.locator("[data-terminal-text]").innerText()
   await appPage.screenshot({path:testInfo.outputPath('apack-focused-agent-native-help-panel.png')})
   await helpPanel.getByRole('button',{name:'Close panel',exact:true}).click()
   await expect(helpPanel).toBeHidden()

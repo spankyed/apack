@@ -35,7 +35,7 @@ test('reviews native file creation, overwrite and edit before one-time decisions
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   let theme = false, security = false, navigated = false, trusted = false
   await expect.poll(async () => {
     const current = await context(), native = current.native

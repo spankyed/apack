@@ -39,10 +39,10 @@ test('retires a crashed pending approval and permits a fresh same-session decisi
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   ;(globalThis as any).self ??= globalThis
-  const {Terminal}=createRequire(import.meta.url)('@app/claude-terminal-xterm')
-  let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined, screenOwner: string | undefined,lastSequence=0
+  const {Terminal}=createRequire(import.meta.url)('@xterm/xterm')
+  let terminalScreen: import('@xterm/xterm').Terminal | undefined, screenOwner: string | undefined,lastSequence=0
   async function screenText(native:any){
     if(!native?.state?.ownerId)return ''
     if(screenOwner!==native.state.ownerId){

@@ -30,6 +30,13 @@ export interface ClaudeNativeFocusProjection {
   hidden: string[]
 }
 
+/** The viewport and measured cell used by the owning broker session. */
+export interface ClaudeNativeTerminalSize {
+  columns: number
+  rows: number
+  cell?: {width: number; height: number}
+}
+
 /** The broker-issued drawing address; independent of Claude session IDs and process IDs. */
 export interface ClaudeNativeTerminalSession {
   id: string
@@ -39,6 +46,8 @@ export interface ClaudeNativeTerminalSession {
 export interface ClaudeNativeTerminalState {
   /** Absent before the host has opened its terminal; never derive it from a PID or owner ID. */
   terminalSession?: ClaudeNativeTerminalSession
+  /** View/parent transition: ordinary terminal input waits; cancellation remains available. */
+  inputBlocked?: boolean
 
   /** Original background gesture is reviewing, deferring or forking; independent of process exit. */
   handoffPending?: boolean

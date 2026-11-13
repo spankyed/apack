@@ -33,10 +33,10 @@ test('authenticates original MCP with cancellation and stale callback refusal wh
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
   const resize = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
@@ -107,27 +107,27 @@ test('authenticates original MCP with cancellation and stale callback refusal wh
     if(previousViewport?.width!==size.width||previousViewport?.height!==size.height){
       await expect.poll(async()=>{const fitted=await resize();return fitted&&previous&&(fitted.cols!==previous.cols||fitted.rows!==previous.rows)}).toBe(true)
     }
-    await expect.poll(async()=>{const fitted=await resize();return fitted?.rows===(await panel.locator('.xterm-rows > div').count())}).toBe(true)
-    await expect(panel.locator('.xterm-rows')).toContainText(expected)
+    await expect.poll(async()=>{const fitted=await resize();return fitted?.rows===(await panel.locator("[data-terminal-text] > div").count())}).toBe(true)
+    await expect(panel.locator("[data-terminal-text]")).toContainText(expected)
     if(stage==='stale-refused'&&width===680){
       await keyboard.press('PageDown')
       await expect.poll(screen).toContain('opened.')
-      await expect(panel.locator('.xterm-rows')).toContainText('opened.')
-      await expect(panel.locator('.xterm-rows')).toContainText(/Esc.*go back/i)
-      await expect(panel.locator('.xterm-rows > div').filter({hasText:'opened.'})).toBeInViewport()
-      await expect(panel.locator('.xterm-rows > div').filter({hasText:'Esc'})).toBeInViewport()
-      await expect(panel.locator('.xterm-rows > div').filter({hasText:'to go back.'})).toBeInViewport()
+      await expect(panel.locator("[data-terminal-text]")).toContainText('opened.')
+      await expect(panel.locator("[data-terminal-text]")).toContainText(/Esc.*go back/i)
+      await expect(panel.locator("[data-terminal-text] > div").filter({hasText:'opened.'})).toBeInViewport()
+      await expect(panel.locator("[data-terminal-text] > div").filter({hasText:'Esc'})).toBeInViewport()
+      await expect(panel.locator("[data-terminal-text] > div").filter({hasText:'to go back.'})).toBeInViewport()
     }
     await expect(panel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport()
     await appPage.evaluate(()=>document.fonts.ready.then(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())))))
-    await expect(panel.locator('.xterm-rows')).toContainText(expected)
-    if(stage==='stale-refused')await expect(panel.locator('.xterm-rows > div').filter({hasText:'opened.'})).toBeInViewport()
-    const paint=await panel.locator('.xterm-rows').innerText(),native=await screen(),grid=await resize()
+    await expect(panel.locator("[data-terminal-text]")).toContainText(expected)
+    if(stage==='stale-refused')await expect(panel.locator("[data-terminal-text] > div").filter({hasText:'opened.'})).toBeInViewport()
+    const paint=await panel.locator("[data-terminal-text]").innerText(),native=await screen(),grid=await resize()
     const result=await nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {size:image.getSize(),png:image.toPNG().toString('base64')}},size)
     expect(result.size).toEqual(size);const file='native-mcp-oauth-'+stage+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(result.png,'base64'));captures.push({file,stage,...size,grid,paint,native})
   }
   await appPage.setViewportSize({width:1100,height:900});await openPanel()
-  const keyboard=panel.locator('textarea.xterm-helper-textarea')
+  const keyboard=panel.locator("textarea[aria-label=\"Terminal input\"]")
   await keyboard.press('Enter');await expect.poll(screen).toContain('Research MCP Server')
   await expect.poll(screen).toContain('Authenticate')
   await keyboard.press('Enter');await expect.poll(async()=>(await urls()).length,{timeout:15000}).toBe(1)

@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(async ({appPage,electronApp},info) => {
   terminalScreen?.dispose(); terminalScreen=undefined
   if(workspace && info.status!==info.expectedStatus) {
@@ -45,10 +45,10 @@ test('chooses models through original hooks, decisions and same-session recovery
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   const resize = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return
     const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'))
@@ -127,7 +127,7 @@ test('chooses models through original hooks, decisions and same-session recovery
       await writeFile(join(workspace!,'native-model-panel-failure.png'),Buffer.from(image,'base64'))
       throw error
     }
-    await expect(panel.locator('textarea.xterm-helper-textarea')).toHaveCount(0)
+    await expect(panel.locator("textarea[aria-label=\"Terminal input\"]")).toHaveCount(0)
   }
   async function capture(stage:string,reading:()=>import('@playwright/test').Locator,controls:()=>import('@playwright/test').Locator[]){
     for(const [width,height] of [[1100,900],[680,600]]){

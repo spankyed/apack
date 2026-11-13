@@ -56,10 +56,12 @@ it('does not apply a phase to an Agent view and refuses overlapping parent submi
     let release!: (value:unknown)=>void
     f.request.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve}))
     const pending=owner.submit('Parent',undefined,'Plan')
+    expect(owner.state.inputBlocked).toBe(true)
     await expect(owner.setPermissionMode('acceptEdits')).rejects.toThrow('parent input is changing')
     await expect(owner.submit('Overlapping',undefined,'Edit')).rejects.toThrow('draft was retained')
     f.request.mockResolvedValue({mode:'plan'});f.submit.mockResolvedValue({sessionId:f.projection.sessionId,uuid:'original',text:'Parent'})
     release({main:true});await pending
+    expect(owner.state.inputBlocked).toBe(false)
   } finally {await prepared.dispose()}
 })
 

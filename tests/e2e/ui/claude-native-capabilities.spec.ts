@@ -9,7 +9,7 @@ const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.
 if (process.env.CLAUDE_RESEARCH_TERMINAL_CAPABILITIES === 'disabled') process.env.FORCE_COLOR = '0'
 else if (['default', 'no-color'].includes(process.env.CLAUDE_RESEARCH_TERMINAL_CAPABILITIES ?? '')) delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('honors explicit native color and hyperlink capabilities in the composer', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
@@ -34,11 +34,11 @@ test('honors explicit native color and hyperlink capabilities in the composer', 
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
-  const dimensions = await input.evaluate(element => { const root = element.closest('.xterm')!, screen = root.querySelector('.xterm-screen')!.getBoundingClientRect(), style = getComputedStyle(root.querySelector('.xterm-char-measure-element')!); const canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`; return { cols: Math.round(screen.width / context.measureText('W').width), rows: 200 } })
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
+  const dimensions = await input.evaluate(element => { const root = element.closest<HTMLElement>('[data-native-terminal]')!; return { cols: Number(root.dataset.nativeTerminalColumns), rows: Number(root.dataset.nativeTerminalRows) } })
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
   terminalScreen = new Terminal({ cols: dimensions.cols, rows: Math.max(2, dimensions.rows), allowProposedApi: true })
   let lastSequence = 0

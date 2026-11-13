@@ -40,10 +40,10 @@ test('renders original notification-only focus groups', async ({ app, appPage },
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
-  const dimensions = () => input.evaluate(element => { const root = element.closest('.xterm')!, box = root.querySelector('.xterm-screen')!.getBoundingClientRect(), font = getComputedStyle(root.querySelector('.xterm-char-measure-element')!), canvas = document.createElement('canvas'), context = canvas.getContext('2d')!; context.font = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`; return Math.round(box.width / context.measureText('W').width) })
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
+  const dimensions = () => input.evaluate(element => { const root = element.closest<HTMLElement>('[data-native-terminal]')!; return Number(root.dataset.nativeTerminalColumns) })
   await expect.poll(dimensions).toBeGreaterThan(1)
   const terminal = new Terminal({ cols: await dimensions(), rows: 200, allowProposedApi: true })
   let lastSequence = 0, lastScreen = ''

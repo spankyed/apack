@@ -29,7 +29,7 @@ test('hands one conversation to the native terminal and displays its main and ag
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   let theme = false, security = false, navigated = false, trusted = false
   await expect.poll(async () => {
     const current = await context(), native = current.native
@@ -134,7 +134,7 @@ test('hands one conversation to the native terminal and displays its main and ag
   const nativeOwnerId = (await context()).native.state.ownerId
   await app.navigate('host/settings'); await app.navigate('default-setup/threads')
   await expect.poll(async () => (await context()).native?.state?.ownerId).toBe(nativeOwnerId)
-  await expect(section.locator('textarea.xterm-helper-textarea')).toBeVisible()
+  await expect(section.locator("textarea[aria-label=\"Terminal input\"]")).toBeVisible()
   await expect(main).toContainText('AppNativeMain ' + sessionId)
   await section.getByRole('button', { name: 'Back to conversation', exact: true }).click()
   await expect(card).toBeVisible()

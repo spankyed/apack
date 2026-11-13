@@ -33,10 +33,10 @@ test('opens original MCP management without replacing the everyday draft', async
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
   const resize = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
@@ -98,16 +98,16 @@ test('opens original MCP management without replacing the everyday draft', async
   else{await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Claude MCP servers',exact:true}).click()}
   await expect(panel).toBeVisible()
   await expect.poll(screen).toContain('research')
-  const keyboard=panel.locator('textarea.xterm-helper-textarea')
+  const keyboard=panel.locator("textarea[aria-label=\"Terminal input\"]")
   await keyboard.press('Enter')
   await expect.poll(screen).toContain('Research MCP Server')
   for(const {stage,width} of [{stage:'details',width:1100},{stage:'details',width:680},{stage:'tools',width:680}]){
     if(stage==='tools'){await keyboard.press('Enter');await expect.poll(screen).toMatch(/echo/i)}
     const size={width,height:width===680?600:900};await appPage.setViewportSize(size)
-    await expect(panel.locator('.xterm-rows')).toContainText(stage==='tools'?/echo/i:'Research MCP Server')
-    await expect(panel.locator('.xterm-rows')).toContainText(/Esc.*back/i)
+    await expect(panel.locator("[data-terminal-text]")).toContainText(stage==='tools'?/echo/i:'Research MCP Server')
+    await expect(panel.locator("[data-terminal-text]")).toContainText(/Esc.*back/i)
     await expect(panel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport()
-    const paint=await panel.locator('.xterm-rows').innerText(),native=await screen()
+    const paint=await panel.locator("[data-terminal-text]").innerText(),native=await screen()
     await appPage.evaluate(()=>document.fonts.ready.then(()=>undefined))
     const capture=await nativeWindow.evaluate(async(win,size)=>{const image=await win.webContents.capturePage({x:0,y:0,...size});return {size:image.getSize(),png:image.toPNG().toString('base64')}},size)
     expect(capture.size).toEqual(size);const file='native-mcp-panel-'+stage+'-'+width+'.png';await writeFile(testInfo.outputPath(file),Buffer.from(capture.png,'base64'));captures.push({file,stage,...size,paint,native})

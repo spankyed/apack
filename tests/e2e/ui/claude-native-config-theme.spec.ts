@@ -33,10 +33,10 @@ test('preserves Agent drafts through original Config theme preview, cancel and c
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
   const resize = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
@@ -108,7 +108,7 @@ test('preserves Agent drafts through original Config theme preview, cancel and c
         if(label==='picker-guidance')await expect.poll(screen).toMatch(/Enter to confirm.*Esc to cancel/)
         const text=await screen(),grid=await resize()
         const geometry=await panel.evaluate(element=>{
-          const viewport=element.querySelector('[aria-label="Native command terminal"]')!,screen=element.querySelector('.xterm-screen')!,close=element.querySelector('button')!
+          const viewport=element.querySelector('[aria-label="Native command terminal"]')!,screen=element.querySelector("[data-native-terminal]")!,close=element.querySelector('button')!
           const rect=(value:Element)=>{const r=value.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}}
           return {panel:rect(element),viewport:rect(viewport),screen:rect(screen),close:rect(close),window:{width:innerWidth,height:innerHeight}}
         })
@@ -116,7 +116,7 @@ test('preserves Agent drafts through original Config theme preview, cancel and c
           const rgb=(text:string)=>(text.match(/[\d.]+/g)??[]).slice(0,3).map(Number)
           const light=(values:number[])=>values.map(value=>{const v=value/255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4}).reduce((sum,value,index)=>sum+value*[0.2126,0.7152,0.0722][index],0)
           const background=getComputedStyle(element).backgroundColor,bg=light(rgb(background))
-          return Array.from(element.querySelectorAll('.xterm-rows span')).filter(span=>/(?:In:|Out:|Cache:)/.test(span.textContent??'')).map(span=>{
+          return Array.from(element.querySelectorAll("[data-terminal-text] span")).filter(span=>/(?:In:|Out:|Cache:)/.test(span.textContent??'')).map(span=>{
             const style=getComputedStyle(span),fg=light(rgb(style.color));return {text:span.textContent,color:style.color,background,opacity:Number(style.opacity),ratio:(Math.max(fg,bg)+0.05)/(Math.min(fg,bg)+0.05)}
           })
         }):undefined
@@ -188,7 +188,7 @@ test('preserves Agent drafts through original Config theme preview, cancel and c
     await expect(focused.locator(':scope > header')).toBeVisible()
     retained.push({draft,document:originalDocument,selection:originalSelection,view:(await context()).native.state.view})
   }
-  const keyboard=panel.locator('textarea.xterm-helper-textarea')
+  const keyboard=panel.locator("textarea[aria-label=\"Terminal input\"]")
   const themeReceipts:any[]=[]
   const settings=async()=>JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8'))
   const highlighted=async()=>(await screen()).split('\n').flatMap(line=>{const match=line.match(/❯\s+(.+)/);return match?[match[1].trim().replace(/^✔\s*/,'')]:[]}).at(-1)??''

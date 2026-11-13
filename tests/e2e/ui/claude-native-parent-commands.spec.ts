@@ -37,7 +37,7 @@ test('runs native parent commands, panels and delayed lifecycle changes from the
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   let theme = false, security = false, navigated = false, trusted = false
   await expect.poll(async () => {
     const current = await context(), native = current.native
@@ -128,9 +128,9 @@ test('runs native parent commands, panels and delayed lifecycle changes from the
   await sendNative('/cost')
   const usage = appPage.getByRole('dialog', { name: 'Native /usage panel', exact: true })
   await expect(usage).toBeVisible()
-  await usage.locator('textarea.xterm-helper-textarea').press('ArrowLeft')
+  await usage.locator("textarea[aria-label=\"Terminal input\"]").press('ArrowLeft')
   await appPage.screenshot({ path: testInfo.outputPath('apack-main-native-settings-compact.png') })
-  await usage.locator('textarea.xterm-helper-textarea').press('Escape')
+  await usage.locator("textarea[aria-label=\"Terminal input\"]").press('Escape')
   await expect(usage).toBeHidden(); await expect(composer).toBeFocused()
   await writeFile(join(workspace!, 'native-parent-delay-request'), 'ready')
   await expect.poll(async () => { try { return await readFile(join(workspace!, 'native-parent-delay-ready'), 'utf8') } catch { return '' } }).toBe('ready')

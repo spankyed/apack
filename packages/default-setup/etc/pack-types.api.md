@@ -584,13 +584,17 @@ interface ClaudeBackgroundAttachment {
     readonly snapshot: ClaudeBackgroundAttachmentSnapshot;
     subscribe(listener: () => void): () => void;
     input(id: string, text: string): boolean;
-    resize(id: string, columns: number, rows: number): boolean;
+    resize(id: string, columns: number, rows: number, cell?: {
+        width: number;
+        height: number;
+    }): boolean;
     close(): Promise<void>;
 }
 
 /** An attach client is separate from the background worker it displays. */
 interface ClaudeBackgroundAttachmentSnapshot {
     terminalSession: ClaudeNativeTerminalSession;
+    inputBlocked?: boolean;
     id: string;
     jobId: string;
     sessionId: string;
@@ -781,8 +785,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    plan: "plan";
                     default: "default";
+                    plan: "plan";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1592,11 +1596,11 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     snapshot: z.ZodObject<{
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
-                finished: "finished";
                 selection: "selection";
                 enable: "enable";
                 disable: "disable";
                 connecting: "connecting";
+                finished: "finished";
             }>;
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
@@ -1671,8 +1675,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 loading: z.ZodBoolean;
                 copyState: z.ZodOptional<z.ZodEnum<{
                     error: "error";
-                    pending: "pending";
                     idle: "idle";
+                    pending: "pending";
                     saved: "saved";
                 }>>;
                 insight: z.ZodOptional<z.ZodString>;
@@ -1890,8 +1894,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"chrome_install_setup">;
     phase: z.ZodEnum<{
-        failed: "failed";
         connecting: "connecting";
+        failed: "failed";
         waiting_install: "waiting_install";
         stalled: "stalled";
         connected: "connected";
@@ -1914,8 +1918,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"effort_preference_result">;
     severity: z.ZodEnum<{
-        warning: "warning";
         feedback: "feedback";
+        warning: "warning";
     }>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -2286,8 +2290,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                plan: "plan";
                 default: "default";
+                plan: "plan";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -2549,7 +2553,10 @@ interface ClaudeNativeTerminalOwner {
     }[];
     subscribe(listener: () => void): () => void;
     input(ownerId: string, text: string): boolean;
-    resize(ownerId: string, columns: number, rows: number): boolean;
+    resize(ownerId: string, columns: number, rows: number, cell?: {
+        width: number;
+        height: number;
+    }): boolean;
     holdQuestionDialog(request: ClaudeNativeQuestionHoldRequest): Promise<void>;
     renderQuestionDialog(request: ClaudeNativeQuestionRenderRequest): Promise<ClaudeNativeQuestionRender>;
     getQuestionDialogs(): Promise<ClaudeNativeQuestionDialog[]>;
@@ -2627,6 +2634,8 @@ interface ClaudeNativeTerminalSession {
 interface ClaudeNativeTerminalState {
     /** Absent before the host has opened its terminal; never derive it from a PID or owner ID. */
     terminalSession?: ClaudeNativeTerminalSession;
+    /** View/parent transition: ordinary terminal input waits; cancellation remains available. */
+    inputBlocked?: boolean;
     /** Original background gesture is reviewing, deferring or forking; independent of process exit. */
     handoffPending?: boolean;
     /** Available after the native dialog store has been observed; retained through owned shutdown. */
@@ -3163,6 +3172,10 @@ type ClaudeTerminalViewRequest = {
     ownerId: string;
     columns: number;
     rows: number;
+    cell?: {
+        width: number;
+        height: number;
+    };
 } | ({
     type: 'CLAUDE_TERMINAL_TASK';
     ownerId: string;
@@ -3210,6 +3223,10 @@ type ClaudeTerminalViewRequest = {
     attachmentId: string;
     columns: number;
     rows: number;
+    cell?: {
+        width: number;
+        height: number;
+    };
 } | {
     type: 'CLAUDE_BACKGROUND_CLOSE';
     requestId: string;
@@ -8242,8 +8259,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    plan: "plan";
     default: "default";
+    plan: "plan";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -10520,11 +10537,11 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
 declare const claudeSettingsSnapshot: z.ZodObject<{
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
-            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
+            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -10599,8 +10616,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -11618,8 +11635,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

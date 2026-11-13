@@ -25,7 +25,6 @@ import { stat } from 'node:fs/promises'
 import { resolveClaudeExecutable } from './native-executable.ts'
 import { createClaudeTerminalImageFileTransport } from './terminal-image-file-transport.ts'
 import { createClaudeTerminalImageCache } from './terminal-image-cache.ts'
-import { createClaudeTerminalGraphicsQueryResponder } from './terminal-graphics-query.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { randomUUID } from 'node:crypto'
 import { stripVTControlCharacters } from 'node:util'
@@ -61,7 +60,7 @@ export interface ClaudeNativeTerminalOwner {
   readonly records: readonly { sequence: number; record: ClaudeNativeTerminalRecord }[]
   subscribe(listener: () => void): () => void
   input(ownerId: string, text: string): boolean
-  resize(ownerId: string, columns: number, rows: number): boolean
+  resize(ownerId: string, columns: number, rows: number, cell?: {width:number;height:number}): boolean
   holdQuestionDialog(request: ClaudeNativeQuestionHoldRequest): Promise<void>
   renderQuestionDialog(request: ClaudeNativeQuestionRenderRequest): Promise<ClaudeNativeQuestionRender>
   getQuestionDialogs(): Promise<ClaudeNativeQuestionDialog[]>
@@ -129,9 +128,8 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   // Advertise app rendering capabilities only when the caller has not chosen an override.
   if (!terminalEnv.NO_COLOR) terminalEnv.FORCE_COLOR ??= '3'
   terminalEnv.FORCE_HYPERLINK ??= '1'
-  // Native automatic detection only admits kitty/ghostty. Our Unicode-placeholder
-  // consumer uses Claude's explicit custom-terminal opt-in; never spoof that identity.
-  terminalEnv.CLAUDE_CODE_FORCE_TERMINAL_IMAGES ??= '1'
+  // The broker answers native capability probes. Forcing images also forces file-image
+  // support in Claude, which a byte-only broker does not advertise. Preserve caller overrides.
   const readJournal = createClaudeNativeJournalReader()
   const trace = createClaudeLifecycleTrace('terminal')
   const ownerId = randomUUID(), listeners = new Set<() => void>()
@@ -154,9 +152,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     enter() { if (closed || !terminal) throw new Error('Native terminal closed'); bestEffort(terminal.write('\r')) } })
   const imageCache = createClaudeTerminalImageCache()
   const imageListeners = new Set<(event: Record<string, unknown>) => void>()
-  const graphicsQuery = createClaudeTerminalGraphicsQueryResponder(text => { if (!closed && terminal) bestEffort(terminal.write(text)) })
   const imageTransport = createClaudeTerminalImageFileTransport({
-    reply(text) { if (!closed && terminal) bestEffort(terminal.write(text)) },
+    // Capability/decode replies belong to the broker; this observes pixels for Client drawings.
+    reply() {},
+    answerFileQueries: false,
     image(value) {
       imageCache.put(value)
       for (const listener of imageListeners) { try { listener({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render', client_snapshot: true }) } catch { /* isolate mounted views */ } }
@@ -164,7 +163,6 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     remove(id) { imageCache.remove(id) },
     emit(text) {
       if (closed) return
-      graphicsQuery(text)
       const bytes = Buffer.from(text)
       if (bytes.length > 262144) {
         let from = bytes.length - 262144
@@ -272,6 +270,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       // output has nowhere to go. `TERM` is the broker's to set, so it is not named here
       terminal = await services.terminal.open(
         {
+          images: true,
           cols: options.columns ?? 100,
           rows: options.rows ?? 30,
           shell: executable,
@@ -333,7 +332,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       } finally { operatingMcpForm = false; finish() }
     }
     let backgroundState: ClaudeNativeTerminalState | undefined
-    const currentState = (): ClaudeNativeTerminalState => ({ handoffPending: !closed && handoffPending, messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, terminalSession: terminal ? {id: terminal.id, target: terminal.target} : undefined, pid: terminal?.pid ?? undefined, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks })
+    const currentState = (): ClaudeNativeTerminalState => ({ handoffPending: !closed && handoffPending, messageRetirements, mcpForm: closed ? undefined : mcpForm, mcpUrl: closed ? undefined : mcpUrl, notice: closed ? undefined : notice, preview: closed ? undefined : bridge.preview, view: bridge.view, ownerId, sessionId: bridge.projection.sessionId, continuation: continuation?.sessionId === bridge.projection.sessionId ? continuation : undefined, cwd: options.cwd, status: status === 'starting' && bridge.ready ? 'live' : status, terminalSession: terminal ? {id: terminal.id, target: terminal.target} : undefined, inputBlocked:closed||changingView||preparingParent, pid: terminal?.pid ?? undefined, nativePid: bridge.nativePid, exitCode, busy: bridge.busy || changingModel || changingPermission || changingView || preparingParent, activity: bridge.activity, focus: bridge.focus, lastTurn: bridge.lastTurn, session: bridge.session.metadata, mainStatus: bridge.projection.mainStatus, billing: closed ? undefined : bridge.billing, problem: bridge.problem, tasks: bridge.projection.tasks })
     const readState = (): ClaudeNativeTerminalState => backgroundState
       ? { ...backgroundState, status: closed ? status : backgroundState.status, exitCode }
       : currentState()
@@ -457,9 +456,10 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
       input(id, text) { if (closed || (changingView || preparingParent) && text !== '\x03' || id !== ownerId || typeof text !== 'string' || text.length > 32768) return false; bestEffort(terminal!.write(text)); return true },
-      resize(id, columns, rows) {
+      resize(id, columns, rows,cell) {
         if (closed || id !== ownerId || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false
-        bestEffort(terminal!.resize(columns, rows)); return true
+        if(cell&&(!Number.isFinite(cell.width)||!Number.isFinite(cell.height)||cell.width<=0||cell.height<=0||cell.width>65535||cell.height>65535))return false
+        bestEffort(terminal!.resize(columns, rows,cell)); return true
       },
       async holdQuestionDialog(request) {
         if (closed || request.sessionId !== bridge.projection.sessionId) throw new Error('Native question session expired')

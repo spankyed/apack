@@ -86,7 +86,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   let theme = false, security = false, navigated = false, trusted = false
   await expect.poll(async () => {
     const current = await context(), native = current.native
@@ -481,7 +481,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
           const modulePath=join(pluginRoot!,'hooks/register.ts'),source=await readFile(modulePath,'utf8'),comment='\n// Owned research reload '+Date.now()+'\n'
           await writeFile(modulePath,source+comment);expect(await readFile(modulePath,'utf8')).toBe(source+comment)
           const moduleChange={beforeSha256:createHash('sha256').update(source).digest('hex'),afterSha256:createHash('sha256').update(source+comment).digest('hex'),commentOnly:true}
-          await open();const input=attached.locator('textarea.xterm-helper-textarea');await input.pressSequentially('/reload-plugins --force');await input.press('Enter')
+          await open();const input=attached.locator("textarea[aria-label=\"Terminal input\"]");await input.pressSequentially('/reload-plugins --force');await input.press('Enter')
           await expect.poll(async()=>(await registrations()).at(-1)?.leaseHash,{timeout:15000}).not.toBe(before.leaseHash)
           const after=(await registrations()).at(-1);expect(after?.leaseHash).toBeTruthy()
           await expect.poll(async()=>stripVTControlCharacters((await attachment())?.state?.output?.map((row:any)=>row.text).join('')??''),{timeout:15000}).toContain('Reloaded')
@@ -533,13 +533,13 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       }
       const first = await openChild()
       const childText = childInteraction?'Read the release checklist before proposing changes.':'Confirm this attached background session received my review.'
-      await attached.locator('textarea.xterm-helper-textarea').fill(childText)
-      await attached.locator('textarea.xterm-helper-textarea').press('Enter')
+      await attached.locator("textarea[aria-label=\"Terminal input\"]").fill(childText)
+      await attached.locator("textarea[aria-label=\"Terminal input\"]").press('Enter')
       const projects = join(workspace!, '.claude', 'projects')
       const childJournal = async () => (await Promise.all((await readdir(projects,{withFileTypes:true})).filter(entry=>entry.isDirectory()).map(entry=>readFile(join(projects,entry.name,job.sessionId+'.jsonl'),'utf8').catch(()=>'')))).join('\n')
       await expect.poll(childJournal,{timeout:15000}).toContain(childText)
       if (childInteraction) {
-        const terminalInput = attached.locator('textarea.xterm-helper-textarea')
+        const terminalInput = attached.locator("textarea[aria-label=\"Terminal input\"]")
         const screen = async () => normalizeScreen((await attachment())?.state?.output.map((chunk:any)=>chunk.text).join('') ?? '')
         await expect.poll(screen,{timeout:15000}).toMatch(/Doyouwant|Allow|Readfile/)
         observations.childReadReview = {attachment:await attachment(),nativeJobs:await list()}
@@ -563,7 +563,7 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
       for (const [name,size] of [['normal',{width:1100,height:900}],['compact',{width:680,height:600}]] as const) {
         await appPage.setViewportSize(size)
         await expect(attached.getByRole('button',{name:'Close connection',exact:true})).toBeInViewport({ratio:1})
-        await expect(attached.locator('textarea.xterm-helper-textarea')).toBeAttached()
+        await expect(attached.locator("textarea[aria-label=\"Terminal input\"]")).toBeAttached()
         await capture('apack-native-child-attached-'+name+'.png')
       }
       await attached.getByRole('button',{name:'Close connection',exact:true}).click()
@@ -640,14 +640,14 @@ test('left-arrow entry and handoff: hands an original native conversation to a s
         await expect.poll(screen).toContain('No,exit')
         observations.childResume={refusal:{kind:'workspace-trust-exit',shown:await attachment()}}
         await captureResume('resume-trust-exit')
-        await attached.locator('textarea.xterm-helper-textarea').press('Enter')
+        await attached.locator("textarea[aria-label=\"Terminal input\"]").press('Enter')
         await expect.poll(async()=>(await attachment())?.state?.status).toBe('exited')
         expect(await liveWorker()).toBeUndefined()
         observations.childResume.refusal={...observations.childResume.refusal,attachment:await attachment(),originalText:true,noWorker:true,jobs:await list()}
         await closeAttachment()
         await widget.getByRole('button',{name:'Open session',exact:true}).click()
         await expect.poll(screen,{timeout:20000}).toContain('Quicksafetycheck:')
-        const terminalInput=attached.locator('textarea.xterm-helper-textarea')
+        const terminalInput=attached.locator("textarea[aria-label=\"Terminal input\"]")
         await terminalInput.press('ArrowDown');await terminalInput.press('Enter')
         await expect.poll(screen,{timeout:20000}).toContain('ParentSubagentFixtureComplete')
         await expect.poll(async()=>!!await liveWorker()).toBe(true)

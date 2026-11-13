@@ -39,7 +39,7 @@ test('completes native extended questions, follow-up, refusal retry and cancella
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   let theme = false, security = false, navigated = false, trusted = false
   await expect.poll(async () => {
     const current = await context(), native = current.native
@@ -128,7 +128,7 @@ test('completes native extended questions, follow-up, refusal retry and cancella
   await writeFile(join(workspace!,'native-dialog-shapes-before-reopen.json'),await readFile(join(workspace!,'native-dialog-shapes.json')))
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
   ;(globalThis as any).self??=globalThis
-  const {Terminal}=createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const {Terminal}=createRequire(import.meta.url)('@xterm/xterm')
   let terminal:any,lastSequence=0,reopenTheme=false,reopenSecurity=false,reopenNavigated=false,trustAt=0,trustAttempts=0
   try{await expect.poll(async()=>{
     const native=(await context()).native,ownerId=native.state.ownerId

@@ -3,7 +3,7 @@
   <NativeIdePanel v-else-if="state?.status === 'panel' && state.panel?.commandName === 'ide'" :key="state.panel.id" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
   <NativeHelpPanel v-else-if="state?.status === 'panel' && state.panel?.commandName === 'help'" :key="state.panel.id" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
   <NativeSettingsPanel v-else-if="state?.status === 'panel' && state.panel && ['config','model','status','usage','theme'].includes(state.panel.commandName)" :key="state.panel.id" :subject="state.panel.commandName === 'model' ? 'model' : state.panel.commandName === 'theme' ? 'theme' : 'settings'" :state="state.settings" @operate="emit('settings', $event)" @close="emit('panel')" />
-  <NativeCommandPanel v-else-if="state?.status === 'panel' && state.panel" :name="state.panel.commandName" :owner-id="ownerId" :output="output" @input="emit('panel', $event)" @close="emit('panel')" @resize="emit('resize', $event)" />
+  <NativeCommandPanel v-else-if="state?.status === 'panel' && state.panel" :name="state.panel.commandName" :owner-id="ownerId" :terminal-session="terminalSession" :input-blocked="inputBlocked" @input="emit('panel', $event)" @close="emit('panel')" @resize="emit('resize', $event)" />
   <section v-else-if="state?.status === 'command_output' && state.output && !dismissed" aria-label="Native command output" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/10 px-3 py-2">
       <span class="text-xs text-neutral-400">/{{ state.output.commandName }}</span>
@@ -27,8 +27,8 @@ import NativeCommandPanel from './NativeCommandPanel.vue'
 import NativeSettingsPanel from './NativeSettingsPanel.vue'
 import NativeHelpPanel from './NativeHelpPanel.vue'
 import NativeIdePanel from './NativeIdePanel.vue'
-const props = defineProps<{ state?: ClaudeUiMountState['agentInput']; frame?: ClaudeUiTranscriptFrame; ownerId: string; output: readonly { sequence: number; text: string }[]; dismissed: boolean; expanded: boolean }>()
-const emit = defineEmits<{ background: [request: { panelId: string; revision: string; decision: 'confirm' | 'cancel' }]; settings: [action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; panel: [text?: string]; resize: [size: { columns: number; rows: number }]; decide: [decision: 'confirm' | 'cancel']; dismiss: []; expand: [value: boolean] }>()
+const props = defineProps<{ state?: ClaudeUiMountState['agentInput']; frame?: ClaudeUiTranscriptFrame; ownerId: string; inputBlocked?: boolean; terminalSession?: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSession; dismissed: boolean; expanded: boolean }>()
+const emit = defineEmits<{ background: [request: { panelId: string; revision: string; decision: 'confirm' | 'cancel' }]; settings: [action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation]; press: [id: string, href?: string]; field: [event: ClaudeUiFieldEvent]; panel: [text?: string]; resize: [size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize]; decide: [decision: 'confirm' | 'cancel']; dismiss: []; expand: [value: boolean] }>()
 const cancel = ref<HTMLButtonElement>()
 watch(() => props.state?.status, async status => { if (status === 'confirmation') { await nextTick(); cancel.value?.focus({ preventScroll: true }) } })
 </script>

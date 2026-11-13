@@ -52,13 +52,13 @@ test('keeps an empty keyboard Client reachable and retires hidden input without 
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   let theme = false, security = false, navigated = false, trusted = false, onboardingScreen = ''
   try {
   await expect.poll(async () => {
     const current = await context(), native = current.native
     // The renderer applies cursor-addressed redraws; accumulated PTY bytes are not the current screen.
-    onboardingScreen = await section.locator('.xterm-rows').innerText()
+    onboardingScreen = await section.locator("[data-terminal-text]").innerText()
     const screen = recognizeOnboardingPrompt(onboardingScreen, workspace)
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }

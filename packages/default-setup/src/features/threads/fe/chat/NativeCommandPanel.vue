@@ -10,22 +10,18 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { mountNativeTerminal } from './native-terminal-pool.ts'
-const props = defineProps<{ name: string; ownerLabel?: string; ownerId: string; output: readonly { sequence: number; text: string }[] }>()
-const emit = defineEmits<{ input: [text: string]; close: []; resize: [size: { columns: number; rows: number }] }>()
+const props = defineProps<{ name: string; ownerLabel?: string; ownerId: string; inputBlocked?: boolean; terminalSession?: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSession }>()
+const emit = defineEmits<{ input: [text: string]; close: []; resize: [size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize] }>()
 const viewport = ref<HTMLElement>()
-let terminal: ReturnType<typeof mountNativeTerminal> | undefined, observer: ResizeObserver | undefined
-watch(() => props.output, output => terminal?.write(output))
-watch(viewport, async element => {
-  if (!element) return
-  await nextTick()
-  if (viewport.value !== element) return
-  terminal = mountNativeTerminal(props.ownerId, element, text => emit('input', text))
-  terminal.write(props.output)
-  observer = new ResizeObserver(() => { if (element.clientWidth && element.clientHeight) emit('resize', terminal!.fit()) })
-  observer.observe(element); terminal.focus()
-}, { flush: 'post' })
-onBeforeUnmount(() => { observer?.disconnect(); terminal?.detach() })
+let terminal: ReturnType<typeof mountNativeTerminal> | undefined
+watch([viewport,()=>props.terminalSession?.id,()=>props.terminalSession?.target,()=>props.ownerId],async([element])=>{
+ const session=props.terminalSession
+ terminal?.detach();terminal=undefined
+ if(!element||!session)return
+ await nextTick()
+ if(viewport.value!==element||props.terminalSession?.id!==session.id||props.terminalSession?.target!==session.target)return
+ terminal=mountNativeTerminal(props.ownerId,session,element,size=>emit('resize',size),props.inputBlocked===true);terminal.setInputBlocked(props.inputBlocked===true);terminal.focus()
+},{flush:'post'})
+watch(()=>props.inputBlocked,blocked=>terminal?.setInputBlocked(blocked===true))
+onBeforeUnmount(()=>terminal?.detach())
 </script>
-<style scoped>
-:deep(.xterm) { height: 100%; }
-</style>

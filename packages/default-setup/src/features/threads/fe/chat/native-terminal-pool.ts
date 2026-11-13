@@ -1,53 +1,198 @@
-import { Terminal } from '@app/claude-terminal-xterm'
-import { FitAddon } from './vendor/webterm-kitty/fit.ts'
-import '@app/claude-terminal-xterm/css/xterm.css'
-import { KittyGraphics } from './vendor/webterm-kitty/index.ts'
-interface NativeTerminalEntry {
-  term: Terminal
-  graphics: KittyGraphics
-  fit: FitAddon
-  element: HTMLDivElement
-  sequence: number
-  replaying: boolean
-  input?: (text: string) => void
+import {
+  BrokerViews,
+  TerminalView,
+  xtermPalette,
+  Modifier,
+  type TerminalSource,
+  type KeyInput
+} from 'apack-terminal-view'
+import { TERMINAL_COLORS } from '#features/code/be/terminal-colors.ts'
+import { terminalViews } from '@apackdev/sdk/fe'
+import type {
+  ClaudeNativeTerminalSession,
+  ClaudeNativeTerminalSize
+} from '#features/code/common/native-terminal.ts'
+
+type Connection = { views: BrokerViews; closed: boolean }
+type Entry = {
+  session: ClaudeNativeTerminalSession
+  connection: Connection
+  view: TerminalView
+  lease?: object
+  resize?: (size: ClaudeNativeTerminalSize) => void
+  size?: ClaudeNativeTerminalSize
+  sent?: string
+  inputBlocked?: boolean
+  timer?: ReturnType<typeof setTimeout>
 }
-const entries = new Map<string, NativeTerminalEntry>()
-/** Retain the emulator across view changes; never forward terminal replies synthesized by history replay. */
-export function mountNativeTerminal(ownerId: string, container: HTMLElement, input: (text: string) => void) {
+const connections = new Map<string, Connection>(),
+  entries = new Map<string, Entry>()
+const theme = {
+  background: 0x191919,
+  foreground: 0xd4d0ca,
+  palette: xtermPalette(
+    TERMINAL_COLORS.ansi.map((c) => parseInt(c.slice(1), 16))
+  ),
+  cursor: 0xd3aa8e,
+  cursorText: 0x191919,
+  selectionBackground: 0x51443a,
+  selectionForeground: null,
+  minimumContrast: 7
+}
+function connection(target: string | null): Connection {
+  const key = target ?? '',
+    existing = connections.get(key)
+  if (existing && !existing.closed) return existing
+  const stream = terminalViews(target ?? undefined),
+    current = { views: new BrokerViews(stream), closed: false }
+  connections.set(key, current)
+  const closed = () => {
+    current.closed = true
+    if (connections.get(key) === current) connections.delete(key)
+  }
+  stream.onClose(closed)
+  current.views.onClose(closed)
+  return current
+}
+function dispose(entry: Entry) {
+  entry.lease = undefined
+  entry.resize = undefined
+  clearTimeout(entry.timer)
+  entry.view.dispose()
+}
+/** Preserve the native transition gate while the broker remains the only key encoder. */
+function ownedInput(source: TerminalSource, entry: Entry): TerminalSource {
+  const kept = new Map<PropertyKey, unknown>(),
+    allowed = () => !!entry.lease && !entry.inputBlocked
+  return new Proxy(source, {
+    get(target, key) {
+      if (kept.has(key)) return kept.get(key)
+      const value = Reflect.get(target, key, target)
+      if (typeof value !== 'function') return value
+      let call = value.bind(target)
+      if (key === 'key')
+        call = (input: KeyInput) => {
+          if (
+            allowed() ||
+            (entry.lease &&
+              input.code === 'KeyC' &&
+              (input.modifiers & Modifier.control) !== 0 &&
+              (input.modifiers & (Modifier.alt | Modifier.super)) === 0)
+          )
+            value.call(target, input)
+        }
+      else if (key === 'paste')
+        call = (...args: unknown[]) =>
+          allowed()
+            ? value.apply(target, args)
+            : Promise.reject(new Error('Native input is changing'))
+      else if (['text', 'pointer', 'focus'].includes(String(key)))
+        call = (...args: unknown[]) => {
+          if (allowed()) value.apply(target, args)
+        }
+      kept.set(key, call)
+      return call
+    }
+  })
+}
+/** A retained broker drawing, not an ANSI emulator. Mounting never replays bytes into a process. */
+export function mountNativeTerminal(
+  ownerId: string,
+  session: ClaudeNativeTerminalSession,
+  container: HTMLElement,
+  resize: (size: ClaudeNativeTerminalSize) => void,
+  inputBlocked = false
+) {
   let entry = entries.get(ownerId)
+  if (
+    entry &&
+    (entry.session.id !== session.id ||
+      entry.session.target !== session.target ||
+      entry.connection.closed)
+  ) {
+    dispose(entry)
+    entries.delete(ownerId)
+    entry = undefined
+  }
   if (!entry) {
     for (const [id, old] of entries) {
       if (entries.size < 16) break
-      if (!old.element.isConnected) { old.graphics.dispose(); old.term.dispose(); entries.delete(id) }
+      if (!old.lease) {
+        dispose(old)
+        entries.delete(id)
+      }
     }
-    const element = document.createElement('div'); element.className = 'h-full w-full'
-    const term = new Terminal({ fontSize: 13, fontFamily: 'Menlo, Monaco, monospace', lineHeight: 1.15, cursorBlink: true, scrollback: 5000,
-      // The terminal renderer halves this threshold for ANSI faint text; keep secondary details readable.
-      minimumContrastRatio: 7, allowProposedApi: true, theme: { background: '#191919', foreground: '#d4d0ca', cursor: '#d3aa8e', selectionBackground: '#b68e7340' } })
-    const fit = new FitAddon(); term.loadAddon(fit)
-    container.append(element); term.open(element)
-    // Only the live PTY query responder negotiates graphics. Replaying cached drawing
-    // bytes must never send a query/decode reply into a new native interaction.
-    const graphics = new KittyGraphics(term, element, { storageBytes: 32 * 1024 * 1024 })
-    entry = { term, fit, graphics, element, sequence: 0, replaying: false }
+    const broker = connection(session.target)
+    const created: Entry = {
+      session: { ...session },
+      connection: broker,
+      view: undefined!
+    }
+    created.view = new TerminalView(
+      ownedInput(broker.views.open(session.id), created),
+      {
+        font: { family: 'Menlo, Monaco, monospace', size: 13 },
+        theme,
+        onFit: (fit) => {
+          created.view.element.dataset.nativeTerminalColumns = String(
+            Math.max(2, Math.min(500, fit.columns))
+          )
+          created.view.element.dataset.nativeTerminalRows = String(
+            Math.max(2, Math.min(200, fit.rows))
+          )
+          created.size = {
+            columns: Math.max(2, Math.min(500, fit.columns)),
+            rows: Math.max(2, Math.min(200, fit.rows)),
+            cell: { width: fit.cellWidth, height: fit.cellHeight }
+          }
+          clearTimeout(created.timer)
+          const lease = created.lease
+          if (lease)
+            created.timer = setTimeout(() => {
+              if (created.lease !== lease || !created.size) return
+              const key = JSON.stringify(created.size)
+              if (key !== created.sent) {
+                created.sent = key
+                created.resize?.(created.size)
+              }
+            }, 100)
+        },
+        onLink: (link) => {
+          void window.electronAPI?.shell
+            .openTerminalLink(link.target)
+            .catch(() => false)
+        },
+        confirmPaste: async (text) =>
+          window.confirm(
+            'This paste may run a command. Paste it into Claude’s terminal?\n\n' +
+              text
+          )
+      }
+    )
+    created.view.element.dataset.nativeTerminal = ''
+    entry = created
     entries.set(ownerId, entry)
-    const target = entry
-    const send = (text: string) => { if (!target.replaying) target.input?.(text) }
-    term.onData(send)
-  } else container.append(entry.element)
-  entry.input = input
-  const target = entry
+  }
+  const target = entry,
+    lease = {}
+  target.lease = lease
+  target.inputBlocked = inputBlocked
+  target.resize = resize
+  target.sent = undefined
+  target.view.mount(container)
   return {
-    fit() { target.fit.fit(); return { columns: target.term.cols, rows: target.term.rows } },
-    write(chunks: readonly { sequence: number; text: string }[]) {
-      const fresh = chunks.filter(chunk => chunk.sequence > target.sequence)
-      if (!fresh.length) return
-      const replay = target.sequence === 0 || fresh[0]!.sequence > target.sequence + 1
-      if (replay) { target.replaying = true; target.graphics.dispose(); target.term.reset(); target.graphics = new KittyGraphics(target.term, target.element, { storageBytes: 32 * 1024 * 1024 }) }
-      target.sequence = fresh.at(-1)!.sequence
-      target.term.write(fresh.map(chunk => chunk.text).join(''), () => { if (replay) target.replaying = false })
+    focus() {
+      if (target.lease === lease) target.view.focus()
     },
-    focus() { target.term.focus() },
-    detach() { if (target.input === input) { target.input = undefined; target.element.remove() } },
+    setInputBlocked(blocked: boolean) {
+      if (target.lease === lease) target.inputBlocked = blocked
+    },
+    detach() {
+      if (target.lease !== lease) return
+      target.lease = undefined
+      target.resize = undefined
+      clearTimeout(target.timer)
+      target.view.unmount()
+    }
   }
 }

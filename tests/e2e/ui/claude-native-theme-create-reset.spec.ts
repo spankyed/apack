@@ -44,9 +44,9 @@ test('creates, validates, forks and resets original native custom themes', async
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   const dimensions = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return 0
     const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'))
@@ -89,7 +89,7 @@ test('creates, validates, forks and resets original native custom themes', async
       const ready=card.locator('.native-inline-text').filter({hasText:/^Workspace ready$/})
       const saved=await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))
       const panel=appPage.getByRole('dialog',{name:'Claude Code theme',exact:true})
-      async function openTheme(){await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Claude themes',exact:true}).click();await expect(panel).toBeVisible();await expect(panel.locator('[data-native-settings-option="dark"]')).toBeVisible();await expect(panel.locator('.xterm')).toHaveCount(0)}
+      async function openTheme(){await card.getByRole('button',{name:'More actions',exact:true}).click();await appPage.getByRole('menuitem',{name:'Claude themes',exact:true}).click();await expect(panel).toBeVisible();await expect(panel.locator('[data-native-settings-option="dark"]')).toBeVisible();await expect(panel.locator("[data-native-terminal]")).toHaveCount(0)}
       const themeDir=join(workspace!,'.claude/themes'),themeFile=(slug:string)=>join(themeDir,slug+'.json')
       const files=()=>readdir(themeDir).then(rows=>rows.sort()),settings=async()=>JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8'))
       async function retained(){await expect(composer).toHaveText(draft);expect(await composer.evaluate(element=>({doc:(element as any).editor.state.doc.toJSON(),selection:(element as any).editor.state.selection.toJSON()}))).toEqual(saved);expect((await context()).native.state.nativePid).toBe(boundNativePid)}

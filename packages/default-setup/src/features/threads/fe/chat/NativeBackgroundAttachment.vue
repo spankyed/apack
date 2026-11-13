@@ -14,21 +14,20 @@ import {ref, watch, nextTick, onBeforeUnmount} from 'vue'
 import type {ClaudeBackgroundAttachmentView} from '#features/threads/be/claude-terminal-views.ts'
 import {mountNativeTerminal} from './native-terminal-pool.ts'
 const props = defineProps<{attachment: ClaudeBackgroundAttachmentView}>()
-const emit = defineEmits<{close:[requestId:string]; input:[attachmentId:string,text:string]; resize:[attachmentId:string,columns:number,rows:number]}>()
+const emit = defineEmits<{close:[requestId:string]; input:[attachmentId:string,text:string]; resize:[attachmentId:string,size:import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize]}>()
 const viewport = ref<HTMLElement>()
-let terminal: ReturnType<typeof mountNativeTerminal> | undefined, observer: ResizeObserver | undefined, attached: string | undefined
-function detach() {observer?.disconnect(); observer=undefined;terminal?.detach();terminal=undefined;attached=undefined}
+let terminal: ReturnType<typeof mountNativeTerminal> | undefined, attached: string | undefined
+function detach() {terminal?.detach();terminal=undefined;attached=undefined}
 watch(() => props.attachment.state, async state => {
   if (!state) {detach();return}
   await nextTick()
   if (!viewport.value || props.attachment.state?.id !== state.id) return
   if (attached !== state.id) {
     detach();attached=state.id
-    terminal=mountNativeTerminal(state.id,viewport.value,text=>{if(props.attachment.state?.id===state.id)emit('input',state.id,text)})
-    observer=new ResizeObserver(()=>{if(!terminal||!viewport.value?.clientWidth||!viewport.value.clientHeight)return;const size=terminal.fit();emit('resize',state.id,size.columns,size.rows)})
-    observer.observe(viewport.value);terminal.focus()
+    terminal=mountNativeTerminal(state.id,state.terminalSession,viewport.value,size=>{if(props.attachment.state?.id===state.id)emit('resize',state.id,size)},state.inputBlocked===true)
+    terminal.focus()
   }
-  terminal?.write(state.output)
+  terminal?.setInputBlocked(state.inputBlocked===true)
 },{immediate:true,flush:'post'})
 onBeforeUnmount(detach)
 </script>
@@ -38,5 +37,5 @@ header {display:flex;align-items:center;justify-content:space-between;flex-wrap:
 h3 {font-size:13px;font-weight:600;margin:0} p {font-size:11px;color:#aaa59e;line-height:1.5;overflow-wrap:anywhere}
 button {min-height:30px;padding:5px 9px;border:1px solid #ffffff26;border-radius:7px;font-size:11px}button:focus-visible {outline:2px solid #8cabe8;outline-offset:2px}
 .child-terminal__viewport {flex:1;min-height:144px;min-width:0;overflow:hidden;padding:10px;background:#191919;border:1px solid #ffffff1a;border-radius:10px}
-.child-terminal__viewport :deep(.xterm) {height:100%}.child-terminal__hint {padding:8px 0;margin:0}
+.child-terminal__hint {padding:8px 0;margin:0}
 </style>

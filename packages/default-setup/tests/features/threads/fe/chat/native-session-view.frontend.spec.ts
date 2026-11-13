@@ -7,7 +7,7 @@ const links = vi.hoisted(() => ({ open: vi.fn() }))
 const state = ref({ context: { nativeTerminalViews: {} as Record<string, ClaudeTerminalViewSnapshot> } })
 vi.mock('@apackdev/sdk/fe', () => ({ useSurface: () => actor, openLink: links.open }))
 vi.mock('@xstate/vue', () => ({ useSelector: (_actor: unknown, select: (value: typeof state.value) => unknown) => computed(() => select(state.value)) }))
-vi.mock('#features/threads/fe/chat/native-terminal-pool.ts', () => ({ mountNativeTerminal: () => ({ detach: vi.fn(), focus: vi.fn(), fit: () => ({ columns: 100, rows: 30 }), write: vi.fn() }) }))
+vi.mock('#features/threads/fe/chat/native-terminal-pool.ts', () => ({ mountNativeTerminal: () => ({ detach: vi.fn(), focus: vi.fn(),setInputBlocked:vi.fn(), fit: () => ({ columns: 100, rows: 30 }), write: vi.fn() }) }))
 let app: App | undefined
 beforeEach(() => { actor.send.mockClear(); links.open.mockClear(); state.value = { context: { nativeTerminalViews: {} } }; vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }) })
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); vi.unstubAllGlobals() })

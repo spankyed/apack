@@ -41,7 +41,7 @@ it('launches the exact linked job in its own cwd without another resume writer o
   const owner=await openBackgroundAttachment(continuation,job.id,{cliPath:process.execPath,env:{ANTHROPIC_API_KEY:'must-not-leak'}})
   try {
     expect(f.query).toHaveBeenCalledWith(continuation,{operation:'refresh'},expect.anything())
-    expect(f.open).toHaveBeenCalledWith(expect.objectContaining({shell:process.execPath,args:['attach',job.id],cwd:job.cwd}),expect.anything())
+    expect(f.open).toHaveBeenCalledWith(expect.objectContaining({images:true,shell:process.execPath,args:['attach',job.id],cwd:job.cwd}),expect.anything())
     expect(f.open.mock.calls[0][0].env.ANTHROPIC_API_KEY).toBeUndefined()
     expect(owner.snapshot.sessionId).toBe(job.sessionId)
     expect(owner.snapshot.terminalSession).toEqual({id:'broker-1',target:null})
@@ -65,6 +65,8 @@ it('bounds replay, refuses stale input/resize and closes only its attacher group
   expect(owner.snapshot.output.reduce((size,chunk)=>size+Buffer.byteLength(chunk.text),0)).toBeLessThanOrEqual(1048576)
   expect(owner.input('stale','text')).toBe(false);expect(owner.input(owner.snapshot.id,'text')).toBe(true)
   expect(owner.resize('stale',80,24)).toBe(false);expect(owner.resize(owner.snapshot.id,80,24)).toBe(true)
+  expect(owner.resize(owner.snapshot.id,80,24,{width:9,height:18})).toBe(true);expect(f.resize).toHaveBeenLastCalledWith(80,24,{width:9,height:18})
+  expect(owner.resize(owner.snapshot.id,80,24,{width:NaN,height:18})).toBe(false)
   await owner.close();await owner.close()
   // **Its own group, and never the session ended outright.** `terminate` would take the worker this attached
   // to with it; what has to go is the `attach` process this started

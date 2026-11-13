@@ -9,7 +9,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test.afterEach(async ({appPage,electronApp},testInfo)=>{
   if(testInfo.status===testInfo.expectedStatus||!workspace)return
@@ -45,10 +45,10 @@ test('edits original Settings through desktop controls and retains composing', a
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
   const resize = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
@@ -132,7 +132,7 @@ test('edits original Settings through desktop controls and retains composing', a
     else { await card.getByRole('button',{name:'More actions',exact:true}).click(); await appPage.getByRole('menuitem',{name:'Claude settings',exact:true}).click() }
     await expect(panel).toBeVisible()
     await expect(panel.getByRole('checkbox',{name:'Show tips',exact:true})).toBeVisible({timeout:15000})
-    await expect(panel.locator('textarea.xterm-helper-textarea')).toHaveCount(0)
+    await expect(panel.locator("textarea[aria-label=\"Terminal input\"]")).toHaveCount(0)
   }
   await open()
   const local = async () => JSON.parse(await readFile(join(workspace!,'.claude/settings.local.json'),'utf8').catch(()=>'{}'))

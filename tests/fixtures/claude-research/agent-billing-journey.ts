@@ -75,13 +75,13 @@ export async function verifyAgentBilling(
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
   let theme = false, security = false, navigated = false, trusted = false, onboardingScreen = ''
   try {
   await expect.poll(async () => {
     const current = await context(), native = current.native
     // The renderer applies cursor-addressed redraws; accumulated PTY bytes are not the current screen.
-    onboardingScreen = await section.locator('.xterm-rows').innerText()
+    onboardingScreen = await section.locator("[data-terminal-text]").innerText()
     const screen = recognizeOnboardingPrompt(onboardingScreen, project)
     if (screen === 'theme' && !theme) { theme = true; await input.press('Enter') }
     else if (screen === 'security-notes' && theme && !security) { security = true; await input.press('Enter') }
@@ -185,13 +185,13 @@ export async function verifyAgentBilling(
       await expect(panel).toBeVisible({timeout:15000})
       await expect.poll(async()=>(await context()).nativeUi.some((view:any)=>view.state?.agentInput?.status==='panel'&&view.state.agentInput.panel?.commandName==='tasks'),{timeout:15000}).toBe(true)
       await expect(panel.getByRole('button',{name:'Close panel',exact:true})).toBeInViewport({ratio:1})
-      await expect.poll(async()=>(await panel.locator('.xterm-rows').innerText()).trim().length,{timeout:15000}).toBeGreaterThan(0)
+      await expect.poll(async()=>(await panel.locator("[data-terminal-text]").innerText()).trim().length,{timeout:15000}).toBeGreaterThan(0)
       const box=await panel.evaluate(element=>{const r=element.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,scrollWidth:element.scrollWidth,clientWidth:element.clientWidth}})
       expect(box.x).toBeGreaterThanOrEqual(0);expect(box.y).toBeGreaterThanOrEqual(0)
       expect(box.x+box.width).toBeLessThanOrEqual(size.width+1);expect(box.y+box.height).toBeLessThanOrEqual(size.height+1)
       expect(box.scrollWidth).toBeLessThanOrEqual(box.clientWidth+1)
       await capture('native-task-manager-'+size.width+'.png')
-      const text=await panel.locator('.xterm-rows').innerText()
+      const text=await panel.locator("[data-terminal-text]").innerText()
       await panel.getByRole('button',{name:'Close panel',exact:true}).click();await expect(panel).toBeHidden()
       await expect(composer).toHaveText('Keep the parent release-review draft.')
       expect(await composer.evaluate(element=>(element as any).editor.state.doc.toJSON())).toEqual(documentBefore)

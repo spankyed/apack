@@ -6,6 +6,8 @@ import { readClaudeTerminalImageFile, type ClaudeTerminalImageFileFormat } from 
 export function createClaudeTerminalImageFileTransport(options: {
   emit: (text: string) => void
   reply: (text: string) => void
+  /** False when the broker alone negotiates terminal capabilities. */
+  answerFileQueries?: boolean
   read?: typeof readClaudeTerminalImageFile
   readShared?: typeof readClaudeTerminalSharedImage
   image?: (value: ClaudeTerminalImagePixels) => void
@@ -13,6 +15,7 @@ export function createClaudeTerminalImageFileTransport(options: {
 }) {
   const read = options.read ?? readClaudeTerminalImageFile, readShared = options.readShared ?? readClaudeTerminalSharedImage
   let pending = Promise.resolve(), queuedBytes = 0, closed = false
+  let inline: {id:number;image:ClaudeTerminalImageFileFormat;parts:string[];length:number}|undefined
   let reading = false, cancelRead: (() => void) | undefined
   async function readImage(path: string, image: ClaudeTerminalImageFileFormat, shared: boolean) {
     if (reading) throw new Error('Previous terminal image read is still pending')
@@ -36,10 +39,36 @@ export function createClaudeTerminalImageFileTransport(options: {
     if (!text.startsWith('\x1b_G')) { emit(text); return }
     const body = text.slice(3, -2), split = body.indexOf(';'), header = split < 0 ? body : body.slice(0, split)
     if (!/(?:^|,)t=[fs](?:,|$)/.test(header)) {
-      const deletion = /(?:^|,)a=d(?:,|$)/.test(header) && /(?:^|,)d=I(?:,|$)/.test(header) ? /(?:^|,)i=([1-9][0-9]*)(?:,|$)/.exec(header) : null
-      if (deletion) options.remove?.(Number(deletion[1]))
+      // Original pinned inline transmissions feed the separate Client snapshot cache.
+      // They are observed, never decoded as terminal rows or answered here.
+      const parts=header.split(',')
+      if(header.length>512||parts.some(part=>!/^([A-Za-z])=([A-Za-z0-9]+)$/.test(part))||new Set(parts.map(part=>part[0])).size!==parts.length){inline=undefined;emit(text);return}
+      const fields=new Map(parts.map(part=>[part.slice(0,1),part.slice(2)])),payload=split<0?'':body.slice(split+1)
+      if(!fields.has('a')&&[...fields.keys()].some(key=>!['m','q'].includes(key)))inline=undefined
+      if(fields.get('a')==='T'){
+        inline=undefined
+        const id=Number(fields.get('i')),format=fields.get('f'),width=Number(fields.get('s')),height=Number(fields.get('v'))
+        if([...fields.keys()].every(key=>['a','U','q','f','s','v','i','c','r','m','t'].includes(key))&&fields.get('U')==='1'&&Number.isInteger(id)&&id>0&&id<=0xffffffff&&['24','32','100'].includes(format??'')&&(!fields.has('t')||fields.get('t')==='d')&&!fields.has('o')&&
+          (format==='100'||Number.isSafeInteger(width)&&Number.isSafeInteger(height)&&width>0&&height>0&&width*height*(format==='24'?3:4)<=32*1024*1024))
+          inline={id,image:format==='100'?{format:'png'}:{format:format==='24'?'rgb':'rgba',width,height},parts:[],length:0}
+      }else if(fields.has('a'))inline=undefined
+      if(inline){
+        if(fields.get('m')==='1'&&payload.includes('=')||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(payload)||inline.length+payload.length>Math.ceil(32*1024*1024/3)*4)inline=undefined
+        else{
+          if(payload)inline.parts.push(payload);inline.length+=payload.length
+          if(fields.get('m')!=='1'){
+            const current=inline;inline=undefined;const pixels=Buffer.from(current.parts.join(''),'base64'),image=current.image
+            if(pixels.length<=32*1024*1024&&(image.format==='png'?pixels.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])):pixels.length===image.width*image.height*(image.format==='rgb'?3:4)))options.image?.({id:current.id,image,pixels})
+          }
+        }
+      }
+
+      const deletion=Number(fields.get('i'))
+      if(fields.get('a')==='d'&&fields.get('d')==='I'&&[...fields.keys()].every(key=>['a','d','i','q'].includes(key))&&Number.isInteger(deletion)&&deletion>0&&deletion<=0xffffffff)options.remove?.(deletion)
       emit(text); return
     }
+    inline=undefined
+    if(options.answerFileQueries===false&&/(?:^|,)a=q(?:,|$)/.test(header))return
     const fields = new Map<string, string>()
     let valid = header.length <= 512
     for (const part of header.split(',')) {
@@ -89,7 +118,7 @@ export function createClaudeTerminalImageFileTransport(options: {
       }
       held += char
       if (state === 'apcEscape' && char === '\\') { const complete = held; held = ''; state = 'text'; flush(); await frame(complete) }
-      else if (held.length > 8192) { emit(held); held = ''; state = char === '\x1b' ? 'passthroughEscape' : 'passthrough' }
+      else if (held.length > 8192) { inline=undefined;emit(held); held = ''; state = char === '\x1b' ? 'passthroughEscape' : 'passthrough' }
       else state = char === '\x1b' ? 'apcEscape' : 'apc'
     }
     emit(plain); flush()
@@ -105,6 +134,6 @@ export function createClaudeTerminalImageFileTransport(options: {
       return result
     },
     drain() { return pending },
-    close() { closed = true; held = ''; ready = ''; cancelRead?.() },
+    close() { closed = true; inline=undefined; held = ''; ready = ''; cancelRead?.() },
   }
 }

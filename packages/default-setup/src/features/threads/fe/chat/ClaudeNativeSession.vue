@@ -287,8 +287,8 @@ watch(() => noticePanels.value.find(panel => ['resume_return', 'newer_model_offe
   ;(picker ?? button)?.focus({ preventScroll: true })
 }, { immediate: true })
 const viewport = ref<HTMLElement>()
-let terminal: ReturnType<typeof mountNativeTerminal> | undefined, observer: ResizeObserver | undefined
-let attachedOwner: string | undefined
+let terminal: ReturnType<typeof mountNativeTerminal> | undefined
+let attachedOwner: string | undefined, attachedSession: string | undefined
 const identity = () => ({ threadId: props.threadId, mountId })
 function renew() { actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity() }) }
 function operateBackground(target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest) {
@@ -303,7 +303,7 @@ function openBackground(target: ClaudeNativeContinuation, jobId: string) {
 }
 function closeBackground(requestId: string) {actor.send({type:'CLAUDE_BACKGROUND_CLOSE',...identity(),requestId})}
 function inputBackground(attachmentId: string,text: string) {actor.send({type:'CLAUDE_BACKGROUND_INPUT',...identity(),attachmentId,text})}
-function resizeBackground(attachmentId: string,columns: number,rows: number) {actor.send({type:'CLAUDE_BACKGROUND_RESIZE',...identity(),attachmentId,columns,rows})}
+function resizeBackground(attachmentId: string,size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize) {actor.send({type:'CLAUDE_BACKGROUND_RESIZE',...identity(),attachmentId,...size})}
 function open() { returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false; actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() }) }
 function cancelOpen() {
   const openingId = view.value?.openingId
@@ -317,24 +317,22 @@ function stop() {
   stopping.value = { ownerId, afterRevision: view.value?.stop?.revision ?? 0 }
   actor.send({ type: 'CLAUDE_TERMINAL_CLOSE', ...identity(), ownerId })
 }
-function detach() { observer?.disconnect(); observer = undefined; terminal?.detach(); terminal = undefined; attachedOwner = undefined }
+function detach() { terminal?.detach(); terminal = undefined; attachedOwner = undefined; attachedSession = undefined }
 watch(displayActive, value => emit('active', value), { immediate: true })
 watch([view, active], async ([value, showing]) => {
   if (!showing) { detach(); return }
   const ownerId = value?.state?.ownerId
-  if (!ownerId) { detach(); return }
+  const session=value?.state?.terminalSession
+  if (!ownerId||!session) { detach(); return }
   await nextTick()
   if (!viewport.value || view.value?.state?.ownerId !== ownerId) return
-  if (attachedOwner !== ownerId) {
-    detach(); attachedOwner = ownerId
-    terminal = mountNativeTerminal(ownerId, viewport.value, text => actor.send({ type: 'CLAUDE_TERMINAL_INPUT', ...identity(), ownerId, text }))
-    observer = new ResizeObserver(() => {
-      if (!terminal || !viewport.value?.clientWidth || !viewport.value.clientHeight) return
-      const size = terminal.fit(); actor.send({ type: 'CLAUDE_TERMINAL_RESIZE', ...identity(), ownerId, ...size })
-    }); observer.observe(viewport.value)
+  const sessionKey=JSON.stringify(session)
+  if (attachedOwner !== ownerId||attachedSession!==sessionKey) {
+    detach(); attachedOwner = ownerId; attachedSession=sessionKey
+    terminal = mountNativeTerminal(ownerId, session, viewport.value, size => actor.send({ type: 'CLAUDE_TERMINAL_RESIZE', ...identity(), ownerId, ...size }), value?.state?.inputBlocked===true)
     terminal.focus()
   }
-  terminal?.write(value.output)
+  terminal?.setInputBlocked(value?.state?.inputBlocked===true)
 }, { flush: 'post' })
 defineExpose({ open })
 renew();
@@ -407,8 +405,6 @@ onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: '
 .native-button--return { border-color: #b68e7333; color: #d3aa8e; }
 .native-console { display: flex; flex: 1; min-height: 144px; min-width: 0; overflow: hidden; border: 1px solid #ffffff12; border-radius: 12px; background: var(--console-bg); box-shadow: 0 8px 30px #00000020; }
 .native-viewport { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 20px; }
-.native-viewport :deep(.xterm) { height: 100%; }
-.native-viewport :deep(.xterm-viewport) { scrollbar-width: thin; scrollbar-color: #ffffff20 transparent; }
 .native-activity { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); flex-shrink: 0; gap: 16px 28px; max-height: 180px; overflow: auto; padding: 16px 4px 2px; }
 .native-section-label { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; color: #797773; font-size: 10px; font-weight: 500; letter-spacing: .04em; }
 .native-count { display: inline-grid; place-items: center; min-width: 16px; height: 16px; border-radius: 5px; background: #ffffff08; color: #aaa59f; font-size: 10px; letter-spacing: 0; }

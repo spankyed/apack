@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('applies quoted staged folders on native handoff and stopped-session reopen', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
@@ -40,10 +40,10 @@ test('applies quoted staged folders on native handoff and stopped-session reopen
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
   const resize = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
@@ -95,7 +95,7 @@ test('applies quoted staged folders on native handoff and stopped-session reopen
   await stop();await stageDirectory(secondDirectory)
   await expect(composer).toHaveText(draft)
   await section.getByRole('button',{name:'Use native interface',exact:true}).click()
-  let reopenTerminal:import('@app/claude-terminal-xterm').Terminal|undefined,reopenSequence=0,reopenNavigated=false,reopenTrustAt=0,reopenTrustAttempts=0
+  let reopenTerminal:import('@xterm/xterm').Terminal|undefined,reopenSequence=0,reopenNavigated=false,reopenTrustAt=0,reopenTrustAttempts=0
   try{await expect.poll(async()=>{
     const native=(await context()).native;if(!native?.state||typeof native.state.nativePid!=='number'||native.state.nativePid===boundNativePid)return false;if(native.state.status==='live')return true;if(['error','exited'].includes(native.state.status))throw Error('Native reopen ended before trust was accepted')
     if(!reopenTerminal){const size=await resize();if(!size)return false;reopenTerminal=new Terminal({cols:size.cols,rows:size.rows,allowProposedApi:true})}

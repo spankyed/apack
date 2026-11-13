@@ -29,7 +29,6 @@
     "@apackdev/ears": "*",
     "@apackdev/sdk": "*",
     "@apackdev/ui": "*",
-    "@app/claude-terminal-xterm": "npm:@xterm/xterm@6.1.0-beta.290",
     "@floating-ui/vue": "^1.1.11",
     "@leeoniya/ufuzzy": "^1.0.18",
     "@vscode/ripgrep": "^1.17.1",

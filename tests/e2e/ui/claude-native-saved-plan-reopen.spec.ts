@@ -7,7 +7,7 @@ import {stripVTControlCharacters} from 'node:util'
 import {resolveAppEnvironment} from '@apackdev/sdk/env'
 import {test,expect} from '@apackdev/testing'
 const workspace=process.env.CLAUDE_RESEARCH_WORKSPACE,onboarding=process.env.CLAUDE_RESEARCH_ONBOARDING
-let screenTerminal:import('@app/claude-terminal-xterm').Terminal|undefined
+let screenTerminal:import('@xterm/xterm').Terminal|undefined
 test.afterEach(()=>screenTerminal?.dispose())
 test.skip(!workspace||!onboarding,'Explicit private native composer cold-reopen fixture required')
 test('restores original pre-Plan context after cold restart and exits Plan through native and print composing',async({app,appPage,electronApp},testInfo)=>{
@@ -21,7 +21,7 @@ test('restores original pre-Plan context after cold restart and exits Plan throu
  await app.waitForSurface('default-setup/threads');await app.navigate('default-setup/threads')
  await appPage.evaluate(threadId=>{const actor=(window as any).applicationState.system.get('default-setup/threads');actor.send({type:'VIEW_THREAD',threadId});actor.send({type:'VIEW_DASHBOARD'})},saved.threadId)
  const card=appPage.locator('[data-onboarding-id="agent-chat-input"]'),composer=card.locator('[contenteditable="true"]'),status=card.getByTestId('composer-native-status')
- const section=appPage.getByRole('region',{name:'Claude native interface',exact:true}),input=section.locator('textarea.xterm-helper-textarea')
+ const section=appPage.getByRole('region',{name:'Claude native interface',exact:true}),input=section.locator("textarea[aria-label=\"Terminal input\"]")
  const context=()=>appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {phase:c.phase,threadId:c.currentThread?.id,sessionId:c.currentThread?.context?.claudeCode?.sessionId,claude:c.currentThread?.context?.claudeCode,messages:c.currentThread?.messages,native:Object.values(c.nativeTerminalViews).find((v:any)=>v.threadId===c.currentThread?.id)} as any})
  await appPage.evaluate(()=>{
   const actor=(window as any).applicationState.system.get('default-setup/threads'),scope=window as any;scope.savedPlanPhaseTrace=[];
@@ -42,7 +42,7 @@ test('restores original pre-Plan context after cold restart and exits Plan throu
  await section.getByRole('button',{name:'Use native interface',exact:true}).click()
  const {recognizeOnboardingPrompt}=await import(pathToFileURL(onboarding!).href)
  ;(globalThis as any).self??=globalThis
- const {Terminal}=createRequire(import.meta.url)('@app/claude-terminal-xterm')
+ const {Terminal}=createRequire(import.meta.url)('@xterm/xterm')
  let sequence=0,navigated=false,navigationAttempts=0,trustAt=0,trustAttempts=0
  await expect.poll(async()=>{
   const native=(await context()).native

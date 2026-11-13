@@ -95,3 +95,23 @@ it('aborts the shared reader when its terminal owner closes', async () => {
   f.close();await pending;expect(signal.aborted).toBe(true);release(Buffer.alloc(4));await Promise.resolve()
   expect(f.output()).toBe('');expect(f.reply).not.toHaveBeenCalled()
 })
+
+it('observes native inline chunks for Client snapshots without changing bytes or answering the broker',async()=>{
+ const image=vi.fn(),emit=vi.fn(),reply=vi.fn(),read=vi.fn(),transport=createClaudeTerminalImageFileTransport({emit,reply,read,image,answerFileQueries:false})
+ const first='\x1b_Ga=T,U=1,q=2,f=32,s=2,v=1,i=123,c=2,r=1,m=1;AQID\x1b\\',last='\x1b_Gm=0,q=2;BAUGBwg=\x1b\\'
+ await transport.write(first.slice(0,15));await transport.write(first.slice(15));expect(image).not.toHaveBeenCalled();await transport.write(last)
+ expect(image).toHaveBeenCalledExactlyOnceWith({id:123,image:{format:'rgba',width:2,height:1},pixels:Buffer.from([1,2,3,4,5,6,7,8])})
+ expect(emit.mock.calls.map(call=>call[0]).join('')).toBe(first+last);expect(reply).not.toHaveBeenCalled();expect(read).not.toHaveBeenCalled();transport.close()
+})
+it('leaves file capability queries to the broker without opening or approving their path',async()=>{
+ const emit=vi.fn(),reply=vi.fn(),read=vi.fn(),transport=createClaudeTerminalImageFileTransport({emit,reply,read,answerFileQueries:false}),text=frame('i=24,s=1,v=1,a=q,t=f,f=32')
+ await transport.write(text);expect(emit).not.toHaveBeenCalled();expect(read).not.toHaveBeenCalled();expect(reply).not.toHaveBeenCalled();transport.close()
+})
+it.each([
+ ['duplicate ID','a=T,U=1,f=32,s=1,v=1,i=2,i=3','AQIDBA=='],
+ ['wrong byte length','a=T,U=1,f=32,s=2,v=1,i=2','AQIDBA=='],
+ ['compressed unsupported payload','a=T,U=1,f=32,s=1,v=1,i=2,o=z','AQIDBA=='],
+ ['not a PNG','a=T,U=1,f=100,i=2','AQIDBA=='],
+])('does not cache malformed inline pixels: %s',async(_label,header,data)=>{
+ const image=vi.fn(),transport=createClaudeTerminalImageFileTransport({emit:vi.fn(),reply:vi.fn(),image});await transport.write(`\x1b_G${header};${data}\x1b\\`);expect(image).not.toHaveBeenCalled();transport.close()
+})

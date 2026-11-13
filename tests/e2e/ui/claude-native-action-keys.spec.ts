@@ -18,7 +18,7 @@ const dialogMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_DIALOG === '1'
 const paneMode = process.env.CLAUDE_RESEARCH_ACTION_KEY_PANES === '1'
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(async ({appPage}, testInfo) => {
   if (testInfo.status !== testInfo.expectedStatus) {
     await appPage.screenshot({path:testInfo.outputPath('native-action-keys-failure.png')}).catch(() => {})
@@ -52,10 +52,10 @@ async function prepareNativeActionSession({ app, appPage }: { app: AppDriver; ap
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
   const resize = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;

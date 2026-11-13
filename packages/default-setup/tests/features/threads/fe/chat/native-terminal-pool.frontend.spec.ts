@@ -1,30 +1,212 @@
-const f=vi.hoisted(()=>({terms:[] as any[],graphics:[] as any[]}))
-vi.mock('@app/claude-terminal-xterm',()=>({Terminal:class{
- cols=80;rows=24;callbacks:(()=>void)[]=[];data?: (text:string)=>void
- reset=vi.fn();dispose=vi.fn();focus=vi.fn();open=vi.fn();loadAddon=vi.fn()
- constructor(public options:unknown){f.terms.push(this)}
- onData(callback:(text:string)=>void){this.data=callback}
- write(_text:string,callback:()=>void){this.callbacks.push(callback)}
-}}))
-vi.mock('#features/threads/fe/chat/vendor/webterm-kitty/fit.ts',()=>({FitAddon:class{fit=vi.fn()}}))
-vi.mock('#features/threads/fe/chat/vendor/webterm-kitty/index.ts',()=>({KittyGraphics:class{
- dispose=vi.fn();constructor(...args:unknown[]){f.graphics.push({instance:this,args})}
-}}))
-import {mountNativeTerminal} from '#features/threads/fe/chat/native-terminal-pool.ts'
-afterEach(()=>document.body.replaceChildren())
-it('retains the emulator, silences history, and gives graphics no replay input callback',()=>{
- const root=document.createElement('div');document.body.append(root);const input=vi.fn(),first=mountNativeTerminal('replay-owner',root,input),term=f.terms.at(-1)!
- first.write([{sequence:1,text:'cached query'}]);term.data?.('synthetic reply');expect(input).not.toHaveBeenCalled()
- expect(f.graphics.at(-1)!.args[2]).not.toHaveProperty('respond')
- term.callbacks.shift()!();term.data?.('live key');expect(input).toHaveBeenLastCalledWith('live key')
- first.detach();term.data?.('detached key');expect(input).toHaveBeenCalledTimes(1)
- const replacement=vi.fn(),again=mountNativeTerminal('replay-owner',root,replacement)
- expect(f.terms.at(-1)).toBe(term);expect(again.fit()).toEqual({columns:80,rows:24});term.data?.('new key');expect(replacement).toHaveBeenCalledWith('new key')
- first.detach();expect(root.children).toHaveLength(1);again.detach()
+const f = vi.hoisted(() => ({
+  views: [] as any[],
+  connections: [] as any[],
+  streams: [] as any[]
+}))
+vi.mock('@apackdev/sdk/fe', () => ({
+  terminalViews: vi.fn((target?: string) => {
+    const listeners: (() => void)[] = []
+    const stream = {
+      target,
+      onClose: (callback: () => void) => {
+        listeners.push(callback)
+        return () => {}
+      },
+      close: () => listeners.forEach((callback) => callback())
+    }
+    f.streams.push(stream)
+    return stream
+  })
+}))
+vi.mock('apack-terminal-view', () => ({
+  Modifier: { control: 2, alt: 4, super: 8 },
+  xtermPalette: (colors: number[]) => colors,
+  BrokerViews: class {
+    open = vi.fn((id: string) => ({
+      id,
+      key: vi.fn(),
+      text: vi.fn(),
+      paste: vi.fn(async () => 'pasted'),
+      pointer: vi.fn(),
+      focus: vi.fn()
+    }))
+    onClose = vi.fn()
+    constructor(public stream: unknown) {
+      f.connections.push(this)
+    }
+  },
+  TerminalView: class {
+    element = document.createElement('div')
+    dispose = vi.fn(() => this.element.remove())
+    focus = vi.fn()
+    unmount = vi.fn(() => this.element.remove())
+    mount = vi.fn((host: HTMLElement) => {
+      host.append(this.element)
+      this.options.onFit({
+        columns: 80,
+        rows: 24,
+        cellWidth: 8,
+        cellHeight: 16
+      })
+    })
+    constructor(
+      public source: unknown,
+      public options: {
+        onFit: (size: {
+          columns: number
+          rows: number
+          cellWidth: number
+          cellHeight: number
+        }) => void
+      }
+    ) {
+      f.views.push(this)
+    }
+  }
+}))
+import { mountNativeTerminal } from '#features/threads/fe/chat/native-terminal-pool.ts'
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => {
+  vi.clearAllTimers()
+  vi.useRealTimers()
+  document.body.replaceChildren()
 })
-it('disposes pending graphics before replaying a history gap',()=>{
- const root=document.createElement('div');document.body.append(root);const input=vi.fn(),mounted=mountNativeTerminal('gap-owner',root,input),term=f.terms.at(-1)!
- mounted.write([{sequence:1,text:'old'}]);term.callbacks.shift()!();const old=f.graphics.at(-1)!.instance
- mounted.write([{sequence:4,text:'replacement history'}]);expect(old.dispose).toHaveBeenCalledOnce();expect(f.graphics.at(-1)!.instance).not.toBe(old)
- term.data?.('replayed action');expect(input).not.toHaveBeenCalled();term.callbacks.shift()!();term.data?.('fresh action');expect(input).toHaveBeenCalledWith('fresh action');mounted.detach()
+const root = () => {
+  const element = document.createElement('div')
+  document.body.append(element)
+  return element
+}
+it('retains the broker drawing across mounts and refuses an old host release', () => {
+  const firstHost = root(),
+    secondHost = root(),
+    size = vi.fn(),
+    session = { id: 'broker-main', target: null }
+  const first = mountNativeTerminal('main', session, firstHost, size),
+    view = f.views.at(-1)!
+  const second = mountNativeTerminal('main', { ...session }, secondHost, size)
+  expect(f.views.at(-1)).toBe(view)
+  expect(firstHost.children).toHaveLength(0)
+  expect(secondHost.children).toHaveLength(1)
+  first.detach()
+  first.focus()
+  expect(secondHost.children).toHaveLength(1)
+  expect(view.focus).not.toHaveBeenCalled()
+  second.focus()
+  expect(view.focus).toHaveBeenCalledOnce()
+  vi.advanceTimersByTime(100)
+  expect(size).toHaveBeenCalledExactlyOnceWith({
+    columns: 80,
+    rows: 24,
+    cell: { width: 8, height: 16 }
+  })
+  expect(view.source.id).toBe('broker-main')
+  expect(first).not.toHaveProperty('write')
+  second.detach()
+})
+it('coalesces measured resize and discards a detached host’s queued size', () => {
+  const size = vi.fn(),
+    mount = mountNativeTerminal(
+      'size',
+      { id: 'broker-size', target: null },
+      root(),
+      size
+    ),
+    view = f.views.at(-1)!
+  view.options.onFit({ columns: 100, rows: 30, cellWidth: 9, cellHeight: 18 })
+  view.options.onFit({ columns: 101, rows: 31, cellWidth: 9, cellHeight: 18 })
+  vi.advanceTimersByTime(100)
+  expect(size).toHaveBeenCalledExactlyOnceWith({
+    columns: 101,
+    rows: 31,
+    cell: { width: 9, height: 18 }
+  })
+  view.options.onFit({ columns: 101, rows: 31, cellWidth: 9, cellHeight: 18 })
+  vi.advanceTimersByTime(100)
+  expect(size).toHaveBeenCalledTimes(1)
+  view.options.onFit({ columns: 110, rows: 40, cellWidth: 9, cellHeight: 18 })
+  mount.detach()
+  vi.advanceTimersByTime(100)
+  expect(size).toHaveBeenCalledTimes(1)
+})
+it('replaces a changed broker session without retaining the old screen or host authority', () => {
+  const first = mountNativeTerminal(
+      'replace',
+      { id: 'broker-old', target: null },
+      root(),
+      vi.fn()
+    ),
+    old = f.views.at(-1)!
+  const next = mountNativeTerminal(
+    'replace',
+    { id: 'broker-new', target: null },
+    root(),
+    vi.fn()
+  )
+  expect(old.dispose).toHaveBeenCalledOnce()
+  expect(f.views.at(-1)!.source.id).toBe('broker-new')
+  first.focus()
+  expect(old.focus).not.toHaveBeenCalled()
+  first.detach()
+  next.detach()
+})
+it('shares a target connection and reconnects on an explicit mount after that stream closes', () => {
+  const one = mountNativeTerminal(
+      'connection-a',
+      { id: 'a', target: 'remote-fixture' },
+      root(),
+      vi.fn()
+    ),
+    broker = f.connections.at(-1)!,
+    stream = f.streams.at(-1)!
+  const two = mountNativeTerminal(
+    'connection-b',
+    { id: 'b', target: 'remote-fixture' },
+    root(),
+    vi.fn()
+  )
+  expect(f.connections.at(-1)).toBe(broker)
+  stream.close()
+  const again = mountNativeTerminal(
+    'connection-a',
+    { id: 'a', target: 'remote-fixture' },
+    root(),
+    vi.fn()
+  )
+  expect(f.connections.at(-1)).not.toBe(broker)
+  one.detach()
+  two.detach()
+  again.detach()
+})
+
+it('keeps transition input gated, permits cancellation and retires detached input authority', async () => {
+  const mounted = mountNativeTerminal(
+      'input-gate',
+      { id: 'broker-gate', target: null },
+      root(),
+      vi.fn()
+    ),
+    view = f.views.at(-1)!,
+    raw = f.connections
+      .flatMap((connection) =>
+        connection.open.mock.results.map((result: any) => result.value)
+      )
+      .find((source) => source?.id === 'broker-gate')
+  mounted.setInputBlocked(true)
+  view.source.text('stale')
+  view.source.pointer({})
+  await expect(view.source.paste('stale')).rejects.toThrow('changing')
+  view.source.key({ code: 'Enter', modifiers: 0 })
+  expect(raw.key).not.toHaveBeenCalled()
+  expect(raw.text).not.toHaveBeenCalled()
+  expect(raw.pointer).not.toHaveBeenCalled()
+  view.source.key({ code: 'KeyC', modifiers: 2 })
+  expect(raw.key).toHaveBeenCalledOnce()
+  mounted.setInputBlocked(false)
+  view.source.text('current')
+  expect(raw.text).toHaveBeenCalledExactlyOnceWith('current')
+  mounted.detach()
+  view.source.text('retired')
+  view.source.key({ code: 'KeyC', modifiers: 2 })
+  expect(raw.text).toHaveBeenCalledTimes(1)
+  expect(raw.key).toHaveBeenCalledTimes(1)
 })

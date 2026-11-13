@@ -33,10 +33,10 @@ test('keeps original Settings tabs and picker controls usable at both sizes', as
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
   const resize = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
@@ -95,7 +95,7 @@ test('keeps original Settings tabs and picker controls usable at both sizes', as
         if(label==='picker-guidance')await expect.poll(screen).toMatch(/Enter to confirm.*Esc to cancel/)
         const text=await screen(),grid=await resize()
         const geometry=await panel.evaluate(element=>{
-          const viewport=element.querySelector('[aria-label="Native command terminal"]')!,screen=element.querySelector('.xterm-screen')!,close=element.querySelector('button')!
+          const viewport=element.querySelector('[aria-label="Native command terminal"]')!,screen=element.querySelector("[data-native-terminal]")!,close=element.querySelector('button')!
           const rect=(value:Element)=>{const r=value.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}}
           return {panel:rect(element),viewport:rect(viewport),screen:rect(screen),close:rect(close),window:{width:innerWidth,height:innerHeight}}
         })
@@ -129,7 +129,7 @@ test('keeps original Settings tabs and picker controls usable at both sizes', as
     await expect(panel).toBeVisible();await expect.poll(screen).toContain('Search settings')
   }
   await open()
-  const keyboard=panel.locator('textarea.xterm-helper-textarea')
+  const keyboard=panel.locator("textarea[aria-label=\"Terminal input\"]")
   // Config's search advertises Up to tabs; original Tabs then owns Left/Right.
   const beforeTabs=(await context()).native.output.at(-1)?.sequence??0
   await keyboard.press('ArrowUp')

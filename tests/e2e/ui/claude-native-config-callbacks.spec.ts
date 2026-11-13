@@ -7,7 +7,7 @@ import { test, expect } from '@apackdev/testing'
 const workspace = process.env.CLAUDE_RESEARCH_WORKSPACE, launcher = process.env.CLAUDE_RESEARCH_LAUNCHER, onboarding = process.env.CLAUDE_RESEARCH_ONBOARDING
 delete process.env.FORCE_COLOR
 test.skip(!workspace || !launcher || !onboarding, 'Explicit private native terminal fixture required')
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test('persists original Config callbacks and returns to composing', async ({ app, appPage, electronApp: _electronApp }, testInfo) => {
   test.setTimeout(90000)
@@ -33,10 +33,10 @@ test('persists original Config callbacks and returns to composing', async ({ app
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   // The mounted app reports its actual fitted grid to the backend; no private DOM font probe.
   const resize = async () => {
     const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;
@@ -96,7 +96,7 @@ test('persists original Config callbacks and returns to composing', async ({ app
   async function open(){await composer.fill('/config');await card.getByRole('button',{name:'Send',exact:true}).click();await expect(panel).toBeVisible();await expect.poll(screen).toContain('Search settings')}
   for(const change of [{label:'Show tips',key:'spinnerTipsEnabled',value:false},{label:'Reduce motion',key:'prefersReducedMotion',value:true}]){
     await open()
-    const keyboard=panel.locator('textarea.xterm-helper-textarea')
+    const keyboard=panel.locator("textarea[aria-label=\"Terminal input\"]")
     await keyboard.pressSequentially(change.label);await expect.poll(screen).toContain(change.label)
     await keyboard.press('ArrowDown');await keyboard.press('Enter')
     await expect.poll(async()=>(await settings())[change.key]).toBe(change.value)
@@ -110,7 +110,7 @@ test('persists original Config callbacks and returns to composing', async ({ app
   }
   const userSettings=async()=>JSON.parse(await readFile(join(workspace!,'.claude/settings.json'),'utf8'))
   for(const language of ['French','']){
-    await open();const keyboard=panel.locator('textarea.xterm-helper-textarea')
+    await open();const keyboard=panel.locator("textarea[aria-label=\"Terminal input\"]")
     await keyboard.pressSequentially('Language');await expect.poll(screen).toContain('Language')
     await keyboard.press('ArrowDown');await keyboard.press('Enter')
     await keyboard.press('Control+u');if(language)await keyboard.pressSequentially(language);await keyboard.press('Enter')

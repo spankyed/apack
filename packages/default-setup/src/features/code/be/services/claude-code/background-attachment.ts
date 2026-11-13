@@ -14,7 +14,7 @@ export interface ClaudeBackgroundAttachment {
   readonly snapshot: ClaudeBackgroundAttachmentSnapshot
   subscribe(listener: () => void): () => void
   input(id: string, text: string): boolean
-  resize(id: string, columns: number, rows: number): boolean
+  resize(id: string, columns: number, rows: number, cell?: {width:number;height:number}): boolean
   close(): Promise<void>
 }
 
@@ -46,7 +46,7 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
   const client = await services.terminal.open(
     // `unset` rather than an omission from `env`: a session inherits the host's environment, so leaving a
     // key out of the overrides leaves it inherited
-    {cols: 100, rows: 30, shell: executable, args: ['attach', session.id], env, unset: DENIED_TO_A_CHILD, cwd: session.cwd},
+    {images:true,cols: 100, rows: 30, shell: executable, args: ['attach', session.id], env, unset: DENIED_TO_A_CHILD, cwd: session.cwd},
     {
       onOutput: text => {
         if (ended) return
@@ -84,10 +84,10 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
   options.signal?.addEventListener('abort', abort, {once:true})
   if (options.signal?.aborted) {await close(); throw new Error('Background attachment cancelled')}
   return {
-    get snapshot(): ClaudeBackgroundAttachmentSnapshot {return {id, terminalSession:{id:client.id,target:client.target}, jobId:session.id, sessionId:session.sessionId, cwd:session.cwd, clientPid:client.pid, status:ended?'exited':'live', exitCode, output:[...chunks]}},
+    get snapshot(): ClaudeBackgroundAttachmentSnapshot {return {id, terminalSession:{id:client.id,target:client.target},inputBlocked:ended||closing, jobId:session.id, sessionId:session.sessionId, cwd:session.cwd, clientPid:client.pid, status:ended?'exited':'live', exitCode, output:[...chunks]}},
     subscribe(listener) {listeners.add(listener); return () => listeners.delete(listener)},
     input(ownerId,text) {if (ownerId !== id || ended || closing || typeof text !== 'string' || text.length > 32768) return false; bestEffort(client.write(text)); return true},
-    resize(ownerId,columns,rows) {if (ownerId !== id || ended || closing || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false; bestEffort(client.resize(columns,rows)); return true},
+    resize(ownerId,columns,rows,cell) {if (ownerId !== id || ended || closing || !Number.isSafeInteger(columns) || !Number.isSafeInteger(rows) || columns < 2 || columns > 500 || rows < 2 || rows > 200) return false; if(cell&&(!Number.isFinite(cell.width)||!Number.isFinite(cell.height)||cell.width<=0||cell.height<=0||cell.width>65535||cell.height>65535))return false;bestEffort(client.resize(columns,rows,cell)); return true},
     close,
   }
 }

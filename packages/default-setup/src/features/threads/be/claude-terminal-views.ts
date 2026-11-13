@@ -18,7 +18,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_CANCEL_OPEN'; openingId: string }
   | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string; references?: MessageReferences; phase?: 'Plan' | 'Edit' }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
-  | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number }
+  | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number; cell?: {width:number;height:number} }
   | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
   | { type: 'CLAUDE_TERMINAL_NOTICE'; ownerId: string; notice: import('#features/code/common/native-notice.ts').ClaudeNativeNoticeResponse }
   | { type: 'CLAUDE_TERMINAL_MCP_URL'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlRequest }
@@ -26,7 +26,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | ({ type: 'CLAUDE_TERMINAL_BACKGROUND'; sessionId: string; continuedInSessionId: string; revision: number } & (ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest))
   | { type: 'CLAUDE_BACKGROUND_OPEN'; sessionId: string; continuedInSessionId: string; jobId: string; revision: number }
   | { type: 'CLAUDE_BACKGROUND_INPUT'; attachmentId: string; text: string }
-  | { type: 'CLAUDE_BACKGROUND_RESIZE'; attachmentId: string; columns: number; rows: number }
+  | { type: 'CLAUDE_BACKGROUND_RESIZE'; attachmentId: string; columns: number; rows: number; cell?: {width:number;height:number} }
   | { type: 'CLAUDE_BACKGROUND_CLOSE'; requestId: string }
   | { type: 'CLAUDE_TERMINAL_CLOSE'; ownerId: string }
 )
@@ -314,7 +314,7 @@ export function createClaudeTerminalViews(dependencies: {
       if (event.type === 'CLAUDE_BACKGROUND_INPUT' || event.type === 'CLAUDE_BACKGROUND_RESIZE') {
         if (!attachmentCurrent(target) || target.attachmentOwner?.snapshot.id !== event.attachmentId) return
         if (event.type === 'CLAUDE_BACKGROUND_INPUT') target.attachmentOwner.input(event.attachmentId,event.text)
-        else target.attachmentOwner.resize(event.attachmentId,event.columns,event.rows)
+        else target.attachmentOwner.resize(event.attachmentId,event.columns,event.rows,event.cell)
         return
       }
       if (event.type === 'CLAUDE_TERMINAL_OPEN') {
@@ -455,7 +455,7 @@ export function createClaudeTerminalViews(dependencies: {
         })
       }
       else if (event.type === 'CLAUDE_TERMINAL_INPUT') owner.input(event.ownerId, event.text)
-      else if (event.type === 'CLAUDE_TERMINAL_RESIZE') owner.resize(event.ownerId, event.columns, event.rows)
+      else if (event.type === 'CLAUDE_TERMINAL_RESIZE') owner.resize(event.ownerId, event.columns, event.rows,event.cell)
       else if (event.type === 'CLAUDE_TERMINAL_CLOSE') {
         if (target.stop?.ownerId === event.ownerId && target.stop.status === 'pending') return
         const stop: ClaudeTerminalStopState = { ownerId: event.ownerId, revision: (target.stop?.revision ?? 0) + 1, status: 'pending' }

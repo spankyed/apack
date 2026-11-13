@@ -18,7 +18,7 @@ test('cold reopens the saved native session without an invented model turn',asyn
  await app.waitForSurface('default-setup/threads');await app.navigate('default-setup/threads');
  await appPage.evaluate(id=>(window as any).applicationState.system.get('default-setup/threads').send({type:'OPEN_THREAD_CHAT',threadId:id,restore:true}),saved.threadId);
  const card=appPage.locator('[data-onboarding-id="agent-chat-input"]'),composer=card.locator('[contenteditable="true"]');
- const section=appPage.getByRole('region',{name:'Claude native interface',exact:true}),input=section.locator('textarea.xterm-helper-textarea');
+ const section=appPage.getByRole('region',{name:'Claude native interface',exact:true}),input=section.locator("textarea[aria-label=\"Terminal input\"]");
  const code=appPage.locator('[data-native-code-ansi]'),markdown=appPage.locator('[data-native-markdown-ansi]');
  const context=()=>appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {phase:c.phase,mode:c.mode,threadId:c.currentThread?.id,sessionId:c.currentThread?.context?.claudeCode?.sessionId,claude:c.currentThread?.context?.claudeCode,messages:c.currentThread?.messages,ui:c.nativeUiViews,native:Object.values(c.nativeTerminalViews).find((v:any)=>v.threadId===c.currentThread?.id)} as any});
   async function nativeDocument(kind:string){return appPage.evaluate(kind=>{

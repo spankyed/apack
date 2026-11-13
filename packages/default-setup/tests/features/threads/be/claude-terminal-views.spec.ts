@@ -412,7 +412,7 @@ it('opens only the listed linked child and keeps input/resize authority on its o
     f.views.handle(f.request,'one',f.send);await vi.waitFor(()=>expect(f.send.mock.calls.at(-1)![0].attachment?.status).toBe('ready'))
     f.views.handle({...mount,type:'CLAUDE_BACKGROUND_INPUT',attachmentId:'stale',text:'no'},'one',f.send);expect(f.child.input).not.toHaveBeenCalled()
     f.views.handle({...mount,type:'CLAUDE_BACKGROUND_INPUT',attachmentId:f.child.snapshot.id,text:'yes'},'one',f.send);expect(f.child.input).toHaveBeenCalledExactlyOnceWith(f.child.snapshot.id,'yes')
-    f.views.handle({...mount,type:'CLAUDE_BACKGROUND_RESIZE',attachmentId:f.child.snapshot.id,columns:80,rows:24},'one',f.send);expect(f.child.resize).toHaveBeenCalledExactlyOnceWith(f.child.snapshot.id,80,24)
+    f.views.handle({...mount,type:'CLAUDE_BACKGROUND_RESIZE',attachmentId:f.child.snapshot.id,columns:80,rows:24},'one',f.send);expect(f.child.resize).toHaveBeenCalledExactlyOnceWith(f.child.snapshot.id,80,24,undefined)
     const requestId=f.send.mock.calls.at(-1)![0].attachment.requestId
     f.views.handle({...mount,type:'CLAUDE_BACKGROUND_CLOSE',requestId},'one',f.send);expect(f.child.close).toHaveBeenCalled();expect(f.background.mock.calls).toHaveLength(1)
     f.views.handle(f.request,'one',f.send);expect(f.openAttachment).toHaveBeenCalledOnce()

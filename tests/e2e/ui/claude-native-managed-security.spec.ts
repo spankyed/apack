@@ -51,7 +51,7 @@ test('reviews original startup managed settings and returns to the same conversa
   if(decision==='trust'){
    const {recognizeOnboardingPrompt}=await import(pathToFileURL(process.env.CLAUDE_RESEARCH_ONBOARDING!).href)
    let navigated=false,confirmed=false,selectedAt=0
-   const terminalInput=section.locator('textarea.xterm-helper-textarea')
+   const terminalInput=section.locator("textarea[aria-label=\"Terminal input\"]")
    await expect.poll(async()=>{
     if((await context()).native.state.status==='live')return true
     const stage=recognizeOnboardingPrompt(await section.innerText(),workspace)

@@ -10,7 +10,7 @@ test.skip(!workspace || !launcher || !onboarding, 'Explicit private native termi
 const roundTripJourney=process.env.CLAUDE_RESEARCH_AGENT_ROUNDTRIP==='1'
 const referenceJourney = process.env.CLAUDE_RESEARCH_AGENT_REFERENCE === '1'||roundTripJourney
 const imeJourney = process.env.CLAUDE_RESEARCH_AGENT_IME === '1'
-let terminalScreen: import('@app/claude-terminal-xterm').Terminal | undefined
+let terminalScreen: import('@xterm/xterm').Terminal | undefined
 test.afterEach(() => { terminalScreen?.dispose(); terminalScreen = undefined })
 test.afterEach(async({appPage,electronApp},info)=>{
   if(!roundTripJourney||info.status===info.expectedStatus)return
@@ -51,10 +51,10 @@ test('preserves rich parent and Agent drafts and selection through actual Agent 
   const section = appPage.getByRole('region', { name: 'Claude native interface', exact: true })
   await expect(section.getByRole('button', { name: 'Use native interface', exact: true })).toBeEnabled()
   await section.getByRole('button', { name: 'Use native interface', exact: true }).click()
-  const input = section.locator('textarea.xterm-helper-textarea')
-  // Reuse the installed app emulator: native cursor-diff updates cannot be recognized by stripping escapes.
+  const input = section.locator("textarea[aria-label=\"Terminal input\"]")
+  // Test-only ANSI reference parser for the original PTY stream; the app draws broker rows.
   ;(globalThis as any).self ??= globalThis
-  const { Terminal } = createRequire(import.meta.url)('@app/claude-terminal-xterm')
+  const { Terminal } = createRequire(import.meta.url)('@xterm/xterm')
   const resize=async()=>{const ownerId=(await context()).native?.state?.ownerId;if(!ownerId)return;const log=stripVTControlCharacters(await readFile(join(workspace!,'app-data/apack/logs/main.log'),'utf8'));const row=[...log.matchAll(/Incoming: "CLAUDE_TERMINAL_RESIZE" \{[\s\S]*?\n\}/g)].map(match=>match[0]).filter(row=>row.includes(ownerId)).at(-1);const cols=row?.match(/columns:\s*(\d+)/)?.[1];return cols?{cols:Number(cols),rows:200}:undefined}
   await expect.poll(resize).toBeTruthy();const dimensions=(await resize())!
   expect(dimensions.cols).toBeGreaterThan(1); expect(dimensions.cols).toBeLessThanOrEqual(500)
