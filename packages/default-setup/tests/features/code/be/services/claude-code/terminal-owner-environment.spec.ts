@@ -23,7 +23,7 @@ it.each([
   const owner = await prepared.start()
   try {
     expect(owner.state.terminalSession).toEqual({id:'native-1',target:null})
-    expect(native.open).toHaveBeenCalledWith(expect.objectContaining({ images:true, shell: process.execPath, env: expect.objectContaining({ FORCE_COLOR: expectedColor, FORCE_HYPERLINK: expectedLinks }) }), expect.anything())
+    expect(native.open).toHaveBeenCalledWith(expect.objectContaining({ images:true, colors:expect.objectContaining({background:'#191919',foreground:'#d4d0ca',cursor:'#d3aa8e'}), shell: process.execPath, env: expect.objectContaining({ FORCE_COLOR: expectedColor, FORCE_HYPERLINK: expectedLinks }) }), expect.anything())
   } finally { await prepared.dispose() }
   expect(native.closeBridge).toHaveBeenCalledOnce()
 })

@@ -43,3 +43,11 @@ export const TERMINAL_COLORS: TerminalColors = {
     TERMINAL_THEME.brightBlue, TERMINAL_THEME.brightMagenta, TERMINAL_THEME.brightCyan, TERMINAL_THEME.brightWhite,
   ],
 }
+
+/** Claude's native surface palette, shared by its drawing and broker capability replies. */
+export const CLAUDE_NATIVE_TERMINAL_COLORS = {
+  ...TERMINAL_COLORS,
+  background: '#191919',
+  foreground: '#d4d0ca',
+  cursor: '#d3aa8e',
+} satisfies TerminalColors

@@ -1,3 +1,4 @@
+import { CLAUDE_NATIVE_TERMINAL_COLORS } from '../../terminal-colors.ts'
 import {claudeCreditRequest} from '../../../common/native-credit.ts'
 import { resolveAppEnvironment } from '@apackdev/sdk/env'
 import type { TerminalSession } from '@apackdev/sdk/services'
@@ -271,6 +272,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       terminal = await services.terminal.open(
         {
           images: true,
+          colors: CLAUDE_NATIVE_TERMINAL_COLORS,
           cols: options.columns ?? 100,
           rows: options.rows ?? 30,
           shell: executable,

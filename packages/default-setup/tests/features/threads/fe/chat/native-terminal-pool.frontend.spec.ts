@@ -85,6 +85,7 @@ it('retains the broker drawing across mounts and refuses an old host release', (
     view = f.views.at(-1)!
   const second = mountNativeTerminal('main', { ...session }, secondHost, size)
   expect(f.views.at(-1)).toBe(view)
+  expect(view.options.theme).toMatchObject({background:0x191919,foreground:0xd4d0ca,cursor:0xd3aa8e,cursorText:0x191919})
   expect(firstHost.children).toHaveLength(0)
   expect(secondHost.children).toHaveLength(1)
   first.detach()

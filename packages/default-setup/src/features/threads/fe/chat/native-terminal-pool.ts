@@ -6,7 +6,7 @@ import {
   type TerminalSource,
   type KeyInput
 } from 'apack-terminal-view'
-import { TERMINAL_COLORS } from '#features/code/be/terminal-colors.ts'
+import { CLAUDE_NATIVE_TERMINAL_COLORS } from '#features/code/be/terminal-colors.ts'
 import { terminalViews } from '@apackdev/sdk/fe'
 import type {
   ClaudeNativeTerminalSession,
@@ -27,14 +27,15 @@ type Entry = {
 }
 const connections = new Map<string, Connection>(),
   entries = new Map<string, Entry>()
+const rgb = (color: string) => parseInt(color.slice(1), 16)
 const theme = {
-  background: 0x191919,
-  foreground: 0xd4d0ca,
+  background: rgb(CLAUDE_NATIVE_TERMINAL_COLORS.background),
+  foreground: rgb(CLAUDE_NATIVE_TERMINAL_COLORS.foreground),
   palette: xtermPalette(
-    TERMINAL_COLORS.ansi.map((c) => parseInt(c.slice(1), 16))
+    CLAUDE_NATIVE_TERMINAL_COLORS.ansi.map(rgb)
   ),
-  cursor: 0xd3aa8e,
-  cursorText: 0x191919,
+  cursor: rgb(CLAUDE_NATIVE_TERMINAL_COLORS.cursor),
+  cursorText: rgb(CLAUDE_NATIVE_TERMINAL_COLORS.background),
   selectionBackground: 0x51443a,
   selectionForeground: null,
   minimumContrast: 7
