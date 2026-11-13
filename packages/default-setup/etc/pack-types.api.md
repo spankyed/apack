@@ -6051,6 +6051,10 @@ declare namespace __FeatureSettings_Code {
         restoreTerminals: boolean;
         terminalClipboardWrite: boolean;
         copyOnSelect: boolean;
+        cursorStyle?: "bar" | "block" | "underline";
+        cursorInactiveStyle?: "bar" | "block" | "hollow" | "underline";
+        cursorBlink?: "default" | "off" | "on" | "program";
+        linkPreview?: "all" | "off" | "osc8";
         bellFlash: boolean;
         bellNotification: boolean;
         defaultBaseDirectory: string | null;

@@ -621,6 +621,40 @@
             "copyOnSelect": {
               "type": "boolean"
             },
+            "cursorStyle": {
+              "type": "string",
+              "enum": [
+                "block",
+                "bar",
+                "underline"
+              ]
+            },
+            "cursorInactiveStyle": {
+              "type": "string",
+              "enum": [
+                "block",
+                "bar",
+                "underline",
+                "hollow"
+              ]
+            },
+            "cursorBlink": {
+              "type": "string",
+              "enum": [
+                "default",
+                "on",
+                "off",
+                "program"
+              ]
+            },
+            "linkPreview": {
+              "type": "string",
+              "enum": [
+                "off",
+                "osc8",
+                "all"
+              ]
+            },
             "bellFlash": {
               "type": "boolean"
             },
@@ -823,6 +857,10 @@
           "restoreTerminals": true,
           "terminalClipboardWrite": true,
           "copyOnSelect": false,
+          "cursorStyle": "bar",
+          "cursorInactiveStyle": "hollow",
+          "cursorBlink": "default",
+          "linkPreview": "osc8",
           "bellFlash": true,
           "bellNotification": false,
           "defaultBaseDirectory": null,
