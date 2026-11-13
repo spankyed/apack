@@ -109,6 +109,13 @@ The Windows status today, in plain terms:
   task, not part of this one.
 - **Size:** small.
 
+**Result (2026-11-13, met).** On the VM, through the broker (`apack-terminal` 0.1.0 built with Zig 0.17.0), one
+PowerShell session with the app's own shell integration (`integrationFor`, the marks key the app gives a keyed shell)
+ran 10,000 typed `Write-Output` commands in 156 s, in 50-command chunks. The session's listener saw 10,000
+`commandStarted` and 10,000 `commandFinished` events: all in order, none missing or duplicated, every outcome
+`exited` with code 0. The broker keeps 256 commands (`COMMANDS_KEPT`), and those 256 match the last 256 written.
+Script: `.apack/w1-order.ts` on the VM (run by `tsx`, source condition); result file `C:\apack-setup\w1-result.json`.
+
 ### W2. The app's own code path on Windows, without a window
 - **Why:** the hooks are arranged by the app (`packages/default-setup/.../shell-integration.ts`), not by the
   broker. On the VM the hook file was generated from the app's code and run through the broker directly. The
@@ -120,6 +127,17 @@ The Windows status today, in plain terms:
   service.
 - **Size:** medium. It may need a headless harness; if the API cannot run headless on the VM, record why and say
   so before moving on.
+
+**Result (2026-11-13, partly met).** The API runs headless on the VM (`packages/api` dist, `SHIPPED_PACKS_DIR`
+set to `packages`, `APACK_ENV=development`, own data dir), loads the default-setup pack, and the app's
+terminal service opens a PowerShell through the broker over the named pipe (`terminal.CREATED`, `TITLED`).
+Typed input reaches the shell: a command typed through `terminal.TERMINAL_INPUT` wrote a marker file
+(`Set-Content`) that the VM then holds with the expected text. The app lists each terminal as `recorded: true`
+(`terminal.TERMINALS_LISTED`). **Not met:** the app's recorded command list with statuses cannot be read back
+on Windows. The rewind answers with a session (`terminal.REWOUND`) but no frames arrive, and no recording file
+is written under the data dir; the design says recordings and kept sessions run nowhere on Windows. That is W3.
+The broker's exe was built on the VM with Zig 0.17.0 (the version the repo's Windows CI installs), staged by
+`cargo xtask package`. Shells left by a run were gone once the API stopped.
 
 ### W3. Kept sessions and recordings on Windows
 - **Why:** the `keeping` suite (15 cases) runs only on POSIX. Each case ends by closing a connection that a reader

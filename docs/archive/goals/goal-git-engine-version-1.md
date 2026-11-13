@@ -86,7 +86,7 @@ What the work found that the plan did not say:
   fails on an export or public member no spec uses; of 42 such values, those the app uses got cases, the rest left
   the door, and five dead `GitRepository` methods went. Reads named `get*` are `read*` or `find*`.
 
-Left as found, outside this goal: the synthetic diff of an untracked text file counts one line too many;
-`readDiffs`' path checks assume `/` and treat a file in an untracked folder as tracked; `StashConflictError`
-carries no code. Under three concurrent chains the external-pack fork spec's Electron sometimes did no work for
+Found and fixed after the goal closed (apack-git #27, pinned by apack #472): the synthetic diff of an untracked
+text file counted one line too many; `readDiffs` treated a file in an untracked folder as tracked and took an
+absolute path inside the repository only with `/`; `StashConflictError` carried no code. Under three concurrent chains the external-pack fork spec's Electron sometimes did no work for
 120 s after `will-quit`; it passed alone and as the chain runs it on a quieter machine.

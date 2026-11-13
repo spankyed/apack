@@ -89,6 +89,27 @@ the pin `3a2140c`. Nothing is pushed or merged; the app pin still names `3a2140c
 - Mutation check: disabling the shown-rows branch in `fetch` makes
   `lines_fetched_while_the_program_is_holding_the_screen_are_those_from_before_the_hold` fail; restored, it passes.
 
+### Hold timeout measurement (2026-11-12)
+
+Commit `fad909e` on `session/next-features-measure` (from `origin/master`, `3b8ef5c`, where the broker work is merged
+as #24 and #25) adds `benches/hold.rs`. Command: `cargo bench --bench hold` in the `next-features-measure` worktree.
+It reports and never fails.
+
+- **Machine:** `uname -m` arm64; 10 cores; **loaded**. Load average was 44.2 at the start of the session and 33 to
+  36 during the runs (`uptime`), so the cost figures are upper bounds on an idle machine.
+- **Release cost**, a full 200x50 repaint of coloured text inside `2026h`/`2026l`, timed from the hold's start to its
+  release as the broker publishes it (`Screen::feed`), 200 runs. Run 1: p50 491 us, p95 621 us, max 805 us. Run 2:
+  p50 475 us, p95 536 us, max 647 us. This is parse and publish cost. It is not how long a real program holds the
+  screen, which the program sets.
+- **View fetch** of the whole screen after release, the same 200 runs: run 1 p50 409 us, p95 487 us, max 769 us;
+  run 2 p50 398 us, p95 456 us, max 615 us.
+- **Never-released hold**, a program that writes `2026h` and nothing else, 5 runs: the view receives the broker's
+  frame at 1.003 s and 1.001 s, and at most 1.006 s (run 2: p50 1.001 s, max 1.006 s). The limit fires.
+
+**Decision:** `HOLD_LIMIT` stays at one second (`src/holds.rs:27`). The measured release cost is well under a
+millisecond, so a 1 s ceiling does not come near a repaint. Nothing measured says a longer or shorter limit is
+needed, and the hold length of a real full-screen program was not measured.
+
 ### Not done in Phase 1
 
 - The view paint loop (`view/src`) was not changed. Nothing in the view needed it, since frames are withheld in the broker.
@@ -159,6 +180,19 @@ Each mutant was a copy in the scratchpad, copied over the file, run, and the ori
 - Focus is `document.hasFocus()`, as the existing `notifySystem` uses it. No app-level focus state was found to use.
 - Every window showing the code surface receives the bell. An unfocused window each asks for a notification, so two
   unfocused windows can show two. The `NOTIFIED` path avoids this with a shared tag; the bell path does not yet.
+
+### Phase 2 gap closed
+
+The two-windows gap above is closed in the main process: `registerNotifyHandler` in
+`packages/main/src/modules/notify-access.ts` shows an identical title and body once per 1000 ms. Commit `e51bcbb09e`.
+
+- `npm run spec -- packages/main/tests/notify-access.spec.ts`: 11 passed (3 new: two identical asks inside the window show
+  one; different text inside the window is shown; an identical ask after 1000 ms is shown).
+- `npm run typecheck:pack`: exit 0. `tsc --noEmit` in `packages/main`: exit 0.
+- Mutation: the dedupe guard removed in a mutant copy under the scratchpad. The duplicate test fails (1 failed, 10
+  passed); the original was restored and `cmp` reports it identical.
+
+Remaining limit: dedupe is by text, so two different bells with the same text within a second show once.
 
 ## Phase 3 — cursor style and blink (2026-11-12)
 
@@ -687,3 +721,51 @@ Run in a window, with a real input method, and record each result here:
 - **Browser repositioning on a timer** (xterm's `setTimeout` reposition) is not done; the field moves on paint only.
 - **The `_compositionSuffix` case** of xterm (reconversion of text around the caret) is handled only by position in the
   field, which holds only what the composition put there; no real reconversion was tested.
+
+## Gaps closed (2026-11-12)
+
+Branch `session/next-features-gaps` (local, not pushed; worktree `apack-terminal-worktrees.noindex/gaps`), cut from
+`origin/master` at `3b8ef5c`. Commits: `304f399` `fix(vt): a case-sensitive search goes to the end of the history
+before its cap`, and `849a1f0` `feat(view): setters change the cursor and link settings on a view that is up`.
+Nothing is pushed or merged, no PR is open, and `vendor/apack-terminal.rev` is not moved.
+
+### Gap A: a case-sensitive search missed an old exact match (Phase 6)
+
+- **Cause.** `vt/reads.rs` `find` stopped feeding the core once it had 2,000 case-insensitive matches, and the exact
+  filter ran only on those. An exact match older than them was never seen.
+- **Fix.** The 2,000 stop applies to a case-insensitive search only. A case-sensitive search runs to the end of the
+  history. The filter is lazy, so it reads match text only until it has 2,000 exact matches. The 1,000 display cap in
+  the view (D3) is unchanged.
+- **Test.** `a_case_sensitive_search_finds_an_exact_match_older_than_the_case_insensitive_cap` (`tests/view_reads.rs`):
+  the oldest line is the only exact `needle`, and 40,000 later lines read `Needle`. The exact search returns the oldest
+  line. The case-insensitive search still returns 2,000.
+- **Mutation.** The 2,000 stop restored for the case-sensitive path (`let enough = total >= SEARCH_MATCHES;`). The new
+  test fails at its exact-match assertion (`left: []`). A first version with 2,500 later lines did not fail, because the
+  core's first part already reached the oldest line, so the history was widened to span several parts. File restored, `cmp` identical.
+- **Counts.** `cargo test --test suite`: 444 passed, 0 failed (443 before, plus the new test). `cargo fmt --all --check`
+  exit 0. `cargo clippy --all-targets -- -D warnings` exit 0.
+
+### Gap B: cursor and link settings remade the view (Phase 3, link preview)
+
+- **Change.** `view/src/view.ts`: the inactive cursor shape, the blink mode and the link preview are fields, set from the
+  constructor options (which still work). New `setCursorInactive(style)`, `setCursorBlink(mode)` and `setLinkPreview(mode)`
+  take effect on the existing view. `setCursorBlink` restarts the blink phase as typing does. `setLinkPreview` updates
+  the title of the link under the pointer. None of them remakes the view.
+- **Tests.** Three in `view/tests/view.spec.ts` ('cursor settings changed on a view that is up') and one in
+  `view/tests/interaction.spec.ts` (`setLinkPreview`). Each checks the next paint or title, the element's identity, the
+  selection, and the scroll position, including a scrolled-up view.
+- **Mutation.** Each setter in turn was given `this.follow(); this.selection.clear()`, which is what a rebuild does to
+  scroll and selection. Each mutant's own test fails: `setCursorInactive`, `setCursorBlink` (its first test) and
+  `setLinkPreview`. Each file restored, `cmp` identical.
+- **Counts.** View `npm test`: 393 passed, 17 files (4 new). `npx tsc --noEmit` exit 0. Broker suite as above.
+
+### Remaining limits
+
+- **The app still remakes views.** It must switch from remaking views to these setters. That is a separate app change,
+  made after this branch merges and `vendor/apack-terminal.rev` moves to it. Until then the app's pinned view has no setters.
+- **A blink change restarts the blink phase.** A change to any blink mode shows the cursor at once.
+- **Case-sensitive cost is not measured.** Such a search reads every match of the needle in the history, and keeps all
+  the case-insensitive matches it finds. The exact filter reads text only as far as 2,000 exact matches.
+- **`Request::Search` is untouched.** `Screen::search` (`screen.rs`, ceiling 100) has no case flag and is not on the
+  view's path.
+- **Not seen in a real window.** The cursor's look and the link title's timing are checked in jsdom only.
