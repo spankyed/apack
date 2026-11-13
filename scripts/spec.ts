@@ -65,7 +65,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
 import { SPEC_COUNT_FILE } from './lib/spec-count-reporter.ts';
+import { vendoredDriftLine } from './lib/chain-evidence.ts';
 import { BUDGET_MS } from './lib/step-budgets.ts';
+import { vendoredStates } from './lib/vendored-checkouts.ts';
 import { ENSURE_LABEL, exitCodeFor, packageOf, planChanged, planTargets, type Run, splitArgs, verdictOf } from './lib/spec-plan.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -276,6 +278,10 @@ async function main(): Promise<number> {
     console.error(`\n${label}: the spec count never arrived, so whether anything ran is unknown.`
       + `\n  ${path.relative(ROOT, COUNT_REPORTER)} did not write it — is it still a reporter vitest calls?`);
   }
+  // A spec over vendored code runs against whatever commit the linked sibling checkout sits on, so a failure
+  // there can belong to the link rather than this tree; the chain prints the same line
+  const drift = vendoredDriftLine(vendoredStates(ROOT));
+  if (drift !== undefined) console.error(`\n${drift}`);
   return exitCodeFor({ failed, uncovered: uncovered.length, noCount: noCount.length });
 }
 
