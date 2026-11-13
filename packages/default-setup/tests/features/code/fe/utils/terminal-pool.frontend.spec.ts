@@ -241,24 +241,55 @@ describe('the cursor and link settings a view is made with', () => {
     expect(viewSettingsOf(undefined)).toEqual({ cursorInactive: 'hollow', cursorBlink: 'program', linkPreview: 'osc8' })
   })
 
-  it('reach a view made after they are set, and a view already drawn is made again in the same host with them', () => {
+  it('reach a view made after they are set, from the constructor', () => {
+    try {
+      terminalPool.setViewSettings({ cursorInactive: 'bar', cursorBlink: 'off', linkPreview: 'all' })
+      const info = terminal()
+      terminalPool.ensure(info)
+      expect(lastView().options).toMatchObject({ cursorInactive: 'bar', cursorBlink: 'off', linkPreview: 'all' })
+    } finally {
+      terminalPool.setViewSettings(viewSettingsOf(undefined))
+    }
+  })
+
+  /**
+   * A view already drawn is given the change through its setter and is not made again: its element stays where it
+   * is in the host, and it is neither disposed nor mounted again, so its selection and scroll position stay.
+   */
+  it.each([
+    ['cursorInactive', { cursorInactive: 'bar' as const }, 'setCursorInactive', 'bar'],
+    ['cursorBlink', { cursorBlink: 'off' as const }, 'setCursorBlink', 'off'],
+    ['linkPreview', { linkPreview: 'all' as const }, 'setLinkPreview', 'all'],
+  ])('changing %s calls its setter on a drawn view and keeps that view', (_name, change, setter, value) => {
     const info = terminal()
     terminalPool.ensure(info)
     const container = host()
     const attachment = terminalPool.attach(info.id, container)!
     const before = lastView()
+    const drawn = views.length
+    const mounts = before.mounts
 
     try {
-      terminalPool.setViewSettings({ cursorInactive: 'bar', cursorBlink: 'off', linkPreview: 'all' })
-      const after = lastView()
-      expect(after, 'the view was made again').not.toBe(before)
-      expect(before.disposed, 'the view it replaces was disposed').toBe(true)
-      expect(after.options).toMatchObject({ cursorInactive: 'bar', cursorBlink: 'off', linkPreview: 'all' })
-      expect(container.contains(after.element), 'the new view is in the host the old one was in').toBe(true)
+      terminalPool.setViewSettings({ ...viewSettingsOf(undefined), ...change })
+      expect(before.settingChanges).toEqual([{ setter, value }])
+      expect(lastView(), 'the view was made again').toBe(before)
+      expect(views.length, 'a view was made').toBe(drawn)
+      expect(before.disposed, 'the view was disposed').toBe(false)
+      expect(before.mounts, 'the view was mounted again').toBe(mounts)
+      expect(container.contains(before.element), 'the view left its host').toBe(true)
       expect(attachment.release()).toBe(true)
     } finally {
       terminalPool.setViewSettings(viewSettingsOf(undefined))
     }
+  })
+
+  it('call no setter for a setting that does not change', () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const before = lastView()
+    terminalPool.setViewSettings(viewSettingsOf(undefined))
+    expect(before.settingChanges).toEqual([])
+    expect(lastView()).toBe(before)
   })
 
   it('do not remake a view when they do not change', () => {

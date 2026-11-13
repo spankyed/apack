@@ -22,6 +22,11 @@ export interface FakeView {
   copyCommand(command: { id: number }): Promise<boolean>
   readonly element: HTMLDivElement
   readonly options: ViewOptions
+  /** The setter calls a view was given after it was made, in order: which setter, and the value it was given */
+  readonly settingChanges: Array<{ setter: 'setCursorInactive' | 'setCursorBlink' | 'setLinkPreview'; value: string }>
+  setCursorInactive(style: string): void
+  setCursorBlink(mode: string): void
+  setLinkPreview(mode: string): void
   /** The element it is mounted in, or `null` while no host has it */
   mountedIn: HTMLElement | null
   mounts: number
@@ -142,6 +147,10 @@ export function viewModule(): Record<string, unknown> {
     }
     focus(): void { this.focused += 1 }
     setCopyOnSelect(on: boolean): void { this.copyOnSelect = on }
+    readonly settingChanges: Array<{ setter: 'setCursorInactive' | 'setCursorBlink' | 'setLinkPreview'; value: string }> = []
+    setCursorInactive(style: string): void { this.settingChanges.push({ setter: 'setCursorInactive', value: style }) }
+    setCursorBlink(mode: string): void { this.settingChanges.push({ setter: 'setCursorBlink', value: mode }) }
+    setLinkPreview(mode: string): void { this.settingChanges.push({ setter: 'setLinkPreview', value: mode }) }
     readonly typed: string[] = []
     readonly copiedCommands: number[] = []
     typeText(text: string): void { this.typed.push(text) }

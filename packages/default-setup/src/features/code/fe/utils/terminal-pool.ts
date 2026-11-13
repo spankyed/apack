@@ -117,8 +117,8 @@ const paths: Detector = {
 }
 
 /**
- * What a view is made with that the window's settings decide. A view takes these at construction and has no setter for
- * them, so a change is applied by making the views again (`setViewSettings`).
+ * What a view is made with that the window's settings decide. A view takes these at construction, and a drawn view is
+ * given a change through its setter (`setViewSettings`).
  */
 export interface ViewSettings {
   /** The cursor drawn while the terminal does not have the keyboard */
@@ -289,15 +289,19 @@ class TerminalPool {
   }
 
   /**
-   * Gives every view the settings the views take at construction. Those have no setter, so a view already drawn is made
-   * again, in the same container, when one of them changes; a view that is not drawn takes them as it is made.
+   * Gives every view the settings they are made with. A view already drawn takes a changed setting through its setter,
+   * so it keeps its element, selection and scroll position; a view that is not drawn takes them as it is made.
    */
   setViewSettings(next: ViewSettings): void {
     const current = this.viewSettings
     if (next.cursorInactive === current.cursorInactive && next.cursorBlink === current.cursorBlink && next.linkPreview === current.linkPreview) return
     this.viewSettings = next
     for (const entry of this.entries.values()) {
-      if (entry.view) this.draw(entry, entry.info)
+      const view = entry.view
+      if (!view) continue
+      if (next.cursorInactive !== current.cursorInactive) view.setCursorInactive(next.cursorInactive)
+      if (next.cursorBlink !== current.cursorBlink) view.setCursorBlink(next.cursorBlink)
+      if (next.linkPreview !== current.linkPreview) view.setLinkPreview(next.linkPreview)
     }
   }
   /**
