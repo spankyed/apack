@@ -314,6 +314,18 @@ async function registerWithObserver($: ClaudePluginApi, ownGeneration: number) {
   const registered = await send($, '/background-register', { pid: backgroundPid }, ownGeneration);
   if (ownGeneration !== generation) return;
   backgroundLease = registered.token as string;
+  return reportRegisteredBackground($, ownGeneration);
+}
+
+/**
+ * A newly leased worker can already be rendering its first status line. Configure its observer in
+ * this exchange rather than waiting for another timer wake, and read usage again after registration:
+ * the original worker may have completed a turn while its process identity was being checked.
+ */
+async function reportRegisteredBackground($: ClaudePluginApi, ownGeneration: number) {
+  const state = await readState($);
+  if (ownGeneration !== generation) return;
+  return reportToObserver($, ownGeneration, state);
 }
 
 /** Fill the app's command into the prompt, and report whether it took. */
@@ -352,7 +364,7 @@ async function exchange($: ClaudePluginApi, ownGeneration: number) {
     backgroundTick = 0;
     reconnecting = false;
     retryDelay = RETRY_FLOOR_MS;
-    return;
+    return reportRegisteredBackground($, ownGeneration);
   }
   const sessionId = await $.session.id();
   if (ownGeneration !== generation) return;

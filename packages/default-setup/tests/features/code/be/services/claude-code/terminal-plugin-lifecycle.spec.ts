@@ -15,7 +15,7 @@ function fixture(){
 }
 it('reconnects a child after broker loss while fencing queued ticks during backoff',async()=>{
  const f=fixture();await f.start();f.tick();await vi.waitFor(()=>expect(f.requests.map(x=>x.path)).toContain('/background-register'));await new Promise(resolve=>setTimeout(resolve,0))
- f.lose();f.tick();await vi.waitFor(()=>expect(f.requests.map(x=>x.path)).toContain('/background-status'));await new Promise(resolve=>setTimeout(resolve,0))
+ f.lose();for(let i=0;i<4;i++){f.tick();await new Promise(resolve=>setImmediate(resolve))}await vi.waitFor(()=>expect(f.requests.filter(row=>row.path==='/background-status')).toHaveLength(2));await new Promise(resolve=>setImmediate(resolve))
  const requests=f.requests.length;f.tick();await f.render();await new Promise(resolve=>setTimeout(resolve,0));expect(f.requests).toHaveLength(requests);expect(f.api.clock.every).toHaveBeenCalledOnce();expect(f.cancel).not.toHaveBeenCalled()
  f.restore();f.advance(1000);f.tick();await vi.waitFor(()=>expect(f.requests.filter(row=>row.path==='/background-register')).toHaveLength(2));expect(f.api.process.run).toHaveBeenCalledOnce()
 })

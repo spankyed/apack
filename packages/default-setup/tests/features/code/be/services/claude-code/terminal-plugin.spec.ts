@@ -33,6 +33,21 @@ it('registers and publishes child status before parent-only transcript reporting
  await hooks.get('ui.render')!(api,{},next);expect(api.clock.every).toHaveBeenCalledOnce()
 })
 
+it('configures a new background lease in the same exchange using usage refreshed after registration',async()=>{
+ const child='05ff1d31-597d-4537-8737-4407191add6e',hooks=new Map<string,(...args:any[])=>Promise<any>>(),requests:{path:string;body:any}[]=[]
+ let tick!:()=>void,cost=0.00028,prefix:string|undefined
+ const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=>'sonnet',turns:async()=>2,usage:async()=>({startedAt:1,cost:{usd:cost}})},agent:{list:async()=>[]},settings:{read:async()=>({statusLine:{type:'command',command:'original-helper'}})},env:{get:async()=>prefix,set:vi.fn(async(_name:string,value:string)=>{prefix=value;return{}})},clock:{every:(_ms:number,callback:()=>void)=>{tick=callback;return{cancel(){}}}},process:{run:async()=>({exitCode:0,stdout:'119'})},http:{fetch:async(url:string,init:any)=>{
+  const path=new URL(url).pathname;requests.push({path,body:JSON.parse(init.body)})
+  if(path==='/background-register')cost=0.00042
+  return{ok:true,status:200,text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-register'?{token:'fresh-lease'}:path==='/background-status'?{shellPrefix:'owned-prefix'}:{})}
+ }}}
+ createPluginFixture(CONFIG)(collector(hooks));await hooks.get('session.start')!(api,{},async()=>({}))
+ tick();await vi.waitFor(()=>expect(prefix).toBe('owned-prefix'))
+ expect(requests.filter(row=>row.path.startsWith('/background-')).map(row=>row.path)).toEqual(['/background-register','/background-status'])
+ expect(requests.find(row=>row.path==='/background-status')?.body).toMatchObject({pid:119,token:'fresh-lease',sequence:1,usage:{cost:{usd:0.00042}},formatter:{command:'original-helper'}})
+ expect(api.env.set).toHaveBeenCalledOnce()
+})
+
 it('renews the original child lease after broker replacement, restores the user prefix and never reuses the old token',async()=>{
  const child='05ff1d31-597d-4537-8737-4407191add6e',hooks=new Map<string,(...args:any[])=>Promise<any>>()
  let tick!:()=>void,online=true,lease=0,prefix='user-prefix',now=1000
