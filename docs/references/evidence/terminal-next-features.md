@@ -558,9 +558,7 @@ the pool makes each view with. No Electron window was run, so nothing below is c
 - **Inactive shape is one of the view's four shapes** (`block`, `bar`, `underline`, `hollow`), default `hollow`. Only the
   active shape goes through the broker, since the broker reports the shape a program set, and that is the frame's cursor.
 - **Link preview**: `off`, `osc8` (declared links only) or `all`, default `osc8`, passed to the view as `linkPreview`. Its
-  setting copy says it takes effect in terminals opened after the change. That was true before this section, since it was
-  written before `setViewSettings` existed; with `setViewSettings` it is now true of every terminal, so that sentence in
-  `settings.vue` is stale and should be corrected in the next settings edit.
+  setting copy was corrected in the same commit to say it applies to every open terminal at once.
 
 ### Changes
 
@@ -610,8 +608,6 @@ confirmed with `cmp` (identical in both cases).
 
 - **No Electron run.** The form's selects, the cursor shape and blink, and the link underline and preview were not looked
   at in a window.
-- **The settings copy for the link preview is stale** (see Decisions) and is left for the next settings edit, which the
-  next person should make.
 - **View recreation on a settings change** loses scroll and selection in each drawn terminal. Not measured, and not
   avoided: a setter in the view would be the fix, and it is a view-side change.
 - **`cursorBlink` `default` is stored, not absent.** The form and the schema agree; an external edit of the settings
