@@ -12,7 +12,7 @@
 <script setup lang="ts">
 import {ref, watch, nextTick, onBeforeUnmount} from 'vue'
 import type {ClaudeBackgroundAttachmentView} from '#features/threads/be/claude-terminal-views.ts'
-import {mountNativeTerminal} from './native-terminal-pool.ts'
+import {mountNativeTerminal} from '#extensions/terminal/pool.ts'
 const props = defineProps<{attachment: ClaudeBackgroundAttachmentView}>()
 const emit = defineEmits<{close:[requestId:string]; input:[attachmentId:string,text:string]; resize:[attachmentId:string,size:import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize]}>()
 const viewport = ref<HTMLElement>()

@@ -9,7 +9,7 @@
 </template>
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { mountNativeTerminal } from './native-terminal-pool.ts'
+import { mountNativeTerminal } from '#extensions/terminal/pool.ts'
 const props = defineProps<{ name: string; ownerLabel?: string; ownerId: string; inputBlocked?: boolean; terminalSession?: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSession }>()
 const emit = defineEmits<{ input: [text: string]; close: []; resize: [size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize] }>()
 const viewport = ref<HTMLElement>()

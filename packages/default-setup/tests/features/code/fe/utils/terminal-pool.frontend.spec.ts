@@ -13,7 +13,7 @@ vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-v
 const { views, lastView, connections, fakeStream } = await import('../_support/terminal-view.ts')
 type FakeStream = ReturnType<typeof fakeStream>
 const { terminalInfo } = await import('../_support/terminal-host.ts')
-const { terminalPool, RESIZE_SETTLE_MS, viewSettingsOf } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool, RESIZE_SETTLE_MS, viewSettingsOf } = await import('#extensions/terminal/pool.ts')
 
 let stopRuntime: (() => void) | undefined
 let next = 0
@@ -670,7 +670,7 @@ describe('a host mounted with a terminal as it was', () => {
 
 describe('a path a program printed', () => {
   it('is resolved in the shape of the directory the shell is in', async () => {
-    const { resolvePath } = await import('#features/code/fe/utils/terminal-pool.ts')
+    const { resolvePath } = await import('#extensions/terminal/pool.ts')
     expect(resolvePath('/Users/me/app', 'src/../lib/a.ts')).toBe('/Users/me/app/lib/a.ts')
     expect(resolvePath('/Users/me/app', '/etc/hosts')).toBe('/etc/hosts')
     expect(resolvePath('C:\\Users\\me\\app', 'src/view.ts')).toBe('C:\\Users\\me\\app\\src\\view.ts')

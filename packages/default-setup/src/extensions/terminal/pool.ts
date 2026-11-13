@@ -1,13 +1,14 @@
-import { BrokerViews, TerminalView, xtermPalette, type Command, type CursorBlink, type CursorShape, type Detector, type LinkPreview, type Theme } from 'apack-terminal-view'
+import { BrokerViews, TerminalView, xtermPalette, type Command, type CursorBlink, type CursorShape, type Detector, type LinkPreview, type Theme, Modifier, type TerminalSource, type KeyInput } from 'apack-terminal-view'
 
 /** A command the shell marked, as the view holds it: a host draws its command blocks from these without importing the view */
 export type { Command }
 import { terminalViews, type TerminalViewStream } from '@apackdev/sdk/fe'
-import type { TerminalInfo } from '../features/terminal/state.ts'
-import { TERMINAL_COLORS, TERMINAL_THEME } from '../../be/terminal-colors.ts'
+import type { ClaudeNativeTerminalSession, ClaudeNativeTerminalSize } from '#features/code/common/native-terminal.ts'
+import type { TerminalInfo } from '#features/code/be/types.ts'
+import { CLAUDE_NATIVE_TERMINAL_COLORS, TERMINAL_COLORS, TERMINAL_THEME } from '#features/code/be/terminal-colors.ts'
 
 /**
- * **The feature's seam to what draws its terminals.** Every view the code surface has is here, and this is
+ * **The pack's seam to what draws its terminals.** Every shell and native Claude terminal drawing is here, and this is
  * the only module that imports `apack-terminal-view` at all — the hosts that show a terminal hold a
  * `TerminalAttachment` and a container, which is the whole of their reach into one.
  *
@@ -786,3 +787,259 @@ class TerminalPool {
 }
 
 export const terminalPool = new TerminalPool()
+
+// Native Claude drawings keep process identity and transition gates instead of shell lifecycle notices.
+type NativeConnection = {
+  views: BrokerViews
+  stream: TerminalViewStream
+  closed: boolean
+  heard: boolean
+  retry: boolean
+}
+type NativeEntry = {
+  session: ClaudeNativeTerminalSession
+  connection: NativeConnection
+  view: TerminalView
+  drawing?: object
+  container?: HTMLElement
+  host?: HTMLElement
+  lease?: object
+  resize?: (size: ClaudeNativeTerminalSize) => void
+  size?: ClaudeNativeTerminalSize
+  sent?: string
+  inputBlocked?: boolean
+  timer?: ReturnType<typeof setTimeout>
+}
+const nativeConnections = new Map<string, NativeConnection>(),
+  nativeEntries = new Map<string, NativeEntry>()
+const nativeTheme = {
+  background: rgb(CLAUDE_NATIVE_TERMINAL_COLORS.background),
+  foreground: rgb(CLAUDE_NATIVE_TERMINAL_COLORS.foreground),
+  palette: xtermPalette(CLAUDE_NATIVE_TERMINAL_COLORS.ansi.map(rgb)),
+  cursor: rgb(CLAUDE_NATIVE_TERMINAL_COLORS.cursor),
+  cursorText: rgb(CLAUDE_NATIVE_TERMINAL_COLORS.background),
+  selectionBackground: 0x51443a,
+  selectionForeground: null,
+  minimumContrast: 7,
+}
+function nativeConnection(target: string | null, retry = true): NativeConnection {
+  const key = target ?? '',
+    existing = nativeConnections.get(key)
+  if (existing && !existing.closed) return existing
+  const stream = terminalViews(target ?? undefined),
+    current: NativeConnection = {
+      views: new BrokerViews(stream),
+      stream,
+      closed: false,
+      heard: false,
+      retry,
+    }
+  nativeConnections.set(key, current)
+  stream.onData(() => {
+    current.heard = true
+  })
+  const closed = () => {
+    if (current.closed) return
+    current.closed = true
+    if (nativeConnections.get(key) !== current) return
+    nativeConnections.delete(key)
+    current.views.close()
+    current.stream.close()
+    // Match the ordinary terminal's bounded retry: only a connection that worked,
+    // once. An explicit later mount permits another try; no retry timer spins.
+    if (!current.heard || !current.retry) return
+    for (const entry of nativeEntries.values()) {
+      if (entry.connection !== current || !entry.lease || !entry.container)
+        continue
+      const focused = entry.view.element.contains(document.activeElement)
+      clearTimeout(entry.timer)
+      entry.view.dispose()
+      entry.connection = nativeConnection(entry.session.target, false)
+      entry.sent = undefined
+      entry.view = createNativeDrawing(entry)
+      entry.view.mount(entry.host!)
+      if (focused) entry.view.focus()
+    }
+  }
+  stream.onClose(closed)
+  current.views.onClose(closed)
+  return current
+}
+function disposeNativeDrawing(entry: NativeEntry) {
+  entry.lease = undefined
+  entry.drawing = undefined
+  entry.container = undefined
+  entry.resize = undefined
+  clearTimeout(entry.timer)
+  entry.view.dispose()
+  entry.host?.remove()
+  entry.host = undefined
+}
+/** Preserve the native transition gate while the broker remains the only key encoder. */
+function ownedNativeInput(
+  source: TerminalSource,
+  entry: NativeEntry,
+  drawing: object
+): TerminalSource {
+  const kept = new Map<PropertyKey, unknown>(),
+    allowed = () =>
+      entry.drawing === drawing &&
+      !entry.connection.closed &&
+      !!entry.lease &&
+      !entry.inputBlocked
+  return new Proxy(source, {
+    get(target, key) {
+      if (kept.has(key)) return kept.get(key)
+      const value = Reflect.get(target, key, target)
+      if (typeof value !== 'function') return value
+      let call = value.bind(target)
+      if (key === 'key')
+        call = (input: KeyInput) => {
+          if (
+            allowed() ||
+            (entry.drawing === drawing &&
+              !entry.connection.closed &&
+              entry.lease &&
+              input.code === 'KeyC' &&
+              (input.modifiers & Modifier.control) !== 0 &&
+              (input.modifiers & (Modifier.alt | Modifier.super)) === 0)
+          )
+            value.call(target, input)
+        }
+      else if (key === 'paste')
+        call = (...args: unknown[]) =>
+          allowed()
+            ? value.apply(target, args)
+            : Promise.reject(new Error('Native input is changing'))
+      else if (['text', 'pointer', 'focus'].includes(String(key)))
+        call = (...args: unknown[]) => {
+          if (allowed()) value.apply(target, args)
+        }
+      kept.set(key, call)
+      return call
+    },
+  })
+}
+function createNativeDrawing(created: NativeEntry): TerminalView {
+  const drawing = {}
+  created.drawing = drawing
+  const view = new TerminalView(
+    ownedNativeInput(
+      created.connection.views.open(created.session.id),
+      created,
+      drawing
+    ),
+    {
+      font: { family: 'Menlo, Monaco, monospace', size: 13 },
+      theme: nativeTheme,
+      onFit: (fit) => {
+        if (created.drawing !== drawing) return
+        created.view.element.dataset.nativeTerminalColumns = String(
+          Math.max(2, Math.min(500, fit.columns))
+        )
+        created.view.element.dataset.nativeTerminalRows = String(
+          Math.max(2, Math.min(200, fit.rows))
+        )
+        created.size = {
+          columns: Math.max(2, Math.min(500, fit.columns)),
+          rows: Math.max(2, Math.min(200, fit.rows)),
+          cell: { width: fit.cellWidth, height: fit.cellHeight },
+        }
+        clearTimeout(created.timer)
+        const lease = created.lease
+        if (lease)
+          created.timer = setTimeout(() => {
+            if (created.lease !== lease || !created.size) return
+            const key = JSON.stringify(created.size)
+            if (key !== created.sent) {
+              created.sent = key
+              created.resize?.(created.size)
+            }
+          }, 100)
+      },
+      onLink: (link) => {
+        void window.electronAPI?.shell
+          .openTerminalLink(link.target)
+          .catch(() => false)
+      },
+      confirmPaste: async (text) =>
+        window.confirm(
+          'This paste may run a command. Paste it into Claude’s terminal?\n\n' +
+            text
+        ),
+    }
+  )
+  view.element.dataset.nativeTerminal = ''
+  return view
+}
+/** A retained broker drawing, not an ANSI emulator. Mounting never replays bytes into a process. */
+export function mountNativeTerminal(
+  ownerId: string,
+  session: ClaudeNativeTerminalSession,
+  container: HTMLElement,
+  resize: (size: ClaudeNativeTerminalSize) => void,
+  inputBlocked = false
+) {
+  let entry = nativeEntries.get(ownerId)
+  if (
+    entry &&
+    (entry.session.id !== session.id ||
+      entry.session.target !== session.target ||
+      entry.connection.closed)
+  ) {
+    disposeNativeDrawing(entry)
+    nativeEntries.delete(ownerId)
+    entry = undefined
+  }
+  if (!entry) {
+    for (const [id, old] of nativeEntries) {
+      if (nativeEntries.size < 16) break
+      if (!old.lease) {
+        disposeNativeDrawing(old)
+        nativeEntries.delete(id)
+      }
+    }
+    const broker = nativeConnection(session.target)
+    const created: NativeEntry = {
+      session: { ...session },
+      connection: broker,
+      view: undefined!,
+    }
+    created.view = createNativeDrawing(created)
+    entry = created
+    nativeEntries.set(ownerId, entry)
+  }
+  const target = entry,
+    lease = {}
+  target.lease = lease
+  target.inputBlocked = inputBlocked
+  target.resize = resize
+  target.container = container
+  // The view measures its parent client box. Keep caller padding/borders outside
+  // that box so the CLI never receives columns or rows the drawing clips.
+  target.host?.remove()
+  const host = document.createElement('div')
+  host.style.cssText = 'width:100%;height:100%;min-width:0;min-height:0'
+  container.append(host)
+  target.host = host
+  target.sent = undefined
+  target.view.mount(host)
+  return {
+    focus() {
+      if (target.lease === lease) target.view.focus()
+    },
+    setInputBlocked(blocked: boolean) {
+      if (target.lease === lease) target.inputBlocked = blocked
+    },
+    detach() {
+      if (target.lease !== lease) return
+      target.lease = undefined
+      target.container = undefined
+      target.resize = undefined
+      clearTimeout(target.timer)
+      target.view.unmount()
+      target.host?.remove()
+      target.host = undefined
+    },
+  }
+}

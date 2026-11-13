@@ -4,7 +4,7 @@ import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-ter
 import type { ClaudeNativeTaskDetails, ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
 const send = vi.fn()
 let context: { nativeUiViews: Record<string, { state: { agent: ClaudeNativeTaskDetails; agentInput?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiMountState['agentInput'] } }>; nativeTerminalViews: Record<string, ClaudeTerminalViewSnapshot> }, app: App | undefined
-vi.mock('#features/threads/fe/chat/native-terminal-pool.ts', () => ({ mountNativeTerminal: () => ({ fit: () => ({ columns: 80, rows: 24 }), write: () => {},setInputBlocked:vi.fn(), focus: () => {}, detach: () => {} }) }))
+vi.mock('#extensions/terminal/pool.ts', () => ({ mountNativeTerminal: () => ({ fit: () => ({ columns: 80, rows: 24 }), write: () => {},setInputBlocked:vi.fn(), focus: () => {}, detach: () => {} }) }))
 vi.mock('@apackdev/sdk/fe', () => ({ useSurface: () => ({ send, getSnapshot: () => ({ context, status: 'active' }) }) }))
 vi.mock('@xstate/vue', async () => { const { computed } = await import('vue'); return { useSelector: (_actor: unknown, select: (value: unknown) => unknown) => computed(() => select({ context })) } })
 vi.mock('#features/threads/fe/chat/native-agent-scroll.ts', () => ({ useClaudeAgentScroll: () => ({ following: ref(true), latest: () => {}, intentRevision: () => 0 }) }))

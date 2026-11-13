@@ -39,6 +39,13 @@ src/
   content/                   # Content sources: actions, prompts, flows, notes, commands
 ```
 
+## Terminal drawings
+
+`src/extensions/terminal/pool.ts` owns the pack's shell and native Claude terminal drawings. Feature
+hosts hold attachments rather than importing `apack-terminal-view`. Shell process notices and native
+Claude transition gates retain separate lifetimes within that shared seam; moving a host never replays
+bytes into its process.
+
 ## Features
 
 Each feature lives in `src/features/<name>/` with this layout:

@@ -3,7 +3,7 @@ import { answerTo } from '@apackdev/sdk/testing'
 import { sentCall } from '../../../_support/calls.ts'
 const sendToSystem=vi.hoisted(()=>vi.fn())
 vi.mock('#generated/events.ts',()=>({sendToSystem}))
-vi.mock('#features/code/fe/utils/terminal-pool.ts',()=>({terminalPool:{dispose:vi.fn(),syncProcesses:vi.fn()}}))
+vi.mock('#extensions/terminal/pool.ts',()=>({terminalPool:{dispose:vi.fn(),syncProcesses:vi.fn()}}))
 vi.mock('#features/code/fe/utils/terminal-events.ts',()=>({terminalEventBus:{emit:vi.fn(),clearOutput:vi.fn(),prunePersistedOutputs:vi.fn()}}))
 const {default:codeState}=await import('#features/code/fe/state.ts')
 const actors:ReturnType<typeof createActor>[]=[]

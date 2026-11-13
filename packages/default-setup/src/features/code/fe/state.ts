@@ -29,7 +29,7 @@ import { searchState } from './features/search/state.ts';
 import { commitState } from './features/commit/state.ts';
 import { pullRequestState } from './features/pull-request/state.ts';
 import { terminalState, type TerminalInfo } from './features/terminal/state.ts';
-import { terminalPool, viewSettingsOf } from './utils/terminal-pool.ts';
+import { terminalPool, viewSettingsOf } from '#extensions/terminal/pool.ts';
 import { actionsState } from './features/actions/state.ts';
 import { promptsState } from './features/prompts/state.ts';
 import type { KeyboardShortcut } from '@apackdev/sdk/types';

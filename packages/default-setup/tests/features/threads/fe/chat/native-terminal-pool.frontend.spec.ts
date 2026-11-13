@@ -71,7 +71,7 @@ vi.mock('apack-terminal-view', () => ({
     }
   },
 }))
-import { mountNativeTerminal } from '#features/threads/fe/chat/native-terminal-pool.ts'
+import { mountNativeTerminal } from '#extensions/terminal/pool.ts'
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => {
   vi.clearAllTimers()

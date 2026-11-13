@@ -126,7 +126,7 @@ import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS, MENU_CONTENT_CLASS, MENU_SEPAR
 import { Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Trash2 } from 'lucide-vue-next'
 import { type CodeState } from '#features/code/fe/state.ts'
 import type { TerminalInfo } from '#features/code/fe/features/terminal/state.ts'
-import { terminalPool, type TerminalAttachment, type Command } from '#features/code/fe/utils/terminal-pool.ts'
+import { terminalPool, type TerminalAttachment, type Command } from '#extensions/terminal/pool.ts'
 import TerminalMenuExtras from '#features/code/fe/features/terminal/TerminalMenuExtras.vue'
 import TerminalRewind from '#features/code/fe/features/terminal/TerminalRewind.vue'
 import { panelChild } from '../features/children.ts';
