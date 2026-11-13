@@ -6,10 +6,10 @@
  *   - generic `onControlRequest` fallback for unknown subtypes
  *   - dedupe of repeated request_ids
  *   - thrown handler errors become `{subtype:'error'}` responses
- *   - `BoundedSet` LRU eviction
+ *   - pending decisions, exact replay, bounded completed history and pressure refusal
  */
 
-import { createControlRouter, BoundedSet } from '#features/code/be/services/claude-code/control.ts'
+import { createControlRouter } from '#features/code/be/services/claude-code/control.ts'
 import type { ControlRequestLine } from '#features/code/be/services/claude-code/types.ts'
 
 function makeRequest(requestId: string, subtype: string, extra: Record<string, unknown> = {}): ControlRequestLine {
@@ -147,47 +147,46 @@ describe('createControlRouter', () => {
       expect(isSuccess(second)).toBe(true)
       if (isSuccess(second)) {
         expect(second.response.request_id).toBe('same-id')
-        expect(second.response.response).toEqual({})
+        expect(second.response.response).toEqual({ behavior: 'allow', updatedInput: {} })
       }
     })
   })
 })
 
-describe('BoundedSet', () => {
-  it('reports has/add correctly', () => {
-    const s = new BoundedSet(3)
-    expect(s.has('a')).toBe(false)
-    s.add('a')
-    expect(s.has('a')).toBe(true)
-    expect(s.size).toBe(1)
-  })
-
-  it('noops when adding an existing key', () => {
-    const s = new BoundedSet(3)
-    s.add('a')
-    s.add('a')
-    expect(s.size).toBe(1)
-  })
-
-  it('evicts oldest entries once the limit is exceeded', () => {
-    const s = new BoundedSet(3)
-    s.add('a')
-    s.add('b')
-    s.add('c')
-    s.add('d') // evicts 'a'
-    expect(s.has('a')).toBe(false)
-    expect(s.has('b')).toBe(true)
-    expect(s.has('c')).toBe(true)
-    expect(s.has('d')).toBe(true)
-    expect(s.size).toBe(3)
-  })
-
-  it('handles 501 unique inserts with limit 500 — only the oldest drops', () => {
-    const s = new BoundedSet(500)
-    for (let i = 0; i < 501; i++) s.add(`id-${i}`)
-    expect(s.size).toBe(500)
-    expect(s.has('id-0')).toBe(false)
-    expect(s.has('id-1')).toBe(true)
-    expect(s.has('id-500')).toBe(true)
-  })
+it('waits for the same pending permission decision instead of answering empty success', async () => {
+  let decide!: (value: {behavior:'deny';message:string}) => void
+  const handler = vi.fn(() => new Promise<{behavior:'deny';message:string}>(resolve => {decide=resolve}))
+  const router = createControlRouter({onPermissionRequest:handler}), line=makeRequest('pending','can_use_tool',{tool_name:'Bash',tool_use_id:'tool',input:{command:'rm file'}})
+  const first=router.handle(line), second=router.handle(line)
+  let settled=false;void second.then(()=>{settled=true})
+  await Promise.resolve();await Promise.resolve();expect(settled).toBe(false);expect(handler).toHaveBeenCalledOnce()
+  decide({behavior:'deny',message:'Keep the file'})
+  expect(await second).toEqual(await first)
+  expect((await second as SuccessResponse).response.response).toEqual({behavior:'deny',message:'Keep the file'})
+})
+it('replays the original failure rather than converting it to success', async () => {
+  const handler=vi.fn(async()=>{throw Error('Permission owner closed')}),router=createControlRouter({onControlRequest:handler}),line=makeRequest('failed','elicitation')
+  const first=await router.handle(line);expect(isError(first)).toBe(true);expect(await router.handle(line)).toEqual(first);expect(handler).toHaveBeenCalledOnce()
+})
+it('retains a serialized decision independently of subsequent caller mutation', async () => {
+  const decision={behavior:'allow' as const,updatedInput:{command:'safe'}},router=createControlRouter({onPermissionRequest:()=>decision}),line=makeRequest('immutable','can_use_tool',{tool_name:'Bash',tool_use_id:'tool',input:{}})
+  const first=await router.handle(line) as SuccessResponse;decision.updatedInput.command='changed';(first.response.response as typeof decision).updatedInput.command='also changed'
+  expect((await router.handle(line) as SuccessResponse).response.response).toEqual({behavior:'allow',updatedInput:{command:'safe'}})
+})
+it('evicts old completed responses while retaining recent exact replies', async () => {
+  const handler=vi.fn(async request=>({id:request.id})),router=createControlRouter({onControlRequest:handler})
+  for(let i=0;i<501;i++)await router.handle(makeRequest('id-'+i,'hook_callback',{id:i}))
+  expect((await router.handle(makeRequest('id-500','hook_callback',{id:500})) as SuccessResponse).response.response).toEqual({id:500});expect(handler).toHaveBeenCalledTimes(501)
+  await router.handle(makeRequest('id-0','hook_callback',{id:0}));expect(handler).toHaveBeenCalledTimes(502)
+})
+it('refuses excess pending work without evicting a decision still owned by its handler', async () => {
+  let release!:()=>void;const held=new Promise<void>(resolve=>{release=resolve}),handler=vi.fn(async()=>{await held;return {done:true}}),router=createControlRouter({onControlRequest:handler})
+  const pending=Array.from({length:500},(_,i)=>router.handle(makeRequest('pending-'+i,'hook_callback')))
+  await Promise.resolve();const refused=await router.handle(makeRequest('overflow','hook_callback'));expect(isError(refused)).toBe(true);expect(handler).toHaveBeenCalledTimes(500)
+  const duplicate=router.handle(makeRequest('pending-0','hook_callback'));release();expect(await duplicate).toEqual(await pending[0]);await Promise.all(pending);expect(handler).toHaveBeenCalledTimes(500)
+})
+it('does not rerun a handler whose completed response exceeds the replay byte budget', async () => {
+  const handler=vi.fn(async()=>({text:'x'.repeat(32*1024*1024+1)})),router=createControlRouter({onControlRequest:handler}),line=makeRequest('large','mcp_message')
+  expect(((await router.handle(line) as SuccessResponse).response.response as {text:string}).text.length).toBe(32*1024*1024+1)
+  const replay=await router.handle(line);expect(isError(replay)).toBe(true);if(isError(replay))expect(replay.response.error).toContain('too large to replay');expect(handler).toHaveBeenCalledOnce()
 })

@@ -462,6 +462,26 @@ describe('query() native control replies', () => {
     await handle.close()
   })
 
+  it('writes the same full permission decision when a completed control request is repeated', async () => {
+    const mock = makeMockStream()
+    vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
+    const permission = vi.fn(async () => ({ behavior: 'deny' as const, message: 'Keep the existing file' }))
+    const handle = await query({ onPermissionRequest: permission })
+    const request = { type: 'control_request', request_id: 'repeat-decision', request: {
+      subtype: 'can_use_tool', tool_name: 'Bash', tool_use_id: 'tool-repeat', input: {command:'remove file'},
+    } }
+    const responses = () => mock.writes.filter(value => (value as {type:string}).type === 'control_response')
+    try {
+      mock.pushEvent(request)
+      await vi.waitFor(() => expect(responses()).toHaveLength(1))
+      mock.pushEvent(request)
+      await vi.waitFor(() => expect(responses()).toHaveLength(2))
+      expect(responses()[1]).toEqual(responses()[0])
+      expect(responses()[1]).toEqual({type:'control_response',response:{subtype:'success',request_id:'repeat-decision',response:{behavior:'deny',message:'Keep the existing file'}}})
+      expect(permission).toHaveBeenCalledOnce()
+    } finally { await handle.close() }
+  })
+
   it.each(['cancel', 'exit'])('suppresses a late permission reply after %s without waiting for the callback', async ending => {
     const mock = makeMockStream()
     vi.spyOn(runner, 'spawnStream').mockResolvedValue(mock.handle)
