@@ -256,6 +256,8 @@ const ownedNoticeCases: { notice: ClaudeNativeNotice; button: string; decision: 
  {notice:{...identity,kind:'resume_return',choices:[{value:'resume_compact',label:'Resume from summary'},{value:'resume_continue',label:'Resume full session as-is'},{value:'resume_never',label:"Don't ask me again"}]},button:'Resume from summary',decision:'resume_compact'},
  {notice:{...identity,kind:'newer_model_offer',choices:[{value:'newer_keep',label:'Keep current model'},{value:'newer_accept',label:'Resume on newer model'}]},button:'Resume on newer model',decision:'newer_accept'},
  {notice:{...identity,kind:'cold_resume_quota',trigger:'idle',preferredChoice:'quota_new_conversation',choices:[{value:'quota_resume',label:'Resume'},{value:'quota_new_conversation',label:'Start a new conversation',description:'Original pointer disclosure'}]},button:'Resume',decision:'quota_resume'},
+ {notice:{...identity,kind:'computer_use_approval',phase:'apps',preferredChoice:'computer_deny',choices:[{value:'computer_deny',label:'Deny'},{value:'computer_allow',label:'Allow for this session (1 app)'}]},button:'Deny',decision:'computer_deny'},
+ {notice:{...identity,kind:'computer_use_approval',phase:'os_permissions',choices:[{value:'computer_accessibility',label:'Open Accessibility'},{value:'computer_retry',label:'Try again'}]},button:'Open Accessibility',decision:'computer_accessibility'},
  {notice:{...identity,kind:'permission_browser',toolName:'mcp__claude-in-chrome__navigate',requestId:'browser-tool',choices:[{value:'browser_allow',label:'Allow'},{value:'browser_domain',label:'Allow domain for this session'},{value:'browser_deny',label:'Deny'}]},button:'Allow',decision:'browser_allow'},
 ]
 it.each(ownedNoticeCases)('does not retarget a displayed $notice.kind click or Escape to a replacement',async({notice,button,decision})=>{
@@ -454,4 +456,22 @@ it('shows native Chrome setup descriptions and withdraws phase-specific actions 
  expect(f.root.querySelector('[data-native-choice="chrome_continue"]')).toBeNull()
  f.root.querySelector('[aria-label="Claude browser setup"]')!.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))
  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({notice:expect.objectContaining({revision:'failed-phase',decision:'chrome_cancel'})}))
+})
+
+it('preserves native computer consent warnings, deny focus and OS phase ownership',async()=>{
+ const focus=vi.spyOn(document,'hasFocus').mockReturnValue(true)
+ try{
+  const f=await fixture(),base=ownedNoticeCases.find(row=>row.notice.kind==='computer_use_approval'&&row.notice.phase==='apps')!.notice
+  if(base.kind!=='computer_use_approval')throw Error('Missing computer consent fixture')
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+  const notice={...base,title:'Computer consent <script>',paragraphs:['Hidden apps are not included.','Clipboard access requested.']}
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice}});await nextTick();await nextTick()
+  const card=f.root.querySelector<HTMLElement>('[aria-label="Claude computer permission"]')!;expect(card.getAttribute('role')).toBe('dialog');expect(card.querySelector('script')).toBeNull();expect(card.textContent).toContain('Hidden apps are not included.');expect(document.activeElement?.textContent).toBe('Deny')
+  const stale=[...card.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Allow for this session (1 app)')!
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice},noticeAnswer:{id:notice.id,revision:notice.revision,status:'pending'}});await nextTick();expect([...card.querySelectorAll('button')].every(button=>button.disabled)).toBe(true)
+  const os={...notice,revision:'os-phase',phase:'os_permissions' as const,preferredChoice:undefined,choices:[{value:'computer_retry' as const,label:'Try again'}]}
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,notice:os}})
+  actor.send.mockClear();stale.click();expect(actor.send).not.toHaveBeenCalled();await nextTick();expect(card.textContent).not.toContain('Allow for this session');expect(card.textContent).toContain('Try again')
+  card.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));expect(actor.send.mock.calls.at(-1)![0].notice).toEqual({id:os.id,revision:'os-phase',sessionId:os.sessionId,decision:'computer_cancel'})
+ }finally{focus.mockRestore()}
 })

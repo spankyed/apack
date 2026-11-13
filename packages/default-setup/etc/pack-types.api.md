@@ -1576,7 +1576,7 @@ declare const ClaudeNativeMessageRetirementsSchema: z.ZodArray<z.ZodObject<{
 type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>;
 
 type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & {
-    decision: 'background_confirm' | 'background_stay' | 'browser_allow' | 'browser_cancel' | 'browser_deny' | 'browser_domain' | 'cancelled' | 'chrome_cancel' | 'chrome_continue' | 'chrome_install' | 'chrome_never' | 'chrome_not_now' | 'chrome_skip' | 'chrome_wait' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'continue' | 'disable' | 'edit_prompt' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'policy_approve' | 'policy_reject' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'yes';
+    decision: 'background_confirm' | 'background_stay' | 'browser_allow' | 'browser_cancel' | 'browser_deny' | 'browser_domain' | 'cancelled' | 'chrome_cancel' | 'chrome_continue' | 'chrome_install' | 'chrome_never' | 'chrome_not_now' | 'chrome_skip' | 'chrome_wait' | 'compact_accept' | 'compact_dismiss' | 'compact_keep' | 'compact_next' | 'compact_previous' | 'computer_accessibility' | 'computer_allow' | 'computer_cancel' | 'computer_deny' | 'computer_retry' | 'computer_screen_recording' | 'continue' | 'disable' | 'edit_prompt' | 'goal_accept' | 'goal_decline' | 'interrupt' | 'never' | 'newer_accept' | 'newer_dismiss' | 'newer_keep' | 'no' | 'policy_approve' | 'policy_reject' | 'quota_dismiss' | 'quota_new_conversation' | 'quota_resume' | 'resume_compact' | 'resume_continue' | 'resume_dismiss' | 'resume_never' | 'retry_fallback' | 'sandbox_allow' | 'sandbox_cancel' | 'sandbox_deny' | 'sandbox_remember' | 'yes';
 };
 
 /** Native owns the dialog, available choices, timeout and acknowledgement. */
@@ -1615,6 +1615,28 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         }>;
         label: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
+    }, z.core.$strip>>;
+    title: z.ZodString;
+    paragraphs: z.ZodArray<z.ZodString>;
+    id: z.ZodString;
+    revision: z.ZodString;
+    sessionId: z.ZodString;
+}, z.core.$strip>, z.ZodObject<{
+    kind: z.ZodLiteral<"computer_use_approval">;
+    phase: z.ZodEnum<{
+        apps: "apps";
+        os_permissions: "os_permissions";
+    }>;
+    preferredChoice: z.ZodOptional<z.ZodLiteral<"computer_deny">>;
+    choices: z.ZodArray<z.ZodObject<{
+        value: z.ZodEnum<{
+            computer_deny: "computer_deny";
+            computer_allow: "computer_allow";
+            computer_accessibility: "computer_accessibility";
+            computer_screen_recording: "computer_screen_recording";
+            computer_retry: "computer_retry";
+        }>;
+        label: z.ZodString;
     }, z.core.$strip>>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -11150,8 +11172,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;
