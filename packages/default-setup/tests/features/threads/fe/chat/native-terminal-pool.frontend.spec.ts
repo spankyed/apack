@@ -1,22 +1,28 @@
 const f = vi.hoisted(() => ({
   views: [] as any[],
   connections: [] as any[],
-  streams: [] as any[]
+  streams: [] as any[],
 }))
 vi.mock('@apackdev/sdk/fe', () => ({
   terminalViews: vi.fn((target?: string) => {
     const listeners: (() => void)[] = []
+    const data: ((bytes: Uint8Array) => void)[] = []
     const stream = {
       target,
+      onData: (callback: (bytes: Uint8Array) => void) => {
+        data.push(callback)
+        return () => {}
+      },
+      hear: () => data.forEach((callback) => callback(new Uint8Array([1]))),
       onClose: (callback: () => void) => {
         listeners.push(callback)
         return () => {}
       },
-      close: () => listeners.forEach((callback) => callback())
+      close: () => listeners.forEach((callback) => callback()),
     }
     f.streams.push(stream)
     return stream
-  })
+  }),
 }))
 vi.mock('apack-terminal-view', () => ({
   Modifier: { control: 2, alt: 4, super: 8 },
@@ -28,9 +34,10 @@ vi.mock('apack-terminal-view', () => ({
       text: vi.fn(),
       paste: vi.fn(async () => 'pasted'),
       pointer: vi.fn(),
-      focus: vi.fn()
+      focus: vi.fn(),
     }))
     onClose = vi.fn()
+    close = vi.fn()
     constructor(public stream: unknown) {
       f.connections.push(this)
     }
@@ -46,7 +53,7 @@ vi.mock('apack-terminal-view', () => ({
         columns: 80,
         rows: 24,
         cellWidth: 8,
-        cellHeight: 16
+        cellHeight: 16,
       })
     })
     constructor(
@@ -62,7 +69,7 @@ vi.mock('apack-terminal-view', () => ({
     ) {
       f.views.push(this)
     }
-  }
+  },
 }))
 import { mountNativeTerminal } from '#features/threads/fe/chat/native-terminal-pool.ts'
 beforeEach(() => vi.useFakeTimers())
@@ -85,7 +92,12 @@ it('retains the broker drawing across mounts and refuses an old host release', (
     view = f.views.at(-1)!
   const second = mountNativeTerminal('main', { ...session }, secondHost, size)
   expect(f.views.at(-1)).toBe(view)
-  expect(view.options.theme).toMatchObject({background:0x191919,foreground:0xd4d0ca,cursor:0xd3aa8e,cursorText:0x191919})
+  expect(view.options.theme).toMatchObject({
+    background: 0x191919,
+    foreground: 0xd4d0ca,
+    cursor: 0xd3aa8e,
+    cursorText: 0x191919,
+  })
   expect(firstHost.children).toHaveLength(0)
   expect(secondHost.children).toHaveLength(1)
   first.detach()
@@ -98,7 +110,7 @@ it('retains the broker drawing across mounts and refuses an old host release', (
   expect(size).toHaveBeenCalledExactlyOnceWith({
     columns: 80,
     rows: 24,
-    cell: { width: 8, height: 16 }
+    cell: { width: 8, height: 16 },
   })
   expect(view.source.id).toBe('broker-main')
   expect(first).not.toHaveProperty('write')
@@ -119,7 +131,7 @@ it('coalesces measured resize and discards a detached host’s queued size', () 
   expect(size).toHaveBeenCalledExactlyOnceWith({
     columns: 101,
     rows: 31,
-    cell: { width: 9, height: 18 }
+    cell: { width: 9, height: 18 },
   })
   view.options.onFit({ columns: 101, rows: 31, cellWidth: 9, cellHeight: 18 })
   vi.advanceTimersByTime(100)
@@ -210,4 +222,87 @@ it('keeps transition input gated, permits cancellation and retires detached inpu
   view.source.key({ code: 'KeyC', modifiers: 2 })
   expect(raw.text).toHaveBeenCalledTimes(1)
   expect(raw.key).toHaveBeenCalledTimes(1)
+})
+
+it('recovers mounted drawings once on a previously working shared connection and retires old input', () => {
+  const hostA = root(),
+    hostB = root(),
+    size = vi.fn()
+  const first = mountNativeTerminal(
+    'recover-a',
+    { id: 'recover-a', target: 'recovery-target' },
+    hostA,
+    size,
+    true
+  )
+  const oldA = f.views.at(-1)!
+  const second = mountNativeTerminal(
+    'recover-b',
+    { id: 'recover-b', target: 'recovery-target' },
+    hostB,
+    size
+  )
+  const oldB = f.views.at(-1)!,
+    stream = f.streams.at(-1)!,
+    count = f.connections.length
+  stream.hear()
+  stream.close()
+  expect(f.connections.length).toBe(count + 1)
+  const nextA = f.views.at(-2)!,
+    nextB = f.views.at(-1)!
+  expect(hostA.firstElementChild).toBe(nextA.element)
+  expect(hostB.firstElementChild).toBe(nextB.element)
+  expect(oldA.dispose).toHaveBeenCalledOnce()
+  expect(oldB.dispose).toHaveBeenCalledOnce()
+  const raw = f.connections.at(-1)!.open.mock.results[0].value
+  oldA.source.text('retired')
+  oldA.source.key({ code: 'KeyC', modifiers: 2 })
+  expect(
+    f.connections.at(-2)!.open.mock.results[0].value.text
+  ).not.toHaveBeenCalled()
+  expect(
+    f.connections.at(-2)!.open.mock.results[0].value.key
+  ).not.toHaveBeenCalled()
+  nextA.source.text('gated')
+  expect(raw.text).not.toHaveBeenCalled()
+  first.setInputBlocked(false)
+  nextA.source.text('current')
+  expect(raw.text).toHaveBeenCalledExactlyOnceWith('current')
+  first.focus()
+  expect(nextA.focus).toHaveBeenCalledOnce()
+  expect(oldA.focus).not.toHaveBeenCalled()
+  const retried = f.streams.at(-1)!
+  retried.hear()
+  retried.close()
+  expect(f.connections.length).toBe(count + 1)
+  nextA.source.text('disconnected')
+  expect(raw.text).toHaveBeenCalledTimes(1)
+  vi.advanceTimersByTime(1000)
+  expect(f.connections.length).toBe(count + 1)
+  first.detach()
+  second.detach()
+})
+it('does not reconnect an unanswered connection or a detached drawing', () => {
+  const unanswered = mountNativeTerminal(
+    'unanswered',
+    { id: 'unanswered', target: 'unanswered-target' },
+    root(),
+    vi.fn()
+  )
+  const count = f.connections.length
+  f.streams.at(-1)!.close()
+  expect(f.connections.length).toBe(count)
+  unanswered.detach()
+  const detached = mountNativeTerminal(
+    'detached-loss',
+    { id: 'detached-loss', target: 'detached-target' },
+    root(),
+    vi.fn()
+  )
+  const stream = f.streams.at(-1)!,
+    before = f.connections.length
+  detached.detach()
+  stream.hear()
+  stream.close()
+  expect(f.connections.length).toBe(before)
 })
