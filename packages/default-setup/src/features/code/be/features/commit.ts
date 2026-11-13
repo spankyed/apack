@@ -362,10 +362,10 @@ export const commitSystem = setup({
       const isImage = ev.path ? context.gitRepository!.isImageFile(ev.path) : false
       const getContent = isImage
         ? (p: string, v: 'HEAD' | 'working' | 'index') => context.gitRepository!.getFileContentAsDataUrl(p, v)
-        : (p: string, v: 'HEAD' | 'working' | 'index') => context.gitRepository!.getFileContent(p, v)
+        : (p: string, v: 'HEAD' | 'working' | 'index') => context.gitRepository!.readFileContent(p, v)
 
       // The editor draws the change from the file's two sides, so those are what is read: no patch is made
-      context.gitRepository!.getStatus().then(async (status) => {
+      context.gitRepository!.readStatus().then(async (status) => {
         const fileStatus = status.find(f => f.path === ev.path && f.staged === (ev.staged || false))
           // A file inside a folder listed as one row has no row of its own, and is untracked like the folder
           ?? (!ev.staged && ev.path && status.some(f => f.isDirectory && ev.path!.startsWith(f.path))
@@ -414,7 +414,7 @@ export const commitSystem = setup({
         }
 
         // The pieces of the change that can be staged one at a time, cut by git from the file as it is now
-        const hunks = ev.path && !isImage ? await context.gitRepository!.getHunks(ev.path, ev.staged || false) : []
+        const hunks = ev.path && !isImage ? await context.gitRepository!.readHunks(ev.path, ev.staged || false) : []
         // A conflicted file is shown as its three sides, in place of the markers git wrote into one file
         const sides = fileStatus?.status === 'unmerged' && ev.path && !isImage ? await context.gitRepository!.conflictSides(ev.path).catch(() => undefined) : undefined
         const conflict = sides && !sides.binary ? { base: sides.base, ours: sides.ours, theirs: sides.theirs } : undefined
@@ -463,7 +463,7 @@ export const commitSystem = setup({
 
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.getStatus().then((status) => {
+      context.gitRepository.readStatus().then((status) => {
         const allPaths = new Set(ev.paths)
         for (const p of ev.paths) {
           const fileStatus = status.find(f => f.path === p)
@@ -582,7 +582,7 @@ export const commitSystem = setup({
       const ev = event as { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.getStatus().then(async (status) => {
+      context.gitRepository.readStatus().then(async (status) => {
         const unmerged = status.filter(f => f.status === 'unmerged')
         for (const f of unmerged) {
           await context.gitRepository!.resolveConflict(f.path, ev.strategy)
@@ -683,7 +683,7 @@ export const commitSystem = setup({
 
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.getStagedFiles().then((stagedFiles) => {
+      context.gitRepository.readStagedFiles().then((stagedFiles) => {
         if (stagedFiles.length === 0) {
           answer(reply, {
             type: 'commit.ERROR_RECEIVED',
@@ -720,10 +720,10 @@ export const commitSystem = setup({
       })
     },
 
-    getCurrentBranch: ({ context, reply }) => {
+    readCurrentBranch: ({ context, reply }) => {
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.getCurrentBranch().then((branch) => {
+      context.gitRepository.readCurrentBranch().then((branch) => {
         answer(reply, {
           type: 'commit.BRANCH_RETRIEVED',
           data: { branch }
@@ -736,11 +736,11 @@ export const commitSystem = setup({
       })
     },
 
-    getAllBranches: ({ context, reply }) => {
+    readBranches: ({ context, reply }) => {
       if (!requireGitRepository(context, reply)) return
 
       const repo = context.gitRepository
-      Promise.all([repo.getAllBranches(), repo.refsModel().catch(() => undefined)]).then(([branches, refs]) => {
+      Promise.all([repo.readBranches(), repo.refsModel().catch(() => undefined)]).then(([branches, refs]) => {
         // Each local branch's standing, by the name the list gives it
         const standing = Object.fromEntries((refs?.branches ?? []).filter(branch => !branch.remote).map(({ name, upstream, upstreamGone, ahead, behind }) =>
           [name, { ...(upstream && { upstream }), ...(upstreamGone && { upstreamGone }), ahead, behind }]))
@@ -782,7 +782,7 @@ export const commitSystem = setup({
       if (!requireGitRepository(context, reply)) return
 
       let branchName: string
-      context.gitRepository.getCurrentBranch().then((currentBranch) => {
+      context.gitRepository.readCurrentBranch().then((currentBranch) => {
         branchName = currentBranch
         return context.gitRepository!.pushBranch(progressTo(reply, 'push'))
       }).then(() => {
@@ -810,9 +810,9 @@ export const commitSystem = setup({
     generateCommitMessage: ({ context, reply, client }) => {
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.getStagedFiles().then((stagedFiles) => {
+      context.gitRepository.readStagedFiles().then((stagedFiles) => {
         const staged = stagedFiles.length > 0
-        return context.gitRepository!.getDiff(undefined, staged)
+        return context.gitRepository!.readDiff(undefined, staged)
       }).then(async (diff) => {
         if (!diff.trim()) {
           answer(reply, {
@@ -824,7 +824,7 @@ export const commitSystem = setup({
 
         const truncatedDiff = diff.length > 40000 ? diff.substring(0, 40000) + '\n... (truncated)' : diff
 
-        const branch = await context.gitRepository!.getCurrentBranch()
+        const branch = await context.gitRepository!.readCurrentBranch()
         const repoDir = context.gitRepository!.getWorkingDir()
         const repoName = repoDir.split('/').pop() || ''
 
@@ -848,7 +848,7 @@ export const commitSystem = setup({
       if (!requireGitRepository(context, reply)) return
 
       let branchName: string
-      context.gitRepository.getCurrentBranch().then((currentBranch) => {
+      context.gitRepository.readCurrentBranch().then((currentBranch) => {
         branchName = currentBranch
         return context.gitRepository!.pullBranch(progressTo(reply, 'pull'))
       }).then(() => {
@@ -1171,7 +1171,7 @@ export const commitSystem = setup({
     getStashChanges: ({ event, context, reply }) => {
       const { index } = event as { type: 'commit.GET_STASH_CHANGES'; index: number }
       if (!requireGitRepository(context, reply)) return
-      context.gitRepository.stashChanges(index).then(
+      context.gitRepository.readStashChanges(index).then(
         files => answer(reply, { type: 'commit.STASH_CHANGES_RECEIVED', data: { index, files } }),
         (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
       )
@@ -1423,10 +1423,10 @@ export const commitSystem = setup({
           actions: 'undoLast'
         },
         'commit.GET_CURRENT_BRANCH': {
-          actions: 'getCurrentBranch'
+          actions: 'readCurrentBranch'
         },
         'commit.GET_ALL_BRANCHES': {
-          actions: 'getAllBranches'
+          actions: 'readBranches'
         },
         'commit.CHECKOUT_BRANCH': {
           actions: 'checkoutBranch'

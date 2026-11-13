@@ -116,7 +116,7 @@ export async function action(
     } else {
       const branchPR = await services.cli.gh.findPRForBranch();
       if (!branchPR) {
-        const branch = await services.cli.git.getCurrentBranch();
+        const branch = await services.cli.git.readCurrentBranch();
         if (threadId) {
           services.chat.sendBlockMessage({
             threadId,

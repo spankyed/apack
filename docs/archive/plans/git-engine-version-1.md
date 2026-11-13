@@ -1,8 +1,8 @@
 # The git engine's version 1, one pull request at a time
 
-Status: active, run by [its goal](../goals/goal-git-engine-version-1.md). As of 2026-11-12 pull requests 1 and 2
-have landed (apack #429 and #428), after [the engine's move to a repository of its own](../archive/plans/git-engine-own-repository.md),
-and so have the [five additions](../archive/plans/git-engine-additions.md) the rest waited on. The next is 3.
+Status: done 2026-11-12, run by [its goal](../goals/goal-git-engine-version-1.md), whose Outcome says what each item
+landed as. Pull requests 1 and 2 had landed before it (apack #429 and #428), after [the engine's move to a repository
+of its own](git-engine-own-repository.md) and the [five additions](git-engine-additions.md) the rest waited on.
 
 Compiled 2026-11-11 against the code feature as it stood in the working tree that day, with git 2.38.1 on
 macOS. Each pull request says under **Known** what was run, what was only read, and what is neither.
@@ -13,7 +13,7 @@ macOS. Each pull request says under **Known** what was run, what was only read, 
 developer or an agent opens, and the engine is never what breaks their git or loses their work.**
 
 Version 1 is a reviewed door, not a frozen one. The engine has one consumer, pinned by commit and changed
-with it ([CLAUDE.md](../../CLAUDE.md), "Backward compatibility"), and a freeze would protect nobody. It is
+with it ([CLAUDE.md](../../../CLAUDE.md), "Backward compatibility"), and a freeze would protect nobody. It is
 frozen and tagged when a second consumer exists that cannot move with it.
 
 ## Decided on 2026-11-12

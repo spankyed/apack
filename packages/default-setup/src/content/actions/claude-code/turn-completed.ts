@@ -179,7 +179,7 @@ export async function action(
     const paths = turn ? turn.changes.map(change => change.path) : Array.isArray(mutatedPaths) ? mutatedPaths : [];
     if (paths.length > 0) {
       log.debug('collecting diff for mutated files', { paths });
-      const unified = await services.cli.git.getDiff(paths);
+      const unified = await services.cli.git.readDiff(paths);
       const parsed = parseUnifiedDiff(unified);
       if (parsed.files.length > 0 || (turn?.changes.length ?? 0) > 0) {
         const diffTitle = deriveDiffTitle(parsed.files.length > 0 ? parsed.files : paths.map(path => ({ path })));

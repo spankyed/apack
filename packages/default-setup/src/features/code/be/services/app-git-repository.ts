@@ -181,7 +181,7 @@ export class AppGitRepository extends GitRepository {
    * git would use it. Nothing where there is no remote, or it is a path here.
    */
   async signInHelp(): Promise<SignInHelp | undefined> {
-    const address = await this.getRemoteUrl()
+    const address = await this.readRemoteUrl()
     return address ? signInHelpFor(address) : undefined
   }
 
@@ -295,11 +295,11 @@ export class AppGitRepository extends GitRepository {
     }
 
     // What the branch was made from is known where it was written down, and guessed from the commits otherwise
-    const current = await this.getCurrentBranch().catch(() => 'HEAD')
+    const current = await this.readCurrentBranch().catch(() => 'HEAD')
     const remembered = current === 'HEAD' ? undefined : await this.rememberedBaseOf(current).catch(() => undefined)
     if (remembered) return keep(remembered)
 
-    const defaultBase = await this.getBaseBranch({ preferUpstream: false })
+    const defaultBase = await this.findBaseBranch({ preferUpstream: false })
 
     // Try to find a closer parent branch via merge-base distance
     try {
@@ -318,10 +318,10 @@ export class AppGitRepository extends GitRepository {
    * smaller commit distance than main/master.
    */
   private async findClosestParentBranch(defaultBase: string): Promise<string | null> {
-    const currentBranch = await this.getCurrentBranch()
+    const currentBranch = await this.readCurrentBranch()
 
     // Only check branches whose tip is within recent commits AND merged into HEAD
-    const candidates = await this.getNearbyMergedBranches(PARENT_BRANCH_SEARCH_DEPTH)
+    const candidates = await this.findNearbyMergedBranches(PARENT_BRANCH_SEARCH_DEPTH)
     const filtered = candidates.filter(b =>
       b !== currentBranch && b !== defaultBase && b !== 'HEAD'
     )
@@ -329,8 +329,8 @@ export class AppGitRepository extends GitRepository {
 
     // For merged branches, tip = merge-base, so rev-list --count <branch>..HEAD gives distance directly
     const [defaultDistance, ...distances] = await Promise.all([
-      this.getCommitDistance(defaultBase),
-      ...filtered.map(b => this.getCommitDistance(b)),
+      this.readCommitDistance(defaultBase),
+      ...filtered.map(b => this.readCommitDistance(b)),
     ])
 
     if (defaultDistance === undefined || defaultDistance <= 0) return null
@@ -358,9 +358,9 @@ export class AppGitRepository extends GitRepository {
   async getFileContentAsDataUrl(filePath: string, version: 'HEAD' | 'working' | 'index' = 'working'): Promise<string> {
     const mimeType = getImageMimeType(filePath)
     if (!mimeType) {
-      return this.getFileContent(filePath, version)
+      return this.readFileContent(filePath, version)
     }
-    const buffer = await this.getFileBytes(filePath, version)
+    const buffer = await this.readFileBytes(filePath, version)
     if (!buffer || (version !== 'working' && buffer.length === 0)) return ''
     return `data:${mimeType};base64,${buffer.toString('base64')}`
   }
@@ -369,10 +369,10 @@ export class AppGitRepository extends GitRepository {
   async getFileContentFromBranchAsDataUrl(filePath: string, branch: string): Promise<string> {
     const mimeType = getImageMimeType(filePath)
     if (!mimeType) {
-      return this.getFileContentFromBranch(filePath, branch)
+      return this.readFileContentFromBranch(filePath, branch)
     }
     try {
-      const buffer = await this.getFileBytesFromBranch(filePath, branch)
+      const buffer = await this.readFileBytesFromBranch(filePath, branch)
       if (!buffer || buffer.length === 0) return ''
       return `data:${mimeType};base64,${buffer.toString('base64')}`
     } catch (error) {

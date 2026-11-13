@@ -43,6 +43,16 @@ Three things keep the two apart:
 - **It is pinned by commit and both halves move together.** A change to the engine is a commit there and the
   pin moved in the change here that uses it. There is no version to bump and nothing kept for compatibility.
 
+## The door
+
+The engine's entries are `apack-git`, `apack-git/staging` and `apack-git/availability`; the last two import nothing
+of Node's, so a window can use them. Its `REFERENCE.md` is every export with its comment and signature, generated
+from the source, and its CI fails on a difference or on an export or public member no spec uses. Reads are named
+`read*` (`readStatus`, `readDiff`, `readBranches`, `readStashChanges`) and searches `find*` (`findBaseBranch`), by
+this repository's naming rules. `examples/news.mjs` there is a host in thirty lines, printing a folder's news as it
+happens, and the diagnostic for a watch. What is supported is Linux, macOS and Windows, Node 24.12 or later and git
+from 2.35.0 to the newest, which is what its CI runs.
+
 ## Which git, and when it cannot be used
 
 **The app decides where git is; the engine decides whether it can be used.** The app hands the engine a path
@@ -122,7 +132,7 @@ and the editor shows them in place of the markers, with the side to take.
 
 `lineCounts()` is git's own count of the lines each changed file adds and removes (`--numstat`), staged and not, one
 command a side; the commit panel's status answer carries it (`counts`, for up to 500 changed files) and each row
-shows it. `changesIn(commit)` and `stashChanges(index)` list what a commit or a stash changed with the same counts; a
+shows it. `changesIn(commit)` and `readStashChanges(index)` list what a commit or a stash changed with the same counts; a
 stash in the panel's list opens to show its files before it is applied (`commit.GET_STASH_CHANGES`).
 
 ## History that can be drawn

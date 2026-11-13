@@ -7,7 +7,7 @@ Windows at the pinned commit, holds at `84d652c`.
 
 What is added to the engine now that it has moved is
 [five additions to the git engine](git-engine-additions.md), and after it
-[version 1](../../plans/git-engine-version-1.md).
+[version 1](git-engine-version-1.md).
 
 Compiled 2026-11-11 from `master` at `292ff4a3dd`. File names, line counts and what other packages do are as
 of that day: read them again before starting.
