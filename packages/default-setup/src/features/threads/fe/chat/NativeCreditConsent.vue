@@ -33,6 +33,6 @@ function operate(operation:ClaudeSettingsOperation){
 onBeforeUnmount(()=>{if(root.value?.contains(document.activeElement)&&previous instanceof HTMLElement&&previous.isConnected)previous.focus({preventScroll:true})})
 </script>
 <style scoped>
-.native-credit-consent { min-height: 0; }
-.native-credit-consent :deep(.native-credit-panel) { margin: 0 0 8px; flex: none; max-height: min(32rem, 55vh); }
+.native-credit-consent { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+.native-credit-consent :deep(.native-credit-panel) { margin: 0 0 8px; flex: 1; max-height: none; }
 </style>
