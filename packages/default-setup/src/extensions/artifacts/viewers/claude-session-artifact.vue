@@ -37,7 +37,7 @@
         v-if="content.sessionError"
         class="px-3 py-2 bg-red-950/40 border-b border-red-900/50 text-xs text-red-300"
       >
-        {{ content.sessionError }}
+        {{ describeClaudeUiProblem(content.sessionError) }}
       </div>
 
       <!-- Goal status -->
@@ -284,6 +284,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { describeClaudeUiProblem } from '#features/code/common/native-ui-problem.ts'
 import { Wrench, Copy, Check, MessageSquare, ChevronDown } from 'lucide-vue-next'
 import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent } from 'reka-ui'
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'

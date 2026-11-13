@@ -1,7 +1,7 @@
 <template>
   <div v-for="shown in [frame]" :key="shown?.messageId" class="question-drawing" tabindex="-1" @keydown="key" @pointerover="hover.point" @pointermove="hover.point" @pointerleave="hover.leave">
     <NativeUiNode v-if="shown?.body.status === 'live' && shown.shownInput && shown.token" :node="shown.body.tree" @press="(id, href) => emit('press', id, href)" @field="emit('field', $event)">
-      <template #engine><NativeQuestionPanel :key="shown.messageId" :card="shown.shownInput" :presentation="shown.presentation" :render-token="shown.token" :cancel-label="cancelLabel" :can-reject="canReject" @reject="reject(shown)" :disabled="disabled || !!shown.pending" :error="error ?? shown.problem" @started="token => started(shown, token)" @respond="answer => respond(shown, answer)" @pause="pause(shown)" /></template>
+      <template #engine><NativeQuestionPanel :key="shown.messageId" :card="shown.shownInput" :presentation="shown.presentation" :render-token="shown.token" :cancel-label="cancelLabel" :can-reject="canReject" @reject="reject(shown)" :disabled="disabled || !!shown.pending" :pending="!!shown.pending" :error="error ?? shown.problem" @started="token => started(shown, token)" @respond="answer => respond(shown, answer)" @pause="pause(shown)" /></template>
     </NativeUiNode>
     <section v-else role="status" class="p-4 text-xs text-neutral-400">{{ shown?.body.status === 'error' ? shown.body.message : 'Loading native question…' }}</section>
   </div>

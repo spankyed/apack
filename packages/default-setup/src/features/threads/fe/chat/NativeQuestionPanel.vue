@@ -2,8 +2,8 @@
   <section class="native-question-panel" aria-label="Claude Code questions" data-testid="native-question-panel">
     <header><span>Question {{ step + 1 }} of {{ parsed?.questions.length ?? '?' }}</span><strong>{{ parsed?.title || current?.header || 'Claude Code' }}</strong></header>
     <div v-if="!parsed || !current" class="body">This question format needs the native interface. Use “Use native interface” above to continue.</div>
-    <div v-else class="body" :key="step" tabindex="0" aria-label="Question details">
-      <p v-if="error" role="alert">{{ error }}</p>
+    <div v-else class="body" :key="step" tabindex="0" role="group" aria-label="Question details" :aria-busy="pending || undefined">
+      <p v-if="displayError" role="alert" class="problem">{{ displayError }}</p>
       <h2>{{ current.question }}</h2>
       <p v-if="current.description" class="muted">{{ current.description }}</p>
       <template v-if="!current.kind || current.kind === 'choice'">
@@ -29,7 +29,10 @@
     </div>
     <p v-if="props.presentation?.notice" class="native-tool-notice" role="note">{{ props.presentation.notice }}</p>
     <footer>
-      <button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">{{ cancelLabel ?? 'Cancel' }}</button>
+      <div class="decision-status">
+        <button type="button" class="quiet" :disabled="disabled" @click="$emit('pause')">{{ cancelLabel ?? 'Cancel' }}</button>
+        <span v-if="pending" role="status" class="muted">Waiting for Claude…</span>
+      </div>
       <div class="navigation">
         <button v-if="canReject" type="button" :disabled="disabled" @click="emit('reject')">Reject question</button>
         <button v-if="step > 0" type="button" :disabled="disabled" @click="step--">Back</button>
@@ -43,10 +46,13 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, shallowRef, watch } from 'vue'
+import { describeClaudeUiProblem } from '#features/code/common/native-ui-problem.ts'
 import NativeQuestionHtmlPreview from './NativeQuestionHtmlPreview.vue'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import { ClaudeQuestionCardSchema, type ClaudeQuestionAnswer, type ClaudeQuestionPresentation } from '#features/code/common/native-question.ts'
-const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; canReject?: boolean; disabled: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
+const props = defineProps<{ card: Record<string, unknown>; cancelLabel?: string; canReject?: boolean; disabled: boolean; pending?: boolean; error?: string; presentation?: ClaudeQuestionPresentation; renderToken?: string }>()
+const disabled = computed(() => props.disabled || props.pending === true)
+const displayError = computed(() => describeClaudeUiProblem(props.error, 'decision'))
 const emit = defineEmits<{ respond: [answer: ClaudeQuestionAnswer]; started: [token?: string]; pause: []; reject: [] }>()
 const answering = ref(false), acceptedCard = shallowRef(props.card), acceptedPresentation = shallowRef(props.presentation), acceptedToken = ref(props.renderToken)
 watch(() => [JSON.stringify(props.card), props.presentation, props.renderToken], () => {
@@ -70,7 +76,7 @@ const selectedOption = computed(() => current.value?.options.find(option => stat
 const selectedPreview = computed(() => current.value && selectedOption.value ? previewFor(current.value.question, selectedOption.value.label, selectedOption.value.preview) : undefined)
 const previewWithheld = computed(() => current.value && selectedOption.value && viewPresentation.value?.previews.some(item => item.question === current.value!.question && item.option === selectedOption.value!.label && item.kind === 'withheld'))
 function choose(label: string) {
-  if (props.disabled || !current.value) return
+  if (disabled.value || !current.value) return
   markStarted()
   const draft = state.value
   draft.custom = ''
@@ -78,7 +84,7 @@ function choose(label: string) {
 }
 function setNumber(event: Event) { markStarted(); state.value.custom = (event.target as HTMLInputElement).value; state.value.selected = [] }
 function submit(followUp = false) {
-  if (!parsed.value || props.disabled) return
+  if (!parsed.value || disabled.value) return
   markStarted()
   const answers: NonNullable<ClaudeQuestionAnswer['answers']> = {}, annotations: NonNullable<ClaudeQuestionAnswer['annotations']> = {}
   parsed.value.questions.forEach((question, index) => {
@@ -92,13 +98,13 @@ function submit(followUp = false) {
   emit('respond', { answers, annotations, ...(generalResponse.value.trim() ? { response: generalResponse.value.trim() } : {}), ...(followUp ? { followUp: true } : {}) })
 }
 function advance() {
-  if (props.disabled || !parsed.value || numberInput.value && !numberInput.value.reportValidity()) return
+  if (disabled.value || !parsed.value || numberInput.value && !numberInput.value.reportValidity()) return
   markStarted()
   if (step.value + 1 < parsed.value.questions.length) step.value++
   else submit()
 }
 function skip() {
-  if (props.disabled || !parsed.value) return
+  if (disabled.value || !parsed.value) return
   state.value.selected = []; state.value.custom = ''; state.value.notes = ''
   markStarted()
   if (step.value + 1 < parsed.value.questions.length) step.value++
@@ -123,6 +129,9 @@ textarea, input[type=number] { width:100%; padding:7px 9px; border:1px solid #55
 textarea { resize:vertical; } details { margin-top:10px; } summary { cursor:pointer; margin-bottom:5px; }
 pre { white-space:pre-wrap; overflow-wrap:anywhere; padding:8px; background:#191919; border-radius:6px; font-size:11px; }
 footer { display:flex; flex:none; justify-content:space-between; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid rgb(255 255 255 / .07); }
+.decision-status { display:flex; align-items:center; gap:8px; min-width:0; }
+.decision-status [role=status] { white-space:nowrap; }
+.problem { margin:0 0 12px; padding:8px 10px; border:1px solid #555; border-radius:6px; }
 .navigation { display:flex; gap:6px; } button { border-radius:6px; padding:7px 10px; font-size:12px; background:#3b3b3b; cursor:pointer; }
 button.primary { background:#e5e5e5; color:#202020; } button.quiet { background:transparent; color:#aaa; } button:disabled { opacity:.5; cursor:default; }
 button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible { outline:2px solid #93c5fd; outline-offset:2px; }
