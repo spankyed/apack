@@ -242,6 +242,8 @@ export interface BrokerSession {
   commandOutput(command: number): Promise<string | null>;
   /** Whether the session outlives the app's hold on the broker */
   keep(kept: boolean): Promise<void>;
+  /** The cursor a program returns to on a reset, as the broker's default (`SetCursorDefaults`). No reply */
+  setCursorDefaults(style: 'block' | 'bar' | 'underline', blink: 'on' | 'off' | 'program'): Promise<void>;
   kill(): Promise<void>;
 }
 
@@ -908,6 +910,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         connection.send({ kind: 'keep', session: id, kept });
         await connection.next(event => event.kind === 'kept' && event.session === id, { session: id });
       },
+      async setCursorDefaults(style, blink) { connection.send({ kind: 'set_cursor_defaults', session: id, style, blink }); },
       async kill() { connection.send({ kind: 'kill', session: id }); },
   });
 

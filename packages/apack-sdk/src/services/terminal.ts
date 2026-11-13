@@ -151,6 +151,18 @@ export interface TerminalColors {
   readonly ansi: readonly TerminalColor[];
 }
 
+/**
+ * The shape a session's cursor is drawn in by default, which a program changes with DECSCUSR and a reset returns to.
+ * The inactive shape a view draws when it does not have the keyboard is the window's own, not the session's.
+ */
+export type TerminalCursorStyle = 'block' | 'bar' | 'underline';
+
+/**
+ * Whether a session's cursor blinks when no program has chosen (`on` and `program` blink by default; `off` is steady).
+ * `on` and `off` also override what a program asks in a window; `program` leaves it to the program.
+ */
+export type TerminalCursorBlink = 'on' | 'off' | 'program';
+
 /** One cell in pixels */
 export interface TerminalCellSize {
   readonly width: number;
@@ -223,6 +235,11 @@ export interface TerminalSession {
    * the last one given stands.
    */
   resize(cols: number, rows: number, cell?: TerminalCellSize): Promise<void>;
+  /**
+   * The cursor a program starts with and returns to on a reset. A program's own choice (DECSCUSR) holds until it
+   * resets, so this sets the default and does not override the program.
+   */
+  setCursorDefaults(style: TerminalCursorStyle, blink: TerminalCursorBlink): Promise<void>;
   /**
    * What the shell has reported about itself, as the host parsed it.
    *
