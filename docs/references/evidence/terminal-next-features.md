@@ -197,6 +197,15 @@ remaining limit, that two different bells with the same text within a second sho
 - Mutation: the main dedupe keyed on the text again fails the two-tags test. The frontend passing no tag fails the
   bridge-call tests. Each file was restored from a copy under the scratchpad and `cmp` reports it identical.
 
+### Bell notification gate (commit 5744db8e24)
+
+Two gates, both on the terminal's state (`features/terminal/state.ts`):
+
+- Flash: 500 ms (`BELL_WINDOW_MS`). A bell inside it is the same bell and paints nothing new. The 150 ms flash is unchanged.
+- Notification: 1 s per terminal (`BELL_NOTIFY_WINDOW_MS`). A notification is asked for only when the window is unfocused and the setting is on, and only if no notification for that terminal is inside its 1 s window.
+
+Limit: a bell inside the 1 s notification window is not notified, and nothing notifies it later. There is no trailing or queued notification.
+
 ## Phase 3 — cursor style and blink (2026-11-12)
 
 Broker commits on `session/next-features-broker` (worktree `apack-terminal-worktrees.noindex/next-features`, on top of
