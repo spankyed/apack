@@ -69,7 +69,7 @@ describe.skipIf(!BINARY)('when the broker is gone', () => {
     await client.open({ cols: 80, rows: 24 }, first.listeners);
     await client.open({ cols: 80, rows: 24 }, second.listeners);
 
-    broker.kill();
+    await broker.kill();
 
     await first.told('the first session to be reported exited when the broker died');
     await second.told('the second session to be reported exited when the broker died');
@@ -89,7 +89,7 @@ describe.skipIf(!BINARY)('when the broker is gone', () => {
     client.onGone(() => { forgotten += 1; notify(); });
     await client.open({ cols: 80, rows: 24 }, listener().listeners);
 
-    broker.kill();
+    await broker.kill();
 
     await _whenSatisfied(
       (tell) => { notify = tell; return () => { notify = () => {}; }; },

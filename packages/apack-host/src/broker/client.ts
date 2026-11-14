@@ -1057,6 +1057,9 @@ function ready(process_: ChildProcess, stderr: string[], startMs = BROKER_START_
     // `holdBrokerSessions` buy nothing in whichever process won the start.
     const settle = (run: () => void) => { clearTimeout(deadline); lines.close(); run(); };
     const fail = (why: string) => settle(() => reject(new Error(said(why))));
+    // The reader re-emits whatever its input raises on its own `error`, as `frames` explains, and one with
+    // no listener throws out of the event loop rather than refusing this start
+    lines.on('error', error => fail(`the broker's output could not be read (${error.message})`));
     // What a broker that will not listen says before it exits, which is why it will not
     let refused: string | undefined;
     lines.once('line', line => {
@@ -1105,6 +1108,11 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
   // handshake is the case — and an unhandled one on a `net.Socket` ends the process. What a connection does
   // about a failure it reports through `close`, which refuses every waiter below
   socket.on('error', () => {});
+  // **And on the reader, which re-emits every error its input raises.** `createInterface` forwards the
+  // socket's `error` to the interface's own, so a listener on the socket alone still leaves one with none:
+  // a `write` racing a broker that has just exited — accepted, then gone before the greeting — raises
+  // `EPIPE` there, and that throws out of the event loop instead of ending this connection through `close`
+  lines.on('error', () => {});
 
   lines.on('line', line => {
     if (line.trim() === '') return;

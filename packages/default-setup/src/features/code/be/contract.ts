@@ -332,7 +332,8 @@ export type OutgoingTerminalEvents =
    * text reaches their clipboard, whether a notification is worth their attention.
    */
   | { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
-  | { type: 'terminal.BELL'; data: { terminalId: string } }
+  // `bellId` names this one bell: every window receives it, and a notification for it is shown once across them
+  | { type: 'terminal.BELL'; data: { terminalId: string; bellId: string } }
   | { type: 'terminal.NOTIFIED'; data: { terminalId: string; title: string; body: string } }
   /** How far along the program says it is; `percent` is `null` where it gave none, and `none` clears it */
   | { type: 'terminal.PROGRESS'; data: { terminalId: string; state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; percent: number | null } }

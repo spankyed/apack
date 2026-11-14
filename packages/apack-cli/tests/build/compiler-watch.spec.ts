@@ -346,7 +346,10 @@ describe('what a package build reads', () => {
   it.each(['apack-testing', 'apack-cli'])('makes an edit under %s fire in this checkout, and a write to its dist not', pkg => {
     const paths = packageInputWatchPaths(Object.values(buildUnitsIn(REPO_ROOT)));
     const fires = createCompilerWatchMatcher(paths);
-    const source = fs.readdirSync(path.join(REPO_ROOT, 'packages', pkg, 'src'), { withFileTypes: true }).find(entry => entry.isFile())!;
+    // A module and not any file: a Mac drops an ignored `.DS_Store` into a folder Finder has shown, which sorts
+    // first and is rightly no input
+    const source = fs.readdirSync(path.join(REPO_ROOT, 'packages', pkg, 'src'), { withFileTypes: true })
+      .find(entry => entry.isFile() && entry.name.endsWith('.ts'))!;
     expect(fires(path.join(REPO_ROOT, 'packages', pkg, 'src', source.name), 'change')).toBe(true);
     expect(fires(path.join(REPO_ROOT, 'packages', pkg, 'dist/package/package.json'), 'change')).toBe(false);
   });

@@ -196,9 +196,13 @@ condition before proceeding, and record the outcome.
 - **D3 — Search matches are capped at 1000 (xterm's `highlightLimit`).** Beyond the cap, the count reads "1000+"
   and navigation still works. *Why:* the cap bounds the paint and the search cost; a user who needs the 1001st
   match is rare, and "1000+" says so.
-- **D4 — OSC 8 links open only `http`, `https` and `mailto` by default.** Any other scheme, and every `file://` link,
-  asks for confirmation through the main process. A `file://` link without a host is refused outright. *Why:* ghostty
-  1.4 shows the crafted-link risk; a confirmation is cheap and the refusal is exact.
+- **D4 — OSC 8 links open only `http`, `https` and `mailto` by default.** Any other scheme asks for confirmation
+  through the main process, except `javascript:`, `data:` and `vbscript:`, which are refused outright. A `file://`
+  link is refused, with or without a host. *Why:* ghostty 1.4 shows the crafted-link risk. The three refused schemes
+  run or display code, and no program's link needs one. A `data:` URL can carry a whole page that the confirmation
+  cannot show in full, so asking would only ask the person to approve text they cannot read. Refusing costs nothing
+  today; if a real use appears, a per-scheme allow-list in settings is the way to add one. *Revised during Phase 4
+  review:* the original text asked for all three.
 - **D5 — Synchronized output has a timeout of 150 ms.** *Revised in Phase 0:* the broker already owns the hold and its one-second limit (`src/holds.rs`, `HOLD_LIMIT`), and that limit is tested. The view adds no second clock. Phase 1 measures the limit and records whether it stays at one second. The original text follows. When a program sets mode 2026 and does not reset it within
   150 ms of its last write, the view resumes painting. *Why:* the specification gives no value, and says a too-short
   timeout is no worse than none. 150 ms is long enough that a slow program rarely flickers and short enough that a
@@ -299,8 +303,8 @@ it finishes. A phase is not finished until its evidence section is written.
 - **Deliverable:**
   - A declared OSC 8 link is underlined on hover, groups by `id` so a wrapped link hovers as one, and opens on
     modifier-click (Cmd on macOS, Ctrl elsewhere).
-  - The main process opens the link under D4: `http`, `https`, `mailto` open directly; any other scheme or any
-    `file://` link asks first; `file://` without a host is refused.
+  - The main process opens the link under D4: `http`, `https`, `mailto` open directly; any other scheme asks first,
+    except `javascript:`, `data:` and `vbscript:`, which are refused; every `file://` link is refused.
   - A setting for link previews: off, on for all links, or OSC 8 only (ghostty's `osc8` value). Default: OSC 8 only.
 - **Read first:** `view/src/links.ts:4-20`, `38`; `view/src/view.ts:81`; `rows.rs:364-365` and `473-484`.
 - **Dependencies:** Phase 3.

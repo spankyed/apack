@@ -405,7 +405,7 @@ export interface _HostBridge {
     };
     // (undocumented)
     notify: {
-        show: (title: string, body: string) => Promise<boolean>;
+        show: (title: string, body: string, tag?: string) => Promise<boolean>;
     };
     // (undocumented)
     performance: {

@@ -32,7 +32,7 @@ let started: StartedBroker | undefined;
 afterEach(async () => {
   await service?.shutdown();
   service = undefined;
-  started?.kill();
+  await started?.kill();
   started = undefined;
 });
 

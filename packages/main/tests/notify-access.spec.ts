@@ -2,7 +2,7 @@
 // is the main process's, so the test reads what was shown rather than whether a call was made.
 import {beforeEach, describe, expect, it} from 'vitest';
 import {ipcMain, notifications, resetElectronStub} from './electron-stub.ts';
-import {MAX_NOTIFICATION_BODY, MAX_NOTIFICATION_TITLE, notificationProblem, registerNotifyHandler, showNotification} from '../src/modules/notify-access.ts';
+import {MAX_NOTIFICATION_BODY, MAX_NOTIFICATION_TAG, MAX_NOTIFICATION_TITLE, TAG_MEMORY_MS, notificationProblem, registerNotifyHandler, showNotification} from '../src/modules/notify-access.ts';
 
 beforeEach(() => resetElectronStub());
 
@@ -57,36 +57,50 @@ describe('what a bell may show as a system notification', () => {
     expect(notifications.shown).toEqual([{title: 'Terminal', body: 'Rang the bell'}]);
   });
 
+  it('refuses a tag that is not text, or longer than the title may be', () => {
+    expect(notificationProblem('Terminal', 'body', 42)).toMatch(/tag is not text/);
+    expect(notificationProblem('Terminal', 'body', 'x'.repeat(MAX_NOTIFICATION_TAG + 1))).toMatch(/tag is longer than/);
+    expect(notificationProblem('Terminal', 'body', undefined)).toBeUndefined();
+    expect(notificationProblem('Terminal', 'body', 'bell:1')).toBeUndefined();
+  });
+
   describe('one notification for one bell, however many windows heard it', () => {
-    // Every unfocused window asks for the same bell; the handler is the one place they meet.
+    // Every unfocused window asks for the same bell with the bell's id as its tag; the handler is the one place they meet.
     let at = 0;
-    const askAt = (time: number, title: unknown, body: unknown): unknown => {
+    const askAt = (time: number, title: unknown, body: unknown, tag?: unknown): unknown => {
       at = time;
-      return ipcMain.handlers.get('notify:show')!({}, title, body);
+      return ipcMain.handlers.get('notify:show')!({}, title, body, tag);
     };
     beforeEach(() => {
       at = 0;
       registerNotifyHandler(ipcMain, () => at);
     });
 
-    it('shows two identical asks inside the window as one notification', () => {
-      expect(askAt(0, 'Terminal', 'Rang the bell')).toBe(true);
-      expect(askAt(400, 'Terminal', 'Rang the bell')).toBe(false);
+    it('shows the same tag asked from two windows as one notification', () => {
+      expect(askAt(0, 'Terminal', 'Rang the bell', 't-1#1')).toBe(true);
+      expect(askAt(400, 'Terminal', 'Rang the bell', 't-1#1')).toBe(false);
       expect(notifications.shown).toEqual([{title: 'Terminal', body: 'Rang the bell'}]);
     });
 
-    it('shows an ask with different text inside the window', () => {
-      expect(askAt(0, 'Terminal', 'Rang the bell')).toBe(true);
-      expect(askAt(400, 'Terminal', 'Another bell')).toBe(true);
+    it('shows two different tags with the same title and body, both', () => {
+      expect(askAt(0, 'Terminal', 'Rang the bell', 't-1#1')).toBe(true);
+      expect(askAt(400, 'Terminal', 'Rang the bell', 't-1#2')).toBe(true);
       expect(notifications.shown).toEqual([
         {title: 'Terminal', body: 'Rang the bell'},
-        {title: 'Terminal', body: 'Another bell'},
+        {title: 'Terminal', body: 'Rang the bell'},
       ]);
     });
 
-    it('shows an identical ask after the window has passed', () => {
+    it('shows an ask with no tag every time', () => {
       expect(askAt(0, 'Terminal', 'Rang the bell')).toBe(true);
-      expect(askAt(1000, 'Terminal', 'Rang the bell')).toBe(true);
+      expect(askAt(0, 'Terminal', 'Rang the bell')).toBe(true);
+      expect(notifications.shown).toHaveLength(2);
+    });
+
+    it('shows a tag again once it is older than TAG_MEMORY_MS, and not before', () => {
+      expect(askAt(0, 'Terminal', 'Rang the bell', 't-1#1')).toBe(true);
+      expect(askAt(TAG_MEMORY_MS - 1, 'Terminal', 'Rang the bell', 't-1#1')).toBe(false);
+      expect(askAt(TAG_MEMORY_MS, 'Terminal', 'Rang the bell', 't-1#1')).toBe(true);
       expect(notifications.shown).toHaveLength(2);
     });
   });

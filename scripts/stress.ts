@@ -41,33 +41,48 @@ while (argv[0] === '--runs' || argv[0] === '--busy') {
   const [flag, value] = argv.splice(0, 2);
   own[flag!.slice(2)] = value;
 }
-const runs = asNumber(own.runs, 'runs') ?? 3;
-// Half the cores by default: enough contention to stretch every wait, and room left for the command itself
-const busy = asNumber(own.busy, 'busy') ?? Math.max(1, Math.floor(os.availableParallelism() / 2));
-const [command, ...args] = argv.length > 0 ? argv : DEFAULT_COMMAND;
-
-fs.mkdirSync(OUTPUT_DIR, { recursive: true });
-const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-console.log(`stress: ${[command, ...args].join(' ')}, ${runs} run(s) under ${busy} busy core(s)`);
-
-const burners = new AbortController();
-startBurners(busy, burners.signal);
-let failed = 0;
-try {
-  for (let run = 1; run <= runs; run += 1) {
-    const result = await boundedSpawn(command!, args, BURNER_CEILING_MS);
-    const file = path.join(OUTPUT_DIR, `${stamp}-${run}.log`);
-    fs.writeFileSync(file, result.output);
-    const verdict = result.code === 0 ? 'passed' : `FAILED (exit ${result.code})`;
-    console.log(`  run ${run}/${runs}: ${verdict} in ${Math.round(result.ms / 1000)}s — ${path.relative(process.cwd(), file)}`);
-    if (result.code !== 0) {
-      failed += 1;
-      // Said here as well as kept: the file may not outlive the run (a container's is gone when it exits)
-      console.log(failureOf(result.output).map((line) => `    ${line}`).join('\n'));
-    }
-  }
-} finally {
-  burners.abort();
+// A leading flag that is not one of its own is not a command either: run, it fails every time with `spawn
+// --help ENOENT`, which reads as N failures under load rather than as a mistyped invocation
+const USAGE = 'usage: npm run stress -- [--runs N] [--busy K] [command…]  (default: the host unit pool, --all)';
+if (argv[0] === '--help' || argv[0] === '-h') {
+  console.log(USAGE);
+} else if (argv[0]?.startsWith('-')) {
+  console.error(`stress: unknown option ${argv[0]}\n${USAGE}`);
+  process.exitCode = 2;
+} else {
+  process.exitCode = await stress();
 }
-console.log(failed === 0 ? `stress: every run passed under load` : `stress: ${failed} of ${runs} run(s) failed under load`);
-process.exitCode = failed === 0 ? 0 : 1;
+
+/** Runs the command under load, returning the exit code this script answers with */
+async function stress(): Promise<number> {
+  const runs = asNumber(own.runs, 'runs') ?? 3;
+  // Half the cores by default: enough contention to stretch every wait, and room left for the command itself
+  const busy = asNumber(own.busy, 'busy') ?? Math.max(1, Math.floor(os.availableParallelism() / 2));
+  const [command, ...args] = argv.length > 0 ? argv : DEFAULT_COMMAND;
+
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  console.log(`stress: ${[command, ...args].join(' ')}, ${runs} run(s) under ${busy} busy core(s)`);
+
+  const burners = new AbortController();
+  startBurners(busy, burners.signal);
+  let failed = 0;
+  try {
+    for (let run = 1; run <= runs; run += 1) {
+      const result = await boundedSpawn(command!, args, BURNER_CEILING_MS);
+      const file = path.join(OUTPUT_DIR, `${stamp}-${run}.log`);
+      fs.writeFileSync(file, result.output);
+      const verdict = result.code === 0 ? 'passed' : `FAILED (exit ${result.code})`;
+      console.log(`  run ${run}/${runs}: ${verdict} in ${Math.round(result.ms / 1000)}s — ${path.relative(process.cwd(), file)}`);
+      if (result.code !== 0) {
+        failed += 1;
+        // Said here as well as kept: the file may not outlive the run (a container's is gone when it exits)
+        console.log(failureOf(result.output).map((line) => `    ${line}`).join('\n'));
+      }
+    }
+  } finally {
+    burners.abort();
+  }
+  console.log(failed === 0 ? `stress: every run passed under load` : `stress: ${failed} of ${runs} run(s) failed under load`);
+  return failed === 0 ? 0 : 1;
+}

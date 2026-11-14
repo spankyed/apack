@@ -8,13 +8,22 @@ import {Notification, type IpcMain} from 'electron';
 export const MAX_NOTIFICATION_TITLE = 200;
 /** The longest body a notification may carry, refused rather than cut for the same reason as the title */
 export const MAX_NOTIFICATION_BODY = 1000;
+/** The longest tag an ask may carry: the same rule as the title, refused rather than cut */
+export const MAX_NOTIFICATION_TAG = MAX_NOTIFICATION_TITLE;
 
-/** Why a notification with this title and body may not be shown, or undefined when it may */
-export function notificationProblem(title: unknown, body: unknown): string | undefined {
+/**
+ * Why a notification with this title, body and tag may not be shown, or undefined when it may. The tag is optional;
+ * an absent one is `undefined`, and a present one must be text of at most `MAX_NOTIFICATION_TAG` characters.
+ */
+export function notificationProblem(title: unknown, body: unknown, tag?: unknown): string | undefined {
   if (typeof title !== 'string') return 'its title is not text';
   if (typeof body !== 'string') return 'its body is not text';
   if (title.length > MAX_NOTIFICATION_TITLE) return `its title is longer than ${MAX_NOTIFICATION_TITLE} characters`;
   if (body.length > MAX_NOTIFICATION_BODY) return `its body is longer than ${MAX_NOTIFICATION_BODY} characters`;
+  if (tag !== undefined) {
+    if (typeof tag !== 'string') return 'its tag is not text';
+    if (tag.length > MAX_NOTIFICATION_TAG) return `its tag is longer than ${MAX_NOTIFICATION_TAG} characters`;
+  }
   return undefined;
 }
 
@@ -27,29 +36,31 @@ export function showNotification(title: unknown, body: unknown): boolean {
 }
 
 /**
- * The window within which a notification with the same title and body is shown once. Every window showing the code
- * surface receives a terminal's bell, so one bell reaches this handler once per unfocused window; the first ask shows
- * and the repeats inside this window show nothing. Identity is the text alone, so two different bells with the same
- * text inside the window show once.
+ * How long a shown tag is remembered. Every window showing the code surface receives a terminal's bell, so one bell
+ * reaches the handler once per unfocused window, each with the same tag; a tag shown within this window is not shown
+ * again. Past it the tag is forgotten, so the set holds only the tags shown in the last minute. The bound is time
+ * rather than a count: a bell is a human-scale event, and a program that rings faster than this is not one the
+ * person can read anyway.
  */
-export const DUPLICATE_NOTIFICATION_WINDOW_MS = 1000;
+export const TAG_MEMORY_MS = 60_000;
 
 /**
- * Answers the window's `notify:show` request with `showNotification`, showing an identical notification once per
- * `DUPLICATE_NOTIFICATION_WINDOW_MS`. `now` is the clock the window is measured on.
+ * Answers the window's `notify:show` request with `showNotification`. An ask carrying a tag is shown once per tag
+ * within `TAG_MEMORY_MS`; identity is the tag, so two bells with the same title and body but different tags both
+ * show, and an ask with no tag is shown every time. `now` is the clock the tags are measured on.
  */
 export function registerNotifyHandler(ipc: Pick<IpcMain, 'handle'>, now: () => number = Date.now): void {
-  const lastShown = new Map<string, number>();
-  ipc.handle('notify:show', (_event, title: unknown, body: unknown) => {
-    if (notificationProblem(title, body) !== undefined) return false;
+  const shownAt = new Map<string, number>();
+  ipc.handle('notify:show', (_event, title: unknown, body: unknown, tag?: unknown) => {
+    if (notificationProblem(title, body, tag) !== undefined) return false;
     const at = now();
-    for (const [key, shownAt] of lastShown) {
-      if (at - shownAt >= DUPLICATE_NOTIFICATION_WINDOW_MS) lastShown.delete(key);
+    for (const [key, when] of shownAt) {
+      if (at - when >= TAG_MEMORY_MS) shownAt.delete(key);
     }
-    const key = JSON.stringify([title, body]);
-    if (lastShown.has(key)) return false;
+    const identity = typeof tag === 'string' ? tag : undefined;
+    if (identity !== undefined && shownAt.has(identity)) return false;
     const shown = showNotification(title, body);
-    if (shown) lastShown.set(key, at);
+    if (shown && identity !== undefined) shownAt.set(identity, at);
     return shown;
   });
 }

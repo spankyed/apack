@@ -24,6 +24,13 @@ export const BELL_FLASH_MS = 150
  * accepted bell, so the flash (150 ms) is followed by the rest of the window (350 ms) before another bell is a new one.
  */
 export const BELL_WINDOW_MS = 500
+/**
+ * The window in which a terminal's bell notification is not repeated. It is its own gate, separate from the flash's
+ * window: a bell that the flash ignores as the same bell can still be a notification of its own once this has closed.
+ * The gate is not queued: a bell inside it is not notified and nothing notifies it later, so a run of bells inside one
+ * second shows one notification, and the bells after it are seen only as flashes.
+ */
+export const BELL_NOTIFY_WINDOW_MS = 1000
 
 /** The name a recording's view is pooled under, which is not a terminal's and cannot be taken for one */
 export const rewindViewId = (session: string) => `rewind:${session}`
@@ -98,6 +105,11 @@ export interface CodeTerminalContext {
    * still opens the window so a notification is not repeated.
    */
   bells: Record<string, 'flashing' | 'quiet'>
+  /**
+   * The terminals whose bell notification was asked for within the last `BELL_NOTIFY_WINDOW_MS`. Each entry is removed by
+   * a timer its notification started, so an entry never outlives its window.
+   */
+  notifying: Record<string, true>
 }
 
 export type Event =
@@ -121,7 +133,7 @@ export type Event =
   | { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
   | { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
   | { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
-  | { type: 'terminal.BELL'; data: { terminalId: string } }
+  | { type: 'terminal.BELL'; data: { terminalId: string; bellId: string } }
   | { type: 'terminal.NOTIFIED'; data: { terminalId: string; title: string; body: string } }
   | { type: 'terminal.PROGRESS'; data: { terminalId: string; state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; percent: number | null } }
   | { type: 'terminal.TITLED'; data: { terminalId: string; title: string } }
@@ -130,6 +142,7 @@ export type Event =
   /** The machine's own timers: a bell's flash ends, and its window closes. Not sent by anything else. */
   | { type: 'terminal.BELL_FLASH_ENDED'; terminalId: string }
   | { type: 'terminal.BELL_WINDOW_ENDED'; terminalId: string }
+  | { type: 'terminal.BELL_NOTIFY_WINDOW_ENDED'; terminalId: string }
   | { type: 'terminal.KEEP'; terminalId: string; kept: boolean }
   | { type: 'terminal.KEPT'; data: { terminalId: string; kept: boolean } }
   | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
@@ -146,8 +159,8 @@ export type Event =
  * Asks the main process to show the system notification a bell asks for. Through the bridge, because a window's own
  * `Notification` is refused while the window is not focused, which is the case this exists for.
  */
-export function showBellNotification(): void {
-  void window.electronAPI?.notify?.show('Terminal', 'Rang the bell').catch(() => {})
+export function showBellNotification(bellId: string): void {
+  void window.electronAPI?.notify?.show('Terminal', 'Rang the bell', bellId).catch(() => {})
 }
 
 export const terminalState = setup({
@@ -470,14 +483,27 @@ export const terminalState = setup({
     ringBell: enqueueActions(({ context, event, self, enqueue }) => {
       const ev = event as Extract<Event, { type: 'terminal.BELL' }>
       const id = ev.data.terminalId
-      if (context.bells[id] !== undefined) return
       const settings = getParentContext(self)?.settings
-      const flash = settings?.bellFlash !== false
-      enqueue.assign({ bells: { ...context.bells, [id]: flash ? 'flashing' : 'quiet' } })
-      if (flash) enqueue.raise({ type: 'terminal.BELL_FLASH_ENDED', terminalId: id }, { delay: BELL_FLASH_MS })
-      enqueue.raise({ type: 'terminal.BELL_WINDOW_ENDED', terminalId: id }, { delay: BELL_WINDOW_MS })
+      if (context.bells[id] === undefined) {
+        const flash = settings?.bellFlash !== false
+        enqueue.assign({ bells: { ...context.bells, [id]: flash ? 'flashing' : 'quiet' } })
+        if (flash) enqueue.raise({ type: 'terminal.BELL_FLASH_ENDED', terminalId: id }, { delay: BELL_FLASH_MS })
+        enqueue.raise({ type: 'terminal.BELL_WINDOW_ENDED', terminalId: id }, { delay: BELL_WINDOW_MS })
+      }
+      // The notification has its own gate, not the flash's: a bell the flash ignores as the same bell can still be
+      // notified once the notification window is clear. A bell inside it is not notified, and is not queued.
+      if (context.notifying[id] !== undefined) return
       // Not while the window has the focus: the person can see the terminal then, and the flash says it
-      if (settings?.bellNotification === true && !document.hasFocus()) showBellNotification()
+      if (settings?.bellNotification === true && !document.hasFocus()) {
+        enqueue.assign({ notifying: { ...context.notifying, [id]: true } })
+        enqueue.raise({ type: 'terminal.BELL_NOTIFY_WINDOW_ENDED', terminalId: id }, { delay: BELL_NOTIFY_WINDOW_MS })
+        showBellNotification(ev.data.bellId)
+      }
+    }),
+
+    endBellNotifyWindow: assign(({ context, event }) => {
+      const { [(event as { terminalId: string }).terminalId]: _closed, ...rest } = context.notifying
+      return { notifying: rest }
     }),
 
     endBellFlash: assign(({ context, event }) => {
@@ -722,7 +748,8 @@ export const terminalState = setup({
     activity: {},
     rewind: null,
     pendingOpens: {},
-    bells: {}
+    bells: {},
+    notifying: {}
   },
   on: {
     'terminal.CREATE': {
@@ -788,6 +815,7 @@ export const terminalState = setup({
     'terminal.BELL': { actions: ['noteActivity', 'ringBell'] },
     'terminal.BELL_FLASH_ENDED': { actions: 'endBellFlash' },
     'terminal.BELL_WINDOW_ENDED': { actions: 'endBellWindow' },
+    'terminal.BELL_NOTIFY_WINDOW_ENDED': { actions: 'endBellNotifyWindow' },
     'terminal.NOTIFIED': { actions: ['noteActivity', 'notifySystem'] },
     'terminal.PROGRESS': { actions: 'noteActivity' },
     'terminal.TITLED': { actions: 'noteActivity' },

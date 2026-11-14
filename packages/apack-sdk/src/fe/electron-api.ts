@@ -74,9 +74,11 @@ export interface _HostBridge {
     /**
      * Shows a system notification, from the main process, which needs no focus. A window cannot show one while its
      * document is not focused, which is when a terminal's bell asks for one. Answers whether it was shown: a title or
-     * body that is not text, or longer than the most it may hold, is refused rather than cut.
+     * body that is not text, or longer than the most it may hold, is refused rather than cut. A `tag` identifies the
+     * notification: an ask whose tag was already shown recently is not shown again, so one event asked for by several
+     * windows shows once. Without a tag every ask is shown.
      */
-    show: (title: string, body: string) => Promise<boolean>;
+    show: (title: string, body: string, tag?: string) => Promise<boolean>;
   };
   media: {
     upload: (entityId: string, base64Data: string, mimeType: string) => Promise<string>;
