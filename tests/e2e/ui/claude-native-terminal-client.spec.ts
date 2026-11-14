@@ -150,6 +150,25 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
   }
   if(process.env.CLAUDE_RESEARCH_IMAGE_PIXELS==='1'){
     const image=appPage.locator('[data-native-placement="InfoNotice"] [data-native-image]').first(),receipts=async()=>JSON.parse(await readFile(join(workspace!,'native-image-blits.json'),'utf8').catch(()=>'[]'))
+    const expectVisibleImage = async () => {
+      try { await expect(image).toBeInViewport() }
+      catch (error) {
+        await capture({ path: testInfo.outputPath('native-image-viewport-failure.png') })
+        const layout = await image.evaluate(element => {
+          const ancestors = []
+          for (let node: Element | null = element; node; node = node.parentElement) {
+            const rect = node.getBoundingClientRect(), style = getComputedStyle(node)
+            ancestors.push({ tag: node.tagName, class: node.className,
+              rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+              display: style.display, overflow: style.overflow,
+              scrollTop: node.scrollTop, scrollHeight: node.scrollHeight, clientHeight: node.clientHeight })
+          }
+          return { viewport: { width: innerWidth, height: innerHeight }, ancestors }
+        })
+        await writeFile(join(workspace!, 'native-image-viewport-failure.json'), JSON.stringify(layout, null, 2))
+        throw error
+      }
+    }
     const pixel=()=>image.evaluate(element=>{const source=element.querySelector('img,canvas') as HTMLImageElement|HTMLCanvasElement;if(!source)return [];if(source instanceof HTMLImageElement&&!source.complete)return [];const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;const c=canvas.getContext('2d')!;try{c.drawImage(source,0,0,2,2);return Array.from(c.getImageData(0,0,1,1).data)}catch{return []}})
     // The broker's 2D painter uses drawImage for pictures and fillText for characters.
     // Observe actual picture destinations, then read the finished canvas there; scanning
@@ -190,7 +209,7 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
     }));
     try{await expect.poll(pixel).toEqual([255,136,0,255])}catch(error){await writeFile(join(workspace!,'native-image-pixel-failure.json'),JSON.stringify({errors,state:await appPage.evaluate(()=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;return {views:c.nativeUiViews,native:c.nativeTerminalViews}})}));await capture({path:testInfo.outputPath('native-image-pixel-failure.png')});throw error}const draft='Keep my release notes while the original image changes.';await composer.fill(draft)
     await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(1);expect((await receipts())[0].result).toEqual({});await expect.poll(pixel).toEqual([0,136,255,255])
-    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await capture({path:testInfo.outputPath('native-image-pixels-'+size.width+'.png')})}
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expectVisibleImage();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await capture({path:testInfo.outputPath('native-image-pixels-'+size.width+'.png')})}
     if(process.env.CLAUDE_RESEARCH_IMAGE_SHM==='1'){
       const objects=JSON.parse(await readFile(join(workspace!,'native-image-shm.json'),'utf8'))
       const absent=async(name:string)=>{try{await access('/dev/shm/'+name.slice(1));return false}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return true;throw error}}
@@ -200,7 +219,7 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
       await writeFile('/dev/shm/'+objects.initial.slice(1),Buffer.from([0,200,80,0,200,80,0,200,80,0,200,80]),{flag:'wx',mode:0o600})
       await info.focus();await info.press('r');await expect.poll(pixel).toEqual([0,200,80,255]);await expect.poll(()=>absent(objects.initial)).toBe(true)
       const generation=await pixel()
-      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture({path:testInfo.outputPath('native-image-shm-generation-'+size.width+'.png')})}
+      for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expectVisibleImage();await expect(composer).toHaveText(draft);await expect(card.getByRole('button',{name:'Send',exact:true})).toBeInViewport();await capture({path:testInfo.outputPath('native-image-shm-generation-'+size.width+'.png')})}
       await appPage.setViewportSize({width:1100,height:900});await section.getByRole('button',{name:'Use native interface',exact:true}).click()
       for(const size of [{width:1100,height:900},{width:680,height:600},{width:1100,height:900}]){await appPage.setViewportSize(size);if(size.width===1100)await expect.poll(terminalPixels).toContainEqual([0,200,80,255]);await capture({path:testInfo.outputPath('native-image-shm-terminal-'+size.width+'.png')})}
       expect((await context()).native.state.nativePid).toBe(boundNativePid)
@@ -268,7 +287,7 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
     await info.focus();await info.press('r');await expect(image).toHaveText('Release cover updated')
     await info.focus();await info.press('h');await expect(image).toHaveCount(0);await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(2);expect((await receipts())[1].result.deny).toContain('no Image')
     await info.focus();await info.press('s');await expect(image).toHaveText('Release cover updated');await info.focus();await info.press('b');await expect.poll(async()=>(await receipts()).length).toBe(3);expect((await receipts())[2].result.deny).toMatch(/draws its alt|not drawn under a terminal root/)
-    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expect(image).toBeInViewport();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await capture({path:testInfo.outputPath('native-image-fallback-'+size.width+'.png')})}
+    for(const size of [{width:1100,height:900},{width:680,height:600}]){await appPage.setViewportSize(size);await image.scrollIntoViewIfNeeded();await expectVisibleImage();await expect(composer).toHaveText(draft);for(const item of [composer,status,card.getByRole('button',{name:'Send',exact:true})]){await expect(item).toBeInViewport();expect(await item.evaluate(element=>{const r=element.getBoundingClientRect(),hit=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return !!hit&&(element===hit||element.contains(hit))})).toBe(true)}await capture({path:testInfo.outputPath('native-image-fallback-'+size.width+'.png')})}
     await writeFile(join(workspace!,'native-image-app-proof.json'),JSON.stringify({text:await image.innerText(),receipts:await receipts(),draft,sameNativeOwner:(await context()).native.state.nativePid===boundNativePid}))
     await section.getByRole('button',{name:'Use native interface',exact:true}).click();await section.getByRole('button',{name:'Stop session',exact:true}).click();await expect.poll(async()=>(await context()).native.state.status).toBe('exited');await section.getByRole('button',{name:'Back to conversation',exact:true}).click();await composer.fill('Continue after inspecting native image admission.');await card.getByRole('button',{name:'Send',exact:true}).click();await expect.poll(async()=>(await context()).claude.chatState).toBe('success');expect((await context()).sessionId).toBe(sessionId)
     await writeFile(join(workspace!,'native-terminal-app-evidence.json'),JSON.stringify({actualAppGui:true,nativePlanScenario:'composer-layout',nativeImageFallback:true,nativeRetainedDraft:true,resumedPrintSameSession:true,sessionId,finalSessionId:sessionId,boundNativePid,browserErrors:errors}));return
