@@ -183,16 +183,19 @@ Each mutant was a copy in the scratchpad, copied over the file, run, and the ori
 
 ### Phase 2 gap closed
 
-The two-windows gap above is closed in the main process: `registerNotifyHandler` in
-`packages/main/src/modules/notify-access.ts` shows an identical title and body once per 1000 ms. Commit `e51bcbb09e`.
+The two-windows gap is closed by bell identity. Each bell gets a `bellId` when the backend emits `terminal.BELL`
+(`packages/default-setup/src/features/code/be/features/terminal.ts`), and the window passes it to the notify bridge as a
+tag. `registerNotifyHandler` in `packages/main/src/modules/notify-access.ts` shows an ask once per tag within 60 seconds
+(`TAG_MEMORY_MS`); an ask with no tag is shown every time. Two different bells with the same title and body are two
+notifications.
 
-- `npm run spec -- packages/main/tests/notify-access.spec.ts`: 11 passed (3 new: two identical asks inside the window show
-  one; different text inside the window is shown; an identical ask after 1000 ms is shown).
-- `npm run typecheck:pack`: exit 0. `tsc --noEmit` in `packages/main`: exit 0.
-- Mutation: the dedupe guard removed in a mutant copy under the scratchpad. The duplicate test fails (1 failed, 10
-  passed); the original was restored and `cmp` reports it identical.
+The earlier text-based dedupe (identical title and body within 1000 ms, commit `e51bcbb09e`) is superseded. Its
+remaining limit, that two different bells with the same text within a second showed once, no longer holds.
 
-Remaining limit: dedupe is by text, so two different bells with the same text within a second show once.
+- `npm run spec -- packages/main/tests/notify-access.spec.ts`: 13 passed (the same tag from two windows shows once; two
+  tags with the same text both show; an ask with no tag shows every time; a tag is shown again after `TAG_MEMORY_MS`).
+- Mutation: the main dedupe keyed on the text again fails the two-tags test. The frontend passing no tag fails the
+  bridge-call tests. Each file was restored from a copy under the scratchpad and `cmp` reports it identical.
 
 ## Phase 3 — cursor style and blink (2026-11-12)
 
