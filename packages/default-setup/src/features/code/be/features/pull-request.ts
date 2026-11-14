@@ -6,7 +6,7 @@ import { setup, assign, type AnyActorRef } from 'xstate'
 
 import { createLogger } from '@apackdev/sdk/logger'
 import { openGitRepository, type AppGitRepository } from '../services/app-git-repository.ts'
-import { gitHubApiFor } from './github.ts'
+import { gitHubApiFor, gitHubOf, type GitHubOfCheckout } from './github.ts'
 import { GitHubApiError, type GitHubApi } from '../services/github-api.ts'
 
 const logger = createLogger('pr')
@@ -21,7 +21,24 @@ export interface CodePullRequestSystemContext {
   gitRepository: AppGitRepository | null
   /** The code system, which routes a `commit.*` event to its commit child */
   code?: AnyActorRef
+  /**
+   * Each comparison as its branch diff last fetched and read it, by `comparisonKey`: what a file's diff in it reads,
+   * so that opening a file fetches nothing. Emptied when the folder changes
+   */
+  comparisons: Map<string, Comparison>
 }
+
+/** A comparison's two sides, fetched: the commit a file's original side is read at, and the ref of its changes */
+interface Comparison {
+  /** Where the head left the base: the merge-base, which is what the comparison's files are listed from */
+  original: string
+  head: string
+}
+
+/** What a comparison is asked as */
+interface ComparisonAsk { baseBranch: string; headBranch?: string; prNumber?: number }
+
+const comparisonKey = ({ baseBranch, headBranch, prNumber }: ComparisonAsk): string => `${baseBranch}...${headBranch ?? ''}#${prNumber ?? ''}`
 
 export type Event =
   | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
@@ -36,7 +53,7 @@ export type Event =
   | { type: 'pr.CHECK_GITHUB_ACCESS' }
   | { type: 'pr.GET_PR_AUTOFILL' }
   | { type: 'pr.GET_SMART_BASE_BRANCH' }
-  | { type: 'pr.DELETE_BRANCH'; branch: string }
+  | { type: 'pr.DELETE_BRANCH'; number: number }
   | { type: 'pr.UPDATE_PR'; number: number; title?: string; body?: string; base?: string }
   | { type: 'pr.CREATE_COMMENT'; number: number; body: string }
   | { type: 'pr.EDIT_COMMENT'; commentId: number; body: string }
@@ -66,6 +83,11 @@ function emitError(emit: Emit, message: string) {
   emit({ type: 'pr.ERROR', message })
 }
 
+/** A failure as the panel is told it: what to say, and for GitHub's, the reason it acts on */
+function emitFailure(emit: Emit, error: any) {
+  emit({ type: 'pr.ERROR', message: error?.message ?? String(error), ...(error instanceof GitHubApiError && { reason: error.reason }) })
+}
+
 /** Run async work that requires a git repository, answering through \`emit\`. Guards null repo, handles errors. */
 function withRepo<T>(
   context: CodePullRequestSystemContext,
@@ -79,41 +101,105 @@ function withRepo<T>(
 }
 
 /**
- * Run async work against GitHub's API for the repository the checkout's remote names, with this app's sign-in.
- * Refused, through `onError`, where there is no repository, no remote on github.com or no sign-in
+ * Run async work against GitHub's API for the repository the checkout's remote names, with this app's sign-in, and
+ * that remote, which every fetch and delete of the work uses. Refused, through `onError` — by default the asker is
+ * told why, with GitHub's reason — where there is no repository, no remote on GitHub or no sign-in
  */
 function withGitHub<T>(
   context: CodePullRequestSystemContext,
   emit: Emit,
-  work: (github: GitHubApi, repo: AppGitRepository) => Promise<T>,
+  work: (github: GitHubApi, repo: AppGitRepository, remote: GitHubOfCheckout['remote']) => Promise<T>,
   onSuccess: (result: T) => void,
-  onError?: (error: any) => void
+  onError: (error: any) => void = error => emitFailure(emit, error)
 ) {
-  withRepo(context, emit, async repo => work(await gitHubApiFor(repo), repo), onSuccess, onError)
+  withRepo(context, emit, async repo => {
+    const { github, remote } = await gitHubOf(repo)
+    return work(github, repo, remote)
+  }, onSuccess, onError)
+}
+
+/** A pull request's text as shown, with the images in it loadable, beside the text as written, which an edit starts from */
+async function shown<T extends { body: string; rawBody?: string }>(github: GitHubApi, item: T): Promise<T> {
+  item.rawBody = item.body
+  item.body = await github.resolveAssetUrls(item.body)
+  return item
 }
 
 /** A pull request's details once GitHub has worked out whether it can merge, with the images in it loadable */
 async function settledDetails(github: GitHubApi, number: number) {
   const { comments = [], ...pr } = await github.fetchPRDetailsSettled(number)
-  pr.body = await github.resolveAssetUrls(pr.body)
-  for (const comment of comments) comment.body = await github.resolveAssetUrls(comment.body)
+  await shown(github, pr)
+  for (const comment of comments) await shown(github, comment)
   return { pr, comments }
 }
 
-/**
- * The ref a comparison's head is read from, fetched first: what GitHub keeps of a pull request where the asker
- * names one (`refs/pull/<n>/head`), which outlives its branch and covers a fork's, and the branch's own otherwise
- */
-async function headOf(repo: AppGitRepository, headBranch?: string, prNumber?: number): Promise<string | undefined> {
-  if (prNumber) return repo.fetchPullRequest(prNumber)
-  if (!headBranch) return undefined
-  await repo.fetchRemoteBranch(headBranch)
-  return `origin/${headBranch}`
+/** The remote a comparison fetches from: the one the current branch follows, else `origin`, else the only one */
+async function remoteOf(repo: AppGitRepository): Promise<string> {
+  const remote = await repo.readRemote()
+  if (!remote) throw new Error('This repository has no remote, so a pull request\'s branches cannot be fetched.')
+  return remote.name
 }
 
-/** What to say of a comparison whose branch the remote no longer has, in place of git's words for a missing ref */
-const headGone = (error: any, headBranch?: string): string | undefined =>
-  error?.code === 'unknown-ref' && headBranch ? `${headBranch} is no longer on the remote, so its changes cannot be compared.` : undefined
+/** Git's words for a fetch of a branch the remote does not have */
+const notOnRemote = (error: any): boolean => /couldn't find remote ref/i.test(error?.message ?? '')
+
+/** Fetches `branch` from `remote`, saying of a branch the remote does not have which side it is */
+async function fetchSide(repo: AppGitRepository, branch: string, remote: string, side: 'base' | 'head'): Promise<string> {
+  try {
+    return await repo.fetchRemoteBranch(branch, remote)
+  } catch (error) {
+    if (!notOnRemote(error)) throw new Error(`${branch} could not be fetched from ${remote}: ${(error as Error)?.message ?? String(error)}`)
+    throw new Error(side === 'head'
+      ? `${branch} is no longer on the remote, so its changes cannot be compared.`
+      : `${branch}, the branch this is compared with, is not on the remote.`)
+  }
+}
+
+/**
+ * Fetches a comparison's two sides, once, and works out where its files are read from. The head is what GitHub
+ * keeps of a pull request where the asker names one (`refs/pull/<n>/head`), which outlives its branch and covers a
+ * fork's, the branch's own fetched where only it is named, and the checkout's `HEAD` otherwise. A comparison with
+ * a remote head is against the base as the remote has it, which is what GitHub compares with; one of the checkout
+ * against its local base, or the remote's where there is no local one. Either side missing is said, by name
+ */
+async function compare(repo: AppGitRepository, ask: ComparisonAsk): Promise<Comparison & { base: string }> {
+  const { baseBranch, headBranch, prNumber } = ask
+  let head = 'HEAD'
+  let base = baseBranch
+  if (prNumber || headBranch) {
+    const remote = await remoteOf(repo)
+    head = prNumber ? await repo.fetchPullRequest(prNumber, remote) : await fetchSide(repo, headBranch!, remote, 'head')
+    base = await fetchSide(repo, baseBranch, remote, 'base')
+  } else if (!await repo.commitsExist(baseBranch)) {
+    const remote = await repo.readRemote()
+    base = remote && await repo.commitsExist(`${remote.name}/${baseBranch}`) ? `${remote.name}/${baseBranch}` : ''
+    if (!base) throw new Error(`${baseBranch}, the branch this is compared with, is not a branch here or on the remote.`)
+  }
+  const original = await repo.mergeBase(base, head)
+  if (!original) throw new Error(`${headBranch ?? 'This branch'} and ${baseBranch} share no commit, so there is nothing to compare.`)
+  return { base, head, original }
+}
+
+/**
+ * The branch checked out, as the remote names it: the name of the branch it follows there, where it follows one,
+ * and its own otherwise. A detached HEAD is no branch, and is refused in words
+ */
+async function headBranchOf(repo: AppGitRepository, remote: string): Promise<string> {
+  const current = await repo.readCurrentBranch()
+  if (current === 'HEAD') throw new Error('The checkout is on a detached HEAD, not a branch. Check out a branch to open a pull request from it.')
+  const upstream = (await repo.refsModel()).branches.find(branch => branch.current && !branch.remote)?.upstream
+  return upstream?.startsWith(`${remote}/`) ? upstream.slice(remote.length + 1) : current
+}
+
+/**
+ * Brings a change GitHub made — a merge, a deleted branch — here: the repository fetches from the remote its branch
+ * follows, then the commit child reads it whole, and whatever moved is announced to every window. A fetch that
+ * fails leaves the repository as it was, which the read finds
+ */
+async function fetchAndAnnounce(context: CodePullRequestSystemContext): Promise<void> {
+  await context.gitRepository?.fetch().catch(() => undefined)
+  context.code?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true })
+}
 
 /** Hands each handler the answer for the message it is handling — see `defineHandlers` */
 const handlers = defineHandlers<CodePullRequestSystemContext, Event>();
@@ -138,14 +224,14 @@ export const pullRequestSystem = setup({
       const ev = event as { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
       withRepo(context, emit,
         async repo => {
-          const base = ev.baseBranch ? Promise.resolve(ev.baseBranch) : repo.findBaseBranch({ preferUpstream: false })
-          const head = await headOf(repo, ev.headBranch, ev.prNumber)
-          const baseBranch = await base
-          const files = await repo.readBranchDiff(baseBranch, head)
+          const baseBranch = ev.baseBranch ?? await repo.findBaseBranch({ preferUpstream: false })
+          const ask = { baseBranch, headBranch: ev.headBranch, prNumber: ev.prNumber }
+          const comparison = await compare(repo, ask)
+          const files = await repo.readBranchDiff(comparison.original, comparison.head)
+          context.comparisons.set(comparisonKey(ask), comparison)
           return { files, baseBranch }
         },
         ({ files, baseBranch }) => emit({ type: 'pr.BRANCH_DIFF_RECEIVED', data: { files, baseBranch, headBranch: ev.headBranch } }),
-        error => emitError(emit, headGone(error, ev.headBranch) ?? error?.message ?? String(error)),
       )
     },
 
@@ -161,23 +247,27 @@ export const pullRequestSystem = setup({
         }),
         error => error?.code === 'content-missing'
           ? emit({ type: 'pr.FILE_CONTENT_MISSING', data: where })
-          : emitError(emit, headGone(error, ev.headBranch) ?? error?.message ?? String(error)),
+          : emitError(emit, error?.message ?? String(error)),
       )
       async function read(repo: AppGitRepository) {
-        const target = await headOf(repo, ev.headBranch, ev.prNumber) ?? 'HEAD'
+        // The comparison its file list was read from, which is fetched again only when that list is asked for
+        const key = comparisonKey(ev)
+        const comparison = context.comparisons.get(key) ?? await compare(repo, ev)
+        context.comparisons.set(key, comparison)
         const isImage = repo.isImageFile(ev.path)
         const getContent = isImage
           ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
           : (p: string, b: string) => repo.readFileContentFromBranch(p, b)
         // A side that is missing reads as empty, which is right for a file one branch does not have and wrong
         // for a branch that is not there: that is an error, said as one
-        if (!await repo.commitsExist(ev.baseBranch, target)) {
-          throw new Error(`Failed to get file diff between branches: ${ev.baseBranch} or ${target} is not a commit here`)
+        if (!await repo.commitsExist(comparison.original, comparison.head)) {
+          throw new Error(`Failed to get file diff between branches: ${ev.baseBranch} or ${ev.headBranch ?? 'HEAD'} is not a commit here`)
         }
-        // The editor draws the change from the file's two sides, so those are what is read: no patch is made
+        // The editor draws the change from the file's two sides, so those are what is read: no patch is made. The
+        // original is the file where the head left the base, so what the base changed since is not shown as undone
         const [originalContent, modifiedContent] = await Promise.all([
-          getContent(ev.path, ev.baseBranch),
-          getContent(ev.path, target),
+          getContent(ev.path, comparison.original),
+          getContent(ev.path, comparison.head),
         ])
         return { originalContent, modifiedContent, isImage }
       }
@@ -204,7 +294,6 @@ export const pullRequestSystem = setup({
       withGitHub(context, emit,
         github => github.listOpenPRs(),
         prs => emit({ type: 'pr.OPEN_PRS_RECEIVED', data: { prs } }),
-        () => emit({ type: 'pr.OPEN_PRS_RECEIVED', data: { prs: [] } })
       )
     },
 
@@ -223,8 +312,8 @@ export const pullRequestSystem = setup({
       const emit = answering(reply)
       const ev = event as { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
       withGitHub(context, emit,
-        async (github, repo) => {
-          const head = await repo.readCurrentBranch()
+        async (github, repo, remote) => {
+          const head = await headBranchOf(repo, remote)
           const { comments: _comments, ...pr } = await github.createPR({ title: ev.title, body: ev.body, base: ev.base, head, draft: ev.draft })
           return pr
         },
@@ -239,7 +328,8 @@ export const pullRequestSystem = setup({
         github => github.mergePR(ev.number, ev.method),
         () => {
           emit({ type: 'pr.PR_MERGED', data: { number: ev.number } })
-          context.code?.send({ type: 'commit.GET_ALL_BRANCHES' })
+          // GitHub moved the base: it is fetched, and every window shown what moved
+          void fetchAndAnnounce(context)
         },
         async err => {
           // Merge was rejected server-side — refresh PR data so the UI reflects the
@@ -251,7 +341,7 @@ export const pullRequestSystem = setup({
               emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { ...result, fetchedAt: Date.now() } })
             }
           } catch { /* swallow — we still want to surface the merge error below */ }
-          emitError(emit, err.message)
+          emitFailure(emit, err)
         }
       )
     },
@@ -301,13 +391,13 @@ export const pullRequestSystem = setup({
         return
       }
       withGitHub(context, emit,
-        async (github, repo) => {
-          const pr = await github.findPRForBranch(await repo.readCurrentBranch())
-          if (pr?.body) pr.body = await github.resolveAssetUrls(pr.body)
-          return pr
+        async (github, repo, remote) => {
+          // A detached HEAD is no branch, and so has no pull request of its own
+          if (await repo.readCurrentBranch() === 'HEAD') return null
+          const pr = await github.findPRForBranch(await headBranchOf(repo, remote))
+          return pr && shown(github, pr)
         },
         pr => emit({ type: 'pr.BRANCH_PR_CHECKED', data: { pr } }),
-        () => emit({ type: 'pr.BRANCH_PR_CHECKED', data: { pr: null } })
       )
     },
 
@@ -396,7 +486,7 @@ export const pullRequestSystem = setup({
       withGitHub(context, emit,
         async github => {
           const comments = await github.getPRComments(ev.number)
-          for (const c of comments) c.body = await github.resolveAssetUrls(c.body)
+          for (const comment of comments) await shown(github, comment)
           return comments
         },
         comments => emit({ type: 'pr.COMMENTS_RECEIVED', data: { number: ev.number, comments } }),
@@ -461,12 +551,27 @@ export const pullRequestSystem = setup({
       )
     },
 
+    /**
+     * Deletes a pull request's branch through GitHub, only where it is a branch of this repository — a fork's is
+     * not this repository's to delete — that no other open pull request is from. One GitHub already deleted, on
+     * merge say, is deleted
+     */
     deleteBranch: ({ event, context, reply }) => {
       const emit = answering(reply)
-      const ev = event as { type: 'pr.DELETE_BRANCH'; branch: string }
-      withRepo(context, emit,
-        repo => repo.deleteRemoteBranch(ev.branch),
-        () => emit({ type: 'pr.BRANCH_DELETED', data: { branch: ev.branch } })
+      const ev = event as { type: 'pr.DELETE_BRANCH'; number: number }
+      withGitHub(context, emit,
+        async github => {
+          const { branch, isCrossRepository } = await github.readHead(ev.number)
+          if (isCrossRepository) throw new Error(`#${ev.number} is from a branch of another repository, a fork, which is not this repository's to delete.`)
+          const others = (await github.openPRsFromBranch(branch)).filter(number => number !== ev.number)
+          if (others.length > 0) throw new Error(`${branch} is kept: open pull request${others.length > 1 ? 's' : ''} ${others.map(number => `#${number}`).join(', ')} ${others.length > 1 ? 'are' : 'is'} from it too.`)
+          await github.deleteBranch(branch)
+          return branch
+        },
+        branch => {
+          emit({ type: 'pr.BRANCH_DELETED', data: { branch } })
+          void fetchAndAnnounce(context)
+        },
       )
     },
 
@@ -479,7 +584,8 @@ export const pullRequestSystem = setup({
       gitRepository: ({ event }) => {
         const ev = event as { type: 'pr.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository }
         return ev.gitRepository
-      }
+      },
+      comparisons: () => new Map(),
     }),
 
   })
@@ -488,7 +594,8 @@ export const pullRequestSystem = setup({
   initial: 'idle',
   context: ({ input }) => ({
     gitRepository: input?.gitRepository || (input?.baseDirectory ? openGitRepository(input.baseDirectory) : null),
-    code: input?.code
+    code: input?.code,
+    comparisons: new Map(),
   }),
   states: {
     idle: {

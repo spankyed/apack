@@ -1,6 +1,7 @@
 // A stand-in for GitHub's REST and GraphQL APIs on this machine. A case says what each route answers; a GraphQL
 // request is answered by the first operation whose name its query contains (`repository`, `pullRequest(`,
-// `convertPullRequestToDraft`…), in the order the case gave them. Every request is recorded with its body, so a
+// `convertPullRequestToDraft`…), in the order the case gave them; an answer a case computes may be awaited, as one
+// that changes a real remote is. Every request is recorded with its body, so a
 // case can say what was sent where. The bodies a case answers with are GitHub's own shapes, as its REST and GraphQL
 // documentation gives them and as github.com answered on 2026-11-13.
 import * as http from 'node:http';
@@ -22,8 +23,8 @@ export interface RecordedRequest {
 
 /** What a request is answered with: by `METHOD /path` for REST, by a fragment of the query for GraphQL */
 export interface StandInRoutes {
-  rest?: Record<string, StandInAnswer | ((request: RecordedRequest) => StandInAnswer)>;
-  graphql?: Array<[fragment: string, answer: StandInAnswer | ((request: RecordedRequest) => StandInAnswer)]>;
+  rest?: Record<string, StandInAnswer | ((request: RecordedRequest) => StandInAnswer | Promise<StandInAnswer>)>;
+  graphql?: Array<[fragment: string, answer: StandInAnswer | ((request: RecordedRequest) => StandInAnswer | Promise<StandInAnswer>)]>;
 }
 
 export async function startGitHubApiStandIn(routes: StandInRoutes): Promise<{ endpoints: GitHubEndpoints; requests: RecordedRequest[]; close(): Promise<void> }> {
@@ -31,7 +32,7 @@ export async function startGitHubApiStandIn(routes: StandInRoutes): Promise<{ en
   const server = http.createServer((incoming, response) => {
     let text = '';
     incoming.on('data', (chunk: Buffer) => { text += chunk.toString(); });
-    incoming.on('end', () => {
+    incoming.on('end', async () => {
       const path = (incoming.url ?? '').split('?')[0]!;
       const request: RecordedRequest = {
         method: incoming.method ?? 'GET',
@@ -43,7 +44,7 @@ export async function startGitHubApiStandIn(routes: StandInRoutes): Promise<{ en
       const route = path === '/graphql'
         ? routes.graphql?.find(([fragment]) => String(request.body?.query ?? '').includes(fragment))?.[1]
         : routes.rest?.[`${request.method} ${path}`];
-      const answer = typeof route === 'function' ? route(request) : route ?? { status: 404, body: { message: 'Not Found' } };
+      const answer = typeof route === 'function' ? await route(request) : route ?? { status: 404, body: { message: 'Not Found' } };
       response.writeHead(answer.status ?? 200, { 'Content-Type': 'application/json', ...answer.headers });
       response.end(answer.body === undefined ? '' : JSON.stringify(answer.body));
     });
@@ -69,6 +70,7 @@ export function pullRequestNode(overrides: Record<string, unknown> = {}) {
     body: 'It adds the thing.',
     headRefName: 'feature/thing',
     baseRefName: 'main',
+    isCrossRepository: false,
     state: 'OPEN',
     url: 'https://github.com/octo/repo/pull/7',
     isDraft: false,

@@ -1637,7 +1637,10 @@ declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission
 
 interface GhPRComment {
     id: string;
+    /** The comment as shown: an image GitHub hosts for its users at the signed address a window can load */
     body: string;
+    /** The comment as written, which an edit starts from: `body` where nothing in it was rewritten for showing */
+    rawBody?: string;
     author: {
         login: string;
     };
@@ -1649,9 +1652,14 @@ interface GhPRComment {
 interface GhPullRequest {
     number: number;
     title: string;
+    /** The description as shown: an image GitHub hosts for its users at the signed address a window can load */
     body: string;
+    /** The description as written, which an edit starts from: `body` where nothing in it was rewritten for showing */
+    rawBody?: string;
     headRefName: string;
     baseRefName: string;
+    /** Whether the head is a branch of another repository, a fork's, rather than of this one */
+    isCrossRepository?: boolean;
     state: 'CLOSED' | 'MERGED' | 'OPEN';
     url: string;
     isDraft: boolean;
@@ -1740,10 +1748,10 @@ interface GitHubAccount {
  * What GitHub refused, as the panel acts on it: no sign-in, or one GitHub no longer takes (`signed-out`); a
  * repository whose remote is not on github.com (`not-github`); one
  * without the access the call needs (`missing-scope`); one an organisation's single sign-on has not authorised
- * (`sso`); a repository or pull request this sign-in cannot see (`not-found`); GitHub could not be reached or said
- * something else (`failed`)
+ * (`sso`); a repository or pull request this sign-in cannot see (`not-found`); a sign-in that has used up what
+ * GitHub lets it ask for a while (`rate-limited`); GitHub could not be reached or said something else (`failed`)
  */
-type GitHubApiFailure = 'failed' | 'missing-scope' | 'not-found' | 'not-github' | 'signed-out' | 'sso';
+type GitHubApiFailure = 'failed' | 'missing-scope' | 'not-found' | 'not-github' | 'rate-limited' | 'signed-out' | 'sso';
 
 /** Where GitHub answers: the web host that runs sign-in, and the REST API */
 interface GitHubEndpoints {
@@ -2308,6 +2316,10 @@ type IncomingGitHubEvents =
 /** Forgets the token. It stays valid at GitHub until the user revokes it there, which Settings says */
  | {
     type: 'github.SIGN_OUT';
+}
+/** The app's stored secrets changed (no values): the sign-in held is read again on its next use */
+ | {
+    type: 'SECRETS_CHANGED';
 };
 
 type IncomingLibraryEvents = {
@@ -2536,9 +2548,14 @@ type IncomingPullRequestEvents =
     type: 'pr.GET_PR_AUTOFILL';
 } | {
     type: 'pr.GET_SMART_BASE_BRANCH';
-} | {
+}
+/**
+ * Deletes the pull request's branch on GitHub: refused for a fork's branch, and for one another open pull request
+ * is from. Answered with the branch deleted, or one already gone
+ */
+ | {
     type: 'pr.DELETE_BRANCH';
-    branch: string;
+    number: number;
 } | {
     type: 'pr.UPDATE_PR';
     number: number;
@@ -4152,9 +4169,12 @@ type OutgoingPullRequestEvents = {
         headBranch?: string;
         prNumber?: number;
     };
-} | {
+}
+/** What failed, said; for a refusal of GitHub's, the reason the panel acts on, as `pr.GITHUB_ACCESS_CHECKED` gives it */
+ | {
     type: 'pr.ERROR';
     message: string;
+    reason?: GitHubApiFailure;
 }
 /** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */
  | {

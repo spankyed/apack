@@ -4,7 +4,8 @@
 // REST where GitHub has one and GraphQL where only it does (draft state, resolving a thread).
 //
 // A failure is a `GitHubApiError` whose `reason` is what the panel can do something about: sign in, sign in again
-// with the access it lacks, authorise the sign-in for an organisation's single sign-on, or nothing (not found).
+// with the access it lacks, authorise the sign-in for an organisation's single sign-on, wait for the rate limit to
+// reset, or nothing (not found).
 import type { GhPullRequest, GhPRComment, GhReviewThread } from '../types.ts'
 import type { GitHubEndpoints } from './github.ts'
 
@@ -18,15 +19,18 @@ export interface GitHubRepo {
  * What GitHub refused, as the panel acts on it: no sign-in, or one GitHub no longer takes (`signed-out`); a
  * repository whose remote is not on github.com (`not-github`); one
  * without the access the call needs (`missing-scope`); one an organisation's single sign-on has not authorised
- * (`sso`); a repository or pull request this sign-in cannot see (`not-found`); GitHub could not be reached or said
- * something else (`failed`)
+ * (`sso`); a repository or pull request this sign-in cannot see (`not-found`); a sign-in that has used up what
+ * GitHub lets it ask for a while (`rate-limited`); GitHub could not be reached or said something else (`failed`)
  */
-export type GitHubApiFailure = 'signed-out' | 'not-github' | 'missing-scope' | 'sso' | 'not-found' | 'failed'
+export type GitHubApiFailure = 'signed-out' | 'not-github' | 'missing-scope' | 'sso' | 'not-found' | 'rate-limited' | 'failed'
 
 export class GitHubApiError extends Error {
-  constructor(readonly reason: GitHubApiFailure, message: string) {
+  /** For `rate-limited`: when GitHub takes asks again, in milliseconds since the epoch, where it said */
+  readonly resetsAt?: number
+  constructor(readonly reason: GitHubApiFailure, message: string, { resetsAt }: { resetsAt?: number } = {}) {
     super(message)
     this.name = 'GitHubApiError'
+    if (resetsAt !== undefined) this.resetsAt = resetsAt
   }
 }
 
@@ -36,21 +40,34 @@ export class GitHubApiError extends Error {
  */
 const REQUEST_MS = 30_000
 
-/** The repository a remote's address names on github.com, or nothing for another host or a path */
-export function repoOfRemote(remoteUrl: string): GitHubRepo | undefined {
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * The repository a remote's address names on the GitHub at `web` (github.com, or a stand-in for it), or nothing for
+ * another host or a path
+ */
+export function repoOfRemote(remoteUrl: string, web = 'https://github.com'): GitHubRepo | undefined {
   const address = remoteUrl.trim()
+  const host = escaped(new URL(web).hostname)
   // https://github.com/owner/name(.git), ssh://git@github.com/owner/name(.git), git@github.com:owner/name(.git)
-  const match = /^(?:[a-z][a-z0-9+.-]*:\/\/(?:[^@/]*@)?github\.com(?::\d+)?\/|(?:[^@/]+@)?github\.com:)([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?\/?$/i.exec(address)
+  const match = new RegExp(`^(?:[a-z][a-z0-9+.-]*://(?:[^@/]*@)?${host}(?::\\d+)?/|(?:[^@/]+@)?${host}:)([A-Za-z0-9-]+)/([A-Za-z0-9._-]+?)(?:\\.git)?/?$`, 'i').exec(address)
   return match ? { owner: match[1]!, name: match[2]! } : undefined
 }
 
-const PR_FIELDS = 'number title body headRefName baseRefName state url isDraft author { login } createdAt updatedAt'
+const PR_FIELDS = 'number title body headRefName baseRefName isCrossRepository state url isDraft author { login } createdAt updatedAt'
 const MERGE_FIELDS = 'mergeable mergeStateStatus reviewDecision'
 /** The checks of the head commit, as the panel's merge button reads them: `gh` flattened them the same way */
 const CHECK_FIELDS = `checks: commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
   __typename ... on CheckRun { name status conclusion } ... on StatusContext { context state } } } } } } }`
 const COMMIT_FIELDS = 'commitList: commits(first: 250) { nodes { commit { oid messageHeadline committedDate } } }'
-const COMMENT_FIELDS = 'comments(first: 100) { nodes { id body author { login } createdAt url viewerDidAuthor } }'
+/** How many of a list one ask reads: GitHub's most */
+const PAGE = 100
+/** A pull request's discussion, newest last, read back from the newest a page at a time (`before`) */
+const COMMENT_NODES = 'pageInfo { hasPreviousPage startCursor } nodes { id body author { login } createdAt url viewerDidAuthor }'
+const COMMENT_FIELDS = `comments(last: ${PAGE}) { ${COMMENT_NODES} }`
+const THREAD_NODES = `pageInfo { hasPreviousPage startCursor } nodes {
+  id isResolved isOutdated path line startLine originalLine originalStartLine diffSide startDiffSide subjectType
+  comments(last: ${PAGE}) { nodes { id databaseId body author { login } createdAt viewerDidAuthor path line startLine originalLine originalStartLine diffHunk } } }`
 
 type Json = Record<string, any>
 
@@ -93,8 +110,17 @@ export interface GitHubApi {
   /** The pull request's details, asked again while GitHub is still working out whether it can merge */
   fetchPRDetailsSettled(number: number): Promise<GhPullRequest & { comments: GhPRComment[] }>
   getPRComments(number: number): Promise<GhPRComment[]>
-  /** The pull request from `branch`, an open one first; `null` when there is none */
+  /**
+   * The pull request from `branch` of this repository, an open one first; `null` when there is none. A fork's
+   * pull request from a branch of the same name is another branch's, and is not it
+   */
   findPRForBranch(branch: string): Promise<GhPullRequest | null>
+  /** A pull request's head: its branch's name, and whether that is a branch of another repository, a fork's */
+  readHead(number: number): Promise<{ branch: string; isCrossRepository: boolean }>
+  /** The open pull requests whose head is `branch` of this repository */
+  openPRsFromBranch(branch: string): Promise<number[]>
+  /** Deletes `branch` of this repository; one GitHub no longer has is deleted already */
+  deleteBranch(branch: string): Promise<void>
   createPR(options: { title: string; body: string; head: string; base?: string; draft?: boolean }): Promise<GhPullRequest & { comments: GhPRComment[] }>
   mergePR(number: number, method?: 'merge' | 'squash' | 'rebase'): Promise<void>
   closePR(number: number): Promise<void>
@@ -124,9 +150,10 @@ export function createGitHubApi({ endpoints, token, repo, pause = pauseFor }: {
   const path = `/repos/${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.name)}`
   const headers = { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' }
 
-  /** Why GitHub refused, from its status, its single sign-on header and what it said */
+  /** Why GitHub refused, from its status, its single sign-on and rate limit headers and what it said */
   const refusal = (status: number, response: Response, said: string): GitHubApiError => {
     if (status === 401) return new GitHubApiError('signed-out', 'GitHub no longer takes this sign-in. Sign in to GitHub again in Settings → Code.')
+    if ((status === 403 || status === 429) && (response.headers.get('x-ratelimit-remaining') === '0' || /rate limit/i.test(said))) return rateLimited(response)
     if (response.headers.get('x-github-sso')) {
       return new GitHubApiError('sso', `${repo.owner} requires single sign-on: authorise apack for it at github.com, under Settings → Applications.`)
     }
@@ -135,6 +162,18 @@ export function createGitHubApi({ endpoints, token, repo, pause = pauseFor }: {
     }
     if (status === 404) return new GitHubApiError('not-found', `GitHub has no ${repo.owner}/${repo.name} this sign-in can see, or no such pull request.`)
     return new GitHubApiError('failed', `GitHub refused it (${status}): ${said}`)
+  }
+
+  /**
+   * The rate limit used up, with when it resets: GitHub's `retry-after` (seconds from now) for a secondary limit,
+   * and `x-ratelimit-reset` (seconds since the epoch) for the primary one
+   */
+  const rateLimited = (response: Response): GitHubApiError => {
+    const retryAfter = Number(response.headers.get('retry-after'))
+    const reset = Number(response.headers.get('x-ratelimit-reset'))
+    const resetsAt = retryAfter > 0 ? Date.now() + retryAfter * 1000 : reset > 0 ? reset * 1000 : undefined
+    const when = resetsAt === undefined ? 'in a while' : `at ${new Date(resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    return new GitHubApiError('rate-limited', `GitHub has had as many asks from this sign-in as it takes for now; it takes more ${when}.`, { ...(resetsAt !== undefined && { resetsAt }) })
   }
 
   const request = async (url: string, init: RequestInit = {}): Promise<Response> => {
@@ -153,8 +192,20 @@ export function createGitHubApi({ endpoints, token, repo, pause = pauseFor }: {
     })
     const text = await response.text()
     const parsed = text ? (() => { try { return JSON.parse(text) as Json } catch { return { message: text } } })() : undefined
-    if (!response.ok) throw refusal(response.status, response, String(parsed?.message ?? response.statusText))
+    if (!response.ok) throw refusal(response.status, response, saidIn(parsed, response.statusText))
     return parsed
+  }
+
+  /**
+   * What GitHub said of a refused REST call: its message, and the reasons it gave for a validation failure
+   * (`errors`), which are what say a pull request already exists or has no commits
+   */
+  const saidIn = (parsed: Json | undefined, fallback: string): string => {
+    const message = String(parsed?.message ?? fallback)
+    const reasons = (Array.isArray(parsed?.errors) ? parsed.errors as Json[] : [])
+      .map(error => typeof error === 'string' ? error : error.message ?? [error.resource, error.field, error.code].filter(Boolean).join(' '))
+      .filter(Boolean)
+    return reasons.length > 0 ? `${message}: ${reasons.join('; ')}` : message
   }
 
   const graphql = async (query: string, variables: Json): Promise<Json> => {
@@ -168,6 +219,7 @@ export function createGitHubApi({ endpoints, token, repo, pause = pauseFor }: {
     const errors: Json[] = parsed.errors ?? []
     if (errors.length > 0) {
       const said = errors.map(error => error.message).join('; ')
+      if (errors.some(error => error.type === 'RATE_LIMITED')) throw rateLimited(response)
       if (errors.some(error => error.type === 'NOT_FOUND')) throw new GitHubApiError('not-found', `GitHub has nothing this sign-in can see there: ${said}`)
       if (errors.some(error => error.type === 'FORBIDDEN' || error.type === 'INSUFFICIENT_SCOPES')) throw refusal(403, response, said)
       throw new GitHubApiError('failed', `GitHub refused it: ${said}`)
@@ -183,18 +235,36 @@ export function createGitHubApi({ endpoints, token, repo, pause = pauseFor }: {
     return node
   }
 
+  /**
+   * Every node of a list a pull request holds, oldest first: `page` as the first ask answered it (the newest), and
+   * the pages before it, asked for back to the first
+   */
+  const backTo = async (number: number, list: 'comments' | 'reviewThreads', nodes: string, page: Json | undefined): Promise<Json[]> => {
+    const all: Json[] = [...(page?.nodes as Json[] ?? [])]
+    let info: Json | undefined = page?.pageInfo
+    while (info?.hasPreviousPage && info.startCursor) {
+      const data = await graphql(`query($owner: String!, $name: String!, $number: Int!, $before: String!) {
+        repository(owner: $owner, name: $name) { pullRequest(number: $number) { ${list}(last: ${PAGE}, before: $before) { ${nodes} } } } }`, { number, before: info.startCursor })
+      const earlier = data?.repository?.pullRequest?.[list]
+      all.unshift(...(earlier?.nodes as Json[] ?? []))
+      info = earlier?.pageInfo
+    }
+    return all
+  }
+
   const getPRDetails = async (number: number) => {
     const node = await pullRequest(number, `${PR_FIELDS} ${MERGE_FIELDS} ${CHECK_FIELDS} ${COMMIT_FIELDS} ${COMMENT_FIELDS}`)
     const { id: _id, ...rest } = node
-    return { ...pullRequestOf(rest), comments: (node.comments?.nodes as Json[] ?? []).map(commentOf) }
+    return { ...pullRequestOf(rest), comments: (await backTo(number, 'comments', COMMENT_NODES, node.comments)).map(commentOf) }
   }
 
   const fetchPRDetailsSettled = async (number: number) => {
     let details = await getPRDetails(number)
-    // GitHub works out whether a pull request can merge after it is created or its base moves, answering UNKNOWN
-    // until then; a draft is never worked out. Two more looks, two and four seconds on, keeping the last good one
+    // GitHub works out whether an open pull request can merge after it is created or its base moves, answering
+    // UNKNOWN until then; a draft, or one closed or merged, is never worked out. Two more looks, two and four
+    // seconds on, keeping the last good one
     for (let attempt = 1; attempt <= 2; attempt++) {
-      if (details.isDraft || (details.mergeable && details.mergeable !== 'UNKNOWN' && details.mergeStateStatus && details.mergeStateStatus !== 'UNKNOWN')) break
+      if (details.isDraft || details.state !== 'OPEN' || (details.mergeable && details.mergeable !== 'UNKNOWN' && details.mergeStateStatus && details.mergeStateStatus !== 'UNKNOWN')) break
       await pause(2_000 * attempt)
       try { details = await getPRDetails(number) } catch { break }
     }
@@ -223,15 +293,36 @@ export function createGitHubApi({ endpoints, token, repo, pause = pauseFor }: {
     fetchPRDetailsSettled,
 
     async getPRComments(number) {
-      return ((await pullRequest(number, COMMENT_FIELDS)).comments?.nodes as Json[] ?? []).map(commentOf)
+      return (await backTo(number, 'comments', COMMENT_NODES, (await pullRequest(number, COMMENT_FIELDS)).comments)).map(commentOf)
     },
 
     async findPRForBranch(branch) {
       const data = await graphql(`query($owner: String!, $name: String!, $branch: String!) { repository(owner: $owner, name: $name) {
-        pullRequests(headRefName: $branch, first: 3, orderBy: { field: CREATED_AT, direction: DESC }) {
+        pullRequests(headRefName: $branch, first: 20, orderBy: { field: CREATED_AT, direction: DESC }) {
           nodes { ${PR_FIELDS} ${MERGE_FIELDS} ${CHECK_FIELDS} } } } }`, { branch })
-      const prs = (data?.repository?.pullRequests?.nodes as Json[] ?? []).map(pullRequestOf)
+      const prs = (data?.repository?.pullRequests?.nodes as Json[] ?? []).map(pullRequestOf).filter(pr => pr.isCrossRepository === false)
       return prs.find(pr => pr.state === 'OPEN') ?? prs[0] ?? null
+    },
+
+    async readHead(number) {
+      const node = await pullRequest(number, 'headRefName isCrossRepository')
+      return { branch: node.headRefName as string, isCrossRepository: node.isCrossRepository !== false }
+    },
+
+    async openPRsFromBranch(branch) {
+      const data = await graphql(`query($owner: String!, $name: String!, $branch: String!) { repository(owner: $owner, name: $name) {
+        pullRequests(headRefName: $branch, states: OPEN, first: ${PAGE}) { nodes { number isCrossRepository } } } }`, { branch })
+      return (data?.repository?.pullRequests?.nodes as Json[] ?? []).filter(pr => pr.isCrossRepository === false).map(pr => pr.number as number)
+    },
+
+    async deleteBranch(branch) {
+      try {
+        await rest('DELETE', `/git/refs/heads/${branch.split('/').map(encodeURIComponent).join('/')}`)
+      } catch (error) {
+        // GitHub says a branch it no longer has, deleted on merge say, "does not exist" (422), or is not found
+        if (error instanceof GitHubApiError && (error.reason === 'not-found' || /reference does not exist/i.test(error.message))) return
+        throw error
+      }
     },
 
     async createPR({ title, body, head, base, draft }) {
@@ -274,10 +365,8 @@ export function createGitHubApi({ endpoints, token, repo, pause = pauseFor }: {
     },
 
     async getReviewThreads(number) {
-      const node = await pullRequest(number, `reviewThreads(first: 100) { nodes {
-        id isResolved isOutdated path line startLine originalLine originalStartLine diffSide startDiffSide subjectType
-        comments(first: 50) { nodes { id databaseId body author { login } createdAt viewerDidAuthor path line startLine originalLine originalStartLine diffHunk } } } }`)
-      return (node.reviewThreads?.nodes as Json[] ?? []).map(thread => {
+      const node = await pullRequest(number, `reviewThreads(last: ${PAGE}) { ${THREAD_NODES} }`)
+      return (await backTo(number, 'reviewThreads', THREAD_NODES, node.reviewThreads)).map(thread => {
         const comments = (thread.comments?.nodes as Json[] ?? []).map(comment => ({
           id: comment.id,
           databaseId: comment.databaseId,

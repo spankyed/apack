@@ -48,7 +48,11 @@ async function codeOverARemoteWantingASignIn() {
 }
 
 /** The app signed in to GitHub, as its sign-in leaves it: the pack's own secret */
-const signedIn = () => services.secrets.own.set('github', JSON.stringify({ token: 'gho_token', scopes: ['repo'], account: { login: 'octocat' } }));
+/** Signed in from elsewhere than the code system, which the host tells the systems of as a change to the secrets */
+const signedIn = async () => {
+  services.secrets.own.set('github', JSON.stringify({ token: 'gho_token', scopes: ['repo'], account: { login: 'octocat' } }));
+  await app!.send('code', { type: 'SECRETS_CHANGED' });
+};
 
 const ask = (event: { type: string; host?: string; during?: 'push' | 'pull' }) => app!.send('code', event, { sender: CODE, client: 'c-main' });
 
@@ -68,7 +72,7 @@ it('tells the window that pushed why the push failed, that it can be run again, 
 describe('taking the offer to sign in to GitHub', () => {
   it('says git can sign in, once the app is signed in to GitHub, with the push or the pull it was for', async () => {
     await codeOverARemoteWantingASignIn();
-    signedIn();
+    await signedIn();
 
     const call = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' });
 
@@ -90,7 +94,7 @@ describe('taking the offer to sign in to GitHub', () => {
 
   it('takes nothing for a host that would read as an option, or one that is not GitHub', async () => {
     await codeOverARemoteWantingASignIn();
-    signedIn();
+    await signedIn();
 
     const option = await ask({ type: 'commit.SET_UP_SIGN_IN', host: '--help' });
     expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: option })).data).toMatchObject({ message: 'Not a host name: "--help"' });
