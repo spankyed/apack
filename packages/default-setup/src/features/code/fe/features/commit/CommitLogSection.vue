@@ -86,7 +86,8 @@
               <button @click.stop="openRevertCommitDialog(entry)" class="p-0.5 hover:bg-neutral-700 rounded" title="Revert this commit">
                 <Undo2 class="w-3 h-3 text-neutral-400" />
               </button>
-              <button @click.stop="resetToCommit(entry)" class="p-0.5 hover:bg-neutral-700 rounded" title="Reset to this commit">
+              <Loader2 v-if="resettingTo === entry.hash" data-testid="reset-busy" class="w-3 h-3 animate-spin text-neutral-400" />
+              <button v-else data-testid="reset-to-commit" :disabled="!!resettingTo" @click.stop="pendingReset = entry" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40" title="Reset to this commit">
                 <RotateCw class="w-3 h-3 text-neutral-400" />
               </button>
               <button @click.stop="copyCommitHash(entry)" class="p-0.5 hover:bg-neutral-700 rounded" title="Copy commit hash">
@@ -142,8 +143,20 @@
     :file="null"
     :customTitle="'Revert Commit'"
     :customMessage="`Are you sure you want to revert commit ${pendingCommitShortHash}? This will create a new commit that undoes the changes.`"
+    reversible="Reverting the new commit brings the changes back."
     @confirm="confirmRevertCommit"
     @cancel="cancelRevertCommit"
+  />
+
+  <!-- Reset To Commit Dialog -->
+  <RevertDialog
+    :show="!!pendingReset"
+    :file="null"
+    :customTitle="'Reset to Commit'"
+    :customMessage="`Reset the branch to ${pendingReset?.hash.slice(0, 7)}? The commits after it leave the branch, and what they changed stays in the files, unstaged.`"
+    reversible="Undo puts the branch back where it was."
+    @confirm="confirmReset"
+    @cancel="pendingReset = null"
   />
 
 </template>
@@ -155,7 +168,7 @@ import { ref, computed, nextTick, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { CommitLogEntry } from '#features/code/fe/features/commit/state.ts'
-import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X, Cherry, Pencil, FoldVertical, Trash2, Tag } from 'lucide-vue-next'
+import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X, Cherry, Pencil, FoldVertical, Trash2, Tag, Loader2 } from 'lucide-vue-next'
 import RevertDialog from '#features/code/fe/features/commit/RevertDialog.vue'
 import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import HistoryGraph from '#features/code/fe/features/commit/HistoryGraph.vue'
@@ -254,8 +267,13 @@ const cancelRevertCommit = () => {
   pendingCommitShortHash.value = ''
 }
 
-const resetToCommit = (entry: CommitLogEntry) => {
-  commitActor?.send({ type: 'commit.RESET_TO_COMMIT', hash: entry.hash })
+const resettingTo = useSelector(commitActor, (state) => state.context.resettingTo)
+/** The commit a reset waits on the user's yes to go back to */
+const pendingReset = ref<CommitLogEntry | null>(null)
+const confirmReset = () => {
+  const entry = pendingReset.value
+  pendingReset.value = null
+  if (entry) commitActor?.send({ type: 'commit.RESET_TO_COMMIT', hash: entry.hash })
 }
 
 const copyCommitHash = (entry: CommitLogEntry) => {

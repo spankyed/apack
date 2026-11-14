@@ -40,7 +40,8 @@
               </ul>
             </div>
           </template>
-          <p v-else class="text-sm text-yellow-500">
+          <p v-else-if="reversible" class="text-sm text-neutral-400" data-testid="dialog-reversible">{{ reversible }}</p>
+          <p v-else class="text-sm text-yellow-500" data-testid="dialog-irreversible">
             <AlertCircle class="inline w-4 h-4 mr-1" />
             This action cannot be undone.
           </p>
@@ -80,6 +81,8 @@ const props = defineProps<{
   undoable?: boolean
   /** The paths it would remove that are too large to keep a copy of */
   notKept?: string[]
+  /** How what this does can be taken back, said instead of a warning that it cannot be */
+  reversible?: string
 }>()
 
 /** Whether nothing of what this removes can be kept, so there is nothing for Undo to bring back */
