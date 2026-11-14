@@ -137,6 +137,7 @@ import { GitBranch, ArrowRight, Loader2, Pencil, ExternalLink } from 'lucide-vue
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ImageLightbox from '@apackdev/ui/design/ImageLightbox'
 import type { GhPullRequest, GhPRComment } from '#generated/types.ts'
+import type { WriteAnswer } from './state.ts'
 import { openLink } from '@apackdev/sdk/fe'
 
 const props = defineProps<{
@@ -145,6 +146,8 @@ const props = defineProps<{
   branches: string[]
   isLoading?: boolean
   isUpdating?: boolean
+  /** How the last write a form waits on was answered: the edit is left on its own success */
+  answered?: WriteAnswer | null
 }>()
 
 const emit = defineEmits<{
@@ -228,11 +231,16 @@ function save() {
   }
 }
 
-// Exit edit mode when update completes
-watch(() => props.isUpdating, (updating, wasUpdating) => {
-  if (wasUpdating && !updating) {
+// The edit is left once GitHub has taken it, and kept when it refused it, so nothing typed is lost
+watch(() => props.answered, (answer) => {
+  if (answer?.write === 'update-pr' && answer.ok && answer.target === props.pr?.number) {
     editing.value = false
   }
+})
+
+// An edit belongs to the pull request it was started on
+watch(() => props.pr?.number, () => {
+  editing.value = false
 })
 
 const statusLabel = computed(() => {

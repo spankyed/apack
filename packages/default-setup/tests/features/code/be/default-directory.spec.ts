@@ -45,7 +45,8 @@ describe("the code explorer's directory", () => {
     await setCodeSetting('defaultBaseDirectory', directory);
     await app.settle();
     const before = app.system('code').getSnapshot().context;
-    const refreshes = () => app!.emitted('code').filter(event => event.type === 'pr.STATUS_CHANGED').length;
+    // Choosing the folder that is already open moves nothing, so no window is told the directory changed
+    const refreshes = () => app!.emitted('code').filter(event => event.type === 'BASE_DIRECTORY_CHANGED').length;
     const originalRefreshes = refreshes();
     const revision = getTestSettings().getSnapshot().revision;
     expect(getTestSettings().getOverrides().features?.['default-setup/code']).not.toHaveProperty('baseDirectory');

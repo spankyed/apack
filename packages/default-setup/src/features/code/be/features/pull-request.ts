@@ -24,7 +24,6 @@ export interface CodePullRequestSystemContext {
 }
 
 export type Event =
-  | { type: 'pr.GET_BASE_BRANCH' }
   | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
   | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; prNumber?: number; fetchMissing?: boolean }
   | { type: 'pr.LIST_OPEN_PRS' }
@@ -126,14 +125,6 @@ export const pullRequestSystem = setup({
     input: {} as { baseDirectory: string | null; gitRepository?: AppGitRepository | null; code?: AnyActorRef }
   },
   actions: handlers.actions({
-    findBaseBranch: ({ context, reply }) => {
-      const emit = answering(reply)
-      withRepo(context, emit,
-        repo => repo.findBaseBranch({ preferUpstream: false }),
-        branch => emit({ type: 'pr.BASE_BRANCH_RECEIVED', data: { branch } })
-      )
-    },
-
     getSmartBaseBranch: ({ context, reply }) => {
       const emit = answering(reply)
       withRepo(context, emit,
@@ -502,7 +493,6 @@ export const pullRequestSystem = setup({
   states: {
     idle: {
       on: {
-        'pr.GET_BASE_BRANCH': { actions: 'findBaseBranch' },
         'pr.GET_BRANCH_DIFF': { actions: 'readBranchDiff' },
         'pr.GET_BRANCH_FILE_DIFF': { actions: 'getBranchFileDiff' },
         'pr.LIST_OPEN_PRS': { actions: 'listOpenPRs' },

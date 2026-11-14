@@ -5991,11 +5991,9 @@ type IncomingPromptsEvents = {
     templateFn: string;
 };
 
-type IncomingPullRequestEvents = {
-    type: 'pr.GET_BASE_BRANCH';
-}
+type IncomingPullRequestEvents = 
 /** `prNumber` reads the head from what GitHub keeps of that pull request, which outlives its branch */
- | {
+{
     type: 'pr.GET_BRANCH_DIFF';
     baseBranch?: string;
     headBranch?: string;
@@ -7198,6 +7196,13 @@ type OutgoingCommitEvents =
     data: {
         path: string;
     };
+}
+/** The worktree a window asked to switch to is the folder the code surface is over now, answered to that window */
+ | {
+    type: 'commit.WORKTREE_SWITCHED';
+    data: {
+        path: string;
+    };
 } | {
     type: 'commit.CONFLICT_RESOLVED';
     data: {
@@ -7644,11 +7649,6 @@ type OutgoingPromptsEvents = {
 };
 
 type OutgoingPullRequestEvents = {
-    type: 'pr.BASE_BRANCH_RECEIVED';
-    data: {
-        branch: string;
-    };
-} | {
     type: 'pr.BRANCH_DIFF_RECEIVED';
     data: {
         files: GitStatusFile[];
@@ -7674,11 +7674,6 @@ type OutgoingPullRequestEvents = {
 } | {
     type: 'pr.ERROR';
     message: string;
-} | {
-    type: 'pr.STATUS_CHANGED';
-    data: {
-        timestamp: Date;
-    };
 }
 /** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */
  | {

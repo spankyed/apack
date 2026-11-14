@@ -176,6 +176,7 @@
             :branches="availableBranches"
             :isLoading="isLoadingDetails"
             :isUpdating="isUpdatingPR"
+            :answered="lastWriteAnswer"
             @save="handleSavePR"
             @start-editing="commitActor?.send({ type: 'commit.GET_ALL_BRANCHES' })"
           >
@@ -186,6 +187,7 @@
               :prNumber="selectedPR.number"
               :isOpen="selectedPR.state === 'OPEN'"
               :isSubmitting="isSubmittingComment"
+              :answered="lastWriteAnswer"
               @set-tab="(tab) => prActor?.send({ type: 'pr.SET_COMMENT_TAB', tab })"
               @create-comment="(body) => prActor?.send({ type: 'pr.CREATE_COMMENT', number: selectedPR!.number, body })"
               @edit-comment="(id, body) => prActor?.send({ type: 'pr.EDIT_COMMENT', commentId: id, body })"
@@ -329,6 +331,7 @@ const isTogglingDraft = useSelector(prActor, (state) => state.context.isToggling
 const isDeletingBranch = useSelector(prActor, (state) => state.context.isDeletingBranch)
 const isUpdatingPR = useSelector(prActor, (state) => state.context.isUpdatingPR)
 const isLoadingDetails = useSelector(prActor, (state) => state.context.isLoadingDetails)
+const lastWriteAnswer = useSelector(prActor, (state) => state.context.lastWriteAnswer)
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
 const isPushing = useSelector(commitActor, (state) => state.context.isPushing)
 const currentBranch = useSelector(commitActor, (state) => state.context.gitBranch)
@@ -408,12 +411,9 @@ const handleRefreshPR = () => {
   }
 }
 
+// The machine reads the discussion when the one it holds is another pull request's
 const handleViewPRInfo = () => {
   prActor?.send({ type: 'pr.SET_VIEW_MODE', mode: 'pr' })
-  // Fetch full details (including commits/comments) if not yet loaded
-  if (selectedPR.value && !prComments.value.length) {
-    prActor?.send({ type: 'pr.REFRESH_PR', number: selectedPR.value.number })
-  }
 }
 
 const handleBackToBranch = () => {

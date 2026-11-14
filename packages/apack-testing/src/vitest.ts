@@ -10,6 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { TaskMeta } from 'vitest';
+import { IDLE_MS } from '@apackdev/sdk/progress';
 import type { ViteUserConfig } from 'vitest/config';
 
 export interface IsolatedDataDir {
@@ -205,6 +206,12 @@ export async function definePackTestConfig(options: PackTestConfig = {}): Promis
       // tree stalls, and a test that spends the CPU budget above, so a busy machine fails nothing (`vitest-progress-guard.ts`)
       testTimeout: 0,
       hookTimeout: 0,
+      // **`expect.poll` cannot turn its clock off, so its default is the guard's idle window.** A poll mostly waits on
+      // work in this process and what it starts (`git`), which a busy machine makes late and never stops: a second,
+      // Vitest's default, failed git-backed cases under load. A poll only spends its timeout when it never succeeds,
+      // so this costs a failing case time and a passing one nothing. A poll asserting something stays put names its
+      // own short `timeout`
+      expect: { poll: { timeout: IDLE_MS } },
       // Each worker's tests create their own EARS engines, so files may run in parallel
       fileParallelism: true,
       env: dataDir.env,

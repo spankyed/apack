@@ -236,13 +236,16 @@ describe('keep-alive', () => {
    * The app sets no `keepAlive` today, which makes this latent — and would make it silent.
    */
   it('survives a ping cycle and keeps answering', async () => {
-    await serve({ enabled: true, pingMs: 15, pongWaitMs: 60 });
+    // The server shares this process, so its pong window measures this event loop as well as the client: 60ms was
+    // missed under load by a client that answered. Half a second is margin for that, and the idle wait below is
+    // still three windows, so a client that stopped answering is still dropped inside it
+    await serve({ enabled: true, pingMs: 50, pongWaitMs: 500 });
     client = await connect();
 
     // Long enough for several ping/terminate windows to come and go while the client sits idle. The one wait
     // here that is not converted to an awaited event, because the elapsed time *is* the assertion: what is
     // being checked is that nothing happened for a while
-    await after(200);
+    await after(1_500);
 
     expect(client.failure, 'the socket was not terminated under us').toBeNull();
     await expect(client.send({ to: 'x/y', event: { type: 'PING' } })).resolves.toBeUndefined();

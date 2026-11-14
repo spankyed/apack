@@ -18,7 +18,9 @@ export function removeCompilerReadTree(directory: string): void {
     }
   };
   unlock(directory);
-  fs.rmSync(directory, { recursive: true, force: true });
+  // Retried as `removeCompilerStoreDirectory` is: a `.DS_Store` written into a directory between its entries going
+  // and its `rmdir` fails that `rmdir` with `ENOTEMPTY`, and `maxRetries` walks the tree again on that error
+  fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5 });
 }
 
 /**
