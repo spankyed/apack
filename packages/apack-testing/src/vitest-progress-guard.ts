@@ -21,7 +21,7 @@
  */
 import { Session } from 'node:inspector';
 import { isMainThread } from 'node:worker_threads';
-import { aroundAll, aroundEach, expect, inject } from 'vitest';
+import { aroundAll, aroundEach, expect, inject, vi } from 'vitest';
 import { IDLE_MS, cpuAdded, describeRefusal, describeTree, readTreeCpuMs, storageHold, unmetWaits, watchWork, type Watch, type WatchClock, type WorkReading } from '@apackdev/sdk/progress';
 // What a config provides and a test declares to it are typed with the package's vitest entry, which packs import
 import type { ProgressMeta } from './vitest.ts';
@@ -40,6 +40,19 @@ const provided = <K extends 'apack.idleMs' | 'apack.testCpuMs'>(key: K): number 
 };
 
 const idleMs = provided('apack.idleMs') ?? IDLE_MS;
+
+/**
+ * **`expect.poll`'s default is this guard's stall window, not Vitest's one second.** A poll cannot turn its clock off,
+ * and what one waits for is mostly work in this process and what it starts (`git` above all), which a busy machine
+ * makes late and never stops: a second failed git-backed cases under `npm run stress`. A poll spends its timeout only
+ * when it never succeeds, so this costs a failing case time and a passing one nothing; a call that names its own
+ * `timeout` keeps it, and a poll asserting that something stays put names a short one.
+ *
+ * Set here because every config loads this file, which `suite-timeouts.spec.ts` holds them to, so host and pack suites
+ * have one owner for it. `setConfig` replaces the config's whole `expect`, which is why that spec also refuses a config
+ * declaring `expect` options of its own: they would be dropped here without a word.
+ */
+vi.setConfig({ expect: { poll: { timeout: idleMs } } });
 const defaultBudgetMs = provided('apack.testCpuMs');
 
 interface Running {
