@@ -183,7 +183,7 @@ async function repositoryOnDevelop() {
 it('bases a pull request on the branch a branch was made from, where that was written down', async () => {
   const root = await repositoryOnDevelop();
   const repo = new AppGitRepository(root);
-  await repo.checkoutBranch('topic');
+  await repo.createBranch('topic');
   expect(await repo.getPRBaseBranch(), 'written down by this app when it made the branch').toBe('develop');
 
   await git(root, 'checkout', '--quiet', '-b', 'from-main', 'main');
@@ -224,7 +224,7 @@ it('does not answer a branch only the remote has, nor a commit reached from a br
 it('keeps the base it worked out until the repository is said to have changed', async () => {
   const root = await repositoryOnDevelop();
   const repo = new AppGitRepository(root);
-  await repo.checkoutBranch('topic');
+  await repo.createBranch('topic');
   expect(await repo.getPRBaseBranch()).toBe('develop');
 
   // Made in a terminal, which a watcher reports as a change under `.git`

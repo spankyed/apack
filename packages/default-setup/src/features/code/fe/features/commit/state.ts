@@ -119,7 +119,7 @@ export interface CodeCommitContext {
   /** What can be done about the sign-in the remote asked for when fetching stopped */
   fetchSignIn: SignInHelp | null
   /** What is known of the failure `gitError` words: the command to run again, and the sign-in a remote asked for */
-  gitFailure: Pick<CommitFailure, 'code' | 'during' | 'signIn' | 'trust' | 'ownership' | 'hook'> | null
+  gitFailure: Pick<CommitFailure, 'code' | 'during' | 'signIn' | 'trust' | 'ownership' | 'hook' | 'missingBranch'> | null
   /** Whether the backend was told git can sign in now and has not answered */
   isSettingUpSignIn: boolean
   /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
@@ -145,6 +145,8 @@ export interface CodeCommitContext {
   isGeneratingMessage: boolean
   stashList: StashEntry[]
   isStashing: boolean
+  /** Whether the stash being pushed was named with the commit message typed, which it then takes */
+  stashTakesMessage: boolean
   worktreeList: WorktreeEntry[]
   isWorktreeLoading: boolean
   commitLog: CommitLogEntry[]
@@ -384,6 +386,8 @@ export type Event =
   | { type: 'commit.STASH_CLEAR' }
   | { type: 'commit.STASH_LIST_RECEIVED'; data: { stashes: StashEntry[] } }
   | { type: 'commit.STASH_SUCCESS'; data: { message: string } }
+  | { type: 'commit.STASH_APPLIED'; data: { index: number; popped: boolean } }
+  | { type: 'commit.CREATE_BRANCH'; branchName: string }
   | { type: 'commit.WORKTREE_LIST' }
   | { type: 'commit.WORKTREE_ADD'; path: string; branch?: string; createBranch?: boolean }
   | { type: 'commit.WORKTREE_REMOVE'; path: string; force?: boolean }
@@ -448,6 +452,7 @@ type OfOneFolder =
   | 'isPushing'
   | 'isPulling'
   | 'isStashing'
+  | 'stashTakesMessage'
   | 'isWorktreeLoading'
   | 'isMovingOperation'
   | 'isStartingOperation'
@@ -520,6 +525,7 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   isPushing: false,
   isPulling: false,
   isStashing: false,
+  stashTakesMessage: false,
   isWorktreeLoading: false,
   isMovingOperation: false,
   isStartingOperation: false,
@@ -913,12 +919,12 @@ export const commitState = setup({
      * nothing about a push still running, and an error answering no ask held here clears nothing
      */
     handleErrorReceived: assign(({ context, event }) => {
-      const { message, code, during, signIn, trust, ownership, hook } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
+      const { message, code, during, signIn, trust, ownership, hook, missingBranch } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
       const ofStatus = answersCall(event, context.statusAsk)
       const { recorded, pending } = settleCall(context.busyAsks, event)
       return {
         gitError: message,
-        gitFailure: { code, during, signIn, trust, ownership, hook },
+        gitFailure: { code, during, signIn, trust, ownership, hook, missingBranch },
         statusFailed: ofStatus,
         ...(ofStatus && { statusAsk: null, isGitLoading: false }),
         ...(recorded && { busyAsks: pending, ...FAILED[recorded](context) }),
@@ -1100,6 +1106,15 @@ export const commitState = setup({
       })
     }),
 
+    /** Makes a branch at what is checked out, as the user asked: a checkout that found no branch offers it */
+    createBranch: enqueueActions(({ event, enqueue }) => {
+      const branchName = (event as { type: 'commit.CREATE_BRANCH'; branchName: string }).branchName.trim()
+      if (!branchName) return
+      askBusy(enqueue, 'checkout', { isCheckingOutBranch: true, gitError: null, gitFailure: null }, call => {
+        sendToSystem('code', { type: 'commit.CREATE_BRANCH', branchName }, { call })
+      })
+    }),
+
     createTag: ({ event }) => {
       const { name, commit, message } = event as { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
       sendToSystem('code', { type: 'commit.CREATE_TAG', name, ...(commit && { commit }), ...(message && { message }) })
@@ -1168,9 +1183,11 @@ export const commitState = setup({
       }
     }),
 
-    stashPush: enqueueActions(({ event, enqueue }) => {
+    stashPush: enqueueActions(({ event, enqueue, context }) => {
       const ev = event as { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean; paths?: string[] }
-      askBusy(enqueue, 'stash', { isStashing: true }, call => {
+      // A stash named with the message typed for the commit takes it; one named otherwise leaves it
+      const takesMessage = !!ev.message && ev.message === context.commitMessage
+      askBusy(enqueue, 'stash', { isStashing: true, stashTakesMessage: takesMessage }, call => {
         sendToSystem('code', { type: 'commit.STASH_PUSH', message: ev.message, stagedOnly: ev.stagedOnly, ...(ev.paths && { paths: ev.paths }) }, { call })
       })
     }),
@@ -1192,7 +1209,8 @@ export const commitState = setup({
 
     handleStashSuccess: assign({
       isStashing: false,
-      commitMessage: ''
+      commitMessage: ({ context }) => context.stashTakesMessage ? '' : context.commitMessage,
+      stashTakesMessage: false,
     }),
 
     stashApply: ({ event }) => {
@@ -1581,6 +1599,7 @@ export const commitState = setup({
         'commit.BRANCH_CHECKOUT_SUCCESS': {
           actions: ['handleBranchCheckoutSuccess', 'getAllBranches']
         },
+        'commit.CREATE_BRANCH': { actions: 'createBranch' },
         'commit.PUSH_BRANCH': {
           actions: 'pushBranch'
         },
@@ -1622,6 +1641,10 @@ export const commitState = setup({
         },
         'commit.STASH_SUCCESS': {
           actions: ['handleStashSuccess', 'refreshGitStatus']
+        },
+        // A stash applied leaves the message typed as it is; one popped is gone from the list
+        'commit.STASH_APPLIED': {
+          actions: ['refreshGitStatus', 'requestStashList']
         },
         'commit.STASH_APPLY': {
           actions: 'stashApply'

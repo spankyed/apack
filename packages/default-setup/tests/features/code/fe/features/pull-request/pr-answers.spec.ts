@@ -319,3 +319,14 @@ describe('the repository moving', () => {
     expect(asked('pr.CHECK_BRANCH_PR')).toEqual([]);
   });
 });
+
+describe('"Checkout & Pull Base"', () => {
+  it('asks for the pull, since a checkout pulls nothing by itself', () => {
+    const actor = started();
+    pick(actor, pr(7, { baseRefName: 'develop' }));
+
+    actor.send({ type: 'pr.CHECKOUT_BASE' });
+
+    expect(asked('commit.CHECKOUT_BRANCH').at(-1)?.[1]).toEqual({ type: 'commit.CHECKOUT_BRANCH', branchName: 'develop', pull: true });
+  });
+});

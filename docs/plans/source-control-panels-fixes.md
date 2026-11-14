@@ -1,6 +1,6 @@
 # Fixing the source-control and pull request panels
 
-Status: decided 2026-11-14 (its four decisions below). Phases 1 and 2 landed 2026-11-14; phases 3 and 4 next.
+Status: decided 2026-11-14 (its four decisions below). Phases 1 to 3 landed 2026-11-14; phase 4 next.
 
 Surveyed at monorepo `origin/master` `eb567581ac` and apack-git `cf7be5d` (the pin), by four read-only reviews — the
 commit panel and the pull request panel, frontend and backend each — and a check of the findings against the code.
@@ -165,6 +165,37 @@ The chain passed apart from three of `repo-checks`' tooling specs (`bounded-spaw
 
 **Done when:** a case for each on a real git (the engine's own specs for 3.1, 3.2 and 3.9, through its CI on three
 platforms); the app's half on the harness; the chain passes.
+
+**Landed 2026-11-14**, in apack-git #33 and apack #PR. The engine's half:
+- `checkoutBranch` no longer pulls.
+- `checkoutBranch` refuses a name no branch has, as `unknown-ref`. A branch only a remote has is still made to follow
+  it, by git's own guess.
+- `createBranch` makes a branch on purpose.
+- `pushBranch` publishes to the branch's push remote, then `remote.pushDefault`, then the remote it follows, else
+  `origin`, else the only remote. It refuses `no-remote` and `detached-head` in words.
+- `deleteRemoteTrackingBranch` deletes a remote-tracking ref without asking the remote. Delete Branch now uses it,
+  which finishes phase 2's leftover.
+
+The app's half:
+- Its "Create branch" is its own ask (`commit.CREATE_BRANCH`).
+- A checkout that found no branch answers with the name, which the panel offers to make.
+- "Checkout & Pull Base" asks for the pull (`pull: true`).
+
+The rest as the table says. Each item has a case in `tests/features/code/be/commit-answers.spec.ts`,
+`worktree-switch.spec.ts`, `services/git-fetch.spec.ts`, and the panel's `branches-and-stashes.spec.ts` and
+`pr-answers.spec.ts`, with two exceptions:
+
+- **3.7 does not reproduce at this engine.** The status lists a renamed file's staged row before its edit's unstaged
+  row, so the old lookup found the staged row anyway. The lookup now asks for the staged row whatever the order. Its
+  case passes either way, and says so.
+- **3.8 has no case.** It removed a call, and the second fetch it caused was not reached in the harness: the remote
+  saw the same requests with the call put back.
+
+A mutation of each other app fix failed its case. Driven in the app over a scratch repository:
+- typing a branch that does not exist was refused with its name, and no branch was made;
+- "Create branch" was offered, and clicking it made and checked out the branch.
+
+The full typecheck and every spec the change reaches (the pack's 264 files) pass. The chain was not run.
 
 ## Phase 4 — the commit panel's smaller defects
 

@@ -852,6 +852,8 @@ interface CommitFailure {
     code?: GitErrorCode;
     /** The command the failure was of, where the panel can run it again */
     during?: 'pull' | 'push';
+    /** A branch a checkout named that is neither here nor on a remote, which the panel offers to make */
+    missingBranch?: string;
     /** What can be done about a sign-in the remote asked for */
     signIn?: SignInHelp;
     /** What the repository would have git run, when the command was not run because the repository is not trusted */
@@ -1633,7 +1635,7 @@ interface FolderItem {
 }
 
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
-declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "host-refused", "untrusted", "content-missing", "published", "hook-refused", "name-not-text"];
+declare const GIT_ERROR_CODES: readonly ["locked", "authentication", "permission", "remote-unreachable", "non-fast-forward", "diverged", "conflict", "local-changes", "unknown-ref", "not-a-repository", "aborted", "git-not-found", "developer-tools-missing", "git-too-old", "unsafe-ownership", "signing-failed", "unrelated-histories", "nothing-to-commit", "branch-exists", "detached-head", "no-remote", "host-refused", "untrusted", "content-missing", "published", "hook-refused", "name-not-text"];
 
 interface GhPRComment {
     id: string;
@@ -1998,8 +2000,16 @@ type IncomingCommitEvents = {
     type: 'commit.TRUST_OWNERSHIP';
 } | {
     type: 'commit.GET_ALL_BRANCHES';
-} | {
+}
+/** Checks out a branch there is, and with `pull` pulls it from what it follows once it is checked out */
+ | {
     type: 'commit.CHECKOUT_BRANCH';
+    branchName: string;
+    pull?: boolean;
+}
+/** Makes a branch at what is checked out, and checks it out */
+ | {
+    type: 'commit.CREATE_BRANCH';
     branchName: string;
 } | {
     type: 'commit.PUBLISH_BRANCH';
@@ -3677,6 +3687,14 @@ type OutgoingCommitEvents =
     type: 'commit.STASH_SUCCESS';
     data: {
         message: string;
+    };
+}
+/** A stash was applied, or with `popped` applied and dropped, without a conflict */
+ | {
+    type: 'commit.STASH_APPLIED';
+    data: {
+        index: number;
+        popped: boolean;
     };
 } | {
     type: 'commit.WORKTREE_LIST_RECEIVED';
