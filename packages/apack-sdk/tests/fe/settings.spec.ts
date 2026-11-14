@@ -95,14 +95,14 @@ it('changes app and feature preferences at the address the caller named', () => 
   const { value: save, stop } = inScope(() => useSettingsSave(settings))
 
   save.update({ kind: 'app' }, ['projects'], ['three'])
-  save.update({ kind: 'feature', featureRef: CODE }, ['cliPaths', 'gh'], '/opt/bin/gh')
+  save.update({ kind: 'feature', featureRef: CODE }, ['cliPaths', 'git'], '/opt/bin/git')
 
   expect(settings.updates).toEqual([
     { target: { kind: 'app' }, path: ['projects'], value: ['three'] },
-    { target: { kind: 'feature', featureRef: CODE }, path: ['cliPaths', 'gh'], value: '/opt/bin/gh' },
+    { target: { kind: 'feature', featureRef: CODE }, path: ['cliPaths', 'git'], value: '/opt/bin/git' },
   ])
   expect(settings.get({ kind: 'app' })).toEqual({ projects: ['three'] })
-  expect(settings.get({ kind: 'feature', featureRef: CODE })).toEqual({ mdEditorDefault: true, cliPaths: { gh: '/opt/bin/gh' } })
+  expect(settings.get({ kind: 'feature', featureRef: CODE })).toEqual({ mdEditorDefault: true, cliPaths: { git: '/opt/bin/git' } })
   stop()
 })
 

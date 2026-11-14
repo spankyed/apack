@@ -86,7 +86,7 @@ it('ends as cancelled when the asker aborts while it waits', async () => {
 
 it('asks GitHub nothing without an OAuth App to sign in as', async () => {
   const { endpoints, requests } = await signIn([]);
-  const github = createGitHubSignIn({ endpoints, wait: async () => {} });
+  const github = createGitHubSignIn({ endpoints, clientId: '', wait: async () => {} });
   expect(await reasonOf(github.fetchDeviceCode(new AbortController().signal))).toBe('unconfigured');
   expect(requests).toEqual([]);
 });

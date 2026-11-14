@@ -76,6 +76,8 @@ const waitFor: Wait = (ms, signal) => new Promise<void>((resolve, reject) => {
 })
 
 export interface GitHubSignIn {
+  /** Where GitHub answers, which the API calls made with this sign-in go to as well */
+  readonly endpoints: GitHubEndpoints
   /** Asks GitHub for a code to show the user */
   fetchDeviceCode(signal: AbortSignal): Promise<DeviceCode>
   /** Asks GitHub at the interval it set until the user approved the code, refused it or it expired */
@@ -120,6 +122,8 @@ export function createGitHubSignIn({ endpoints = GITHUB_ENDPOINTS, clientId = GI
   }, signal)
 
   return {
+    endpoints,
+
     async fetchDeviceCode(signal) {
       const { status, body } = await post('/login/device/code', { client_id: configuredId(), scope: GITHUB_SCOPES.join(' ') }, signal)
       if (typeof body.device_code !== 'string' || typeof body.user_code !== 'string' || typeof body.verification_uri !== 'string') {

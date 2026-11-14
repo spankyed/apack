@@ -39,8 +39,8 @@ afterEach(() => {
 describe('githubToken', () => {
   it('prefers GITHUB_TOKEN and falls back to GH_TOKEN', () => {
     expect(githubToken()).toBeUndefined();
-    process.env.GH_TOKEN = 'gh';
-    expect(githubToken()).toBe('gh');
+    process.env.GH_TOKEN = 'from-gh-token';
+    expect(githubToken()).toBe('from-gh-token');
     process.env.GITHUB_TOKEN = 'github';
     expect(githubToken()).toBe('github');
   });
@@ -98,7 +98,7 @@ describe('githubFetch', () => {
     // The message used to name GITHUB_TOKEN whichever variable supplied the token, sending the user
     // to check a variable they never set
     it('names the variable the token actually came from on a 401', async () => {
-      process.env.GH_TOKEN = 'gh';
+      process.env.GH_TOKEN = 'from-gh-token';
       const err = await fail(respond(401));
       expect(err.message).toContain('GH_TOKEN');
       expect(err.message).not.toContain('GITHUB_TOKEN');

@@ -176,7 +176,7 @@ describe('prose costs nothing', () => {
     'packages/default-setup/etc/pack-types.api.md': 'facade:check',
     // Content sources compile into the rows a user gets
     'packages/default-setup/src/content/notes/welcome.md': 'build:default-setup',
-    'packages/default-setup/src/extensions/help/github-token-permissions.md': 'build:default-setup',
+    'packages/default-setup/src/extensions/help/github-sign-in.md': 'build:default-setup',
     // The CLI's scaffold, rendered into a new pack and read by the specifier rules
     'packages/apack-cli/templates/pack/README.md': 'check:specifiers',
     // Test input, read by the content-parity goldens

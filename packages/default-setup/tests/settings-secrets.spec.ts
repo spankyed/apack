@@ -22,8 +22,8 @@ describe('settings and stored API keys', () => {
   it("stores a CLI path override on the code surface's settings", async () => {
     const app = await startApp({ systems: ['host/settings'] });
     await app.connect();
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'default-setup/code' }, path: ['cliPaths'], value: { gh: '/opt/bin/gh' } }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
-    expect(featureSettings.forFeature('code').get()).toMatchObject({ cliPaths: { gh: '/opt/bin/gh' } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'default-setup/code' }, path: ['cliPaths'], value: { git: '/opt/bin/git' } }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    expect(featureSettings.forFeature('code').get()).toMatchObject({ cliPaths: { git: '/opt/bin/git' } });
   });
 
   // A feature settings change reaches the surface identified by its qualified ref
@@ -40,13 +40,13 @@ describe('settings and stored API keys', () => {
   it('refuses an unqualified feature target, saving nothing', async () => {
     const app = await startApp({ systems: ['host/settings'] });
     await app.connect();
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'code' }, path: ['cliPaths'], value: { gh: '/elsewhere/gh' } }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'code' }, path: ['cliPaths'], value: { git: '/elsewhere/git' } }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
     // The sender's mistake to fix, which its form shows: not a system error
     expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({
       type: 'SETTINGS_REFUSED',
       problems: [expect.stringContaining('settings target')],
     }));
     expect(takeSystemErrors()).toEqual([]);
-    expect(featureSettings.forFeature('code').get()).not.toMatchObject({ cliPaths: { gh: '/elsewhere/gh' } });
+    expect(featureSettings.forFeature('code').get()).not.toMatchObject({ cliPaths: { git: '/elsewhere/git' } });
   });
 });

@@ -41,7 +41,6 @@ const providers = [
   { key: 'copilot', label: 'Copilot CLI', installHint: 'Install via npm', installCmd: 'npm install -g @github/copilot' },
   { key: 'claude-code', label: 'Claude Code CLI', installHint: 'Install via npm', installCmd: 'npm install -g @anthropic-ai/claude-code' },
   { key: 'codex', label: 'Codex CLI', installHint: 'Install via npm', installCmd: 'npm install -g @openai/codex' },
-  { key: 'gh', label: 'GitHub CLI', installHint: 'Install via Homebrew', installCmd: 'brew install gh' },
   { key: 'git', label: 'Git', installHint: 'Install from git-scm.com, or via Homebrew', installCmd: 'brew install git' },
 ]
 

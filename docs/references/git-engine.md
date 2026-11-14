@@ -22,7 +22,7 @@ what to say.**
 |---|---|
 | Running git: its environment, what may run beside what, waiting for a lock, when a command is done, what a failure means | The event bus, the contract, windows, who asked |
 | The snapshot, change detection by part, path-scoped reads, an operation in progress | The words shown to the user |
-| A watcher of its own over Node's `fs.watch`, which a host can replace | GitHub, `gh`, pull requests, the offer to sign in |
+| A watcher of its own over Node's `fs.watch`, which a host can replace | GitHub, its sign-in and API, pull requests, the offer to sign in |
 | Reads (a diff, a file at a revision, the log, branches, stashes, worktrees) and writes (stage, commit, check out, stash, fetch, pull, push) | Policy: when to fetch unasked, which branch a pull request is based on, settings |
 | Where a staged file will be listed, as an entry with no Node imports (`apack-git/staging`) | What says "look again": window focus, a terminal command ending, an agent's turn ending |
 

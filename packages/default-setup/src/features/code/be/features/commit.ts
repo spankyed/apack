@@ -8,7 +8,7 @@ import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'x
 import { GitError, GitUnusableError, HookRefusedError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from 'apack-git'
 import type { HistoryCommit, HistoryPage, RewriteStep } from 'apack-git'
 import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
-import { setUpGitSignIn } from '../services/gh-cli.ts'
+import { storedSignIn } from './github.ts'
 import { isHostName } from '../services/sign-in.ts'
 import type { CommitFailure, GitProgress, OperationMove, RepositoryChange, RewriteAction, StartableOperation } from '../types.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
@@ -981,8 +981,9 @@ export const commitSystem = setup({
     },
 
     /**
-     * Has the GitHub CLI give git its sign-in for the host a remote asked on, and starts fetching again. The
-     * host arrives from the window, so it is held to a host name before it reaches a command line
+     * Git can sign in to the host a remote asked on now that the app is signed in to GitHub (`withGitHubSignIn`
+     * gives every git run that sign-in), so fetching starts again and the window runs again what was refused. The
+     * host arrives from the window, so it is held to a host name, and to GitHub's
      */
     setUpSignIn: ({ event, context, self, reply }) => {
       const { host, during: asked } = event as { type: 'commit.SET_UP_SIGN_IN'; host: string; during?: 'push' | 'pull' }
@@ -996,14 +997,18 @@ export const commitSystem = setup({
         return
       }
 
-      setUpGitSignIn(repository.getWorkingDir(), host).then(() => {
-        repository.resumeAutoFetch()
-        answer(reply, { type: 'commit.SIGN_IN_SET_UP', data: { host, ...during } })
-        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-      }, (error: unknown) => {
-        // Still the sign-in that is missing, so the offer stays with what went wrong setting it up
-        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { ...failureOf(error), ...during, code: 'authentication', signIn: { host, kind: 'github-cli' } } })
-      })
+      if (host !== 'github.com') {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: `The app signs git in to GitHub, not to ${host}.`, ...during } })
+        return
+      }
+      if (!storedSignIn()) {
+        // Still the sign-in that is missing, so the offer stays
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: `Sign in to GitHub to give git a sign-in for ${host}.`, ...during, code: 'authentication', signIn: { host, kind: 'github' } } })
+        return
+      }
+      repository.resumeAutoFetch()
+      answer(reply, { type: 'commit.SIGN_IN_SET_UP', data: { host, ...during } })
+      self.send({ type: 'commit.GIT_STATUS_CHANGED' })
     },
 
     updateBaseDirectory: assign({
