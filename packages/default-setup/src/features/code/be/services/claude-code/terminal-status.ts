@@ -29,8 +29,8 @@ export function createClaudeTerminalStatus(sessionId: string) {
       const next: ClaudeNativeTerminalTask[] = [], seen = new Set<string>()
       for (const value of values) {
         const task = record(value), type = ClaudeNativeManagedTaskTypeSchema.safeParse(task?.nativeTaskType)
-        if (!task || !validId(task.id) || seen.has(task.id) || !type.success || typeof task.name !== 'string' || typeof task.status !== 'string' || !['running', 'pending'].includes(task.status)) return false
-        seen.add(task.id); next.push({id:task.id,kind:'managed',nativeTaskType:type.data,name:task.name.slice(0,256),status:task.status})
+        if (!task || !validId(task.id) || seen.has(task.id) || !type.success || typeof task.name !== 'string' || typeof task.status !== 'string' || !['running', 'pending'].includes(task.status) || typeof task.canStop !== 'boolean' || task.canStop && (type.data === 'remote_agent' || task.status !== 'running')) return false
+        seen.add(task.id); next.push({id:task.id,kind:'managed',nativeTaskType:type.data,name:task.name.slice(0,256),status:task.status,canStop:task.canStop})
       }
       managedTasks = next; return true
     },

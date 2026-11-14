@@ -59,8 +59,11 @@ it('projects MCP activity atomically and retires it on session replacement', () 
 
 it('atomically projects manager-owned tasks and refuses unknown types and stale sessions', () => {
   const state=createClaudeTerminalStatus(session)
-  const task={id:'remote-review',nativeTaskType:'remote_agent',name:'Release review',status:'running'}
+  const task={id:'remote-review',nativeTaskType:'remote_agent',name:'Release review',status:'running',canStop:false}
   expect(state.updateActivityTasks(session,[],[],[],[task])).toBe(true)
+  expect(state.tasks).toEqual([{...task,kind:'managed'}])
+  expect(state.updateActivityTasks(session,[],[],[],[{...task,canStop:true}])).toBe(false)
+  expect(state.updateActivityTasks(session,[],[],[],[{...task,nativeTaskType:'auto_mode_scan',status:'pending',canStop:true}])).toBe(false)
   expect(state.tasks).toEqual([{...task,kind:'managed'}])
   expect(state.updateActivityTasks(session,[],[],[],[{...task,nativeTaskType:'local_agent'}])).toBe(false)
   expect(state.updateActivityTasks('foreign',[],[],[],[])).toBe(false)

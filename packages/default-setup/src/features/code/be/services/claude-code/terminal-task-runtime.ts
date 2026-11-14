@@ -3,10 +3,11 @@ import { ClaudeNativeManagedTaskTypeSchema } from '../../../common/native-manage
 /** Authored task ownership adapter; callbacks and transcript readers remain native. */
 export const claudeTerminalTaskRuntime = String.raw`function nativeWorkflowTaskFlags(n,task){const settled=n.transcriptState.AE(task.id);return {settled,canPause:task.status==='running',canResume:task.status==='paused'&&!!task.scriptPath&&!!task.workflowRunId,canStop:task.status==='running'||['completed','failed','killed'].includes(task.status)&&!settled};}
 function nativeWorkflowTasks(n,registry){return Object.values(registry.all()).filter(task=>task.type==='local_workflow').slice(0,256).map(task=>({id:task.id,name:String(task.description??task.summary??task.workflowName??'Workflow').slice(0,256),status:task.status,...nativeWorkflowTaskFlags(n,task)}));}
+function nativeManagedTaskCanStop(task){return ['dream','auto_mode_scan','local_memory_import','monitor_mcp','monitor_ws'].includes(task.type)&&task.status==='running'&&!(task.isBackgrounded===false);}
 function nativeManagedTasks(registry){
  const kinds=new Set(${JSON.stringify(ClaudeNativeManagedTaskTypeSchema.options)});
  // The original non-V3 task manager lists these families through Oh/hgo.
- return Object.values(registry.all()).filter(task=>kinds.has(task.type)&&['running','pending'].includes(task.status)&&!('isBackgrounded' in task&&task.isBackgrounded===false)).slice(0,256).map(task=>({id:task.id,nativeTaskType:task.type,name:String(task.type==='remote_agent'?task.title??task.description??'Remote Agent':task.description??task.type).slice(0,256),status:task.status}));
+ return Object.values(registry.all()).filter(task=>kinds.has(task.type)&&['running','pending'].includes(task.status)&&!('isBackgrounded' in task&&task.isBackgrounded===false)).slice(0,256).map(task=>({id:task.id,nativeTaskType:task.type,name:String(task.type==='remote_agent'?task.title??task.description??'Remote Agent':task.description??task.type).slice(0,256),status:task.status,canStop:nativeManagedTaskCanStop(task)}));
 }
 function nativeMcpTaskInfo(n,task){
  let truncated=false;const text=(value,limit)=>{if(typeof value!=='string')return;const clean=n.taskOutputText.stripVTControlCharacters(value);if(clean.length>limit)truncated=true;let shown=clean.slice(0,limit);const last=shown.charCodeAt(shown.length-1);if(last>=0xd800&&last<=0xdbff)shown=shown.slice(0,-1);return shown;};
@@ -84,9 +85,14 @@ async function nativeTaskControl(n,binding,request,abort,current){
   current();if(context.getAppState().viewingAgentTaskId!==undefined)throw Error('Native view moved during selection');
   return {view:{taskId:null}};
  }
- const matches=Object.values(registry.all()).filter(task=>['local_workflow','local_bash','mcp_task'].includes(task.type)?task.id===request.task_id:n.runtime.flt(task)?.id===request.task_id);
+ const matches=Object.values(registry.all()).filter(task=>['local_workflow','local_bash','mcp_task',...${JSON.stringify(ClaudeNativeManagedTaskTypeSchema.options)}].includes(task.type)?task.id===request.task_id:n.runtime.flt(task)?.id===request.task_id);
  if(matches.length!==1)throw Error('Native task is no longer owned by this session');
  const task=matches[0];
+ if(${JSON.stringify(ClaudeNativeManagedTaskTypeSchema.options)}.includes(task.type)){
+  if(request.operation!=='stop')throw Error('Use the original native task manager for this task detail');
+  if(!nativeManagedTaskCanStop(task))throw Error('This native task cannot be stopped directly; it may have ended or require confirmation');
+  await n.taskControls.gAe(task.id,{taskRegistry:registry,setAppState:context.setAppState,getAppState:context.getAppState,session:context.session,storageV5:context.storageV5,source:'user'});current();return {stopped:true};
+ }
  if(task.type==='mcp_task'){
   if(!nativeMcpTaskVisible(task))throw Error('MCP task is no longer listed by the native task manager');
   if(!['inspect','stop'].includes(request.operation))throw Error('MCP tasks support details and Stop only');

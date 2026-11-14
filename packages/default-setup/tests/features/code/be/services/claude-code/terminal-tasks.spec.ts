@@ -306,5 +306,34 @@ it('lists all remaining original task families without foreground or retired rec
   const result=list({all:()=>tasks})
   expect(result.map(task=>task.nativeTaskType)).toEqual(kinds)
   expect(result[0].name).toBe('Remote review')
-  expect(result.every(task=>!('canStop' in task)&&!('canInput' in task))).toBe(true)
+  expect(result.map(task=>task.canStop)).toEqual([false,false,true,false,true,false])
+  expect(result.every(task=>!('canInput' in task))).toBe(true)
+})
+
+function managedFixture(type = 'auto_mode_scan') {
+ const task = {id:'managed-a',type,status:'running',isBackgrounded:true}
+ const registry = {all:()=>({[task.id]:task}),get:(id:string)=>id===task.id?task:undefined}
+ const context = {taskRegistry:registry,session:{id:'native-session'},storageV5:{},setAppState:vi.fn(),getAppState:vi.fn()}
+ const stop = vi.fn(async()=>{task.status='killed'})
+ const run = vm.runInNewContext(claudeTerminalTaskRuntime+';nativeTaskControl')
+ return {task,stop,context,request:(operation='stop',taskId=task.id,current=()=>{})=>run({taskControls:{gAe:stop}}, {toolContext:()=>context}, {task_id:taskId,operation},new AbortController(),current)}
+}
+it.each(['dream','auto_mode_scan','local_memory_import','monitor_mcp','monitor_ws'])('stops owned %s through the original user handler without Agent controls',async type=>{
+ const f=managedFixture(type)
+ await expect(f.request('input')).rejects.toThrow('original native task manager')
+ await expect(f.request('stop','foreign')).rejects.toThrow('no longer owned')
+ expect(f.stop).not.toHaveBeenCalled()
+ expect(await f.request()).toEqual({stopped:true})
+ expect(f.stop).toHaveBeenCalledExactlyOnceWith(f.task.id,{...f.context,source:'user'})
+ expect(f.task.status).toBe('killed')
+ await expect(f.request()).rejects.toThrow('cannot be stopped directly')
+ expect(f.stop).toHaveBeenCalledOnce()
+})
+it('preserves remote confirmation, pending and foreground refusal, native errors and late-owner isolation',async()=>{
+ const remote=managedFixture('remote_agent');await expect(remote.request()).rejects.toThrow('require confirmation');expect(remote.stop).not.toHaveBeenCalled()
+ const f=managedFixture();f.task.status='pending';await expect(f.request()).rejects.toThrow('cannot be stopped directly')
+ f.task.status='running';f.task.isBackgrounded=false;await expect(f.request()).rejects.toThrow('cannot be stopped directly');expect(f.stop).not.toHaveBeenCalled()
+ f.task.isBackgrounded=true;f.stop.mockRejectedValueOnce(Error('Original Stop refused'));await expect(f.request()).rejects.toThrow('Original Stop refused')
+ let current=true;f.stop.mockImplementationOnce(async()=>{current=false})
+ await expect(f.request('stop',f.task.id,()=>{if(!current)throw Error('Owner replaced')})).rejects.toThrow('Owner replaced')
 })

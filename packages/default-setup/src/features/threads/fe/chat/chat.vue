@@ -563,7 +563,7 @@ const statusLineCwd = computed(() => {
 })
 const taskView = computed(() => Object.entries(nativeTerminalViews.value).find(([mountId, view]) => mountId !== nativeUiMount.value?.mountId && view.threadId === currentThread.value?.id && view.state?.status === 'live'))
 const workflowTasks = computed(() => { const owner = taskView.value?.[1].state; return owner?.tasks.filter(task => task.kind === 'workflow').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
-const managedTasks = computed(() => nativeComposerOwner.value?.tasks.filter(task => task.kind === 'managed') ?? [])
+const managedTasks = computed(() => { const owner = nativeComposerOwner.value; return owner?.tasks.filter(task => task.kind === 'managed').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
 const mcpTasks = computed(() => { const owner = taskView.value?.[1].state; return owner?.tasks.filter(task => task.kind === 'mcp').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
 const shellTasks = computed(() => { const owner = taskView.value?.[1].state; return owner?.tasks.filter(task => task.kind === 'shell').map(task => ({ ...task, ownerId: owner.ownerId, sessionId: owner.sessionId })) ?? [] })
 const agentPending = ref(false), agentReturning = ref(false)

@@ -124,7 +124,7 @@ it('shows MCP task details and native refusal without offering Agent controls', 
 
 it('routes remote-review management to Claude without invented Agent or Stop controls', async () => {
   const root=document.createElement('div');document.body.append(root)
-  const task={id:'remote',kind:'managed' as const,nativeTaskType:'remote_agent' as const,name:'Release <script>review</script>',status:'running'}
+  const task={id:'remote',ownerId:'owner',sessionId:'session',kind:'managed' as const,nativeTaskType:'remote_agent' as const,name:'Release <script>review</script>',status:'running',canStop:true}
   const manage=vi.fn(),disabled=ref(false)
   app=createApp({render:()=>h(NativeManagedTasks,{tasks:[task],disabled:disabled.value,onManage:manage})});app.mount(root)
   expect(root.textContent).toContain(task.name);expect(root.querySelector('script')).toBeNull()
@@ -134,4 +134,22 @@ it('routes remote-review management to Claude without invented Agent or Stop con
   buttons[0]!.click();await nextTick();expect(manage).toHaveBeenCalledOnce()
   disabled.value=true;await nextTick();expect(buttons[0]!.disabled).toBe(true)
   buttons[0]!.click();expect(manage).toHaveBeenCalledOnce()
+})
+
+it('shows owned native activity Stop, pending/error state and retires old-owner access',async()=>{
+ const task={id:'scan',ownerId:'owner',sessionId:'session',kind:'managed' as const,nativeTaskType:'auto_mode_scan' as const,name:'Scan workspace',status:'running',canStop:true}
+ const owner=ref('owner'),state=ref<ClaudeTerminalTaskState>(),disabled=ref(false),operate=vi.fn()
+ const root=document.createElement('div');document.body.append(root)
+ app=createApp({setup(){provide(claudeTaskControls,{foregroundAvailable:computed(()=>false),ownerId:computed(()=>owner.value),state:computed(()=>state.value),operate});return()=>h(NativeManagedTasks,{tasks:[task],disabled:disabled.value})}});app.mount(root)
+ const stop=()=>root.querySelector<HTMLButtonElement>('[aria-label="Stop Scan workspace"]')!
+ expect(stop().disabled).toBe(false);stop().click();expect(operate).toHaveBeenCalledExactlyOnceWith(task,'stop')
+ state.value={ownerId:'owner',taskId:'scan',revision:1,operation:'stop',status:'pending'};await nextTick()
+ expect(stop().disabled).toBe(true);expect(stop().textContent).toBe('Stopping…');stop().click();expect(operate).toHaveBeenCalledOnce()
+ state.value={...state.value,status:'error',problem:'Original Stop refused'};await nextTick()
+ expect(root.querySelector('[role="alert"]')?.textContent).toBe('Original Stop refused');expect(stop().disabled).toBe(false)
+ owner.value='replacement';await nextTick();expect(stop().disabled).toBe(true)
+ stop().click();expect(operate).toHaveBeenCalledOnce()
+ state.value={...state.value,ownerId:'replacement'};await nextTick();expect(root.querySelector('[role="alert"]')).toBeNull()
+ owner.value='owner';disabled.value=true;await nextTick();expect(stop().disabled).toBe(true)
+ expect(root.querySelector('textarea')).toBeNull();expect(root.textContent).not.toContain('Open Agent')
 })
