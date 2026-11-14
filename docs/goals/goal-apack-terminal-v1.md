@@ -109,8 +109,8 @@ machine, one heavy job at a time. P2 is measured against P1's baseline, so P1 co
 | Requirement | Implementation / source | Evidence | Remaining work |
 |---|---|---|---|
 | R1 Parsers fuzzed in CI | Not started | none | T1 |
-| R2 Recording format versioned | Not started | none | T2 |
-| R3 `unsafe` blocks accounted for | Not started | none | T3 |
+| R2 Recording format versioned | Met: a recording begins with the magic `APKREC` and format 1; a file without the header, or of another format, is refused and says why (`be263dc`). The golden file `tests/fixtures/recording-format-1.apkrec` reads back | Recording suite on the Mac, 34 passed, 2026-11-14; CI's tests on macOS, Linux and Windows pass on `master` | none |
+| R3 `unsafe` blocks accounted for | Met: every `unsafe` site has a `SAFETY` comment, and `cargo xtask check-safety` fails on one without and on finding none; it passes on `master`. The suite runs clean under AddressSanitizer on x86_64 Linux (`asan.yml`) | `check-safety` on the Mac, 2026-11-14; ASan run 43601063124 on `436a8ae`, 2026-11-14, success (and on `63d78cd`, 2026-11-12) | none |
 | R4 Command marks correct under ConPTY load | Not tested | 2026-11-12 VM run of the hook, 3 commands only | W1 |
 | R5 App code path works on Windows | Partly: the app's terminal service opens PowerShell through the broker on the VM, and typed input reaches the shell. The recorded commands with statuses are not read back on Windows | 2026-11-12 VM run (headless API, marker file) | W2 |
 | R6 Kept-session suite on Windows, or beta with evidence | Met with two justified exceptions: 13 of the 15 `keeping` cases pass on the VM (`keeping::`, 2026-11-14), including the job-group case ported this round. The other two are POSIX-only and gated with their reasons: the ignore-hangup case (a Windows console has no hangup a program can ignore) and the half-close case (a named pipe cannot close one direction) | 2026-11-14 VM run; PR #32 | none; the two exceptions need the owner's acceptance |
