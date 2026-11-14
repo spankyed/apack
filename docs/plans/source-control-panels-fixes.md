@@ -110,7 +110,7 @@ pull request whose base moved on shows only its own changes; a fork's pull reque
 Branch confirms and deletes the right branch.
 
 **Landed 2026-11-14**, in apack-git #30 (`readRemote`, `mergeBase`, `fetchRemoteBranch`, `deleteRemoteBranch`) and
-apack #PR, with 6.1–6.3. Left over, each for a later phase:
+apack #486, with 6.1–6.3. Left over, each for a later phase:
 
 - After Delete Branch, the local tracking ref (`origin/<branch>`) stays until the next fetch prunes it: pruning one
   ref needs an engine method, which goes with phase 3's engine changes.
