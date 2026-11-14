@@ -120,7 +120,7 @@ it('stores a memo a client adds and sends it back', async () => {
 | `connect()` | Sends `CLIENT_CONNECTED` and then `SEND_STATE`, which reach every running app, as a client connecting does. Every running system gets them (the harness has no client that loads pack frontends later), and sends to frontend surfaces are delivered from then on. Events for systems don't wait for it: client events, and the events systems, steps and schedules send (`sendToSystem`, `fire`, schedule ticks), reach them from `startApp`, as in the app |
 | `send(systemId, event)` | Sends a system an event, connected or not |
 | `emitted(surfaceId?)` | Events sent to frontend surfaces (`broadcastToSurface`). Both go through the bus, as in the app, so one sent before `connect()` is dropped and never appears here (systems send their startup data once a client connects, so `connect()` first) |
-| `nextEmit(surfaceId, type, { timeoutMs? })` | The next such event no earlier call returned, waiting for it (default 5000 ms) |
+| `nextEmit(surfaceId, type, { answering?, timeoutMs? })` | The next such event no earlier call returned, waiting for it for as long as the test's processes keep working. `timeoutMs` waits on the clock instead, for a case asserting an event does not come |
 | `settle()` | Resolves once the systems have no work left |
 | `system(systemId)` | A running system's actor |
 | `watchView(feature, view, args?)` | Subscribes to one of a feature's [views](services-and-data.md#views) as a window does: `updates` holds what it delivered, `next()` waits for the next one (default 5000 ms), `stop()` unsubscribes. Each call is its own subscriber, so two stand in for two windows; subscribers asking for the same view and arguments share one read, as in the app. A `startShell` shell's `useView` subscribes through the same views |
@@ -246,7 +246,7 @@ it('summarizes a note', async () => {
 ```
 
 - **`importFlows(dsl)`** compiles flow DSL and imports it as the flow applier does. Import before `startApp`: the brain starts the root flow when the app starts.
-- **`runFlow(label, { event?, data?, timeoutMs? })`** (default timeout 10 000 ms, covering its sends and settling) sends `event` with `data` as its payload, as a client sends an event to the brain, and waits for the flow labelled `label`, which must be running (the root flow or a subflow).
+- **`runFlow(label, { event?, data?, timeoutMs? })`** (waiting for as long as the test's processes keep working, as `nextEmit` does; `timeoutMs` is a clock, for a case asserting the flow does not finish) sends `event` with `data` as its payload, as a client sends an event to the brain, and waits for the flow labelled `label`, which must be running (the root flow or a subflow).
   - It resolves once every track of that flow the event triggered has finished: steps completed or failed, apart from steps that wait by design (keep-alive).
   - Without `event`, it resolves with the entry tracks the flow ran when it started.
   - It returns a `FlowRun`: `eventRunNodeIds`, the run-history nodes of the tracks the event triggered, and `steps`, the steps those tracks ran in start order, each a `FlowRunStep` (`runNodeId`, `label`, `kind` (`step`, or `flow` for a subflow), `status`, `input` (what the step was given: its settings, and under `params` the inputs it resolved from the event and earlier steps, as its run node records them — a long value is a `{ value, _truncated }` marker) and `result`, what the step returned).

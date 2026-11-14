@@ -88,7 +88,6 @@ export function resetTestData(): void;
 export interface RunFlowOptions {
     data?: unknown;
     event?: string;
-    // (undocumented)
     timeoutMs?: number;
 }
 
