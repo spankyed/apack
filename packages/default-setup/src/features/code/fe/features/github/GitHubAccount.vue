@@ -55,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { useSurface } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
@@ -69,7 +69,9 @@ const account = useSelector(github, (state) => state.context.account)
 const signIn = useSelector(github, (state) => state.context.signIn)
 const failure = useSelector(github, (state) => state.context.failure)
 
+/** Whether the code shown now was copied: a new code is not, until it is */
 const copied = ref(false)
+watch(() => signIn.value?.code?.userCode, () => { copied.value = false })
 const copyCode = async (code: string) => {
   copied.value = await window.electronAPI?.clipboard.writeText(code) ?? false
 }

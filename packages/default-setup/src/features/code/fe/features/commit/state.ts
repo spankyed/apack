@@ -141,7 +141,17 @@ export interface CodeCommitContext {
   /** The untracked folder rows that are open, each with the files it lists, by the folder's path */
   openFolders: Record<string, OpenFolder>
   isPushing: boolean
+  /** Whether the push last run was stopped by the user rather than done, which the panel says instead of "Pushed" */
+  pushStopped: boolean
   isPulling: boolean
+  /** A commit or an amend is asked for and unanswered: another is not asked for until it is */
+  isCommitting: boolean
+  /** The tag being pushed or deleted, until that is answered */
+  tagBusy: { name: string; action: 'push' | 'delete' } | null
+  /** The tag last pushed, a new object each time, which the panel says it pushed */
+  tagPushed: { name: string } | null
+  /** The commit the branch is being reset to, until that is answered */
+  resettingTo: string | null
   isGeneratingMessage: boolean
   stashList: StashEntry[]
   isStashing: boolean
@@ -217,7 +227,7 @@ const diffRefresh = (file: { path: string; staged: boolean }) => {
 /** What an ask that holds a busy flag is busy with */
 type BusyAsk =
   | 'push' | 'pull' | 'checkout' | 'stash' | 'worktree' | 'speedUp' | 'signIn' | 'hunk' | 'generate'
-  | 'moveOperation' | 'startOperation' | 'blame' | 'reword'
+  | 'moveOperation' | 'startOperation' | 'blame' | 'reword' | 'commit' | 'tag' | 'reset'
 
 /** The progress shown, unless it is of the command named: that command's progress goes with it */
 const progressUnless = (context: CodeCommitContext, during: 'push' | 'pull' | 'checkout') =>
@@ -238,6 +248,9 @@ const FAILED: Record<BusyAsk, (context: CodeCommitContext) => Partial<CodeCommit
   startOperation: () => ({ isStartingOperation: false }),
   blame: () => ({ blame: null }),
   reword: () => ({ rewording: null }),
+  commit: () => ({ isCommitting: false }),
+  tag: () => ({ tagBusy: null }),
+  reset: () => ({ resettingTo: null }),
 }
 
 /** What `enqueueActions` hands a body, as far as an ask made from one uses it */
@@ -439,9 +452,16 @@ type RewriteRequest =
   | { type: 'commit.REWRITE_COMMIT'; hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }
 
 /** Asks the backend for an amend or a rewrite, as each one's own event */
-function sendRewrite(request: RewriteRequest): void {
-  if (request.type === 'commit.AMEND') sendToSystem('code', request)
-  else sendToSystem('code', request)
+function sendRewrite(request: RewriteRequest, call?: string): void {
+  const options = call ? { call } : undefined
+  if (request.type === 'commit.AMEND') sendToSystem('code', request, options)
+  else sendToSystem('code', request, options)
+}
+
+/** Asks for a rewrite; an amend holds the panel's commit busy until it is answered, as a commit does */
+function askRewrite(enqueue: Enqueue, request: RewriteRequest): void {
+  if (request.type === 'commit.AMEND') askBusy(enqueue, 'commit', { isCommitting: true }, call => sendRewrite(request, call))
+  else enqueue(() => sendRewrite(request))
 }
 
 /** The fields of the panel's state that are read from a repository, or wait on an answer from one */
@@ -450,7 +470,12 @@ type OfOneFolder =
   | 'isGitLoading'
   | 'isCheckingOutBranch'
   | 'isPushing'
+  | 'pushStopped'
   | 'isPulling'
+  | 'isCommitting'
+  | 'tagBusy'
+  | 'tagPushed'
+  | 'resettingTo'
   | 'isStashing'
   | 'stashTakesMessage'
   | 'isWorktreeLoading'
@@ -523,7 +548,12 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   isGitLoading: false,
   isCheckingOutBranch: false,
   isPushing: false,
+  pushStopped: false,
   isPulling: false,
+  isCommitting: false,
+  tagBusy: null,
+  tagPushed: null,
+  resettingTo: null,
   isStashing: false,
   stashTakesMessage: false,
   isWorktreeLoading: false,
@@ -735,16 +765,21 @@ export const commitState = setup({
       }
     }),
 
-    commit: ({ context }) => {
+    /** Asks for a commit, one at a time; a message of nothing but co-author lines is said to be one rather than sent */
+    commit: enqueueActions(({ context, enqueue }) => {
+      if (context.isCommitting) return
       const message = context.commitMessage.replace(/\n*Co-Authored-By:.*$/gim, '').trim()
-      if (message) {
-        sendToSystem('code', { type: 'commit.COMMIT', message })
+      if (!message) {
+        if (context.commitMessage.trim()) enqueue.assign({ gitError: 'The message has only Co-Authored-By lines: write what the commit does above them.', gitFailure: null })
+        return
       }
-    },
+      askBusy(enqueue, 'commit', { isCommitting: true }, call => { sendToSystem('code', { type: 'commit.COMMIT', message }, { call }) })
+    }),
 
     handleCommitSuccess: assign({
       commitMessage: '',
       selectedGitFile: null,
+      isCommitting: false,
     }),
 
     toggleRevertDialog: enqueueActions(({ event, enqueue }) => {
@@ -1024,16 +1059,17 @@ export const commitState = setup({
     handleOperationStarted: assign({ isStartingOperation: false }),
 
     /** Asks for an amend or a rewrite, kept until it is answered so the user can go on with it if a remote holds it */
-    requestRewrite: enqueueActions(({ event, enqueue }) => {
+    requestRewrite: enqueueActions(({ context, event, enqueue }) => {
       const request = event as RewriteRequest
+      if (request.type === 'commit.AMEND' && context.isCommitting) return
       enqueue.assign({ pendingRewrite: request, rewriteConfirmation: null, gitError: null })
-      enqueue(() => { sendRewrite(request) })
+      askRewrite(enqueue, request)
     }),
 
     confirmRewrite: enqueueActions(({ context, enqueue }) => {
       const request = context.rewriteConfirmation?.request
       enqueue.assign({ rewriteConfirmation: null })
-      if (request) enqueue(() => { sendRewrite({ ...request, evenIfPublished: true }) })
+      if (request) askRewrite(enqueue, { ...request, evenIfPublished: true })
     }),
 
     previewMerge: ({ event }) => {
@@ -1119,14 +1155,14 @@ export const commitState = setup({
       const { name, commit, message } = event as { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
       sendToSystem('code', { type: 'commit.CREATE_TAG', name, ...(commit && { commit }), ...(message && { message }) })
     },
-    deleteTag: ({ event }) => {
+    deleteTag: enqueueActions(({ event, enqueue }) => {
       const { name } = event as { type: 'commit.DELETE_TAG'; name: string }
-      sendToSystem('code', { type: 'commit.DELETE_TAG', name })
-    },
-    pushTag: ({ event }) => {
+      askBusy(enqueue, 'tag', { tagBusy: { name, action: 'delete' } }, call => { sendToSystem('code', { type: 'commit.DELETE_TAG', name }, { call }) })
+    }),
+    pushTag: enqueueActions(({ event, enqueue }) => {
       const { name } = event as { type: 'commit.PUSH_TAG'; name: string }
-      sendToSystem('code', { type: 'commit.PUSH_TAG', name })
-    },
+      askBusy(enqueue, 'tag', { tagBusy: { name, action: 'push' } }, call => { sendToSystem('code', { type: 'commit.PUSH_TAG', name }, { call }) })
+    }),
     renameBranch: ({ event }) => {
       const { name, to } = event as { type: 'commit.RENAME_BRANCH'; name: string; to: string }
       sendToSystem('code', { type: 'commit.RENAME_BRANCH', name, to })
@@ -1148,11 +1184,17 @@ export const commitState = setup({
     }),
 
     pushBranch: enqueueActions(({ enqueue }) => {
-      askBusy(enqueue, 'push', { isPushing: true }, call => { sendToSystem('code', { type: 'commit.PUBLISH_BRANCH' }, { call }) })
+      askBusy(enqueue, 'push', { isPushing: true, pushStopped: false }, call => { sendToSystem('code', { type: 'commit.PUBLISH_BRANCH' }, { call }) })
     }),
 
     handleBranchPushed: assign({
       isPushing: false,
+      progress: null
+    }),
+
+    handlePushStopped: assign({
+      isPushing: false,
+      pushStopped: true,
       progress: null
     }),
 
@@ -1300,10 +1342,10 @@ export const commitState = setup({
       sendToSystem('code', { type: 'commit.REVERT_COMMIT', hash: ev.hash })
     },
 
-    resetToCommit: ({ event }) => {
-      const ev = event as { type: 'commit.RESET_TO_COMMIT'; hash: string }
-      sendToSystem('code', { type: 'commit.RESET_TO_COMMIT', hash: ev.hash })
-    }
+    resetToCommit: enqueueActions(({ event, enqueue }) => {
+      const { hash } = event as { type: 'commit.RESET_TO_COMMIT'; hash: string }
+      askBusy(enqueue, 'reset', { resettingTo: hash }, call => { sendToSystem('code', { type: 'commit.RESET_TO_COMMIT', hash }, { call }) })
+    })
   }
 }).createMachine({
   id: 'commit',
@@ -1528,10 +1570,11 @@ export const commitState = setup({
         },
         'commit.AMEND': { actions: 'requestRewrite' },
         'commit.REWRITE_COMMIT': { actions: 'requestRewrite' },
-        'commit.AMENDED': { actions: [assign({ pendingRewrite: null, commitMessage: '' }), 'requestLogList'] },
+        'commit.AMENDED': { actions: [assign({ pendingRewrite: null, commitMessage: '', isCommitting: false }), 'requestLogList'] },
         'commit.COMMIT_REWRITTEN': { actions: [assign({ pendingRewrite: null, rewording: null }), 'requestLogList'] },
         'commit.REWRITE_NEEDS_CONFIRMATION': {
           actions: assign({
+            isCommitting: false,
             rewriteConfirmation: ({ context, event }) => context.pendingRewrite
               ? { message: (event as { type: 'commit.REWRITE_NEEDS_CONFIRMATION'; data: { message: string } }).data.message, request: context.pendingRewrite }
               : null,
@@ -1594,7 +1637,10 @@ export const commitState = setup({
         // The status that follows says whether it is still slow
         'commit.STATUS_SPED_UP': { actions: assign({ isSpeedingUpStatus: false, slowStatus: null }) },
         'commit.TAG_CREATED': { actions: ['getAllBranches', 'requestLogList'] },
-        'commit.TAG_DELETED': { actions: ['getAllBranches', 'requestLogList'] },
+        'commit.TAG_DELETED': { actions: [assign({ tagBusy: null }), 'getAllBranches', 'requestLogList'] },
+        'commit.TAG_PUSHED': {
+          actions: assign({ tagBusy: null, tagPushed: ({ event }) => ({ name: (event as { type: 'commit.TAG_PUSHED'; data: { name: string } }).data.name }) }),
+        },
         'commit.BRANCH_RENAMED': { actions: ['getAllBranches', 'requestLogList'] },
         'commit.BRANCH_CHECKOUT_SUCCESS': {
           actions: ['handleBranchCheckoutSuccess', 'getAllBranches']
@@ -1612,7 +1658,7 @@ export const commitState = setup({
           actions: () => { sendToSystem('code', { type: 'commit.STOP_PUSH' }) }
         },
         'commit.PUSH_STOPPED': {
-          actions: 'handleBranchPushed'
+          actions: 'handlePushStopped'
         },
         'commit.PULL_BRANCH': {
           actions: 'pullBranch'
@@ -1700,7 +1746,7 @@ export const commitState = setup({
           actions: ['refreshGitStatus', 'requestLogList']
         },
         'commit.RESET_COMMIT_SUCCESS': {
-          actions: ['refreshGitStatus', 'requestLogList']
+          actions: [assign({ resettingTo: null }), 'refreshGitStatus', 'requestLogList']
         },
         'CODE_STARTED': {
           actions: 'handleCodeStartup'
