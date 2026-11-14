@@ -30,14 +30,14 @@ describe('TEST_CLI_PROVIDER', () => {
   it('tests a known provider at its stored path, answers the settings surface and keeps the path', async () => {
     const app = await startApp({ systems: ['code', 'host/settings'] });
     await app.connect();
-    featureSettings.forFeature('code').set({ path: ['cliPaths', 'gh'], value: process.execPath });
+    featureSettings.forFeature('code').set({ path: ['cliPaths', 'codex'], value: process.execPath });
 
-    await app.send('code', { type: 'TEST_CLI_PROVIDER', provider: 'gh' });
+    await app.send('code', { type: 'TEST_CLI_PROVIDER', provider: 'codex' });
 
     expect(await app.nextEmit('host/settings', 'CLI_TEST_RESULT')).toMatchObject({
-      type: 'CLI_TEST_RESULT', provider: 'gh', success: true, resolvedPath: process.execPath,
+      type: 'CLI_TEST_RESULT', provider: 'codex', success: true, resolvedPath: process.execPath,
     });
     expect(app.emitted('code').filter((e) => e.type === 'CLI_TEST_RESULT')).toEqual([]);
-    expect(cliPaths().gh).toBe(process.execPath);
+    expect(cliPaths().codex).toBe(process.execPath);
   });
 });

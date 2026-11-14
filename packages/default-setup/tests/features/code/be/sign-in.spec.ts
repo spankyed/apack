@@ -1,6 +1,6 @@
 // A remote that asks for a sign-in git does not have is refused at once, since git runs with its prompts off. The
-// window that pushed is told so with what can be done about it, and where that is the GitHub CLI, has the CLI give
-// git its sign-in. The remote is a real one that answers 401; the CLI is a script that records what it was asked.
+// window that pushed is told so with what can be done about it, and where that is signing in to GitHub, is told
+// git can sign in once the app has. The remote is a real one that answers 401.
 import { afterEach, describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as http from 'node:http';
@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
-import { featureSettings } from '#generated/settings.ts';
+import { services } from '#generated/services.ts';
 
 const CODE = 'default-setup/code';
 const dirs: string[] = [];
@@ -47,22 +47,8 @@ async function codeOverARemoteWantingASignIn() {
   await app.settle();
 }
 
-/** A GitHub CLI that records each command it was given, signed in or not */
-function githubCli({ signedIn }: { signedIn: boolean }) {
-  const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-sign-in-gh-')));
-  dirs.push(directory);
-  const cli = path.join(directory, 'gh');
-  fs.writeFileSync(cli, `#!/bin/sh
-echo "$*" >> "$(dirname "$0")/asked"
-if [ "$2" = status ] && [ ${signedIn ? 0 : 1} = 1 ]; then
-  echo 'You are not logged into any GitHub hosts. To log in, run: gh auth login' >&2
-  exit 1
-fi
-`);
-  fs.chmodSync(cli, 0o755);
-  featureSettings.forFeature('code').set({ path: ['cliPaths', 'gh'], value: cli });
-  return () => fs.existsSync(path.join(directory, 'asked')) ? fs.readFileSync(path.join(directory, 'asked'), 'utf8').trim().split('\n') : [];
-}
+/** The app signed in to GitHub, as its sign-in leaves it: the pack's own secret */
+const signedIn = () => services.secrets.own.set('github', JSON.stringify({ token: 'gho_token', scopes: ['repo'], account: { login: 'octocat' } }));
 
 const ask = (event: { type: string; host?: string; during?: 'push' | 'pull' }) => app!.send('code', event, { sender: CODE, client: 'c-main' });
 
@@ -79,52 +65,37 @@ it('tells the window that pushed why the push failed, that it can be run again, 
   });
 });
 
-// The stand-in is a script run by its shebang, which Windows does not read
-describe.skipIf(process.platform === 'win32')('taking the GitHub CLI offer', () => {
-  it('has the CLI give git its sign-in for the host, once the CLI says it is signed in', async () => {
+describe('taking the offer to sign in to GitHub', () => {
+  it('says git can sign in, once the app is signed in to GitHub, with the push or the pull it was for', async () => {
     await codeOverARemoteWantingASignIn();
-    const asked = githubCli({ signedIn: true });
+    signedIn();
 
-    const call = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com' });
+    const call = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' });
 
-    expect((await app!.nextEmit('code', 'commit.SIGN_IN_SET_UP', { answering: call })).data).toEqual({ host: 'github.com' });
-    expect(asked()).toEqual(['auth status --hostname github.com', 'auth setup-git --hostname github.com']);
+    expect((await app!.nextEmit('code', 'commit.SIGN_IN_SET_UP', { answering: call })).data).toEqual({ host: 'github.com', during: 'push' });
   });
 
-  it('says the CLI is not signed in, changes nothing, and leaves the offer standing', async () => {
+  it('leaves the offer standing while the app is not signed in, with the pull it was for', async () => {
     await codeOverARemoteWantingASignIn();
-    const asked = githubCli({ signedIn: false });
 
-    const call = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com' });
+    const call = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'pull' });
 
     expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: call })).data).toEqual({
-      message: 'GitHub CLI is not signed in to github.com. Run `gh auth login` in a terminal, then try again.',
+      message: 'Sign in to GitHub to give git a sign-in for github.com.',
       code: 'authentication',
-      signIn: { host: 'github.com', kind: 'github-cli' },
+      during: 'pull',
+      signIn: { host: 'github.com', kind: 'github' },
     });
-    expect(asked(), 'git\'s config was not touched').toEqual(['auth status --hostname github.com']);
   });
 
-  // Whoever asked runs the refused command again from the answer, since what they held of it may be gone by then
-  it('answers with the push or the pull the sign-in was for, set up or not', async () => {
+  it('takes nothing for a host that would read as an option, or one that is not GitHub', async () => {
     await codeOverARemoteWantingASignIn();
-    githubCli({ signedIn: true });
-    const done = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' });
-    expect((await app!.nextEmit('code', 'commit.SIGN_IN_SET_UP', { answering: done })).data).toEqual({ host: 'github.com', during: 'push' });
+    signedIn();
 
-    githubCli({ signedIn: false });
-    const refused = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'pull' });
-    expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: refused })).data).toMatchObject({ during: 'pull', signIn: { host: 'github.com', kind: 'github-cli' } });
-  });
-
-  it('runs nothing for a host that would read as an option', async () => {
-    await codeOverARemoteWantingASignIn();
-    const asked = githubCli({ signedIn: true });
-
-    const call = await ask({ type: 'commit.SET_UP_SIGN_IN', host: '--help' });
-
-    expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: call })).data).toMatchObject({ message: 'Not a host name: "--help"' });
-    expect(asked()).toEqual([]);
+    const option = await ask({ type: 'commit.SET_UP_SIGN_IN', host: '--help' });
+    expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: option })).data).toMatchObject({ message: 'Not a host name: "--help"' });
+    const elsewhere = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'gitlab.com' });
+    expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: elsewhere })).data).toEqual({ message: 'The app signs git in to GitHub, not to gitlab.com.' });
   });
 });
 

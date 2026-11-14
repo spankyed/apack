@@ -1,3 +1,4 @@
+import type { GitHubApiFailure } from '#features/code/be/services/github-api.ts'
 import { setup, assign, enqueueActions , type ActorRefFrom } from 'xstate';
 import { sendToSystem } from '#generated/events.ts';
 import type { GitStatusFile, GitDiff } from '../commit/state.ts';
@@ -33,7 +34,7 @@ export const fileKey = (base: string, head: string | undefined, path: string): s
 
 const defaultLoadingStates = {
   isPrLoading: false,
-  isGhChecking: false,
+  isCheckingBranchPR: false,
   isCreating: false,
   isMerging: false,
   isClosing: false,
@@ -45,11 +46,8 @@ const defaultLoadingStates = {
   inflightMutations: 0,
 }
 
-export interface ActiveTokenInfo {
-  source: 'GITHUB_TOKEN' | 'keyring' | 'unknown'
-  kind: 'fine-grained-pat' | 'classic-pat' | 'oauth' | 'unknown'
-  prefix: string
-}
+/** Whether the app's GitHub sign-in can work with this repository's pull requests: `ok`, or why not */
+export type GitHubAccess = 'ok' | GitHubApiFailure
 
 export interface CodePullRequestContext {
   // Branch comparison
@@ -89,18 +87,13 @@ export interface CodePullRequestContext {
   reviewThreads: GhReviewThread[]
   commentTab: 'discussion' | 'reviews'
   viewMode: 'files' | 'pr'
-  isGhAvailable: boolean
-  prAccess: boolean
-  activeToken: ActiveTokenInfo | null
-  isGhChecking: boolean
+  /** `null` until the backend has said */
+  githubAccess: GitHubAccess | null
+  /** What to tell the user about an access that is not `ok` */
+  githubAccessMessage: string | null
+  isCheckingBranchPR: boolean
   branchPRCheckFailed: boolean
   prCheckCompleted: boolean
-  /**
-   * True once we've ever received a pr.GH_AUTH_CHECKED response. Used to gate the
-   * "GitHub CLI not available" banner so the default `isGhAvailable: false` initial
-   * state doesn't flash before the first auth check resolves.
-   */
-  authCheckCompleted: boolean
 
   // Create form
   createTitle: string
@@ -169,7 +162,8 @@ export type Event =
   | { type: 'pr.GIT_STATUS_REFRESHED'; data: { timestamp: Date } }
   | { type: 'CODE_STARTED' }
   // GitHub PR events from backend
-  | { type: 'pr.GH_AUTH_CHECKED'; data: { available: boolean; prAccess: boolean; activeToken: ActiveTokenInfo | null } }
+  | { type: 'pr.CHECK_GITHUB_ACCESS' }
+  | { type: 'pr.GITHUB_ACCESS_CHECKED'; data: { access: GitHubAccess; message?: string } }
   | { type: 'pr.NAVIGATE_TO_HELP' }
   | { type: 'pr.OPEN_PRS_RECEIVED'; data: { prs: GhPullRequest[] } }
   | { type: 'pr.PR_DETAILS_RECEIVED'; data: { pr: GhPullRequest; comments: GhPRComment[]; fetchedAt: number } }
@@ -388,7 +382,7 @@ export const pullRequestState = setup({
     handleCodeStartup: ({ self }) => {
       const parentContext = getParentContext(self)
       if (parentContext?.baseDirectory) {
-        sendToSystem('code', { type: 'pr.CHECK_GH_AUTH' })
+        sendToSystem('code', { type: 'pr.CHECK_GITHUB_ACCESS' })
         self.send({ type: 'pr.REFRESH_STATUS' })
       } else {
         self.send({ type: 'pr.ERROR', message: 'No directory selected. Please select a directory first.' })
@@ -397,20 +391,13 @@ export const pullRequestState = setup({
 
     // --- GitHub PR actions ---
 
-    handleGhAuthChecked: assign({
-      isGhAvailable: ({ event }) => {
-        const ev = event as { type: 'pr.GH_AUTH_CHECKED'; data: { available: boolean; prAccess: boolean; activeToken: ActiveTokenInfo | null } }
-        return ev.data.available
-      },
-      authCheckCompleted: true,
-      prAccess: ({ event }) => {
-        const ev = event as { type: 'pr.GH_AUTH_CHECKED'; data: { available: boolean; prAccess: boolean; activeToken: ActiveTokenInfo | null } }
-        return ev.data.prAccess
-      },
-      activeToken: ({ event }) => {
-        const ev = event as { type: 'pr.GH_AUTH_CHECKED'; data: { available: boolean; prAccess: boolean; activeToken: ActiveTokenInfo | null } }
-        return ev.data.activeToken ?? null
-      },
+    checkGitHubAccess: () => {
+      sendToSystem('code', { type: 'pr.CHECK_GITHUB_ACCESS' })
+    },
+
+    handleGitHubAccessChecked: assign({
+      githubAccess: ({ event }) => (event as { type: 'pr.GITHUB_ACCESS_CHECKED'; data: { access: GitHubAccess } }).data.access,
+      githubAccessMessage: ({ event }) => (event as { type: 'pr.GITHUB_ACCESS_CHECKED'; data: { message?: string } }).data.message ?? null,
     }),
 
     navigateToHelp: () => {
@@ -464,7 +451,7 @@ export const pullRequestState = setup({
         selectedPR: context.isManualPRSelection
           ? context.selectedPR
           : (unchanged ? context.selectedPR : incoming ?? null),
-        isGhChecking: false,
+        isCheckingBranchPR: false,
         branchPRCheckFailed: false,
         prCheckCompleted: true,
       })
@@ -918,13 +905,11 @@ export const pullRequestState = setup({
     reviewThreads: [],
     commentTab: 'discussion',
     viewMode: 'files',
-    isGhAvailable: false,
-    prAccess: true,
-    activeToken: null,
-    isGhChecking: false,
+    githubAccess: null,
+    githubAccessMessage: null,
+    isCheckingBranchPR: false,
     branchPRCheckFailed: false,
     prCheckCompleted: false,
-    authCheckCompleted: false,
 
     createTitle: '',
     createBody: '',
@@ -958,7 +943,7 @@ export const pullRequestState = setup({
             assign({
               isPrLoading: ({ context }) =>
                 !context.diffsByRef[refKey(context.prBaseBranch, context.selectedPR?.headRefName)],
-              isGhChecking: ({ context }) => !context.prCheckCompleted,
+              isCheckingBranchPR: ({ context }) => !context.prCheckCompleted,
               branchPRCheckFailed: false,
             }),
             'refreshPrStatus',
@@ -974,9 +959,9 @@ export const pullRequestState = setup({
         'pr.BRANCH_DIFF_RECEIVED': { actions: 'handleBranchDiffReceived' },
         'pr.FILE_DIFF_RECEIVED': { actions: 'handleFileDiffReceived' },
         // Full reset for directory switches — clears view, selection, and PR state
-        'pr.STATUS_CHANGED': { actions: [assign({ diffStale: true, isManualPRSelection: false, pendingManualPRNumber: null, prCheckCompleted: false, isGhChecking: true, viewMode: 'files' as const, prError: null }), 'refreshPrStatus'] },
+        'pr.STATUS_CHANGED': { actions: [assign({ diffStale: true, isManualPRSelection: false, pendingManualPRNumber: null, prCheckCompleted: false, isCheckingBranchPR: true, viewMode: 'files' as const, prError: null }), 'refreshPrStatus'] },
         // Lightweight refresh for git changes — re-checks PR status without resetting viewMode or manual selection
-        'pr.GIT_STATUS_REFRESHED': { actions: [assign({ diffStale: true, prCheckCompleted: false, isGhChecking: true, prError: null }), 'refreshPrStatus'] },
+        'pr.GIT_STATUS_REFRESHED': { actions: [assign({ diffStale: true, prCheckCompleted: false, isCheckingBranchPR: true, prError: null }), 'refreshPrStatus'] },
         'CODE_STARTED': {
           actions: [
             assign({
@@ -1005,7 +990,8 @@ export const pullRequestState = setup({
         },
 
         // GitHub PR events from backend
-        'pr.GH_AUTH_CHECKED': { actions: 'handleGhAuthChecked' },
+        'pr.CHECK_GITHUB_ACCESS': { actions: 'checkGitHubAccess' },
+        'pr.GITHUB_ACCESS_CHECKED': { actions: 'handleGitHubAccessChecked' },
         'pr.NAVIGATE_TO_HELP': { actions: 'navigateToHelp' },
         'pr.OPEN_PRS_RECEIVED': { actions: 'handleOpenPRsReceived' },
         'pr.PR_DETAILS_RECEIVED': { actions: ['handlePRDetailsReceived', 'loadDiffForSelectedPR', 'fetchReviewThreads'] },
@@ -1056,7 +1042,7 @@ export const pullRequestState = setup({
         'pr.REFRESH_PR': { actions: ['refreshPRDetails', assign({ isLoadingDetails: true })] },
         'pr.BACK_TO_BRANCH': {
           actions: [
-            assign({ selectedPR: null, isManualPRSelection: false, pendingManualPRNumber: null, diffsByRef: {}, inFlightFileDiffs: new Set<string>(), diffStale: true, prCheckCompleted: false, isGhChecking: true }),
+            assign({ selectedPR: null, isManualPRSelection: false, pendingManualPRNumber: null, diffsByRef: {}, inFlightFileDiffs: new Set<string>(), diffStale: true, prCheckCompleted: false, isCheckingBranchPR: true }),
             'refreshPrStatus',
           ]
         },

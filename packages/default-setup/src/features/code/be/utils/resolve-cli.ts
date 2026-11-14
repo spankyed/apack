@@ -1,5 +1,5 @@
 import { featureSettings } from '#generated/settings.ts';
-// Finds the CLIs the code feature runs (Claude Code, Codex, Copilot, gh, git): a path the user set in the code
+// Finds the CLIs the code feature runs (Claude Code, Codex, Copilot, git): a path the user set in the code
 // surface's settings (`cliPaths`), known install locations, then PATH.
 
 import { execFileWhileWorking } from '@apackdev/sdk/progress'
@@ -8,7 +8,7 @@ import * as os from 'os'
 import * as path from 'path'
 
 
-export type CliName = 'copilot' | 'claude-code' | 'codex' | 'gh' | 'git'
+export type CliName = 'copilot' | 'claude-code' | 'codex' | 'git'
 
 const HOME = os.homedir()
 
@@ -24,10 +24,6 @@ const FALLBACK_PATHS: Record<CliName, string[]> = process.platform === 'win32'
           path.join(appData, 'npm', 'claude.cmd'),
         ],
         codex: [path.join(appData, 'npm', 'codex.cmd')],
-        gh: [
-          path.join(process.env.ProgramFiles || 'C:\\Program Files', 'GitHub CLI', 'gh.exe'),
-          path.join(localAppData, 'Programs', 'gh', 'gh.exe'),
-        ],
         // Where Git for Windows installs, for each kind of Program Files, then for the user alone
         git: [
           ...[process.env.ProgramW6432, process.env['ProgramFiles(x86)'], process.env.ProgramFiles]
@@ -44,7 +40,6 @@ const FALLBACK_PATHS: Record<CliName, string[]> = process.platform === 'win32'
         `${HOME}/.nvm/versions/node/*/bin/claude`,
       ],
       codex: ['/usr/local/bin/codex', `${HOME}/.nvm/versions/node/*/bin/codex`],
-      gh: ['/opt/homebrew/bin/gh', '/usr/local/bin/gh'],
       // An installed git ahead of the system's: on macOS `/usr/bin/git` stands for the developer tools until they
       // are installed, which the engine asks before it runs it, and only by that path
       git: ['/opt/homebrew/bin/git', '/usr/local/bin/git', '/usr/bin/git'],
@@ -56,7 +51,6 @@ const CLI_COMMANDS: Record<CliName, string> = {
   copilot: 'copilot',
   'claude-code': 'claude',
   codex: 'codex',
-  gh: 'gh',
   git: 'git',
 }
 
@@ -165,7 +159,7 @@ export function clearCliPathCache(): void {
   resolvedCache.clear()
 }
 
-const CLI_NAMES: Set<string> = new Set<string>(['copilot', 'claude-code', 'codex', 'gh', 'git'])
+const CLI_NAMES: Set<string> = new Set<string>(['copilot', 'claude-code', 'codex', 'git'])
 
 export function isCliName(value: string): value is CliName {
   return CLI_NAMES.has(value)

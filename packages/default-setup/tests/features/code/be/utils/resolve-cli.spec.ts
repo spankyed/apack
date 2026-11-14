@@ -22,7 +22,6 @@ describe('resolveCliPath', () => {
     ['copilot', 'copilot'],
     ['claude-code', 'claude'],
     ['codex', 'codex'],
-    ['gh', 'gh'],
   ] as const)('falls back to the %s executable name', async (provider, executable) => {
     vi.resetModules()
     execFileMock.mockRejectedValue(Object.assign(new Error('not found'), { code: 'ENOENT' }))

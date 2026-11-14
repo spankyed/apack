@@ -111,12 +111,6 @@ type ActionsInboxEvent = {
     actionId: EARS.EntityId;
 };
 
-interface ActiveTokenInfo {
-    source: TokenSource;
-    kind: TokenKind;
-    prefix: string;
-}
-
 interface AgentMode {
     id: string;
     name: string;
@@ -3989,7 +3983,9 @@ interface CliServiceType {
         /** Puts the working tree back as a copy has it, removing what was made since */
         restoreCheckpoint(id: string): Promise<void>;
     };
-    gh: {
+    /** The pull requests of the repository the working directory's remote names on GitHub, with the app's sign-in */
+    github: {
+        /** `null` where there is none, and where GitHub could not be asked */
         findPRForBranch(branch?: string): Promise<GhPullRequest | null>;
         getPRDetails(number: number, repo?: {
             owner: string;
@@ -5241,7 +5237,24 @@ interface GitHubAccount {
     avatarUrl?: string;
 }
 
+/**
+ * What GitHub refused, as the panel acts on it: no sign-in, or one GitHub no longer takes (`signed-out`); a
+ * repository whose remote is not on github.com (`not-github`); one
+ * without the access the call needs (`missing-scope`); one an organisation's single sign-on has not authorised
+ * (`sso`); a repository or pull request this sign-in cannot see (`not-found`); GitHub could not be reached or said
+ * something else (`failed`)
+ */
+type GitHubApiFailure = 'failed' | 'missing-scope' | 'not-found' | 'not-github' | 'signed-out' | 'sso';
+
+/** Where GitHub answers: the web host that runs sign-in, and the REST API */
+interface GitHubEndpoints {
+    web: string;
+    api: string;
+}
+
 interface GitHubSignIn {
+    /** Where GitHub answers, which the API calls made with this sign-in go to as well */
+    readonly endpoints: GitHubEndpoints;
     /** Asks GitHub for a code to show the user */
     fetchDeviceCode(signal: AbortSignal): Promise<DeviceCode>;
     /** Asks GitHub at the interval it set until the user approved the code, refused it or it expired */
@@ -5619,7 +5632,7 @@ type IncomingCommitEvents = {
     staged: boolean;
     hunk: string;
 }
-/** Have the GitHub CLI give git its sign-in for this host */
+/** Git can sign in to this host now the app is signed in to GitHub: fetching starts again, and the window runs again what was refused */
  | {
     type: 'commit.SET_UP_SIGN_IN';
     host: string;
@@ -6016,8 +6029,10 @@ type IncomingPullRequestEvents = {
     isDraft: boolean;
 } | {
     type: 'pr.CHECK_BRANCH_PR';
-} | {
-    type: 'pr.CHECK_GH_AUTH';
+}
+/** Whether the app's GitHub sign-in can work with the pull requests of the repository the remote names */
+ | {
+    type: 'pr.CHECK_GITHUB_ACCESS';
 } | {
     type: 'pr.GET_PR_AUTOFILL';
 } | {
@@ -7055,7 +7070,7 @@ type OutgoingCommitEvents =
         truncated: boolean;
     };
 }
-/** Git signs in to this host through the GitHub CLI now */
+/** Git signs in to this host with the app's GitHub sign-in now */
  | {
     type: 'commit.SIGN_IN_SET_UP';
     data: {
@@ -7713,12 +7728,13 @@ type OutgoingPullRequestEvents = {
     data: {
         pr: GhPullRequest | null;
     };
-} | {
-    type: 'pr.GH_AUTH_CHECKED';
+}
+/** `ok`, or why not, with what to tell the user */
+ | {
+    type: 'pr.GITHUB_ACCESS_CHECKED';
     data: {
-        available: boolean;
-        prAccess: boolean;
-        activeToken: ActiveTokenInfo | null;
+        access: 'ok' | GitHubApiFailure;
+        message?: string;
     };
 } | {
     type: 'pr.AUTOFILL_RECEIVED';
@@ -8908,10 +8924,11 @@ interface SignInHelp {
     /** The host that asked, as the remote's address names it */
     host: string;
     /**
-     * `github-cli`: the GitHub CLI can sign git in to this host. `ssh`: the host refused the key it was offered, or
-     * was offered none. `https`: the host wants a username and password or token, and git has none stored for it.
+     * `github`: signing in to GitHub in the app signs git in to this host. `ssh`: the host refused the key it was
+     * offered, or was offered none. `https`: the host wants a username and password or token, and git has none
+     * stored for it.
      */
-    kind: 'github-cli' | 'https' | 'ssh';
+    kind: 'github' | 'https' | 'ssh';
 }
 
 type Simplify<T> = {
@@ -9548,10 +9565,6 @@ type ThreadsInboxEvent = {
 };
 
 type ThreadsSettings = SettingsOf<'threads'>;
-
-type TokenKind = 'classic-pat' | 'fine-grained-pat' | 'oauth' | 'unknown';
-
-type TokenSource = 'GITHUB_TOKEN' | 'keyring' | 'unknown';
 
 interface ToolActivityEntry {
     /** Stable id. Usually the CLI's `tool_use_id`. */

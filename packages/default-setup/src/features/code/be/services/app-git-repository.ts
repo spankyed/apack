@@ -14,6 +14,8 @@ import type { RepositoryHandle, WatcherHandle } from '../types.ts'
 import { featureSettings } from '#generated/settings.ts'
 import { getDataDirPath } from '#generated/paths.ts'
 import { agentChildEnvironment } from './shell-environment.ts'
+import { services } from '#generated/services.ts'
+import { GITHUB_TOKEN_USERNAME, storedSignIn } from '../features/github.ts'
 import { resolveGitPath } from '../utils/resolve-cli.ts'
 import { signInHelpFor, type SignInHelp } from './sign-in.ts'
 
@@ -48,12 +50,44 @@ export function trustRepository(repository: string): void {
   if (!trusted.includes(repository)) featureSettings.forFeature('code').set({ path: ['trustedRepositories'], value: [...trusted, repository] })
 }
 
+/** The variable a git run is handed the app's GitHub token in, which only that run sees: never a terminal's */
+const GITHUB_TOKEN_VARIABLE = 'APACK_GITHUB_TOKEN'
+
+/**
+ * `environment` with git given the app's GitHub sign-in for `web` (github.com, or a stand-in for it), when there is
+ * one: a credential helper named on the command (`GIT_CONFIG_COUNT`), which answers only `get`, from a variable git
+ * hands it. Nothing is written to any git config. A helper named this way is asked after the user's own, so a user
+ * whose git already signs in to GitHub keeps exactly that sign-in.
+ */
+export function withGitHubSignIn(environment: NodeJS.ProcessEnv, token: string | undefined, web: string): NodeJS.ProcessEnv {
+  if (!token) return environment
+  // After any the user's own environment names, which keep their numbers
+  const count = Number.parseInt(environment.GIT_CONFIG_COUNT ?? '0', 10) || 0
+  return {
+    ...environment,
+    GIT_CONFIG_COUNT: String(count + 1),
+    [`GIT_CONFIG_KEY_${count}`]: `credential.${web}.helper`,
+    [`GIT_CONFIG_VALUE_${count}`]: `!f() { test "$1" = get || exit 0; echo username=${GITHUB_TOKEN_USERNAME}; echo "password=$${GITHUB_TOKEN_VARIABLE}"; }; f`,
+    [GITHUB_TOKEN_VARIABLE]: token,
+  }
+}
+
+/** The app's GitHub sign-in as git is given it; none in a tool that opens a repository outside the app */
+function appGitHubSignIn(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  try {
+    return withGitHubSignIn(environment, storedSignIn()?.token, services.github.endpoints.web)
+  } catch {
+    return environment
+  }
+}
+
 /**
  * What the engine runs with in this app. Git starts from the app's own environment with what the app set on its
- * own process taken out, and a git that stops working is ended rather than left to a clock.
+ * own process taken out and the app's GitHub sign-in laid over it, and a git that stops working is ended rather
+ * than left to a clock.
  */
 export const APP_TIES: RepositoryTies = {
-  environment: () => agentChildEnvironment(process.env),
+  environment: () => appGitHubSignIn(agentChildEnvironment(process.env)),
   run: (file, args, options) => execFileWhileWorking(file, args, options),
   watchProcess: (pid, onStalled, idleMs) => watchWork({ work: processWork(pid), idleMs, onRefused: onStalled }),
   isTrusted: repository => trustedRepositories().includes(repository),

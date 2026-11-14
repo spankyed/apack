@@ -30,26 +30,25 @@
 
     <!-- Main content -->
     <template v-else>
-      <!-- gh CLI not available banner. Gated on authCheckCompleted so the default
-           isGhAvailable: false initial state doesn't flash before the first auth
-           check resolves (was racing pr.BRANCH_PR_CHECKED clearing isGhChecking). -->
+      <!-- Not signed in to GitHub: the sign-in itself, here where it is needed -->
       <div
-        v-if="authCheckCompleted && !isGhAvailable && !isPrLoading"
-        class="flex items-center gap-2 px-3 py-2 text-xs text-yellow-400 bg-yellow-900/20 border-b border-yellow-800/30"
+        v-if="githubAccess === 'signed-out' && !isPrLoading"
+        class="px-3 py-3 text-xs border-b border-neutral-800"
       >
-        <AlertTriangle :size="12" class="shrink-0" />
-        <span>GitHub CLI not available. Install <code class="px-1 py-0.5 rounded bg-neutral-800">gh</code> and run <code class="px-1 py-0.5 rounded bg-neutral-800">gh auth login</code> for PR features.</span>
+        <p class="mb-2 text-neutral-400">{{ githubAccessMessage }}</p>
+        <GitHubAccount />
       </div>
 
-      <!-- gh token missing PR permissions banner -->
+      <!-- Signed in, but GitHub will not show this repository's pull requests to it, or the remote is elsewhere -->
       <div
-        v-if="authCheckCompleted && isGhAvailable && !prAccess && !isPrLoading"
+        v-else-if="githubAccess && githubAccess !== 'ok' && !isPrLoading"
         class="flex items-start gap-2 px-3 py-2 text-xs text-yellow-400 bg-yellow-900/20 border-b border-yellow-800/30"
       >
         <AlertTriangle :size="12" class="shrink-0 mt-0.5" />
         <div class="flex-1">
-          <span>{{ prPermissionHint }}</span>
+          <span>{{ githubAccessMessage }}</span>
           <button
+            v-if="githubAccess !== 'not-github'"
             @click="prActor?.send({ type: 'pr.NAVIGATE_TO_HELP' })"
             class="ml-1 underline text-yellow-300 hover:text-yellow-200 transition-colors"
           >Learn more</button>
@@ -261,7 +260,7 @@
 
 <script setup lang="ts">
 
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
@@ -279,6 +278,7 @@ import CreatePRForm from '#features/code/fe/features/pull-request/CreatePRForm.v
 import PRInfo from '#features/code/fe/features/pull-request/PRInfo.vue'
 import PRComments from '#features/code/fe/features/pull-request/PRComments.vue'
 import PRActionBar from '#features/code/fe/features/pull-request/PRActionBar.vue'
+import GitHubAccount from '#features/code/fe/features/github/GitHubAccount.vue'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { TreeNode } from './types.ts'
 import { panelChild } from '../children.ts';
@@ -306,11 +306,17 @@ const reviewThreads = useSelector(prActor, (state) => state.context.reviewThread
 const commentTab = useSelector(prActor, (state) => state.context.commentTab)
 const isSubmittingComment = useSelector(prActor, (state) => state.context.inflightMutations > 0)
 const viewMode = useSelector(prActor, (state) => state.context.viewMode)
-const isGhAvailable = useSelector(prActor, (state) => state.context.isGhAvailable)
-const prAccess = useSelector(prActor, (state) => state.context.prAccess)
-const activeToken = useSelector(prActor, (state) => state.context.activeToken)
-const isGhChecking = useSelector(prActor, (state) => state.context.isGhChecking)
-const authCheckCompleted = useSelector(prActor, (state) => state.context.authCheckCompleted)
+const githubAccess = useSelector(prActor, (state) => state.context.githubAccess)
+const githubAccessMessage = useSelector(prActor, (state) => state.context.githubAccessMessage)
+const isCheckingBranchPR = useSelector(prActor, (state) => state.context.isCheckingBranchPR)
+// Signing in or out anywhere changes what this repository's pull requests answer, so ask again
+const githubActor = panelChild(codeActor, 'github')!
+const githubAccount = useSelector(githubActor, (state) => state.context.account)
+watch(githubAccount, (now, before) => {
+  if (before === undefined) return
+  prActor?.send({ type: 'pr.CHECK_GITHUB_ACCESS' })
+  prActor?.send({ type: 'pr.REFRESH_STATUS' })
+})
 const branchPRCheckFailed = useSelector(prActor, (state) => state.context.branchPRCheckFailed)
 const createTitle = useSelector(prActor, (state) => state.context.createTitle)
 const createBody = useSelector(prActor, (state) => state.context.createBody)
@@ -329,27 +335,6 @@ const currentBranch = useSelector(commitActor, (state) => state.context.gitBranc
 const availableBranches = useSelector(commitActor, (state) => state.context.availableBranches)
 
 // Computed
-const prPermissionHint = computed(() => {
-  const token = activeToken.value
-  if (!token) return 'GitHub token missing PR permissions. Run "gh auth status" to check your active token.'
-
-  if (token.source === 'GITHUB_TOKEN') {
-    if (token.kind === 'fine-grained-pat') {
-      return 'Active token is a fine-grained PAT (via GITHUB_TOKEN env var). Add "Pull requests: Read and write" in GitHub Developer Settings, or unset GITHUB_TOKEN.'
-    }
-    if (token.kind === 'classic-pat') {
-      return 'Active token is a classic PAT (via GITHUB_TOKEN env var). Ensure it has the "repo" scope in GitHub Developer Settings, or unset GITHUB_TOKEN.'
-    }
-    return 'Active token (via GITHUB_TOKEN env var) lacks PR permissions. Update its permissions or unset GITHUB_TOKEN.'
-  }
-
-  if (token.source === 'keyring') {
-    return 'GitHub token missing PR permissions. Run "gh auth refresh -s repo" to add missing scopes, or "gh auth switch" to change accounts.'
-  }
-
-  return 'GitHub token missing PR permissions. Run "gh auth status" to check your active token.'
-})
-
 const isNoGitRepoError = computed(() =>
   prError.value?.includes('not a git repository') ||
   prError.value?.includes('Not a git repository')
@@ -376,8 +361,8 @@ const isBaseBranch = computed(() => {
 })
 
 const topRowStatus = computed(() => {
-  if (isGhChecking.value) return 'checking' as const
-  if (!isGhAvailable.value) return 'hidden' as const
+  if (isCheckingBranchPR.value) return 'checking' as const
+  if (githubAccess.value !== 'ok') return 'hidden' as const
   if (isBaseBranch.value) return 'base-branch' as const
   if (!hasUpstream.value) return 'publish' as const
   if (selectedPR.value) return 'has-pr' as const

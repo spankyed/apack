@@ -20,7 +20,7 @@ import { renameSession, validateSessionResumeTarget, getSessionFileRewindPreview
 import { featureSettings } from '#generated/settings.ts';
 
 import { openGitRepository, type AppGitRepository } from '#features/code/be/services/app-git-repository.ts'
-import * as ghCli from '#features/code/be/services/gh-cli.ts'
+import { gitHubApiFor } from '#features/code/be/features/github.ts'
 import type { GitStatusFile, GhPullRequest, GhPRComment, GhReviewThread } from '#features/code/be/types.ts'
 import { getSessionContextUsage, type ClaudeSessionContextOptions } from './claude-code/context.ts'
 import type { ClaudeFileRewind, ClaudeContextUsage } from './claude-code/host-controls.ts'
@@ -56,7 +56,9 @@ export interface CliServiceType {
     /** Puts the working tree back as a copy has it, removing what was made since */
     restoreCheckpoint(id: string): Promise<void>
   }
-  gh: {
+  /** The pull requests of the repository the working directory's remote names on GitHub, with the app's sign-in */
+  github: {
+    /** `null` where there is none, and where GitHub could not be asked */
     findPRForBranch(branch?: string): Promise<GhPullRequest | null>
     getPRDetails(number: number, repo?: { owner: string; name: string }): Promise<GhPullRequest & { comments: GhPRComment[] }>
     getReviewThreads(number: number, repo?: { owner: string; name: string }): Promise<GhReviewThread[]>
@@ -225,19 +227,21 @@ function createCliService(): CliServiceType {
         await getGitRepo().restoreCheckpoint(id)
       },
     },
-    gh: {
+    github: {
       async findPRForBranch(branch?: string): Promise<GhPullRequest | null> {
-        const cwd = resolveCwd()
-        const branchName = branch || await getGitRepo().readCurrentBranch()
-        return ghCli.findPRForBranch(cwd, branchName)
+        try {
+          const repository = getGitRepo()
+          const branchName = branch || await repository.readCurrentBranch()
+          return await (await gitHubApiFor(repository)).findPRForBranch(branchName)
+        } catch {
+          return null
+        }
       },
       async getPRDetails(number: number, repo?: { owner: string; name: string }): Promise<GhPullRequest & { comments: GhPRComment[] }> {
-        const cwd = resolveCwd()
-        return ghCli.getPRDetails(cwd, number, repo)
+        return (await gitHubApiFor(getGitRepo(), repo)).getPRDetails(number)
       },
       async getReviewThreads(number: number, repo?: { owner: string; name: string }): Promise<GhReviewThread[]> {
-        const cwd = resolveCwd()
-        return ghCli.getReviewThreads(cwd, number, repo)
+        return (await gitHubApiFor(getGitRepo(), repo)).getReviewThreads(number)
       },
     },
     claudeCode: {

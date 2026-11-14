@@ -112,9 +112,9 @@ export async function action(
 
     if (parsed) {
       repo = parsed.repo;
-      pr = await services.cli.gh.getPRDetails(parsed.number, repo);
+      pr = await services.cli.github.getPRDetails(parsed.number, repo);
     } else {
-      const branchPR = await services.cli.gh.findPRForBranch();
+      const branchPR = await services.cli.github.findPRForBranch();
       if (!branchPR) {
         const branch = await services.cli.git.readCurrentBranch();
         if (threadId) {
@@ -126,10 +126,10 @@ export async function action(
         }
         return { success: false, error: 'No PR found for current branch' };
       }
-      pr = await services.cli.gh.getPRDetails(branchPR.number);
+      pr = await services.cli.github.getPRDetails(branchPR.number);
     }
 
-    const threads = await services.cli.gh.getReviewThreads(pr.number, repo);
+    const threads = await services.cli.github.getReviewThreads(pr.number, repo);
     const markdown = formatPRMarkdown(pr, pr.comments || [], threads);
 
     if (threadId) {

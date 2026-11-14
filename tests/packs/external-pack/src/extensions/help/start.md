@@ -1,5 +1,5 @@
 ---
-id: github-token-permissions
+id: github-sign-in
 features: [memos]
 order: 1
 ---

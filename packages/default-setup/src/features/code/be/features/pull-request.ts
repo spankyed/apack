@@ -6,7 +6,8 @@ import { setup, assign, type AnyActorRef } from 'xstate'
 
 import { createLogger } from '@apackdev/sdk/logger'
 import { openGitRepository, type AppGitRepository } from '../services/app-git-repository.ts'
-import * as ghCli from '../services/gh-cli.ts'
+import { gitHubApiFor } from './github.ts'
+import { GitHubApiError, type GitHubApi } from '../services/github-api.ts'
 
 const logger = createLogger('pr')
 
@@ -33,7 +34,7 @@ export type Event =
   | { type: 'pr.CLOSE_PR'; number: number }
   | { type: 'pr.TOGGLE_DRAFT'; number: number; isDraft: boolean }
   | { type: 'pr.CHECK_BRANCH_PR' }
-  | { type: 'pr.CHECK_GH_AUTH' }
+  | { type: 'pr.CHECK_GITHUB_ACCESS' }
   | { type: 'pr.GET_PR_AUTOFILL' }
   | { type: 'pr.GET_SMART_BASE_BRANCH' }
   | { type: 'pr.DELETE_BRANCH'; branch: string }
@@ -76,6 +77,28 @@ function withRepo<T>(
 ) {
   if (!context.gitRepository) { emitError(emit, 'No git repository available'); return }
   work(context.gitRepository).then(onSuccess).catch(onError)
+}
+
+/**
+ * Run async work against GitHub's API for the repository the checkout's remote names, with this app's sign-in.
+ * Refused, through `onError`, where there is no repository, no remote on github.com or no sign-in
+ */
+function withGitHub<T>(
+  context: CodePullRequestSystemContext,
+  emit: Emit,
+  work: (github: GitHubApi, repo: AppGitRepository) => Promise<T>,
+  onSuccess: (result: T) => void,
+  onError?: (error: any) => void
+) {
+  withRepo(context, emit, async repo => work(await gitHubApiFor(repo), repo), onSuccess, onError)
+}
+
+/** A pull request's details once GitHub has worked out whether it can merge, with the images in it loadable */
+async function settledDetails(github: GitHubApi, number: number) {
+  const { comments = [], ...pr } = await github.fetchPRDetailsSettled(number)
+  pr.body = await github.resolveAssetUrls(pr.body)
+  for (const comment of comments) comment.body = await github.resolveAssetUrls(comment.body)
+  return { pr, comments }
 }
 
 /** Hands each handler the answer for the message it is handling — see `defineHandlers` */
@@ -159,25 +182,26 @@ export const pullRequestSystem = setup({
       }
     },
 
-    // --- GitHub CLI actions ---
+    // --- GitHub ---
 
-    checkGhAuth: ({ context, reply }) => {
+    /** Whether this app's sign-in can work with the pull requests of the repository the checkout's remote names */
+    checkGitHubAccess: ({ context, reply }) => {
       const emit = answering(reply)
       if (!context.gitRepository) {
-        emit({ type: 'pr.GH_AUTH_CHECKED', data: { available: false, prAccess: false, activeToken: null } })
+        emit({ type: 'pr.GITHUB_ACCESS_CHECKED', data: { access: 'not-github', message: 'No git repository is open.' } })
         return
       }
-      withRepo(context, emit,
-        repo => ghCli.checkAuth(repo.getWorkingDir()),
-        result => emit({ type: 'pr.GH_AUTH_CHECKED', data: result }),
-        () => emit({ type: 'pr.GH_AUTH_CHECKED', data: { available: false, prAccess: false, activeToken: null } })
+      withGitHub(context, emit,
+        github => github.checkAccess(),
+        () => emit({ type: 'pr.GITHUB_ACCESS_CHECKED', data: { access: 'ok' } }),
+        error => emit({ type: 'pr.GITHUB_ACCESS_CHECKED', data: { access: error instanceof GitHubApiError ? error.reason : 'failed', message: error?.message ?? String(error) } })
       )
     },
 
     listOpenPRs: ({ context, reply }) => {
       const emit = answering(reply)
-      withRepo(context, emit,
-        repo => ghCli.listOpenPRs(repo.getWorkingDir()),
+      withGitHub(context, emit,
+        github => github.listOpenPRs(),
         prs => emit({ type: 'pr.OPEN_PRS_RECEIVED', data: { prs } }),
         () => emit({ type: 'pr.OPEN_PRS_RECEIVED', data: { prs: [] } })
       )
@@ -186,18 +210,8 @@ export const pullRequestSystem = setup({
     selectPR: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.SELECT_PR'; number: number }
-      withRepo(context, emit,
-        async repo => {
-          const cwd = repo.getWorkingDir()
-          const details = await ghCli.fetchPRDetailsSettled(cwd, ev.number)
-          const { comments = [], ...pr } = details
-          // Resolve GitHub asset URLs to signed S3 URLs so images load in Electron
-          pr.body = await ghCli.resolveGitHubAssetUrls(pr.body, cwd)
-          for (const comment of comments) {
-            comment.body = await ghCli.resolveGitHubAssetUrls(comment.body, cwd)
-          }
-          return { pr, comments }
-        },
+      withGitHub(context, emit,
+        github => settledDetails(github, ev.number),
         ({ pr, comments }) => {
           emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { pr, comments, fetchedAt: Date.now() } })
         }
@@ -207,10 +221,12 @@ export const pullRequestSystem = setup({
     createPR: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
-      withRepo(context, emit,
-        repo => repo.readCurrentBranch().then(head =>
-          ghCli.createPR(repo.getWorkingDir(), { title: ev.title, body: ev.body, base: ev.base, head, draft: ev.draft })
-        ),
+      withGitHub(context, emit,
+        async (github, repo) => {
+          const head = await repo.readCurrentBranch()
+          const { comments: _comments, ...pr } = await github.createPR({ title: ev.title, body: ev.body, base: ev.base, head, draft: ev.draft })
+          return pr
+        },
         pr => emit({ type: 'pr.PR_CREATED', data: { pr } })
       )
     },
@@ -218,8 +234,8 @@ export const pullRequestSystem = setup({
     mergePR: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.MERGE_PR'; number: number; method?: 'merge' | 'squash' | 'rebase' }
-      withRepo(context, emit,
-        repo => ghCli.mergePR(repo.getWorkingDir(), ev.number, ev.method),
+      withGitHub(context, emit,
+        github => github.mergePR(ev.number, ev.method),
         () => {
           emit({ type: 'pr.PR_MERGED', data: { number: ev.number } })
           context.code?.send({ type: 'commit.GET_ALL_BRANCHES' })
@@ -230,12 +246,8 @@ export const pullRequestSystem = setup({
           // not whatever stale data triggered the click.
           try {
             if (context.gitRepository) {
-              const cwd = context.gitRepository.getWorkingDir()
-              const details = await ghCli.fetchPRDetailsSettled(cwd, ev.number)
-              const { comments = [], ...pr } = details
-              pr.body = await ghCli.resolveGitHubAssetUrls(pr.body, cwd)
-              for (const c of comments) c.body = await ghCli.resolveGitHubAssetUrls(c.body, cwd)
-              emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { pr, comments, fetchedAt: Date.now() } })
+              const result = await settledDetails(await gitHubApiFor(context.gitRepository), ev.number)
+              emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { ...result, fetchedAt: Date.now() } })
             }
           } catch { /* swallow — we still want to surface the merge error below */ }
           emitError(emit, err.message)
@@ -246,8 +258,8 @@ export const pullRequestSystem = setup({
     closePR: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.CLOSE_PR'; number: number }
-      withRepo(context, emit,
-        repo => ghCli.closePR(repo.getWorkingDir(), ev.number),
+      withGitHub(context, emit,
+        github => github.closePR(ev.number),
         () => emit({ type: 'pr.PR_CLOSED', data: { number: ev.number } })
       )
     },
@@ -257,26 +269,21 @@ export const pullRequestSystem = setup({
       const ev = event as { type: 'pr.TOGGLE_DRAFT'; number: number; isDraft: boolean }
       // ev.isDraft is the CURRENT state, so true = draft → ready, false = ready → draft.
       const goingReady = ev.isDraft
-      withRepo(context, emit,
-        async repo => {
-          const cwd = repo.getWorkingDir()
+      withGitHub(context, emit,
+        async github => {
           if (goingReady) {
-            await ghCli.markReady(cwd, ev.number)
+            await github.markReady(ev.number)
             // Marking a draft ready is GitHub's trigger to start computing
             // mergeability. Same async-settle race as create / update-base — refetch
             // with retry so the Merge button lands on the real state instead of stuck
             // on UNKNOWN. Tolerate refetch failures (toggle already succeeded).
             try {
-              const details = await ghCli.fetchPRDetailsSettled(cwd, ev.number)
-              const { comments = [], ...pr } = details
-              pr.body = await ghCli.resolveGitHubAssetUrls(pr.body, cwd)
-              for (const c of comments) c.body = await ghCli.resolveGitHubAssetUrls(c.body, cwd)
-              return { pr, comments }
+              return await settledDetails(github, ev.number)
             } catch {
               return null
             }
           }
-          await ghCli.markDraft(cwd, ev.number)
+          await github.markDraft(ev.number)
           return null
         },
         result => {
@@ -292,14 +299,10 @@ export const pullRequestSystem = setup({
         emit({ type: 'pr.BRANCH_PR_CHECKED', data: { pr: null } })
         return
       }
-      withRepo(context, emit,
-        async repo => {
-          const cwd = repo.getWorkingDir()
-          const branch = await repo.readCurrentBranch()
-          const pr = await ghCli.findPRForBranch(cwd, branch)
-          if (pr?.body) {
-            pr.body = await ghCli.resolveGitHubAssetUrls(pr.body, cwd)
-          }
+      withGitHub(context, emit,
+        async (github, repo) => {
+          const pr = await github.findPRForBranch(await repo.readCurrentBranch())
+          if (pr?.body) pr.body = await github.resolveAssetUrls(pr.body)
           return pr
         },
         pr => emit({ type: 'pr.BRANCH_PR_CHECKED', data: { pr } }),
@@ -333,24 +336,19 @@ export const pullRequestSystem = setup({
     updatePR: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.UPDATE_PR'; number: number; title?: string; body?: string; base?: string }
-      withRepo(context, emit,
-        async repo => {
-          const cwd = repo.getWorkingDir()
-          await ghCli.updatePR(cwd, ev.number, { title: ev.title, body: ev.body, base: ev.base })
+      withGitHub(context, emit,
+        async github => {
+          await github.updatePR(ev.number, { title: ev.title, body: ev.body, base: ev.base })
           // Base changes cause GitHub to recompute mergeability asynchronously —
           // fetch fresh details with retry so the Merge button settles correctly.
           // Title / body edits don't affect mergeability, so skip the extra round-trip.
           if (!ev.base) return null
-          // Tolerate refetch failures — the gh pr edit above already succeeded, so we
+          // Tolerate refetch failures — the edit above already succeeded, so we
           // must still emit PR_UPDATED. PR_DETAILS_RECEIVED only fires when we actually
           // have fresh data; otherwise the UI keeps the old mergeability until the next
           // refresh, which is strictly better than a misleading error banner.
           try {
-            const details = await ghCli.fetchPRDetailsSettled(cwd, ev.number)
-            const { comments = [], ...pr } = details
-            pr.body = await ghCli.resolveGitHubAssetUrls(pr.body, cwd)
-            for (const c of comments) c.body = await ghCli.resolveGitHubAssetUrls(c.body, cwd)
-            return { pr, comments }
+            return await settledDetails(github, ev.number)
           } catch {
             return null
           }
@@ -367,8 +365,8 @@ export const pullRequestSystem = setup({
     createComment: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.CREATE_COMMENT'; number: number; body: string }
-      withRepo(context, emit,
-        repo => ghCli.createPRComment(repo.getWorkingDir(), ev.number, ev.body),
+      withGitHub(context, emit,
+        github => github.createPRComment(ev.number, ev.body),
         () => emit({ type: 'pr.COMMENT_CREATED', data: { number: ev.number } })
       )
     },
@@ -376,8 +374,8 @@ export const pullRequestSystem = setup({
     editComment: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.EDIT_COMMENT'; commentId: number; body: string }
-      withRepo(context, emit,
-        repo => ghCli.editPRComment(repo.getWorkingDir(), ev.commentId, ev.body),
+      withGitHub(context, emit,
+        github => github.editPRComment(ev.commentId, ev.body),
         () => emit({ type: 'pr.COMMENT_EDITED', data: { commentId: ev.commentId } })
       )
     },
@@ -385,8 +383,8 @@ export const pullRequestSystem = setup({
     deleteComment: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.DELETE_COMMENT'; commentId: number }
-      withRepo(context, emit,
-        repo => ghCli.deletePRComment(repo.getWorkingDir(), ev.commentId),
+      withGitHub(context, emit,
+        github => github.deletePRComment(ev.commentId),
         () => emit({ type: 'pr.COMMENT_DELETED', data: { commentId: ev.commentId } })
       )
     },
@@ -394,11 +392,10 @@ export const pullRequestSystem = setup({
     getComments: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.GET_COMMENTS'; number: number }
-      withRepo(context, emit,
-        async repo => {
-          const cwd = repo.getWorkingDir()
-          const comments = await ghCli.getPRComments(cwd, ev.number)
-          for (const c of comments) c.body = await ghCli.resolveGitHubAssetUrls(c.body, cwd)
+      withGitHub(context, emit,
+        async github => {
+          const comments = await github.getPRComments(ev.number)
+          for (const c of comments) c.body = await github.resolveAssetUrls(c.body)
           return comments
         },
         comments => emit({ type: 'pr.COMMENTS_RECEIVED', data: { number: ev.number, comments } }),
@@ -412,8 +409,8 @@ export const pullRequestSystem = setup({
     getReviewThreads: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.GET_REVIEW_THREADS'; number: number }
-      withRepo(context, emit,
-        repo => ghCli.getReviewThreads(repo.getWorkingDir(), ev.number),
+      withGitHub(context, emit,
+        github => github.getReviewThreads(ev.number),
         threads => emit({ type: 'pr.REVIEW_THREADS_RECEIVED', data: { threads } })
       )
     },
@@ -421,8 +418,8 @@ export const pullRequestSystem = setup({
     replyToThread: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.REPLY_TO_THREAD'; prNumber: number; commentId: number; body: string }
-      withRepo(context, emit,
-        repo => ghCli.replyToReviewThread(repo.getWorkingDir(), ev.prNumber, ev.commentId, ev.body),
+      withGitHub(context, emit,
+        github => github.replyToReviewThread(ev.prNumber, ev.commentId, ev.body),
         () => emit({ type: 'pr.THREAD_REPLIED', data: { prNumber: ev.prNumber } })
       )
     },
@@ -430,8 +427,8 @@ export const pullRequestSystem = setup({
     resolveThread: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.RESOLVE_THREAD'; threadId: string }
-      withRepo(context, emit,
-        _repo => ghCli.resolveReviewThread(_repo.getWorkingDir(), ev.threadId),
+      withGitHub(context, emit,
+        github => github.resolveReviewThread(ev.threadId),
         () => emit({ type: 'pr.THREAD_RESOLVED', data: { threadId: ev.threadId } })
       )
     },
@@ -439,8 +436,8 @@ export const pullRequestSystem = setup({
     unresolveThread: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.UNRESOLVE_THREAD'; threadId: string }
-      withRepo(context, emit,
-        _repo => ghCli.unresolveReviewThread(_repo.getWorkingDir(), ev.threadId),
+      withGitHub(context, emit,
+        github => github.unresolveReviewThread(ev.threadId),
         () => emit({ type: 'pr.THREAD_UNRESOLVED', data: { threadId: ev.threadId } })
       )
     },
@@ -448,8 +445,8 @@ export const pullRequestSystem = setup({
     editReviewComment: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.EDIT_REVIEW_COMMENT'; commentId: number; body: string }
-      withRepo(context, emit,
-        repo => ghCli.editReviewComment(repo.getWorkingDir(), ev.commentId, ev.body),
+      withGitHub(context, emit,
+        github => github.editReviewComment(ev.commentId, ev.body),
         () => emit({ type: 'pr.REVIEW_COMMENT_EDITED', data: { commentId: ev.commentId } })
       )
     },
@@ -457,8 +454,8 @@ export const pullRequestSystem = setup({
     deleteReviewComment: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.DELETE_REVIEW_COMMENT'; commentId: number }
-      withRepo(context, emit,
-        repo => ghCli.deleteReviewComment(repo.getWorkingDir(), ev.commentId),
+      withGitHub(context, emit,
+        github => github.deleteReviewComment(ev.commentId),
         () => emit({ type: 'pr.REVIEW_COMMENT_DELETED', data: { commentId: ev.commentId } })
       )
     },
@@ -518,7 +515,7 @@ export const pullRequestSystem = setup({
         'pr.UNRESOLVE_THREAD': { actions: 'unresolveThread' },
         'pr.EDIT_REVIEW_COMMENT': { actions: 'editReviewComment' },
         'pr.DELETE_REVIEW_COMMENT': { actions: 'deleteReviewComment' },
-        'pr.CHECK_GH_AUTH': { actions: 'checkGhAuth' },
+        'pr.CHECK_GITHUB_ACCESS': { actions: 'checkGitHubAccess' },
         'pr.GET_PR_AUTOFILL': { actions: 'getPRAutofill' },
         'pr.GIT_STATUS_CHANGED': { actions: 'handleGitStatusChanged' },
         'pr.UPDATE_BASE_DIRECTORY': { actions: ['updateBaseDirectory'] }
