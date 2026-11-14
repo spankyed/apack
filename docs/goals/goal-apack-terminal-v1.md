@@ -75,7 +75,7 @@ Each phase ends in finite conditions. Task IDs are the plan's.
 
 | Phase | Tasks | Done when |
 |---|---|---|
-| **0. Start** | none | Pull request #14 is merged (done: `54c1f1d`). The VM is reachable (checked 2026-11-12). Merge authority is settled (D9). |
+| **0. Start** | none | Pull request #14 is merged (done: `54c1f1d`). The VM is reachable (checked 2026-11-12; reached over SSH again 2026-11-14). Merge authority is settled (D9). |
 | **1. Parsers and format** | T1 fuzz targets, T2 recording header, T3 `unsafe` accounting | Every fuzz target runs one clean hour locally and runs nightly in CI. A recording written now reads back; a bad header is refused; the golden file passes on all three platforms. The `SAFETY` check passes; the ASan run is clean or each report is written down. |
 | **2. Windows** | W1 ConPTY marks under load, W2 app code path, W3 kept sessions (spike, then port or beta), W4 proxy test cleanup, W5 POSIX-only cases, W6 desktop check (owner) | W1: 10,000 commands in one session come back in order. W2: commands recorded by the app's own service match what was typed. W3: the `keeping` suite passes on the VM, or the beta label and its evidence exist. W4: a killed test leaves no broker. W5: each POSIX-only case runs on Windows or has a written reason and a Windows test. W6: the owner reports the desktop check. |
 | **3. Speed** | P1 native benchmarks, P2 quiet-gap flush | P1: baseline recorded in `docs/architecture/testing.md`. P2: back-to-back echo median under 3 ms; `seq 1 1000000` throughput within 10% of P1's baseline; existing output and credit cases pass; the new behaviour has a case. |
@@ -100,6 +100,7 @@ machine, one heavy job at a time. P2 is measured against P1's baseline, so P1 co
   2026-11-12 (`docs/goals/evidence/terminal-view.md`, "On Windows, and a picture in the real app").
 - **Not proven:** the app's own code path on Windows (W2); the kept-session suite on Windows (W3); test
   cleanup of proxy-started brokers on Windows (W4); ConPTY marks under load (W1); the desktop check (W6).
+- **2026-11-14:** broker PR #28 (`fix/windows-hang-up`) is open and not merged. It carries the named-pipe hang-up, the Windows kill fix (through the wezterm git commit `8afe0ad307`, with an upstream issue asking for a release), the ported keeping, proxy and view suites, and the design doc's Windows limits. Its CI fails in three places: `cargo fmt` (fixed in `cdb2cbd`), a Windows timing failure in one keeping case (fixed in `cdb2cbd`), and a Linux mutant in the Windows-only arm of `hang_up`. The Linux mutation job cannot kill that mutant, because it is compiled out on Linux, and the workflow answers mixed files with a Windows dispatch. Choosing how to gate it is open. The app pin is not moved.
 - **Next:** T1, T2 and W1 can start at once, on different machines.
 - **Evidence file:** `docs/references/evidence/apack-terminal-v1.md`, to be created with the first checkpoint.
 
@@ -111,14 +112,14 @@ machine, one heavy job at a time. P2 is measured against P1's baseline, so P1 co
 | R2 Recording format versioned | Not started | none | T2 |
 | R3 `unsafe` blocks accounted for | Not started | none | T3 |
 | R4 Command marks correct under ConPTY load | Not tested | 2026-11-12 VM run of the hook, 3 commands only | W1 |
-| R5 App code path works on Windows | Not run | none | W2 |
-| R6 Kept-session suite on Windows, or beta with evidence | Not run; suite is POSIX-only | none | W3 |
-| R7 Killed test leaves no broker on Windows | No-op on Windows | none | W4 |
-| R8 POSIX-only cases ported or justified | 26 POSIX-only cases | none | W5 |
+| R5 App code path works on Windows | Partly: the app's terminal service opens PowerShell through the broker on the VM, and typed input reaches the shell. The recorded commands with statuses are not read back on Windows | 2026-11-12 VM run (headless API, marker file) | W2 |
+| R6 Kept-session suite on Windows, or beta with evidence | Partly: 12 of the 15 `keeping` cases pass on the VM. The other 3 are POSIX-only (trap HUP, process groups, one-direction close) and gated with reasons, which is not yet accepted as met | 2026-11-14 VM run (`keeping::`, 12 passed) | W3: accept or port the 3 |
+| R7 Killed test leaves no broker on Windows | Met: the proxy-ending case passes on the VM and the broker process count is 0 once the run ends | 2026-11-14 VM run (`proxy::a_broker_a_proxy_started`) | none |
+| R8 POSIX-only cases ported or justified | Partly: 25 of 30 view and proxy cases pass on the VM. 13 stay gated with a POSIX reason. 5 fail on Windows and are gated without a diagnosis (2 image placements, OSC title and clipboard, mouse-mode report, hang-up on unread answers) | 2026-11-14 VM run (`proxy::`, `view_broker::`: 25 passed) | W5: diagnose and port the 5 |
 | R9 Desktop check of the app's window on Windows | Not done; needs owner | none | W6 (owner) |
 | R10 Native benchmarks with a recorded baseline | Not started; the Node figure is not the broker's | 2026-11-12 Node measurement, not comparable | P1 |
 | R11 Quiet-gap flush | Not started; echo median 19.8 ms | 2026-11-12 measurement | P2 |
-| R12 v1 scope in README and design doc | Not started | none | F1 |
+| R12 v1 scope in README and design doc | Partly: the broker's design doc states the Windows limits and the session-ends-with-broker decision (PR #28). The broker repository has no README to update | PR #28 | F1: finish once W2 and R8 are settled |
 | R13 Broker suite green on macOS, Linux, Windows | Green on `master` at `f385161` (CI and mutation jobs) | Broker runs on `f385161`, checked 2026-11-12 | Re-confirm after each phase |
 | R14 App chain green with the pin at the v1 commit | Pin at `efe5d84` | none | Pin move and `npm run chain -- --no-native`, after R13 |
 
