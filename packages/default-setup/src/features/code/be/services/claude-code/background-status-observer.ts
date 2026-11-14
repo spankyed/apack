@@ -215,7 +215,10 @@ export async function createClaudeBackgroundStatusObserver(options: {
               || !Array.isArray(snapshot.agents) || snapshot.agents.length > 256) return reply(400, {})
             const key = JSON.stringify([value.sessionId, value.pid, snapshot.command, snapshot.policyKey])
             if (held.helperKey !== undefined && held.helperKey !== key) {
-              const config = JSON.parse(await readFile(held.helperConfigPath, 'utf8'))
+              const raw = await readFile(held.helperConfigPath, 'utf8')
+              // Revalidate before persisting a generation; a newer status may have won during I/O.
+              if (closed || childUi !== held || registration !== status.registration || sequence !== status.sequence) return reply(409, {})
+              const config = JSON.parse(raw)
               const generation = randomBytes(32).toString('hex')
               const temporary = held.helperConfigPath + '.' + randomBytes(8).toString('hex')
               writeFileSync(temporary, JSON.stringify({...config, generations: {...config.generations, subagent: generation}}), {mode: 0o600, flag: 'wx'})
