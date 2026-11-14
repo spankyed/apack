@@ -121,7 +121,9 @@ const activeFilePath = useSelector(actor, (state) => state.context.activeFilePat
 const baseDirectory = useSelector(actor, (state) => state.context.baseDirectory)
 const tabGroups = useSelector(actor, (state) => state.context.tabGroups)
 const isApplyingHunk = useSelector(commitActor, (state) => state?.context.isApplyingHunk === true)
-const appliedHunks = useSelector(commitActor, (state) => state?.context.appliedHunks ?? [])
+// The pieces staged from the diff on screen: the commit panel keeps them per diff tab
+const appliedHunksByTab = useSelector(commitActor, (state) => state?.context.appliedHunks ?? {})
+const appliedHunks = computed(() => appliedHunksByTab.value[activeFilePath.value ?? ''] ?? [])
 const applyHunk = (path: string, staged: boolean, hunk: string) => commitActor?.send({ type: 'commit.APPLY_HUNK', path, staged, hunk })
 const resolveConflict = (path: string, strategy: 'ours' | 'theirs') => commitActor?.send({ type: 'commit.RESOLVE_CONFLICT', path, strategy })
 

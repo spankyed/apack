@@ -288,6 +288,7 @@ import {
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import type { GhPRComment, GhReviewThread, GhReviewComment } from '#generated/types.ts'
 import { getCommentDatabaseId } from './comment-id.ts'
+import type { WriteAnswer } from './state.ts'
 
 const props = defineProps<{
   comments: GhPRComment[]
@@ -296,6 +297,8 @@ const props = defineProps<{
   prNumber: number
   isOpen: boolean
   isSubmitting: boolean
+  /** How the last write a form waits on was answered: each form lets go of its text on its own success only */
+  answered?: WriteAnswer | null
 }>()
 
 const emit = defineEmits<{
@@ -313,10 +316,12 @@ const emit = defineEmits<{
 // New comment
 const newCommentBody = ref('')
 
+const awaitingNewComment = ref(false)
+
 function submitNewComment() {
   if (!newCommentBody.value.trim()) return
   emit('create-comment', newCommentBody.value)
-  newCommentBody.value = ''
+  awaitingNewComment.value = true
 }
 
 // Edit comment
@@ -339,7 +344,6 @@ function saveEditComment(comment: GhPRComment) {
   const id = getCommentDatabaseId(comment)
   if (!id) return
   emit('edit-comment', id, editCommentBody.value)
-  editingCommentId.value = null
 }
 
 // Review thread state
@@ -351,6 +355,8 @@ watch(() => props.reviewThreads, () => {
 })
 const replyingThreadId = ref<string | null>(null)
 const replyBody = ref('')
+/** The comment a sent reply answers, while GitHub has not taken it */
+const replyingTo = ref<number | null>(null)
 const editingReviewCommentId = ref<string | null>(null)
 const editReviewCommentBody = ref('')
 
@@ -361,7 +367,6 @@ function startEditReviewComment(comment: GhReviewComment) {
 
 function saveEditReviewComment(comment: GhReviewComment) {
   emit('edit-review-comment', comment.databaseId, editReviewCommentBody.value)
-  editingReviewCommentId.value = null
 }
 
 function confirmDeleteReviewComment(comment: GhReviewComment) {
@@ -388,9 +393,33 @@ function submitReply(thread: GhReviewThread) {
   // Reply to the last comment in the thread
   const lastComment = thread.comments[thread.comments.length - 1]
   emit('reply-thread', props.prNumber, lastComment.databaseId, replyBody.value)
-  replyingThreadId.value = null
-  replyBody.value = ''
+  replyingTo.value = lastComment.databaseId
 }
+
+/** The id an edit form is open on, as GitHub numbers it */
+const editingCommentDatabaseId = (): number | null => {
+  const comment = props.comments.find(c => c.id === editingCommentId.value)
+  return comment ? getCommentDatabaseId(comment) : null
+}
+const editingReviewCommentDatabaseId = (): number | null =>
+  props.reviewThreads.flatMap(t => t.comments).find(c => c.id === editingReviewCommentId.value)?.databaseId ?? null
+
+// Each form keeps what was typed until GitHub has taken it, so a refused write loses nothing
+watch(() => props.answered, (answer) => {
+  if (!answer) return
+  if (answer.write === 'create-comment' && awaitingNewComment.value && answer.target === props.prNumber) {
+    awaitingNewComment.value = false
+    if (answer.ok) newCommentBody.value = ''
+  }
+  if (!answer.ok) return
+  if (answer.write === 'edit-comment' && answer.target === editingCommentDatabaseId()) editingCommentId.value = null
+  if (answer.write === 'edit-review-comment' && answer.target === editingReviewCommentDatabaseId()) editingReviewCommentId.value = null
+  if (answer.write === 'reply' && answer.target === replyingTo.value) {
+    replyingThreadId.value = null
+    replyBody.value = ''
+    replyingTo.value = null
+  }
+})
 
 function handleResolveToggle(thread: GhReviewThread) {
   resolvingThreadId.value = thread.id

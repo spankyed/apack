@@ -1,6 +1,8 @@
 // Staging one piece of a file's change from its diff: the panel has git do it, and is busy until git answers
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { answerTo } from '@apackdev/sdk/testing';
+import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
 vi.mock('#generated/events.ts', () => ({ sendToSystem }));
@@ -22,7 +24,7 @@ it('has git stage the piece, and is busy with it until git says it is done', () 
 
   actor.send(PIECE);
 
-  expect(sendToSystem).toHaveBeenCalledWith('code', PIECE);
+  expect(sendToSystem).toHaveBeenCalledWith('code', PIECE, { call: expect.any(String) });
   expect(actor.getSnapshot().context.isApplyingHunk).toBe(true);
 
   actor.send({ type: 'commit.HUNK_APPLIED', data: { path: 'a.txt', staged: false, hunk: 'a piece' } });
@@ -33,7 +35,7 @@ it('is no longer busy, and says why, when git refuses the piece', () => {
   const actor = createActor(commitState).start();
   actor.send(PIECE);
 
-  actor.send({ type: 'commit.ERROR_RECEIVED', data: { message: 'The file has changed since this change was read.' } });
+  actor.send(answerTo(sentCall(sendToSystem, 'commit.APPLY_HUNK'), { type: 'commit.ERROR_RECEIVED' as const, data: { message: 'The file has changed since this change was read.' } }));
 
   expect(actor.getSnapshot().context).toMatchObject({ isApplyingHunk: false, gitError: 'The file has changed since this change was read.' });
 });
@@ -44,8 +46,8 @@ it('holds a piece as done from when git stages it until a diff is read again', (
   actor.send(PIECE);
 
   actor.send({ type: 'commit.HUNK_APPLIED', data: { path: 'a.txt', staged: false, hunk: 'a piece' } });
-  expect(actor.getSnapshot().context.appliedHunks).toEqual(['a piece']);
+  expect(actor.getSnapshot().context.appliedHunks).toEqual({ 'diff:a.txt:unstaged': ['a piece'] });
 
   actor.send({ type: 'commit.DIFF_RECEIVED', data: { path: 'a.txt', staged: false, originalContent: '', modifiedContent: '', hunks: [] } });
-  expect(actor.getSnapshot().context.appliedHunks).toEqual([]);
+  expect(actor.getSnapshot().context.appliedHunks).toEqual({});
 });

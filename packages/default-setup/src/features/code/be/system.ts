@@ -29,6 +29,7 @@ import { setup, enqueueActions, assign, sendTo, type AnyActorRef } from 'xstate'
 import { defineSystem } from '@apackdev/sdk/framework'
 import { AppGitRepository, GIT_COMMAND_LOG, openGitRepository, openGitWatcher, repositoryHandle, repositoryOf, watcherHandle, watcherOf } from './services/app-git-repository.ts'
 import { gitWatcherActor } from './git-watcher-actor.ts'
+import { answer } from './answer.ts'
 
 // child systems; their events come from the contract, which is where every child's now live
 import { explorerSystem } from './features/explorer.ts'
@@ -157,6 +158,30 @@ export const systemMachine = setup({
       void AppGitRepository.repositoriesUnder(folder).then(
         ({ repositories, truncated }) => reply?.({ type: 'commit.REPOSITORIES_RECEIVED', data: { repositories, truncated, current: context.baseDirectory } }),
         () => reply?.({ type: 'commit.REPOSITORIES_RECEIVED', data: { repositories: [], truncated: false, current: context.baseDirectory } }),
+      )
+    },
+
+    /**
+     * Moves the code surface to one of the repository's worktrees, and answers the window that asked: switched, or
+     * why not. A path the repository does not list as a worktree is refused, and the folder stays where it is
+     */
+    switchWorktree: ({ context, event, self, reply }) => {
+      const { path } = codeSpec.typeOf('commit.WORKTREE_SWITCH', event)
+      const repository = repositoryOf(context.gitRepository)
+      if (!repository) {
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: 'No repository is open to switch worktrees in.' } })
+        return
+      }
+      void repository.worktreeList().then(
+        (worktrees) => {
+          if (!worktrees.some(worktree => worktree.path === path)) {
+            answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: `Not a worktree of this repository: ${path}` } })
+            return
+          }
+          self.send({ type: 'SET_BASE_DIRECTORY', path, fromUserNavigation: true })
+          answer(reply, { type: 'commit.WORKTREE_SWITCHED', data: { path } })
+        },
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: error instanceof Error ? error.message : String(error) } }),
       )
     },
 
@@ -369,13 +394,8 @@ export const systemMachine = setup({
             self.send({ type: 'SET_BASE_DIRECTORY', path: ev.path, fromUserNavigation: true, fromPicker: true })
           },
         },
-        // Worktree switch is intercepted here to change baseDirectory
-        'commit.WORKTREE_SWITCH': {
-          actions: ({ event, self }) => {
-            const ev = event as { type: 'commit.WORKTREE_SWITCH'; path: string }
-            self.send({ type: 'SET_BASE_DIRECTORY', path: ev.path, fromUserNavigation: true })
-          }
-        },
+        // A worktree switch changes the folder, which is this system's: it is not routed to the commit child
+        'commit.WORKTREE_SWITCH': { actions: 'switchWorktree' },
         // All other events get routed to children
         '*': {
           actions: 'routeEvent'
