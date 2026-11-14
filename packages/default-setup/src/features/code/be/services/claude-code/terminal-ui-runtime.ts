@@ -827,6 +827,7 @@ async function control(request,abort){
   const effective=settings.ut(),policy=settings.me('policySettings')??{},privateHooksSuppressed=restrictions.xr('plugins')===true;
   const helperState=nativeHelperPolicySnapshot(effective,policy);
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
+  if(request.include_main_status_cache===true)helperState.cachedMainStatus=nativeMainStatusCache(n,binding.toolContext(abort),sessionId,helperState.statusCommand);
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
   const preview=await nativeStreamingPreview(n,facts,n.runtime.lpe());
   const limits=await import('/$bunfs/root/chunk-2bb0j573.js');

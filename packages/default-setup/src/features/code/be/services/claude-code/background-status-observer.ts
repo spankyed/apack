@@ -150,6 +150,16 @@ export async function createClaudeBackgroundStatusObserver(options: {
     if (observed.sessionId !== value.sessionId || observed.statusCommand !== value.command || policyKey !== value.policyKey) return false
     return held.main.accept(value)
   }
+  async function restoreMain(held: NonNullable<typeof childUi>, registration: number, sequence: number) {
+    const cost = status.value?.totalCostUsd
+    if (!held.main.canRestore(cost)) return
+    const observed = await held.transport.request({subtype: 'apack_owner_snapshot', policy_only: true, follow_native_session: true, include_main_status_cache: true}) as {sessionId?: unknown; statusCommand?: unknown; cachedMainStatus?: unknown; hooksDisabled?: unknown; policy?: {allowManagedHooksOnly?: unknown; disableAllHooks?: unknown}}
+    if (await childUiCurrent() !== held || registration !== status.registration || sequence !== status.sequence) return
+    if (typeof observed.policy?.allowManagedHooksOnly !== 'boolean' || typeof observed.policy.disableAllHooks !== 'boolean' || typeof observed.hooksDisabled !== 'boolean') return
+    const policyKey = JSON.stringify([observed.policy.allowManagedHooksOnly, observed.policy.disableAllHooks, observed.hooksDisabled])
+    if (observed.sessionId !== status.identity?.activeSessionId || !held.main.matchesPolicy(observed.statusCommand, policyKey)) return
+    if (held.main.restoreCached(observed.cachedMainStatus, cost)) changed(true)
+  }
   const server = createServer(async (request, response) => {
     const reply = (code: number, value: unknown) => { if (!response.destroyed && !response.writableEnded) { response.writeHead(code, { 'content-type': 'application/json' }); response.end(JSON.stringify(value)) } }
     try {
@@ -237,6 +247,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
               try { if (!await acceptMain(held, startup as Record<string, unknown>)) held.main.discardStartup() }
               catch { /* Native UI binding may still be starting. This same lease retries on its next status report. */ }
             }
+            try { await restoreMain(held, registration, sequence) } catch { /* A still-starting native cache is retried by the next status report. */ }
             if (closed || childUi !== held || registration !== status.registration || sequence !== status.sequence) return reply(409, {})
           }
           if (value.formatter && !formatter) {

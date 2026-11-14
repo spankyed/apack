@@ -27,3 +27,10 @@ it('keeps eligible managed helpers under private suppression and suppresses all 
 it('reports absent and unsupported helpers as explicit null commands', () => {
   expect(snapshot({ statusLine: { type: 'prompt', command: 'unsupported' }, subagentStatusLine: { type: 'command', command: [] } }, {})).toMatchObject({ statusCommand: null, subagentCommand: null })
 })
+it('reads the original live-session caption cache without creating native state',()=>{
+ const read=new Function('n','context','sessionId','command',claudeTerminalHelperPolicyRuntime+'\nreturn nativeMainStatusCache(n,context,sessionId,command)')
+ const session={id:'child'},peek=vi.fn(()=>({lastText:'Original cached caption'})),n={runtime:{Mco:{peek}}}
+ expect(read(n,{session},'foreign','helper')).toBeNull();expect(read(n,{session},'child',null)).toBeNull();expect(peek).not.toHaveBeenCalled()
+ expect(read(n,{session},'child','helper')).toBe('Original cached caption');expect(peek).toHaveBeenCalledWith(session)
+ peek.mockReturnValue({lastText:'🙂'.repeat(8193)});expect(read(n,{session},'child','helper')).toBeNull()
+})

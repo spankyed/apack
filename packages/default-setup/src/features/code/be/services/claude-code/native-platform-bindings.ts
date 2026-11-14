@@ -289,6 +289,7 @@ export const claudeNativeLinuxBindings: {
         "flt": "slt",
         "GYt": "P8t",
         "Hco": "sco",
+        "Mco": "oco",
         "ilo": "Oao",
         "j_r": "w_r",
         "Jgr": "Pgr",

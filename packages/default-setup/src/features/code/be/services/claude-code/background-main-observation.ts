@@ -7,6 +7,7 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
   let key: string | undefined, generation: string | undefined, command: string | null = null, policyKey: string | undefined
   let startupResult: unknown
   let latest: bigint | undefined, result: {cost: number; text?: string} | undefined
+  let cached: {key: string; cost: number; text: string; startedAt: bigint} | undefined
   return {
     configure(nextCommand: string | null, nextPolicy: string): unknown {
       const nextKey = JSON.stringify([nextCommand, nextPolicy])
@@ -43,6 +44,15 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
       latest = started; startupResult = undefined
       const text = value.code === 0 && !value.truncated && !value.signal ? value.stdout.trim().split('\n').flatMap(line => line.trim() || []).join('\n') || undefined : undefined
       result = {cost: value.totalCostUsd, text}
+      cached = text ? {key, cost: value.totalCostUsd, text, startedAt: started} : undefined
+      return true
+    },
+    canRestore(cost: number | undefined) { return result === undefined && !!command && cached !== undefined && cached.key === key && cached.cost === cost },
+    restoreCached(value: unknown, cost: number | undefined) {
+      if (result !== undefined || !command || !cached || cached.key !== key || cached.cost !== cost || typeof value !== 'string' || Buffer.byteLength(value) > 32768) return false
+      const text = value.trim().split('\n').flatMap(line => line.trim() || []).join('\n')
+      if (text !== cached.text) return false
+      result = {cost: cached.cost, text}; latest = cached.startedAt
       return true
     },
     discardStartup() { startupResult = undefined },
@@ -50,6 +60,6 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
     get startedAt() { return latest },
     matchesCost(cost: number | undefined) { return result !== undefined && result.cost === cost },
     value(cost: number | undefined) { return result?.cost === cost ? result?.text : undefined },
-    clear() { key = undefined; generation = undefined; latest = undefined; result = undefined; command = null; policyKey = undefined; startupResult = undefined },
+    clear() { key = undefined; generation = undefined; latest = undefined; result = undefined; cached = undefined; command = null; policyKey = undefined; startupResult = undefined },
   }
 }
