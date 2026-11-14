@@ -91,6 +91,9 @@ export class CodexAppServer {
     // Set up readline BEFORE the init promise so we don't miss messages
     this.readline = createInterface({ input: this.process.stdout! })
     this.readline.on('line', (line: string) => this._handleLine(line))
+    // The reader re-emits whatever its input raises on its own `error`, and one with no listener throws out of the
+    // API process. A pipe that fails is followed by the process's own `exit`, which settles what was pending
+    this.readline.on('error', (error: Error) => logger.warn('App-server output could not be read', { error: error.message }))
 
     // Handle process exit
     this.process.on('exit', (code, signal) => {

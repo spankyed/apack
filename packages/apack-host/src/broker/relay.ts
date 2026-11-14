@@ -112,7 +112,9 @@ export async function serveRelay(socket: string, command: readonly string[], env
       logger.warn(failure);
       connection.destroy();
     });
-    child.once('exit', (code, signal) => {
+    // `close` and not `exit`: it comes once the command's output has been read to its end, so what it said of why it
+    // failed has arrived. `exit` can come first, and a busy machine made it come before the line naming the cause
+    child.once('close', (code, signal) => {
       running.delete(child);
       if (code !== 0 && signal === null) {
         failure = said.trim() || `${program} exited with status ${code}`;

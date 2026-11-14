@@ -30,7 +30,9 @@ const server = net.createServer(connection => {
   // Gone with its last connection, as the real broker is: one that stayed would outlive the case that started it
   open += 1;
   connection.on('close', () => { open -= 1; if (open === 0) process.exit(0); });
-  readline.createInterface({ input: connection }).on('line', line => {
+  // A client that hangs up mid-write is a reset here, and the reader re-emits it: unheard, either ends this broker
+  connection.on('error', () => {});
+  readline.createInterface({ input: connection }).on('error', () => {}).on('line', line => {
     const request = JSON.parse(line);
     const answers = (script[request.kind] ?? []).map(event =>
       typeof event === 'string'
@@ -137,7 +139,8 @@ let open = 0;
 const server = net.createServer(connection => {
   open += 1;
   connection.on('close', () => { open -= 1; if (open === 0) process.exit(0); });
-  readline.createInterface({ input: connection }).on('line', () => {
+  connection.on('error', () => {});
+  readline.createInterface({ input: connection }).on('error', () => {}).on('line', () => {
     connection.write(JSON.stringify({ kind: 'hello', protocol: 99 }) + '\\n');
   });
 });

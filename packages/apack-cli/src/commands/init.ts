@@ -262,7 +262,9 @@ src/__generated__/
 async function prompt(question: string, defaultValue?: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const suffix = defaultValue ? ` (${defaultValue})` : '';
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
+    // The reader re-emits its input's errors on its own, and one with no listener throws rather than rejecting
+    rl.once('error', error => { rl.close(); reject(error); });
     rl.question(`${question}${suffix}: `, answer => {
       rl.close();
       resolve(answer.trim() || defaultValue || '');
