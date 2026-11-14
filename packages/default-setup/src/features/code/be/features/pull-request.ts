@@ -193,12 +193,14 @@ async function headBranchOf(repo: AppGitRepository, remote: string): Promise<str
 
 /**
  * Brings a change GitHub made — a merge, a deleted branch — here: the repository fetches from the remote its branch
- * follows, then the commit child reads it whole, and whatever moved is announced to every window. A fetch that
- * fails leaves the repository as it was, which the read finds
+ * follows, and the fetch is announced to every window as this app's other writes are (`commit.GIT_STATUS_CHANGED`).
+ * A write is announced whether or not a window has asked since the last news, where a hint is put off until one
+ * does: the pull request panel, which is what follows a merge, asks for no status. A fetch that fails leaves the
+ * repository as it was, which the read finds
  */
 async function fetchAndAnnounce(context: CodePullRequestSystemContext): Promise<void> {
   await context.gitRepository?.fetch().catch(() => undefined)
-  context.code?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true })
+  context.code?.send({ type: 'commit.GIT_STATUS_CHANGED' })
 }
 
 /** Hands each handler the answer for the message it is handling — see `defineHandlers` */

@@ -128,6 +128,12 @@ for it, nor listed the commit panel's repositories, stashes, worktrees and branc
 before it was there; it now hands it with `sendTo`, which XState delivers once the transition is done
 (`fe/state.ts`, `broadcastToAllFeatures`; `tests/features/code/fe/state.spec.ts`).
 
+Found under load, and fixed here: the fetch after a merge or a branch's deletion was announced as a hint
+(`commit.REPOSITORY_MAY_HAVE_CHANGED`), which the commit system puts off while no window has asked for its status
+since the last news — and the pull request panel, which is what a merge happens from, asks for none. The fetch is now
+announced as this app's other writes are (`commit.GIT_STATUS_CHANGED`). `pull-request-merge-fetches.spec.ts` failed
+six runs of six under `npm run stress` before it.
+
 Seen while driving, outside this change:
 
 - Once, after a pack reload that landed while a comment was being sent, the app read as signed out to GitHub until it
