@@ -2490,10 +2490,13 @@ type IncomingPromptsEvents = {
 
 type IncomingPullRequestEvents = {
     type: 'pr.GET_BASE_BRANCH';
-} | {
+}
+/** `prNumber` reads the head from what GitHub keeps of that pull request, which outlives its branch */
+ | {
     type: 'pr.GET_BRANCH_DIFF';
     baseBranch?: string;
     headBranch?: string;
+    prNumber?: number;
 }
 /** `fetchMissing`: content a partial clone was not given is fetched for this diff, where it is otherwise answered as missing */
  | {
@@ -2501,6 +2504,7 @@ type IncomingPullRequestEvents = {
     path: string;
     baseBranch: string;
     headBranch?: string;
+    prNumber?: number;
     fetchMissing?: boolean;
 } | {
     type: 'pr.LIST_OPEN_PRS';
@@ -4146,6 +4150,7 @@ type OutgoingPullRequestEvents = {
         path: string;
         baseBranch: string;
         headBranch?: string;
+        prNumber?: number;
     };
 } | {
     type: 'pr.ERROR';
