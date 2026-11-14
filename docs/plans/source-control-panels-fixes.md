@@ -1,6 +1,6 @@
 # Fixing the source-control and pull request panels
 
-Status: decided 2026-11-14 (its four decisions below). Not started.
+Status: decided 2026-11-14 (its four decisions below). Phase 1 landed 2026-11-14; phases 2 to 4 next.
 
 Surveyed at monorepo `origin/master` `eb567581ac` and apack-git `cf7be5d` (the pin), by four read-only reviews — the
 commit panel and the pull request panel, frontend and backend each — and a check of the findings against the code.
@@ -68,6 +68,21 @@ few and clears everything on any error. One pull request for this phase, fronten
 **Done when:** a spec for each scenario drives the machine with `answerTo` (late, early and failing answers), each
 fails with its fix reverted; the existing panel specs pass; the chain passes. Driven once in the app: a failed
 write's message stays until dismissed, and a folder switch mid-push leaves nothing busy.
+
+**Landed 2026-11-14**, in apack #478. Two items changed in the doing:
+- **1.8** keeps GitHub's last list with each unanswered write laid over it, rather than one snapshot per write:
+  restoring one write's snapshot would also undo another's change made after it.
+- **1.10** also clears the pick when the branch is deleted, so the panel cannot be left with nothing selected.
+
+Also removed: `pr.STATUS_CHANGED`, `pr.GET_BASE_BRANCH` and `pr.BASE_BRANCH_RECEIVED`, which nothing sent, and
+the check in `default-directory.spec.ts` that counted one of them and could never fail. 6.4 asks GitHub while the
+pull request panel is the one selected; a hidden code surface with that panel selected still asks, which needs the
+code surface to tell the panel it is hidden, as it tells the commit panel.
+
+Driven in the app on the branch: a failed push's error stayed through the status refresh an edit caused, and a
+worktree switch moved the surface and left the list usable. The chain's one failure was outside this change:
+`repo-checks/tests/bounded-spawn.integration.spec.ts` fails under the machine's load (average 28–50 from other
+sessions), on different cases each run.
 
 ## Phase 2 — the pull request backend
 
