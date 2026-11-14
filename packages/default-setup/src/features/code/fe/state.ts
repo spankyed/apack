@@ -672,9 +672,16 @@ const codeState = setup({
     // Hands every child whatever arrived and lets each ignore what it doesn't handle. That is routing rather than
     // addressing one child, so there is no single event union to check against and the children stay untyped here —
     // as in `routeEvent`. Every call that names one child names its type.
-    broadcastToAllFeatures: ({ event, self }) => {
-      for (const id of CODE_CHILD_IDS) routeToCodeChild(self, id, event);
-    },
+    //
+    // It is sent with `sendTo`, which XState delivers once this transition's context is the surface's: a child
+    // handling the start reads the folder the start just set (`getParentContext`), where a send made from inside
+    // the transition would be handled first and read the folder before it.
+    broadcastToAllFeatures: enqueueActions(({ enqueue, event, self }) => {
+      for (const id of CODE_CHILD_IDS) {
+        const child = self.getSnapshot().children[id] as AnyActorRef | undefined
+        if (child) enqueue.sendTo(child, event)
+      }
+    }),
 
     routeEvent: ({ event, self }) => {
       const eventType = event.type;

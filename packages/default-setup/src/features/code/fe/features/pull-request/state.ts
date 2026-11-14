@@ -100,7 +100,7 @@ const writeAnswer = (write: PullRequestWrite, ok: boolean): WriteAnswer | null =
 const applyComment = (comments: GhPRComment[], change: CommentChange): GhPRComment[] => {
   switch (change.change) {
     case 'create': return [...comments, change.placeholder]
-    case 'edit': return comments.map(c => getCommentDatabaseId(c) === change.commentId ? { ...c, body: change.body } : c)
+    case 'edit': return comments.map(c => getCommentDatabaseId(c) === change.commentId ? { ...c, body: change.body, rawBody: change.body } : c)
     case 'delete': return comments.filter(c => getCommentDatabaseId(c) !== change.commentId)
   }
 }
@@ -228,6 +228,17 @@ const folderStart = (): Omit<CodePullRequestContext, 'commentTab'> => ({
 /** Whether the app's GitHub sign-in can work with this repository's pull requests: `ok`, or why not */
 export type GitHubAccess = 'ok' | GitHubApiFailure
 
+/** GitHub's reasons a refusal is about the sign-in or the repository, not the ask: shown as the access is */
+const ACCESS_FAILURES: readonly GitHubApiFailure[] = ['signed-out', 'not-github', 'missing-scope', 'sso']
+
+/**
+ * Whether the pull request's branch is one the panel offers to delete: a branch of this repository, not a fork's,
+ * that no other open pull request it knows of is from. The backend asks GitHub the same before it deletes
+ */
+export const branchDeletable = (pr: GhPullRequest | null, openPRs: GhPullRequest[]): boolean =>
+  !!pr && pr.state !== 'OPEN' && pr.isCrossRepository === false
+  && !openPRs.some(other => other.number !== pr.number && other.headRefName === pr.headRefName && other.isCrossRepository === false)
+
 export interface CodePullRequestContext {
   // Branch comparison
   /**
@@ -335,7 +346,7 @@ export type Event =
   /** The user asked for the content the diff of `missingFileDiff` lacks to be downloaded */
   | { type: 'pr.FETCH_MISSING_DIFF' }
   | { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string; prNumber?: number } }
-  | { type: 'pr.ERROR'; message: string }
+  | { type: 'pr.ERROR'; message: string; reason?: GitHubApiFailure }
   | { type: 'pr.BRANCH_DIFF_RECEIVED'; data: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
   | { type: 'pr.FILE_DIFF_RECEIVED'; data: GitDiff & { baseBranch: string; headBranch?: string } }
   | { type: 'pr.OPEN_FILE'; file: GitStatusFile }
@@ -513,11 +524,14 @@ export const pullRequestState = setup({
 
     /**
      * An error ends the ask or write it answers and nothing else: that ask's busy flag clears, that write's
-     * change comes off what is shown. Its message is shown whatever it answers, an earlier ask's included.
+     * change comes off what is shown. Its message is shown whatever it answers, an earlier ask's included: as the
+     * GitHub access, where GitHub's reason is the sign-in or the repository, and as the panel's error otherwise.
      */
     takeError: enqueueActions(({ enqueue, context, event }) => {
-      const ev = event as { type: 'pr.ERROR'; message: string }
-      const updates: Partial<CodePullRequestContext> = { prError: ev.message }
+      const ev = event as { type: 'pr.ERROR'; message: string; reason?: GitHubApiFailure }
+      const updates: Partial<CodePullRequestContext> = ev.reason && ACCESS_FAILURES.includes(ev.reason)
+        ? { githubAccess: ev.reason, githubAccessMessage: ev.message }
+        : { prError: ev.message }
       const asks = { ...context.asks }
       for (const which of ASKS) {
         if (!answersCall(event, asks[which])) continue
@@ -767,7 +781,7 @@ export const pullRequestState = setup({
               ? {
                   ...context.selectedPR,
                   ...(ev.data.title && { title: ev.data.title }),
-                  ...(ev.data.body !== undefined && { body: ev.data.body }),
+                  ...(ev.data.body !== undefined && { body: ev.data.body, rawBody: ev.data.body }),
                   ...(ev.data.base && { baseRefName: ev.data.base }),
                 }
               : context.selectedPR,
@@ -778,10 +792,11 @@ export const pullRequestState = setup({
       }
     }),
 
+    /** Deletes the pull request's branch, where the panel offers it (`branchDeletable`); the view has asked first */
     requestDeleteBranch: enqueueActions(({ enqueue, context }) => {
-      const branch = context.selectedPR?.headRefName
-      if (!branch) return
-      sendWrite(enqueue, { write: 'delete-branch' }, (o) => sendToSystem('code', { type: 'pr.DELETE_BRANCH', branch }, o))
+      const pr = context.selectedPR
+      if (!pr || !branchDeletable(pr, context.openPRs)) return
+      sendWrite(enqueue, { write: 'delete-branch' }, (o) => sendToSystem('code', { type: 'pr.DELETE_BRANCH', number: pr.number }, o))
     }),
 
     checkoutBase: ({ context, self }) => {

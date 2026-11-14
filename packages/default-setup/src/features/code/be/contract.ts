@@ -230,7 +230,11 @@ export type IncomingPullRequestEvents =
   | { type: 'pr.CHECK_GITHUB_ACCESS' }
   | { type: 'pr.GET_PR_AUTOFILL' }
   | { type: 'pr.GET_SMART_BASE_BRANCH' }
-  | { type: 'pr.DELETE_BRANCH'; branch: string }
+  /**
+   * Deletes the pull request's branch on GitHub: refused for a fork's branch, and for one another open pull request
+   * is from. Answered with the branch deleted, or one already gone
+   */
+  | { type: 'pr.DELETE_BRANCH'; number: number }
   | { type: 'pr.UPDATE_PR'; number: number; title?: string; body?: string; base?: string }
   | { type: 'pr.CREATE_COMMENT'; number: number; body: string }
   | { type: 'pr.EDIT_COMMENT'; commentId: number; body: string }
@@ -248,7 +252,8 @@ export type OutgoingPullRequestEvents =
   | { type: 'pr.FILE_DIFF_RECEIVED'; data: GitDiff & { baseBranch: string; headBranch?: string } }
   /** A file's diff needs content this partial clone was not given, which is fetched only when the user asks */
   | { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string; prNumber?: number } }
-  | { type: 'pr.ERROR'; message: string }
+  /** What failed, said; for a refusal of GitHub's, the reason the panel acts on, as `pr.GITHUB_ACCESS_CHECKED` gives it */
+  | { type: 'pr.ERROR'; message: string; reason?: GitHubApiFailure }
   /** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */
   | { type: 'pr.GIT_STATUS_REFRESHED'; data: { timestamp: Date } }
   | { type: 'pr.OPEN_PRS_RECEIVED'; data: { prs: GhPullRequest[] } }
@@ -400,6 +405,8 @@ export type IncomingGitHubEvents =
   | { type: 'github.CANCEL_SIGN_IN' }
   /** Forgets the token. It stays valid at GitHub until the user revokes it there, which Settings says */
   | { type: 'github.SIGN_OUT' }
+  /** The app's stored secrets changed (no values): the sign-in held is read again on its next use */
+  | { type: 'SECRETS_CHANGED' }
 
 export type OutgoingGitHubEvents =
   | { type: 'github.ACCOUNT'; account: GitHubAccount | null }

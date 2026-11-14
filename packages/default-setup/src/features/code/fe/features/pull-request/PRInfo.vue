@@ -208,7 +208,8 @@ const branchOptions = computed(() => {
 function startEditing() {
   if (!props.pr) return
   editTitle.value = props.pr.title
-  editBody.value = props.pr.body || ''
+  // The description as written: what is shown has its images at signed addresses that expire
+  editBody.value = props.pr.rawBody ?? props.pr.body ?? ''
   editBase.value = props.pr.baseRefName
   editing.value = true
   emit('start-editing')
@@ -222,7 +223,7 @@ function save() {
   if (!props.pr) return
   const changes: { title?: string; body?: string; base?: string } = {}
   if (editTitle.value !== props.pr.title) changes.title = editTitle.value
-  if (editBody.value !== (props.pr.body || '')) changes.body = editBody.value
+  if (editBody.value !== (props.pr.rawBody ?? props.pr.body ?? '')) changes.body = editBody.value
   if (editBase.value !== props.pr.baseRefName) changes.base = editBase.value
   if (Object.keys(changes).length > 0) {
     emit('save', changes)

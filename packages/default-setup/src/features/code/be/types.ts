@@ -224,9 +224,14 @@ export interface CommitLogEntry {
 export interface GhPullRequest {
   number: number
   title: string
+  /** The description as shown: an image GitHub hosts for its users at the signed address a window can load */
   body: string
+  /** The description as written, which an edit starts from: `body` where nothing in it was rewritten for showing */
+  rawBody?: string
   headRefName: string
   baseRefName: string
+  /** Whether the head is a branch of another repository, a fork's, rather than of this one */
+  isCrossRepository?: boolean
   state: 'OPEN' | 'CLOSED' | 'MERGED'
   url: string
   isDraft: boolean
@@ -250,7 +255,10 @@ export interface GhPullRequest {
 
 export interface GhPRComment {
   id: string
+  /** The comment as shown: an image GitHub hosts for its users at the signed address a window can load */
   body: string
+  /** The comment as written, which an edit starts from: `body` where nothing in it was rewritten for showing */
+  rawBody?: string
   author: { login: string }
   createdAt: string
   url: string
