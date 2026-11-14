@@ -24,8 +24,7 @@ import { parseClaudeNativeContinuation, type ClaudeNativeContinuation } from './
 import type { ClaudeNativeTerminalRecord, ClaudeNativeSubmissionReceipt, ClaudeNativeImage } from './terminal-session.ts'
 import { stat } from 'node:fs/promises'
 import { resolveClaudeExecutable } from './native-executable.ts'
-import { createClaudeTerminalImageFileTransport } from './terminal-image-file-transport.ts'
-import { createClaudeTerminalImageCache } from './terminal-image-cache.ts'
+import { projectClaudeTerminalImageReferences } from './terminal-image-reference.ts'
 import { createClaudeLifecycleTrace } from './lifecycle-trace.ts'
 import { randomUUID } from 'node:crypto'
 import { stripVTControlCharacters } from 'node:util'
@@ -129,8 +128,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   // Advertise app rendering capabilities only when the caller has not chosen an override.
   if (!terminalEnv.NO_COLOR) terminalEnv.FORCE_COLOR ??= '3'
   terminalEnv.FORCE_HYPERLINK ??= '1'
-  // The broker answers native capability probes. Forcing images also forces file-image
-  // support in Claude, which a byte-only broker does not advertise. Preserve caller overrides.
+  // The broker answers capability probes and owns all inline/file/shared-memory image reads.
   const readJournal = createClaudeNativeJournalReader()
   const trace = createClaudeLifecycleTrace('terminal')
   const ownerId = randomUUID(), listeners = new Set<() => void>()
@@ -151,44 +149,15 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     notificationsDropped: (route, count) => trace('notifications_dropped', {route, count}), changed,
     pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); bestEffort(terminal.write('\x1b[200~' + path + '\x1b[201~')) },
     enter() { if (closed || !terminal) throw new Error('Native terminal closed'); bestEffort(terminal.write('\r')) } })
-  const imageCache = createClaudeTerminalImageCache()
-  const imageListeners = new Set<(event: Record<string, unknown>) => void>()
-  const imageTransport = createClaudeTerminalImageFileTransport({
-    // Capability/decode replies belong to the broker; this observes pixels for Client drawings.
-    reply() {},
-    answerFileQueries: false,
-    image(value) {
-      imageCache.put(value)
-      for (const listener of imageListeners) { try { listener({ type: 'system', subtype: 'ui_invalidate', event: 'ui.render', client_snapshot: true }) } catch { /* isolate mounted views */ } }
-    },
-    remove(id) { imageCache.remove(id) },
-    emit(text) {
-      if (closed) return
-      const bytes = Buffer.from(text)
-      if (bytes.length > 262144) {
-        let from = bytes.length - 262144
-        while (from < bytes.length && (bytes[from]! & 0xc0) === 0x80) from++
-        text = bytes.subarray(from).toString()
-      }
-      output.push({ sequence: ++sequence, text }); outputSize += Buffer.byteLength(text)
-      while (output.length > 1 && outputSize > 262144) outputSize -= Buffer.byteLength(output.shift()!.text)
-      changed()
-    },
-  })
   const uiTransport: ClaudeNativeTerminalOwner['uiTransport'] = {
     get promptHosts() { return bridge.uiTransport.promptHosts },
     async request(value) {
       const result = await bridge.uiTransport.request(value)
       if (value.subtype !== 'ui_render' && value.subtype !== 'apack_render_question_dialog') return result
-      await imageTransport.drain()
-      if (closed) throw new Error('Native image owner closed before rendering')
-      return imageCache.project(result)
+      if (closed || !terminal) throw new Error('Native image owner closed before rendering')
+      return projectClaudeTerminalImageReferences(result, { id: terminal.id, target: terminal.target })
     },
-    subscribe(listener) {
-      imageListeners.add(listener)
-      const detach = bridge.uiTransport.subscribe(listener)
-      return () => { imageListeners.delete(listener); detach() }
-    },
+    subscribe(listener) { return bridge.uiTransport.subscribe(listener) },
   }
   /**
    * A write, resize or pause that cannot be delivered is not this call's to report.
@@ -199,15 +168,13 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
    * on `onExit` and closes this owner. So they are best effort by construction rather than by neglect.
    */
   const bestEffort = (sent: Promise<unknown>): void => { void sent.catch(() => {}) }
-  let outputFailed = false, pendingOutput = 0
   let hardStop: ReturnType<typeof setTimeout> | undefined
   async function finish(code: number | null, signal?: string) {
     if (closed) return
-    imageTransport.close(); imageCache.close(); imageListeners.clear()
     // `code` is absent when a signal ended it, which this trace takes only integers for; `outcome` is what
     // carries that case, and the signal itself reaches the window on the session's own exit
-    trace('exit', {outcome:outputFailed ? 'error' : stopping ? 'cancelled' : code === 0 ? 'ok' : 'error',code: code ?? undefined});
-    closed = true; clearTimeout(hardStop); status = outputFailed ? 'error' : stopping || code === 0 && !signal ? 'exited' : 'error'; exitCode = code ?? undefined
+    trace('exit', {outcome:stopping ? 'cancelled' : code === 0 ? 'ok' : 'error',code: code ?? undefined});
+    closed = true; clearTimeout(hardStop); status = stopping || code === 0 && !signal ? 'exited' : 'error'; exitCode = code ?? undefined
     try { await bridge.close() } finally {
       releasing = true
       try { for (const observer of exitObservers) await observer() } finally { changed(); resolveDone() }
@@ -217,7 +184,6 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
     if (closed || stopping || !terminal) return
     trace('cancel_requested')
     stopping = true
-    imageTransport.close()
     // **The session is what the guards compare, not its pid.** A replaced session is a different handle, and
     // the broker answers no pid for one it took up again rather than started
     const session = terminal, nativePid = bridge.nativePid
@@ -272,6 +238,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       terminal = await services.terminal.open(
         {
           images: true,
+          imageFiles: true,
           colors: CLAUDE_NATIVE_TERMINAL_COLORS,
           cols: options.columns ?? 100,
           rows: options.rows ?? 30,
@@ -287,13 +254,17 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         {
           onOutput: text => {
             if (closed || stopping) return
-            // **The session stops being read while the transport drains**, which is what a pause is for: the
-            // bytes wait in the pty's buffer and the CLI blocks on its own write, rather than piling up here
-            pendingOutput++; if (terminal) bestEffort(terminal.pause())
-            void imageTransport.write(text).catch(() => { outputFailed = true; kill() }).finally(() => {
-              pendingOutput--
-              if (!closed && !stopping && pendingOutput === 0 && terminal) bestEffort(terminal.resume())
-            })
+            // The broker alone consumes images, including unlinking shared-memory sources.
+            // This bounded tail observes output; it never reads or rewrites image payloads.
+            const bytes = Buffer.from(text)
+            if (bytes.length > 262144) {
+              let from = bytes.length - 262144
+              while (from < bytes.length && (bytes[from]! & 0xc0) === 0x80) from++
+              text = bytes.subarray(from).toString()
+            }
+            output.push({ sequence: ++sequence, text }); outputSize += Buffer.byteLength(text)
+            while (output.length > 1 && outputSize > 262144) outputSize -= Buffer.byteLength(output.shift()!.text)
+            changed()
           },
           onExit: (code, signal) => {
             options.signal?.removeEventListener('abort', kill)

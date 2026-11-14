@@ -71,6 +71,7 @@ export interface ClaudeUiHover {
 
 // Inert wire presentation only. No native handles or process dependencies.
 export type ClaudeUiNode =
+  | { kind: 'broker-image'; columns: number; rows: number; alt: string; imageId: number; terminalSession: import('../../../common/native-terminal.ts').ClaudeNativeTerminalSession; plugin?: string }
   | { kind: 'image'; columns: number; rows: number; alt: string; format: 'png' | 'rgba'; data: string; width?: number; height?: number; plugin?: string }
   | { kind: 'raster'; columns: number; rows: number; nativeAnsi: string; plugin?: string }
   | { kind: 'client'; id: string; pointer: boolean; keys: boolean; layout?: Pick<ClaudeUiBoxLayout,'width'|'height'|'flexGrow'>; children: ClaudeUiNode[]; plugin?: string }

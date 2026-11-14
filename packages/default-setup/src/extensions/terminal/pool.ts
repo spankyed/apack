@@ -1,3 +1,5 @@
+import { observeTerminalPicture, type TerminalPicture, type TerminalPictureSource } from './picture.ts'
+export type { TerminalPicture } from './picture.ts'
 import { BrokerViews, TerminalView, xtermPalette, type Command, type CursorBlink, type CursorShape, type Detector, type LinkPreview, type Theme, Modifier, type TerminalSource, type KeyInput } from 'apack-terminal-view'
 
 /** A command the shell marked, as the view holds it: a host draws its command blocks from these without importing the view */
@@ -811,6 +813,95 @@ type NativeEntry = {
   inputBlocked?: boolean
   timer?: ReturnType<typeof setTimeout>
 }
+type NativeImageObserver = { connection: NativeImageConnection; reconnect(): void }
+type PictureListener = Parameters<TerminalPictureSource['attach']>[0]
+type PictureFrame = Parameters<PictureListener['frame']>[0]
+type NativeImageConnection = {
+  stream: TerminalViewStream
+  views: BrokerViews
+  source: TerminalPictureSource
+  listeners: Set<PictureListener>
+  frame?: PictureFrame
+  ended: boolean
+  closed: boolean
+  heard: boolean
+  retry: boolean
+}
+const nativeImageObservers = new Set<NativeImageObserver>()
+const nativeImageConnections = new Map<string, NativeImageConnection>()
+
+/**
+ * One read-only channel per displayed image owner. It shares the broker's decoded pictures, not its
+ * filesystem inputs. The last image releases the connection, including the broker sources it holds;
+ * remounting pictures cannot accumulate detached sources on a long-lived terminal drawing connection.
+ */
+function nativeImageConnection(session: ClaudeNativeTerminalSession, retry = true): NativeImageConnection {
+  const key = JSON.stringify([session.target, session.id]), existing = nativeImageConnections.get(key)
+  if (existing && !existing.closed) return existing
+  const stream = terminalViews(session.target ?? undefined), views = new BrokerViews(stream), source = views.open(session.id)
+  const current: NativeImageConnection = {
+    stream, views, listeners: new Set(), ended: false, closed: false, heard: false, retry,
+    source: {
+      attach(listener) {
+        current.listeners.add(listener)
+        if (current.ended) listener.ended()
+        else if (current.frame) listener.frame(current.frame)
+        return () => { current.listeners.delete(listener) }
+      },
+      // The shared channel acknowledges once after distributing a frame, regardless of image count.
+      acknowledge() {},
+      image(id) { return source.image(id) },
+    },
+  }
+  nativeImageConnections.set(key, current)
+  stream.onData(() => { current.heard = true })
+  const closed = () => {
+    if (current.closed) return
+    current.closed = true
+    if (nativeImageConnections.get(key) === current) nativeImageConnections.delete(key)
+    views.close(); stream.close()
+    if (current.heard && current.retry) {
+      for (const observer of nativeImageObservers) if (observer.connection === current) observer.reconnect()
+    }
+  }
+  stream.onClose(closed); views.onClose(closed)
+  source.attach({
+    frame(frame) {
+      current.frame = frame
+      for (const listener of current.listeners) listener.frame(frame)
+      source.acknowledge(frame.sequence)
+    },
+    ended() {
+      current.ended = true; current.frame = undefined
+      for (const listener of current.listeners) listener.ended()
+    },
+  })
+  return current
+}
+
+/** Observe pictures without mounting a drawing, sending input, or changing the terminal's size. */
+export function observeNativeTerminalImage(session: ClaudeNativeTerminalSession, imageId: number, changed: (picture: TerminalPicture | null) => void): () => void {
+  let detach: (() => void) | undefined
+  const observer: NativeImageObserver = {
+    connection: nativeImageConnection(session),
+    reconnect() {
+      detach?.()
+      observer.connection = nativeImageConnection(session, false)
+      detach = observeTerminalPicture(observer.connection.source, imageId, changed)
+    },
+  }
+  nativeImageObservers.add(observer)
+  detach = observeTerminalPicture(observer.connection.source, imageId, changed)
+  return () => {
+    nativeImageObservers.delete(observer); detach?.(); detach = undefined
+    const connection = observer.connection
+    if (![...nativeImageObservers].some(entry => entry.connection === connection)) {
+      connection.retry = false
+      connection.views.close(); connection.stream.close()
+    }
+  }
+}
+
 const nativeConnections = new Map<string, NativeConnection>(),
   nativeEntries = new Map<string, NativeEntry>()
 const nativeTheme = {

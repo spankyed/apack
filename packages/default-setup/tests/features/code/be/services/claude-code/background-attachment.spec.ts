@@ -41,7 +41,7 @@ it('launches the exact linked job in its own cwd without another resume writer o
   const owner=await openBackgroundAttachment(continuation,job.id,{cliPath:process.execPath,env:{ANTHROPIC_API_KEY:'must-not-leak'}})
   try {
     expect(f.query).toHaveBeenCalledWith(continuation,{operation:'refresh'},expect.anything())
-    expect(f.open).toHaveBeenCalledWith(expect.objectContaining({images:true, colors:expect.objectContaining({background:'#191919',foreground:'#d4d0ca',cursor:'#d3aa8e'}),shell:process.execPath,args:['attach',job.id],cwd:job.cwd}),expect.anything())
+    expect(f.open).toHaveBeenCalledWith(expect.objectContaining({images:true,imageFiles:true, colors:expect.objectContaining({background:'#191919',foreground:'#d4d0ca',cursor:'#d3aa8e'}),shell:process.execPath,args:['attach',job.id],cwd:job.cwd}),expect.anything())
     expect(f.open.mock.calls[0][0].env.ANTHROPIC_API_KEY).toBeUndefined()
     expect(owner.snapshot.sessionId).toBe(job.sessionId)
     expect(owner.snapshot.terminalSession).toEqual({id:'broker-1',target:null})

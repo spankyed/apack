@@ -23,7 +23,7 @@ it.each([
   const owner = await prepared.start()
   try {
     expect(owner.state.terminalSession).toEqual({id:'native-1',target:null})
-    expect(native.open).toHaveBeenCalledWith(expect.objectContaining({ images:true, colors:expect.objectContaining({background:'#191919',foreground:'#d4d0ca',cursor:'#d3aa8e'}), shell: process.execPath, env: expect.objectContaining({ FORCE_COLOR: expectedColor, FORCE_HYPERLINK: expectedLinks }) }), expect.anything())
+    expect(native.open).toHaveBeenCalledWith(expect.objectContaining({ images:true,imageFiles:true, colors:expect.objectContaining({background:'#191919',foreground:'#d4d0ca',cursor:'#d3aa8e'}), shell: process.execPath, env: expect.objectContaining({ FORCE_COLOR: expectedColor, FORCE_HYPERLINK: expectedLinks }) }), expect.anything())
   } finally { await prepared.dispose() }
   expect(native.closeBridge).toHaveBeenCalledOnce()
 })
@@ -75,31 +75,24 @@ it('keeps intentional signal-driven shutdown classified as exited', async () => 
 })
 
 
-it('reads file pixels in the live terminal owner and projects them without giving the engine bytes', async () => {
-  const directory=await mkdtemp(join(tmpdir(),'claude-owner-image-')),path=join(directory,'frame.rgba'),pixels=Buffer.from([255,128,0,255])
-  await writeFile(path,pixels)
-  let data!: (text:string)=>void
-  // Promises, because that is what the contract answers: a double returning `undefined` is one the
-  // caller is entitled to `await`
-  const write=vi.fn(async()=>{}),pause=vi.fn(async()=>{}),resume=vi.fn(async()=>{})
-  native.open.mockImplementation(async (_options, listeners) => { data = listeners.onOutput; return nativeSession(listeners, {write, pause, resume}) })
-  native.uiRequest.mockResolvedValue({tree:{type:'NativeImageReference',props:{imageId:7,columns:2,rows:1,alt:'Cover'}}})
-  const prepared=await prepareClaudeNativeTerminal({sessionId:'11111111-1111-1111-1111-111111111111',cwd:directory,cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]}})
-  const owner=await prepared.start(),changed=vi.fn(),detach=owner.uiTransport.subscribe(changed)
-  try{
-    const name=Buffer.from(path).toString('base64')
-    data('\x1b_Gi=24,s=1,v=1,a=q,t=f,f=32;'+name+'\x1b\\')
-    await vi.waitFor(()=>expect(resume).toHaveBeenCalled());expect(write).not.toHaveBeenCalled()
-    data('\x1b_Ga=T,U=1,q=1,f=32,s=1,v=1,t=f,i=7,c=2,r=1;'+name+'\x1b\\')
-    await vi.waitFor(()=>expect(changed).toHaveBeenCalledOnce())
-    expect(await owner.uiTransport.request({subtype:'ui_render'})).toMatchObject({tree:{type:'NativeImage',props:{format:'rgba',data:pixels.toString('base64')}}})
-    expect(native.uiRequest).toHaveBeenCalledExactlyOnceWith({subtype:'ui_render'})
-    expect(owner.output.map(chunk=>chunk.text).join('')).toContain('t=d')
-    expect(owner.output.map(chunk=>chunk.text).join('')).not.toContain(name)
-    expect(pause).toHaveBeenCalled();await vi.waitFor(()=>expect(resume).toHaveBeenCalled())
-    data('\x1b_Ga=d,d=I,i=7,q=2;\x1b\\')
-    expect(await owner.uiTransport.request({subtype:'ui_render'})).toMatchObject({tree:{type:'Text'}})
-  }finally{detach();await prepared.dispose();await rm(directory,{recursive:true,force:true})}
+it('leaves file/shared-memory reads and capability replies to the broker and binds references to its session', async () => {
+  let data!: (text: string) => void
+  const write = vi.fn(async () => {}), pause = vi.fn(async () => {}), resume = vi.fn(async () => {})
+  native.open.mockImplementation(async (_options, listeners) => { data = listeners.onOutput; return nativeSession(listeners, { write, pause, resume }) })
+  native.uiRequest.mockResolvedValue({ tree: { type: 'NativeImageReference', props: { imageId: 7, columns: 2, rows: 1, alt: 'Cover' } } })
+  const prepared = await prepareClaudeNativeTerminal({ sessionId: '11111111-1111-1111-1111-111111111111', cwd: tmpdir(), cliPath: process.execPath, permissionMode: 'default', settings: { effective: {}, sources: [] } })
+  const owner = await prepared.start()
+  try {
+    // Neither name exists. The observer must not read, unlink, answer or rewrite either transport.
+    const file = Buffer.from('/nonexistent/fixture-frame.rgba').toString('base64'), shm = Buffer.from('/fixture-unavailable-image').toString('base64')
+    const frames = ['\x1b_Gi=24,s=1,v=1,a=q,t=f,f=32;' + file + '\x1b\\', '\x1b_Ga=T,U=1,q=1,f=32,s=1,v=1,t=s,i=7,c=2,r=1;' + shm + '\x1b\\']
+    for (const frame of frames) data(frame)
+    expect(await owner.uiTransport.request({ subtype: 'ui_render' })).toMatchObject({ tree: { type: 'NativeBrokerImage', props: { imageId: 7, terminalSession: { id: 'native-1', target: null } } } })
+    expect(owner.output.map(chunk => chunk.text).join('')).toBe(frames.join(''))
+    expect(write).not.toHaveBeenCalled(); expect(pause).not.toHaveBeenCalled(); expect(resume).not.toHaveBeenCalled()
+    expect(native.uiRequest).toHaveBeenCalledExactlyOnceWith({ subtype: 'ui_render' })
+  } finally { await prepared.dispose() }
+  await expect(owner.uiTransport.request({ subtype: 'ui_render' })).rejects.toThrow('owner closed')
 })
 
 

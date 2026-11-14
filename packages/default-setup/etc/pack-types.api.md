@@ -1590,11 +1590,11 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     snapshot: z.ZodObject<{
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
-                finished: "finished";
                 selection: "selection";
                 enable: "enable";
                 disable: "disable";
                 connecting: "connecting";
+                finished: "finished";
             }>;
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
@@ -1669,8 +1669,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 loading: z.ZodBoolean;
                 copyState: z.ZodOptional<z.ZodEnum<{
                     error: "error";
-                    pending: "pending";
                     idle: "idle";
+                    pending: "pending";
                     saved: "saved";
                 }>>;
                 insight: z.ZodOptional<z.ZodString>;
@@ -1888,8 +1888,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"chrome_install_setup">;
     phase: z.ZodEnum<{
-        failed: "failed";
         connecting: "connecting";
+        failed: "failed";
         waiting_install: "waiting_install";
         stalled: "stalled";
         connected: "connected";
@@ -1912,8 +1912,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"effort_preference_result">;
     severity: z.ZodEnum<{
-        warning: "warning";
         feedback: "feedback";
+        warning: "warning";
     }>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -3482,6 +3482,14 @@ type ClaudeUiMountState = ({
 };
 
 type ClaudeUiNode = {
+    kind: 'broker-image';
+    columns: number;
+    rows: number;
+    alt: string;
+    imageId: number;
+    terminalSession: ClaudeNativeTerminalSession;
+    plugin?: string;
+} | {
     kind: 'image';
     columns: number;
     rows: number;
@@ -10647,11 +10655,11 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
 declare const claudeSettingsSnapshot: z.ZodObject<{
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
-            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
+            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -10726,8 +10734,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;

@@ -100,6 +100,11 @@ export function createClaudeUiDrawing(tree: unknown, previous?: ClaudeUiDrawing,
     if (!record(value) || typeof value.type !== 'string') throw new ClaudeProtocolError('native UI node must have a component type')
     const plugin = record(value.part) && typeof value.part.plugin === 'string' ? value.part.plugin : inheritedPlugin
     const attribution = plugin === undefined ? {} : { plugin }
+    if (value.type === 'NativeBrokerImage') {
+      const p = value.props
+      if (!record(p) || !Number.isSafeInteger(p.columns) || Number(p.columns) < 1 || Number(p.columns) > 512 || !Number.isSafeInteger(p.rows) || Number(p.rows) < 1 || Number(p.rows) > 256 || typeof p.alt !== 'string' || p.alt.length > 4096 || !Number.isSafeInteger(p.imageId) || Number(p.imageId) < 1 || Number(p.imageId) > 0xffffffff || !record(p.terminalSession) || typeof p.terminalSession.id !== 'string' || !p.terminalSession.id.length || p.terminalSession.id.length > 512 || !(p.terminalSession.target === null || typeof p.terminalSession.target === 'string' && p.terminalSession.target.length <= 4096)) throw new ClaudeProtocolError('Invalid native broker Image presentation')
+      return { kind: 'broker-image', columns: Number(p.columns), rows: Number(p.rows), alt: p.alt, imageId: Number(p.imageId), terminalSession: { id: p.terminalSession.id, target: p.terminalSession.target }, ...attribution }
+    }
     if (value.type === 'NativeImage') {
       const p=value.props
       if(!record(p)||!Number.isSafeInteger(p.columns)||Number(p.columns)<1||Number(p.columns)>512||!Number.isSafeInteger(p.rows)||Number(p.rows)<1||Number(p.rows)>256||typeof p.alt!=='string'||p.alt.length>4096||typeof p.data!=='string'||!p.data.length||p.data.length>65536||!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(p.data)||(p.format!=='png'&&p.format!=='rgba'))throw new ClaudeProtocolError('Invalid native Image presentation')

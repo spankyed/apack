@@ -47,7 +47,7 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
   const client = await services.terminal.open(
     // `unset` rather than an omission from `env`: a session inherits the host's environment, so leaving a
     // key out of the overrides leaves it inherited
-    {images:true,colors:CLAUDE_NATIVE_TERMINAL_COLORS,cols: 100, rows: 30, shell: executable, args: ['attach', session.id], env, unset: DENIED_TO_A_CHILD, cwd: session.cwd},
+    {images:true,imageFiles:true,colors:CLAUDE_NATIVE_TERMINAL_COLORS,cols: 100, rows: 30, shell: executable, args: ['attach', session.id], env, unset: DENIED_TO_A_CHILD, cwd: session.cwd},
     {
       onOutput: text => {
         if (ended) return
