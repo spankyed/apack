@@ -11,7 +11,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => parent)
 const pool = vi.hoisted(() => ({ dispose: vi.fn(), syncProcesses: vi.fn(), noteExit: vi.fn(), describe: vi.fn() }))
 vi.mock('#features/code/fe/utils/terminal-pool.ts', () => ({ terminalPool: pool }))
 
-const { terminalState, BELL_FLASH_MS, BELL_WINDOW_MS } = await import('#features/code/fe/features/terminal/state.ts')
+const { terminalState, BELL_FLASH_MS, BELL_WINDOW_MS, BELL_NOTIFY_WINDOW_MS } = await import('#features/code/fe/features/terminal/state.ts')
 
 const aTerminal = (id: string) => ({ id, title: id, cwd: '/tmp', active: true }) as never
 let bellsSent = 0
@@ -135,11 +135,53 @@ describe('a bell on the window', () => {
     expect(notify).not.toHaveBeenCalled()
   })
 
-  it('asks for one notification for a run of bells inside 500 ms', () => {
+  // Changed from "inside 500 ms": the notification gate is BELL_NOTIFY_WINDOW_MS (1 s), its own, not the flash's window.
+  it('asks for one notification for a run of bells inside 1 s, and the flash is still one flash', async () => {
     hasFocus.mockReturnValue(false)
     const w = window({ bellNotification: true })
     w.bell()
+    await w.advance(BELL_WINDOW_MS)
     w.bell()
     expect(notify).toHaveBeenCalledTimes(1)
+    expect(w.flashStarts()).toEqual([0, BELL_WINDOW_MS])
+  })
+
+  it('does not notify a second bell 600 ms after the first, though the flash window has passed', async () => {
+    hasFocus.mockReturnValue(false)
+    const w = window({ bellNotification: true })
+    w.bell()
+    await w.advance(600)
+    w.bell()
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(w.flashStarts()).toEqual([0, 600])
+  })
+
+  it('notifies a bell 1100 ms after the first, once the notification gate has closed', async () => {
+    hasFocus.mockReturnValue(false)
+    const w = window({ bellNotification: true })
+    w.bell()
+    await w.advance(1100)
+    w.bell()
+    expect(notify).toHaveBeenCalledTimes(2)
+  })
+
+  it('a bell 200 ms after the first flashes nothing new and asks for no notification', async () => {
+    hasFocus.mockReturnValue(false)
+    const w = window({ bellNotification: true })
+    w.bell()
+    await w.advance(200)
+    w.bell()
+    expect(notify).toHaveBeenCalledTimes(1)
+    expect(w.flashStarts()).toEqual([0])
+  })
+
+  it('gates notifications per terminal: a bell on another terminal inside the first gate is still notified', async () => {
+    hasFocus.mockReturnValue(false)
+    const w = window({ bellNotification: true })
+    w.bell('t-1')
+    await w.advance(BELL_NOTIFY_WINDOW_MS - 1)
+    w.bell('t-2')
+    expect(notify).toHaveBeenCalledTimes(2)
+    expect(notify.mock.calls.map(call => call[2])).toEqual(['t-1#1', 't-2#2'])
   })
 })
