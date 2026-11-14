@@ -312,7 +312,11 @@ function openBackground(target: ClaudeNativeContinuation, jobId: string) {
 function closeBackground(requestId: string) {actor.send({type:'CLAUDE_BACKGROUND_CLOSE',...identity(),requestId})}
 function inputBackground(attachmentId: string,text: string) {actor.send({type:'CLAUDE_BACKGROUND_INPUT',...identity(),attachmentId,text})}
 function resizeBackground(attachmentId: string,size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize) {actor.send({type:'CLAUDE_BACKGROUND_RESIZE',...identity(),attachmentId,...size})}
-function open() { expanded.value = true; returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false; actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() }) }
+function open() {
+  if (inputBlocksLaunch.value) return
+  expanded.value = true; returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false
+  if (!props.inputPending) actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() })
+}
 function cancelOpen() {
   const openingId = view.value?.openingId
   if (!openingId || view.value?.cancelling) return

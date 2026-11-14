@@ -619,8 +619,9 @@ it('keeps a live owner and Stop reachable while a native submission is pending',
  f.flags.value={busy:true,inputPending:true}
  f.publish({...f.snapshot,state:{...f.snapshot.state!,busy:true,view:{kind:'main',revision:3}}});await nextTick()
  const open=[...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.includes('Use native interface'))!
+ const opens=actor.send.mock.calls.filter(([event])=>event.type==='CLAUDE_TERMINAL_OPEN').length
  expect(open.disabled).toBe(false);open.click();await nextTick()
- expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({type:'CLAUDE_TERMINAL_OPEN',threadId:'thread',mountId:f.mount.mountId}))
+ expect(actor.send.mock.calls.filter(([event])=>event.type==='CLAUDE_TERMINAL_OPEN')).toHaveLength(opens)
  const stop=[...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.includes('Stop session'))!
  expect(stop.disabled).toBe(false);stop.click();await nextTick()
  expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({type:'CLAUDE_TERMINAL_CLOSE',ownerId:'owner'}))
