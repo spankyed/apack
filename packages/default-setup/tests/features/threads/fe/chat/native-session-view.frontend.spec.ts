@@ -15,14 +15,15 @@ beforeEach(() => { actor.send.mockClear(); links.open.mockClear(); drawing.focus
 afterEach(() => { app?.unmount(); document.body.replaceChildren(); vi.unstubAllGlobals() })
 async function fixture(continuation?:import('#features/code/be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation) {
   const active = vi.fn(), root = document.createElement('div'); document.body.append(root)
-  app = createApp({ render: () => h(ClaudeNativeSession, { threadId: 'thread', continuation, busy: false, onActive: active }) }); app.mount(root)
+  const flags = ref({ busy: false, inputPending: false })
+  app = createApp({ render: () => h(ClaudeNativeSession, { threadId: 'thread', continuation, ...flags.value, onActive: active }) }); app.mount(root)
   const mount = actor.send.mock.calls.find(([event]) => event.type === 'CLAUDE_TERMINAL_MOUNT')![0]
   const snapshot: ClaudeTerminalViewSnapshot = { opening: false, output: [], state: { ownerId: 'owner', sessionId: 'session', cwd: '/fixture', status: 'live', busy: false, tasks: [{ id: 'agent-a', name: 'Worker', status: 'running' }], view: { kind: 'agent', revision: 2, registryId: 'registry-a', taskId: 'agent-a' } } }
   function publish(value: ClaudeTerminalViewSnapshot) { state.value = { context: { nativeTerminalViews: { [mount.mountId]: { ...value, threadId: 'thread' } as ClaudeTerminalViewSnapshot } } } }
   publish(snapshot); await nextTick()
   Array.from(root.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === 'Use native interface' || button.textContent?.includes('Use native interface'))!.click(); await nextTick()
   const back = Array.from(root.querySelectorAll('button')).find(button => button.textContent?.includes('Back to conversation'))!
-  return { root, active, snapshot, publish, back, mount }
+  return { root, active, snapshot, publish, back, mount, flags }
 }
 it('keeps the native terminal visible until the exact main-view receipt is acknowledged', async () => {
   const f = await fixture(); expect(f.root.textContent).toContain('Viewing Agent · Worker')
@@ -610,4 +611,29 @@ it.each(['main', 'background'] as const)('keeps canvas focus when a late %s draw
   await nextTick(); await nextTick(); await nextTick()
   expect(drawing.focus).not.toHaveBeenCalled()
   expect(document.activeElement).toBe(field)
+})
+
+it('keeps a live owner and Stop reachable while a native submission is pending', async () => {
+ const f=await fixture()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ f.flags.value={busy:true,inputPending:true}
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,busy:true,view:{kind:'main',revision:3}}});await nextTick()
+ const open=[...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.includes('Use native interface'))!
+ expect(open.disabled).toBe(false);open.click();await nextTick()
+ expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({type:'CLAUDE_TERMINAL_OPEN',threadId:'thread',mountId:f.mount.mountId}))
+ const stop=[...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.includes('Stop session'))!
+ expect(stop.disabled).toBe(false);stop.click();await nextTick()
+ expect(actor.send).toHaveBeenLastCalledWith(expect.objectContaining({type:'CLAUDE_TERMINAL_CLOSE',ownerId:'owner'}))
+})
+it('keeps pending input from starting or replacing an unavailable native owner', async () => {
+ const f=await fixture()
+ f.publish({...f.snapshot,state:{...f.snapshot.state!,status:'exited'}});await nextTick();f.back.click();await nextTick()
+ f.flags.value.inputPending=true
+ for(const status of ['starting','exited','error'] as const){
+  f.publish({...f.snapshot,state:{...f.snapshot.state!,status}});await nextTick()
+  const open=[...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.includes('Use native interface'))!
+  expect(open.disabled).toBe(true)
+ }
+ f.publish({opening:false,output:[]});await nextTick()
+ expect([...f.root.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent?.includes('Use native interface'))!.disabled).toBe(true)
 })

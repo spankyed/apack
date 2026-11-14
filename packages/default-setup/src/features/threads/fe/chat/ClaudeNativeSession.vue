@@ -6,7 +6,7 @@
         <NativeBackgroundComposer :key="composer.target.ownerId" @open-native="composer.openNative" @leave="composer.close" :thread-id="threadId" :target="composer.target" :active="composer.active" :draft="composer.draft" :draft-snapshot="composer.draftSnapshot" :disabled="composer.pending" :send="composer.send" @draft="composer.updateDraft" @draft-snapshot="composer.saveSnapshot" />
       </template>
       <template #parent-interface>
-        <button v-if="!active && !view?.attachment && view?.state?.notice?.kind !== 'refusal_fallback_prompt'" type="button" class="native-button native-parent-interface" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" aria-label="Use native interface" title="Open parent native interface" @click="open"><span aria-hidden="true" class="native-command">›_</span></button>
+        <button v-if="!active && !view?.attachment && view?.state?.notice?.kind !== 'refusal_fallback_prompt'" type="button" class="native-button native-parent-interface" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputBlocksLaunch" aria-label="Use native interface" title="Open parent native interface" @click="open"><span aria-hidden="true" class="native-command">›_</span></button>
       </template>
     </NativeBackgroundSession>
     <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" :expanded="expanded" @toggle-expanded="expanded = !expanded" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
@@ -25,7 +25,7 @@
         <header v-if="panel.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
           <h3>{{ panel.notice.title }}</h3>
           <a v-if="panel.notice.helpUrl" :href="panel.notice.helpUrl" target="_blank" rel="noopener noreferrer">Learn more</a>
-          <button type="button" class="native-button native-button--launch" :disabled="inputPending" @click="open"><span aria-hidden="true" class="native-command">›_</span> Use native interface</button>
+          <button type="button" class="native-button native-button--launch" :disabled="inputBlocksLaunch" @click="open"><span aria-hidden="true" class="native-command">›_</span> Use native interface</button>
         </header>
         <h3 v-else>{{ panel.notice.title }}</h3>
         <template v-if="panel.notice.kind === 'plugin_hint' || panel.notice.kind === 'lsp_recommendation'">
@@ -82,7 +82,7 @@
     <div v-if="!active && !view?.attachment" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt' && (!continuation || launchProblem || view?.opening)" class="native-launch__actions">
       <span v-if="launchProblem" role="status" class="native-problem" :class="{ 'native-problem--expected': managedPolicyDeclined }">{{ launchProblem }}</span>
       <span v-if="continuation && view?.opening" role="status">{{ view.cancelling ? 'Cancelling native startup…' : 'Opening native interface…' }}</span>
-      <button v-if="!continuation" type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputPending" @click="open">
+      <button v-if="!continuation" type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputBlocksLaunch" @click="open">
         <span aria-hidden="true" class="native-command">›_</span>
         {{ view?.opening ? view.cancelling ? 'Cancelling native startup…' : 'Opening native interface…' : 'Use native interface' }}
       </button>
@@ -254,6 +254,8 @@ const expanded = ref(true)
 const dismissed = ref(false)
 const requested = ref(false)
 const ended = computed(() => ['exited', 'error'].includes(view.value?.state?.status ?? ''))
+// A pending send must leave its live owner's native controls reachable.
+const inputBlocksLaunch = computed(() => props.inputPending === true && view.value?.state?.status !== 'live')
 const active = computed(() => !!view.value?.state && !view.value.opening && requested.value && !dismissed.value)
 const displayActive = computed(() => active.value || !!view.value?.attachment)
 const { activeSurface } = useShell()
