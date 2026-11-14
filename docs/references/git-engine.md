@@ -255,6 +255,28 @@ A watch that has just opened is not yet delivering either, and the platform says
 `startWatching` resolves once the watches are open, and two seconds later the watcher reports the checkout once
 as one in which anything may have changed, which is what covers an edit made in between (`catchUpAfterMs`).
 
+## Signing in to GitHub
+
+GitHub is the app's half, and the engine knows nothing of it: the app hands it an environment, as it hands every
+host's. The user signs in to GitHub once, in the app, with OAuth's device flow as the OAuth App **apack**
+(`code/be/services/github.ts`): a code copied and github.com/login/device opened in their browser, then a token
+that lasts until they revoke it, with the `repo` and `workflow` scopes. The token is the code feature's own secret
+(`services.secrets.own`), which no other pack can read, and is in no setting and no log. Settings → Code shows
+whose it is, with Sign out.
+
+**Git is given that sign-in on each command, never in a config** (`withGitHubSignIn`, `app-git-repository.ts`): a
+credential helper for github.com named through `GIT_CONFIG_COUNT`, which answers only `get`, from a variable only
+that git run sees. Git asks it after the user's own helpers, so a user whose git already signs in to GitHub keeps
+that sign-in. Git hands a sign-in that worked to every helper to keep, so a keychain may hold the token after a
+push; signing out has git's helpers forget it (`git credential reject`). A push or a pull refused for want of a
+sign-in to github.com offers to sign in to GitHub, and runs again once the app has.
+
+**The pull request panel calls GitHub's API with the same sign-in** (`code/be/services/github-api.ts`): GraphQL for
+reads, in the shapes the panel takes, and REST for most writes, for the repository the checkout's remote names on
+github.com. A refusal comes back as what the panel can act on (`GitHubApiFailure`): not signed in, a remote
+elsewhere, access the sign-in lacks, an organisation's single sign-on, or nothing GitHub will show it. Help →
+"How do I sign in to GitHub?" says the same to the user.
+
 ## Working on both at once
 
 The link points at a checkout, so an edit there is what a local build here uses once the engine is built
