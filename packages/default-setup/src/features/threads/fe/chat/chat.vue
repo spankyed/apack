@@ -163,7 +163,7 @@
               :quick-prompt-cursor="quickPromptCursor"
               :recording-limit-minutes="recordingLimitMinutes"
               :status-line="statusLine"
-              :native-status="nativeComposerOwner?.mainStatus" :native-background="nativeComposerOwner?.view?.kind === 'main' && !nativeSessionBackgrounded" :native-backgrounded="nativeSessionBackgrounded"
+              :native-status="nativeComposerOwner?.mainStatus" :native-permission-mode="nativePermissionMode" :native-background="nativeComposerOwner?.view?.kind === 'main' && !nativeSessionBackgrounded" :native-backgrounded="nativeSessionBackgrounded"
               :status-line-cwd="statusLineCwd"
               :native-ui="nativeUiDrawing" :native-focus="nativeFocus"
               :native-submit="nativeComposerOwner ? submitNativeMessage : undefined"
@@ -344,6 +344,10 @@ const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerm
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => !nativeSessionBackgrounded.value && nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
+const nativePermissionMode = computed(() => {
+  const owner = nativeComposerOwner.value
+  return owner?.view?.kind === 'main' && nativeComposerView.value?.threadId === currentThread.value?.id && owner.sessionId === currentThread.value?.context?.claudeCode?.sessionId ? owner.session?.permissionMode : undefined
+})
 function operateMcpForm(action: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormOperation) {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value, form = owner?.mcpForm
   if (!mount || !owner || !form) return
