@@ -423,6 +423,15 @@ function installHosts(n){
  n.runtime.Zao(wrappedContext);
 }
 let preparedPrompt;
+function nativeUnknownCommandRefusal(n,messages){
+ if(typeof preparedPrompt?.text!=='string')return;
+ const name=n.commandInput.IS(preparedPrompt.text.trimEnd())?.commandName;
+ // The pinned dispatcher warns only for this command grammar; path-like input remains native input.
+ if(typeof name!=='string'||!/^[a-zA-Z0-9_][a-zA-Z0-9:_-]*$/.test(name))return;
+ const shown=name.length>200?name.slice(0,200)+'…':name,prefix='Unknown command: /'+shown;
+ const warnings=messages.filter(row=>!preparedPrompt.before.has(row.uuid)&&row.type==='system'&&row.subtype==='informational'&&row.level==='warning'&&row.isMeta!==true&&typeof row.uuid==='string'&&typeof row.content==='string'&&row.content.length<=1024&&(row.content===prefix||row.content.startsWith(prefix+'. Did you mean /')&&row.content.endsWith('?')));
+ return warnings.length===1?warnings[0].content:undefined;
+}
 async function promptOutcome(n,id){
  const interruptions=await nativeInterruptionModule();
  if(!preparedPrompt||preparedPrompt.id!==id)return {};
@@ -430,6 +439,7 @@ async function promptOutcome(n,id){
  const message=messages.findLast(row=>row.promptSubmitEnding&&!preparedPrompt.before.has(row.uuid));
  if(!message){
   const candidates=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!interruptions.Sh(row)&&!preparedPrompt.before.has(row.uuid)&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result')));
+  if(candidates.length===0){const reason=nativeUnknownCommandRefusal(n,messages);return reason===undefined?{}:{drop:reason};}
   if(candidates.length!==1)return {};
   const row=candidates[0],content=typeof row.message.content==='string'?[{type:'text',text:row.message.content}]:row.message.content;
   return {accepted:{uuid:row.uuid,door:'prompt',origin:row.origin??{kind:'native'},message:{type:'user',content}}};
@@ -1371,6 +1381,11 @@ async function followNativeOwnerSession(gate){
  await ownerPost('/poll',{...snapshot,agents:ownerAgents(snapshot.taskFacts),directOwner:true});
  ownerIndependent=true;
 }
+async function reportPendingPromptRefusal(id){
+ if(typeof id!=='string'||!id)return;
+ const outcome=await control({subtype:'apack_prompt_outcome',submission_id:id},new AbortController());
+ if(typeof outcome?.drop==='string')await ownerPost('/submission',{id,drop:outcome.drop});
+}
 const ownerTimer=setInterval(async()=>{
  if(ownerReading)return;ownerReading=true;
  try{
@@ -1379,7 +1394,7 @@ const ownerTimer=setInterval(async()=>{
   const viewKey=JSON.stringify([gate.sessionId,gate.view,gate.sequence]);
   // Reaffirm unchanged observations after a broker-side session handoff withdraws its view.
   const refreshView=viewKey!==reportedView||++viewHeartbeat>=4;
-  if(refreshView){await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;viewHeartbeat=0;}
+  if(refreshView){const response=await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;viewHeartbeat=0;await reportPendingPromptRefusal(response?.pendingSubmissionId);}
   const billingKey=JSON.stringify([gate.sessionId,gate.billing]);
   if(gate.billing&&billingKey!==reportedBilling&&await ownerPost('/native-billing',{sessionId:gate.sessionId,pid:process.pid,sequence:++billingSequence,...gate.billing}))reportedBilling=billingKey;
   const previewKey=JSON.stringify([gate.sessionId,gate.sequence,gate.preview]);

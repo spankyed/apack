@@ -345,7 +345,8 @@ export async function createClaudeTerminalBridge(options: {
         nativeViewSequence = value.sequence as number
         nativeViewRecord = record
         if (JSON.stringify(next) !== JSON.stringify(nativeView)) { preview = undefined; focus = undefined; nativeView = next; options.changed() }
-        return reply(200, {})
+        // The existing heartbeat can settle native non-query refusals after plugin polling stops.
+        return reply(200, next.kind === 'main' && pending?.entered && pending.prepared && pending.sessionId === value.sessionId ? { pendingSubmissionId: pending.id } : {})
       }
       if (request.url === '/ui-ready') {
         await ui.transport.request({ subtype: 'apack_observe_notices' }); return reply(200, {})

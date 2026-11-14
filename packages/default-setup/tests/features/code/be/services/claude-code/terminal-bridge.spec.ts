@@ -710,3 +710,18 @@ it('tells the plugin to report only on a hook once the CLI\'s own UI is reportin
   expect(owner.value, 'the CLI\'s own UI keeps its own timer').not.toHaveProperty('reportEveryMs')
   expect((await request('/poll', { sessionId: session, agents: [] })).value).toEqual({ reportEveryMs: 0 })
 })
+
+it('carries a prepared pending nonce on an existing main-view heartbeat after native reporting takes over',async()=>{
+ await create();vi.spyOn(bridge!.uiTransport,'request').mockResolvedValue({filled:true})
+ const submitted=bridge!.submit('/missing-review').then(()=>null,error=>error)
+ const poll=await request('/poll',{sessionId:session,agents:[],directOwner:true,busy:false,turn:null})
+ const main={sessionId:session,pid:process.pid,sequence:1,view:{kind:'main'}}
+ expect(poll.value.prepared).toBe(true);expect((await request('/native-view',main)).value).toEqual({})
+ await request('/result',{sessionId:session,id:poll.value.id,filled:true})
+ expect((await request('/native-view',{...main,pid:process.pid+1})).status).toBe(409)
+ expect((await request('/native-view',main)).value).toEqual({pendingSubmissionId:poll.value.id})
+ expect((await request('/submission',{sessionId:session,id:poll.value.id,drop:'Unknown command: /missing-review'})).status).toBe(200);expect(await submitted).toMatchObject({message:'Native prompt refused: Unknown command: /missing-review'})
+ expect((await request('/native-view',main)).value).toEqual({})
+ expect((await request('/submission',{sessionId:session,id:poll.value.id,drop:'late'})).status).toBe(409)
+ expect((await request('/poll',{sessionId:session,agents:[]})).value.reportEveryMs).toBe(0)
+})
