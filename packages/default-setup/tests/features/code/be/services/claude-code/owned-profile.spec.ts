@@ -1,6 +1,7 @@
 import { claudeTerminalStatusRuntime } from '#features/code/be/services/claude-code/terminal-status-runtime.ts'
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, realpath, symlink } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, dirname } from 'node:path'
+import { createHash } from 'node:crypto'
 import { execFileWhileWorking } from '@apackdev/sdk/progress'
 import { prepareClaudeOwnedChildUi, prepareClaudeOwnedProfile, prepareClaudeOwnedProfileSetup } from '#features/code/be/services/claude-code/owned-profile.ts'
 
@@ -131,4 +132,57 @@ test('retains original main-helper I/O before registration without changing stre
  expect(cached).toMatchObject({kind:'main',sessionId,parentPid:result.pid,generation:'startup',policyKey:'[false,false,false]',totalCostUsd:0.00042,code:0,truncated:false,stdout:result.stdout})
  expect((await readFile(join(root,'executions.jsonl'),'utf8')).trim().split('\n').map(line=>JSON.parse(line))).toEqual([payload])
  expect((await readdir(root)).filter(name=>name.startsWith('startup-main'))).toEqual(['startup-main.json'])
+})
+
+
+test('prepares a deferred owned warm spare before its session and plugin arguments exist', async () => {
+ const root=await directory('cc-owned-spare-'),profile=await prepareClaudeOwnedProfile({userDataDir:join(root,"app's profile with spaces")})
+ const settingsPath=join(profile.configDir,'settings.json'),before=await readFile(settingsPath)
+ const helper=join(profile.configDir,'..','bin','launch.mjs')
+ const {stdout}=await execFileWhileWorking(process.execPath,[helper,profile.configDir,String(process.pid),process.execPath,'--bg-spare',join(root,'claim.sock')],
+  {timeout:10000,env:{...process.env,CLAUDE_CONFIG_DIR:profile.configDir,CLAUDE_CODE_SESSION_KIND:'bg',CLAUDE_BG_RENDEZVOUS_SOCK:undefined,BUN_OPTIONS:'caller-options'}})
+ expect(stdout.trim()).not.toBe('')
+ expect(stdout.trim()).not.toMatch(/[\s'"]/)
+ expect(stdout.trim()).toMatch(/^\/tmp\/cc-spares-[a-f0-9]+\/s-[^/]+\/startup\.mjs$/)
+ roots.push(dirname(dirname(stdout.trim())))
+ expect(await readFile(stdout.trim(),'utf8')).toContain('spare')
+ expect(await readFile(settingsPath)).toEqual(before)
+})
+
+
+test('does not prepare spare observation for a foreign profile or an unrelated native self-spawn', async () => {
+  const root = await directory('cc-foreign-spare-')
+  const profile = await prepareClaudeOwnedProfile({ userDataDir: root })
+  const helper = join(profile.configDir, '..', 'bin', 'launch.mjs')
+  const before = await readFile(join(profile.configDir, 'settings.json'))
+  const cases = [
+    { args: ['--bg-spare', join(root, 'claim.sock')], configDir: '/another/profile', kind: 'bg' },
+    { args: ['--bg-spare', join(root, 'claim.sock')], configDir: profile.configDir, kind: 'interactive' },
+    { args: ['--bg-pty-host', join(root, 'claim.sock')], configDir: profile.configDir, kind: 'bg' },
+  ]
+  for (const input of cases) {
+    const { stdout } = await execFileWhileWorking(process.execPath,
+      [helper, profile.configDir, String(process.pid), process.execPath, ...input.args],
+      { timeout: 10000, env: { ...process.env, CLAUDE_CONFIG_DIR: input.configDir, CLAUDE_CODE_SESSION_KIND: input.kind, CLAUDE_BG_RENDEZVOUS_SOCK: undefined } })
+    expect(stdout).toBe('')
+  }
+  const spareRoot=join('/tmp','cc-spares-'+createHash('sha256').update(await realpath(join(profile.configDir,'..'))).digest('hex').slice(0,32));roots.push(spareRoot)
+  await expect(readdir(spareRoot)).rejects.toMatchObject({code:'ENOENT'})
+  expect(await readFile(join(profile.configDir, 'settings.json'))).toEqual(before)
+})
+
+test('recognizes the owned warm profile through a symlinked ancestor and retains its configured selector', async () => {
+  const root = await directory('cc-owned-spare-alias-')
+  const physical = join(root, 'physical'), alias = join(root, 'alias')
+  await mkdir(physical)
+  await symlink(physical, alias)
+  const profile = await prepareClaudeOwnedProfile({ userDataDir: join(alias, 'app') })
+  const helper = join(profile.configDir, '..', 'bin', 'launch.mjs')
+  const { stdout } = await execFileWhileWorking(process.execPath,
+    [helper, profile.configDir, String(process.pid), process.execPath, '--bg-spare', join(root, 'claim.sock')],
+    { timeout: 10000, env: { ...process.env, CLAUDE_CONFIG_DIR: profile.configDir, CLAUDE_CODE_SESSION_KIND: 'bg', CLAUDE_BG_RENDEZVOUS_SOCK: undefined } })
+  expect(stdout.trim()).toMatch(/^\/tmp\/cc-spares-[a-f0-9]+\/s-[^/]+\/startup\.mjs$/)
+  roots.push(dirname(dirname(stdout.trim())))
+  const config = JSON.parse(await readFile(join(dirname(stdout.trim()), 'spare.json'), 'utf8'))
+  expect(config.configDir).toBe(profile.configDir)
 })

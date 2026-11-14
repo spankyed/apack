@@ -1,3 +1,6 @@
+import { claudeOwnedSpareRuntime } from './owned-spare-runtime.ts'
+import { claudeTerminalStatusObserverRuntime } from './terminal-status-observer-runtime.ts'
+import { claudeTerminalHelperPolicyReaderModule } from './terminal-helper-policy-reader-runtime.ts'
 import { claudeTerminalStatusRuntime } from './terminal-status-runtime.ts'
 import { claudeTerminalUiRuntime } from './terminal-ui-runtime.ts'
 import { mkdir, lstat, readFile, writeFile, rename, readdir } from 'node:fs/promises'
@@ -56,6 +59,9 @@ async function prepare(directory: string, configDir: string, nodePath: string) {
   await privateDirectory(bin)
   const helper = join(bin, 'launch.mjs'), launcher = join(bin, 'launch.sh')
   await atomicWrite(helper, claudeOwnedLauncherRuntime, 0o600)
+  await atomicWrite(join(bin, 'spare.mjs'), claudeOwnedSpareRuntime, 0o600)
+  await atomicWrite(join(bin, 'status-observer.mjs'), claudeTerminalStatusObserverRuntime, 0o600)
+  await atomicWrite(join(bin, 'helper-policy-reader.mjs'), claudeTerminalHelperPolicyReaderModule, 0o600)
   // A command-scoped Electron flag runs the helper as Node without leaking that flag to Claude.
   await atomicWrite(launcher, '#!/bin/sh\nset -eu\npreload=$(ELECTRON_RUN_AS_NODE=1 ' + quote(nodePath) + ' ' + quote(helper) + ' ' + quote(configDir) + ' "$$" "$@")\nif [ -n "$preload" ]; then\n  BUN_OPTIONS="${BUN_OPTIONS:+$BUN_OPTIONS }--preload=$preload"\n  export BUN_OPTIONS\nfi\nexec "$@"\n', 0o700)
   const settingsPath = join(configDir, 'settings.json')
