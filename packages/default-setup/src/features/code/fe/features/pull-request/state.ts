@@ -75,7 +75,7 @@ export interface CodePullRequestContext {
    * The file whose diff needs content this partial clone was not given: shown with an offer to download it,
    * which is the one way a read fetches
    */
-  missingFileDiff: { path: string; baseBranch: string; headBranch?: string } | null
+  missingFileDiff: { path: string; baseBranch: string; headBranch?: string; prNumber?: number } | null
   isPrLoading: boolean
   selectedPrFile: GitStatusFile | null
 
@@ -152,7 +152,7 @@ export type Event =
   | { type: 'pr.VIEW_DIFF'; path: string }
   /** The user asked for the content the diff of `missingFileDiff` lacks to be downloaded */
   | { type: 'pr.FETCH_MISSING_DIFF' }
-  | { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string } }
+  | { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string; prNumber?: number } }
   | { type: 'pr.ERROR'; message: string }
   | { type: 'pr.BASE_BRANCH_RECEIVED'; data: { branch: string } }
   | { type: 'pr.BRANCH_DIFF_RECEIVED'; data: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
@@ -248,12 +248,13 @@ export const pullRequestState = setup({
         path: ev.path,
         baseBranch: context.prBaseBranch,
         headBranch: head,
+        ...(context.selectedPR && { prNumber: context.selectedPR.number }),
       }))
     }),
 
     /** Answers a diff this machine asked for that needs content the clone lacks: the request is over, and the offer shown */
     handleFileContentMissing: enqueueActions(({ enqueue, context, event }) => {
-      const ev = event as { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string } }
+      const ev = event as { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string; prNumber?: number } }
       const key = fileKey(ev.data.baseBranch, ev.data.headBranch, ev.data.path)
       if (!context.inFlightFileDiffs.has(key)) return
       const remaining = new Set(context.inFlightFileDiffs)
@@ -469,6 +470,7 @@ export const pullRequestState = setup({
               type: 'pr.GET_BRANCH_DIFF',
               baseBranch: incoming.baseRefName,
               headBranch: incoming.headRefName,
+              prNumber: incoming.number,
             })
           }
         } else {
@@ -722,6 +724,7 @@ export const pullRequestState = setup({
         type: 'pr.GET_BRANCH_DIFF',
         baseBranch: ev.data.pr.baseRefName,
         headBranch: ev.data.pr.headRefName,
+        prNumber: prNumber,
       }))
     }),
 

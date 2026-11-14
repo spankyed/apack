@@ -214,9 +214,10 @@ export type OutgoingCommitEvents =
 // ── pull-request ─────────────────────────────────────────────────────────
 export type IncomingPullRequestEvents =
   | { type: 'pr.GET_BASE_BRANCH' }
-  | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string }
+  /** `prNumber` reads the head from what GitHub keeps of that pull request, which outlives its branch */
+  | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
   /** `fetchMissing`: content a partial clone was not given is fetched for this diff, where it is otherwise answered as missing */
-  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; fetchMissing?: boolean }
+  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; prNumber?: number; fetchMissing?: boolean }
   | { type: 'pr.LIST_OPEN_PRS' }
   | { type: 'pr.SELECT_PR'; number: number }
   | { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
@@ -246,7 +247,7 @@ export type OutgoingPullRequestEvents =
   | { type: 'pr.BRANCH_DIFF_RECEIVED'; data: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
   | { type: 'pr.FILE_DIFF_RECEIVED'; data: GitDiff & { baseBranch: string; headBranch?: string } }
   /** A file's diff needs content this partial clone was not given, which is fetched only when the user asks */
-  | { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string } }
+  | { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string; prNumber?: number } }
   | { type: 'pr.ERROR'; message: string }
   | { type: 'pr.STATUS_CHANGED'; data: { timestamp: Date } }
   /** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */

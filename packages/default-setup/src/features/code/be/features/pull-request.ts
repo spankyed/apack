@@ -25,8 +25,8 @@ export interface CodePullRequestSystemContext {
 
 export type Event =
   | { type: 'pr.GET_BASE_BRANCH' }
-  | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string }
-  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; fetchMissing?: boolean }
+  | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
+  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; prNumber?: number; fetchMissing?: boolean }
   | { type: 'pr.LIST_OPEN_PRS' }
   | { type: 'pr.SELECT_PR'; number: number }
   | { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
@@ -101,6 +101,21 @@ async function settledDetails(github: GitHubApi, number: number) {
   return { pr, comments }
 }
 
+/**
+ * The ref a comparison's head is read from, fetched first: what GitHub keeps of a pull request where the asker
+ * names one (`refs/pull/<n>/head`), which outlives its branch and covers a fork's, and the branch's own otherwise
+ */
+async function headOf(repo: AppGitRepository, headBranch?: string, prNumber?: number): Promise<string | undefined> {
+  if (prNumber) return repo.fetchPullRequest(prNumber)
+  if (!headBranch) return undefined
+  await repo.fetchRemoteBranch(headBranch)
+  return `origin/${headBranch}`
+}
+
+/** What to say of a comparison whose branch the remote no longer has, in place of git's words for a missing ref */
+const headGone = (error: any, headBranch?: string): string | undefined =>
+  error?.code === 'unknown-ref' && headBranch ? `${headBranch} is no longer on the remote, so its changes cannot be compared.` : undefined
+
 /** Hands each handler the answer for the message it is handling — see `defineHandlers` */
 const handlers = defineHandlers<CodePullRequestSystemContext, Event>();
 
@@ -129,27 +144,24 @@ export const pullRequestSystem = setup({
 
     readBranchDiff: ({ event, context, reply }) => {
       const emit = answering(reply)
-      const ev = event as { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string }
+      const ev = event as { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
       withRepo(context, emit,
         async repo => {
           const base = ev.baseBranch ? Promise.resolve(ev.baseBranch) : repo.findBaseBranch({ preferUpstream: false })
-          const head = ev.headBranch ? `origin/${ev.headBranch}` : undefined
-          if (ev.headBranch) {
-            await repo.fetchRemoteBranch(ev.headBranch)
-          }
+          const head = await headOf(repo, ev.headBranch, ev.prNumber)
           const baseBranch = await base
           const files = await repo.readBranchDiff(baseBranch, head)
           return { files, baseBranch }
         },
-        ({ files, baseBranch }) => emit({ type: 'pr.BRANCH_DIFF_RECEIVED', data: { files, baseBranch, headBranch: ev.headBranch } })
+        ({ files, baseBranch }) => emit({ type: 'pr.BRANCH_DIFF_RECEIVED', data: { files, baseBranch, headBranch: ev.headBranch } }),
+        error => emitError(emit, headGone(error, ev.headBranch) ?? error?.message ?? String(error)),
       )
     },
 
     getBranchFileDiff: ({ event, context, reply }) => {
       const emit = answering(reply)
-      const ev = event as { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; fetchMissing?: boolean }
-      const target = ev.headBranch ? `origin/${ev.headBranch}` : 'HEAD'
-      const where = { path: ev.path, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
+      const ev = event as { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; prNumber?: number; fetchMissing?: boolean }
+      const where = { path: ev.path, baseBranch: ev.baseBranch, headBranch: ev.headBranch, ...(ev.prNumber && { prNumber: ev.prNumber }) }
       withRepo(context, emit,
         repo => ev.fetchMissing ? repo.fetchingMissing(() => read(repo)) : read(repo),
         ({ originalContent, modifiedContent, isImage }) => emit({
@@ -158,12 +170,10 @@ export const pullRequestSystem = setup({
         }),
         error => error?.code === 'content-missing'
           ? emit({ type: 'pr.FILE_CONTENT_MISSING', data: where })
-          : emitError(emit, error?.message ?? String(error)),
+          : emitError(emit, headGone(error, ev.headBranch) ?? error?.message ?? String(error)),
       )
       async function read(repo: AppGitRepository) {
-        if (ev.headBranch) {
-          await repo.fetchRemoteBranch(ev.headBranch)
-        }
+        const target = await headOf(repo, ev.headBranch, ev.prNumber) ?? 'HEAD'
         const isImage = repo.isImageFile(ev.path)
         const getContent = isImage
           ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
