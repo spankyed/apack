@@ -355,3 +355,17 @@ describe("the feature's settings reaching the terminals", () => {
     expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'hollow', cursorBlink: 'program', linkPreview: 'osc8' })
   })
 })
+
+describe('starting over a folder', () => {
+  it('has each panel ask about the folder the start names, which is the surface\'s by the time they ask', async () => {
+    const { sendToSystem } = await import('#generated/events.ts')
+    const actor = started()
+    vi.mocked(sendToSystem).mockClear()
+
+    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work' } } as never)
+
+    const asked = vi.mocked(sendToSystem).mock.calls.map(([, event]) => (event as { type: string }).type)
+    expect(asked, 'the pull request panel asks whether GitHub answers for it').toContain('pr.CHECK_GITHUB_ACCESS')
+    expect(asked, 'the commit panel asks for the repositories under it').toContain('LIST_REPOSITORIES')
+  })
+})

@@ -14,17 +14,22 @@ export interface SignedIn {
   password: string;
 }
 
-export async function startSmartHttpRemote({ tokens }: { tokens: string[] }): Promise<{
+/** `repository` is where it is served, as GitHub serves `owner/name`: `repo` unless a case names another */
+export async function startSmartHttpRemote({ tokens, repository = 'repo' }: { tokens: string[]; repository?: string }): Promise<{
   /** The server's address, as a credential helper's URL names it */
   web: string;
   /** The repository's address on it */
   url: string;
+  /** The bare repository it serves, on disk */
+  directory: string;
   /** Every sign-in it took */
   signIns: SignedIn[];
   close(): Promise<void>;
 }> {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'smart-http-')));
-  await execFileWhileWorking('git', ['init', '--quiet', '--bare', '--initial-branch=main', path.join(root, 'repo.git')]);
+  const directory = path.join(root, `${repository}.git`);
+  fs.mkdirSync(path.dirname(directory), { recursive: true });
+  await execFileWhileWorking('git', ['init', '--quiet', '--bare', '--initial-branch=main', directory]);
   const signIns: SignedIn[] = [];
 
   const server = http.createServer((request, response) => {
@@ -72,7 +77,8 @@ export async function startSmartHttpRemote({ tokens }: { tokens: string[] }): Pr
   const web = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   return {
     web,
-    url: `${web}/repo.git`,
+    url: `${web}/${repository}.git`,
+    directory,
     signIns,
     close: async () => {
       await new Promise<void>((resolve, reject) => { server.closeAllConnections(); server.close((error) => error ? reject(error) : resolve()); });

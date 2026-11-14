@@ -484,6 +484,17 @@ const loadsGuard = (file: string): boolean => {
   return /vitest-progress-guard/.test(own) || /sibling\('vitest-progress-guard'\)/.test(helper);
 };
 
+/**
+ * Whether a Vitest config, or the helper it delegates to, declares `expect` options.
+ *
+ * The progress guard sets the run's `expect` (its `poll` default, `vitest-progress-guard.ts`) with `vi.setConfig`,
+ * which replaces the whole object, so an option a config declared there would be dropped without a word. Read as
+ * text, as every other question here is, ignoring comments.
+ */
+const declaresExpect = (sources: readonly string[]): boolean => sources.join('\n').split('\n')
+  .map((line) => line.trim())
+  .some((line) => !line.startsWith('//') && !line.startsWith('*') && /\bexpect\s*:\s*\{/.test(line));
+
 describe('a suite bounds a test by its size, and never by the clock', () => {
   // The population, not a spot check: a config nobody derived is one whose budget nothing holds
   it('finds every test config, so none goes unchecked', () => {
@@ -513,6 +524,12 @@ describe('a suite bounds a test by its size, and never by the clock', () => {
       .map(([key, ms]) => `${key} is ${declared.has(key) ? `${declared.get(key)!}` : 'not declared'}, not ${ms}`);
     expect(wrong, `${file} is ${size}`).toEqual([]);
     expect(loadsGuard(file), `${file} turns the clock off without the progress guard, which leaves a hang unbounded`).toBe(true);
+    expect(declaresExpect(timeoutSources(file)), `${file} declares \`expect\` options, which the guard's \`vi.setConfig\` replaces`).toBe(false);
+  });
+
+  it('reads a config declaring `expect` options as one, and a comment naming them as none', () => {
+    expect(declaresExpect(['test: {', '  expect: { requireAssertions: true },', '}'])).toBe(true);
+    expect(declaresExpect(['test: {', '  // expect: { poll: … } is the guard\'s', '  testTimeout: 0,', '}'])).toBe(false);
   });
 
   it.each(configs().filter(({ file }) => isPlaywright(file)))('$file declares its $size deadline', ({ file, size }) => {

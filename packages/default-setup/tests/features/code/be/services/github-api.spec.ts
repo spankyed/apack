@@ -31,6 +31,8 @@ it("names the repository a github.com remote's address holds, and nothing for an
   expect(repoOfRemote('https://user@github.com/octo/my.repo.git')).toEqual({ owner: 'octo', name: 'my.repo' });
   expect(repoOfRemote('https://gitlab.com/octo/repo.git')).toBeUndefined();
   expect(repoOfRemote('/srv/git/repo.git')).toBeUndefined();
+  expect(repoOfRemote('http://127.0.0.1:4100/octo/repo.git', 'http://127.0.0.1:4100'), 'the GitHub the app signs in to, a stand-in here').toEqual(REPO);
+  expect(repoOfRemote('https://github.com/octo/repo.git', 'http://127.0.0.1:4100')).toBeUndefined();
 });
 
 it("reads a pull request's details in the shape the panel takes: checks, commits and comments flattened", async () => {
@@ -63,6 +65,86 @@ it("lists the open pull requests, and finds a branch's with an open one first", 
 
   expect((await gh.listOpenPRs()).map(pr => pr.number)).toEqual([7]);
   expect((await gh.findPRForBranch('feature/thing'))?.number).toBe(6);
+});
+
+it("takes no fork's pull request from a branch of the same name for the branch's own", async () => {
+  const { gh } = await api({ graphql: [
+    ['states: OPEN', { body: { data: { repository: { pullRequests: { nodes: [
+      { number: 8, isCrossRepository: true }, { number: 6, isCrossRepository: false },
+    ] } } } } }],
+    ['headRefName: $branch', { body: { data: { repository: { pullRequests: { nodes: [
+      pullRequestNode({ number: 8, state: 'OPEN', isCrossRepository: true }), pullRequestNode({ number: 5, state: 'CLOSED' }),
+    ] } } } } }],
+  ] });
+
+  expect((await gh.findPRForBranch('feature/thing'))?.number).toBe(5);
+  expect(await gh.openPRsFromBranch('feature/thing')).toEqual([6]);
+});
+
+it("deletes a branch through GitHub, and takes one GitHub no longer has as deleted", async () => {
+  let gone = false;
+  const { gh, requests } = await api({ rest: {
+    'DELETE /repos/octo/repo/git/refs/heads/feature/thing': () => gone
+      ? { status: 422, body: { message: 'Reference does not exist', documentation_url: 'https://docs.github.com/rest/git/refs#delete-a-reference' } }
+      : (gone = true, { status: 204 }),
+    'DELETE /repos/octo/repo/git/refs/heads/protected': { status: 422, body: { message: 'Cannot delete this protected branch' } },
+  } });
+
+  await gh.deleteBranch('feature/thing');
+  await gh.deleteBranch('feature/thing');
+  expect(requests.map(({ method, path }) => `${method} ${path}`)).toEqual(['DELETE /repos/octo/repo/git/refs/heads/feature/thing', 'DELETE /repos/octo/repo/git/refs/heads/feature/thing']);
+  expect(await reasonOf(gh.deleteBranch('protected'))).toBe('failed');
+});
+
+it("reads a busy pull request's discussion and threads newest first, back to the first", async () => {
+  const node = (id: number) => ({ id: `IC_${id}`, body: `comment ${id}`, author: { login: 'hubot' }, createdAt: '', url: `u#issuecomment-${id}`, viewerDidAuthor: false });
+  const threadNode = (id: string) => ({ id, isResolved: false, isOutdated: false, path: 'a.ts', line: 1, comments: { nodes: [] } });
+  const { gh, requests } = await api({ graphql: [
+    ['before: $before', request => request.body.query.includes('reviewThreads')
+      ? { body: { data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasPreviousPage: false }, nodes: [threadNode('T1')] } } } } } }
+      : { body: { data: { repository: { pullRequest: { comments: { pageInfo: { hasPreviousPage: false }, nodes: [node(1)] } } } } } }],
+    ['reviewThreads(', { body: { data: { repository: { pullRequest: { id: 'PR_1', reviewThreads: { pageInfo: { hasPreviousPage: true, startCursor: 'T' }, nodes: [threadNode('T2')] } } } } } }],
+    ['pullRequest(', { body: { data: { repository: { pullRequest: pullRequestNode({
+      comments: { pageInfo: { hasPreviousPage: true, startCursor: 'C' }, nodes: [node(2), node(3)] },
+    }) } } } }],
+  ] });
+
+  expect((await gh.getPRDetails(7)).comments.map(comment => comment.id)).toEqual(['IC_1', 'IC_2', 'IC_3']);
+  expect((await gh.getReviewThreads(7)).map(thread => thread.id)).toEqual(['T1', 'T2']);
+  expect(requests[0]!.body.query).toMatch(/comments\(last: 100\)/);
+  expect(requests.filter(request => request.body.variables.before).map(request => request.body.variables.before)).toEqual(['C', 'T']);
+});
+
+it('asks nothing again of a closed or merged pull request, whose merge state GitHub never works out', async () => {
+  const { gh, pauses } = await api({ graphql: [['pullRequest(', { body: { data: { repository: { pullRequest: pullRequestNode({ state: 'MERGED', mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN' }) } } } }]] });
+
+  expect(await gh.fetchPRDetailsSettled(7)).toMatchObject({ state: 'MERGED' });
+  expect(pauses).toEqual([]);
+});
+
+it("says GitHub's reasons for refusing a pull request, not only that it failed validation", async () => {
+  const { gh } = await api({
+    rest: { 'POST /repos/octo/repo/pulls': { status: 422, body: { message: 'Validation Failed', errors: [{ resource: 'PullRequest', code: 'custom', message: 'A pull request already exists for octo:feature/thing.' }] } } },
+    graphql: [['defaultBranchRef', { body: { data: { repository: { defaultBranchRef: { name: 'main' } } } } }]],
+  });
+
+  await expect(gh.createPR({ title: 't', body: '', head: 'feature/thing' })).rejects.toThrow('Validation Failed: A pull request already exists for octo:feature/thing.');
+});
+
+it('says when the rate limit is used up, and when GitHub takes asks again', async () => {
+  const failure = (promise: Promise<unknown>) => promise.then(() => undefined, (error: unknown) => error as GitHubApiError);
+  const resets = Math.floor(Date.now() / 1000) + 600;
+
+  const primary = await failure((await api({ graphql: [['repository', { status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(resets) }, body: { message: 'API rate limit exceeded for user ID 1.' } }]] })).gh.checkAccess());
+  expect(primary).toMatchObject({ reason: 'rate-limited', resetsAt: resets * 1000 });
+
+  const before = Date.now();
+  const secondary = await failure((await api({ rest: { 'PUT /repos/octo/repo/pulls/7/merge': { status: 429, headers: { 'retry-after': '60' }, body: { message: 'You have exceeded a secondary rate limit.' } } } })).gh.mergePR(7));
+  expect(secondary?.reason).toBe('rate-limited');
+  expect(secondary?.resetsAt).toBeGreaterThanOrEqual(before + 60_000);
+
+  const graphql = await failure((await api({ graphql: [['repository', { body: { data: null, errors: [{ type: 'RATE_LIMITED', message: 'API rate limit exceeded' }] } }]] })).gh.checkAccess());
+  expect(graphql?.reason).toBe('rate-limited');
 });
 
 it("asks again while GitHub is still working out whether a new pull request can merge, onto the repository's default branch", async () => {

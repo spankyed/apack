@@ -26,13 +26,14 @@ export const GITHUB_TOKEN_USERNAME = 'x-access-token'
 /**
  * Has git's own credential helpers forget the token, so it signs nothing in once the app has signed out. Git hands
  * a sign-in that worked to every helper the user has to keep, so a keychain may hold the app's token after a push;
- * `git credential reject` asks each to erase it. A git that cannot be run leaves it there, which is said in the log
+ * `git credential reject`, run in `environment`, asks each helper that environment's git names to erase it. A git
+ * that cannot be run leaves it there, which is said in the log; the promise settles once git has finished either way
  */
-function forgetInGit(token: string, web: string): void {
+export function forgetInGit(token: string, web: string, environment: NodeJS.ProcessEnv): Promise<void> {
   const { protocol, host } = new URL(web)
-  const run = execFileWhileWorking(resolveGitPath(), ['credential', 'reject'], { env: agentChildEnvironment(process.env) })
+  const run = execFileWhileWorking(resolveGitPath(), ['credential', 'reject'], { env: environment })
   run.child.stdin?.end(`protocol=${protocol.replace(':', '')}\nhost=${host}\nusername=${GITHUB_TOKEN_USERNAME}\npassword=${token}\n\n`)
-  run.catch((error: unknown) => logger.warn('Git could not be asked to forget the GitHub sign-in', { error: error instanceof Error ? error.message : String(error) }))
+  return run.then(() => undefined, (error: unknown) => logger.warn('Git could not be asked to forget the GitHub sign-in', { error: error instanceof Error ? error.message : String(error) }))
 }
 
 /** What is kept: the token, the scopes GitHub granted with it, and whose it is */
@@ -53,26 +54,59 @@ export type Event =
   | { type: 'github.CANCEL_SIGN_IN' }
   | { type: 'github.SIGN_OUT' }
 
-/** The sign-in this pack holds, or `null`. One that cannot be read is no sign-in, which is said in the log */
+/**
+ * The sign-in as last read, so that a git run, which lays it over git's environment, neither reads nor decrypts
+ * the secrets file: `undefined` until it is read. This system's own sign-in and sign-out write it as they write the
+ * secret; anything else that changes the stored secrets says so (`SECRETS_CHANGED`), and it is read again
+ */
+let heldSignIn: { signIn: StoredSignIn | null } | undefined
+
+/**
+ * The sign-in this pack holds, or `null`. One that cannot be read is no sign-in, which is said in the log once,
+ * until the secrets change
+ */
 export function storedSignIn(): StoredSignIn | null {
+  if (heldSignIn) return heldSignIn.signIn
+  let signIn: StoredSignIn | null = null
   try {
     const stored = services.secrets.own.get(SECRET)
-    return stored === undefined ? null : JSON.parse(stored) as StoredSignIn
+    signIn = stored === undefined ? null : JSON.parse(stored) as StoredSignIn
   } catch (error) {
     logger.warn('The GitHub sign-in could not be read; sign in again', { error: error instanceof Error ? error.message : String(error) })
-    return null
   }
+  heldSignIn = { signIn }
+  return signIn
+}
+
+/** Has the next use read the sign-in again: the stored secrets changed, or the app holding it started */
+export function forgetHeldSignIn(): void {
+  heldSignIn = undefined
+}
+
+/** A checkout's repository on GitHub, and the remote that names it, which every fetch and delete of the ask uses */
+export interface GitHubOfCheckout {
+  github: GitHubApi
+  /** The remote's name, as git names it: the one the current branch follows, else `origin`, else the only one */
+  remote: string
 }
 
 /**
- * GitHub's API for the repository a checkout's remote names, or for `named` where the caller names another, with
- * this pack's sign-in. Refuses, saying which, a checkout whose remote is not on github.com and an app that is not
- * signed in
+ * GitHub's API for the repository the checkout's remote names (`readRemote`) with this pack's sign-in, and that
+ * remote. Refuses, saying which, a checkout whose remote is not on GitHub and an app that is not signed in
  */
+export async function gitHubOf(repository: AppGitRepository): Promise<GitHubOfCheckout> {
+  const remote = await repository.readRemote()
+  const repo = remote ? repoOfRemote(remote.url, services.github.endpoints.web) : undefined
+  if (!remote || !repo) throw new GitHubApiError('not-github', 'This repository has no remote on github.com.')
+  return { github: signedIn(repo), remote: remote.name }
+}
+
+/** GitHub's API for the repository a checkout's remote names, or for `named` where the caller names another */
 export async function gitHubApiFor(repository: AppGitRepository, named?: GitHubRepo): Promise<GitHubApi> {
-  const address = named ? undefined : await repository.readRemoteUrl()
-  const repo = named ?? (address ? repoOfRemote(address) : undefined)
-  if (!repo) throw new GitHubApiError('not-github', 'This repository has no remote on github.com.')
+  return named ? signedIn(named) : (await gitHubOf(repository)).github
+}
+
+function signedIn(repo: GitHubRepo): GitHubApi {
   const signIn = storedSignIn()
   if (!signIn) throw new GitHubApiError('signed-out', 'Sign in to GitHub in Settings → Code to work with pull requests.')
   return createGitHubApi({ endpoints: services.github.endpoints, token: signIn.token, repo })
@@ -103,7 +137,9 @@ export const githubSystem = setup({
         answer(reply, { type: 'github.SIGN_IN_CODE', userCode: code.userCode, verificationUri: code.verificationUri, expiresAt: code.expiresAt })
         const { token, scopes } = await services.github.pollForToken(code, signal)
         const account = await services.github.fetchAccount(token, signal)
-        services.secrets.own.set(SECRET, JSON.stringify({ token, scopes, account } satisfies StoredSignIn))
+        const signIn: StoredSignIn = { token, scopes, account }
+        services.secrets.own.set(SECRET, JSON.stringify(signIn))
+        heldSignIn = { signIn }
         logger.info(`Signed in to GitHub as ${account.login}`)
         accountChanged(account)
       })().catch((error: unknown) => {
@@ -123,13 +159,16 @@ export const githubSystem = setup({
       context.held.signIn?.abort()
       const signedIn = storedSignIn()
       services.secrets.own.delete(SECRET)
-      if (signedIn) forgetInGit(signedIn.token, services.github.endpoints.web)
+      heldSignIn = { signIn: null }
+      if (signedIn) void forgetInGit(signedIn.token, services.github.endpoints.web, agentChildEnvironment(process.env))
       accountChanged(null)
     },
   }),
 }).createMachine({
   id: 'github',
   context: () => ({ held: {} }),
+  // A sign-in read by an app before this one is not this app's
+  entry: () => forgetHeldSignIn(),
   on: {
     'github.GET_ACCOUNT': { actions: 'tellAccount' },
     'github.SIGN_IN': { actions: 'signIn' },

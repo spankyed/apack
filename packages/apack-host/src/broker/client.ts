@@ -376,6 +376,12 @@ export interface BrokerSessionOptions {
   /** Whether its programs may send images, which is yes only where something draws them */
   images?: boolean;
   /**
+   * Whether one may be named rather than sent — a file or a shared memory object the broker then reads.
+   * Only read where `images` is on, and only for a session running a program its owner trusts: see
+   * `TerminalService.open`'s `imageFiles`
+   */
+  imageFiles?: boolean;
+  /**
    * What vouches for the shell's marks: 32 lowercase hexadecimal characters the shell was also given.
    * With one the broker records a command only on the word of a mark that carries it; without, every
    * marker is believed and reported as a claim
@@ -916,7 +922,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
 
   return {
     history,
-    async open({ cols, rows, shell, args, env, unset, cwd, colors, record, restore, images, marksKey }, sessionListeners) {
+    async open({ cols, rows, shell, args, env, unset, cwd, colors, record, restore, images, imageFiles, marksKey }, sessionListeners) {
       connection.send({
         kind: 'spawn',
         cols,
@@ -932,6 +938,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         record: record ?? null,
         restore: restore ?? false,
         images: images ?? false,
+        image_files: imageFiles ?? false,
         marks_key: marksKey ?? null,
       });
       // Registered as the frame is read, so an `exited` in the same read is not lost; delivered once this

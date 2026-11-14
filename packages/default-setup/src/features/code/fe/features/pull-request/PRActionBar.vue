@@ -102,7 +102,8 @@
       <span>Checkout & Pull Base</span>
     </button>
     <button
-      @click="$emit('delete-branch')"
+      v-if="canDeleteBranch"
+      @click="confirmDeleteBranch"
       :disabled="isDeletingBranch"
       class="flex items-center gap-1 px-2 py-1 text-xs rounded text-red-400 hover:bg-red-900/30 transition-colors disabled:opacity-50 ml-auto"
       title="Delete remote branch"
@@ -134,6 +135,8 @@ const props = defineProps<{
   isClosing: boolean
   isTogglingDraft: boolean
   isDeletingBranch: boolean
+  /** The branch is this repository's and no other open pull request is from it (`branchDeletable`) */
+  canDeleteBranch: boolean
 }>()
 
 /** Semantic state of the merge button: drives color, icon, tooltip, and disabled flag. */
@@ -184,13 +187,19 @@ const CHEVRON_BTN_CLASSES: Record<MergeVariant, string> = {
   pending: 'bg-amber-950/50 text-amber-300 cursor-not-allowed border-l border-amber-900/60',
 }
 
-defineEmits<{
+const emit = defineEmits<{
   'merge': [method: 'merge' | 'squash' | 'rebase']
   'close': []
   'toggle-draft': []
   'delete-branch': []
   'checkout-base': []
 }>()
+
+/** Deleting a branch cannot be taken back from here, so it is asked first */
+function confirmDeleteBranch() {
+  const branch = props.pr?.headRefName
+  if (branch && confirm(`Delete the branch ${branch} on GitHub? Its commits stay in the pull request.`)) emit('delete-branch')
+}
 
 const showMergeOptions = ref(false)
 const selectedMethod = ref<'merge' | 'squash' | 'rebase'>('merge')

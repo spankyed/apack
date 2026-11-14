@@ -36,7 +36,7 @@ import { explorerSystem } from './features/explorer.ts'
 import { searchSystem } from './features/search.ts'
 import { commitSystem } from './features/commit.ts'
 import { pullRequestSystem } from './features/pull-request.ts'
-import { githubSystem } from './features/github.ts'
+import { forgetHeldSignIn, githubSystem } from './features/github.ts'
 import { terminalSystem } from './features/terminal.ts'
 import { actionsSystem } from './features/actions.ts'
 import { promptsSystem } from './features/prompts.ts'
@@ -398,6 +398,7 @@ export const systemMachine = setup({
           { actions: 'rememberBaseDirectory' },
         ],
         LIST_REPOSITORIES: { actions: 'listRepositories' },
+        SECRETS_CHANGED: { actions: () => forgetHeldSignIn() },
         SELECT_REPOSITORY: {
           actions: ({ event, self }) => {
             const ev = event as { type: 'SELECT_REPOSITORY'; path: string }

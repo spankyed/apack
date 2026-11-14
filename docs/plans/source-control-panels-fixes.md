@@ -1,6 +1,6 @@
 # Fixing the source-control and pull request panels
 
-Status: decided 2026-11-14 (its four decisions below). Phase 1 landed 2026-11-14; phases 2 to 4 next.
+Status: decided 2026-11-14 (its four decisions below). Phases 1 and 2 landed 2026-11-14; phases 3 and 4 next.
 
 Surveyed at monorepo `origin/master` `eb567581ac` and apack-git `cf7be5d` (the pin), by four read-only reviews — the
 commit panel and the pull request panel, frontend and backend each — and a check of the findings against the code.
@@ -108,6 +108,44 @@ sessions), on different cases each run.
 changes green on apack-git CI and pinned; the chain passes. Driven against a scratch repository on github.com: a
 pull request whose base moved on shows only its own changes; a fork's pull request is not the branch's; Delete
 Branch confirms and deletes the right branch.
+
+**Landed 2026-11-14**, in apack-git #30 (`readRemote`, `mergeBase`, `fetchRemoteBranch`, `deleteRemoteBranch`) and
+apack #486, with 6.1–6.3. Left over, each for a later phase:
+
+- After Delete Branch, the local tracking ref (`origin/<branch>`) stays until the next fetch prunes it: pruning one
+  ref needs an engine method, which goes with phase 3's engine changes.
+- 2.8 pages a pull request's comments and its review threads, but not the comments inside one thread, which are read
+  as its last 100.
+
+Driven against a scratch repository on github.com, signed in through the app: a pull request whose base moved on
+after the branch was cut showed only the branch's line, the diff's original side being the merge-base's; a comment
+posted and showed; the merge went through; Delete Branch asked first and removed the branch on GitHub. A fork's pull
+request was not driven, there being no second account; its cases are against the stand-ins.
+
+Found while driving, and fixed here: a window starting over a folder it restored never asked whether GitHub answers
+for it, nor listed the commit panel's repositories, stashes, worktrees and branches. The code surface handed
+`CODE_STARTED` to its panels in the middle of the transition that stores the folder, so each panel read the folder
+before it was there; it now hands it with `sendTo`, which XState delivers once the transition is done
+(`fe/state.ts`, `broadcastToAllFeatures`; `tests/features/code/fe/state.spec.ts`).
+
+Found under load, and fixed here: the fetch after a merge or a branch's deletion was announced as a hint
+(`commit.REPOSITORY_MAY_HAVE_CHANGED`), which the commit system puts off while no window has asked for its status
+since the last news — and the pull request panel, which is what a merge happens from, asks for none. The fetch is now
+announced as this app's other writes are (`commit.GIT_STATUS_CHANGED`). `pull-request-merge-fetches.spec.ts` failed
+six runs of six under `npm run stress` before it.
+
+Seen while driving, outside this change:
+
+- Once, after a pack reload that landed while a comment was being sent, the app read as signed out to GitHub until it
+  was restarted, though the token was still stored; a second reload did not do it, and the cause is not known.
+- Every pack reload logs `[shutdown] Error: Pack services are unavailable until the host accepts this runtime`, from
+  default-setup's `onShutdown` (`features/hooks.ts`, `services.runHistory.stopActive()`), which the host runs for the
+  replaced runtime after its services are gone (`apack-host/src/packs/runtime/lifecycle.ts`, `startAcceptedPack`).
+  The rest of that hook does not run.
+- A pull request's diff tab is labelled as an unstaged change (`README.md (unstaged)`).
+
+The chain passed apart from three of `repo-checks`' tooling specs (`bounded-spawn`, `progress-guard`,
+`spec-durations-reporter`), which fail under the machine's load and touch nothing here.
 
 ## Phase 3 — the commit backend and the engine
 

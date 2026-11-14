@@ -330,7 +330,8 @@ const editCommentBody = ref('')
 
 function startEditComment(comment: GhPRComment) {
   editingCommentId.value = comment.id
-  editCommentBody.value = comment.body
+  // The comment as written: what is shown has its images at signed addresses that expire
+  editCommentBody.value = comment.rawBody ?? comment.body
 }
 
 function confirmDeleteComment(comment: GhPRComment) {

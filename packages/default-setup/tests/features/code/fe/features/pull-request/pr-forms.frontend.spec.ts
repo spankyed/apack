@@ -19,6 +19,7 @@ vi.mock('@apackdev/ui/design/ImageLightbox', () => ({ default: defineComponent({
 
 const { default: PRComments } = await import('#features/code/fe/features/pull-request/PRComments.vue')
 const { default: PRInfo } = await import('#features/code/fe/features/pull-request/PRInfo.vue')
+const { default: PRActionBar } = await import('#features/code/fe/features/pull-request/PRActionBar.vue')
 
 let app: App | undefined
 afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren() })
@@ -143,5 +144,65 @@ describe("the pull request's edit form", () => {
     props.pr = pr(9)
     await nextTick()
     expect(titleInput()).toBeNull()
+  })
+})
+
+describe('an edit', () => {
+  const signed = 'https://objects.example/signed?expires=1'
+  const written = 'https://github.com/user-attachments/assets/0f1e2d3c'
+
+  it("of a comment starts from the comment as written, not from its images' signed addresses", async () => {
+    mount(PRComments, {
+      comments: [{ ...comment(2, `![shot](${signed})`), rawBody: `![shot](${written})` }],
+      reviewThreads: [], tab: 'discussion', prNumber: 1, isOpen: true, isSubmitting: false, answered: null,
+    })
+    button('Edit').click()
+    await nextTick()
+    expect(areas()[0]!.value).toBe(`![shot](${written})`)
+  })
+
+  it('of the description starts from it as written, and an unchanged one saves no body', async () => {
+    const onSave = vi.fn()
+    mount(PRInfo, {
+      pr: { number: 3, title: 'PR 3', body: `![shot](${signed})`, rawBody: `![shot](${written})`, baseRefName: 'main', headRefName: 'f', state: 'OPEN', isDraft: false, author: { login: 'me' }, createdAt: '', url: '' },
+      comments: [], branches: ['main'], isLoading: false, isUpdating: false, answered: null, onSave,
+    })
+    button('Edit PR').click()
+    await nextTick()
+    expect(areas().map(area => area.value)).toContain(`![shot](${written})`)
+    const title = document.querySelector<HTMLInputElement>('input')!
+    title.value = 'retitled'
+    title.dispatchEvent(new Event('input'))
+    button('Save').click()
+    expect(onSave).toHaveBeenCalledWith({ title: 'retitled' })
+  })
+})
+
+describe("deleting a pull request's branch", () => {
+  const merged = { number: 3, title: 'PR 3', body: '', baseRefName: 'main', headRefName: 'feature', isCrossRepository: false, state: 'MERGED', isDraft: false, author: { login: 'me' }, createdAt: '', url: '' }
+  const actionBar = (canDeleteBranch: boolean) => {
+    const onDelete = vi.fn()
+    mount(PRActionBar, { pr: merged, isMerging: false, isClosing: false, isTogglingDraft: false, isDeletingBranch: false, canDeleteBranch, 'onDelete-branch': onDelete })
+    return onDelete
+  }
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('is asked first, and sent only when the user says yes', () => {
+    const asked = vi.fn(() => false)
+    vi.stubGlobal('confirm', asked)
+    const onDelete = actionBar(true)
+
+    button('Delete Branch').click()
+    expect(asked).toHaveBeenCalledWith(expect.stringContaining('feature'))
+    expect(onDelete).not.toHaveBeenCalled()
+
+    asked.mockReturnValue(true)
+    button('Delete Branch').click()
+    expect(onDelete).toHaveBeenCalledOnce()
+  })
+
+  it('is not offered for a branch it may not delete', () => {
+    actionBar(false)
+    expect(button('Delete Branch')).toBeUndefined()
   })
 })

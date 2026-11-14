@@ -205,6 +205,7 @@
             :isClosing="isClosing"
             :isTogglingDraft="isTogglingDraft"
             :isDeletingBranch="isDeletingBranch"
+            :canDeleteBranch="branchDeletable(selectedPR, openPRs)"
             @merge="handleMerge"
             @close="handleClose"
             @toggle-draft="handleToggleDraft"
@@ -266,7 +267,7 @@ import { computed, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
 import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
-import { refKey } from '#features/code/fe/features/pull-request/state.ts'
+import { branchDeletable, refKey } from '#features/code/fe/features/pull-request/state.ts'
 import {
   AlertCircle, AlertTriangle, GitBranch, GitPullRequest, RefreshCw,
   Loader2, ArrowLeft, X
