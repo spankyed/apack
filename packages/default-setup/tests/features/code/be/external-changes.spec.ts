@@ -38,7 +38,10 @@ describe('a change no file event reported', () => {
     expect(announcements()).toBe(0);
 
     await app!.send('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' });
-    await expect.poll(announcements).toBe(1);
+    // Waited for as the event it is: the check reads the directory through git, which a busy machine can make
+    // take longer than a poll's second
+    await app!.nextEmit('code', 'commit.REPOSITORY_CHANGED');
+    expect(announcements()).toBe(1);
   });
 
   it('to a file open in an editor is announced under the path it was opened by', async () => {
@@ -72,6 +75,6 @@ describe('a change no file event reported', () => {
 
     // The shell says a command ended, which is the moment its files may have moved
     broker.reportsCommandFinished(session);
-    await expect.poll(() => announcements()).toBeGreaterThan(0);
+    await app!.nextEmit('code', 'commit.REPOSITORY_CHANGED');
   });
 });

@@ -245,7 +245,11 @@ export async function removeCompilerStoreDirectory(entry: string): Promise<void>
     await Promise.all((await fs.promises.readdir(file)).map(name => writable(path.join(file, name))));
   };
   await writable(entry);
-  await fs.promises.rm(entry, { recursive: true, force: true });
+  // **Retried, because something else can write into a directory as it is emptied.** On a Mac a `.DS_Store`
+  // lands in a directory just after its entries were removed and before its `rmdir`, which then fails with
+  // `ENOTEMPTY` and leaves the whole tree behind. `maxRetries` walks it again on that error, so the
+  // late file goes with the rest
+  await fs.promises.rm(entry, { recursive: true, force: true, maxRetries: 5 });
 }
 
 /** Copies the sources into `entry`, which does not exist yet; removes it again if anything fails */

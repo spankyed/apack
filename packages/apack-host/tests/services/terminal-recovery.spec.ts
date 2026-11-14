@@ -49,7 +49,7 @@ describe.skipIf(!BINARY)('after the broker it was holding died', () => {
       { onOutput() {}, onExit(code) { exits.push(code); notify(); } },
     );
 
-    broker.kill();
+    await broker.kill();
 
     await _whenSatisfied(
       (tell) => { notify = tell; return () => { notify = () => {}; }; },

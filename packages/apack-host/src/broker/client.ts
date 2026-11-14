@@ -1057,6 +1057,9 @@ function ready(process_: ChildProcess, stderr: string[], startMs = BROKER_START_
     // `holdBrokerSessions` buy nothing in whichever process won the start.
     const settle = (run: () => void) => { clearTimeout(deadline); lines.close(); run(); };
     const fail = (why: string) => settle(() => reject(new Error(said(why))));
+    // The reader re-emits whatever its input raises on its own `error`, as `frames` explains, and one with
+    // no listener throws out of the event loop rather than refusing this start
+    lines.on('error', error => fail(`the broker's output could not be read (${error.message})`));
     // What a broker that will not listen says before it exits, which is why it will not
     let refused: string | undefined;
     lines.once('line', line => {
