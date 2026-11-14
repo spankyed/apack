@@ -8,6 +8,7 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
   let startupResult: unknown
   let latest: bigint | undefined, result: {cost: number; text?: string} | undefined
   let cached: {key: string; cost: number; text: string; startedAt: bigint} | undefined
+  const withdraw = () => { key = undefined; generation = undefined; latest = undefined; result = undefined; command = null; policyKey = undefined; startupResult = undefined }
   return {
     configure(nextCommand: string | null, nextPolicy: string): unknown {
       const nextKey = JSON.stringify([nextCommand, nextPolicy])
@@ -60,6 +61,8 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
     get startedAt() { return latest },
     matchesCost(cost: number | undefined) { return result !== undefined && result.cost === cost },
     value(cost: number | undefined) { return result?.cost === cost ? result?.text : undefined },
-    clear() { key = undefined; generation = undefined; latest = undefined; result = undefined; cached = undefined; command = null; policyKey = undefined; startupResult = undefined },
+    // A policy handoff hides output; only fresh native cache validation may reuse the private receipt.
+    withdraw,
+    clear() { withdraw(); cached = undefined },
   }
 }

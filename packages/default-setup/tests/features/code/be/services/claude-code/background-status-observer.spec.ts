@@ -191,9 +191,10 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
  await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath,mainObservationClaimed:false,generations:{main:'main-generation',subagent:'subagent-generation'}}),{mode:0o600})
  let policyReady=false
+ let cachedMainStatus: string | undefined
  const helperPolicy={allowManagedHooksOnly:false,disableAllHooks:false}
  const helperPolicyFields=new Function('effective','policy',claudeTerminalHelperPolicyRuntime+'\nreturn nativeHelperPolicySnapshot(effective,policy)')
- const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);if(value.request?.subtype==='apack_owner_snapshot'&&!policyReady){res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,error:'Native policy binding not ready'}));return}res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,...helperPolicyFields({statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}},{...helperPolicy,statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}})}:{attached:true}}))})
+ const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);if(value.request?.subtype==='apack_owner_snapshot'&&!policyReady){res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,error:'Native policy binding not ready'}));return}res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,cachedMainStatus,...helperPolicyFields({statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}},{...helperPolicy,statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}})}:{attached:true}}))})
  await new Promise<void>(resolve=>native.listen(socketPath,resolve))
  try {
   expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
@@ -237,6 +238,16 @@ it('binds child drawing and reverse prompts to the original worker and retires t
   expect((await post('/native-status',{...helperOutput,startedAt:'12'},token)).code).toBe(409)
   expect((await post('/native-status',{...helperOutput,generation:restoredGeneration,startedAt:'13'},token)).code).toBe(200)
   expect(observer.value?.agents).toMatchObject([{id:'reviewer',statusText:'Release review caption'}])
+  // A real helper can finish under restored policy before its next status snapshot arrives.
+  // Its old generation remains refused; the live native cache is a separate recovery authority.
+  cachedMainStatus='Current main caption'
+  helperPolicy.allowManagedHooksOnly=true
+  expect((await post('/background-status',helperSnapshot(5))).code).toBe(200)
+  const restrictedMainGeneration=JSON.parse(await readFile(join(worker,'observer.json'),'utf8')).generations.main
+  helperPolicy.allowManagedHooksOnly=false
+  expect((await post('/native-status',{...startupMain,generation:restrictedMainGeneration,startedAt:'15',stdout:cachedMainStatus},token)).code).toBe(409)
+  expect((await post('/background-status',helperSnapshot(6))).code).toBe(200)
+  expect(observer.value?.statusLine).toBe(cachedMainStatus)
   let draft='Owned child draft あ🙂'
   transport!.promptHosts.register('child-view',{read:async()=>({text:draft,cursor:draft.length}),fill:async input=>{draft=input.text;return true}})
   await expect(transport!.request({subtype:'ui_attach',client_id:'child-view',surface:'desktop'})).resolves.toEqual({attached:true})

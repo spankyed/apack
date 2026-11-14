@@ -146,7 +146,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
       held.main.clear(); changed(true); return false
     }
     const policyKey = JSON.stringify([observed.policy.allowManagedHooksOnly, observed.policy.disableAllHooks, observed.hooksDisabled])
-    if (!held.main.matchesPolicy(observed.statusCommand, policyKey)) { held.main.clear(); changed(true); return false }
+    if (!held.main.matchesPolicy(observed.statusCommand, policyKey)) { held.main.withdraw(); changed(true); return false }
     if (observed.sessionId !== value.sessionId || observed.statusCommand !== value.command || policyKey !== value.policyKey) return false
     return held.main.accept(value)
   }
