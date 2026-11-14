@@ -428,6 +428,13 @@
         class="mt-1 text-xs text-red-500 hover:text-red-300 transition-colors"
       >{{ isErrorExpanded ? 'View less' : 'View more' }}</button>
       <SignInHelp v-if="errorSignIn" class="mt-2" :help="errorSignIn" :busy="isSettingUpSignIn" @sign-in="setUpSignIn" />
+      <!-- A checkout found no branch of the name: making one is offered, never done unasked -->
+      <button
+        v-if="missingBranch"
+        data-testid="create-missing-branch"
+        @click="commitActor?.send({ type: 'commit.CREATE_BRANCH', branchName: missingBranch })"
+        class="mt-2 px-2 py-1 text-xs rounded border border-red-800 text-red-300 hover:bg-red-900/40 transition-colors"
+      >Create branch {{ missingBranch }}</button>
     </div>
 
     <!-- Commit Message -->
@@ -1010,6 +1017,7 @@ const isFetchSuspended = useSelector(commitActor, (state) => state.context.isFet
 const fetchSignIn = useSelector(commitActor, (state) => state.context.fetchSignIn)
 const isSettingUpSignIn = useSelector(commitActor, (state) => state.context.isSettingUpSignIn)
 // The help belongs to the error it came with, and goes when that error does
+const missingBranch = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.missingBranch ?? null : null))
 const errorSignIn = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.signIn ?? null : null))
 // The refusal belongs to the error it came with, and goes when that error does
 const trustRequest = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.trust ?? null : null))
@@ -1425,11 +1433,9 @@ const confirmCreateBranch = () => {
     cancelCreateBranch()
     return
   }
-  commitActor?.send({ type: 'commit.UPDATE_BRANCH_INPUT', input: name })
-  commitActor?.send({ type: 'commit.CHECKOUT_BRANCH' })
+  commitActor?.send({ type: 'commit.CREATE_BRANCH', branchName: name })
   isCreatingBranch.value = false
   newBranchName.value = ''
-  commitActor?.send({ type: 'commit.UPDATE_BRANCH_INPUT', input: '' })
 }
 
 const cancelCreateBranch = () => {

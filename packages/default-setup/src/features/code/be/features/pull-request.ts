@@ -562,12 +562,14 @@ export const pullRequestSystem = setup({
       const emit = answering(reply)
       const ev = event as { type: 'pr.DELETE_BRANCH'; number: number }
       withGitHub(context, emit,
-        async github => {
+        async (github, repo, remote) => {
           const { branch, isCrossRepository } = await github.readHead(ev.number)
           if (isCrossRepository) throw new Error(`#${ev.number} is from a branch of another repository, a fork, which is not this repository's to delete.`)
           const others = (await github.openPRsFromBranch(branch)).filter(number => number !== ev.number)
           if (others.length > 0) throw new Error(`${branch} is kept: open pull request${others.length > 1 ? 's' : ''} ${others.map(number => `#${number}`).join(', ')} ${others.length > 1 ? 'are' : 'is'} from it too.`)
           await github.deleteBranch(branch)
+          // Deleted through GitHub, so git's record of it here goes too, as a fetch that prunes would take it
+          await repo.deleteRemoteTrackingBranch(branch, remote)
           return branch
         },
         branch => {

@@ -154,7 +154,10 @@ export const systemMachine = setup({
     /** What the repository picker lists, for the window that asked: everything under the folder the user opened */
     listRepositories: ({ context, reply }) => {
       const folder = context.openedDirectory ?? context.baseDirectory
-      if (!folder) return
+      if (!folder) {
+        reply?.({ type: 'commit.REPOSITORIES_RECEIVED', data: { repositories: [], truncated: false, current: context.baseDirectory } })
+        return
+      }
       void AppGitRepository.repositoriesUnder(folder).then(
         ({ repositories, truncated }) => reply?.({ type: 'commit.REPOSITORIES_RECEIVED', data: { repositories, truncated, current: context.baseDirectory } }),
         () => reply?.({ type: 'commit.REPOSITORIES_RECEIVED', data: { repositories: [], truncated: false, current: context.baseDirectory } }),
@@ -178,7 +181,8 @@ export const systemMachine = setup({
             answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: `Not a worktree of this repository: ${path}` } })
             return
           }
-          self.send({ type: 'SET_BASE_DIRECTORY', path, fromUserNavigation: true })
+          // A worktree is one of the repositories the picker offers, so the picker keeps the folder it lists
+          self.send({ type: 'SET_BASE_DIRECTORY', path, fromUserNavigation: true, fromPicker: true })
           answer(reply, { type: 'commit.WORKTREE_SWITCHED', data: { path } })
         },
         (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: error instanceof Error ? error.message : String(error) } }),
@@ -194,8 +198,10 @@ export const systemMachine = setup({
       },
       gitRepository: ({ event, context }) => {
         const ev = codeSpec.typeOf('SET_BASE_DIRECTORY', event)
-        // Clear the old repository's cache before creating new one
-        repositoryOf(context.gitRepository)?.clearCache()
+        // The repository it replaces lets go of what it holds open — its readers, a fetch under way — which on
+        // Windows would hold its directory
+        const replaced = repositoryOf(context.gitRepository)
+        if (replaced) void replaced.close().catch((error: unknown) => cliLogger.warn('The repository left behind could not be closed', { error: error instanceof Error ? error.message : String(error) }))
         const repo = openGitRepository(ev.path)
         const codeSettings = featureSettings.forFeature('code').get()
         repo.setFetchConfig(
@@ -290,9 +296,9 @@ export const systemMachine = setup({
           ev.settings.autoFetchRemote ?? false,
           ev.settings.autoFetchIntervalSeconds ?? 180
         )
-        // Fetching had stopped, and the settings arriving again is where it starts over: the repository is checked,
-        // which says so to the windows showing it, and fetched if a fetch is due
-        if (suspended) child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true })
+        // Fetching had stopped and its settings changed, which starts it over: the repository is checked, which
+        // says so to the windows showing it, and fetched if a fetch is due
+        if (suspended && !repository.isAutoFetchSuspended) child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true })
       }
 
     },
