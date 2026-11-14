@@ -78,7 +78,10 @@ export type IncomingCommitEvents =
   /** The user trusts the repository git refused for who owns it: added to their safe.directory */
   | { type: 'commit.TRUST_OWNERSHIP' }
   | { type: 'commit.GET_ALL_BRANCHES' }
-  | { type: 'commit.CHECKOUT_BRANCH'; branchName: string }
+  /** Checks out a branch there is, and with `pull` pulls it from what it follows once it is checked out */
+  | { type: 'commit.CHECKOUT_BRANCH'; branchName: string; pull?: boolean }
+  /** Makes a branch at what is checked out, and checks it out */
+  | { type: 'commit.CREATE_BRANCH'; branchName: string }
   | { type: 'commit.PUBLISH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
   | { type: 'commit.GENERATE_MESSAGE' }
@@ -196,6 +199,8 @@ export type OutgoingCommitEvents =
   | { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }
   | { type: 'commit.BLAME_RECEIVED'; data: { path: string; lines: BlameLine[] } }
   | { type: 'commit.STASH_SUCCESS'; data: { message: string } }
+  /** A stash was applied, or with `popped` applied and dropped, without a conflict */
+  | { type: 'commit.STASH_APPLIED'; data: { index: number; popped: boolean } }
   | { type: 'commit.WORKTREE_LIST_RECEIVED'; data: { worktrees: WorktreeEntry[] } }
   | { type: 'commit.WORKTREE_ADDED'; data: { path: string; branch: string } }
   | { type: 'commit.WORKTREE_REMOVED'; data: { path: string } }

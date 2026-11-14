@@ -64,3 +64,15 @@ it('refuses a path that is no worktree of the repository, and stays where it was
   await app.settle();
   expect(await current(app)).toBe(main);
 });
+
+it('keeps the repository picker on the folder the user opened when it switches to a worktree', async () => {
+  const { app, main, other } = await withWorktree();
+
+  await app.nextEmit('code', 'commit.WORKTREE_SWITCHED', { answering: await app.send('code', { type: 'commit.WORKTREE_SWITCH', path: other }, asWindow) });
+  await app.settle();
+
+  const listed = await app.send('code', { type: 'LIST_REPOSITORIES' }, asWindow);
+  const data = (await app.nextEmit('code', 'commit.REPOSITORIES_RECEIVED', { answering: listed })).data as { repositories: { path: string }[]; current: string };
+  expect(data.current).toBe(other);
+  expect(data.repositories.map(repository => repository.path), 'what is listed is under the folder opened, not the worktree').toContain(main);
+});

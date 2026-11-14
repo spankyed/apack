@@ -81,6 +81,14 @@ it('stops fetching by itself once the remote wants credentials, until the settin
   expect(await repo.fetchIfDue()).toBe(false);
   expect(asked(), 'it was not tried again').toBe(1);
 
+  // Every write to the feature's settings hands the fetch settings on, the same ones included
+  repo.setFetchConfig(true, 0);
+  expect(repo.isAutoFetchSuspended, 'the same settings arriving again are no one saying to try again').toBe(true);
+  expect(await repo.fetchIfDue()).toBe(false);
+  expect(asked()).toBe(1);
+
+  // Turned off and on again
+  repo.setFetchConfig(false, 0);
   repo.setFetchConfig(true, 0);
   expect(repo.isAutoFetchSuspended).toBe(false);
   expect(await repo.refreshSnapshot(), 'and that it may try again is said too').toMatchObject({ status: true });

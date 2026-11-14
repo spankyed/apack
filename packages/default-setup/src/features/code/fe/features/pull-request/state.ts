@@ -802,7 +802,8 @@ export const pullRequestState = setup({
     checkoutBase: ({ context, self }) => {
       if (!context.selectedPR?.baseRefName) return
       updateParentState(self, { selectedPanel: 'commit' })
-      sendToSystem('code', { type: 'commit.CHECKOUT_BRANCH', branchName: context.selectedPR.baseRefName })
+      // "Checkout & Pull Base": the pull is asked for, a checkout pulling nothing by itself
+      sendToSystem('code', { type: 'commit.CHECKOUT_BRANCH', branchName: context.selectedPR.baseRefName, pull: true })
     },
 
     /** Shows the files or the pull request; the pull request's discussion is read when the one held is another's */

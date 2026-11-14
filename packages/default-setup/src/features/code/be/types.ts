@@ -549,7 +549,7 @@ export interface WatcherHandle { readonly [gitHandle]: 'watcher' }
 /** Why a git command failed, where what it printed says: the git engine's codes, as the contract names them */
 export const GIT_ERROR_CODES = [
   'locked', 'authentication', 'permission', 'remote-unreachable', 'non-fast-forward', 'diverged', 'conflict', 'local-changes', 'unknown-ref', 'not-a-repository',
-  'aborted', 'git-not-found', 'developer-tools-missing', 'git-too-old', 'unsafe-ownership', 'signing-failed', 'unrelated-histories', 'nothing-to-commit', 'branch-exists', 'host-refused',
+  'aborted', 'git-not-found', 'developer-tools-missing', 'git-too-old', 'unsafe-ownership', 'signing-failed', 'unrelated-histories', 'nothing-to-commit', 'branch-exists', 'detached-head', 'no-remote', 'host-refused',
   'untrusted', 'content-missing', 'published', 'hook-refused', 'name-not-text',
 ] as const
 export type GitErrorCode = (typeof GIT_ERROR_CODES)[number]
@@ -575,6 +575,8 @@ export interface CommitFailure {
   code?: GitErrorCode
   /** The command the failure was of, where the panel can run it again */
   during?: 'push' | 'pull'
+  /** A branch a checkout named that is neither here nor on a remote, which the panel offers to make */
+  missingBranch?: string
   /** What can be done about a sign-in the remote asked for */
   signIn?: SignInHelp
   /** What the repository would have git run, when the command was not run because the repository is not trusted */

@@ -38,7 +38,8 @@ export type Event =
   | { type: 'commit.RESTORE_DISCARDED'; id: string }
   | { type: 'commit.TRUST_REPOSITORY'; repository: string }
   | { type: 'commit.GET_ALL_BRANCHES' }
-  | { type: 'commit.CHECKOUT_BRANCH'; branchName: string }
+  | { type: 'commit.CHECKOUT_BRANCH'; branchName: string; pull?: boolean }
+  | { type: 'commit.CREATE_BRANCH'; branchName: string }
   | { type: 'commit.PUBLISH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
   | { type: 'commit.GENERATE_MESSAGE' }
@@ -466,7 +467,8 @@ export const commitSystem = setup({
       context.gitRepository.readStatus().then((status) => {
         const allPaths = new Set(ev.paths)
         for (const p of ev.paths) {
-          const fileStatus = status.find(f => f.path === p)
+          // The row of what is staged: a file renamed in the index and edited since has a second, unstaged row
+          const fileStatus = status.find(f => f.path === p && f.staged)
           if (fileStatus && (fileStatus.status === 'renamed' || fileStatus.status === 'copied') && fileStatus.originalPath) {
             allPaths.add(fileStatus.originalPath)
           }
@@ -700,23 +702,13 @@ export const commitSystem = setup({
           self.send({ type: 'commit.GIT_STATUS_CHANGED' })
           return answerUndoable(context.gitRepository!, reply)
         })
-      }).catch((error: any) => {
-        // A hook's refusal is the hook's, with what it printed
-        if (error instanceof HookRefusedError) {
-          answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
-          return
-        }
-        let errorMessage = error.message
-        if (error.message.includes('nothing to commit')) {
-          errorMessage = 'No changes to commit. Stage your changes first.'
-        } else if (error.message.includes('Please tell me who you are')) {
-          errorMessage = 'Git user not configured. Run "git config --global user.email" and "git config --global user.name"'
-        }
-
-        answer(reply, {
-          type: 'commit.ERROR_RECEIVED',
-          data: { message: errorMessage }
-        })
+      }).catch((error: unknown) => {
+        // What failed and why, with what can be done about it (a trust to give, a hook's output); two of git's
+        // messages are said in words of the panel's
+        const failure = failureOf(error)
+        if (failure.message.includes('nothing to commit')) failure.message = 'No changes to commit. Stage your changes first.'
+        else if (failure.message.includes('Please tell me who you are')) failure.message = 'Git user not configured. Run "git config --global user.email" and "git config --global user.name"'
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failure })
       })
     },
 
@@ -756,26 +748,43 @@ export const commitSystem = setup({
       })
     },
 
+    /**
+     * Checks out a branch there is, and with `pull` pulls it once it is checked out, when it follows one. A name no
+     * branch has is answered with the name, which the panel offers to make; a pull that fails after the checkout is
+     * answered as the pull's failure, the checkout having happened
+     */
     checkoutBranch: ({ event, context, self, reply }) => {
-      const ev = event as { type: 'commit.CHECKOUT_BRANCH'; branchName: string }
+      const ev = event as { type: 'commit.CHECKOUT_BRANCH'; branchName: string; pull?: boolean }
 
       if (!requireGitRepository(context, reply)) return
+      const repository = context.gitRepository
 
-      context.gitRepository.checkoutBranch(ev.branchName, progressTo(reply, 'checkout')).then(() => {
-        context.gitRepository!.clearCache()
-
-        answer(reply, {
-          type: 'commit.BRANCH_CHECKOUT_SUCCESS',
-          data: { branchName: ev.branchName }
-        })
-
+      repository.checkoutBranch(ev.branchName, progressTo(reply, 'checkout')).then(async () => {
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-      }).catch((error: any) => {
-        answer(reply, {
-          type: 'commit.ERROR_RECEIVED',
-          data: failureOf(error)
-        })
+        if (ev.pull && (await repository.readSnapshot()).hasUpstream) {
+          try {
+            await repository.pullBranch(progressTo(reply, 'pull'))
+          } catch (error) {
+            answer(reply, { type: 'commit.ERROR_RECEIVED', data: await remoteFailureOf(error, 'pull', repository) })
+            return
+          }
+          self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        }
+        answer(reply, { type: 'commit.BRANCH_CHECKOUT_SUCCESS', data: { branchName: ev.branchName } })
+      }, (error: unknown) => {
+        const failure = failureOf(error)
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failure.code === 'unknown-ref' ? { ...failure, missingBranch: ev.branchName } : failure })
       })
+    },
+
+    /** Makes a branch at what is checked out and checks it out: answered as a checkout of it */
+    createBranch: ({ event, context, self, reply }) => {
+      const ev = event as { type: 'commit.CREATE_BRANCH'; branchName: string }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.createBranch(ev.branchName).then(() => {
+        answer(reply, { type: 'commit.BRANCH_CHECKOUT_SUCCESS', data: { branchName: ev.branchName } })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+      }, (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }))
     },
 
     pushBranch: ({ context, self, reply }) => {
@@ -852,8 +861,6 @@ export const commitSystem = setup({
         branchName = currentBranch
         return context.gitRepository!.pullBranch(progressTo(reply, 'pull'))
       }).then(() => {
-        context.gitRepository!.forceFetchOnce()
-
         answer(reply, {
           type: 'commit.BRANCH_PULLED',
           data: { branchName }
@@ -1118,57 +1125,39 @@ export const commitSystem = setup({
       })
     },
 
+    /**
+     * Applies a stash: answered once the status is asked again. A stash that conflicts is answered as
+     * the conflict, after the status, which shows the conflicted files
+     */
     stashApply: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.STASH_APPLY'; index: number }
 
       if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stashApply(ev.index).then(() => {
-        answer(reply, {
-          type: 'commit.STASH_SUCCESS',
-          data: { message: 'Stash applied successfully' }
-        })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-      }).catch((error: any) => {
-        if (error instanceof StashConflictError) {
-          answer(reply, {
-            type: 'commit.STASH_SUCCESS',
-            data: failureOf(error)
-          })
-          self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-          return
-        }
-        answer(reply, {
-          type: 'commit.ERROR_RECEIVED',
-          data: failureOf(error)
-        })
+        answer(reply, { type: 'commit.STASH_APPLIED', data: { index: ev.index, popped: false } })
+      }, (error: unknown) => {
+        if (error instanceof StashConflictError) self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
       })
     },
 
+    /**
+     * Applies a stash and drops it: answered once the status is asked again. A stash that conflicts is answered as
+     * the conflict, after the status, which shows the conflicted files, and the stash is kept
+     */
     stashPop: ({ event, context, self, reply }) => {
       const ev = event as { type: 'commit.STASH_POP'; index: number }
 
       if (!requireGitRepository(context, reply)) return
 
       context.gitRepository.stashPop(ev.index).then(() => {
-        answer(reply, {
-          type: 'commit.STASH_SUCCESS',
-          data: { message: 'Stash popped successfully' }
-        })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-      }).catch((error: any) => {
-        if (error instanceof StashConflictError) {
-          answer(reply, {
-            type: 'commit.STASH_SUCCESS',
-            data: failureOf(error)
-          })
-          self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-          return
-        }
-        answer(reply, {
-          type: 'commit.ERROR_RECEIVED',
-          data: failureOf(error)
-        })
+        answer(reply, { type: 'commit.STASH_APPLIED', data: { index: ev.index, popped: true } })
+      }, (error: unknown) => {
+        if (error instanceof StashConflictError) self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) })
       })
     },
 
@@ -1436,6 +1425,7 @@ export const commitSystem = setup({
         'commit.CHECKOUT_BRANCH': {
           actions: 'checkoutBranch'
         },
+        'commit.CREATE_BRANCH': { actions: 'createBranch' },
         'commit.PUBLISH_BRANCH': {
           actions: 'pushBranch'
         },

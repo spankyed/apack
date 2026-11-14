@@ -190,11 +190,16 @@ export class AppGitRepository extends GitRepository {
     this.setStatusNote(suspended ? 'not fetching' : 'fetching')
   }
 
+  /**
+   * Takes the fetch settings. A change to them is the user saying to try again, and starts fetching by itself
+   * again where it had stopped; the same settings arriving again, as they do with every write to this feature's
+   * settings, change nothing
+   */
   setFetchConfig(enabled: boolean, intervalSeconds: number): void {
+    const changed = enabled !== this.autoFetchEnabled || intervalSeconds * 1000 !== this.fetchThrottleMs
     this.autoFetchEnabled = enabled
     this.fetchThrottleMs = intervalSeconds * 1000
-    // The settings were changed, which is the user saying to try again
-    this.suspend(false)
+    if (changed) this.suspend(false)
   }
 
   /**
