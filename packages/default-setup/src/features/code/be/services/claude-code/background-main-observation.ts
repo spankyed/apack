@@ -2,14 +2,18 @@ import {randomUUID} from 'node:crypto'
 import {lstatSync, readFileSync, renameSync, unlinkSync, writeFileSync} from 'node:fs'
 import {dirname, join} from 'node:path'
 
+interface ClaudeBackgroundMainReceipt {key: string; cost: number; text: string; startedAt: bigint}
+
 /** One original worker's main helper; native policy and process identity are checked by its owner. */
-export function createClaudeBackgroundMainObservation(options: {configPath: string; sessionId: string; pid: number}) {
+export function createClaudeBackgroundMainObservation(options: {configPath: string; sessionId: string; pid: number; recovery?: ClaudeBackgroundMainReceipt}) {
   let key: string | undefined, generation: string | undefined, command: string | null = null, policyKey: string | undefined
   let startupResult: unknown
   let latest: bigint | undefined, result: {cost: number; text?: string} | undefined
-  let cached: {key: string; cost: number; text: string; startedAt: bigint} | undefined
+  let cached: ClaudeBackgroundMainReceipt | undefined = options.recovery ? {...options.recovery} : undefined
   const withdraw = () => { key = undefined; generation = undefined; latest = undefined; result = undefined; command = null; policyKey = undefined; startupResult = undefined }
   return {
+    // A receipt is private evidence, never live output until fresh native validation succeeds.
+    get recovery() { return cached ? {...cached} : undefined },
     configure(nextCommand: string | null, nextPolicy: string): unknown {
       const nextKey = JSON.stringify([nextCommand, nextPolicy])
       if (nextKey === key) return startupResult

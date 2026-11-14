@@ -52,7 +52,9 @@ export async function createClaudeBackgroundStatusObserver(options: {
   let monitor: ReturnType<typeof setInterval> | undefined, closing: Promise<void> | undefined
   let statusUpdates = 0
   const changed = (force = false): void => {
-    if (childUi && (childUi.registration !== status.registration || childUi.identity !== JSON.stringify(status.identity))) retireChildUi()
+    const identity = JSON.stringify(status.identity)
+    if (recovery && recovery.identity !== identity) recovery = undefined
+    if (childUi && (childUi.registration !== status.registration || childUi.identity !== identity)) retireChildUi(childUi.identity === identity)
     if (!force && statusUpdates && status.value) return
     parentChanged()
     for (const listener of listeners) { try { listener() } catch { /* Isolate windows. */ } }
@@ -72,7 +74,14 @@ export async function createClaudeBackgroundStatusObserver(options: {
   let launcher: Promise<string> | undefined
   let formatterRegistration = -1, formatterSequence = -1
   let childUi: {registration: number; identity: string; token: string; transport: ClaudeTerminalUiTransport; bridge: ReturnType<typeof createClaudeTerminalUiTransport>; owner: ClaudeBackgroundDesktopOwner; helper: ReturnType<typeof createClaudeBackgroundHelperProjection>; main: ReturnType<typeof createClaudeBackgroundMainObservation>; helperConfigPath: string; helperGeneration: string; helperKey?: string; finish(): void} | undefined
-  const retireChildUi = () => { const held = childUi; childUi = undefined; held?.helper.clear(); held?.main.clear(); held?.owner.controls.close(); held?.bridge.close(); held?.finish() }
+  let recovery: {identity: string; receipt: NonNullable<ReturnType<typeof createClaudeBackgroundMainObservation>['recovery']>} | undefined
+  const retireChildUi = (preserveReceipt = false) => {
+    const held = childUi
+    if (held) {
+      const receipt = preserveReceipt ? held.main.recovery : undefined
+      recovery = receipt ? {identity: held.identity, receipt} : undefined
+    }
+    childUi = undefined; held?.helper.clear(); held?.main.clear(); held?.owner.controls.close(); held?.bridge.close(); held?.finish() }
   async function childUiCurrent() {
     const held = childUi, identity = status.identity
     if (!held || !identity || closed || held.registration !== status.registration || held.identity !== JSON.stringify(identity)) return
@@ -135,7 +144,8 @@ export async function createClaudeBackgroundStatusObserver(options: {
     let finish!: () => void
     const done = new Promise<void>(resolve => { finish = resolve })
     const owner: ClaudeBackgroundDesktopOwner = {id: randomBytes(16).toString('hex'), parentSessionId, identity: Object.freeze({...identity}), registration, transport, done, get controls() { return controls }}
-    childUi = {registration, identity: scope, token: config.token, bridge, transport, owner, helper: createClaudeBackgroundHelperProjection(), main: createClaudeBackgroundMainObservation({configPath: proof.configPath, sessionId: identity.activeSessionId, pid: identity.pid}), helperConfigPath: proof.configPath, helperGeneration: config.generations.subagent, finish}
+    childUi = {registration, identity: scope, token: config.token, bridge, transport, owner, helper: createClaudeBackgroundHelperProjection(), main: createClaudeBackgroundMainObservation({configPath: proof.configPath, sessionId: identity.activeSessionId, pid: identity.pid, recovery: recovery?.identity === scope ? recovery.receipt : undefined}), helperConfigPath: proof.configPath, helperGeneration: config.generations.subagent, finish}
+    recovery = undefined
     const controls = createClaudeBackgroundControls({sessionId: identity.activeSessionId, transport, changed: () => changed(true)})
     return transport
   }
@@ -273,7 +283,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
   })
   const close = () => closing ??= (async () => {
     closed = true; if (releaseTimer) clearTimeout(releaseTimer); if (monitor) clearInterval(monitor)
-    retireChildUi(); status.close(); formatter?.reset(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
+    recovery = undefined; retireChildUi(); status.close(); formatter?.reset(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
     await authority.close(); await checkpoint?.retire(); await rm(directory, { recursive: true, force: true }); changed(); listeners.clear()
   })()
   async function checkReleasedChild() {
@@ -287,7 +297,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
     } catch {
       if (!closed && status.registration === registration && authority === current) {
         // Retire the process lease, retaining the small listener/plugin for a later original restart.
-        retireChildUi(); status.reset(); formatter?.reset(); const retiring = current.close(); authority = options.authority(parentSessionId); await retiring
+        recovery = undefined; retireChildUi(); status.reset(); formatter?.reset(); const retiring = current.close(); authority = options.authority(parentSessionId); await retiring
       }
     } finally { checking = false }
   }
@@ -324,7 +334,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
       if (closed || sessionId === parentSessionId) return
       await checkpoint?.retire()
       checkpoint = options.profile ? await claimClaudeBackgroundCheckpoint({profile:options.profile,parentSessionId:sessionId,endpoint:{directory,token}}) : undefined
-      retireChildUi(); parentSessionId = sessionId; status.reset(); formatter?.reset()
+      recovery = undefined; retireChildUi(); parentSessionId = sessionId; status.reset(); formatter?.reset()
       const retiring = authority.close(); authority = options.authority(parentSessionId); await retiring
     },
     adoptParent(nextTarget: typeof options.target, changed: () => void) {

@@ -200,16 +200,26 @@ it('binds child drawing and reverse prompts to the original worker and retires t
   expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
   const startupMain={sessionId:child,parentPid:119,kind:'main',generation:'main-generation',policyKey:'[false,false,false]',command:'main-caption',startedAt:'9',totalCostUsd:0.00042,code:0,truncated:false,stdout:'Original startup caption'}
   await writeFile(join(worker,'startup-main.json'),JSON.stringify(startupMain),{mode:0o600})
-  const lease=(await post('/background-register',{sessionId:child,pid:119})).value.token
-  const [transport,parallelTransport]=await Promise.all([observer.desktopTransport(),observer.desktopTransport()]);expect(transport).toBeDefined();expect(parallelTransport).toBe(transport)
+  let lease=(await post('/background-register',{sessionId:child,pid:119})).value.token
+  let [transport,parallelTransport]=await Promise.all([observer.desktopTransport(),observer.desktopTransport()]);expect(transport).toBeDefined();expect(parallelTransport).toBe(transport)
   const desktop=observer.desktopOwner!
   expect(desktop).toMatchObject({parentSessionId:parent,identity:original,transport})
   expect(await observer.desktopTransport()).toBe(transport);expect(observer.desktopOwner).toBe(desktop)
   const helperSnapshot=(sequence:number)=>({sessionId:child,pid:119,token:lease,sequence,metadata:{model:'sonnet',turns:2},usage:{startedAt:1,cost:{usd:0.00042}},formatter:{command:'main-caption',shellPrefix:null,policy:JSON.stringify(helperPolicy)},helpers:{command:'caption-helper',policyKey:JSON.stringify([helperPolicy.allowManagedHooksOnly,helperPolicy.disableAllHooks,false]),agents:[{id:'reviewer',type:'general-purpose',status:'running'}]}})
-  const configured=await post('/background-status',helperSnapshot(1));expect(configured.code).toBe(200)
+  let configured=await post('/background-status',helperSnapshot(1));expect(configured.code).toBe(200)
   expect(observer.value?.statusLine).toBeUndefined();policyReady=true
   expect((await post('/background-status',helperSnapshot(2))).code).toBe(200)
   expect(observer.value?.statusLine).toBe('Original startup caption')
+  cachedMainStatus='Original startup caption'
+  lease=(await post('/background-register',{sessionId:child,pid:119})).value.token
+  await desktop.done
+  expect(observer.value?.statusLine).toBeUndefined()
+  configured=await post('/background-status',helperSnapshot(1));expect(configured.code).toBe(200)
+  transport=observer.desktopOwner!.transport
+  expect(observer.desktopOwner).not.toBe(desktop)
+  expect(observer.value?.statusLine).toBe(cachedMainStatus)
+  expect((await post('/native-status',startupMain,token)).code).toBe(409)
+  expect((await post('/background-status',helperSnapshot(2))).code).toBe(200)
   const prefix=configured.value.shellPrefix,formatterConfig=JSON.parse(Buffer.from(prefix.slice(prefix.lastIndexOf(' -')+2),'base64url').toString())
   expect((await post('/background-formatter',{...formatterConfig,startedAt:'10',totalCostUsd:0.00042,code:0,stdout:'Fresh same-cost caption'})).code).toBe(200)
   expect(observer.value?.statusLine).toBe('Fresh same-cost caption')
