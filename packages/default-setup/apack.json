@@ -952,7 +952,8 @@
       },
       "services": {
         "cli": "src/features/code/be/services/cli.ts#cliService",
-        "codex": "src/features/code/be/services/codex/index.ts#codexService"
+        "codex": "src/features/code/be/services/codex/index.ts#codexService",
+        "github": "src/features/code/be/services/github.ts#githubService"
       },
       "repositories": {
         "terminalQueries": "src/features/code/be/repository/index.ts#terminalQueries",

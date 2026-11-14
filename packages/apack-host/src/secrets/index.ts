@@ -1,5 +1,5 @@
-// The user's secrets, host-internal: the host and the API read and write them here. Packs reach only the metadata,
-// through `services.secrets`, and never import this module.
+// The user's secrets, host-internal: the host and the API read and write them here. Packs reach only the metadata
+// and their own secrets, through `services.secrets`, and never import this module.
 import { resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import { _rootEvents } from '@apackdev/sdk/runtime';
 import { _getSecretsFilePath } from '@apackdev/sdk/utils';
@@ -54,6 +54,9 @@ export const secretsStore: SecretsStore = {
   add: (provider, label, value) => appStore().add(provider, label, value),
   replaceValue: (id, value) => appStore().replaceValue(id, value),
   keyFor: (provider) => appStore().keyFor(provider),
+  getOwned: (owner, name) => appStore().getOwned(owner, name),
+  setOwned: (owner, name, value) => appStore().setOwned(owner, name, value),
+  deleteOwned: (owner, name) => appStore().deleteOwned(owner, name),
   allowUnprotected: () => appStore().allowUnprotected(),
   clearAll: () => appStore().clearAll(),
   changedElsewhere: () => appStore().changedElsewhere(),

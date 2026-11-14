@@ -9,7 +9,7 @@ import type { AppDataService } from '../services/app-data.ts';
 import type { OnboardingService } from '../services/onboarding.ts';
 import type { RunHistory } from '../services/run-history.ts';
 import type { InferenceService } from '../services/inference.ts';
-import type { SecretsService } from '../services/secrets.ts';
+import type { SecretsAdmin } from '../services/secrets.ts';
 import type { FilesystemService } from '../services/filesystem.ts';
 import type { TerminalService } from '../services/terminal.ts';
 import type { SettingsAdmin } from '../services/settings.ts';
@@ -28,8 +28,8 @@ export interface HostRuntimeServices {
   runHistory: RunHistory;
   /** Model calls with the user's provider keys */
   inference: InferenceService;
-  /** The user's API keys, as metadata */
-  secrets: SecretsService;
+  /** The user's API keys, as metadata, and each pack's own secrets through the service bound to it */
+  secrets: SecretsAdmin;
   /** Files and folders on the user's disk */
   filesystem: FilesystemService;
   /** Terminal sessions, which the broker owns rather than this process */

@@ -785,8 +785,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    default: "default";
                     plan: "plan";
+                    default: "default";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1596,11 +1596,11 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     snapshot: z.ZodObject<{
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
+                finished: "finished";
                 selection: "selection";
                 enable: "enable";
                 disable: "disable";
                 connecting: "connecting";
-                finished: "finished";
             }>;
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
@@ -1675,8 +1675,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 loading: z.ZodBoolean;
                 copyState: z.ZodOptional<z.ZodEnum<{
                     error: "error";
-                    idle: "idle";
                     pending: "pending";
+                    idle: "idle";
                     saved: "saved";
                 }>>;
                 insight: z.ZodOptional<z.ZodString>;
@@ -1894,8 +1894,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"chrome_install_setup">;
     phase: z.ZodEnum<{
-        connecting: "connecting";
         failed: "failed";
+        connecting: "connecting";
         waiting_install: "waiting_install";
         stalled: "stalled";
         connected: "connected";
@@ -1918,8 +1918,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"effort_preference_result">;
     severity: z.ZodEnum<{
-        feedback: "feedback";
         warning: "warning";
+        feedback: "feedback";
     }>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -2290,8 +2290,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                default: "default";
                 plan: "plan";
+                default: "default";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -4698,6 +4698,18 @@ interface DatabaseSchemaInfo {
 
 type DatabaseSettings = SettingsOf<'database'>;
 
+/** What GitHub gave to show the user, and what to ask with */
+interface DeviceCode {
+    deviceCode: string;
+    /** What the user types at `verificationUri` */
+    userCode: string;
+    verificationUri: string;
+    /** When GitHub stops taking this code, in milliseconds since the epoch */
+    expiresAt: number;
+    /** How long to wait between asks, as GitHub said */
+    intervalMs: number;
+}
+
 /** One piece of a file's change, as git cuts it */
 interface DiffHunk {
     /** What names this piece when it is staged or unstaged: the same for as long as git cuts the same piece */
@@ -5223,6 +5235,33 @@ interface GitDiff {
 
 type GitErrorCode = (typeof GIT_ERROR_CODES)[number];
 
+interface GitHubAccount {
+    login: string;
+    name?: string;
+    avatarUrl?: string;
+}
+
+interface GitHubSignIn {
+    /** Asks GitHub for a code to show the user */
+    fetchDeviceCode(signal: AbortSignal): Promise<DeviceCode>;
+    /** Asks GitHub at the interval it set until the user approved the code, refused it or it expired */
+    pollForToken(code: DeviceCode, signal: AbortSignal): Promise<GitHubToken>;
+    /** The account a token signs in as */
+    fetchAccount(token: string, signal: AbortSignal): Promise<GitHubAccount>;
+}
+
+/**
+ * Why a sign-in ended without a token: no OAuth App configured for this build, the user refused it at github.com,
+ * the code expired before they approved it, the app cancelled it, or GitHub could not be asked or said something else
+ */
+type GitHubSignInFailure = 'cancelled' | 'denied' | 'expired' | 'failed' | 'unconfigured';
+
+interface GitHubToken {
+    token: string;
+    /** The scopes GitHub granted, which the user may have narrowed */
+    scopes: string[];
+}
+
 /** The two sides of one file's change, which an editor shows side by side */
 /** How far along git is with a command that talks to a remote or writes many files */
 interface GitProgress {
@@ -5353,7 +5392,7 @@ type IncomingBrowserEvents = {
     type: 'GET_SAVED_SESSION';
 };
 
-type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | IncomingCommitEvents | IncomingPullRequestEvents | IncomingTerminalEvents | IncomingActionsEvents | IncomingPromptsEvents | {
+type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | IncomingCommitEvents | IncomingPullRequestEvents | IncomingTerminalEvents | IncomingActionsEvents | IncomingPromptsEvents | IncomingGitHubEvents | {
     type: 'SET_BASE_DIRECTORY';
     path: string;
     fromUserNavigation?: boolean;
@@ -5743,6 +5782,22 @@ type IncomingFlowsEvents =
  | {
     type: 'SET_ROOT_FLOW';
     flowId: string | null;
+};
+
+type IncomingGitHubEvents = 
+/** Who the app is signed in to GitHub as, from what it holds: GitHub is not asked */
+{
+    type: 'github.GET_ACCOUNT';
+}
+/** Starts a sign-in, ending any under way: the asker is sent the code to type, then how it ended */
+ | {
+    type: 'github.SIGN_IN';
+} | {
+    type: 'github.CANCEL_SIGN_IN';
+}
+/** Forgets the token. It stays valid at GitHub until the user revokes it there, which Settings says */
+ | {
+    type: 'github.SIGN_OUT';
 };
 
 type IncomingLibraryEvents = {
@@ -6820,7 +6875,7 @@ type OutgoingCodeEvents = {
     } | {
         error: string;
     };
-} | OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingActionsEvents | OutgoingPromptsEvents | {
+} | OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingActionsEvents | OutgoingPromptsEvents | OutgoingGitHubEvents | {
     type: 'CODE_STARTED';
     data: CodeConnectedData;
 }
@@ -7400,6 +7455,27 @@ type OutgoingFlowsEvents =
 } | {
     type: 'DSL_EXPORT_FAILED';
     errors: string[];
+};
+
+type OutgoingGitHubEvents = {
+    type: 'github.ACCOUNT';
+    account: GitHubAccount | null;
+}
+/** The code to type at `verificationUri`, for the window that asked to sign in */
+ | {
+    type: 'github.SIGN_IN_CODE';
+    userCode: string;
+    verificationUri: string;
+    expiresAt: number;
+} | {
+    type: 'github.SIGN_IN_FAILED';
+    reason: GitHubSignInFailure;
+    message: string;
+}
+/** News for every window: the account the app is signed in as changed, or it signed out (`null`) */
+ | {
+    type: 'github.ACCOUNT_CHANGED';
+    account: GitHubAccount | null;
 };
 
 /**
@@ -8259,8 +8335,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    default: "default";
     plan: "plan";
+    default: "default";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -10537,11 +10613,11 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
 declare const claudeSettingsSnapshot: z.ZodObject<{
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
+            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
-            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -10616,8 +10692,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                idle: "idle";
                 pending: "pending";
+                idle: "idle";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -11598,6 +11674,7 @@ declare const featureServices: {
         listAllSessions: typeof listAll;
         viewSessionByFile: typeof viewByFile;
     };
+    github: GitHubSignIn;
     library: LibraryService;
     action: ActionService;
     prompt: PromptService;
@@ -11635,8 +11712,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

@@ -346,7 +346,7 @@ through the supplied provider because a test reset replaces it.
 - A data key created for a write that then fails is removed from the vault again (`pendingKeys`).
 - `writePrivateFile` (`./private-file`) writes a unique temp file with mode `0600`, fsyncs it, renames it into place and fsyncs the directory. On Windows it retries renames that fail with `EPERM`, `EBUSY` or `EACCES`, and skips the directory sync.
 - `secretsSnapshot()` is the `SecretsSnapshot` (`list()` and `status()`) the API's procedures return. `forwardSecretsChanges(registry)`, which the API's boot calls once, sends `SECRETS_CHANGED` (no values) on the bound `rootEvents` to every system that declares it takes it, on every store change.
-- Only the API's `transport/secrets.ts` tRPC procedures (`add`, `replaceValue`, `allowUnprotected`, ...) and `services/inference.ts` (`keyFor`) touch values. `services/secrets.ts` exposes only `status`, `list`, `select`, `rename` and `delete` to packs.
+- Only the API's `transport/secrets.ts` tRPC procedures (`add`, `replaceValue`, `allowUnprotected`, ...) and `services/inference.ts` (`keyFor`) touch values. `services/secrets.ts` exposes `status`, `list`, `select`, `rename` and `delete` of the user's keys to packs, and under `own` a pack's own secrets: `forPack(packId)` binds them to the pack the host admitted (`packs/service-binding.ts`), so a pack names a secret and never its owner. They are kept in the same file as the user's keys (`owned`, encrypted alike, with the owner and name as the AAD), are not among the keys `list` returns, and go with them on `clearAll`.
 
 ## Services (`services/`)
 

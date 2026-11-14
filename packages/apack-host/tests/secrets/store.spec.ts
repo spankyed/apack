@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSecretsStore, KeyVaultUnavailableError, memoryKeyVault, fileKeyVault, type KeyVault } from '../../src/secrets/index.ts';
+import { createSecretsService } from '../../src/services/secrets.ts';
 
 // Every value the store handles is handed to redaction, which keeps only its digest and length
 const registered = vi.hoisted(() => [] as string[]);
@@ -366,5 +367,65 @@ describe('secrets store', () => {
     const { store, filePath } = setup();
     fs.writeFileSync(filePath, JSON.stringify({ format: 99, secrets: [] }));
     expect(() => store.list()).toThrow(`Unknown stored keys format 99 in ${filePath}`);
+  });
+});
+
+// A pack's own secrets, by a name it chose: kept beside the user's keys and protected as they are, and reached only
+// by the pack that kept them
+describe("a pack's own secrets", () => {
+  it('keeps one by owner and name, encrypted, apart from the keys the user listed', () => {
+    const { store, filePath } = setup();
+    store.setOwned('one', 'token', 'gho_first');
+    store.setOwned('two', 'token', 'gho_second');
+
+    expect(store.getOwned('one', 'token')).toBe('gho_first');
+    expect(store.getOwned('two', 'token'), 'the same name, another pack').toBe('gho_second');
+    expect(store.getOwned('one', 'other'), 'a name it never set').toBeUndefined();
+    expect(store.list(), "not one of the user's keys").toEqual([]);
+    expect(fs.readFileSync(filePath, 'utf8'), 'no value in the file as text').not.toMatch(/gho_/);
+
+    store.setOwned('one', 'token', 'gho_replaced');
+    expect(store.getOwned('one', 'token')).toBe('gho_replaced');
+    store.deleteOwned('one', 'token');
+    expect(store.getOwned('one', 'token')).toBeUndefined();
+    expect(store.getOwned('two', 'token'), "another pack's is left").toBe('gho_second');
+    store.deleteOwned('one', 'token');
+  });
+
+  it('does not decrypt a value moved to another owner in the file', () => {
+    const { store, filePath } = setup();
+    store.setOwned('one', 'token', 'gho_first');
+    store.setOwned('two', 'token', 'gho_second');
+    const file = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    file.owned[1].value = file.owned[0].value;
+    fs.writeFileSync(filePath, JSON.stringify(file));
+
+    expect(() => store.getOwned('two', 'token')).toThrow(`The secret "token" of pack "two" can't be read on this machine`);
+    expect(store.getOwned('one', 'token')).toBe('gho_first');
+  });
+
+  it('is deleted on clear, moved when the user allows unprotected storage, and handed to redaction', () => {
+    const { store } = setup();
+    store.setOwned('one', 'token', 'gho_kept');
+    expect(registered).toContain('gho_kept');
+
+    store.allowUnprotected();
+    expect(store.getOwned('one', 'token')).toBe('gho_kept');
+
+    store.clearAll();
+    expect(store.getOwned('one', 'token')).toBeUndefined();
+  });
+});
+
+describe('the secrets service', () => {
+  it("gives a pack its own secrets and never another's", () => {
+    const { store } = setup();
+    const service = createSecretsService(store);
+    service.forPack('one').own.set('token', 'gho_one');
+
+    expect(service.forPack('one').own.get('token')).toBe('gho_one');
+    expect(service.forPack('two').own.get('token')).toBeUndefined();
+    service.forPack('two').own.delete('token');
+    expect(service.forPack('one').own.get('token'), "a delete reaches only the pack's own").toBe('gho_one');
   });
 });

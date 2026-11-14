@@ -94,6 +94,13 @@
     </CollapsibleSection>
     </div>
 
+    <!-- GitHub Section -->
+    <div class="border-t border-neutral-800 pt-8">
+    <CollapsibleSection label="GitHub" :default-open="true" class="mb-8">
+      <GitHubAccount />
+    </CollapsibleSection>
+    </div>
+
     <!-- Git Settings Section -->
     <div class="border-t border-neutral-800 pt-8">
     <CollapsibleSection label="Git Settings" :default-open="true" class="mb-8">
@@ -721,6 +728,7 @@ import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 import KeyboardShortcutInput from '@apackdev/ui/components/KeyboardShortcutInput'
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 import DirectorySelect from '@apackdev/ui/design/DirectorySelect'
+import GitHubAccount from './features/github/GitHubAccount.vue'
 
 import { openSurface } from '#generated/fe.ts'
 import { useSettingsDraft, untypedOpenSurface } from '@apackdev/sdk/fe'

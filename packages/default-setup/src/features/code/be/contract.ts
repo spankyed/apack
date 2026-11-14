@@ -10,6 +10,7 @@ import type {
 } from './types.ts';
 import type { ActiveTokenInfo } from './services/gh-cli.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
+import type { GitHubAccount, GitHubSignInFailure } from './services/github.ts';
 
 // ── The child actors' events ─────────────────────────────────────────────────────────────────────
 // They live here rather than beside each child because this module is the contract leaf: codegen reads it as a
@@ -387,6 +388,24 @@ export type OutgoingPromptsEvents =
   | { type: 'codePrompts.PROMPT_UPDATED'; prompt: PromptEntity; promptId: string }
   | { type: 'codePrompts.CODE_ERROR'; data: { message: string } }
 
+// ── github ─────────────────────────────────────────────────────────
+export type IncomingGitHubEvents =
+  /** Who the app is signed in to GitHub as, from what it holds: GitHub is not asked */
+  | { type: 'github.GET_ACCOUNT' }
+  /** Starts a sign-in, ending any under way: the asker is sent the code to type, then how it ended */
+  | { type: 'github.SIGN_IN' }
+  | { type: 'github.CANCEL_SIGN_IN' }
+  /** Forgets the token. It stays valid at GitHub until the user revokes it there, which Settings says */
+  | { type: 'github.SIGN_OUT' }
+
+export type OutgoingGitHubEvents =
+  | { type: 'github.ACCOUNT'; account: GitHubAccount | null }
+  /** The code to type at `verificationUri`, for the window that asked to sign in */
+  | { type: 'github.SIGN_IN_CODE'; userCode: string; verificationUri: string; expiresAt: number }
+  | { type: 'github.SIGN_IN_FAILED'; reason: GitHubSignInFailure; message: string }
+  /** News for every window: the account the app is signed in as changed, or it signed out (`null`) */
+  | { type: 'github.ACCOUNT_CHANGED'; account: GitHubAccount | null }
+
 // ── The system's own ─────────────────────────────────────────────────────────────────────────────
 
 export type IncomingCodeEvents =
@@ -397,6 +416,7 @@ export type IncomingCodeEvents =
   | IncomingTerminalEvents
   | IncomingActionsEvents
   | IncomingPromptsEvents
+  | IncomingGitHubEvents
   | { type: 'SET_BASE_DIRECTORY'; path: string; fromUserNavigation?: boolean; fromPicker?: boolean }
   /** The repositories under the folder the user opened: its own, nested ones, submodules and linked worktrees */
   | { type: 'LIST_REPOSITORIES' }
@@ -426,6 +446,7 @@ export type OutgoingCodeEvents =
   | OutgoingTerminalEvents
   | OutgoingActionsEvents
   | OutgoingPromptsEvents
+  | OutgoingGitHubEvents
   // Broadcast events (sent to all child systems)
   | { type: 'CODE_STARTED'; data: CodeConnectedData }
   /**

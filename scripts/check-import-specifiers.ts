@@ -682,6 +682,7 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
   'packages/apack-host/src/packs/github.ts': "a fetch from GitHub's API: network, which no CPU reading describes",
   'packages/apack-host/src/packs/installer.ts': 'a pack download: network, which no CPU reading describes',
   'packages/default-setup/src/features/code/be/services/gh-cli.ts': "`gh` waits on GitHub's API: network, which no CPU reading describes",
+  'packages/default-setup/src/features/code/be/services/github.ts': "a request to GitHub's sign-in or API: network, which no CPU reading describes",
   'packages/default-setup/src/features/code/be/services/codex/app-server.ts':
     "a request to the codex app-server waits on the model's API, during which the server is idle by design",
   // The native loader queries run before admission has verified the process, so they may load nothing into it. A
