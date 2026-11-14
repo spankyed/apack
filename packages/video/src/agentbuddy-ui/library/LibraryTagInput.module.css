@@ -1,0 +1,56 @@
+.LibraryTagInput_root {
+  width: 100%;
+}
+
+.LibraryTagInput_trigger {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+  padding: 8px 12px;
+  transition: border-color 200ms ease;
+}
+
+.LibraryTagInput_trigger:hover,
+.LibraryTagInput_trigger:focus-within {
+  border-color: rgb(82 82 82);
+}
+
+.LibraryTagInput_tags {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.LibraryTagInput_selectedTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.LibraryTagInput_input {
+  flex: 1;
+  min-width: 120px;
+  color: rgb(82 82 82);
+  font-size: 14px;
+  line-height: 1.25;
+  padding: 2px 4px;
+}
+
+.LibraryTagInput_chevron {
+  flex-shrink: 0;
+  color: rgb(115 115 115);
+}

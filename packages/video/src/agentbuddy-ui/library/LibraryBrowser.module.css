@@ -1,0 +1,255 @@
+.LibraryBrowser_root {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background: rgb(23 23 23);
+  color: rgb(245 245 245);
+  outline: none;
+}
+
+.LibraryBrowser_toolbar {
+  border-bottom: 1px solid rgb(38 38 38);
+  padding: 12px 24px 12px 12px;
+}
+
+.LibraryBrowser_navigationRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.LibraryBrowser_breadcrumbGroup {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+}
+
+.LibraryBrowser_backButton,
+.LibraryBrowser_homeButton,
+.LibraryBrowser_crumbButton {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(115 115 115);
+  font: inherit;
+  transition: background-color 150ms ease, color 150ms ease, transform 80ms ease;
+}
+
+.LibraryBrowser_backButton {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+}
+
+.LibraryBrowser_backButton:not([data-disabled='true']):hover,
+.LibraryBrowser_homeButton:hover,
+.LibraryBrowser_crumbButton:hover {
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+}
+
+.LibraryBrowser_backButton[data-disabled='true'] {
+  color: rgb(64 64 64);
+}
+
+.LibraryBrowser_homeButton {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+}
+
+.LibraryBrowser_homeButton[data-active='true'],
+.LibraryBrowser_crumbButton[data-active='true'] {
+  color: rgb(229 229 229);
+  font-weight: 500;
+}
+
+.LibraryBrowser_breadcrumbs,
+.LibraryBrowser_crumbGroup {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 2px;
+}
+
+.LibraryBrowser_breadcrumbs {
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.LibraryBrowser_slash {
+  margin: 0 2px;
+  color: rgb(82 82 82);
+  font-size: 12px;
+}
+
+.LibraryBrowser_crumbButton {
+  max-width: 160px;
+  overflow: hidden;
+  padding: 2px 6px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.LibraryBrowser_actions {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.LibraryBrowser_selectionCount {
+  margin-right: 4px;
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.LibraryBrowser_divider {
+  width: 1px;
+  height: 20px;
+  margin-left: 4px;
+  background: rgb(64 64 64);
+}
+
+.LibraryBrowser_splitButton {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid rgb(82 82 82);
+  border-radius: 6px;
+  background: rgb(64 64 64);
+  transition: border-color 150ms ease;
+}
+
+.LibraryBrowser_splitMain,
+.LibraryBrowser_splitChevron {
+  display: inline-flex;
+  height: 100%;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: rgb(229 229 229);
+  font: inherit;
+  font-size: 14px;
+}
+
+.LibraryBrowser_splitMain {
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.LibraryBrowser_splitChevron {
+  justify-content: center;
+  border-left: 1px solid rgb(82 82 82);
+  color: rgb(163 163 163);
+  padding: 0 4px;
+}
+
+.LibraryBrowser_splitMain:hover,
+.LibraryBrowser_splitChevron:hover {
+  background: rgb(82 82 82);
+  color: rgb(245 245 245);
+}
+
+.LibraryBrowser_symlinkBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.LibraryBrowser_symlinkPopover {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  box-shadow: 0 10px 15px rgb(0 0 0 / 30%);
+  padding: 12px;
+}
+
+.LibraryBrowser_symlinkInput {
+  width: 384px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  color: rgb(245 245 245);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  padding: 6px 12px;
+}
+
+.LibraryBrowser_symlinkInput::placeholder {
+  color: rgb(82 82 82);
+}
+
+.LibraryBrowser_symlinkClose {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 4px;
+}
+
+.LibraryBrowser_symlinkClose:hover {
+  color: rgb(229 229 229);
+}
+
+.LibraryBrowser_tableScroller {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+}
+
+.LibraryBrowser_table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+}
+
+.LibraryBrowser_thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgb(23 23 23);
+  box-shadow: inset 0 -1px 0 0 rgb(38 38 38);
+}
+
+.LibraryBrowser_emptyCell {
+  height: 256px;
+}
+
+.LibraryBrowser_emptyState {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: rgb(82 82 82);
+  text-align: center;
+}
+
+.LibraryBrowser_emptyState p {
+  margin: 12px 0 0;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.LibraryBrowser_emptyRow td {
+  padding: 12px 24px;
+}

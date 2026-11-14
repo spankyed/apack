@@ -1,0 +1,70 @@
+.ColorPicker_root {
+  position: relative;
+  display: inline-block;
+}
+
+.ColorPicker_trigger {
+  display: block;
+  width: 32px;
+  height: 32px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  padding: 0;
+  transition: border-color 150ms ease;
+}
+
+.ColorPicker_trigger:hover {
+  border-color: rgb(82 82 82);
+}
+
+.ColorPicker_palette {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  display: grid;
+  width: max-content;
+  grid-template-columns: repeat(5, 28px);
+  gap: 4px;
+  margin-top: 8px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  padding: 8px;
+}
+
+.ColorPicker_swatch {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 4px;
+  padding: 0;
+  transition: transform 150ms ease;
+}
+
+.ColorPicker_swatch:hover {
+  transform: scale(1.1);
+}
+
+.ColorPicker_clear {
+  display: flex;
+  grid-column: span 5;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 4px 0;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.ColorPicker_clear:hover {
+  background: rgb(64 64 64);
+  color: white;
+}

@@ -1,0 +1,132 @@
+.BrokenSymlinkView_root {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.BrokenSymlinkView_card {
+  width: 100%;
+  max-width: 384px;
+  overflow: hidden;
+  border: 1px solid rgb(64 64 64 / 60%);
+  border-radius: 8px;
+  background: rgb(38 38 38 / 40%);
+}
+
+.BrokenSymlinkView_header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 16px 12px;
+}
+
+.BrokenSymlinkView_iconWrap {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+  border-radius: 999px;
+  background: rgb(245 158 11 / 10%);
+  color: rgb(245 158 11);
+}
+
+.BrokenSymlinkView_headerCopy {
+  min-width: 0;
+}
+
+.BrokenSymlinkView_headerCopy h3,
+.BrokenSymlinkView_headerCopy p,
+.BrokenSymlinkView_pathBox p {
+  margin: 0;
+}
+
+.BrokenSymlinkView_headerCopy h3 {
+  color: rgb(229 229 229);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.BrokenSymlinkView_headerCopy p {
+  margin-top: 2px;
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.BrokenSymlinkView_pathBox {
+  margin: 0 16px;
+  border: 1px solid rgb(64 64 64 / 40%);
+  border-radius: 6px;
+  background: rgb(23 23 23 / 50%);
+  padding: 8px 12px;
+}
+
+.BrokenSymlinkView_pathBox p {
+  margin-bottom: 2px;
+  color: rgb(115 115 115);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.BrokenSymlinkView_pathBox code {
+  color: rgb(163 163 163);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.BrokenSymlinkView_relink {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+
+.BrokenSymlinkView_inputRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.BrokenSymlinkView_input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(23 23 23 / 60%);
+  color: rgb(245 245 245);
+  font-size: 14px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.BrokenSymlinkView_input::placeholder {
+  color: rgb(82 82 82);
+}
+
+.BrokenSymlinkView_actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.BrokenSymlinkView_remove {
+  border: 0;
+  background: transparent;
+  color: rgb(115 115 115);
+  font: inherit;
+  font-size: 12px;
+  transition: color 150ms ease;
+}
+
+.BrokenSymlinkView_remove:hover {
+  color: rgb(248 113 113);
+}

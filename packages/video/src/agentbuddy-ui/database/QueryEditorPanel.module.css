@@ -1,0 +1,89 @@
+.DatabaseQueryEditorPanel_root {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  border-right: 1px solid rgb(38 38 38);
+}
+
+.DatabaseQueryEditorPanel_aiPrompt {
+  overflow: hidden;
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(38 38 38);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+}
+
+.DatabaseQueryEditorPanel_aiPrompt textarea {
+  flex: 1;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: rgb(245 245 245);
+  font-size: 14px;
+  line-height: 20px;
+  outline: none;
+}
+
+.DatabaseQueryEditorPanel_aiPrompt textarea::placeholder {
+  color: rgb(115 115 115);
+}
+
+.DatabaseQueryEditorPanel_aiPrompt button {
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 4px;
+  background: rgb(245 158 11 / 20%);
+  color: rgb(251 191 36);
+  margin-top: 2px;
+  padding: 2px 8px;
+  font-size: 12px;
+  transition: background-color 160ms ease;
+}
+
+.DatabaseQueryEditorPanel_aiPrompt button:hover {
+  background: rgb(245 158 11 / 30%);
+}
+
+.DatabaseQueryEditorPanel_editorRegion {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.DatabaseQueryEditorPanel_loadingOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(23 23 23 / 80%);
+  backdrop-filter: blur(4px);
+}
+
+.DatabaseQueryEditorPanel_loadingBody {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: rgb(212 212 212);
+  font-size: 14px;
+}
+
+.DatabaseQueryEditorPanel_spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid rgb(245 158 11);
+  border-top-color: transparent;
+  border-radius: 999px;
+  animation: DatabaseQueryEditorPanel_spin 900ms linear infinite;
+}
+
+@keyframes DatabaseQueryEditorPanel_spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

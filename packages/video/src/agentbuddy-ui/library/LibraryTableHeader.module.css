@@ -1,0 +1,43 @@
+.LibraryTableHeader_root {
+  cursor: pointer;
+  padding: 8px 24px;
+  text-align: left;
+  color: rgb(115 115 115);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.LibraryTableHeader_root:hover {
+  color: rgb(212 212 212);
+}
+
+.LibraryTableHeader_root:first-child {
+  padding-left: 24px;
+}
+
+.LibraryTableHeader_name {
+  width: 60%;
+}
+
+.LibraryTableHeader_modified {
+  width: 18%;
+}
+
+.LibraryTableHeader_size {
+  width: 10%;
+}
+
+.LibraryTableHeader_kind {
+  width: 12%;
+}
+
+.LibraryTableHeader_inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.LibraryTableHeader_inactiveIcon {
+  opacity: 0.5;
+}

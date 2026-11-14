@@ -1,0 +1,64 @@
+.ThinkingBlock_root {
+  overflow: hidden;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.5rem;
+  background: rgb(38 38 38 / 40%);
+}
+
+.ThinkingBlock_header {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 0.5rem;
+  border: 0;
+  background: transparent;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  transition: background-color 150ms ease;
+}
+
+.ThinkingBlock_header:hover {
+  background: rgb(64 64 64 / 40%);
+}
+
+.ThinkingBlock_chevron,
+.ThinkingBlock_brain {
+  align-self: center;
+  flex-shrink: 0;
+  color: rgb(163 163 163);
+  transition: transform 150ms ease;
+}
+
+.ThinkingBlock_chevronOpen {
+  align-self: center;
+  flex-shrink: 0;
+  color: rgb(163 163 163);
+  transform: rotate(90deg);
+  transition: transform 150ms ease;
+}
+
+.ThinkingBlock_label {
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(229 229 229);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ThinkingBlock_content {
+  max-height: 20rem;
+  overflow-y: auto;
+  border-top: 1px solid rgb(64 64 64);
+  padding: 0.5rem 0.75rem;
+}
+
+.ThinkingBlock_content pre {
+  color: rgb(163 163 163);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.625;
+  margin: 0;
+  white-space: pre-wrap;
+}

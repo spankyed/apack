@@ -1,0 +1,48 @@
+.ActionsCollapsibleSection_root {
+  width: 100%;
+}
+
+.ActionsCollapsibleSection_header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+}
+
+.ActionsCollapsibleSection_trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+}
+
+.ActionsCollapsibleSection_trigger label {
+  cursor: pointer;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ActionsCollapsibleSection_chevron {
+  color: rgb(115 115 115);
+  transition: transform 200ms ease;
+}
+
+.ActionsCollapsibleSection_chevronOpen {
+  transform: rotate(90deg);
+}
+
+.ActionsCollapsibleSection_headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.ActionsCollapsibleSection_content {
+  margin: 12px 24px 16px;
+}

@@ -1,0 +1,58 @@
+.ThreadChatCanvas_root {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgb(28 28 28);
+}
+
+.ThreadChatCanvas_messagesWrapper {
+  position: relative;
+  min-height: 0;
+  flex-grow: 1;
+  overflow: hidden;
+}
+
+.ThreadChatCanvas_messagesWrapper::after {
+  content: "";
+  position: absolute;
+  right: 15px;
+  bottom: 0;
+  left: 0;
+  z-index: 5;
+  height: 40px;
+  background: linear-gradient(to bottom, transparent, rgb(28 28 28));
+  pointer-events: none;
+}
+
+.ThreadChatCanvas_messagesScroller {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ThreadChatCanvas_messagesScroller::-webkit-scrollbar {
+  display: none;
+}
+
+.ThreadChatCanvas_messagesContent {
+  width: 75%;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0.5rem 0 12rem;
+}
+
+/* Scrolled-to-bottom: pin the content block to the bottom of the scroller so
+ * the latest message (e.g. a queued bubble) stays above the composer; taller-
+ * than-viewport content overflows off the top (clipped) like a real scroll. */
+.ThreadChatCanvas_messagesContentBottom {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}

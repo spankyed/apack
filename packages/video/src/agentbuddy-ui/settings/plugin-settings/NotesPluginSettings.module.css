@@ -1,0 +1,198 @@
+.NotesPluginSettings_root {
+  max-width: 768px;
+}
+
+.NotesPluginSettings_copy {
+  margin: 0 0 16px;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.NotesPluginSettings_stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.NotesPluginSettings_row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.NotesPluginSettings_label {
+  min-width: 120px;
+  color: rgb(212 212 212);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.NotesPluginSettings_segmented {
+  display: flex;
+  gap: 4px;
+}
+
+.NotesPluginSettings_segment {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(163 163 163);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 12px;
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+.NotesPluginSettings_segment[data-active='true'] {
+  border-color: transparent;
+  background: rgb(37 99 235);
+  color: white;
+}
+
+.NotesPluginSettings_segment:not([data-active='true']):hover {
+  background: rgb(64 64 64);
+  color: rgb(212 212 212);
+}
+
+.NotesPluginSettings_formatToggle {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  padding: 4px;
+}
+
+.NotesPluginSettings_formatButton {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(163 163 163);
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.NotesPluginSettings_formatButton[data-active='true'] {
+  background: rgb(64 64 64);
+  color: white;
+  font-weight: 500;
+}
+
+.NotesPluginSettings_formatButton:not([data-active='true']):hover {
+  color: rgb(212 212 212);
+}
+
+.NotesPluginSettings_directoryRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.NotesPluginSettings_directoryInput {
+  flex: 1;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: white;
+  font-size: 14px;
+  outline: none;
+  padding: 8px 12px;
+}
+
+.NotesPluginSettings_directoryInput::placeholder {
+  color: rgb(82 82 82);
+}
+
+.NotesPluginSettings_secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.NotesPluginSettings_secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.NotesPluginSettings_secondaryButton:not(:disabled):hover {
+  border-color: rgb(82 82 82);
+  background: rgb(64 64 64);
+  color: white;
+}
+
+.NotesPluginSettings_statusCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.NotesPluginSettings_statusCard[data-tone="success"] {
+  border-color: rgb(4 120 87 / 50%);
+  background: rgb(6 78 59 / 20%);
+}
+
+.NotesPluginSettings_statusCard[data-tone="error"] {
+  border-color: rgb(185 28 28 / 50%);
+  background: rgb(127 29 29 / 20%);
+}
+
+.NotesPluginSettings_statusIcon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.NotesPluginSettings_statusCard[data-tone="success"] .NotesPluginSettings_statusIcon {
+  color: rgb(16 185 129);
+}
+
+.NotesPluginSettings_statusCard[data-tone="error"] .NotesPluginSettings_statusIcon {
+  color: rgb(239 68 68);
+}
+
+.NotesPluginSettings_statusBody {
+  flex: 1;
+}
+
+.NotesPluginSettings_statusTitle {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.NotesPluginSettings_statusCard[data-tone="success"] .NotesPluginSettings_statusTitle {
+  color: rgb(52 211 153);
+}
+
+.NotesPluginSettings_statusCard[data-tone="error"] .NotesPluginSettings_statusTitle {
+  color: rgb(248 113 113);
+}
+
+.NotesPluginSettings_statusCopy,
+.NotesPluginSettings_statusList {
+  color: rgb(163 163 163);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.NotesPluginSettings_statusList {
+  list-style: disc;
+  padding-left: 18px;
+}

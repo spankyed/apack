@@ -1,0 +1,112 @@
+.RevertHistoryPopup_root {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 9999;
+  min-width: 300px;
+  max-width: min(520px, 100%);
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid rgb(55 55 60);
+  border-radius: 8px;
+  background: rgb(30 30 30);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 45%), 0 2px 6px rgb(0 0 0 / 30%);
+  padding: 6px;
+}
+
+.RevertHistoryPopup_item,
+.RevertHistoryPopup_itemSelected,
+.RevertHistoryPopup_itemDisabled {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow: hidden;
+  border-radius: 4px;
+  color: rgb(212 212 212);
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  padding: 7px 12px;
+  white-space: nowrap;
+}
+
+.RevertHistoryPopup_item:hover {
+  background: rgb(40 40 40);
+}
+
+.RevertHistoryPopup_itemSelected {
+  background: rgb(45 45 50);
+  box-shadow: inset 2px 0 0 rgb(120 120 140);
+  color: rgb(245 245 245);
+}
+
+.RevertHistoryPopup_itemDisabled {
+  color: rgb(110 110 115);
+  cursor: not-allowed;
+}
+
+.RevertHistoryPopup_itemDisabled:hover {
+  background: transparent;
+}
+
+.RevertHistoryPopup_itemDisabled.RevertHistoryPopup_itemSelected {
+  background: rgb(35 35 40);
+  box-shadow: none;
+}
+
+.RevertHistoryPopup_time {
+  min-width: 3.2em;
+  flex-shrink: 0;
+  color: rgb(130 130 135);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.RevertHistoryPopup_snippet {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.RevertHistoryPopup_caret {
+  flex-shrink: 0;
+  color: rgb(150 150 150);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.RevertHistoryPopup_item:hover .RevertHistoryPopup_caret,
+.RevertHistoryPopup_itemSelected .RevertHistoryPopup_caret {
+  opacity: 1;
+}
+
+.RevertHistoryPopup_icon {
+  flex-shrink: 0;
+  color: rgb(163 163 163);
+}
+
+.RevertHistoryPopup_itemDisabled .RevertHistoryPopup_icon {
+  color: rgb(90 90 95);
+}
+
+.RevertHistoryPopup_hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: rgb(125 125 125);
+  font-size: 0.7rem;
+  line-height: 1.2;
+  margin-top: 4px;
+  padding: 6px 12px 2px;
+}
+
+.RevertHistoryPopup_hintKey {
+  color: rgb(180 180 180);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  margin-right: 2px;
+}
+
+.RevertHistoryPopup_hintSep {
+  color: rgb(85 85 85);
+  margin: 0 6px;
+}

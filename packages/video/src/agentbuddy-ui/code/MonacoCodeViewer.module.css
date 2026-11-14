@@ -1,0 +1,56 @@
+.MonacoCodeViewer_root {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: rgb(23 23 23);
+}
+
+.MonacoCodeViewer_editor {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.MonacoCodeViewer_root .monaco-editor,
+.MonacoCodeViewer_root .monaco-diff-editor {
+  --vscode-editor-background: rgb(23 23 23);
+}
+
+.MonacoCodeViewer_root .monaco-editor .line-delete {
+  background-color: rgb(248 81 73 / 10%) !important;
+}
+
+.MonacoCodeViewer_root .monaco-editor .char-delete {
+  background-color: rgb(248 81 73 / 22%) !important;
+}
+
+.MonacoCodeViewer_root .monaco-editor .line-insert {
+  background-color: rgb(63 185 80 / 10%) !important;
+}
+
+.MonacoCodeViewer_root .monaco-editor .char-insert {
+  background-color: rgb(63 185 80 / 22%) !important;
+}
+
+.MonacoCodeViewer_root .monaco-editor .view-lines > .view-line {
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+.MonacoCodeViewer_placeholder {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  color: rgb(115 115 115);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  overflow: hidden;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.MonacoCodeViewer_placeholderVisible {
+  z-index: 2;
+  pointer-events: none;
+}

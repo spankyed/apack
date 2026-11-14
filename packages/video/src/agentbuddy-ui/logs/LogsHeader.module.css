@@ -1,0 +1,245 @@
+.LogsHeader_root {
+  border-bottom: 1px solid rgb(38 38 38);
+}
+
+.LogsHeader_row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px;
+}
+
+.LogsHeader_left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.LogsHeader_searchBox {
+  position: relative;
+  width: 384px;
+}
+
+.LogsHeader_searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  color: rgb(115 115 115);
+  transform: translateY(-50%);
+}
+
+.LogsHeader_searchBox input {
+  width: 100%;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(23 23 23);
+  color: rgb(245 245 245);
+  padding: 8px 12px 8px 40px;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 160ms ease;
+}
+
+.LogsHeader_searchBox[data-has-search="true"] input {
+  border-color: rgb(82 82 82);
+}
+
+.LogsHeader_searchBox:not([data-has-search="true"]) input:focus {
+  border-color: rgb(82 82 82);
+}
+
+.LogsHeader_searchBox input::placeholder {
+  color: rgb(115 115 115);
+}
+
+.LogsHeader_clearSearch {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  border: 0;
+  background: transparent;
+  color: rgb(115 115 115);
+  padding: 4px;
+  transition: color 160ms ease;
+  transform: translateY(-50%);
+}
+
+.LogsHeader_clearSearch:hover {
+  color: rgb(212 212 212);
+}
+
+.LogsHeader_levelPills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+  background: rgb(23 23 23);
+  padding: 4px 12px;
+}
+
+.LogsHeader_allPill,
+.LogsHeader_levelPill {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 4px 12px;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.LogsHeader_allPill:hover {
+  color: rgb(229 229 229);
+}
+
+.LogsHeader_allPill {
+  color: rgb(163 163 163);
+}
+
+.LogsHeader_allPill span {
+  margin-left: 4px;
+  opacity: 0.6;
+}
+
+.LogsHeader_allActive {
+  background: rgb(38 38 38);
+  color: rgb(245 245 245);
+}
+
+.LogsHeader_levelPill {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.LogsHeader_debug {
+  color: rgb(115 115 115);
+}
+
+.LogsHeader_debug:hover {
+  color: rgb(212 212 212);
+}
+
+.LogsHeader_info {
+  color: rgb(96 165 250 / 60%);
+}
+
+.LogsHeader_info:hover {
+  color: rgb(96 165 250);
+}
+
+.LogsHeader_warn {
+  color: rgb(250 204 21 / 60%);
+}
+
+.LogsHeader_warn:hover {
+  color: rgb(250 204 21);
+}
+
+.LogsHeader_error {
+  color: rgb(248 113 113 / 60%);
+}
+
+.LogsHeader_error:hover {
+  color: rgb(248 113 113);
+}
+
+.LogsHeader_debugActive {
+  background: rgb(64 64 64);
+  color: rgb(245 245 245);
+}
+
+.LogsHeader_infoActive {
+  background: rgb(59 130 246 / 20%);
+  color: rgb(96 165 250);
+}
+
+.LogsHeader_warnActive {
+  background: rgb(234 179 8 / 20%);
+  color: rgb(250 204 21);
+}
+
+.LogsHeader_errorActive {
+  background: rgb(239 68 68 / 20%);
+  color: rgb(248 113 113);
+}
+
+.LogsHeader_appEvents {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(115 115 115);
+  padding: 4px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.LogsHeader_appEvents:hover {
+  color: rgb(212 212 212);
+}
+
+.LogsHeader_appEventsActive {
+  background: rgb(38 38 38);
+  color: rgb(245 245 245);
+}
+
+.LogsHeader_appEventsActive:hover {
+  color: rgb(245 245 245);
+}
+
+.LogsHeader_excludedSources {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgb(180 83 9 / 30%);
+  border-radius: 8px;
+  background: rgb(120 53 15 / 20%);
+  color: rgb(251 191 36);
+  padding: 6px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.LogsHeader_excludedSources:hover {
+  background: rgb(120 53 15 / 30%);
+}
+
+.LogsHeader_actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.LogsHeader_copyButton,
+.LogsHeader_clearButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 160ms ease;
+}
+
+.LogsHeader_copied {
+  color: rgb(74 222 128);
+}
+
+.LogsHeader_copyButton:hover,
+.LogsHeader_clearButton:hover {
+  color: rgb(229 229 229);
+}
+
+.LogsHeader_copyButton.LogsHeader_copied:hover {
+  color: rgb(74 222 128);
+}

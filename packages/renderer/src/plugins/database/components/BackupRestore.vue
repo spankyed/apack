@@ -85,7 +85,7 @@
                     <input
                       v-model="exportPath"
                       type="text"
-                      placeholder="/Users/spankyed/Documents/AgentBuddy Backups"
+                      placeholder="Select backup directory"
                       class="w-full pl-10 pr-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-sm text-white placeholder-neutral-600 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500/50 transition-all"
                     />
                   </div>

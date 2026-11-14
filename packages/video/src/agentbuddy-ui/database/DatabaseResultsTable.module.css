@@ -1,0 +1,36 @@
+.DatabaseResultsTable_root {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgb(38 38 38 / 20%);
+}
+
+.DatabaseResultsTable_tableContainer {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  scrollbar-color: rgb(155 155 155 / 30%) transparent;
+  scrollbar-width: thin;
+}
+
+.DatabaseResultsTable_tableContainer::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.DatabaseResultsTable_tableContainer::-webkit-scrollbar-track,
+.DatabaseResultsTable_tableContainer::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+
+.DatabaseResultsTable_tableContainer::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 6px;
+  background-clip: content-box;
+  background-color: rgb(155 155 155 / 30%);
+}
+
+.DatabaseResultsTable_tableContainer::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(155 155 155 / 50%);
+}

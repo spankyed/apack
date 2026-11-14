@@ -1,0 +1,87 @@
+.PullRequestPanel_root {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgb(23 23 23);
+}
+
+.PullRequestPanel_topRow {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(38 38 38 / 50%);
+  padding: 0.5rem 1rem;
+}
+
+.PullRequestPanel_publishButton,
+.PullRequestPanel_createButton,
+.PullRequestPanel_viewButton {
+  display: inline-flex;
+  height: 28px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  border: 0;
+  border-radius: 0.25rem;
+  color: white;
+  font-size: 14px;
+  padding: 0 0.5rem;
+}
+
+.PullRequestPanel_publishButton {
+  background: rgb(37 99 235 / 80%);
+}
+
+.PullRequestPanel_publishButton[data-pressed="true"],
+.PullRequestPanel_createButton[data-pressed="true"] {
+  filter: brightness(0.88);
+  transform: translateY(1px) scale(0.98);
+}
+
+.PullRequestPanel_createButton {
+  background: rgb(22 163 74 / 80%);
+}
+
+.PullRequestPanel_viewButton {
+  background: transparent;
+  color: rgb(115 115 115);
+}
+
+.PullRequestPanel_viewButton:hover {
+  background: rgb(64 64 64 / 50%);
+  color: rgb(229 229 229);
+}
+
+.PullRequestPanel_backRow {
+  display: flex;
+  height: 42px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(38 38 38 / 50%);
+  color: rgb(115 115 115);
+  font-size: 14px;
+  padding: 0 0.75rem;
+  text-align: left;
+}
+
+.PullRequestPanel_backRow span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.PullRequestPanel_spinner {
+  animation: PullRequestPanel_spin 900ms linear infinite;
+}
+
+@keyframes PullRequestPanel_spin {
+  to { transform: rotate(360deg); }
+}

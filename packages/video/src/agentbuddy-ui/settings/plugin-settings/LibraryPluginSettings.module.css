@@ -1,0 +1,228 @@
+.LibraryPluginSettings_root {
+  max-width: 768px;
+}
+
+.LibraryPluginSettings_copy {
+  margin: 0 0 16px;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.LibraryPluginSettings_stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.LibraryPluginSettings_tagGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.LibraryPluginSettings_stack > .LibraryPluginSettings_secondaryButton {
+  align-self: flex-start;
+}
+
+.LibraryPluginSettings_tagRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.LibraryPluginSettings_input,
+.LibraryPluginSettings_directoryInput {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: white;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.LibraryPluginSettings_input {
+  flex: 1;
+  padding: 8px 12px;
+}
+
+.LibraryPluginSettings_directoryInput {
+  flex: 1;
+  padding: 8px 12px;
+}
+
+.LibraryPluginSettings_input::placeholder,
+.LibraryPluginSettings_directoryInput::placeholder {
+  color: rgb(82 82 82);
+}
+
+.LibraryPluginSettings_input:hover {
+  border-color: rgb(82 82 82);
+}
+
+.LibraryPluginSettings_input:focus {
+  border-color: rgb(59 130 246 / 50%);
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 20%);
+}
+
+.LibraryPluginSettings_iconButton,
+.LibraryPluginSettings_secondaryButton,
+.LibraryPluginSettings_addButton,
+.LibraryPluginSettings_segmentButton {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  font: inherit;
+}
+
+.LibraryPluginSettings_iconButton,
+.LibraryPluginSettings_secondaryButton {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+  font-size: 14px;
+}
+
+.LibraryPluginSettings_iconButton {
+  padding: 8px 12px;
+  color: rgb(163 163 163);
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.LibraryPluginSettings_iconButton:not(:disabled):hover {
+  border-color: rgb(239 68 68 / 50%);
+  color: rgb(248 113 113);
+}
+
+.LibraryPluginSettings_secondaryButton {
+  gap: 8px;
+  padding: 8px 16px;
+  font-weight: 500;
+  transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.LibraryPluginSettings_secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.LibraryPluginSettings_secondaryButton:not(:disabled):hover {
+  border-color: rgb(82 82 82);
+  background: rgb(64 64 64);
+  color: white;
+}
+
+.LibraryPluginSettings_addButton {
+  align-self: flex-start;
+  gap: 6px;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 6px 12px;
+  font-size: 14px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.LibraryPluginSettings_addButton:hover {
+  background: rgb(38 38 38 / 50%);
+  color: white;
+}
+
+.LibraryPluginSettings_segmentedControl {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  padding: 4px;
+}
+
+.LibraryPluginSettings_segmentButton {
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 6px 12px;
+  font-size: 14px;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.LibraryPluginSettings_segmentButton:not([data-active='true']):hover {
+  color: rgb(212 212 212);
+}
+
+.LibraryPluginSettings_segmentButton[data-active='true'] {
+  background: rgb(64 64 64);
+  color: white;
+  font-weight: 500;
+}
+
+.LibraryPluginSettings_directoryRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.LibraryPluginSettings_statusCard {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.LibraryPluginSettings_statusCard[data-tone="success"] {
+  border-color: rgb(4 120 87 / 50%);
+  background: rgb(6 78 59 / 20%);
+}
+
+.LibraryPluginSettings_statusCard[data-tone="error"] {
+  border-color: rgb(185 28 28 / 50%);
+  background: rgb(127 29 29 / 20%);
+}
+
+.LibraryPluginSettings_statusIcon {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.LibraryPluginSettings_statusCard[data-tone="success"] .LibraryPluginSettings_statusIcon {
+  color: rgb(16 185 129);
+}
+
+.LibraryPluginSettings_statusCard[data-tone="error"] .LibraryPluginSettings_statusIcon {
+  color: rgb(239 68 68);
+}
+
+.LibraryPluginSettings_statusBody {
+  flex: 1;
+}
+
+.LibraryPluginSettings_statusTitle {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.LibraryPluginSettings_statusCard[data-tone="success"] .LibraryPluginSettings_statusTitle {
+  color: rgb(52 211 153);
+}
+
+.LibraryPluginSettings_statusCard[data-tone="error"] .LibraryPluginSettings_statusTitle {
+  color: rgb(248 113 113);
+}
+
+.LibraryPluginSettings_statusCopy,
+.LibraryPluginSettings_statusList {
+  color: rgb(163 163 163);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.LibraryPluginSettings_statusList {
+  list-style: disc;
+  padding-left: 18px;
+}

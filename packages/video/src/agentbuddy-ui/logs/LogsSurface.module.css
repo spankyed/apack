@@ -1,0 +1,74 @@
+.LogsSurface_root {
+  position: relative;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background: rgb(23 23 23);
+}
+
+.LogsSurface_content {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.LogsSurface_empty {
+  display: flex;
+  min-height: 400px;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  text-align: center;
+}
+
+.LogsSurface_emptyIcon {
+  display: inline-flex;
+  width: 64px;
+  height: 64px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  border-radius: 999px;
+  background: rgb(38 38 38);
+  color: rgb(115 115 115);
+}
+
+.LogsSurface_empty h3 {
+  margin: 0 0 8px;
+  color: rgb(212 212 212);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.LogsSurface_empty p {
+  max-width: 384px;
+  margin: 0;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.LogsSurface_empty button {
+  margin-top: 16px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 160ms ease;
+}
+
+.LogsSurface_empty button:hover {
+  background: rgb(64 64 64);
+}
+
+.LogsSurface_more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgb(115 115 115);
+  padding: 12px 0;
+  font-size: 14px;
+}

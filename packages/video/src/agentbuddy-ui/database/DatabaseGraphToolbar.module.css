@@ -1,0 +1,146 @@
+.DatabaseGraphToolbar_root {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgb(64 64 64);
+  background: rgb(38 38 38);
+  padding: 10px 16px;
+}
+
+.DatabaseGraphToolbar_left,
+.DatabaseGraphToolbar_controls,
+.DatabaseGraphToolbar_viewControls,
+.DatabaseGraphToolbar_stat,
+.DatabaseGraphToolbar_stats {
+  display: flex;
+  align-items: center;
+}
+
+.DatabaseGraphToolbar_left {
+  gap: 12px;
+}
+
+.DatabaseGraphToolbar_layoutSelector {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  padding: 4px;
+}
+
+.DatabaseGraphToolbar_layoutButton {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.DatabaseGraphToolbar_layoutButton:hover {
+  color: rgb(245 245 245);
+}
+
+.DatabaseGraphToolbar_layoutButtonActive {
+  background: rgb(64 64 64);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
+  color: rgb(245 245 245);
+}
+
+.DatabaseGraphToolbar_layoutButton[data-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.DatabaseGraphToolbar_stats {
+  gap: 12px;
+  border-radius: 6px;
+  background: rgb(64 64 64);
+  padding: 6px 12px;
+}
+
+.DatabaseGraphToolbar_stat {
+  gap: 6px;
+  font-size: 12px;
+}
+
+.DatabaseGraphToolbar_dotBlue,
+.DatabaseGraphToolbar_dotNeutral {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.DatabaseGraphToolbar_dotBlue {
+  background: rgb(59 130 246);
+}
+
+.DatabaseGraphToolbar_dotNeutral {
+  background: rgb(163 163 163);
+}
+
+.DatabaseGraphToolbar_statCount {
+  color: rgb(229 229 229);
+  font-weight: 500;
+}
+
+.DatabaseGraphToolbar_statLabel {
+  color: rgb(163 163 163);
+}
+
+.DatabaseGraphToolbar_statsDivider,
+.DatabaseGraphToolbar_controlDivider {
+  width: 1px;
+  height: 16px;
+  background: rgb(64 64 64);
+}
+
+.DatabaseGraphToolbar_viewControls {
+  border-radius: 6px;
+  background: rgb(64 64 64);
+  padding: 2px;
+}
+
+.DatabaseGraphToolbar_iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 6px;
+  transition: background-color 160ms ease, color 160ms ease, opacity 160ms ease;
+}
+
+.DatabaseGraphToolbar_iconButton:hover {
+  background: rgb(82 82 82);
+  color: rgb(245 245 245);
+}
+
+.DatabaseGraphToolbar_iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.DatabaseGraphToolbar_iconButtonActive {
+  background: rgb(82 82 82);
+  color: rgb(245 245 245);
+}
+
+.DatabaseGraphToolbar_zoomLabel {
+  min-width: 56px;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  user-select: none;
+}
+
+.DatabaseGraphToolbar_controlDivider {
+  margin: 0 2px;
+  height: 20px;
+}

@@ -1,0 +1,172 @@
+.LogsPluginSettings_root {
+  max-width: 768px;
+}
+
+.LogsPluginSettings_row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.LogsPluginSettings_text {
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.LogsPluginSettings_number {
+  width: 80px;
+  border: 1px solid rgb(64 64 64 / 30%);
+  border-radius: 4px;
+  background: rgb(38 38 38 / 50%);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  padding: 4px 8px;
+  text-align: center;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.LogsPluginSettings_number:focus,
+.LogsPluginSettings_input:focus {
+  border-color: rgb(82 82 82);
+  outline: none;
+}
+
+.LogsPluginSettings_small {
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.LogsPluginSettings_range {
+  display: block;
+  width: 100%;
+  accent-color: rgb(96 165 250);
+}
+
+.LogsPluginSettings_ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.LogsPluginSettings_ticks button {
+  border: 0;
+  background: transparent;
+  color: rgb(82 82 82);
+  font: inherit;
+  font-size: 12px;
+  padding: 0;
+  transition: color 150ms ease;
+}
+
+.LogsPluginSettings_ticks button:hover {
+  color: rgb(163 163 163);
+}
+
+.LogsPluginSettings_copy {
+  color: rgb(115 115 115);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+.LogsPluginSettings_exclusionList {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.LogsPluginSettings_exclusion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.LogsPluginSettings_removeButton {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: rgb(115 115 115);
+  padding: 0;
+  transition: color 150ms ease;
+}
+
+.LogsPluginSettings_removeButton:hover {
+  color: rgb(248 113 113);
+}
+
+.LogsPluginSettings_code {
+  color: rgb(212 212 212);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.LogsPluginSettings_addRow {
+  display: flex;
+  gap: 8px;
+}
+
+.LogsPluginSettings_input {
+  flex: 1;
+  border: 1px solid rgb(64 64 64 / 30%);
+  border-radius: 4px;
+  background: rgb(38 38 38 / 50%);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.LogsPluginSettings_input::placeholder {
+  color: rgb(82 82 82);
+}
+
+.LogsPluginSettings_add {
+  border: 0;
+  border-radius: 4px;
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.LogsPluginSettings_add:hover {
+  background: rgb(64 64 64);
+}
+
+.LogsPluginSettings_add:disabled {
+  background: rgb(23 23 23);
+  color: rgb(82 82 82);
+}
+
+.LogsPluginSettings_quick {
+  color: rgb(82 82 82);
+  font-size: 12px;
+  margin-top: 12px;
+}
+
+.LogsPluginSettings_quick button {
+  border: 0;
+  background: transparent;
+  color: rgb(115 115 115);
+  font: inherit;
+  padding: 0;
+  transition: color 150ms ease;
+}
+
+.LogsPluginSettings_quick button:hover {
+  color: rgb(163 163 163);
+}
+
+.LogsPluginSettings_quick button:disabled {
+  color: rgb(64 64 64);
+}
+
+.LogsPluginSettings_dot {
+  margin: 0 4px;
+}

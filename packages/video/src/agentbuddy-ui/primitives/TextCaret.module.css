@@ -1,0 +1,16 @@
+.TextCaret_root {
+  display: inline-block;
+  width: 1px;
+  height: 1.15em;
+  background: rgb(229 229 229);
+  transform: translateY(0.18em);
+  vertical-align: baseline;
+}
+
+.TextCaret_trailing {
+  margin-left: 1px;
+}
+
+.TextCaret_leading {
+  margin-right: 4px;
+}

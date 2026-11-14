@@ -1,0 +1,317 @@
+.BrowserSurface_root {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: rgb(23 23 23);
+  color: rgb(229 229 229);
+  overflow: hidden;
+}
+
+.BrowserSurface_tabBar {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 2px;
+  overflow: hidden;
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(10 10 10);
+  padding: 6px 8px;
+}
+
+.BrowserSurface_tab {
+  display: flex;
+  min-width: 80px;
+  max-width: 200px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 4px 12px;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  line-height: 16px;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.BrowserSurface_tab[data-active='true'] {
+  background: rgb(38 38 38);
+  color: rgb(245 245 245);
+}
+
+.BrowserSurface_closeButton {
+  display: grid;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: rgb(115 115 115);
+  padding: 0;
+}
+
+.BrowserSurface_favicon,
+.BrowserSurface_faviconFallback,
+.BrowserSurface_spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.BrowserSurface_faviconFallback {
+  border-radius: 2px;
+  background: rgb(64 64 64);
+}
+
+.BrowserSurface_spinner {
+  border: 2px solid rgb(82 82 82);
+  border-top-color: rgb(212 212 212);
+  border-radius: 999px;
+}
+
+.BrowserSurface_tabTitle {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.BrowserSurface_groupLabel {
+  display: flex;
+  min-height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px 6px 0 0;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.BrowserSurface_groupMore {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.BrowserSurface_newTab {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(115 115 115);
+  padding: 0;
+}
+
+.BrowserSurface_navBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(23 23 23);
+  padding: 6px 12px;
+}
+
+.BrowserSurface_navButton {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(212 212 212);
+  padding: 0;
+}
+
+.BrowserSurface_navButton[data-disabled='true'] {
+  color: rgb(82 82 82);
+}
+
+.BrowserSurface_devtoolsButton {
+  color: rgb(163 163 163);
+}
+
+.BrowserSurface_addressWrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.BrowserSurface_address {
+  width: 100%;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+  font-size: 14px;
+  line-height: 20px;
+  outline: none;
+  padding: 6px 12px;
+}
+
+.BrowserSurface_address[data-focused='true'] {
+  border-color: rgb(115 115 115);
+}
+
+.BrowserSurface_autocomplete {
+  position: absolute;
+  z-index: 4;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  overflow: hidden;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  box-shadow: 0 20px 50px rgb(0 0 0 / 0.35);
+}
+
+.BrowserSurface_suggestion {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+}
+
+.BrowserSurface_suggestion[data-selected='true'] {
+  background: rgb(64 64 64);
+}
+
+.BrowserSurface_suggestionIcon,
+.BrowserSurface_suggestionFallback {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.BrowserSurface_suggestionFallback {
+  border-radius: 4px;
+  background: rgb(82 82 82);
+}
+
+.BrowserSurface_suggestionText {
+  min-width: 0;
+  flex: 1;
+}
+
+.BrowserSurface_suggestionTitle,
+.BrowserSurface_suggestionUrl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.BrowserSurface_suggestionTitle {
+  color: rgb(229 229 229);
+}
+
+.BrowserSurface_suggestionUrl {
+  color: rgb(115 115 115);
+}
+
+.BrowserSurface_content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: rgb(10 10 10);
+}
+
+.BrowserSurface_empty {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.BrowserSurface_page {
+  height: 100%;
+  background: rgb(248 250 252);
+  color: rgb(15 23 42);
+  padding: 44px 52px;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+.BrowserSurface_pageShell {
+  max-width: 980px;
+  margin: 0 auto;
+}
+
+.BrowserSurface_pageEyebrow {
+  color: var(--browser-page-accent, rgb(37 99 235));
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.BrowserSurface_page h1 {
+  margin: 14px 0 10px;
+  color: rgb(15 23 42);
+  font-size: 44px;
+  line-height: 1.05;
+  font-weight: 760;
+}
+
+.BrowserSurface_pageSubheading {
+  max-width: 680px;
+  color: rgb(71 85 105);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.BrowserSurface_pageGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.BrowserSurface_pageCard {
+  border: 1px solid rgb(226 232 240);
+  border-radius: 8px;
+  background: white;
+  padding: 18px;
+}
+
+.BrowserSurface_pageCard span {
+  color: rgb(100 116 139);
+  font-size: 12px;
+}
+
+.BrowserSurface_pageCard strong {
+  display: block;
+  margin-top: 8px;
+  color: rgb(15 23 42);
+  font-size: 20px;
+}
+
+.BrowserSurface_pageStatus {
+  display: inline-flex;
+  margin-top: 28px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--browser-page-accent, rgb(37 99 235)) 12%, white);
+  color: color-mix(in srgb, var(--browser-page-accent, rgb(37 99 235)) 70%, rgb(15 23 42));
+  font-size: 13px;
+  font-weight: 650;
+  padding: 8px 12px;
+}

@@ -1,0 +1,227 @@
+.FlowNode_node {
+  position: absolute;
+  box-sizing: border-box;
+  min-width: 120px;
+  max-width: 200px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgb(115 115 115 / 30%);
+  border-radius: 0.5rem;
+  background: rgb(64 64 64 / 60%);
+  color: rgb(229 229 229);
+  padding: 0.5rem 0.75rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 18%);
+  backdrop-filter: blur(4px);
+  transition: all 0.15s ease;
+}
+
+.FlowNode_node:hover {
+  filter: brightness(1.05);
+}
+
+.FlowNode_node[data-kind="entry"],
+.FlowNode_node[data-kind="listener"],
+.FlowNode_node[data-kind="event"] {
+  border-color: rgb(96 165 250 / 25%);
+  background: rgb(30 58 138 / 60%);
+}
+
+.FlowNode_node[data-kind="flow"] {
+  border-color: rgb(192 132 252 / 25%);
+  background: rgb(88 28 135 / 60%);
+}
+
+.FlowNode_node[data-kind="keep_alive"] {
+  border-color: rgb(52 211 153 / 25%);
+  background: rgb(6 78 59 / 60%);
+}
+
+.FlowNode_node[data-kind="action"] {
+  border-color: rgb(115 115 115 / 30%);
+  background: rgb(64 64 64 / 60%);
+}
+
+.FlowNode_node[data-kind="create"] {
+  border-color: rgb(192 132 252 / 25%);
+  background: rgb(88 28 135 / 60%);
+}
+
+.FlowNode_node[data-kind="llm"] {
+  border-color: rgb(129 140 248 / 25%);
+  background: rgb(49 46 129 / 60%);
+}
+
+.FlowNode_node[data-kind="schedule"] {
+  border-color: rgb(34 211 238 / 25%);
+  background: rgb(22 78 99 / 60%);
+}
+
+.FlowNode_node[data-kind="switch"] {
+  border-color: rgb(250 204 21 / 25%);
+  background: rgb(113 63 18 / 60%);
+}
+
+.FlowNode_node[data-kind="fire"] {
+  border-color: rgb(251 191 36 / 25%);
+  background: rgb(120 53 15 / 60%);
+}
+
+.FlowNode_node[data-kind="kill"] {
+  border-color: rgb(248 113 113 / 25%);
+  background: rgb(127 29 29 / 60%);
+}
+
+.FlowNode_selected {
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 40%), 0 4px 14px rgb(255 255 255 / 5%);
+}
+
+.FlowNode_editing {
+  box-shadow: 0 0 0 2px rgb(96 165 250 / 70%), 0 10px 22px rgb(59 130 246 / 20%);
+}
+
+.FlowNode_entry {
+  min-width: 120px;
+  padding: 0.5rem 0.75rem;
+}
+
+.FlowNode_switchNode {
+  min-width: 120px;
+  padding: 0.5rem 0.75rem;
+}
+
+.FlowNode_header {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: rgb(229 229 229);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.FlowNode_nodeIcon {
+  flex-shrink: 0;
+  margin-right: 0.125rem;
+  opacity: 1;
+}
+
+.FlowNode_node[data-kind="entry"] .FlowNode_nodeIcon,
+.FlowNode_node[data-kind="listener"] .FlowNode_nodeIcon,
+.FlowNode_node[data-kind="event"] .FlowNode_nodeIcon { color: rgb(96 165 250); }
+.FlowNode_node[data-kind="flow"] .FlowNode_nodeIcon { color: rgb(192 132 252); }
+.FlowNode_node[data-kind="keep_alive"] .FlowNode_nodeIcon { color: rgb(52 211 153); }
+.FlowNode_node[data-kind="action"] .FlowNode_nodeIcon { color: rgb(163 163 163); }
+.FlowNode_node[data-kind="create"] .FlowNode_nodeIcon { color: rgb(192 132 252); }
+.FlowNode_node[data-kind="llm"] .FlowNode_nodeIcon { color: rgb(129 140 248); }
+.FlowNode_node[data-kind="schedule"] .FlowNode_nodeIcon { color: rgb(34 211 238); }
+.FlowNode_node[data-kind="switch"] .FlowNode_nodeIcon { color: rgb(250 204 21); }
+.FlowNode_node[data-kind="fire"] .FlowNode_nodeIcon { color: rgb(251 191 36); }
+.FlowNode_node[data-kind="kill"] .FlowNode_nodeIcon { color: rgb(248 113 113); }
+
+.FlowNode_header span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+  padding-right: 0.25rem;
+  text-align: center;
+}
+
+.FlowNode_subtitle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.375rem;
+  border-top: 1px solid rgb(96 165 250 / 40%);
+  padding-top: 0.375rem;
+  color: rgb(163 163 163);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  text-align: center;
+}
+
+.FlowNode_exitList {
+  margin-top: 0.375rem;
+  border-top: 1px solid rgb(64 64 64 / 50%);
+  padding-top: 0.375rem;
+}
+
+.FlowNode_branchList {
+  margin-top: 0.5rem;
+  border-top: 1px solid rgb(234 179 8 / 40%);
+  padding-top: 0.5rem;
+}
+
+.FlowNode_exitRow,
+.FlowNode_branchRow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding-right: 0.25rem;
+}
+
+.FlowNode_exitRow {
+  gap: 0.5rem;
+  height: 22px;
+  min-height: 22px;
+  color: rgb(163 163 163);
+  font-size: 11px;
+}
+
+.FlowNode_branchRow {
+  gap: 0.625rem;
+  height: 26px;
+  min-height: 26px;
+  color: rgb(229 229 229);
+  font-size: 11px;
+}
+
+.FlowNode_exitIndex,
+.FlowNode_branchIndex {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.375rem;
+  background: rgb(82 82 82 / 60%);
+  color: rgb(212 212 212);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.FlowNode_elseIndex {
+  background: rgb(249 115 22 / 20%);
+  color: rgb(253 186 116);
+}
+
+.FlowNode_elseLabel {
+  color: rgb(254 215 170 / 80%);
+  font-style: italic;
+}
+
+.FlowNode_handle {
+  position: absolute;
+  right: -5px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translateY(-50%) rotate(45deg);
+  border: 1.5px solid #888888;
+  border-radius: 1px;
+  background: #666666;
+}
+
+.FlowNode_unconnectedHandle {
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid rgb(82 82 82);
+  border-radius: 999px;
+  background: rgb(64 64 64);
+  color: rgb(212 212 212);
+  font-size: 12px;
+  line-height: 1;
+  transform: translateY(-50%);
+}

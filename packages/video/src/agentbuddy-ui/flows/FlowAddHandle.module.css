@@ -1,0 +1,25 @@
+.FlowAddHandle_root,
+.FlowAddHandle_selected {
+  position: absolute;
+  top: 50%;
+  right: -8px;
+  z-index: 3;
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 1px solid rgb(82 82 82);
+  border-radius: 999px;
+  background: rgb(64 64 64);
+  color: rgb(212 212 212);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.FlowAddHandle_selected {
+  border-color: rgb(96 165 250);
+  background: rgb(59 130 246);
+  color: white;
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 30%), 0 2px 8px rgb(0 0 0 / 24%);
+}

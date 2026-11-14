@@ -1,0 +1,72 @@
+.TogglesBlock_root {
+  display: grid;
+  gap: 0.375rem;
+  padding-top: 0.25rem;
+}
+
+.TogglesBlock_empty {
+  display: block;
+}
+
+.TogglesBlock_response {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding-top: 0.25rem;
+}
+
+.TogglesBlock_row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.TogglesBlock_switch,
+.TogglesBlock_switchOn {
+  position: relative;
+  width: 2rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgb(82 82 91);
+  border: 0;
+  transition: background-color 150ms ease;
+}
+
+.TogglesBlock_switchOn {
+  background: rgb(37 99 235);
+}
+
+.TogglesBlock_knob {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 999px;
+  background: white;
+  transition: transform 150ms ease;
+}
+
+.TogglesBlock_switchOn .TogglesBlock_knob {
+  left: 1rem;
+}
+
+.TogglesBlock_label {
+  color: rgb(212 212 212);
+  font-size: 14px;
+}
+
+.TogglesBlock_description,
+.TogglesBlock_responseItem {
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.TogglesBlock_on {
+  color: rgb(34 197 94);
+}
+
+.TogglesBlock_off {
+  color: rgb(212 212 212);
+}

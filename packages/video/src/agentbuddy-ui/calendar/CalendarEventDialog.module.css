@@ -1,0 +1,161 @@
+.CalendarEventDialog_overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.8);
+}
+
+.CalendarEventDialog_panel {
+  position: relative;
+  width: 90%;
+  max-width: 480px;
+  border: 1px solid #262626;
+  border-radius: 12px;
+  background: #161616;
+  padding: 24px;
+  box-shadow: 0 10px 38px -10px rgb(0 0 0 / 0.75), 0 10px 20px -15px rgb(0 0 0 / 0.4);
+}
+
+.CalendarEventDialog_title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.CalendarEventDialog_close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #262626;
+  border-radius: 6px;
+  background: transparent;
+  color: #666;
+}
+
+.CalendarEventDialog_body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 20px 0;
+}
+
+.CalendarEventDialog_field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.CalendarEventDialog_label {
+  font-size: 12px;
+  color: rgb(115 115 115);
+}
+
+.CalendarEventDialog_input {
+  width: 100%;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(23 23 23);
+  color: rgb(229 229 229);
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.CalendarEventDialog_input[data-placeholder='true'] {
+  color: rgb(115 115 115);
+}
+
+.CalendarEventDialog_textarea {
+  width: 100%;
+  min-height: 72px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(23 23 23);
+  color: rgb(229 229 229);
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.CalendarEventDialog_textarea[data-placeholder='true'] {
+  color: rgb(115 115 115);
+}
+
+.CalendarEventDialog_allDayRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: rgb(212 212 212);
+  user-select: none;
+}
+
+.CalendarEventDialog_checkbox {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 1px solid rgb(115 115 115);
+  border-radius: 3px;
+  background: rgb(23 23 23);
+}
+
+.CalendarEventDialog_checkbox[data-checked='true'] {
+  border-color: rgb(37 99 235);
+  background: rgb(37 99 235);
+}
+
+.CalendarEventDialog_timeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.CalendarEventDialog_actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.CalendarEventDialog_deleteButton {
+  margin-right: auto;
+  border: 1px solid rgb(127 29 29 / 0.6);
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(248 113 113);
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.CalendarEventDialog_cancelButton {
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(212 212 212);
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.CalendarEventDialog_saveButton {
+  border: 0;
+  border-radius: 6px;
+  background: rgb(37 99 235);
+  color: rgb(255 255 255);
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.CalendarEventDialog_saveButton[data-hover='true'] {
+  background: rgb(59 130 246);
+}

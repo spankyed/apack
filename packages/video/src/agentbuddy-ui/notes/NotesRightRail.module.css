@@ -1,0 +1,315 @@
+.NotesRightRail_root {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.NotesRightRail_header {
+  position: relative;
+  display: flex;
+  height: 42px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgb(38 38 38);
+  padding: 0 1rem;
+}
+
+.NotesRightRail_titleWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.NotesRightRail_title {
+  color: rgb(212 212 212);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.NotesRightRail_backButton {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 0;
+}
+
+.NotesRightRail_backButton:hover {
+  color: rgb(229 229 229);
+}
+
+.NotesRightRail_actions {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.NotesRightRail_actions button {
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 0;
+  transition: color 160ms ease, background 160ms ease;
+}
+
+.NotesRightRail_actions button:hover {
+  background: rgb(64 64 64 / 50%);
+  color: rgb(229 229 229);
+}
+
+.NotesRightRail_activeAction {
+  background: rgb(64 64 64) !important;
+  color: rgb(229 229 229) !important;
+}
+
+.NotesRightRail_emptyTrash {
+  width: auto !important;
+  color: rgb(248 113 113) !important;
+  font-size: 12px;
+  padding: 0 0.5rem !important;
+}
+
+.NotesRightRail_menu {
+  position: absolute;
+  top: 34px;
+  right: 0.75rem;
+  z-index: 50;
+  min-width: 140px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.375rem;
+  background: rgb(38 38 38);
+  box-shadow: 0 14px 34px rgb(0 0 0 / 34%);
+  padding: 0.25rem 0;
+}
+
+.NotesRightRail_menu button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(212 212 212);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 0.375rem 0.75rem;
+  text-align: left;
+  transition: background 160ms ease;
+  white-space: nowrap;
+}
+
+.NotesRightRail_menu button:hover {
+  background: rgb(64 64 64);
+}
+
+.NotesRightRail_menu svg {
+  flex-shrink: 0;
+  color: rgb(115 115 115);
+}
+
+.NotesRightRail_menuIconAccent {
+  color: rgb(234 179 8 / 60%) !important;
+}
+
+.NotesRightRail_searchPanel {
+  flex-shrink: 0;
+  border-bottom: 1px solid rgb(38 38 38);
+  padding: 0.5rem 0.75rem;
+}
+
+.NotesRightRail_searchBox {
+  position: relative;
+}
+
+.NotesRightRail_searchIcon {
+  position: absolute;
+  left: 0.625rem;
+  top: 50%;
+  color: rgb(115 115 115);
+  transform: translateY(-50%);
+}
+
+.NotesRightRail_searchInput {
+  width: 100%;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.25rem;
+  outline: none;
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+  font-size: 14px;
+  line-height: 20px;
+  padding: 0.375rem 1.75rem 0.375rem 2rem;
+}
+
+.NotesRightRail_searchInput::placeholder {
+  color: rgb(115 115 115);
+}
+
+.NotesRightRail_clearIcon {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  color: rgb(115 115 115);
+  transform: translateY(-50%);
+}
+
+.NotesRightRail_scroller {
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.NotesRightRail_scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.NotesRightRail_tree {
+  padding: 0.75rem 0.5rem;
+}
+
+.NotesRightRail_searchResults {
+  padding: 0.5rem;
+}
+
+.NotesRightRail_searchResult {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(212 212 212);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 0.375rem 0.75rem;
+  text-align: left;
+  transition: background 160ms ease;
+}
+
+.NotesRightRail_searchResult:hover {
+  background: rgb(38 38 38);
+}
+
+.NotesRightRail_searchEmoji {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.NotesRightRail_searchGlyph {
+  flex-shrink: 0;
+  color: rgb(115 115 115);
+}
+
+.NotesRightRail_emptyState {
+  padding: 1rem 0.75rem;
+  color: rgb(115 115 115);
+  font-size: 14px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.NotesRightRail_trashList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.75rem 0.5rem;
+}
+
+.NotesRightRail_trashRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.25rem;
+  color: rgb(163 163 163);
+  cursor: default;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 0.375rem 0.75rem;
+}
+
+.NotesRightRail_trashRow:hover {
+  background: rgb(38 38 38);
+}
+
+.NotesRightRail_trashRow[data-active="true"] {
+  background: rgb(38 38 38);
+}
+
+.NotesRightRail_trashEmoji {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.NotesRightRail_trashTitle {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.NotesRightRail_deletedAge {
+  flex-shrink: 0;
+  color: rgb(82 82 82);
+  font-size: 10px;
+}
+
+.NotesRightRail_trashActions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.125rem;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.NotesRightRail_trashRow:hover .NotesRightRail_trashActions {
+  opacity: 1;
+}
+
+.NotesRightRail_trashRow[data-active="true"] .NotesRightRail_trashActions {
+  opacity: 1;
+}
+
+.NotesRightRail_trashActions button {
+  display: flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(115 115 115);
+  padding: 0;
+}
+
+.NotesRightRail_trashActions button:hover {
+  background: rgb(64 64 64 / 50%);
+  color: rgb(229 229 229);
+}
+
+.NotesRightRail_trashActions button[data-action="delete"]:hover,
+.NotesRightRail_trashRow[data-active="true"] .NotesRightRail_trashActions button[data-action="delete"] {
+  color: rgb(248 113 113);
+}

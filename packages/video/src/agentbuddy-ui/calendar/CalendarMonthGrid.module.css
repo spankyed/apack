@@ -1,0 +1,87 @@
+.CalendarMonthGrid_root {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.CalendarMonthGrid_weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid rgb(38 38 38);
+}
+
+.CalendarMonthGrid_weekday {
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: rgb(115 115 115);
+  text-align: right;
+}
+
+.CalendarMonthGrid_grid {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: repeat(6, minmax(0, 1fr));
+}
+
+.CalendarMonthGrid_cell {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  border-bottom: 1px solid rgb(38 38 38);
+  border-right: 1px solid rgb(38 38 38);
+  padding: 4px;
+  overflow: hidden;
+}
+
+.CalendarMonthGrid_cell[data-out-month='true'] {
+  opacity: 0.4;
+}
+
+.CalendarMonthGrid_numberRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.CalendarMonthGrid_dayNumber {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.CalendarMonthGrid_dayNumber[data-hover='true'] {
+  background: rgb(64 64 64);
+  color: rgb(229 229 229);
+}
+
+.CalendarMonthGrid_dayNumber[data-today='true'] {
+  background: rgb(37 99 235);
+  color: rgb(255 255 255);
+  font-weight: 600;
+}
+
+.CalendarMonthGrid_chips {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+  overflow: hidden;
+}
+
+.CalendarMonthGrid_more {
+  flex-shrink: 0;
+  padding: 0 4px;
+  font-size: 10px;
+  color: rgb(115 115 115);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

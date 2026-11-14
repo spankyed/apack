@@ -1,0 +1,47 @@
+.NoteBlock_root {
+  border: 1px solid;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+}
+
+.NoteBlock_label {
+  font-size: 12px;
+  margin-bottom: 0.25rem;
+}
+
+.NoteBlock_content {
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+.NoteBlock_info {
+  border-color: rgb(82 82 91);
+  background: rgb(64 64 64 / 0.5);
+}
+
+.NoteBlock_info .NoteBlock_label { color: rgb(163 163 163); }
+.NoteBlock_info .NoteBlock_content { color: rgb(229 229 229); }
+
+.NoteBlock_warning {
+  border-color: rgb(202 138 4 / 0.3);
+  background: rgb(113 63 18 / 0.2);
+}
+
+.NoteBlock_warning .NoteBlock_label { color: rgb(250 204 21); }
+.NoteBlock_warning .NoteBlock_content { color: rgb(254 240 138 / 0.8); }
+
+.NoteBlock_error {
+  border-color: rgb(220 38 38 / 0.3);
+  background: rgb(127 29 29 / 0.2);
+}
+
+.NoteBlock_error .NoteBlock_label { color: rgb(248 113 113); }
+.NoteBlock_error .NoteBlock_content { color: rgb(254 202 202 / 0.8); }
+
+.NoteBlock_success {
+  border-color: rgb(22 163 74 / 0.3);
+  background: rgb(20 83 45 / 0.2);
+}
+
+.NoteBlock_success .NoteBlock_label { color: rgb(74 222 128); }
+.NoteBlock_success .NoteBlock_content { color: rgb(187 247 208 / 0.8); }

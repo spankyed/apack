@@ -1,0 +1,106 @@
+.DatabaseQueryEditorActions_root {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.DatabaseQueryEditorActions_modeButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 160ms ease;
+}
+
+.DatabaseQueryEditorActions_modeButton span,
+.DatabaseQueryEditorActions_executeButton span {
+  display: none;
+}
+
+.DatabaseQueryEditorActions_queryMode {
+  background: rgb(30 58 138 / 30%);
+  color: rgb(96 165 250);
+}
+
+.DatabaseQueryEditorActions_queryMode:hover {
+  background: rgb(30 58 138 / 50%);
+}
+
+.DatabaseQueryEditorActions_transactionMode {
+  background: rgb(124 45 18 / 30%);
+  color: rgb(251 146 60);
+}
+
+.DatabaseQueryEditorActions_transactionMode:hover {
+  background: rgb(124 45 18 / 50%);
+}
+
+.DatabaseQueryEditorActions_divider {
+  width: 1px;
+  height: 20px;
+  background: rgb(64 64 64);
+}
+
+.DatabaseQueryEditorActions_executeButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(59 130 246);
+  color: white;
+  padding: 6px 8px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 25%);
+  transition: opacity 160ms ease, background-color 160ms ease;
+}
+
+.DatabaseQueryEditorActions_executeButton:hover {
+  background: rgb(37 99 235);
+}
+
+.DatabaseQueryEditorActions_executeButton[data-pressed="true"] {
+  background: rgb(37 99 235);
+  transform: translateY(1px) scale(0.97);
+}
+
+.DatabaseQueryEditorActions_executeButton[data-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.DatabaseQueryEditorActions_executeButton[data-disabled="true"]:hover {
+  background: rgb(59 130 246);
+}
+
+.DatabaseQueryEditorActions_spinner {
+  animation: DatabaseQueryEditorActions_spin 900ms linear infinite;
+}
+
+@keyframes DatabaseQueryEditorActions_spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@container (min-width: 36rem) {
+  .DatabaseQueryEditorActions_modeButton {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .DatabaseQueryEditorActions_executeButton {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .DatabaseQueryEditorActions_modeButton span,
+  .DatabaseQueryEditorActions_executeButton span {
+    display: inline;
+  }
+}

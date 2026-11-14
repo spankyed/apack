@@ -110,6 +110,7 @@ interface Props {
   modelValue: string | null
   projects: Project[]
   disabled?: boolean
+  homeDirectory?: string | null
 }
 
 const props = defineProps<Props>()
@@ -164,9 +165,10 @@ const getFolderName = (path: string): string => {
 const formatFullPath = (path: string): string => {
   if (!path) return ''
 
-  // Replace home directory with ~
-  const homeDir = '/Users/spankyed'
-  let displayPath = path.replace(homeDir, '~')
+  const normalizedHome = props.homeDirectory?.replace(/\/+$/, '')
+  const displayPath = normalizedHome && (path === normalizedHome || path.startsWith(`${normalizedHome}/`))
+    ? `~${path.slice(normalizedHome.length)}`
+    : path
 
   // If path is short enough, return as-is
   if (displayPath.length <= 50) return displayPath

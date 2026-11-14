@@ -1,0 +1,33 @@
+.SubDocumentLink_root {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  padding: 0.15rem 0;
+  user-select: none;
+}
+
+.SubDocumentLink_root:hover .SubDocumentLink_title {
+  text-decoration: underline;
+}
+
+.SubDocumentLink_selected {
+  outline: none;
+  border-radius: 3px;
+  background-color: rgb(64 64 64);
+  margin-left: -0.6rem;
+  padding-left: 0.6rem;
+}
+
+.SubDocumentLink_icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  margin-left: -0.1rem;
+  color: rgb(163 163 163);
+}
+
+.SubDocumentLink_title {
+  color: rgb(212 212 212);
+  font-weight: 600;
+}

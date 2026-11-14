@@ -1,0 +1,10 @@
+.NotesLayout_root {
+  display: flex;
+  height: 100%;
+}
+
+.NotesLayout_taskListWrap {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}

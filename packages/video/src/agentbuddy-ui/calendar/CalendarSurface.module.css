@@ -1,0 +1,96 @@
+.CalendarSurface_root {
+  position: relative;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: rgb(23 23 23);
+  color: rgb(212 212 212);
+  overflow: hidden;
+}
+
+.CalendarSurface_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgb(38 38 38);
+  padding: 12px 16px;
+}
+
+.CalendarSurface_headerNav {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.CalendarSurface_navButton {
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 6px;
+}
+
+.CalendarSurface_label {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(229 229 229);
+  padding: 2px 8px;
+  font-size: 18px;
+  line-height: 28px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.CalendarSurface_label[data-hover='true'] {
+  background: rgb(38 38 38);
+}
+
+.CalendarSurface_todayButton {
+  margin-left: 4px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(212 212 212);
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.CalendarSurface_todayButton[data-hover='true'] {
+  background: rgb(38 38 38);
+}
+
+.CalendarSurface_pickerAnchor {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 30px;
+  z-index: 50;
+}
+
+.CalendarSurface_newEventButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.CalendarSurface_newEventButton[data-hover='true'] {
+  background: rgb(64 64 64);
+}
+
+.CalendarSurface_body {
+  flex: 1;
+  min-height: 0;
+}

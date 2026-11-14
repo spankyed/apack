@@ -1,0 +1,75 @@
+.TextInputBlock_root {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.TextInputBlock_responseHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.TextInputBlock_responseHeader svg {
+  color: rgb(34 197 94);
+}
+
+.TextInputBlock_responseValue {
+  border: 1px solid rgb(37 99 235 / 0.3);
+  border-radius: 0.5rem;
+  background: rgb(37 99 235 / 0.15);
+  color: rgb(96 165 250);
+  font-size: 14px;
+  padding: 0.5rem 0.75rem;
+}
+
+.TextInputBlock_input,
+.TextInputBlock_inputDisabled,
+.TextInputBlock_textarea,
+.TextInputBlock_textareaDisabled {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgb(82 82 91);
+  border-radius: 0.5rem;
+  background: rgb(64 64 64);
+  color: rgb(229 229 229);
+  font: inherit;
+  font-size: 14px;
+  padding: 0.5rem 0.75rem;
+}
+
+.TextInputBlock_inputDisabled,
+.TextInputBlock_textareaDisabled {
+  border-color: rgb(63 63 70);
+  background: rgb(64 64 64 / 0.5);
+  color: rgb(113 113 122);
+  cursor: not-allowed;
+}
+
+.TextInputBlock_textarea,
+.TextInputBlock_textareaDisabled {
+  resize: vertical;
+}
+
+.TextInputBlock_suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.TextInputBlock_suggestion {
+  border: 1px solid rgb(82 82 91);
+  border-radius: 999px;
+  background: transparent;
+  color: rgb(212 212 212);
+  font-size: 14px;
+  padding: 0.25rem 0.75rem;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.TextInputBlock_suggestion:hover {
+  border-color: rgb(59 130 246);
+  background: rgb(37 99 235 / 0.2);
+  color: rgb(96 165 250);
+}

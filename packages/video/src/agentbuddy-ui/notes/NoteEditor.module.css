@@ -1,0 +1,46 @@
+.NoteEditor_root {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: rgb(245 245 245);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.NoteEditor_scroller {
+  flex: 1;
+  overflow-y: auto;
+  padding-left: 0.25rem;
+  padding-right: 1rem;
+  scrollbar-width: none;
+}
+
+.NoteEditor_scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.NoteEditor_editor {
+  min-height: 0;
+  padding: 0.1rem 0 2rem 3.25rem;
+}
+
+.NoteEditor_list {
+  margin: 0.25em 0;
+  padding-left: 1.2em;
+}
+
+.NoteEditor_list li + li {
+  margin-top: 0.15em;
+}
+
+.NoteEditor_connected {
+  color: rgb(230 255 248);
+}
+
+.NoteEditor_rule {
+  height: 1px;
+  background: rgb(64 64 64);
+  margin: 0.75em 0;
+}

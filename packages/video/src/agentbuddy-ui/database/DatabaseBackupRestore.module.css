@@ -1,0 +1,367 @@
+.DatabaseBackupRestore_root {
+  display: flex;
+  position: relative;
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+.DatabaseBackupRestore_header {
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(13 13 13 / 50%);
+  padding: 16px 24px;
+}
+
+.DatabaseBackupRestore_headerInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.DatabaseBackupRestore_back {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(163 163 163);
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.DatabaseBackupRestore_back:hover {
+  background: rgb(38 38 38 / 50%);
+  color: white;
+}
+
+.DatabaseBackupRestore_backIcon {
+  transition: transform 200ms ease;
+}
+
+.DatabaseBackupRestore_back:hover .DatabaseBackupRestore_backIcon {
+  transform: translateX(-2px);
+}
+
+.DatabaseBackupRestore_tabs {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+  background: rgb(38 38 38 / 50%);
+  padding: 4px;
+}
+
+.DatabaseBackupRestore_tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(163 163 163);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 16px;
+}
+
+.DatabaseBackupRestore_tab[data-active="true"] {
+  background: rgb(64 64 64);
+  color: white;
+}
+
+.DatabaseBackupRestore_tab:not([data-active="true"]):hover {
+  color: rgb(229 229 229);
+}
+
+.DatabaseBackupRestore_action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(37 99 235);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 20px;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.DatabaseBackupRestore_action:hover:not(:disabled) {
+  background: rgb(29 78 216);
+}
+
+.DatabaseBackupRestore_action[data-disabled="true"] {
+  cursor: not-allowed;
+  background: rgb(38 38 38);
+  color: rgb(115 115 115);
+}
+
+.DatabaseBackupRestore_action[data-tab="import"] {
+  background: rgb(220 38 38);
+}
+
+.DatabaseBackupRestore_action[data-tab="import"]:hover:not(:disabled) {
+  background: rgb(185 28 28);
+}
+
+.DatabaseBackupRestore_action[data-tab="import"][data-disabled="true"] {
+  background: rgb(38 38 38);
+  color: rgb(115 115 115);
+}
+
+.DatabaseBackupRestore_spinner {
+  animation: DatabaseBackupRestore_spin 900ms linear infinite;
+}
+
+@keyframes DatabaseBackupRestore_spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.DatabaseBackupRestore_scroll {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.DatabaseBackupRestore_content {
+  max-width: 896px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.DatabaseBackupRestore_stack {
+  display: grid;
+  gap: 24px;
+}
+
+.DatabaseBackupRestore_card {
+  border: 1px solid rgb(38 38 38);
+  border-radius: 12px;
+  background: rgb(23 23 23 / 50%);
+  padding: 24px;
+}
+
+.DatabaseBackupRestore_label {
+  display: block;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.DatabaseBackupRestore_inputRow {
+  display: flex;
+  gap: 8px;
+}
+
+.DatabaseBackupRestore_input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  padding: 8px 12px 8px 40px;
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.DatabaseBackupRestore_input::placeholder {
+  color: rgb(82 82 82);
+}
+
+.DatabaseBackupRestore_input:focus {
+  border-color: rgb(59 130 246 / 50%);
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 20%);
+}
+
+.DatabaseBackupRestore_browse {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 16px;
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.DatabaseBackupRestore_browse:hover {
+  border-color: rgb(64 64 64);
+  background: rgb(64 64 64);
+}
+
+.DatabaseBackupRestore_inputWrap {
+  position: relative;
+  flex: 1;
+}
+
+.DatabaseBackupRestore_inputIcon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  color: rgb(115 115 115);
+  transform: translateY(-50%);
+}
+
+.DatabaseBackupRestore_sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.DatabaseBackupRestore_title {
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.DatabaseBackupRestore_count {
+  border-radius: 999px;
+  background: rgb(38 38 38 / 50%);
+  color: rgb(163 163 163);
+  font-size: 12px;
+  padding: 4px 12px;
+}
+
+.DatabaseBackupRestore_grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.DatabaseBackupRestore_dbCard {
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38 / 50%);
+  cursor: pointer;
+  padding: 16px;
+  transition: background-color 200ms ease, border-color 200ms ease;
+}
+
+.DatabaseBackupRestore_dbCard:hover {
+  background: rgb(38 38 38 / 70%);
+}
+
+.DatabaseBackupRestore_dbCard[data-selected="true"] {
+  border-color: rgb(59 130 246 / 50%);
+  background: rgb(59 130 246 / 5%);
+}
+
+.DatabaseBackupRestore_dbInner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.DatabaseBackupRestore_checkbox {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 2px solid rgb(82 82 82);
+  border-radius: 4px;
+  background: rgb(23 23 23);
+}
+
+.DatabaseBackupRestore_dbCard[data-selected="true"] .DatabaseBackupRestore_checkbox {
+  border-color: rgb(59 130 246);
+  background: rgb(59 130 246);
+}
+
+.DatabaseBackupRestore_dbTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.DatabaseBackupRestore_dbIconBlue {
+  color: rgb(96 165 250);
+}
+
+.DatabaseBackupRestore_dbIconGreen {
+  color: rgb(74 222 128);
+}
+
+.DatabaseBackupRestore_dbIconAmber {
+  color: rgb(251 191 36);
+}
+
+.DatabaseBackupRestore_dbDescription {
+  color: rgb(115 115 115);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.DatabaseBackupRestore_infoGrid,
+.DatabaseBackupRestore_infoGridFour {
+  display: grid;
+  gap: 16px;
+}
+
+.DatabaseBackupRestore_infoGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.DatabaseBackupRestore_infoGridFour {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.DatabaseBackupRestore_infoCard {
+  border-radius: 8px;
+  background: rgb(38 38 38 / 50%);
+  padding: 12px;
+}
+
+.DatabaseBackupRestore_infoLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  color: rgb(163 163 163);
+  font-size: 12px;
+}
+
+.DatabaseBackupRestore_infoCard p {
+  margin: 0;
+  color: white;
+  font-size: 14px;
+}
+
+.DatabaseBackupRestore_warning {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgb(245 158 11 / 20%);
+  border-radius: 12px;
+  background: rgb(245 158 11 / 10%);
+  padding: 16px;
+}
+
+.DatabaseBackupRestore_warning svg {
+  flex-shrink: 0;
+  color: rgb(245 158 11);
+}
+
+.DatabaseBackupRestore_warning p {
+  margin: 0;
+  color: rgb(251 191 36);
+  font-size: 14px;
+}

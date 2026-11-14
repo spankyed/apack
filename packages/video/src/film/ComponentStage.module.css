@@ -1,0 +1,22 @@
+.ComponentStage_root {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: #050505;
+}
+
+.ComponentStage_card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgb(38 38 38);
+  border-radius: 10px;
+  background: rgb(23 23 23);
+  box-shadow: 0 44px 130px rgb(0 0 0 / 48%);
+  color: rgb(245 245 245);
+  will-change: opacity, transform;
+}
+
+.ComponentStage_square {
+  place-items: center;
+}

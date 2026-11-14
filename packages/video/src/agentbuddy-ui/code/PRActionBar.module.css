@@ -1,0 +1,244 @@
+.PRActionBar_root {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-top: 1px solid rgb(38 38 38);
+  background: rgb(38 38 38 / 30%);
+  padding: 0.5rem 0.75rem;
+}
+
+.PRActionBar_mergeGroup {
+  position: relative;
+  display: flex;
+}
+
+.PRActionBar_merge,
+.PRActionBar_chevron,
+.PRActionBar_draft,
+.PRActionBar_close,
+.PRActionBar_checkout,
+.PRActionBar_deleteBranch {
+  display: inline-flex;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  border: 0;
+  font-size: 12px;
+}
+
+.PRActionBar_merge {
+  border-radius: 0.25rem 0 0 0.25rem;
+  background: rgb(21 128 61 / 80%);
+  color: white;
+  font-weight: 500;
+  padding: 0 0.5rem;
+}
+
+.PRActionBar_merge[data-variant="blocked"] {
+  background: rgb(64 64 64 / 60%);
+  color: rgb(163 163 163);
+}
+
+.PRActionBar_merge[data-variant="error"] {
+  border: 1px solid rgb(127 29 29 / 60%);
+  background: rgb(69 10 10 / 50%);
+  color: rgb(252 165 165);
+}
+
+.PRActionBar_merge[data-variant="pending"] {
+  border: 1px solid rgb(120 53 15 / 60%);
+  background: rgb(69 26 3 / 50%);
+  color: rgb(252 211 77);
+}
+
+.PRActionBar_merge[data-variant="merging"] {
+  background: rgb(21 128 61 / 60%);
+  color: white;
+}
+
+.PRActionBar_merge[data-pressed="true"],
+.PRActionBar_chevron[data-pressed="true"] {
+  transform: translateY(1px);
+}
+
+.PRActionBar_chevron {
+  width: 24px;
+  border-left: 1px solid rgb(22 163 74 / 50%);
+  border-radius: 0 0.25rem 0.25rem 0;
+  background: rgb(21 128 61 / 80%);
+  color: white;
+}
+
+.PRActionBar_chevron[data-variant="blocked"] {
+  border-left-color: rgb(82 82 82 / 60%);
+  background: rgb(64 64 64 / 60%);
+  color: rgb(163 163 163);
+}
+
+.PRActionBar_chevron[data-variant="error"] {
+  border-left-color: rgb(127 29 29 / 60%);
+  background: rgb(69 10 10 / 50%);
+  color: rgb(252 165 165);
+}
+
+.PRActionBar_chevron[data-variant="pending"] {
+  border-left-color: rgb(120 53 15 / 60%);
+  background: rgb(69 26 3 / 50%);
+  color: rgb(252 211 77);
+}
+
+.PRActionBar_chevron[data-variant="merging"] {
+  border-left-color: rgb(22 163 74 / 50%);
+  background: rgb(22 101 52);
+  color: white;
+}
+
+.PRActionBar_draft {
+  border-radius: 0.25rem;
+  background: rgb(64 64 64 / 50%);
+  color: rgb(163 163 163);
+  padding: 0 0.5rem;
+}
+
+.PRActionBar_ready {
+  border-radius: 0.25rem;
+  background: rgb(29 78 216 / 50%);
+  color: rgb(147 197 253);
+  padding: 0 0.5rem;
+}
+
+.PRActionBar_spacer {
+  flex: 1;
+}
+
+.PRActionBar_close {
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(248 113 113);
+  padding: 0 0.5rem;
+}
+
+.PRActionBar_checkout {
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(96 165 250);
+  padding: 0 0.5rem;
+}
+
+.PRActionBar_deleteBranch {
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(248 113 113);
+  padding: 0 0.5rem;
+}
+
+.PRActionBar_spinner {
+  animation: PRActionBar_spin 900ms linear infinite;
+}
+
+.PRActionBar_tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  width: 288px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.25rem;
+  background: rgb(23 23 23);
+  box-shadow: 0 20px 30px rgb(0 0 0 / 35%);
+  color: rgb(212 212 212);
+  font-size: 12px;
+  padding: 0.75rem;
+}
+
+.PRActionBar_tooltipHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.PRActionBar_tooltipHeader > svg {
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.PRActionBar_tooltipHeader strong,
+.PRActionBar_tooltipHeader span {
+  display: block;
+}
+
+.PRActionBar_tooltipHeader strong {
+  color: rgb(245 245 245);
+  font-weight: 600;
+}
+
+.PRActionBar_tooltipHeader span {
+  color: rgb(163 163 163);
+  line-height: 1.35;
+  margin-top: 0.125rem;
+}
+
+.PRActionBar_checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-top: 1px solid rgb(38 38 38);
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.PRActionBar_checkRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+  color: rgb(212 212 212);
+}
+
+.PRActionBar_checkRow span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.PRActionBar_checkRow em {
+  flex-shrink: 0;
+  color: rgb(115 115 115);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.PRActionBar_actionHint {
+  color: rgb(163 163 163);
+  font-size: 10px;
+  font-style: italic;
+  margin-top: 0.5rem;
+}
+
+.PRActionBar_branchFooter {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+  border-top: 1px solid rgb(38 38 38);
+  color: rgb(115 115 115);
+  font-size: 10px;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.PRActionBar_branchFooter span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes PRActionBar_spin {
+  to { transform: rotate(360deg); }
+}
