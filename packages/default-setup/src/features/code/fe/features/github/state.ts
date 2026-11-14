@@ -45,6 +45,17 @@ export const githubState = setup({
   guards: {
     answersTheSignIn: ({ context, event }) => answersCall(event, context.signInAsk),
   },
+  actions: {
+    /**
+     * Copies the code and opens GitHub's page for it in the system browser, where the user is signed in to GitHub:
+     * the click on Sign in asked to go there. The window still shows both, for a browser that did not open
+     */
+    handOverCode: (_, code: { userCode: string; verificationUri: string }) => {
+      const bridge = globalThis.window?.electronAPI
+      void bridge?.clipboard.writeText(code.userCode)
+      void bridge?.shell.openExternal(code.verificationUri)
+    },
+  },
 }).createMachine({
   id: 'github',
   context: { account: undefined, signIn: null, signInAsk: null, failure: null },
@@ -68,7 +79,10 @@ export const githubState = setup({
     'github.ACCOUNT': { actions: assign({ account: ({ event }) => event.account }) },
     'github.SIGN_IN_CODE': {
       guard: 'answersTheSignIn',
-      actions: assign({ signIn: ({ event }) => ({ code: { userCode: event.userCode, verificationUri: event.verificationUri, expiresAt: event.expiresAt } }) }),
+      actions: [
+        assign({ signIn: ({ event }) => ({ code: { userCode: event.userCode, verificationUri: event.verificationUri, expiresAt: event.expiresAt } }) }),
+        { type: 'handOverCode', params: ({ event }) => ({ userCode: event.userCode, verificationUri: event.verificationUri }) },
+      ],
     },
     // A cancel is not a failure to show
     'github.SIGN_IN_FAILED': {

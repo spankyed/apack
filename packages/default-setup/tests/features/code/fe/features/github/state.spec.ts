@@ -52,3 +52,23 @@ it('takes the account any window signed in as, ending the sign-in it shows', () 
 
   expect(actor.getSnapshot().context).toMatchObject({ account: { login: 'octocat' }, signIn: null, failure: null });
 });
+
+it("copies its sign-in's code and opens GitHub's page for it in the system browser, and nothing for another's", () => {
+  const writeText = vi.fn(async () => true);
+  const openExternal = vi.fn(async () => {});
+  vi.stubGlobal('window', { electronAPI: { clipboard: { writeText }, shell: { openExternal } } });
+  try {
+    const { actor, call: first } = started();
+    actor.send({ type: 'github.SIGN_IN' });
+    const second = sentCall(sendToSystem, 'github.SIGN_IN', 1);
+
+    actor.send(answerTo(first, { type: 'github.SIGN_IN_CODE', ...code, userCode: 'OLD0-0000' }));
+    expect(writeText, 'a code from a sign-in this window has moved on from').not.toHaveBeenCalled();
+
+    actor.send(answerTo(second, { type: 'github.SIGN_IN_CODE', ...code }));
+    expect(writeText.mock.calls).toEqual([['ABCD-1234']]);
+    expect(openExternal.mock.calls).toEqual([['https://github.com/login/device']]);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

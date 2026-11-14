@@ -21,8 +21,9 @@
     <div v-else-if="signIn" class="space-y-2">
       <template v-if="signIn.code">
         <p class="text-sm text-neutral-200">
-          Enter this code at
-          <button class="text-blue-400 hover:text-blue-300" @click="openLink(signIn.code.verificationUri)">{{ signIn.code.verificationUri }}</button>
+          The code is copied, and
+          <button class="text-blue-400 hover:text-blue-300" @click="openInBrowser(signIn.code.verificationUri)">{{ signIn.code.verificationUri }}</button>
+          is open in your browser: paste it there and approve apack.
         </p>
         <div class="flex items-center gap-3">
           <code class="px-3 py-1 text-lg tracking-widest text-neutral-100 bg-neutral-800 rounded select-all">{{ signIn.code.userCode }}</code>
@@ -56,7 +57,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useSelector } from '@xstate/vue'
-import { openLink, useSurface } from '@apackdev/sdk/fe'
+import { useSurface } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import { panelChild, type PanelChild } from '../children.ts'
 
@@ -70,9 +71,10 @@ const failure = useSelector(github, (state) => state.context.failure)
 
 const copied = ref(false)
 const copyCode = async (code: string) => {
-  await navigator.clipboard.writeText(code)
-  copied.value = true
+  copied.value = await window.electronAPI?.clipboard.writeText(code) ?? false
 }
+// The system browser, where the user is signed in to GitHub, rather than a tab in the app
+const openInBrowser = (url: string) => { void window.electronAPI?.shell.openExternal(url) }
 
 onMounted(() => send({ type: 'github.GET_ACCOUNT' }))
 </script>
