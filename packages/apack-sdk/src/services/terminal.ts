@@ -412,6 +412,23 @@ export interface TerminalService {
       /** Whether its programs may send images. For a session a window draws */
       images?: boolean;
       /**
+       * Whether an image may be named rather than sent: as a file, or a shared memory object, on the
+       * machine the session runs on, which the terminal then reads (the Kitty graphics protocol's `t=f`
+       * and `t=s`). Only read where `images` is on.
+       *
+       * **For a session started to run one program its owner trusts, and not for a shell.** A program on
+       * that machine could have read the file itself, and names it so megabytes need not cross the pty.
+       * But a terminal reads what its screen is written with, whoever wrote it: in a shell, a file shown
+       * with `cat` or the far end of an `ssh` that spells the same request has the machine open a path of
+       * its choosing. Left out, an image sent this way is refused and its program told so, which is how
+       * one falls back to sending the bytes.
+       *
+       * A shared memory object is unlinked once read, as the protocol says; a file is left as it is. A
+       * session restored from a recording does not have such an image: the recording holds the name the
+       * program wrote, not the pixels.
+       */
+      imageFiles?: boolean;
+      /**
        * What vouches for the shell's marks: 32 lowercase hexadecimal characters the owner also gives the
        * shell — in its environment, for a hook that reads it and takes it out again — and nothing else.
        *

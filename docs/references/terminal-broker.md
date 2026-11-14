@@ -50,6 +50,20 @@ window has measured a cell a size in pixels is not answered at all. Grapheme clu
 and the Kitty image protocol is on for a session a window draws (`Spawn.images`) and off for any other,
 so a program asking whether it may send an image is told yes only where something would draw it. A picture
 arrives as raw pixels or as a PNG; the broker decodes the PNG, which the core leaves to whoever embeds it.
+One shown through placeholder cells — the way a program that redraws its screen shows an image, so that it
+moves with the text — reaches a window as part of the rows that hold the cells, and is drawn under them.
+
+**A picture may also be named rather than sent, where the session's owner asked for that**
+(`Spawn.image_files`, `imageFiles` on `services.terminal`'s `open`): as a file or a shared memory object on
+the machine the session runs on, which the broker then reads. It is the owner's to ask because a terminal
+reads what its screen is written with, whoever wrote it: for a session started to run one program its owner
+trusts that saves megabytes crossing the pty, and in a shell a file shown with `cat` or the far end of an
+`ssh` that spells the same request has the machine open a path of its choosing. So the code surface's
+shells are opened without it, and a program there that names a file is told no.
+
+**A cursor a program has hidden is still told where it is.** A program that draws its own cursor hides the
+terminal's and moves it to where typing goes; the window puts its input there, so an input method composes
+beside what is being typed.
 
 **A shell's exit is waited for, not inferred from its output ending.** A POSIX pty gives EOF on the master
 when the last slave closes; a ConPTY does not, because the broker still holds the pseudoconsole. The exit is
@@ -317,7 +331,11 @@ know which shell is on the other end.
   no looking back, and a path a program prints there is not a link: it names a file on another machine.
 - **Images after a restart.** A recording's keyframe is the sequences that redraw a screen, which carry
   no images, so a restored terminal comes back without the ones it was showing. Animations are not
-  advanced and virtual placements are not told to a view.
+  advanced.
+- **A session opened with `imageFiles` reads what it is named.** The core opens a path before it looks at
+  what it is, and opening a FIFO waits for a writer, so a program there that names one stops that session's
+  output being read until something opens the other end. Nothing checks a path first; apack-terminal's
+  `design.md` records it.
 - **The hooks outside the suite, and on Windows.** `shell-marks.spec.ts` runs the bash (3.2) and zsh
   hooks in the real shells this machine has. fish's and PowerShell's were run by hand in containers
   ([evidence](../goals/evidence/terminal-view.md)) and are held in the suite only to their text, neither

@@ -271,6 +271,24 @@ describe('the broker client', () => {
     expect(spawns.map(spawn => spawn.marks_key)).toEqual([marksKey, null]);
   });
 
+  it('says whether a session\'s programs may name an image as a file, which is no unless its owner said so', async () => {
+    // What reading a named file does is proven where the terminal is (`apack-terminal/tests/images.rs`);
+    // which sessions do is decided by this one field, so the frame is what a case here can see
+    const fake = await recordingBroker({
+      ...GREETS,
+      spawn: [{ kind: 'spawned', session: 's-1', pid: 1 }, { kind: 'spawned', session: 's-2', pid: 2 }],
+    });
+    await fake.broker.open({ cols: 80, rows: 24, images: true, imageFiles: true }, { onOutput() {}, onExit() {} });
+    await fake.broker.open({ cols: 80, rows: 24, images: true }, { onOutput() {}, onExit() {} });
+
+    const spawns = await settles(() => {
+      const sent = fake.requests().filter(request => (request as { kind: string }).kind === 'spawn');
+      if (sent.length < 2) throw new Error(`only ${sent.length} spawns reached the broker`);
+      return sent as Array<{ images: boolean; image_files: boolean }>;
+    });
+    expect(spawns.map(spawn => [spawn.images, spawn.image_files])).toEqual([[true, true], [true, false]]);
+  });
+
   it('asks whether a pid is inside a session, and takes only the answer about that pid', async () => {
     // **The pid is the correlation.** The session cannot be: a caller admitting several claims has more
     // than one of these outstanding, so the first frame here is an answer about a pid nobody asked about

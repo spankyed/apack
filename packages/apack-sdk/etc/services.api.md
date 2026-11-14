@@ -652,6 +652,7 @@ export interface TerminalService {
         record?: string;
         restore?: boolean;
         images?: boolean;
+        imageFiles?: boolean;
         marksKey?: string;
     }, listeners: TerminalListeners): Promise<TerminalSession>;
     rewind(recording: string, size: {
