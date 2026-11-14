@@ -272,9 +272,23 @@ export function ensureSessionMarker(services: Services, threadId: EntityId): Ent
 }
 
 /**
+ * Map from chat-state to the kanban thread-status it implies.
+ * `idle` and `error` are intentionally absent — they have no
+ * meaningful kanban column equivalent.
+ */
+const CHAT_STATE_TO_STATUS: Partial<Record<ChatState, string>> = {
+  working: 'In Progress',
+  paused: 'In Review',
+  success: 'Done',
+};
+
+/**
  * Update the chat state on the thread AND push a real-time event to the
  * frontend threads plugin. This is the single call site for chat state
  * transitions.
+ *
+ * Also syncs the thread's kanban status when the chat state implies a
+ * specific column (e.g. working → "In Progress").
  */
 export function updateChatState(
   services: Services,
@@ -283,6 +297,20 @@ export function updateChatState(
 ): void {
   persistClaudeState(services, threadId as string, { chatState });
   services.threads.updateChatState(threadId, chatState);
+
+  // Sync kanban status when chat state implies a specific column.
+  const targetStatus = CHAT_STATE_TO_STATUS[chatState];
+  if (targetStatus) {
+    const thread = services.repository.threadQueries.byId(threadId as any) as any;
+    if (thread && thread.status !== targetStatus) {
+      services.emitter.sendToSystem('threads', {
+        type: 'UPDATE_THREAD_STATUS',
+        threadId: threadId as string,
+        status: targetStatus,
+        userInduced: false,
+      } as any);
+    }
+  }
 }
 
 /**
