@@ -75,6 +75,8 @@ through (`commit(options.durable)`). So apack can make any unit durable without 
 about 0.33 seconds, against about 1.4 seconds at 181 writes. Whether a streamed reply needs a
 durable commit at all is a separate decision; the streamed text is already on the row's clock.
 
+**Waiting.** The safe-mode measurement waits on the monorepo resolving an elmdb that has `syncEachCommit`; neither the pinned `4b67670` nor `c745183` has it, so nothing is measured here.
+
 **Done when.** The durable commit cost is measured on this machine through `apack-ears`, and the
 reading is recorded here with its date.
 
