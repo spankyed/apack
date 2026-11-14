@@ -121,7 +121,7 @@ export type Event =
   | { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
   | { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
   | { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
-  | { type: 'terminal.BELL'; data: { terminalId: string } }
+  | { type: 'terminal.BELL'; data: { terminalId: string; bellId: string } }
   | { type: 'terminal.NOTIFIED'; data: { terminalId: string; title: string; body: string } }
   | { type: 'terminal.PROGRESS'; data: { terminalId: string; state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; percent: number | null } }
   | { type: 'terminal.TITLED'; data: { terminalId: string; title: string } }
@@ -146,8 +146,8 @@ export type Event =
  * Asks the main process to show the system notification a bell asks for. Through the bridge, because a window's own
  * `Notification` is refused while the window is not focused, which is the case this exists for.
  */
-export function showBellNotification(): void {
-  void window.electronAPI?.notify?.show('Terminal', 'Rang the bell').catch(() => {})
+export function showBellNotification(bellId: string): void {
+  void window.electronAPI?.notify?.show('Terminal', 'Rang the bell', bellId).catch(() => {})
 }
 
 export const terminalState = setup({
@@ -477,7 +477,7 @@ export const terminalState = setup({
       if (flash) enqueue.raise({ type: 'terminal.BELL_FLASH_ENDED', terminalId: id }, { delay: BELL_FLASH_MS })
       enqueue.raise({ type: 'terminal.BELL_WINDOW_ENDED', terminalId: id }, { delay: BELL_WINDOW_MS })
       // Not while the window has the focus: the person can see the terminal then, and the flash says it
-      if (settings?.bellNotification === true && !document.hasFocus()) showBellNotification()
+      if (settings?.bellNotification === true && !document.hasFocus()) showBellNotification(ev.data.bellId)
     }),
 
     endBellFlash: assign(({ context, event }) => {

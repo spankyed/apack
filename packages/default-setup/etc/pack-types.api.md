@@ -4359,6 +4359,7 @@ type OutgoingTerminalEvents =
     type: 'terminal.BELL';
     data: {
         terminalId: string;
+        bellId: string;
     };
 } | {
     type: 'terminal.NOTIFIED';

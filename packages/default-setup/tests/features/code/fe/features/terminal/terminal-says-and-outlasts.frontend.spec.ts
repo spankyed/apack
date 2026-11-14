@@ -31,9 +31,9 @@ afterEach(() => { vi.unstubAllGlobals() })
 describe("what a terminal's program says off its screen", () => {
   it('marks its tab until the person looks at it, and only its own', () => {
     const { actor, activity } = started()
-    actor.send({ type: 'terminal.BELL', data: { terminalId: 't-1' } })
+    actor.send({ type: 'terminal.BELL', data: { terminalId: 't-1', bellId: 't-1#1' } })
     actor.send({ type: 'terminal.NOTIFIED', data: { terminalId: 't-1', title: 'Build', body: 'finished' } })
-    actor.send({ type: 'terminal.BELL', data: { terminalId: 't-2' } })
+    actor.send({ type: 'terminal.BELL', data: { terminalId: 't-2', bellId: 't-2#1' } })
     expect(activity()).toEqual({ 't-1': { bell: true, notification: { title: 'Build', body: 'finished' } }, 't-2': { bell: true } })
 
     actor.send({ type: 'terminal.SEEN', terminalId: 't-1' })
@@ -79,7 +79,7 @@ describe("what a terminal's program says off its screen", () => {
 
   it('is forgotten with the terminal', () => {
     const { actor, activity } = started()
-    actor.send({ type: 'terminal.BELL', data: { terminalId: 't-1' } })
+    actor.send({ type: 'terminal.BELL', data: { terminalId: 't-1', bellId: 't-1#1' } })
     actor.send({ type: 'terminal.CLOSED', data: { terminalId: 't-1' } })
     expect(activity()).toEqual({})
   })

@@ -92,6 +92,12 @@ export function startTerminalSizing(): () => void {
  * Where a terminal's news and its exit go — **given to the service before the session exists**, not
  * registered after it returns, so nothing a shell does first has nowhere to go.
  */
+/**
+ * The bells this backend process has emitted. The id is unique within a run, which is all a bell's identity needs:
+ * the main process forgets a shown id within a minute, and no terminal keeps its id across a restart.
+ */
+let bellCount = 0
+
 const terminalHandlers = {
   onEvent(terminalId: string, event: TerminalEvent) {
     switch (event.kind) {
@@ -114,7 +120,7 @@ const terminalHandlers = {
         emitToFrontend({ type: 'terminal.CLIPBOARD', data: { terminalId, text: event.text } })
         break
       case 'bell':
-        emitToFrontend({ type: 'terminal.BELL', data: { terminalId } })
+        emitToFrontend({ type: 'terminal.BELL', data: { terminalId, bellId: `${terminalId}#${++bellCount}` } })
         break
       case 'notification':
         emitToFrontend({ type: 'terminal.NOTIFIED', data: { terminalId, title: event.title, body: event.body } })

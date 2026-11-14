@@ -60,7 +60,7 @@ const clipboard = {
 
 // System notifications: the main process shows them, since a window cannot while it is not focused (see packages/main/src/modules/notify-access.ts)
 const notify = {
-  show: (title: string, body: string) => ipcRenderer.invoke('notify:show', title, body) as Promise<boolean>,
+  show: (title: string, body: string, tag?: string) => ipcRenderer.invoke('notify:show', title, body, tag) as Promise<boolean>,
 } satisfies _HostBridge['notify'];
 
 // Shell utilities

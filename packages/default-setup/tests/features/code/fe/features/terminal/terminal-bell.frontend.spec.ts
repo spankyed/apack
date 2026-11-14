@@ -14,10 +14,12 @@ vi.mock('#features/code/fe/utils/terminal-pool.ts', () => ({ terminalPool: pool 
 const { terminalState, BELL_FLASH_MS, BELL_WINDOW_MS } = await import('#features/code/fe/features/terminal/state.ts')
 
 const aTerminal = (id: string) => ({ id, title: id, cwd: '/tmp', active: true }) as never
-const bell = (terminalId: string) => ({ type: 'terminal.BELL', data: { terminalId } }) as never
+let bellsSent = 0
+const bell = (terminalId: string, bellId: string) => ({ type: 'terminal.BELL', data: { terminalId, bellId } }) as never
 
 /** A terminal whose code surface has these settings, and the flash and notification the window showed */
 function window(settings: Record<string, unknown> = {}) {
+  bellsSent = 0
   parent.getParentContext.mockReturnValue({ settings } as never)
   const actor = createActor(terminalState).start()
   actor.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-1'), aTerminal('t-2')] })
@@ -31,7 +33,8 @@ function window(settings: Record<string, unknown> = {}) {
     wasFlashing = flashing
   })
   return {
-    bell: (terminalId = 't-1') => actor.send(bell(terminalId)),
+    // The backend gives each bell its own id; the window passes it on as the notification's tag
+    bell: (terminalId = 't-1') => actor.send(bell(terminalId, `${terminalId}#${++bellsSent}`)),
     flashing: (terminalId = 't-1') => actor.getSnapshot().context.bells[terminalId] === 'flashing',
     /** When each flash began, in ms from the first bell */
     flashStarts: () => flashes.slice(),
@@ -107,7 +110,16 @@ describe('a bell on the window', () => {
     hasFocus.mockReturnValue(false)
     window({ bellNotification: true }).bell()
     expect(notify).toHaveBeenCalledTimes(1)
-    expect(notify).toHaveBeenCalledWith('Terminal', 'Rang the bell')
+    expect(notify).toHaveBeenCalledWith('Terminal', 'Rang the bell', expect.any(String))
+  })
+
+  it('passes the bell\'s own id as the notification tag, so each bell is its own notification', async () => {
+    hasFocus.mockReturnValue(false)
+    const w = window({ bellNotification: true })
+    w.bell('t-1')
+    await w.advance(BELL_WINDOW_MS)
+    w.bell('t-2')
+    expect(notify.mock.calls.map(call => call[2])).toEqual(['t-1#1', 't-2#2'])
   })
 
   it('does not ask for a system notification while the window is focused', () => {
