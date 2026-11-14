@@ -10,7 +10,7 @@ test('installed pack help remains navigable without its runtime', async ({ app, 
   });
   try {
     await app.navigate('host/settings');
-    await appPage.evaluate(() => (window as any).applicationState.system.get('host/settings').send({ type: 'HELP.OPEN', target: { packId: 'e2e-fixture', articleId: 'github-token-permissions' } }));
+    await appPage.evaluate(() => (window as any).applicationState.system.get('host/settings').send({ type: 'HELP.OPEN', target: { packId: 'e2e-fixture', articleId: 'github-sign-in' } }));
     await expect(appPage.getByTestId('help-article-title')).toHaveText('Fixture guide');
     await appPage.getByRole('link', { name: 'Next guide' }).click();
     await expect(appPage.getByTestId('help-article-title')).toHaveText('Next fixture guide');

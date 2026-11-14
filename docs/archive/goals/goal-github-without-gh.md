@@ -1,6 +1,9 @@
 # GitHub without the GitHub CLI
 
-Status: phase 1 done, 2026-11-13. Next: phase 2.
+> **Done 2026-11-13.** All four phases landed: the app signs in to GitHub on its own, calls GitHub's API directly,
+> gives git that sign-in on the command, and no longer runs `gh`.
+> [`docs/references/git-engine.md`](../../references/git-engine.md#signing-in-to-github) describes the result, and
+> Help → "How do I sign in to GitHub?" says it to the user. The Outcome below says what each landed as.
 
 ```text
 # Goal: the code feature reaches GitHub on its own sign-in, and no longer runs gh
@@ -75,23 +78,32 @@ hands it an environment, as it does today.
 | 3 | Git signs in with the token for github.com HTTPS remotes; the panel's offer is "Sign in to GitHub" in place of `gh auth setup-git` | A push to a local smart-HTTP server that requires the token succeeds with it and is refused without it; with a user helper that answers, that helper's answer is the one used; no git config file changes |
 | 4 | Remove `gh`: `gh-cli.ts`, `resolveForService('gh')`, the CLI providers entry, `github-token-permissions.md` and every mention | A search of the repository finds no run of `gh`; Settings and help read as written; the chain passes |
 
-## Current handoff
+## Outcome
 
-**Phase 1 is done.** What landed:
+**Phase 1** (apack #474): `services.secrets` gained a pack-owned face, `own`, bound to the pack the host admitted; the
+code feature signs in with the device flow as the OAuth App `apack` (client id `Ov23lioCOloq0FgG3Uj3`: device flow
+on, token expiry off, no client secret) and keeps the token as its own secret. Signing in copies the code and opens
+github.com/login/device in the system browser.
 
-- `services.secrets` has a pack-owned face, `own` (`get`, `set`, `delete`), bound to the pack the host admitted
-  (`packages/apack-host/src/packs/service-binding.ts`) and kept in the secrets file beside the user's keys,
-  encrypted alike (`secrets/store.ts`, `owned`). Another pack cannot read one: `apack-host`'s
-  `tests/secrets/store.spec.ts`.
-- The device flow is `services.github` (`code/be/services/github.ts`), signing in as the OAuth App `apack`
-  (client id `Ov23lioCOloq0FgG3Uj3`: device flow on, token expiry off, no client secret). The code system's
-  `github` child (`code/be/features/github.ts`) runs it and keeps the token as the pack's own secret; the code
-  feature's Settings form shows the code, then the account with Sign out (`code/fe/features/github/`).
-- Against a stand-in (`tests/features/code/be/_support/github-stand-in.ts`): the code is shown, polling honours
-  `slow_down` with and without an interval, `expired_token`, a refusal and a cancel end it, the token lands in the
-  store, and Sign out removes it.
-- Driven against github.com on 2026-11-13, from this branch's development app: the code shown, approved at
-  github.com, "Signed in as" the account, no token in the app's log, and Sign out left the secrets file holding
-  nothing of the pack's.
+**Phase 2**: `github-api.ts` replaces every call `gh-cli.ts` made, GraphQL for reads in the shapes the panel takes
+(`GhPullRequest`, `GhPRComment`, `GhReviewThread`), REST for most writes, GraphQL for draft state and resolving a
+thread; the owner and name come from the remote's address (`repoOfRemote`). Refusals are `GitHubApiFailure`:
+`signed-out`, `not-github`, `missing-scope`, `sso`, `not-found`, `failed`. The panel shows the sign-in in place when
+signed out, and asks again when the account changes. `services.cli.gh` is `services.cli.github`.
 
-Next: phase 2, the GitHub client over `fetch` in place of `gh-cli.ts`, reading the token through `storedSignIn()`.
+**Phase 3**: `withGitHubSignIn` gives every git run the sign-in through `GIT_CONFIG_COUNT`, writing no config. Found
+on the way: git hands a sign-in that worked to every helper to store, so a keychain helper keeps the app's token
+after a push; signing out now runs `git credential reject` for it. The commit panel's offer is to sign in to GitHub.
+
+**Phase 4**: `gh-cli.ts`, `resolveForService('gh')` and the `gh` CLI name, the Settings → Providers entry and
+`github-token-permissions.md` are gone; the help article is now how to sign in to GitHub.
+
+**Checked**: against stand-ins for GitHub's device flow, REST and GraphQL APIs, and a smart-HTTP git server that
+takes only a token (a push succeeds with the app's, is refused without it, uses the user's own helper first, and no
+git config file changes). Driven on 2026-11-13 against github.com in a private scratch repository: signed in,
+published a branch, opened pull request #1, read its details, commented, marked it draft and ready, closed it,
+deleted the branch, signed out. Typecheck and `npm run chain -- --no-native` pass.
+
+**Left as it was, outside this goal**: the repository's developer tooling still uses `gh` — the release workflows
+(`gh release`), `build/release/unrelease.sh`, and the instructions for dispatching CI (`gh workflow run`). None of it
+is the app; it runs `gh` on GitHub's runners or a developer's machine.

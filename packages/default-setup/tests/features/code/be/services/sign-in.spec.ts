@@ -3,9 +3,9 @@ import { expect, it } from 'vitest';
 import { signInHelpFor } from '../../../../../src/features/code/be/services/sign-in.ts';
 
 it.each([
-  ['https://github.com/octo/repo.git', { host: 'github.com', kind: 'github-cli' }],
-  ['https://someone@github.com/octo/repo.git', { host: 'github.com', kind: 'github-cli' }],
-  ['https://GitHub.com/octo/repo', { host: 'github.com', kind: 'github-cli' }],
+  ['https://github.com/octo/repo.git', { host: 'github.com', kind: 'github' }],
+  ['https://someone@github.com/octo/repo.git', { host: 'github.com', kind: 'github' }],
+  ['https://GitHub.com/octo/repo', { host: 'github.com', kind: 'github' }],
   ['https://gitlab.com/octo/repo.git', { host: 'gitlab.com', kind: 'https' }],
   ['http://127.0.0.1:8080/repo.git', { host: '127.0.0.1', kind: 'https' }],
   ['git@github.com:octo/repo.git', { host: 'github.com', kind: 'ssh' }],

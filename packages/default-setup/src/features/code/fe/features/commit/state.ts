@@ -118,7 +118,7 @@ export interface CodeCommitContext {
   fetchSignIn: SignInHelp | null
   /** What is known of the failure `gitError` words: the command to run again, and the sign-in a remote asked for */
   gitFailure: Pick<CommitFailure, 'code' | 'during' | 'signIn' | 'trust' | 'ownership' | 'hook'> | null
-  /** Whether the GitHub CLI was asked to give git its sign-in and has not answered */
+  /** Whether the backend was told git can sign in now and has not answered */
   isSettingUpSignIn: boolean
   /** Whether git was asked to stage or unstage one piece of a file's change and has not answered */
   isApplyingHunk: boolean
@@ -859,7 +859,7 @@ export const commitState = setup({
       enqueue(() => { sendToSystem('code', { type: 'commit.APPLY_HUNK', path, staged, hunk }) })
     }),
 
-    /** Has the GitHub CLI give git its sign-in for the host that asked */
+    /** Tells the backend git can sign in to the host that asked, now the app is signed in to GitHub */
     setUpSignIn: enqueueActions(({ context, event, enqueue }) => {
       const { host } = event as { type: 'commit.SET_UP_SIGN_IN'; host: string }
       // The push or the pull that was refused goes with the ask and comes back with its answer: what is held

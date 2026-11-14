@@ -22,7 +22,7 @@ what to say.**
 |---|---|
 | Running git: its environment, what may run beside what, waiting for a lock, when a command is done, what a failure means | The event bus, the contract, windows, who asked |
 | The snapshot, change detection by part, path-scoped reads, an operation in progress | The words shown to the user |
-| A watcher of its own over Node's `fs.watch`, which a host can replace | GitHub, `gh`, pull requests, the offer to sign in |
+| A watcher of its own over Node's `fs.watch`, which a host can replace | GitHub, its sign-in and API, pull requests, the offer to sign in |
 | Reads (a diff, a file at a revision, the log, branches, stashes, worktrees) and writes (stage, commit, check out, stash, fetch, pull, push) | Policy: when to fetch unasked, which branch a pull request is based on, settings |
 | Where a staged file will be listed, as an entry with no Node imports (`apack-git/staging`) | What says "look again": window focus, a terminal command ending, an agent's turn ending |
 
@@ -254,6 +254,28 @@ opened says this as well, for as long as the statuses it is sent say it.
 A watch that has just opened is not yet delivering either, and the platform says nothing when it starts to:
 `startWatching` resolves once the watches are open, and two seconds later the watcher reports the checkout once
 as one in which anything may have changed, which is what covers an edit made in between (`catchUpAfterMs`).
+
+## Signing in to GitHub
+
+GitHub is the app's half, and the engine knows nothing of it: the app hands it an environment, as it hands every
+host's. The user signs in to GitHub once, in the app, with OAuth's device flow as the OAuth App **apack**
+(`code/be/services/github.ts`): a code copied and github.com/login/device opened in their browser, then a token
+that lasts until they revoke it, with the `repo` and `workflow` scopes. The token is the code feature's own secret
+(`services.secrets.own`), which no other pack can read, and is in no setting and no log. Settings → Code shows
+whose it is, with Sign out.
+
+**Git is given that sign-in on each command, never in a config** (`withGitHubSignIn`, `app-git-repository.ts`): a
+credential helper for github.com named through `GIT_CONFIG_COUNT`, which answers only `get`, from a variable only
+that git run sees. Git asks it after the user's own helpers, so a user whose git already signs in to GitHub keeps
+that sign-in. Git hands a sign-in that worked to every helper to keep, so a keychain may hold the token after a
+push; signing out has git's helpers forget it (`git credential reject`). A push or a pull refused for want of a
+sign-in to github.com offers to sign in to GitHub, and runs again once the app has.
+
+**The pull request panel calls GitHub's API with the same sign-in** (`code/be/services/github-api.ts`): GraphQL for
+reads, in the shapes the panel takes, and REST for most writes, for the repository the checkout's remote names on
+github.com. A refusal comes back as what the panel can act on (`GitHubApiFailure`): not signed in, a remote
+elsewhere, access the sign-in lacks, an organisation's single sign-on, or nothing GitHub will show it. Help →
+"How do I sign in to GitHub?" says the same to the user.
 
 ## Working on both at once
 

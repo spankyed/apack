@@ -273,9 +273,16 @@ the engine's `failures.spec.ts` that fails a real git that way.
 
 - **A remote that asks for a sign-in is refused at once**, since git runs with its prompts off, so the refusal
   comes with what can be done about it (`SignInHelp`, `sign-in.ts`), read from the remote's address: for GitHub
-  over HTTPS the panel offers to have the GitHub CLI give git its sign-in (`gh auth setup-git`, which writes the
-  user's git config and so is only ever their click), and for a key or another host it says which sign-in is
+  over HTTPS the panel offers to sign in to GitHub, and for a key or another host it says which sign-in is
   missing. A push or a pull refused that way is run again once the sign-in is set up.
+- **Git signs in to GitHub with the app's own sign-in, given on each command and never written to a config**
+  (`withGitHubSignIn`, `app-git-repository.ts`): a credential helper named through `GIT_CONFIG_COUNT`, answering
+  from a variable only that git run sees, and asked after the user's own helpers, so a user whose git already signs
+  in keeps that. Git hands a sign-in that worked to every helper to keep, so signing out has git forget the token
+  too (`git credential reject`, `features/github.ts`).
+- **The pull request panel calls GitHub's API with that sign-in** (`github-api.ts`, through `gitHubApiFor`): GraphQL
+  for reads, in the shapes the panel takes, and REST for most writes. A refusal comes back as the reason the
+  panel acts on (`GitHubApiFailure`), never as GitHub's prose to match.
 
 **The guards that remain, and what each got wrong first.** Every correlating guard in this pack went through this,
 and they failed in four different ways — which is the argument for reading the list rather than copying the one you

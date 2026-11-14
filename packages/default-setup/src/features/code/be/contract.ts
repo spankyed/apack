@@ -8,7 +8,7 @@ import type {
   RepositoryOperation, SearchProgress, SignInHelp,
   SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
 } from './types.ts';
-import type { ActiveTokenInfo } from './services/gh-cli.ts';
+import type { GitHubApiFailure } from './services/github-api.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
 import type { GitHubAccount, GitHubSignInFailure } from './services/github.ts';
 
@@ -126,7 +126,7 @@ export type IncomingCommitEvents =
   | { type: 'commit.LIST_UNTRACKED'; path: string }
   /** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
-  /** Have the GitHub CLI give git its sign-in for this host */
+  /** Git can sign in to this host now the app is signed in to GitHub: fetching starts again, and the window runs again what was refused */
   | { type: 'commit.SET_UP_SIGN_IN'; host: string; during?: 'push' | 'pull' }
   /** A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history */
   | { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
@@ -169,7 +169,7 @@ export type OutgoingCommitEvents =
   /** How far along a push, a pull or a checkout is, for the window that asked for it */
   | { type: 'commit.PROGRESS'; data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }
   | { type: 'commit.UNTRACKED_LISTED'; data: { path: string; files: string[]; truncated: boolean } }
-  /** Git signs in to this host through the GitHub CLI now */
+  /** Git signs in to this host with the app's GitHub sign-in now */
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
   | { type: 'commit.BRANCH_RETRIEVED'; data: { branch: string } }
   /** The branches, and how each local one stands against what it follows, by its name */
@@ -224,7 +224,8 @@ export type IncomingPullRequestEvents =
   | { type: 'pr.CLOSE_PR'; number: number }
   | { type: 'pr.TOGGLE_DRAFT'; number: number; isDraft: boolean }
   | { type: 'pr.CHECK_BRANCH_PR' }
-  | { type: 'pr.CHECK_GH_AUTH' }
+  /** Whether the app's GitHub sign-in can work with the pull requests of the repository the remote names */
+  | { type: 'pr.CHECK_GITHUB_ACCESS' }
   | { type: 'pr.GET_PR_AUTOFILL' }
   | { type: 'pr.GET_SMART_BASE_BRANCH' }
   | { type: 'pr.DELETE_BRANCH'; branch: string }
@@ -265,7 +266,8 @@ export type OutgoingPullRequestEvents =
   | { type: 'pr.PR_CLOSED'; data: { number: number } }
   | { type: 'pr.PR_DRAFT_TOGGLED'; data: { number: number; isDraft: boolean } }
   | { type: 'pr.BRANCH_PR_CHECKED'; data: { pr: GhPullRequest | null } }
-  | { type: 'pr.GH_AUTH_CHECKED'; data: { available: boolean; prAccess: boolean; activeToken: ActiveTokenInfo | null } }
+  /** `ok`, or why not, with what to tell the user */
+  | { type: 'pr.GITHUB_ACCESS_CHECKED'; data: { access: 'ok' | GitHubApiFailure; message?: string } }
   | { type: 'pr.AUTOFILL_RECEIVED'; data: { title: string; body: string } }
   | { type: 'pr.SMART_BASE_BRANCH_RECEIVED'; data: { branch: string } }
   | { type: 'pr.BRANCH_DELETED'; data: { branch: string } }

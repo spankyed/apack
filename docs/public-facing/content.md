@@ -135,7 +135,7 @@ Ordinary pack source imports its own `services` and `Services` from `#generated/
 | `services.brain` | Ad-hoc brain event listeners (`listen`, `unlisten`) |
 | `services.scheduler` | Cron schedules for flow triggers (`registerSchedule`, `unregisterByPrefix`, `clearAllSchedules`) |
 | `services.database` | Live-data schema and topology context for AI query generation (`buildQueryContext`) |
-| `services.cli` | CLI tools: `git`, `gh`, `claudeCode`, `codex`, plus `testCli` |
+| `services.cli` | CLI tools: `git`, `github` (pull requests, with the app's GitHub sign-in), `claudeCode`, `codex`, plus `testCli` |
 | `services.codex` | The Codex app-server (threads, turns, approvals, sessions) |
 
 **Host services**
