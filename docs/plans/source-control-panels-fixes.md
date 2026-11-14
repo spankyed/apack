@@ -1,6 +1,6 @@
 # Fixing the source-control and pull request panels
 
-Status: decided 2026-11-14 (its four decisions below). Phases 1 to 3 landed 2026-11-14; phase 4 next.
+Status: decided 2026-11-14 (its four decisions below). Phases 1 to 4 landed 2026-11-14; phase 5 waits for the user's choice.
 
 Surveyed at monorepo `origin/master` `eb567581ac` and apack-git `cf7be5d` (the pin), by four read-only reviews — the
 commit panel and the pull request panel, frontend and backend each — and a check of the findings against the code.
@@ -214,6 +214,33 @@ The full typecheck and every spec the change reaches (the pack's 264 files) pass
 | 4.11 | The sign-in's Copy button says "Copied" for every later code | `fe/features/github/GitHubAccount.vue` | V | Reset it with each code |
 
 **Done when:** a component or machine spec for each; driven once in the app.
+
+**Landed 2026-11-14**, in the app alone. Every R item was confirmed in the code first. Two fixes chose between the
+table's options:
+
+- **4.5** makes the message box read-only while a message is generated, rather than keeping text typed since the ask.
+- **4.10**: a click on a stash row opens its files, and an Apply button beside Pop applies it.
+
+4.7 confirms a tag push, a tag delete and a reset in the panel's dialog, and shows each busy until it is answered. A
+pushed tag is said in a toast. The revert dialog now says a revert can be taken back, by reverting the commit it
+adds. The two stash dialogs no longer say "cannot be undone" twice.
+
+Each item has a case: `commit-panel.frontend.spec.ts` (the panel drawn over its real machine),
+`commit-and-tag-answers.spec.ts` (the machine), and `github/account.frontend.spec.ts` (4.11). A mutation of each fix
+(16, counting each half of 4.4 and 4.7) failed its case.
+
+Driven in the app over a scratch repository with a local remote:
+- with nothing staged and a commit ahead, only Push showed;
+- a click on a stash row listed its files and applied nothing, and Apply applied it and kept the stash;
+- three quick clicks on Commit made one commit;
+- the tag push asked first, then reached the remote and said so;
+- the revert dialog said how to take a revert back, and the reset asked first, moved the branch and offered Undo;
+- a message of only a co-author line was refused in words.
+
+4.1, 4.3, 4.5 and 4.11 were not driven: a push to a local remote ends before it can be stopped, and the others need an
+untrusted repository, a model key and a GitHub sign-in. Their cases cover them.
+
+The full typecheck and the pack's suite (267 files) pass. The chain was not run.
 
 ## Found while writing this plan
 
