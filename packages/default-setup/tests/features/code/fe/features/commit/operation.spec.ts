@@ -3,6 +3,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import { answerTo } from '@apackdev/sdk/testing';
+import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
 vi.mock('#generated/events.ts', () => ({ sendToSystem }));
@@ -45,7 +46,7 @@ it('has git move it on, and is busy with that until git answers', () => {
   const actor = panelTold(MERGE);
 
   actor.send({ type: 'commit.MOVE_OPERATION', move: 'continue' });
-  expect(sendToSystem).toHaveBeenLastCalledWith('code', { type: 'commit.MOVE_OPERATION', move: 'continue' });
+  expect(sendToSystem).toHaveBeenLastCalledWith('code', { type: 'commit.MOVE_OPERATION', move: 'continue' }, { call: expect.any(String) });
   expect(actor.getSnapshot().context.isMovingOperation).toBe(true);
 
   actor.send({ type: 'commit.OPERATION_MOVED', data: { move: 'continue' } });
@@ -56,7 +57,7 @@ it('says why when git could not, and is no longer busy', () => {
   const actor = panelTold(MERGE);
   actor.send({ type: 'commit.MOVE_OPERATION', move: 'continue' });
 
-  actor.send({ type: 'commit.ERROR_RECEIVED', data: { message: 'you have unmerged files' } });
+  actor.send(answerTo(sentCall(sendToSystem, 'commit.MOVE_OPERATION'), { type: 'commit.ERROR_RECEIVED' as const, data: { message: 'you have unmerged files' } }));
 
   expect(actor.getSnapshot().context).toMatchObject({ isMovingOperation: false, gitError: 'you have unmerged files', operation: MERGE });
 });

@@ -70,8 +70,10 @@ export interface CodeCommitContext {
   lastDiscard: { id: string; paths: string[]; notKept: string[] } | null
   /** How many lines each changed file adds and removes, by `staged:path` */
   lineCounts: Record<string, LineCount>
-  /** The files of the stashes opened in the list, by index, read without applying them */
+  /** The files of the stashes opened in the list, by index, read without applying them: of the stash list as last received */
   stashFiles: Record<number, ChangedFile[]>
+  /** The asks for a stash's files still unanswered, by call, each with the index it asked about */
+  stashFileAsks: Record<string, number>
   /** Who last changed each line of the file the editor shows blame for, from the top of the folder */
   blame: { path: string; lines: BlameLine[] } | null
   /** The repositories under the folder the user opened, which the picker lists when there is more than one */
@@ -129,8 +131,11 @@ export interface CodeCommitContext {
   isShown: boolean
   /** What changed in the repository while the window did not show it, which it asks about when it next does */
   missedChange: RepositoryChange | null
-  /** The pieces staged or unstaged since a diff was last read: still in the open tab's diff, and no longer there to act on */
-  appliedHunks: string[]
+  /**
+   * The pieces staged or unstaged since each diff was last read, by its tab (`diffTabPath`, which names the file and
+   * whether the diff is of what is staged): still in that tab's diff, and no longer there to act on
+   */
+  appliedHunks: Record<string, string[]>
   /** How far along the push, the pull or the checkout under way is, once git has said */
   progress: ({ during: 'push' | 'pull' | 'checkout' } & GitProgress) | null
   /** The untracked folder rows that are open, each with the files it lists, by the folder's path */
@@ -147,10 +152,21 @@ export interface CodeCommitContext {
   logCursor: string | null
   /** The file whose history the log shows, followed across its renames; `null` for the whole history */
   logPath: string | null
-  /** The asks in flight for a diff that is already open, by call: the answer to one brings its tab up to date and opens none */
-  diffRefreshes: Record<string, true>
+  /**
+   * The asks in flight for a diff that is already open, by call, each with its tab: the answer to one brings its tab up
+   * to date and opens none. An ask made since for the same tab supersedes it, and its answer is dropped
+   */
+  diffRefreshes: Record<string, { tab: string; superseded?: true }>
   /** The latest ask for the status, while it is unanswered: an answer to an earlier one is of the repository before it */
   statusAsk: string | null
+  /** Whether the error shown is the status read's own, which the next status read clears */
+  statusFailed: boolean
+  /**
+   * The asks that hold a busy flag while unanswered, by call, each with what it is busy with: an error clears the
+   * flag of the ask it answers and no other. The latest ask of each kind replaces the one before it, so this holds
+   * one per kind at most
+   */
+  busyAsks: Record<string, BusyAsk>
   /**
    * The latest ask for each list the panel shows beside the status, while it is unanswered. An answer to an
    * earlier one is of the repository as it was then, or of the folder that was open before this one
@@ -180,14 +196,78 @@ const bothChanges = (one: RepositoryChange | null, other: RepositoryChange): Rep
   }
 }
 
-/** An ask for a diff that is already open */
+/** An ask for a diff that is already open: the asks before it for the same tab are superseded, and their answers dropped */
 const diffRefresh = (file: { path: string; staged: boolean }) => {
   const call = newCall()
+  const tab = diffTabPath(file)
   return {
-    record: ({ context }: { context: CodeCommitContext }) => ({ diffRefreshes: recordCall(context.diffRefreshes, call, true as const) }),
+    record: ({ context }: { context: CodeCommitContext }) => ({
+      diffRefreshes: recordCall(
+        Object.fromEntries(Object.entries(context.diffRefreshes).map(([asked, ask]) => [asked, ask.tab === tab ? { tab, superseded: true as const } : ask])),
+        call,
+        { tab },
+      ),
+    }),
     ask: () => { sendToSystem('code', { type: 'commit.GET_GIT_DIFF', path: file.path, staged: file.staged }, { call }) },
   }
 }
+
+/** What an ask that holds a busy flag is busy with */
+type BusyAsk =
+  | 'push' | 'pull' | 'checkout' | 'stash' | 'worktree' | 'speedUp' | 'signIn' | 'hunk' | 'generate'
+  | 'moveOperation' | 'startOperation' | 'blame' | 'reword'
+
+/** The progress shown, unless it is of the command named: that command's progress goes with it */
+const progressUnless = (context: CodeCommitContext, during: 'push' | 'pull' | 'checkout') =>
+  context.progress?.during === during ? { progress: null } : {}
+
+/** What an ask that failed leaves: its own busy flag cleared, and what it was waiting to show let go of */
+const FAILED: Record<BusyAsk, (context: CodeCommitContext) => Partial<CodeCommitContext>> = {
+  push: context => ({ isPushing: false, ...progressUnless(context, 'push') }),
+  pull: context => ({ isPulling: false, ...progressUnless(context, 'pull') }),
+  checkout: context => ({ isCheckingOutBranch: false, ...progressUnless(context, 'checkout') }),
+  stash: () => ({ isStashing: false }),
+  worktree: () => ({ isWorktreeLoading: false }),
+  speedUp: () => ({ isSpeedingUpStatus: false }),
+  signIn: () => ({ isSettingUpSignIn: false }),
+  hunk: () => ({ isApplyingHunk: false }),
+  generate: () => ({ isGeneratingMessage: false }),
+  moveOperation: () => ({ isMovingOperation: false }),
+  startOperation: () => ({ isStartingOperation: false }),
+  blame: () => ({ blame: null }),
+  reword: () => ({ rewording: null }),
+}
+
+/** What `enqueueActions` hands a body, as far as an ask made from one uses it */
+type Enqueue = {
+  assign: (values: Partial<CodeCommitContext> | ((args: { context: CodeCommitContext }) => Partial<CodeCommitContext>)) => void
+} & ((action: () => void) => void)
+
+/**
+ * Sends an ask that holds a busy flag under a call of its own: `busy` is what the panel shows while it is
+ * unanswered, and the call is recorded as the latest ask of its kind, whose failure clears it
+ */
+function askBusy(enqueue: Enqueue, kind: BusyAsk, busy: Partial<CodeCommitContext>, send: (call: string) => void): void {
+  const call = newCall()
+  enqueue.assign(({ context }) => ({
+    ...busy,
+    busyAsks: recordCall(Object.fromEntries(Object.entries(context.busyAsks).filter(([, asked]) => asked !== kind)), call, kind),
+  }))
+  enqueue(() => send(call))
+}
+
+/** Failures a status read reports itself, which a status read that succeeds shows are gone */
+const STATUS_READ_FAILURES: readonly (CommitFailure['code'])[] = [
+  'not-a-repository', 'untrusted', 'unsafe-ownership', 'git-not-found', 'developer-tools-missing', 'git-too-old',
+]
+
+/** Whether a status read that succeeds clears the error shown: the status read's own, or a failure of the kind it reports */
+const statusReadClears = (context: CodeCommitContext): boolean =>
+  context.statusFailed || STATUS_READ_FAILURES.includes(context.gitFailure?.code)
+
+/** Whether two stash lists name the same stashes at the same indexes */
+const sameStashes = (one: StashEntry[], other: StashEntry[]) =>
+  one.length === other.length && one.every((stash, i) => stash.ref === other[i]!.ref && stash.date === other[i]!.date && stash.message === other[i]!.message)
 
 export interface StashEntry {
   index: number
@@ -308,6 +388,8 @@ export type Event =
   | { type: 'commit.WORKTREE_ADD'; path: string; branch?: string; createBranch?: boolean }
   | { type: 'commit.WORKTREE_REMOVE'; path: string; force?: boolean }
   | { type: 'commit.WORKTREE_SWITCH'; path: string }
+  /** The switch was made: the code surface is over the worktree now */
+  | { type: 'commit.WORKTREE_SWITCHED'; data: { path: string } }
   | { type: 'commit.WORKTREE_LIST_RECEIVED'; data: { worktrees: WorktreeEntry[] } }
   | { type: 'commit.WORKTREE_ADDED'; data: { path: string; branch: string } }
   | { type: 'commit.WORKTREE_REMOVED'; data: { path: string } }
@@ -358,9 +440,26 @@ function sendRewrite(request: RewriteRequest): void {
   else sendToSystem('code', request)
 }
 
-/** The fields of the panel's state that are read from a repository */
+/** The fields of the panel's state that are read from a repository, or wait on an answer from one */
 type OfOneFolder =
   | 'gitStatus'
+  | 'isGitLoading'
+  | 'isCheckingOutBranch'
+  | 'isPushing'
+  | 'isPulling'
+  | 'isStashing'
+  | 'isWorktreeLoading'
+  | 'isMovingOperation'
+  | 'isStartingOperation'
+  | 'isSettingUpSignIn'
+  | 'isApplyingHunk'
+  | 'progress'
+  | 'stagingWrites'
+  | 'busyAsks'
+  | 'statusAsk'
+  | 'statusFailed'
+  | 'listAsks'
+  | 'stashFileAsks'
   | 'gitBranch'
   | 'hasIdentity'
   | 'pullPreview'
@@ -409,9 +508,30 @@ type OfOneFolder =
  * The panel starts with this, and goes back to it when the code surface starts over another folder. A
  * repository git is not run in, because it is not trusted, reads nothing, and would otherwise sit under the
  * branch and the commits of the folder open before it.
+ *
+ * What it waits on goes with it: the asks made of the folder before, the writes the list shows done, and the
+ * busy flags they hold, so an answer from that folder is taken for none and nothing stays busy. The open diffs'
+ * refreshes are not among them: they belong to tabs, and their answers only ever bring a tab up to date.
  */
 const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   gitStatus: [],
+  isGitLoading: false,
+  isCheckingOutBranch: false,
+  isPushing: false,
+  isPulling: false,
+  isStashing: false,
+  isWorktreeLoading: false,
+  isMovingOperation: false,
+  isStartingOperation: false,
+  isSettingUpSignIn: false,
+  isApplyingHunk: false,
+  progress: null,
+  stagingWrites: viewWrites(),
+  busyAsks: {},
+  statusAsk: null,
+  statusFailed: false,
+  listAsks: { branches: null, stashes: null, worktrees: null, log: null },
+  stashFileAsks: {},
   gitBranch: '',
   hasIdentity: true,
   pullPreview: null,
@@ -445,7 +565,7 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   isFetchSuspended: false,
   fetchSignIn: null,
   gitFailure: null,
-  appliedHunks: [],
+  appliedHunks: {},
   missedChange: null,
   openFolders: {},
   stashList: [],
@@ -460,27 +580,26 @@ const LIST_ASKS = {
   branches: (call: string) => { sendToSystem('code', { type: 'commit.GET_ALL_BRANCHES' }, { call }) },
   stashes: (call: string) => { sendToSystem('code', { type: 'commit.STASH_LIST' }, { call }) },
   worktrees: (call: string) => { sendToSystem('code', { type: 'commit.WORKTREE_LIST' }, { call }) },
-  log: (call: string) => { sendToSystem('code', { type: 'commit.LOG_LIST' }, { call }) },
 }
-type RepositoryList = keyof typeof LIST_ASKS
+/** Those lists and the log, which is asked for a page at a time (`askLogPage`) */
+type RepositoryList = keyof typeof LIST_ASKS | 'log'
+
+/**
+ * Asks for a page of the log as the ask of the log, so its answer is the one the log takes. A page of a file's
+ * history names the file, which the log takes it by
+ */
+function askLogPage(enqueue: Enqueue, ask: { cursor?: string; path?: string | null }): void {
+  const call = newCall()
+  enqueue.assign(({ context }) => ({ listAsks: { ...context.listAsks, log: call } }))
+  enqueue(() => sendToSystem('code', { type: 'commit.LOG_LIST', ...(ask.cursor && { cursor: ask.cursor }), ...(ask.path && { path: ask.path }) }, { call }))
+}
 
 /**
  * An ask for each of these lists under a call of its own: what to hold as the latest ask of each, and the sends.
  * Only the answer to the latest ask of a list is shown. An answer to an earlier one is dropped: the folder may
  * have changed since it was asked, and the backend answers every ask.
  */
-/** Asks for a page of the log as the ask of the log, so its answer is the one the log takes */
-function askLogPage(
-  context: CodeCommitContext,
-  enqueue: { assign: (values: Partial<CodeCommitContext>) => void } & ((action: () => void) => void),
-  ask: { cursor?: string; path?: string | null },
-): void {
-  const call = newCall()
-  enqueue.assign({ listAsks: { ...context.listAsks, log: call } })
-  enqueue(() => sendToSystem('code', { type: 'commit.LOG_LIST', ...(ask.cursor && { cursor: ask.cursor }), ...(ask.path && { path: ask.path }) }, { call }))
-}
-
-function listAsks(lists: readonly RepositoryList[]) {
+function listAsks(lists: readonly (keyof typeof LIST_ASKS)[]) {
   const calls = lists.map((list) => [list, newCall()] as const)
   return {
     asks: Object.fromEntries(calls) as Partial<Record<RepositoryList, string>>,
@@ -783,29 +902,27 @@ export const commitState = setup({
       isWatchSilent: ({ event }) => (event as { data: { watchSilent?: boolean } }).data.watchSilent === true,
       fetchSignIn: ({ event }) => (event as { data: { signIn?: SignInHelp } }).data.signIn ?? null,
       isGitLoading: false,
-      gitError: null,
-      gitFailure: null
+      // A write's failure stays until it is dismissed: only what a status read reports is gone once one succeeds
+      gitError: ({ context }) => statusReadClears(context) ? null : context.gitError,
+      gitFailure: ({ context }) => statusReadClears(context) ? null : context.gitFailure,
+      statusFailed: false,
     }),
 
-    handleErrorReceived: assign({
-      gitError: ({ event }) => {
-        const ev = event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
-        return ev.data.message
-      },
-      gitFailure: ({ event }) => {
-        const { code, during, signIn, trust, ownership, hook } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
-        return { code, during, signIn, trust, ownership, hook }
-      },
-      isSettingUpSignIn: false,
-      isApplyingHunk: false,
-      progress: null,
-      isGitLoading: false,
-      isCheckingOutBranch: false,
-      isPushing: false,
-      isPulling: false,
-      isGeneratingMessage: false,
-      isMovingOperation: false,
-      isStartingOperation: false
+    /**
+     * Shows what failed, whichever ask it answers. Only the ask it answers stops being busy: a failed blame says
+     * nothing about a push still running, and an error answering no ask held here clears nothing
+     */
+    handleErrorReceived: assign(({ context, event }) => {
+      const { message, code, during, signIn, trust, ownership, hook } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
+      const ofStatus = answersCall(event, context.statusAsk)
+      const { recorded, pending } = settleCall(context.busyAsks, event)
+      return {
+        gitError: message,
+        gitFailure: { code, during, signIn, trust, ownership, hook },
+        statusFailed: ofStatus,
+        ...(ofStatus && { statusAsk: null, isGitLoading: false }),
+        ...(recorded && { busyAsks: pending, ...FAILED[recorded](context) }),
+      }
     }),
 
     dismissError: assign({ gitError: null, gitFailure: null }),
@@ -855,8 +972,9 @@ export const commitState = setup({
     /** Has git stage one piece of a file's change, or take one back out of what is staged */
     applyHunk: enqueueActions(({ event, enqueue }) => {
       const { path, staged, hunk } = event as { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
-      enqueue.assign({ isApplyingHunk: true, gitError: null, gitFailure: null })
-      enqueue(() => { sendToSystem('code', { type: 'commit.APPLY_HUNK', path, staged, hunk }) })
+      askBusy(enqueue, 'hunk', { isApplyingHunk: true, gitError: null, gitFailure: null }, call => {
+        sendToSystem('code', { type: 'commit.APPLY_HUNK', path, staged, hunk }, { call })
+      })
     }),
 
     /** Tells the backend git can sign in to the host that asked, now the app is signed in to GitHub */
@@ -865,8 +983,9 @@ export const commitState = setup({
       // The push or the pull that was refused goes with the ask and comes back with its answer: what is held
       // of it here is cleared by the next status, which can arrive while the sign-in is being set up
       const during = context.gitFailure?.during
-      enqueue.assign({ isSettingUpSignIn: true })
-      enqueue(() => { sendToSystem('code', { type: 'commit.SET_UP_SIGN_IN', host, ...(during ? { during } : {}) }) })
+      askBusy(enqueue, 'signIn', { isSettingUpSignIn: true }, call => {
+        sendToSystem('code', { type: 'commit.SET_UP_SIGN_IN', host, ...(during ? { during } : {}) }, { call })
+      })
     }),
 
     /** Git can sign in now, so the push or the pull that was refused is run again: it is what the user was doing */
@@ -880,8 +999,9 @@ export const commitState = setup({
     /** Has git carry on with what it is in the middle of, skip the commit a rebase stopped at, or give it up */
     moveOperation: enqueueActions(({ event, enqueue }) => {
       const { move } = event as { type: 'commit.MOVE_OPERATION'; move: OperationMove }
-      enqueue.assign({ isMovingOperation: true, gitError: null })
-      enqueue(() => { sendToSystem('code', { type: 'commit.MOVE_OPERATION', move }) })
+      askBusy(enqueue, 'moveOperation', { isMovingOperation: true, gitError: null }, call => {
+        sendToSystem('code', { type: 'commit.MOVE_OPERATION', move }, { call })
+      })
     }),
 
     // Where that left the repository is in its status, which the backend announces as changed
@@ -890,8 +1010,9 @@ export const commitState = setup({
     /** Has git merge a branch in, rebase onto one or pick a commit: one that stops on a conflict shows as in progress */
     startOperation: enqueueActions(({ event, enqueue }) => {
       const { kind, target } = event as { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
-      enqueue.assign({ isStartingOperation: true, gitError: null })
-      enqueue(() => { sendToSystem('code', { type: 'commit.START_OPERATION', kind, target }) })
+      askBusy(enqueue, 'startOperation', { isStartingOperation: true, gitError: null }, call => {
+        sendToSystem('code', { type: 'commit.START_OPERATION', kind, target }, { call })
+      })
     }),
 
     handleOperationStarted: assign({ isStartingOperation: false }),
@@ -916,9 +1037,10 @@ export const commitState = setup({
 
     handleMergePreviewed: assign({ mergePreview: ({ event }) => (event as { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }).data }),
 
-    requestGenerateMessage: () => {
-      sendToSystem('code', { type: 'commit.GENERATE_MESSAGE' })
-    },
+    // Busy from when the backend says it has begun
+    requestGenerateMessage: enqueueActions(({ enqueue }) => {
+      askBusy(enqueue, 'generate', {}, call => { sendToSystem('code', { type: 'commit.GENERATE_MESSAGE' }, { call }) })
+    }),
 
     setGeneratingMessage: assign({ isGeneratingMessage: true }),
 
@@ -941,8 +1063,14 @@ export const commitState = setup({
     handleDiffReceived: enqueueActions(({ enqueue, self, event, context }) => {
       const ev = event as { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
       const { recorded, pending } = settleCall(context.diffRefreshes, event)
-      // A diff as it is now holds none of the pieces that were staged out of the one before it
-      if (context.appliedHunks.length > 0) enqueue.assign({ appliedHunks: [] })
+      // An ask made since for the same tab has the diff as it is now: this one is of the file before it
+      if (recorded?.superseded) return enqueue.assign({ diffRefreshes: pending })
+      // A diff as it is now holds none of the pieces that were staged out of the one before it, in its own tab
+      const tab = diffTabPath(ev.data)
+      if (context.appliedHunks[tab]) {
+        const { [tab]: _read, ...others } = context.appliedHunks
+        enqueue.assign({ appliedHunks: others })
+      }
       if (!recorded) {
         enqueue(() => addTabToParent(self, diffTab(ev.data)))
         return
@@ -964,13 +1092,13 @@ export const commitState = setup({
       }
     }),
 
-    checkoutBranch: ({ context }) => {
-      if (context.branchInput.trim()) {
-        sendToSystem('code', { type: 'commit.CHECKOUT_BRANCH', branchName: context.branchInput.trim() })
-      }
-    },
-
-    setCheckingOutBranch: assign({ isCheckingOutBranch: true }),
+    checkoutBranch: enqueueActions(({ context, enqueue }) => {
+      const branchName = context.branchInput.trim()
+      if (!branchName) return
+      askBusy(enqueue, 'checkout', { isCheckingOutBranch: true }, call => {
+        sendToSystem('code', { type: 'commit.CHECKOUT_BRANCH', branchName }, { call })
+      })
+    }),
 
     createTag: ({ event }) => {
       const { name, commit, message } = event as { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
@@ -1004,22 +1132,18 @@ export const commitState = setup({
       progress: null
     }),
 
-    pushBranch: () => {
-      sendToSystem('code', { type: 'commit.PUBLISH_BRANCH' })
-    },
-
-    setPushing: assign({ isPushing: true }),
+    pushBranch: enqueueActions(({ enqueue }) => {
+      askBusy(enqueue, 'push', { isPushing: true }, call => { sendToSystem('code', { type: 'commit.PUBLISH_BRANCH' }, { call }) })
+    }),
 
     handleBranchPushed: assign({
       isPushing: false,
       progress: null
     }),
 
-    pullBranch: () => {
-      sendToSystem('code', { type: 'commit.PULL_BRANCH' })
-    },
-
-    setPulling: assign({ isPulling: true }),
+    pullBranch: enqueueActions(({ enqueue }) => {
+      askBusy(enqueue, 'pull', { isPulling: true }, call => { sendToSystem('code', { type: 'commit.PULL_BRANCH' }, { call }) })
+    }),
 
     handleBranchPulled: assign({
       isPulling: false,
@@ -1030,24 +1154,26 @@ export const commitState = setup({
       const directory: string = getParentContext(self)?.baseDirectory || ''
       // What the panel holds is one folder's (`ofNoFolder`), and says nothing about another: it goes when the
       // folder is another one
-      if (directory !== context.directory) enqueue.assign({ directory, ...ofNoFolder() })
+      const another = directory !== context.directory
+      if (another) enqueue.assign({ directory, ...ofNoFolder() })
       if (directory) {
         // Refresh git status when directory is available
         self.send({ type: 'commit.REFRESH_STATUS' })
         // The repositories under the folder the user opened, for the picker
         enqueue(() => sendToSystem('code', { type: 'LIST_REPOSITORIES' }))
-        const { asks, send } = listAsks(['stashes', 'worktrees', 'branches', 'log'])
-        enqueue.assign({ listAsks: { ...context.listAsks, ...asks } })
+        const { asks, send } = listAsks(['stashes', 'worktrees', 'branches'])
+        enqueue.assign(({ context }) => ({ listAsks: { ...context.listAsks, ...asks } }))
         enqueue(send)
+        askLogPage(enqueue, { path: another ? null : context.logPath })
       }
     }),
 
-    stashPush: ({ event }) => {
+    stashPush: enqueueActions(({ event, enqueue }) => {
       const ev = event as { type: 'commit.STASH_PUSH'; message?: string; stagedOnly?: boolean; paths?: string[] }
-      sendToSystem('code', { type: 'commit.STASH_PUSH', message: ev.message, stagedOnly: ev.stagedOnly, ...(ev.paths && { paths: ev.paths }) })
-    },
-
-    setStashing: assign({ isStashing: true }),
+      askBusy(enqueue, 'stash', { isStashing: true }, call => {
+        sendToSystem('code', { type: 'commit.STASH_PUSH', message: ev.message, stagedOnly: ev.stagedOnly, ...(ev.paths && { paths: ev.paths }) }, { call })
+      })
+    }),
 
     requestStashList: enqueueActions(({ context, enqueue }) => {
       const { asks, send } = listAsks(['stashes'])
@@ -1055,11 +1181,13 @@ export const commitState = setup({
       enqueue(send)
     }),
 
-    handleStashListReceived: assign({
-      stashList: ({ event }) => {
-        const ev = event as { type: 'commit.STASH_LIST_RECEIVED'; data: { stashes: StashEntry[] } }
-        return ev.data.stashes
-      }
+    /**
+     * A stash's files are of the stash at its index when they were read: once the list moves, the stash at that
+     * index is another, so the files open and the asks for them go
+     */
+    handleStashListReceived: assign(({ context, event }) => {
+      const { stashes } = (event as { type: 'commit.STASH_LIST_RECEIVED'; data: { stashes: StashEntry[] } }).data
+      return sameStashes(context.stashList, stashes) ? { stashList: stashes } : { stashList: stashes, stashFiles: {}, stashFileAsks: {} }
     }),
 
     handleStashSuccess: assign({
@@ -1100,31 +1228,40 @@ export const commitState = setup({
       isWorktreeLoading: false
     }),
 
-    worktreeAdd: ({ event }) => {
+    worktreeAdd: enqueueActions(({ event, enqueue }) => {
       const ev = event as { type: 'commit.WORKTREE_ADD'; path: string; branch?: string; createBranch?: boolean }
-      sendToSystem('code', { type: 'commit.WORKTREE_ADD', path: ev.path, branch: ev.branch, createBranch: ev.createBranch })
-    },
+      askBusy(enqueue, 'worktree', { isWorktreeLoading: true }, call => {
+        sendToSystem('code', { type: 'commit.WORKTREE_ADD', path: ev.path, branch: ev.branch, createBranch: ev.createBranch }, { call })
+      })
+    }),
 
-    worktreeRemove: ({ event }) => {
+    worktreeRemove: enqueueActions(({ event, enqueue }) => {
       const ev = event as { type: 'commit.WORKTREE_REMOVE'; path: string; force?: boolean }
-      sendToSystem('code', { type: 'commit.WORKTREE_REMOVE', path: ev.path, force: ev.force })
-    },
+      askBusy(enqueue, 'worktree', { isWorktreeLoading: true }, call => {
+        sendToSystem('code', { type: 'commit.WORKTREE_REMOVE', path: ev.path, force: ev.force }, { call })
+      })
+    }),
 
-    worktreeSwitch: ({ event }) => {
+    worktreeSwitch: enqueueActions(({ event, enqueue }) => {
       const ev = event as { type: 'commit.WORKTREE_SWITCH'; path: string }
-      sendToSystem('code', { type: 'commit.WORKTREE_SWITCH', path: ev.path })
-    },
+      askBusy(enqueue, 'worktree', { isWorktreeLoading: true }, call => {
+        sendToSystem('code', { type: 'commit.WORKTREE_SWITCH', path: ev.path }, { call })
+      })
+    }),
 
-    setWorktreeLoading: assign({ isWorktreeLoading: true }),
+    /** The switch this window asked for was made: the list is no longer busy with it */
+    handleWorktreeSwitched: assign(({ context, event }) => {
+      const { recorded, pending } = settleCall(context.busyAsks, event)
+      return recorded === 'worktree' ? { busyAsks: pending, isWorktreeLoading: false } : {}
+    }),
 
     handleWorktreeAdded: assign({ isWorktreeLoading: false }),
 
     handleWorktreeRemoved: assign({ isWorktreeLoading: false }),
 
+    /** Asks again for the history the log shows: a file's, while it shows one */
     requestLogList: enqueueActions(({ context, enqueue }) => {
-      const { asks, send } = listAsks(['log'])
-      enqueue.assign({ listAsks: { ...context.listAsks, ...asks } })
-      enqueue(send)
+      askLogPage(enqueue, { path: context.logPath })
     }),
 
     /**
@@ -1155,26 +1292,12 @@ export const commitState = setup({
   initial: 'idle',
   context: {
     diffRefreshes: {},
-    statusAsk: null,
-    listAsks: { branches: null, stashes: null, worktrees: null, log: null },
-    stagingWrites: viewWrites(),
-    isGitLoading: false,
     commitMessage: '',
     directory: '',
-    isCheckingOutBranch: false,
     isWatchingRepository: true,
     isWatchSilent: false,
-    isMovingOperation: false,
-    isStartingOperation: false,
-    isSettingUpSignIn: false,
-    isApplyingHunk: false,
     isShown: false,
-    progress: null,
-    isPushing: false,
-    isPulling: false,
     isGeneratingMessage: false,
-    isStashing: false,
-    isWorktreeLoading: false,
     ...ofNoFolder(),
   },
   states: {
@@ -1216,10 +1339,11 @@ export const commitState = setup({
         },
         'commit.HUNK_APPLIED': {
           // The tab still shows the piece until its diff is read again, and git no longer cuts it
-          actions: assign(({ context, event }) => ({
-            isApplyingHunk: false,
-            appliedHunks: [...context.appliedHunks, (event as { data: { hunk: string } }).data.hunk],
-          }))
+          actions: assign(({ context, event }) => {
+            const { data } = event as { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
+            const tab = diffTabPath(data)
+            return { isApplyingHunk: false, appliedHunks: { ...context.appliedHunks, [tab]: [...(context.appliedHunks[tab] ?? []), data.hunk] } }
+          })
         },
         'commit.SELECT_FILE': {
           actions: 'selectGitFile'
@@ -1294,41 +1418,44 @@ export const commitState = setup({
               const { [index]: _closed, ...open } = context.stashFiles
               enqueue.assign({ stashFiles: open })
             } else {
-              enqueue(() => sendToSystem('code', { type: 'commit.GET_STASH_CHANGES', index }))
+              const call = newCall()
+              enqueue.assign({ stashFileAsks: recordCall(context.stashFileAsks, call, index) })
+              enqueue(() => sendToSystem('code', { type: 'commit.GET_STASH_CHANGES', index }, { call }))
             }
           }),
         },
+        // Only an answer to an ask made of the stash list as it stands: the index of one asked before names another stash now
         'commit.STASH_CHANGES_RECEIVED': {
-          actions: assign({
-            stashFiles: ({ context, event }) => {
-              const { index, files } = (event as { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }).data
-              return { ...context.stashFiles, [index]: files }
-            },
+          actions: assign(({ context, event }) => {
+            const { recorded, pending } = settleCall(context.stashFileAsks, event)
+            if (recorded === undefined) return {}
+            const { files } = (event as { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }).data
+            return { stashFileAsks: pending, stashFiles: { ...context.stashFiles, [recorded]: files } }
           }),
         },
         'commit.LOAD_MORE_LOG': {
           actions: enqueueActions(({ context, enqueue }) => {
-            if (context.logCursor) askLogPage(context, enqueue, { cursor: context.logCursor, path: context.logPath })
+            if (context.logCursor) askLogPage(enqueue, { cursor: context.logCursor, path: context.logPath })
           }),
         },
         'commit.SHOW_FILE_HISTORY': {
-          actions: enqueueActions(({ context, enqueue, event }) => {
+          actions: enqueueActions(({ enqueue, event }) => {
             const { path } = event as { type: 'commit.SHOW_FILE_HISTORY'; path: string }
             enqueue.assign({ logPath: path, commitLog: [], logCursor: null })
-            askLogPage(context, enqueue, { path })
+            askLogPage(enqueue, { path })
           }),
         },
         'commit.CLEAR_FILE_HISTORY': {
-          actions: enqueueActions(({ context, enqueue }) => {
+          actions: enqueueActions(({ enqueue }) => {
             enqueue.assign({ logPath: null, commitLog: [], logCursor: null })
-            askLogPage(context, enqueue, {})
+            askLogPage(enqueue, {})
           }),
         },
         'commit.SHOW_BLAME': {
-          actions: [
-            assign({ blame: ({ event }) => ({ path: (event as { type: 'commit.SHOW_BLAME'; path: string }).path, lines: [] }) }),
-            ({ event }) => sendToSystem('code', { type: 'commit.GET_BLAME', path: (event as { type: 'commit.SHOW_BLAME'; path: string }).path }),
-          ],
+          actions: enqueueActions(({ enqueue, event }) => {
+            const { path } = event as { type: 'commit.SHOW_BLAME'; path: string }
+            askBusy(enqueue, 'blame', { blame: { path, lines: [] } }, call => { sendToSystem('code', { type: 'commit.GET_BLAME', path }, { call }) })
+          }),
         },
         'commit.CLEAR_BLAME': { actions: assign({ blame: null }) },
         // Only for the file blame was last asked of: an answer for one since left is no answer
@@ -1396,8 +1523,7 @@ export const commitState = setup({
         'commit.START_REWORD': {
           actions: enqueueActions(({ event, enqueue }) => {
             const { hash } = event as { type: 'commit.START_REWORD'; hash: string }
-            enqueue.assign({ rewording: { hash, message: null } })
-            enqueue(() => { sendToSystem('code', { type: 'commit.GET_COMMIT_MESSAGE', hash }) })
+            askBusy(enqueue, 'reword', { rewording: { hash, message: null } }, call => { sendToSystem('code', { type: 'commit.GET_COMMIT_MESSAGE', hash }, { call }) })
           }),
         },
         'commit.CANCEL_REWORD': { actions: assign({ rewording: null }) },
@@ -1432,7 +1558,7 @@ export const commitState = setup({
           actions: 'updateBranchInput'
         },
         'commit.CHECKOUT_BRANCH': {
-          actions: ['setCheckingOutBranch', 'checkoutBranch']
+          actions: 'checkoutBranch'
         },
         'commit.BRANCHES_RECEIVED': {
           guard: 'answersTheBranchesAsked',
@@ -1444,8 +1570,7 @@ export const commitState = setup({
         'commit.RENAME_BRANCH': { actions: 'renameBranch' },
         'commit.SPEED_UP_STATUS': {
           actions: enqueueActions(({ enqueue }) => {
-            enqueue.assign({ isSpeedingUpStatus: true })
-            enqueue(() => { sendToSystem('code', { type: 'commit.SPEED_UP_STATUS' }) })
+            askBusy(enqueue, 'speedUp', { isSpeedingUpStatus: true }, call => { sendToSystem('code', { type: 'commit.SPEED_UP_STATUS' }, { call }) })
           }),
         },
         // The status that follows says whether it is still slow
@@ -1457,7 +1582,7 @@ export const commitState = setup({
           actions: ['handleBranchCheckoutSuccess', 'getAllBranches']
         },
         'commit.PUSH_BRANCH': {
-          actions: ['setPushing', 'pushBranch']
+          actions: 'pushBranch'
         },
         'commit.BRANCH_PUSHED': {
           actions: 'handleBranchPushed'
@@ -1471,7 +1596,7 @@ export const commitState = setup({
           actions: 'handleBranchPushed'
         },
         'commit.PULL_BRANCH': {
-          actions: ['setPulling', 'pullBranch']
+          actions: 'pullBranch'
         },
         'commit.BRANCH_PULLED': {
           actions: 'handleBranchPulled'
@@ -1486,7 +1611,7 @@ export const commitState = setup({
           actions: 'handleMessageGenerated'
         },
         'commit.STASH_PUSH': {
-          actions: ['setStashing', 'stashPush']
+          actions: 'stashPush'
         },
         'commit.STASH_LIST': {
           actions: 'requestStashList'
@@ -1518,13 +1643,16 @@ export const commitState = setup({
           actions: 'handleWorktreeListReceived'
         },
         'commit.WORKTREE_ADD': {
-          actions: ['setWorktreeLoading', 'worktreeAdd']
+          actions: 'worktreeAdd'
         },
         'commit.WORKTREE_REMOVE': {
-          actions: ['setWorktreeLoading', 'worktreeRemove']
+          actions: 'worktreeRemove'
         },
         'commit.WORKTREE_SWITCH': {
-          actions: ['setWorktreeLoading', 'worktreeSwitch']
+          actions: 'worktreeSwitch'
+        },
+        'commit.WORKTREE_SWITCHED': {
+          actions: 'handleWorktreeSwitched'
         },
         'commit.WORKTREE_ADDED': {
           actions: ['handleWorktreeAdded', 'requestWorktreeList']

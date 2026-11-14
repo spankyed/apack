@@ -1,6 +1,8 @@
 // How far along a push, a pull or a checkout is: the panel holds what git last said until the command is answered
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { answerTo } from '@apackdev/sdk/testing';
+import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
 vi.mock('#generated/events.ts', () => ({ sendToSystem }));
@@ -27,6 +29,6 @@ it.each([
   actor.send({ type: 'commit.PROGRESS', data: WRITING });
   expect(actor.getSnapshot().context.progress).toEqual(WRITING);
 
-  actor.send(answer);
+  actor.send(answerTo(sentCall(sendToSystem, 'commit.PUBLISH_BRANCH'), answer));
   expect(actor.getSnapshot().context).toMatchObject({ progress: null, isPushing: false });
 });

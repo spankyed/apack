@@ -199,6 +199,8 @@ export type OutgoingCommitEvents =
   | { type: 'commit.WORKTREE_LIST_RECEIVED'; data: { worktrees: WorktreeEntry[] } }
   | { type: 'commit.WORKTREE_ADDED'; data: { path: string; branch: string } }
   | { type: 'commit.WORKTREE_REMOVED'; data: { path: string } }
+  /** The worktree a window asked to switch to is the folder the code surface is over now, answered to that window */
+  | { type: 'commit.WORKTREE_SWITCHED'; data: { path: string } }
   | { type: 'commit.CONFLICT_RESOLVED'; data: { path: string } }
   | { type: 'commit.ALL_CONFLICTS_RESOLVED' }
   /** A page of history, saying which file's it is and whether it goes on from a cursor; `cursor` for the next */
@@ -213,7 +215,6 @@ export type OutgoingCommitEvents =
 
 // ── pull-request ─────────────────────────────────────────────────────────
 export type IncomingPullRequestEvents =
-  | { type: 'pr.GET_BASE_BRANCH' }
   /** `prNumber` reads the head from what GitHub keeps of that pull request, which outlives its branch */
   | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
   /** `fetchMissing`: content a partial clone was not given is fetched for this diff, where it is otherwise answered as missing */
@@ -243,13 +244,11 @@ export type IncomingPullRequestEvents =
   | { type: 'pr.DELETE_REVIEW_COMMENT'; commentId: number }
 
 export type OutgoingPullRequestEvents =
-  | { type: 'pr.BASE_BRANCH_RECEIVED'; data: { branch: string } }
   | { type: 'pr.BRANCH_DIFF_RECEIVED'; data: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
   | { type: 'pr.FILE_DIFF_RECEIVED'; data: GitDiff & { baseBranch: string; headBranch?: string } }
   /** A file's diff needs content this partial clone was not given, which is fetched only when the user asks */
   | { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string; prNumber?: number } }
   | { type: 'pr.ERROR'; message: string }
-  | { type: 'pr.STATUS_CHANGED'; data: { timestamp: Date } }
   /** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */
   | { type: 'pr.GIT_STATUS_REFRESHED'; data: { timestamp: Date } }
   | { type: 'pr.OPEN_PRS_RECEIVED'; data: { prs: GhPullRequest[] } }

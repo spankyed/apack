@@ -3,6 +3,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import { answerTo } from '@apackdev/sdk/testing';
+import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
 vi.mock('#generated/events.ts', () => ({ sendToSystem }));
@@ -41,10 +42,10 @@ it('asks for the sign-in to be set up for the host, and is busy with it until it
 
   actor.send({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com' });
 
-  expect(sendToSystem, 'with the push that was refused, which the answer brings back').toHaveBeenCalledWith('code', { type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' });
+  expect(sendToSystem, 'with the push that was refused, which the answer brings back').toHaveBeenCalledWith('code', { type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' }, { call: expect.any(String) });
   expect(actor.getSnapshot().context.isSettingUpSignIn).toBe(true);
 
-  actor.send({ type: 'commit.ERROR_RECEIVED', data: { message: 'Sign in to GitHub to give git a sign-in for github.com.', code: 'authentication', signIn: GITHUB } });
+  actor.send(answerTo(sentCall(sendToSystem, 'commit.SET_UP_SIGN_IN'), { type: 'commit.ERROR_RECEIVED' as const, data: { message: 'Sign in to GitHub to give git a sign-in for github.com.', code: 'authentication' as const, signIn: GITHUB } }));
   expect(actor.getSnapshot().context, 'a setup that failed is answered too').toMatchObject({ isSettingUpSignIn: false, gitError: 'Sign in to GitHub to give git a sign-in for github.com.' });
 });
 
@@ -102,5 +103,5 @@ it('runs the push again when the sign-in is set up at the second try', () => {
   sendToSystem.mockReset();
 
   actor.send({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com' });
-  expect(sendToSystem).toHaveBeenCalledWith('code', { type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' });
+  expect(sendToSystem).toHaveBeenCalledWith('code', { type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' }, { call: expect.any(String) });
 });
