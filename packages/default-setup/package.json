@@ -17,6 +17,8 @@
     "build:dev": "apack pack build",
     "facade:check": "apack pack facade-report",
     "facade:update": "apack pack facade-report --update",
+    "plugin:check": "tsx scripts/build-native-plugin.ts",
+    "plugin:update": "tsx scripts/build-native-plugin.ts --update",
     "flow-export:check": "npm test -- tests/extensions/steps/export-example.spec.ts",
     "flow-export:update": "UPDATE_FLOW_EXAMPLE=1 npm test -- tests/extensions/steps/export-example.spec.ts",
     "content-parity:check": "npm test -- tests/content",
@@ -37,7 +39,9 @@
     "apack-terminal-view": "file:../../vendor/apack-terminal/view",
     "chokidar": "^3.6.0",
     "croner": "^10.0.1",
+    "diff": "8.0.4",
     "elkjs": "^0.9.0",
+    "lowlight": "3.3.0",
     "vue": "^3.5.18",
     "vue-arrange": "^1.5.0"
   },
@@ -55,6 +59,7 @@
     "typescript": "^5.8.3",
     "vitest": "^4.1.12",
     "vue-tsc": "^3.0.4",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "prosemirror-markdown": "^1.13.9"
   }
 }

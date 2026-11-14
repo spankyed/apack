@@ -3,7 +3,7 @@
     <template v-if="!inline">
       <ThreadsHeader />
       <!-- Tab Bar -->
-      <div class="flex items-center border-b border-neutral-800 bg-neutral-900 overflow-hidden" data-onboarding-id="agent-thread-tabs">
+      <div class="flex shrink-0 items-center border-b border-neutral-800 bg-neutral-900 overflow-hidden" data-onboarding-id="agent-thread-tabs">
         <TabBar :tabs="tabs" :activeTabId="activeTabId" :tabGroups="tabGroups" />
       </div>
     </template>

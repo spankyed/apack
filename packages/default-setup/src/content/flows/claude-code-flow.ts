@@ -62,6 +62,18 @@ export default {
         }),
         branch([
           {
+            if: "$.lastStep.result.elicitation == true",
+            steps: [action("CC: Answer MCP Elicitation", {
+              label: "answer-elicitation",
+              map: {
+                threadId: "$.steps[label=route-response].result.threadId",
+                messageId: "$.steps[label=route-response].result.messageId",
+                requestId: "$.steps[label=route-response].result.requestId",
+                response: "$.steps[label=route-response].result.response",
+              },
+            })],
+          },
+          {
             if: "$.lastStep.result.directorySelect == true",
             steps: [
               action("CC: Handle Directory Select", {
@@ -81,6 +93,7 @@ export default {
                 label: "clear-context",
                 map: {
                   threadId: "$.steps[label=route-response].result.threadId",
+                  requestId: "$.steps[label=route-response].result.requestId",
                   response: "$.steps[label=route-response].result.response",
                 },
               }),
@@ -93,6 +106,8 @@ export default {
                 label: "deny-tool",
                 map: {
                   threadId: "$.steps[label=route-response].result.threadId",
+                  requestId: "$.steps[label=route-response].result.requestId",
+                  response: "$.steps[label=route-response].result.response",
                 },
               }),
             ],
@@ -111,18 +126,21 @@ export default {
               }),
             ],
           },
-        ], [
-          // else: tool approval (Write, Edit, Bash, ExitPlanMode, etc.)
-          action("CC: Approve Tool", {
-            label: "approve-tool",
-            map: {
-              threadId: "$.steps[label=route-response].result.threadId",
-              requestId: "$.steps[label=route-response].result.requestId",
-              toolName: "$.steps[label=route-response].result.toolName",
-              originalInput: "$.steps[label=route-response].result.originalInput",
-              response: "$.steps[label=route-response].result.response",
-            },
-          }),
+          {
+            if: "$.lastStep.result.success == true",
+            steps: [
+              action("CC: Approve Tool", {
+                label: "approve-tool",
+                map: {
+                  threadId: "$.steps[label=route-response].result.threadId",
+                  requestId: "$.steps[label=route-response].result.requestId",
+                  toolName: "$.steps[label=route-response].result.toolName",
+                  originalInput: "$.steps[label=route-response].result.originalInput",
+                  response: "$.steps[label=route-response].result.response",
+                },
+              }),
+            ],
+          },
         ]),
       ]],
       "Permission response",
@@ -332,9 +350,11 @@ export default {
                 // Session operations (resume, import) — share transcript import helpers
                 { if: "$.event.data.payload.command == 'cc-resume'", steps: [action("CC: Session Ops", { label: "cc-resume", map: { command: "$.event.data.payload.command", text: "$.event.data.payload.text", threadId: "$.event.data.payload.threadId", references: "$.event.data.payload.references", cwdOverride: "$.event.data.payload.cwdOverride" } })] },
                 { if: "$.event.data.payload.command == 'cc-import'", steps: [action("CC: Session Ops", { label: "cc-import", map: { command: "$.event.data.payload.command", text: "$.event.data.payload.text", threadId: "$.event.data.payload.threadId", references: "$.event.data.payload.references" } })] },
+                { if: "$.event.data.payload.command == 'cc-reset'", steps: [action("Claude Code Reset Session", { label: "cc-reset", map: { threadId: "$.event.data.payload.threadId" } })] },
                 // Standalone commands
                 { if: "$.event.data.payload.command == 'cc-compact'", steps: [action("CC: Compact", { label: "cc-compact", map: { command: "$.event.data.payload.command", text: "$.event.data.payload.text", threadId: "$.event.data.payload.threadId", references: "$.event.data.payload.references" } })] },
                 { if: "$.event.data.payload.command == 'cc-fork'", steps: [action("CC: Fork", { label: "cc-fork", map: { command: "$.event.data.payload.command", text: "$.event.data.payload.text", threadId: "$.event.data.payload.threadId", references: "$.event.data.payload.references" } })] },
+                { if: "$.event.data.payload.command == 'cc-plan'", steps: [action("CC: Plan", { label: "cc-plan", map: { command: "$.event.data.payload.command", text: "$.event.data.payload.text", threadId: "$.event.data.payload.threadId", references: "$.event.data.payload.references" } })] },
                 { if: "$.event.data.payload.command == 'cc-context'", steps: [action("CC: Context", { label: "cc-context", map: { command: "$.event.data.payload.command", text: "$.event.data.payload.text", threadId: "$.event.data.payload.threadId", references: "$.event.data.payload.references" } })] },
                 { if: "$.event.data.payload.command == 'cc-recap'", steps: [action("CC: Recap", { label: "cc-recap", map: { command: "$.event.data.payload.command", text: "$.event.data.payload.text", threadId: "$.event.data.payload.threadId" } })] },
                 { if: "$.event.data.payload.command == 'cc-goal'", steps: [action("CC: Goal", { label: "cc-goal", map: { command: "$.event.data.payload.command", text: "$.event.data.payload.text", threadId: "$.event.data.payload.threadId", references: "$.event.data.payload.references" } })] },

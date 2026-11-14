@@ -586,3 +586,5 @@ export interface CommitFailure {
   /** A hook of the repository's that refused the command: its name, the code it exited with and what it printed */
   hook?: { name: string; exitCode: number; output: string }
 }
+
+export type { ClaudeUiClientEvent, ClaudeUiNoticeEvent, ClaudeUiNotices, ClaudeUiScrollEvent, ClaudeUiScrollState, ClaudeUiPanePresentation, ClaudeUiPaneEvent, ClaudePromptHostRequest, ClaudePromptHostResponse, ClaudeUiFocusEvent, ClaudeUiFocusReply, ClaudeUiNode, ClaudeUiMountState, ClaudeUiFieldEvent, ClaudePromptEdit, ClaudePromptReply, ClaudePromptCompletionRow, ClaudePromptCompletionRequest, ClaudePromptCompletionReply } from './services/claude-code/ui-presentation.ts'

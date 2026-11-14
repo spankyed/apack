@@ -109,9 +109,10 @@ export const threadQueries = {
 
   /** A thread as its detail page shows it, or `null` once it is gone */
   detail: (threadId: EARS.EntityId): ThreadDetailView | null => {
-    if (!threadQueries.byId(threadId)) return null;
+    const thread = threadQueries.byId(threadId);
+    if (!thread) return null;
     const { messages: _messages, ...fields } = threadQueries.extendedData(threadId, 'linkedThreads');
-    return { ...fields, id: threadId as ThreadEntity['id'], messageIds: displayOrder(threadId).map(m => m.id) };
+    return { ...fields, id: threadId as ThreadEntity['id'], messageIds: displayOrder(threadId, isRestoredClaudeThread(thread)).map(m => m.id) };
   },
 
   /**
@@ -824,8 +825,47 @@ function textOf(messageIds: readonly EARS.EntityId[]): Map<EARS.EntityId, Array<
  * thread of a hundred messages costs a constant number of crossings rather than one read per message
  * (`tests/features/threads/be/query-work.spec.ts`).
  */
-function messagesOfThread(threadId: EARS.EntityId): MessageEntity[] {
-  const rows = (query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? []) as Partial<MessageEntity>[];
+/**
+ * A restored Claude session's messages in the order they happened, which the `contains` relation does not give.
+ *
+ * **Relation order is not a chronology after a restoration**: an imported or natively launched thread had its
+ * messages written in whatever order the import walked them, so the chat would show a conversation shuffled.
+ * What orders them is what the CLI said — a message's own timestamp, and within one session and one instant
+ * the order it reported — and queue placement stays separate from it.
+ */
+function isRestoredClaudeThread(thread: Pick<ThreadEntity, 'tags' | 'context'> | null | undefined): boolean {
+  if (!thread?.context?.claudeCode) return false;
+  // Truthiness, not `=== true`: `nativeLaunch` is the launch itself — a record of the session and its cwd
+  return thread.tags?.includes('imported') === true || Boolean(thread.context.claudeCode.nativeLaunch);
+}
+
+/**
+ * The answer, for a reader that holds no thread of its own.
+ *
+ * **Every function below takes it as a parameter whose default is this read**, so the one that already holds
+ * the thread — a chat page, a thread's data, its detail — passes what it has, and the thread is read once a
+ * view rather than once a helper. The default is the read, written where it can be seen.
+ */
+function readsAsRestoredClaudeThread(threadId: EARS.EntityId): boolean {
+  return isRestoredClaudeThread(threadQueries.byId(threadId));
+}
+
+function orderClaudeSessionMessages(messages: Partial<MessageEntity>[], restored: boolean) {
+  if (!restored) return messages;
+  const native = (message: Partial<MessageEntity>) => message.context?.claudeTerminalMessage as { sessionId?: string; timestamp?: number; order?: number } | undefined;
+  return messages.sort((a, b) => {
+    const left = native(a), right = native(b);
+    const time = (left?.timestamp ?? a.timestamp ?? 0) - (right?.timestamp ?? b.timestamp ?? 0);
+    if (time || !left?.sessionId || left.sessionId !== right?.sessionId) return time;
+    return (left.order ?? 0) - (right.order ?? 0);
+  });
+}
+
+function messagesOfThread(threadId: EARS.EntityId, restored = readsAsRestoredClaudeThread(threadId)): MessageEntity[] {
+  const rows = orderClaudeSessionMessages(
+    (query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(messagePickFields) ?? []) as Partial<MessageEntity>[],
+    restored,
+  );
   const ids = rows.flatMap((row) => (row.id ? [row.id as EARS.EntityId] : []));
   const children = childrenOfMessages(ids);
   const text = textOf(ids);
@@ -842,12 +882,16 @@ function messagesOfThread(threadId: EARS.EntityId): MessageEntity[] {
     });
 }
 
-function getThreadFields(threadId: EARS.EntityId): AgentThreadData | null {
+/**
+ * A thread's own fields, `tags` among them: a view assembled from them answers `isRestoredClaudeThread`
+ * without reading the thread a second time, which is what the message order below needs.
+ */
+function getThreadFields(threadId: EARS.EntityId): (AgentThreadData & { tags?: ThreadEntity['tags'] }) | null {
   const thread = query.ids(threadId)
     .orderBy('timestamp', 'desc')
     .limit(4)
-    .pick(["shortCode", "topic", "instructions", "status", "timestamp", "forcedMode", "pinned", "chatState", "context"] as const);
-  return thread[0] as AgentThreadData | null;
+    .pick(["shortCode", "topic", "instructions", "status", "timestamp", "forcedMode", "pinned", "chatState", "context", "tags"] as const);
+  return thread[0] as (AgentThreadData & { tags?: ThreadEntity['tags'] }) | null;
 }
 
 
@@ -859,7 +903,24 @@ function getThreadFields(threadId: EARS.EntityId): AgentThreadData | null {
  * ends: opening a long thread costs its page. It reads no message's content, which is what keeps a view over it still
  * while a message streams.
  */
-function lastPage(threadId: EARS.EntityId, limit: number) {
+function lastPage(threadId: EARS.EntityId, limit: number, restored = readsAsRestoredClaudeThread(threadId)) {
+  // **A restored session is ordered before it is windowed, which costs reading all of it.** The window below
+  // is taken from the end of the `contains` relation, and for an imported or natively launched thread that
+  // order is whatever the walk wrote — so windowing first takes the wrong *messages*, not merely the right
+  // ones in the wrong order. Only such a thread pays for this; every other keeps the page.
+  if (restored) {
+    const all = orderClaudeSessionMessages(
+      (query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message)
+        .pick(['status', 'timestamp', 'context'] as const) ?? []) as Partial<MessageEntity>[],
+      restored,
+    ) as Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }>;
+    const others = all.filter(m => m.status !== 'queued');
+    return {
+      page: others.slice(Math.max(0, others.length - limit)),
+      queued: all.filter(m => m.status === 'queued'),
+      hasMore: others.length > limit,
+    };
+  }
   for (let n = limit + 4; ; n *= 2) {
     const window = (query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message)
       .reverse().limit(n).pick(['status'] as const) ?? []) as Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }>;
@@ -875,13 +936,18 @@ function lastPage(threadId: EARS.EntityId, limit: number) {
 }
 
 /**
- * A thread's messages in the order the chat shows them, each with its status alone: chronological, the queued ones
- * last. It reads no message's content, which is what keeps a view over it still while a message streams.
+ * A thread's messages in the order the chat shows them: chronological, the queued ones last.
+ *
+ * It reads each message's status and the two fields a restored Claude session is ordered by, and **no
+ * message's text or blocks** — which is what keeps a view over it still while a message streams.
  */
-function displayOrder(threadId: EARS.EntityId): Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }> {
-  const all = query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(['status'] as const) ?? [];
+function displayOrder(threadId: EARS.EntityId, restored = readsAsRestoredClaudeThread(threadId)): Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }> {
+  const all = query.ids(threadId).out(EARS.RelKind.CONTAINS, EARS.Entity.Message).pick(['status', 'timestamp', 'context'] as const) ?? [];
   const queued = all.filter(m => m.status === 'queued');
-  return [...all.filter(m => m.status !== 'queued'), ...queued] as Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }>;
+  return [
+    ...orderClaudeSessionMessages(all.filter(m => m.status !== 'queued') as Partial<MessageEntity>[], restored),
+    ...queued,
+  ] as Array<{ id: EARS.EntityId; status?: MessageEntity['status'] }>;
 }
 
 /** How far before a snippet's first match its window starts, and how long the window is, in UTF-16 units */
@@ -961,10 +1027,11 @@ export const chatQueries = {
   threadData: (threadId: EARS.EntityId): AgentThreadData | null => {
     const thread = getThreadFields(threadId);
     if (!thread) return null;
+    const { tags: _tags, ...fields } = thread;
 
     return {
-      ...thread,
-      messages: messagesOfThread(threadId),
+      ...fields,
+      messages: messagesOfThread(threadId, isRestoredClaudeThread(thread)),
       artifacts: getThreadArtifacts(threadId) as any as ArtifactEntity[],
     };
   },
@@ -976,8 +1043,9 @@ export const chatQueries = {
   chatPage: (threadId: EARS.EntityId, limit: number): ChatPage | null => {
     const thread = getThreadFields(threadId);
     if (!thread) return null;
-    const { page, queued, hasMore } = lastPage(threadId, limit);
-    return { ...thread, id: threadId as ThreadEntity['id'], messageIds: [...page, ...queued].map(m => m.id), hasMore };
+    const { tags: _tags, ...fields } = thread;
+    const { page, queued, hasMore } = lastPage(threadId, limit, isRestoredClaudeThread(thread));
+    return { ...fields, id: threadId as ThreadEntity['id'], messageIds: [...page, ...queued].map(m => m.id), hasMore };
   },
 
   /** An open tab's thread, or `null` once it is gone */
@@ -1013,6 +1081,10 @@ export const chatQueries = {
       settings: featureSettings.forFeature('threads').get(),
     };
   },
+
+  /** Whether that message is in that thread, without reading anything about it */
+  hasMessageInThread: (messageId: EARS.EntityId, threadId: EARS.EntityId): boolean =>
+    query.ids(messageId).out(EARS.RelKind.CONTAINS, EARS.Entity.Thread).ids().includes(threadId),
 
   /** A message's blocks, assembled from their rows: what an export carries and `messageById` folds in */
   blocksOf: (messageId: EARS.EntityId): StoredBlock[] => blocksOf(messageId),
@@ -1087,6 +1159,14 @@ export const chatCommands = {
     asideText?: string;
     compacted?: boolean;
     context?: Record<string, unknown>;
+    /**
+     * When the message happened, where a new one happens now.
+     *
+     * **A restored session's messages carry the CLI's own time**, not the time this process wrote them: an
+     * import walks a transcript in whatever order it reads it, and the chat is ordered by this
+     * (`orderClaudeSessionMessages`). Absent means now, which is every message a user sends.
+     */
+    timestamp?: number;
     skipRelink?: boolean;
   }): {
     id: EARS.EntityId;
@@ -1097,7 +1177,7 @@ export const chatCommands = {
     /** The blocks as rows, for a caller that describes the message it just added */
     blocks?: StoredBlock[];
   } => {
-    const { threadId, text, sender, blocks, forkable, references, isCommand, command, autoHide, asUser, asideContext, blockResponse, responseTimestamp, asideText, compacted, context, skipRelink } = params;
+    const { threadId, text, sender, blocks, forkable, references, isCommand, command, autoHide, asUser, asideContext, blockResponse, responseTimestamp, asideText, compacted, context, timestamp: happenedAt, skipRelink } = params;
 
     const thread = query.ids(threadId).first();
     if (!thread) {
@@ -1112,7 +1192,7 @@ export const chatCommands = {
       );
     }
 
-    const timestamp = Date.now();
+    const timestamp = happenedAt ?? Date.now();
     const messageTx = create(EARS.Entity.Message, { text: text.trim(), timestamp, sender, createdAt: timestamp });
 
     if (forkable !== undefined) messageTx.set('forkable', forkable);

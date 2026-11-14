@@ -1,7 +1,7 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
 import { sendToSystem } from '#generated/events.ts';
 import { newCall, recordCall, settleCall } from '@apackdev/sdk/events';
-import { terminalPool } from '../../utils/terminal-pool.ts';
+import { terminalPool } from '#extensions/terminal/pool.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, nextActiveFromHistory } from '../../utils/tab-management.ts';
 import type { TerminalInfo } from '../../../be/types.ts'

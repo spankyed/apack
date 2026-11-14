@@ -41,11 +41,6 @@ const BARE_WAIT_BY_DESIGN: Record<string, string> = {
   // is the subject, which its header says too. Its one clocked wait was on a positive condition and is now a poll
   'packages/default-setup/tests/harness-app-stop.spec.ts > wait':
     'the wait is the assertion: it proves a stopped schedule does not tick, so shortening it removes the check',
-  'packages/apack-cli/tests/build/frontend-watch.native.spec.ts > fileEventsDelivered':
-    'what the cases assert is that an event changes nothing, and an event that has no effect has nothing to await',
-  'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':
-    'the subject is a second build that must not start, so there is no event to await; load can only cause a false '
-    + 'pass here, never a false failure',
   'packages/apack-host/tests/broker/lifetime.spec.ts > keeps a session when its client leaves and an owner holds the broker':
     'the subject is a session that must *not* end, and attach is absent from the broker client, so a second '
     + 'client cannot ask about a session it did not open and there is no event that says "still here". Load '
@@ -54,6 +49,11 @@ const BARE_WAIT_BY_DESIGN: Record<string, string> = {
     'the case it serves closes the only client, so no connection remains for an event to arrive on and the '
     + "OS is the only witness left. Its sibling, where a client is still connected, awaits the broker's own "
     + '`onExit` instead',
+  'packages/apack-cli/tests/build/frontend-watch.native.spec.ts > fileEventsDelivered':
+    'what the cases assert is that an event changes nothing, and an event that has no effect has nothing to await',
+  'packages/apack-cli/tests/build/watch-package-edit.native.spec.ts > publishes one build when a refresh rewrites what the pack builds against':
+    'the subject is a second build that must not start, so there is no event to await; load can only cause a false '
+    + 'pass here, never a false failure',
   'packages/apack-host/tests/bus/reply.spec.ts > after':
     "a delay inside the handler under test — a backend system's work is I/O, so it awaits before it answers, "
     + 'which is what makes the delivery scope load-bearing. The cases await the answer',
@@ -81,6 +81,7 @@ const BARE_WAIT_BY_DESIGN: Record<string, string> = {
  * awaited event when somebody reads it.
  */
 const NOT_CONVERTED_YET: readonly string[] = [
+  'packages/default-setup/tests/harness-app-stop.spec.ts > wait',
   'packages/apack-cli/tests/commands/db.integration.spec.ts > writerDuring',
   'packages/repo-checks/tests/chain-schedule.spec.ts > done',
 ];
@@ -106,10 +107,9 @@ describe('a spec waits for the thing it waits for', () => {
       .map((wait) => `${wait.file}:${wait.line} > ${wait.name}`);
 
     expect(unaccounted, [
-      'A spec may not sleep and then assert. Await the thing instead — `settles` from @apackdev/sdk/testing',
-      'for a condition to poll (the one a pack can reach too), or `_whenSatisfied`/`_byDeadline` from',
-      '@apackdev/sdk/testing/waiting for an event. If the elapsed time really is the subject, add it to',
-      'BARE_WAIT_BY_DESIGN with the reason.',
+      'A spec may not sleep and then assert. Await the thing instead —',
+      '`_whenSatisfied` or `_byDeadline` from @apackdev/sdk/testing/waiting — or, if the elapsed time really is',
+      'the subject, add it to BARE_WAIT_BY_DESIGN with the reason.',
     ].join(' ')).toEqual([]);
   });
 
@@ -126,8 +126,8 @@ describe('a spec waits for the thing it waits for', () => {
    * Asserted as an exact number for the same reason `spec-cost`'s records are: a count that drifts upward
    * without anyone noticing is how a list of deliberate exceptions becomes a list of everything.
    */
-  it('has two waits left to examine', () => {
-    expect(NOT_CONVERTED_YET).toHaveLength(2);
+  it('has three waits left to examine', () => {
+    expect(NOT_CONVERTED_YET).toHaveLength(3);
   });
 });
 
@@ -139,10 +139,26 @@ describe('a spec waits for the thing it waits for', () => {
  * own state, where nothing outside it is slowed by load and a quick failure beats the guard's stall window.
  */
 const CLOCK_BY_DESIGN: Record<string, string> = {
-  // Empty, and the three cases below are what keep it honest rather than this table: scoped to the vitest
-  // trees, every clock left in them has become a progress bound, and the planted file above is what proves
-  // the reader still finds one. An entry is a claim about a named file, so the list going back up is a
-  // finding and not paperwork.
+  // The native Claude suites: `it.skipIf(!executable||!workspace||!endpoint)`, so these run only where someone
+  // has a real `claude` binary and an HTTP endpoint for it. Their waits are on that binary starting and
+  // answering over the network, which is the class the rule already admits — not on work this machine's load
+  // slows, and not something the progress guard can read, since the CPU is spent in another process tree.
+  'packages/default-setup/tests/content/actions/claude-code/reset-chat-native.spec.ts':
+    'drives a real `claude` against an HTTP endpoint, so the wait is a network wait and the signal bounds it',
+  'packages/default-setup/tests/features/code/be/services/claude-code/native-app-owner.spec.ts':
+    'the same binary end to end, including a model round trip per turn, which is a network wait',
+  // A child that may never signal: the case spawns a launcher and waits for it to write `started`. With no
+  // deadline the poll never ends when that child dies before writing, and the guard's stall window is the
+  // wrong instrument — the test is making progress, polling a file that will not appear
+  'packages/default-setup/tests/features/code/be/services/claude-code/terminal-bridge.spec.ts':
+    'bounds a spawned launcher that may never write its readiness file, where a clock-free poll cannot end',
+  // A kill grace, which the rule names: the wait is for the OS to reap a child after SIGKILL, and nothing
+  // this machine's load slows is in it — a second is already generous for a reap
+  'packages/default-setup/tests/features/code/be/services/claude-code/runner-once.spec.ts':
+    'waits for the OS to reap a killed child, which is a kill grace rather than work being done',
+  // In-process, which is the original class: a fake native whose completion flag this process sets
+  'packages/default-setup/tests/features/code/be/services/claude-code/conversation.spec.ts':
+    "waits on a flag the fake native sets on this process's own event loop, where load slows wait and work alike",
 };
 
 

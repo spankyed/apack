@@ -140,7 +140,8 @@
     "tsup": "^9.0.0",
     "typescript": "^5.8.3",
     "unplugin-vue": "^7.2.0",
-    "vue-component-type-helpers": "^2.2.12"
+    "vue-component-type-helpers": "^2.2.12",
+    "@xterm/xterm": "6.1.0-beta.290"
   },
   "dependencies": {
     "@app/api": "*",

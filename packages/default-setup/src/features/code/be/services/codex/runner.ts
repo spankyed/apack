@@ -66,13 +66,13 @@ class CodexCliNotFoundError extends Error {
 
 // ─── Env ─────────────────────────────────────────────────────────────────────
 
-function buildCodexEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+/** Exported for direct unit testing, as `claude-code/runner.ts`'s equivalent is: a pure function. */
+export function buildCodexEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   // **The app's identity is stripped before anything else is decided** (`agentChildEnvironment`). This child
   // is the widest case there is: its own tools spawn whatever the model asks for, in this environment
   const env: NodeJS.ProcessEnv = { ...agentChildEnvironment(process.env), ...override }
   // Remove the server's Anthropic key so it doesn't leak to the Codex subprocess
   delete env.ANTHROPIC_API_KEY
-  delete env.NODE_ENV
   return env
 }
 

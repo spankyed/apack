@@ -1,5 +1,5 @@
-import { afterEach, expect, it, vi } from 'vitest';
-import { createApp, h, nextTick, type App } from 'vue';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { createApp, h, nextTick, ref, type App } from 'vue';
 import { createActor, createMachine } from 'xstate';
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
 import { SurfaceScope, type ArtifactFrontendBinding, type BlockFrontendBinding } from '@apackdev/sdk/fe';
@@ -10,7 +10,8 @@ import type { MessageEntity } from '#generated/types.ts';
 import ConversationViewer from '@apackdev/ui/components/tiptap/ConversationViewer';
 
 let app: App | undefined;
-afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren(); stopFeTestRuntime(); });
+beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); });
+afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren(); stopFeTestRuntime(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 function fixture() {
   const owner = { packId: 'external', origin: 'native' as const, enabled: true };
@@ -94,3 +95,66 @@ it('keeps a message body mounted when its aside is expanded and collapsed', asyn
   expect(bubble.style.display).toBe('none');
   expect(f.root.querySelector('[data-body]')).toBe(body);
 });
+
+it('preserves normal sidebar wheel scrolling and consumes compact wheel only when the strip moves', () => {
+  const f = fixture();
+  app = createApp(ContentViewer, { artifacts: [], compact: false }); app.mount(f.root);
+  let list = f.root.querySelector('[data-onboarding-id="agent-artifacts"]')!.firstElementChild as HTMLElement;
+  const wheel = (target: HTMLElement, input: WheelEventInit) => {
+    const event = new WheelEvent('wheel', { bubbles: true, cancelable: true, ...input });
+    target.dispatchEvent(event); return event.defaultPrevented;
+  };
+  expect(wheel(list, { deltaY: 80 })).toBe(false);
+  app.unmount();
+  app = createApp(ContentViewer, { artifacts: [], compact: true }); app.mount(f.root);
+  list = f.root.querySelector('[data-onboarding-id="agent-artifacts"]')!.firstElementChild as HTMLElement;
+  Object.defineProperties(list, { scrollWidth: { value: 500 }, clientWidth: { value: 200 } });
+  expect(wheel(list, { deltaY: 80 })).toBe(true); expect(list.scrollLeft).toBe(80);
+  expect(wheel(list, { deltaY: 400 })).toBe(true); expect(list.scrollLeft).toBe(300);
+  expect(wheel(list, { deltaY: 80 })).toBe(false); expect(list.scrollLeft).toBe(300);
+  expect(wheel(list, { deltaY: -60 })).toBe(true); expect(list.scrollLeft).toBe(240);
+  expect(wheel(list, { deltaX: 20, deltaY: 40 })).toBe(false);
+  expect(wheel(list, { deltaY: 40, ctrlKey: true })).toBe(false);
+  expect(wheel(list, { deltaY: 40, shiftKey: true })).toBe(false);
+  expect(list.scrollLeft).toBe(240);
+});
+
+it('offers full session details in a short canvas and returns focus when closed', async () => {
+  const f = fixture(), declaration = { ...f.artifact, type: 'claude-session' };
+  f.state.artifacts = [declaration];
+  f.artifacts.set('claude-session', { packId: 'external', declaration: declaration.declaration, binding: { type: 'claude-session', fe: { icon: {}, component: { props: ['artifact'], render() { return h('div', { 'data-session-details': this.artifact.id }, this.artifact.title + ' · model and accounting'); } } } } });
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(40);
+  app = createApp(ContentViewer, { artifacts: [{ id: 'session-a', type: 'claude-session', title: 'Claude Code session', content: {} }], selectedArtifactId: 'session-a' });
+  app.mount(f.root); await nextTick();
+  const trigger = f.root.querySelector<HTMLButtonElement>('[aria-label="Open Claude session details"]')!;
+  expect(trigger).not.toBeNull(); expect(f.root.querySelector('[data-session-details]')).toBeNull();
+  trigger.focus(); trigger.click(); await nextTick();
+  await vi.waitFor(() => expect(document.body.querySelector('[aria-label="Claude session details"]')).not.toBeNull());
+  const details = document.body.querySelector('[aria-label="Claude session details"]')!;
+  expect(details.querySelector('[data-session-details="session-a"]')?.textContent).toContain('model and accounting');
+  details.querySelector<HTMLButtonElement>('[aria-label="Close Claude session details"]')!.click();
+  await vi.waitFor(() => expect(document.body.querySelector('[aria-label="Claude session details"]')).toBeNull());
+  await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+})
+
+it('retains ordinary artifact navigation and content when the short canvas is not a sole native session', async () => {
+  const f = fixture(); vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(40);
+  app = createApp(ContentViewer, { artifacts: [{ id: 'card-a', type: 'card', title: 'Saved card', content: 'Keep this document available' }], selectedArtifactId: 'card-a' });
+  app.mount(f.root); await nextTick();
+  expect(f.root.querySelector('[aria-label="Open Claude session details"]')).toBeNull();
+  expect(f.root.textContent).toContain('Keep this document available'); expect(f.root.textContent).toContain('Saved card');
+})
+
+it('retires an open session popover when its selected artifact is replaced', async () => {
+  const f = fixture(), declaration = { ...f.artifact, type: 'claude-session' };
+  f.state.artifacts = [declaration];
+  f.artifacts.set('claude-session', { packId: 'external', declaration: declaration.declaration, binding: { type: 'claude-session', fe: { icon: {}, component: { render: () => h('div', 'Session metadata') } } } });
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(40);
+  const model = ref({ artifacts: [{ id: 'session-a', type: 'claude-session', title: 'First session', content: {} }], selectedArtifactId: 'session-a' });
+  app = createApp({ render: () => h(ContentViewer, model.value) }); app.mount(f.root); await nextTick();
+  f.root.querySelector<HTMLButtonElement>('[aria-label="Open Claude session details"]')!.click();
+  await vi.waitFor(() => expect(document.body.querySelector('[aria-label="Claude session details"]')).not.toBeNull());
+  model.value = { artifacts: [{ id: 'session-b', type: 'claude-session', title: 'Second session', content: {} }], selectedArtifactId: 'session-b' };
+  await vi.waitFor(() => expect(document.body.querySelector('[aria-label="Claude session details"]')).toBeNull());
+  expect(f.root.querySelector('[aria-label="Open Claude session details"]')?.textContent).toContain('Second session');
+})

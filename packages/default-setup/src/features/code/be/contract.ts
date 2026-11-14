@@ -439,6 +439,7 @@ export type IncomingCodeEvents =
   | { type: 'SELECT_REPOSITORY'; path: string }
   /** Settings → Providers: resolve a CLI and store where it was found, in this feature's own settings */
   | { type: 'TEST_CLI_PROVIDER'; provider: string }
+  | { type: 'PREPARE_CLAUDE_PROFILE_SETUP' }
   /**
    * What a window's code surface starts from, asked as the shell starts it: answered with \`CODE_STARTED\`, and by the
    * explorer and the terminals, to which the system hands this same ask, with the files and the running terminals
@@ -452,6 +453,7 @@ export type IncomingCodeEvents =
   /** `by` a window that gained focus; without it, a terminal command or an agent's turn has just ended */
   | { type: 'CHECK_FOR_EXTERNAL_CHANGES'; by?: 'window' }
 export type OutgoingCodeEvents =
+  | { type: 'CLAUDE_PROFILE_SETUP_PREPARED'; result: {command: string; cwd: string} | {error: string} }
   | OutgoingExplorerEvents
   | OutgoingSearchEvents
   | OutgoingCommitEvents

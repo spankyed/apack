@@ -147,30 +147,30 @@ export function useAttachments() {
     pendingFiles.value = pendingFiles.value.filter((_, idx) => idx !== i)
   }
 
-  const collectAttachments = async (entityId: string): Promise<MessageReferences | undefined> => {
-    const imageRefs: ImageReference[] = []
-    for (const img of pendingImages.value) {
-      const match = img.dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/)
-      if (match) {
-        const url = await window.electronAPI?.media.upload(entityId, match[2], match[1])
-        if (url) imageRefs.push({ url, name: img.name })
-      }
-    }
-    const files: FileReference[] = pendingFiles.value.map(f => ({
-      name: f.name, path: f.path, typeLabel: f.typeLabel,
-      isImage: f.isImage,
-      // previewUrl deliberately omitted — base64 not stored
-    }))
-    if (!imageRefs.length && !files.length) return undefined
+  /** Snapshot both values and identities before any upload yields to later composer edits. */
+  const captureAttachments = () => {
+    const images = pendingImages.value.map(item => ({ item, dataUrl: item.dataUrl, name: item.name }))
+    const capturedFiles = pendingFiles.value.slice()
+    const files: FileReference[] = capturedFiles.map(f => ({ name: f.name, path: f.path, typeLabel: f.typeLabel, isImage: f.isImage }))
     return {
-      ...(imageRefs.length && { images: imageRefs }),
-      ...(files.length && { files }),
+      async collect(entityId: string): Promise<MessageReferences | undefined> {
+        const imageRefs: ImageReference[] = []
+        for (const img of images) {
+          const match = img.dataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/)
+          if (!match) throw new Error(`Cannot upload image: ${img.name}`)
+          const url = await window.electronAPI?.media.upload(entityId, match[2], match[1])
+          if (!url) throw new Error(`Image upload failed: ${img.name}`)
+          imageRefs.push({ url, name: img.name })
+        }
+        if (!imageRefs.length && !files.length) return undefined
+        return { ...(imageRefs.length ? { images: imageRefs } : {}), ...(files.length ? { files } : {}) }
+      },
+      clear() {
+        const imageItems = new Set(images.map(image => image.item)), fileItems = new Set(capturedFiles)
+        pendingImages.value = pendingImages.value.filter(image => !imageItems.has(image))
+        pendingFiles.value = pendingFiles.value.filter(file => !fileItems.has(file))
+      },
     }
-  }
-
-  const clearAll = () => {
-    pendingImages.value = []
-    pendingFiles.value = []
   }
 
   /** Restore pending attachments from a persisted MessageReferences (e.g. on revert). */
@@ -221,8 +221,7 @@ export function useAttachments() {
     removeImage,
     openFilePicker,
     removeFile,
-    collectAttachments,
-    clearAll,
+    captureAttachments,
     restoreFromReferences,
   }
 }

@@ -15,7 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('apack-terminal-view', async () => (await import('../../_support/terminal-view.ts')).viewModule())
 
 const { startCodeSurface, terminalInfo } = await import('../../_support/terminal-host.ts')
-const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool } = await import('#extensions/terminal/pool.ts')
 const PanelTerminalSection = (await import('#features/code/fe/features/terminal/PanelTerminalSection.vue')).default
 
 let surface: ReturnType<typeof startCodeSurface> | undefined

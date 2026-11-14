@@ -155,7 +155,9 @@ const isApprovedResponse = (response: any): boolean => {
 }
 
 // Response display handling
+const isCancelledResponse = computed(() => props.response?.cancelled === true)
 const approvalClasses = computed(() => {
+  if (isCancelledResponse.value) return 'bg-neutral-800/40 border-neutral-600/30 text-neutral-300'
   const approved = isApprovedResponse(props.response)
   return approved
     ? 'bg-green-900/20 border-green-600/30 text-green-200'
@@ -168,6 +170,7 @@ const approvalIcon = computed(() => {
 })
 
 const approvalText = computed(() => {
+  if (isCancelledResponse.value) return 'Cancelled'
   const approved = isApprovedResponse(props.response)
   return approved ? 'Approved' : 'Denied'
 })

@@ -1,0 +1,345 @@
+import { claudeTerminalHelperPolicyRuntime } from '#features/code/be/services/claude-code/terminal-helper-policy-runtime.ts'
+import {spawn} from 'node:child_process'
+import {once} from 'node:events'
+import {rm} from 'node:fs/promises'
+import {randomUUID,createHash} from 'node:crypto'
+import {tmpdir} from 'node:os'
+import {claimClaudeBackgroundCheckpoint} from '#features/code/be/services/claude-code/background-observer-checkpoint.ts'
+import { request } from 'node:http'
+import { writeFile, access } from 'node:fs/promises'
+import { join } from 'node:path'
+import { createClaudeBackgroundStatusObserver } from '#features/code/be/services/claude-code/background-status-observer.ts'
+const parent='24be904a-3c35-4981-9793-cbe7a6c19d46',child='05ff1d31-597d-4537-8737-4407191add6e'
+const original={jobId:'05ff1d31',sessionId:child,activeSessionId:child,pid:119,start:'worker-start',hostPid:100,hostStart:'host-start',cwd:'/owned'}
+async function fixture(target:()=>{sessionId:string;cwd:string}|undefined=()=>({sessionId:child,cwd:'/owned'})){
+ let identity={...original}
+ const authorities:{identify:ReturnType<typeof vi.fn>;close:ReturnType<typeof vi.fn>}[]=[],changed=vi.fn()
+ const observer=await createClaudeBackgroundStatusObserver({parentSessionId:parent,target,changed,authority:()=>{const authority={identify:vi.fn(async()=>({...identity})),close:vi.fn(async()=>{})};authorities.push(authority);return authority}})
+ const post=(path:string,value:unknown,token=observer.token)=>new Promise<{code:number;value:any}>((resolve,reject)=>{
+  const req=request({socketPath:observer.socketPath,path,method:'POST',headers:{'x-apack-native-token':token,'content-type':'application/json'}},response=>{let text='';response.setEncoding('utf8');response.on('data',value=>text+=value);response.on('end',()=>resolve({code:response.statusCode!,value:JSON.parse(text)}))});req.on('error',reject);req.end(JSON.stringify(value))
+ })
+ const message=(token:string,sequence=1)=>({sessionId:child,pid:identity.pid,token,sequence,metadata:{model:'sonnet',turns:2},usage:{startedAt:1,cost:{usd:0.001}}})
+ return{observer,authorities,changed,post,message,replace:()=>{identity={...identity,pid:120,start:'new-worker-start'}}}
+}
+it('keeps the independently addressed child listener and plugin files after parent release',async()=>{
+ const f=await fixture();const plugin=join(f.observer.directory,'owned-plugin');await writeFile(plugin,'fixture')
+ try{
+  const registered=await f.post('/background-register',{sessionId:child,pid:119});expect(registered.code).toBe(200)
+  expect((await f.post('/background-status',f.message(registered.value.token))).code).toBe(200)
+  await f.observer.releaseParent();await access(plugin)
+  expect((await f.post('/background-status',{...f.message(registered.value.token,2),metadata:{model:'sonnet',turns:3}})).code).toBe(200)
+  expect(f.observer.value).toMatchObject({sessionId:child,pid:119,turns:3,totalCostUsd:0.001})
+ }finally{await f.observer.close()}
+ await expect(access(plugin)).rejects.toThrow();expect(f.authorities[0].close).toHaveBeenCalledOnce()
+})
+it('refuses foreign sessions, tokens and parent control routes on the child channel',async()=>{
+ const f=await fixture()
+ try{
+  expect((await f.post('/background-register',{sessionId:parent,pid:119})).code).toBe(409)
+  expect((await f.post('/background-register',{sessionId:child,pid:119},'wrong-token')).code).toBe(403)
+  expect((await f.post('/poll',{sessionId:child})).code).toBe(404)
+  expect(f.authorities[0].identify).not.toHaveBeenCalled();expect(f.observer.value).toBeUndefined()
+ }finally{await f.observer.close()}
+})
+it('retires a replaced process lease after parent release and admits a fresh original registration',async()=>{
+ vi.useFakeTimers({toFake:['setInterval','clearInterval']});const f=await fixture()
+ try{
+  const old=(await f.post('/background-register',{sessionId:child,pid:119})).value.token
+  await f.post('/background-status',f.message(old));await f.observer.releaseParent();f.replace()
+  await vi.advanceTimersByTimeAsync(5000)
+  expect(f.observer.value).toBeUndefined();expect(f.authorities[0].close).toHaveBeenCalledOnce();expect(f.authorities).toHaveLength(2)
+  expect((await f.post('/background-status',f.message(old,2))).code).toBe(409)
+  const fresh=await f.post('/background-register',{sessionId:child,pid:120});expect(fresh.code).toBe(200)
+  expect((await f.post('/background-status',f.message(fresh.value.token))).code).toBe(200)
+  expect(f.observer.value?.pid).toBe(120)
+ }finally{await f.observer.close();vi.useRealTimers()}
+})
+
+it('keeps its channel and child lease through same-parent adoption before the new writer observes continuation',async()=>{
+ const f=await fixture()
+ try{
+  const registered=await f.post('/background-register',{sessionId:child,pid:119});await f.post('/background-status',f.message(registered.value.token))
+  await f.observer.releaseParent();const changed=vi.fn();f.observer.adoptParent(()=>undefined,changed)
+  expect((await f.post('/background-status',f.message(registered.value.token,2))).code).toBe(200)
+  expect(f.observer.value?.sessionId).toBe(child);expect(changed).toHaveBeenCalled();expect(f.authorities).toHaveLength(1)
+ }finally{await f.observer.close()}
+})
+
+it('retires old child tokens and the original identity authority on an acknowledged parent-session reset',async()=>{
+ const f=await fixture()
+ try{
+  const old=(await f.post('/background-register',{sessionId:child,pid:119})).value.token;await f.post('/background-status',f.message(old))
+  const next='33333333-3333-4333-8333-333333333333';await f.observer.resetParent(next)
+  expect(f.observer.parentSessionId).toBe(next);expect(f.observer.value).toBeUndefined();expect(f.authorities[0].close).toHaveBeenCalledOnce()
+  expect((await f.post('/background-status',f.message(old,2))).code).toBe(409)
+ }finally{await f.observer.close()}
+})
+
+it('keeps formatter output independent of the parent and refuses retired policy/worker results',async()=>{
+ const f=await fixture()
+ try{
+  const token=(await f.post('/background-register',{sessionId:child,pid:119})).value.token
+  const config={command:'cat',shellPrefix:null,policy:'personal'}
+  const first=await f.post('/background-status',{...f.message(token),formatter:config});expect(first.code).toBe(200)
+  const prefix=first.value.shellPrefix,producer=JSON.parse(Buffer.from(prefix.slice(prefix.lastIndexOf(' -')+2),'base64url').toString())
+  const output={...producer,startedAt:'10',totalCostUsd:0.001,stdout:'original child status'}
+  expect((await f.post('/background-formatter',output)).code).toBe(200);expect(f.observer.value?.statusLine).toBe('original child status')
+  await f.observer.releaseParent();expect((await f.post('/background-status',{...f.message(token,2),formatter:config})).code).toBe(200)
+  expect(f.observer.value?.statusLine).toBe('original child status')
+  await f.post('/background-status',{...f.message(token,3),formatter:{...config,command:null,policy:'disabled'}})
+  expect(f.observer.value?.statusLine).toBeUndefined();expect((await f.post('/background-formatter',{...output,startedAt:'20'})).code).toBe(409)
+  const fresh=await f.post('/background-status',{...f.message(token,4),formatter:config})
+  const next=fresh.value.shellPrefix,current=JSON.parse(Buffer.from(next.slice(next.lastIndexOf(' -')+2),'base64url').toString())
+  f.replace();expect((await f.post('/background-formatter',{...current,startedAt:'30',totalCostUsd:0.001,stdout:'wrong worker'})).code).toBe(409)
+ }finally{await f.observer.close()}
+})
+
+it.skipIf(process.platform==='win32')('recovers the same private endpoint after its actual API owner dies without admitting cached status or old formatter output',async()=>{
+ const profile='/owned-recovery-test/'+randomUUID(),module=new URL('../../../../../../src/features/code/be/services/claude-code/background-status-observer.ts',import.meta.url).href
+ const script='const {createClaudeBackgroundStatusObserver}=await import('+JSON.stringify(module)+');const observer=await createClaudeBackgroundStatusObserver({parentSessionId:'+JSON.stringify(parent)+',profile:'+JSON.stringify(profile)+',target:()=>('+JSON.stringify({sessionId:child,cwd:'/owned'})+'),changed(){},authority:()=>({identify:async()=>('+JSON.stringify(original)+'),close:async()=>{}})});console.log(JSON.stringify({directory:observer.directory,socketPath:observer.socketPath,token:observer.token}));'
+ const processOwner=spawn(process.execPath,['--experimental-strip-types','--input-type=module','-e',script],{stdio:['ignore','pipe','pipe']})
+ let recovered:Awaited<ReturnType<typeof createClaudeBackgroundStatusObserver>>|undefined,endpoint:any
+ const index=join(process.platform==='darwin'?'/private/tmp':tmpdir(),'apack-claude-background-'+process.getuid?.(),createHash('sha256').update(JSON.stringify([profile,parent])).digest('hex'))
+ try{
+  endpoint=await new Promise((resolve,reject)=>{let text='';processOwner.stdout.setEncoding('utf8');processOwner.stdout.on('data',chunk=>{text+=chunk;if(text.includes('\n'))resolve(JSON.parse(text.split('\n')[0]))});processOwner.once('error',reject);processOwner.once('exit',()=>reject(Error('Fixture API exited before readiness')))})
+  const post=(path:string,value:unknown)=>new Promise<{code:number;value:any}>((resolve,reject)=>{const req=request({socketPath:endpoint.socketPath,path,method:'POST',headers:{'x-apack-native-token':endpoint.token,'content-type':'application/json'}},response=>{let text='';response.setEncoding('utf8');response.on('data',chunk=>text+=chunk);response.on('end',()=>resolve({code:response.statusCode!,value:JSON.parse(text)}))});req.on('error',reject);req.end(JSON.stringify(value))})
+  const registered=(await post('/background-register',{sessionId:child,pid:119})).value
+  const message=(token:string)=>({sessionId:child,pid:119,token,sequence:1,metadata:{model:'sonnet',turns:2},usage:{startedAt:1},formatter:{command:'printf native',shellPrefix:null,policy:'{}'}})
+  const first=await post('/background-status',message(registered.token));expect(first.code).toBe(200)
+  const oldConfig=JSON.parse(Buffer.from(first.value.shellPrefix.split(' -').at(-1),'base64url').toString())
+  const captured={...oldConfig,stdout:'old native output',startedAt:'1',totalCostUsd:0.001}
+  expect((await post('/background-formatter',captured)).code).toBe(200)
+  const plugin=join(endpoint.directory,'original-module');await writeFile(plugin,'retained original plugin')
+  const exited=once(processOwner,'exit');processOwner.kill('SIGKILL');await exited
+  const checkpoint=await claimClaudeBackgroundCheckpoint({profile,parentSessionId:parent});expect(checkpoint).toBeDefined()
+  recovered=await createClaudeBackgroundStatusObserver({parentSessionId:parent,profile,checkpoint,target:()=>({sessionId:child,cwd:'/owned'}),changed(){},authority:()=>({identify:async()=>({...original}),close:async()=>{}})})
+  expect(recovered.socketPath).toBe(endpoint.socketPath);expect(recovered.value).toBeUndefined();await access(plugin)
+  expect((await post('/background-status',message(registered.token))).code).toBe(409)
+  expect((await post('/background-formatter',{...captured,startedAt:'2'})).code).toBe(409)
+  const fresh=(await post('/background-register',{sessionId:child,pid:119})).value;expect(fresh.token).not.toBe(registered.token)
+  expect((await post('/background-status',message(fresh.token))).code).toBe(200)
+  expect((await post('/background-formatter',{...captured,startedAt:'3'})).code).toBe(409)
+  expect(recovered.value).toMatchObject({sessionId:child,pid:119,model:'sonnet'});expect(recovered.value?.statusLine).toBeUndefined()
+ }finally{
+  if(processOwner.exitCode===null&&processOwner.signalCode===null){const exited=once(processOwner,'exit');processOwner.kill('SIGKILL');await exited}
+  await recovered?.close();if(endpoint)await rm(endpoint.directory,{recursive:true,force:true});await rm(index,{recursive:true,force:true})
+ }
+})
+
+it('publishes refreshed usage and its unchanged valid formatter as one snapshot',async()=>{
+ const f=await fixture(),snapshots:any[]=[]
+ try{
+  const registered=(await f.post('/background-register',{sessionId:child,pid:119})).value
+  const formatter={command:'printf steady',shellPrefix:null,policy:'{}'}
+  const first=await f.post('/background-status',{...f.message(registered.token),formatter})
+  const config=JSON.parse(Buffer.from(first.value.shellPrefix.split(' -').at(-1),'base64url').toString())
+  expect((await f.post('/background-formatter',{...config,startedAt:'1',totalCostUsd:0.001,stdout:'Native steady status'})).code).toBe(200)
+  expect(f.observer.value?.statusLine).toBe('Native steady status')
+  const detach=f.observer.subscribe(()=>snapshots.push(f.observer.value))
+  expect((await f.post('/background-status',{...f.message(registered.token,2),metadata:{model:'sonnet',turns:3},formatter})).code).toBe(200)
+  detach();expect(snapshots.length).toBeGreaterThan(0)
+  expect(snapshots.every(value=>value?.statusLine==='Native steady status')).toBe(true)
+  expect(snapshots.at(-1)?.turns).toBe(3)
+ }finally{await f.observer.close()}
+})
+
+it('clears an old formatter immediately when a new lease overtakes a pending status lookup',async()=>{
+ const f=await fixture(),snapshots:any[]=[]
+ let release!:(value:typeof original)=>void,started!:()=>void
+ const ready=new Promise<void>(resolve=>{started=resolve}),held=new Promise<typeof original>(resolve=>{release=resolve})
+ let pending:ReturnType<typeof f.post>|undefined
+ try{
+  const lease=(await f.post('/background-register',{sessionId:child,pid:119})).value.token,formatter={command:'printf steady',shellPrefix:null,policy:'{}'}
+  const configured=await f.post('/background-status',{...f.message(lease),formatter}),config=JSON.parse(Buffer.from(configured.value.shellPrefix.split(' -').at(-1),'base64url').toString())
+  await f.post('/background-formatter',{...config,startedAt:'1',totalCostUsd:0.001,stdout:'Old lease output'})
+  f.observer.subscribe(()=>snapshots.push(f.observer.value))
+  f.authorities[0].identify.mockImplementationOnce(()=>{started();return held})
+  pending=f.post('/background-status',{...f.message(lease,2),formatter});await ready
+  const fresh=await f.post('/background-register',{sessionId:child,pid:119});expect(fresh.code).toBe(200);expect(fresh.value.token).not.toBe(lease)
+  expect(snapshots.length).toBeGreaterThan(0);expect(snapshots.at(-1)?.statusLine).toBeUndefined()
+  release({...original});expect((await pending).code).toBe(409)
+ }finally{release({...original});await pending?.catch(()=>{});await f.observer.close()}
+})
+it('does not hide status expiry while a later identity lookup is pending',async()=>{
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout','Date']})
+ const f=await fixture(),snapshots:any[]=[]
+ let release!:(value:typeof original)=>void,started!:()=>void
+ const ready=new Promise<void>(resolve=>{started=resolve}),held=new Promise<typeof original>(resolve=>{release=resolve})
+ let pending:ReturnType<typeof f.post>|undefined
+ try{
+  const lease=(await f.post('/background-register',{sessionId:child,pid:119})).value.token
+  await f.post('/background-status',f.message(lease));f.observer.subscribe(()=>snapshots.push(f.observer.value))
+  f.authorities[0].identify.mockImplementationOnce(()=>{started();return held})
+  pending=f.post('/background-status',f.message(lease,2));await ready
+  await vi.advanceTimersByTimeAsync(5000);expect(snapshots.at(-1)).toBeUndefined();expect(f.observer.value).toBeUndefined()
+  release({...original});expect((await pending).code).toBe(200);expect(f.observer.value?.observedAt).toBe(Date.now())
+ }finally{release({...original});await pending?.catch(()=>{});await f.observer.close();vi.useRealTimers()}
+})
+
+it('binds child drawing and reverse prompts to the original worker and retires them on replacement', async () => {
+ const {mkdtemp,mkdir,readFile}=await import('node:fs/promises'),{createServer}=await import('node:http')
+ const profile=await mkdtemp(join(process.platform==='darwin'?'/private/tmp':tmpdir(),'cc-ui-profile-'))
+ let identity={...original}
+ const observer=await createClaudeBackgroundStatusObserver({profile,parentSessionId:parent,childUiLaunch:{configDir:join(profile,'claude-code-profile','config'),executable:process.execPath,cwd:'/owned',searchPath:process.env.PATH},target:()=>({sessionId:child,cwd:'/owned'}),changed(){},authority:()=>({identify:async()=>({...identity}),close:async()=>{}})})
+ const token='b'.repeat(64),worker=join(observer.directory,'workers','w-119-abcdef'),socketPath=join(worker,'ui.sock')
+ const post=(path:string,value:unknown,auth=observer.token)=>new Promise<{code:number;value:any}>((resolve,reject)=>{
+  const req=request({socketPath:observer.socketPath,path,method:'POST',headers:{'x-apack-native-token':auth}},res=>{let text='';res.on('data',chunk=>text+=chunk);res.on('end',()=>resolve({code:res.statusCode!,value:JSON.parse(text)}))});req.on('error',reject);req.end(JSON.stringify(value))
+ })
+ await mkdir(worker,{recursive:true,mode:0o700})
+ // mkdir's intermediates use the process umask; the private workers parent is explicit.
+ const {chmod}=await import('node:fs/promises');await chmod(join(observer.directory,'workers'),0o700)
+ await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
+ await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath,mainObservationClaimed:false,generations:{main:'main-generation',subagent:'subagent-generation'}}),{mode:0o600})
+ let policyReady=false
+ let cachedMainStatus: string | undefined
+ const helperPolicy={allowManagedHooksOnly:false,disableAllHooks:false}
+ const helperPolicyFields=new Function('effective','policy',claudeTerminalHelperPolicyRuntime+'\nreturn nativeHelperPolicySnapshot(effective,policy)')
+ const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);if(value.request?.subtype==='apack_owner_snapshot'&&!policyReady){res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,error:'Native policy binding not ready'}));return}res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,cachedMainStatus,...helperPolicyFields({statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}},{...helperPolicy,statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}})}:{attached:true}}))})
+ await new Promise<void>(resolve=>native.listen(socketPath,resolve))
+ try {
+  expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
+  const startupMain={sessionId:child,parentPid:119,kind:'main',generation:'main-generation',policyKey:'[false,false,false]',command:'main-caption',startedAt:'9',totalCostUsd:0.00042,code:0,truncated:false,stdout:'Original startup caption'}
+  await writeFile(join(worker,'startup-main.json'),JSON.stringify(startupMain),{mode:0o600})
+  const lease=(await post('/background-register',{sessionId:child,pid:119})).value.token
+  const [transport,parallelTransport]=await Promise.all([observer.desktopTransport(),observer.desktopTransport()]);expect(transport).toBeDefined();expect(parallelTransport).toBe(transport)
+  const desktop=observer.desktopOwner!
+  expect(desktop).toMatchObject({parentSessionId:parent,identity:original,transport})
+  expect(await observer.desktopTransport()).toBe(transport);expect(observer.desktopOwner).toBe(desktop)
+  const helperSnapshot=(sequence:number)=>({sessionId:child,pid:119,token:lease,sequence,metadata:{model:'sonnet',turns:2},usage:{startedAt:1,cost:{usd:0.00042}},formatter:{command:'main-caption',shellPrefix:null,policy:JSON.stringify(helperPolicy)},helpers:{command:'caption-helper',policyKey:JSON.stringify([helperPolicy.allowManagedHooksOnly,helperPolicy.disableAllHooks,false]),agents:[{id:'reviewer',type:'general-purpose',status:'running'}]}})
+  const configured=await post('/background-status',helperSnapshot(1));expect(configured.code).toBe(200)
+  expect(observer.value?.statusLine).toBeUndefined();policyReady=true
+  expect((await post('/background-status',helperSnapshot(2))).code).toBe(200)
+  expect(observer.value?.statusLine).toBe('Original startup caption')
+  const prefix=configured.value.shellPrefix,formatterConfig=JSON.parse(Buffer.from(prefix.slice(prefix.lastIndexOf(' -')+2),'base64url').toString())
+  expect((await post('/background-formatter',{...formatterConfig,startedAt:'10',totalCostUsd:0.00042,code:0,stdout:'Fresh same-cost caption'})).code).toBe(200)
+  expect(observer.value?.statusLine).toBe('Fresh same-cost caption')
+  expect((await post('/background-formatter',{...formatterConfig,startedAt:'11',totalCostUsd:0.00042,code:1,stdout:''})).code).toBe(200)
+  expect(observer.value?.statusLine).toBeUndefined()
+  const helperOutput={sessionId:child,parentPid:119,kind:'subagent',generation:'subagent-generation',policyKey:'[false,false,false]',command:'caption-helper',startedAt:'10',code:0,truncated:false,tasks:[{id:'reviewer',status:'running'}],stdout:JSON.stringify({id:'reviewer',content:'Release review caption'})}
+  expect((await post('/native-status',helperOutput)).code).toBe(403)
+  expect((await post('/native-status',helperOutput,token)).code).toBe(200)
+  expect(observer.value?.agents).toMatchObject([{id:'reviewer',statusText:'Release review caption'}])
+  expect((await post('/native-status',{...helperOutput,kind:'main',command:'root-helper',startedAt:'11'},token)).code).toBe(409)
+  expect(observer.value?.agents).toMatchObject([{id:'reviewer',statusText:'Release review caption'}])
+  helperPolicy.allowManagedHooksOnly=true
+  expect((await post('/native-status',{...helperOutput,startedAt:'11'},token)).code).toBe(409)
+  expect(observer.value?.agents).toEqual([])
+  expect((await post('/background-status',helperSnapshot(3))).code).toBe(200)
+  expect(observer.value?.statusLine).toBeUndefined()
+  helperPolicy.allowManagedHooksOnly=false
+  expect((await post('/background-status',helperSnapshot(4))).code).toBe(200)
+  const restoredGeneration=JSON.parse(await readFile(join(worker,'observer.json'),'utf8')).generations.subagent
+  const mainGeneration=JSON.parse(await readFile(join(worker,'observer.json'),'utf8')).generations.main
+  expect((await post('/native-status',startupMain,token)).code).toBe(409)
+  expect((await post('/native-status',{...startupMain,generation:mainGeneration,startedAt:'14',stdout:'Current main caption'},token)).code).toBe(200)
+  expect((await post('/native-status',{...startupMain,startedAt:'15'},token)).code).toBe(409)
+  expect(observer.value?.statusLine).toBe('Current main caption')
+  expect(restoredGeneration).not.toBe(helperOutput.generation)
+  expect((await post('/native-status',{...helperOutput,startedAt:'12'},token)).code).toBe(409)
+  expect((await post('/native-status',{...helperOutput,generation:restoredGeneration,startedAt:'13'},token)).code).toBe(200)
+  expect(observer.value?.agents).toMatchObject([{id:'reviewer',statusText:'Release review caption'}])
+  // A real helper can finish under restored policy before its next status snapshot arrives.
+  // Its old generation remains refused; the live native cache is a separate recovery authority.
+  cachedMainStatus='Current main caption'
+  helperPolicy.allowManagedHooksOnly=true
+  expect((await post('/background-status',helperSnapshot(5))).code).toBe(200)
+  const restrictedMainGeneration=JSON.parse(await readFile(join(worker,'observer.json'),'utf8')).generations.main
+  helperPolicy.allowManagedHooksOnly=false
+  expect((await post('/native-status',{...startupMain,generation:restrictedMainGeneration,startedAt:'15',stdout:cachedMainStatus},token)).code).toBe(409)
+  expect((await post('/background-status',helperSnapshot(6))).code).toBe(200)
+  expect(observer.value?.statusLine).toBe(cachedMainStatus)
+  let draft='Owned child draft あ🙂'
+  transport!.promptHosts.register('child-view',{read:async()=>({text:draft,cursor:draft.length}),fill:async input=>{draft=input.text;return true}})
+  await expect(transport!.request({subtype:'ui_attach',client_id:'child-view',surface:'desktop'})).resolves.toEqual({attached:true})
+  const events=vi.fn();transport!.subscribe(events)
+  const event={type:'system',subtype:'ui_invalidate',event:'ui.render',client_id:'child-view'}
+  expect((await post('/ui-event',{pid:119,sessionId:child,event})).code).toBe(403)
+  expect((await post('/ui-event',{pid:119,sessionId:child,event},token)).code).toBe(200)
+  expect(events).toHaveBeenCalledWith(event)
+  expect((await post('/ui-event',{pid:120,sessionId:child,event},token)).code).toBe(409)
+  const reverse=await post('/ui-host',{pid:119,sessionId:child,request_id:randomUUID(),sequence:1,request:{subtype:'ui_prompt_read',client_id:'child-view',surface:'desktop'}},token)
+  expect(reverse.code).toBe(200);expect(JSON.stringify(reverse.value)).toContain('Owned child draft あ🙂')
+  const filled=await post('/ui-host',{pid:119,sessionId:child,request_id:randomUUID(),sequence:2,request:{subtype:'ui_prompt_fill',client_id:'child-view',surface:'desktop',text:'Child replacement 🙂',mode:'replace'}},token)
+  expect(filled.code).toBe(200)
+  const after=await post('/ui-host',{pid:119,sessionId:child,request_id:randomUUID(),sequence:3,request:{subtype:'ui_prompt_read',client_id:'child-view',surface:'desktop'}},token)
+  expect(after.value.result).toEqual({text:'Child replacement 🙂',cursor:'Child replacement 🙂'.length})
+  const nextSession='72fd7bf0-568f-490d-9917-ded54c2014b0'
+  identity={...identity,activeSessionId:nextSession}
+  expect((await post('/background-register',{sessionId:nextSession,pid:119})).code).toBe(200)
+  await desktop.done
+  await expect(transport!.request({subtype:'ui_render'})).rejects.toThrow()
+  const freshTransport=await observer.desktopTransport();expect(freshTransport).toBeDefined()
+  expect(observer.desktopOwner?.identity).toMatchObject({sessionId:child,activeSessionId:nextSession,start:identity.start})
+  expect(JSON.parse(await readFile(join(worker,'observer.json'),'utf8'))).toMatchObject({sessionId:nextSession,jobSessionId:child})
+  await expect(freshTransport!.request({subtype:'ui_attach',client_id:'fresh',surface:'desktop'})).resolves.toEqual({attached:true})
+  expect((await post('/ui-event',{pid:119,sessionId:child,event},token)).code).toBe(409)
+  expect((await post('/ui-event',{pid:119,sessionId:nextSession,event},token)).code).toBe(200)
+  identity={...identity,activeSessionId:child,start:'replacement-worker'}
+  await expect(transport!.request({subtype:'ui_render'})).rejects.toThrow('owner changed')
+  expect((await post('/ui-event',{pid:119,sessionId:child,event},token)).code).toBe(403)
+  await desktop.done;expect(observer.desktopOwner).toBeUndefined()
+  await post('/background-register',{sessionId:child,pid:119})
+  await expect(observer.desktopTransport()).rejects.toThrow('startup does not match')
+  await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
+  await observer.desktopTransport();const replacement=observer.desktopOwner!
+  expect(replacement.id).not.toBe(desktop.id)
+  expect(replacement.identity.start).toBe('replacement-worker')
+  await post('/background-register',{sessionId:child,pid:119})
+  await replacement.done;expect(observer.desktopOwner).toBeUndefined()
+  await observer.desktopTransport();const finalOwner=observer.desktopOwner!
+  await observer.close();await finalOwner.done;expect(observer.desktopOwner).toBeUndefined()
+ } finally {native.closeAllConnections();await new Promise<void>(resolve=>native.close(()=>resolve()));await observer.close();await rm(profile,{recursive:true,force:true})}
+})
+
+
+it('preserves child startup files when parent exit precedes the canonical continuation',async()=>{
+ let target:{sessionId:string;cwd:string}|undefined
+ const f=await fixture(()=>target),startup=join(f.observer.directory,'pending-child-startup')
+ await writeFile(startup,'Keep until original registration or bounded cleanup')
+ try {
+  await f.observer.releaseParent()
+  await expect(access(startup)).resolves.toBeUndefined()
+  expect((await f.post('/background-register',{sessionId:child,pid:119})).code).not.toBe(200)
+  target={sessionId:child,cwd:'/owned'}
+  const registration=await f.post('/background-register',{sessionId:child,pid:119})
+  expect(registration.code).toBe(200)
+  expect((await f.post('/background-status',f.message(registration.value.token))).code).toBe(200)
+  expect(f.observer.value).toMatchObject({sessionId:child,pid:119})
+  await expect(access(startup)).resolves.toBeUndefined()
+ } finally {await f.observer.close()}
+ await expect(access(startup)).rejects.toThrow()
+})
+
+it('still removes unclaimed startup files at the existing registration deadline',async()=>{
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout','setInterval','clearInterval']})
+ const f=await fixture(()=>undefined),startup=join(f.observer.directory,'unclaimed-startup')
+ try {
+  await writeFile(startup,'fixture')
+  await f.observer.releaseParent();expect(f.observer.available).toBe(true)
+  await vi.advanceTimersByTimeAsync(29999);expect(f.observer.available).toBe(true)
+  await vi.advanceTimersByTimeAsync(1);expect(f.observer.available).toBe(false)
+  await f.observer.close();await expect(access(startup)).rejects.toThrow()
+ } finally {await f.observer.close();vi.useRealTimers()}
+})
+
+it('does not combine a helper observation with an earlier or later native cost snapshot',async()=>{
+ const f=await fixture()
+ try{
+  const lease=(await f.post('/background-register',{sessionId:child,pid:119})).value.token
+  const formatter={command:'printf cost',shellPrefix:null,policy:'{}'}
+  const first=await f.post('/background-status',{...f.message(lease),formatter})
+  const config=JSON.parse(Buffer.from(first.value.shellPrefix.split(' -').at(-1),'base64url').toString())
+  expect((await f.post('/background-formatter',{...config,startedAt:'1',totalCostUsd:0.001,stdout:'Cost $0.001'})).code).toBe(200)
+  expect(f.observer.value?.statusLine).toBe('Cost $0.001')
+  expect((await f.post('/background-formatter',{...config,startedAt:'2',totalCostUsd:0.002,stdout:'Cost $0.002'})).code).toBe(200)
+  expect(f.observer.value).toMatchObject({totalCostUsd:0.001})
+  expect(f.observer.value?.statusLine).toBeUndefined()
+  await f.post('/background-status',{...f.message(lease,2),usage:{startedAt:1,cost:{usd:0.002}},formatter})
+  expect(f.observer.value).toMatchObject({totalCostUsd:0.002,statusLine:'Cost $0.002'})
+  await f.post('/background-status',{...f.message(lease,3),usage:{startedAt:1,cost:{usd:0.003}},formatter})
+  expect(f.observer.value?.totalCostUsd).toBe(0.003)
+  expect(f.observer.value?.statusLine).toBeUndefined()
+  await f.post('/background-formatter',{...config,startedAt:'3',totalCostUsd:0.003,stdout:'Cost $0.003'})
+  expect(f.observer.value).toMatchObject({totalCostUsd:0.003,statusLine:'Cost $0.003'})
+ }finally{await f.observer.close()}
+})

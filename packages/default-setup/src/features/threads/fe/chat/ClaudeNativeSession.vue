@@ -1,0 +1,459 @@
+<template>
+  <section :class="[displayActive ? 'native-session' : 'native-launch', { 'native-launch--credit': !displayActive && view?.state?.notice?.kind === 'fable_overage_consent_prompt', 'native-session--expanded': active && expanded, 'native-session--child': !!view?.attachment, 'native-session--child-expanded': !!view?.attachment && expanded, 'native-launch--background-composing': backgroundComposing, 'native-launch--background': !!continuation && !active && !view?.attachment }]" aria-label="Claude native interface">
+    <NativeBackgroundReview v-for="panel in leftArrowPanel ? [leftArrowPanel] : []" :key="JSON.stringify([panel.ownerId, panel.sessionId, panel.id])" :panel-id="panel.id" :state="panel.state" @answer="answerLeftArrow(panel, $event)" />
+    <NativeBackgroundSession v-if="continuation" :continuation="continuation" :state="view?.background" :attached="!!view?.attachment" :info="view?.backgroundInfo" :can-reply="view?.canReplyBackground === true" @operate="operateBackground" @open="openBackground" @composing="backgroundComposing = $event">
+      <template #composer="composer">
+        <NativeBackgroundComposer :key="composer.target.ownerId" @open-native="composer.openNative" @leave="composer.close" :thread-id="threadId" :target="composer.target" :active="composer.active" :draft="composer.draft" :draft-snapshot="composer.draftSnapshot" :disabled="composer.pending" :send="composer.send" @draft="composer.updateDraft" @draft-snapshot="composer.saveSnapshot" />
+      </template>
+      <template #parent-interface>
+        <button v-if="!active && !view?.attachment && view?.state?.notice?.kind !== 'refusal_fallback_prompt'" type="button" class="native-button native-parent-interface" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputBlocksLaunch" aria-label="Use native interface" title="Open parent native interface" @click="open"><span aria-hidden="true" class="native-command">›_</span></button>
+      </template>
+    </NativeBackgroundSession>
+    <NativeBackgroundAttachment v-if="view?.attachment" :attachment="view.attachment" :expanded="expanded" @toggle-expanded="expanded = !expanded" @close="closeBackground" @input="inputBackground" @resize="resizeBackground" />
+    <NativeCreditConsent v-if="!active && view?.state?.notice?.kind === 'fable_overage_consent_prompt'" :key="JSON.stringify([view.state.ownerId,view.state.notice.sessionId,view.state.notice.id,view.state.notice.revision])" :notice="view.state.notice" :answer="view.noticeAnswer" @answer="answerCredit" />
+    <section v-if="!active && view?.state?.notice?.kind === 'credit_consent_result'" role="status" aria-label="Claude usage credit result" class="rounded-lg border border-neutral-700/50 bg-neutral-900/40 px-3 py-2 text-xs leading-relaxed text-neutral-200"><p v-for="(paragraph,index) in view.state.notice.paragraphs" :key="index" class="whitespace-pre-wrap break-words"><NativeConsentDisclosure :text="paragraph" :links="view.state.notice.links" /></p></section>
+    <NativeManagedSecurityReview v-if="view?.state?.notice?.kind === 'managed_settings_security'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerManagedSecurity" />
+    <NativeSandboxNetworkReview v-if="!active && view?.state?.notice?.kind === 'sandbox_network_access'" :notice="view.state.notice" :pending="noticePending" :problem="noticeProblem" @answer="answerSandboxNetwork" />
+    <section v-if="!active && view?.state?.notice?.kind === 'newer_model_inline'" role="status" aria-label="Claude model offer" class="rounded-lg border border-neutral-700/50 bg-neutral-900/40 px-3 py-2 text-xs leading-relaxed">
+      <NativeStatusText :text="view.state.notice.ansi" />
+    </section>
+    <section v-if="!active && view?.state?.notice?.kind === 'effort_preference_result'" :role="view.state.notice.severity === 'warning' ? 'alert' : 'status'" aria-label="Claude effort result" class="rounded-lg border px-3 py-2 text-xs leading-relaxed" :class="view.state.notice.severity === 'warning' ? 'border-amber-300/20 bg-amber-300/5 text-amber-200' : 'border-neutral-700/50 bg-neutral-900/40 text-neutral-200'">
+      <p v-for="(paragraph, index) in view.state.notice.paragraphs" :key="index" class="whitespace-pre-wrap break-words">{{ paragraph }}</p>
+    </section>
+    <section v-for="panel in noticePanels" :key="panel.key" ref="noticeElements" :role="['resume_return', 'newer_model_offer', 'cold_resume_quota', 'permission_browser', 'computer_use_approval', 'effort_medium_nudge', 'auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow', 'chrome_install_upsell', 'chrome_install_setup'].includes(panel.kind) ? 'dialog' : undefined" :data-native-notice="panel.notice.kind" :aria-label="panel.notice.kind === 'effort_medium_nudge' ? 'Claude effort preference' : ['auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow'].includes(panel.notice.kind) ? 'Claude auto-mode review' : panel.notice.kind === 'computer_use_approval' ? 'Claude computer permission' : panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'chrome_install_setup' ? 'Claude browser setup' : panel.notice.kind === 'permission_browser' ? 'Claude browser permission' : panel.notice.kind === 'refusal_fallback_prompt' ? 'Claude model fallback' : panel.notice.kind === 'lsp_recommendation' ? 'Claude LSP recommendation' : panel.notice.kind === 'plugin_hint' ? 'Claude plugin recommendation' : panel.notice.kind === 'cold_resume_quota' ? 'Claude quota offer' : panel.notice.kind === 'newer_model_offer' ? 'Claude newer model offer' : panel.notice.kind === 'resume_return' ? 'Claude resume offer' : panel.notice.kind === 'goal_proposal' ? 'Claude goal proposal' : panel.notice.kind === 'autocompact_offer' ? 'Claude autocompact offer' : 'Claude auto mode notice'" class="native-notice" :class="{ 'native-notice--recommendation': panel.notice.kind !== 'auto_mode_server_fallback' }" @keydown.esc.stop.prevent="answerNotice(panel, panel.notice.kind === 'effort_medium_nudge' ? 'effort_decline' : ['auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow'].includes(panel.notice.kind) ? 'auto_safety_cancel' : panel.notice.kind === 'computer_use_approval' ? 'computer_cancel' : panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'chrome_install_setup' ? 'chrome_cancel' : panel.notice.kind === 'permission_browser' ? 'browser_cancel' : panel.notice.kind === 'autocompact_offer' ? 'compact_dismiss' : panel.notice.kind === 'cold_resume_quota' ? 'quota_dismiss' : panel.notice.kind === 'newer_model_offer' ? 'newer_dismiss' : panel.notice.kind === 'resume_return' ? 'resume_dismiss' : panel.notice.kind === 'goal_proposal' ? 'goal_decline' : panel.notice.kind === 'refusal_fallback_prompt' ? 'cancelled' : panel.notice.kind !== 'auto_mode_server_fallback' ? 'no' : 'interrupt')">
+      <div class="native-notice__body" tabindex="0">
+        <header v-if="panel.notice.kind === 'refusal_fallback_prompt'" class="native-notice__header">
+          <h3>{{ panel.notice.title }}</h3>
+          <a v-if="panel.notice.helpUrl" :href="panel.notice.helpUrl" target="_blank" rel="noopener noreferrer">Learn more</a>
+          <button type="button" class="native-button native-button--launch" :disabled="inputBlocksLaunch" @click="open"><span aria-hidden="true" class="native-command">›_</span> Use native interface</button>
+        </header>
+        <h3 v-else>{{ panel.notice.title }}</h3>
+        <template v-if="panel.notice.kind === 'plugin_hint' || panel.notice.kind === 'lsp_recommendation'">
+          <p class="native-notice__identity">{{ panel.notice.pluginName }} · {{ panel.notice.marketplaceName }}</p>
+          <PopoverRoot :key="panel.notice.revision">
+            <PopoverTrigger as-child><button type="button" class="native-notice__details">About this plugin</button></PopoverTrigger>
+            <PopoverPortal>
+              <PopoverContent side="top" align="start" :side-offset="8" :collision-padding="12" :aria-label="panel.notice.kind === 'lsp_recommendation' ? 'LSP plugin details' : 'Plugin details'" class="claude-native-lsp-details">
+                <header><h3>About this plugin</h3><PopoverClose as-child><button type="button" aria-label="Close plugin details">Close</button></PopoverClose></header>
+                <p v-for="(paragraph, index) in panel.notice.paragraphs" :key="index">{{ paragraph }}</p>
+              </PopoverContent>
+            </PopoverPortal>
+          </PopoverRoot>
+        </template>
+        <template v-else>
+          <p v-for="(paragraph, index) in panel.notice.paragraphs" :key="index">{{ paragraph }}</p>
+          <p v-if="panel.notice.kind === 'effort_medium_nudge' && panel.notice.warning" role="note" class="rounded border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-amber-200">{{ panel.notice.warning }}</p>
+          <p v-if="panel.notice.kind === 'auto_mode_server_fallback'" class="native-notice__url">{{ panel.notice.helpUrl }}</p>
+        </template>
+        <fieldset v-if="panel.notice.kind === 'auto_mode_flagged_allow' && panel.notice.phase === 'pick'" class="space-y-2" :disabled="noticePending">
+          <legend class="mb-2 font-medium">Rules to remove</legend>
+          <label v-for="(rule, index) in panel.notice.rules" :key="index" class="flex items-start gap-2 whitespace-pre-wrap break-words">
+            <input type="checkbox" class="mt-1 shrink-0" :checked="panel.notice.selectedValues.includes(rule.value)" @change="selectAutoRule(panel, rule.value, ($event.target as HTMLInputElement).checked)" />
+            <span class="min-w-0">{{ rule.label }}</span>
+          </label>
+        </fieldset>
+      </div>
+      <p v-if="noticePending && ['effort_medium_nudge', 'auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow'].includes(panel.kind)" role="status" class="native-notice__identity">Waiting for Claude…</p>
+      <p v-if="noticeProblem" role="alert" class="native-problem">{{ noticeProblem }}</p>
+      <div v-if="panel.notice.kind === 'autocompact_offer'" class="native-notice__actions" role="group" aria-label="Autocompact size">
+        <button type="button" class="native-button" :disabled="noticePending || !panel.notice.canPrevious" @click="answerNotice(panel, 'compact_previous')">Smaller</button>
+        <output aria-label="Selected token limit">{{ panel.notice.selectedTokens.toLocaleString() }} tokens</output>
+        <button type="button" class="native-button" :disabled="noticePending || !panel.notice.canNext" @click="answerNotice(panel, 'compact_next')">Larger</button>
+      </div>
+      <div class="native-notice__actions">
+        <template v-if="panel.notice.kind !== 'auto_mode_server_fallback'">
+          <button v-for="choice in panel.notice.choices" :key="choice.value" :data-native-choice="choice.value" :aria-label="choice.label" type="button" class="native-button" :class="{ 'native-button--return': choice.value === 'yes' }" :disabled="noticePending" @click="answerNotice(panel, choice.value)">{{ choice.label }}<span v-if="['cold_resume_quota', 'chrome_install_upsell', 'chrome_install_setup'].includes(panel.notice.kind) && 'description' in choice && choice.description" class="block text-[11px] font-normal text-neutral-400">{{ choice.description }}</span></button>
+          <button v-if="panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'chrome_install_setup'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'chrome_cancel')">Cancel</button>
+          <button v-if="['auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow'].includes(panel.notice.kind)" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'auto_safety_cancel')">Cancel</button>
+          <button v-if="panel.notice.kind === 'computer_use_approval'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'computer_cancel')">Cancel</button>
+          <button v-if="panel.notice.kind === 'permission_browser'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'browser_cancel')">Cancel</button>
+          <button v-if="panel.notice.kind === 'refusal_fallback_prompt'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'cancelled')">Cancel</button>
+          <button v-if="panel.notice.kind === 'autocompact_offer'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'compact_dismiss')">Not now</button>
+          <button v-if="panel.notice.kind === 'resume_return'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'resume_dismiss')">Not now</button>
+          <button v-if="panel.notice.kind === 'newer_model_offer'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'newer_dismiss')">Not now</button>
+          <button v-if="panel.notice.kind === 'cold_resume_quota'" type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'quota_dismiss')">Not now</button>
+        </template>
+        <template v-else>
+          <button type="button" class="native-button" :disabled="noticePending" @click="answerNotice(panel, 'interrupt')">Cancel</button>
+          <button type="button" class="native-button native-button--return" :disabled="noticePending" @click="answerNotice(panel, 'continue')">{{ noticePending ? 'Continuing…' : 'Continue in auto mode' }}</button>
+        </template>
+      </div>
+    </section>
+    <div v-if="!active && !view?.attachment" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt' && (!continuation || launchProblem || view?.opening)" class="native-launch__actions">
+      <span v-if="launchProblem" role="status" class="native-problem" :class="{ 'native-problem--expected': managedPolicyDeclined }">{{ launchProblem }}</span>
+      <span v-if="continuation && view?.opening" role="status">{{ view.cancelling ? 'Cancelling native startup…' : 'Opening native interface…' }}</span>
+      <button v-if="!continuation" type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputBlocksLaunch" @click="open">
+        <span aria-hidden="true" class="native-command">›_</span>
+        {{ view?.opening ? view.cancelling ? 'Cancelling native startup…' : 'Opening native interface…' : 'Use native interface' }}
+      </button>
+      <button v-if="view?.opening && view.openingId" type="button" class="native-button" :disabled="view.cancelling" @click="cancelOpen">Cancel startup</button>
+    </div>
+    <template v-else-if="!view?.attachment">
+      <header class="native-header">
+        <div class="native-identity">
+          <span class="native-mark" aria-hidden="true">›_</span>
+          <div class="native-heading">
+            <h2>Claude Code <span class="native-interface-label">Native interface</span></h2>
+            <p :title="view?.state?.cwd">{{ workspaceName }}</p>
+            <p v-if="selectedAgent" role="status">Viewing Agent · {{ selectedAgent }}</p>
+          </div>
+        </div>
+        <div class="native-controls">
+          <span role="status" class="native-state" :class="{ 'native-state--live': view?.state?.status === 'live', 'native-state--error': view?.state?.status === 'error' && !managedPolicyDeclined }">
+            <span aria-hidden="true" />{{ stateLabel }}
+          </span>
+          <button type="button" class="native-button native-button--size" :aria-expanded="expanded" @click="expanded = !expanded">{{ expanded ? 'Minimize' : 'Expand' }}</button>
+          <button v-if="active" type="button" class="native-button native-button--return" :disabled="!ended && (!!stopping || !!returning || view?.task?.status === 'pending')" @click="returnToConversation">Back to conversation <span aria-hidden="true">↗</span></button>
+          <button v-if="!ended" type="button" class="native-button native-button--stop" :disabled="!!stopping" @click="stop"><span class="native-stop-icon" aria-hidden="true" />{{ stopping ? 'Stopping…' : 'Stop session' }}</button>
+        </div>
+      </header>
+      <p v-if="returnProblem" role="alert" class="native-problem">{{ returnProblem }}</p>
+      <div class="native-console">
+        <div ref="viewport" class="native-viewport" aria-label="Claude terminal" />
+      </div>
+      <p v-if="view?.state?.status === 'live'" role="status" aria-label="Claude billing status" class="px-4 py-2 text-xs text-neutral-400">{{ claudeBillingText(view.state.billing) }}</p>
+      <footer v-if="view?.state?.mainStatus || view?.state?.tasks.length || view?.problem || view?.state?.problem" class="native-activity">
+        <div v-if="view?.state?.mainStatus" class="native-summary">
+          <span class="native-section-label">Session status</span>
+          <NativeStatusText data-testid="native-main-status" class="native-summary__text" :text="view.state.mainStatus" />
+        </div>
+        <div v-if="view?.state?.tasks.length" class="native-agents">
+          <div class="native-section-label">Tasks <span class="native-count">{{ view.state.tasks.length }}</span></div>
+          <ul aria-label="Native Claude tasks" class="native-agent-list">
+            <li v-for="task in view.state.tasks" :key="task.id" :data-native-task-id="task.id" class="native-agent">
+              <div class="native-agent__heading"><span class="native-agent__name">{{ task.kind === 'workflow' ? 'Workflow · ' : '' }}{{ task.name }}</span><span class="native-agent__state">{{ task.status }}</span></div>
+              <NativeStatusText v-if="task.statusText" class="native-agent__detail" :text="task.statusText" />
+              <span v-if="task.kind === 'managed'" class="native-agent__detail">Manage with /tasks</span>
+              <NativeTaskControls v-if="task.kind !== 'managed'" :task="{ ...task, ownerId: view.state.ownerId, sessionId: view.state.sessionId }" />
+            </li>
+          </ul>
+        </div>
+        <p v-if="view?.problem || view?.state?.problem" role="alert" class="native-problem">{{ view?.problem || view?.state?.problem }}</p>
+      </footer>
+    </template>
+  </section>
+</template>
+<script setup lang="ts">
+import NativeCreditConsent from './NativeCreditConsent.vue'
+import NativeConsentDisclosure from './NativeConsentDisclosure.vue'
+import NativeBackgroundReview from './NativeBackgroundReview.vue'
+import NativeBackgroundSession from './NativeBackgroundSession.vue'
+import NativeBackgroundComposer from './NativeBackgroundComposer.vue'
+import type { ClaudeNativeContinuation } from '#features/code/be/services/claude-code/terminal-session.ts'
+import type { ClaudeBackgroundSessionRequest, ClaudeBackgroundReplyRequest, ClaudeBackgroundTurnInterruptRequest } from '#features/code/common/native-background.ts'
+import { claudeBillingText } from '#features/code/common/native-billing.ts'
+import { describeClaudeUiProblem } from '#features/code/common/native-ui-problem.ts'
+import { isClaudeNativeNoticeDecision, type ClaudeNativeNoticeResponse } from '#features/code/common/native-notice.ts'
+import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent, PopoverClose } from 'reka-ui'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useSelector } from '@xstate/vue'
+import { useSurface, useShell } from '@apackdev/sdk/fe'
+import type { ThreadsState } from '../state.ts'
+import { mountNativeTerminal } from '#extensions/terminal/pool.ts'
+import NativeBackgroundAttachment from './NativeBackgroundAttachment.vue'
+import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
+import NativeManagedSecurityReview from './NativeManagedSecurityReview.vue'
+import NativeSandboxNetworkReview from './NativeSandboxNetworkReview.vue'
+import { parseClaudeDocument } from '#extensions/blocks/display/native-status-text.ts'
+import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
+const props = defineProps<{ threadId: string; continuation?: ClaudeNativeContinuation; busy: boolean; inputPending?: boolean }>()
+const emit = defineEmits<{ active: [value: boolean]; 'background-composing': [value: boolean] }>()
+const backgroundComposing = ref(false)
+watch(backgroundComposing, value => emit('background-composing', value), {immediate:true})
+const actor: ThreadsState = useSurface()
+const mountId = crypto.randomUUID()
+const views = useSelector(actor, state => state.context.nativeTerminalViews)
+const view = computed(() => views.value[mountId])
+
+const noticePending = computed(() => view.value?.noticeAnswer?.status === 'pending' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision)
+const noticeProblem = computed(() => view.value?.noticeAnswer?.status === 'error' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision ? describeClaudeUiProblem(view.value.noticeAnswer.problem) : undefined)
+const managedPolicyExit = ref<{ ownerId: string; afterSequence: number }>()
+const managedPolicyDeclined = computed(() => {
+  const current = view.value, intent = managedPolicyExit.value
+  return !!intent && current?.state?.ownerId === intent.ownerId && current.state.exitCode === 1 && ['error', 'exited'].includes(current.state.status)
+    && parseClaudeDocument(current.output.filter(chunk => chunk.sequence > intent.afterSequence).map(chunk => chunk.text).join('')).map(span => span.text).join('').replace(/\s+/g, ' ').includes('Managed settings were not approved; exiting without applying them.')
+})
+function answerCredit(response: ClaudeNativeNoticeResponse) {
+  const state=view.value?.state,notice=state?.notice
+  if(response.decision!=='credit'||!state||!notice||active.value||noticePending.value||notice.kind!=='fable_overage_consent_prompt'||notice.id!==response.id||notice.revision!==response.revision||notice.sessionId!==response.sessionId)return
+  const operation=response.credit.operation
+  if(operation.kind==='editor'&&(operation.revision!==notice.snapshot.revision||operation.editorRevision!==notice.snapshot.editor?.revision))return
+  actor.send({type:'CLAUDE_TERMINAL_NOTICE',...identity(),ownerId:state.ownerId,notice:response})
+}
+function answerManagedSecurity(response: ClaudeNativeNoticeResponse) {
+  const state = view.value?.state, notice = state?.notice
+  if (!state || notice?.kind !== 'managed_settings_security' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
+  if (response.decision === 'policy_reject') managedPolicyExit.value = { ownerId: state.ownerId, afterSequence: view.value?.output.at(-1)?.sequence ?? 0 }
+  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
+}
+function answerSandboxNetwork(response: ClaudeNativeNoticeResponse) {
+  const state = view.value?.state, notice = state?.notice
+  if (!state || notice?.kind !== 'sandbox_network_access' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
+  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
+}
+const leftArrowPanel = computed(() => {
+  const state = view.value?.state, notice = state?.notice
+  if (active.value || !state || notice?.kind !== 'left_arrow_confirm') return
+  const confirm = notice.choices.find(choice => choice.value === 'background_confirm'), cancel = notice.choices.find(choice => choice.value === 'background_stay')
+  if (!confirm || !cancel) return
+  return { ownerId: state.ownerId, id: notice.id, revision: notice.revision, sessionId: notice.sessionId,
+    state: { status: noticePending.value ? 'pending' as const : 'ready' as const, problem: noticeProblem.value,
+      review: { revision: notice.revision, title: notice.title, paragraphs: notice.paragraphs, confirmLabel: confirm.label, cancelLabel: cancel.label, defaultFocus: notice.preferredChoice === 'background_confirm' ? 'confirm' as const : 'cancel' as const } } }
+})
+function answerLeftArrow(panel: NonNullable<typeof leftArrowPanel.value>, request: { panelId: string; revision: string; decision: 'confirm' | 'cancel' }) {
+  const state = view.value?.state
+  if (panel !== leftArrowPanel.value || !state || noticePending.value || panel.ownerId !== state.ownerId || request.panelId !== panel.id || request.revision !== panel.revision) return
+  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision: request.decision === 'confirm' ? 'background_confirm' : 'background_stay' } })
+}
+function answerNotice(panel: (typeof noticePanels.value)[number], decision: Exclude<ClaudeNativeNoticeResponse['decision'],'credit'>, selectedValues?: string[]) {
+  const state = view.value?.state, notice = state?.notice
+  if (!state || !notice || active.value || noticePending.value || state.ownerId !== panel.ownerId || notice.kind !== panel.kind || notice.id !== panel.id || notice.revision !== panel.revision || notice.sessionId !== panel.sessionId || !isClaudeNativeNoticeDecision(notice, decision)) return
+  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision, ...(decision === 'auto_rules_select' ? { selectedValues } : {}) } })
+}
+function selectAutoRule(panel: (typeof noticePanels.value)[number], value: string, checked: boolean) {
+  if (panel.notice.kind !== 'auto_mode_flagged_allow' || panel.notice.phase !== 'pick' || !panel.notice.rules.some(rule => rule.value === value)) return
+  const selected = new Set(panel.notice.selectedValues)
+  if (checked) selected.add(value); else selected.delete(value)
+  answerNotice(panel, 'auto_rules_select', [...selected])
+}
+const workspaceName = computed(() => view.value?.state?.cwd?.split(/[\\/]/).filter(Boolean).at(-1) || 'Current workspace')
+const launchProblem = computed(() => managedPolicyDeclined.value ? 'Claude Code closed because you declined the managed settings.' : view.value?.problem || view.value?.state?.problem || (view.value?.state?.status === 'error' ? 'Claude Code disconnected unexpectedly. Reopen the native interface to continue this session.' : undefined))
+const stateLabel = computed(() => {
+  const state = view.value?.state
+  if (managedPolicyDeclined.value) return 'Session ended'
+  if (state?.status === 'live') return state.busy ? 'Working' : 'Connected'
+  return state?.status === 'starting' ? 'Connecting' : state?.status === 'error' ? 'Connection error' : 'Session ended'
+})
+const selectedAgent = computed(() => { const state = view.value?.state; return state?.view?.kind === 'agent' ? state.tasks.find(task => task.id === (state.view?.kind === 'agent' ? state.view.taskId : undefined))?.name ?? state.view.taskId ?? 'Unavailable Agent' : undefined })
+const returning = ref<{ ownerId: string; revision: number }>(), returnProblem = ref<string>()
+const stopping = ref<{ ownerId: string; afterRevision: number }>()
+watch(view, value => {
+  const pending = stopping.value
+  if (pending && (value?.state?.ownerId !== pending.ownerId || ['exited', 'error'].includes(value?.state?.status ?? '') || value?.stop?.ownerId === pending.ownerId && value.stop.revision > pending.afterRevision && value.stop.status === 'error')) stopping.value = undefined
+})
+function returnToConversation() {
+  const state = view.value?.state
+  if (!state || ended.value) { dismissed.value = true; return }
+  if (stopping.value || returning.value || view.value?.task?.status === 'pending') return
+  const revision = (view.value?.task?.revision ?? 0) + 1
+  returning.value = { ownerId: state.ownerId, revision }; returnProblem.value = undefined
+  const taskId = state.view?.kind === 'agent' ? state.view.taskId ?? state.view.registryId : '@main-view'
+  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...identity(), ownerId: state.ownerId, taskId, revision, operation: 'background' })
+}
+watch(view, value => {
+  const request = returning.value
+  if (!request) return
+  if (value?.state?.ownerId !== request.ownerId || ended.value) { returning.value = undefined; returnProblem.value = 'Native owner changed'; return }
+  const result = value.task
+  if (result?.revision !== request.revision || result.operation !== 'background' || result.status === 'pending') return
+  returning.value = undefined
+  if (result.status === 'done' && result.view?.taskId === null && value.state.view?.kind === 'main') dismissed.value = true
+  else returnProblem.value = result.problem ?? 'The native view changed; return again'
+})
+const expanded = ref(true)
+const dismissed = ref(false)
+const requested = ref(false)
+const ended = computed(() => ['exited', 'error'].includes(view.value?.state?.status ?? ''))
+// A pending send must leave its live owner's native controls reachable.
+const inputBlocksLaunch = computed(() => props.inputPending === true && view.value?.state?.status !== 'live')
+const active = computed(() => !!view.value?.state && !view.value.opening && requested.value && !dismissed.value)
+const displayActive = computed(() => active.value || !!view.value?.attachment)
+const { activeSurface } = useShell()
+// Navigation reveals its canvas without changing the native owner, draft or connection.
+watch(() => activeSurface.value.id, () => {
+  if (requested.value || view.value?.attachment) expanded.value = false
+})
+// Rendered actions retain their original owner and revision until Vue replaces the panel.
+const noticePanels = computed(() => {
+  if (active.value) return []
+  const state = view.value?.state, notice = state?.notice
+  if (!state || !notice || notice.kind === 'fable_overage_consent_prompt' || notice.kind === 'credit_consent_result' || notice.kind === 'newer_model_inline' || notice.kind === 'effort_preference_result' || notice.kind === 'managed_settings_security' || notice.kind === 'sandbox_network_access' || notice.kind === 'left_arrow_confirm') return []
+  return [{ key: JSON.stringify([state.ownerId, notice.sessionId, notice.id, notice.kind]), ownerId: state.ownerId, id: notice.id, revision: notice.revision, sessionId: notice.sessionId, kind: notice.kind, notice }]
+})
+const noticeElements = ref<HTMLElement[]>([])
+let resumeFocus: { ownerId: string; sessionId: string; section: HTMLElement; previous: HTMLElement | null } | undefined
+watch(() => noticePanels.value.find(panel => ['resume_return', 'newer_model_offer', 'permission_browser', 'computer_use_approval', 'effort_medium_nudge', 'auto_default_nudge', 'auto_mode_setup_review', 'auto_mode_flagged_allow', 'chrome_install_upsell', 'chrome_install_setup'].includes(panel.kind) || panel.notice.kind === 'cold_resume_quota' && panel.notice.trigger === 'resume' && panel.notice.preferredChoice !== undefined), async (panel, previous) => {
+  const sameDialog = panel && previous && panel.ownerId === previous.ownerId && panel.sessionId === previous.sessionId && panel.id === previous.id
+  const phaseChanged = panel?.notice.kind === 'auto_mode_flagged_allow' && previous?.notice.kind === 'auto_mode_flagged_allow' && panel.notice.phase !== previous.notice.phase
+  if (sameDialog && !phaseChanged) return
+  const retained = resumeFocus; resumeFocus = undefined
+  if (!panel) {
+    await nextTick()
+    if (retained && view.value?.state?.ownerId === retained.ownerId && view.value.state.sessionId === retained.sessionId
+      && retained.previous?.isConnected && (document.activeElement === document.body || retained.section.contains(document.activeElement))) retained.previous.focus({ preventScroll: true })
+    return
+  }
+  await nextTick()
+  if (!noticePanels.value.includes(panel) || !document.hasFocus()) return
+  const section = noticeElements.value.find(element => element.dataset.nativeNotice === panel.kind)
+  if (!section) return
+  resumeFocus = { ownerId: panel.ownerId, sessionId: panel.sessionId, section, previous: sameDialog && retained ? retained.previous : document.activeElement instanceof HTMLElement ? document.activeElement : null }
+  const preferred = panel.notice.kind === 'cold_resume_quota' || panel.notice.kind === 'chrome_install_upsell' || panel.notice.kind === 'computer_use_approval' || panel.notice.kind === 'auto_default_nudge' || panel.notice.kind === 'auto_mode_setup_review' || panel.notice.kind === 'auto_mode_flagged_allow' || panel.notice.kind === 'effort_medium_nudge' ? panel.notice.preferredChoice : undefined
+  const button = preferred ? Array.from(section.querySelectorAll<HTMLButtonElement>('button')).find(button => button.dataset.nativeChoice === preferred) : section.querySelector<HTMLButtonElement>('button')
+  const picker = panel.notice.kind === 'auto_mode_flagged_allow' && panel.notice.phase === 'pick' ? section.querySelector<HTMLInputElement>('input[type=checkbox]') : undefined
+  ;(picker ?? button)?.focus({ preventScroll: true })
+}, { immediate: true })
+const viewport = ref<HTMLElement>()
+let terminal: ReturnType<typeof mountNativeTerminal> | undefined
+let attachedOwner: string | undefined, attachedSession: string | undefined
+const identity = () => ({ threadId: props.threadId, mountId })
+function renew() { actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity() }) }
+function operateBackground(target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest) {
+  if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.background?.continuedInSessionId === target.continuedInSessionId && view.value.background.sessionId === target.sessionId && view.value.background.status === 'pending') return
+  actor.send({ type: 'CLAUDE_TERMINAL_BACKGROUND', ...identity(), sessionId: target.sessionId, continuedInSessionId: target.continuedInSessionId,
+    revision: (view.value?.background?.revision ?? 0) + 1, ...request })
+}
+let attachmentRevision = 0
+function openBackground(target: ClaudeNativeContinuation, jobId: string) {
+  if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.attachment) return
+  expanded.value = true
+  actor.send({type:'CLAUDE_BACKGROUND_OPEN',...identity(),sessionId:target.sessionId,continuedInSessionId:target.continuedInSessionId,jobId,revision:++attachmentRevision})
+}
+function closeBackground(requestId: string) {actor.send({type:'CLAUDE_BACKGROUND_CLOSE',...identity(),requestId})}
+function inputBackground(attachmentId: string,text: string) {actor.send({type:'CLAUDE_BACKGROUND_INPUT',...identity(),attachmentId,text})}
+function resizeBackground(attachmentId: string,size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize) {actor.send({type:'CLAUDE_BACKGROUND_RESIZE',...identity(),attachmentId,...size})}
+function open() {
+  if (inputBlocksLaunch.value) return
+  expanded.value = true; returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false
+  if (!props.inputPending) actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() })
+}
+function cancelOpen() {
+  const openingId = view.value?.openingId
+  if (!openingId || view.value?.cancelling) return
+  requested.value = false; dismissed.value = true
+  actor.send({ type: 'CLAUDE_TERMINAL_CANCEL_OPEN', ...identity(), openingId })
+}
+function stop() {
+  const ownerId = view.value?.state?.ownerId
+  if (!ownerId || stopping.value) return
+  stopping.value = { ownerId, afterRevision: view.value?.stop?.revision ?? 0 }
+  actor.send({ type: 'CLAUDE_TERMINAL_CLOSE', ...identity(), ownerId })
+}
+function detach() { terminal?.detach(); terminal = undefined; attachedOwner = undefined; attachedSession = undefined }
+watch(displayActive, value => emit('active', value), { immediate: true })
+watch([view, active], async ([value, showing]) => {
+  if (!showing) { detach(); return }
+  const ownerId = value?.state?.ownerId
+  const session=value?.state?.terminalSession
+  if (!ownerId||!session) { detach(); return }
+  await nextTick()
+  if (!viewport.value || view.value?.state?.ownerId !== ownerId) return
+  const sessionKey=JSON.stringify(session)
+  if (attachedOwner !== ownerId||attachedSession!==sessionKey) {
+    detach(); attachedOwner = ownerId; attachedSession=sessionKey
+    terminal = mountNativeTerminal(ownerId, session, viewport.value, size => actor.send({ type: 'CLAUDE_TERMINAL_RESIZE', ...identity(), ownerId, ...size }), value?.state?.inputBlocked===true)
+    if (expanded.value) terminal.focus()
+  }
+  terminal?.setInputBlocked(value?.state?.inputBlocked===true)
+}, { flush: 'post' })
+defineExpose({ open })
+renew();
+watch(() => JSON.stringify([props.continuation?.sessionId, props.continuation?.continuedInSessionId]), () => {
+  if (props.continuation) operateBackground({ ...props.continuation }, { operation: 'refresh' })
+}, { immediate: true, flush: 'post' })
+const heartbeat = setInterval(renew, 10000)
+onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity() }); emit('active', false); emit('background-composing', false) })
+</script>
+
+<style scoped>
+.native-button.native-parent-interface { min-height: 30px; width: 32px; padding-inline: 5px; border: 1px solid #ffffff1a; }
+.native-launch { display: flex; flex-direction: column; flex-shrink: 0; justify-content: flex-end; padding: 6px 20px; }
+.native-launch--credit { flex: 0 0 min(28rem, 65%); min-height: 0; max-height: calc(100% - 15rem); }
+.native-launch--background { flex-shrink: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; justify-content: flex-start; }
+.native-launch--background-composing { flex: 1; overflow: hidden; }
+.native-launch__actions { justify-content: flex-end; display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.native-launch__actions .native-problem { flex: 1 1 16rem; min-width: 0; overflow-wrap: anywhere; }
+.native-launch__actions .native-button { flex-shrink: 0; }
+.native-notice { margin-bottom: 8px; padding: 12px; border: 1px solid #d3aa8e33; border-radius: 10px; background: #d3aa8e08; }
+.native-notice__body { max-height: min(14rem, 23vh); overflow-y: auto; overscroll-behavior: contain; font-size: 12px; line-height: 1.5; color: #c9c5bf; overflow-wrap: anywhere; }
+.native-notice h3 { margin: 0 0 8px; font-size: 13px; font-weight: 500; color: #eee7dd; }
+.native-notice p { margin: 0 0 8px; }
+.native-notice__url { color: #9f9a92; font-size: 11px; }
+.native-notice--recommendation { padding: 8px 12px; }
+.native-notice--recommendation h3, .native-notice--recommendation p { margin-bottom: 4px; }
+.native-notice__header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 4px; }
+.native-notice__header h3 { flex: 1; margin: 0; }
+.native-notice__header a { font-size: 11px; color: #c9c5bf; text-underline-offset: 3px; }
+.native-notice__header a:hover { text-decoration: underline; }
+.native-notice__header a:focus-visible { outline: 1px solid #8eadd3; outline-offset: 3px; }
+.native-notice__header .native-button { padding: 3px 6px; font-size: 11px; }
+.native-notice__identity { overflow-wrap: anywhere; }
+.native-notice__details { padding: 0; border: 0; background: none; color: #aaa59e; font-size: 11px; cursor: pointer; }
+.native-notice__details:focus-visible { outline: 1px solid #8eadd3; outline-offset: 3px; }
+:global(.claude-native-lsp-details) { z-index: 50; width: min(32rem, calc(100vw - 24px)); max-height: min(35vh, var(--reka-popover-content-available-height)); overflow-y: auto; overscroll-behavior: contain; padding: 12px; border: 1px solid #ffffff26; border-radius: 10px; background: #232323; color: #c9c5bf; font-size: 12px; line-height: 1.5; box-shadow: 0 12px 36px #0008; overflow-wrap: anywhere; }
+:global(.claude-native-lsp-details header) { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+:global(.claude-native-lsp-details h3) { margin: 0; color: #eee7dd; font-size: 13px; font-weight: 500; }
+:global(.claude-native-lsp-details header button) { color: #aaa59e; font-size: 11px; cursor: pointer; }
+:global(.claude-native-lsp-details p) { margin: 0 0 8px; }
+.native-notice__actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.native-session { container-type: inline-size; container-name: claude-native; --console-bg: #191919; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; padding: 16px; gap: 0; background: #141414; color: #dedbd7; }
+.native-session--expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
+/* Native consent and question screens need more rows than the compact split allows. */
+@media (max-height: 700px), (max-width: 720px) {
+  .native-session--child-expanded { position: fixed; inset: 40px 0 0 72px; z-index: 40; }
+}
+.native-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 20px; padding: 4px 4px 18px; }
+.native-identity { display: flex; align-items: center; min-width: 0; gap: 12px; }
+.native-mark { display: grid; place-items: center; flex-shrink: 0; width: 38px; height: 38px; border: 1px solid #b68e7333; border-radius: 11px; background: #b68e7310; color: #d3aa8e; font: 600 21px ui-monospace, monospace; }
+.native-heading { min-width: 0; }
+.native-heading h2 { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.02em; }
+.native-interface-label { color: #82807d; font-size: 11px; font-weight: 400; letter-spacing: 0; }
+.native-heading p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 4px 0 0; color: #8e8b86; font-size: 11px; }
+.native-controls { display: flex; align-items: center; flex-shrink: 0; gap: 8px; }
+.native-state { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; color: #a29e98; white-space: nowrap; font-size: 11px; }
+.native-state > span { width: 6px; height: 6px; border-radius: 50%; background: #827e78; }
+.native-state--live > span { background: #99bea2; box-shadow: 0 0 0 3px #99bea210; }
+.native-state--error { color: #e9a3a0; }
+.native-state--error > span { background: currentColor; }
+.native-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 5px 10px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: #a9a5a0; font-size: 11px; line-height: 18px; transition: background .15s, color .15s, border-color .15s; }
+.native-button:hover { background: #ffffff08; color: #f0ece7; }
+.native-button:focus-visible { outline: 2px solid #d3aa8e; outline-offset: 3px; }
+.native-button:disabled { opacity: .4; cursor: not-allowed; }
+.native-button--launch { border-color: #ffffff0a; }
+.native-command { color: #c7a38a; font-family: ui-monospace, monospace; font-size: 15px; }
+.native-button--stop { border-color: #ffffff12; background: #ffffff03; color: #c3b8b1; }
+.native-button--stop:hover { border-color: #c9797340; background: #c9797310; color: #edb6af; }
+.native-stop-icon { width: 7px; height: 7px; border-radius: 2px; background: currentColor; }
+.native-button--return { border-color: #b68e7333; color: #d3aa8e; }
+.native-console { display: flex; flex: 1; min-height: 144px; min-width: 0; overflow: hidden; border: 1px solid #ffffff12; border-radius: 12px; background: var(--console-bg); box-shadow: 0 8px 30px #00000020; }
+.native-viewport { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 20px; }
+.native-activity { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); flex-shrink: 0; gap: 16px 28px; max-height: 180px; overflow: auto; padding: 16px 4px 2px; }
+.native-section-label { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; color: #797773; font-size: 10px; font-weight: 500; letter-spacing: .04em; }
+.native-count { display: inline-grid; place-items: center; min-width: 16px; height: 16px; border-radius: 5px; background: #ffffff08; color: #aaa59f; font-size: 10px; letter-spacing: 0; }
+.native-summary__text { display: block; font-size: 11px; line-height: 1.65; color: #bbb6af; overflow-wrap: anywhere; }
+.native-agent-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.native-agent { min-width: 0; border-left: 2px solid #b68e7340; padding: 2px 0 2px 10px; }
+.native-agent__heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.native-agent__name { color: #d1ccc5; font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
+.native-agent__state { color: #a7b9aa; font-size: 10px; }
+.native-agent__detail { display: block; margin-top: 3px; color: #8f8a84; font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.native-problem { grid-column: 1 / -1; margin: 0; color: #e9a3a0; font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 760px) {
+  .native-session { padding: 12px; }
+  .native-header { flex-wrap: wrap; gap: 12px; padding-bottom: 12px; }
+  .native-identity { flex: 1; }
+  .native-controls { margin-left: auto; gap: 4px; }
+  .native-state { margin-right: 4px; }
+  .native-interface-label { display: none; }
+  .native-viewport { padding: 12px; }
+  .native-activity { gap: 12px; padding-top: 12px; }
+}
+@container claude-native (max-width: 760px) {
+  .native-header { flex-wrap: wrap; gap: 12px; padding-bottom: 12px; }
+  .native-identity { flex: 1; }
+  .native-controls { margin-left: auto; gap: 4px; }
+  .native-state { margin-right: 4px; }
+  .native-interface-label { display: none; }
+}
+@container claude-native (max-width: 520px) {
+  .native-controls { width: 100%; flex-wrap: wrap; justify-content: flex-end; }
+  .native-state { margin-right: auto; }
+  .native-console { min-height: 0; }
+}
+@media (max-width: 440px) {
+  .native-controls { width: 100%; justify-content: flex-end; }
+  .native-state { margin-right: auto; }
+  .native-activity { grid-template-columns: minmax(0, 1fr); max-height: 160px; }
+}
+.native-problem--expected { color: #a3a3a3; }
+</style>
