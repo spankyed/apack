@@ -156,6 +156,18 @@ test('uses original terminal Client drawings, controls and lifetimes in the app'
         // for a person; programmatic scrolling can be undone by native reflow.
         await appPage.locator('[data-testid="chat-transcript"]').hover()
         await appPage.mouse.wheel(0, -10000)
+        // At compact height the notice starts below its header. Scroll the image
+        // itself into the reading area, rather than assuming the very top fits it.
+        for (let step = 0; step < 12; step++) {
+          const shift = await image.evaluate(element => {
+            const box = element.getBoundingClientRect()
+            const viewport = element.closest('[data-testid="chat-transcript"]')!.firstElementChild!.getBoundingClientRect()
+            return box.bottom > viewport.bottom ? box.bottom - viewport.bottom : box.top < viewport.top ? box.top - viewport.top : 0
+          })
+          if (!shift) break
+          await appPage.mouse.wheel(0, shift)
+          await appPage.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
+        }
         await expect(image).toBeInViewport({ ratio: 1 })
       }
       catch (error) {
