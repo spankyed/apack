@@ -1016,16 +1016,18 @@ describe('waiting for a build in flight', () => {
     // This process holds it, and does no work while it waits: what a wedged holder looks like
     hold(file, process.pid);
     const started = Date.now();
-    expect(waitForPackageBuild({ file, idleMs: 1_000 })?.pid).toBe(process.pid);
+    const wait = waitForPackageBuild({ file, idleMs: 1_000 });
+    expect(wait?.holder.pid).toBe(process.pid);
+    expect(wait?.ended, 'given up on, not let go').toBe('stalled');
     expect(Date.now() - started, 'it gave up without waiting').toBeGreaterThanOrEqual(900);
   });
 
   it('ends the wait when the holder releases, however idle it was', () => {
     const file = lockFile();
     hold(file, holder("setTimeout(() => require('node:fs').rmSync(process.argv[1]), 1000)", file));
-    const started = Date.now();
-    waitForPackageBuild({ file, idleMs: 10_000 });
-    expect(Date.now() - started, 'it waited out the stall window rather than the release').toBeLessThan(8_000);
+    // Asked of the wait, not of the clock: a busy machine slows the holder's start and the waiter's own readings by
+    // seconds, so how long it took cannot say which way it ended
+    expect(waitForPackageBuild({ file, idleMs: 10_000 })?.ended, 'it waited out the stall window rather than the release').toBe('released');
   });
 
   /** The firing case for following the holder: one that hands the lock on is no stall, and its successor works */
@@ -1034,7 +1036,8 @@ describe('waiting for a build in flight', () => {
     const busy = holder("const end = Date.now() + 6000; while (Date.now() < end) {} require('node:fs').rmSync(process.argv[1])", file);
     hold(file, holder(`setTimeout(() => require('node:fs').writeFileSync(process.argv[1], JSON.stringify({ pid: ${busy}, label: 'next', startedAt: new Date().toISOString() })), 1000)`, file));
     const started = Date.now();
-    waitForPackageBuild({ file, idleMs: 4_000 });
+    const wait = waitForPackageBuild({ file, idleMs: 4_000 });
+    expect(wait?.ended, 'the successor was given up on rather than followed').toBe('released');
     expect(Date.now() - started, 'the busy successor was charged its idle predecessor\'s silence').toBeGreaterThanOrEqual(5_000);
   });
 });

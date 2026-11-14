@@ -1112,8 +1112,14 @@ function waitWhileHolderWorks(holder: () => number | undefined, idleMs: number, 
   return 'released';
 }
 
+/** A build waited for, and how the wait ended: the lock let go, or its holder gave up on as stalled */
+export interface PackageBuildWait {
+  readonly holder: LockHolder;
+  readonly ended: 'released' | 'stalled';
+}
+
 /**
- * Waits for an in-flight package build to finish, and returns the build it waited for. A reader of the
+ * Waits for an in-flight package build to finish, and returns the build it waited for and how the wait ended. A reader of the
  * stamps wants this rather than `runningPackageBuild` alone: a build removes each stamp before rewriting
  * it, so a reader that checks freshness mid-build sees units that look unbuilt and reports them stale,
  * telling the reader to run the build that is already running. Waiting turns that into the pause it
@@ -1125,12 +1131,12 @@ function waitWhileHolderWorks(holder: () => number | undefined, idleMs: number, 
  * report staleness as before, which is the pre-existing behaviour rather than a hang.
  */
 export function waitForPackageBuild({ idleMs = HOLDER_IDLE_MS, pollMs = LOCK_POLL_MS, file = LOCK_FILE }:
-{ idleMs?: number; pollMs?: number; file?: string } = {}): LockHolder | undefined {
-  const waitedFor = runningPackageBuild(file);
-  if (!waitedFor) return undefined;
+{ idleMs?: number; pollMs?: number; file?: string } = {}): PackageBuildWait | undefined {
+  const holder = runningPackageBuild(file);
+  if (!holder) return undefined;
   // Whoever holds it now: a build that hands the lock to another is followed, not mistaken for a stall
-  waitWhileHolderWorks(() => runningPackageBuild(file)?.pid, idleMs, pollMs);
-  return waitedFor;
+  const outcome = waitWhileHolderWorks(() => runningPackageBuild(file)?.pid, idleMs, pollMs);
+  return { holder, ended: outcome === 'released' ? 'released' : 'stalled' };
 }
 
 /**
@@ -1493,7 +1499,7 @@ export interface EnsurePackagesOptions {
 export function ensurePackagesBuilt({
   wait = () => {
     const waitedFor = waitForPackageBuild();
-    return waitedFor && describeHolder(waitedFor);
+    return waitedFor && describeHolder(waitedFor.holder);
   },
   stale: staleUnits = stalePackageUnits,
   build = buildOnePackage,
