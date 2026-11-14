@@ -51,7 +51,7 @@ it.each([undefined, '2'])('honors native NO_COLOR precedence, explicit FORCE_COL
   } finally { await prepared.dispose() }
 })
 
-it.each([[undefined,undefined],['',''],['0','0'],['1','1']])('uses broker negotiation while preserving explicit image overrides: %s',async(images,expected)=>{
+it.each([[undefined,'1'],['',''],['0','0'],['1','1'],['false','false']])('declares actual custom-terminal image support while preserving explicit overrides: %s',async(images,expected)=>{
  vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES',undefined)
  native.open.mockImplementation(async (_options, listeners) => nativeSession(listeners))
  const prepared=await prepareClaudeNativeTerminal({sessionId:'11111111-1111-1111-1111-111111111111',cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]},env:{CLAUDE_CODE_FORCE_TERMINAL_IMAGES:images}})

@@ -34,6 +34,8 @@ export async function openBackgroundAttachment(continuation: ClaudeNativeContinu
   if (options.signal?.aborted) throw new Error('Background attachment cancelled')
   const env: Record<string,string> = {}
   for (const [key,value] of Object.entries(buildChildEnv(options.env))) if (typeof value === 'string') env[key] = value
+  // The attached client draws through the same image-capable broker as a main native owner.
+  env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES ??= '1'
   const id = randomUUID(), listeners = new Set<() => void>(), chunks: {sequence:number;text:string}[] = []
   let ended = false, closing = false, sequence = 0, bytes = 0, exitCode: number | undefined, hardStop: ReturnType<typeof setTimeout> | undefined
   let finish!: () => void

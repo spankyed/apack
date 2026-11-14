@@ -36,7 +36,7 @@ beforeEach(()=>{
     }
   })
 })
-afterEach(()=>vi.restoreAllMocks())
+afterEach(()=>{vi.restoreAllMocks();vi.unstubAllEnvs()})
 it('launches the exact linked job in its own cwd without another resume writer or leaked API key',async()=>{
   const owner=await openBackgroundAttachment(continuation,job.id,{cliPath:process.execPath,env:{ANTHROPIC_API_KEY:'must-not-leak'}})
   try {
@@ -73,4 +73,10 @@ it('bounds replay, refuses stale input/resize and closes only its attacher group
   expect(f.signal).toHaveBeenCalledExactlyOnceWith('SIGTERM',{kind:'group'})
   expect(f.terminate).not.toHaveBeenCalled()
   expect(owner.snapshot.status).toBe('exited');expect(owner.input(owner.snapshot.id,'late')).toBe(false)
+})
+
+it.each([[undefined,'1'],['0','0'],['',''],['1','1'],['false','false']])('declares attached-client image capability while preserving override %s',async(value,expected)=>{
+ vi.stubEnv('CLAUDE_CODE_FORCE_TERMINAL_IMAGES',undefined)
+ const owner=await openBackgroundAttachment(continuation,job.id,{cliPath:process.execPath,env:{CLAUDE_CODE_FORCE_TERMINAL_IMAGES:value}})
+ try{expect(f.open.mock.calls[0][0].env.CLAUDE_CODE_FORCE_TERMINAL_IMAGES).toBe(expected)}finally{await owner.close()}
 })
