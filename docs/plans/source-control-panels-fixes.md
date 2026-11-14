@@ -166,7 +166,7 @@ The chain passed apart from three of `repo-checks`' tooling specs (`bounded-spaw
 **Done when:** a case for each on a real git (the engine's own specs for 3.1, 3.2 and 3.9, through its CI on three
 platforms); the app's half on the harness; the chain passes.
 
-**Landed 2026-11-14**, in apack-git #33 and apack #PR. The engine's half:
+**Landed 2026-11-14**, in apack-git #33 and apack #489. The engine's half:
 - `checkoutBranch` no longer pulls.
 - `checkoutBranch` refuses a name no branch has, as `unknown-ref`. A branch only a remote has is still made to follow
   it, by git's own guess.
