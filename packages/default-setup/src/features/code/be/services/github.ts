@@ -14,10 +14,10 @@ export interface GitHubEndpoints {
 export const GITHUB_ENDPOINTS: GitHubEndpoints = { web: 'https://github.com', api: 'https://api.github.com' }
 
 /**
- * The OAuth App this app signs in as: registered on GitHub with device flow on, and public, since device flow has
- * no secret. Absent until one is registered, and sign-in says so rather than asking GitHub
+ * The OAuth App this app signs in as: registered on GitHub with device flow on and token expiry off, and public,
+ * since device flow has no secret. Where it is unset, sign-in says so rather than asking GitHub
  */
-export const GITHUB_CLIENT_ID: string | undefined = undefined
+export const GITHUB_CLIENT_ID: string | undefined = 'Ov23lioCOloq0FgG3Uj3'
 
 /** Private repositories, pull requests and pushes (`repo`), and pushing a change to `.github/workflows` (`workflow`) */
 export const GITHUB_SCOPES: readonly string[] = ['repo', 'workflow']
