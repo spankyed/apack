@@ -4,6 +4,16 @@
 It contains no recovered Claude implementation, native binary, private traffic, credentials or
 `node_modules`. The fixture is generated, not a second maintained copy of the research tools.
 
+Current lifecycle entry points also include `driveFreshNativeBackgroundNavigation`
+(`apack-fresh-native-background-navigation-drive.mjs`), with
+`CLAUDE_RESEARCH_REQUIRE_WARM_SPARE=1` for the owned warm-spare case, and
+`driveLspOwnerReplacement` (`apack-lsp-replacement-drive.mjs`). The warm-helper journey has
+scoped actual-app acceptance; the pending-LSP Stop/reopen journey is prepared and remains
+app-unaccepted. Its failed prior attempts are preserved in the research evidence. These modern
+journeys use the broker terminal and do not restore the removed xterm implementation.
+Historical launcher selectors below are not a claim that every archived journey runs against the
+current app. This archive records authored tools, not combined F1–F5 acceptance.
+
 Regenerate from the research checkout after committing its tools:
 
 ```sh
