@@ -25,8 +25,8 @@ it.each([{cancelFirst:false,reader:false},{cancelFirst:true,reader:false},{cance
  const request=f.request();f.runtime.answer(f.n,request);expect(f.control.onConfirm).toHaveBeenCalledOnce();expect(f.answer).toHaveBeenCalledExactlyOnceWith({choice:'accept',optionOrder:reader?'screen_reader':cancelFirst?'cancel_first':'confirm_first'});expect(()=>f.runtime.answer(f.n,request)).toThrow('expired')
 })
 it('delegates decline and suppresses a native-withdrawn warning',async()=>{const f=fixture();f.row[49]=false;const notice=ClaudeNativeNoticeSchema.parse(await f.runtime.project(f.n,f.runtime.read(f.n)));expect('warning'in notice&&notice.warning).toBeFalsy();f.runtime.answer(f.n,f.request('effort_decline'));expect(f.control.onCancel).toHaveBeenCalledOnce();expect(f.answer).toHaveBeenCalledExactlyOnceWith({choice:'decline',optionOrder:'confirm_first'})})
-it('preserves native input grace and unaccepted decisions',()=>{const f=fixture(),request=f.request();f.control.refuseInput.mockReturnValue(true);expect(()=>f.runtime.answer(f.n,request)).toThrow('not ready');expect(f.control.onConfirm).not.toHaveBeenCalled();f.control.refuseInput.mockReturnValue(false);f.control.onConfirm=vi.fn();expect(()=>f.runtime.answer(f.n,request)).toThrow('has not accepted');expect(f.open).toHaveLength(1)})
-it('fences session, mutable copy and replaced native controls',()=>{const f=fixture(),request=f.request();expect(()=>f.runtime.answer(f.n,{...request,session_id:randomUUID()})).toThrow('expired');f.payload.copy.body='Changed original copy';expect(()=>f.runtime.answer(f.n,request)).toThrow('expired');const current=f.request();const next={...f.control};f.row[62]={props:next};f.selector.memoizedProps=next;expect(()=>f.runtime.answer(f.n,current)).toThrow('expired');expect(f.answer).not.toHaveBeenCalled()})
+it('preserves native input grace and unaccepted decisions',()=>{const f=fixture(),request=f.request();f.control.refuseInput.mockReturnValue(true);expect(()=>f.runtime.answer(f.n,request)).toThrow('not ready');expect(f.control.onConfirm).not.toHaveBeenCalled();f.control.refuseInput.mockReturnValue(false);f.control.onConfirm=vi.fn();expect(()=>f.runtime.answer(f.n,f.request())).toThrow('has not accepted');expect(f.open).toHaveLength(1)})
+it('fences session, mutable copy and replaced native controls',()=>{const f=fixture(),request=f.request();expect(()=>f.runtime.answer(f.n,{...request,session_id:randomUUID()})).toThrow('expired');f.payload.copy.body='Changed original copy';expect(()=>f.runtime.answer(f.n,request)).toThrow('expired');const current=f.request();const next={...f.control,onConfirm:vi.fn()};f.row[62]={props:next};f.selector.memoizedProps=next;expect(()=>f.runtime.answer(f.n,current)).toThrow('expired');expect(f.answer).not.toHaveBeenCalled()})
 it('cannot attach to a previous item that reused the model and copy',()=>{const f=fixture();f.wrapper.memoizedProps.payload={...f.payload};expect(f.runtime.read(f.n).item).toBeUndefined()})
 it('rechecks lifetime after asynchronous native formatting',async()=>{const f=fixture(),d=f.runtime.read(f.n);f.setFormat(async(_n,text)=>{f.open.splice(0);return text});await expect(f.runtime.project(f.n,d)).rejects.toThrow('changed while formatting')})
 
@@ -37,4 +37,19 @@ it('mirrors exact native success/failure text without fabricating preference suc
  f.notifications.queue=[f.notifications.current];f.notifications.current=undefined;expect(f.runtime.result(f.n)).toBeUndefined()
  f.notifications.current={key:'effort-medium-nudge-result',kind:'feedback',text:'Effort set to medium and saved as your default'};expect(f.runtime.result(f.n).paragraphs).toEqual([f.notifications.current.text])
  f.view.kind='agent';expect(f.runtime.result(f.n)).toBeUndefined();f.view.kind='main';f.notifications.current.jsx={};expect(f.runtime.result(f.n)).toBeUndefined();delete f.notifications.current.jsx;f.open.push(f.item);expect(f.runtime.result(f.n)).toBeUndefined()
+})
+
+it('keeps a reviewed choice valid across original layout-only control reconstruction',()=>{
+ const f=fixture(),request=f.request(),next={...f.control,confirmLabel:'Use medium\nby default',cancelLabel:'Keep\nhigh'}
+ f.row[62]={props:next};f.selector.memoizedProps=next
+ expect(f.runtime.read(f.n).revision).toBe(request.revision)
+ f.runtime.answer(f.n,request);expect(f.control.onConfirm).toHaveBeenCalledOnce()
+})
+it('fences renewed answer ownership and original input lifetime',()=>{
+ for(const field of ['answer','openedAt','refuseInput','focus','cancelFirst']){
+  const f=fixture(),request=f.request()
+  if(field==='answer')f.wrapper.memoizedProps.answer=vi.fn()
+  else Object.assign(f.control,{[field]:field==='openedAt'?123:field==='refuseInput'?()=>false:field==='focus'?'cancel':true})
+  expect(()=>f.runtime.answer(f.n,request)).toThrow('expired');expect(f.answer).not.toHaveBeenCalled()
+ }
 })

@@ -22,7 +22,10 @@ function nativeEffortNudge(n){
  if(typeof control.onConfirm!=='function'||typeof control.onCancel!=='function'||typeof control.refuseInput!=='function'||!['confirm','cancel'].includes(control.focus)||typeof control.cancelFirst!=='boolean'||control.confirmLabel==null||control.cancelLabel==null)throw Error('Native effort preference choices changed');
  if(control.isDisabled===true)return {store,sessionId};
  const controls=find(renderer.child,fiber=>typeof fiber.type==='function'&&fiber.type.name===nativeFunctionName('lr')&&fiber.memoizedProps===control);if(controls.length!==1)throw Error('Native effort preference control is not mounted');checked(controls[0].type,'3b9100071fc0198132bcb81b4006df24fa2c5023055370b698bd4fc1ebae8a70');
- let revision=dialogRevisions.get(kind);if(revision?.item!==item||revision?.payload!==payload||revision?.fingerprint!==fingerprint||revision?.sessionId!==sessionId||revision?.control!==control)revision={item,payload,fingerprint,sessionId,control,revision:randomUUID()};dialogRevisions.set(kind,revision);return {store,...revision,source:{row,control}};
+ // The original renderer recreates control props when terminal columns change. Fence
+ // the answer owner and executable choice lifetime, rather than layout-only props.
+ const answer=wrapper.memoizedProps.answer;
+ let revision=dialogRevisions.get(kind);if(revision?.item!==item||revision?.payload!==payload||revision?.fingerprint!==fingerprint||revision?.sessionId!==sessionId||revision?.answer!==answer||revision?.onConfirm!==control.onConfirm||revision?.onCancel!==control.onCancel||revision?.refuseInput!==control.refuseInput||revision?.openedAt!==control.openedAt||revision?.focus!==control.focus||revision?.cancelFirst!==control.cancelFirst)revision={item,payload,fingerprint,sessionId,answer,onConfirm:control.onConfirm,onCancel:control.onCancel,refuseInput:control.refuseInput,openedAt:control.openedAt,focus:control.focus,cancelFirst:control.cancelFirst,revision:randomUUID()};dialogRevisions.set(kind,revision);return {store,...revision,source:{row,control}};
 }
 async function projectNativeEffortNudge(n,d){
  const title=await nativeGenericPermissionText(n,d.source.row[74].props.title),paragraphs=[],body=await nativeGenericPermissionText(n,d.source.row[47]);if(body)paragraphs.push(body);
