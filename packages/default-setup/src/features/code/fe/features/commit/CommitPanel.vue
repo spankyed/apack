@@ -33,7 +33,7 @@
       :file="null"
       :fileCount="unstagedFiles.length"
       undoable
-      :notKept="notKeptOf(unstagedFiles.map((f: GitStatusFile) => f.path))"
+      :notKept="notKeptOf(byName(unstagedFiles))"
       @confirm="confirmDiscardAll"
       @cancel="cancelDiscardAll"
     />
@@ -158,7 +158,7 @@
           <div
             v-if="syncFeedback"
             class="absolute top-full mt-1 right-0 px-2 py-1 text-[11px] font-medium rounded shadow-lg whitespace-nowrap pointer-events-none z-20"
-            :class="syncFeedback.includes('Already') || syncFeedback.includes('Nothing')
+            :class="syncFeedback.includes('Already') || syncFeedback.includes('Nothing') || syncFeedback.includes('stopped')
               ? 'text-neutral-300 bg-neutral-800 border border-neutral-700'
               : 'text-green-300 bg-green-900/90 border border-green-800/60'"
           >
@@ -229,8 +229,11 @@
               <span class="text-xs text-neutral-300">{{ tag.name }}</span>
               <span class="text-[10px] text-neutral-500 font-mono">{{ tag.commit.slice(0, 7) }}</span>
               <span class="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                <button data-testid="push-tag" @mousedown.stop.prevent="commitActor.send({ type: 'commit.PUSH_TAG', name: tag.name })" :title="`Push ${tag.name}`" class="p-0.5 hover:bg-neutral-700 rounded"><Upload :size="12" class="text-neutral-400" /></button>
-                <button data-testid="delete-tag" @mousedown.stop.prevent="commitActor.send({ type: 'commit.DELETE_TAG', name: tag.name })" :title="`Delete ${tag.name} here`" class="p-0.5 hover:bg-neutral-700 rounded"><Trash2 :size="12" class="text-neutral-400" /></button>
+                <Loader2 v-if="tagBusy?.name === tag.name" data-testid="tag-busy" :size="12" class="animate-spin text-neutral-400" />
+                <template v-else>
+                  <button data-testid="push-tag" :disabled="!!tagBusy" @mousedown.stop.prevent="tagConfirmation = { name: tag.name, action: 'push' }" :title="`Push ${tag.name}`" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"><Upload :size="12" class="text-neutral-400" /></button>
+                  <button data-testid="delete-tag" :disabled="!!tagBusy" @mousedown.stop.prevent="tagConfirmation = { name: tag.name, action: 'delete' }" :title="`Delete ${tag.name} here`" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40"><Trash2 :size="12" class="text-neutral-400" /></button>
+                </template>
               </span>
             </div>
           </template>
@@ -404,7 +407,7 @@
 
     <!-- Git was not run, because the repository would have it run something and has not been trusted -->
     <TrustRequest v-if="trustRequest" :request="trustRequest" @trust="commitActor?.send({ type: 'commit.TRUST_REPOSITORY' })" />
-    <OwnershipRequest v-if="ownershipRequest" :directory="ownershipRequest.directory" @trust="commitActor?.send({ type: 'commit.TRUST_OWNERSHIP' })" />
+    <OwnershipRequest v-else-if="ownershipRequest" :directory="ownershipRequest.directory" @trust="commitActor?.send({ type: 'commit.TRUST_OWNERSHIP' })" />
 
     <!-- Git Error (only show non-directory errors) -->
     <div v-else-if="gitError && !isNoDirectoryError" class="p-3 border-b border-red-800 bg-red-900/20">
@@ -489,6 +492,8 @@
         <textarea
           ref="commitTextarea"
           v-model="commitMessage"
+          :readonly="isGeneratingMessage"
+          data-testid="commit-message"
           @input="updateCommitMessage"
           :placeholder="`Message (currently on ${gitBranch || 'unknown'})`"
           :class="[
@@ -522,7 +527,7 @@
         </button>
 
         <button
-          v-else
+          v-if="!shouldShowActionButton"
           @click="commit"
           :disabled="!canCommit"
           :title="whyNot.commit ?? undefined"
@@ -540,7 +545,7 @@
           v-if="hasCommits && !isPushing"
           data-testid="amend-button"
           @click="amend"
-          :disabled="!!operation"
+          :disabled="!!operation || isCommitting"
           class="w-full mt-1 px-3 py-1 rounded text-xs text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 disabled:opacity-40"
           title="Amend the last commit with what is staged, and with this message if one is written"
         >
@@ -764,8 +769,9 @@
           <div
             v-for="stash in filteredStashes"
             :key="stash.ref"
+            data-testid="stash-row"
             class="group px-2 py-1.5 rounded hover:bg-neutral-800/50 transition-colors cursor-pointer"
-            @click="applyStash(stash.index)"
+            @click="commitActor?.send({ type: 'commit.TOGGLE_STASH_FILES', index: stash.index })"
           >
             <div class="flex items-center gap-2 min-w-0">
               <div class="flex-1 min-w-0">
@@ -778,6 +784,9 @@
                 </button>
                 <button @click.stop="copyStashMessage(stash)" class="p-0.5 hover:bg-neutral-700 rounded" title="Copy message">
                   <Copy class="w-3 h-3 text-neutral-400" />
+                </button>
+                <button @click.stop="applyStash(stash.index)" class="p-0.5 hover:bg-neutral-700 rounded" title="Apply (keep the stash)" data-testid="stash-apply">
+                  <Check class="w-3 h-3 text-neutral-400" />
                 </button>
                 <button @click.stop="popStash(stash.index)" class="p-0.5 hover:bg-neutral-700 rounded" title="Pop (apply & remove)">
                   <ArrowDownToLine class="w-3 h-3 text-neutral-400" />
@@ -804,7 +813,7 @@
       :show="showDropStashDialog"
       :file="null"
       :customTitle="'Drop Stash'"
-      :customMessage="'Are you sure you want to drop this stash? This action cannot be undone.'"
+      :customMessage="'Are you sure you want to drop this stash?'"
       @confirm="confirmDropStash"
       @cancel="cancelDropStash"
     />
@@ -814,9 +823,22 @@
       :show="showClearStashesDialog"
       :file="null"
       :customTitle="'Clear All Stashes'"
-      :customMessage="'Are you sure you want to clear all stashes? This action cannot be undone.'"
+      :customMessage="'Are you sure you want to clear all stashes?'"
       @confirm="confirmClearStashes"
       @cancel="cancelClearStashes"
+    />
+
+    <!-- Pushing a tag or deleting one, confirmed first -->
+    <RevertDialog
+      :show="!!tagConfirmation"
+      :file="null"
+      :customTitle="tagConfirmation?.action === 'push' ? 'Push Tag' : 'Delete Tag'"
+      :customMessage="tagConfirmation?.action === 'push'
+        ? `Push the tag ${tagConfirmation.name} to the remote, where others can fetch it?`
+        : `Delete the tag ${tagConfirmation?.name} here? A copy already pushed stays on the remote.`"
+      :reversible="tagConfirmation?.action === 'push' ? 'A tag pushed can be deleted from the remote again.' : undefined"
+      @confirm="confirmTag"
+      @cancel="tagConfirmation = null"
     />
 
     <!-- Worktrees Section -->
@@ -1047,6 +1069,7 @@ const startOperation = (kind: 'merge' | 'rebase', target: string) => {
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)
 const isPushing = useSelector(commitActor, (state) => state.context.isPushing)
+const pushStopped = useSelector(commitActor, (state) => state.context.pushStopped)
 const isPulling = useSelector(commitActor, (state) => state.context.isPulling)
 const isGeneratingMessage = useSelector(commitActor, (state) => state.context.isGeneratingMessage)
 const stashList = useSelector(commitActor, (state) => state.context.stashList)
@@ -1106,7 +1129,8 @@ const watchSyncOp = (
   flag: typeof isPulling,
   getCount: () => number,
   label: string,
-  noopMessage: string
+  noopMessage: string,
+  stopped?: () => boolean
 ) => {
   let snapshotCount = 0
   watch(flag, (active, wasActive) => {
@@ -1117,6 +1141,8 @@ const watchSyncOp = (
     } else if (wasActive) {
       if (gitError.value) {
         toast.value?.error(`${label} failed`, gitError.value)
+      } else if (stopped?.()) {
+        showSyncFeedback(`${label} stopped`)
       } else {
         showSyncFeedback(snapshotCount > 0
           ? `${label}ed ${snapshotCount} commit${snapshotCount !== 1 ? 's' : ''}`
@@ -1148,7 +1174,7 @@ watch(gitError, () => {
 })
 
 watchSyncOp(isPulling, () => commitsBehind.value, 'Pull', 'Already up to date')
-watchSyncOp(isPushing, () => commitsAhead.value, 'Push', 'Nothing to push')
+watchSyncOp(isPushing, () => commitsAhead.value, 'Push', 'Nothing to push', () => pushStopped.value)
 
 watch(commitMessage, (val) => {
   if (!val && commitTextarea.value) {
@@ -1187,7 +1213,8 @@ const reasonOf = (availability: Availability) => (availability.possible ? null :
 const whyNot = computed(() => ({ commit: reasonOf(canBeDone.value.commit), push: reasonOf(canBeDone.value.push), pull: reasonOf(canBeDone.value.pull) }))
 const syncTitle = computed(() => (commitsAhead.value > 0 ? whyNot.value.push ?? 'Push' : whyNot.value.pull ?? pullTitle.value))
 
-const canCommit = computed(() => commitMessage.value.trim() && stagedFiles.value.length > 0 && hasIdentity.value)
+const isCommitting = useSelector(commitActor, (state) => state.context.isCommitting)
+const canCommit = computed(() => !!commitMessage.value.trim() && stagedFiles.value.length > 0 && canBeDone.value.commit.possible && !isCommitting.value)
 
 const isNoDirectoryError = computed(() => {
   return gitError.value?.includes('No directory selected')
@@ -1478,6 +1505,17 @@ const stashStaged = () => {
 const applyStash = (index: number) => {
   commitActor?.send({ type: 'commit.STASH_APPLY', index })
 }
+
+const tagBusy = useSelector(commitActor, (state) => state.context.tagBusy)
+const tagPushed = useSelector(commitActor, (state) => state.context.tagPushed)
+/** The tag push or delete waiting on the user's yes */
+const tagConfirmation = ref<{ name: string; action: 'push' | 'delete' } | null>(null)
+const confirmTag = () => {
+  const asked = tagConfirmation.value
+  tagConfirmation.value = null
+  if (asked) commitActor?.send({ type: asked.action === 'push' ? 'commit.PUSH_TAG' : 'commit.DELETE_TAG', name: asked.name })
+}
+watch(tagPushed, (pushed) => { if (pushed) toast.value?.success('Tag pushed', `${pushed.name} is on the remote`) })
 
 const popStash = (index: number) => {
   commitActor?.send({ type: 'commit.STASH_POP', index })

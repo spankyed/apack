@@ -70,6 +70,21 @@ interface Running {
  * The worker's work from now: its own CPU, exact and free (`process.cpuUsage`), and what the processes it started
  * have spent, from `ps`. `now()` is what it has read so far, which a test that ends between two readings is told.
  */
+/**
+ * The readings this guard has started and not seen end: each runs a `ps` as a child of this worker.
+ *
+ * **Waited for before the file's last hook ends, because a reading outliving its worker is a leftover.** A pool of
+ * processes ends a file's worker with it, and a `ps` the worker started and was still running is then reparented with
+ * its parent gone and its group the pool's — what the next file's leftover check is for, so a file running beside
+ * this one was failed for the guard's own reading. A busy machine slows `ps`, which is when it happened
+ */
+const readings = new Set<Promise<unknown>>();
+function tracked<T>(reading: Promise<T>): Promise<T> {
+  readings.add(reading);
+  void reading.finally(() => readings.delete(reading)).catch(() => {});
+  return reading;
+}
+
 function workerWork(): WorkReading & { now(): number } {
   const ownAtStart = process.cpuUsage();
   let lastChildren: ReadonlyMap<number, number> | undefined;
@@ -79,7 +94,7 @@ function workerWork(): WorkReading & { now(): number } {
     return (own.user + own.system) / 1000 + childrenMs;
   };
   return Object.assign(async () => {
-    const tree = await readTreeCpuMs(process.pid);
+    const tree = await tracked(readTreeCpuMs(process.pid));
     if (tree !== undefined) {
       const children = new Map([...tree].filter(([pid]) => pid !== process.pid));
       // The first reading is the baseline: a child a hook left running did its earlier work for the hook
@@ -88,7 +103,7 @@ function workerWork(): WorkReading & { now(): number } {
     }
     return now();
   // A worker waiting on a disk is slow and not stuck, as any tree is (`storageHold`)
-  }, { now, held: () => storageHold(process.pid) });
+  }, { now, held: () => tracked(storageHold(process.pid)) });
 }
 
 /**
@@ -261,13 +276,18 @@ async function leftBehind(since: number): Promise<Leftover[]> {
 aroundAll(async (runSuite) => {
   const file = fileName();
   const startedAt = realClock.now();
-  await watch('hooks', `${file} (its beforeAll, afterAll and the time between tests)`, undefined, async () => {
-    await runSuite();
-    const left = await leftBehind(startedAt);
-    if (left.length === 0) return;
-    for (const { process: each } of left) reported.add(each.pid);
-    throw new Error(await describeLeftovers(file, left));
-  });
+  try {
+    await watch('hooks', `${file} (its beforeAll, afterAll and the time between tests)`, undefined, async () => {
+      await runSuite();
+      const left = await leftBehind(startedAt);
+      if (left.length === 0) return;
+      for (const { process: each } of left) reported.add(each.pid);
+      throw new Error(await describeLeftovers(file, left));
+    });
+  } finally {
+    // Nothing is judged any more, so no reading starts after these: the worker may now end without leaving one
+    await Promise.allSettled(readings);
+  }
 });
 
 aroundEach(async (runTest, context) => {
