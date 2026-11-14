@@ -98,7 +98,9 @@ describe.skipIf(!BINARY || process.platform === 'win32')('a terminal on a target
   });
 
   it('says what a command that hangs was doing when it was given up on', async () => {
-    service = createTerminalService({ startMs: 500 });
+    // The bound is the subject, so it is reached rather than waited out — but it must outlast the shell writing its
+    // first line, which half a second did not on a busy machine: the refusal then had nothing to quote
+    service = createTerminalService({ startMs: 3_000 });
     // A command that starts, complains, and never answers: a host that takes no connection
     const hangs = { command: ['/bin/sh', '-c', 'echo "waiting for the daemon" >&2; exec sleep 600'] };
 
