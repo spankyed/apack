@@ -12,6 +12,7 @@ import { untypedQuery } from '@apackdev/sdk/ears';
 import { getDesignated, hasDesignation } from '@apackdev/sdk/designations';
 import { stepRegistry } from '@apackdev/sdk/steps';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
+import { describeRefusal, processWork, watchWork } from '@apackdev/sdk/progress';
 import { bindSettingsRequest } from '@apackdev/host/settings';
 import type { SettingsAdmin, SettingsService } from '@apackdev/sdk/services';
 
@@ -54,6 +55,7 @@ export interface RunFlowOptions {
   event?: string;
   /** The event's payload */
   data?: unknown;
+  /** Gives up after this long on the clock, for a case asserting the flow does not finish; see `nextEmit` */
   timeoutMs?: number;
 }
 
@@ -68,7 +70,10 @@ export interface FlowRun {
 export interface TestView<Result = unknown> {
   /** Every update delivered so far, in order: results, and errors from a view that threw or a pack that isn't running */
   readonly updates: ReadonlyArray<ViewUpdate<Result>>;
-  /** The next update after those an earlier `next` returned, waiting for it if needed (5 s by default) */
+  /**
+   * The next update after those an earlier `next` returned, waiting for it for as long as the test's processes work,
+   * or for `timeoutMs` on the clock when given (see `nextEmit`)
+   */
   next(options?: { timeoutMs?: number }): Promise<ViewUpdate<Result>>;
   /** Unsubscribes, as a window's component unmounting does; the app stopping does it too */
   stop(): void;
@@ -130,6 +135,11 @@ export interface TestApp {
    * which is on the envelope rather than the event, so this is the only way a pack test can see it. Use it
    * wherever a spec has two asks in flight, or asserts that an answer named the right one; the timeout
    * message names what each candidate answered, so a mismatch reads as a mismatch rather than as silence.
+   *
+   * **Waited for while the test's processes work, not for a fixed time.** What answers is this process's systems and
+   * what they start (`git` above all), so a busy machine makes the event late and never stops it; the wait gives up
+   * only once the tree has done nothing for `IDLE_MS`. `timeoutMs` is the clock instead, and is for one case only:
+   * asserting that an event does **not** come, where a short window is the claim being made.
    */
   nextEmit(surface: string, type: string, options?: { timeoutMs?: number; answering?: string }): Promise<SurfaceEvent>;
   /** Resolves once the actors have no queued work left (zero-delay raises and settled promises included) */
@@ -391,10 +401,17 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
   /** The view subscriptions this app opened, which its stop ends */
   const watched = new Set<{ stop(): void }>();
   /** Resolves with what `check` finds once an event makes it find something; rejects when the app stops first */
-  const waitForEmitted = <T>(check: () => T | undefined, timeoutMs: number, describe: () => string) => new Promise<T>((resolve, reject) => {
+  /**
+   * With `clockMs`, the wait ends on the clock, for a case asserting that nothing comes; without it, once this
+   * process's tree stops working (`watchWork`), so that load makes an answer late and never makes it a failure
+   */
+  const waitForEmitted = <T>(check: () => T | undefined, clockMs: number | undefined, describe: () => string) => new Promise<T>((resolve, reject) => {
     if (stopped) return reject(stoppedError());
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let watch: ReturnType<typeof watchWork> | undefined;
     const end = (settleWait: () => void) => {
       clearTimeout(timer);
+      watch?.stop();
       waits.delete(wait);
       settleWait();
     };
@@ -407,8 +424,16 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
       },
       end: (error: Error) => end(() => reject(error)),
     };
-    const timer = setTimeout(() => wait.end(new Error(describe())), timeoutMs);
-    if (!wait.attempt()) waits.add(wait);
+    if (wait.attempt()) return;
+    waits.add(wait);
+    if (clockMs !== undefined) {
+      timer = setTimeout(() => wait.end(new Error(`${describe()} (waited ${clockMs}ms)`)), clockMs);
+      return;
+    }
+    watch = watchWork({
+      work: processWork(process.pid),
+      onRefused: (refusal) => wait.end(new Error(`${describe()} Waited while the test's processes worked, until they ${describeRefusal(refusal)}.`)),
+    });
   });
 
   /**
@@ -494,7 +519,7 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
       const id = resolveSurfaceId(surface);
       return emitted.filter((message) => message.to === id).map((message) => message.event);
     },
-    nextEmit: (surface, type, { timeoutMs = 5000, answering } = {}) => call(async () => {
+    nextEmit: (surface, type, { timeoutMs, answering } = {}) => call(async () => {
       const id = resolveSurfaceId(surface);
       const wanted = answering === undefined ? '' : ` answering ${answering}`;
       // Named per send, since "a QUERY_RESULT arrived but answered something else" is the failure this option
@@ -506,10 +531,10 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
         if (index === -1) return undefined;
         taken.add(index);
         return emitted[index].event;
-      }, timeoutMs, () => `No ${type}${wanted} sent to ${id} within ${timeoutMs}ms. Sent: ${emitted.map(describeSend).join(', ') || 'nothing'}.${heldForAClient()}`);
+      }, timeoutMs, () => `No ${type}${wanted} sent to ${id}. Sent: ${emitted.map(describeSend).join(', ') || 'nothing'}.${heldForAClient()}`);
     }),
     settle: () => call(() => settle()),
-    runFlow: (label, { event, data, timeoutMs = 10_000 } = {}) => call(async () => {
+    runFlow: (label, { event, data, timeoutMs } = {}) => call(async () => {
       const brainId = hasDesignation('brain') ? getDesignated('brain') : undefined;
       if (!brainId || !systems.has(brainId)) {
         throw new Error("runFlow runs flows on the brain: start the app with the brain system, startApp({ systems: ['brain', …] })");
@@ -529,11 +554,11 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
       }
 
       const eventType = event ?? 'flow.entry';
-      const deadline = Date.now() + timeoutMs;
+      const deadline = timeoutMs === undefined ? Infinity : Date.now() + timeoutMs;
       // An event's tracks are the ones it triggers from here; entry tracks ran when the flow started
       const cursor = event === undefined ? 0 : reports.length;
       const since = () => reports.slice(cursor);
-      const timedOut = () => `Flow "${label}" didn't finish "${eventType}" within ${timeoutMs}ms. Steps so far: ${since().filter(isSpawn).filter((e) => e.runNode.kind !== 'event' && flowRunNodeIds.includes(e.flowRunNodeId)).map((e) => `${e.runNode.label} (${runStep(e).status})`).join(', ') || 'none'}.`;
+      const timedOut = () => `Flow "${label}" didn't finish "${eventType}"${timeoutMs === undefined ? '' : ` within ${timeoutMs}ms`}. Steps so far: ${since().filter(isSpawn).filter((e) => e.runNode.kind !== 'event' && flowRunNodeIds.includes(e.flowRunNodeId)).map((e) => `${e.runNode.label} (${runStep(e).status})`).join(', ') || 'none'}.`;
       if (event !== undefined) {
         testRootEvents.emitIncoming({ to: brainId, event: { type: 'TRIGGER_BRAIN_EVENT', eventType: event, payload: data } });
         await settle(deadline, timedOut);
@@ -565,7 +590,7 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
       // A step reports completion before its flow starts the next step, so every started step can look settled
       // in between: check again once the systems have settled
       while (!eventRunNodeIds) {
-        await waitForEmitted(finishedTracks, Math.max(deadline - Date.now(), 0), timedOut);
+        await waitForEmitted(finishedTracks, timeoutMs === undefined ? undefined : Math.max(deadline - Date.now(), 0), timedOut);
         await settle(deadline, timedOut);
         eventRunNodeIds = finishedTracks();
       }
@@ -596,10 +621,10 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
       });
       const subscription: TestView<Result> = {
         updates,
-        next: ({ timeoutMs = 5000 } = {}) => call(() => waitForEmitted(
+        next: ({ timeoutMs } = {}) => call(() => waitForEmitted(
           () => (read < updates.length ? updates[read++] : undefined),
           timeoutMs,
-          () => `No update from view "${view}" of "${feature}" within ${timeoutMs}ms after the ${read} already read; it delivered: ${JSON.stringify(updates)}`,
+          () => `No update from view "${view}" of "${feature}" after the ${read} already read; it delivered: ${JSON.stringify(updates)}`,
         )),
         stop: () => {
           unsubscribe();
