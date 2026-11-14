@@ -31,11 +31,20 @@ export interface SecretsStatus {
 }
 
 /**
- * The user's API keys, as metadata: list, select, rename and delete them. Adding a key or replacing its value
- * happens only in Settings → Secrets (the host's `secrets` procedures), so no value passes through packs or events.
- * The host implements it.
+ * The secrets one pack keeps for itself, by a name it chooses: a sign-in's token, say. Another pack cannot read,
+ * replace or delete them, and they are not among the user's keys `list` returns. Stored and protected as those
+ * keys are, and masked in logs once used.
  */
-export interface SecretsService {
+export interface OwnSecrets {
+  /** The value stored under `name`, or `undefined` when there is none */
+  get(name: string): string | undefined;
+  set(name: string, value: string): void;
+  /** Deleting a name that holds nothing does nothing */
+  delete(name: string): void;
+}
+
+/** The user's API keys as metadata, beside nothing of any pack's: what the host holds before it binds a caller */
+export interface UserSecrets {
   status(): SecretsStatus;
   /** Every stored key, without values */
   list(): SecretMetadata[];
@@ -44,6 +53,21 @@ export interface SecretsService {
   rename(id: string, label: string): void;
   /** Deleting the selected key leaves its provider with none selected */
   delete(id: string): void;
+}
+
+/**
+ * The user's API keys, as metadata: list, select, rename and delete them, and the calling pack's own secrets.
+ * Adding a key or replacing its value happens only in Settings → Secrets (the host's `secrets` procedures), so no
+ * key's value passes through packs or events. The host implements it, bound to the pack calling it.
+ */
+export interface SecretsService extends UserSecrets {
+  /** The calling pack's own secrets */
+  own: OwnSecrets;
+}
+
+/** Trusted host operations: the user's keys, and a pack's service bound to that pack */
+export interface SecretsAdmin extends UserSecrets {
+  forPack(packId: string): SecretsService;
 }
 
 /** The user's stored keys (without values) and how they're protected */

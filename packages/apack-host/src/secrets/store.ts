@@ -15,7 +15,13 @@ const AUTH_TAG_BYTES = 16;
 
 interface EncryptedValue { keyId: string; iv: string; tag: string; data: string }
 interface StoredSecret extends SecretMetadata { value: EncryptedValue }
-interface SecretsFile { format: number; protection: 'os-keystore' | 'unprotected'; keyId: string; secrets: StoredSecret[] }
+/** A secret one pack keeps for itself, by the name it chose: not one of the user's keys */
+interface OwnedSecret { owner: string; name: string; value: EncryptedValue; createdAt: number; updatedAt?: number }
+interface SecretsFile {
+  format: number; protection: 'os-keystore' | 'unprotected'; keyId: string; secrets: StoredSecret[]
+  /** Absent in a file no pack has kept a secret in */
+  owned?: OwnedSecret[]
+}
 
 export interface SecretsStoreOptions {
   /** The store's file; its directory also holds the file vault's data keys */
@@ -37,10 +43,14 @@ export interface SecretsStore {
   replaceValue(id: string, value: string): void;
   /** The selected key's value for a provider; throws naming the fix when there's none or it can't be read */
   keyFor(provider: ProviderName): string;
+  /** A pack's own secret, or `undefined` when it keeps none by that name; throws when it can't be read */
+  getOwned(owner: string, name: string): string | undefined;
+  setOwned(owner: string, name: string, value: string): void;
+  deleteOwned(owner: string, name: string): void;
   /** Keeps data keys in a file from now on, where the OS has no credential store */
   allowUnprotected(): void;
   /**
-   * Deletes every stored key. The data key stays in its vault, where a copy of the data directory may share it, and
+   * Deletes every stored key and every pack's own secrets. The data key stays in its vault, where a copy of the data directory may share it, and
    * encrypts the keys added next; a file that can't be read is deleted.
    */
   clearAll(): void;
@@ -161,29 +171,36 @@ export function createSecretsStore(options: SecretsStoreOptions): SecretsStore {
     return key;
   };
 
-  const aad = (id: string, provider: SecretProvider) => Buffer.from(`${id}:${provider}`);
+  const aad = (id: string, provider: SecretProvider) => `${id}:${provider}`;
+  /** What binds an owned value to its owner and name, so a value moved to another entry does not decrypt */
+  const ownedAad = (owner: string, name: string) => `owned:${owner}:${name}`;
 
-  const encrypt = (file: SecretsFile, id: string, provider: SecretProvider, value: string): EncryptedValue => {
+  const encrypt = (file: SecretsFile, id: string, provider: SecretProvider, value: string): EncryptedValue =>
+    encryptFor(file, aad(id, provider), value);
+
+  const encryptFor = (file: SecretsFile, additional: string, value: string): EncryptedValue => {
     rememberForRedaction(value);
     const key = encryptionKey(file);
     const iv = crypto.randomBytes(12);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-    cipher.setAAD(aad(id, provider));
+    cipher.setAAD(Buffer.from(additional));
     const data = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
     return { keyId: file.keyId, iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64') };
   };
 
-  const decrypt = (file: SecretsFile, secret: StoredSecret): string => {
-    const unreadable = new Error(`The ${_secretProviderLabel(secret.provider)} key "${secret.label}" can't be read on this machine: enter it again in Settings → Secrets`);
-    const key = loadKey(file, secret.value.keyId);
+  const decrypt = (file: SecretsFile, secret: StoredSecret): string => decryptFor(file, secret.value, aad(secret.id, secret.provider),
+    new Error(`The ${_secretProviderLabel(secret.provider)} key "${secret.label}" can't be read on this machine: enter it again in Settings → Secrets`));
+
+  const decryptFor = (file: SecretsFile, encrypted: EncryptedValue, additional: string, unreadable: Error): string => {
+    const key = loadKey(file, encrypted.keyId);
     if (!key) throw unreadable;
     try {
-      const tag = Buffer.from(secret.value.tag, 'base64');
+      const tag = Buffer.from(encrypted.tag, 'base64');
       if (tag.length !== AUTH_TAG_BYTES) throw unreadable;
-      const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(secret.value.iv, 'base64'), { authTagLength: AUTH_TAG_BYTES });
-      decipher.setAAD(aad(secret.id, secret.provider));
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(encrypted.iv, 'base64'), { authTagLength: AUTH_TAG_BYTES });
+      decipher.setAAD(Buffer.from(additional));
       decipher.setAuthTag(tag);
-      const value = Buffer.concat([decipher.update(Buffer.from(secret.value.data, 'base64')), decipher.final()]).toString('utf8');
+      const value = Buffer.concat([decipher.update(Buffer.from(encrypted.data, 'base64')), decipher.final()]).toString('utf8');
       rememberForRedaction(value);
       return value;
     } catch {
@@ -241,6 +258,31 @@ export function createSecretsStore(options: SecretsStoreOptions): SecretsStore {
       return decrypt(file, _secretRules.selectedFor(file.secrets, provider));
     },
 
+    getOwned(owner, name) {
+      const file = read();
+      const held = file.owned?.find((secret) => secret.owner === owner && secret.name === name);
+      return held && decryptFor(file, held.value, ownedAad(owner, name),
+        new Error(`The secret "${name}" of pack "${owner}" can't be read on this machine`));
+    },
+
+    setOwned(owner, name, value) {
+      const file = read();
+      const encrypted = encryptFor(file, ownedAad(owner, name), value);
+      const owned = file.owned ?? [];
+      const held = owned.find((secret) => secret.owner === owner && secret.name === name);
+      file.owned = held
+        ? owned.map((secret) => secret === held ? { ...secret, value: encrypted, updatedAt: now() } : secret)
+        : [...owned, { owner, name, value: encrypted, createdAt: now() }];
+      write(file);
+    },
+
+    deleteOwned(owner, name) {
+      const file = read();
+      const owned = file.owned ?? [];
+      if (!owned.some((secret) => secret.owner === owner && secret.name === name)) return;
+      write({ ...file, owned: owned.filter((secret) => !(secret.owner === owner && secret.name === name)) });
+    },
+
     allowUnprotected() {
       const file = read();
       if (options.useFileVault || file.protection === 'unprotected') return;
@@ -258,6 +300,17 @@ export function createSecretsStore(options: SecretsStoreOptions): SecretsStore {
       next.secrets = file.secrets.map((secret) => readable.has(secret.id)
         ? { ...secret, value: encrypt(next, secret.id, secret.provider, readable.get(secret.id)!) }
         : secret);
+      // A pack's own secret moves the same way, and one that can't be read stays as it is, as a key does
+      next.owned = (file.owned ?? []).map((secret) => {
+        let value: string;
+        try {
+          value = decryptFor(file, secret.value, ownedAad(secret.owner, secret.name), new Error('unreadable'));
+        } catch {
+          return secret;
+        }
+        return { ...secret, value: encryptFor(next, ownedAad(secret.owner, secret.name), value) };
+      });
+      for (const secret of file.owned ?? []) previousKeyIds.add(secret.value.keyId);
       write(next);
       osVaultUnavailable = false;
       for (const keyId of previousKeyIds) {

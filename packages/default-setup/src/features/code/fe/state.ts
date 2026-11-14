@@ -31,6 +31,7 @@ import { terminalState, type TerminalInfo } from './features/terminal/state.ts';
 import { terminalPool, viewSettingsOf } from './utils/terminal-pool.ts';
 import { actionsState } from './features/actions/state.ts';
 import { promptsState } from './features/prompts/state.ts';
+import { githubState } from './features/github/state.ts';
 import type { KeyboardShortcut } from '@apackdev/sdk/types';
 import { codeChild, routeToCodeChild, CODE_CHILD_IDS } from './features/children.ts';
 
@@ -347,6 +348,7 @@ const codeState = setup({
     terminalState,
     actionsState,
     promptsState,
+    githubState,
     /**
      * **The owner of the terminal pool, which is a module singleton and so has no other.**
      *
@@ -385,6 +387,7 @@ const codeState = setup({
         enqueue.spawnChild('pullRequestState', { id: 'pr' });
         enqueue.spawnChild('actionsState', { id: 'codeActions' });
         enqueue.spawnChild('promptsState', { id: 'codePrompts' });
+        enqueue.spawnChild('githubState', { id: 'github' });
     }),
 
     notifyDirectoryChange: ({ event, context, self }) => {

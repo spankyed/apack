@@ -1,6 +1,6 @@
 # GitHub without the GitHub CLI
 
-Status: planned, 2026-11-12. Not started.
+Status: phase 1 done, 2026-11-13. Next: phase 2.
 
 ```text
 # Goal: the code feature reaches GitHub on its own sign-in, and no longer runs gh
@@ -77,4 +77,21 @@ hands it an environment, as it does today.
 
 ## Current handoff
 
-Nothing started. Next: register the OAuth App (Needs from the user), then phase 1.
+**Phase 1 is done.** What landed:
+
+- `services.secrets` has a pack-owned face, `own` (`get`, `set`, `delete`), bound to the pack the host admitted
+  (`packages/apack-host/src/packs/service-binding.ts`) and kept in the secrets file beside the user's keys,
+  encrypted alike (`secrets/store.ts`, `owned`). Another pack cannot read one: `apack-host`'s
+  `tests/secrets/store.spec.ts`.
+- The device flow is `services.github` (`code/be/services/github.ts`), signing in as the OAuth App `apack`
+  (client id `Ov23lioCOloq0FgG3Uj3`: device flow on, token expiry off, no client secret). The code system's
+  `github` child (`code/be/features/github.ts`) runs it and keeps the token as the pack's own secret; the code
+  feature's Settings form shows the code, then the account with Sign out (`code/fe/features/github/`).
+- Against a stand-in (`tests/features/code/be/_support/github-stand-in.ts`): the code is shown, polling honours
+  `slow_down` with and without an interval, `expired_token`, a refusal and a cancel end it, the token lands in the
+  store, and Sign out removes it.
+- Driven against github.com on 2026-11-13, from this branch's development app: the code shown, approved at
+  github.com, "Signed in as" the account, no token in the app's log, and Sign out left the secrets file holding
+  nothing of the pack's.
+
+Next: phase 2, the GitHub client over `fetch` in place of `gh-cli.ts`, reading the token through `storedSignIn()`.

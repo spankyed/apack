@@ -295,6 +295,14 @@ export type OutputSpec = {
 } & OutputNaming);
 
 // @public
+export interface OwnSecrets {
+    delete(name: string): void;
+    get(name: string): string | undefined;
+    // (undocumented)
+    set(name: string, value: string): void;
+}
+
+// @public
 export interface PackServiceAccess {
     // (undocumented)
     readonly services: Readonly<Record<string, unknown>>;
@@ -425,17 +433,17 @@ export const _secretRules: {
 };
 
 // @public
+export interface SecretsAdmin extends UserSecrets {
+    // (undocumented)
+    forPack(packId: string): SecretsService;
+}
+
+// @public
 export type SecretsProtection = 'os-keystore' | 'unprotected' | 'unavailable';
 
 // @public
-export interface SecretsService {
-    delete(id: string): void;
-    list(): SecretMetadata[];
-    // (undocumented)
-    rename(id: string, label: string): void;
-    select(id: string): void;
-    // (undocumented)
-    status(): SecretsStatus;
+export interface SecretsService extends UserSecrets {
+    own: OwnSecrets;
 }
 
 // @public
@@ -730,6 +738,17 @@ export class UnknownBackupDatabasesError extends Error {
     constructor(databases: string[]);
     // (undocumented)
     readonly databases: string[];
+}
+
+// @public
+export interface UserSecrets {
+    delete(id: string): void;
+    list(): SecretMetadata[];
+    // (undocumented)
+    rename(id: string, label: string): void;
+    select(id: string): void;
+    // (undocumented)
+    status(): SecretsStatus;
 }
 
 // (No @packageDocumentation comment for this package)
