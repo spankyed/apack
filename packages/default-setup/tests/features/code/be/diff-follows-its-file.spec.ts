@@ -55,6 +55,18 @@ function announcedSince(mark: number, change: object) {
     return announced().slice(mark);
   }).toContainEqual(expect.objectContaining(change));
 }
+/**
+ * Waits for the watcher to announce a change made after `mark`, asking for no check of its own.
+ *
+ * **For a claim about the status itself.** The status a check compares includes whether the watch is heard from, and
+ * only a check of everything — the one `checked` asks for — counts a change the watcher had not reported yet: three
+ * in a row say the watch has gone silent (`MISSED_CHECKS_SILENT`, apack-git), and the next one it reports says it is
+ * heard again, both news of the status. Asked for the moment a file is written, those checks outran a watcher that a
+ * busy machine made late, so the status read as changed for the watch's sake. A watcher's own check never counts one
+ */
+function announcedByWatcher(mark: number, change: object) {
+  return expect.poll(() => announced().slice(mark)).toContainEqual(expect.objectContaining(change));
+}
 /** Makes a change and waits for its announcement */
 async function changed(change: object, make: () => unknown) {
   const mark = announced().length;
@@ -73,7 +85,9 @@ it('names the file whose diff changed when a file already changed is edited agai
   await changed({ status: true, diffs: true, files: ['a.txt'] }, () => fs.writeFileSync(path.join(directory, 'a.txt'), 'edited\n'));
 
   // The list of changed files is what it was, so only the diff is news
-  await changed({ status: false, diffs: true, files: ['a.txt'] }, () => fs.writeFileSync(path.join(directory, 'a.txt'), 'edited a second time\n'));
+  const mark = announced().length;
+  fs.writeFileSync(path.join(directory, 'a.txt'), 'edited a second time\n');
+  await announcedByWatcher(mark, { status: false, diffs: true, files: ['a.txt'] });
   expect(await diffOf('a.txt', false)).toEqual({ originalContent: 'committed\n', modifiedContent: 'edited a second time\n' });
 });
 
