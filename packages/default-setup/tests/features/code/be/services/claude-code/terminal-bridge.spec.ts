@@ -9,6 +9,10 @@ import { createClaudeTerminalBridge } from '#features/code/be/services/claude-co
 const session = '11111111-1111-4111-8111-111111111111'
 let bridge: Awaited<ReturnType<typeof createClaudeTerminalBridge>> | undefined
 async function config() { return JSON.parse(await readFile(bridge!.directory + '/observer.json', 'utf8')) }
+/** Node-hosted helper fixtures supply policy reads; the real UI module requires the pinned Claude binary. */
+async function standInHelperPolicy(policy?: string) {
+  await writeFile(join(bridge!.directory, 'ui.mjs'), `let prepared=false;export async function prepareNativeHelperPolicy(){await Promise.resolve();prepared=true;}export function readNativeHelperPolicy(){if(!prepared)throw Error('Policy was not prepared');return ${JSON.stringify(policy) ?? 'undefined'};}`)
+}
 async function request(path: string, body: unknown, token?: string) {
   const value = await config()
   return new Promise<{ status: number; value: Record<string, unknown> }>((resolve, reject) => {
@@ -114,6 +118,7 @@ it.each([0, 7])('preserves real child streams, Unicode, exit code and the origin
   let nativePid: number | undefined
   const helper = "const data=[];process.stdin.on('data',x=>data.push(x));process.stdin.on('end',()=>{const p=JSON.parse(Buffer.concat(data));const b=Buffer.from('中文🙂 '+p.session_id);process.stdout.write(b.subarray(0,2));setImmediate(()=>{process.stdout.write(b.subarray(2));process.exitCode=" + code + "})});"
   bridge = await createClaudeTerminalBridge({ backgroundAuthority: () => ({identify: async () => {throw Error("No child in this fixture")},close: async () => {}}), sessionId: session, settings: { effective: { statusLine: { type: 'command', command: helper } }, sources: [] }, bunOptions: '--preload=/private/user-preload.mjs', ownsProcess: async pid => pid === nativePid, changed() {}, enter() {} })
+  await standInHelperPolicy()
   const launcher = join(bridge.directory, 'fixture.mjs')
   await writeFile(launcher, `await import('./status.mjs');const {spawn}=await import('node:child_process');const child=spawn(process.execPath,['-e',${JSON.stringify(helper)}]);const chunks=[];child.stdout.on('data',x=>chunks.push(x));child.stdin.end(JSON.stringify({session_id:${JSON.stringify(session)},version:'2.1.302',cost:{},context_window:{}}));child.once('close',code=>console.log(JSON.stringify({code,text:Buffer.concat(chunks).toString(),bunOptions:process.env.BUN_OPTIONS})));`)
   const child = spawn(process.execPath, [launcher], { env: { ...process.env, BUN_OPTIONS: bridge.bunOptions }, stdio: ['ignore', 'pipe', 'pipe'] }); nativePid = child.pid
@@ -311,6 +316,7 @@ it('stamps a real helper at spawn rather than after a policy change before stdin
  let nativePid:number|undefined
  const helper="process.stdin.on('data',()=>{});process.stdin.on('end',()=>process.stdout.write('late pre-policy helper'))"
  bridge=await createClaudeTerminalBridge({ backgroundAuthority: () => ({identify: async () => {throw Error("No child in this fixture")},close: async () => {}}),sessionId:session,settings:{effective:{statusLine:{type:'command',command:helper}},sources:[]},ownsProcess:async pid=>pid===nativePid,changed(){},enter(){}})
+ await standInHelperPolicy()
  const launcher=join(bridge.directory,'spawn-epoch.mjs'),started=join(bridge.directory,'spawned'),release=join(bridge.directory,'release')
  await writeFile(launcher,`await import('./status.mjs');const{spawn}=await import('node:child_process');const{writeFileSync,existsSync}=await import('node:fs');const child=spawn(process.execPath,['-e',${JSON.stringify(helper)}]);let output='';child.stdout.on('data',chunk=>output+=chunk);child.once('close',code=>console.log(JSON.stringify({code,output})));writeFileSync(${JSON.stringify(started)},'started');const deadline=Date.now()+3000;while(!existsSync(${JSON.stringify(release)})&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,10));child.stdin.end(JSON.stringify({session_id:${JSON.stringify(session)},version:'2.1.302',cost:{},context_window:{}}));`)
  const child=spawn(process.execPath,[launcher],{env:{...process.env,BUN_OPTIONS:bridge.bunOptions},stdio:['ignore','pipe','pipe']});nativePid=child.pid
@@ -476,7 +482,7 @@ it('captures original helper policy at spawn before the bridge policy poll', { m
  let nativePid:number|undefined
  const helper="process.stdin.on('data',()=>{});process.stdin.on('end',()=>process.stdout.write('fresh managed helper'))"
  bridge=await createClaudeTerminalBridge({ backgroundAuthority: () => ({identify: async () => {throw Error("No child in this fixture")},close: async () => {}}),sessionId:session,settings:{effective:{statusLine:{type:'command',command:helper}},sources:[]},ownsProcess:async pid=>pid===nativePid,changed(){},enter(){}})
- await writeFile(join(bridge.directory,'ui.mjs'),"export const readNativeHelperPolicy=()=> '[true,false,false]';")
+ await standInHelperPolicy('[true,false,false]')
  const launcher=join(bridge.directory,'fresh-policy.mjs')
  await writeFile(launcher,`await import('./status.mjs');const{spawn}=await import('node:child_process');const child=spawn(process.execPath,['-e',${JSON.stringify(helper)}]);child.stdout.resume();await new Promise(resolve=>{child.once('close',resolve);child.stdin.end(JSON.stringify({session_id:${JSON.stringify(session)},version:'2.1.302',cost:{},context_window:{}}));});`)
  const child=spawn(process.execPath,[launcher],{stdio:['ignore','pipe','pipe']});nativePid=child.pid
