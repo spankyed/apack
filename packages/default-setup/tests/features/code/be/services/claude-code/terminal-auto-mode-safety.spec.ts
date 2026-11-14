@@ -42,7 +42,18 @@ it('respects native grace and refuses a previously cancelled request before call
 it('fences original item/control/session and payload revisions',async()=>{const f=fixture(),request=f.request('auto_review_accept');await expect(f.runtime.answer(f.n,{...request,session_id:randomUUID()})).rejects.toThrow('expired');f.payload.notes.push('New native proposal');await expect(f.runtime.answer(f.n,request)).rejects.toThrow('expired');const next=f.request('auto_review_accept');f.selector.memoizedProps={...f.selector.memoizedProps};await expect(f.runtime.answer(f.n,next)).rejects.toThrow('expired');expect(f.calls.choice).not.toHaveBeenCalled()})
 it('never binds to an old wrapper that reused the same rules array',()=>{const f=fixture('flagged');f.wrapper.memoizedProps.payload={...f.payload};expect(f.runtime.read(f.n).item).toBeUndefined()})
 it('rejects policy choices from another review phase',async()=>{const f=fixture('flagged',true);await expect(f.runtime.answer(f.n,f.request('auto_rules_all'))).rejects.toThrow('choice is unavailable');expect(f.calls.choice).not.toHaveBeenCalled()})
-it('rechecks lifetime after native text formatting',async()=>{const f=fixture(),d=f.runtime.read(f.n);f.setFormat(async()=>{f.open.splice(0);return 'Original text'});await expect(f.runtime.project(f.n,d)).rejects.toThrow('changed while formatting')})
+it('drops a dialog retired during formatting while refusing its old decision',async()=>{
+ const f=fixture('nudge'),d=f.runtime.read(f.n),request=f.request('auto_nudge_accept')
+ f.setFormat(async()=>{f.open.splice(0);return 'Original text'})
+ await expect(f.runtime.project(f.n,d)).resolves.toBeUndefined()
+ await expect(f.runtime.answer(f.n,request)).rejects.toThrow('expired');expect(f.calls.choice).not.toHaveBeenCalled()
+})
+it('drops an obsolete paint when the native control changes without retiring the dialog',async()=>{
+ const f=fixture(),d=f.runtime.read(f.n),request=f.request('auto_review_accept')
+ f.setFormat(async()=>{f.selector.memoizedProps={...f.selector.memoizedProps};return 'Original text'})
+ await expect(f.runtime.project(f.n,d)).resolves.toBeUndefined();expect(f.open).toHaveLength(1)
+ await expect(f.runtime.answer(f.n,request)).rejects.toThrow('expired');expect(f.calls.choice).not.toHaveBeenCalled()
+})
 it('does not acknowledge a settling choice whose original dialog remains open',async()=>{const f=fixture();f.selector.memoizedProps.onChange=vi.fn();await expect(f.runtime.answer(f.n,f.request('auto_review_accept'))).rejects.toThrow('has not accepted')})
 
 it('waits through a transient unmounted picker without treating it as retirement',async()=>{

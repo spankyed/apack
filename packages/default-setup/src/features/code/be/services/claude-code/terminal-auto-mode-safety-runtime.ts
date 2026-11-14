@@ -44,7 +44,8 @@ async function projectNativeAutoModeSafety(n,d){
  const choices=[],rules=[];let preferredChoice;
  if(d.source.picking){for(const option of d.source.control.options)rules.push({value:option.value,label:await nativeGenericPermissionText(n,option.label)});choices.push({value:'auto_rules_submit',label:d.source.control.submitButtonText});}
  else{for(const option of d.source.control.options)choices.push({value:autoModeSafetyDecision(d,option.value),label:await nativeGenericPermissionText(n,option.label)});if(typeof d.source.control.defaultFocusValue==='string')preferredChoice=autoModeSafetyDecision(d,d.source.control.defaultFocusValue);}
- const current=nativeAutoModeSafety(n);if(current.item!==d.item||current.revision!==d.revision||current.source?.control!==d.source.control)throw Error('Native auto-mode review changed while formatting');
+ // A native decision may retire this dialog while its text is being formatted. Never publish the obsolete paint.
+ const current=nativeAutoModeSafety(n);if(current.item!==d.item||current.revision!==d.revision||current.source?.control!==d.source.control)return;
  return {id:d.item.id,revision:d.revision,sessionId:d.sessionId,kind:d.item.kind,title,paragraphs,choices,...preferredChoice?{preferredChoice}:{},...d.spec.role==='flagged'?{phase:d.source.picking?'pick':'review',rules,selectedValues:d.source.picking?[...d.source.control.defaultValue]:[]}:{}};
 }
 async function answerNativeAutoModeSafety(n,request,abort){
