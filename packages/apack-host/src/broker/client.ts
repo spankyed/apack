@@ -1105,6 +1105,11 @@ function frames(socket: net.Socket, listeners: Map<string, BrokerSessionListener
   // handshake is the case — and an unhandled one on a `net.Socket` ends the process. What a connection does
   // about a failure it reports through `close`, which refuses every waiter below
   socket.on('error', () => {});
+  // **And on the reader, which re-emits every error its input raises.** `createInterface` forwards the
+  // socket's `error` to the interface's own, so a listener on the socket alone still leaves one with none:
+  // a `write` racing a broker that has just exited — accepted, then gone before the greeting — raises
+  // `EPIPE` there, and that throws out of the event loop instead of ending this connection through `close`
+  lines.on('error', () => {});
 
   lines.on('line', line => {
     if (line.trim() === '') return;
