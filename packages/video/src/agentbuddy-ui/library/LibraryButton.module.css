@@ -1,0 +1,39 @@
+.LibraryButton_root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.LibraryButton_sm {
+  height: 28px;
+  gap: 6px;
+  padding: 0 10px;
+}
+
+.LibraryButton_md {
+  height: 36px;
+  gap: 8px;
+  padding: 0 14px;
+}
+
+.LibraryButton_transparent {
+  background: transparent;
+  color: rgb(212 212 212);
+}
+
+.LibraryButton_primary {
+  border-color: rgb(37 99 235);
+  background: rgb(37 99 235);
+  color: white;
+}
+
+.LibraryButton_root:disabled {
+  cursor: default;
+  opacity: 0.5;
+}

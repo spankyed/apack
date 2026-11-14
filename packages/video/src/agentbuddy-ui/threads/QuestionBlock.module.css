@@ -1,0 +1,164 @@
+.QuestionBlock_root {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.QuestionBlock_responseHeader,
+.QuestionBlock_steps,
+.QuestionBlock_actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.QuestionBlock_responseHeader {
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.QuestionBlock_responseValue {
+  border: 1px solid rgb(37 99 235 / 0.3);
+  border-radius: 0.5rem;
+  background: rgb(37 99 235 / 0.15);
+  color: rgb(96 165 250);
+  font-size: 14px;
+  padding: 0.5rem 0.75rem;
+}
+
+.QuestionBlock_step,
+.QuestionBlock_stepDone,
+.QuestionBlock_stepCurrent {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgb(82 82 91);
+}
+
+.QuestionBlock_stepDone {
+  background: rgb(37 99 235);
+}
+
+.QuestionBlock_stepCurrent {
+  background: rgb(96 165 250);
+  box-shadow: 0 0 0 2px rgb(96 165 250 / 0.4);
+}
+
+.QuestionBlock_stepText {
+  color: rgb(115 115 115);
+  font-size: 12px;
+  margin-left: 0.25rem;
+}
+
+.QuestionBlock_question {
+  color: rgb(212 212 216);
+  font-size: 14px;
+}
+
+.QuestionBlock_choices {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.QuestionBlock_choice,
+.QuestionBlock_selected {
+  border: 1px solid rgb(82 82 91);
+  border-radius: 0.5rem;
+  background: rgb(64 64 64 / 0.5);
+  padding: 0.75rem 1rem;
+}
+
+.QuestionBlock_selected {
+  border-color: rgb(37 99 235);
+  background: rgb(37 99 235 / 0.2);
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 0.4);
+}
+
+.QuestionBlock_choiceInner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.QuestionBlock_control,
+.QuestionBlock_controlSelected,
+.QuestionBlock_controlMulti,
+.QuestionBlock_controlMultiSelected {
+  display: flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgb(115 115 115);
+  border-radius: 999px;
+  background: rgb(82 82 91);
+}
+
+.QuestionBlock_controlMulti,
+.QuestionBlock_controlMultiSelected {
+  border-radius: 0.375rem;
+}
+
+.QuestionBlock_controlSelected,
+.QuestionBlock_controlMultiSelected {
+  border-color: rgb(37 99 235);
+  background: rgb(37 99 235);
+  color: white;
+}
+
+.QuestionBlock_label {
+  color: rgb(229 229 229);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.QuestionBlock_description {
+  color: rgb(163 163 163);
+  font-size: 12px;
+  margin-top: 0.25rem;
+}
+
+.QuestionBlock_custom {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.QuestionBlock_custom label {
+  color: rgb(163 163 163);
+  font-size: 12px;
+}
+
+.QuestionBlock_custom textarea {
+  resize: none;
+  border: 1px solid rgb(82 82 91);
+  border-radius: 0.5rem;
+  background: rgb(64 64 64);
+  color: rgb(229 229 229);
+  font: inherit;
+  font-size: 14px;
+  padding: 0.5rem 0.75rem;
+}
+
+.QuestionBlock_actions {
+  justify-content: flex-end;
+}
+
+.QuestionBlock_back,
+.QuestionBlock_cancel,
+.QuestionBlock_submit {
+  border: 0;
+  border-radius: 0.375rem;
+  color: rgb(229 229 229);
+  font-size: 14px;
+  padding: 0.375rem 0.75rem;
+}
+
+.QuestionBlock_back,
+.QuestionBlock_cancel {
+  background: rgb(64 64 64);
+}
+
+.QuestionBlock_submit {
+  background: rgb(37 99 235);
+  color: white;
+}

@@ -1,0 +1,154 @@
+.FlowPalette_root {
+  width: 15rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-right: 1px solid rgb(38 38 38);
+  background: rgb(23 23 23);
+}
+
+.FlowPalette_inner {
+  padding: 0.75rem;
+}
+
+.FlowPalette_stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.75rem;
+}
+
+.FlowPalette_item {
+  position: relative;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.625rem;
+  overflow: hidden;
+  border: 1px solid rgb(115 115 115 / 30%);
+  border-radius: 0.375rem;
+  background: rgb(64 64 64 / 60%);
+  color: rgb(255 255 255 / 90%);
+  cursor: grab;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0;
+  text-align: left;
+  transform-origin: center;
+  transition: transform 200ms ease, border-color 200ms ease, filter 200ms ease;
+}
+
+.FlowPalette_item:hover {
+  transform: translateY(-0.5px);
+  filter: brightness(1.05);
+}
+
+.FlowPalette_item:active {
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+.FlowPalette_item[data-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.FlowPalette_content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.FlowPalette_glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  filter: blur(18px);
+  transition: opacity 300ms ease;
+}
+
+.FlowPalette_item:hover .FlowPalette_glow {
+  opacity: 1;
+}
+
+.FlowPalette_gradientOverlay {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.FlowPalette_item:hover .FlowPalette_gradientOverlay {
+  opacity: 0.1;
+}
+
+.FlowPalette_item[data-kind="keep_alive"] { border-color: rgb(52 211 153 / 25%); background: rgb(6 78 59 / 60%); }
+.FlowPalette_item[data-kind="listener"] { border-color: rgb(96 165 250 / 25%); background: rgb(30 58 138 / 60%); }
+.FlowPalette_item[data-kind="schedule"] { border-color: rgb(34 211 238 / 25%); background: rgb(22 78 99 / 60%); }
+.FlowPalette_item[data-kind="llm"] { border-color: rgb(129 140 248 / 25%); background: rgb(49 46 129 / 42%); color: rgb(115 115 115); }
+.FlowPalette_item[data-kind="flow"] { border-color: rgb(192 132 252 / 25%); background: rgb(88 28 135 / 60%); }
+.FlowPalette_item[data-kind="switch"] { border-color: rgb(250 204 21 / 25%); background: rgb(113 63 18 / 60%); }
+.FlowPalette_item[data-kind="fire"] { border-color: rgb(251 146 60 / 25%); background: rgb(124 45 18 / 60%); }
+.FlowPalette_item[data-kind="kill"] { border-color: rgb(248 113 113 / 25%); background: rgb(127 29 29 / 60%); }
+
+.FlowPalette_dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgb(115 115 115);
+  box-shadow: 0 0 0 1px rgb(23 23 23 / 50%), 0 0 0 2px rgb(115 115 115 / 25%);
+}
+
+.FlowPalette_item[data-kind="keep_alive"] .FlowPalette_dot { background: rgb(16 185 129); box-shadow: 0 0 0 1px rgb(23 23 23 / 50%), 0 0 0 2px rgb(16 185 129 / 20%); }
+.FlowPalette_item[data-kind="listener"] .FlowPalette_dot { background: rgb(59 130 246); }
+.FlowPalette_item[data-kind="schedule"] .FlowPalette_dot { background: rgb(6 182 212); }
+.FlowPalette_item[data-kind="llm"] .FlowPalette_dot { background: rgb(79 70 229); }
+.FlowPalette_item[data-kind="flow"] .FlowPalette_dot { background: rgb(168 85 247); }
+.FlowPalette_item[data-kind="switch"] .FlowPalette_dot { background: rgb(245 158 11); }
+.FlowPalette_item[data-kind="fire"] .FlowPalette_dot { background: rgb(249 115 22); }
+.FlowPalette_item[data-kind="kill"] .FlowPalette_dot { background: rgb(239 68 68); }
+
+.FlowPalette_label {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.FlowPalette_icon {
+  flex-shrink: 0;
+  opacity: 0.75;
+  margin-left: auto;
+}
+
+.FlowPalette_item[data-kind="keep_alive"] .FlowPalette_icon { color: rgb(110 231 183 / 80%); }
+.FlowPalette_item[data-kind="listener"] .FlowPalette_icon { color: rgb(147 197 253 / 80%); }
+.FlowPalette_item[data-kind="schedule"] .FlowPalette_icon { color: rgb(103 232 249 / 80%); }
+.FlowPalette_item[data-kind="llm"] .FlowPalette_icon { color: rgb(165 180 252 / 70%); }
+.FlowPalette_item[data-kind="flow"] .FlowPalette_icon { color: rgb(216 180 254 / 80%); }
+.FlowPalette_item[data-kind="switch"] .FlowPalette_icon { color: rgb(252 211 77 / 80%); }
+.FlowPalette_item[data-kind="fire"] .FlowPalette_icon { color: rgb(253 186 116 / 80%); }
+.FlowPalette_item[data-kind="kill"] .FlowPalette_icon { color: rgb(252 165 165 / 80%); }
+
+.FlowPalette_item[data-kind="keep_alive"] .FlowPalette_glow { background: rgb(16 185 129 / 5%); }
+.FlowPalette_item[data-kind="listener"] .FlowPalette_glow { background: rgb(59 130 246 / 5%); }
+.FlowPalette_item[data-kind="schedule"] .FlowPalette_glow { background: rgb(6 182 212 / 5%); }
+.FlowPalette_item[data-kind="flow"] .FlowPalette_glow { background: rgb(168 85 247 / 5%); }
+.FlowPalette_item[data-kind="switch"] .FlowPalette_glow { background: rgb(245 158 11 / 5%); }
+.FlowPalette_item[data-kind="fire"] .FlowPalette_glow { background: rgb(249 115 22 / 5%); }
+.FlowPalette_item[data-kind="kill"] .FlowPalette_glow { background: rgb(239 68 68 / 5%); }
+
+.FlowPalette_item[data-kind="keep_alive"] .FlowPalette_gradientOverlay { background: linear-gradient(to right, rgb(52 211 153), rgb(5 150 105)); }
+.FlowPalette_item[data-kind="listener"] .FlowPalette_gradientOverlay { background: linear-gradient(to right, rgb(96 165 250), rgb(37 99 235)); }
+.FlowPalette_item[data-kind="schedule"] .FlowPalette_gradientOverlay { background: linear-gradient(to right, rgb(34 211 238), rgb(8 145 178)); }
+.FlowPalette_item[data-kind="flow"] .FlowPalette_gradientOverlay { background: linear-gradient(to right, rgb(192 132 252), rgb(147 51 234)); }
+.FlowPalette_item[data-kind="switch"] .FlowPalette_gradientOverlay { background: linear-gradient(to right, rgb(250 204 21), rgb(202 138 4)); }
+.FlowPalette_item[data-kind="fire"] .FlowPalette_gradientOverlay { background: linear-gradient(to right, rgb(251 146 60), rgb(234 88 12)); }
+.FlowPalette_item[data-kind="kill"] .FlowPalette_gradientOverlay { background: linear-gradient(to right, rgb(248 113 113), rgb(220 38 38)); }

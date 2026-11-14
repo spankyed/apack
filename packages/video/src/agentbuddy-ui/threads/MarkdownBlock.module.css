@@ -1,0 +1,28 @@
+.MarkdownBlock_root {
+  overflow: hidden;
+  border: 1px solid rgb(82 82 91);
+  border-radius: 0.5rem;
+  background: rgb(64 64 64 / 0.5);
+}
+
+.MarkdownBlock_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem 0.25rem;
+}
+
+.MarkdownBlock_label {
+  color: rgb(163 163 163);
+  font-size: 12px;
+}
+
+.MarkdownBlock_content {
+  max-height: 20rem;
+  overflow: hidden;
+  color: rgb(229 229 229);
+  font-size: 14px;
+  line-height: 1.55;
+  padding: 0.75rem 1rem;
+  white-space: pre-wrap;
+}

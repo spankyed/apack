@@ -1,0 +1,175 @@
+.LogRow_root {
+  border-bottom: 1px solid rgb(38 38 38 / 30%);
+}
+
+.LogRow_root:hover {
+  background: rgb(38 38 38 / 30%);
+}
+
+.LogRow_summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+}
+
+.LogRow_clickable {
+  cursor: pointer;
+}
+
+.LogRow_levelIcon {
+  flex-shrink: 0;
+}
+
+.LogRow_debug {
+  color: rgb(115 115 115);
+}
+
+.LogRow_info {
+  color: rgb(96 165 250);
+}
+
+.LogRow_warn {
+  color: rgb(250 204 21);
+}
+
+.LogRow_error {
+  color: rgb(248 113 113);
+}
+
+.LogRow_message {
+  min-width: 0;
+  flex: 1;
+}
+
+.LogRow_message p {
+  margin: 0;
+  color: rgb(229 229 229);
+  font-size: 14px;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.LogRow_searchMark {
+  background: rgb(234 179 8 / 30%);
+  color: rgb(254 240 138);
+}
+
+.LogRow_meta {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  font-size: 14px;
+}
+
+.LogRow_source {
+  cursor: pointer;
+  border-radius: 4px;
+  background: rgb(38 38 38);
+  color: rgb(163 163 163);
+  padding: 2px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  transition: background-color 160ms ease;
+}
+
+.LogRow_source:hover {
+  background: rgb(64 64 64);
+}
+
+.LogRow_time {
+  color: rgb(115 115 115);
+  font-variant-numeric: tabular-nums;
+}
+
+.LogRow_chevronSlot {
+  display: flex;
+  width: 16px;
+  align-items: center;
+  justify-content: center;
+  color: rgb(163 163 163);
+}
+
+.LogRow_expandedChevron {
+  transform: rotate(90deg);
+}
+
+.LogRow_expanded {
+  margin-left: 28px;
+  border-left: 2px solid rgb(38 38 38);
+  padding: 0 16px 12px;
+}
+
+.LogRow_expandedInner {
+  margin-left: 16px;
+}
+
+.LogRow_metadataPanel {
+  border-radius: 8px;
+  background: rgb(38 38 38 / 50%);
+  padding: 12px;
+}
+
+.LogRow_metadataTitle {
+  margin-bottom: 8px;
+  color: rgb(163 163 163);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.LogRow_stackPanel {
+  border: 1px solid rgb(239 68 68 / 20%);
+  border-radius: 8px;
+  background: rgb(239 68 68 / 5%);
+  padding: 12px;
+}
+
+.LogRow_stackTitle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  color: rgb(248 113 113);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.LogRow_stackPanel pre {
+  margin: 0;
+  color: rgb(252 165 165 / 90%);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+.LogRow_toggles {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.LogRow_toggles button {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 4px 8px;
+  font-size: 14px;
+  transition: color 160ms ease, background-color 160ms ease;
+}
+
+.LogRow_toggles button:hover {
+  color: rgb(229 229 229);
+}
+
+.LogRow_toggleActive {
+  background: rgb(64 64 64) !important;
+  color: rgb(229 229 229) !important;
+}
+
+.LogRow_stackToggleActive {
+  background: rgb(239 68 68 / 20%) !important;
+  color: rgb(248 113 113) !important;
+}

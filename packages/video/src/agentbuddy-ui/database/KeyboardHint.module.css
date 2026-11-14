@@ -1,0 +1,8 @@
+.DatabaseKeyboardHint_root {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 8px;
+  color: rgb(115 115 115);
+  font-size: 12px;
+}

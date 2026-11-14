@@ -1,0 +1,59 @@
+.CanvasHeader_root {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 42px;
+  overflow: hidden;
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(23 23 23);
+  padding: 0 12px;
+}
+
+.CanvasHeader_breadcrumbs {
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.5rem;
+  color: rgb(115 115 115);
+  white-space: nowrap;
+}
+
+.CanvasHeader_menuButton {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 0.25rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(115 115 115);
+  padding: 0;
+}
+
+.CanvasHeader_crumbWrap {
+  display: inline-flex;
+  align-items: center;
+}
+
+.CanvasHeader_crumb {
+  color: rgb(163 163 163);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  line-height: 1rem;
+  text-transform: uppercase;
+}
+
+.CanvasHeader_chevron {
+  margin: 0 0.25rem;
+  color: rgb(82 82 82);
+}
+
+.CanvasHeader_title {
+  color: rgb(212 212 216);
+  font-size: 14px;
+}

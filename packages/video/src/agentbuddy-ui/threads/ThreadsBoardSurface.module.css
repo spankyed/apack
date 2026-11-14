@@ -1,0 +1,7 @@
+.ThreadsBoardSurface_root {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: rgb(23 23 23);
+}

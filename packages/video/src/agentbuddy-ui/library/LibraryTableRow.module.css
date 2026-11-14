@@ -1,0 +1,87 @@
+.LibraryTableRow_root {
+  cursor: pointer;
+  color: rgb(212 212 212);
+  transition: background-color 150ms ease;
+}
+
+.LibraryTableRow_root:hover {
+  background: rgb(64 64 64 / 30%);
+}
+
+.LibraryTableRow_selected {
+  background: rgb(59 130 246 / 30%);
+}
+
+.LibraryTableRow_broken {
+  color: rgb(82 82 82);
+}
+
+.LibraryTableRow_nameCell {
+  position: relative;
+  padding: 4px 16px;
+}
+
+.LibraryTableRow_nameInner {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.LibraryTableRow_disclosure,
+.LibraryTableRow_disclosureSpacer {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.LibraryTableRow_disclosure {
+  color: rgb(163 163 163);
+  transition: transform 150ms ease, color 150ms ease;
+}
+
+.LibraryTableRow_disclosureExpanded {
+  transform: rotate(90deg);
+}
+
+.LibraryTableRow_itemIcon {
+  flex-shrink: 0;
+  color: rgb(163 163 163);
+}
+
+.LibraryTableRow_folderIcon {
+  color: rgb(96 165 250);
+}
+
+.LibraryTableRow_symlinkIcon {
+  color: rgb(192 132 252);
+}
+
+.LibraryTableRow_itemName {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(229 229 229);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.LibraryTableRow_folderName {
+  color: rgb(245 245 245);
+  font-weight: 500;
+}
+
+.LibraryTableRow_cell {
+  padding: 4px 24px;
+  color: rgb(163 163 163);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.LibraryTableRow_kindCell {
+  color: rgb(163 163 163);
+}

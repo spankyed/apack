@@ -1,0 +1,231 @@
+.DatabaseSchemaPanel_root {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background: rgb(23 23 23);
+}
+
+.DatabaseSchemaPanel_header {
+  border-bottom: 1px solid rgb(38 38 38);
+  padding: 8px 16px 10px;
+}
+
+.DatabaseSchemaPanel_header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.DatabaseSchemaPanel_searchBox {
+  position: relative;
+  flex: 1;
+}
+
+.DatabaseSchemaPanel_searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  color: rgb(163 163 163);
+  transform: translateY(-50%);
+}
+
+.DatabaseSchemaPanel_searchBox input {
+  width: 100%;
+  border: 1px solid rgb(38 38 38);
+  border-radius: 8px;
+  background: rgb(23 23 23);
+  color: rgb(245 245 245);
+  padding: 8px 16px 8px 40px;
+  font-size: 14px;
+  outline: none;
+}
+
+.DatabaseSchemaPanel_clearSearch,
+.DatabaseSchemaPanel_refreshButton {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(163 163 163);
+}
+
+.DatabaseSchemaPanel_clearSearch {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  padding: 4px;
+  transform: translateY(-50%);
+}
+
+.DatabaseSchemaPanel_refreshButton {
+  padding: 8px;
+}
+
+.DatabaseSchemaPanel_tree {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.DatabaseSchemaPanel_category {
+  margin-bottom: 8px;
+}
+
+.DatabaseSchemaPanel_categoryHeader {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  border-radius: 8px;
+  padding: 8px 12px;
+  transition: background-color 150ms ease;
+}
+
+.DatabaseSchemaPanel_categoryHeader:hover {
+  background: rgb(64 64 64 / 50%);
+}
+
+.DatabaseSchemaPanel_categoryChevron {
+  margin-right: 8px;
+  color: rgb(163 163 163);
+  transition: transform 200ms ease, color 150ms ease;
+}
+
+.DatabaseSchemaPanel_categoryHeader:hover .DatabaseSchemaPanel_categoryChevron {
+  color: rgb(212 212 212);
+}
+
+.DatabaseSchemaPanel_categoryChevronExpanded {
+  transform: rotate(90deg);
+}
+
+.DatabaseSchemaPanel_entitiesIcon,
+.DatabaseSchemaPanel_attributesIcon,
+.DatabaseSchemaPanel_relationsIcon {
+  margin-right: 10px;
+}
+
+.DatabaseSchemaPanel_entitiesIcon {
+  color: rgb(96 165 250);
+}
+
+.DatabaseSchemaPanel_attributesIcon {
+  color: rgb(74 222 128);
+}
+
+.DatabaseSchemaPanel_relationsIcon {
+  color: rgb(192 132 252);
+}
+
+.DatabaseSchemaPanel_categoryLabel {
+  flex: 1;
+  color: rgb(212 212 212);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.DatabaseSchemaPanel_count {
+  border-radius: 999px;
+  background: rgb(64 64 64);
+  color: rgb(163 163 163);
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.DatabaseSchemaPanel_children {
+  margin-left: 12px;
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.DatabaseSchemaPanel_child {
+  display: flex;
+  cursor: pointer;
+  align-items: center;
+  border-radius: 8px;
+  color: rgb(163 163 163);
+  padding: 6px 12px;
+  font-size: 14px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.DatabaseSchemaPanel_child:hover {
+  background: rgb(64 64 64 / 50%);
+}
+
+.DatabaseSchemaPanel_selectedChild {
+  background: rgb(30 58 138 / 30%);
+  color: rgb(147 197 253);
+}
+
+.DatabaseSchemaPanel_itemIcon {
+  margin-right: 10px;
+  color: rgb(115 115 115);
+}
+
+.DatabaseSchemaPanel_selectedItemIcon {
+  color: rgb(96 165 250);
+}
+
+.DatabaseSchemaPanel_child span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.DatabaseSchemaPanel_childChevron {
+  opacity: 0;
+}
+
+.DatabaseSchemaPanel_child:hover .DatabaseSchemaPanel_childChevron,
+.DatabaseSchemaPanel_selectedChild .DatabaseSchemaPanel_childChevron {
+  opacity: 1;
+}
+
+.DatabaseSchemaPanel_empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 8px;
+  text-align: center;
+}
+
+.DatabaseSchemaPanel_empty svg {
+  margin-bottom: 12px;
+  color: rgb(163 163 163);
+}
+
+.DatabaseSchemaPanel_empty p {
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.DatabaseSchemaPanel_empty button {
+  border: 0;
+  background: transparent;
+  color: rgb(96 165 250);
+  font-size: 12px;
+}
+
+.DatabaseSchemaPanel_footer {
+  border-top: 1px solid rgb(38 38 38);
+  padding: 4px;
+}
+
+.DatabaseSchemaPanel_footer button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 8px 12px;
+  font-size: 14px;
+}

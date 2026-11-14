@@ -1,0 +1,66 @@
+.Toolbar_root {
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  height: 100%;
+  border-right: 1px solid rgb(38 38 38);
+  color: white;
+}
+
+.Toolbar_windowControlsArea {
+  height: 42px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgb(38 38 38);
+}
+
+.Toolbar_scrollArea {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  margin: 0.5rem 0;
+  scrollbar-width: none;
+}
+
+.Toolbar_scrollArea::-webkit-scrollbar {
+  display: none;
+}
+
+.Toolbar_buttonStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.Toolbar_pinnedArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: auto;
+  border-top: 1px solid rgb(38 38 38);
+  padding: 1.5rem 0;
+}
+
+.Toolbar_button {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  padding: 8px;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: rgb(163 163 163);
+  transition: color 200ms ease, background 200ms ease, box-shadow 200ms ease;
+}
+
+.Toolbar_button:hover {
+  background: rgb(29 78 216);
+  color: white;
+}
+
+.Toolbar_active {
+  background: rgb(37 99 235);
+  color: white;
+}

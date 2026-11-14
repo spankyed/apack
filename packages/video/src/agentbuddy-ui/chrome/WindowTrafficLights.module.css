@@ -1,0 +1,19 @@
+.WindowTrafficLights_root {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+}
+
+.WindowTrafficLights_root span {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+}
+
+.WindowTrafficLights_close { background: rgb(255 95 87); }
+.WindowTrafficLights_minimize { background: rgb(255 189 46); }
+.WindowTrafficLights_zoom { background: rgb(40 200 64); }
+

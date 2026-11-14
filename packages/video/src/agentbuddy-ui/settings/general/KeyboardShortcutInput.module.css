@@ -1,0 +1,30 @@
+.KeyboardShortcutInput_root {
+  flex: 1;
+}
+
+.KeyboardShortcutInput_label {
+  display: block;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.KeyboardShortcutInput_box {
+  display: flex;
+  min-height: 39px;
+  align-items: center;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38 / 50%);
+  color: white;
+  font-size: 14px;
+  padding: 8px 12px;
+}
+
+.KeyboardShortcutInput_key {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}

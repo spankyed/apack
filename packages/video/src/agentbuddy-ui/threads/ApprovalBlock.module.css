@@ -1,0 +1,118 @@
+.ApprovalBlock_root {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ApprovalBlock_response {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid;
+  border-radius: 0.5rem;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+}
+
+.ApprovalBlock_approved {
+  border-color: rgb(22 163 74 / 0.3);
+  background: rgb(20 83 45 / 0.2);
+  color: rgb(187 247 208);
+}
+
+.ApprovalBlock_denied {
+  border-color: rgb(220 38 38 / 0.3);
+  background: rgb(127 29 29 / 0.2);
+  color: rgb(254 202 202);
+}
+
+.ApprovalBlock_reasonBox {
+  border: 1px solid rgb(82 82 91 / 0.5);
+  border-radius: 0.5rem;
+  background: rgb(64 64 64 / 0.3);
+  color: rgb(212 212 216);
+  font-size: 14px;
+  padding: 0.5rem 0.75rem;
+}
+
+.ApprovalBlock_reasonBox small {
+  display: block;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  margin-bottom: 0.25rem;
+}
+
+.ApprovalBlock_reason {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ApprovalBlock_reason label {
+  color: rgb(163 163 163);
+  font-size: 12px;
+}
+
+.ApprovalBlock_textarea {
+  min-height: 5.25rem;
+  resize: none;
+  border: 1px solid rgb(82 82 91);
+  border-radius: 0.5rem;
+  background: rgb(64 64 64);
+  color: rgb(229 229 229);
+  font: inherit;
+  font-size: 14px;
+  padding: 0.5rem 0.75rem;
+}
+
+.ApprovalBlock_actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ApprovalBlock_autoAccept {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  margin-right: auto;
+}
+
+.ApprovalBlock_checkbox {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 1px solid rgb(115 115 115);
+  border-radius: 0.25rem;
+  background: rgb(64 64 64);
+}
+
+.ApprovalBlock_button,
+.ApprovalBlock_buttonPrimary,
+.ApprovalBlock_buttonDanger,
+.ApprovalBlock_buttonSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: 0.5rem;
+  color: rgb(229 229 229);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+}
+
+.ApprovalBlock_button,
+.ApprovalBlock_buttonSecondary {
+  background: rgb(82 82 91);
+}
+
+.ApprovalBlock_buttonPrimary {
+  background: rgb(22 163 74);
+  color: white;
+}
+
+.ApprovalBlock_buttonDanger {
+  background: rgb(220 38 38);
+  color: white;
+}

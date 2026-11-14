@@ -1,0 +1,44 @@
+.FilePickerBlock_root {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.FilePickerBlock_responseHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.FilePickerBlock_path {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid rgb(82 82 91 / 0.5);
+  border-radius: 0.5rem;
+  background: rgb(64 64 64 / 0.5);
+  color: rgb(212 212 216);
+  font-size: 14px;
+  padding: 0.5rem 0.75rem;
+}
+
+.FilePickerBlock_path span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.FilePickerBlock_browse {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid rgb(82 82 91);
+  border-radius: 0.5rem;
+  background: rgb(64 64 64);
+  color: rgb(229 229 229);
+  font-size: 14px;
+  padding: 0.5rem 1rem;
+}

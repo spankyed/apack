@@ -1,0 +1,64 @@
+.CodeReview_root {
+  display: flex;
+  height: 100%;
+  min-width: 0;
+  background: rgb(23 23 23);
+}
+
+.CodeReview_panel {
+  display: flex;
+  width: 430px;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-left: 1px solid rgb(38 38 38);
+  background: rgb(23 23 23);
+}
+
+.CodeReview_panelContent {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.CodeReview_fileGroups {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-color: rgb(82 82 82) transparent;
+  scrollbar-width: thin;
+}
+
+.CodeReview_fileGroup {
+  border-bottom: 1px solid rgb(38 38 38);
+  padding: 0.75rem;
+}
+
+.CodeReview_groupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgb(163 163 163);
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+  padding: 0 0.5rem;
+}
+
+.CodeReview_groupHeader button {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(163 163 163);
+  margin-left: 0.25rem;
+}
+
+.CodeReview_compact .CodeReview_panel {
+  width: 360px;
+}

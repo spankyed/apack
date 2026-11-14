@@ -1,0 +1,115 @@
+.CategoryFilter_root {
+  position: relative;
+}
+
+.CategoryFilter_button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 12px 24px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: color 200ms ease;
+}
+
+.CategoryFilter_count {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgb(37 99 235);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.CategoryFilter_dropdown {
+  position: absolute;
+  z-index: 50;
+  min-width: 200px;
+  margin-top: 4px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 40%);
+  padding: 8px;
+}
+
+.CategoryFilter_option {
+  border: 1px solid rgb(82 82 82);
+  border-radius: 8px;
+  background: rgb(64 64 64 / 50%);
+  padding: 8px 12px;
+}
+
+.CategoryFilter_option + .CategoryFilter_option {
+  margin-top: 4px;
+}
+
+.CategoryFilter_optionSelected {
+  border-color: rgb(37 99 235);
+  background: rgb(37 99 235 / 20%);
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 50%);
+}
+
+.CategoryFilter_optionInner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.CategoryFilter_checkbox {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgb(115 115 115);
+  border-radius: 6px;
+  background: rgb(82 82 82);
+}
+
+.CategoryFilter_checkboxSelected {
+  border-color: rgb(37 99 235);
+  background: rgb(37 99 235);
+}
+
+.CategoryFilter_allLabel {
+  color: rgb(229 229 229);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.CategoryFilter_badge {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.CategoryFilter_empty {
+  padding: 16px 12px;
+  color: rgb(115 115 115);
+  text-align: center;
+  font-size: 14px;
+  letter-spacing: 0;
+  text-transform: none;
+}

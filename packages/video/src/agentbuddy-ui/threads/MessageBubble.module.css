@@ -1,0 +1,105 @@
+.MessageBubble_row {
+  display: flex;
+  width: 100%;
+  padding-bottom: 0.75rem;
+}
+
+.MessageBubble_userRow { justify-content: flex-end; }
+.MessageBubble_assistantRow { justify-content: flex-start; }
+
+.MessageBubble_group {
+  position: relative;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.MessageBubble_actions {
+  position: absolute;
+  right: -1rem;
+  bottom: -0.75rem;
+  z-index: 10;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+}
+
+.MessageBubble_group:hover .MessageBubble_actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.MessageBubble_bubble {
+  position: relative;
+  max-width: 760px;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  color: rgb(245 245 245);
+  font-size: 15px;
+  line-height: 1.55;
+  transition: box-shadow 200ms ease, opacity 200ms ease;
+}
+
+.MessageBubble_content {
+  position: relative;
+}
+
+.MessageBubble_truncated {
+  max-height: 200px;
+  cursor: pointer;
+}
+
+.MessageBubble_truncationOverlay {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  height: 5rem;
+  align-items: flex-end;
+  justify-content: center;
+  background: linear-gradient(to top, rgb(38 38 38), rgb(38 38 38 / 0.9) 42%, transparent);
+  padding-bottom: 0.5rem;
+  pointer-events: none;
+}
+
+.MessageBubble_assistantBubble .MessageBubble_truncationOverlay {
+  background: linear-gradient(to top, rgb(23 23 23), rgb(23 23 23 / 0.9) 42%, transparent);
+}
+
+.MessageBubble_truncationOverlay span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: rgb(163 163 163);
+  font-size: 12px;
+}
+
+.MessageBubble_bubble:hover {
+  box-shadow: 0 6px 18px rgb(0 0 0 / 18%);
+}
+
+.MessageBubble_userBubble {
+  border: 1px solid rgb(64 64 64 / 60%);
+  background: rgb(38 38 38 / 80%);
+}
+
+.MessageBubble_assistantBubble {
+  border: 1px solid rgb(64 64 64 / 60%);
+  background: transparent;
+}
+
+.MessageBubble_cancelled {
+  opacity: 0.5;
+}
+
+.MessageBubble_system {
+  width: max-content;
+  max-width: 100%;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  color: rgb(115 115 115);
+  font-size: 12px;
+  font-style: italic;
+  text-align: left;
+}

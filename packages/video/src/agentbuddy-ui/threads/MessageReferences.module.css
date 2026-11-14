@@ -1,0 +1,103 @@
+.MessageReferences_root {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.MessageReferences_image {
+  position: relative;
+  width: 5rem;
+  height: 5rem;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid rgb(64 64 64 / 40%);
+  border-radius: 0.5rem;
+  background: rgb(38 38 38);
+  cursor: pointer;
+  transition: opacity 150ms ease;
+}
+
+.MessageReferences_image:hover {
+  opacity: 0.8;
+}
+
+.MessageReferences_image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.MessageReferences_imageFallback {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 34% 28%, rgb(82 82 91), rgb(24 24 27) 68%);
+}
+
+.MessageReferences_imageLabel {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  border-right: 1px solid rgb(64 64 64 / 40%);
+  border-bottom: 1px solid rgb(64 64 64 / 40%);
+  border-left: 1px solid rgb(64 64 64 / 40%);
+  border-radius: 0 0 0.5rem 0.5rem;
+  background: linear-gradient(to top, rgb(23 23 23) 0%, rgb(23 23 23) 40%, transparent);
+  color: rgb(163 163 163);
+  font-size: 11px;
+  line-height: 1rem;
+  padding: 0.125rem 0.375rem;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.MessageReferences_file {
+  display: flex;
+  width: 15rem;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.625rem;
+  border: 1px solid rgb(64 64 64 / 40%);
+  border-radius: 0.5rem;
+  background: rgb(23 23 23);
+  cursor: pointer;
+  padding: 0.5rem;
+}
+
+.MessageReferences_fileIcon {
+  display: flex;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 0.25rem;
+  background: rgb(38 38 38);
+  color: rgb(163 163 163);
+}
+
+.MessageReferences_fileText {
+  display: grid;
+  min-width: 0;
+}
+
+.MessageReferences_fileText span {
+  overflow: hidden;
+  color: rgb(229 229 229);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.MessageReferences_fileText small {
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
