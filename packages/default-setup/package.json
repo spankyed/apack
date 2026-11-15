@@ -17,6 +17,8 @@
     "build:dev": "apack pack build",
     "facade:check": "apack pack facade-report",
     "facade:update": "apack pack facade-report --update",
+    "editor:check": "tsx scripts/build-native-editor.ts",
+    "editor:update": "tsx scripts/build-native-editor.ts --update",
     "plugin:check": "tsx scripts/build-native-plugin.ts",
     "plugin:update": "tsx scripts/build-native-plugin.ts --update",
     "flow-export:check": "npm test -- tests/extensions/steps/export-example.spec.ts",
