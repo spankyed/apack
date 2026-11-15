@@ -266,39 +266,44 @@ describe('the in-page bridge', () => {
    * The hook stays in the page after its session exits, and the next session to attach is handed its calls
    * before its own function is exposed: Playwright refuses each with a rejected promise, which in the app's
    * window is fatal. The installed source runs here over a window of its own, whose function refuses, throws
-   * or is not there, and whatever the page's runtime would see as unhandled is caught.
+   * or is not there. A refusal is unhandled exactly when nothing attached a rejection handler to it, which the
+   * refusing promise records as it happens, so nothing waits for the runtime to report one.
    */
   it('settles every call the page makes, so one no session serves is not an unhandled rejection', async () => {
     const { session, expressions } = sessionWith();
     await session.ready();
     const installed = expressions.find((source) => source.includes(BRIDGE_FLAG))!;
-    const unhandled: unknown[] = [];
-    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
-    process.on('unhandledRejection', onUnhandled);
-    try {
-      for (const bridge of [
-        () => Promise.reject(new Error(`Function "${BRIDGE_FUNCTION}" is not exposed`)),
-        () => { throw new Error('threw before answering'); },
-        undefined,
-      ]) {
-        let inspect: ((inspection: unknown) => void) | undefined;
-        const win: Record<string, unknown> = {
-          [BRIDGE_FUNCTION]: bridge,
-          applicationState: { system: { inspect: (observer: typeof inspect) => { inspect = observer; } } },
-        };
-        new Function('window', `return ${installed}`)(win);
-        const circular: Record<string, unknown> = { type: 'CIRCULAR' };
-        circular.self = circular;
-        expect(() => {
-          inspect!({ type: '@xstate.event', event: { type: 'PING' }, actorRef: { id: 'x' } });
-          inspect!({ type: '@xstate.event', event: circular, actorRef: { id: 'x' } });
-        }).not.toThrow();
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      expect(unhandled).toEqual([]);
-    } finally {
-      process.off('unhandledRejection', onUnhandled);
+    /** Each refusal the page was handed, and whether it attached a handler to it */
+    const refusals: Array<{ handled: boolean }> = [];
+    const refuse = () => {
+      const refusal = Promise.reject(new Error(`Function "${BRIDGE_FUNCTION}" is not exposed`));
+      const seen = { handled: false };
+      refusals.push(seen);
+      return Object.assign(refusal, {
+        catch: (onRejected: (reason: unknown) => unknown) => {
+          seen.handled = true;
+          return Promise.prototype.catch.call(refusal, onRejected);
+        },
+      });
+    };
+
+    for (const bridge of [refuse, () => { throw new Error('threw before answering'); }, undefined]) {
+      let inspect: ((inspection: unknown) => void) | undefined;
+      const win: Record<string, unknown> = {
+        [BRIDGE_FUNCTION]: bridge,
+        applicationState: { system: { inspect: (observer: typeof inspect) => { inspect = observer; } } },
+      };
+      new Function('window', `return ${installed}`)(win);
+      const circular: Record<string, unknown> = { type: 'CIRCULAR' };
+      circular.self = circular;
+      expect(() => {
+        inspect!({ type: '@xstate.event', event: { type: 'PING' }, actorRef: { id: 'x' } });
+        inspect!({ type: '@xstate.event', event: circular, actorRef: { id: 'x' } });
+      }).not.toThrow();
     }
+
+    expect(refusals, 'the page was refused, once for each event').toHaveLength(2);
+    expect(refusals.map((refusal) => refusal.handled), 'and handled every refusal').toEqual([true, true]);
   });
 
   it('hands the page every event, one that will not serialise as an empty one', async () => {
