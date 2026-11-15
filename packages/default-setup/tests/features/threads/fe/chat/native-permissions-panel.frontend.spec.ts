@@ -53,3 +53,18 @@ it('withholds advertised mutations while an original action is pending', async (
 it('retains an explicit terminal route while remaining native branches are being adapted', async () => {
   const f = fixture(); await nextTick(); f.buttons().find(b => b.textContent === 'Use terminal controls')!.click(); expect(f.terminal).toHaveBeenCalledOnce()
 })
+
+it('places confirmation context before decisions and preserves the native cancel focus', async () => {
+  const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  const f = fixture(); await nextTick()
+  const panel = f.state.value.snapshot!.permissions!
+  panel.title = 'Delete rule'; panel.tabs = []; delete panel.search
+  panel.paragraphs = ['This deletes the original rule.']
+  panel.choices = [{ value: 'confirm', label: 'Yes', disabled: false }, { value: 'cancel', label: 'No', description: 'Keep the original rule', disabled: false }]
+  panel.defaultFocusValue = 'cancel'; await nextTick(); await nextTick()
+  const warning = [...f.root.querySelectorAll('p')].find(p => p.textContent === 'This deletes the original rule.')!
+  const yes = f.buttons().find(b => b.textContent === 'Yes')!
+  expect(warning.compareDocumentPosition(yes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(document.activeElement?.textContent).toContain('No'); expect(document.activeElement?.textContent).toContain('Keep the original rule')
+  focus.mockRestore()
+})

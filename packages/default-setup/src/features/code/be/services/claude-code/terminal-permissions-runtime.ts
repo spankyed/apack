@@ -6,7 +6,7 @@ function nativePermissionText(value,depth=0){
  if(value===null||value===undefined||typeof value==='boolean')return '';
  if(typeof value==='string'||typeof value==='number')return String(value);
  if(Array.isArray(value))return value.map(v=>nativePermissionText(v,depth+1)).join('');
- if(typeof value==='object'&&value.props)return nativePermissionText(value.props.children,depth+1);
+ if(typeof value==='object'&&value.props&&Object.hasOwn(value.props,'children'))return nativePermissionText(value.props.children,depth+1);
  throw Error('Native permission label is not supported');
 }
 function nativePermissionsFrame(n,entry){
@@ -41,17 +41,30 @@ function nativePermissionsFrame(n,entry){
   if(typeof p.value==='string'&&typeof p.onChange==='function'&&typeof p.onSubmit==='function'&&typeof p.placeholder==='string'){inputs.push(p);return false;}
  });
  if(pickers.length>1||inputs.length>1||pickers.length&&inputs.length)throw Error('Native Permissions controls are ambiguous');
- nativeIdeWalk(controlsRoot,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&(Array.isArray(p?.options)&&typeof (p.onChange??p.onSelect)==='function'||typeof p?.onSubmit==='function'&&typeof p?.value==='string'))return false;if(f.type!=='ink-text')return;let text='';nativeIdeWalk(f.child,c=>{if(c.tag===6&&typeof c.memoizedProps==='string')text+=c.memoizedProps;});if(text)paragraphs.push(text);return false;});
- const title=tabFrame?.title??(()=>{const candidates=[];nativeIdeWalk(owner.child,f=>{if(typeof f.memoizedProps?.title==='string'&&typeof f.memoizedProps.onCancel==='function')candidates.push(f.memoizedProps.title);});return candidates[0]??'Permissions';})();
+ const textRoots=[];let bodyFrame;
+ if(!tabFrame){
+  const frames=[];nativeIdeWalk(owner.child,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&typeof p?.title==='string'&&p.children!==undefined)frames.push(f);});
+  bodyFrame=frames[0];
+  if(bodyFrame){
+   const children=Array.isArray(bodyFrame.memoizedProps.children)?bodyFrame.memoizedProps.children:[bodyFrame.memoizedProps.children];
+   for(const element of children){if(element===null||element===undefined||typeof element==='boolean')continue;if(typeof element!=='object')throw Error('Native Permissions body element changed');const matches=[];nativeIdeWalk(bodyFrame.child,f=>{if(f.type===element.type&&f.memoizedProps===element.props)matches.push(f);});if(matches.length!==1)throw Error('Native Permissions body is not uniquely mounted');textRoots.push(matches[0]);}
+  }else if(['19402997c9ec0c7bb57ebb4fe65ffd9e9fbdef857b9088fa1ed1eac99f9fe18d','61abd1560c3097702383db89a1347182baa6c2ce4d5d7d0733135f74682fd5f2'].includes(nativeModelFunctionHash(owner.child?.type))){
+   const boxes=[];nativeIdeWalk(owner.child,f=>{if(f.memoizedProps?.borderStyle==='round'&&f.memoizedProps.borderColor==='error'){boxes.push(f);return false;}});if(boxes.length!==1)throw Error('Native Permissions delete context changed');textRoots.push(boxes[0]);
+  }
+ }
+ if(!textRoots.length)textRoots.push(controlsRoot);
+ for(const root of textRoots)nativeIdeWalk(root,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&(Array.isArray(p?.options)&&typeof (p.onChange??p.onSelect)==='function'||typeof p?.onSubmit==='function'&&typeof p?.value==='string'))return false;if(f.type!=='ink-text')return;let text='';nativeIdeWalk(f.child,c=>{if(c.tag===6&&typeof c.memoizedProps==='string')text+=c.memoizedProps;});if(text)paragraphs.push(text);return false;},false);
+ const title=tabFrame?.title??bodyFrame?.memoizedProps.title??'Permissions';
  let cancel=owner.child?.memoizedProps?.onCancel;
  if(typeof cancel!=='function'){
   const caches=owner.updateQueue?.memoCache?.data?.filter(c=>Array.isArray(c)&&c.length===(local?226:19));
   if(caches?.length!==1||typeof caches[0][local?39:1]!=='function')throw Error('Native Permissions dismissal changed');cancel=caches[0][local?39:1];
  }
  const picker=pickers[0],input=inputs[0];
- const choices=(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true}));
+ const choices=(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),...(o.description!==undefined?{description:nativePermissionText(o.description)}:{}),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true}));
  if(new Set(choices.map(o=>o.value)).size!==choices.length||tabs.length>16||paragraphs.length>256||paragraphs.some(t=>t.length>65536)||choices.some(o=>!o.value||o.value.length>16384||o.label.length>65536)||title.length>65536)throw Error('Native Permissions text or choices exceed bounds');
- const permissions={title,tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...ruleList?{search:entry.permissionsSearch??ruleList.searchQuery??''}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:'Continue'}}:{}};
+ const defaultFocusValue=picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey;
+ const permissions={title,...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...ruleList?{search:entry.permissionsSearch??ruleList.searchQuery??''}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:'Continue'}}:{}};
  const encoded=JSON.stringify(permissions),prior=entry.permissionsFrame,source=picker?.props??input??tabFrame??owner.memoizedProps;
  if(!prior||prior.encoded!==encoded||prior.source!==source||prior.cancel!==cancel)entry.permissionsFrame={encoded,source,cancel,picker,input,tabs,ruleList,snapshot:{revision:createHash('sha256').update(encoded+randomUUID()).digest('hex'),rows:[],permissions}};
  return entry.permissionsFrame;

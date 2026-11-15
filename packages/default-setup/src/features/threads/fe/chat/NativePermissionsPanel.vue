@@ -10,13 +10,14 @@
     <div class="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
       <p v-if="!panel && !state?.problem" role="status" class="text-sm text-neutral-400">Loading permission rules…</p>
       <label v-if="panel?.search !== undefined" class="block text-xs text-neutral-400">Search rules<input v-model="query" type="search" :disabled="pending" placeholder="Search permission rules…" class="mt-1 w-full rounded-lg border border-white/10 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @input="scheduleSearch" /></label>
+      <div class="space-y-2 text-xs leading-relaxed text-neutral-400"><p v-for="(text,index) in panel?.paragraphs" :key="index" class="whitespace-pre-wrap break-words"><NativeStatusText :text="text" /></p></div>
       <div v-if="panel?.form" class="space-y-2">
         <label class="block text-xs text-neutral-400">{{ panel.form.placeholder }}<textarea v-if="panel.form.multiline" v-model="draft" :disabled="pending" :placeholder="panel.form.placeholder" rows="5" class="mt-1 w-full rounded-lg border border-white/10 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" /><input v-else v-model="draft" :disabled="pending" :placeholder="panel.form.placeholder" class="mt-1 w-full rounded-lg border border-white/10 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" @keydown.enter.prevent="submit" /></label>
       </div>
       <div v-if="choices.length" role="group" aria-label="Permission choices" class="space-y-2">
-        <button v-for="choice in choices" :key="choice.value" type="button" :disabled="pending || choice.disabled" class="block w-full whitespace-pre-wrap break-words rounded-lg border border-white/10 p-3 text-left text-sm text-neutral-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="operate(choice.revision, {action:'select',value:choice.value})"><NativeStatusText :text="choice.label" /></button>
+        <button v-for="choice in choices" :key="choice.value" type="button" :data-native-permission-choice="choice.value" :disabled="pending || choice.disabled" class="block w-full whitespace-pre-wrap break-words rounded-lg border border-white/10 p-3 text-left text-sm text-neutral-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="operate(choice.revision, {action:'select',value:choice.value})"><NativeStatusText :text="choice.label" /><span v-if="choice.description" class="mt-1 block text-xs leading-relaxed text-neutral-400"><NativeStatusText :text="choice.description" /></span></button>
       </div>
-      <div class="space-y-2 text-xs leading-relaxed text-neutral-400"><p v-for="(text,index) in panel?.paragraphs" :key="index" class="whitespace-pre-wrap break-words"><NativeStatusText :text="text" /></p></div>
+
     </div>
     <footer class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-2 text-xs">
       <p v-if="state?.problem" role="alert" class="min-w-0 flex-1 break-words text-amber-200">{{ state.problem }}</p><span v-else role="status" class="text-neutral-500">{{ pending ? 'Waiting for Claude Code…' : '' }}</span>
@@ -25,7 +26,7 @@
   </section>
 </template>
 <script setup lang="ts">
-import {computed,onBeforeUnmount,onMounted,ref,watch} from 'vue'
+import {computed,nextTick,onBeforeUnmount,onMounted,ref,watch} from 'vue'
 import type {ClaudeSettingsOperation,ClaudeSettingsView} from '#features/code/common/native-settings.ts'
 import type {ClaudePermissionsOperation} from '#features/code/common/native-permissions.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
@@ -39,6 +40,7 @@ function operate(revision:string,command:ClaudePermissionsOperation){if(!pending
 function read(){if(!pending.value)emit('operate',{kind:'read'})}
 function submit(){const revision=props.state?.snapshot?.revision;if(revision&&panel.value?.form)operate(revision,{action:'submit',value:draft.value})}
 function cancel(){const revision=props.state?.snapshot?.revision;if(revision)operate(revision,{action:'cancel'})}
+watch([()=>panel.value?.defaultFocusValue,()=>panel.value?.title,()=>panel.value?.choices.find(c=>c.value===panel.value?.defaultFocusValue)?.disabled],async([value])=>{if(typeof value!=='string'||!value)return;await nextTick();if(!document.hasFocus()||document.activeElement?.matches('input,textarea')||document.activeElement!==document.body&&!root.value?.contains(document.activeElement))return;const button=[...root.value!.querySelectorAll<HTMLButtonElement>('[data-native-permission-choice]')].find(e=>e.dataset.nativePermissionChoice===value);button?.focus({preventScroll:true})},{immediate:true})
 let searchTimer:ReturnType<typeof setTimeout>|undefined,timer:ReturnType<typeof setInterval>|undefined
 function scheduleSearch(){if(searchTimer)clearTimeout(searchTimer);const revision=props.state?.snapshot?.revision;if(revision)searchTimer=setTimeout(()=>operate(revision,{action:'search',value:query.value}),180)}
 watch(()=>panel.value?.search,value=>{if(value!==undefined&&value!==query.value)query.value=value})

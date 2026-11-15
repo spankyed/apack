@@ -87,6 +87,20 @@ describe('original mounted Permissions authority', () => {
     expect(frame.snapshot.permissions.paragraphs).toEqual(['Managed rule: contact your administrator.'])
   })
 
+  it('projects only original body context, source descriptions and the native cancel default', () => {
+    const f = fixture(), choiceProps = { options: [{ value: 'confirm', label: 'Yes' }, { value: 'cancel', label: 'No', description: 'Keep the original rule' }], onChange: vi.fn(), defaultFocusValue: 'cancel' }
+    const textProps = {}, textElement = { type: 'ink-text', props: textProps }
+    const choiceType = function Choices() {}, choiceElement = { type: choiceType, props: choiceProps }
+    const body: any = { type: 'ink-text', memoizedProps: textProps, child: { tag: 6, memoizedProps: 'Original delete warning' } }
+    const choices: any = { type: choiceType, memoizedProps: choiceProps }
+    const chrome: any = { type: 'ink-text', memoizedProps: {}, child: { tag: 6, memoizedProps: 'Terminal border and key hints' } }
+    chrome.sibling = body; body.sibling = choices
+    f.root.child = { type: function Frame() {}, memoizedProps: { title: 'Rule details', onCancel: f.cancel, children: [textElement, choiceElement] }, child: chrome }
+    const frame = f.read().snapshot.permissions
+    expect(frame.title).toBe('Rule details'); expect(frame.paragraphs).toEqual(['Original delete warning'])
+    expect(frame.choices[1].description).toBe('Keep the original rule'); expect(frame.defaultFocusValue).toBe('cancel')
+  })
+
   it('uses native dismissal so original summary/retry semantics are preserved', async () => {
     const f = fixture(); await f.close(); expect(f.cancel).toHaveBeenCalledOnce()
     expect(f.read).toThrow(/expired/)
