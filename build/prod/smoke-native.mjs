@@ -10,7 +10,8 @@
 //   elmdb             opens a database in a temp dir, writes its schema, closes, opens it again and reads it back
 //   @napi-rs/keyring  loads its binding, without touching the credential store
 //
-//   apack-terminal    runs the broker binary the package ships, and sees it bind a socket
+//   apack-terminal    runs the broker binary the package ships, and sees it bind a socket; on Windows, finds the
+//                     ConPTY it runs its sessions on beside it
 //
 // **The broker is a binary rather than a module, so its probe is a spawn.** A pty belongs to the
 // `apack-terminal` broker, which the app starts as a child process; what can be wrong with it is what can
@@ -91,6 +92,14 @@ async function main() {
     throw new Error('apack-terminal answered ' + ran.status + ' and ' + JSON.stringify(ran.stderr) + ', not its usage');
   }
   console.log('apack-terminal: the broker binary runs');
+  // **On Windows the broker runs its sessions on the ConPTY beside it**, which it finds only there: without
+  // it the system's is used, which drops images and mouse reporting before the broker sees them, and the
+  // broker still starts. So its being there is asked of the files, as nothing the broker answers shows it
+  if (process.platform === 'win32') {
+    const beside = ['conpty.dll', 'OpenConsole.exe'].filter((file) => !require('node:fs').existsSync(path.join(path.dirname(broker), file)));
+    if (beside.length) throw new Error('apack-terminal ships without ' + beside.join(' and ') + ' beside its binary');
+    console.log('apack-terminal: its ConPTY is beside it');
+  }
 }
 main().catch((error) => { console.error(error?.stack ?? String(error)); process.exit(1); });
 `;
