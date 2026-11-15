@@ -114,7 +114,7 @@ it('keeps the original editor wait alive while an unrelated native RPC still tim
     await expect(first).resolves.toEqual({saved: true})
     await vi.waitFor(() => expect(() => f.holdEditorRequest(editor)).toThrow(/unavailable/))
   } finally {await f.close()}
-}, 10_000)
+})
 it('rejects an ambiguous original request and never resurrects a disposed one', async () => {
   const f = await fixture(() => {})
   try {

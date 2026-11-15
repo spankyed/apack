@@ -475,6 +475,7 @@ describe("the chain runs every recorded file's check", () => {
     'sdk-modules:check': 'a wrapper for `sdk-bridge-drift.spec.ts`, which compares the generated file against a fresh render; it runs in test:unit:host',
     'flow-export:check': 'a wrapper for `npm test -- tests/extensions/steps/export-example.spec.ts`; that spec runs in test:unit:pack, where it compares the flow DSL example rather than recording it',
     'plugin:check': 'a wrapper for `native-plugin/program-built.spec.ts`, which re-bundles the CLI plugin program and compares it against the committed copy; it runs in test:unit:pack',
+    'editor:check': 'a wrapper for `native-editor-built.spec.ts`, which re-bundles the native editor child and compares it against the committed program; it runs in test:unit:pack',
   };
 
   /** Every `<name>:check` in the repo, as the label of the manifest declaring it and the script's name */

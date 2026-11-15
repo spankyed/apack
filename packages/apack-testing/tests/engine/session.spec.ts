@@ -8,6 +8,7 @@
 // what a window's delivery door puts on the event. Nothing is in the event itself, which is why these cases
 // read the call off the send rather than out of a payload.
 import { describe, expect, it, vi } from 'vitest';
+import { setImmediate as nextTurn } from 'node:timers/promises';
 import {
   BRIDGE_FLAG, BRIDGE_FUNCTION, createSession, DATABASE_SYSTEM, DRIVE_REF, evalSource, MAX_SEEN_EVENTS,
   REPLY_TIMEOUT_MS, type EngineResult, type SeenEvent, type SessionApi, type SessionPage,
@@ -294,7 +295,8 @@ describe('the in-page bridge', () => {
           inspect!({ type: '@xstate.event', event: circular, actorRef: { id: 'x' } });
         }).not.toThrow();
       }
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      // Node reports an unhandled rejection at the turn boundary; no elapsed delay is needed.
+      await nextTurn();
       expect(unhandled).toEqual([]);
     } finally {
       process.off('unhandledRejection', onUnhandled);
