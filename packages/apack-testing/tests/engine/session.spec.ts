@@ -273,22 +273,18 @@ describe('the in-page bridge', () => {
     const { session, expressions } = sessionWith();
     await session.ready();
     const installed = expressions.find((source) => source.includes(BRIDGE_FLAG))!;
-    /** A refusal that notes whether anything will handle it */
-    class Refusal extends Promise<never> {
-      handled = false;
-      override then<A = never, B = never>(
-        onFulfilled?: ((value: never) => A | PromiseLike<A>) | null,
-        onRejected?: ((reason: unknown) => B | PromiseLike<B>) | null,
-      ): Promise<A | B> {
-        if (onRejected) this.handled = true;
-        return super.then(onFulfilled, onRejected);
-      }
-    }
-    const refusals: Refusal[] = [];
+    /** Each refusal the page was handed, and whether it attached a handler to it */
+    const refusals: Array<{ handled: boolean }> = [];
     const refuse = () => {
-      const refusal = new Refusal((_resolve, reject) => { reject(new Error(`Function "${BRIDGE_FUNCTION}" is not exposed`)); });
-      refusals.push(refusal);
-      return refusal;
+      const refusal = Promise.reject(new Error(`Function "${BRIDGE_FUNCTION}" is not exposed`));
+      const seen = { handled: false };
+      refusals.push(seen);
+      return Object.assign(refusal, {
+        catch: (onRejected: (reason: unknown) => unknown) => {
+          seen.handled = true;
+          return Promise.prototype.catch.call(refusal, onRejected);
+        },
+      });
     };
 
     for (const bridge of [refuse, () => { throw new Error('threw before answering'); }, undefined]) {
