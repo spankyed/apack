@@ -15,13 +15,13 @@
 // against. One broker per data dir is the start lock's (`ensureListening`), not this file's.
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, statSync } from 'node:fs';
+import { createHash, randomBytes } from 'node:crypto';
+import { existsSync, linkSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolveAppEnvironment, withoutAppProcessEnv } from '@apackdev/sdk/env';
 import type { TerminalColor, TerminalColors, TerminalListeners, TerminalService, TerminalSession, TerminalTarget } from '@apackdev/sdk/services';
 import { isRelayKey, relayKey, serveRelay, type Relay } from '../broker/relay.ts';
-import { type Broker, type BrokerColors, type BrokerSession, PROTOCOL_VERSION, holdBrokerSessions, startBroker } from '../broker/client.ts';
+import { type Broker, type BrokerColors, type BrokerSession, PROTOCOL_VERSION, brokerProof, holdBrokerSessions, startBroker } from '../broker/client.ts';
 
 /**
  * The longest a Unix socket path may be, conservatively.
@@ -190,7 +190,54 @@ export function holdTerminalSessions(): Promise<{ close(): void }> {
     binary: brokerBinary(),
     socket: socketPath(),
     env: brokerEnvironment(),
+    key: brokerKey(),
   });
+}
+
+/** The 32 random bytes, in hexadecimal, that a broker key is */
+const BROKER_KEY = /^[0-9a-f]{64}$/;
+
+/**
+ * The key this data dir's broker is started with and asked to prove, made the first time it is asked for.
+ *
+ * **Kept where only this user can read it**, in the app's own directory (`appDir`), which is what makes the
+ * broker's answer to a challenge proof that it is this app's: another account has no way to the key, so a
+ * process of theirs listening at the broker's address cannot answer (`proveOwnBroker`). It is the same key for
+ * every broker this data dir starts, because a kept session outlives the app that started its broker and the
+ * next app has to be able to ask that broker the same question.
+ *
+ * **Made once, whoever gets there first.** Electron main and the API both start the broker and may both be
+ * here at once, so a key is written to a file of its own and linked into place, which fails rather than
+ * replaces when the other was first; each then reads the one that is there. A file there that is not a key is
+ * refused rather than replaced, since replacing it would leave a running broker unable to prove itself.
+ */
+export function brokerKey(appDir = resolveAppEnvironment().appDir): string {
+  const file = path.join(appDir, 'terminal-key');
+  const read = (): string | undefined => {
+    try {
+      const key = readFileSync(file, 'utf8').trim();
+      if (!BROKER_KEY.test(key)) throw new Error(`${file} does not hold a terminal broker key; remove it and restart apack to make one`);
+      return key;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+      throw error;
+    }
+  };
+  const found = read();
+  if (found !== undefined) return found;
+  mkdirSync(appDir, { recursive: true });
+  const made = path.join(appDir, `.terminal-key-${process.pid}-${randomBytes(4).toString('hex')}`);
+  writeFileSync(made, randomBytes(32).toString('hex'), { mode: 0o600, flag: 'wx' });
+  try {
+    linkSync(made, file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  } finally {
+    rmSync(made, { force: true });
+  }
+  const key = read();
+  if (key === undefined) throw new Error(`${file} could not be made`);
+  return key;
 }
 
 /**
@@ -200,13 +247,18 @@ export function holdTerminalSessions(): Promise<{ close(): void }> {
  * the broker's view protocol rather than the client's. The greeting is built here so that the protocol's
  * version is written where the client's is.
  */
-export function terminalViewEndpoint(target?: string): { socket: string; greeting: string } {
+export function terminalViewEndpoint(target?: string): { socket: string; greeting: string; proof: string | null } {
   // **A target is named by its key and nothing else**, so a window can be pointed only at a socket this
   // app made for a target, and never at a path of its own choosing
   if (target !== undefined && !isRelayKey(target)) throw new Error(`${JSON.stringify(target)} names no terminal target`);
+  // **The window asks this app's broker to prove it is this app's**, as every other connection to it does, and
+  // is told the answer to expect rather than the key: the key stays in this process. A target's broker is
+  // another machine's, started without this app's key, so its window asks nothing
+  const challenge = target === undefined ? randomBytes(16).toString('hex') : null;
   return {
     socket: target === undefined ? socketPath() : relaySocketPath(target),
-    greeting: `${JSON.stringify({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'view' })}\n`,
+    greeting: `${JSON.stringify({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'view', challenge })}\n`,
+    proof: challenge === null ? null : brokerProof(brokerKey(), challenge),
   };
 }
 
@@ -414,10 +466,10 @@ const TARGET_GREETING_MS = 60_000;
  */
 export function createTerminalService({ startMs = TARGET_GREETING_MS }: { startMs?: number } = {}): TerminalService & { shutdown(): Promise<void> } {
   const own = brokerSessions(
-    () => startBroker({ binary: brokerBinary(), socket: socketPath(), env: brokerEnvironment() }),
+    () => startBroker({ binary: brokerBinary(), socket: socketPath(), env: brokerEnvironment(), key: brokerKey() }),
     () => startKey(brokerBinary(), socketPath()),
     null,
-    () => startBroker({ socket: socketPath() }),
+    () => startBroker({ socket: socketPath(), key: brokerKey() }),
   );
   /** A target's sessions and the socket in front of its command, by the target's key */
   const targets = new Map<string, { sessions: ReturnType<typeof brokerSessions>; relay: Promise<Relay> }>();
