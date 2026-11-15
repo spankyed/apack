@@ -779,8 +779,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    plan: "plan";
                     default: "default";
+                    plan: "plan";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1601,6 +1601,13 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 label: z.ZodString;
                 description: z.ZodOptional<z.ZodString>;
                 disabled: z.ZodBoolean;
+                approved: z.ZodOptional<z.ZodBoolean>;
+                retryScheduled: z.ZodOptional<z.ZodBoolean>;
+                retryAvailable: z.ZodOptional<z.ZodBoolean>;
+            }, z.core.$strict>>;
+            decisions: z.ZodOptional<z.ZodObject<{
+                approved: z.ZodNumber;
+                retry: z.ZodNumber;
             }, z.core.$strict>>;
             defaultFocusValue: z.ZodOptional<z.ZodString>;
             search: z.ZodOptional<z.ZodString>;
@@ -1631,11 +1638,11 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         }, z.core.$strict>>;
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
-                finished: "finished";
                 selection: "selection";
                 enable: "enable";
                 disable: "disable";
                 connecting: "connecting";
+                finished: "finished";
             }>;
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
@@ -1710,8 +1717,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 loading: z.ZodBoolean;
                 copyState: z.ZodOptional<z.ZodEnum<{
                     error: "error";
-                    pending: "pending";
                     idle: "idle";
+                    pending: "pending";
                     saved: "saved";
                 }>>;
                 insight: z.ZodOptional<z.ZodString>;
@@ -1929,8 +1936,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"chrome_install_setup">;
     phase: z.ZodEnum<{
-        failed: "failed";
         connecting: "connecting";
+        failed: "failed";
         waiting_install: "waiting_install";
         stalled: "stalled";
         connected: "connected";
@@ -1953,8 +1960,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"effort_preference_result">;
     severity: z.ZodEnum<{
-        warning: "warning";
         feedback: "feedback";
+        warning: "warning";
     }>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -2325,8 +2332,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                plan: "plan";
                 default: "default";
+                plan: "plan";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -8439,8 +8446,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    plan: "plan";
     default: "default";
+    plan: "plan";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -10633,6 +10640,9 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
         action: z.ZodLiteral<"tab">;
         value: z.ZodString;
     }, z.core.$strict>, z.ZodObject<{
+        action: z.ZodLiteral<"retry">;
+        value: z.ZodString;
+    }, z.core.$strict>, z.ZodObject<{
         action: z.ZodLiteral<"select">;
         value: z.ZodString;
     }, z.core.$strict>, z.ZodObject<{
@@ -10756,6 +10766,13 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             label: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
             disabled: z.ZodBoolean;
+            approved: z.ZodOptional<z.ZodBoolean>;
+            retryScheduled: z.ZodOptional<z.ZodBoolean>;
+            retryAvailable: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>>;
+        decisions: z.ZodOptional<z.ZodObject<{
+            approved: z.ZodNumber;
+            retry: z.ZodNumber;
         }, z.core.$strict>>;
         defaultFocusValue: z.ZodOptional<z.ZodString>;
         search: z.ZodOptional<z.ZodString>;
@@ -10786,11 +10803,11 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     }, z.core.$strict>>;
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
-            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
+            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -10865,8 +10882,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;
@@ -11382,8 +11399,15 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
                     label: string;
                     disabled: boolean;
                     description?: string | undefined;
+                    approved?: boolean | undefined;
+                    retryScheduled?: boolean | undefined;
+                    retryAvailable?: boolean | undefined;
                 }[];
                 readOnly: boolean;
+                decisions?: {
+                    approved: number;
+                    retry: number;
+                } | undefined;
                 defaultFocusValue?: string | undefined;
                 search?: string | undefined;
                 searchScope?: string | undefined;

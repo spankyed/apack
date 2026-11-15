@@ -295,3 +295,16 @@ it('commits composed search text once without replacing the local composition on
   input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })); await nextTick(); await vi.advanceTimersByTimeAsync(200)
   expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'search', scope: 'c'.repeat(64), value: 'Café' } })
 })
+
+it('exposes native approval/retry state and makes apply-on-close explicit', async () => {
+  const f = fixture(); await nextTick(); f.operate.mockClear()
+  const panel = f.state.value.snapshot!.permissions!
+  panel.decisions = { approved: 1, retry: 1 }
+  panel.choices = [{ value: '1', label: 'git diff', disabled: false, approved: true, retryScheduled: true, retryAvailable: true }]
+  await nextTick()
+  expect(f.root.textContent).toContain('Approved · Retry scheduled')
+  expect(f.root.textContent).toContain('These decisions take effect when you close permissions.')
+  expect(f.buttons().some(button => button.textContent === 'Apply and close')).toBe(true)
+  f.buttons().find(button => button.textContent === 'Cancel retry')!.click()
+  expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'retry', value: '1' } })
+})

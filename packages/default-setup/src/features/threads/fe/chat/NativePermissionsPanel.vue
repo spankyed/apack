@@ -2,7 +2,7 @@
   <section ref="root" role="dialog" aria-label="Claude Code permissions" aria-modal="false" tabindex="-1" data-native-command-panel class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-neutral-900" @keydown.esc.stop.prevent="cancel">
     <header class="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
       <div class="min-w-0"><p v-if="ownerLabel" class="mb-1 text-xs text-neutral-400">{{ ownerLabel }}</p><h2 class="text-sm font-medium text-neutral-200">{{ panel?.title ?? 'Permissions' }}</h2><p v-if="panel?.readOnly" class="mt-1 text-xs text-neutral-400">Read-only session rules</p></div>
-      <button type="button" :disabled="pending" class="shrink-0 rounded-lg px-3 py-2 text-xs text-neutral-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="cancel">{{ panel?.tabs.length ? 'Close permissions' : 'Back' }}</button>
+      <button type="button" :disabled="pending" class="shrink-0 rounded-lg px-3 py-2 text-xs text-neutral-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="cancel">{{ panel?.tabs.length ? hasDecisions ? 'Apply and close' : 'Close permissions' : 'Back' }}</button>
     </header>
     <div v-if="tabs.length" role="tablist" aria-label="Permission categories" class="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 px-3 py-2">
       <button v-for="tab in tabs" :key="tab.value" :data-native-permission-revision="tab.revision" role="tab" type="button" :aria-selected="tab.selected" :disabled="pending" class="shrink-0 rounded-lg px-3 py-2 text-xs focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" :class="tab.selected ? 'bg-white/10 text-neutral-100' : 'text-neutral-400 hover:bg-white/5'" @click="operate(tab.revision, {action:'tab',value:tab.value})">{{ tab.label }}</button>
@@ -21,8 +21,12 @@
         <p v-if="panel.form.live?.problem" role="alert" class="whitespace-pre-wrap break-words text-xs leading-relaxed text-amber-200"><NativeStatusText :text="panel.form.live.problem" /></p>
       </div>
       <p v-if="panel?.search && !choices.length && !pending" role="status" class="text-sm text-neutral-400">No matching rules.</p>
+      <p v-if="hasDecisions" role="status" class="text-xs leading-relaxed text-amber-200">{{ panel?.decisions?.approved }} approved · {{ panel?.decisions?.retry }} scheduled for retry. These decisions take effect when you close permissions.</p>
       <div v-if="choices.length" role="group" aria-label="Permission choices" class="space-y-2">
-        <button v-for="choice in choices" :key="choice.value" type="button" :data-native-permission-choice="choice.value" :data-native-permission-revision="choice.revision" :disabled="pending || choice.disabled" class="block w-full whitespace-pre-wrap break-words rounded-lg border border-white/10 p-3 text-left text-sm text-neutral-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="operate(choice.revision, {action:'select',value:choice.value})"><NativeStatusText :text="choice.label" /><span v-if="choice.description" class="mt-1 block text-xs leading-relaxed text-neutral-400"><NativeStatusText :text="choice.description" /></span></button>
+        <div v-for="choice in choices" :key="choice.value" class="space-y-1">
+        <button type="button" :aria-pressed="choice.approved" :data-native-permission-choice="choice.value" :data-native-permission-revision="choice.revision" :disabled="pending || choice.disabled" class="block w-full whitespace-pre-wrap break-words rounded-lg border border-white/10 p-3 text-left text-sm text-neutral-200 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="operate(choice.revision, {action:'select',value:choice.value})"><span v-if="choice.approved!==undefined" class="mb-1 block text-xs" :class="choice.approved ? 'text-emerald-300' : 'text-neutral-400'">{{ choice.approved ? 'Approved' : 'Denied' }}{{ choice.retryScheduled ? ' · Retry scheduled' : '' }}</span><NativeStatusText :text="choice.label" /><span v-if="choice.description" class="mt-1 block text-xs leading-relaxed text-neutral-400"><NativeStatusText :text="choice.description" /></span></button>
+        <button v-if="choice.retryAvailable" type="button" :disabled="pending || choice.disabled" :aria-label="(choice.retryScheduled ? 'Cancel retry for ' : 'Approve and retry ')+choice.label" class="rounded px-3 py-2 text-xs text-blue-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="operate(choice.revision,{action:'retry',value:choice.value})">{{ choice.retryScheduled ? 'Cancel retry' : 'Approve and retry' }}</button>
+        </div>
       </div>
 
     </div>
@@ -42,6 +46,7 @@ const props=defineProps<{state?:ClaudeSettingsView;ownerLabel?:string}>()
 const emit=defineEmits<{operate:[request:ClaudeSettingsRequest];terminal:[]}>()
 const root=ref<HTMLElement>(),query=ref(''),draft=ref('')
 const panel=computed(()=>props.state?.snapshot?.permissions)
+const hasDecisions=computed(()=>!!(panel.value?.decisions?.approved||panel.value?.decisions?.retry))
 const transportFlight=ref<ClaudeSettingsRequest>(),queuedAction=ref<{revision:string;command:ClaudePermissionsOperation}>(),localProblem=ref(''),suspendReads=ref(false)
 const problem=computed(()=>props.state?.problem||localProblem.value)
 const changedControls='Claude Code updated these controls. Review them and try again.'

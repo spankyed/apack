@@ -330,3 +330,86 @@ it('does not report a dismissal as expired when the original panel settles durin
   const result = await f.act(f.read().snapshot.revision, { action: 'cancel' })
   expect(f.cancel).toHaveBeenCalledOnce(); expect(result.snapshot.permissions).toMatchObject({ tabs: [], choices: [], readOnly: true })
 })
+
+function recentFixture() {
+  const f = fixture(), approved = new Set<number>(), retry = new Set<number>(), blocked = new Set<number>()
+  const denials = [{ command: 'git status' }, { command: 'git diff' }]
+  const nativeProps = { denials, onStateChange: vi.fn(), onHeaderFocusChange: vi.fn() }
+  const decisions = { approved, retry, denials }
+  f.root.memoizedState = { memoizedState: { current: decisions } }
+  f.tab.title = 'Recently denied'
+  let focused = 0, detached = false
+  const statusType = Object.assign(function NativeStatus() {}, { hash: 'b7097cfb75fda499f36e9f7d7385de9b7d46a6c526e45268b2eea4d0c06d4670' })
+  const recentType = Object.assign(function RecentDenials() {}, { hash: '778577580f5ce69db75851a9cd5bca62db56721ba04ff74c8e1800fbe510cefa' })
+  const select = vi.fn((value: string) => { const index = Number(value); if (!blocked.has(index)) { if (approved.has(index)) approved.delete(index); else approved.add(index) }; redraw() })
+  const focus = vi.fn((value: string) => { focused = Number(value); redraw() })
+  const keyDown = vi.fn((event: { key: string; preventDefault: () => void }) => { if (event.key !== 'r' || blocked.has(focused)) return; event.preventDefault(); if (retry.has(focused)) retry.delete(focused); else retry.add(focused); approved.add(focused); redraw() })
+  function redraw() {
+    const cache = Array(46); cache[13] = blocked; cache[15] = select; cache[16] = focus; cache[17] = focused; cache[18] = false; cache[20] = keyDown; cache[25] = approved; cache[29] = retry
+    const picker = { options: denials.map((row, index) => ({ value: String(index), label: { props: { children: [{ type: statusType, props: { status: approved.has(index) ? 'success' : 'error', withSpace: true } }, row.command, { props: { children: retry.has(index) ? ' (retry)' : '' } }] } } })), onChange: select, onFocus: focus, isDisabled: false }
+    const pickerFiber: any = { type: function Picker() {}, memoizedProps: picker }
+    const container = { type: function NativeThemedBox() {}, props: { onKeyDown: keyDown } }
+    cache[45] = container
+    // The original themed Box forwards its handler to another Box/host. Only the cached element owns it.
+    const host = { type: 'ink-box', memoizedProps: { onKeyDown: keyDown }, child: pickerFiber }
+    const containerFiber = { type: container.type, memoizedProps: container.props, child: host }
+    f.root.child = { type: function Tab() {}, memoizedProps: f.tab, sibling: { type: recentType, memoizedProps: detached ? { ...nativeProps } : nativeProps, updateQueue: { memoCache: { data: [cache] } }, child: containerFiber } }
+  }
+  redraw()
+  return { ...f, approved, retry, blocked, focus, select, keyDown, recentType, statusType, redraw, detach: () => { detached = true; redraw() } }
+}
+
+describe('original Recently denied decisions', () => {
+  it('projects original approval status and applies decisions only through original dismissal', async () => {
+    const f = recentFixture(), before = f.read()
+    expect(before.snapshot.permissions.choices[0]).toMatchObject({ value: '0', label: 'git status', approved: false, retryScheduled: false, retryAvailable: true })
+    await f.act(before.snapshot.revision, { action: 'select', value: '0' })
+    expect(f.focus).toHaveBeenCalledExactlyOnceWith('0')
+    expect(f.select).toHaveBeenCalledExactlyOnceWith('0')
+    expect(f.read().snapshot.permissions.decisions).toEqual({ approved: 1, retry: 0 })
+    expect(f.cancel).not.toHaveBeenCalled()
+    await f.close(); expect(f.cancel).toHaveBeenCalledOnce()
+  })
+
+  it('focuses the requested original row before invoking its original retry handler once', async () => {
+    const f = recentFixture()
+    const result = await f.act(f.read().snapshot.revision, { action: 'retry', value: '1' })
+    expect(f.focus).toHaveBeenCalledExactlyOnceWith('1'); expect(f.keyDown).toHaveBeenCalledOnce()
+    expect(f.select).not.toHaveBeenCalled(); expect([...f.retry]).toEqual([1]); expect([...f.approved]).toEqual([1])
+    expect(result.snapshot.permissions.choices[1]).toMatchObject({ approved: true, retryScheduled: true })
+    expect(result.snapshot.permissions.decisions).toEqual({ approved: 1, retry: 1 })
+    await f.act(result.snapshot.revision, { action: 'retry', value: '1' })
+    expect([...f.retry]).toEqual([]); expect([...f.approved]).toEqual([1])
+  })
+
+  it('preserves native retry state when approval is subsequently unticked', async () => {
+    const f = recentFixture(); f.retry.add(0); f.redraw()
+    expect(f.read().snapshot.permissions.decisions).toEqual({ approved: 0, retry: 1 })
+  })
+
+  it('refuses blocked, fabricated, stale and replacement retry requests', async () => {
+    const f = recentFixture(); f.blocked.add(1); f.redraw()
+    const revision = f.read().snapshot.revision
+    await expect(f.act(revision, { action: 'retry', value: '1' })).rejects.toThrow(/unavailable/)
+    await expect(f.act(revision, { action: 'retry', value: 'invented' })).rejects.toThrow(/unavailable/)
+    f.detach(); await expect(f.act(revision, { action: 'retry', value: '0' })).rejects.toThrow(/changed/)
+    expect(f.focus).not.toHaveBeenCalled(); expect(f.keyDown).not.toHaveBeenCalled()
+  })
+
+  it('refuses retry when the original row owner changes during focus acknowledgement', async () => {
+    const f = recentFixture(); f.focus.mockImplementation(() => f.detach())
+    await expect(f.act(f.read().snapshot.revision, { action: 'retry', value: '1' })).rejects.toThrow(/expired/)
+    expect(f.keyDown).not.toHaveBeenCalled()
+  })
+
+  it('fails closed on an unrecognized native Recent producer or status atom', () => {
+    const f = recentFixture(); f.recentType.hash = 'changed'; expect(f.read).toThrow(/producer changed/)
+    const other = recentFixture(); other.statusType.hash = 'changed'; expect(other.read).toThrow(/label changed/)
+  })
+
+  it('does not toggle approval after its native owner is replaced during focus', async () => {
+    const f = recentFixture(); f.focus.mockImplementation(() => f.detach())
+    await expect(f.act(f.read().snapshot.revision, { action: 'select', value: '1' })).rejects.toThrow(/expired/)
+    expect(f.select).not.toHaveBeenCalled(); expect([...f.approved]).toEqual([])
+  })
+})

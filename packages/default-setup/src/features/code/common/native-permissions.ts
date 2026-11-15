@@ -5,7 +5,8 @@ export const claudePermissionsSnapshot = z.object({
   title: z.string().max(65536),
   tabs: z.array(z.object({ value: z.string().min(1).max(128), label: z.string().max(1024), selected: z.boolean() }).strict()).max(16),
   paragraphs: z.array(z.string().max(65536)).max(256),
-  choices: z.array(z.object({ value: z.string().min(1).max(16384), label: z.string().max(65536), description: z.string().max(65536).optional(), disabled: z.boolean() }).strict()).max(2048),
+  choices: z.array(z.object({ value: z.string().min(1).max(16384), label: z.string().max(65536), description: z.string().max(65536).optional(), disabled: z.boolean(), approved: z.boolean().optional(), retryScheduled: z.boolean().optional(), retryAvailable: z.boolean().optional() }).strict()).max(2048),
+  decisions: z.object({ approved: z.number().int().nonnegative().max(2048), retry: z.number().int().nonnegative().max(2048) }).strict().optional(),
   defaultFocusValue: z.string().max(16384).optional(),
   search: z.string().max(16384).optional(),
   searchScope: z.string().regex(/^[a-f0-9]{64}$/).optional(),
@@ -24,6 +25,7 @@ export const claudePermissionsSnapshot = z.object({
 }).strict()
 export const claudePermissionsOperation = z.discriminatedUnion('action', [
   z.object({ action: z.literal('tab'), value: z.string().min(1).max(128) }).strict(),
+  z.object({ action: z.literal('retry'), value: z.string().min(1).max(16384) }).strict(),
   z.object({ action: z.literal('select'), value: z.string().min(1).max(16384) }).strict(),
   z.object({ action: z.literal('search'), scope: z.string().regex(/^[a-f0-9]{64}$/), value: z.string().max(16384) }).strict(),
   z.object({ action: z.literal('change'), scope: z.string().regex(/^[a-f0-9]{64}$/), value: z.string().max(16384) }).strict(),

@@ -41,6 +41,27 @@ function nativePermissionAutoRule(controlsRoot,input,entry){
  const problem=problems[0]?.children;if(problem?.length>65536)throw Error('Native auto mode validation exceeded bounds');
  return {lease,field:input,items:[],problemProps:problems[0],snapshot:{kind:'autoRule',id:lease.id,revision:createHash('sha256').update(JSON.stringify([lease.id,lease.epoch,input.value,problem])).digest('hex'),suggestions:[],...problem!==undefined?{problem}:{}}};
 }
+function nativePermissionDecisionState(owner){
+ const matches=[],seen=new Set();let hook=owner.memoizedState;
+ while(hook){if(seen.has(hook)||seen.size>=512)throw Error('Native denial state traversal exceeded bound');seen.add(hook);const state=hook.memoizedState?.current;
+  if(state&&Array.isArray(state.denials)&&Object.prototype.toString.call(state.approved)==='[object Set]'&&Object.prototype.toString.call(state.retry)==='[object Set]')matches.push(state);hook=hook.next;
+ }
+ if(matches.length>1)throw Error('Native denial decisions are ambiguous');const state=matches[0];if(!state)return;
+ if(state.denials.length>2048||[...state.approved,...state.retry].some(i=>!Number.isInteger(i)||i<0||i>=state.denials.length))throw Error('Native denial decisions changed');
+ return {approved:state.approved.size,retry:state.retry.size};
+}
+function nativePermissionRecent(controlsRoot,picker){
+ const owners=[];nativeIdeWalk(controlsRoot,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&Array.isArray(p?.denials)&&typeof p.onStateChange==='function'&&typeof p.onHeaderFocusChange==='function')owners.push(f);});
+ if(!owners.length)return;if(owners.length!==1||!['778577580f5ce69db75851a9cd5bca62db56721ba04ff74c8e1800fbe510cefa','b230f51612e3684854bbcd2284f7900cf428a128c6f1c7340ed2c004f6cedfd8'].includes(nativeModelFunctionHash(owners[0].type)))throw Error('Native recent denials producer changed');
+ const owner=owners[0],cache=owner.updateQueue?.memoCache?.data?.filter(c=>Array.isArray(c)&&c.length===46);
+ if(cache?.length!==1||!picker||picker.options.length!==owner.memoizedProps.denials.length||picker.props.onChange!==cache[0][15]||picker.props.onFocus!==cache[0][16]||typeof picker.props.onFocus!=='function'||typeof cache[0][20]!=='function'||!Number.isInteger(cache[0][17])||typeof cache[0][18]!=='boolean'||[13,25,29].some(i=>Object.prototype.toString.call(cache[0][i])!=='[object Set]'))throw Error('Native recent denials controls changed');
+ const c=cache[0],container=c[45],handlers=[];if(container?.props?.onKeyDown!==c[20])throw Error('Native recent denial retry container changed');nativeIdeWalk(owner.child,f=>{if(f.type===container.type&&f.memoizedProps===container.props)handlers.push(f);});if(handlers.length!==1)throw Error('Native recent denial retry owner changed');
+ const choices=picker.options.map((o,index)=>{
+  const parts=o.label?.props?.children,status=parts?.[0];if(o.value!==String(index)||!Array.isArray(parts)||parts.length!==3||!['b7097cfb75fda499f36e9f7d7385de9b7d46a6c526e45268b2eea4d0c06d4670','3b05e00b8aec0c76fa3e70d0eb8e0dbf739c42e0e270a86f6f4104f65f622e6b'].includes(nativeModelFunctionHash(status?.type))||status.props?.status!==(c[25].has(index)?'success':'error')||status.props?.withSpace!==true)throw Error('Native recent denial label changed');
+  return {value:o.value,label:nativePermissionText(parts.slice(1)),...o.description!==undefined?{description:nativePermissionText(o.description)}:{},approved:c[25].has(index),retryScheduled:c[29].has(index),retryAvailable:true,disabled:picker.props.isDisabled===true||c[13].has(index)};
+ });
+ return {props:owner.memoizedProps,picker,focus:picker.props.onFocus,keyDown:c[20],focused:String(c[17]),headerFocused:c[18],choices};
+}
 function nativePermissionSearch(owner,controlsRoot,ruleList,entry,local){
  const autoLists=[];nativeIdeWalk(controlsRoot,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&Array.isArray(p?.entries)&&p.builtinsState&&typeof p.onSelectBuiltins==='function'&&typeof p.onSelectEntry==='function'&&typeof p.onAddNew==='function'&&typeof p.searchQuery==='string')autoLists.push(f);});
  if(autoLists.length>1||autoLists.length&&ruleList)throw Error('Native permission search owner is ambiguous');
@@ -111,13 +132,28 @@ function nativePermissionsFrame(n,entry){
   const caches=owner.updateQueue?.memoCache?.data?.filter(c=>Array.isArray(c)&&c.length===(local?226:19));
   if(caches?.length!==1||typeof caches[0][local?39:1]!=='function')throw Error('Native Permissions dismissal changed');cancel=caches[0][local?39:1];
  }
- const choices=(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),...(o.description!==undefined?{description:nativePermissionText(o.description)}:{}),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true}));
+ const recent=nativePermissionRecent(controlsRoot,picker),decisions=local?nativePermissionDecisionState(owner):undefined;
+ const choices=recent?.choices??(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),...(o.description!==undefined?{description:nativePermissionText(o.description)}:{}),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true}));
  if(new Set(choices.map(o=>o.value)).size!==choices.length||tabs.length>16||paragraphs.length>256||paragraphs.some(t=>t.length>65536)||choices.some(o=>!o.value||o.value.length>16384||o.label.length>65536)||title.length>65536)throw Error('Native Permissions text or choices exceed bounds');
- const defaultFocusValue=picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey;
- const permissions={title,...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...search?{search:search.value,searchScope:search.lease.token}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:liveForm?.snapshot.kind==='directory'?'Add directory':liveForm?'Save rule':'Continue',...liveForm?{live:liveForm.snapshot}:{}}}:{}};
+ const defaultFocusValue=recent?.focused??picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey;
+ const permissions={title,...decisions?{decisions}:{},...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...search?{search:search.value,searchScope:search.lease.token}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:liveForm?.snapshot.kind==='directory'?'Add directory':liveForm?'Save rule':'Continue',...liveForm?{live:liveForm.snapshot}:{}}}:{}};
  const encoded=JSON.stringify(permissions),prior=entry.permissionsFrame,source=picker?.props??input??tabFrame??owner.memoizedProps;
- if(!prior||prior.encoded!==encoded||prior.source!==source||prior.cancel!==cancel||prior.focusBody!==focusBody||prior.liveForm?.field!==liveForm?.field)entry.permissionsFrame={encoded,source,cancel,focusBody,picker,input,liveForm,tabs,ruleList,search,snapshot:{revision:createHash('sha256').update(encoded+randomUUID()).digest('hex'),rows:[],permissions}};
+ if(!prior||prior.encoded!==encoded||prior.source!==source||prior.cancel!==cancel||prior.focusBody!==focusBody||prior.liveForm?.field!==liveForm?.field||prior.recent?.props!==recent?.props||prior.recent?.keyDown!==recent?.keyDown)entry.permissionsFrame={encoded,source,cancel,focusBody,picker,input,liveForm,tabs,ruleList,search,recent,snapshot:{revision:createHash('sha256').update(encoded+randomUUID()).digest('hex'),rows:[],permissions}};
  return entry.permissionsFrame;
+}
+async function actNativePermissionRecent(n,entry,recent,value,retry,signal){
+ await recent.focus(value);
+ for(let attempt=0;attempt<40;attempt++){
+  signal.throwIfAborted();entry.current();const current=nativePermissionsFrame(n,entry),active=current.recent;
+  if(!active||active.props!==recent.props||!active.choices.some(o=>o.value===value&&!o.disabled)||active.headerFocused)throw Error('Native denial action expired');
+  if(active.focused===value){
+   if(retry)await active.keyDown({key:'r',ctrl:false,meta:false,shift:false,preventDefault(){}});
+   else await active.picker.select(value);
+   return;
+  }
+  await new Promise(resolve=>setTimeout(resolve,25));
+ }
+ throw Error('Claude Code has not acknowledged denial focus. Refresh before trying again.');
 }
 async function nativePermissionsPanel(n,entry,request,abort){
  const before=nativePermissionsFrame(n,entry);abort.signal.throwIfAborted();if(request.operation==='read')return {snapshot:before.snapshot};
@@ -160,7 +196,11 @@ async function nativePermissionsPanel(n,entry,request,abort){
  let callback,args=[];
  if(command.action==='tab'){const tab=before.tabs.find(t=>t.title===command.value);if(!tab)throw Error('Native Permissions tab unavailable');callback=tab.onClick;}
 
- else if(command.action==='select'){const choice=before.snapshot.permissions.choices.find(o=>o.value===command.value&&!o.disabled);if(!choice||!before.picker)throw Error('Native permission choice unavailable');callback=before.picker.select;args=[command.value];}
+ else if(command.action==='select'){const choice=before.snapshot.permissions.choices.find(o=>o.value===command.value&&!o.disabled);if(!choice||!before.picker)throw Error('Native permission choice unavailable');callback=before.recent?()=>actNativePermissionRecent(n,entry,before.recent,command.value,false,abort.signal):before.picker.select;args=before.recent?[]:[command.value];}
+ else if(command.action==='retry'){
+  const recent=before.recent,choice=recent?.choices.find(o=>o.value===command.value&&!o.disabled);if(!recent||!choice||recent.headerFocused)throw Error('Native denial retry unavailable');
+  callback=()=>actNativePermissionRecent(n,entry,recent,command.value,true,abort.signal);
+ }
  else if(command.action==='submit'){if(!before.input||typeof command.value!=='string'||command.value.length>16384)throw Error('Native permission input unavailable');callback=before.input.onSubmit;args=[typeof before.input.inputFilter==='function'?before.input.inputFilter(command.value):command.value];}
  else if(command.action==='cancel')callback=before.cancel;
  else throw Error('Unsupported native Permissions action');
