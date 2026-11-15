@@ -129,7 +129,7 @@ export async function bundleDeclarations(
   } catch (err) {
     return { success: false, error: tree?.diagnostic(errorMessage(err)) ?? errorMessage(err) };
   } finally {
-    if (configDirectory) fs.rmSync(configDirectory, { recursive: true, force: true });
+    if (configDirectory) fs.rmSync(configDirectory, { recursive: true, force: true, maxRetries: 5 });
   }
 }
 

@@ -48,7 +48,7 @@ export async function startPackFrontend(root: string, compiler: CompilerInstalla
         NODE_OPTIONS: nodeOptions.worker, ELECTRON_RUN_AS_NODE: '1', TSX_DISABLE_CACHE: '1' },
     }, directory);
   } catch (error) {
-    await fs.promises.rm(directory, { recursive: true, force: true });
+    await fs.promises.rm(directory, { recursive: true, force: true, maxRetries: 5 });
     throw error;
   }
   let failure: Error | undefined;

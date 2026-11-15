@@ -114,6 +114,6 @@ export async function checkContentRuntimeLoads(
       error: `${path.relative(packDir, bundleFile)} doesn't load outside the app. Packs depending on this one load it in their unit tests with only @apackdev/sdk installed, so repositories and content writers can't use native modules or @apackdev/sdk's optional peers (${blocked.join(', ')}).\n${reason}`,
     };
   } finally {
-    fs.rmSync(dataDir, { recursive: true, force: true });
+    fs.rmSync(dataDir, { recursive: true, force: true, maxRetries: 5 });
   }
 }
