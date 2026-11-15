@@ -241,3 +241,25 @@ it('resets to a commit only once that is confirmed, shows it busy, and says a re
   await settle()
   expect(byTestId('reset-busy'), 'refused: no longer busy').toBeNull()
 })
+
+it('commits on Cmd+Enter or Ctrl+Enter in the message box, only where Commit could be pressed', async () => {
+  await panel({ files: [staged] })
+  const press = async (init: KeyboardEventInit) => {
+    byTestId('commit-message')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, ...init }))
+    await settle()
+  }
+  const commits = () => sent().filter(type => type === 'commit.COMMIT').length
+
+  await press({ metaKey: true })
+  expect(commits(), 'no message: Commit could not be pressed').toBe(0)
+  await typeMessage('Fix it')
+  await press({})
+  await press({ shiftKey: true, metaKey: true })
+  expect(commits(), 'Enter alone is a new line').toBe(0)
+  await press({ ctrlKey: true, isComposing: true })
+  expect(commits(), 'an input method is composing').toBe(0)
+  await press({ ctrlKey: true })
+  expect(commits()).toBe(1)
+  await press({ metaKey: true })
+  expect(commits(), 'one commit at a time').toBe(1)
+})

@@ -495,6 +495,7 @@
           :readonly="isGeneratingMessage"
           data-testid="commit-message"
           @input="updateCommitMessage"
+          @keydown.enter="commitByKey"
           :placeholder="`Message (currently on ${gitBranch || 'unknown'})`"
           :class="[
             'w-full px-3 py-2 text-sm border rounded resize-none overflow-y-auto bg-neutral-900 text-neutral-100 placeholder-neutral-500 focus:outline-none commit-message transition-colors',
@@ -1311,6 +1312,16 @@ const commit = () => {
   if (canCommit.value) {
     commitActor?.send({ type: 'commit.COMMIT' })
   }
+}
+
+/**
+ * Cmd+Enter or Ctrl+Enter in the message box commits, where the Commit button could be pressed. A key an input
+ * method is composing with is the method's, and Enter alone is a new line
+ */
+const commitByKey = (event: KeyboardEvent) => {
+  if (event.isComposing || !(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return
+  event.preventDefault()
+  commit()
 }
 
 const handleActionButton = () => {

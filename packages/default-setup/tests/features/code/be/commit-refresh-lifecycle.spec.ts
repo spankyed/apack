@@ -37,7 +37,7 @@ it('cancels a pending refresh when the commit actor stops', async () => {
 it('announces a write as the repository changing, and lists nothing itself', async () => {
   const announced = vi.fn();
   const listed = vi.fn();
-  const gitRepository = { stashDrop: async () => {}, refreshSnapshot: async () => NOTHING } as never;
+  const gitRepository = { whenFetchDue: () => {}, stashDrop: async () => {}, refreshSnapshot: async () => NOTHING } as never;
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced, stashList: listed } }),
     { input: { baseDirectory: '/repo', gitRepository } }).start();
   actors.push(actor);
@@ -61,7 +61,7 @@ it('announces a hint as the parts git says changed, one check at a time, and not
   const refreshSnapshot = vi.fn(() => new Promise<typeof NOTHING>((resolve) => { release = () => resolve(found); }));
   const announced = vi.fn();
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
-    { input: { baseDirectory: '/repo', gitRepository: { refreshSnapshot } as never } }).start();
+    { input: { baseDirectory: '/repo', gitRepository: { whenFetchDue: () => {}, refreshSnapshot } as never } }).start();
   actors.push(actor);
 
   actor.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED' });
@@ -87,7 +87,7 @@ it('reads what was noted for a hint, and everything for a reconcile and for a wr
   const refreshSnapshot = vi.fn(async (_reading?: string) => NOTHING);
   const announced = vi.fn();
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
-    { input: { baseDirectory: '/repo', gitRepository: { refreshSnapshot, fetchIfDue: async () => false } as never } }).start();
+    { input: { baseDirectory: '/repo', gitRepository: { whenFetchDue: () => {}, refreshSnapshot, fetchIfDue: async () => false } as never } }).start();
   actors.push(actor);
   const read = async (event: Parameters<typeof actor.send>[0]) => {
     refreshSnapshot.mockClear();
@@ -110,6 +110,7 @@ it('has the repository checked again when a fetch behind a reconcile stops fetch
   const gitRepository = {
     refreshSnapshot,
     isAutoFetchSuspended: false,
+    whenFetchDue() {},
     async fetchIfDue() { if (stops) this.isAutoFetchSuspended = true; return false; },
   };
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
@@ -135,7 +136,7 @@ it('announces a write as its status changing and whatever else git says did, aft
   const refreshSnapshot = vi.fn(async () => found);
   const announced = vi.fn();
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
-    { input: { baseDirectory: '/repo', gitRepository: { refreshSnapshot } as never } }).start();
+    { input: { baseDirectory: '/repo', gitRepository: { whenFetchDue: () => {}, refreshSnapshot } as never } }).start();
   actors.push(actor);
 
   actor.send({ type: 'commit.GIT_STATUS_CHANGED' });
@@ -154,7 +155,7 @@ it('tells the pull requests only when the history changed', async () => {
   let found = NOTHING;
   const code = { send: vi.fn() };
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: () => {} } }),
-    { input: { baseDirectory: '/repo', gitRepository: { refreshSnapshot: async () => found, isGitRepository: async () => false } as never, code: code as never } }).start();
+    { input: { baseDirectory: '/repo', gitRepository: { whenFetchDue: () => {}, refreshSnapshot: async () => found, isGitRepository: async () => false } as never, code: code as never } }).start();
   actors.push(actor);
 
   // A write made here that moved no commit, as staging a file is
@@ -183,7 +184,7 @@ it('tells the pull requests only when the history changed', async () => {
 /** A commit system over a stand-in repository whose every check finds its status changed, with what was read each time */
 function overAChangingRepository() {
   const refreshSnapshot = vi.fn(async (_reading?: string, _options?: { refreshIndex?: boolean }) => ({ ...NOTHING, status: true }));
-  const gitRepository = { refreshSnapshot, isGitRepository: async () => false, fetchIfDue: async () => false, isAutoFetchSuspended: false };
+  const gitRepository = { whenFetchDue: () => {}, refreshSnapshot, isGitRepository: async () => false, fetchIfDue: async () => false, isAutoFetchSuspended: false };
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: () => {} } }),
     { input: { baseDirectory: '/repo', gitRepository: gitRepository as never } }).start();
   actors.push(actor);

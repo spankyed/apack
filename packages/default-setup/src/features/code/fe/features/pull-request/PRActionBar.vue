@@ -76,6 +76,20 @@
       <span>{{ pr.isDraft ? 'Ready' : 'Draft' }}</span>
     </button>
 
+    <!-- Check out the pull request's head as a branch here -->
+    <button
+      v-if="!isCheckedOut"
+      data-testid="pr-checkout"
+      @click="$emit('checkout')"
+      :disabled="isCheckingOut"
+      class="flex items-center gap-1 px-2 py-1 text-xs rounded bg-neutral-700/50 text-neutral-300 hover:bg-neutral-700 transition-colors disabled:opacity-50"
+      title="Check out this pull request's branch here"
+    >
+      <Loader2 v-if="isCheckingOut" :size="11" class="animate-spin" />
+      <GitBranch v-else :size="11" />
+      <span>Check out</span>
+    </button>
+
     <div class="flex-1" />
 
     <!-- Close -->
@@ -137,6 +151,9 @@ const props = defineProps<{
   isDeletingBranch: boolean
   /** The branch is this repository's and no other open pull request is from it (`branchDeletable`) */
   canDeleteBranch: boolean
+  isCheckingOut: boolean
+  /** What is checked out is this pull request's branch already */
+  isCheckedOut: boolean
 }>()
 
 /** Semantic state of the merge button: drives color, icon, tooltip, and disabled flag. */
@@ -189,6 +206,7 @@ const CHEVRON_BTN_CLASSES: Record<MergeVariant, string> = {
 
 const emit = defineEmits<{
   'merge': [method: 'merge' | 'squash' | 'rebase']
+  'checkout': []
   'close': []
   'toggle-draft': []
   'delete-branch': []

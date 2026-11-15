@@ -9,7 +9,8 @@ import { defineHandlers } from '@apackdev/sdk/framework'
 import { createLogger } from '@apackdev/sdk/logger'
 import { setup } from 'xstate'
 import { GitHubSignInError, type GitHubAccount } from '../services/github.ts'
-import { createGitHubApi, GitHubApiError, repoOfRemote, type GitHubApi, type GitHubRepo } from '../services/github-api.ts'
+import { createGitHubApi, GitHubApiError, sameRepo, type GitHubApi, type GitHubRepo } from '../services/github-api.ts'
+import { gitHubRepoOf } from '../services/ssh-host.ts'
 import type { AppGitRepository } from '../services/app-git-repository.ts'
 import { agentChildEnvironment } from '../services/shell-environment.ts'
 import { resolveGitPath } from '../utils/resolve-cli.ts'
@@ -83,33 +84,67 @@ export function forgetHeldSignIn(): void {
   heldSignIn = undefined
 }
 
-/** A checkout's repository on GitHub, and the remote that names it, which every fetch and delete of the ask uses */
+/**
+ * A checkout's pull requests on GitHub: the API for the repository they are on, and the remotes every fetch and
+ * delete of the ask uses
+ */
 export interface GitHubOfCheckout {
+  /** On the repository the remote names, or on its parent where that is a fork (`github.head` is the fork) */
   github: GitHubApi
   /** The remote's name, as git names it: the one the current branch follows, else `origin`, else the only one */
   remote: string
+  /**
+   * The remote that names `github.repo`, which a pull request's ref and its base are fetched from: `remote` itself,
+   * or for a fork the remote naming its parent (`upstream`, as a rule). Absent for a fork with no such remote
+   */
+  baseRemote?: string
 }
 
 /**
- * GitHub's API for the repository the checkout's remote names (`readRemote`) with this pack's sign-in, and that
- * remote. Refuses, saying which, a checkout whose remote is not on GitHub and an app that is not signed in
+ * The repository each fork is of, by `owner/name` as GitHub reads it (without regard to case), for the app's run:
+ * which repository a fork is of does not change. `null` for a repository that is no fork; an ask that failed is
+ * forgotten, and asked again
  */
-export async function gitHubOf(repository: AppGitRepository): Promise<GitHubOfCheckout> {
-  const remote = await repository.readRemote()
-  const repo = remote ? repoOfRemote(remote.url, services.github.endpoints.web) : undefined
-  if (!remote || !repo) throw new GitHubApiError('not-github', 'This repository has no remote on github.com.')
-  return { github: signedIn(repo), remote: remote.name }
+const parents = new Map<string, Promise<GitHubRepo | null>>()
+
+function parentOf(api: GitHubApi): Promise<GitHubRepo | null> {
+  const key = `${api.repo.owner}/${api.repo.name}`.toLowerCase()
+  const known = parents.get(key)
+  if (known) return known
+  const asked = api.readParent()
+  parents.set(key, asked)
+  asked.catch(() => { if (parents.get(key) === asked) parents.delete(key) })
+  return asked
 }
 
-/** GitHub's API for the repository a checkout's remote names, or for `named` where the caller names another */
+/**
+ * GitHub's API for the pull requests of the repository the checkout's remote names (`readRemote`), with this
+ * pack's sign-in, and the remotes to fetch from. Where that repository is a fork they are its parent's: listed,
+ * opened and created there, from the fork's branches. Refuses, saying which, a checkout whose remote is not on
+ * GitHub and an app that is not signed in
+ */
+export async function gitHubOf(repository: AppGitRepository): Promise<GitHubOfCheckout> {
+  const web = services.github.endpoints.web
+  const remote = await repository.readRemote()
+  const head = remote ? await gitHubRepoOf(remote.url, web) : undefined
+  if (!remote || !head) throw new GitHubApiError('not-github', 'This repository has no remote on github.com.')
+  const parent = await parentOf(signedIn(head))
+  if (!parent) return { github: signedIn(head), remote: remote.name, baseRemote: remote.name }
+  const remotes = await repository.readRemotes()
+  const named = await Promise.all(remotes.map(async other => sameRepo(await gitHubRepoOf(other.url, web), parent) ? other.name : undefined))
+  const baseRemote = named.find(name => name !== undefined)
+  return { github: signedIn(parent, head), remote: remote.name, ...(baseRemote && { baseRemote }) }
+}
+
+/** GitHub's API for the pull requests of a checkout (`gitHubOf`), or of `named` where the caller names a repository */
 export async function gitHubApiFor(repository: AppGitRepository, named?: GitHubRepo): Promise<GitHubApi> {
   return named ? signedIn(named) : (await gitHubOf(repository)).github
 }
 
-function signedIn(repo: GitHubRepo): GitHubApi {
+function signedIn(repo: GitHubRepo, head: GitHubRepo = repo): GitHubApi {
   const signIn = storedSignIn()
   if (!signIn) throw new GitHubApiError('signed-out', 'Sign in to GitHub in Settings → Code to work with pull requests.')
-  return createGitHubApi({ endpoints: services.github.endpoints, token: signIn.token, repo })
+  return createGitHubApi({ endpoints: services.github.endpoints, token: signIn.token, repo, head })
 }
 
 const accountChanged = (account: GitHubAccount | null) => broadcastToSurface('code', { type: 'github.ACCOUNT_CHANGED', account } satisfies OutgoingGitHubEvents)

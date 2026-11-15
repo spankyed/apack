@@ -35,6 +35,14 @@ it("names the repository a github.com remote's address holds, and nothing for an
   expect(repoOfRemote('https://github.com/octo/repo.git', 'http://127.0.0.1:4100')).toBeUndefined();
 });
 
+it('names the repository an address of GitHub\'s other hosts holds, and an owner with an underscore', () => {
+  expect(repoOfRemote('ssh://git@ssh.github.com:443/octo/repo.git'), "GitHub's SSH over port 443").toEqual(REPO);
+  expect(repoOfRemote('https://www.github.com/octo/repo')).toEqual(REPO);
+  expect(repoOfRemote('git@github.com:octo_acme/repo.git'), "an enterprise-managed user's").toEqual({ owner: 'octo_acme', name: 'repo' });
+  expect(repoOfRemote('ssh://git@ssh.github.com:443/octo/repo.git', 'http://127.0.0.1:4100'), 'only github.com has them').toBeUndefined();
+  expect(repoOfRemote('git@github-work:octo/repo.git'), 'an alias is ssh\'s to resolve').toBeUndefined();
+});
+
 it("reads a pull request's details in the shape the panel takes: checks, commits and comments flattened", async () => {
   const { gh, requests } = await api({ graphql: [['pullRequest(', { body: { data: { repository: { pullRequest: pullRequestNode() } } } }]] });
 
@@ -55,30 +63,107 @@ it("reads a pull request's details in the shape the panel takes: checks, commits
   expect(requests[0]).toMatchObject({ path: '/graphql', authorization: 'Bearer gho_token', body: { variables: { owner: 'octo', name: 'repo', number: 7 } } });
 });
 
-it("lists the open pull requests, and finds a branch's with an open one first", async () => {
+const FORK = { name: 'repo', owner: { login: 'someone' } };
+
+it("finds a branch's pull request with an open one first, and says which other open ones share its head", async () => {
   const { gh } = await api({ graphql: [
     ['headRefName: $branch', { body: { data: { repository: { pullRequests: { nodes: [
-      pullRequestNode({ number: 5, state: 'CLOSED' }), pullRequestNode({ number: 6, state: 'OPEN' }),
+      pullRequestNode({ number: 5, state: 'CLOSED' }), pullRequestNode({ number: 6, state: 'OPEN' }), pullRequestNode({ number: 4, state: 'OPEN' }),
     ] } } } } }],
-    ['states: OPEN', { body: { data: { repository: { pullRequests: { nodes: [pullRequestNode()] } } } } }],
   ] });
 
-  expect((await gh.listOpenPRs()).map(pr => pr.number)).toEqual([7]);
-  expect((await gh.findPRForBranch('feature/thing'))?.number).toBe(6);
+  expect(await gh.findPRForBranch('feature/thing')).toMatchObject({ number: 6, headInRemote: true, openFromSameHead: [4] });
 });
 
-it("takes no fork's pull request from a branch of the same name for the branch's own", async () => {
+it("takes no other repository's pull request from a branch of the same name for the branch's own", async () => {
   const { gh } = await api({ graphql: [
     ['states: OPEN', { body: { data: { repository: { pullRequests: { nodes: [
-      { number: 8, isCrossRepository: true }, { number: 6, isCrossRepository: false },
+      { number: 8, headRepository: FORK }, { number: 6, headRepository: { name: 'Repo', owner: { login: 'OCTO' } } }, { number: 3, headRepository: null },
     ] } } } } }],
     ['headRefName: $branch', { body: { data: { repository: { pullRequests: { nodes: [
-      pullRequestNode({ number: 8, state: 'OPEN', isCrossRepository: true }), pullRequestNode({ number: 5, state: 'CLOSED' }),
+      pullRequestNode({ number: 8, state: 'OPEN', isCrossRepository: true, headRepository: FORK }), pullRequestNode({ number: 5, state: 'CLOSED' }),
     ] } } } } }],
   ] });
 
-  expect((await gh.findPRForBranch('feature/thing'))?.number).toBe(5);
-  expect(await gh.openPRsFromBranch('feature/thing')).toEqual([6]);
+  expect(await gh.findPRForBranch('feature/thing')).toMatchObject({ number: 5, openFromSameHead: [] });
+  expect(await gh.openPRsFromBranch('feature/thing'), 'GitHub reads names without case; a deleted fork is nobody\'s').toEqual([6]);
+});
+
+it('lists a state a page at a time, newest first, with the cursor of the next and none after the last', async () => {
+  const page = (numbers: number[], next: string | null) => ({ body: { data: { repository: { pullRequests: {
+    pageInfo: { hasNextPage: next !== null, endCursor: next }, nodes: numbers.map(number => pullRequestNode({ number, state: 'MERGED' })),
+  } } } } });
+  const { gh, requests } = await api({ graphql: [['pullRequests(states:', request => request.body.variables.after ? page([3], null) : page([9, 8], 'CURSOR')]] });
+
+  expect(await gh.listPRs({ state: 'merged' })).toMatchObject({ prs: [{ number: 9 }, { number: 8 }], next: 'CURSOR' });
+  expect(await gh.listPRs({ state: 'merged', after: 'CURSOR' })).toMatchObject({ prs: [{ number: 3 }], next: null });
+  expect(requests[0]!.body.query).toMatch(/states: \[MERGED\], first: 50/);
+  expect(requests[1]!.body.variables).toMatchObject({ after: 'CURSOR' });
+
+  await gh.listPRs({ state: 'all' });
+  expect(requests[2]!.body.query).toMatch(/states: \[OPEN, CLOSED, MERGED\]/);
+});
+
+it("searches a state with GitHub's search, keeping this repository's alone, and a number first", async () => {
+  const other = { ...pullRequestNode({ number: 2 }), repository: { name: 'elsewhere', owner: { login: 'octo' } } };
+  const { gh, requests } = await api({ graphql: [
+    ['search(', { body: { data: { search: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [
+      { ...pullRequestNode({ number: 40 }), repository: { name: 'repo', owner: { login: 'octo' } } }, other, {},
+    ] } } } }],
+    ['pullRequest(', request => request.body.variables.number === 12
+      ? { body: { data: { repository: { pullRequest: pullRequestNode({ number: 12 }) } } } }
+      : { body: { data: { repository: { pullRequest: null } } } }],
+  ] });
+
+  expect((await gh.listPRs({ state: 'closed', query: ' flaky test ' })).prs.map(pr => pr.number), "a qualifier naming another repository finds none of this one's").toEqual([40]);
+  expect(requests[0]!.body.variables.q).toBe('repo:octo/repo is:pr is:closed is:unmerged sort:created-desc flaky test');
+
+  expect((await gh.listPRs({ state: 'open', query: '#12' })).prs.map(pr => pr.number)).toEqual([12, 40]);
+  expect((await gh.listPRs({ state: 'merged', query: '12' })).prs.map(pr => pr.number), 'an open one is not merged').toEqual([40]);
+  expect((await gh.listPRs({ state: 'open', query: '99' })).prs.map(pr => pr.number), 'a number with no pull request is searched only').toEqual([40]);
+});
+
+it('merges the head shown, and merges nothing where it has moved since', async () => {
+  const { gh, requests } = await api({ rest: { 'PUT /repos/octo/repo/pulls/7/merge': request => request.body.sha === 'abc123'
+    ? { body: { merged: true } }
+    : { status: 409, body: { message: 'Head branch was modified. Review and try the merge again.' } } } });
+
+  await gh.mergePR(7, 'squash', 'abc123');
+  expect(requests[0]!.body).toEqual({ merge_method: 'squash', sha: 'abc123' });
+  expect(await reasonOf(gh.mergePR(7, 'merge', 'old456'))).toBe('head-moved');
+});
+
+it("opens, finds and deletes a fork's branches as the fork's, on the pull requests of its parent", async () => {
+  const standIn = await startGitHubApiStandIn({
+    rest: {
+      'POST /repos/octo/repo/pulls': { status: 201, body: { number: 7 } },
+      'DELETE /repos/someone/repo/git/refs/heads/feature/thing': { status: 204 },
+    },
+    graphql: [
+      ['defaultBranchRef', { body: { data: { repository: { defaultBranchRef: { name: 'main' } } } } }],
+      ['headRefName: $branch', { body: { data: { repository: { pullRequests: { nodes: [
+        pullRequestNode({ number: 6, state: 'OPEN' }), pullRequestNode({ number: 5, state: 'OPEN', isCrossRepository: true, headRepository: FORK }),
+      ] } } } } }],
+      ['pullRequest(', { body: { data: { repository: { pullRequest: pullRequestNode({ isCrossRepository: true, headRepository: FORK }) } } } }],
+    ],
+  });
+  stops.push(standIn.close);
+  const gh = createGitHubApi({ endpoints: standIn.endpoints, token: 'gho_token', repo: REPO, head: { owner: 'someone', name: 'repo' }, pause: async () => {} });
+
+  expect((await gh.findPRForBranch('feature/thing'))?.number, "the parent's own branch of that name is not the fork's").toBe(5);
+  expect(await gh.readHead(7)).toEqual({ branch: 'feature/thing', headInRemote: true });
+  await gh.createPR({ title: 't', body: '', head: 'feature/thing' });
+  expect(standIn.requests.find(request => request.path === '/repos/octo/repo/pulls')?.body).toMatchObject({ head: 'someone:feature/thing', base: 'main' });
+  await gh.deleteBranch('feature/thing');
+  expect(standIn.requests.filter(request => request.method === 'DELETE').map(request => request.path)).toEqual(['/repos/someone/repo/git/refs/heads/feature/thing']);
+});
+
+it('says the repository a fork is of, and that one which is no fork is of none', async () => {
+  const { gh } = await api({ graphql: [['isFork', request => request.body.variables.name === 'repo'
+    ? { body: { data: { repository: { isFork: true, parent: { name: 'upstream-repo', owner: { login: 'parent-org' } } } } } }
+    : { body: { data: { repository: { isFork: false, parent: null } } } }]] });
+
+  expect(await gh.readParent()).toEqual({ owner: 'parent-org', name: 'upstream-repo' });
 });
 
 it("deletes a branch through GitHub, and takes one GitHub no longer has as deleted", async () => {

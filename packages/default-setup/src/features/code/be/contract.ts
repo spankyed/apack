@@ -4,11 +4,11 @@
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
   CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
-  GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
+  PRBranchCheckout, GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
   SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
 } from './types.ts';
-import type { GitHubApiFailure } from './services/github-api.ts';
+import type { GitHubApiFailure, PRListState } from './services/github-api.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
 import type { GitHubAccount, GitHubSignInFailure } from './services/github.ts';
 
@@ -224,10 +224,14 @@ export type IncomingPullRequestEvents =
   | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
   /** `fetchMissing`: content a partial clone was not given is fetched for this diff, where it is otherwise answered as missing */
   | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; prNumber?: number; fetchMissing?: boolean }
-  | { type: 'pr.LIST_OPEN_PRS' }
+  /** A page of the pull requests in `state`, newest first, from `after` (the last page's `next`), by `query` where there is one */
+  | { type: 'pr.LIST_PRS'; state: PRListState; query?: string; after?: string }
+  /** Checks out the pull request's head as a branch here (`pr.PR_CHECKED_OUT`) */
+  | { type: 'pr.CHECKOUT_PR'; number: number }
   | { type: 'pr.SELECT_PR'; number: number }
   | { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
-  | { type: 'pr.MERGE_PR'; number: number; method?: 'merge' | 'squash' | 'rebase' }
+  /** `sha` is the head shown: GitHub merges nothing where the head has moved since (`head-moved`) */
+  | { type: 'pr.MERGE_PR'; number: number; method?: 'merge' | 'squash' | 'rebase'; sha?: string }
   | { type: 'pr.CLOSE_PR'; number: number }
   | { type: 'pr.TOGGLE_DRAFT'; number: number; isDraft: boolean }
   | { type: 'pr.CHECK_BRANCH_PR' }
@@ -261,7 +265,10 @@ export type OutgoingPullRequestEvents =
   | { type: 'pr.ERROR'; message: string; reason?: GitHubApiFailure }
   /** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */
   | { type: 'pr.GIT_STATUS_REFRESHED'; data: { timestamp: Date } }
-  | { type: 'pr.OPEN_PRS_RECEIVED'; data: { prs: GhPullRequest[] } }
+  /** A page of the list asked for, and the cursor of the next, `null` where it was the last */
+  | { type: 'pr.PRS_LISTED'; data: { prs: GhPullRequest[]; next: string | null } }
+  /** The branch the pull request was checked out as, and what that did to a branch already there */
+  | { type: 'pr.PR_CHECKED_OUT'; data: { number: number; branch: string; checkout: PRBranchCheckout } }
   /**
    * `fetchedAt` is when these details were read from GitHub, and the viewer keeps the newest per PR so a
    * slow retry cannot overwrite fresher data from a concurrent fetch.

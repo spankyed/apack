@@ -248,7 +248,7 @@ describe('another folder', () => {
       createTitle: '',
       prComments: [],
       reviewThreads: [],
-      openPRs: [],
+      prList: expect.objectContaining({ prs: [], read: false, asked: null }),
       inflightMutations: 0,
       writes: {},
     });
@@ -294,7 +294,6 @@ describe('the repository moving', () => {
 
     actor.send({ type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } });
 
-    expect(asked('pr.LIST_OPEN_PRS')).toEqual([]);
     expect(asked('pr.CHECK_BRANCH_PR')).toEqual([]);
     expect(context(actor).isCheckingBranchPR).toBe(false);
 
@@ -308,7 +307,6 @@ describe('the repository moving', () => {
   it('asks GitHub again while the panel is shown', () => {
     const actor = started();
     actor.send({ type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } });
-    expect(asked('pr.LIST_OPEN_PRS')).toHaveLength(1);
     expect(asked('pr.CHECK_BRANCH_PR')).toHaveLength(1);
   });
 
