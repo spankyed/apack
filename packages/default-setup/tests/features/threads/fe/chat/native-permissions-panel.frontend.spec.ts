@@ -59,11 +59,15 @@ it('retains an explicit terminal route while remaining native branches are being
 it('places confirmation context before decisions and preserves the native cancel focus', async () => {
   const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   const f = fixture(); await nextTick()
+  f.holdReads(); f.buttons().find(button => button.textContent === 'Refresh')!.click(); await nextTick()
+  const requestId = f.requests.at(-1)!.requestId
   const panel = f.state.value.snapshot!.permissions!
   panel.title = 'Delete rule'; panel.tabs = []; delete panel.search
   panel.paragraphs = ['This deletes the original rule.']
   panel.choices = [{ value: 'confirm', label: 'Yes', disabled: false }, { value: 'cancel', label: 'No', description: 'Keep the original rule', disabled: false }]
   panel.defaultFocusValue = 'cancel'; await nextTick(); await nextTick()
+  expect(f.buttons().find(button => button.textContent?.startsWith('No'))!.disabled).toBe(true)
+  f.state.value = { ...f.state.value, requestId, status: 'ready' }; await nextTick(); await nextTick()
   const warning = [...f.root.querySelectorAll('p')].find(p => p.textContent === 'This deletes the original rule.')!
   const yes = f.buttons().find(b => b.textContent === 'Yes')!
   expect(warning.compareDocumentPosition(yes) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
