@@ -1,11 +1,21 @@
 import { z } from 'zod'
 import {CLAUDE_NATIVE_EDITOR_MAX_BYTES} from './native-editor.ts'
 
+const permissionsTextStyle = z.object({
+  color: z.string().max(256).optional(), backgroundColor: z.string().max(256).optional(),
+  bold: z.boolean().optional(), italic: z.boolean().optional(), underline: z.boolean().optional(),
+  strikethrough: z.boolean().optional(), inverse: z.boolean().optional(), dimColor: z.boolean().optional(),
+}).strict()
+const permissionsParagraph = z.object({
+  runs: z.array(z.object({text: z.string().max(65536), style: permissionsTextStyle}).strict()).min(1).max(4096),
+  role: z.literal('alert').optional(),
+}).strict().refine(value => value.runs.reduce((size, run) => size + run.text.length, 0) <= 65536, 'Permission paragraph exceeds text bound')
+
 /** Semantic controls from one currently mounted original Permissions dialog. */
 export const claudePermissionsSnapshot = z.object({
   title: z.string().max(65536),
   tabs: z.array(z.object({ value: z.string().min(1).max(128), label: z.string().max(1024), selected: z.boolean() }).strict()).max(16),
-  paragraphs: z.array(z.string().max(65536)).max(256),
+  paragraphs: z.array(permissionsParagraph).max(256),
   choices: z.array(z.object({ value: z.string().min(1).max(16384), label: z.string().max(65536), description: z.string().max(65536).optional(), disabled: z.boolean(), approved: z.boolean().optional(), retryScheduled: z.boolean().optional(), retryAvailable: z.boolean().optional() }).strict()).max(2048),
   decisions: z.object({ approved: z.number().int().nonnegative().max(2048), retry: z.number().int().nonnegative().max(2048) }).strict().optional(),
   defaultFocusValue: z.string().max(16384).optional(),

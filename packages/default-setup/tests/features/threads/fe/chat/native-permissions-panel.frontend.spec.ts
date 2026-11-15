@@ -8,7 +8,7 @@ afterEach(() => { for (const close of mounted.splice(0)) close(); vi.useRealTime
 function fixture(form = false) {
   const root = document.createElement('div'); document.body.append(root)
   const state = reactive<{ value: ClaudeSettingsView }>({ value: { requestId: 'read', status: 'ready', snapshot: {
-    revision: 'a'.repeat(64), rows: [], permissions: { title: 'Permissions', tabs: [{ value: 'Allow', label: 'Allow', selected: true }, { value: 'Ask', label: 'Ask', selected: false }], paragraphs: ['Rules are validated and saved by Claude Code.'], choices: form ? [] : [{ value: 'native-source-key', label: 'Read(release-notes.md)', disabled: false }], readOnly: false,
+    revision: 'a'.repeat(64), rows: [], permissions: { title: 'Permissions', tabs: [{ value: 'Allow', label: 'Allow', selected: true }, { value: 'Ask', label: 'Ask', selected: false }], paragraphs: [{runs:[{text:'Rules are validated and saved by Claude Code.',style:{}}]}], choices: form ? [] : [{ value: 'native-source-key', label: 'Read(release-notes.md)', disabled: false }], readOnly: false,
       ...(form ? { form: { value: '', placeholder: 'Enter permission rule', multiline: false, submitLabel: 'Continue' } } : { search: '', searchScope: 'c'.repeat(64) }) },
   } } })
   const operate = vi.fn(), terminal = vi.fn(), requests: ClaudeSettingsRequest[] = []; let holdReads = false
@@ -63,7 +63,7 @@ it('places confirmation context before decisions and preserves the native cancel
   const requestId = f.requests.at(-1)!.requestId
   const panel = f.state.value.snapshot!.permissions!
   panel.title = 'Delete rule'; panel.tabs = []; delete panel.search
-  panel.paragraphs = ['This deletes the original rule.']
+  panel.paragraphs = [{runs:[{text:'This deletes the original rule.',style:{}}]}]
   panel.choices = [{ value: 'confirm', label: 'Yes', disabled: false }, { value: 'cancel', label: 'No', description: 'Keep the original rule', disabled: false }]
   panel.defaultFocusValue = 'cancel'; await nextTick(); await nextTick()
   expect(f.buttons().find(button => button.textContent?.startsWith('No'))!.disabled).toBe(true)
@@ -319,4 +319,50 @@ it('keeps mutations disabled during a native environment commit while allowing a
   expect(f.operate).toHaveBeenCalledExactlyOnceWith({kind: 'read'})
   f.state.value.snapshot!.commitPending = false; await nextTick()
   expect(f.buttons().find(b => b.textContent === 'Ask')!.disabled).toBe(false)
+})
+
+
+it('returns keyboard focus from a finished environment editor to current Permissions controls', async () => {
+  const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  try {
+    const f = fixture(); await nextTick()
+    const panel = f.state.value.snapshot!.permissions!
+    panel.editor = {id: crypto.randomUUID(), revision: 'a'.repeat(64), value: 'Original document', closing: false}
+    await nextTick(); await nextTick()
+    const field = f.root.querySelector('textarea')!; field.focus(); expect(document.activeElement).toBe(field)
+    delete panel.editor; panel.title = 'Edit environment'; panel.tabs = []; delete panel.search
+    panel.choices = [{value: 'reopen', label: 'Reopen in your editor', disabled: false}, {value: 'cancel', label: 'Cancel', disabled: false}]
+    await nextTick(); await nextTick()
+    const dialog = f.root.querySelector('[aria-label="Claude Code permissions"]')!
+    expect(document.activeElement).toBe(dialog)
+    f.operate.mockClear(); dialog.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true}))
+    expect(f.operate).toHaveBeenCalledExactlyOnceWith({kind: 'permissions', revision: 'a'.repeat(64), command: {action: 'cancel'}})
+  } finally { focus.mockRestore() }
+})
+
+it('does not take focus from another input when the environment editor finishes', async () => {
+  const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true), other = document.createElement('input')
+  document.body.append(other)
+  try {
+    const f = fixture(); await nextTick()
+    const panel = f.state.value.snapshot!.permissions!
+    panel.editor = {id: crypto.randomUUID(), revision: 'a'.repeat(64), value: 'Original document', closing: false}
+    await nextTick(); await nextTick(); other.focus(); delete panel.editor
+    await nextTick(); await nextTick(); expect(document.activeElement).toBe(other)
+  } finally { other.remove(); focus.mockRestore() }
+})
+
+
+it('paints original resolved validation colors and mixed emphasis without interpreting markup', async () => {
+  const f = fixture(); await nextTick()
+  f.state.value.snapshot!.permissions!.paragraphs = [{role: 'alert', runs: [
+    {text: 'Original validation: ', style: {color: '#12ab34', bold: true}},
+    {text: '<img src=x onerror=alert(1)>', style: {color: '#abcdef', italic: true, underline: true}},
+  ]}]
+  await nextTick()
+  const alert = f.root.querySelector('[role="alert"]')!, runs = alert.querySelectorAll<HTMLElement>(':scope > span')
+  expect(alert.textContent).toBe('Original validation: <img src=x onerror=alert(1)>')
+  expect(runs[0].style.color).toBe('rgb(18, 171, 52)'); expect(runs[0].style.fontWeight).toBe('bold')
+  expect(runs[1].style.color).toBe('rgb(171, 205, 239)'); expect(runs[1].style.fontStyle).toBe('italic'); expect(runs[1].style.textDecoration).toBe('underline')
+  expect(alert.querySelector('img')).toBeNull()
 })

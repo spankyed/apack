@@ -19,14 +19,15 @@ function fixture() {
   function redraw() { list = { ...list }; const first: any = fiber(tab); first.sibling = fiber(list); root.child = first }
   redraw()
   const walk = claudeTerminalIdeRuntime.slice(claudeTerminalIdeRuntime.indexOf('function nativeIdeWalk('), claudeTerminalIdeRuntime.indexOf('function nativeIdeFrame('))
-  const n = { themeRoots: { ai: () => new Map([[undefined, { container: { current: root } }]]) } }
+  const textType = function Text() {}
+  const n = { terminalComponents: {n:textType}, themeRoots: { ai: () => new Map([[undefined, { container: { current: root } }]]) } }
   // The authored runtime uses process.stdout only as the original root-map key.
   const globalProcess = { stdout: undefined }
   const context = vm.createContext({ createHash, randomUUID, setTimeout, process: globalProcess, nativeModelFunctionHash: (fn: any) => fn.hash })
   const runtime = vm.runInContext(walk + claudeTerminalPermissionsRuntime + ';({frame:nativePermissionsFrame,act:nativePermissionsPanel,close:closeNativePermissionsPanel})', context)
   const read = () => runtime.frame(n, entry)
   const act = (revision: string, command: object) => runtime.act(n, entry, { operation: 'permissions', revision, command }, new AbortController())
-  return { entry, root, originalType, cancel, getter, select, queryChange, tab, redraw, read, act, close: () => runtime.close(n, entry) }
+  return { entry, root, textType, originalType, cancel, getter, select, queryChange, tab, redraw, read, act, close: () => runtime.close(n, entry) }
 }
 
 describe('original mounted Permissions authority', () => {
@@ -85,7 +86,7 @@ describe('original mounted Permissions authority', () => {
     f.root.child = { type: function Details() {}, memoizedProps: { onCancel: f.cancel }, child: { type: 'ink-text', child: { tag: 6, memoizedProps: 'Managed rule: contact your administrator.' } } }
     const frame = f.read()
     expect(frame.snapshot.permissions.choices).toEqual([])
-    expect(frame.snapshot.permissions.paragraphs).toEqual(['Managed rule: contact your administrator.'])
+    expect(frame.snapshot.permissions.paragraphs).toEqual([{runs:[{text:'Managed rule: contact your administrator.',style:{}}]}])
   })
 
   it('projects only original body context, source descriptions and the native cancel default', () => {
@@ -98,7 +99,7 @@ describe('original mounted Permissions authority', () => {
     chrome.sibling = body; body.sibling = choices
     f.root.child = { type: function Frame() {}, memoizedProps: { title: 'Rule details', onCancel: f.cancel, children: [textElement, choiceElement] }, child: chrome }
     const frame = f.read().snapshot.permissions
-    expect(frame.title).toBe('Rule details'); expect(frame.paragraphs).toEqual(['Original delete warning'])
+    expect(frame.title).toBe('Rule details'); expect(frame.paragraphs).toEqual([{runs:[{text:'Original delete warning',style:{}}]}])
     expect(frame.choices[1].description).toBe('Keep the original rule'); expect(frame.defaultFocusValue).toBe('cancel')
   })
 
@@ -412,4 +413,13 @@ describe('original Recently denied decisions', () => {
     await expect(f.act(f.read().snapshot.revision, { action: 'select', value: '1' })).rejects.toThrow(/expired/)
     expect(f.select).not.toHaveBeenCalled(); expect([...f.approved]).toEqual([])
   })
+})
+
+
+it('preserves resolved native error text and nested paint without borrowing sibling styles', () => {
+  const f = fixture()
+  const plain = {tag:6,memoizedProps:' plus ordinary text'}
+  const emphasized = {type:'ink-virtual-text',memoizedProps:{textStyles:{bold:true,color:'#abcdef'}},child:{tag:6,memoizedProps:'Important'},sibling:plain}
+  f.root.child = {type:function Details(){},memoizedProps:{onCancel:f.cancel},child:{type:f.textType,memoizedProps:{color:'error'},child:{type:'ink-text',memoizedProps:{textStyles:{color:'#12ab34'}},child:emphasized}}}
+  expect(f.read().snapshot.permissions.paragraphs).toEqual([{role:'alert',runs:[{text:'Important',style:{color:'#abcdef',bold:true}},{text:' plus ordinary text',style:{color:'#12ab34'}}]}])
 })

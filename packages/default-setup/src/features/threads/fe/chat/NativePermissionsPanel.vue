@@ -1,5 +1,5 @@
 <template>
-  <NativeEnvironmentEditor v-if="panel?.editor" :key="panel.editor.id" :editor="panel.editor" :state="state" :owner-label="ownerLabel" @operate="sendRequest" />
+  <NativeEnvironmentEditor ref="environmentEditor" v-if="panel?.editor" :key="panel.editor.id" :editor="panel.editor" :state="state" :owner-label="ownerLabel" @operate="sendRequest" />
   <section v-else ref="root" role="dialog" aria-label="Claude Code permissions" aria-modal="false" tabindex="-1" data-native-command-panel class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-neutral-900" @keydown.esc.stop.prevent="cancel">
     <header class="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
       <div class="min-w-0"><p v-if="ownerLabel" class="mb-1 text-xs text-neutral-400">{{ ownerLabel }}</p><h2 class="text-sm font-medium text-neutral-200">{{ panel?.title ?? 'Permissions' }}</h2><p v-if="panel?.readOnly" class="mt-1 text-xs text-neutral-400">Read-only session rules</p></div>
@@ -11,7 +11,7 @@
     <div data-native-permission-body class="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4 [container-type:size]">
       <p v-if="!panel && !state?.problem" role="status" class="text-sm text-neutral-400">Loading permission rules…</p>
       <label v-if="panel?.search !== undefined" class="block text-xs text-neutral-400">Search rules<input :key="searchScope" v-model="query" :data-native-permission-search="searchScope" type="search" :disabled="searchDisabled" placeholder="Search permission rules…" class="mt-1 w-full rounded-lg border border-white/10 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @input.capture="searchInputChanged" @compositionstart.capture="searchCompositionStarted" @compositionend.capture="searchCompositionEnded" /></label>
-      <div class="space-y-2 text-xs leading-relaxed text-neutral-400"><p v-for="(text,index) in panel?.paragraphs" :key="index" class="whitespace-pre-wrap break-words"><NativeStatusText :text="text" /></p></div>
+      <div class="space-y-2 text-xs leading-relaxed text-neutral-400"><p v-for="(paragraph,index) in panel?.paragraphs" :key="index" :role="paragraph.role" class="whitespace-pre-wrap break-words"><span v-for="(run,runIndex) in paragraph.runs" :key="runIndex" :style="paragraphStyle(run.style)"><NativeStatusText :text="run.text" /></span></p></div>
       <div v-if="panel?.form" class="space-y-2">
         <label class="block text-xs text-neutral-400">{{ panel.form.placeholder }}<textarea v-if="panel.form.multiline" :key="formIdentity" :data-native-permission-form="formIdentity" v-model="draft" :disabled="formDisabled" :placeholder="panel.form.placeholder" rows="5" class="mt-1 w-full rounded-lg border border-white/10 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" @input.capture="formInputChanged" @compositionstart.capture="formCompositionStarted" @compositionend.capture="formCompositionEnded" @keydown.capture="formKeydown" /><input v-else ref="formInput" :key="formIdentity" :data-native-permission-form="formIdentity" v-model="draft" :disabled="formDisabled" :placeholder="panel.form.placeholder" :role="liveForm.active.value ? 'combobox' : undefined" :aria-autocomplete="liveForm.active.value ? 'list' : undefined" :aria-expanded="liveForm.active.value ? directorySuggestions.length > 0 : undefined" :aria-controls="liveForm.active.value ? directoryListId : undefined" :aria-activedescendant="activeSuggestionId" class="mt-1 w-full rounded-lg border border-white/10 bg-neutral-950 px-3 py-2 text-sm text-neutral-200 focus-visible:outline focus-visible:outline-blue-400" @input.capture="formInputChanged" @keydown.capture="formKeydown" @compositionstart.capture="formCompositionStarted" @compositionend.capture="formCompositionEnded" /></label>
         <div v-if="directorySuggestions.length" :id="directoryListId" role="listbox" aria-label="Directory suggestions" class="max-h-[min(12rem,35cqh)] space-y-1 overflow-y-auto rounded-lg border border-white/10 bg-neutral-950 p-1">
@@ -38,16 +38,27 @@
   </section>
 </template>
 <script setup lang="ts">
-import {computed,nextTick,onBeforeUnmount,onMounted,ref,useId,watch} from 'vue'
+import {computed,nextTick,onBeforeUnmount,onMounted,ref,useId,watch,type CSSProperties} from 'vue'
 import type {ClaudeSettingsOperation,ClaudeSettingsRequest,ClaudeSettingsView} from '#features/code/common/native-settings.ts'
-import type {ClaudePermissionsOperation} from '#features/code/common/native-permissions.ts'
+import type {ClaudePermissionsOperation,ClaudePermissionsSnapshot} from '#features/code/common/native-permissions.ts'
+import {claudeUiTextPaint} from './native-ui-paint.ts'
 import NativeEnvironmentEditor from './NativeEnvironmentEditor.vue'
 import {useNativePermissionsForm} from './native-permissions-form.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props=defineProps<{state?:ClaudeSettingsView;ownerLabel?:string}>()
 const emit=defineEmits<{operate:[request:ClaudeSettingsRequest];terminal:[]}>()
-const root=ref<HTMLElement>(),query=ref(''),draft=ref('')
+const root=ref<HTMLElement>(),environmentEditor=ref<InstanceType<typeof NativeEnvironmentEditor>>(),query=ref(''),draft=ref('')
 const panel=computed(()=>props.state?.snapshot?.permissions)
+function paragraphStyle(style:ClaudePermissionsSnapshot['paragraphs'][number]['runs'][number]['style']):CSSProperties {
+ return {...claudeUiTextPaint(style),fontWeight:style.bold?'bold':undefined,fontStyle:style.italic?'italic':undefined,textDecoration:[style.underline?'underline':'',style.strikethrough?'line-through':''].filter(Boolean).join(' ')||undefined,opacity:style.dimColor?0.5:undefined}
+}
+watch(()=>panel.value?.editor?.id,async(id,previous)=>{
+ if(id||!previous||!document.hasFocus())return
+ const active=document.activeElement,editorRoot=environmentEditor.value?.$el as HTMLElement|undefined
+ if(active!==document.body&&!editorRoot?.contains(active))return
+ await nextTick()
+ if(!panel.value?.editor&&document.hasFocus()&&document.activeElement===document.body)root.value?.focus({preventScroll:true})
+})
 const hasDecisions=computed(()=>!!(panel.value?.decisions?.approved||panel.value?.decisions?.retry))
 const transportFlight=ref<ClaudeSettingsRequest>(),queuedAction=ref<{revision:string;command:ClaudePermissionsOperation}>(),localProblem=ref(''),suspendReads=ref(false)
 const problem=computed(()=>props.state?.problem||localProblem.value)

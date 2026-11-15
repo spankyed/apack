@@ -1,6 +1,24 @@
 /** Project original mounted Permissions controls; never implement a second rules engine. */
 export const claudeTerminalPermissionsRuntime = String.raw`
 const nativePermissionOwners={local:['8e4ca278c03aa64a7d666f3951ff4a1e343a5269a5acf07a03e21d7489ad37ff','c8a050b9b1f2b0cdd458b6ebee147fb759d6eb7d9bc2f2dea9b53d2c140b7bcd'],remote:['bd588d9655799c36f26b7f6cd6e88da340848918d3b7f3ccb35fbf71a63d6628','c83126250600d4c3d787c86d3952e3e5fe1b21f79bf564cdce8fa270a03828be']};
+function nativePermissionParagraph(n,root){
+ const runs=[],pending=[{fiber:root,style:{},alert:false}],seen=new Set();let length=0,alert=false;
+ while(pending.length){
+  const item=pending.pop(),f=item.fiber;if(!f||seen.has(f))continue;if(seen.size>=4096)throw Error('Native Permissions paragraph traversal exceeded bound');seen.add(f);
+  if(f!==root&&f.sibling)pending.push({...item,fiber:f.sibling});
+  const p=f.memoizedProps;let style=item.style,isAlert=item.alert;
+  if(n.terminalComponents?.n&&f.type===n.terminalComponents.n&&p?.color==='error')isAlert=true;
+  if(f.type==='ink-text'||f.type==='ink-virtual-text'){
+   style={...style};const paint=p?.textStyles;
+   if(paint!==undefined&&(!paint||typeof paint!=='object'||Array.isArray(paint)))throw Error('Native Permissions text paint changed');
+   for(const key of ['color','backgroundColor'])if(paint?.[key]!==undefined){if(typeof paint[key]!=='string'||paint[key].length>256)throw Error('Native Permissions color changed');style[key]=paint[key];}
+   for(const [key,target]of [['bold','bold'],['italic','italic'],['underline','underline'],['strikethrough','strikethrough'],['inverse','inverse'],['dim','dimColor']])if(paint?.[key]!==undefined){if(typeof paint[key]!=='boolean')throw Error('Native Permissions emphasis changed');style[target]=paint[key];}
+  }
+  if(f.tag===6&&typeof p==='string'&&p){length+=p.length;if(length>65536)throw Error('Native Permissions paragraph exceeded text bound');runs.push({text:p,style});alert||=isAlert;}
+  if(f.child)pending.push({fiber:f.child,style,alert:isAlert});
+ }
+ return runs.length?{runs,...alert?{role:'alert'}:{}}:undefined;
+}
 function nativePermissionText(value,depth=0){
  if(depth>32)throw Error('Native permission text nesting exceeded bound');
  if(value===null||value===undefined||typeof value==='boolean')return '';
@@ -126,7 +144,7 @@ function nativePermissionsFrame(n,entry){
   }
  }
  if(!textRoots.length)textRoots.push(controlsRoot);
- for(const root of textRoots)nativeIdeWalk(root,f=>{const p=f.memoizedProps;if(liveForm?.problemProps&&p===liveForm.problemProps||search?.displayProps&&p===search.displayProps)return false;if(typeof f.type==='function'&&(Array.isArray(p?.options)&&typeof (p.onChange??p.onSelect)==='function'||typeof p?.onSubmit==='function'&&typeof p?.value==='string'))return false;if(f.type!=='ink-text')return;let text='';nativeIdeWalk(f.child,c=>{if(c.tag===6&&typeof c.memoizedProps==='string')text+=c.memoizedProps;});if(text)paragraphs.push(text);return false;},false);
+ for(const root of textRoots)nativeIdeWalk(root,f=>{const p=f.memoizedProps;if(liveForm?.problemProps&&p===liveForm.problemProps||search?.displayProps&&p===search.displayProps)return false;if(typeof f.type==='function'&&(Array.isArray(p?.options)&&typeof (p.onChange??p.onSelect)==='function'||typeof p?.onSubmit==='function'&&typeof p?.value==='string'))return false;if(f.type!=='ink-text'&&(!n.terminalComponents?.n||f.type!==n.terminalComponents.n))return;const paragraph=nativePermissionParagraph(n,f);if(paragraph)paragraphs.push(paragraph);return false;},false);
  const title=tabFrame?.title??bodyFrame?.memoizedProps.title??'Permissions';
  let cancel=owner.child?.memoizedProps?.onCancel;
  if(typeof cancel!=='function'){
@@ -135,7 +153,7 @@ function nativePermissionsFrame(n,entry){
  }
  const recent=nativePermissionRecent(controlsRoot,picker),decisions=local?nativePermissionDecisionState(owner):undefined;
  const choices=recent?.choices??(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),...(o.description!==undefined?{description:nativePermissionText(o.description)}:{}),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true}));
- if(new Set(choices.map(o=>o.value)).size!==choices.length||tabs.length>16||paragraphs.length>256||paragraphs.some(t=>t.length>65536)||choices.some(o=>!o.value||o.value.length>16384||o.label.length>65536)||title.length>65536)throw Error('Native Permissions text or choices exceed bounds');
+ if(new Set(choices.map(o=>o.value)).size!==choices.length||tabs.length>16||paragraphs.length>256||paragraphs.some(p=>p.runs.reduce((size,run)=>size+run.text.length,0)>65536)||choices.some(o=>!o.value||o.value.length>16384||o.label.length>65536)||title.length>65536)throw Error('Native Permissions text or choices exceed bounds');
  const defaultFocusValue=recent?.focused??picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey;
  const permissions={title,...decisions?{decisions}:{},...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...search?{search:search.value,searchScope:search.lease.token}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:liveForm?.snapshot.kind==='directory'?'Add directory':liveForm?'Save rule':'Continue',...liveForm?{live:liveForm.snapshot}:{}}}:{}};
  const encoded=JSON.stringify(permissions),prior=entry.permissionsFrame,source=picker?.props??input??tabFrame??owner.memoizedProps;

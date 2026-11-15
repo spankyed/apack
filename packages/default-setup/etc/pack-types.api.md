@@ -1595,7 +1595,22 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 label: z.ZodString;
                 selected: z.ZodBoolean;
             }, z.core.$strict>>;
-            paragraphs: z.ZodArray<z.ZodString>;
+            paragraphs: z.ZodArray<z.ZodObject<{
+                runs: z.ZodArray<z.ZodObject<{
+                    text: z.ZodString;
+                    style: z.ZodObject<{
+                        color: z.ZodOptional<z.ZodString>;
+                        backgroundColor: z.ZodOptional<z.ZodString>;
+                        bold: z.ZodOptional<z.ZodBoolean>;
+                        italic: z.ZodOptional<z.ZodBoolean>;
+                        underline: z.ZodOptional<z.ZodBoolean>;
+                        strikethrough: z.ZodOptional<z.ZodBoolean>;
+                        inverse: z.ZodOptional<z.ZodBoolean>;
+                        dimColor: z.ZodOptional<z.ZodBoolean>;
+                    }, z.core.$strict>;
+                }, z.core.$strict>>;
+                role: z.ZodOptional<z.ZodLiteral<"alert">>;
+            }, z.core.$strict>>;
             choices: z.ZodArray<z.ZodObject<{
                 value: z.ZodString;
                 label: z.ZodString;
@@ -10773,7 +10788,22 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             label: z.ZodString;
             selected: z.ZodBoolean;
         }, z.core.$strict>>;
-        paragraphs: z.ZodArray<z.ZodString>;
+        paragraphs: z.ZodArray<z.ZodObject<{
+            runs: z.ZodArray<z.ZodObject<{
+                text: z.ZodString;
+                style: z.ZodObject<{
+                    color: z.ZodOptional<z.ZodString>;
+                    backgroundColor: z.ZodOptional<z.ZodString>;
+                    bold: z.ZodOptional<z.ZodBoolean>;
+                    italic: z.ZodOptional<z.ZodBoolean>;
+                    underline: z.ZodOptional<z.ZodBoolean>;
+                    strikethrough: z.ZodOptional<z.ZodBoolean>;
+                    inverse: z.ZodOptional<z.ZodBoolean>;
+                    dimColor: z.ZodOptional<z.ZodBoolean>;
+                }, z.core.$strict>;
+            }, z.core.$strict>>;
+            role: z.ZodOptional<z.ZodLiteral<"alert">>;
+        }, z.core.$strict>>;
         choices: z.ZodArray<z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
@@ -11412,7 +11442,22 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
                     label: string;
                     selected: boolean;
                 }[];
-                paragraphs: string[];
+                paragraphs: {
+                    runs: {
+                        text: string;
+                        style: {
+                            color?: string | undefined;
+                            backgroundColor?: string | undefined;
+                            bold?: boolean | undefined;
+                            italic?: boolean | undefined;
+                            underline?: boolean | undefined;
+                            strikethrough?: boolean | undefined;
+                            inverse?: boolean | undefined;
+                            dimColor?: boolean | undefined;
+                        };
+                    }[];
+                    role?: "alert" | undefined;
+                }[];
                 choices: {
                     value: string;
                     label: string;
@@ -11972,8 +12017,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

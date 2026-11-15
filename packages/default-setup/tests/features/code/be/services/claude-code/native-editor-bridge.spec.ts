@@ -24,7 +24,7 @@ async function fixture() {
   })
   server.listen(socketPath); await once(server, 'listening')
   cleanup.push(() => new Promise<void>(resolve => {server.closeAllConnections(); server.close(() => resolve())}))
-  const originalResult = {snapshot: {revision: 'b'.repeat(64), rows: [], permissions: {title: 'Permissions', tabs: [], choices: [], paragraphs: ['Original native validation result'], readOnly: false}}}
+  const originalResult = {snapshot: {revision: 'b'.repeat(64), rows: [], permissions: {title: 'Permissions', tabs: [], choices: [], paragraphs: [{runs:[{text:'Original native validation result',style:{}}]}], readOnly: false}}}
   const release = vi.fn(), hold = vi.fn(() => release), changed = vi.fn(), failed = vi.fn()
   const request = vi.fn(async (value: Record<string, unknown>) => {
     if (value.subtype !== 'apack_ui_settings' || value.operation !== 'permissions') return {read: true}
