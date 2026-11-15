@@ -60,6 +60,12 @@ const nativeUiPromptRpcSubtypes=new Set(${JSON.stringify(CLAUDE_UI_PROMPT_RPC_SU
 const configUrl=new URL('./observer.json',import.meta.url),config=JSON.parse(readFileSync(configUrl,'utf8'));
 ${claudeTerminalHelperPolicyRuntime}
 ${claudeTerminalHelperPolicyReaderRuntime}
+let nativeHelperObservationReader;
+export function bindNativeHelperObservationReader(reader){
+ if(typeof reader!=='function'||nativeHelperObservationReader&&nativeHelperObservationReader!==reader)throw Error('Native helper observation reader is already bound or invalid');
+ nativeHelperObservationReader=reader;
+}
+
 const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,sequenceSession=config.sessionId,sessionTransition,inFlight=0,highestSequence=0;
 const nativeRasterMirrors=createNativeRasterMirrors({current:scope=>{if(!native||!clients.has(scope.client_id)||!clientViewCurrent(native,scope.client_id)||scope.instance_revision!==undefined&&!instanceLifetimes.active(scope,scope.instance_revision))return false;const source=currentTerminalPlacementAction(native,scope);return source?.fingerprint===scope.source_revision;},invalidate:scope=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:scope.client_id,instances:[{surface:'desktop',component:scope.component,instance_id:scope.instance_id}]})});
 const actionKeys=createNativeActionKeyBridge({
@@ -833,6 +839,7 @@ async function control(request,abort){
   const helperState=nativeHelperPolicySnapshot(effective,policy);
   const facts=nativeViewFacts(n,binding,abort),view=facts.view;
   if(request.include_main_status_cache===true)helperState.cachedMainStatus=nativeMainStatusCache(n,binding.toolContext(abort),sessionId,helperState.statusCommand);
+  if(request.include_main_status_observation===true)helperState.mainStatusObservation=nativeHelperObservationReader?.()??null;
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
   const preview=await nativeStreamingPreview(n,facts,n.runtime.lpe());
   const limits=await import('/$bunfs/root/chunk-2bb0j573.js');

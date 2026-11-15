@@ -144,7 +144,7 @@ export async function createClaudeBackgroundStatusObserver(options: {
     let finish!: () => void
     const done = new Promise<void>(resolve => { finish = resolve })
     const owner: ClaudeBackgroundDesktopOwner = {id: randomBytes(16).toString('hex'), parentSessionId, identity: Object.freeze({...identity}), registration, transport, done, get controls() { return controls }}
-    childUi = {registration, identity: scope, token: config.token, bridge, transport, owner, helper: createClaudeBackgroundHelperProjection(), main: createClaudeBackgroundMainObservation({configPath: proof.configPath, sessionId: identity.activeSessionId, pid: identity.pid, recovery: recovery?.identity === scope ? recovery.receipt : undefined}), helperConfigPath: proof.configPath, helperGeneration: config.generations.subagent, finish}
+    childUi = {registration, identity: scope, token: config.token, bridge, transport, owner, helper: createClaudeBackgroundHelperProjection(), main: createClaudeBackgroundMainObservation({configPath: proof.configPath, sessionId: identity.activeSessionId, pid: identity.pid, recovery: recovery?.identity === scope ? recovery.receipt : undefined, recoverObservedMain: !!options.checkpoint}), helperConfigPath: proof.configPath, helperGeneration: config.generations.subagent, finish}
     recovery = undefined
     const controls = createClaudeBackgroundControls({sessionId: identity.activeSessionId, transport, changed: () => changed(true)})
     return transport
@@ -162,12 +162,19 @@ export async function createClaudeBackgroundStatusObserver(options: {
   }
   async function restoreMain(held: NonNullable<typeof childUi>, registration: number, sequence: number) {
     const cost = status.value?.totalCostUsd
-    if (!held.main.canRestore(cost)) return
-    const observed = await held.transport.request({subtype: 'apack_owner_snapshot', policy_only: true, follow_native_session: true, include_main_status_cache: true}) as {sessionId?: unknown; statusCommand?: unknown; cachedMainStatus?: unknown; hooksDisabled?: unknown; policy?: {allowManagedHooksOnly?: unknown; disableAllHooks?: unknown}}
+    if (!held.main.canRestore(cost)&&!held.main.canRetainRestartObservation) return
+    const observed = await held.transport.request({subtype: 'apack_owner_snapshot', policy_only: true, follow_native_session: true, include_main_status_cache: true, include_main_status_observation: held.main.canRetainRestartObservation}) as {mainStatusObservation?:unknown; sessionId?: unknown; statusCommand?: unknown; cachedMainStatus?: unknown; hooksDisabled?: unknown; policy?: {allowManagedHooksOnly?: unknown; disableAllHooks?: unknown}}
     if (await childUiCurrent() !== held || registration !== status.registration || sequence !== status.sequence) return
     if (typeof observed.policy?.allowManagedHooksOnly !== 'boolean' || typeof observed.policy.disableAllHooks !== 'boolean' || typeof observed.hooksDisabled !== 'boolean') return
     const policyKey = JSON.stringify([observed.policy.allowManagedHooksOnly, observed.policy.disableAllHooks, observed.hooksDisabled])
     if (observed.sessionId !== status.identity?.activeSessionId || !held.main.matchesPolicy(observed.statusCommand, policyKey)) return
+    if(held.main.canRetainRestartObservation){
+      const observation=observed.mainStatusObservation as {pending?:unknown;receipt?:unknown}|null|undefined
+      if(observation?.pending===false)held.main.retainRestartObservation(observation.receipt)
+      // A pending original run may still finish under the prior API generation. A completed or
+      // unavailable observation is a final answer; never turn absent evidence into a read loop.
+      if(observation?.pending!==true)held.main.discardRestartObservation()
+    }
     if (held.main.restoreCached(observed.cachedMainStatus, cost)) changed(true)
   }
   const server = createServer(async (request, response) => {

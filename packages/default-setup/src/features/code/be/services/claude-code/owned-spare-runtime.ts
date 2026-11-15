@@ -18,7 +18,7 @@ export async function startOwnedWarmSpare(config,spareDirectory){
    cleanup();return pathToFileURL(configPath);
   },
   readPolicy:()=>policy.readNativeHelperPolicy(),
-  async onReady({configUrl}){const ui=await import(new URL('./ui.mjs',configUrl));await ui.prepareNativeHelperPolicy();},
+  async onReady({configUrl}){const ui=await import(new URL('./ui.mjs',configUrl));await ui.prepareNativeHelperPolicy();ui.bindNativeHelperObservationReader(()=>({pending:observer.mainObservationPending,receipt:observer.mainObservation??null}));},
  });
  process.once('exit',()=>{observer.close();cleanup()});
 }

@@ -85,3 +85,53 @@ it('keeps a copied receipt private across reconnect until native policy, cost an
  expect(replacement.restoreCached(event.stdout,event.totalCostUsd)).toBe(true)
  expect(replacement.value(event.totalCostUsd)).toBe(event.stdout.trim())
 })
+
+
+it('retains surviving-worker restart evidence privately and still requires fresh native cache and cost',()=>{
+ const f=fixture();f.main.configure(event.command,event.policyKey);expect(f.main.accept(event)).toBe(true)
+ const restarted=createClaudeBackgroundMainObservation({configPath:f.configPath,sessionId:'child',pid:119,recoverObservedMain:true})
+ restarted.configure(event.command,event.policyKey)
+ expect(restarted.accept(event)).toBe(false)
+ expect(restarted.canRetainRestartObservation).toBe(true)
+ expect(restarted.retainRestartObservation(event)).toBe(true)
+ expect(restarted.canRetainRestartObservation).toBe(false)
+ expect(restarted.value(event.totalCostUsd)).toBeUndefined()
+ expect(restarted.restoreCached('foreign cache',event.totalCostUsd)).toBe(false)
+ expect(restarted.restoreCached(event.stdout,0.00056)).toBe(false)
+ expect(restarted.restoreCached(event.stdout,event.totalCostUsd)).toBe(true)
+ expect(restarted.value(event.totalCostUsd)).toBe(event.stdout.trim())
+})
+it('refuses foreign, failed and retired restart observations without reviving a live caption',()=>{
+ for(const patch of [{parentPid:120},{sessionId:'foreign'},{command:'other'},{policyKey:'[true,false,false]'},{generation:''},{stdout:'',code:0},{code:1},{signal:'aborted'},{truncated:true}]){
+  const f=fixture();f.main.configure(event.command,event.policyKey)
+  const restarted=createClaudeBackgroundMainObservation({configPath:f.configPath,sessionId:'child',pid:119,recoverObservedMain:true})
+  restarted.configure(event.command,event.policyKey)
+  expect(restarted.retainRestartObservation({...event,...patch})).toBe(false)
+  expect(restarted.restoreCached(event.stdout,event.totalCostUsd)).toBe(false)
+ }
+ const f=fixture();f.main.configure(event.command,event.policyKey)
+ const restarted=createClaudeBackgroundMainObservation({configPath:f.configPath,sessionId:'child',pid:119,recoverObservedMain:true})
+ restarted.configure(event.command,event.policyKey);restarted.configure('other',event.policyKey);restarted.configure(event.command,event.policyKey)
+ expect(restarted.retainRestartObservation(event)).toBe(false);restarted.clear();restarted.configure(event.command,event.policyKey);expect(restarted.retainRestartObservation(event)).toBe(false)
+})
+it('never overwrites a new live result with an earlier restart observation',()=>{
+ const f=fixture();f.main.configure(event.command,event.policyKey)
+ const restarted=createClaudeBackgroundMainObservation({configPath:f.configPath,sessionId:'child',pid:119,recoverObservedMain:true})
+ restarted.configure(event.command,event.policyKey);const generation=JSON.parse(readFileSync(f.configPath,'utf8')).generations.main
+ expect(restarted.accept({...event,generation,startedAt:'20',stdout:'Current worker result'})).toBe(true)
+ expect(restarted.retainRestartObservation(event)).toBe(false)
+ expect(restarted.value(event.totalCostUsd)).toBe('Current worker result')
+})
+
+it('revalidates the same surviving-worker observation through repeated API generations without relabeling live events',()=>{
+ const f=fixture();f.main.configure(event.command,event.policyKey);f.main.accept(event)
+ for(let attempt=0;attempt<2;attempt++){
+  const restarted=createClaudeBackgroundMainObservation({configPath:f.configPath,sessionId:'child',pid:119,recoverObservedMain:true})
+  restarted.configure(event.command,event.policyKey)
+  expect(restarted.accept(event)).toBe(false)
+  expect(restarted.retainRestartObservation(event)).toBe(true)
+  expect(restarted.value(event.totalCostUsd)).toBeUndefined()
+  expect(restarted.restoreCached(event.stdout,event.totalCostUsd)).toBe(true)
+  expect(restarted.value(event.totalCostUsd)).toBe(event.stdout.trim())
+ }
+})

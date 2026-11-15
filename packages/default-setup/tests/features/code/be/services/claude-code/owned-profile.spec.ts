@@ -53,7 +53,7 @@ test('boots only a matching app child, retains its PID and reaps retired bootstr
   const plugin = join(observer, 'plugin'), sessionId = '11111111-1111-4111-8111-111111111111'
   await mkdir(plugin, {mode: 0o700})
   await writeFile(join(observer, 'child-ui-launch.json'), JSON.stringify({directory: observer, configDir: profile.configDir, executable: await realpath(process.execPath), socketPath: join(observer, 'status.sock'), token: 'a'.repeat(64)}), {mode: 0o600})
-  await writeFile(join(observer, 'child-ui-template.mjs'), 'export async function prepareNativeHelperPolicy(){};export function readNativeHelperPolicy(){return "[false,false,false]"};globalThis.childUiStarted = JSON.parse((await import("node:fs")).readFileSync(new URL("./observer.json",import.meta.url),"utf8")).sessionId;', {mode: 0o600})
+  await writeFile(join(observer, 'child-ui-template.mjs'), 'export function bindNativeHelperObservationReader(reader){globalThis.mainObservation=reader};export async function prepareNativeHelperPolicy(){};export function readNativeHelperPolicy(){return "[false,false,false]"};globalThis.childUiStarted = JSON.parse((await import("node:fs")).readFileSync(new URL("./observer.json",import.meta.url),"utf8")).sessionId;', {mode: 0o600})
   await writeFile(join(observer, 'child-helper-template.mjs'), claudeTerminalStatusRuntime + '\nglobalThis.childHelperStarted=true;', {mode: 0o600})
   const code = 'const marker=process.env.BUN_OPTIONS.split("--preload=").at(-1); import(require("node:url").pathToFileURL(marker).href).then(()=>console.log(JSON.stringify({pid:process.pid,sessionId:globalThis.childUiStarted,helper:globalThis.childHelperStarted,bun:process.env.BUN_OPTIONS})));'
   for (const originalBunOptions of ['original-options', undefined]) {
@@ -120,7 +120,7 @@ test('resolves the owned worker executable using the launch PATH and cwd without
 test('retains original main-helper I/O before registration without changing streams or executing it twice',async()=>{
  const root=await directory('cc-startup-result-'),sessionId='11111111-1111-4111-8111-111111111111'
  await writeFile(join(root,'observer.json'),JSON.stringify({socketPath:join(root,'absent.sock'),token:'private',sessionId,jobSessionId:sessionId,uiSocketPath:join(root,'ui.sock'),mainObservationClaimed:false,generations:{main:'startup',subagent:'other'}}),{mode:0o600})
- await writeFile(join(root,'ui.mjs'),'let ready=false;export async function prepareNativeHelperPolicy(){ready=true};export function readNativeHelperPolicy(){if(!ready)throw Error("policy not prepared");return "[false,false,false]"}',{mode:0o600})
+ await writeFile(join(root,'ui.mjs'),'export function bindNativeHelperObservationReader(reader){globalThis.mainObservation=reader};let ready=false;export async function prepareNativeHelperPolicy(){ready=true};export function readNativeHelperPolicy(){if(!ready)throw Error("policy not prepared");return "[false,false,false]"}',{mode:0o600})
  await writeFile(join(root,'status.mjs'),claudeTerminalStatusRuntime,{mode:0o600})
  const helper=join(root,'original-helper.mjs')
  await writeFile(helper,`import{appendFileSync}from'node:fs';let raw='';for await(const chunk of process.stdin)raw+=chunk;appendFileSync(${JSON.stringify(join(root,'executions.jsonl'))},raw+'\\n');process.stdout.write('Configured Ω🙂\\n');`,{mode:0o600})
@@ -185,4 +185,22 @@ test('recognizes the owned warm profile through a symlinked ancestor and retains
   roots.push(dirname(dirname(stdout.trim())))
   const config = JSON.parse(await readFile(join(dirname(stdout.trim()), 'spare.json'), 'utf8'))
   expect(config.configDir).toBe(profile.configDir)
+})
+
+
+test('retains the latest completed worker observation after startup claim and withdraws it during new helper work',async()=>{
+ const root=await directory('cc-live-observation-'),sessionId='11111111-1111-4111-8111-111111111111'
+ await writeFile(join(root,'observer.json'),JSON.stringify({socketPath:join(root,'absent.sock'),token:'private',sessionId,jobSessionId:sessionId,uiSocketPath:join(root,'ui.sock'),mainObservationClaimed:true,generations:{main:'current',subagent:'other'}}),{mode:0o600})
+ await writeFile(join(root,'ui.mjs'),'export function bindNativeHelperObservationReader(reader){globalThis.mainObservation=reader};export async function prepareNativeHelperPolicy(){};export function readNativeHelperPolicy(){return "[false,false,false]"}',{mode:0o600})
+ await writeFile(join(root,'status.mjs'),claudeTerminalStatusRuntime,{mode:0o600})
+ const helper=join(root,'original-helper.mjs')
+ await writeFile(helper,`for await(const chunk of process.stdin){};process.stdout.write(process.argv[2]==='success'?'Original live caption\\n':'Original failed execution\\n');process.exit(process.argv[2]==='success'?0:1);`,{mode:0o600})
+ const payload={session_id:sessionId,version:'2.1.302',cost:{total_cost_usd:0.00042},context_window:{}}
+ const code=`await import(${JSON.stringify('file://'+join(root,'status.mjs'))});const{spawn}=await import('node:child_process');async function run(mode){const child=spawn(process.execPath,[${JSON.stringify(helper)},mode]);let stdout='';child.stdout.on('data',chunk=>stdout+=chunk);child.stdin.end(${JSON.stringify(JSON.stringify(payload))});const pending=globalThis.mainObservation();const exit=await new Promise(resolve=>child.once('close',resolve));return{stdout,exit,pending:pending.pending,pendingReceipt:pending.receipt,receipt:globalThis.mainObservation().receipt}};const first=await run('success');const copy=globalThis.mainObservation();copy.receipt.stdout='tampered';const unchanged=globalThis.mainObservation().receipt;const failed=await run('failure');console.log(JSON.stringify({pid:process.pid,first,unchanged,failed}));`
+ const ran=await execFileWhileWorking(process.execPath,['--input-type=module','-e',code],{timeout:10000}),result=JSON.parse(ran.stdout)
+ expect(result.first).toMatchObject({stdout:'Original live caption\n',exit:0,receipt:{kind:'main',parentPid:result.pid,generation:'current',policyKey:'[false,false,false]',stdout:'Original live caption\n',code:0,totalCostUsd:0.00042}})
+ expect(result.first.pending).toBe(true);expect(result.first.pendingReceipt).toBeNull();expect(result.unchanged).toEqual(result.first.receipt)
+ expect(result.failed.pending).toBe(true);expect(result.failed.pendingReceipt).toBeNull();expect(result.failed).toMatchObject({stdout:'Original failed execution\n',exit:1,receipt:{code:1,stdout:'Original failed execution\n'}})
+ expect(BigInt(result.failed.receipt.startedAt)).toBeGreaterThan(BigInt(result.first.receipt.startedAt))
+ await expect(readFile(join(root,'startup-main.json'))).rejects.toMatchObject({code:'ENOENT'})
 })

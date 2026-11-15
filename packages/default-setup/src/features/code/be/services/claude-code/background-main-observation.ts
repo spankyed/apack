@@ -2,15 +2,25 @@ import {randomUUID} from 'node:crypto'
 import {lstatSync, readFileSync, renameSync, unlinkSync, writeFileSync} from 'node:fs'
 import {dirname, join} from 'node:path'
 
+interface ClaudeBackgroundMainResult extends Record<string,unknown> {startedAt:string; totalCostUsd:number; code:number|null; truncated:boolean; stdout:string}
 interface ClaudeBackgroundMainReceipt {key: string; cost: number; text: string; startedAt: bigint}
 
 /** One original worker's main helper; native policy and process identity are checked by its owner. */
-export function createClaudeBackgroundMainObservation(options: {configPath: string; sessionId: string; pid: number; recovery?: ClaudeBackgroundMainReceipt}) {
+export function createClaudeBackgroundMainObservation(options: {configPath: string; sessionId: string; pid: number; recovery?: ClaudeBackgroundMainReceipt; recoverObservedMain?:boolean}) {
   let key: string | undefined, generation: string | undefined, command: string | null = null, policyKey: string | undefined
+  let recoverObservedMain=options.recoverObservedMain===true
   let startupResult: unknown
   let latest: bigint | undefined, result: {cost: number; text?: string} | undefined
   let cached: ClaudeBackgroundMainReceipt | undefined = options.recovery ? {...options.recovery} : undefined
-  const withdraw = () => { key = undefined; generation = undefined; latest = undefined; result = undefined; command = null; policyKey = undefined; startupResult = undefined }
+  const withdraw = () => { recoverObservedMain=false; key = undefined; generation = undefined; latest = undefined; result = undefined; command = null; policyKey = undefined; startupResult = undefined }
+  function validObservation(value:Record<string,unknown>,expected:string|undefined):value is ClaudeBackgroundMainResult {
+    return typeof expected==='string'&&key!==undefined&&command!==null&&value.kind==='main'&&value.sessionId===options.sessionId&&value.parentPid===options.pid
+      &&value.generation===expected&&value.policyKey===policyKey&&value.command===command
+      &&typeof value.startedAt==='string'&&/^[0-9]{1,30}$/.test(value.startedAt)
+      &&typeof value.totalCostUsd==='number'&&Number.isFinite(value.totalCostUsd)&&value.totalCostUsd>=0
+      &&(Number.isSafeInteger(value.code)||value.code===null&&typeof value.signal==='string')&&typeof value.truncated==='boolean'&&typeof value.stdout==='string'&&Buffer.byteLength(value.stdout)<=32768
+  }
+  const textOf=(value:ClaudeBackgroundMainResult)=>value.code===0&&!value.truncated&&!value.signal?value.stdout.trim().split('\n').flatMap(line=>line.trim()||[]).join('\n')||undefined:undefined
   return {
     // A receipt is private evidence, never live output until fresh native validation succeeds.
     get recovery() { return cached ? {...cached} : undefined },
@@ -26,6 +36,7 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
       const temporary = options.configPath + '.' + randomUUID()
       writeFileSync(temporary, JSON.stringify({...config, mainObservationClaimed: true, generations: {...config.generations, main: generation}}), {mode: 0o600, flag: 'wx'})
       renameSync(temporary, options.configPath)
+      if(key!==undefined)recoverObservedMain=false
       key = nextKey; command = nextCommand; policyKey = nextPolicy; latest = undefined; result = undefined; startupResult = undefined
       if (!startup) return
       const path = join(dirname(options.configPath), 'startup-main.json')
@@ -39,17 +50,26 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
       } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     },
     accept(value: Record<string, unknown>) {
-      if (!key || !command || value.kind !== 'main' || value.sessionId !== options.sessionId || value.parentPid !== options.pid
-        || value.generation !== generation || value.policyKey !== policyKey || value.command !== command
-        || typeof value.startedAt !== 'string' || !/^[0-9]{1,30}$/.test(value.startedAt)
-        || typeof value.totalCostUsd !== 'number' || !Number.isFinite(value.totalCostUsd) || value.totalCostUsd < 0
-        || !(Number.isSafeInteger(value.code) || value.code === null && typeof value.signal === 'string') || typeof value.truncated !== 'boolean' || typeof value.stdout !== 'string' || Buffer.byteLength(value.stdout) > 32768) return false
+      const scope=key
+      if(!scope||!validObservation(value,generation))return false
       const started = BigInt(value.startedAt)
       if (latest !== undefined && started <= latest) return false
       latest = started; startupResult = undefined
-      const text = value.code === 0 && !value.truncated && !value.signal ? value.stdout.trim().split('\n').flatMap(line => line.trim() || []).join('\n') || undefined : undefined
+      const text = textOf(value)
       result = {cost: value.totalCostUsd, text}
-      cached = text ? {key, cost: value.totalCostUsd, text, startedAt: started} : undefined
+      cached = text ? {key:scope, cost: value.totalCostUsd, text, startedAt: started} : undefined
+      return true
+    },
+    get canRetainRestartObservation(){return recoverObservedMain&&key!==undefined&&command!==null&&result===undefined&&cached===undefined&&latest===undefined},
+    discardRestartObservation(){recoverObservedMain=false},
+    retainRestartObservation(value:unknown){
+      if(!recoverObservedMain||result!==undefined||cached!==undefined||latest!==undefined||!value||typeof value!=='object'||Array.isArray(value))return false
+      const record=value as Record<string,unknown>
+      if(typeof record.generation!=='string'||!/^[-A-Za-z0-9]{1,128}$/.test(record.generation)||!validObservation(record,record.generation))return false
+      const observed=record;recoverObservedMain=false
+      const text=textOf(observed);if(!text)return false
+      // This is private evidence from the surviving worker, never an incoming old-generation frame.
+      cached={key:key!,cost:observed.totalCostUsd,text,startedAt:BigInt(observed.startedAt)}
       return true
     },
     canRestore(cost: number | undefined) { return result === undefined && !!command && cached !== undefined && cached.key === key && cached.cost === cost },
@@ -67,6 +87,6 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
     value(cost: number | undefined) { return result?.cost === cost ? result?.text : undefined },
     // A policy handoff hides output; only fresh native cache validation may reuse the private receipt.
     withdraw,
-    clear() { withdraw(); cached = undefined },
+    clear() { withdraw(); cached = undefined; recoverObservedMain=false },
   }
 }
