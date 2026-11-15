@@ -20,6 +20,7 @@ vi.mock('@apackdev/ui/design/ImageLightbox', () => ({ default: defineComponent({
 const { default: PRComments } = await import('#features/code/fe/features/pull-request/PRComments.vue')
 const { default: PRInfo } = await import('#features/code/fe/features/pull-request/PRInfo.vue')
 const { default: PRActionBar } = await import('#features/code/fe/features/pull-request/PRActionBar.vue')
+const { default: PRSelector } = await import('#features/code/fe/features/pull-request/PRSelector.vue')
 
 let app: App | undefined
 afterEach(() => { app?.unmount(); app = undefined; document.body.replaceChildren() })
@@ -204,5 +205,72 @@ describe("deleting a pull request's branch", () => {
   it('is not offered for a branch it may not delete', () => {
     actionBar(false)
     expect(button('Delete Branch')).toBeUndefined()
+  })
+})
+
+describe("checking out a pull request's branch", () => {
+  const open = { number: 3, title: 'PR 3', body: '', baseRefName: 'main', headRefName: 'feature', state: 'OPEN', isDraft: false, author: { login: 'me' }, createdAt: '', url: '' }
+  const bar = (props: Record<string, unknown>) => {
+    const onCheckout = vi.fn()
+    mount(PRActionBar, { pr: open, isMerging: false, isClosing: false, isTogglingDraft: false, isDeletingBranch: false, canDeleteBranch: false, isCheckingOut: false, isCheckedOut: false, onCheckout, ...props })
+    return onCheckout
+  }
+  const checkout = () => document.querySelector<HTMLButtonElement>('[data-testid="pr-checkout"]')
+
+  it('is offered for an open pull request not checked out, and off while one is under way', () => {
+    const onCheckout = bar({})
+    checkout()!.click()
+    expect(onCheckout).toHaveBeenCalledOnce()
+    app!.unmount()
+    bar({ isCheckingOut: true })
+    expect(checkout()!.disabled).toBe(true)
+    app!.unmount()
+    bar({ isCheckedOut: true })
+    expect(checkout(), 'checked out already').toBeNull()
+  })
+})
+
+describe('the pull request list', () => {
+  const list = (extra: Record<string, unknown> = {}) => ({ state: 'open', query: '', prs: [], next: null, asked: null, read: true, ...extra })
+  const pr = (number: number) => ({ number, title: `PR ${number}`, state: 'OPEN', isDraft: false })
+  const open = async (props: Record<string, unknown>) => {
+    const handlers = { onShown: vi.fn(), 'onSet-state': vi.fn(), 'onSet-query': vi.fn(), 'onLoad-more': vi.fn(), 'onSelect-pr': vi.fn() }
+    mount(PRSelector, { selectedPR: null, ...handlers, ...props })
+    document.querySelector('button')!.click()
+    await nextTick()
+    return handlers
+  }
+  const byTestId = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`)
+  afterEach(() => { vi.useRealTimers() })
+
+  it('is read when opened, filtered by its tabs, and paged by Load more', async () => {
+    const on = await open({ list: list({ prs: [pr(9), pr(8)], next: 'C1' }) })
+    expect(on.onShown).toHaveBeenCalledOnce()
+    expect(document.body.textContent).toContain('#9 PR 9')
+    byTestId('pr-list-state-merged')!.click()
+    expect(on['onSet-state']).toHaveBeenCalledWith('merged')
+    byTestId('pr-list-more')!.click()
+    expect(on['onLoad-more']).toHaveBeenCalledOnce()
+  })
+
+  it('searches once typing pauses, and says when nothing matches', async () => {
+    vi.useFakeTimers()
+    const on = await open({ list: list({ query: 'x', read: true }) })
+    const box = byTestId('pr-list-search') as HTMLInputElement
+    for (const text of ['f', 'fl', 'flaky']) { box.value = text; box.dispatchEvent(new Event('input')); await nextTick() }
+    vi.advanceTimersByTime(299)
+    expect(on['onSet-query']).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expect(on['onSet-query']).toHaveBeenCalledExactlyOnceWith('flaky')
+    expect(byTestId('pr-list-empty')!.textContent).toContain('No pull requests match')
+  })
+
+  it('shows no Load more while the list is being read again, or after its last page', async () => {
+    await open({ list: list({ prs: [pr(9)], next: 'C1', asked: { call: 'c', append: false } }) })
+    expect(byTestId('pr-list-more')).toBeNull()
+    expect(document.body.textContent).toContain('Loading')
+    app!.unmount()
+    await open({ list: list({ prs: [pr(9)], next: null }) })
+    expect(byTestId('pr-list-more')).toBeNull()
   })
 })

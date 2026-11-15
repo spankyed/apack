@@ -437,22 +437,37 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
    *
    * Idempotent through a flag on `window`, and called again after a reload, where a fresh document has
    * dropped both the hook and the flag.
+   *
+   * **The hook outlives the session that installed it**: nothing in the page can be told a session ended, so
+   * after one exits the hook keeps calling a function no process serves, and the next session to attach is
+   * handed those calls before its own `exposeFunction` lands — Playwright refuses each, as a rejected promise.
+   * In the app's window an unhandled rejection is fatal (its error page), so every call is settled here: an
+   * event no session is listening for is one nobody asked about.
    */
   const installBridge = () => page.evaluateExpression(`(() => {
     const win = window;
     if (win.${BRIDGE_FLAG}) return null;
     win.${BRIDGE_FLAG} = true;
+    const emit = (payload) => {
+      try {
+        Promise.resolve(win.${BRIDGE_FUNCTION}?.(payload)).catch(() => {});
+      } catch {
+        // The function is absent, or threw before answering: the same event nobody is listening for
+      }
+    };
     win.applicationState?.system?.inspect?.((inspection) => {
       if (inspection?.type !== '@xstate.event') return;
       const event = inspection.event;
       if (!event || typeof event.type !== 'string') return;
       const to = inspection.actorRef?.id;
+      let copy;
       try {
-        win.${BRIDGE_FUNCTION}({ to, type: event.type, event: JSON.parse(JSON.stringify(event)) });
+        copy = JSON.parse(JSON.stringify(event));
       } catch {
         // An event that will not serialise still happened, and that it did is worth reporting
-        win.${BRIDGE_FUNCTION}({ to, type: event.type, event: {} });
+        copy = {};
       }
+      emit({ to, type: event.type, event: copy });
     });
     return null;
   })()`);

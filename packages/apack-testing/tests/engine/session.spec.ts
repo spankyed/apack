@@ -262,6 +262,68 @@ describe('the in-page bridge', () => {
     expect(drained(session.drainEvents()).dropped, 'the count resets with the read').toBe(0);
   });
 
+  /**
+   * The hook stays in the page after its session exits, and the next session to attach is handed its calls
+   * before its own function is exposed: Playwright refuses each with a rejected promise, which in the app's
+   * window is fatal. The installed source runs here over a window of its own, whose function refuses, throws
+   * or is not there, and whatever the page's runtime would see as unhandled is caught.
+   */
+  it('settles every call the page makes, so one no session serves is not an unhandled rejection', async () => {
+    const { session, expressions } = sessionWith();
+    await session.ready();
+    const installed = expressions.find((source) => source.includes(BRIDGE_FLAG))!;
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      for (const bridge of [
+        () => Promise.reject(new Error(`Function "${BRIDGE_FUNCTION}" is not exposed`)),
+        () => { throw new Error('threw before answering'); },
+        undefined,
+      ]) {
+        let inspect: ((inspection: unknown) => void) | undefined;
+        const win: Record<string, unknown> = {
+          [BRIDGE_FUNCTION]: bridge,
+          applicationState: { system: { inspect: (observer: typeof inspect) => { inspect = observer; } } },
+        };
+        new Function('window', `return ${installed}`)(win);
+        const circular: Record<string, unknown> = { type: 'CIRCULAR' };
+        circular.self = circular;
+        expect(() => {
+          inspect!({ type: '@xstate.event', event: { type: 'PING' }, actorRef: { id: 'x' } });
+          inspect!({ type: '@xstate.event', event: circular, actorRef: { id: 'x' } });
+        }).not.toThrow();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+
+  it('hands the page every event, one that will not serialise as an empty one', async () => {
+    const { session, expressions } = sessionWith();
+    await session.ready();
+    const installed = expressions.find((source) => source.includes(BRIDGE_FLAG))!;
+    const delivered: unknown[] = [];
+    let inspect: ((inspection: unknown) => void) | undefined;
+    const win = {
+      [BRIDGE_FUNCTION]: async (payload: unknown) => { delivered.push(payload); },
+      applicationState: { system: { inspect: (observer: typeof inspect) => { inspect = observer; } } },
+    };
+    new Function('window', `return ${installed}`)(win);
+    const circular: Record<string, unknown> = { type: 'CIRCULAR' };
+    circular.self = circular;
+    inspect!({ type: '@xstate.event', event: { type: 'PING', n: 1 }, actorRef: { id: 'a' } });
+    inspect!({ type: '@xstate.event', event: circular, actorRef: { id: 'b' } });
+    inspect!({ type: '@xstate.snapshot', event: { type: 'IGNORED' } });
+
+    expect(delivered).toEqual([
+      { to: 'a', type: 'PING', event: { type: 'PING', n: 1 } },
+      { to: 'b', type: 'CIRCULAR', event: {} },
+    ]);
+  });
+
   it('still wakes a waiter when the buffer is full', async () => {
     const { session, emit, send } = sessionWith();
     await session.ready();

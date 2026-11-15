@@ -5260,8 +5260,20 @@ interface GhPullRequest {
     rawBody?: string;
     headRefName: string;
     baseRefName: string;
-    /** Whether the head is a branch of another repository, a fork's, rather than of this one */
+    /** Whether the head is a branch of another repository, a fork's, rather than of the one the pull request is on */
     isCrossRepository?: boolean;
+    /** The head commit, which a merge names so that one of a head moved since is refused */
+    headRefOid?: string;
+    /**
+     * Whether the head is a branch of the repository the checkout's remote names — of this repository, or of the fork
+     * the checkout is a clone of — which is what checking it out and deleting it go by
+     */
+    headInRemote?: boolean;
+    /**
+     * The other open pull requests from the same head, where the backend read them (with a pull request's details,
+     * and the branch's own): what keeps the branch from being offered for deletion
+     */
+    openFromSameHead?: number[];
     state: 'CLOSED' | 'MERGED' | 'OPEN';
     url: string;
     isDraft: boolean;
@@ -5351,9 +5363,10 @@ interface GitHubAccount {
  * repository whose remote is not on github.com (`not-github`); one
  * without the access the call needs (`missing-scope`); one an organisation's single sign-on has not authorised
  * (`sso`); a repository or pull request this sign-in cannot see (`not-found`); a sign-in that has used up what
- * GitHub lets it ask for a while (`rate-limited`); GitHub could not be reached or said something else (`failed`)
+ * GitHub lets it ask for a while (`rate-limited`); a merge of a head that is no longer the pull request's
+ * (`head-moved`); GitHub could not be reached or said something else (`failed`)
  */
-type GitHubApiFailure = 'failed' | 'missing-scope' | 'not-found' | 'not-github' | 'rate-limited' | 'signed-out' | 'sso';
+type GitHubApiFailure = 'failed' | 'head-moved' | 'missing-scope' | 'not-found' | 'not-github' | 'rate-limited' | 'signed-out' | 'sso';
 
 /** Where GitHub answers: the web host that runs sign-in, and the REST API */
 interface GitHubEndpoints {
@@ -6128,8 +6141,18 @@ type IncomingPullRequestEvents =
     headBranch?: string;
     prNumber?: number;
     fetchMissing?: boolean;
-} | {
-    type: 'pr.LIST_OPEN_PRS';
+}
+/** A page of the pull requests in `state`, newest first, from `after` (the last page's `next`), by `query` where there is one */
+ | {
+    type: 'pr.LIST_PRS';
+    state: PRListState;
+    query?: string;
+    after?: string;
+}
+/** Checks out the pull request's head as a branch here (`pr.PR_CHECKED_OUT`) */
+ | {
+    type: 'pr.CHECKOUT_PR';
+    number: number;
 } | {
     type: 'pr.SELECT_PR';
     number: number;
@@ -6139,10 +6162,13 @@ type IncomingPullRequestEvents =
     body: string;
     base?: string;
     draft?: boolean;
-} | {
+}
+/** `sha` is the head shown: GitHub merges nothing where the head has moved since (`head-moved`) */
+ | {
     type: 'pr.MERGE_PR';
     number: number;
     method?: 'merge' | 'rebase' | 'squash';
+    sha?: string;
 } | {
     type: 'pr.CLOSE_PR';
     number: number;
@@ -7818,10 +7844,22 @@ type OutgoingPullRequestEvents = {
     data: {
         timestamp: Date;
     };
-} | {
-    type: 'pr.OPEN_PRS_RECEIVED';
+}
+/** A page of the list asked for, and the cursor of the next, `null` where it was the last */
+ | {
+    type: 'pr.PRS_LISTED';
     data: {
         prs: GhPullRequest[];
+        next: string | null;
+    };
+}
+/** The branch the pull request was checked out as, and what that did to a branch already there */
+ | {
+    type: 'pr.PR_CHECKED_OUT';
+    data: {
+        number: number;
+        branch: string;
+        checkout: PRBranchCheckout;
     };
 }
 /**
@@ -8328,6 +8366,18 @@ type OwnSurfaceEvents = {
     'database': __events_database | __accepts_database;
     'logs': __events_logs | __accepts_logs;
 };
+
+/**
+ * What checking out a pull request did to its branch: made it at the head (`created`), found it there (`current`),
+ * moved it forward to it (`fast-forwarded`), or checked it out where it was, since it has commits the head lacks
+ * (`kept`). The engine's `BranchCheckout`, which the backend hands on as this
+ */
+type PRBranchCheckout = 'created' | 'current' | 'fast-forwarded' | 'kept';
+
+type PRListState = (typeof PR_LIST_STATES)[number];
+
+/** Which pull requests a list shows */
+declare const PR_LIST_STATES: readonly ["open", "closed", "merged", "all"];
 
 /**
  * `services.emitter`, typed with this pack's events. A system and a surface are both named

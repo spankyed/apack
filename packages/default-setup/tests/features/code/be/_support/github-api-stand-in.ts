@@ -3,7 +3,8 @@
 // `convertPullRequestToDraft`…), in the order the case gave them; an answer a case computes may be awaited, as one
 // that changes a real remote is. Every request is recorded with its body, so a
 // case can say what was sent where. The bodies a case answers with are GitHub's own shapes, as its REST and GraphQL
-// documentation gives them and as github.com answered on 2026-11-13.
+// documentation gives them and as github.com answered on 2026-11-13. Asked whether a repository is a fork, and given no
+// answer for it, the stand-in says it is none, as most are.
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { GitHubEndpoints } from '#features/code/be/services/github.ts';
@@ -27,6 +28,9 @@ export interface StandInRoutes {
   graphql?: Array<[fragment: string, answer: StandInAnswer | ((request: RecordedRequest) => StandInAnswer | Promise<StandInAnswer>)]>;
 }
 
+/** What GitHub answers of a repository that is no fork */
+const NO_FORK: [string, StandInAnswer] = ['isFork', { body: { data: { repository: { isFork: false, parent: null } } } }];
+
 export async function startGitHubApiStandIn(routes: StandInRoutes): Promise<{ endpoints: GitHubEndpoints; requests: RecordedRequest[]; close(): Promise<void> }> {
   const requests: RecordedRequest[] = [];
   const server = http.createServer((incoming, response) => {
@@ -42,7 +46,7 @@ export async function startGitHubApiStandIn(routes: StandInRoutes): Promise<{ en
       };
       requests.push(request);
       const route = path === '/graphql'
-        ? routes.graphql?.find(([fragment]) => String(request.body?.query ?? '').includes(fragment))?.[1]
+        ? [...routes.graphql ?? [], NO_FORK].find(([fragment]) => String(request.body?.query ?? '').includes(fragment))?.[1]
         : routes.rest?.[`${request.method} ${path}`];
       const answer = typeof route === 'function' ? await route(request) : route ?? { status: 404, body: { message: 'Not Found' } };
       response.writeHead(answer.status ?? 200, { 'Content-Type': 'application/json', ...answer.headers });
@@ -69,6 +73,8 @@ export function pullRequestNode(overrides: Record<string, unknown> = {}) {
     title: 'Add the thing',
     body: 'It adds the thing.',
     headRefName: 'feature/thing',
+    headRefOid: 'abc123',
+    headRepository: { name: 'repo', owner: { login: 'octo' } },
     baseRefName: 'main',
     isCrossRepository: false,
     state: 'OPEN',

@@ -486,6 +486,9 @@ npm run check:repro              # Build everything twice and compare — a diag
 click through it, read state back, screenshot it. Nothing collects or gates on those scripts. For one
 question, `npm run dev:eval` and its neighbours ask the app `npm run dev` holds over its debug port and print
 one JSON object; with no app they exit 3, and `--spawn` starts one. `docs/public-facing/cli.md` has the verbs.
+**To wait for an app `npm run dev` is still starting, loop on the exit code until it is 0, never on what was
+printed**: the answer is wrapped (`{"value":true,"state":"attached",…}`), so a loop matching a bare `true`
+never ends, and the app is up the whole time.
 
 **`tests/e2e/smoke/` is a gate**, as its own chain step (`test:smoke`): the app launches, reaches
 `connected`, has its surfaces, and runs in its own data dir.

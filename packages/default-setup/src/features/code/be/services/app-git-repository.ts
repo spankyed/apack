@@ -159,6 +159,9 @@ const localFailure = (error: unknown): unknown => {
   return said && error instanceof GitError ? new GitError(said, error.code) : error
 }
 
+/** The shortest wait between two fetches by itself, as the setting takes it: the timer never fetches sooner */
+const FETCH_INTERVAL_FLOOR_MS = 60_000
+
 /** How long the branch a pull request is based on is kept before it is worked out again */
 const PR_BASE_KEPT_MS = 5000
 /** How far back a branch's tip may be for it to be the branch this one was made from */
@@ -175,6 +178,9 @@ export class AppGitRepository extends GitRepository {
   private suspendedSignIn: SignInHelp | undefined
   private forceFetchNext = false
   private prBase: { branch: string; at: number } | undefined
+  /** Who is told when a fetch by itself falls due (`whenFetchDue`), and the timer set for the next one */
+  private fetchDue: (() => void) | undefined
+  private fetchTimer: ReturnType<typeof setTimeout> | undefined
 
   constructor(workingDirectory: string, ties: RepositoryTies = APP_TIES) {
     super(workingDirectory, ties)
@@ -188,6 +194,39 @@ export class AppGitRepository extends GitRepository {
   private suspend(suspended: boolean): void {
     this.autoFetchSuspended = suspended
     this.setStatusNote(suspended ? 'not fetching' : 'fetching')
+    this.armFetchTimer()
+  }
+
+  /**
+   * Has `due` called each time a fetch by itself falls due — the fetch settings ask for one and their interval has
+   * passed since the last — whether or not a window asks; `due` fetches with `fetchIfDue`, which decides. One
+   * caller at a time, and `undefined` stops it. Nothing is set while fetching by itself is off or has stopped
+   */
+  whenFetchDue(due: (() => void) | undefined): void {
+    this.fetchDue = due
+    this.armFetchTimer()
+  }
+
+  /**
+   * Sets the timer for the next fetch due, from the last one (or the last time one was considered) and the
+   * interval: called whenever either moves, or fetching by itself starts or stops. It does not keep the process
+   * running
+   */
+  private armFetchTimer(): void {
+    clearTimeout(this.fetchTimer)
+    this.fetchTimer = undefined
+    if (!this.fetchDue || !this.autoFetchEnabled || this.autoFetchSuspended) return
+    const wait = Math.max(0, this.lastFetchTimestamp + Math.max(this.fetchThrottleMs, FETCH_INTERVAL_FLOOR_MS) - Date.now())
+    this.fetchTimer = setTimeout(() => {
+      this.fetchTimer = undefined
+      this.fetchDue?.()
+    }, wait)
+    this.fetchTimer.unref?.()
+  }
+
+  override async close(): Promise<void> {
+    this.whenFetchDue(undefined)
+    return super.close()
   }
 
   /**
@@ -251,8 +290,12 @@ export class AppGitRepository extends GitRepository {
     }
     this.fetching = true
     try {
-      // Nothing to fetch for a branch that follows no remote one, and not a reason to forget a forced fetch
-      if (!(await this.readSnapshot()).hasUpstream) return false
+      // Nothing to fetch for a branch that follows no remote one, and not a reason to forget a forced fetch. It
+      // was considered, which puts the next look off by the interval, as a fetch would
+      if (!(await this.readSnapshot()).hasUpstream) {
+        this.lastFetchTimestamp = Date.now()
+        return false
+      }
       this.forceFetchNext = false
       this.lastFetchTimestamp = Date.now()
       const result = await this.fetch()
@@ -266,6 +309,7 @@ export class AppGitRepository extends GitRepository {
       return false
     } finally {
       this.fetching = false
+      this.armFetchTimer()
     }
   }
 
@@ -289,7 +333,7 @@ export class AppGitRepository extends GitRepository {
     } finally {
       if (this.pushing === pushing) this.pushing = undefined
     }
-    // A push moved the remote's refs here too, so a fetch is not due
+    // A push moved the remote's refs here too, so a fetch is not due; `suspend` sets the timer again from it
     this.lastFetchTimestamp = Date.now()
     this.suspend(false)
   }
@@ -306,7 +350,7 @@ export class AppGitRepository extends GitRepository {
 
   override async pullBranch(onProgress?: (progress: GitProgress) => void): Promise<void> {
     await super.pullBranch(onProgress).catch((error: unknown) => { throw remoteFailure('pull', error) })
-    // A pull fetched already
+    // A pull fetched already; `suspend` sets the timer again from it
     this.lastFetchTimestamp = Date.now()
     this.suspend(false)
   }
