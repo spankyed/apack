@@ -53,6 +53,14 @@ const idleMs = provided('apack.idleMs') ?? IDLE_MS;
  * declaring `expect` options of its own: they would be dropped here without a word.
  */
 vi.setConfig({ expect: { poll: { timeout: idleMs } } });
+
+/**
+ * **And so is `vi.waitFor`'s, for the same reason.** It takes no default from the config, so the one place that can
+ * give every suite one is here, wrapping it: a call naming a timeout, as a number or in its options, keeps it.
+ */
+const waitFor = vi.waitFor.bind(vi);
+vi.waitFor = ((callback, options = {}) =>
+  waitFor(callback, typeof options === 'number' ? options : { timeout: idleMs, ...options })) as typeof vi.waitFor;
 const defaultBudgetMs = provided('apack.testCpuMs');
 
 interface Running {
