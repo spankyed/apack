@@ -376,6 +376,29 @@ it('holds native toast lifetime with the shown pane and releases it after its na
   await view.dispose()
 })
 
+it.each(['accepted','rejected'] as const)('keeps Client down/up RPCs in emission order after an %s request',async outcome=>{
+ const f=fixture(),mount=f.mount(),held=deferred<{handled:boolean}>(),id='9b08a63e-78f6-46c5-9134-c6c64de30937'
+ await mount.ready
+ f.ui.clientEvent.mockImplementationOnce(()=>held.promise.then(value=>{if(outcome==='rejected')throw Error('native refused');return value}))
+ const down=mount.clientEvent({id,sequence:1,event:{kind:'pointer',type:'down',x:1,y:1}})
+ const observed=outcome==='rejected'?expect(down).rejects.toThrow('native refused'):expect(down).resolves.toEqual({handled:true})
+ const up=mount.clientEvent({id,sequence:2,event:{kind:'pointer',type:'up',x:1,y:1}})
+ try{
+  await Promise.resolve();await Promise.resolve()
+  expect(f.ui.clientEvent).toHaveBeenCalledTimes(1)
+ }finally{held.resolve({handled:true});await Promise.all([observed,up]);await mount.dispose()}
+ expect(f.ui.clientEvent).toHaveBeenNthCalledWith(2,expect.objectContaining({id,sequence:2,event:{kind:'pointer',type:'up',x:1,y:1}}))
+})
+
+it('drops queued Client input when its mounted owner retires',async()=>{
+ const f=fixture(),mount=f.mount(),held=deferred<{handled:boolean}>(),id='9b08a63e-78f6-46c5-9134-c6c64de30937'
+ await mount.ready;f.ui.clientEvent.mockImplementationOnce(()=>held.promise)
+ const first=mount.clientEvent({id,sequence:1,event:{kind:'key',key:'a'}})
+ const queued=mount.clientEvent({id,sequence:2,event:{kind:'key',key:'b'}})
+ await Promise.resolve();await mount.dispose();held.resolve({handled:true});await first
+ expect(await queued).toEqual({handled:false});expect(f.ui.clientEvent).toHaveBeenCalledTimes(1)
+})
+
 it('keeps a Client container mounted during native redraws and routes its scoped input',async()=>{
  const f=fixture(),id='9b08a63e-78f6-46c5-9134-c6c64de30937'
  f.ui.render.mockResolvedValue({tree:{type:'NativeClient',props:{id,pointer:true,keys:true,width:30,height:3},children:[{type:'Button',props:{label:'Run',key:'run'},press:{plugin:'fixture',handle:1}}]},props:{},rewritten:true,hooked:true})

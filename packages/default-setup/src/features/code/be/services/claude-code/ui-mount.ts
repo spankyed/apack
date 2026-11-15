@@ -64,6 +64,7 @@ export function mountClaudeUi(options: {
   let ide: ClaudeUiMountState['ide']
   let actionKeyState: ClaudeUiActionKeyState | undefined
   let keyQueue: Promise<unknown> = Promise.resolve()
+  let clientQueue: Promise<unknown> = Promise.resolve()
   let lastState: ClaudeUiMountState = { status: 'connecting' }
   let agent: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails | undefined
   let gestureProblem: string | undefined
@@ -473,9 +474,14 @@ export function mountClaudeUi(options: {
         if (current() && revision === promptRevision) return { revision, status: 'error', message: error instanceof Error ? error.message : 'Native composer edit failed' }
       }
     },
-    async clientEvent(event: import('./ui-presentation.ts').ClaudeUiClientEvent) {
-      if(!current()||!attached)return {handled:false}
-      return owner.handle.ui.clientEvent({...event,client_id:client.client_id})
+    clientEvent(event: import('./ui-presentation.ts').ClaudeUiClientEvent) {
+      // Native sequences reject older input: an up must never overtake its down over separate RPCs.
+      const operation = clientQueue.then(() => {
+        if(!current()||!attached)return {handled:false}
+        return owner.handle.ui.clientEvent({...event,client_id:client.client_id})
+      })
+      clientQueue = operation.then(() => undefined, () => undefined)
+      return operation
     },
     async field(event: ClaudeUiFieldEvent): Promise<{ handled: boolean }> {
       if (question.ownsField(event.actionId)) return question.field(event)
