@@ -9,7 +9,7 @@ function fixture(form = false) {
   const root = document.createElement('div'); document.body.append(root)
   const state = reactive<{ value: ClaudeSettingsView }>({ value: { requestId: 'read', status: 'ready', snapshot: {
     revision: 'a'.repeat(64), rows: [], permissions: { title: 'Permissions', tabs: [{ value: 'Allow', label: 'Allow', selected: true }, { value: 'Ask', label: 'Ask', selected: false }], paragraphs: ['Rules are validated and saved by Claude Code.'], choices: form ? [] : [{ value: 'native-source-key', label: 'Read(release-notes.md)', disabled: false }], readOnly: false,
-      ...(form ? { form: { value: '', placeholder: 'Enter permission rule', multiline: false, submitLabel: 'Continue' } } : { search: '' }) },
+      ...(form ? { form: { value: '', placeholder: 'Enter permission rule', multiline: false, submitLabel: 'Continue' } } : { search: '', searchScope: 'c'.repeat(64) }) },
   } } })
   const operate = vi.fn(), terminal = vi.fn()
   const app = createApp({ render: () => h(NativePermissionsPanel, { state: state.value, onOperate: operate, onTerminal: terminal }) })
@@ -39,7 +39,7 @@ it('retains a typed form draft when background snapshots contain unchanged nativ
 it('filters through the native operation rather than filtering displayed choices locally', async () => {
   vi.useFakeTimers(); const f = fixture(); await nextTick(); f.operate.mockClear()
   const input = f.root.querySelector('input')!; input.focus(); input.value = 'unmatched'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick(); await vi.advanceTimersByTimeAsync(200)
-  expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'search', value: 'unmatched' } })
+  expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'search', scope: 'c'.repeat(64), value: 'unmatched' } })
   expect(f.root.textContent).toContain('Read(release-notes.md)')
 })
 
@@ -76,12 +76,12 @@ it('retains debounced search across an in-flight refresh and sends with its curr
   expect(f.operate).not.toHaveBeenCalled()
   f.state.value = { ...f.state.value, status: 'ready', snapshot: { ...f.state.value.snapshot!, revision: 'b'.repeat(64), permissions: { ...f.state.value.snapshot!.permissions!, search: '' } } }; await nextTick()
   expect(input.value).toBe('release-notes')
-  expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'b'.repeat(64), command: { action: 'search', value: 'release-notes' } })
+  expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'b'.repeat(64), command: { action: 'search', scope: 'c'.repeat(64), value: 'release-notes' } })
 })
 
 it('discards a queued search when its original tab is replaced', async () => {
   vi.useFakeTimers(); const f = fixture(); await nextTick(); f.operate.mockClear()
   const input = f.root.querySelector('input')!; input.value = 'old-tab-query'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick()
-  const panel = f.state.value.snapshot!.permissions!; panel.tabs[0].selected = false; panel.tabs[1].selected = true; await nextTick(); await vi.advanceTimersByTimeAsync(200)
+  const panel = f.state.value.snapshot!.permissions!; panel.tabs[0].selected = false; panel.tabs[1].selected = true; panel.searchScope = 'd'.repeat(64); await nextTick(); await vi.advanceTimersByTimeAsync(200)
   expect(f.operate).not.toHaveBeenCalled(); expect(input.value).toBe('')
 })

@@ -68,23 +68,30 @@ function nativePermissionsFrame(n,entry){
  const choices=(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),...(o.description!==undefined?{description:nativePermissionText(o.description)}:{}),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true}));
  if(new Set(choices.map(o=>o.value)).size!==choices.length||tabs.length>16||paragraphs.length>256||paragraphs.some(t=>t.length>65536)||choices.some(o=>!o.value||o.value.length>16384||o.label.length>65536)||title.length>65536)throw Error('Native Permissions text or choices exceed bounds');
  const defaultFocusValue=picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey;
- const permissions={title,...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...ruleList?{search:entry.permissionsSearch??ruleList.searchQuery??''}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:'Continue'}}:{}};
+ if(!ruleList)entry.permissionsSearchLease=undefined;else if(entry.permissionsSearchLease?.tab!==ruleList.tab)entry.permissionsSearchLease={tab:ruleList.tab,token:createHash('sha256').update(randomUUID()).digest('hex')};
+ const permissions={title,...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...ruleList?{search:entry.permissionsSearch??ruleList.searchQuery??'',searchScope:entry.permissionsSearchLease.token}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:'Continue'}}:{}};
  const encoded=JSON.stringify(permissions),prior=entry.permissionsFrame,source=picker?.props??input??tabFrame??owner.memoizedProps;
  if(!prior||prior.encoded!==encoded||prior.source!==source||prior.cancel!==cancel||prior.focusBody!==focusBody)entry.permissionsFrame={encoded,source,cancel,focusBody,picker,input,tabs,ruleList,snapshot:{revision:createHash('sha256').update(encoded+randomUUID()).digest('hex'),rows:[],permissions}};
  return entry.permissionsFrame;
 }
 async function nativePermissionsPanel(n,entry,request,abort){
  const before=nativePermissionsFrame(n,entry);abort.signal.throwIfAborted();if(request.operation==='read')return {snapshot:before.snapshot};
- if(request.operation!=='permissions'||request.revision!==before.snapshot.revision||before.consumed)throw Error('Native Permissions changed before this action');
+ if(request.operation!=='permissions')throw Error('Unsupported native Permissions operation');
  const command=request.command;if(!command||typeof command.action!=='string')throw Error('Native Permissions action is missing');
+ // Filtering reads the current native list; its lease survives renders but not another action or tab.
+ if(command.action==='search'){
+  if(!before.ruleList||command.scope!==before.snapshot.permissions.searchScope||typeof command.value!=='string'||command.value.length>16384)throw Error('Native permission search unavailable');
+  entry.permissionsSearch=command.value;return {snapshot:nativePermissionsFrame(n,entry).snapshot};
+ }
+ if(request.revision!==before.snapshot.revision||before.consumed)throw Error('Native Permissions changed before this action');
  let callback,args=[];
  if(command.action==='tab'){const tab=before.tabs.find(t=>t.title===command.value);if(!tab)throw Error('Native Permissions tab unavailable');callback=tab.onClick;}
- else if(command.action==='search'){if(!before.ruleList||typeof command.value!=='string'||command.value.length>16384)throw Error('Native permission search unavailable');entry.permissionsSearch=command.value;return {snapshot:nativePermissionsFrame(n,entry).snapshot};}
+
  else if(command.action==='select'){const choice=before.snapshot.permissions.choices.find(o=>o.value===command.value&&!o.disabled);if(!choice||!before.picker)throw Error('Native permission choice unavailable');callback=before.picker.select;args=[command.value];}
  else if(command.action==='submit'){if(!before.input||typeof command.value!=='string'||command.value.length>16384)throw Error('Native permission input unavailable');callback=before.input.onSubmit;args=[typeof before.input.inputFilter==='function'?before.input.inputFilter(command.value):command.value];}
  else if(command.action==='cancel')callback=before.cancel;
  else throw Error('Unsupported native Permissions action');
- if(nativePermissionsFrame(n,entry)!==before)throw Error('Native Permissions changed before dispatch');entry.current();before.consumed=true;await callback(...args);
+ if(nativePermissionsFrame(n,entry)!==before)throw Error('Native Permissions changed before dispatch');entry.current();before.consumed=true;entry.permissionsSearchLease=undefined;await callback(...args);
  let focusRequested=false;
  for(let attempt=0;attempt<40;attempt++){abort.signal.throwIfAborted();if(entry.closed)return {snapshot:{revision:before.snapshot.revision,rows:[],permissions:{title:'Permissions',tabs:[],paragraphs:[],choices:[],readOnly:true}}};await new Promise(resolve=>setTimeout(resolve,25));entry.current();const after=nativePermissionsFrame(n,entry);
   if(command.action==='tab'){

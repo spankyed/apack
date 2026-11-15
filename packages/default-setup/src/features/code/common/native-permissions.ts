@@ -8,13 +8,14 @@ export const claudePermissionsSnapshot = z.object({
   choices: z.array(z.object({ value: z.string().min(1).max(16384), label: z.string().max(65536), description: z.string().max(65536).optional(), disabled: z.boolean() }).strict()).max(2048),
   defaultFocusValue: z.string().max(16384).optional(),
   search: z.string().max(16384).optional(),
+  searchScope: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   form: z.object({ value: z.string().max(16384), placeholder: z.string().max(4096), multiline: z.boolean(), submitLabel: z.string().max(1024) }).strict().optional(),
   readOnly: z.boolean(),
 }).strict()
 export const claudePermissionsOperation = z.discriminatedUnion('action', [
   z.object({ action: z.literal('tab'), value: z.string().min(1).max(128) }).strict(),
   z.object({ action: z.literal('select'), value: z.string().min(1).max(16384) }).strict(),
-  z.object({ action: z.literal('search'), value: z.string().max(16384) }).strict(),
+  z.object({ action: z.literal('search'), scope: z.string().regex(/^[a-f0-9]{64}$/), value: z.string().max(16384) }).strict(),
   z.object({ action: z.literal('submit'), value: z.string().max(16384) }).strict(),
   z.object({ action: z.literal('cancel') }).strict(),
 ])

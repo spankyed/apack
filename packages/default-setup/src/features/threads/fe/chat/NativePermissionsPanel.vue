@@ -42,10 +42,10 @@ function submit(){const revision=props.state?.snapshot?.revision;if(revision&&pa
 function cancel(){const revision=props.state?.snapshot?.revision;if(revision)operate(revision,{action:'cancel'})}
 watch([()=>panel.value?.defaultFocusValue,()=>panel.value?.title,()=>panel.value?.choices.find(c=>c.value===panel.value?.defaultFocusValue)?.disabled],async([value])=>{if(typeof value!=='string'||!value)return;await nextTick();if(!document.hasFocus()||document.activeElement?.matches('input,textarea')||document.activeElement!==document.body&&!root.value?.contains(document.activeElement))return;const button=[...root.value!.querySelectorAll<HTMLButtonElement>('[data-native-permission-choice]')].find(e=>e.dataset.nativePermissionChoice===value);button?.focus({preventScroll:true})},{immediate:true})
 let searchTimer:ReturnType<typeof setTimeout>|undefined,timer:ReturnType<typeof setInterval>|undefined
-const searchScope=computed(()=>panel.value?.search===undefined?undefined:panel.value.title+':'+panel.value.tabs.find(tab=>tab.selected)?.value)
+const searchScope=computed(()=>panel.value?.searchScope)
 type SearchIntent={scope:string;value:string;ready:boolean;sent:boolean}
 let searchIntent:SearchIntent|undefined
-function flushSearch(){const intent=searchIntent,revision=props.state?.snapshot?.revision;if(!intent||!intent.ready||intent.sent||pending.value||!revision)return;if(intent.scope!==searchScope.value){searchIntent=undefined;return}intent.sent=true;operate(revision,{action:'search',value:intent.value})}
+function flushSearch(){const intent=searchIntent,revision=props.state?.snapshot?.revision;if(!intent||!intent.ready||intent.sent||pending.value||!revision)return;if(intent.scope!==searchScope.value){searchIntent=undefined;return}intent.sent=true;operate(revision,{action:'search',scope:intent.scope,value:intent.value})}
 function scheduleSearch(){if(searchTimer)clearTimeout(searchTimer);const scope=searchScope.value;if(scope===undefined)return;const intent:SearchIntent=searchIntent={scope,value:query.value,ready:false,sent:false};searchTimer=setTimeout(()=>{if(searchIntent!==intent)return;intent.ready=true;flushSearch()},180)}
 watch(searchScope,()=>{searchIntent=undefined;if(searchTimer)clearTimeout(searchTimer);query.value=panel.value?.search??''})
 watch([()=>panel.value?.search,()=>props.state?.snapshot?.revision,()=>props.state?.status],([value])=>{if(searchIntent&&searchIntent.sent&&value===searchIntent.value)searchIntent=undefined;if(!searchIntent&&typeof value==='string'&&value!==query.value)query.value=value;flushSearch()})

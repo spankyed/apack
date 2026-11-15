@@ -32,7 +32,7 @@ describe('original mounted Permissions authority', () => {
   it('uses original filtering and source keys rather than rebuilding permission rules', async () => {
     const f = fixture(), first = f.read()
     expect(first.snapshot.permissions.choices).toEqual([{ value: 'original-source-key', label: 'Read(release-notes.md)', disabled: false }])
-    const filtered = await f.act(first.snapshot.revision, { action: 'search', value: 'does not match' })
+    const filtered = await f.act(first.snapshot.revision, { action: 'search', scope: first.snapshot.permissions.searchScope, value: 'does not match' })
     expect(f.getter).toHaveBeenLastCalledWith('ask', 'does not match')
     expect(filtered.snapshot.permissions.choices).toEqual([])
     expect(f.select).not.toHaveBeenCalled()
@@ -148,4 +148,22 @@ it('does not transfer focus to a provider replaced while native tab selection se
   const f = tabFocusFixture(); f.tab.onClick.mockImplementation(() => { f.focus.selectedTab = 'foreign' })
   await expect(f.act(f.read().snapshot.revision, { action: 'tab', value: 'Workspace' })).rejects.toThrow(/focus owner changed/)
   expect(f.focus.blurHeader).not.toHaveBeenCalled()
+})
+
+it('filters the current original list after render revision churn, without relaxing choice revisions', async () => {
+  const f = fixture(), before = f.read(); f.redraw(); const refreshed = f.read()
+  expect(refreshed.snapshot.revision).not.toBe(before.snapshot.revision)
+  expect(refreshed.snapshot.permissions.searchScope).toBe(before.snapshot.permissions.searchScope)
+  const result = await f.act(before.snapshot.revision, { action: 'search', scope: before.snapshot.permissions.searchScope, value: 'release-notes' })
+  expect(result.snapshot.permissions.search).toBe('release-notes')
+  await expect(f.act(before.snapshot.revision, { action: 'select', value: 'original-source-key' })).rejects.toThrow(/changed/)
+  expect(f.select).not.toHaveBeenCalled()
+})
+
+it('retires a search lease on another native action and rejects fabricated scopes', async () => {
+  const f = fixture(), before = f.read(), scope = before.snapshot.permissions.searchScope
+  await expect(f.act(before.snapshot.revision, { action: 'search', scope: 'f'.repeat(64), value: 'wrong' })).rejects.toThrow(/unavailable/)
+  expect(f.read().snapshot.permissions.search).toBe('')
+  await f.act(before.snapshot.revision, { action: 'tab', value: 'Ask' })
+  await expect(f.act(before.snapshot.revision, { action: 'search', scope, value: 'retired' })).rejects.toThrow(/unavailable/)
 })
