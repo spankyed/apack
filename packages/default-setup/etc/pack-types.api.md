@@ -779,8 +779,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    plan: "plan";
                     default: "default";
+                    plan: "plan";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1588,6 +1588,28 @@ type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | '
 declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     kind: z.ZodLiteral<"fable_overage_consent_prompt">;
     snapshot: z.ZodObject<{
+        permissions: z.ZodOptional<z.ZodObject<{
+            title: z.ZodString;
+            tabs: z.ZodArray<z.ZodObject<{
+                value: z.ZodString;
+                label: z.ZodString;
+                selected: z.ZodBoolean;
+            }, z.core.$strict>>;
+            paragraphs: z.ZodArray<z.ZodString>;
+            choices: z.ZodArray<z.ZodObject<{
+                value: z.ZodString;
+                label: z.ZodString;
+                disabled: z.ZodBoolean;
+            }, z.core.$strict>>;
+            search: z.ZodOptional<z.ZodString>;
+            form: z.ZodOptional<z.ZodObject<{
+                value: z.ZodString;
+                placeholder: z.ZodString;
+                multiline: z.ZodBoolean;
+                submitLabel: z.ZodString;
+            }, z.core.$strict>>;
+            readOnly: z.ZodBoolean;
+        }, z.core.$strict>>;
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
                 selection: "selection";
@@ -2284,8 +2306,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                plan: "plan";
                 default: "default";
+                plan: "plan";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -8398,8 +8420,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    plan: "plan";
     default: "default";
+    plan: "plan";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -10586,6 +10608,24 @@ declare const claudeCreditRequest: z.ZodObject<{
 }, z.core.$strict>;
 
 declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    kind: z.ZodLiteral<"permissions">;
+    revision: z.ZodString;
+    command: z.ZodDiscriminatedUnion<[z.ZodObject<{
+        action: z.ZodLiteral<"tab">;
+        value: z.ZodString;
+    }, z.core.$strict>, z.ZodObject<{
+        action: z.ZodLiteral<"select">;
+        value: z.ZodString;
+    }, z.core.$strict>, z.ZodObject<{
+        action: z.ZodLiteral<"search">;
+        value: z.ZodString;
+    }, z.core.$strict>, z.ZodObject<{
+        action: z.ZodLiteral<"submit">;
+        value: z.ZodString;
+    }, z.core.$strict>, z.ZodObject<{
+        action: z.ZodLiteral<"cancel">;
+    }, z.core.$strict>], "action">;
+}, z.core.$strict>, z.ZodObject<{
     kind: z.ZodLiteral<"ideSelect">;
     revision: z.ZodString;
     value: z.ZodString;
@@ -10671,6 +10711,28 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strict>], "kind">;
 
 declare const claudeSettingsSnapshot: z.ZodObject<{
+    permissions: z.ZodOptional<z.ZodObject<{
+        title: z.ZodString;
+        tabs: z.ZodArray<z.ZodObject<{
+            value: z.ZodString;
+            label: z.ZodString;
+            selected: z.ZodBoolean;
+        }, z.core.$strict>>;
+        paragraphs: z.ZodArray<z.ZodString>;
+        choices: z.ZodArray<z.ZodObject<{
+            value: z.ZodString;
+            label: z.ZodString;
+            disabled: z.ZodBoolean;
+        }, z.core.$strict>>;
+        search: z.ZodOptional<z.ZodString>;
+        form: z.ZodOptional<z.ZodObject<{
+            value: z.ZodString;
+            placeholder: z.ZodString;
+            multiline: z.ZodBoolean;
+            submitLabel: z.ZodString;
+        }, z.core.$strict>>;
+        readOnly: z.ZodBoolean;
+    }, z.core.$strict>>;
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
             selection: "selection";
@@ -11256,6 +11318,28 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
                 editorAvailable?: boolean | undefined;
                 lockReason?: string | undefined;
             }[];
+            permissions?: {
+                title: string;
+                tabs: {
+                    value: string;
+                    label: string;
+                    selected: boolean;
+                }[];
+                paragraphs: string[];
+                choices: {
+                    value: string;
+                    label: string;
+                    disabled: boolean;
+                }[];
+                readOnly: boolean;
+                search?: string | undefined;
+                form?: {
+                    value: string;
+                    placeholder: string;
+                    multiline: boolean;
+                    submitLabel: string;
+                } | undefined;
+            } | undefined;
             ide?: {
                 stage: "connecting" | "disable" | "enable" | "finished" | "selection";
                 title: string;
@@ -11772,8 +11856,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

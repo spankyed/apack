@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { claudePermissionsSnapshot, claudePermissionsOperation } from './native-permissions.ts'
 
 export const claudeSettingValue = z.union([z.boolean(), z.string().max(16384), z.number().finite(), z.null()])
 export const claudeSettingsTab = z.enum(['Status', 'Config', 'Usage', 'Stats'])
@@ -44,6 +45,7 @@ export const claudeIdeSnapshot = z.object({
   selectedValue:z.string().max(1024).optional(),disabled:z.boolean().optional(),
 }).strict()
 export const claudeSettingsSnapshot = z.object({
+  permissions: claudePermissionsSnapshot.optional(),
   ide: claudeIdeSnapshot.optional(),
   help: claudeHelpSnapshot.optional(),
   frame: claudeSettingsFrame.optional(),
@@ -76,6 +78,7 @@ export const claudeSettingsEditorCommand = z.discriminatedUnion('action', [
   z.object({action:z.literal('cancel')}).strict(),
 ])
 export const claudeSettingsOperation = z.discriminatedUnion('kind', [
+  z.object({kind:z.literal('permissions'),revision:z.string().regex(/^[a-f0-9]{64}$/),command:claudePermissionsOperation}).strict(),
   z.object({kind:z.literal('ideSelect'),revision:z.string().regex(/^[a-f0-9]{64}$/),value:z.string().max(1024)}).strict(),
   z.object({kind:z.literal('helpTab'),revision:z.string().regex(/^[a-f0-9]{64}$/),tab:claudeHelpTab}).strict(),
   z.object({kind:z.literal('read')}).strict(),
