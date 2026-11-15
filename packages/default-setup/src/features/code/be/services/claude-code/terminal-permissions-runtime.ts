@@ -58,7 +58,8 @@ function nativePermissionRecent(controlsRoot,picker){
  const c=cache[0],container=c[45],handlers=[];if(container?.props?.onKeyDown!==c[20])throw Error('Native recent denial retry container changed');nativeIdeWalk(owner.child,f=>{if(f.type===container.type&&f.memoizedProps===container.props)handlers.push(f);});if(handlers.length!==1)throw Error('Native recent denial retry owner changed');
  const choices=picker.options.map((o,index)=>{
   const parts=o.label?.props?.children,status=parts?.[0];if(o.value!==String(index)||!Array.isArray(parts)||parts.length!==3||!['b7097cfb75fda499f36e9f7d7385de9b7d46a6c526e45268b2eea4d0c06d4670','3b05e00b8aec0c76fa3e70d0eb8e0dbf739c42e0e270a86f6f4104f65f622e6b'].includes(nativeModelFunctionHash(status?.type))||status.props?.status!==(c[25].has(index)?'success':'error')||status.props?.withSpace!==true)throw Error('Native recent denial label changed');
-  return {value:o.value,label:nativePermissionText(parts.slice(1)),...o.description!==undefined?{description:nativePermissionText(o.description)}:{},approved:c[25].has(index),retryScheduled:c[29].has(index),retryAvailable:true,disabled:picker.props.isDisabled===true||c[13].has(index)};
+  if(nativePermissionText(parts[2])!==(c[29].has(index)?' (retry)':''))throw Error('Native recent denial retry label changed');
+  return {value:o.value,label:nativePermissionText(parts[1]),...o.description!==undefined?{description:nativePermissionText(o.description)}:{},approved:c[25].has(index),retryScheduled:c[29].has(index),retryAvailable:true,disabled:picker.props.isDisabled===true||c[13].has(index)};
  });
  return {props:owner.memoizedProps,picker,focus:picker.props.onFocus,keyDown:c[20],focused:String(c[17]),headerFocused:c[18],choices};
 }

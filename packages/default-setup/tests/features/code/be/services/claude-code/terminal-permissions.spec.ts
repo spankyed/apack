@@ -376,7 +376,7 @@ describe('original Recently denied decisions', () => {
     const result = await f.act(f.read().snapshot.revision, { action: 'retry', value: '1' })
     expect(f.focus).toHaveBeenCalledExactlyOnceWith('1'); expect(f.keyDown).toHaveBeenCalledOnce()
     expect(f.select).not.toHaveBeenCalled(); expect([...f.retry]).toEqual([1]); expect([...f.approved]).toEqual([1])
-    expect(result.snapshot.permissions.choices[1]).toMatchObject({ approved: true, retryScheduled: true })
+    expect(result.snapshot.permissions.choices[1]).toMatchObject({ label: 'git diff', approved: true, retryScheduled: true })
     expect(result.snapshot.permissions.decisions).toEqual({ approved: 1, retry: 1 })
     await f.act(result.snapshot.revision, { action: 'retry', value: '1' })
     expect([...f.retry]).toEqual([]); expect([...f.approved]).toEqual([1])
