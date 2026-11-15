@@ -77,7 +77,7 @@ the bridge just called — every assertion reads an empty map.
 | `browser.closeTab` / `selectTab` / `navigate` / `goBack` / `goForward` / `reload` / `stop` / `setBounds` / `show` / `hide` / `toggleDevTools` | `browser:*` | send | `browser` |
 | `browser.onTabCreated` / `onTabRemoved` / `onTabUpdated` / `onActiveTabChanged` / `onFocusAddressBar` | `browser:tab-created` / `-removed` / `-updated` / `active-tab-changed` / `focus-address-bar` | on | `BrowserTabManager` |
 | `protocolAction.onAction(cb)` | `protocol-action` | on | `ProtocolHandler` (`apack://<action>?…` deep links) |
-| `terminal.views()` | `terminal:view-endpoint` | sendSync, then a socket of its own | `terminal-sessions`: where the broker listens and the line to greet it with. The bytes go straight to the broker, not through main |
+| `terminal.views()` | `terminal:view-endpoint` | sendSync, then a socket of its own | `terminal-sessions`: where the broker listens, the line to greet it with, and the proof the broker's answer must carry, without which the bridge ends the connection. The bytes go straight to the broker, not through main |
 | `performance.start` / `stop` (host-only) | `performance:renderer:start` / `performance:renderer:stop` | invoke | `performance` (dev/test, calling window and lease only) |
 | `rendererReady()` | `renderer:ready` | send | `window-manager`: shows the main window and closes the splash (15 s fallback) |
 

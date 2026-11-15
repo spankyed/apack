@@ -38,6 +38,12 @@ const server = net.createServer(connection => {
       typeof event === 'string'
         ? JSON.parse(event.replaceAll('$session', request.session ?? 's-1').replaceAll('$pid', String(request.pid ?? 0)))
         : event);
+    // What the real broker does with the key it was started with (\`proof_of\`), so a fake started with one
+    // proves it as a broker would
+    if (request.kind === 'hello' && process.env.APACK_TERMINAL_KEY && request.challenge) {
+      const proof = require('node:crypto').createHmac('sha256', process.env.APACK_TERMINAL_KEY).update(request.challenge).digest('hex');
+      for (const answer of answers) answer.proof = proof;
+    }
     if (answers.length === 0) return;
     // **One write, so a request's answers are one read.** Two writes are two syscalls that the socket
     // coalesces or not as it pleases, which makes 'these frames arrive together' a property of the day
@@ -186,6 +192,36 @@ describe('the broker client', () => {
     const session = await (await broker(OPENS)).open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
 
     expect(session).toMatchObject({ id: 's-1', pid: 4242 });
+  });
+
+  it('starts its broker with the key it then asks it to prove, and goes on when it does', async () => {
+    const { binary, socket } = brokerScript(FAKE);
+    running = await startBroker({ binary, socket, env: { ...process.env, FAKE_SCRIPT: JSON.stringify(OPENS) }, key: 'the-key' });
+    const session = await running.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
+    expect(session.id).toBe('s-1');
+  });
+
+  /**
+   * **Another account's process at the broker's address is refused before it is told anything**: on Windows the
+   * address is a pipe name, which any account can take first, and this app's broker then finds it taken and
+   * exits as if one were already there. Played here by a broker started without this app's key, which has
+   * nothing to answer the challenge with; the requests it read show it was sent the greeting and nothing more.
+   */
+  it('refuses a broker that cannot prove it holds the key, before it sends anything past the greeting', async () => {
+    directory = mkdtempSync(path.join(tmpdir(), 'broker-client-'));
+    const binary = path.join(directory, 'fake-broker.cjs');
+    const asked = path.join(directory, 'requests.ndjson');
+    writeFileSync(binary, RECORDS);
+    chmodSync(binary, 0o755);
+    const socket = path.join(directory, 'b.sock');
+    const env = { ...process.env, FAKE_SCRIPT: JSON.stringify(OPENS), FAKE_REQUESTS: asked };
+    // There first, keyless: what the app finds at its address
+    running = await startBroker({ binary, socket, env });
+
+    await expect(startBroker({ binary, socket, env, key: 'the-key' })).rejects.toThrow(/could not prove it is this app's terminal broker/);
+    await expect(holdBrokerSessions({ binary, socket, env, key: 'the-key' })).rejects.toThrow(/could not prove/);
+    const kinds = readFileSync(asked, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line).kind);
+    expect(kinds, 'a broker that proved nothing was sent more than greetings').toEqual(['hello', 'hello', 'hello']);
   });
 
   it('refuses a broker that speaks another protocol, naming both', async () => {
