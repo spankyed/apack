@@ -85,3 +85,90 @@ it('discards a queued search when its original tab is replaced', async () => {
   const panel = f.state.value.snapshot!.permissions!; panel.tabs[0].selected = false; panel.tabs[1].selected = true; panel.searchScope = 'd'.repeat(64); await nextTick(); await vi.advanceTimersByTimeAsync(200)
   expect(f.operate).not.toHaveBeenCalled(); expect(input.value).toBe('')
 })
+
+async function directoryFixture() {
+  const f = fixture(true), panel = f.state.value.snapshot!.permissions!
+  panel.title = 'Add directory to workspace'; panel.form!.placeholder = 'Directory path…'; panel.form!.submitLabel = 'Add directory'; panel.form!.value = 'ref'
+  panel.form!.live = { id: 'd'.repeat(64), revision: 'e'.repeat(64), selectedValue: '/native/reference', suggestions: [{ value: '/native/reference', label: 'reference/', description: 'directory', token: 'f'.repeat(64) }, { value: '/native/references', label: 'references/', token: '1'.repeat(64) }] }
+  await nextTick(); f.operate.mockClear()
+  return f
+}
+type DirectoryFixture = Awaited<ReturnType<typeof directoryFixture>>
+async function directoryReply(f: DirectoryFixture, requestId: string, value: string, revision = '2'.repeat(64)) {
+  const next: ClaudeSettingsView = JSON.parse(JSON.stringify(f.state.value)); next.requestId = requestId; next.status = 'ready'; next.snapshot!.revision = 'b'.repeat(64)
+  next.snapshot!.permissions!.form!.value = value; next.snapshot!.permissions!.form!.live!.revision = revision
+  f.state.value = next; await nextTick(); await nextTick()
+}
+function typeDirectory(f: DirectoryFixture, value: string) { const input = f.root.querySelector('input')!; input.value = value; input.dispatchEvent(new Event('input', { bubbles: true })); return input }
+
+it('completes an original directory suggestion without submitting access', async () => {
+  const f = await directoryFixture()
+  f.root.querySelector<HTMLButtonElement>('[role="option"]')!.click(); await nextTick()
+  expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'complete', scope: 'd'.repeat(64), value: '/native/reference', token: 'f'.repeat(64) } })
+  await directoryReply(f, 'completion', '/native/reference/')
+  expect(f.root.querySelector('input')!.value).toBe('/native/reference/')
+  expect(f.operate.mock.calls.some(([v]) => v.command?.action === 'submit')).toBe(false)
+})
+
+it('coalesces typing behind an original live edit without erasing a newer local draft', async () => {
+  const f = await directoryFixture(); const input = typeDirectory(f, 'refa'); await nextTick()
+  f.state.value.status = 'pending'; await nextTick(); expect(input.disabled).toBe(false)
+  typeDirectory(f, 'refab'); typeDirectory(f, 'refabc'); await nextTick()
+  expect(f.operate).toHaveBeenCalledTimes(1)
+  await directoryReply(f, 'first-edit', 'refa')
+  expect(input.value).toBe('refabc')
+  expect(f.operate.mock.calls.map(([v]) => v.command?.value)).toEqual(['refa', 'refabc'])
+  await directoryReply(f, 'latest-edit', 'refabc', '3'.repeat(64)); expect(input.value).toBe('refabc')
+})
+
+it('waits for the real native draft before submitting a queued Enter exactly once', async () => {
+  const f = await directoryFixture(), input = typeDirectory(f, 'reference'); await nextTick(); await Promise.resolve()
+  expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'change', scope: 'd'.repeat(64), value: 'reference' } })
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await nextTick()
+  expect(f.operate.mock.calls.some(([v]) => v.command?.action === 'submit'), JSON.stringify(f.operate.mock.calls)).toBe(false)
+  await directoryReply(f, 'edit-ack', '/native/reference', '9'.repeat(64))
+  expect(f.operate).toHaveBeenLastCalledWith({ kind: 'permissions', revision: 'b'.repeat(64), command: { action: 'submit', scope: 'd'.repeat(64), formRevision: '9'.repeat(64), value: '/native/reference' } })
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await nextTick()
+  expect(f.operate.mock.calls.filter(([v]) => v.command?.action === 'submit')).toHaveLength(1)
+})
+
+it('retires buffered edits when the original directory form is replaced', async () => {
+  const f = await directoryFixture(); const retiredInput = typeDirectory(f, 'refa'); await nextTick(); typeDirectory(f, 'refab'); await nextTick()
+  f.state.value.snapshot!.permissions!.form!.live!.id = '4'.repeat(64); f.state.value.snapshot!.permissions!.form!.value = 'new-owner'; f.state.value.requestId = 'replacement'; await nextTick(); await nextTick()
+  expect(f.root.querySelector('input')!.value).toBe('new-owner'); expect(f.operate).toHaveBeenCalledTimes(1)
+  retiredInput.value = 'retired-composition'; retiredInput.dispatchEvent(new Event('input', { bubbles: true })); retiredInput.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })); await nextTick()
+  expect(f.root.querySelector('input')!.value).toBe('new-owner'); expect(f.operate).toHaveBeenCalledTimes(1)
+})
+
+it('keeps composing text local until composition finishes', async () => {
+  const f = await directoryFixture(), input = f.root.querySelector('input')!
+  input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); input.value = '資料'
+  input.dispatchEvent(new InputEvent('input', { bubbles: true, data: '資料', isComposing: true })); await nextTick()
+  expect(f.operate).not.toHaveBeenCalled()
+  input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })); await nextTick(); await nextTick()
+  expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'change', scope: 'd'.repeat(64), value: '資料' } })
+})
+
+it('retains an arrow-selected completion through a background read and completes it with Tab', async () => {
+  const f = await directoryFixture(), input = f.root.querySelector('input')!
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })); await nextTick()
+  f.state.value.status = 'pending'; await nextTick(); await directoryReply(f, 'background-read', 'ref')
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })); await nextTick()
+  expect(f.operate).toHaveBeenLastCalledWith({ kind: 'permissions', revision: 'b'.repeat(64), command: { action: 'complete', scope: 'd'.repeat(64), value: '/native/references', token: '1'.repeat(64) } })
+})
+
+it('shows the original directory validation error and clears it only with native state', async () => {
+  const f = await directoryFixture(); f.state.value.snapshot!.permissions!.form!.live!.problem = 'Original path is not accessible'; await nextTick()
+  expect(f.root.querySelector('[role="alert"]')?.textContent).toBe('Original path is not accessible')
+  delete f.state.value.snapshot!.permissions!.form!.live!.problem; await nextTick(); expect(f.root.querySelector('[role="alert"]')).toBeNull()
+})
+
+it('does not replay a queued add after a background read fails', async () => {
+  const f = await directoryFixture(), input = f.root.querySelector('input')!
+  f.state.value.status = 'pending'; await nextTick()
+  typeDirectory(f, 'unsent-reference'); input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await nextTick()
+  expect(f.operate).not.toHaveBeenCalled()
+  f.state.value.status = 'error'; f.state.value.problem = 'Original read failed'; await nextTick()
+  await directoryReply(f, 'refreshed', 'ref'); delete f.state.value.problem; await nextTick(); await nextTick()
+  expect(input.value).toBe('unsent-reference'); expect(f.operate).not.toHaveBeenCalled()
+})

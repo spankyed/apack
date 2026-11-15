@@ -9,6 +9,26 @@ function nativePermissionText(value,depth=0){
  if(typeof value==='object'&&value.props&&Object.hasOwn(value.props,'children'))return nativePermissionText(value.props.children,depth+1);
  throw Error('Native permission label is not supported');
 }
+function nativePermissionDirectory(controlsRoot,input,entry){
+ if(!input){entry.permissionsDirectoryLease=undefined;return;}
+ const owners=[];nativeIdeWalk(controlsRoot,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&typeof p?.onAddDirectory==='function'&&p.permissionContext)owners.push(f);});
+ if(!owners.length){entry.permissionsDirectoryLease=undefined;return;}
+ if(owners.length!==1||!['82ec5e10ac78d83816820ac86a78e829cb590af5e337988668816b8650c15473','f253efbd23d08ded24b3b7a564dfe865d007cd97a0966e4ec7f3f75c79936b14'].includes(nativeModelFunctionHash(owners[0].type)))throw Error('Native directory producer changed');
+ const owner=owners[0],fields=[];nativeIdeWalk(owner.child,f=>{const p=f.memoizedProps;if(typeof f.type==='function'&&p?.onChange===input.onChange&&p.onSubmit===input.onSubmit&&Array.isArray(p.suggestions))fields.push(f);});
+ if(fields.length!==1||!['c6cd02efcbe63ca1098635b105cf87343f6514880c19f38944088c26ce479eb6','81590b4e10c20acc4a6bcf8648017370a77b06a1b08f034b8493ef2cd1b6cfb7'].includes(nativeModelFunctionHash(fields[0].type)))throw Error('Native directory field changed');
+ const field=fields[0].memoizedProps,caches=owner.updateQueue?.memoCache?.data?.filter(c=>Array.isArray(c)&&c.length===38);
+ if(caches?.length!==1||typeof caches[0][7]!=='function'||field.value!==input.value||field.suggestions.length>128||field.error!=null&&typeof field.error!=='string'||!Number.isInteger(field.selectedSuggestion))throw Error('Native directory completion changed');
+ const complete=caches[0][7];let lease=entry.permissionsDirectoryLease;
+ if(!lease||lease.owner!==owner.memoizedProps||lease.change!==input.onChange||lease.submit!==input.onSubmit||lease.complete!==complete)lease=entry.permissionsDirectoryLease={owner:owner.memoizedProps,change:input.onChange,submit:input.onSubmit,complete,id:createHash('sha256').update(randomUUID()).digest('hex'),epoch:0,busy:false};
+ const items=field.suggestions,suggestions=items.map(item=>{
+  if(typeof item?.id!=='string'||!item.id||item.id.length>16384||typeof item.displayText!=='string'||item.displayText.length>65536||item.description!==undefined&&typeof item.description!=='string')throw Error('Native directory suggestion changed');
+  const label=item.displayText,description=item.description;return {value:item.id,label,...description!==undefined?{description}:{},token:createHash('sha256').update(JSON.stringify([lease.id,lease.epoch,input.value,item.id,label,description])).digest('hex')};
+ });
+ if(new Set(suggestions.map(s=>s.value)).size!==suggestions.length)throw Error('Native directory suggestions are ambiguous');
+ const selectedValue=items[field.selectedSuggestion]?.id,problem=field.error??undefined;
+ const snapshot={id:lease.id,revision:createHash('sha256').update(JSON.stringify([lease.id,lease.epoch,input.value,problem])).digest('hex'),suggestions,...selectedValue!==undefined?{selectedValue}:{},...problem!==undefined?{problem}:{}};
+ return {lease,field,items,snapshot};
+}
 function nativePermissionsFrame(n,entry){
  entry.current();if(entry.closed||entry.answered||entry.commandName!=='permissions')throw Error('Native Permissions panel expired');
  const hash=nativeModelFunctionHash(entry.originalType),local=nativePermissionOwners.local.includes(hash);
@@ -64,14 +84,14 @@ function nativePermissionsFrame(n,entry){
   const caches=owner.updateQueue?.memoCache?.data?.filter(c=>Array.isArray(c)&&c.length===(local?226:19));
   if(caches?.length!==1||typeof caches[0][local?39:1]!=='function')throw Error('Native Permissions dismissal changed');cancel=caches[0][local?39:1];
  }
- const picker=pickers[0],input=inputs[0];
+ const picker=pickers[0],input=inputs[0],directory=nativePermissionDirectory(controlsRoot,inputs[0],entry);
  const choices=(picker?.options??[]).map(o=>({value:o.value,label:nativePermissionText(o.label),...(o.description!==undefined?{description:nativePermissionText(o.description)}:{}),disabled:o.disabled===true||o.isDisabled===true||picker.props.isDisabled===true}));
  if(new Set(choices.map(o=>o.value)).size!==choices.length||tabs.length>16||paragraphs.length>256||paragraphs.some(t=>t.length>65536)||choices.some(o=>!o.value||o.value.length>16384||o.label.length>65536)||title.length>65536)throw Error('Native Permissions text or choices exceed bounds');
  const defaultFocusValue=picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey;
  if(!ruleList)entry.permissionsSearchLease=undefined;else if(entry.permissionsSearchLease?.tab!==ruleList.tab)entry.permissionsSearchLease={tab:ruleList.tab,token:createHash('sha256').update(randomUUID()).digest('hex')};
- const permissions={title,...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...ruleList?{search:entry.permissionsSearch??ruleList.searchQuery??'',searchScope:entry.permissionsSearchLease.token}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:'Continue'}}:{}};
+ const permissions={title,...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...ruleList?{search:entry.permissionsSearch??ruleList.searchQuery??'',searchScope:entry.permissionsSearchLease.token}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:directory?'Add directory':'Continue',...directory?{live:directory.snapshot}:{}}}:{}};
  const encoded=JSON.stringify(permissions),prior=entry.permissionsFrame,source=picker?.props??input??tabFrame??owner.memoizedProps;
- if(!prior||prior.encoded!==encoded||prior.source!==source||prior.cancel!==cancel||prior.focusBody!==focusBody)entry.permissionsFrame={encoded,source,cancel,focusBody,picker,input,tabs,ruleList,snapshot:{revision:createHash('sha256').update(encoded+randomUUID()).digest('hex'),rows:[],permissions}};
+ if(!prior||prior.encoded!==encoded||prior.source!==source||prior.cancel!==cancel||prior.focusBody!==focusBody||prior.directory?.field!==directory?.field)entry.permissionsFrame={encoded,source,cancel,focusBody,picker,input,directory,tabs,ruleList,snapshot:{revision:createHash('sha256').update(encoded+randomUUID()).digest('hex'),rows:[],permissions}};
  return entry.permissionsFrame;
 }
 async function nativePermissionsPanel(n,entry,request,abort){
@@ -83,6 +103,28 @@ async function nativePermissionsPanel(n,entry,request,abort){
   if(!before.ruleList||command.scope!==before.snapshot.permissions.searchScope||typeof command.value!=='string'||command.value.length>16384)throw Error('Native permission search unavailable');
   entry.permissionsSearch=command.value;return {snapshot:nativePermissionsFrame(n,entry).snapshot};
  }
+ const directory=before.directory,liveSubmit=command.action==='submit'&&!!directory,liveCancel=command.action==='cancel'&&!!directory;
+ if(command.action==='change'||command.action==='complete'||liveSubmit||liveCancel){
+  if(!directory||command.scope!==directory.lease.id||directory.lease.busy)throw Error('Native directory field expired or busy');
+  let callback,args,expected;
+  if(command.action==='change'){
+   if(typeof command.value!=='string'||command.value.length>16384)throw Error('Native directory draft changed');
+   expected=typeof before.input.inputFilter==='function'?before.input.inputFilter(command.value):command.value;callback=before.input.onChange;args=[expected];
+  }else if(command.action==='complete'){
+   const index=directory.snapshot.suggestions.findIndex(s=>s.value===command.value&&s.token===command.token);
+   if(index<0||before.consumed)throw Error('Native directory suggestion changed');callback=directory.lease.complete;args=[directory.items[index]];
+  }else if(liveCancel){callback=before.cancel;args=[];}else{
+   if(command.formRevision!==directory.snapshot.revision||command.value!==before.input.value||before.consumed)throw Error('Native directory submission changed');callback=before.input.onSubmit;args=[command.value];
+  }
+  if(nativePermissionsFrame(n,entry)!==before)throw Error('Native directory field changed before dispatch');entry.current();directory.lease.epoch++;directory.lease.busy=true;if(command.action!=='change')before.consumed=true;
+  try{await callback(...args);}finally{directory.lease.busy=false;}
+  for(let attempt=0;attempt<40;attempt++){abort.signal.throwIfAborted();await new Promise(resolve=>setTimeout(resolve,25));entry.current();const after=nativePermissionsFrame(n,entry);
+   if(after.directory?.lease!==directory.lease)return {snapshot:after.snapshot};
+   if(command.action==='change'?after.input.value===expected:command.action==='complete'?after.directory.field!==directory.field||after.input.value!==before.input.value:true)return {snapshot:after.snapshot};
+  }
+  return {snapshot:nativePermissionsFrame(n,entry).snapshot,problem:'Claude Code has not acknowledged the directory edit. Refresh to check its current state.'};
+ }
+ if(command.scope!==undefined||command.formRevision!==undefined)throw Error('Native directory field expired');
  if(request.revision!==before.snapshot.revision||before.consumed)throw Error('Native Permissions changed before this action');
  let callback,args=[];
  if(command.action==='tab'){const tab=before.tabs.find(t=>t.title===command.value);if(!tab)throw Error('Native Permissions tab unavailable');callback=tab.onClick;}

@@ -167,3 +167,60 @@ it('retires a search lease on another native action and rejects fabricated scope
   await f.act(before.snapshot.revision, { action: 'tab', value: 'Ask' })
   await expect(f.act(before.snapshot.revision, { action: 'search', scope, value: 'retired' })).rejects.toThrow(/unavailable/)
 })
+
+function directoryFixture() {
+  const f = fixture(), ownerProps = { onAddDirectory: vi.fn(), onCancel: f.cancel, permissionContext: {} }
+  let value = '', problem: string | null = null, suggestions = [{ id: '/native/reference', displayText: 'reference/', description: 'directory' }]
+  const onChange = vi.fn((next: string) => { value = next; redraw() })
+  const onSubmit = vi.fn(async (_next: string) => { problem = 'Original directory validation failed'; redraw() })
+  const complete = vi.fn((_item: object) => { value = 'original-completed-value/'; problem = null; redraw() })
+  const ownerType = Object.assign(function Directory() {}, { hash: '82ec5e10ac78d83816820ac86a78e829cb590af5e337988668816b8650c15473' })
+  const fieldType = Object.assign(function DirectoryField() {}, { hash: 'c6cd02efcbe63ca1098635b105cf87343f6514880c19f38944088c26ce479eb6' })
+  const filter = (text: string) => text.replace(/[\r\n]/g, '')
+  function redraw() {
+    const inputProps = { value, onChange, onSubmit, placeholder: 'Directory path…', inputFilter: filter }
+    const fieldProps = { value, onChange, onSubmit, suggestions, selectedSuggestion: 0, error: problem }
+    const frameProps = { title: 'Add directory to workspace', onCancel: f.cancel, children: [{ type: fieldType, props: fieldProps }] }
+    const field: any = { type: fieldType, memoizedProps: fieldProps, child: { type: function Input() {}, memoizedProps: inputProps } }
+    f.root.child = { type: ownerType, memoizedProps: ownerProps, updateQueue: { memoCache: { data: [Array.from({ length: 38 }, (_, i) => i === 7 ? complete : undefined)] } }, child: { type: function Frame() {}, memoizedProps: frameProps, child: field } }
+  }
+  redraw(); return { ...f, onChange, onSubmit, complete, ownerType, fieldType, redraw, replaceSuggestions: (next: typeof suggestions) => { suggestions = next; redraw() }, nativeItems: () => suggestions }
+}
+
+it('projects original directory suggestions and invokes their original completion without adding access', async () => {
+  const f = directoryFixture(), first = f.read(), live = first.snapshot.permissions.form.live
+  expect(live.suggestions[0]).toMatchObject({ value: '/native/reference', label: 'reference/', description: 'directory' })
+  const result = await f.act(first.snapshot.revision, { action: 'complete', scope: live.id, value: live.suggestions[0].value, token: live.suggestions[0].token })
+  expect(f.complete).toHaveBeenCalledExactlyOnceWith(f.nativeItems()[0]); expect(f.onSubmit).not.toHaveBeenCalled()
+  expect(result.snapshot.permissions.form.value).toBe('original-completed-value/')
+  await expect(f.act(first.snapshot.revision, { action: 'complete', scope: live.id, value: live.suggestions[0].value, token: live.suggestions[0].token })).rejects.toThrow(/suggestion changed/)
+  expect(f.complete).toHaveBeenCalledOnce()
+})
+
+it('updates only the original live draft across render churn and preserves the original input filter', async () => {
+  const f = directoryFixture(), first = f.read(); f.redraw()
+  const result = await f.act(first.snapshot.revision, { action: 'change', scope: first.snapshot.permissions.form.live.id, value: 'reference\n' })
+  expect(f.onChange).toHaveBeenCalledExactlyOnceWith('reference'); expect(f.onSubmit).not.toHaveBeenCalled(); expect(f.complete).not.toHaveBeenCalled()
+  expect(result.snapshot.permissions.form.value).toBe('reference')
+})
+
+it('refuses replaced native suggestions and fabricated or retired field scopes', async () => {
+  const f = directoryFixture(), first = f.read(), live = first.snapshot.permissions.form.live
+  f.replaceSuggestions([{ id: '/native/different', displayText: 'different/', description: 'directory' }])
+  await expect(f.act(first.snapshot.revision, { action: 'complete', scope: live.id, ...live.suggestions[0] })).rejects.toThrow(/suggestion changed/)
+  await expect(f.act(first.snapshot.revision, { action: 'change', scope: 'f'.repeat(64), value: 'foreign' })).rejects.toThrow(/expired/)
+  f.root.child.memoizedProps = { ...f.root.child.memoizedProps }
+  await expect(f.act(first.snapshot.revision, { action: 'change', scope: live.id, value: 'retired' })).rejects.toThrow(/expired/)
+  expect(f.onChange).not.toHaveBeenCalled(); expect(f.complete).not.toHaveBeenCalled()
+})
+
+it('submits only the current native draft and form revision, and exposes original validation errors', async () => {
+  const f = directoryFixture(), first = f.read(), scope = first.snapshot.permissions.form.live.id
+  const edited = await f.act(first.snapshot.revision, { action: 'change', scope, value: 'bad-directory' }), form = edited.snapshot.permissions.form
+  await expect(f.act(first.snapshot.revision, { action: 'submit', scope, formRevision: first.snapshot.permissions.form.live.revision, value: 'bad-directory' })).rejects.toThrow(/submission changed/)
+  await expect(f.act(edited.snapshot.revision, { action: 'submit', scope, formRevision: form.live.revision, value: 'unseen-draft' })).rejects.toThrow(/submission changed/)
+  const result = await f.act(edited.snapshot.revision, { action: 'submit', scope, formRevision: form.live.revision, value: form.value })
+  expect(f.onSubmit).toHaveBeenCalledExactlyOnceWith('bad-directory')
+  expect(result.snapshot.permissions.form.live.problem).toBe('Original directory validation failed')
+  await expect(f.act(edited.snapshot.revision, { action: 'submit', scope, formRevision: form.live.revision, value: form.value })).rejects.toThrow(/submission changed/)
+})
