@@ -74,7 +74,7 @@ describe('original mounted Permissions authority', () => {
     const body: any = { type: function TabBody() {}, memoizedProps: { id: 'ask', title: 'Ask', children: {} }, child: active }
     const inactive: any = { type: function TabBody() {}, memoizedProps: { id: 'deny', title: 'Deny', children: {} }, child: hidden }
     first.sibling = body; body.sibling = inactive
-    f.root.child = { type: function Tabs() {}, memoizedProps: { title: 'Permissions', children: [] }, child: first }
+    f.root.child = { type: Object.assign(function Tabs() {}, { hash: 'a2ed848a66ba4a3055694ea64f27b7f1b126f093b0b13c9c56f98c72d41a242c' }), memoizedProps: { title: 'Permissions', children: [] }, child: { type: {}, memoizedProps: { value: { selectedTab: 'ask', headerFocused: false, focusHeader() {}, blurHeader() {}, registerOptIn() {}, registerNavigationOwner() {} } }, child: first } }
     expect(f.read().snapshot.permissions.choices[0].value).toBe('original-source-key')
     expect(inactiveGetter).not.toHaveBeenCalled()
   })
@@ -105,4 +105,47 @@ describe('original mounted Permissions authority', () => {
     const f = fixture(); await f.close(); expect(f.cancel).toHaveBeenCalledOnce()
     expect(f.read).toThrow(/expired/)
   })
+})
+
+function tabFocusFixture(disabledChoice = false) {
+  const f = fixture()
+  const focus = { selectedTab: 'workspace', headerFocused: true, focusHeader: vi.fn(), blurHeader: vi.fn(() => { focus.headerFocused = false; mount() }), registerOptIn: vi.fn(), registerNavigationOwner: vi.fn() }
+  const select = vi.fn(() => mount())
+  const props = () => ({ options: [{ value: 'add-directory', label: 'Add directory…', disabled: disabledChoice }], isDisabled: focus.headerFocused, onChange: select })
+  const tab = { title: 'Workspace', isCurrent: true, onClick: vi.fn(() => mount()) }
+  const type = Object.assign(function Tabs() {}, { hash: 'a2ed848a66ba4a3055694ea64f27b7f1b126f093b0b13c9c56f98c72d41a242c' })
+  function mount() {
+    const body: any = { type: function TabBody() {}, memoizedProps: { id: 'workspace', title: 'Workspace', children: {} }, child: { type: function Picker() {}, memoizedProps: props() } }
+    const header: any = { type: function Header() {}, memoizedProps: tab, sibling: body }
+    f.root.child = { type, memoizedProps: { title: 'Permissions', children: [] }, child: { type: {}, memoizedProps: { value: focus }, child: header } }
+  }
+  mount(); return { ...f, focus, select, type, tab }
+}
+
+it('hands a desktop-selected category to the original native body focus callback', async () => {
+  const f = tabFocusFixture(); expect(f.read().snapshot.permissions.choices[0].disabled).toBe(true)
+  const result = await f.act(f.read().snapshot.revision, { action: 'tab', value: 'Workspace' })
+  expect(f.focus.blurHeader).toHaveBeenCalledOnce(); expect(f.select).not.toHaveBeenCalled()
+  expect(result.snapshot.permissions.choices[0].disabled).toBe(false)
+})
+
+it('refuses a foreign tab focus provider or changed original tab producer', () => {
+  const f = tabFocusFixture(); f.focus.selectedTab = 'foreign'
+  expect(f.read).toThrow(/focus owner changed/); expect(f.focus.blurHeader).not.toHaveBeenCalled()
+  f.focus.selectedTab = 'workspace'; f.type.hash = 'unknown'
+  expect(f.read).toThrow(/tab producer changed/); expect(f.focus.blurHeader).not.toHaveBeenCalled()
+})
+
+it('retains native choice restrictions after the original header releases focus', async () => {
+  const f = tabFocusFixture(true)
+  const result = await f.act(f.read().snapshot.revision, { action: 'tab', value: 'Workspace' })
+  expect(f.focus.blurHeader).toHaveBeenCalledOnce(); expect(result.snapshot.permissions.choices[0].disabled).toBe(true)
+  await expect(f.act(result.snapshot.revision, { action: 'select', value: 'add-directory' })).rejects.toThrow(/unavailable/)
+  expect(f.select).not.toHaveBeenCalled()
+})
+
+it('does not transfer focus to a provider replaced while native tab selection settles', async () => {
+  const f = tabFocusFixture(); f.tab.onClick.mockImplementation(() => { f.focus.selectedTab = 'foreign' })
+  await expect(f.act(f.read().snapshot.revision, { action: 'tab', value: 'Workspace' })).rejects.toThrow(/focus owner changed/)
+  expect(f.focus.blurHeader).not.toHaveBeenCalled()
 })

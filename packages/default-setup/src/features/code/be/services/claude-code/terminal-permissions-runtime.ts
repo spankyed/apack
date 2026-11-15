@@ -16,9 +16,9 @@ function nativePermissionsFrame(n,entry){
  const owners=[];nativeIdeWalk(n.themeRoots.ai().get(process.stdout)?.container?.current,f=>{if(f.type===entry.originalType&&f.memoizedProps===entry.originalProps)owners.push(f);});
  if(owners.length!==1)throw Error('Native Permissions is not uniquely mounted');
  const owner=owners[0],tabs=[],pickers=[],inputs=[],paragraphs=[];
- let tabFrame,ruleList;const ruleLists=[],bodies=[];
+ let tabFrame,tabOwner,focusBody,ruleList;const ruleLists=[],bodies=[];
  nativeIdeWalk(owner.child,f=>{const p=f.memoizedProps;if(typeof f.type!=='function'||!p)return;
-  if(p.title==='Permissions'&&Array.isArray(p.children))tabFrame=p;
+  if(p.title==='Permissions'&&Array.isArray(p.children)){tabFrame=p;tabOwner=f;}
   if(typeof p.title==='string'&&typeof p.isCurrent==='boolean'&&typeof p.onClick==='function')tabs.push(p);
   if(typeof p.id==='string'&&typeof p.title==='string'&&p.children)bodies.push(f);
   if(['allow','ask','deny'].includes(p.tab)&&typeof p.getRulesOptions==='function'&&typeof p.handleToolSelect==='function')ruleLists.push(p);
@@ -28,6 +28,10 @@ function nativePermissionsFrame(n,entry){
   const selected=tabs.filter(t=>t.isCurrent);if(selected.length!==1)throw Error('Native Permissions active tab is ambiguous');
   const active=bodies.filter(f=>f.memoizedProps.title===selected[0].title&&f.child);
   if(active.length!==1)throw Error('Native Permissions active body changed');controlsRoot=active[0].child;
+  if(!['a2ed848a66ba4a3055694ea64f27b7f1b126f093b0b13c9c56f98c72d41a242c','9848f88d74e42a102b8cbdced12d71e71c6e56ef1c84fd8c58ab8aa0898e707d'].includes(nativeModelFunctionHash(tabOwner.type)))throw Error('Native Permissions tab producer changed');
+  const providers=[];nativeIdeWalk(tabOwner.child,f=>{const v=f.memoizedProps?.value;if(v&&typeof v.headerFocused==='boolean'&&typeof v.focusHeader==='function'&&typeof v.blurHeader==='function'&&typeof v.registerOptIn==='function'&&typeof v.registerNavigationOwner==='function')providers.push(v);});
+  if(providers.length!==1||providers[0].selectedTab!==(active[0].memoizedProps.id??active[0].memoizedProps.title))throw Error('Native Permissions tab focus owner changed');
+  focusBody=providers[0].headerFocused?providers[0].blurHeader:undefined;
   const activeRules=[];nativeIdeWalk(controlsRoot,f=>{if(ruleLists.includes(f.memoizedProps))activeRules.push(f.memoizedProps);});
   if(activeRules.length>1)throw Error('Native Permissions rule lists are ambiguous');ruleList=activeRules[0];
  }else if(ruleLists.length===1)ruleList=ruleLists[0];
@@ -66,7 +70,7 @@ function nativePermissionsFrame(n,entry){
  const defaultFocusValue=picker?.props.defaultFocusValue??picker?.props.lastFocusedRuleKey;
  const permissions={title,...typeof defaultFocusValue==='string'&&choices.some(o=>o.value===defaultFocusValue)?{defaultFocusValue}:{},tabs:tabs.map(t=>({value:t.title,label:t.title,selected:t.isCurrent})),paragraphs,choices,readOnly:!local,...ruleList?{search:entry.permissionsSearch??ruleList.searchQuery??''}:{},...input?{form:{value:input.value,placeholder:input.placeholder,multiline:input.multiline===true,submitLabel:'Continue'}}:{}};
  const encoded=JSON.stringify(permissions),prior=entry.permissionsFrame,source=picker?.props??input??tabFrame??owner.memoizedProps;
- if(!prior||prior.encoded!==encoded||prior.source!==source||prior.cancel!==cancel)entry.permissionsFrame={encoded,source,cancel,picker,input,tabs,ruleList,snapshot:{revision:createHash('sha256').update(encoded+randomUUID()).digest('hex'),rows:[],permissions}};
+ if(!prior||prior.encoded!==encoded||prior.source!==source||prior.cancel!==cancel||prior.focusBody!==focusBody)entry.permissionsFrame={encoded,source,cancel,focusBody,picker,input,tabs,ruleList,snapshot:{revision:createHash('sha256').update(encoded+randomUUID()).digest('hex'),rows:[],permissions}};
  return entry.permissionsFrame;
 }
 async function nativePermissionsPanel(n,entry,request,abort){
@@ -81,7 +85,13 @@ async function nativePermissionsPanel(n,entry,request,abort){
  else if(command.action==='cancel')callback=before.cancel;
  else throw Error('Unsupported native Permissions action');
  if(nativePermissionsFrame(n,entry)!==before)throw Error('Native Permissions changed before dispatch');entry.current();before.consumed=true;await callback(...args);
- for(let attempt=0;attempt<40;attempt++){abort.signal.throwIfAborted();if(entry.closed)return {snapshot:{revision:before.snapshot.revision,rows:[],permissions:{title:'Permissions',tabs:[],paragraphs:[],choices:[],readOnly:true}}};await new Promise(resolve=>setTimeout(resolve,25));entry.current();const after=nativePermissionsFrame(n,entry);if(after!==before)return {snapshot:after.snapshot};}
+ let focusRequested=false;
+ for(let attempt=0;attempt<40;attempt++){abort.signal.throwIfAborted();if(entry.closed)return {snapshot:{revision:before.snapshot.revision,rows:[],permissions:{title:'Permissions',tabs:[],paragraphs:[],choices:[],readOnly:true}}};await new Promise(resolve=>setTimeout(resolve,25));entry.current();const after=nativePermissionsFrame(n,entry);
+  if(command.action==='tab'){
+   if(after.snapshot.permissions.tabs.find(t=>t.selected)?.value!==command.value)continue;
+   if(after.focusBody){if(!focusRequested){if(nativePermissionsFrame(n,entry)!==after)throw Error('Native Permissions focus changed before dispatch');entry.current();focusRequested=true;await after.focusBody();}continue;}
+  }
+  if(after!==before)return {snapshot:after.snapshot};}
  return {snapshot:before.snapshot,problem:'Claude Code has not acknowledged the permission action. Refresh to check its current state.'};
 }
 async function closeNativePermissionsPanel(n,entry){const frame=nativePermissionsFrame(n,entry);entry.current();await frame.cancel();return {open:!entry.closed};}
