@@ -68,3 +68,20 @@ it('places confirmation context before decisions and preserves the native cancel
   expect(document.activeElement?.textContent).toContain('No'); expect(document.activeElement?.textContent).toContain('Keep the original rule')
   focus.mockRestore()
 })
+
+it('retains debounced search across an in-flight refresh and sends with its current revision', async () => {
+  vi.useFakeTimers(); const f = fixture(); await nextTick(); f.operate.mockClear()
+  const input = f.root.querySelector('input')!; input.value = 'release-notes'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick()
+  f.state.value.status = 'pending'; await nextTick(); await vi.advanceTimersByTimeAsync(200)
+  expect(f.operate).not.toHaveBeenCalled()
+  f.state.value = { ...f.state.value, status: 'ready', snapshot: { ...f.state.value.snapshot!, revision: 'b'.repeat(64), permissions: { ...f.state.value.snapshot!.permissions!, search: '' } } }; await nextTick()
+  expect(input.value).toBe('release-notes')
+  expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'b'.repeat(64), command: { action: 'search', value: 'release-notes' } })
+})
+
+it('discards a queued search when its original tab is replaced', async () => {
+  vi.useFakeTimers(); const f = fixture(); await nextTick(); f.operate.mockClear()
+  const input = f.root.querySelector('input')!; input.value = 'old-tab-query'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick()
+  const panel = f.state.value.snapshot!.permissions!; panel.tabs[0].selected = false; panel.tabs[1].selected = true; await nextTick(); await vi.advanceTimersByTimeAsync(200)
+  expect(f.operate).not.toHaveBeenCalled(); expect(input.value).toBe('')
+})
