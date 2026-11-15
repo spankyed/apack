@@ -101,8 +101,8 @@ it.each(['settings','environment'] as const)('does not send old metadata under a
  read.mockImplementationOnce(()=>pending.promise)
  await f.start();f.tick();await vi.waitFor(()=>expect(read).toHaveBeenCalled())
  await f.start(fresh);pending.resolve(boundary==='settings'?{}:undefined);await flushPlugin()
- expect(f.requests.filter(r=>r.path==='/poll')).toHaveLength(0)
- f.tick();await flushPlugin()
+ // The fresh producer starts after readiness without a timer; the held old read still sends nothing.
+ await vi.waitFor(()=>expect(f.requests.filter(r=>r.path==='/poll')).toHaveLength(1))
  expect(f.requests.filter(r=>r.path==='/poll').map(r=>r.body)).toEqual([expect.objectContaining({sessionId:fresh,metadata:expect.objectContaining({cwd:'/'+fresh,model:fresh})})])
 })
 
@@ -152,6 +152,7 @@ it('fences the old prompt before waiting on fresh-session readiness delivery',as
  await f.start();f.tick();await vi.waitFor(()=>expect(f.api.prompt.read).toHaveBeenCalledOnce())
  const starting=f.start(fresh);await vi.waitFor(()=>expect(f.requests.some(r=>r.path==='/ui-ready'&&r.body.sessionId===fresh)).toBe(true))
  read.resolve({text:''});await flushPlugin();expect(f.api.prompt.fill).not.toHaveBeenCalled()
+ expect(f.requests.filter(row=>row.path==='/poll'&&row.body.sessionId===fresh)).toHaveLength(0)
  expect(f.api.clock.every).toHaveBeenCalledTimes(2)
  ready.resolve({ok:true,text:'{}'});await starting
 })

@@ -492,7 +492,7 @@ async function begin($: ClaudePluginApi) {
   producerSessionId = currentSession;
   const ownGeneration = ++generation;
   started = true;
-  timer = $.clock.every(TICK_MS, () => {
+  const exchangeWhenReady = () => {
     if (ownGeneration !== generation || retired || inFlight || Date.now() < retryAfter) return;
     // A leased child reports to the observer, which is reading it: its cadence is its own (every fourth
     // tick), and the app's answer has nothing to say about it.
@@ -503,7 +503,9 @@ async function begin($: ClaudePluginApi) {
       .finally(() => {
         if (ownGeneration === generation) inFlight = false;
       });
-  });
+  };
+  timer = $.clock.every(TICK_MS, exchangeWhenReady);
+  return exchangeWhenReady;
 }
 
 export function registerApackNativePlugin(on: ClaudeHookRegistrar, configuration: ApackNativePluginConfig) {
@@ -552,26 +554,31 @@ export function registerApackNativePlugin(on: ClaudeHookRegistrar, configuration
     }
   });
   on('session.start', async ($, event, next) => {
-    await begin($);
+    const startExchange = await begin($);
     await notify($, 'ui-ready', {});
+    // Readiness retires prior app commands; negotiation must not race that notification.
+    startExchange?.();
     return next(event);
   });
   on('ui.render', { component: 'SessionMode' }, async ($, event, next) => {
-    await begin($);
+    const startExchange = await begin($);
+    startExchange?.();
     return next(event);
   });
   on('turn.start', async ($, event: ClaudeTurnEvent, next) => {
     if (!event.agentId) {
-      await begin($);
+      const startExchange = await begin($);
       await notify($, 'turn', { running: true });
+      startExchange?.();
     }
     return next(event);
   });
   on('turn.complete', async ($, event: ClaudeTurnEvent, next) => {
     const result = await next(event);
     if (!event.agentId) {
-      await begin($);
+      const startExchange = await begin($);
       await notify($, 'turn', { running: false, turnId: event.turnId, reason: event.reason });
+      startExchange?.();
     }
     return result;
   });

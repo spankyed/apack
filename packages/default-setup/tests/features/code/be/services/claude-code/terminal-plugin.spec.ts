@@ -108,16 +108,18 @@ it('counts a notification the app refused and carries the count until an exchang
  const next=async(value:any)=>value
  createPluginFixture(CONFIG)(collector(hooks))
  await hooks.get('session.start')!(api,{},next)
+ // Settle the immediate startup report before the notification-count scenario begins.
+ await vi.waitFor(()=>expect(polls).toHaveLength(1));await new Promise(resolve=>setImmediate(resolve))
  const appended=async()=>hooks.get('session.append')!(api,{door:'prompt'},async()=>({uuid:'row-1',message:{role:'assistant'}}))
  await appended();await appended()
- tick();await vi.waitFor(()=>expect(polls).toHaveLength(1))
- expect(polls[0].dropped).toEqual({append:2})
+ tick();await vi.waitFor(()=>expect(polls).toHaveLength(2))
+ expect(polls[1].dropped).toEqual({append:2})
  // Taken off the counters only once it has been delivered, and the next exchange says nothing
- appendRefused=false;tick();await vi.waitFor(()=>expect(polls).toHaveLength(2))
- expect(polls[1]).not.toHaveProperty('dropped')
- await appended()
- tick();await vi.waitFor(()=>expect(polls).toHaveLength(3))
+ appendRefused=false;tick();await vi.waitFor(()=>expect(polls).toHaveLength(3))
  expect(polls[2]).not.toHaveProperty('dropped')
+ await appended()
+ tick();await vi.waitFor(()=>expect(polls).toHaveLength(4))
+ expect(polls[3]).not.toHaveProperty('dropped')
 })
 
 /**
@@ -146,4 +148,26 @@ it('reports at the cadence the app answers with, and on a hook when the app is n
  // A turn boundary is news, so the next tick reports it whatever the cadence said
  await hooks.get('turn.start')!(api,{},next)
  tick();await vi.waitFor(()=>expect(polls).toHaveLength(4))
+})
+
+it('starts worker negotiation without a timer tick while allowing native startup to continue',async()=>{
+ const child='05ff1d31-597d-4537-8737-4407191add6e',hooks=new Map<string,(...args:any[])=>Promise<any>>(),requests:{path:string;body:any}[]=[]
+ let tick!:()=>void,release!:()=>void,prefix:string|undefined
+ const pending=new Promise<void>(resolve=>{release=resolve}),next=vi.fn(async(value:any)=>value)
+ const api={session:{id:async()=>child,cwd:async()=>'/owned',model:async()=>'sonnet',turns:async()=>2,usage:async()=>({startedAt:1,cost:{usd:0.00042}})},agent:{list:async()=>[]},settings:{read:async()=>({statusLine:{type:'command',command:'original-helper'}})},env:{get:async()=>prefix,set:vi.fn(async(_name:string,value:string)=>{prefix=value;return{}})},clock:{every:vi.fn((_ms:number,callback:()=>void)=>{tick=callback;return{cancel(){}}})},process:{run:vi.fn(async()=>({exitCode:0,stdout:'119'}))},http:{fetch:async(url:string,init:any)=>{
+  const path=new URL(url).pathname;requests.push({path,body:JSON.parse(init.body)})
+  if(path==='/poll')await pending
+  return{ok:true,status:200,text:JSON.stringify(path==='/poll'?{background:true}:path==='/background-register'?{token:'early-lease'}:path==='/background-status'?{shellPrefix:'owned-prefix'}:{})}
+ }}}
+ createPluginFixture(CONFIG)(collector(hooks))
+ try {
+  await hooks.get('session.start')!(api,{},next)
+  expect(next).toHaveBeenCalledOnce()
+  await vi.waitFor(()=>expect(requests.filter(row=>row.path==='/poll')).toHaveLength(1))
+  tick();await hooks.get('ui.render')!(api,{},next);await new Promise(resolve=>setImmediate(resolve))
+  expect(requests.filter(row=>row.path==='/poll')).toHaveLength(1)
+  release();await vi.waitFor(()=>expect(prefix).toBe('owned-prefix'))
+  expect(requests.filter(row=>row.path.startsWith('/background-')).map(row=>row.path)).toEqual(['/background-register','/background-status'])
+  expect(api.process.run).toHaveBeenCalledOnce();expect(api.clock.every).toHaveBeenCalledOnce()
+ }finally{release()}
 })
