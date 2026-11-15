@@ -11,7 +11,7 @@ let bridge: Awaited<ReturnType<typeof createClaudeTerminalBridge>> | undefined
 async function config() { return JSON.parse(await readFile(bridge!.directory + '/observer.json', 'utf8')) }
 /** Node-hosted helper fixtures supply policy reads; the real UI module requires the pinned Claude binary. */
 async function standInHelperPolicy(policy?: string) {
-  await writeFile(join(bridge!.directory, 'ui.mjs'), `let prepared=false;export function bindNativeHelperObservationReader(reader){if(typeof reader!=='function')throw Error('Invalid observation reader');}export async function prepareNativeHelperPolicy(){await Promise.resolve();prepared=true;}export function readNativeHelperPolicy(){if(!prepared)throw Error('Policy was not prepared');return ${JSON.stringify(policy) ?? 'undefined'};}`)
+  await writeFile(join(bridge!.directory, 'ui.mjs'), `let prepared=false;export function bindNativeHelperObservationReader(reader){if(typeof reader!=='function')throw Error('Invalid observation reader');}export async function prepareNativeHelperPolicy(){await Promise.resolve();prepared=true;}export function readNativeHelperCommands(){return {main:null,subagent:null,prefix:undefined}};export function readNativeHelperPolicy(){if(!prepared)throw Error('Policy was not prepared');return ${JSON.stringify(policy) ?? 'undefined'};}`)
 }
 async function request(path: string, body: unknown, token?: string) {
   const value = await config()
