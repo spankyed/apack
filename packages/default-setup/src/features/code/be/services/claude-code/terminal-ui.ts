@@ -13,6 +13,7 @@ export interface ClaudeTerminalUiTransport {
 export function createClaudeTerminalUiTransport(options: {
   socketPath: string
   token: string
+  transportEpoch: string
   current(): { pid: number; sessionId: string } | undefined
 }) {
   let closed = false, sequence = 0
@@ -38,7 +39,7 @@ export function createClaudeTerminalUiTransport(options: {
       if (pending.size >= 64) return Promise.reject(new Error('Native UI request limit reached'))
       if (value.subtype === 'ui_detach' && typeof value.client_id === 'string') promptHosts.detach(value.client_id)
       if (value.subtype === 'ui_attach' && typeof value.client_id === 'string') value = { ...value, answers: promptHosts.answers(value.client_id) }
-      const id = randomUUID(), body = JSON.stringify({ id, sequence: ++sequence, ownerPid: owner.pid, sessionId: owner.sessionId, request: value })
+      const id = randomUUID(), body = JSON.stringify({ id, sequence: ++sequence, ownerPid: owner.pid, sessionId: owner.sessionId, transportEpoch: options.transportEpoch, request: value })
       const textRpc = CLAUDE_UI_PROMPT_RPC_SUBTYPES.some(subtype => subtype === value.subtype)
       const requestMaxBytes = textRpc ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : 1048576
       const responseMaxBytes = textRpc ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : 2 * 1048576

@@ -73,6 +73,7 @@ export async function createClaudeTerminalBridge(options: {
   const initialPolicy = options.settings.sources.find(source => source.source === 'policySettings' || source.source === 'policy')?.settings ?? {}
   let helperPolicyKey = JSON.stringify([initialPolicy.allowManagedHooksOnly === true, initialPolicy.disableAllHooks === true, options.settings.effective.disableAllHooks === true])
   let policyGeneration = randomUUID()
+  const transportEpoch = randomBytes(16).toString('hex')
   const generations = { main: randomUUID(), subagent: randomUUID() }
   const waiting: Record<string, unknown>[] = []
   let saveObserver: (() => Promise<void>) | undefined
@@ -106,7 +107,7 @@ export async function createClaudeTerminalBridge(options: {
    */
   const pluginCadenceMs = () => nativePolling ? 0 : 250
   let closed = false, busy = false, ready = false
-  const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
+  const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, transportEpoch, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
   let nativeEditor: Awaited<ReturnType<typeof createClaudeNativeEditorBridge>> | undefined
   const uiTransport: typeof ui.transport = {...ui.transport, request: value => nativeEditor ? nativeEditor.request(value) : ui.transport.request(value)}
   let backgroundObserver: ClaudeBackgroundStatusObserver | undefined
@@ -453,7 +454,7 @@ export async function createClaudeTerminalBridge(options: {
     await writeFile(join(directory, 'ui.mjs'), claudeTerminalUiRuntime, { mode: 0o600 })
     let observerWrite = Promise.resolve()
     saveObserver = () => {
-      const snapshot = JSON.stringify({ socketPath, uiSocketPath, token, sessionId: projection.sessionId, restorePlan: options.restorePlan, originalBunOptions: options.bunOptions, generations, policyGeneration })
+      const snapshot = JSON.stringify({ socketPath, uiSocketPath, token, transportEpoch, sessionId: projection.sessionId, restorePlan: options.restorePlan, originalBunOptions: options.bunOptions, generations, policyGeneration })
       observerWrite = observerWrite.catch(() => {}).then(async () => {
         const temporary = observerConfig + '.' + randomUUID() + '.tmp'
         await writeFile(temporary, snapshot, { mode: 0o600 })

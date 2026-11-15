@@ -26,7 +26,7 @@ it.each(['newer status', 'new registration'] as const)('does not rewrite helper 
  try {
   await mkdir(worker, {recursive: true, mode: 0o700}); await chmod(join(observer.directory, 'workers'), 0o700)
   await writeFile(join(observer.directory, 'worker-119.json'), JSON.stringify({pid: 119, sessionId: child, start: identity.start, configPath}), {mode: 0o600})
-  await writeFile(configPath, JSON.stringify({sessionId: child, jobSessionId: child, token: 'b'.repeat(64), uiSocketPath: join(worker, 'ui.sock'), mainObservationClaimed: false, generations: {main: 'main-generation', subagent: 'subagent-generation'}}), {mode: 0o600})
+  await writeFile(configPath, JSON.stringify({sessionId: child, jobSessionId: child, token: 'b'.repeat(64), uiSocketPath: join(worker, 'ui.sock'), mainObservationClaimed: false, transportEpoch: 'a'.repeat(32), generations: {main: 'main-generation', subagent: 'subagent-generation'}}), {mode: 0o600})
   let lease = (await post('/background-register', {sessionId: child, pid: 119})).value.token
   const snapshot = (sequence: number, restricted: boolean) => ({sessionId: child, pid: 119, token: lease, sequence, metadata: {model: 'sonnet', turns: 2}, usage: {startedAt: 1, cost: {usd: 0.00042}}, helpers: {command: 'caption-helper', policyKey: JSON.stringify([restricted, false, false]), agents: []}})
   expect((await post('/background-status', snapshot(1, false))).code).toBe(200)

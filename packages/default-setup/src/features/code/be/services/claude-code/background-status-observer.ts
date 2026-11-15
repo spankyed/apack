@@ -120,19 +120,19 @@ export async function createClaudeBackgroundStatusObserver(options: {
     const configInfo = await lstat(proof.configPath)
     if (!configInfo.isFile() || configInfo.uid !== process.getuid?.() || (configInfo.mode & 0o077) !== 0 || configInfo.size > 65536) throw new Error('Unowned background UI startup config')
     const config = JSON.parse(await readFile(proof.configPath, 'utf8'))
+    if (typeof config.transportEpoch !== 'string' || !/^[a-f0-9]{32}$/.test(config.transportEpoch)) throw new Error('Background UI transport epoch is invalid')
     if (!config.generations || typeof config.generations.main !== 'string' || typeof config.mainObservationClaimed !== 'boolean' || typeof config.generations.subagent !== 'string' || !config.generations.subagent) throw new Error('Background helper generation is invalid')
     if (config.jobSessionId !== identity.sessionId || typeof config.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(config.sessionId) || config.uiSocketPath !== join(proof.configPath.slice(0, -'/observer.json'.length), 'ui.sock') || typeof config.token !== 'string' || !/^[a-f0-9]{64}$/.test(config.token)) throw new Error('Background UI scope is invalid')
     if (closed || registration !== status.registration || JSON.stringify(status.identity) !== JSON.stringify(identity)) throw new Error('Background UI owner changed')
     retireChildUi()
-    // The original daemon's authenticated resume target may change while its job/PID remain.
-    // Keep the startup proof bound to the root job and atomically advance only the UI session.
-    if (config.sessionId !== identity.activeSessionId) {
-      const temporary = proof.configPath + '.' + randomBytes(8).toString('hex')
-      writeFileSync(temporary, JSON.stringify({...config, sessionId: identity.activeSessionId}), {mode: 0o600, flag: 'wx'})
-      renameSync(temporary, proof.configPath)
-    }
+    // A surviving worker keeps its replay window across API owners. Rotate its transport scope
+    // before a replacement starts at sequence 1; the daemon's root job proof stays unchanged.
+    const transportEpoch = randomBytes(16).toString('hex')
+    const temporary = proof.configPath + '.' + randomBytes(8).toString('hex')
+    writeFileSync(temporary, JSON.stringify({...config, sessionId: identity.activeSessionId, transportEpoch}), {mode: 0o600, flag: 'wx'})
+    renameSync(temporary, proof.configPath)
     const scope = JSON.stringify(identity)
-    const bridge = createClaudeTerminalUiTransport({socketPath: config.uiSocketPath, token: config.token,
+    const bridge = createClaudeTerminalUiTransport({socketPath: config.uiSocketPath, token: config.token, transportEpoch,
       current: () => !closed && registration === status.registration && JSON.stringify(status.identity) === scope ? {pid: identity.pid, sessionId: identity.activeSessionId} : undefined})
     const transport: ClaudeTerminalUiTransport = { ...bridge.transport, async request(value) {
       const held = await childUiCurrent()

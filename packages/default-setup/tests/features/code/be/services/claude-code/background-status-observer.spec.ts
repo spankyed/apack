@@ -189,7 +189,7 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  // mkdir's intermediates use the process umask; the private workers parent is explicit.
  const {chmod}=await import('node:fs/promises');await chmod(join(observer.directory,'workers'),0o700)
  await writeFile(join(observer.directory,'worker-119.json'),JSON.stringify({pid:119,sessionId:child,start:identity.start,configPath:join(worker,'observer.json')}),{mode:0o600})
- await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath,mainObservationClaimed:false,generations:{main:'main-generation',subagent:'subagent-generation'}}),{mode:0o600})
+ await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath,mainObservationClaimed:false,transportEpoch:'a'.repeat(32),generations:{main:'main-generation',subagent:'subagent-generation'}}),{mode:0o600})
  let policyReady=false
  let cachedMainStatus: string | undefined
  const helperPolicy={allowManagedHooksOnly:false,disableAllHooks:false}

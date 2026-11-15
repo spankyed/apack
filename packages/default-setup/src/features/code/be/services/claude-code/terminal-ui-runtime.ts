@@ -66,7 +66,7 @@ export function bindNativeHelperObservationReader(reader){
  nativeHelperObservationReader=reader;
 }
 
-const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,sequenceSession=config.sessionId,sessionTransition,inFlight=0,highestSequence=0;
+const clients=new Set(),seen=new Set();let native,initializing,activeSession=config.sessionId,sequenceSession=config.sessionId,sequenceEpoch=config.transportEpoch,sessionTransition,inFlight=0,highestSequence=0;
 const nativeRasterMirrors=createNativeRasterMirrors({current:scope=>{if(!native||!clients.has(scope.client_id)||!clientViewCurrent(native,scope.client_id)||scope.instance_revision!==undefined&&!instanceLifetimes.active(scope,scope.instance_revision))return false;const source=currentTerminalPlacementAction(native,scope);return source?.fingerprint===scope.source_revision;},invalidate:scope=>publish({type:'system',subtype:'ui_invalidate',event:'ui.render',client_snapshot:true,client_id:scope.client_id,instances:[{surface:'desktop',component:scope.component,instance_id:scope.instance_id}]})});
 const actionKeys=createNativeActionKeyBridge({
  nativeActions:(n,client,p)=>nativeInlineModelActions(n,client,p),
@@ -1348,15 +1348,16 @@ const server=http.createServer(async(request,response)=>{
   body=JSON.parse(Buffer.concat(chunks).toString());
   if(bytes>1048576&&!nativeUiPromptRpcSubtypes.has(body?.request?.subtype))return reply(413,{});
   const current=JSON.parse(readFileSync(configUrl,'utf8'));
-  if(typeof body.id!=='string'||!/^[a-f0-9-]{36}$/i.test(body.id)||!Number.isSafeInteger(body.sequence)||body.sequence<1||body.ownerPid!==process.pid||body.sessionId!==current.sessionId)return reply(409,{});
+  if(typeof body.id!=='string'||!/^[a-f0-9-]{36}$/i.test(body.id)||!Number.isSafeInteger(body.sequence)||body.sequence<1||body.ownerPid!==process.pid||body.sessionId!==current.sessionId||typeof current.transportEpoch!=='string'||!/^[a-f0-9]{32}$/.test(current.transportEpoch)||body.transportEpoch!==current.transportEpoch)return reply(409,{});
   const identity={id:body.id,pid:process.pid,sessionId:body.sessionId};
-  if(sequenceSession!==body.sessionId){seen.clear();highestSequence=0;sequenceSession=body.sessionId;}
+  if(sequenceSession!==body.sessionId||sequenceEpoch!==body.transportEpoch){seen.clear();highestSequence=0;sequenceSession=body.sessionId;sequenceEpoch=body.transportEpoch;}
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
    while(activeSession!==body.sessionId){if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during client retirement');await (sessionTransition??=(async()=>{await retireNativeAgentCommands();if(native){nativeRasterMirrors.detach();native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();actionKeys.clear(native);clients.clear();nativeIdeContextLeases.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();composerFrames.clear();composerSeen.clear();composerClocks.clear();terminalPlacementFrames.clear();terminalPlacementSeen.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;})().finally(()=>{sessionTransition=undefined;}));}
+   const beforeControl=JSON.parse(readFileSync(configUrl,'utf8'));if(beforeControl.sessionId!==body.sessionId||beforeControl.transportEpoch!==body.transportEpoch)throw Error('Native owner changed before UI request');
    const result=await control(body.request,abort);
-   if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during UI request');
+   const after=JSON.parse(readFileSync(configUrl,'utf8'));if(after.sessionId!==body.sessionId||after.transportEpoch!==body.transportEpoch)throw Error('Native owner changed during UI request');
    reply(200,{...identity,result});
   }catch(error){if(body.request?.subtype==='ui_render')actionKeys.retire(body.request);reply(400,{...identity,error:String(error?.message??error)});}finally{inFlight--;}
  }catch{reply(400,{});}

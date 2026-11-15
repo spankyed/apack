@@ -15,7 +15,7 @@ async function fixture(answer: (body: Record<string, unknown>, response: ServerR
     answer(JSON.parse(Buffer.concat(chunks).toString()), response)
   })
   await new Promise<void>(resolve => server.listen(socketPath, resolve))
-  const ui = createClaudeTerminalUiTransport({ socketPath, token: 'private-token', current: () => current })
+  const ui = createClaudeTerminalUiTransport({ socketPath, token: 'private-token', transportEpoch: 'a'.repeat(32), current: () => current })
   return { ...ui, owner, disposeTransport: ui.close, replace() { current = { pid: 18, sessionId: 'replacement' } },
     async close() { ui.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }) } }
 }

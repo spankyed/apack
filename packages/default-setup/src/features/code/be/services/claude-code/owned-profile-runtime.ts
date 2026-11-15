@@ -35,7 +35,7 @@ export function prepareClaudeOwnedWorkerStartup({configDir,pid,argv,env=process.
  }
  const worker=mkdtempSync(join(workers,'w-'+pid+'-'));
  const originalBunOptions=env.BUN_OPTIONS??null;
- const config={socketPath:descriptor.socketPath,token:randomBytes(32).toString('hex'),sessionId,jobSessionId:sessionId,mainObservationClaimed:false,generations:{main:randomUUID(),subagent:randomUUID()},uiSocketPath:join(worker,'ui.sock'),originalBunOptions};
+ const config={socketPath:descriptor.socketPath,token:randomBytes(32).toString('hex'),sessionId,jobSessionId:sessionId,mainObservationClaimed:false,transportEpoch:randomBytes(16).toString('hex'),generations:{main:randomUUID(),subagent:randomUUID()},uiSocketPath:join(worker,'ui.sock'),originalBunOptions};
  writeFileSync(join(worker,'observer.json'),JSON.stringify(config),{mode:0o600,flag:'wx'});
  const runtime=privateFile(join(directory,'child-ui-template.mjs'),4*1024*1024);
  writeFileSync(join(worker,'ui.mjs'),runtime,{mode:0o600,flag:'wx'});

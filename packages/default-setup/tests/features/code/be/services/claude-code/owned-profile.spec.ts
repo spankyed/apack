@@ -119,7 +119,7 @@ test('resolves the owned worker executable using the launch PATH and cwd without
 
 test('retains original main-helper I/O before registration without changing streams or executing it twice',async()=>{
  const root=await directory('cc-startup-result-'),sessionId='11111111-1111-4111-8111-111111111111'
- await writeFile(join(root,'observer.json'),JSON.stringify({socketPath:join(root,'absent.sock'),token:'private',sessionId,jobSessionId:sessionId,uiSocketPath:join(root,'ui.sock'),mainObservationClaimed:false,generations:{main:'startup',subagent:'other'}}),{mode:0o600})
+ await writeFile(join(root,'observer.json'),JSON.stringify({socketPath:join(root,'absent.sock'),token:'private',sessionId,jobSessionId:sessionId,uiSocketPath:join(root,'ui.sock'),mainObservationClaimed:false,transportEpoch:'a'.repeat(32),generations:{main:'startup',subagent:'other'}}),{mode:0o600})
  await writeFile(join(root,'ui.mjs'),'export function bindNativeHelperObservationReader(reader){globalThis.mainObservation=reader};let ready=false;export async function prepareNativeHelperPolicy(){ready=true};export function readNativeHelperPolicy(){if(!ready)throw Error("policy not prepared");return "[false,false,false]"}',{mode:0o600})
  await writeFile(join(root,'status.mjs'),claudeTerminalStatusRuntime,{mode:0o600})
  const helper=join(root,'original-helper.mjs')
@@ -190,7 +190,7 @@ test('recognizes the owned warm profile through a symlinked ancestor and retains
 
 test('retains the latest completed worker observation after startup claim and withdraws it during new helper work',async()=>{
  const root=await directory('cc-live-observation-'),sessionId='11111111-1111-4111-8111-111111111111'
- await writeFile(join(root,'observer.json'),JSON.stringify({socketPath:join(root,'absent.sock'),token:'private',sessionId,jobSessionId:sessionId,uiSocketPath:join(root,'ui.sock'),mainObservationClaimed:true,generations:{main:'current',subagent:'other'}}),{mode:0o600})
+ await writeFile(join(root,'observer.json'),JSON.stringify({socketPath:join(root,'absent.sock'),token:'private',sessionId,jobSessionId:sessionId,uiSocketPath:join(root,'ui.sock'),mainObservationClaimed:true,transportEpoch:'a'.repeat(32),generations:{main:'current',subagent:'other'}}),{mode:0o600})
  await writeFile(join(root,'ui.mjs'),'export function bindNativeHelperObservationReader(reader){globalThis.mainObservation=reader};export async function prepareNativeHelperPolicy(){};export function readNativeHelperPolicy(){return "[false,false,false]"}',{mode:0o600})
  await writeFile(join(root,'status.mjs'),claudeTerminalStatusRuntime,{mode:0o600})
  const helper=join(root,'original-helper.mjs')
