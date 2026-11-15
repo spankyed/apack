@@ -255,7 +255,7 @@ it('preserves original Auto mode validation and clears it only through the origi
   const f = autoRuleFixture(), before = f.read(), scope = before.snapshot.permissions.form.live.id
   const result = await f.act(before.snapshot.revision, { action: 'submit', scope, formRevision: before.snapshot.permissions.form.live.revision, value: '' })
   expect(f.onSubmit).toHaveBeenCalledExactlyOnceWith(''); expect(result.snapshot.permissions.form.live.problem).toBe('Original reserved-rule error')
-  expect(result.snapshot.permissions.paragraphs).not.toContain('Original reserved-rule error')
+  expect(result.snapshot.permissions.paragraphs.map((p: {runs: {text: string}[]}) => p.runs.map(r => r.text).join(''))).not.toContain('Original reserved-rule error')
   await expect(f.act(before.snapshot.revision, { action: 'submit', scope, formRevision: before.snapshot.permissions.form.live.revision, value: '' })).rejects.toThrow(/submission changed/)
   const edited = await f.act(result.snapshot.revision, { action: 'change', scope, value: 'New rule' })
   expect(edited.snapshot.permissions.form.live.problem).toBeUndefined(); expect(f.onSubmit).toHaveBeenCalledOnce()
@@ -305,7 +305,7 @@ it('edits the original Auto mode query/cursor and reads its filtered native opti
   expect(result.snapshot.permissions.search).toBe('Database'); expect(result.snapshot.permissions.searchScope).toBe(scope)
   expect(result.snapshot.permissions.choices.map((v: any) => v.value)).toEqual(['native-database-rule'])
   expect(f.display()).toMatchObject({ query: 'Database', cursorOffset: 8 })
-  expect(result.snapshot.permissions.paragraphs).not.toContain('Unadapted native search hint')
+  expect(result.snapshot.permissions.paragraphs.map((p: {runs: {text: string}[]}) => p.runs.map(r => r.text).join(''))).not.toContain('Unadapted native search hint')
   const none = await f.act(before.snapshot.revision, { action: 'search', scope, value: 'missing' }); expect(none.snapshot.permissions.choices).toEqual([])
   const cleared = await f.act(before.snapshot.revision, { action: 'search', scope, value: '' }); expect(cleared.snapshot.permissions.choices).toHaveLength(2)
 })
