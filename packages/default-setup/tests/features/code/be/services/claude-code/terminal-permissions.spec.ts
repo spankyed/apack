@@ -13,7 +13,8 @@ function fixture() {
   const select = vi.fn(() => redraw())
   const tab = { title: 'Ask', isCurrent: true, onClick: vi.fn(() => redraw()) }
   let list = { tab: 'ask', searchQuery: '', getRulesOptions: getter, handleToolSelect: select }
-  const root: any = { type: originalType, memoizedProps: originalProps, updateQueue: { memoCache: { data: [Array.from({ length: 226 }, (_, index) => index === 39 ? cancel : undefined)] } } }
+  const queryChange = Object.assign(vi.fn((value: string) => { list.searchQuery = value; redraw() }), { hash: '5fe3df31f754a92dcf6b401e5a84c7847a17025d80993378dac3c7156c9fca6a' })
+  const root: any = { type: originalType, memoizedProps: originalProps, updateQueue: { memoCache: { data: [Array.from({ length: 226 }, (_, index) => index === 39 ? cancel : index === 24 ? queryChange : undefined)] } } }
   const fiber = (props: object) => ({ type: function NativeControl() {}, memoizedProps: props })
   function redraw() { list = { ...list }; const first: any = fiber(tab); first.sibling = fiber(list); root.child = first }
   redraw()
@@ -25,7 +26,7 @@ function fixture() {
   const runtime = vm.runInContext(walk + claudeTerminalPermissionsRuntime + ';({frame:nativePermissionsFrame,act:nativePermissionsPanel,close:closeNativePermissionsPanel})', context)
   const read = () => runtime.frame(n, entry)
   const act = (revision: string, command: object) => runtime.act(n, entry, { operation: 'permissions', revision, command }, new AbortController())
-  return { entry, root, originalType, cancel, getter, select, tab, redraw, read, act, close: () => runtime.close(n, entry) }
+  return { entry, root, originalType, cancel, getter, select, queryChange, tab, redraw, read, act, close: () => runtime.close(n, entry) }
 }
 
 describe('original mounted Permissions authority', () => {
@@ -276,4 +277,56 @@ it('projects native rich picker labels instead of silently dropping Auto mode op
 it('refuses opaque native picker atoms rather than hiding their choices', () => {
   const f = fixture(); f.root.child = { type: function NativePicker() {}, memoizedProps: { options: [{ value: 'opaque', label: { props: { status: 'success' } } }], onChange: f.select } }
   expect(f.read).toThrow(/not supported/); expect(f.select).not.toHaveBeenCalled()
+})
+
+function autoSearchFixture() {
+  const f = fixture(); let query = ''
+  const select = vi.fn(() => mount())
+  const type = Object.assign(function AutoMode() {}, { hash: '5492680dc6847a0efcf3b94da97323f463cad841677e5a44509103001e4c5665' })
+  const displayType = Object.assign(function SearchDisplay() {}, { hash: 'f5c5ed1101f7b42dfb0dc71cca252bc576d03e9f93d00e32640a10ad50b63dc2' })
+  const change = Object.assign(vi.fn((value: string) => { query = value; mount() }), { hash: '5fe3df31f754a92dcf6b401e5a84c7847a17025d80993378dac3c7156c9fca6a' })
+  f.root.updateQueue.memoCache.data[0][24] = change
+  let displayProps: object
+  function mount() {
+    const props = { entries: [], builtinsState: {}, onSelectBuiltins: select, onSelectEntry: select, onAddNew: select, searchQuery: query }
+    displayProps = { query, cursorOffset: query.length, isFocused: false, isTerminalFocused: true }
+    const display: any = { type: displayType, memoizedProps: displayProps, child: { type: 'ink-text', memoizedProps: {}, child: { tag: 6, memoizedProps: 'Unadapted native search hint' } } }
+    display.sibling = { type: function NativePicker() {}, memoizedProps: { options: [{ value: 'native-database-rule', label: { props: { children: 'Database rule' } } }, { value: 'native-git-rule', label: 'Git rule' }].filter(o => (typeof o.label === 'string' ? o.label : o.label.props.children).toLowerCase().includes(query.toLowerCase())), onChange: select } }
+    f.root.child = { type, memoizedProps: props, child: display }
+  }
+  mount(); return { ...f, change, select, type, displayType, mount, display: () => displayProps }
+}
+
+it('edits the original Auto mode query/cursor and reads its filtered native options', async () => {
+  const f = autoSearchFixture(), before = f.read(), scope = before.snapshot.permissions.searchScope
+  const result = await f.act(before.snapshot.revision, { action: 'search', scope, value: 'Database' })
+  expect(f.change).toHaveBeenCalledExactlyOnceWith('Database'); expect(f.select).not.toHaveBeenCalled(); expect(f.getter).not.toHaveBeenCalled()
+  expect(result.snapshot.permissions.search).toBe('Database'); expect(result.snapshot.permissions.searchScope).toBe(scope)
+  expect(result.snapshot.permissions.choices.map((v: any) => v.value)).toEqual(['native-database-rule'])
+  expect(f.display()).toMatchObject({ query: 'Database', cursorOffset: 8 })
+  expect(result.snapshot.permissions.paragraphs).not.toContain('Unadapted native search hint')
+  const none = await f.act(before.snapshot.revision, { action: 'search', scope, value: 'missing' }); expect(none.snapshot.permissions.choices).toEqual([])
+  const cleared = await f.act(before.snapshot.revision, { action: 'search', scope, value: '' }); expect(cleared.snapshot.permissions.choices).toHaveLength(2)
+})
+
+it('keeps Auto mode search separate from strict mutation revisions and retires it after an action', async () => {
+  const f = autoSearchFixture(), before = f.read(), scope = before.snapshot.permissions.searchScope
+  const next = await f.act(before.snapshot.revision, { action: 'search', scope, value: 'Database' })
+  await expect(f.act(before.snapshot.revision, { action: 'select', value: 'native-database-rule' })).rejects.toThrow(/changed/)
+  await f.act(next.snapshot.revision, { action: 'select', value: 'native-database-rule' })
+  await expect(f.act(next.snapshot.revision, { action: 'search', scope, value: 'retired' })).rejects.toThrow(/unavailable/)
+  expect(f.select).toHaveBeenCalledExactlyOnceWith('native-database-rule')
+})
+
+it('refuses altered native search producers, query callbacks and display bindings', () => {
+  const f = autoSearchFixture(); f.type.hash = 'foreign'; expect(f.read).toThrow(/search producer changed/)
+  f.type.hash = '5492680dc6847a0efcf3b94da97323f463cad841677e5a44509103001e4c5665'; f.change.hash = 'foreign'; expect(f.read).toThrow(/query callback changed/)
+  f.change.hash = '5fe3df31f754a92dcf6b401e5a84c7847a17025d80993378dac3c7156c9fca6a'; f.displayType.hash = 'foreign'; expect(f.read).toThrow(/query display changed/)
+  expect(f.change).not.toHaveBeenCalled(); expect(f.select).not.toHaveBeenCalled()
+})
+
+it('does not report a dismissal as expired when the original panel settles during its wait', async () => {
+  const f = fixture(); f.cancel.mockImplementation(() => { setTimeout(() => { f.entry.answered = true }, 5) })
+  const result = await f.act(f.read().snapshot.revision, { action: 'cancel' })
+  expect(f.cancel).toHaveBeenCalledOnce(); expect(result.snapshot.permissions).toMatchObject({ tabs: [], choices: [], readOnly: true })
 })

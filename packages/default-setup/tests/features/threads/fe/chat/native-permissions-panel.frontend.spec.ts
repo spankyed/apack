@@ -89,7 +89,7 @@ it('discards a queued search when its original tab is replaced', async () => {
   vi.useFakeTimers(); const f = fixture(); await nextTick(); f.operate.mockClear()
   const input = f.root.querySelector('input')!; input.value = 'old-tab-query'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick()
   const panel = f.state.value.snapshot!.permissions!; panel.tabs[0].selected = false; panel.tabs[1].selected = true; panel.searchScope = 'd'.repeat(64); await nextTick(); await vi.advanceTimersByTimeAsync(200)
-  expect(f.operate).not.toHaveBeenCalled(); expect(input.value).toBe('')
+  expect(f.operate).not.toHaveBeenCalled(); expect(f.root.querySelector('input')!.value).toBe('')
 })
 
 async function directoryFixture() {
@@ -222,4 +222,76 @@ it('retains original multiline validation until the original edit clears it', as
   expect(f.root.querySelector('[role="alert"]')?.textContent).toBe('Original reserved-rule error')
   const next: ClaudeSettingsView = JSON.parse(JSON.stringify(f.state.value)); next.requestId = f.requests.at(-1)!.requestId; next.snapshot!.permissions!.form!.value = input.value; delete next.snapshot!.permissions!.form!.live!.problem; f.state.value = next; await nextTick()
   expect(f.root.querySelector('[role="alert"]')).toBeNull(); expect(input.value).toBe('Replacement rule')
+})
+
+it('retains one explicit click arriving before a read disables the current DOM', async () => {
+  const f = fixture(); await nextTick(); f.holdReads(); f.operate.mockClear()
+  const ask = f.buttons().find(button => button.textContent === 'Ask')!
+  f.buttons().find(button => button.textContent === 'Refresh')!.click()
+  expect(ask.disabled).toBe(false)
+  ask.click(); ask.click()
+  const read = f.requests.at(-1)!
+  expect(f.operate.mock.calls.map(([action]) => action.kind)).toEqual(['read'])
+  f.state.value = { ...f.state.value, requestId: read.requestId, status: 'ready' }; await nextTick(); await nextTick()
+  expect(f.operate.mock.calls.map(([action]) => action.kind)).toEqual(['read', 'permissions'])
+  expect(f.operate).toHaveBeenLastCalledWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'tab', value: 'Ask' } })
+})
+
+it('refuses a queued click visibly when the read changes its advertised revision', async () => {
+  const f = fixture(); await nextTick(); f.holdReads(); f.operate.mockClear()
+  f.buttons().find(button => button.textContent === 'Refresh')!.click()
+  f.buttons().find(button => button.textContent === 'Ask')!.click()
+  const requestId = f.requests.at(-1)!.requestId
+  f.state.value = { ...f.state.value, requestId, status: 'ready', snapshot: { ...f.state.value.snapshot!, revision: 'b'.repeat(64) } }; await nextTick(); await nextTick()
+  expect(f.operate.mock.calls.map(([action]) => action.kind)).toEqual(['read'])
+  expect(f.root.querySelector('[role="alert"]')?.textContent).toContain('Review them and try again')
+})
+
+it('does not replay a queued click or automatically clear a native failure with polling', async () => {
+  vi.useFakeTimers(); const f = fixture(); await nextTick(); f.holdReads(); f.operate.mockClear()
+  f.buttons().find(button => button.textContent === 'Refresh')!.click()
+  f.buttons().find(button => button.textContent === 'Ask')!.click()
+  f.state.value = { ...f.state.value, requestId: f.requests.at(-1)!.requestId, status: 'error', problem: 'Original read failed' }; await nextTick(); await vi.advanceTimersByTimeAsync(1600)
+  expect(f.operate.mock.calls.map(([action]) => action.kind)).toEqual(['read'])
+  expect(f.root.querySelector('[role="alert"]')?.textContent).toBe('Original read failed')
+})
+
+it('coalesces new search edits through a read and an older native search acknowledgement', async () => {
+  vi.useFakeTimers(); const f = fixture(); await nextTick(); f.holdReads(); f.operate.mockClear()
+  f.buttons().find(button => button.textContent === 'Refresh')!.click(); await nextTick()
+  const input = f.root.querySelector('input')!; expect(input.disabled).toBe(false)
+  input.value = 'old'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick(); await vi.advanceTimersByTimeAsync(200)
+  f.state.value = { ...f.state.value, requestId: f.requests.at(-1)!.requestId, status: 'ready' }; await nextTick(); await nextTick()
+  expect(f.operate).toHaveBeenLastCalledWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'search', scope: 'c'.repeat(64), value: 'old' } })
+  const search = f.requests.at(-1)!
+  input.value = 'new'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick(); await vi.advanceTimersByTimeAsync(200)
+  const next: ClaudeSettingsView = JSON.parse(JSON.stringify(f.state.value)); next.requestId = search.requestId; next.snapshot!.revision = 'b'.repeat(64); next.snapshot!.permissions!.search = 'old'; f.state.value = next; await nextTick(); await nextTick()
+  expect(input.value).toBe('new')
+  expect(f.operate).toHaveBeenLastCalledWith({ kind: 'permissions', revision: 'b'.repeat(64), command: { action: 'search', scope: 'c'.repeat(64), value: 'new' } })
+})
+
+it('holds search composition locally and drops events from a retired search field', async () => {
+  vi.useFakeTimers(); const f = fixture(); await nextTick(); f.operate.mockClear()
+  const input = f.root.querySelector('input')!; input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); input.value = 'draft'; input.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true })); await nextTick(); await vi.advanceTimersByTimeAsync(250)
+  expect(f.operate.mock.calls.filter(([action]) => action.kind === 'permissions')).toHaveLength(0)
+  const next: ClaudeSettingsView = JSON.parse(JSON.stringify(f.state.value)); next.snapshot!.permissions!.searchScope = 'd'.repeat(64); next.snapshot!.permissions!.search = 'current'; f.state.value = next; await nextTick()
+  input.value = 'retired'; input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })); await nextTick(); await vi.advanceTimersByTimeAsync(250)
+  expect(f.root.querySelector('input')!.value).toBe('current')
+  expect(f.operate.mock.calls.filter(([action]) => action.kind === 'permissions')).toHaveLength(0)
+})
+
+it('stops automatic reads once an explicit root dismissal has settled', async () => {
+  vi.useFakeTimers(); const f = fixture(); await nextTick(); f.operate.mockClear()
+  f.buttons().find(button => button.textContent === 'Close permissions')!.click()
+  f.state.value = { ...f.state.value, requestId: f.requests.at(-1)!.requestId, status: 'ready' }; await nextTick(); await vi.advanceTimersByTimeAsync(1600)
+  expect(f.operate.mock.calls.map(([action]) => action.kind)).toEqual(['permissions'])
+})
+
+it('commits composed search text once without replacing the local composition on a native update', async () => {
+  vi.useFakeTimers(); const f = fixture(); await nextTick(); f.operate.mockClear()
+  const input = f.root.querySelector('input')!; input.focus(); input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true })); input.value = 'Café'; input.dispatchEvent(new InputEvent('input', { bubbles: true, isComposing: true })); await nextTick()
+  f.state.value = JSON.parse(JSON.stringify(f.state.value)); await nextTick(); await vi.advanceTimersByTimeAsync(250)
+  expect(input.value).toBe('Café'); expect(f.operate).not.toHaveBeenCalled()
+  input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true })); await nextTick(); await vi.advanceTimersByTimeAsync(200)
+  expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'search', scope: 'c'.repeat(64), value: 'Café' } })
 })
