@@ -1,4 +1,4 @@
-import { createApp, h, nextTick } from 'vue'
+import { createApp, h, nextTick, ref } from 'vue'
 import NativePlanPanel from '#features/threads/fe/chat/NativePlanPanel.vue'
 vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => { const { h } = await import('vue'); return { default: { props: ['modelValue'], render(this: { modelValue: string }) { return h('pre', this.modelValue) } } } })
 it('retains edited plan/feedback and sends the selected native reset choice through the approval flow', async () => {
@@ -27,3 +27,17 @@ it('withholds approval for an unreviewable plan while retaining feedback and can
     expect(respond).toHaveBeenCalledWith({ approved: false, reason: undefined }); expect(pause).toHaveBeenCalledOnce()
   } finally { app.unmount(); root.remove() }
 })
+
+
+it('emits the displayed decision scope for Cancel and keeps an earlier delivery immutable',async()=>{
+ const scope=ref({ownerId:'owner',sessionId:'session',messageId:'message',id:'dialog',revision:'revision',requestId:'request',toolName:'EnterPlanMode'});
+ const pause=vi.fn(),root=document.createElement('div');document.body.append(root);
+ const app=createApp({render:()=>h(NativePlanPanel,{entering:true,presentation:{plan:'',initialChoice:'',empty:true,withheld:false,choices:[]},pauseScope:scope.value,disabled:false,onPause:pause})});app.mount(root);
+ try{
+  const cancel=()=>[...root.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Cancel')!;
+  cancel().click();expect(pause).toHaveBeenLastCalledWith(scope.value);const captured=pause.mock.calls[0][0];
+  scope.value={...scope.value,ownerId:'replacement-owner',revision:'replacement-revision'};await nextTick();
+  cancel().click();expect(pause).toHaveBeenLastCalledWith(scope.value);
+  expect(captured).toMatchObject({ownerId:'owner',revision:'revision'});
+ }finally{app.unmount();root.remove()}
+});

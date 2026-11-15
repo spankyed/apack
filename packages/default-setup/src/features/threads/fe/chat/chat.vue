@@ -126,15 +126,15 @@
             <ScrollToBottomFob v-else-if="!currentThread?.context?.claudeCode" :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
           </div>
           <div v-if="pendingNativeApproval" class="min-h-0 overflow-hidden px-4 py-2" :class="$style.approvalContainer">
-            <NativeToolApproval :key="pendingNativeApproval.messageId" v-bind="pendingNativeApproval"
+            <NativeToolApproval :key="JSON.stringify(pendingNativeApproval.pauseScope ?? pendingNativeApproval.messageId)" v-bind="pendingNativeApproval"
               @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeApproval!.messageId, response })"
               @edit-workflow="nativeSession?.open()"
-              @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
+              @pause="pauseNativeDecision" />
           </div>
           <div v-if="pendingNativePlan" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
-            <NativePlanPanel :key="pendingNativePlan.messageId" v-bind="pendingNativePlan"
+            <NativePlanPanel :key="JSON.stringify(pendingNativePlan.pauseScope ?? pendingNativePlan.messageId)" v-bind="pendingNativePlan"
               @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativePlan!.messageId, response })"
-              @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })" />
+              @pause="pauseNativeDecision" />
           </div>
           <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
             <NativeQuestionDrawing :key="pendingNativeQuestion.messageId" :frame="pendingNativeQuestion.frame" :disabled="pendingNativeQuestion.disabled" :error="pendingNativeQuestion.error" :can-reject="nativeComposerOwner?.view?.kind === 'main'"
@@ -237,6 +237,7 @@ import NativeManagedSettingsNotice from './NativeManagedSettingsNotice.vue'
 import NativeDiagnosticAttachment from './NativeDiagnosticAttachment.vue'
 import NativeToolGroup from './NativeToolGroup.vue'
 import { provide, ref, computed, watch, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
+import { readClaudeDecisionPauseScope, type ClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import { createScrollPositioning } from './scroll-positioning.ts'
 
 const quotes = [
@@ -694,7 +695,7 @@ const pendingNativeApproval = computed(() => {
   if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || typeof pending?.toolName !== 'string' || !generic && !['Read', 'Bash', 'Write', 'Edit', 'NotebookEdit', 'Workflow', 'WebFetch', 'Skill'].includes(pending.toolName) || typeof pending.approvalMessageId !== 'string' || (!generic && (pending?.toolName === 'WebFetch' || pending?.toolName === 'Skill' ? !ClaudeToolPermissionApprovalSchema.safeParse(native.tool).success : pending?.toolName === 'Workflow' ? !ClaudeWorkflowApprovalSchema.safeParse(native.workflow).success : pending?.toolName === 'Bash' ? typeof pending.originalInput?.command !== 'string' : pending?.toolName === 'NotebookEdit' ? typeof pending.originalInput?.notebook_path !== 'string' : typeof pending.originalInput?.file_path !== 'string'))) return undefined
   const message = allMessages.value.find(message => message.id === pending.approvalMessageId)
   if (!message) return undefined
-  return { messageId: pending.approvalMessageId, toolName: pending.toolName, choiceDescriptions: generic?.choiceDescriptions, defaultFocusValue: generic?.defaultFocusValue, canCancel: generic?.canCancel, tool: generic ?? ClaudeToolPermissionApprovalSchema.safeParse(native.tool).data, workflow: ClaudeWorkflowApprovalSchema.safeParse(native.workflow).data, review: ClaudeFileApprovalReviewSchema.safeParse(native.review).data, file: ClaudeFileApprovalPresentationSchema.safeParse(native.file).data, bash: ClaudeBashApprovalPresentationSchema.safeParse(native.bash).data, filePath: (pending.toolName === 'NotebookEdit' ? pending.originalInput?.notebook_path : pending.originalInput?.file_path) as string | undefined, command: pending.originalInput?.command as string | undefined, cwd: typeof native.cwd === 'string' ? native.cwd : undefined,
+  return { messageId: pending.approvalMessageId, pauseScope: readClaudeDecisionPauseScope(pending), toolName: pending.toolName, choiceDescriptions: generic?.choiceDescriptions, defaultFocusValue: generic?.defaultFocusValue, canCancel: generic?.canCancel, tool: generic ?? ClaudeToolPermissionApprovalSchema.safeParse(native.tool).data, workflow: ClaudeWorkflowApprovalSchema.safeParse(native.workflow).data, review: ClaudeFileApprovalReviewSchema.safeParse(native.review).data, file: ClaudeFileApprovalPresentationSchema.safeParse(native.file).data, bash: ClaudeBashApprovalPresentationSchema.safeParse(native.bash).data, filePath: (pending.toolName === 'NotebookEdit' ? pending.originalInput?.notebook_path : pending.originalInput?.file_path) as string | undefined, command: pending.originalInput?.command as string | undefined, cwd: typeof native.cwd === 'string' ? native.cwd : undefined,
     title: typeof native.title === 'string' ? native.title : 'Read file',
     question: typeof native.question === 'string' ? native.question : 'Allow this read?',
     reason: typeof native.reason === 'string' ? native.reason : undefined,
@@ -707,7 +708,7 @@ const pendingNativePlan = computed(() => {
   if (!native || !owner || native.ownerId !== owner.ownerId || native.sessionId !== owner.sessionId || !['EnterPlanMode', 'ExitPlanMode'].includes(String(pending?.toolName)) || typeof pending.approvalMessageId !== 'string') return undefined
   const presentation = ClaudePlanPresentationSchema.safeParse(native.plan), message = allMessages.value.find(message => message.id === pending.approvalMessageId)
   if (!presentation.success || !message) return undefined
-  return { messageId: pending.approvalMessageId, entering: pending.toolName === 'EnterPlanMode', presentation: presentation.data, reason: typeof native.reason === 'string' ? native.reason : undefined, disabled: !!message.responseTimestamp }
+  return { messageId: pending.approvalMessageId, pauseScope: readClaudeDecisionPauseScope(pending), entering: pending.toolName === 'EnterPlanMode', presentation: presentation.data, reason: typeof native.reason === 'string' ? native.reason : undefined, disabled: !!message.responseTimestamp }
 })
 
 const pendingNativeQuestion = computed(() => {
@@ -744,6 +745,10 @@ function rejectNativeQuestion(identity: import('#features/code/be/services/claud
   actor.send({ type: 'CLAUDE_UI_QUESTION_REJECT', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token })
 }
 
+function pauseNativeDecision(scope?: ClaudeDecisionPauseScope) {
+  const mount = nativeUiMount.value;
+  if (mount && scope) actor.send({ type: 'CLAUDE_UI_DECISION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, scope });
+}
 function pauseNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
   const question = pendingNativeQuestion.value, mount = nativeUiMount.value;
   if (!mount || !question?.frame || question.messageId !== identity.messageId || !identity.token) return;

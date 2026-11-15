@@ -83,10 +83,11 @@ import NativePermissionText from './NativePermissionText.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import type { ClaudeWorkflowApproval } from '#features/code/common/native-workflow-approval.ts'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import type { ClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
-const props = withDefaults(defineProps<{ tool?: ClaudeToolPermissionApproval; workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: string; cancelLabel?: string; canApprove?: boolean; choiceDescriptions?: Record<string, string>; defaultFocusValue?: string; canCancel?: boolean; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>(), { canCancel: undefined, canApprove: undefined })
-const emit = defineEmits<{ respond: [response: { approved: boolean; cancelled?: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: []; 'edit-workflow': [] }>()
+const props = withDefaults(defineProps<{ tool?: ClaudeToolPermissionApproval; workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: string; pauseScope?: ClaudeDecisionPauseScope; cancelLabel?: string; canApprove?: boolean; choiceDescriptions?: Record<string, string>; defaultFocusValue?: string; canCancel?: boolean; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>(), { canCancel: undefined, canApprove: undefined })
+const emit = defineEmits<{ respond: [response: { approved: boolean; cancelled?: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: [scope?: ClaudeDecisionPauseScope]; 'edit-workflow': [] }>()
 const rawWorkflow = ref<boolean>()
 const showRawWorkflow = computed(() => rawWorkflow.value ?? props.workflow?.raw ?? true)
 watch(() => props.workflow?.token, () => { rawWorkflow.value = undefined })
@@ -139,7 +140,7 @@ watch(() => [controlsDisabled.value, props.defaultFocusValue] as const, async ()
   initialFocusApplied = true
 }, { immediate: true, flush: 'post' })
 function cancel() {
-  if (props.canCancel === undefined) { if (!props.disabled) emit('pause'); return }
+  if (props.canCancel === undefined) { if (!props.disabled) emit('pause', props.pauseScope); return }
   if (controlsDisabled.value || !props.canCancel || !props.tool) return
   emit('respond', { approved: false, cancelled: true, choice: '', choiceToken: props.tool.token })
 }

@@ -1,3 +1,4 @@
+import { parseClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import { createLogger } from '@apackdev/sdk/logger'
 import { createClaudeSelectionReply } from '#features/code/be/services/claude-code/ui-selection-reply.ts'
 import { services, type EntityId } from '#generated/services.ts'
@@ -147,7 +148,7 @@ function bind(view: ClaudeUiView): void {
   view.mount = mountClaudeUi({ owner, promptHost, nativeView: owner.nativeView,
     pauseQuestion: !view.nativeView && !view.backgroundView ? async (row, ownerId) => {
       if (!viewCurrent(view) || view.owner !== owner || getClaudeUiOwner(view.threadId) !== owner || owner.question?.ownerId !== ownerId) throw Error('Native question owner changed');
-      const result = await services.action.executeIfFound('CC: Pause Turn', { threadId: view.threadId, nativeQuestion: { ...row, ownerId } });
+      const result = await services.action.executeIfFound('CC: Pause Turn', { threadId: view.threadId, nativeDecision: { ...row, ownerId, toolName: 'AskUserQuestion' } });
       if (result?.success !== true) throw Error(typeof result?.reason === 'string' ? result.reason : 'Native question cancellation was not acknowledged');
     } : undefined,
     question: () => {
@@ -356,6 +357,18 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     bind(view)
     void view.mount?.answerApproval(event.frameId, event.answer)
     return
+  }
+  if(event.type==='CLAUDE_UI_DECISION_PAUSE') {
+    if(!view||view.nativeView||view.backgroundView)return;
+    const scope=parseClaudeDecisionPauseScope(event.scope);if(!scope)return;
+    bind(view);const owner=view.owner;
+    const identity={threadId:event.threadId,mountId:event.mountId,messageId:scope.messageId,ownerId:scope.ownerId};
+    logger.info('Native decision Pause received',identity);
+    if(!owner||owner.question?.ownerId!==scope.ownerId||getClaudeUiOwner(view.threadId)!==owner){logger.info('Native decision Pause completed',{...identity,handled:false});return;}
+    void services.action.executeIfFound('CC: Pause Turn',{threadId:view.threadId,nativeDecision:scope}).then(result=>{
+      logger.info('Native decision Pause completed',{...identity,handled:result?.success===true});
+    }).catch(()=>logger.warn('Native decision Pause failed',identity));
+    return;
   }
   if(event.type==='CLAUDE_UI_QUESTION_PAUSE') {
     if(!view||view.nativeView||view.backgroundView||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return;

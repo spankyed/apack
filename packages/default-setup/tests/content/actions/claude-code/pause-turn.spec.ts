@@ -92,22 +92,22 @@ it('retires an independent native URL waiting dialog after its tool turn has alr
 });
 
 
-it.each([{ownerId:'replaced-owner'},{sessionId:'replaced-session'},{id:'replaced-dialog'},{revision:'replaced-revision'},{requestId:'replaced-request'},{messageId:'replaced-message'}])('refuses an addressed question Pause after its target changes: %j', change => {
- const f=setup('native',true),scope={ownerId:'original-owner',sessionId:'original-session',id:'dialog',revision:'revision',requestId:'question-request',messageId:'question-message'};
+it.each([{ownerId:'replaced-owner'},{sessionId:'replaced-session'},{id:'replaced-dialog'},{revision:'replaced-revision'},{requestId:'replaced-request'},{messageId:'replaced-message'},{toolName:'Read'}])('refuses an addressed question Pause after its target changes: %j', change => {
+ const f=setup('native',true),scope={toolName:'AskUserQuestion',ownerId:'original-owner',sessionId:'original-session',id:'dialog',revision:'revision',requestId:'question-request',messageId:'question-message'};
  repository.threadCommands.update(f.id,{context:{claudeCode:{isRunning:true,pendingControlRequest:{requestId:'question-request',toolName:'AskUserQuestion',approvalMessageId:'question-message',nativeTerminal:{ownerId:scope.ownerId,sessionId:scope.sessionId,dialogId:scope.id,revision:scope.revision,requestId:scope.requestId}}}}});
- return action({threadId:f.id,nativeQuestion:{...scope,...change}},services).then(result=>{
-  expect(result).toEqual({success:false,reason:'native question changed'});
+ return action({threadId:f.id,nativeDecision:{...scope,...change}},services).then(result=>{
+  expect(result).toEqual({success:false,reason:'native decision changed'});
   expect(f.events).toEqual([]);expect(f.requests).toEqual([]);
   expect(repository.threadQueries.byId(f.id)?.context?.claudeCode?.pendingControlRequest).toMatchObject({approvalMessageId:'question-message'});
  });
 });
 
 
-it('retires the addressed question once and refuses its repeated cancellation',async()=>{
- const f=setup('native',true),scope={ownerId:'original-owner',sessionId:'original-session',id:'dialog',revision:'revision',requestId:'question-request',messageId:'question-message'};
- repository.threadCommands.update(f.id,{context:{claudeCode:{isRunning:true,pendingControlRequest:{requestId:scope.requestId,toolName:'AskUserQuestion',approvalMessageId:scope.messageId,nativeTerminal:{ownerId:scope.ownerId,sessionId:scope.sessionId,dialogId:scope.id,revision:scope.revision,requestId:scope.requestId}}}}});
- await expect(action({threadId:f.id,nativeQuestion:scope},services)).resolves.toEqual({success:true});
- await expect(action({threadId:f.id,nativeQuestion:scope},services)).resolves.toEqual({success:false,reason:'native question changed'});
+it.each(['AskUserQuestion','Read','EnterPlanMode'])('retires the addressed %s decision once and refuses its repeated cancellation',async toolName=>{
+ const f=setup('native',true),scope={toolName,ownerId:'original-owner',sessionId:'original-session',id:'dialog',revision:'revision',requestId:'question-request',messageId:'question-message'};
+ repository.threadCommands.update(f.id,{context:{claudeCode:{isRunning:true,pendingControlRequest:{requestId:scope.requestId,toolName,approvalMessageId:scope.messageId,nativeTerminal:{ownerId:scope.ownerId,sessionId:scope.sessionId,dialogId:scope.id,revision:scope.revision,requestId:scope.requestId}}}}});
+ await expect(action({threadId:f.id,nativeDecision:scope},services)).resolves.toEqual({success:true});
+ await expect(action({threadId:f.id,nativeDecision:scope},services)).resolves.toEqual({success:false,reason:'native decision changed'});
  expect(f.events.filter(row=>row[0]==='native.kill')).toHaveLength(1);
  expect(f.events).toContainEqual(['message',scope.messageId,expect.objectContaining({blockResponse:{cancelled:true}})]);
 });

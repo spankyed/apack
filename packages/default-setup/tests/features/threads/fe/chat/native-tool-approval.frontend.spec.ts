@@ -1,4 +1,4 @@
-import { createApp, h, reactive, nextTick } from 'vue'
+import { createApp, h, reactive, nextTick, ref } from 'vue'
 import NativeToolApproval from '#features/threads/fe/chat/NativeToolApproval.vue'
 
 it('renders native path/reason literally and emits only the selected one-time response', async () => {
@@ -267,3 +267,17 @@ it('emits the selected one-time token after an unrelated prefix presentation ref
     expect(respond).toHaveBeenCalledExactlyOnceWith({ approved: true, choice: 'yes', choiceToken: 'b'.repeat(64) })
   } finally { app.unmount(); root.remove() }
 })
+
+
+it('emits the displayed decision scope for Cancel and keeps an earlier delivery immutable',async()=>{
+ const scope=ref({ownerId:'owner',sessionId:'session',messageId:'message',id:'dialog',revision:'revision',requestId:'request',toolName:'Read'});
+ const pause=vi.fn(),root=document.createElement('div');document.body.append(root);
+ const app=createApp({render:()=>h(NativeToolApproval,{toolName:'Read',title:'Read file',question:'Allow?',filePath:'/fixture',pauseScope:scope.value,disabled:false,onPause:pause})});app.mount(root);
+ try{
+  const cancel=()=>[...root.querySelectorAll<HTMLButtonElement>('button')].find(button=>button.textContent==='Cancel')!;
+  cancel().click();expect(pause).toHaveBeenLastCalledWith(scope.value);const captured=pause.mock.calls[0][0];
+  scope.value={...scope.value,ownerId:'replacement-owner',revision:'replacement-revision'};await nextTick();
+  cancel().click();expect(pause).toHaveBeenLastCalledWith(scope.value);
+  expect(captured).toMatchObject({ownerId:'owner',revision:'revision'});
+ }finally{app.unmount();root.remove()}
+});

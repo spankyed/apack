@@ -445,6 +445,11 @@
             "type": "string",
             "description": "Thread ID",
             "required": true
+          },
+          "nativeDecision": {
+            "type": "object",
+            "description": "Captured native decision identity for an addressed Cancel",
+            "required": false
           }
         },
         "label": "CC: Pause Turn",
