@@ -44,18 +44,32 @@ const MINUTE = 60_000;
 /** Only the timer is faked: git and the processes it runs keep the real clock, which `fetchIfDue` reads */
 const fakeTimer = () => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 
+/**
+ * Checks that `due` is not called short of `intervalMs` after a fetch that began at `fetchedFrom`, and is just past it.
+ *
+ * **The timer is the interval less the real time since the fetch**, read from the real clock, and the fetch and what
+ * followed it took real time, which a busy machine stretches to seconds. So "short of it" is measured from the real
+ * time the fetch began, which the fetch's own stamp cannot precede, and "past it" is a second past the whole interval,
+ * which no stamp can exceed. Two seconds either side of the fake interval failed under load
+ */
+function dueAfter(intervalMs: number, fetchedFrom: number, due: ReturnType<typeof vi.fn>) {
+  const short = intervalMs - (Date.now() - fetchedFrom) - 1_000;
+  vi.advanceTimersByTime(short);
+  expect(due, 'within the interval').not.toHaveBeenCalled();
+  vi.advanceTimersByTime(intervalMs + 1_000 - short);
+  expect(due).toHaveBeenCalledTimes(1);
+}
+
 it('is due an interval after the last fetch, and not before', async () => {
   const repo = await cloneBehindItsRemote();
   repo.setFetchConfig(true, 180);
+  const fetchedFrom = Date.now();
   expect(await repo.fetchIfDue()).toBe(true);
   fakeTimer();
   const due = vi.fn();
 
   repo.whenFetchDue(due);
-  vi.advanceTimersByTime(3 * MINUTE - 2_000);
-  expect(due, 'within the interval').not.toHaveBeenCalled();
-  vi.advanceTimersByTime(4_000);
-  expect(due).toHaveBeenCalledTimes(1);
+  dueAfter(3 * MINUTE, fetchedFrom, due);
 });
 
 it('is due nothing while fetching by itself is off, and due at once when it is turned on', async () => {
@@ -95,14 +109,12 @@ it('puts the next look off by the interval for a branch with nothing to fetch, r
 it('never fires sooner than a minute after the last fetch, whatever interval it is given', async () => {
   const repo = await cloneBehindItsRemote();
   repo.setFetchConfig(true, 0);
+  const fetchedFrom = Date.now();
   expect(await repo.fetchIfDue()).toBe(true);
   fakeTimer();
   const due = vi.fn();
   repo.whenFetchDue(due);
-  vi.advanceTimersByTime(MINUTE - 2_000);
-  expect(due).not.toHaveBeenCalled();
-  vi.advanceTimersByTime(4_000);
-  expect(due).toHaveBeenCalledTimes(1);
+  dueAfter(MINUTE, fetchedFrom, due);
 });
 
 it('is due nothing once the repository is closed, or told to stop', async () => {
