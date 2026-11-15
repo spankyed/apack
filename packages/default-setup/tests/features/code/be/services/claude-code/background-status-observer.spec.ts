@@ -176,7 +176,7 @@ it('does not hide status expiry while a later identity lookup is pending',async(
  }finally{release({...original});await pending?.catch(()=>{});await f.observer.close();vi.useRealTimers()}
 })
 
-it('binds child drawing and reverse prompts to the original worker and retires them on replacement', async () => {
+it.each([false,true])('binds child drawing and reverse prompts to the original worker and retires them on replacement (missed current helper: %s)', async missedCurrentHelper => {
  const {mkdtemp,mkdir,readFile}=await import('node:fs/promises'),{createServer}=await import('node:http')
  const profile=await mkdtemp(join(process.platform==='darwin'?'/private/tmp':tmpdir(),'cc-ui-profile-'))
  let identity={...original}
@@ -192,14 +192,20 @@ it('binds child drawing and reverse prompts to the original worker and retires t
  await writeFile(join(worker,'observer.json'),JSON.stringify({sessionId:child,jobSessionId:child,token,uiSocketPath:socketPath,mainObservationClaimed:false,transportEpoch:'a'.repeat(32),generations:{main:'main-generation',subagent:'subagent-generation'}}),{mode:0o600})
  let policyReady=false
  let cachedMainStatus: string | undefined
+ let mainStatusObservation: unknown
  const helperPolicy={allowManagedHooksOnly:false,disableAllHooks:false}
  const helperPolicyFields=new Function('effective','policy',claudeTerminalHelperPolicyRuntime+'\nreturn nativeHelperPolicySnapshot(effective,policy)')
- const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);if(value.request?.subtype==='apack_owner_snapshot'&&!policyReady){res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,error:'Native policy binding not ready'}));return}res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,cachedMainStatus,...helperPolicyFields({statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}},{...helperPolicy,statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}})}:{attached:true}}))})
+ const native=createServer(async(req,res)=>{let text='';for await(const chunk of req)text+=chunk;const value=JSON.parse(text);if(value.request?.subtype==='apack_owner_snapshot'&&!policyReady){res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,error:'Native policy binding not ready'}));return}res.end(JSON.stringify({id:value.id,pid:119,sessionId:value.sessionId,result:value.request?.subtype==='apack_owner_snapshot'?{sessionId:value.sessionId,cachedMainStatus,mainStatusObservation,...helperPolicyFields({statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}},{...helperPolicy,statusLine:{type:'command',command:'main-caption'},subagentStatusLine:{type:'command',command:'caption-helper'}})}:{attached:true}}))})
  await new Promise<void>(resolve=>native.listen(socketPath,resolve))
  try {
   expect(JSON.parse(await readFile(join(observer.directory,'child-ui-launch.json'),'utf8')).configDir).toBe(join(profile,'claude-code-profile','config'))
   const startupMain={sessionId:child,parentPid:119,kind:'main',generation:'main-generation',policyKey:'[false,false,false]',command:'main-caption',startedAt:'9',totalCostUsd:0.00042,code:0,truncated:false,stdout:'Original startup caption'}
-  await writeFile(join(worker,'startup-main.json'),JSON.stringify(startupMain),{mode:0o600})
+  await writeFile(join(worker,'startup-main.json'),JSON.stringify({...startupMain,startedAt:missedCurrentHelper?'8':startupMain.startedAt,totalCostUsd:missedCurrentHelper?0.00028:startupMain.totalCostUsd}),{mode:0o600})
+  if(missedCurrentHelper){
+   // Only the worker retains the newer execution: no live helper delivery reaches this owner.
+   mainStatusObservation={pending:false,receipt:startupMain}
+   cachedMainStatus=startupMain.stdout
+  }
   let lease=(await post('/background-register',{sessionId:child,pid:119})).value.token
   let [transport,parallelTransport]=await Promise.all([observer.desktopTransport(),observer.desktopTransport()]);expect(transport).toBeDefined();expect(parallelTransport).toBe(transport)
   const desktop=observer.desktopOwner!

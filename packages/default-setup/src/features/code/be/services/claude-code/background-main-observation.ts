@@ -21,6 +21,7 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
       &&(Number.isSafeInteger(value.code)||value.code===null&&typeof value.signal==='string')&&typeof value.truncated==='boolean'&&typeof value.stdout==='string'&&Buffer.byteLength(value.stdout)<=32768
   }
   const textOf=(value:ClaudeBackgroundMainResult)=>value.code===0&&!value.truncated&&!value.signal?value.stdout.trim().split('\n').flatMap(line=>line.trim()||[]).join('\n')||undefined:undefined
+  const canRetainWorkerObservation = (cost: number | undefined) => recoverObservedMain && key !== undefined && command !== null && typeof cost === 'number' && Number.isFinite(cost) && cost >= 0 && result?.cost !== cost && cached?.cost !== cost
   return {
     // A receipt is private evidence, never live output until fresh native validation succeeds.
     get recovery() { return cached ? {...cached} : undefined },
@@ -60,17 +61,24 @@ export function createClaudeBackgroundMainObservation(options: {configPath: stri
       cached = text ? {key:scope, cost: value.totalCostUsd, text, startedAt: started} : undefined
       return true
     },
-    get canRetainRestartObservation(){return recoverObservedMain&&key!==undefined&&command!==null&&result===undefined&&cached===undefined&&latest===undefined},
-    discardRestartObservation(){recoverObservedMain=false},
-    retainRestartObservation(value:unknown){
-      if(!recoverObservedMain||result!==undefined||cached!==undefined||latest!==undefined||!value||typeof value!=='object'||Array.isArray(value))return false
+    canRetainWorkerObservation,
+    discardWorkerObservation(){recoverObservedMain=false},
+    retainWorkerObservation(value:unknown,cost:number|undefined){
+      if(!canRetainWorkerObservation(cost))return false
+      if(!value||typeof value!=='object'||Array.isArray(value)){recoverObservedMain=false;return false}
       const record=value as Record<string,unknown>
-      if(typeof record.generation!=='string'||!/^[-A-Za-z0-9]{1,128}$/.test(record.generation)||!validObservation(record,record.generation))return false
-      const observed=record;recoverObservedMain=false
-      const text=textOf(observed);if(!text)return false
-      // This is private evidence from the surviving worker, never an incoming old-generation frame.
-      cached={key:key!,cost:observed.totalCostUsd,text,startedAt:BigInt(observed.startedAt)}
-      return true
+      if(typeof record.generation!=='string'||!/^[-A-Za-z0-9]{1,128}$/.test(record.generation)||!validObservation(record,record.generation)){recoverObservedMain=false;return false}
+      // Native usage can advance before its debounced helper starts, or lag a completed helper.
+      // Keep waiting for an original execution at the reported cost; never reinterpret old input.
+      if(record.totalCostUsd!==cost)return false
+      const started=BigInt(record.startedAt)
+      if(latest!==undefined&&started<=latest||cached!==undefined&&started<=cached.startedAt){recoverObservedMain=false;return false}
+      recoverObservedMain=false;startupResult=undefined;result=undefined;latest=started
+      const text=textOf(record)
+      // This is private evidence from the same worker, not an old-generation live frame.
+      // Even a failed execution retires the older receipt. Text still needs native cache proof.
+      cached=text?{key:key!,cost:record.totalCostUsd,text,startedAt:started}:undefined
+      return text!==undefined
     },
     canRestore(cost: number | undefined) { return result === undefined && !!command && cached !== undefined && cached.key === key && cached.cost === cost },
     restoreCached(value: unknown, cost: number | undefined) {
