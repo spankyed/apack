@@ -495,6 +495,9 @@ function askList(enqueue: Enqueue, list: Pick<PRList, 'state' | 'query' | 'next'
 function sendWrite(enqueue: Enqueue, write: PullRequestWrite, send: Send, refreshes?: number): void {
   const call = newCall()
   enqueue.assign(({ context }) => ({
+    // A write is the user acting on what the panel said, so what it said goes: a merge retried after "nothing
+    // was merged" must not leave that beside the pull request it merged. The write brings its own answer
+    prError: null,
     ...withWrites(context, recordCall(context.writes, call, write)),
     ...(refreshes !== undefined && { detailRefreshes: recordCall(context.detailRefreshes, call, refreshes) }),
   }))

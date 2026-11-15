@@ -139,6 +139,17 @@ it('merges the head shown, by its commit', () => {
   expect(asked('pr.MERGE_PR')[0]![1]).toEqual({ type: 'pr.MERGE_PR', number: 7, method: 'squash', sha: 'sha-7' });
 });
 
+it('says a merge was refused for a moved head until the merge is asked again', () => {
+  const actor = started();
+  pick(actor, pr(7, { state: 'OPEN' }));
+  actor.send({ type: 'pr.MERGE' });
+  answer(actor, 'pr.MERGE_PR', { type: 'pr.ERROR', message: 'nothing was merged', reason: 'head-moved' });
+  expect(context(actor).prError).toBe('nothing was merged');
+
+  actor.send({ type: 'pr.MERGE' });
+  expect(context(actor).prError, 'not left beside the merge that follows it').toBeNull();
+});
+
 it('checks out an open pull request once at a time, and keeps what the checkout did', () => {
   const actor = started();
   pick(actor, pr(7));
