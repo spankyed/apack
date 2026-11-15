@@ -1,9 +1,9 @@
-import type { GitHubApiFailure } from '#features/code/be/services/github-api.ts'
+import type { GitHubApiFailure, PRListState } from '#features/code/be/services/github-api.ts'
 import { setup, assign, enqueueActions , type ActorRefFrom } from 'xstate';
 import { answersCall, newCall, recordCall, settleCall, type CallOptions } from '@apackdev/sdk/events';
 import { sendToSystem } from '#generated/events.ts';
 import type { GitStatusFile, GitDiff } from '../commit/state.ts';
-import type { GhPullRequest, GhPRComment, GhReviewThread } from '#generated/types.ts';
+import type { GhPullRequest, GhPRComment, GhReviewThread, PRBranchCheckout } from '#generated/types.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
 import { resolveName } from '@apackdev/sdk/ids'
@@ -35,7 +35,7 @@ export const fileKey = (base: string, head: string | undefined, path: string): s
 type Send = (options: CallOptions) => void
 
 /** The reads the panel holds one ask for at a time: the latest, and an answer to an earlier one is not taken */
-const ASKS = ['details', 'comments', 'threads', 'smartBase', 'branchPR', 'openPRs', 'access', 'autofill'] as const
+const ASKS = ['details', 'comments', 'threads', 'smartBase', 'branchPR', 'access', 'autofill'] as const
 export type PullRequestAsk = (typeof ASKS)[number]
 
 const noAsks = (): Record<PullRequestAsk, string | null> =>
@@ -65,6 +65,7 @@ export type PullRequestWrite =
   | { write: 'close'; number: number }
   | { write: 'toggle-draft'; number: number }
   | { write: 'delete-branch' }
+  | { write: 'checkout'; number: number }
   | { write: 'update-pr'; number: number }
   | { write: 'create-comment'; number: number; comment: CommentChange }
   | { write: 'edit-comment'; number: number; comment: CommentChange }
@@ -142,6 +143,7 @@ const busy = (writes: Record<string, PullRequestWrite>) => {
     isClosing: any('close'),
     isTogglingDraft: any('toggle-draft'),
     isDeletingBranch: any('delete-branch'),
+    isCheckingOut: any('checkout'),
     isUpdatingPR: any('update-pr'),
     inflightMutations: all.filter(w => commentChangeOf(w) || threadChangeOf(w)).length,
   }
@@ -193,7 +195,8 @@ const folderStart = (): Omit<CodePullRequestContext, 'commentTab'> => ({
   isPrLoading: false,
   selectedPrFile: null,
 
-  openPRs: [],
+  prList: listStart(),
+  lastCheckout: null,
   selectedPR: null,
   branchPR: null,
   prComments: [],
@@ -225,6 +228,30 @@ const folderStart = (): Omit<CodePullRequestContext, 'commentTab'> => ({
   latestPrDetailsFetchedAt: {},
 })
 
+/**
+ * The pull request list the dropdown shows: what it is filtered and searched by, the pages read of it so far, and
+ * the ask for the next. Read when the dropdown opens and whenever its filter or search changes; nobody sees it shut
+ */
+export interface PRList {
+  state: PRListState
+  query: string
+  prs: GhPullRequest[]
+  /** GitHub's cursor for the page after the last read, `null` once the last page is read */
+  next: string | null
+  /** The ask for a page, while it is unanswered: whether its page follows the ones read, or starts the list again */
+  asked: { call: string; append: boolean } | null
+  /** Whether a page has been read for the filter and search shown */
+  read: boolean
+}
+
+const listStart = (): PRList => ({ state: 'open', query: '', prs: [], next: null, asked: null, read: false })
+
+/** `more` after `prs`, each pull request once: one opened between two pages moves the second's down one */
+const joined = (prs: GhPullRequest[], more: GhPullRequest[]): GhPullRequest[] => {
+  const shown = new Set(prs.map(pr => pr.number))
+  return [...prs, ...more.filter(pr => !shown.has(pr.number))]
+}
+
 /** Whether the app's GitHub sign-in can work with this repository's pull requests: `ok`, or why not */
 export type GitHubAccess = 'ok' | GitHubApiFailure
 
@@ -232,12 +259,12 @@ export type GitHubAccess = 'ok' | GitHubApiFailure
 const ACCESS_FAILURES: readonly GitHubApiFailure[] = ['signed-out', 'not-github', 'missing-scope', 'sso']
 
 /**
- * Whether the pull request's branch is one the panel offers to delete: a branch of this repository, not a fork's,
- * that no other open pull request it knows of is from. The backend asks GitHub the same before it deletes
+ * Whether the pull request's branch is one the panel offers to delete: a closed or merged one's, a branch of the
+ * repository the checkout's remote names, that no other open pull request is from as the backend last read them.
+ * Where it has not read them, the backend asks GitHub the same before it deletes, and says why it will not
  */
-export const branchDeletable = (pr: GhPullRequest | null, openPRs: GhPullRequest[]): boolean =>
-  !!pr && pr.state !== 'OPEN' && pr.isCrossRepository === false
-  && !openPRs.some(other => other.number !== pr.number && other.headRefName === pr.headRefName && other.isCrossRepository === false)
+export const branchDeletable = (pr: GhPullRequest | null): boolean =>
+  !!pr && pr.state !== 'OPEN' && pr.headInRemote === true && (pr.openFromSameHead ?? []).length === 0
 
 export interface CodePullRequestContext {
   // Branch comparison
@@ -270,7 +297,9 @@ export interface CodePullRequestContext {
   selectedPrFile: GitStatusFile | null
 
   // GitHub PR state
-  openPRs: GhPullRequest[]
+  prList: PRList
+  /** The last pull request checked out from the panel, as the branch it became and what that did to it */
+  lastCheckout: { number: number; branch: string; checkout: PRBranchCheckout } | null
   selectedPR: GhPullRequest | null
   branchPR: GhPullRequest | null
   /** The discussion shown: `confirmedComments` with the unanswered comment writes laid over it */
@@ -305,6 +334,7 @@ export interface CodePullRequestContext {
   isClosing: boolean
   isTogglingDraft: boolean
   isDeletingBranch: boolean
+  isCheckingOut: boolean
   isUpdatingPR: boolean
   /** The comment and thread writes unanswered, which disables every comment form while any is */
   inflightMutations: number
@@ -356,7 +386,8 @@ export type Event =
   | { type: 'pr.CHECK_GITHUB_ACCESS' }
   | { type: 'pr.GITHUB_ACCESS_CHECKED'; data: { access: GitHubAccess; message?: string } }
   | { type: 'pr.NAVIGATE_TO_HELP' }
-  | { type: 'pr.OPEN_PRS_RECEIVED'; data: { prs: GhPullRequest[] } }
+  | { type: 'pr.PRS_LISTED'; data: { prs: GhPullRequest[]; next: string | null } }
+  | { type: 'pr.PR_CHECKED_OUT'; data: { number: number; branch: string; checkout: PRBranchCheckout } }
   | { type: 'pr.PR_DETAILS_RECEIVED'; data: { pr: GhPullRequest; comments: GhPRComment[]; fetchedAt: number } }
   | { type: 'pr.PR_CREATED'; data: { pr: GhPullRequest } }
   | { type: 'pr.PR_MERGED'; data: { number: number } }
@@ -389,6 +420,13 @@ export type Event =
   | { type: 'pr.TOGGLE_DRAFT' }
   | { type: 'pr.DELETE_BRANCH' }
   | { type: 'pr.CHECKOUT_BASE' }
+  /** Checks out the pull request shown as a branch here */
+  | { type: 'pr.CHECKOUT' }
+  /** The list was opened: it is read for the filter and search it shows */
+  | { type: 'pr.LIST_SHOWN' }
+  | { type: 'pr.SET_LIST_STATE'; state: PRListState }
+  | { type: 'pr.SET_LIST_QUERY'; query: string }
+  | { type: 'pr.LOAD_MORE_PRS' }
   | { type: 'pr.UPDATE_PR'; number: number; title?: string; body?: string; base?: string }
   | { type: 'pr.CREATE_COMMENT'; number: number; body: string }
   | { type: 'pr.EDIT_COMMENT'; commentId: number; body: string }
@@ -432,10 +470,22 @@ function askFileDiff(enqueue: Enqueue, which: { path: string; baseBranch: string
   enqueue(() => { sendToSystem('code', { type: 'pr.GET_BRANCH_FILE_DIFF', ...which, ...(fetchMissing && { fetchMissing }) }, { call }) })
 }
 
-/** Asks for the open pull requests and the branch's own */
+/** Asks for the branch's own pull request */
 function askStatus(enqueue: Enqueue): void {
-  ask(enqueue, 'openPRs', (o) => sendToSystem('code', { type: 'pr.LIST_OPEN_PRS' }, o))
   ask(enqueue, 'branchPR', (o) => sendToSystem('code', { type: 'pr.CHECK_BRANCH_PR' }, o))
+}
+
+/**
+ * Asks for a page of the list as `list` filters and searches it: the first, which starts it again, or the one
+ * after those read. The ask replaces any unanswered, so only the page for what is shown is taken
+ */
+function askList(enqueue: Enqueue, list: Pick<PRList, 'state' | 'query' | 'next'>, append: boolean): void {
+  const call = newCall()
+  const after = append ? list.next ?? undefined : undefined
+  enqueue.assign(({ context }) => ({ prList: { ...context.prList, state: list.state, query: list.query, asked: { call, append } } }))
+  enqueue(() => {
+    sendToSystem('code', { type: 'pr.LIST_PRS', state: list.state, ...(list.query.trim() && { query: list.query.trim() }), ...(after && { after }) }, { call })
+  })
 }
 
 /**
@@ -445,6 +495,9 @@ function askStatus(enqueue: Enqueue): void {
 function sendWrite(enqueue: Enqueue, write: PullRequestWrite, send: Send, refreshes?: number): void {
   const call = newCall()
   enqueue.assign(({ context }) => ({
+    // A write is the user acting on what the panel said, so what it said goes: a merge retried after "nothing
+    // was merged" must not leave that beside the pull request it merged. The write brings its own answer
+    prError: null,
     ...withWrites(context, recordCall(context.writes, call, write)),
     ...(refreshes !== undefined && { detailRefreshes: recordCall(context.detailRefreshes, call, refreshes) }),
   }))
@@ -457,7 +510,7 @@ export const pullRequestState = setup({
     events: {} as Event
   },
   guards: {
-    answersTheOpenPRsAsked: ({ context, event }) => answersCall(event, context.asks.openPRs),
+    answersTheListAsked: ({ context, event }) => answersCall(event, context.prList.asked?.call ?? null),
     answersTheAccessAsked: ({ context, event }) => answersCall(event, context.asks.access),
     answersTheAutofillAsked: ({ context, event }) => answersCall(event, context.asks.autofill),
     answersTheBranchPRAsked: ({ context, event }) => answersCall(event, context.asks.branchPR),
@@ -547,6 +600,8 @@ export const pullRequestState = setup({
       const fileDiff = settleCall(context.fileDiffAsks, event)
       if (fileDiff.recorded !== undefined) updates.fileDiffAsks = fileDiff.pending
       updates.detailRefreshes = settleCall(context.detailRefreshes, event).pending
+
+      if (answersCall(event, context.prList.asked?.call ?? null)) updates.prList = { ...context.prList, asked: null }
 
       const write = settleCall(context.writes, event)
       if (write.recorded !== undefined) {
@@ -652,12 +707,36 @@ export const pullRequestState = setup({
       untypedOpenSurface(HOST_SETTINGS, [{ type: 'TAB.SELECT', tab: 'help' }]);
     },
 
-    handleOpenPRsReceived: assign({
-      openPRs: ({ event }) => {
-        const ev = event as { type: 'pr.OPEN_PRS_RECEIVED'; data: { prs: GhPullRequest[] } }
-        return ev.data.prs
-      },
-      asks: ({ context }) => ({ ...context.asks, openPRs: null }),
+    /** A page of the list, after the ones read where it was asked as the next, and as the list otherwise */
+    takeListPage: assign(({ context, event }) => {
+      const ev = event as { type: 'pr.PRS_LISTED'; data: { prs: GhPullRequest[]; next: string | null } }
+      const list = context.prList
+      return { prList: { ...list, prs: list.asked?.append ? joined(list.prs, ev.data.prs) : ev.data.prs, next: ev.data.next, asked: null, read: true } }
+    }),
+
+    showList: enqueueActions(({ enqueue, context }) => {
+      askList(enqueue, context.prList, false)
+    }),
+
+    setListState: enqueueActions(({ enqueue, context, event }) => {
+      const ev = event as { type: 'pr.SET_LIST_STATE'; state: PRListState }
+      if (ev.state === context.prList.state) return
+      enqueue.assign({ prList: { ...context.prList, state: ev.state, prs: [], next: null, read: false } })
+      askList(enqueue, { ...context.prList, state: ev.state }, false)
+    }),
+
+    setListQuery: enqueueActions(({ enqueue, context, event }) => {
+      const ev = event as { type: 'pr.SET_LIST_QUERY'; query: string }
+      if (ev.query.trim() === context.prList.query.trim()) return
+      enqueue.assign({ prList: { ...context.prList, query: ev.query, prs: [], next: null, read: false } })
+      askList(enqueue, { ...context.prList, query: ev.query }, false)
+    }),
+
+    /** The page after those read, where there is one and no page is being asked for */
+    loadMorePRs: enqueueActions(({ enqueue, context }) => {
+      const list = context.prList
+      if (!list.next || list.asked) return
+      askList(enqueue, list, true)
     }),
 
     /**
@@ -775,6 +854,11 @@ export const pullRequestState = setup({
         case 'pr.BRANCH_DELETED':
           enqueue.assign(({ context }) => ({ ...selecting(context, null), branchPR: null, isManualPRSelection: false }))
           break
+        case 'pr.PR_CHECKED_OUT':
+          // The pull request stays shown, picked or not: a fork's is checked out as `pr/<n>`, which is no branch
+          // GitHub has a pull request from, and the checkout's announcement asks for the branch's own
+          enqueue.assign({ lastCheckout: ev.data })
+          break
         case 'pr.PR_UPDATED':
           enqueue.assign(({ context }) => ({
             selectedPR: context.selectedPR?.number === ev.data.number
@@ -795,8 +879,16 @@ export const pullRequestState = setup({
     /** Deletes the pull request's branch, where the panel offers it (`branchDeletable`); the view has asked first */
     requestDeleteBranch: enqueueActions(({ enqueue, context }) => {
       const pr = context.selectedPR
-      if (!pr || !branchDeletable(pr, context.openPRs)) return
+      if (!pr || !branchDeletable(pr)) return
       sendWrite(enqueue, { write: 'delete-branch' }, (o) => sendToSystem('code', { type: 'pr.DELETE_BRANCH', number: pr.number }, o))
+    }),
+
+    /** Checks out the open pull request shown as a branch here, once at a time */
+    requestCheckout: enqueueActions(({ enqueue, context }) => {
+      const pr = context.selectedPR
+      if (!pr || pr.state !== 'OPEN' || context.isCheckingOut) return
+      enqueue.assign({ lastCheckout: null })
+      sendWrite(enqueue, { write: 'checkout', number: pr.number }, (o) => sendToSystem('code', { type: 'pr.CHECKOUT_PR', number: pr.number }, o))
     }),
 
     checkoutBase: ({ context, self }) => {
@@ -873,9 +965,10 @@ export const pullRequestState = setup({
     requestMerge: enqueueActions(({ enqueue, event, context }) => {
       if (!context.selectedPR) return
       const ev = event as { type: 'pr.MERGE'; method?: 'merge' | 'squash' | 'rebase' }
-      const number = context.selectedPR.number
-      // A refused merge answers with the PR read again, then the refusal
-      sendWrite(enqueue, { write: 'merge', number }, (o) => sendToSystem('code', { type: 'pr.MERGE_PR', number, method: ev.method || 'merge' }, o), number)
+      const { number, headRefOid: sha } = context.selectedPR
+      // The head shown is the one merged: GitHub refuses where it has moved since. A refused merge answers with the
+      // PR read again, then the refusal
+      sendWrite(enqueue, { write: 'merge', number }, (o) => sendToSystem('code', { type: 'pr.MERGE_PR', number, method: ev.method || 'merge', ...(sha && { sha }) }, o), number)
     }),
 
     requestClose: enqueueActions(({ enqueue, context }) => {
@@ -1036,7 +1129,8 @@ export const pullRequestState = setup({
         'pr.CHECK_GITHUB_ACCESS': { actions: 'checkGitHubAccess' },
         'pr.GITHUB_ACCESS_CHECKED': { guard: 'answersTheAccessAsked', actions: 'handleGitHubAccessChecked' },
         'pr.NAVIGATE_TO_HELP': { actions: 'navigateToHelp' },
-        'pr.OPEN_PRS_RECEIVED': { guard: 'answersTheOpenPRsAsked', actions: 'handleOpenPRsReceived' },
+        'pr.PRS_LISTED': { guard: 'answersTheListAsked', actions: 'takeListPage' },
+        'pr.PR_CHECKED_OUT': { actions: 'takeWriteAnswer' },
         'pr.PR_DETAILS_RECEIVED': { actions: 'takeDetails' },
         'pr.BRANCH_PR_CHECKED': { guard: 'answersTheBranchPRAsked', actions: 'handleBranchPRChecked' },
         'pr.SMART_BASE_BRANCH_RECEIVED': { guard: 'answersTheSmartBaseAsked', actions: 'handleSmartBaseBranchReceived' },
@@ -1070,6 +1164,11 @@ export const pullRequestState = setup({
         'pr.TOGGLE_DRAFT': { actions: 'requestToggleDraft' },
         'pr.DELETE_BRANCH': { actions: 'requestDeleteBranch' },
         'pr.CHECKOUT_BASE': { actions: 'checkoutBase' },
+        'pr.CHECKOUT': { actions: 'requestCheckout' },
+        'pr.LIST_SHOWN': { actions: 'showList' },
+        'pr.SET_LIST_STATE': { actions: 'setListState' },
+        'pr.SET_LIST_QUERY': { actions: 'setListQuery' },
+        'pr.LOAD_MORE_PRS': { actions: 'loadMorePRs' },
         'pr.UPDATE_PR': { actions: 'requestUpdatePR' },
         'pr.CREATE_COMMENT': { actions: 'createComment' },
         'pr.EDIT_COMMENT': { actions: 'editComment' },

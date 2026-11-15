@@ -5,9 +5,11 @@ import { defineHandlers } from '@apackdev/sdk/framework';
 import { setup, assign, type AnyActorRef } from 'xstate'
 
 import { createLogger } from '@apackdev/sdk/logger'
+import { services } from '#generated/services.ts'
 import { openGitRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { gitHubApiFor, gitHubOf, type GitHubOfCheckout } from './github.ts'
-import { GitHubApiError, type GitHubApi } from '../services/github-api.ts'
+import { GitHubApiError, type GitHubApi, type PRListState } from '../services/github-api.ts'
+import type { PRBranchCheckout } from '../types.ts'
 
 const logger = createLogger('pr')
 
@@ -43,10 +45,11 @@ const comparisonKey = ({ baseBranch, headBranch, prNumber }: ComparisonAsk): str
 export type Event =
   | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
   | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; prNumber?: number; fetchMissing?: boolean }
-  | { type: 'pr.LIST_OPEN_PRS' }
+  | { type: 'pr.LIST_PRS'; state: PRListState; query?: string; after?: string }
+  | { type: 'pr.CHECKOUT_PR'; number: number }
   | { type: 'pr.SELECT_PR'; number: number }
   | { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
-  | { type: 'pr.MERGE_PR'; number: number; method?: 'merge' | 'squash' | 'rebase' }
+  | { type: 'pr.MERGE_PR'; number: number; method?: 'merge' | 'squash' | 'rebase'; sha?: string }
   | { type: 'pr.CLOSE_PR'; number: number }
   | { type: 'pr.TOGGLE_DRAFT'; number: number; isDraft: boolean }
   | { type: 'pr.CHECK_BRANCH_PR' }
@@ -108,15 +111,23 @@ function withRepo<T>(
 function withGitHub<T>(
   context: CodePullRequestSystemContext,
   emit: Emit,
-  work: (github: GitHubApi, repo: AppGitRepository, remote: GitHubOfCheckout['remote']) => Promise<T>,
+  work: (github: GitHubApi, repo: AppGitRepository, remotes: Omit<GitHubOfCheckout, 'github'>) => Promise<T>,
   onSuccess: (result: T) => void,
-  onError: (error: any) => void = error => emitFailure(emit, error)
+  onError: (error: any) => void = error => emitFailure(emit, error),
+  /** Asked of the repository first, and GitHub is asked nothing where it answers */
+  before?: (repo: AppGitRepository) => Promise<{ answer: T } | undefined>,
 ) {
   withRepo(context, emit, async repo => {
-    const { github, remote } = await gitHubOf(repo)
-    return work(github, repo, remote)
+    const early = await before?.(repo)
+    if (early) return early.answer
+    const { github, ...remotes } = await gitHubOf(repo)
+    return work(github, repo, remotes)
   }, onSuccess, onError)
 }
+
+/** The words for a detached HEAD, which is no branch to open a pull request from */
+const DETACHED = 'The checkout is on a detached HEAD, not a branch. Check out a branch to open a pull request from it.'
+const onNoBranch = async (repo: AppGitRepository) => await repo.readCurrentBranch() === 'HEAD'
 
 /** A pull request's text as shown, with the images in it loadable, beside the text as written, which an edit starts from */
 async function shown<T extends { body: string; rawBody?: string }>(github: GitHubApi, item: T): Promise<T> {
@@ -133,11 +144,25 @@ async function settledDetails(github: GitHubApi, number: number) {
   return { pr, comments }
 }
 
-/** The remote a comparison fetches from: the one the current branch follows, else `origin`, else the only one */
-async function remoteOf(repo: AppGitRepository): Promise<string> {
+/**
+ * The remotes a comparison fetches from: the head's, and the base's, which is where GitHub keeps a pull request's
+ * ref. They are one remote but for a fork, whose base is its parent's (`gitHubOf`). Where GitHub cannot be asked —
+ * no sign-in, or a remote elsewhere — both are the one the current branch follows, else `origin`, else the only one
+ */
+async function remotesOf(repo: AppGitRepository): Promise<{ remote: string; baseRemote?: string }> {
+  const known = await gitHubOf(repo).then(({ remote, baseRemote }) => ({ remote, baseRemote }), () => undefined)
+  if (known) return known
   const remote = await repo.readRemote()
   if (!remote) throw new Error('This repository has no remote, so a pull request\'s branches cannot be fetched.')
-  return remote.name
+  return { remote: remote.name, baseRemote: remote.name }
+}
+
+/** The remote naming the repository a fork's pull requests are on, which nothing can be fetched from without */
+async function baseRemoteOf(repo: AppGitRepository, remotes: { baseRemote?: string }): Promise<string> {
+  if (remotes.baseRemote) return remotes.baseRemote
+  const { github } = await gitHubOf(repo)
+  const parent = `${github.repo.owner}/${github.repo.name}`
+  throw new Error(`This checkout is of a fork of ${parent}, and no remote here names ${parent}: add one (git remote add upstream ${services.github.endpoints.web}/${parent}.git) to read its pull requests' changes.`)
 }
 
 /** Git's words for a fetch of a branch the remote does not have */
@@ -158,7 +183,8 @@ async function fetchSide(repo: AppGitRepository, branch: string, remote: string,
 /**
  * Fetches a comparison's two sides, once, and works out where its files are read from. The head is what GitHub
  * keeps of a pull request where the asker names one (`refs/pull/<n>/head`), which outlives its branch and covers a
- * fork's, the branch's own fetched where only it is named, and the checkout's `HEAD` otherwise. A comparison with
+ * fork's, the branch's own fetched where only it is named, and the checkout's `HEAD` otherwise; the pull request's
+ * ref and the base come from the remote naming the repository the pull request is on (`remotesOf`). A comparison with
  * a remote head is against the base as the remote has it, which is what GitHub compares with; one of the checkout
  * against its local base, or the remote's where there is no local one. Either side missing is said, by name
  */
@@ -167,9 +193,10 @@ async function compare(repo: AppGitRepository, ask: ComparisonAsk): Promise<Comp
   let head = 'HEAD'
   let base = baseBranch
   if (prNumber || headBranch) {
-    const remote = await remoteOf(repo)
-    head = prNumber ? await repo.fetchPullRequest(prNumber, remote) : await fetchSide(repo, headBranch!, remote, 'head')
-    base = await fetchSide(repo, baseBranch, remote, 'base')
+    const remotes = await remotesOf(repo)
+    const baseRemote = await baseRemoteOf(repo, remotes)
+    head = prNumber ? await repo.fetchPullRequest(prNumber, baseRemote) : await fetchSide(repo, headBranch!, remotes.remote, 'head')
+    base = await fetchSide(repo, baseBranch, baseRemote, 'base')
   } else if (!await repo.commitsExist(baseBranch)) {
     const remote = await repo.readRemote()
     base = remote && await repo.commitsExist(`${remote.name}/${baseBranch}`) ? `${remote.name}/${baseBranch}` : ''
@@ -184,9 +211,9 @@ async function compare(repo: AppGitRepository, ask: ComparisonAsk): Promise<Comp
  * The branch checked out, as the remote names it: the name of the branch it follows there, where it follows one,
  * and its own otherwise. A detached HEAD is no branch, and is refused in words
  */
-async function headBranchOf(repo: AppGitRepository, remote: string): Promise<string> {
+async function headBranchOf(repo: AppGitRepository, { remote }: { remote: string }): Promise<string> {
   const current = await repo.readCurrentBranch()
-  if (current === 'HEAD') throw new Error('The checkout is on a detached HEAD, not a branch. Check out a branch to open a pull request from it.')
+  if (current === 'HEAD') throw new Error(DETACHED)
   const upstream = (await repo.refsModel()).branches.find(branch => branch.current && !branch.remote)?.upstream
   return upstream?.startsWith(`${remote}/`) ? upstream.slice(remote.length + 1) : current
 }
@@ -291,11 +318,40 @@ export const pullRequestSystem = setup({
       )
     },
 
-    listOpenPRs: ({ context, reply }) => {
+    listPRs: ({ event, context, reply }) => {
       const emit = answering(reply)
+      const ev = event as { type: 'pr.LIST_PRS'; state: PRListState; query?: string; after?: string }
       withGitHub(context, emit,
-        github => github.listOpenPRs(),
-        prs => emit({ type: 'pr.OPEN_PRS_RECEIVED', data: { prs } }),
+        github => github.listPRs({ state: ev.state, ...(ev.query && { query: ev.query }), ...(ev.after && { after: ev.after }) }),
+        page => emit({ type: 'pr.PRS_LISTED', data: page }),
+      )
+    },
+
+    /**
+     * Checks out the pull request's head as a branch here. A head on the checkout's own remote is that remote's
+     * branch, fetched and checked out under its name, following it; any other — a fork's — is GitHub's ref of the
+     * pull request, fetched from the remote naming the repository it is on and checked out as `pr/<number>`,
+     * following nothing, since nothing here can push to it. A branch already here is moved only forward
+     * (`checkoutBranchAt`). Every window is shown the checkout, as after any write here
+     */
+    checkoutPR: ({ event, context, reply }) => {
+      const emit = answering(reply)
+      const ev = event as { type: 'pr.CHECKOUT_PR'; number: number }
+      withGitHub(context, emit,
+        async (github, repo, remotes): Promise<{ branch: string; checkout: PRBranchCheckout }> => {
+          const { branch, headInRemote } = await github.readHead(ev.number)
+          if (headInRemote) {
+            const ref = await fetchSide(repo, branch, remotes.remote, 'head')
+            return { branch, checkout: await repo.checkoutBranchAt(branch, ref, { track: true }) }
+          }
+          const ref = await repo.fetchPullRequest(ev.number, await baseRemoteOf(repo, remotes))
+          const local = `pr/${ev.number}`
+          return { branch: local, checkout: await repo.checkoutBranchAt(local, ref) }
+        },
+        ({ branch, checkout }) => {
+          emit({ type: 'pr.PR_CHECKED_OUT', data: { number: ev.number, branch, checkout } })
+          context.code?.send({ type: 'commit.GIT_STATUS_CHANGED' })
+        },
       )
     },
 
@@ -314,20 +370,22 @@ export const pullRequestSystem = setup({
       const emit = answering(reply)
       const ev = event as { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
       withGitHub(context, emit,
-        async (github, repo, remote) => {
-          const head = await headBranchOf(repo, remote)
+        async (github, repo, remotes) => {
+          const head = await headBranchOf(repo, remotes)
           const { comments: _comments, ...pr } = await github.createPR({ title: ev.title, body: ev.body, base: ev.base, head, draft: ev.draft })
           return pr
         },
-        pr => emit({ type: 'pr.PR_CREATED', data: { pr } })
+        pr => emit({ type: 'pr.PR_CREATED', data: { pr } }),
+        undefined,
+        async repo => { if (await onNoBranch(repo)) throw new Error(DETACHED); return undefined },
       )
     },
 
     mergePR: ({ event, context, reply }) => {
       const emit = answering(reply)
-      const ev = event as { type: 'pr.MERGE_PR'; number: number; method?: 'merge' | 'squash' | 'rebase' }
+      const ev = event as { type: 'pr.MERGE_PR'; number: number; method?: 'merge' | 'squash' | 'rebase'; sha?: string }
       withGitHub(context, emit,
-        github => github.mergePR(ev.number, ev.method),
+        github => github.mergePR(ev.number, ev.method, ev.sha),
         () => {
           emit({ type: 'pr.PR_MERGED', data: { number: ev.number } })
           // GitHub moved the base: it is fetched, and every window shown what moved
@@ -393,13 +451,14 @@ export const pullRequestSystem = setup({
         return
       }
       withGitHub(context, emit,
-        async (github, repo, remote) => {
-          // A detached HEAD is no branch, and so has no pull request of its own
-          if (await repo.readCurrentBranch() === 'HEAD') return null
-          const pr = await github.findPRForBranch(await headBranchOf(repo, remote))
+        async (github, repo, remotes) => {
+          const pr = await github.findPRForBranch(await headBranchOf(repo, remotes))
           return pr && shown(github, pr)
         },
         pr => emit({ type: 'pr.BRANCH_PR_CHECKED', data: { pr } }),
+        undefined,
+        // A detached HEAD is no branch, and so has no pull request of its own: GitHub is not asked
+        async repo => await onNoBranch(repo) ? { answer: null } : undefined,
       )
     },
 
@@ -554,17 +613,17 @@ export const pullRequestSystem = setup({
     },
 
     /**
-     * Deletes a pull request's branch through GitHub, only where it is a branch of this repository — a fork's is
-     * not this repository's to delete — that no other open pull request is from. One GitHub already deleted, on
-     * merge say, is deleted
+     * Deletes a pull request's branch through GitHub, only where it is a branch of the repository the checkout's
+     * remote names — another repository's is not this checkout's to delete — that no other open pull request is
+     * from. One GitHub already deleted, on merge say, is deleted
      */
     deleteBranch: ({ event, context, reply }) => {
       const emit = answering(reply)
       const ev = event as { type: 'pr.DELETE_BRANCH'; number: number }
       withGitHub(context, emit,
-        async (github, repo, remote) => {
-          const { branch, isCrossRepository } = await github.readHead(ev.number)
-          if (isCrossRepository) throw new Error(`#${ev.number} is from a branch of another repository, a fork, which is not this repository's to delete.`)
+        async (github, repo, { remote }) => {
+          const { branch, headInRemote } = await github.readHead(ev.number)
+          if (!headInRemote) throw new Error(`#${ev.number} is from a branch of another repository, a fork, which is not this checkout's to delete.`)
           const others = (await github.openPRsFromBranch(branch)).filter(number => number !== ev.number)
           if (others.length > 0) throw new Error(`${branch} is kept: open pull request${others.length > 1 ? 's' : ''} ${others.map(number => `#${number}`).join(', ')} ${others.length > 1 ? 'are' : 'is'} from it too.`)
           await github.deleteBranch(branch)
@@ -606,7 +665,8 @@ export const pullRequestSystem = setup({
       on: {
         'pr.GET_BRANCH_DIFF': { actions: 'readBranchDiff' },
         'pr.GET_BRANCH_FILE_DIFF': { actions: 'getBranchFileDiff' },
-        'pr.LIST_OPEN_PRS': { actions: 'listOpenPRs' },
+        'pr.LIST_PRS': { actions: 'listPRs' },
+        'pr.CHECKOUT_PR': { actions: 'checkoutPR' },
         'pr.SELECT_PR': { actions: 'selectPR' },
         'pr.CREATE_PR': { actions: 'createPR' },
         'pr.MERGE_PR': { actions: 'mergePR' },

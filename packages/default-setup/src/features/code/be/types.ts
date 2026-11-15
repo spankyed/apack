@@ -221,6 +221,13 @@ export interface CommitLogEntry {
 }
 
 // GitHub PR types
+/**
+ * What checking out a pull request did to its branch: made it at the head (`created`), found it there (`current`),
+ * moved it forward to it (`fast-forwarded`), or checked it out where it was, since it has commits the head lacks
+ * (`kept`). The engine's `BranchCheckout`, which the backend hands on as this
+ */
+export type PRBranchCheckout = 'created' | 'current' | 'fast-forwarded' | 'kept'
+
 export interface GhPullRequest {
   number: number
   title: string
@@ -230,8 +237,20 @@ export interface GhPullRequest {
   rawBody?: string
   headRefName: string
   baseRefName: string
-  /** Whether the head is a branch of another repository, a fork's, rather than of this one */
+  /** Whether the head is a branch of another repository, a fork's, rather than of the one the pull request is on */
   isCrossRepository?: boolean
+  /** The head commit, which a merge names so that one of a head moved since is refused */
+  headRefOid?: string
+  /**
+   * Whether the head is a branch of the repository the checkout's remote names — of this repository, or of the fork
+   * the checkout is a clone of — which is what checking it out and deleting it go by
+   */
+  headInRemote?: boolean
+  /**
+   * The other open pull requests from the same head, where the backend read them (with a pull request's details,
+   * and the branch's own): what keeps the branch from being offered for deletion
+   */
+  openFromSameHead?: number[]
   state: 'OPEN' | 'CLOSED' | 'MERGED'
   url: string
   isDraft: boolean

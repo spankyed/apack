@@ -1019,11 +1019,24 @@ export const commitSystem = setup({
     },
 
     updateBaseDirectory: assign({
-      gitRepository: ({ event }) => {
+      gitRepository: ({ event, context }) => {
         const ev = event as { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository }
+        // The repository left behind fetches nothing more for this system
+        if (context.gitRepository !== ev.gitRepository) context.gitRepository?.whenFetchDue(undefined)
         return ev.gitRepository
       },
     }),
+
+    /**
+     * Fetches by itself on the repository's timer (`whenFetchDue`), whether or not a window asks, for as long as it is
+     * this system's repository: what a fetch brings is announced as any other change
+     */
+    fetchWhenDue: ({ context, self }) => {
+      const repository = context.gitRepository
+      repository?.whenFetchDue(() => {
+        if (self.getSnapshot().context.gitRepository === repository) fetchInBackground(repository, self)
+      })
+    },
 
     /**
      * The repository changed (on disk, or by a write here; coalesced): news for every window, saying which parts
@@ -1334,6 +1347,8 @@ export const commitSystem = setup({
   id: 'commit',
   initial: 'idle',
   invoke: { id: 'statusRefresh', src: 'statusRefresh' },
+  entry: 'fetchWhenDue',
+  exit: ({ context }) => { context.gitRepository?.whenFetchDue(undefined) },
   context: ({ input }) => {
     const baseDir = input?.baseDirectory
     return {
@@ -1439,7 +1454,7 @@ export const commitSystem = setup({
           actions: 'generateCommitMessage'
         },
         'commit.UPDATE_BASE_DIRECTORY': {
-          actions: ['updateBaseDirectory']
+          actions: ['updateBaseDirectory', 'fetchWhenDue']
         },
         'commit.GIT_STATUS_CHANGED': {
           actions: 'handleGitStatusChanged'

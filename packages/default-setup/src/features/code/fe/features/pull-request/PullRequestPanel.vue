@@ -81,9 +81,13 @@
 
           <!-- PR Selector — always shown when not checking -->
           <PRSelector
-            :openPRs="openPRs"
+            :list="prList"
             :selectedPR="selectedPR"
             @select-pr="handleSelectPRFromDropdown"
+            @shown="prActor?.send({ type: 'pr.LIST_SHOWN' })"
+            @set-state="(state) => prActor?.send({ type: 'pr.SET_LIST_STATE', state })"
+            @set-query="(query) => prActor?.send({ type: 'pr.SET_LIST_QUERY', query })"
+            @load-more="prActor?.send({ type: 'pr.LOAD_MORE_PRS' })"
           />
         </template>
 
@@ -205,7 +209,10 @@
             :isClosing="isClosing"
             :isTogglingDraft="isTogglingDraft"
             :isDeletingBranch="isDeletingBranch"
-            :canDeleteBranch="branchDeletable(selectedPR, openPRs)"
+            :canDeleteBranch="branchDeletable(selectedPR)"
+            :isCheckingOut="isCheckingOut"
+            :isCheckedOut="isOnPRBranch"
+            @checkout="prActor?.send({ type: 'pr.CHECKOUT' })"
             @merge="handleMerge"
             @close="handleClose"
             @toggle-draft="handleToggleDraft"
@@ -258,12 +265,15 @@
         </div>
       </template>
     </template>
+    <ToastNotification ref="toast" />
   </div>
 </template>
 
 <script setup lang="ts">
 
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import type { PRBranchCheckout } from '#generated/types.ts'
+import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import { useSelector } from '@xstate/vue'
 import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
@@ -288,6 +298,7 @@ import { panelChild } from '../children.ts';
 
 // Get actors
 const shell = useShell()
+const toast = ref<InstanceType<typeof ToastNotification>>()
 const codeActor: CodeState = useSurface()
 const prActor = panelChild(codeActor, 'pr')!
 const commitActor = panelChild(codeActor, 'commit')!
@@ -302,7 +313,9 @@ const prError = useSelector(prActor, (state) => state.context.prError)
 const missingFileDiff = useSelector(prActor, (state) => state.context.missingFileDiff)
 const isPrLoading = useSelector(prActor, (state) => state.context.isPrLoading)
 const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)
-const openPRs = useSelector(prActor, (state) => state.context.openPRs)
+const prList = useSelector(prActor, (state) => state.context.prList)
+const isCheckingOut = useSelector(prActor, (state) => state.context.isCheckingOut)
+const lastCheckout = useSelector(prActor, (state) => state.context.lastCheckout)
 const selectedPR = useSelector(prActor, (state) => state.context.selectedPR)
 const prComments = useSelector(prActor, (state) => state.context.prComments)
 const reviewThreads = useSelector(prActor, (state) => state.context.reviewThreads)
@@ -353,9 +366,28 @@ const displayBranch = computed(() =>
   selectedPR.value?.headRefName ?? currentBranch.value
 )
 
-const isViewingOtherPR = computed(() =>
-  selectedPR.value && selectedPR.value.headRefName !== currentBranch.value
-)
+/**
+ * Whether what is checked out is the pull request shown: its branch, where its head is the checkout's remote's, and
+ * the `pr/<number>` it is checked out as otherwise (`pr.CHECKOUT`)
+ */
+const isOnPRBranch = computed(() => {
+  const pr = selectedPR.value
+  if (!pr) return false
+  return currentBranch.value === (pr.headInRemote === false ? `pr/${pr.number}` : pr.headRefName)
+})
+
+const isViewingOtherPR = computed(() => !!selectedPR.value && !isOnPRBranch.value)
+
+/** What checking out a pull request did, said once it is done */
+const CHECKOUT_SAID: Record<PRBranchCheckout, (branch: string) => string> = {
+  'created': branch => `${branch} is checked out`,
+  'current': branch => `${branch} is checked out, and was already at the pull request's head`,
+  'fast-forwarded': branch => `${branch} is checked out, moved forward to the pull request's head`,
+  'kept': branch => `${branch} is checked out as it was: it has commits the pull request does not, so it was not moved`,
+}
+watch(lastCheckout, (done) => {
+  if (done) toast.value?.success(`Checked out #${done.number}`, CHECKOUT_SAID[done.checkout](done.branch))
+})
 
 const isBaseBranch = computed(() => {
   const branch = currentBranch.value

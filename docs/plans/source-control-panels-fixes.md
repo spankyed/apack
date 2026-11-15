@@ -1,6 +1,6 @@
 # Fixing the source-control and pull request panels
 
-Status: decided 2026-11-14 (its four decisions below). Phases 1 to 4 landed 2026-11-14; phase 5 waits for the user's choice.
+Status: decided 2026-11-14 (its four decisions below). Phases 1 to 4 landed 2026-11-14; phase 5 landed 2026-11-15, with its engine half (apack-git #34).
 
 Surveyed at monorepo `origin/master` `eb567581ac` and apack-git `cf7be5d` (the pin), by four read-only reviews — the
 commit panel and the pull request panel, frontend and backend each — and a check of the findings against the code.
@@ -254,18 +254,78 @@ The full typecheck and the pack's suite (267 files) pass. The chain was not run.
 
 These land with the phase whose files they touch: 6.1–6.3 with phase 2, 6.4–6.5 with phase 1.
 
-## Phase 5 — missing, for the user to choose
+## Phase 5 — what was missing
 
-Not defects: things a user would expect that are absent. None is in scope until chosen.
+Chosen 2026-11-15: all seven. Each is a feature, so each says what it does, where, and what is decided about it.
 
-- Cmd/Ctrl+Enter to commit from the message box.
-- Checking out a pull request's branch from the panel (its handler exists, with no button).
-- The pull request list: paging past 50, closed and merged pull requests, search.
-- Merging pinned to the commit reviewed (the head's sha), so a push after review is refused rather than merged.
-- More GitHub remotes recognised: SSH host aliases (`git@github-work:…`), `ssh.github.com:443`, usernames with `_`.
-  GitHub Enterprise hosts remain out of scope.
-- Working from a fork: listing and opening pull requests against the parent repository (decision 3).
-- Fetching on a timer while every window is idle (`autoFetchIntervalSeconds` fetches only when a window asks).
+| # | Feature | Where | Engine |
+|---|---|---|---|
+| 5.1 | Cmd/Ctrl+Enter commits from the message box | `CommitPanel.vue` | — |
+| 5.2 | Check out a pull request's branch | `be/features/pull-request.ts`, `PRActionBar.vue` | `checkoutBranchAt` |
+| 5.3 | The pull request list: pages past 50, closed and merged, search | `be/services/github-api.ts`, `PRSelector.vue`, `fe/…/pull-request/state.ts` | — |
+| 5.4 | A merge is of the head that was shown | `github-api.ts` (`mergePR`), `pull-request/state.ts` | — |
+| 5.5 | More GitHub remotes recognised | `github-api.ts` (`repoOfRemote`), `be/services/ssh-host.ts` | — |
+| 5.6 | Working from a fork | `be/features/github.ts` (`gitHubOf`), `github-api.ts`, `pull-request.ts` | `readRemotes` |
+| 5.7 | Fetching on a timer while every window is idle | `app-git-repository.ts`, `be/features/commit.ts` | — |
+
+- **5.1** Cmd+Enter or Ctrl+Enter commits when the Commit button could be pressed (`canCommit`), and does nothing
+  otherwise; both on every system, as VS Code takes them, so nothing depends on reading the platform. A key pressed while an input method is composing (`isComposing`) is the method's.
+- **5.2** "Check out" on an open pull request. Its head on the checkout's own remote is fetched from there and checked
+  out as a branch of the same name following it. A head in any other repository — someone's fork — is GitHub's
+  `refs/pull/<n>/head`, fetched from the remote that names the pull request's repository and checked out as
+  `pr/<n>`, following nothing: nothing here can push to it. Either way a branch that is already here is checked
+  out, moved forward to the head where it is only behind it, and left where it is otherwise (ahead, or both), as
+  `gh pr checkout` does; the answer says which. The engine gains `checkoutBranchAt(name, at, { track })`, one write
+  for all three, because `git checkout -b <name> refs/remotes/<remote>/pull/<n>` would otherwise set the branch to
+  follow a remote branch named `pull/<n>` that does not exist (`--no-track`).
+- **5.3** The list shows Open, Closed, Merged or All, newest first, 50 at a time with "Load more" (GitHub's cursor),
+  and a search box. A search is GitHub's issue search (`repo:… is:pr`, with the state), and a query of a number
+  (`12` or `#12`) is also that pull request, first. It is asked for when the dropdown opens and when its filter or
+  search changes, and not on every change to the repository, which nobody sees while it is shut. A page is taken
+  only for the ask still held: changing the filter or the search drops a page still coming for the one before, and
+  pages are joined by number so a pull request opened between two pages is not listed twice. Whether Delete Branch
+  is offered no longer reads the list (which may now show closed ones): the backend says, with each pull request
+  it details, which other open pull requests share its head (`openFromSameHead`).
+- **5.4** The merge names the head commit the panel showed (`headRefOid`, GitHub's `sha` on the merge). GitHub
+  refuses a merge whose head has moved (409), which the panel says — "new commits since it was shown" — and shows
+  the pull request read again, as for any refused merge.
+- **5.5** An address naming `ssh.github.com` (GitHub's SSH on port 443) or `www.github.com` is github.com. An owner
+  may hold `_` (an enterprise-managed user's). An SSH host alias (`git@github-work:owner/name`) is resolved by
+  `ssh -G <alias>`, which reads the user's SSH config as ssh will, `Include` and `Match` included, and connects to
+  nothing; a host that `isHostName` refuses is never handed to ssh. What ssh answers is kept per host while the SSH
+  config file is unchanged. No ssh, or an answer that is not GitHub, is not GitHub, as before.
+- **5.6** A checkout whose remote is a fork on GitHub (`isFork`, kept per repository for the app's run) lists, opens
+  and creates pull requests on the fork's parent, the head of a new one being `owner:branch`. The branch's own pull
+  request is the parent's one from this branch of this fork, and a branch is deleted only in the fork, and only
+  where no other open pull request is from it. Reading a pull request's files fetches from the remote that names
+  the parent (`upstream`, usually); a checkout with none is told to add one, by name, rather than compared against
+  the fork's copy of the base, which may be behind. Each pull request says whether its head is the checkout's
+  remote (`headInRemote`), which is what deleting and checking out decide on, in place of `isCrossRepository`.
+- **5.7** With "fetch automatically" on, the repository fetches every interval whether or not a window asks. The
+  repository owns the timer, beside the interval, the last fetch and the suspension it already holds, and sets it
+  to the next fetch due whenever one of those moves; a fetch that runs when a window asks, a push and a pull each
+  put the next one off. It holds no timer while fetching is off or suspended, nor once its folder is closed, and
+  does not keep the process alive. A fetch it runs is announced as any other.
+
+**Landed 2026-11-15.** The engine half is apack-git #34, and the pin names its commit. Two things changed while it was
+built, both above: Cmd and Ctrl both work on every system (5.1), and an SSH alias may hold `_`, which `isHostName`
+refuses, so the resolver has a rule of its own (5.5).
+
+Each item has cases: `checkout-at.spec.ts` in the engine; `github-api.spec.ts`, `ssh-host.spec.ts` (a real
+`ssh -G`), `fetch-timer.spec.ts`, and `pull-requests-on-github.spec.ts`, which drives the code system over a real
+checkout, a fork's included, and checks pull requests out through a real fetch; and the panel's
+`pr-github-answers.spec.ts`, `pr-forms.frontend.spec.ts` and `commit-panel.frontend.spec.ts`. A mutation of each
+decision (30, and two in the engine) failed its case. The two that first survived are why the timer has a case of
+two fetches in a row, and why the resolver allows `_`.
+
+Driven in the app, over a scratch repository with a local remote:
+- Enter alone in the message box committed nothing, and Ctrl+Enter committed;
+- turning fetching on fetched at once, and a commit pushed elsewhere was fetched by the timer about a minute after
+  that, with no window asking; once the code surface was shown, the commit panel offered "Pull (2 commits behind)".
+
+5.2 to 5.6 were not driven: the dev profile had no GitHub sign-in. Their cases cover them, against the stand-in.
+
+The full typecheck and the pack's suite (270 files) pass.
 
 ## Refuted
 
@@ -279,4 +339,4 @@ Not defects: things a user would expect that are absent. None is in scope until 
 One pull request per phase, 1 to 4, each with its specs and the chain, merged as it passes; a phase that changes the
 engine (2.3–2.4, 2.13, 3.1, 3.2, 3.9) lands its apack-git pull request first and moves the pin with the app's half.
 Phase 1 first: it is the largest share of what users see, touches only the frontends and worktree switching, and
-the later phases' frontend fixes rely on its correlation. Phase 5 waits for the user's choice.
+the later phases' frontend fixes rely on its correlation. Phase 5 is one pull request, with its engine half first.
