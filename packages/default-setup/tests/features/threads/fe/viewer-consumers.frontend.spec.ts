@@ -1,3 +1,4 @@
+import ToolActivityBlock from '#extensions/blocks/display/ToolActivityBlock.vue';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp, h, nextTick, ref, type App } from 'vue';
 import { createActor, createMachine } from 'xstate';
@@ -157,4 +158,25 @@ it('retires an open session popover when its selected artifact is replaced', asy
   model.value = { artifacts: [{ id: 'session-b', type: 'claude-session', title: 'Second session', content: {} }], selectedArtifactId: 'session-b' };
   await vi.waitFor(() => expect(document.body.querySelector('[aria-label="Claude session details"]')).toBeNull());
   expect(f.root.querySelector('[aria-label="Open Claude session details"]')?.textContent).toContain('Second session');
+})
+
+
+it('retains reader-opened tools across a message remount without retaining native visibility', async () => {
+ const f=fixture(),block={...f.block,type:'tool-activity',declaration:{kind:'display' as const,fe:'src/tools.vue'}};
+ f.state.blocks=[block];f.blocks.set(block.type,{packId:block.packId,declaration:block.declaration,binding:{type:block.type,kind:'display',fe:{component:ToolActivityBlock}}});
+ const message={id:'Message-tools',entityType:'Message',timestamp:0,createdAt:0,sender:'assistant',text:'Completed review',blocks:[{id:'Block-tools',type:'tool-activity',props:{label:'Native tools',state:'done',entries:[{id:'read-tool',tool:'Read',status:'ok',summary:'Release notes'}]}}]} as MessageEntity;
+ const key=ref(0),expanded=ref<number[]>([]),release=vi.fn();
+ app=createApp({render:()=>h(SurfaceScope,{surface:'external/threads'},{default:()=>h(ChatMessage,{key:key.value,message,nativeBlockExpansion:expanded.value,
+  'onNative-ui-block-view':(view:{blockIndex:number;open:boolean})=>{expanded.value=view.open?[view.blockIndex]:[]},
+  'onNative-ui-block-release':release,
+ })})});app.mount(f.root);await nextTick();
+ const toggle=()=>f.root.querySelector<HTMLButtonElement>('button[aria-expanded]')!;
+ expect(toggle().getAttribute('aria-expanded')).toBe('false');toggle().click();await nextTick();
+ expect(expanded.value).toEqual([0]);expect(f.root.querySelector('[data-native-tool-use-id="read-tool"]')).not.toBeNull();
+ key.value++;await nextTick();
+ expect(expanded.value).toEqual([0]);expect(toggle().getAttribute('aria-expanded')).toBe('true');
+ expect(release).toHaveBeenCalledWith({messageId:message.id,blockIndex:0});
+ expect(f.root.querySelector('[data-native-tool-use-id="read-tool"]')).not.toBeNull();
+ toggle().click();await nextTick();key.value++;await nextTick();
+ expect(expanded.value).toEqual([]);expect(toggle().getAttribute('aria-expanded')).toBe('false');
 })

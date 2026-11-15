@@ -84,9 +84,9 @@
                     <ChatMessage
                       v-if="messagesById.has(id)"
                       :message="messagesById.get(id)!"
-                      :native-frames="nativeUiDrawing?.transcriptMessages" :native-view-id="nativeUiMount?.mountId"
+                      :native-frames="nativeUiDrawing?.transcriptMessages" :native-view-id="nativeUiMount?.mountId" :native-block-expansion="nativeBlockExpansion[id]"
                       @native-ui-press="pressNativeUi" @native-ui-field="editNativeUi"
-                      @native-ui-message-view="reportNativeMessageView" @native-ui-block-view="reportNativeBlockView"
+                      @native-ui-message-view="reportNativeMessageView" @native-ui-block-view="reportNativeBlockView" @native-ui-block-release="releaseNativeBlockView"
                       :is-tail="tailMessageIds.has(id)"
                       :is-claude-code-thread="!!currentThread?.context?.claudeCode"
                       @open-lightbox="openLightbox"
@@ -400,6 +400,7 @@ const tailMessageIds = computed(() => {
 })
 
 const nativeBlockExpansion = ref<Record<string, number[]>>({})
+const nativeBlockVisibility = ref<Record<string, number[]>>({})
 const nativeUserExpansion = ref<Record<string, boolean>>({})
 const nativeUiViews = useSelector(actor, state => state.context.nativeUiViews)
 const nativeActionKey = createClaudeActionKeyHandler(() => {
@@ -419,7 +420,7 @@ const nativeFocus = computed(() => {
 function renewNativeUi() {
   const mount = nativeUiMount.value
   if (mount && mount.threadId === currentThread.value?.id) {
-    actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: document.hasFocus(), ...mount, messageIds: visibleMessages.value.map(message => message.id), userExpansion: nativeUserExpansion.value, blockExpansion: nativeBlockExpansion.value })
+    actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: document.hasFocus(), ...mount, messageIds: visibleMessages.value.map(message => message.id), userExpansion: nativeUserExpansion.value, blockExpansion: nativeBlockVisibility.value })
     actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...mount })
   }
 }
@@ -427,10 +428,20 @@ function reportNativeBlockView(view: { messageId: string; blockIndex: number; op
   const message = visibleMessages.value.find(message => message.id === view.messageId && message.sender === 'assistant')
   if (!message || !['thinking', 'tool-activity'].includes(message.blocks?.[view.blockIndex]?.type ?? '')) return
   const indices = new Set(nativeBlockExpansion.value[view.messageId] ?? [])
+  if (view.open) indices.add(view.blockIndex)
+  else indices.delete(view.blockIndex)
+  nativeBlockExpansion.value = { ...nativeBlockExpansion.value, [view.messageId]: [...indices] }
+  reportNativeBlockVisibility(view)
+}
+function releaseNativeBlockView(view: { messageId: string; blockIndex: number }) {
+  reportNativeBlockVisibility({ ...view, open: false })
+}
+function reportNativeBlockVisibility(view: { messageId: string; blockIndex: number; open: boolean }) {
+  const indices = new Set(nativeBlockVisibility.value[view.messageId] ?? [])
   if (indices.has(view.blockIndex) === view.open) return
   if (view.open) indices.add(view.blockIndex)
   else indices.delete(view.blockIndex)
-  nativeBlockExpansion.value = { ...nativeBlockExpansion.value, [view.messageId]: [...indices] }; renewNativeUi()
+  nativeBlockVisibility.value = { ...nativeBlockVisibility.value, [view.messageId]: [...indices] }; renewNativeUi()
 }
 function reportNativeMessageView(view: { messageId: string; isExpanded: boolean }) {
   if (!visibleMessages.value.some(message => message.id === view.messageId && message.sender === 'user') || nativeUserExpansion.value[view.messageId] === view.isExpanded) return
@@ -482,6 +493,7 @@ function detachNativeUi() {
   nativeUiMount.value = undefined
   nativeUserExpansion.value = {}
   nativeBlockExpansion.value = {}
+  nativeBlockVisibility.value = {}
   if (mount) {
     const snapshot = actor.getSnapshot()
     const resumeKey = snapshot.context.nativeUiViews[mount.mountId]?.resumeKey

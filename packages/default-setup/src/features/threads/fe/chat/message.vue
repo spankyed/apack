@@ -260,6 +260,7 @@ interface ChatMessageProps {
   message: MessageEntity
   nativeFrames?: ClaudeUiTranscriptFrame[]
   nativeViewId?: string
+  nativeBlockExpansion?: readonly number[]
   isTyping?: boolean
   isTail?: boolean
   isClaudeCodeThread?: boolean
@@ -268,6 +269,7 @@ interface ChatMessageProps {
 interface ChatMessageEmits {
   (e: 'native-ui-press', actionId: string, href?: string): void
   (e: 'native-ui-field', event: ClaudeUiFieldEvent): void
+  (e: 'native-ui-block-release', view: { messageId: string; blockIndex: number }): void
   (e: 'native-ui-block-view', view: { messageId: string; blockIndex: number; open: boolean }): void
   (e: 'native-ui-message-view', view: { messageId: string; isExpanded: boolean }): void
   (e: 'revert', messageId: string): void
@@ -293,7 +295,7 @@ provide(claudeToolDrawings, {
   press: (id, href) => emit('native-ui-press', id, href),
   field: event => emit('native-ui-field', event),
   expanded: id => { const index = toolBlockIndex(id); return index >= 0 ? blockExpansion.get(index) : undefined },
-  release: id => { const index = toolBlockIndex(id); if (index >= 0) emit('native-ui-block-view', { messageId: props.message.id, blockIndex: index, open: false }) },
+  release: id => { const index = toolBlockIndex(id); if (index >= 0) emit('native-ui-block-release', { messageId: props.message.id, blockIndex: index }) },
   view: (id, open) => { const index = toolBlockIndex(id); if (index >= 0) reportBlockView(index, open) },
 })
 
@@ -308,7 +310,8 @@ const groupedSuppressed = computed(() => {
 const hasNativeTranscript = computed(() => nativeParts.value.some(part => part.kind === 'native'))
 const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' || props.message.sender === 'user' ? props.nativeFrames : []))
 
-const blockExpansion = new Map<number, boolean>()
+// Native visibility ends on unmount; the conversation retains the reader’s disclosure choice.
+const blockExpansion = new Map<number, boolean>((props.nativeBlockExpansion ?? []).map(index => [index, true]))
 function toolBlockIndex(id: string) { return props.message.blocks?.findIndex(block => block.type === 'tool-activity' && block.props.entries?.some((entry: { id: string }) => entry.id === id)) ?? -1 }
 function reportBlockView(blockIndex: number, open: boolean) {
   blockExpansion.set(blockIndex, open)
