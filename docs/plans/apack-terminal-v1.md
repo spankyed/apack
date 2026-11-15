@@ -128,16 +128,18 @@ Script: `.apack/w1-order.ts` on the VM (run by `tsx`, source condition); result 
 - **Size:** medium. It may need a headless harness; if the API cannot run headless on the VM, record why and say
   so before moving on.
 
-**Result (2026-11-13, partly met).** The API runs headless on the VM (`packages/api` dist, `SHIPPED_PACKS_DIR`
-set to `packages`, `APACK_ENV=development`, own data dir), loads the default-setup pack, and the app's
-terminal service opens a PowerShell through the broker over the named pipe (`terminal.CREATED`, `TITLED`).
-Typed input reaches the shell: a command typed through `terminal.TERMINAL_INPUT` wrote a marker file
-(`Set-Content`) that the VM then holds with the expected text. The app lists each terminal as `recorded: true`
-(`terminal.TERMINALS_LISTED`). **Not met:** the app's recorded command list with statuses cannot be read back
-on Windows. The rewind answers with a session (`terminal.REWOUND`) but no frames arrive, and no recording file
-is written under the data dir; the design says recordings and kept sessions run nowhere on Windows. That is W3.
-The broker's exe was built on the VM with Zig 0.17.0 (the version the repo's Windows CI installs), staged by
-`cargo xtask package`. Shells left by a run were gone once the API stopped.
+**Result (2026-11-15, met).** The API runs headless on the VM (`packages/api` dist, `SHIPPED_PACKS_DIR` set to
+`packages`, `APACK_ENV=development`, own data dir) and loads the default-setup pack. Through the bus, the script
+`.apack/w2-readback.ts` (run by `C:\Users\apackdev\w2-read.ps1`) asks the app's `default-setup/code` feature to
+create a PowerShell terminal, types three lines through `terminal.TERMINAL_INPUT`, then asks the broker over its
+named pipe for the commands of the one session the app opened. They come back in order with their statuses:
+`Write-Output "w2-one"` exited 0, `Get-Item C:\w2-does-not-exist` exited 1, `Write-Output "w2-three"` exited 0,
+and the session is `recorded`. The app keeps no command list of its own: the broker's record is the one the app's
+service reads, and an outcome is `exited` only when a mark carrying the key the app gave the shell said so.
+Result file `C:\apack-setup\w2-readback.json`; app at `3d5f18867`, broker at `6e9c953`, its exe built on the VM
+with Zig 0.17.0 and staged by `cargo xtask package`. The API's `dist` has to be built from the same source as the
+pack: a `dist` older than the pack fails to open a terminal (`session.setCursorDefaults is not a function`).
+Shells left by a run were gone once the API stopped.
 
 ### W3. Kept sessions and recordings on Windows
 - **Why:** the `keeping` suite (15 cases) runs only on POSIX. Each case ends by closing a connection that a reader
@@ -246,6 +248,23 @@ suite is not ported and has not run on the VM.
   does not fall by more than 10% against the baseline from P1; (c) the existing output and credit cases pass; (d)
   a case states the new behaviour: after a quiet moment, one byte is sent without waiting for the window.
 - **Size:** small to medium. Mutation-gate the new branch.
+
+**Result (2026-11-15, met).** `e2069c7` flushes held output after a 1 ms quiet gap (`OUTPUT_QUIET`), and
+`coalescing::a_pause_sends_what_is_held_and_the_next_burst_is_not_batched_with_it` states it. The bench was run at
+the commit before it (`7e570e3`) and at `50080ee`, alternated eight times on two quiet GitHub runners in one run
+(43714875496), so both sides saw the same machine. Medians, before → after:
+
+| Runner | `seq 1 1000000` throughput | Back-to-back echo |
+|---|---|---|
+| ubuntu-24.04 | 17.18 → 17.58 MB/s (×1.02) | 16.1 → 1.17 ms |
+| macos-15 (arm64, virtualized) | 6.80 → 8.51 MB/s (×1.25) | about 94 → 10 ms |
+
+Throughput does not fall on either. The echo target is met on the Linux runner and on the developer's Mac (median
+1.97 ms after, 18.1 ms before, six alternated rounds at load 50 to 190, 2026-11-15); the macOS runner is a virtual
+machine whose echo was 94 ms before the change, so its absolute figure says nothing about the 3 ms target. The
+throughput comparison is against the commit before the change on the same machine rather than against P1's 7.24 MB/s,
+which was a different machine at a different load. The output and credit cases pass on all three platforms (CI on
+`50080ee`).
 
 ## Phase 4: finish
 
