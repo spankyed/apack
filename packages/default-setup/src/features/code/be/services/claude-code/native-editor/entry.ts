@@ -19,6 +19,7 @@ try {
   } finally { closeSync(fd) }
   await runClaudeNativeEditorChild(config, process.argv[3]!, abort.signal)
 } catch (error) {
-  console.error('Claude editor handoff failed: ' + (error instanceof Error ? error.message : 'unknown failure'))
+  // This program is the CLI's editor child, so its failure belongs to the original editor stderr contract.
+  process.stderr.write('Claude editor handoff failed: ' + (error instanceof Error ? error.message : 'unknown failure') + '\n')
   process.exitCode = 1
 } finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop) }

@@ -146,7 +146,7 @@ export const CLAUDE_NATIVE_EDITOR_PROGRAM = [
   "  }",
   "  await runClaudeNativeEditorChild(config, process.argv[3], abort.signal);",
   "} catch (error) {",
-  "  console.error(\"Claude editor handoff failed: \" + (error instanceof Error ? error.message : \"unknown failure\"));",
+  "  process.stderr.write(\"Claude editor handoff failed: \" + (error instanceof Error ? error.message : \"unknown failure\") + \"\\n\");",
   "  process.exitCode = 1;",
   "} finally {",
   "  process.removeListener(\"SIGINT\", stop);",
