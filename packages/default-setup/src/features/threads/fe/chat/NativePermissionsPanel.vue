@@ -32,7 +32,7 @@
 
     </div>
     <footer class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-white/10 px-4 py-2 text-xs">
-      <p v-if="problem" role="alert" class="min-w-0 flex-1 break-words text-amber-200">{{ problem }}</p><span v-else role="status" class="text-neutral-500">{{ pending ? 'Waiting for Claude Code…' : '' }}</span>
+      <p v-if="problem" role="alert" class="min-w-0 flex-1 break-words text-amber-200">{{ problem }}</p><span v-else role="status" class="text-neutral-500">{{ state?.snapshot?.commitPending ? 'Claude Code is saving the environment…' : pending ? 'Waiting for Claude Code…' : '' }}</span>
       <div class="flex flex-wrap gap-2"><button type="button" :disabled="pending" class="rounded px-2 py-2 text-neutral-400 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="emit('terminal')">Use terminal controls</button><button type="button" :disabled="state?.status === 'pending' || !!transportFlight || !!liveForm.flight.value" class="rounded px-2 py-2 text-neutral-400 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="read">Refresh</button><button v-if="panel?.form" type="button" :disabled="liveForm.active.value ? !liveForm.canSubmit.value : pending" class="rounded-lg bg-blue-600 px-3 py-2 text-white hover:bg-blue-500 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="submit">{{ panel.form.submitLabel }}</button></div>
     </footer>
   </section>
@@ -63,7 +63,7 @@ watch([()=>props.state?.requestId,()=>props.state?.status],([id,status])=>{
  else if(status!=='error'&&!props.state?.problem)localProblem.value=changedControls
 })
 const liveForm=useNativePermissionsForm(()=>props.state,sendRequest,draft,()=>!transportFlight.value&&!queuedAction.value)
-const pending=computed(()=>props.state?.status==='pending'||!!transportFlight.value||liveForm.busy.value)
+const pending=computed(()=>props.state?.status==='pending'||props.state?.snapshot?.commitPending===true||!!transportFlight.value||liveForm.busy.value)
 const reading=computed(()=>{const action=transportFlight.value?.action;return action?.kind==='read'||action?.kind==='permissions'&&action.command.action==='search'})
 const searchDisabled=computed(()=>pending.value&&!reading.value)
 const formIdentity=computed(()=>JSON.stringify([panel.value?.title,panel.value?.form?.placeholder,panel.value?.form?.live?.id]))

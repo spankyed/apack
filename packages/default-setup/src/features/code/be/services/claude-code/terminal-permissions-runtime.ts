@@ -156,7 +156,29 @@ async function actNativePermissionRecent(n,entry,recent,value,retry,signal){
  }
  throw Error('Claude Code has not acknowledged denial focus. Refresh before trying again.');
 }
-async function nativePermissionEditorAction(n,entry,request,before,invoke){
+function nativePermissionCommitMessages(n,entry){
+ // The original root keeps its dismissal acknowledgement list in slot35; qr appends its save result there.
+ const owners=[];nativeIdeWalk(n.themeRoots.ai().get(process.stdout)?.container?.current,f=>{if(f.type===entry.originalType&&f.memoizedProps===entry.originalProps)owners.push(f);});
+ const cache=owners.length===1?owners[0].updateQueue?.memoCache?.data?.filter(c=>Array.isArray(c)&&c.length===226):undefined,messages=cache?.length===1?cache[0][35]:undefined;
+ if(!Array.isArray(messages)||messages.length>256||messages.some(v=>typeof v!=='string'||v.length>65536))throw Error('Native environment commit acknowledgement changed');
+ return messages;
+}
+function nativePermissionCommitStatus(n,entry,frame){
+ const commit=entry.permissionsEditorCommit;if(!commit)return {pending:false};
+ if(!frame.snapshot.permissions.tabs.length){entry.permissionsEditorCommit=undefined;return {pending:false};}
+ const messages=nativePermissionCommitMessages(n,entry);
+ if(messages===commit.messages)return {pending:true};
+ if(messages.length!==commit.messages.length+1||commit.messages.some((v,i)=>messages[i]!==v))throw Error('Native environment commit result changed');
+ const result=messages.at(-1);entry.permissionsEditorCommit=undefined;
+ if(result.startsWith('Could not save the environment — '))return {pending:false,problem:result};
+ if(!['Replaced the built-in auto mode environment with your own document','Saved your auto mode environment document'].includes(result))throw Error('Native environment commit result is not recognized');
+ return {pending:false};
+}
+function nativePermissionCommittedResult(n,entry,frame){
+ const commit=nativePermissionCommitStatus(n,entry,frame);
+ return {snapshot:commit.pending?{...frame.snapshot,commitPending:true}:frame.snapshot,...commit.problem?{problem:commit.problem}:{}};
+}
+async function nativePermissionEditorAction(n,entry,request,before,invoke,onEnvironment){
  const value=request.command?.value,title=before.snapshot.permissions.title;
  const opensEnvironment=value==='environment-document'||value==='environment'||title==='Replace the built-in environment?'&&value==='confirm'||title==='Edit environment'&&value==='reopen';
  if(request.command?.action!=='select'||before.snapshot.permissions.readOnly||!opensEnvironment)return invoke();
@@ -167,12 +189,13 @@ async function nativePermissionEditorAction(n,entry,request,before,invoke){
  const prepared=await ownerPost('/native-editor-prepare',{pid:process.pid,clientId:request.client_id,panelId:request.panel_id,directory:nativeEditorDirname(file)});
  if(typeof prepared.command!=='string'||!prepared.command.startsWith('/')||/\s/.test(prepared.command))throw Error('Native editor launcher is unavailable');
  if(nativePermissionsFrame(n,entry)!==before)throw Error('Native Permissions changed during editor preparation');entry.current();
- const previous=get();
+ const previous=get(),commit={frame:before,messages:nativePermissionCommitMessages(n,entry)};entry.permissionsEditorCommit=commit;onEnvironment?.(commit);
  // Scope only the synchronous original callback. Never retain an editor override while awaiting settings IO.
  try{set({...previous,editor:prepared.command});return invoke();}finally{set(previous);}
 }
 async function nativePermissionsPanel(n,entry,request,abort){
- const before=nativePermissionsFrame(n,entry);abort.signal.throwIfAborted();if(request.operation==='read')return {snapshot:before.snapshot};
+ const before=nativePermissionsFrame(n,entry);abort.signal.throwIfAborted();if(request.operation==='read')return nativePermissionCommittedResult(n,entry,before);
+ if(nativePermissionCommitStatus(n,entry,before).pending)throw Error('Wait for Claude Code to finish saving the environment');
  if(request.operation!=='permissions')throw Error('Unsupported native Permissions operation');
  const command=request.command;if(!command||typeof command.action!=='string')throw Error('Native Permissions action is missing');
  // Only the original query setter filters the native list and moves its cursor; search never writes a rule.
@@ -220,14 +243,17 @@ async function nativePermissionsPanel(n,entry,request,abort){
  else if(command.action==='submit'){if(!before.input||typeof command.value!=='string'||command.value.length>16384)throw Error('Native permission input unavailable');callback=before.input.onSubmit;args=[typeof before.input.inputFilter==='function'?before.input.inputFilter(command.value):command.value];}
  else if(command.action==='cancel')callback=before.cancel;
  else throw Error('Unsupported native Permissions action');
- if(nativePermissionsFrame(n,entry)!==before)throw Error('Native Permissions changed before dispatch');entry.current();await nativePermissionEditorAction(n,entry,request,before,()=>{before.consumed=true;entry.permissionsSearchLease=undefined;return callback(...args);});
+ if(nativePermissionsFrame(n,entry)!==before)throw Error('Native Permissions changed before dispatch');entry.current();let editorCommit;
+ try{await nativePermissionEditorAction(n,entry,request,before,()=>{before.consumed=true;entry.permissionsSearchLease=undefined;return callback(...args);},commit=>{editorCommit=commit;});}catch(error){entry.permissionsEditorCommit=undefined;throw error;}
  let focusRequested=false;
  for(let attempt=0;attempt<40;attempt++){abort.signal.throwIfAborted();if(!entry.closed&&!entry.answered)await new Promise(resolve=>setTimeout(resolve,25));if(entry.closed||entry.answered)return {snapshot:{revision:before.snapshot.revision,rows:[],permissions:{title:'Permissions',tabs:[],paragraphs:[],choices:[],readOnly:true}}};entry.current();const after=nativePermissionsFrame(n,entry);
   if(command.action==='tab'){
    if(after.snapshot.permissions.tabs.find(t=>t.selected)?.value!==command.value)continue;
    if(after.focusBody){if(!focusRequested){if(nativePermissionsFrame(n,entry)!==after)throw Error('Native Permissions focus changed before dispatch');entry.current();focusRequested=true;await after.focusBody();}continue;}
   }
-  if(after!==before)return {snapshot:after.snapshot};}
+  if(editorCommit&&after.snapshot.permissions.tabs.length)entry.permissionsEditorCommit=editorCommit;
+  if(after!==before||editorCommit&&after.snapshot.permissions.tabs.length){const result=nativePermissionCommittedResult(n,entry,after);if(result.snapshot.commitPending)continue;return result;}}
+ const pendingResult=nativePermissionCommittedResult(n,entry,nativePermissionsFrame(n,entry));if(editorCommit||pendingResult.snapshot.commitPending)return pendingResult;
  return {snapshot:before.snapshot,problem:'Claude Code has not acknowledged the permission action. Refresh to check its current state.'};
 }
 async function closeNativePermissionsPanel(n,entry){const frame=nativePermissionsFrame(n,entry);entry.current();await frame.cancel();return {open:!entry.closed};}

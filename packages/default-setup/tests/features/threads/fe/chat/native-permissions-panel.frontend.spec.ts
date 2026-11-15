@@ -308,3 +308,15 @@ it('exposes native approval/retry state and makes apply-on-close explicit', asyn
   f.buttons().find(button => button.textContent === 'Cancel retry')!.click()
   expect(f.operate).toHaveBeenCalledExactlyOnceWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'retry', value: '1' } })
 })
+
+it('keeps mutations disabled during a native environment commit while allowing an explicit refresh', async () => {
+  const f = fixture(); await nextTick(); f.operate.mockClear()
+  f.state.value.snapshot!.commitPending = true; await nextTick()
+  expect(f.buttons().find(b => b.textContent === 'Ask')!.disabled).toBe(true)
+  expect(f.buttons().find(b => b.textContent === 'Close permissions')!.disabled).toBe(true)
+  expect(f.root.textContent).toContain('Claude Code is saving the environment…')
+  const refresh = f.buttons().find(b => b.textContent === 'Refresh')!; expect(refresh.disabled).toBe(false); refresh.click(); await nextTick()
+  expect(f.operate).toHaveBeenCalledExactlyOnceWith({kind: 'read'})
+  f.state.value.snapshot!.commitPending = false; await nextTick()
+  expect(f.buttons().find(b => b.textContent === 'Ask')!.disabled).toBe(false)
+})
