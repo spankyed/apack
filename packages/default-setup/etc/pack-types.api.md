@@ -779,8 +779,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    default: "default";
                     plan: "plan";
+                    default: "default";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1634,6 +1634,12 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                     }, z.core.$strict>>;
                 }, z.core.$strict>>;
             }, z.core.$strict>>;
+            editor: z.ZodOptional<z.ZodObject<{
+                id: z.ZodString;
+                revision: z.ZodString;
+                value: z.ZodString;
+                closing: z.ZodBoolean;
+            }, z.core.$strict>>;
             readOnly: z.ZodBoolean;
         }, z.core.$strict>>;
         ide: z.ZodOptional<z.ZodObject<{
@@ -2332,8 +2338,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                default: "default";
                 plan: "plan";
+                default: "default";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -8446,8 +8452,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    default: "default";
     plan: "plan";
+    default: "default";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -10637,6 +10643,13 @@ declare const claudeSettingsOperation: z.ZodDiscriminatedUnion<[z.ZodObject<{
     kind: z.ZodLiteral<"permissions">;
     revision: z.ZodString;
     command: z.ZodDiscriminatedUnion<[z.ZodObject<{
+        action: z.ZodLiteral<"externalSave">;
+        id: z.ZodString;
+        value: z.ZodString;
+    }, z.core.$strict>, z.ZodObject<{
+        action: z.ZodLiteral<"externalCancel">;
+        id: z.ZodString;
+    }, z.core.$strict>, z.ZodObject<{
         action: z.ZodLiteral<"tab">;
         value: z.ZodString;
     }, z.core.$strict>, z.ZodObject<{
@@ -10798,6 +10811,12 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
                     token: z.ZodString;
                 }, z.core.$strict>>;
             }, z.core.$strict>>;
+        }, z.core.$strict>>;
+        editor: z.ZodOptional<z.ZodObject<{
+            id: z.ZodString;
+            revision: z.ZodString;
+            value: z.ZodString;
+            closing: z.ZodBoolean;
         }, z.core.$strict>>;
         readOnly: z.ZodBoolean;
     }, z.core.$strict>>;
@@ -11429,6 +11448,12 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
                         problem?: string | undefined;
                         selectedValue?: string | undefined;
                     } | undefined;
+                } | undefined;
+                editor?: {
+                    id: string;
+                    revision: string;
+                    value: string;
+                    closing: boolean;
                 } | undefined;
             } | undefined;
             ide?: {

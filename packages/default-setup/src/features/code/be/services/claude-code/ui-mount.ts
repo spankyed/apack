@@ -235,6 +235,21 @@ export function mountClaudeUi(options: {
   unsubscribeQuestion = owner.question?.subscribe?.(() => question.refresh()) ?? (() => {})
   unsubscribe = owner.subscribe(event => {
     const line = event as Record<string, unknown>
+    if (current() && line.type === 'system' && ['apack_native_editor_changed', 'apack_native_editor_failed'].includes(String(line.subtype))) {
+      const state = agentInput, settings = state?.status === 'panel' ? state.settings : undefined
+      if (state?.status === 'panel' && state.panel && settings?.snapshot?.permissions?.editor && settings.status !== 'pending') {
+        if (line.subtype === 'apack_native_editor_failed' && line.client_id === client.client_id && line.panel_id === state.panel.id) {
+          state.settings = {...settings, status: 'error', problem: typeof line.problem === 'string' ? line.problem : 'Native environment editor failed'}; publish(lastState)
+        }
+        const requestId = settings.requestId
+        void owner.handle.ui.settings({client_id: client.client_id, panel_id: state.panel.id, action: {kind: 'read'}}).then(result => {
+          if (!current() || agentInput !== state || state.settings?.requestId !== requestId || state.settings.status === 'pending') return
+          state.settings = {requestId, status: result.problem ? 'error' : 'ready', ...result}; publish(lastState)
+        }, error => {
+          if (current() && agentInput === state && state.settings?.requestId === requestId && state.settings.status !== 'pending') {state.settings = {...state.settings, status: 'error', problem: error instanceof Error ? error.message : 'Native environment editor could not refresh'}; publish(lastState)}
+        })
+      }
+    }
     if (current() && (line.type === 'rate_limit_event' || line.subtype === 'apack_billing_changed' || line.type === 'conversation_reset')) publish(lastState)
     notices.receive(line)
     messages.receive(line)

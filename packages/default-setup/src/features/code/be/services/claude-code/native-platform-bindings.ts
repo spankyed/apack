@@ -252,6 +252,8 @@ export const claudeNativeLinuxBindings: {
     "chunk-hdxpvbx1.js": {
       "module": "chunk-26c4qsbq.js",
       "exports": {
+        "Bc": "Uc",
+        "dzo": "$Go",
         "EN": "_F",
         "gu": "gu",
         "Hzo": "d2o",
@@ -268,6 +270,7 @@ export const claudeNativeLinuxBindings: {
     "chunk-hqtnbrjd.js": {
       "module": "chunk-a7b8k0bt.js",
       "exports": {
+        "hgs": "Oms",
         "Ims": "qfs",
         "p_r": "Gyr",
         "RFe": "b$e",

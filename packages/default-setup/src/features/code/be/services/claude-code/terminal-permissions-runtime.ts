@@ -156,6 +156,21 @@ async function actNativePermissionRecent(n,entry,recent,value,retry,signal){
  }
  throw Error('Claude Code has not acknowledged denial focus. Refresh before trying again.');
 }
+async function nativePermissionEditorAction(n,entry,request,before,invoke){
+ const value=request.command?.value,title=before.snapshot.permissions.title;
+ const opensEnvironment=value==='environment-document'||value==='environment'||title==='Replace the built-in environment?'&&value==='confirm'||title==='Edit environment'&&value==='reopen';
+ if(request.command?.action!=='select'||before.snapshot.permissions.readOnly||!opensEnvironment)return invoke();
+ const get=n.questionOptions.Bc,set=n.questionOptions.dzo,path=n.runtime.hgs;
+ if(!['755ff28597ef753308ce7c5638c7d137b281c32142c3bf96cda73c929f8609ed','0e511c19c284af7ac3b9eda8e7784918f2d44603145df66ac7a0510f2ee398ed'].includes(nativeModelFunctionHash(get))||!['ab76cee4f7db1822ee6020683639a9412b38512ce798500110df5a1d743833b1','22a5e02666af94c03e7d073869bd1faf12f87dbd380667aa0aeaaccf08553b86'].includes(nativeModelFunctionHash(set))||!['bc940c622b9e6d02ed188b36512d52ce43bb6e947ce1df71b81462bcf65f4b67','87fcbe09ecb16c1de5642ecab818520bcc7288c364001bb4c9000f9b21fa26e1'].includes(nativeModelFunctionHash(path)))throw Error('Native external editor capability or directory producer changed');
+ const file=path('auto-mode-env-edit-0000000000000000.md');
+ if(file===null)return invoke();
+ const prepared=await ownerPost('/native-editor-prepare',{pid:process.pid,clientId:request.client_id,panelId:request.panel_id,directory:nativeEditorDirname(file)});
+ if(typeof prepared.command!=='string'||!prepared.command.startsWith('/')||/\s/.test(prepared.command))throw Error('Native editor launcher is unavailable');
+ if(nativePermissionsFrame(n,entry)!==before)throw Error('Native Permissions changed during editor preparation');entry.current();
+ const previous=get();
+ // Scope only the synchronous original callback. Never retain an editor override while awaiting settings IO.
+ try{set({...previous,editor:prepared.command});return invoke();}finally{set(previous);}
+}
 async function nativePermissionsPanel(n,entry,request,abort){
  const before=nativePermissionsFrame(n,entry);abort.signal.throwIfAborted();if(request.operation==='read')return {snapshot:before.snapshot};
  if(request.operation!=='permissions')throw Error('Unsupported native Permissions operation');
@@ -205,7 +220,7 @@ async function nativePermissionsPanel(n,entry,request,abort){
  else if(command.action==='submit'){if(!before.input||typeof command.value!=='string'||command.value.length>16384)throw Error('Native permission input unavailable');callback=before.input.onSubmit;args=[typeof before.input.inputFilter==='function'?before.input.inputFilter(command.value):command.value];}
  else if(command.action==='cancel')callback=before.cancel;
  else throw Error('Unsupported native Permissions action');
- if(nativePermissionsFrame(n,entry)!==before)throw Error('Native Permissions changed before dispatch');entry.current();before.consumed=true;entry.permissionsSearchLease=undefined;await callback(...args);
+ if(nativePermissionsFrame(n,entry)!==before)throw Error('Native Permissions changed before dispatch');entry.current();await nativePermissionEditorAction(n,entry,request,before,()=>{before.consumed=true;entry.permissionsSearchLease=undefined;return callback(...args);});
  let focusRequested=false;
  for(let attempt=0;attempt<40;attempt++){abort.signal.throwIfAborted();if(!entry.closed&&!entry.answered)await new Promise(resolve=>setTimeout(resolve,25));if(entry.closed||entry.answered)return {snapshot:{revision:before.snapshot.revision,rows:[],permissions:{title:'Permissions',tabs:[],paragraphs:[],choices:[],readOnly:true}}};entry.current();const after=nativePermissionsFrame(n,entry);
   if(command.action==='tab'){

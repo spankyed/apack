@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import {CLAUDE_NATIVE_EDITOR_MAX_BYTES} from './native-editor.ts'
 
 /** Semantic controls from one currently mounted original Permissions dialog. */
 export const claudePermissionsSnapshot = z.object({
@@ -21,9 +22,12 @@ export const claudePermissionsSnapshot = z.object({
       }).strict()).max(128),
     }).strict().optional(),
   }).strict().optional(),
+  editor: z.object({id: z.string().uuid(), revision: z.string().regex(/^[a-f0-9]{64}$/), value: z.string().max(CLAUDE_NATIVE_EDITOR_MAX_BYTES), closing: z.boolean()}).strict().optional(),
   readOnly: z.boolean(),
 }).strict()
 export const claudePermissionsOperation = z.discriminatedUnion('action', [
+  z.object({action: z.literal('externalSave'), id: z.string().uuid(), value: z.string().max(CLAUDE_NATIVE_EDITOR_MAX_BYTES).refine(value => new TextEncoder().encode(value).length <= CLAUDE_NATIVE_EDITOR_MAX_BYTES, 'Environment document exceeds the 8 MiB editor transport limit')}).strict(),
+  z.object({action: z.literal('externalCancel'), id: z.string().uuid()}).strict(),
   z.object({ action: z.literal('tab'), value: z.string().min(1).max(128) }).strict(),
   z.object({ action: z.literal('retry'), value: z.string().min(1).max(16384) }).strict(),
   z.object({ action: z.literal('select'), value: z.string().min(1).max(16384) }).strict(),

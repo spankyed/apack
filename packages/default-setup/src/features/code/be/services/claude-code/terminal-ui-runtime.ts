@@ -50,6 +50,7 @@ import { claudeTerminalInlineModelRuntime } from './terminal-inline-model-runtim
 import { claudeTerminalActionKeyRuntime } from './terminal-action-key-runtime.ts'
 /** Authored adapter to reviewed embedded native exports; no recovered vendor files are executed. */
 export const claudeTerminalUiRuntime = withClaudeNativePlatformRuntime(String.raw`import http from 'node:http';
+import {dirname as nativeEditorDirname} from 'node:path';
 import {stripVTControlCharacters} from 'node:util';
 import {readFileSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';

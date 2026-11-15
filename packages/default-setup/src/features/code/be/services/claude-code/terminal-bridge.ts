@@ -1,3 +1,5 @@
+import {createClaudeNativeEditorBridge} from './native-editor-bridge.ts'
+import {CLAUDE_NATIVE_EDITOR_MESSAGE_MAX_BYTES, CLAUDE_NATIVE_EDITOR_MAX_BYTES} from '../../../common/native-editor.ts'
 import type { createClaudeBackgroundStatusAuthority } from './background-status-authority.ts'
 import { ClaudeBackgroundControlSchema } from './background-controls.ts'
 import { z } from 'zod'
@@ -105,6 +107,8 @@ export async function createClaudeTerminalBridge(options: {
   const pluginCadenceMs = () => nativePolling ? 0 : 250
   let closed = false, busy = false, ready = false
   const ui = createClaudeTerminalUiTransport({ socketPath: uiSocketPath, token, current: () => !closed && observerPid ? { pid: observerPid, sessionId: projection.sessionId } : undefined })
+  let nativeEditor: Awaited<ReturnType<typeof createClaudeNativeEditorBridge>> | undefined
+  const uiTransport: typeof ui.transport = {...ui.transport, request: value => nativeEditor ? nativeEditor.request(value) : ui.transport.request(value)}
   let backgroundObserver: ClaudeBackgroundStatusObserver | undefined
   const linkedBackground = () => { const target = options.backgroundTarget?.(); return target?.parentSessionId === projection.sessionId ? target : undefined }
   let pending: { id: string; sessionId: string; text: string; images: readonly ClaudeNativeImage[]; sent: boolean; prepared?: boolean; entered?: boolean; waitingForInteraction?: boolean; accepted?: ClaudeNativeSubmissionReceipt; timer: ReturnType<typeof setTimeout>; resolve(receipt: ClaudeNativeSubmissionReceipt): void; reject(error: Error): void } | undefined
@@ -128,7 +132,7 @@ export async function createClaudeTerminalBridge(options: {
     if (!current) return
     if (current.entered) {
       try {
-        const state = pendingControlSchema.parse(await ui.transport.request({ subtype: 'apack_pending_control' }))
+        const state = pendingControlSchema.parse(await uiTransport.request({ subtype: 'apack_pending_control' }))
         if (closed || pending !== current || projection.sessionId !== current.sessionId) return
         if (state.turn?.cancelled || state.control && state.control.dialog.sessionId !== current.sessionId) throw new Error('Native interaction owner changed')
         // The original prompt hook cannot acknowledge until its native question or approval returns.
@@ -154,7 +158,7 @@ export async function createClaudeTerminalBridge(options: {
       if (closed || request.method !== 'POST' || request.headers['x-apack-native-token'] !== token) return reply(403, {})
       let bytes = 0
       const chunks: Buffer[] = []
-      const limit = request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/ui-host' ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : request.url === '/native-status' || request.url === '/native-focus' || request.url === '/native-preview' || request.url === '/native-activity' ? 1048576 + 65536 : 65536
+      const limit = request.url === '/native-editor' ? CLAUDE_NATIVE_EDITOR_MESSAGE_MAX_BYTES : request.url === '/append' ? 8 * 1024 * 1024 + 65536 : request.url === '/ui-host' ? CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES : request.url === '/native-status' || request.url === '/native-focus' || request.url === '/native-preview' || request.url === '/native-activity' ? 1048576 + 65536 : 65536
       let oversized = false
       // Drain rejected bodies without retaining them so the client receives the complete refusal.
       for await (const chunk of request) {
@@ -166,6 +170,18 @@ export async function createClaudeTerminalBridge(options: {
       if (oversized) return reply(413, {})
       const value = object(JSON.parse(Buffer.concat(chunks).toString()))
       if (!value || typeof value.sessionId !== 'string' || !/^[a-f0-9-]{36}$/i.test(value.sessionId)) return reply(400, {})
+      if (request.url === '/native-editor-prepare') {
+        if (!nativeEditor || value.pid !== observerPid || value.sessionId !== projection.sessionId || typeof value.clientId !== 'string' || typeof value.panelId !== 'string' || typeof value.directory !== 'string') return reply(409, {})
+        return reply(200, await nativeEditor.prepare({pid: value.pid as number, sessionId: value.sessionId, clientId: value.clientId, panelId: value.panelId, directory: value.directory}))
+      }
+      if (request.url === '/native-editor') {
+        if (!nativeEditor || value.sessionId !== projection.sessionId || !Number.isSafeInteger(value.pid) || !Number.isSafeInteger(value.parentPid) || typeof value.fileIdentity !== 'string' || typeof value.content !== 'string' || Buffer.byteLength(value.content) > CLAUDE_NATIVE_EDITOR_MAX_BYTES) return reply(409, {})
+        const accepted = await nativeEditor.offer({pid: value.pid as number, parentPid: value.parentPid as number, fileIdentity: value.fileIdentity, content: value.content}, decision => reply(200, decision))
+        if (!accepted) return reply(409, {})
+        const id = nativeEditor.active?.id
+        response.once('close', () => {if (id && !response.writableEnded) nativeEditor?.disconnect(id)})
+        return
+      }
       if (request.url === '/observer-ready') {
         if (value.sessionId !== options.sessionId || !Number.isSafeInteger(value.pid) || (value.pid as number) < 2 || (observerPid !== undefined && observerPid !== value.pid) || !await options.ownsProcess?.(value.pid as number)) return reply(409, {})
         observerPid = value.pid as number; observerProblem = undefined; options.changed(); return reply(200, {})
@@ -266,7 +282,7 @@ export async function createClaudeTerminalBridge(options: {
         if (value.metadata !== undefined) {
           const metadata = parseClaudeTerminalMetadata(value.metadata)!
           if (metadata.totalCostUsd !== undefined) {
-            const checkpoint = object(await ui.transport.request({ subtype: 'apack_checkpoint_cost', session_id: projection.sessionId }))
+            const checkpoint = object(await uiTransport.request({ subtype: 'apack_checkpoint_cost', session_id: projection.sessionId }))
             if (closed || value.sessionId !== projection.sessionId || checkpoint?.sessionId !== projection.sessionId || typeof checkpoint.totalCostUsd !== 'number' || !Number.isFinite(checkpoint.totalCostUsd) || checkpoint.totalCostUsd < 0) return reply(409, {})
             metadata.totalCostUsd = checkpoint.totalCostUsd
           }
@@ -274,7 +290,7 @@ export async function createClaudeTerminalBridge(options: {
           if (metadata.modelSelection === undefined) {
             const sessionId = projection.sessionId
             try {
-              const result = object(await ui.transport.request({ subtype: 'apack_get_model_selection', session_id: sessionId }))
+              const result = object(await uiTransport.request({ subtype: 'apack_get_model_selection', session_id: sessionId }))
               if (closed || projection.sessionId !== sessionId || result?.sessionId !== sessionId) return reply(409, {})
               if (typeof result.selection === 'string' && result.selection && result.selection.length <= 256) metadata.modelSelection = result.selection
             } catch { /* Native binding may not be ready during startup; the next poll retries. */ }
@@ -284,7 +300,7 @@ export async function createClaudeTerminalBridge(options: {
           if (object(value.metadata)?.permissionMode === undefined) {
             const sessionId = projection.sessionId
             try {
-              const result = object(await ui.transport.request({ subtype: 'apack_get_permission_mode' }))
+              const result = object(await uiTransport.request({ subtype: 'apack_get_permission_mode' }))
               const mode = PermissionModeSchema.safeParse(result?.mode)
               if (mode.success && session.metadata && projection.sessionId === sessionId) session.update({ ...session.metadata, permissionMode: mode.data, prePlanMode: result?.prePlanMode })
             } catch { /* Native terminal host may not be bound yet; the next poll retries. */ }
@@ -293,7 +309,7 @@ export async function createClaudeTerminalBridge(options: {
         if (!observerPid && (mainCommand || subagentCommand) && !observerProblem) observerProblem = 'Native helper output could not be observed in this terminal'
         if (pending?.entered && pending.prepared) {
           const submission = pending
-          const outcome = object(await ui.transport.request({ subtype: 'apack_prompt_outcome', submission_id: submission.id }))
+          const outcome = object(await uiTransport.request({ subtype: 'apack_prompt_outcome', submission_id: submission.id }))
           if (pending === submission && submission.sessionId === projection.sessionId && typeof outcome?.drop === 'string') settle(new Error('Native prompt refused: ' + outcome.drop))
         }
         ready = true; options.changed()
@@ -301,7 +317,7 @@ export async function createClaudeTerminalBridge(options: {
           const submission = pending; submission.sent = true
           if (value.directOwner === true || ui.hasPromptHosts || submission.images.length) {
             try {
-              const result = object(await ui.transport.request({ subtype: 'apack_prepare_prompt', text: submission.text, submission_id: submission.id, allow_empty: submission.images.length > 0 }))
+              const result = object(await uiTransport.request({ subtype: 'apack_prepare_prompt', text: submission.text, submission_id: submission.id, allow_empty: submission.images.length > 0 }))
               if (pending !== submission || submission.sessionId !== projection.sessionId) return answer()
               if (result?.filled !== true) { settle(new Error('Native terminal draft could not be prepared; the app draft was retained')); return answer() }
               for (const [index, image] of submission.images.entries()) {
@@ -311,18 +327,18 @@ export async function createClaudeTerminalBridge(options: {
                 const path = join(directory, submission.id + '-' + index + '.' + extension)
                 try {
                   await writeFile(path, Buffer.from(image.data, 'base64'), { mode: 0o600, flag: 'wx' })
-                  const before = object(await ui.transport.request({ subtype: 'apack_terminal_draft', submission_id: submission.id }))
+                  const before = object(await uiTransport.request({ subtype: 'apack_terminal_draft', submission_id: submission.id }))
                   if (pending !== submission) throw new Error('Native image submission was retired')
                   options.pasteImage(path)
                   const deadline = Date.now() + 5000
                   let attached = false
                   while (pending === submission && Date.now() < deadline) {
-                    const draft = object(await ui.transport.request({ subtype: 'apack_terminal_draft', submission_id: submission.id }))
+                    const draft = object(await uiTransport.request({ subtype: 'apack_terminal_draft', submission_id: submission.id }))
                     if (typeof draft?.images === 'number' && typeof before?.images === 'number' && draft.images > before.images) { attached = true; break }
                     await new Promise(resolve => setTimeout(resolve, 25))
                   }
                   if (!attached) throw new Error('Native image could not be attached; the app draft was retained')
-                  await ui.transport.request({ subtype: 'apack_terminal_draft', submission_id: submission.id, remember: true })
+                  await uiTransport.request({ subtype: 'apack_terminal_draft', submission_id: submission.id, remember: true })
                 } finally { await rm(path, { force: true }) }
               }
               if (pending !== submission || submission.sessionId !== projection.sessionId) return answer()
@@ -349,7 +365,7 @@ export async function createClaudeTerminalBridge(options: {
         return reply(200, next.kind === 'main' && pending?.entered && pending.prepared && pending.sessionId === value.sessionId ? { pendingSubmissionId: pending.id } : {})
       }
       if (request.url === '/ui-ready') {
-        await ui.transport.request({ subtype: 'apack_observe_notices' }); return reply(200, {})
+        await uiTransport.request({ subtype: 'apack_observe_notices' }); return reply(200, {})
       }
       if (request.url === '/ui-host') {
         if (value.pid !== observerPid || !ui.receiveHost(value, (result, current) => reply(current ? 200 : 409, { request_id: value.request_id, pid: observerPid, sessionId: value.sessionId, result }))) return reply(409, {})
@@ -420,6 +436,12 @@ export async function createClaudeTerminalBridge(options: {
     } catch { if (!response.headersSent) reply(400, {}); else response.destroy() }
   })
   try {
+    nativeEditor = await createClaudeNativeEditorBridge({directory, socketPath, token, transport: ui.transport, hold: ui.holdEditorRequest,
+      current: () => !closed && observerPid ? {pid: observerPid, sessionId: projection.sessionId} : undefined,
+      ownsChild: pid => options.ownsProcess?.(pid) ?? Promise.resolve(false),
+      changed() {ui.receive({type: 'system', subtype: 'apack_native_editor_changed'}); options.changed()},
+      failed(scope, error) {ui.receive({type: 'system', subtype: 'apack_native_editor_failed', client_id: scope.clientId, panel_id: scope.panelId, problem: error.message})},
+    })
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve) })
     if (options.backgroundObserver?.available) {
       if (options.backgroundObserver.parentSessionId !== options.sessionId) throw new Error('Background observer belongs to another parent')
@@ -448,7 +470,7 @@ export async function createClaudeTerminalBridge(options: {
     const plugin = createClaudeTerminalPlugin(socketPath, token, { parentSessionId: options.sessionId, socketPath: backgroundObserver.socketPath, token: backgroundObserver.token })
     await writeFile(join(pluginRoot, 'hooks/register.ts'), plugin, { mode: 0o600 })
     return {
-      directory, pluginRoot, bunOptions, projection, session, transcripts, uiTransport: ui.transport,
+      directory, pluginRoot, bunOptions, projection, session, transcripts, uiTransport,
       get backgroundInfo() { return backgroundObserver?.value },
       get backgroundObserver() { return backgroundObserver! },
       get problem() { return observerProblem },
@@ -460,9 +482,9 @@ export async function createClaudeTerminalBridge(options: {
       get billing() { return closed ? undefined : billing.value },
       get preview() { return closed ? undefined : preview },
       get activity() { return activity },
-      get busy() { return busy || !!pending },
+      get busy() { return busy || !!pending || !!nativeEditor?.active },
       submit(text: string, images: readonly ClaudeNativeImage[] = []): Promise<ClaudeNativeSubmissionReceipt> {
-        if (closed || !ready || pending || busy || !text.trim() && !images.length || text.length > 32768) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
+        if (closed || !ready || pending || busy || nativeEditor?.active || !text.trim() && !images.length || text.length > 32768) return Promise.reject(new Error('Native terminal cannot accept this draft now'))
         if (images.some(image => !['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(image.mediaType) || !image.data || image.data.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(image.data))) return Promise.reject(new Error('Native image content is invalid'))
         return new Promise((resolve, reject) => {
           const timer = submissionTimer(images.length > 0)
@@ -471,13 +493,13 @@ export async function createClaudeTerminalBridge(options: {
       },
       async close() {
         if (closed) return
-        closed = true; await backgroundObserver?.releaseParent(); busy = false; focus = undefined; activity = undefined; nativeView = undefined; ui.close(); settle(new Error('Native terminal closed')); projection.clear()
+        closed = true; await backgroundObserver?.releaseParent(); busy = false; focus = undefined; activity = undefined; nativeView = undefined; nativeEditor?.close(); ui.close(); settle(new Error('Native terminal closed')); projection.clear()
         waiting.length = 0; server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
         await rm(directory, { recursive: true, force: true })
       },
     }
   } catch (error) {
-    if (backgroundObserver === options.backgroundObserver) await backgroundObserver?.releaseParent(); else await backgroundObserver?.close(); ui.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
+    if (backgroundObserver === options.backgroundObserver) await backgroundObserver?.releaseParent(); else await backgroundObserver?.close(); nativeEditor?.close(); ui.close(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()))
     await rm(directory, { recursive: true, force: true }); throw error
   }
 }

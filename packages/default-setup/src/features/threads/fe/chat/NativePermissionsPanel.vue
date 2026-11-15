@@ -1,5 +1,6 @@
 <template>
-  <section ref="root" role="dialog" aria-label="Claude Code permissions" aria-modal="false" tabindex="-1" data-native-command-panel class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-neutral-900" @keydown.esc.stop.prevent="cancel">
+  <NativeEnvironmentEditor v-if="panel?.editor" :key="panel.editor.id" :editor="panel.editor" :state="state" :owner-label="ownerLabel" @operate="sendRequest" />
+  <section v-else ref="root" role="dialog" aria-label="Claude Code permissions" aria-modal="false" tabindex="-1" data-native-command-panel class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-neutral-900" @keydown.esc.stop.prevent="cancel">
     <header class="flex shrink-0 items-start justify-between gap-3 border-b border-white/10 px-4 py-3">
       <div class="min-w-0"><p v-if="ownerLabel" class="mb-1 text-xs text-neutral-400">{{ ownerLabel }}</p><h2 class="text-sm font-medium text-neutral-200">{{ panel?.title ?? 'Permissions' }}</h2><p v-if="panel?.readOnly" class="mt-1 text-xs text-neutral-400">Read-only session rules</p></div>
       <button type="button" :disabled="pending" class="shrink-0 rounded-lg px-3 py-2 text-xs text-neutral-300 hover:bg-white/5 focus-visible:outline focus-visible:outline-blue-400 disabled:opacity-50" @click="cancel">{{ panel?.tabs.length ? hasDecisions ? 'Apply and close' : 'Close permissions' : 'Back' }}</button>
@@ -40,6 +41,7 @@
 import {computed,nextTick,onBeforeUnmount,onMounted,ref,useId,watch} from 'vue'
 import type {ClaudeSettingsOperation,ClaudeSettingsRequest,ClaudeSettingsView} from '#features/code/common/native-settings.ts'
 import type {ClaudePermissionsOperation} from '#features/code/common/native-permissions.ts'
+import NativeEnvironmentEditor from './NativeEnvironmentEditor.vue'
 import {useNativePermissionsForm} from './native-permissions-form.ts'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 const props=defineProps<{state?:ClaudeSettingsView;ownerLabel?:string}>()
@@ -96,7 +98,7 @@ function operate(revision:string,command:ClaudePermissionsOperation){
  if(reading.value){if(!queuedAction.value)queuedAction.value={revision,command};return}
  if(!pending.value)dispatch(revision,command)
 }
-function read(){if(props.state?.status!=='pending'&&!transportFlight.value&&!liveForm.flight.value){suspendReads.value=false;request({kind:'read'})}}
+function read(){if(panel.value?.editor)return;if(props.state?.status!=='pending'&&!transportFlight.value&&!liveForm.flight.value){suspendReads.value=false;request({kind:'read'})}}
 function submit(){if(liveForm.active.value){liveForm.submit();return}const revision=props.state?.snapshot?.revision;if(revision&&panel.value?.form)operate(revision,{action:'submit',value:draft.value})}
 function cancel(){if(liveForm.cancel())return;const revision=props.state?.snapshot?.revision;if(revision)operate(revision,{action:'cancel'})}
 watch([()=>panel.value?.defaultFocusValue,()=>panel.value?.title,()=>panel.value?.choices.find(c=>c.value===panel.value?.defaultFocusValue)?.disabled,()=>pending.value],async([value])=>{if(typeof value!=='string'||!value||pending.value)return;await nextTick();if(pending.value||!document.hasFocus()||document.activeElement?.matches('input,textarea')||document.activeElement!==document.body&&!root.value?.contains(document.activeElement))return;const button=[...root.value!.querySelectorAll<HTMLButtonElement>('[data-native-permission-choice]')].find(e=>e.dataset.nativePermissionChoice===value);button?.focus({preventScroll:true})},{immediate:true})
