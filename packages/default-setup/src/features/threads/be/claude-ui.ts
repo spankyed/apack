@@ -1,9 +1,9 @@
 import { createLogger } from '@apackdev/sdk/logger'
 import { createClaudeSelectionReply } from '#features/code/be/services/claude-code/ui-selection-reply.ts'
-import type { EntityId } from '#generated/services.ts'
+import { services, type EntityId } from '#generated/services.ts'
 import { repository } from '#generated/repository.ts'
 import { selectClaudeTranscriptRows } from '#features/code/be/services/claude-code/ui-transcript-rows.ts'
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import type { ClaudePromptHostRequest, ClaudePromptHostResponse } from '#generated/types.ts'
 import type { ClaudePromptHost } from '#features/code/be/services/claude-code/ui-prompt-host.ts'
 import { getClaudeUiOwner } from '#features/code/be/services/claude-code/ui-owner.ts'
@@ -145,6 +145,11 @@ function bind(view: ClaudeUiView): void {
     async suggest(text, signal, expiresAt) { const answer = await ask({ kind: 'suggest', text }, signal, expiresAt); return answer?.kind === 'suggest' && answer.shown },
   }
   view.mount = mountClaudeUi({ owner, promptHost, nativeView: owner.nativeView,
+    pauseQuestion: !view.nativeView && !view.backgroundView ? async (row, ownerId) => {
+      if (!viewCurrent(view) || view.owner !== owner || getClaudeUiOwner(view.threadId) !== owner || owner.question?.ownerId !== ownerId) throw Error('Native question owner changed');
+      const result = await services.action.executeIfFound('CC: Pause Turn', { threadId: view.threadId, nativeQuestion: { ...row, ownerId } });
+      if (result?.success !== true) throw Error(typeof result?.reason === 'string' ? result.reason : 'Native question cancellation was not acknowledged');
+    } : undefined,
     question: () => {
       const raw = repository.threadQueries.byId(view.threadId as EntityId)?.context?.claudeCode?.pendingControlRequest
       if (!raw || typeof raw !== 'object') return undefined
@@ -351,6 +356,16 @@ export function handleClaudeUiView(event: ClaudeUiViewRequest, client?: string, 
     bind(view)
     void view.mount?.answerApproval(event.frameId, event.answer)
     return
+  }
+  if(event.type==='CLAUDE_UI_QUESTION_PAUSE') {
+    if(!view||view.nativeView||view.backgroundView||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return;
+    bind(view);
+    const identity = { threadId: event.threadId, mountId: event.mountId, messageId: event.messageId, ownerId: view.owner?.question?.ownerId, tokenDigest: createHash('sha256').update(event.token).digest('hex') };
+    logger.info('Native question Pause received', identity);
+    void Promise.resolve(view.mount?.pauseQuestion(event.messageId,event.token)).then(handled => {
+      logger.info('Native question Pause completed', { ...identity, handled: handled === true });
+    }).catch(() => logger.warn('Native question Pause failed', identity));
+    return;
   }
   if(event.type==='CLAUDE_UI_QUESTION_REJECT') {
     if(!view||view.nativeView||typeof event.messageId!=='string'||event.messageId.length>512||!validId(event.token))return

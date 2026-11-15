@@ -21,6 +21,7 @@ export function createClaudeQuestionHost(options: {
   row(): ClaudeUiQuestionRow | undefined
   current(): boolean
   publish(): void
+  pause?(row: ClaudeUiQuestionRow, ownerId: string): Promise<void>
 }) {
   let entry: Entry | undefined, disposed = false, started = false, rendering = false
   let scheduled: ReturnType<typeof setTimeout> | undefined
@@ -103,6 +104,21 @@ export function createClaudeQuestionHost(options: {
         if(valid(target)){entry=undefined;publish()}
       }catch(error){if(valid(target)){target.frame.problem=error instanceof Error?error.message:'Native question rejection failed';publish()}}
       finally{target.answering=false;target.frame.pending=false;if(valid(target))publish()}
+    },
+    async pause(messageId: string, token: string): Promise<boolean> {
+      const target = entry;
+      if (!target || !valid(target) || !options.source || !options.pause || target.answering || target.row.messageId !== messageId || !token || token !== (target.heldToken ?? target.frame.token) && !target.holding) return false;
+      target.answering = true; target.frame.pending = true; target.frame.problem = undefined; publish();
+      try {
+        await target.holding;
+        if (!valid(target) || token !== (target.heldToken ?? target.frame.token)) return false;
+        await options.pause({ ...target.row }, options.source.ownerId);
+        if (valid(target)) { entry = undefined; publish(); }
+        return true;
+      } catch (error) {
+        if (valid(target)) { target.frame.problem = error instanceof Error ? error.message : 'Native question cancellation failed'; publish(); }
+        return false;
+      } finally { target.answering = false; target.frame.pending = false; if (valid(target)) publish(); }
     },
     ownsAction(id: string) { return !!entry?.drawing?.actions.has(id) },
     ownsField(id: string) { return entry?.frame.draftActionId === id || !!entry?.fields?.fields.has(id) },

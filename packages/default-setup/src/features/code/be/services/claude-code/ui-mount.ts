@@ -32,6 +32,7 @@ export function mountClaudeUi(options: {
   publish(state: ClaudeUiMountState): void
   requestFocus?(focusId: string, revision: number, paneId?: string): void
   question?(): import('./ui-presentation.ts').ClaudeUiQuestionRow | undefined
+  pauseQuestion?(row: import('./ui-presentation.ts').ClaudeUiQuestionRow, ownerId: string): Promise<void>
   messages?(groups: readonly import('./ui-controls.ts').ClaudeUiToolGroup[]): import('./ui-presentation.ts').ClaudeUiTranscriptRow[]
   promptHost?: import('./ui-prompt-host.ts').ClaudePromptHost
   nativeView?: import('./ui-controls.ts').ClaudeUiAttach['native_view']
@@ -112,7 +113,7 @@ export function mountClaudeUi(options: {
   }, publish: () => publish(lastState) })
 
   const approval = createClaudeApprovalHost({source: owner.approval, current, publish: () => publish(lastState)})
-  const question = createClaudeQuestionHost({ source: owner.question, ui: owner.handle.ui, client, row: () => owner.question?.row ? owner.question.row() : options.question?.(), current, publish: () => publish(lastState) })
+  const question = createClaudeQuestionHost({ source: owner.question, ui: owner.handle.ui, client, row: () => owner.question?.row ? owner.question.row() : options.question?.(), current, publish: () => publish(lastState), pause: options.pauseQuestion })
 
   const notices = createClaudeUiNotices({ current, sessionId: () => owner.sessionId, publish: () => publish(lastState) })
 
@@ -416,6 +417,7 @@ export function mountClaudeUi(options: {
     },
     answerQuestion: question.answer,
     rejectQuestion: question.reject,
+    pauseQuestion: question.pause,
     answerApproval: approval.answer,
     refreshTranscript: () => { messages.refresh(); question.refresh() },
     notice(event: import('./ui-presentation.ts').ClaudeUiNoticeEvent) { notices.operate(event) },

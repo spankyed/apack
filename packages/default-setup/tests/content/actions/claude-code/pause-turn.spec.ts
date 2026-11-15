@@ -10,7 +10,7 @@ function setup(kind: 'native' | 'print' | 'idle', pending = false, busy = kind =
   } } });
   const events: unknown[][] = [], requests: Record<string, unknown>[] = [];
   const control = { turn: { id: 'original-turn', cancelled: false } as { id: string; cancelled: boolean } | null, replace: false, refuse: false, nativeForm: false, nativeUrl: false };
-  const native = { state: { sessionId: 'original-session', get mcpUrl() { return control.nativeUrl ? { id: 'url', revision: 'url-revision', sessionId: 'original-session' } : undefined }, get mcpForm() { return control.nativeForm ? { id: 'form', revision: 'original-revision', sessionId: 'original-session' } : undefined } }, kill: () => { events.push(['native.kill']); }, cancelMcpInput: async (form: unknown) => { events.push(['native.cancelMcpInput', form]); }, uiTransport: { request: async (request: Record<string, unknown>) => {
+  const native = { state: { ownerId: 'original-owner', sessionId: 'original-session', get mcpUrl() { return control.nativeUrl ? { id: 'url', revision: 'url-revision', sessionId: 'original-session' } : undefined }, get mcpForm() { return control.nativeForm ? { id: 'form', revision: 'original-revision', sessionId: 'original-session' } : undefined } }, kill: () => { events.push(['native.kill']); }, cancelMcpInput: async (form: unknown) => { events.push(['native.cancelMcpInput', form]); }, uiTransport: { request: async (request: Record<string, unknown>) => {
     requests.push(request);
     if (request.subtype === 'apack_turn_state') return { turn: control.turn };
     if (control.refuse) throw new Error('Native turn changed or ended');
@@ -89,4 +89,25 @@ it('retires an independent native URL waiting dialog after its tool turn has alr
   await expect(action({ threadId: f.id }, services)).resolves.toEqual({ success: true, interrupted: true });
   expect(f.events).toEqual([['native.cancelMcpInput', { id: 'url', revision: 'url-revision', sessionId: 'original-session' }]]);
   expect(f.requests).toEqual([{ subtype: 'apack_turn_state', session_id: 'original-session' }]);
+});
+
+
+it.each([{ownerId:'replaced-owner'},{sessionId:'replaced-session'},{id:'replaced-dialog'},{revision:'replaced-revision'},{requestId:'replaced-request'},{messageId:'replaced-message'}])('refuses an addressed question Pause after its target changes: %j', change => {
+ const f=setup('native',true),scope={ownerId:'original-owner',sessionId:'original-session',id:'dialog',revision:'revision',requestId:'question-request',messageId:'question-message'};
+ repository.threadCommands.update(f.id,{context:{claudeCode:{isRunning:true,pendingControlRequest:{requestId:'question-request',toolName:'AskUserQuestion',approvalMessageId:'question-message',nativeTerminal:{ownerId:scope.ownerId,sessionId:scope.sessionId,dialogId:scope.id,revision:scope.revision,requestId:scope.requestId}}}}});
+ return action({threadId:f.id,nativeQuestion:{...scope,...change}},services).then(result=>{
+  expect(result).toEqual({success:false,reason:'native question changed'});
+  expect(f.events).toEqual([]);expect(f.requests).toEqual([]);
+  expect(repository.threadQueries.byId(f.id)?.context?.claudeCode?.pendingControlRequest).toMatchObject({approvalMessageId:'question-message'});
+ });
+});
+
+
+it('retires the addressed question once and refuses its repeated cancellation',async()=>{
+ const f=setup('native',true),scope={ownerId:'original-owner',sessionId:'original-session',id:'dialog',revision:'revision',requestId:'question-request',messageId:'question-message'};
+ repository.threadCommands.update(f.id,{context:{claudeCode:{isRunning:true,pendingControlRequest:{requestId:scope.requestId,toolName:'AskUserQuestion',approvalMessageId:scope.messageId,nativeTerminal:{ownerId:scope.ownerId,sessionId:scope.sessionId,dialogId:scope.id,revision:scope.revision,requestId:scope.requestId}}}}});
+ await expect(action({threadId:f.id,nativeQuestion:scope},services)).resolves.toEqual({success:true});
+ await expect(action({threadId:f.id,nativeQuestion:scope},services)).resolves.toEqual({success:false,reason:'native question changed'});
+ expect(f.events.filter(row=>row[0]==='native.kill')).toHaveLength(1);
+ expect(f.events).toContainEqual(['message',scope.messageId,expect.objectContaining({blockResponse:{cancelled:true}})]);
 });

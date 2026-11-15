@@ -4,9 +4,12 @@
  * can outlive their tool turn and are retired by their captured request identity.
  */
 
+import { z } from 'zod';
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
 import { getClaudeState, killTurn, updateChatState } from './_helpers/thread-context.ts';
+
+const nativeQuestionScope = z.object({ ownerId: z.string().min(1).max(512), sessionId: z.string().min(1).max(512), messageId: z.string().min(1).max(512), id: z.string().min(1).max(512), revision: z.string().min(1).max(512), requestId: z.string().min(1).max(512) }).strict();
 
 export const meta: ActionMeta = {
   label: 'CC: Pause Turn',
@@ -14,6 +17,7 @@ export const meta: ActionMeta = {
   category: 'claude-code',
   input: {
     threadId: { type: 'string', description: 'Thread ID', required: true },
+    nativeQuestion: { type: 'object', description: 'Captured native question identity for an addressed Cancel', required: false },
   },
 };
 
@@ -28,6 +32,22 @@ export async function action(
   // Busy metadata can lag submission; an explicit Pause targets the owning native process.
   const prior = getClaudeState(services, threadId);
   const native = services.cli.claudeCode.getNativeTerminal(threadId);
+  if (params.nativeQuestion !== undefined) {
+    const parsed = nativeQuestionScope.safeParse(params.nativeQuestion);
+    const pending = prior?.pendingControlRequest, question = pending?.nativeTerminal;
+    if (!parsed.success || !native || prior?.pendingElicitation || pending?.toolName !== 'AskUserQuestion'
+      || native.state.ownerId !== parsed.data.ownerId || native.state.sessionId !== parsed.data.sessionId
+      || pending.approvalMessageId !== parsed.data.messageId || question?.ownerId !== parsed.data.ownerId
+      || question.sessionId !== parsed.data.sessionId || question.dialogId !== parsed.data.id
+      || question.revision !== parsed.data.revision || question.requestId !== parsed.data.requestId) {
+      return { success: false, reason: 'native question changed' };
+    }
+    // No await between the final identity check and retiring this question's process/flow.
+    killTurn(services, threadId);
+    updateChatState(services, threadId as EntityId, 'idle');
+    return { success: true };
+  }
+
   if (native && (!prior?.pendingControlRequest || native.state.mcpForm || native.state.mcpUrl) && !prior?.pendingElicitation) {
     const sessionId = native.state.sessionId, form = native.state.mcpForm ?? native.state.mcpUrl;
     const current = await native.uiTransport.request({ subtype: 'apack_turn_state', session_id: sessionId }) as { turn: { id: string; cancelled: boolean } | null };

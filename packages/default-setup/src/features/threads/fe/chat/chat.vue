@@ -744,7 +744,11 @@ function rejectNativeQuestion(identity: import('#features/code/be/services/claud
   actor.send({ type: 'CLAUDE_UI_QUESTION_REJECT', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token })
 }
 
-function pauseNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) { if (pendingNativeQuestion.value?.messageId === identity.messageId) actor.send({type: 'PAUSE_TURN', threadId: currentThread.value?.id ?? ''}) }
+function pauseNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
+  const question = pendingNativeQuestion.value, mount = nativeUiMount.value;
+  if (!mount || !question?.frame || question.messageId !== identity.messageId || !identity.token) return;
+  actor.send({ type: 'CLAUDE_UI_QUESTION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token });
+}
 
 let nativeSendRevision = 0
 const pendingNativeSend = ref<{ ownerId: string; revision: number; threadId: string; stageRevision?: string; resolve(result?: ClaudeComposerSubmitResult): void; reject(error: Error): void }>()

@@ -7,8 +7,9 @@ function fixture() {
   let pending: ClaudeUiQuestionRow | undefined = row
   const source = { reject: vi.fn(async (_request: unknown) => {}), ownerId: 'owner', render: vi.fn(async () => frame()), hold: vi.fn(async () => {}), answer: vi.fn(async (_request: unknown) => {}) }
   const ui = { press: vi.fn(async () => ({ handled: true })), input: vi.fn(async () => ({ handled: true })), select: vi.fn(async () => ({ handled: true })) }
-  const create = (id: string) => createClaudeQuestionHost({ source, ui, client: { client_id: id, surface: 'desktop' }, row: () => pending, current: () => true, publish: vi.fn() })
-  return { source, ui, create, replace(value?: ClaudeUiQuestionRow) { pending = value } }
+  const pause = vi.fn(async (_row: ClaudeUiQuestionRow, _ownerId: string) => {});
+  const create = (id: string) => createClaudeQuestionHost({ source, ui, client: { client_id: id, surface: 'desktop' }, row: () => pending, current: () => true, publish: vi.fn(), pause })
+  return { source, ui, pause, create, replace(value?: ClaudeUiQuestionRow) { pending = value } }
 }
 function action(host: ReturnType<typeof createClaudeQuestionHost>) {
   const body = host.state?.body
@@ -110,3 +111,34 @@ it('serializes rejection and discards its late acknowledgement after replacement
  f.replace({...row,messageId:'replacement',revision:'new'});host.refresh();finish();await pending
  expect(host.state?.messageId).toBe('replacement');host.dispose()
 })
+
+
+it('addresses question cancellation and serializes repeated Cancel without using another owner',async()=>{
+ const f=fixture(),host=f.create('view');host.start();await vi.advanceTimersByTimeAsync(50);
+ await expect(host.pause(row.messageId,'foreign-token')).resolves.toBe(false);expect(f.pause).not.toHaveBeenCalled();
+ let finish!:()=>void;f.pause.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve}));
+ const first=host.pause(row.messageId,'issued-token');await Promise.resolve();
+ expect(host.state?.pending).toBe(true);await host.pause(row.messageId,'issued-token');
+ expect(f.pause).toHaveBeenCalledExactlyOnceWith(row,'owner');finish();await expect(first).resolves.toBe(true);
+ expect(host.state).toBeUndefined();host.dispose();
+});
+it('refuses cancellation after a held draft loses its original question',async()=>{
+ const f=fixture(),host=f.create('view');host.start();await vi.advanceTimersByTimeAsync(50);
+ let finish!:()=>void;f.source.hold.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve}));
+ const held=host.field({actionId:host.state!.draftActionId,revision:1,kind:'change',value:'issued-token'});
+ const cancelled=host.pause(row.messageId,'issued-token');
+ f.replace({...row,id:'replacement-dialog',revision:'replacement-revision'});host.refresh();finish();await held;await cancelled;
+ expect(f.pause).not.toHaveBeenCalled();host.dispose();
+});
+
+
+it('waits for original draft acknowledgement before cancelling through a newer drawing',async()=>{
+ const f=fixture(),host=f.create('view');host.start();await vi.advanceTimersByTimeAsync(50);
+ let finish!:()=>void;f.source.hold.mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve}));
+ const held=host.field({actionId:host.state!.draftActionId,revision:1,kind:'change',value:'issued-token'});
+ f.source.render.mockImplementationOnce(async()=>({...frame(),question:{...frame().question,token:'new-drawing-token'}}));
+ host.receive({type:'system',subtype:'ui_invalidate',event:'ui.render'});await vi.advanceTimersByTimeAsync(50);
+ expect(host.state?.token).toBe('new-drawing-token');const cancelled=host.pause(row.messageId,'issued-token');
+ expect(f.pause).not.toHaveBeenCalled();finish();await held;await cancelled;
+ expect(f.pause).toHaveBeenCalledExactlyOnceWith(row,'owner');host.dispose();
+});
