@@ -95,7 +95,7 @@ it('discards a queued search when its original tab is replaced', async () => {
 async function directoryFixture() {
   const f = fixture(true), panel = f.state.value.snapshot!.permissions!
   panel.title = 'Add directory to workspace'; panel.form!.placeholder = 'Directory path…'; panel.form!.submitLabel = 'Add directory'; panel.form!.value = 'ref'
-  panel.form!.live = { id: 'd'.repeat(64), revision: 'e'.repeat(64), selectedValue: '/native/reference', suggestions: [{ value: '/native/reference', label: 'reference/', description: 'directory', token: 'f'.repeat(64) }, { value: '/native/references', label: 'references/', token: '1'.repeat(64) }] }
+  panel.form!.live = { kind: 'directory', id: 'd'.repeat(64), revision: 'e'.repeat(64), selectedValue: '/native/reference', suggestions: [{ value: '/native/reference', label: 'reference/', description: 'directory', token: 'f'.repeat(64) }, { value: '/native/references', label: 'references/', token: '1'.repeat(64) }] }
   await nextTick(); f.operate.mockClear()
   return f
 }
@@ -193,4 +193,33 @@ it('serializes a read immediately and acknowledges only its own live edit reques
   expect(f.operate.mock.calls.filter(([action]) => action.command?.action === 'submit')).toHaveLength(0)
   const next: ClaudeSettingsView = JSON.parse(JSON.stringify(f.state.value)); next.requestId = edit.requestId; next.snapshot!.permissions!.form!.value = '/native/reference'; next.snapshot!.permissions!.form!.live!.revision = '9'.repeat(64); f.state.value = next; await nextTick(); await nextTick()
   expect(f.operate).toHaveBeenLastCalledWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'submit', scope: 'd'.repeat(64), formRevision: '9'.repeat(64), value: '/native/reference' } })
+})
+
+async function autoRuleFixture() {
+  const f = await directoryFixture(), panel = f.state.value.snapshot!.permissions!
+  panel.title = 'Add soft deny rule'; panel.form!.placeholder = 'Enter rule…'; panel.form!.submitLabel = 'Save rule'; panel.form!.multiline = true
+  panel.form!.live = { ...panel.form!.live!, kind: 'autoRule', suggestions: [], selectedValue: undefined }
+  await nextTick(); return f
+}
+
+it('keeps multiline editing separate from native save and acknowledges normalized native text', async () => {
+  const f = await autoRuleFixture(), input = f.root.querySelector('textarea')!
+  input.value = 'Production writes:\r\nReject schema changes.'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick()
+  const newline = new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true, cancelable: true }); input.dispatchEvent(newline); await nextTick()
+  expect(newline.defaultPrevented).toBe(false)
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await nextTick()
+  expect(f.operate.mock.calls.filter(([action]) => action.command?.action === 'submit')).toHaveLength(0)
+  await directoryReply(f, 'normalized', 'Production writes:\nReject schema changes.')
+  expect(f.operate).toHaveBeenLastCalledWith({ kind: 'permissions', revision: 'b'.repeat(64), command: { action: 'submit', scope: 'd'.repeat(64), formRevision: '2'.repeat(64), value: 'Production writes:\nReject schema changes.' } })
+  expect(f.root.textContent).toContain('Enter to save · Shift+Enter for a new line')
+  expect(f.root.querySelector('[role="listbox"]')).toBeNull()
+})
+
+it('retains original multiline validation until the original edit clears it', async () => {
+  const f = await autoRuleFixture(), input = f.root.querySelector('textarea')!
+  f.state.value.snapshot!.permissions!.form!.live!.problem = 'Original reserved-rule error'; await nextTick()
+  input.value = 'Replacement rule'; input.dispatchEvent(new Event('input', { bubbles: true })); await nextTick()
+  expect(f.root.querySelector('[role="alert"]')?.textContent).toBe('Original reserved-rule error')
+  const next: ClaudeSettingsView = JSON.parse(JSON.stringify(f.state.value)); next.requestId = f.requests.at(-1)!.requestId; next.snapshot!.permissions!.form!.value = input.value; delete next.snapshot!.permissions!.form!.live!.problem; f.state.value = next; await nextTick()
+  expect(f.root.querySelector('[role="alert"]')).toBeNull(); expect(input.value).toBe('Replacement rule')
 })

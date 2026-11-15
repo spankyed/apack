@@ -224,3 +224,44 @@ it('submits only the current native draft and form revision, and exposes origina
   expect(result.snapshot.permissions.form.live.problem).toBe('Original directory validation failed')
   await expect(f.act(edited.snapshot.revision, { action: 'submit', scope, formRevision: form.live.revision, value: form.value })).rejects.toThrow(/submission changed/)
 })
+
+function autoRuleFixture() {
+  const f = fixture(), ownerType = Object.assign(function AutoRule() {}, { hash: '015b00025c6788136ff0ca3ae813ac911cdce4a52d405ad01f7b87963622d501' })
+  let value = '', problem: string | undefined
+  const onChange = vi.fn((next: string) => { value = next; problem = undefined; redraw() })
+  const onSubmit = vi.fn((_next: string) => { problem = 'Original reserved-rule error'; redraw() })
+  const ownerProps = { section: 'soft_deny', onSubmit, onCancel: f.cancel }
+  function redraw() {
+    const inputProps = { value, multiline: true, onChange, onSubmit, inputFilter: (s: string) => s.replace(/\r\n?/g, '\n'), placeholder: 'Enter rule…' }
+    const inputType = function NativeTextInput() {}, errorType = function NativeText() {}
+    const errorProps = { color: 'error', children: problem }, input: any = { type: inputType, memoizedProps: inputProps }
+    if (problem) input.sibling = { type: errorType, memoizedProps: errorProps, child: { type: 'ink-text', memoizedProps: {}, child: { tag: 6, memoizedProps: problem } } }
+    const frameProps = { title: 'Add soft deny rule', children: [{ type: inputType, props: inputProps }, ...(problem ? [{ type: errorType, props: errorProps }] : [])] }
+    f.root.child = { type: ownerType, memoizedProps: ownerProps, child: { type: function Frame() {}, memoizedProps: frameProps, child: input } }
+  }
+  redraw(); return { ...f, onChange, onSubmit, ownerType, redraw }
+}
+
+it('normalizes multiline text through the original Auto mode filter without submitting', async () => {
+  const f = autoRuleFixture(), before = f.read(), scope = before.snapshot.permissions.form.live.id; f.redraw()
+  const result = await f.act(before.snapshot.revision, { action: 'change', scope, value: 'Production writes:\r\nReject schema changes.' })
+  expect(result.snapshot.permissions.form).toMatchObject({ multiline: true, submitLabel: 'Save rule', value: 'Production writes:\nReject schema changes.', live: { kind: 'autoRule', suggestions: [] } })
+  expect(f.onChange).toHaveBeenCalledExactlyOnceWith('Production writes:\nReject schema changes.'); expect(f.onSubmit).not.toHaveBeenCalled()
+})
+
+it('preserves original Auto mode validation and clears it only through the original edit', async () => {
+  const f = autoRuleFixture(), before = f.read(), scope = before.snapshot.permissions.form.live.id
+  const result = await f.act(before.snapshot.revision, { action: 'submit', scope, formRevision: before.snapshot.permissions.form.live.revision, value: '' })
+  expect(f.onSubmit).toHaveBeenCalledExactlyOnceWith(''); expect(result.snapshot.permissions.form.live.problem).toBe('Original reserved-rule error')
+  expect(result.snapshot.permissions.paragraphs).not.toContain('Original reserved-rule error')
+  await expect(f.act(before.snapshot.revision, { action: 'submit', scope, formRevision: before.snapshot.permissions.form.live.revision, value: '' })).rejects.toThrow(/submission changed/)
+  const edited = await f.act(result.snapshot.revision, { action: 'change', scope, value: 'New rule' })
+  expect(edited.snapshot.permissions.form.live.problem).toBeUndefined(); expect(f.onSubmit).toHaveBeenCalledOnce()
+})
+
+it('refuses changed Auto mode producers and retired form scopes without a callback', async () => {
+  const f = autoRuleFixture(), before = f.read(); f.root.child.memoizedProps = { ...f.root.child.memoizedProps }
+  await expect(f.act(before.snapshot.revision, { action: 'change', scope: before.snapshot.permissions.form.live.id, value: 'Retired' })).rejects.toThrow(/expired/)
+  f.ownerType.hash = 'changed'; expect(f.read).toThrow(/producer changed/)
+  expect(f.onChange).not.toHaveBeenCalled(); expect(f.onSubmit).not.toHaveBeenCalled()
+})

@@ -3,7 +3,7 @@ import type { ClaudeSettingsRequest, ClaudeSettingsView } from '#features/code/c
 import type { ClaudePermissionsOperation } from '#features/code/common/native-permissions.ts'
 
 type Flight = { action: ClaudePermissionsOperation; requestId: string; scope: string; generation: number }
-/** Coalesce one original directory draft; completion never doubles as permission submission. */
+/** Coalesce one original native draft; completion never doubles as permission submission. */
 export function useNativePermissionsForm(state: () => ClaudeSettingsView | undefined, emit: (request: ClaudeSettingsRequest) => void, draft: Ref<string>, available: () => boolean) {
   const form = computed(() => state()?.snapshot?.permissions?.form), live = computed(() => form.value?.live)
   const flight = ref<Flight>(), edit = ref<string>(), completion = ref<Extract<ClaudePermissionsOperation, { action: 'complete' }>>(), submit = ref<string>(), cancel = ref(false), closing = ref(false), composing = ref(false), dirty = ref(false)

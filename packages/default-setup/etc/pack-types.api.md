@@ -1611,6 +1611,10 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 multiline: z.ZodBoolean;
                 submitLabel: z.ZodString;
                 live: z.ZodOptional<z.ZodObject<{
+                    kind: z.ZodEnum<{
+                        directory: "directory";
+                        autoRule: "autoRule";
+                    }>;
                     id: z.ZodString;
                     revision: z.ZodString;
                     problem: z.ZodOptional<z.ZodString>;
@@ -10762,6 +10766,10 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             multiline: z.ZodBoolean;
             submitLabel: z.ZodString;
             live: z.ZodOptional<z.ZodObject<{
+                kind: z.ZodEnum<{
+                    directory: "directory";
+                    autoRule: "autoRule";
+                }>;
                 id: z.ZodString;
                 revision: z.ZodString;
                 problem: z.ZodOptional<z.ZodString>;
@@ -11385,6 +11393,7 @@ declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIn
                     multiline: boolean;
                     submitLabel: string;
                     live?: {
+                        kind: "autoRule" | "directory";
                         id: string;
                         revision: string;
                         suggestions: {
@@ -11914,8 +11923,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

@@ -12,6 +12,7 @@ export const claudePermissionsSnapshot = z.object({
   form: z.object({
     value: z.string().max(16384), placeholder: z.string().max(4096), multiline: z.boolean(), submitLabel: z.string().max(1024),
     live: z.object({
+      kind: z.enum(['directory', 'autoRule']),
       id: z.string().regex(/^[a-f0-9]{64}$/), revision: z.string().regex(/^[a-f0-9]{64}$/),
       problem: z.string().max(65536).optional(), selectedValue: z.string().max(16384).optional(),
       suggestions: z.array(z.object({
