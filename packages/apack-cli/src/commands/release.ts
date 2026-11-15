@@ -294,7 +294,7 @@ export async function publishRelease(root: string, releaseDir: string, options: 
     if (info.version !== version) throw new Error(`Pack version ${info.version} does not match apack.json ${version}`);
     fs.writeFileSync(infoFile, JSON.stringify(info, null, 2) + '\n');
   } finally {
-    fs.rmSync(scratch, { recursive: true, force: true });
+    fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 5 });
   }
 
   const tag = `v${version}`;
@@ -384,7 +384,7 @@ export async function runRelease(root: string, options: ReleaseOptions): Promise
 
   const releaseDir = path.join(root, '.apack', 'release');
   const packRelease = async () => {
-    fs.rmSync(releaseDir, { recursive: true, force: true });
+    fs.rmSync(releaseDir, { recursive: true, force: true, maxRetries: 5 });
     const packed = await buildPackArchive(root, releaseDir);
     console.log(`\nPack: ${packed.file}\n  sha256: ${packed.sha256}\n  files: ${Object.keys(readPackIntegrity(path.join(root, '.apack', 'staged', manifest.id)).files).length}`);
     return packed;

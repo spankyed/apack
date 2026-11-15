@@ -164,7 +164,7 @@ export async function manageInstalledApp(options: AppCommandOptions, deps: AppCo
     if (action === 'uninstall') {
       if (!exists) { log(`${product} is not installed.`); return; }
       await quit(product, log, appPath);
-      fs.rmSync(appPath, { recursive: true });
+      fs.rmSync(appPath, { recursive: true, maxRetries: 5 });
       log(`Uninstalled ${product}. Your data and settings were kept.`);
       return;
     }
@@ -200,8 +200,8 @@ export async function manageInstalledApp(options: AppCommandOptions, deps: AppCo
     if (options.relaunch) await run('open', [appPath]);
   } finally {
     try {
-      if (staged) fs.rmSync(staged, { recursive: true, force: true });
-      if (staging) fs.rmSync(staging, { recursive: true, force: true });
+      if (staged) fs.rmSync(staged, { recursive: true, force: true, maxRetries: 5 });
+      if (staging) fs.rmSync(staging, { recursive: true, force: true, maxRetries: 5 });
     } finally {
       lock.release();
     }

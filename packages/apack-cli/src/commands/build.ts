@@ -79,7 +79,7 @@ export async function build(args: string[], root = findPackRoot(process.cwd())) 
     // Whatever failed and wherever, the pack is left with the build it had. Out here rather than beside each
     // `throw` because a phase that fails before the gates are even reached — an invalid manifest, a feature's
     // missing settings file — is the half that would be forgotten
-    fs.rmSync(staged, { recursive: true, force: true });
+    fs.rmSync(staged, { recursive: true, force: true, maxRetries: 5 });
     throw err;
   } finally {
     lock.release();
@@ -107,7 +107,7 @@ async function buildIntoStaging(args: string[], root: string) {
   // `outputDir` is where every phase below writes; `distDir` is what it becomes, once they have all succeeded
   const distDir = path.join(root, 'dist');
   const outputDir = buildStagingDir(root);
-  fs.rmSync(outputDir, { recursive: true, force: true });
+  fs.rmSync(outputDir, { recursive: true, force: true, maxRetries: 5 });
   fs.mkdirSync(outputDir, { recursive: true });
 
   // Dependencies' step build code, so this pack's flows validate against real step definitions,

@@ -142,7 +142,7 @@ export async function ensureBetaApp(options: BetaAppOptions): Promise<PackagedAp
     // `finally` below removes it.
     if (!fs.existsSync(executable)) replaceDir(extracted, appDir);
   } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
+    fs.rmSync(staging, { recursive: true, force: true, maxRetries: 5 });
   }
 
   return { version: release.version, executable };

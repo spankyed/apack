@@ -22,7 +22,7 @@ export async function clean(args: string[]) {
   for (const dir of CLEAN_DIRS) {
     const fullPath = path.join(root, dir);
     if (fs.existsSync(fullPath)) {
-      fs.rmSync(fullPath, { recursive: true, force: true });
+      fs.rmSync(fullPath, { recursive: true, force: true, maxRetries: 5 });
       console.log(`  removed ${dir}/`);
       removed++;
     }

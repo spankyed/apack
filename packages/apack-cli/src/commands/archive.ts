@@ -63,7 +63,7 @@ export async function buildPackArchive(root: string, outDir = path.join(root, '.
     fs.copyFileSync(archive.checksumFile, checksumFile);
     return { file, checksumFile, sha256: archive.sha256, integrity };
   } finally {
-    try { if (temporary) fs.rmSync(temporary, { recursive: true, force: true }); }
+    try { if (temporary) fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 5 }); }
     finally { lock.release(); }
   }
 }

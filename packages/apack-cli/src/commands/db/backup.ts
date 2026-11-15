@@ -62,7 +62,7 @@ export async function dbBackup(args: string[], io: DbIo): Promise<void> {
   } finally {
     try {
       if (reserved) fs.rmdirSync(destination);
-      if (stage) fs.rmSync(stage, { recursive: true, force: true });
+      if (stage) fs.rmSync(stage, { recursive: true, force: true, maxRetries: 5 });
     } finally { lock.release(); }
   }
 }

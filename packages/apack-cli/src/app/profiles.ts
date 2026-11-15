@@ -259,7 +259,7 @@ export function trimDataDir(dir: string, bytes: (dir: string) => number = dirByt
     const cache = path.join(dir, name);
     if (!fs.existsSync(cache)) continue;
     freed += bytes(cache);
-    fs.rmSync(cache, { recursive: true, force: true });
+    fs.rmSync(cache, { recursive: true, force: true, maxRetries: 5 });
   }
   return { dir, freed };
 }
@@ -417,7 +417,7 @@ export function removeProfile(dirs: CliDirs, dir: string): void {
   if (dataDirInUse(resolved)) {
     throw new Error(`An app is running on ${resolved}. Close it before removing the profile.`);
   }
-  fs.rmSync(resolved, { recursive: true, force: true });
+  fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 5 });
 }
 
 /**
