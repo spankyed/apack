@@ -1,7 +1,6 @@
 # Goal: apack-terminal v1 (apack-only, near-complete on Windows)
 
-**Status: the agent's work is done; the goal closes on the owner's three decisions below ("Owner decisions") and
-the pin's merge (R14).** Owners: the broker (`spankyed/apack-terminal`, including its `view/`
+**Status: the agent's work is done; the goal closes on the owner's three decisions below ("Owner decisions").** Owners: the broker (`spankyed/apack-terminal`, including its `view/`
 package) and the app's pin and docs (`spankyed/apack`). The detailed tasks are in
 [the v1 plan](../plans/apack-terminal-v1.md); this document holds scope, decisions, phases and completion.
 Deferred work is in [the public release plan](../plans/deferred/apack-terminal-public-release.md) and
@@ -89,11 +88,11 @@ machine, one heavy job at a time. P2 is measured against P1's baseline, so P1 co
 
 - **Broker:** the v1 commit is `50080ee` on `master` (PRs #28 and #31 to #35 since the last pin). CI on all three
   platforms, the mutation jobs and the fuzz jobs pass there (R13).
-- **App:** the pin moves to `50080ee` in apack PR #493 (R14), whose chain result is recorded on the pull request.
-- **Proven:** R1 to R5, R7 and R10 to R13, each row below with its evidence; R6 and R8 are met with the exceptions
+- **App:** the pin is `50080ee`, merged in apack PR #493 (`d4430715ca`) with its chain green (R14).
+- **Proven:** R1 to R5, R7 and R10 to R14, each row below with its evidence; R6 and R8 are met with the exceptions
   the owner is asked to accept. The plan's tasks T1 to T3, W1 to W5, P1,
   P2 and F1 have their results recorded in the plan.
-- **Left:** the owner's three decisions (below) and the pin's merge. Nothing else is open.
+- **Left:** the owner's three decisions (below). Nothing else is open.
 - **The VM** is idle; its daily shutdown at 07:00 UTC deallocates it, and deallocating sooner is the owner's
   (`az vm deallocate`, `windows-development-vm.md`).
 
@@ -130,7 +129,7 @@ The agent cannot make these. Each has what to decide and what follows from eithe
 | R11 Quiet-gap flush | Met: held output is sent after a 1 ms quiet gap (`e2069c7`), and a case states it. Back-to-back echo median 1.17 ms on a Linux runner and 1.97 ms on the developer's Mac (16.1 and 18.1 ms before); `seq 1 1000000` throughput ×1.02 on Linux and ×1.25 on macOS against the commit before the change on the same machine | Bench run 43714875496 (7e570e3 against 50080ee, alternated eight times on ubuntu-24.04 and macos-15), 2026-11-15; six alternated rounds on the Mac, 2026-11-15; plan P2 | none |
 | R12 v1 scope in README and design doc | Met: the README status table states the v1 scope, platforms, Windows status and crash behaviour, and design.md has a v1 scope section and its known limits (PR #31, merged as `39fb58c`) | PR #31; `docs/architecture/design.md`, README | none |
 | R13 Broker suite green on macOS, Linux, Windows | Met at the v1 commit `50080ee`: CI (the suite on all three platforms, the checks, the view), the mutation jobs and the fuzz jobs pass on `master` | Broker runs on `50080ee`, 2026-11-15: CI 43647602884 (its Windows job's first attempt failed installing nextest, a certificate revocation check offline on the runner, and passed on re-run), mutants on push, fuzz nightly | none |
-| R14 App chain green with the pin at the v1 commit | The pin moves to `50080ee` in apack PR #493 | The chain run recorded on PR #493 | Met when PR #493 merges with its chain green (D9) |
+| R14 App chain green with the pin at the v1 commit | Met: the pin is `50080ee` (apack PR #493, merged as `d4430715ca`), and `npm run chain -- --no-native` is green on the merged tree | The chain result recorded on PR #493, 2026-11-15 | none |
 
 ## Constraints
 
@@ -144,6 +143,5 @@ The agent cannot make these. Each has what to decide and what follows from eithe
 
 ## Outcome
 
-Not yet: every requirement the agent can meet is met, and closure waits on the owner's decisions and the pin's
-merge. No Windows feature is labelled beta: each Windows gap is either ported or gated with a reason the owner is
+Not yet: every requirement the agent can meet is met, and closure waits on the owner's three decisions. No Windows feature is labelled beta: each Windows gap is either ported or gated with a reason the owner is
 asked to accept, and none was a failed attempt.
