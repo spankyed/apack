@@ -1,6 +1,6 @@
 import { createApp, h, reactive, nextTick } from 'vue'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { ClaudeSettingsView } from '#features/code/common/native-settings.ts'
+import type { ClaudeSettingsRequest, ClaudeSettingsView } from '#features/code/common/native-settings.ts'
 import NativePermissionsPanel from '#features/threads/fe/chat/NativePermissionsPanel.vue'
 
 const mounted: (() => void)[] = []
@@ -11,15 +11,17 @@ function fixture(form = false) {
     revision: 'a'.repeat(64), rows: [], permissions: { title: 'Permissions', tabs: [{ value: 'Allow', label: 'Allow', selected: true }, { value: 'Ask', label: 'Ask', selected: false }], paragraphs: ['Rules are validated and saved by Claude Code.'], choices: form ? [] : [{ value: 'native-source-key', label: 'Read(release-notes.md)', disabled: false }], readOnly: false,
       ...(form ? { form: { value: '', placeholder: 'Enter permission rule', multiline: false, submitLabel: 'Continue' } } : { search: '', searchScope: 'c'.repeat(64) }) },
   } } })
-  const operate = vi.fn(), terminal = vi.fn()
-  const app = createApp({ render: () => h(NativePermissionsPanel, { state: state.value, onOperate: operate, onTerminal: terminal }) })
+  const operate = vi.fn(), terminal = vi.fn(), requests: ClaudeSettingsRequest[] = []; let holdReads = false
+  const onOperate = (request: ClaudeSettingsRequest) => { requests.push(request); operate(request.action); if (request.action.kind === 'read' && !holdReads) state.value = { ...state.value, requestId: request.requestId, status: 'ready' } }
+  const app = createApp({ render: () => h(NativePermissionsPanel, { state: state.value, onOperate, onTerminal: terminal }) })
   app.mount(root); const close = () => { app.unmount(); root.remove() }; mounted.push(close)
-  return { root, state, operate, terminal, close, buttons: () => [...root.querySelectorAll('button')] }
+  return { root, state, operate, terminal, close, requests, holdReads: () => { holdReads = true }, buttons: () => [...root.querySelectorAll('button')] }
 }
 
 it('sends the advertised original tab and rule keys with the current revision', async () => {
   const f = fixture(); await nextTick(); f.operate.mockClear()
   f.buttons().find(b => b.textContent === 'Ask')!.click()
+  f.state.value = { ...f.state.value, requestId: f.requests.at(-1)!.requestId, status: 'ready' }; await nextTick()
   f.buttons().find(b => b.textContent?.includes('Read(release-notes.md)'))!.click()
   expect(f.operate.mock.calls.map(([v]) => v)).toEqual([
     { kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'tab', value: 'Ask' } },
@@ -94,8 +96,8 @@ async function directoryFixture() {
   return f
 }
 type DirectoryFixture = Awaited<ReturnType<typeof directoryFixture>>
-async function directoryReply(f: DirectoryFixture, requestId: string, value: string, revision = '2'.repeat(64)) {
-  const next: ClaudeSettingsView = JSON.parse(JSON.stringify(f.state.value)); next.requestId = requestId; next.status = 'ready'; next.snapshot!.revision = 'b'.repeat(64)
+async function directoryReply(f: DirectoryFixture, _phase: string, value: string, revision = '2'.repeat(64)) {
+  const next: ClaudeSettingsView = JSON.parse(JSON.stringify(f.state.value)); next.requestId = f.requests.at(-1)!.requestId; next.status = 'ready'; next.snapshot!.revision = 'b'.repeat(64)
   next.snapshot!.permissions!.form!.value = value; next.snapshot!.permissions!.form!.live!.revision = revision
   f.state.value = next; await nextTick(); await nextTick()
 }
@@ -171,4 +173,20 @@ it('does not replay a queued add after a background read fails', async () => {
   f.state.value.status = 'error'; f.state.value.problem = 'Original read failed'; await nextTick()
   await directoryReply(f, 'refreshed', 'ref'); delete f.state.value.problem; await nextTick(); await nextTick()
   expect(input.value).toBe('unsent-reference'); expect(f.operate).not.toHaveBeenCalled()
+})
+
+it('serializes a read immediately and acknowledges only its own live edit request', async () => {
+  const f = await directoryFixture(); f.holdReads(); f.operate.mockClear()
+  f.buttons().find(button => button.textContent === 'Refresh')!.click(); await nextTick()
+  const read = f.requests.at(-1)!, input = typeDirectory(f, 'reference'); await nextTick()
+  expect(f.state.value.status).toBe('ready')
+  expect(f.operate.mock.calls.map(([action]) => action.kind)).toEqual(['read'])
+  f.state.value = { ...f.state.value, requestId: read.requestId, status: 'ready' }; await nextTick(); await nextTick()
+  expect(f.operate).toHaveBeenLastCalledWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'change', scope: 'd'.repeat(64), value: 'reference' } })
+  const edit = f.requests.at(-1)!
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })); await nextTick()
+  f.state.value = { ...f.state.value, requestId: crypto.randomUUID(), status: 'ready' }; await nextTick(); await nextTick()
+  expect(f.operate.mock.calls.filter(([action]) => action.command?.action === 'submit')).toHaveLength(0)
+  const next: ClaudeSettingsView = JSON.parse(JSON.stringify(f.state.value)); next.requestId = edit.requestId; next.snapshot!.permissions!.form!.value = '/native/reference'; next.snapshot!.permissions!.form!.live!.revision = '9'.repeat(64); f.state.value = next; await nextTick(); await nextTick()
+  expect(f.operate).toHaveBeenLastCalledWith({ kind: 'permissions', revision: 'a'.repeat(64), command: { action: 'submit', scope: 'd'.repeat(64), formRevision: '9'.repeat(64), value: '/native/reference' } })
 })

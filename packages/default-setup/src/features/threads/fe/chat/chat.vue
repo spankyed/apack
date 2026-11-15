@@ -654,9 +654,9 @@ function mainBackgroundReview(request: { panelId: string; revision: string; deci
   const mount = nativeUiMount.value, state = mainCommand.value
   if (mount && state?.panel?.id === request.panelId && state.backgroundReview?.review?.revision === request.revision) actor.send({ type: 'CLAUDE_UI_BACKGROUND_REVIEW', ...mount, revision: state.revision, panelId: request.panelId, sourceRevision: request.revision, decision: request.decision })
 }
-function mainSettings(action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation) {
+function mainSettings(request: import('#features/code/common/native-settings.ts').ClaudeSettingsRequest) {
   const mount = nativeUiMount.value, state = mainCommand.value
-  if (mount && state?.panel) actor.send({ type: 'CLAUDE_UI_SETTINGS', ...mount, revision: state.revision, panelId: state.panel.id, requestId: crypto.randomUUID(), action })
+  if (mount && state?.panel) actor.send({ type: 'CLAUDE_UI_SETTINGS', ...mount, revision: state.revision, panelId: state.panel.id, requestId: request.requestId, action: request.action })
 }
 function mainPanelResize(size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize) {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value

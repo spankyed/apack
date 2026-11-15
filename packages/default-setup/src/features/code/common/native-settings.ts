@@ -89,5 +89,6 @@ export const claudeSettingsOperation = z.discriminatedUnion('kind', [
   z.object({kind:z.literal('editor'),revision:z.string().regex(/^[a-f0-9]{64}$/),editorRevision:z.string().regex(/^[a-f0-9]{64}$/),command:claudeSettingsEditorCommand}).strict(),
 ])
 export type ClaudeSettingsOperation = z.infer<typeof claudeSettingsOperation>
+export type ClaudeSettingsRequest = { requestId: string; action: ClaudeSettingsOperation }
 
 export type ClaudeSettingsView = { requestId: string; status: 'pending' | 'ready' | 'error'; snapshot?: ClaudeSettingsSnapshot; problem?: string; savedKey?: string }

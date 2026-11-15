@@ -1,10 +1,10 @@
 import { computed, onBeforeUnmount, ref, watch, type Ref } from 'vue'
-import type { ClaudeSettingsOperation, ClaudeSettingsView } from '#features/code/common/native-settings.ts'
+import type { ClaudeSettingsRequest, ClaudeSettingsView } from '#features/code/common/native-settings.ts'
 import type { ClaudePermissionsOperation } from '#features/code/common/native-permissions.ts'
 
-type Flight = { action: ClaudePermissionsOperation; baseRequest?: string; scope: string; generation: number }
+type Flight = { action: ClaudePermissionsOperation; requestId: string; scope: string; generation: number }
 /** Coalesce one original directory draft; completion never doubles as permission submission. */
-export function useNativePermissionsForm(state: () => ClaudeSettingsView | undefined, emit: (action: ClaudeSettingsOperation) => void, draft: Ref<string>) {
+export function useNativePermissionsForm(state: () => ClaudeSettingsView | undefined, emit: (request: ClaudeSettingsRequest) => void, draft: Ref<string>, available: () => boolean) {
   const form = computed(() => state()?.snapshot?.permissions?.form), live = computed(() => form.value?.live)
   const flight = ref<Flight>(), edit = ref<string>(), completion = ref<Extract<ClaudePermissionsOperation, { action: 'complete' }>>(), submit = ref<string>(), cancel = ref(false), closing = ref(false), composing = ref(false), dirty = ref(false)
   let scope: string | undefined, generation = 0, scheduled = false, disposed = false
@@ -17,11 +17,12 @@ export function useNativePermissionsForm(state: () => ClaudeSettingsView | undef
   function send(action: ClaudePermissionsOperation) {
     const snapshot = state()?.snapshot
     if (!snapshot || !scope) return
-    flight.value = { action, scope, generation, baseRequest: state()?.requestId }
-    emit({ kind: 'permissions', revision: snapshot.revision, command: action })
+    const requestId = crypto.randomUUID()
+    flight.value = { action, scope, generation, requestId }
+    emit({ requestId, action: { kind: 'permissions', revision: snapshot.revision, command: action } })
   }
   function drain() {
-    if (disposed || flight.value || closing.value || composing.value || !live.value || live.value.id !== scope || state()?.status !== 'ready') return
+    if (disposed || !available() || flight.value || closing.value || composing.value || !live.value || live.value.id !== scope || state()?.status !== 'ready') return
     if (cancel.value) { cancel.value = false; closing.value = true; send({ action: 'cancel', scope }); return }
     if (edit.value !== undefined) { const value = edit.value; edit.value = undefined; if (value !== form.value!.value) { send({ action: 'change', scope: scope!, value }); return } dirty.value = false }
     if (completion.value) { const action = completion.value; completion.value = undefined; send(action); return }
@@ -49,10 +50,10 @@ export function useNativePermissionsForm(state: () => ClaudeSettingsView | undef
   watch([() => live.value?.id, () => form.value?.placeholder, () => state()?.snapshot?.permissions?.title], ([id]) => {
     clear(); dirty.value = false; scope = id; generation++; draft.value = form.value?.value ?? ''
   }, { immediate: true, flush: 'sync' })
-  watch([() => state()?.requestId, () => state()?.status, () => live.value?.revision], ([request, status]) => {
-    if (status === 'error' || state()?.problem) { flight.value = undefined; edit.value = undefined; completion.value = undefined; submit.value = undefined; cancel.value = false; closing.value = false; return }
+  watch([() => state()?.requestId, () => state()?.status, () => live.value?.revision, available], ([request, status]) => {
+    if ((status === 'error' || state()?.problem) && (!flight.value || request === flight.value.requestId)) { flight.value = undefined; edit.value = undefined; completion.value = undefined; submit.value = undefined; cancel.value = false; closing.value = false; return }
     const pending = flight.value
-    if (pending && request !== pending.baseRequest && status !== 'pending') {
+    if (pending && request === pending.requestId && status !== 'pending') {
       flight.value = undefined
       if (pending.scope === scope && pending.generation === generation && edit.value === undefined && !composing.value) { draft.value = form.value?.value ?? ''; dirty.value = false; if (submit.value !== undefined) submit.value = draft.value }
     }
