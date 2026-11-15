@@ -73,7 +73,7 @@ function nativePermissionsFrame(n,entry){
   if(!Array.isArray(result?.options)||result.options.length>2048)throw Error('Native Permissions rule list changed');
   pickers.push({props:ruleList,options:result.options,select:value=>ruleList.handleToolSelect(value,ruleList.tab)});
  }else nativeIdeWalk(controlsRoot,f=>{const p=f.memoizedProps;if(typeof f.type!=='function'||!p)return;
-  if(Array.isArray(p.options)&&typeof (p.onChange??p.onSelect)==='function'&&p.options.every(o=>typeof o?.value==='string'&&typeof o.label==='string')){pickers.push({props:p,options:p.options,select:p.onChange??p.onSelect});return false;}
+  if(Array.isArray(p.options)&&typeof (p.onChange??p.onSelect)==='function'&&p.options.every(o=>typeof o?.value==='string'&&Object.hasOwn(o,'label'))){pickers.push({props:p,options:p.options,select:p.onChange??p.onSelect});return false;}
   if(typeof p.value==='string'&&typeof p.onChange==='function'&&typeof p.onSubmit==='function'&&typeof p.placeholder==='string'){inputs.push(p);return false;}
  });
  if(pickers.length>1||inputs.length>1||pickers.length&&inputs.length)throw Error('Native Permissions controls are ambiguous');

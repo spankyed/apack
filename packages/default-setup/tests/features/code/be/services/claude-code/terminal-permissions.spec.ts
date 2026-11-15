@@ -265,3 +265,15 @@ it('refuses changed Auto mode producers and retired form scopes without a callba
   f.ownerType.hash = 'changed'; expect(f.read).toThrow(/producer changed/)
   expect(f.onChange).not.toHaveBeenCalled(); expect(f.onSubmit).not.toHaveBeenCalled()
 })
+
+it('projects native rich picker labels instead of silently dropping Auto mode options', async () => {
+  const f = fixture(), props = { options: [{ value: 'builtins:soft_deny', label: { props: { children: [{ props: { children: 'Soft deny' } }, ' Built-in rules', { props: { children: ' · in effect' } }] } }, description: 'Original source description' }], onChange: f.select }
+  f.root.child = { type: function NativePicker() {}, memoizedProps: props }
+  const frame = f.read(); expect(frame.snapshot.permissions.choices).toEqual([{ value: 'builtins:soft_deny', label: 'Soft deny Built-in rules · in effect', description: 'Original source description', disabled: false }])
+  await f.act(frame.snapshot.revision, { action: 'select', value: 'builtins:soft_deny' }); expect(f.select).toHaveBeenCalledExactlyOnceWith('builtins:soft_deny')
+})
+
+it('refuses opaque native picker atoms rather than hiding their choices', () => {
+  const f = fixture(); f.root.child = { type: function NativePicker() {}, memoizedProps: { options: [{ value: 'opaque', label: { props: { status: 'success' } } }], onChange: f.select } }
+  expect(f.read).toThrow(/not supported/); expect(f.select).not.toHaveBeenCalled()
+})
