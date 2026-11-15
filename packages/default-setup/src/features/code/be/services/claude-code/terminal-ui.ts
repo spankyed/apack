@@ -16,6 +16,7 @@ export function createClaudeTerminalUiTransport(options: {
   current(): { pid: number; sessionId: string } | undefined
 }) {
   let closed = false, sequence = 0
+  const requestsByValue = new Map<object, Set<ClientRequest>>(), heldRequests = new WeakSet<ClientRequest>()
   const pending = new Set<ClientRequest>(), listeners = new Set<(event: Record<string, unknown>) => void>()
   const hosts = new Map<string, ClaudePromptHost>(), hostRequests = new Map<string, { clientId: string; cancel(): void }>(), hostSequences = new Set<number>()
   let highestHostSequence = 0
@@ -65,8 +66,11 @@ export function createClaudeTerminalUiTransport(options: {
           })
         })
         pending.add(request)
+        let matching = requestsByValue.get(value)
+        if (!matching) { matching = new Set(); requestsByValue.set(value, matching) }
+        matching.add(request)
         request.setTimeout(5000, () => request.destroy(new Error('Native UI request timed out')))
-        request.on('error', reject); request.once('close', () => pending.delete(request))
+        request.on('error', reject); request.once('close', () => { pending.delete(request); matching.delete(request); if (!matching.size) requestsByValue.delete(value) })
         request.end(body)
       })
     },
@@ -74,6 +78,18 @@ export function createClaudeTerminalUiTransport(options: {
   }
   return {
     transport,
+    /** Only an admitted editor child may hold its exact original Permissions request. */
+    holdEditorRequest(value: Record<string, unknown> & {subtype: string}): () => void {
+      const matches = requestsByValue.get(value), request = matches?.size === 1 ? matches.values().next().value : undefined
+      if (closed || value.subtype !== 'apack_ui_settings' || value.operation !== 'permissions' || !request || request.destroyed || heldRequests.has(request)) throw new Error('Original native editor request is unavailable or ambiguous')
+      heldRequests.add(request); request.setTimeout(0)
+      let released = false
+      return () => {
+        if (released) return
+        released = true; heldRequests.delete(request)
+        if (!closed && !request.destroyed) request.setTimeout(5000)
+      }
+    },
     get hasPromptHosts() { return hosts.size > 0 },
     /** Reuse prompt validation/deadlines per ask; the outer sequence window supplies replay protection. */
     receiveHost(value: Record<string, unknown>, complete: (result: unknown, current: boolean) => void): boolean {

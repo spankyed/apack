@@ -93,3 +93,35 @@ it('keeps serving a long-running composer beyond the former per-manager request 
     }
   } finally { await f.close() }
 })
+
+it('keeps the original editor wait alive while an unrelated native RPC still times out', async () => {
+  let answerEditor: (() => void) | undefined, settled = false
+  const f = await fixture((body, response) => {
+    if ((body.request as Record<string, unknown>).operation === 'permissions') answerEditor = () => response.end(JSON.stringify({id: body.id, pid: body.ownerPid, sessionId: body.sessionId, result: {saved: true}}))
+  })
+  try {
+    const editor = {subtype: 'apack_ui_settings', operation: 'permissions'}, ordinary = {subtype: 'ui_render'}
+    const first = f.transport.request(editor).then(value => {settled = true; return value})
+    const second = expect(f.transport.request(ordinary)).rejects.toThrow('timed out')
+    await vi.waitFor(() => expect(answerEditor).toBeDefined())
+    const release = f.holdEditorRequest(editor)
+    expect(() => f.holdEditorRequest({...editor})).toThrow(/unavailable/)
+    expect(() => f.holdEditorRequest(ordinary)).toThrow(/unavailable/)
+    expect(() => f.holdEditorRequest(editor)).toThrow(/unavailable/)
+    await second
+    expect(settled).toBe(false)
+    release(); release(); answerEditor!()
+    await expect(first).resolves.toEqual({saved: true})
+    await vi.waitFor(() => expect(() => f.holdEditorRequest(editor)).toThrow(/unavailable/))
+  } finally {await f.close()}
+}, 10_000)
+it('rejects an ambiguous original request and never resurrects a disposed one', async () => {
+  const f = await fixture(() => {})
+  try {
+    const value = {subtype: 'apack_ui_settings', operation: 'permissions'}
+    const first = expect(f.transport.request(value)).rejects.toThrow(/closed/), second = expect(f.transport.request(value)).rejects.toThrow(/closed/)
+    expect(() => f.holdEditorRequest(value)).toThrow(/ambiguous/)
+    f.disposeTransport(); await Promise.all([first, second])
+    expect(() => f.holdEditorRequest(value)).toThrow(/unavailable/)
+  } finally {await f.close()}
+})
