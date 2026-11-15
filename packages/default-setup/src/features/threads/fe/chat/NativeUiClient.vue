@@ -92,15 +92,21 @@ function pointer(event:PointerEvent){
 }
 function release(){if(pointerId!==undefined&&captured?.hasPointerCapture?.(pointerId))captured.releasePointerCapture(pointerId);captured=undefined;pointerId=undefined}
 function cancel(){flush();if(pointerId!==undefined)send?.(props.node.id,{kind:'pointer',type:'up',...lastPointer});release()}
+/** Retiring a drawing drops queued movement; only its captured Client may receive the release. */
+function retirePointer(clientId=props.node.id){
+ pending=undefined;suppressPointerClick=false
+ if(frame!==undefined){cancelAnimationFrame(frame);frame=undefined}
+ if(pointerId!==undefined)send?.(clientId,{kind:'pointer',type:'up',...lastPointer})
+ release()
+}
+function retireClient(clientId=props.node.id){cancelComposition();retirePointer(clientId);textInput.value?.blur();region.value?.blur()}
 watch(visible,value=>{
  if(value){lastLayout='';void nextTick(schedule);return}
- cancelComposition();pending=undefined;suppressPointerClick=false
- if(pointerId!==undefined)send?.(props.node.id,{kind:'pointer',type:'up',...lastPointer})
- release();textInput.value?.blur();region.value?.blur()
- if(frame!==undefined){cancelAnimationFrame(frame);frame=undefined}
+ retireClient()
 },{flush:'sync'})
 onMounted(()=>{observer=typeof ResizeObserver==='undefined'?undefined:new ResizeObserver(schedule);if(region.value)observer?.observe(region.value);schedule()})
-watch(()=>props.node.id,()=>{cancelComposition();release();lastPointer={x:0,y:0};lastLayout='';void nextTick(schedule)})
+watch(()=>props.node.id,(_current,previous)=>{retireClient(previous);lastPointer={x:0,y:0};lastLayout='';void nextTick(schedule)},{flush:'sync'})
 watch(()=>props.node.keys,value=>{if(!value)cancelComposition()},{flush:'sync'})
-onBeforeUnmount(()=>{live=false;cancelComposition();cancel();observer?.disconnect();if(frame!==undefined)cancelAnimationFrame(frame)})
+watch(()=>props.node.pointer,value=>{if(!value){retirePointer();void nextTick(schedule)}},{flush:'sync'})
+onBeforeUnmount(()=>{live=false;retireClient();observer?.disconnect()})
 </script>

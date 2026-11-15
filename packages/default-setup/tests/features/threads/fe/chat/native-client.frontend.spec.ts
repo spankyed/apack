@@ -1,13 +1,13 @@
-import {createApp,h,nextTick,provide,ref,type App} from 'vue'
+import {createApp,h,nextTick,provide,ref,computed,type App} from 'vue'
 import NativeUiClient from '#features/threads/fe/chat/NativeUiClient.vue'
-import {claudeClientInput,claudeClientReturnFocus} from '#features/threads/fe/chat/native-client-input.ts'
+import {claudeClientInput,claudeClientReturnFocus,claudeClientVisible} from '#features/threads/fe/chat/native-client-input.ts'
 let app:App|undefined
 const pointer=(type:string,init:MouseEventInit&{pointerId:number})=>Object.assign(new MouseEvent(type,init),{pointerId:init.pointerId})
 const id='9b08a63e-78f6-46c5-9134-c6c64de30937'
 afterEach(()=>{app?.unmount();app=undefined;document.body.replaceChildren();vi.restoreAllMocks()})
-async function mount(returnFocus?:()=>void){
+async function mount(returnFocus?:()=>void,visibility=ref(true)){
  const send=vi.fn(),root=document.createElement('div'),node=ref({kind:'client' as const,id,keys:true,pointer:true,layout:{width:'50%',height:4,flexGrow:1},children:[]});document.body.append(root)
- app=createApp({setup(){provide(claudeClientInput,send);if(returnFocus)provide(claudeClientReturnFocus,returnFocus);return()=>h(NativeUiClient,{node:node.value},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick();await new Promise(resolve=>setTimeout(resolve,0))
+ app=createApp({setup(){provide(claudeClientInput,send);provide(claudeClientVisible,computed(()=>visibility.value));if(returnFocus)provide(claudeClientReturnFocus,returnFocus);return()=>h(NativeUiClient,{node:node.value},()=>[h('textarea',{'aria-label':'Nested editor'}),h('button',{type:'button'},'Client action')])}});app.mount(root);await nextTick();await new Promise(resolve=>setTimeout(resolve,0))
  return {root,send,node,region:root.querySelector<HTMLElement>('[data-native-client]')!}
 }
 it('routes native key names and modifiers while preserving composition, Escape and nested input',async()=>{
@@ -123,4 +123,29 @@ it('cancels empty composition and refuses a replaced Client final event on the r
  input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));input.value='stale preview';node.value.id='replacement';await nextTick()
  input.dispatchEvent(new CompositionEvent('compositionend',{data:'stale',bubbles:true}));input.value='stale';input.dispatchEvent(new InputEvent('input',{data:'stale',bubbles:true}))
  expect(send.mock.calls.filter(([,event])=>event.kind==='key')).toEqual([])
+})
+
+
+it.each(['replacement','pointer-withdrawal','collapse','unmount'] as const)('retires queued pointer work on %s without forwarding it to a replacement',async change=>{
+ const frames=new Map<number,FrameRequestCallback>();let sequence=0
+ vi.spyOn(globalThis,'requestAnimationFrame').mockImplementation(callback=>{frames.set(++sequence,callback);return sequence})
+ vi.spyOn(globalThis,'cancelAnimationFrame').mockImplementation(frame=>{frames.delete(frame)})
+ const draw=()=>{const callbacks=[...frames.values()];frames.clear();for(const callback of callbacks)callback(0)}
+ const visible=ref(true),{region,send,node}=await mount(undefined,visible);draw();send.mockClear()
+ const release=vi.fn();Object.defineProperties(region,{setPointerCapture:{configurable:true,value:vi.fn()},hasPointerCapture:{configurable:true,value:()=>true},releasePointerCapture:{configurable:true,value:release}})
+ region.dispatchEvent(pointer('pointerdown',{pointerId:7,clientX:8,clientY:20,button:0,buttons:1,bubbles:true}))
+ region.dispatchEvent(pointer('pointermove',{pointerId:7,clientX:24,clientY:60,button:0,buttons:1,bubbles:true}))
+ send.mockClear()
+ if(change==='replacement')node.value={...node.value,id:'replacement'}
+ else if(change==='pointer-withdrawal')node.value={...node.value,pointer:false}
+ else if(change==='collapse')visible.value=false
+ else{app!.unmount();app=undefined}
+ await nextTick();draw()
+ expect(send.mock.calls.filter(([,event])=>event.kind==='pointer')).toEqual([[id,expect.objectContaining({kind:'pointer',type:'up'})]])
+ expect(release).toHaveBeenCalledWith(7)
+ if(change==='replacement'){
+  send.mockClear();region.dispatchEvent(pointer('pointerdown',{pointerId:8,clientX:8,clientY:20,button:0,buttons:1,bubbles:true}))
+  region.dispatchEvent(pointer('pointerup',{pointerId:8,clientX:8,clientY:20,button:0,bubbles:true}))
+  expect(send.mock.calls.filter(([,event])=>event.kind==='pointer').map(([client,event])=>[client,event.type])).toEqual([['replacement','down'],['replacement','up']])
+ }
 })
