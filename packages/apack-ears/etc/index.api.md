@@ -246,6 +246,7 @@ export interface EarsAdmin {
 
 // @public
 export interface EarsDatabase {
+    acknowledgeRestore(): void;
     adoptReplacement(epoch: number): boolean;
     backup(target: string): void;
     // (undocumented)
@@ -266,12 +267,14 @@ export interface EarsDatabase {
     hearCommitsElsewhere(listener: () => void): void;
     // (undocumented)
     readonly isOpen: boolean;
+    readonly openReport: OpenReport;
     // (undocumented)
     readonly path: string;
     // (undocumented)
-    readonly readOnly: boolean;
+    read(reads: Uint8Array): Uint8Array;
     // (undocumented)
-    readSync(reads: Uint8Array): Uint8Array;
+    readonly readOnly: boolean;
+    rebuild(type?: string | null, index?: string | null): void;
     replacedElsewhere(): number | null;
     replaceWith(source: string): void;
     reset(): void;
@@ -540,6 +543,15 @@ export interface LinkOptions {
 export type ListElement<T> = [T] extends [readonly (infer U)[]] ? U : unknown;
 
 // @public
+export interface OpenReport {
+    notBorneOut: boolean;
+    restored: {
+        sequence: number | null;
+    } | null;
+    schemaChanges: SchemaChange[];
+}
+
+// @public
 export type OptionalField<S extends EntityShapes, E extends string> = [
 E
 ] extends [keyof S] ? Extract<{
@@ -734,15 +746,21 @@ export interface QueryStage {
     cycles?: number;
     edges?: number;
     error?: number;
+    held?: number;
     index?: string;
     iterations?: number;
     kept: number;
     ms: number;
     neighbours?: number;
     nodes?: number;
+    places?: number;
+    set?: string;
+    sorted?: string;
     stage: string;
     visited: number;
+    wants?: string;
     weight?: number;
+    within?: number;
 }
 
 // @public
