@@ -413,7 +413,7 @@ export interface TerminalService {
       images?: boolean;
       /**
        * Whether an image may be named rather than sent: as a file, or a shared memory object, on the
-       * machine the session runs on, which the terminal then reads (the Kitty graphics protocol's `t=f`
+       * machine the session runs on, which the broker then reads (the Kitty graphics protocol's `t=f`
        * and `t=s`). Only read where `images` is on.
        *
        * **For a session started to run one program its owner trusts, and not for a shell.** A program on
