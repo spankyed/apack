@@ -69,25 +69,24 @@ test("the code system's file watcher and a terminal's news reach the code surfac
   const changed = path.join(workDir, 'changed-outside.txt');
   fs.writeFileSync(changed, 'first');
   await sendToSystem(appPage, 'code', { type: 'SET_BASE_DIRECTORY', path: workDir, fromUserNavigation: false });
-  // The watcher reports changes to open files
+  let writes = 0;
+  // The watcher reports changes to open files, and a read opens one. The read is asked again on each check, since
+  // one asked before the base directory is set is refused, and it's answered to no one: a send made outside a
+  // handler names no sender, so its FILE_CONTENT has nowhere to go. The broadcast is what this test is about
   await expect.poll(async () => {
     await sendToSystem(appPage, 'code', { type: 'explorer.READ_FILE', path: changed });
-    return (await received(appPage, 'code', 'explorer.FILE_CONTENT')).some((event) => (event.data as { path?: string }).path === changed);
-  }, { intervals: [1000] }).toBe(true);
-  let writes = 0;
-  // Written again on each check: the watcher starts after the base directory changes
-  await expect.poll(async () => {
     fs.writeFileSync(changed, `write ${++writes}`);
     return (await received(appPage, 'code', 'explorer.FILE_CHANGED_EXTERNALLY'))
       .some((event) => JSON.stringify(event.data).includes('changed-outside.txt'));
   }, { intervals: [500] }).toBe(true);
 
+  // Every window hears a terminal made, by its id alone: what it is goes in `terminal.OPENED`, to the window that
+  // asked, and this send names none. So this test's terminal is the one made after it asked
+  const created = async () => (await received(appPage, 'code', 'terminal.CREATED')).map((event) => (event.data as { terminalId: string }).terminalId);
+  const before = new Set(await created());
   await sendToSystem(appPage, 'code', { type: 'terminal.CREATE_TERMINAL', title: 'e2e surface sends', cwd: workDir });
-  await expect.poll(async () => (await received(appPage, 'code', 'terminal.CREATED'))
-    .some((event) => (event.data as { title?: string }).title === 'e2e surface sends')).toBe(true);
-  const terminalId = (await received(appPage, 'code', 'terminal.CREATED'))
-    .map((event) => event.data as { id: string; title?: string })
-    .find((terminal) => terminal.title === 'e2e surface sends')!.id;
+  await expect.poll(async () => (await created()).filter((id) => !before.has(id))).toHaveLength(1);
+  const terminalId = (await created()).find((id) => !before.has(id))!;
   try {
     // What a program prints is drawn by the window from its session and is no event; what it *does* is.
     // This asks for text on the clipboard (OSC 52), which the system hands the surface as a claim

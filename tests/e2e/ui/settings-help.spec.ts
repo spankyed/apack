@@ -1,17 +1,21 @@
 import { test, expect } from '@apackdev/testing';
 
+// default-setup's `help/github-sign-in.md`, and a word in its body that no other bundled article's text holds
+const ARTICLE = 'How do I sign in to GitHub?';
+const BODY_ONLY_TERM = 'OAuth';
+
 test('Settings Help searches bundled articles and opens feature help', async ({ app, appPage }) => {
   await app.navigate('host/settings');
   await appPage.getByRole('button', { name: 'Help', exact: true }).click();
   const reader = appPage.getByTestId('help-reader');
-  await expect(reader.getByRole('button', { name: 'Why does the PR panel say my GitHub token is missing permissions?' })).toBeVisible();
-  await reader.getByRole('textbox', { name: 'Search help' }).fill('fine-grained');
-  await expect(reader.getByRole('button', { name: 'Why does the PR panel say my GitHub token is missing permissions?' })).toBeVisible();
+  await expect(reader.getByRole('button', { name: ARTICLE })).toBeVisible();
+  await reader.getByRole('textbox', { name: 'Search help' }).fill(BODY_ONLY_TERM);
+  await expect(reader.getByRole('button', { name: ARTICLE })).toBeVisible();
   await expect(reader.getByRole('button', { name: 'How do I enable TTS?' })).toHaveCount(0);
-  await reader.getByRole('button', { name: 'Why does the PR panel say my GitHub token is missing permissions?' }).click();
-  await expect(reader.getByTestId('help-article-title')).toContainText('GitHub token');
+  await reader.getByRole('button', { name: ARTICLE }).click();
+  await expect(reader.getByTestId('help-article-title')).toContainText('sign in to GitHub');
   await reader.getByRole('button', { name: 'Back', exact: true }).click();
-  await expect(reader.getByRole('textbox', { name: 'Search help' })).toHaveValue('fine-grained');
+  await expect(reader.getByRole('textbox', { name: 'Search help' })).toHaveValue(BODY_ONLY_TERM);
   await app.navigate('host/settings');
   await appPage.evaluate(() => (window as any).applicationState.system.get('host/settings').send({ type: 'FEATURE.SELECT', featureId: 'default-setup/code' }));
   await appPage.evaluate(() => (window as any).applicationState.system.get('host/settings').send({ type: 'TAB.SELECT', tab: 'features' }));

@@ -1,5 +1,6 @@
 // apack db opens a data dir's database offline (docs/goals/goal-apack-db-cli.md, Decision 2 A): with the app running
-// on it, a read works and warns that it may be stale, and replacing or resetting the data is refused
+// on it, a read works and warns that it may be stale, and a command that replaces what the app is using is refused.
+// A reset beside the app goes ahead and starts it over (db-writes-beside-app.spec.ts)
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as path from 'node:path';
@@ -18,7 +19,7 @@ async function apackDb(args: string[]) {
   }
 }
 
-test("reads the running app's data and refuses to reset it", async ({ electronApp, app, appPage }) => {
+test("reads the running app's data and refuses to clear its settings", async ({ electronApp, app, appPage }) => {
   // Connected: the API booted, hydrated and written the app's data
   await app.waitForState('running.connected');
   // Defaults are declarative; a Settings row exists only after an explicit override is saved.
@@ -35,10 +36,10 @@ test("reads the running app's data and refuses to reset it", async ({ electronAp
   // The app's settings and written flows
   expect(JSON.parse(read.stdout)).toEqual([true, true]);
 
-  const reset = await apackDb(['reset', '--force', '--data-dir', dataDir]);
-  expect(reset.status).toBe(1);
-  expect(reset.stderr).toMatch(/quit it first/);
+  const cleared = await apackDb(['clear-settings', '--force', '--data-dir', dataDir]);
+  expect(cleared.status, cleared.stderr).toBe(1);
+  expect(cleared.stderr).toMatch(/quit it first/);
 
-  const flows = await apackDb(['query', 'return query(EARS.Entity.Flow).count() > 0', '--data-dir', dataDir]);
-  expect(flows.stdout).toBe('true');
+  const settings = await apackDb(['query', 'return query(EARS.Entity.Settings).exists()', '--data-dir', dataDir]);
+  expect(settings.stdout, 'the settings are still there').toBe('true');
 });
