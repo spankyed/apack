@@ -332,10 +332,11 @@ know which shell is on the other end.
 - **Images after a restart.** A recording's keyframe is the sequences that redraw a screen, which carry
   no images, so a restored terminal comes back without the ones it was showing. Animations are not
   advanced.
-- **A session opened with `imageFiles` reads what it is named.** The core opens a path before it looks at
-  what it is, and opening a FIFO waits for a writer, so a program there that names one stops that session's
-  output being read until something opens the other end. Nothing checks a path first; apack-terminal's
-  `design.md` records it.
+- **A session opened with `imageFiles` reads what it is named, and waits on a disk that does.** The broker
+  opens a named source without waiting and refuses what is not a regular file, so a FIFO or a device stalls
+  nothing. But a file on a mount that has stopped answering holds that session's output until the read has
+  gone five seconds without the system answering it, and then the program is told no; the thread left in
+  that wait is one per session. apack-terminal's `design.md` records it.
 - **The hooks outside the suite, and on Windows.** `shell-marks.spec.ts` runs the bash (3.2) and zsh
   hooks in the real shells this machine has. fish's and PowerShell's were run by hand in containers
   ([evidence](../goals/evidence/terminal-view.md)) and are held in the suite only to their text, neither
