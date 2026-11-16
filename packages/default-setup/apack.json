@@ -763,6 +763,12 @@
             "showWorktrees": {
               "type": "boolean"
             },
+            "trailersRemovedOnCommit": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "cliPaths": {
               "type": "object",
               "additionalProperties": {
@@ -794,6 +800,7 @@
             "showStashes",
             "showCommits",
             "showWorktrees",
+            "trailersRemovedOnCommit",
             "cliPaths"
           ],
           "additionalProperties": false,
@@ -896,6 +903,7 @@
           "showStashes": true,
           "showCommits": true,
           "showWorktrees": false,
+          "trailersRemovedOnCommit": ["Co-authored-by"],
           "cliPaths": {}
         },
         "title": "Code",

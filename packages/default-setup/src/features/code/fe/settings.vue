@@ -208,6 +208,49 @@
             class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
           />
         </div>
+
+        <div data-trailers-removed-on-commit>
+          <label for="new-removed-trailer" class="text-sm font-medium text-neutral-200">
+            Trailers removed on commit
+          </label>
+          <p class="mt-1 text-xs text-neutral-600">
+            Lines at the end of a commit message with one of these keys, such as
+            <code class="text-neutral-400">Co-authored-by:</code>, are left out of what the panel commits or amends.
+            The panel lists them under the message.
+          </p>
+          <div class="mt-2 flex flex-wrap items-center gap-1.5">
+            <span
+              v-for="(key, index) in trailersRemovedOnCommit"
+              :key="key"
+              class="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs rounded bg-neutral-800 border border-neutral-700 text-neutral-300 font-mono"
+            >
+              {{ key }}
+              <button
+                @click="removeRemovedTrailer(index)"
+                class="p-0.5 text-neutral-500 hover:text-red-400 transition-colors"
+                :title="`Keep ${key} trailers`"
+              >
+                <X :size="12" />
+              </button>
+            </span>
+            <input
+              id="new-removed-trailer"
+              v-model="newRemovedTrailer"
+              placeholder="Signed-off-by"
+              @keydown.enter="addRemovedTrailer"
+              class="w-36 px-2 py-0.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-neutral-200 placeholder-neutral-600 font-mono focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              @click="addRemovedTrailer"
+              :disabled="!newRemovedTrailerKey"
+              class="p-1 transition-colors"
+              :class="newRemovedTrailerKey ? 'text-neutral-400 hover:text-white' : 'text-neutral-700 cursor-not-allowed'"
+              title="Remove trailers with this key on commit"
+            >
+              <Plus :size="14" />
+            </button>
+          </div>
+        </div>
       </div>
     </CollapsibleSection>
     </div>
@@ -762,6 +805,13 @@ const autoFetchIntervalSeconds = useSettingsDraft(() => props.settings?.autoFetc
 const showStashes = useSettingsDraft(() => props.settings?.showStashes ?? true)
 const showCommits = useSettingsDraft(() => props.settings?.showCommits ?? true)
 const showWorktrees = useSettingsDraft(() => props.settings?.showWorktrees ?? false)
+const trailersRemovedOnCommit = useSettingsDraft(() => props.settings?.trailersRemovedOnCommit ?? [])
+const newRemovedTrailer = ref('')
+/** A key typed for a trailer to remove, without the colon a trailer is written with, when it is one git can read */
+const newRemovedTrailerKey = computed(() => {
+  const key = newRemovedTrailer.value.trim().replace(/:$/, '')
+  return /^[A-Za-z0-9-]+$/.test(key) ? key : ''
+})
 
 // Terminal scripts
 const localScripts = useSettingsDraft(() => props.settings?.terminalScripts ?? [])
@@ -889,6 +939,28 @@ const saveShowWorktreesSetting = () => {
     path: ['showWorktrees'],
     value: showWorktrees.value
   })
+}
+
+const saveTrailersRemovedOnCommit = () => {
+  emit('update-setting', {
+    path: ['trailersRemovedOnCommit'],
+    value: [...trailersRemovedOnCommit.value]
+  })
+}
+
+/** Keys are matched whatever their case, as git reads them, so one already listed in another case is not added again */
+const addRemovedTrailer = () => {
+  const key = newRemovedTrailerKey.value
+  if (!key) return
+  newRemovedTrailer.value = ''
+  if (trailersRemovedOnCommit.value.some(listed => listed.toLowerCase() === key.toLowerCase())) return
+  trailersRemovedOnCommit.value.push(key)
+  saveTrailersRemovedOnCommit()
+}
+
+const removeRemovedTrailer = (index: number) => {
+  trailersRemovedOnCommit.value.splice(index, 1)
+  saveTrailersRemovedOnCommit()
 }
 
 const saveDefaultDirectory = () => {

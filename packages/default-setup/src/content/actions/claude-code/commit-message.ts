@@ -41,9 +41,6 @@ function postprocess(raw: string): string {
     msg = msg.slice(1, -1).trim();
   }
 
-  // Strip Co-Authored-By trailers
-  msg = msg.replace(/\n*Co-Authored-By:.*$/gim, '').trim();
-
   return msg;
 }
 

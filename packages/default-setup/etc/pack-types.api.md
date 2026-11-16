@@ -870,6 +870,15 @@ interface CommitFailure {
     };
 }
 
+/**
+ * One trailer at the end of a commit message — `Co-authored-by: A <a@example.com>` — as git reads it: its key as
+ * written, and its value with any lines that continue it unfolded into one
+ */
+interface CommitTrailer {
+    key: string;
+    value: string;
+}
+
 type Condition = {
     predicate?: Predicate;
     label?: string;
@@ -2134,6 +2143,17 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.GET_COMMIT_MESSAGE';
     hash: string;
+}
+/** The trailers git reads at the end of the message being written */
+ | {
+    type: 'commit.READ_TRAILERS';
+    message: string;
+}
+/** The message being written without one of its trailers, each line of it */
+ | {
+    type: 'commit.REMOVE_TRAILER';
+    message: string;
+    trailer: CommitTrailer;
 }
 /** Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it */
  | {
@@ -3512,6 +3532,22 @@ type OutgoingCommitEvents =
     data: {
         hash: string;
         message: string;
+    };
+}
+/** The trailers of the message asked about, which the answer names */
+ | {
+    type: 'commit.TRAILERS_READ';
+    data: {
+        message: string;
+        trailers: CommitTrailer[];
+    };
+}
+/** The message asked about without the trailer asked to remove: `without` is `message` when it had no such trailer */
+ | {
+    type: 'commit.TRAILER_REMOVED';
+    data: {
+        message: string;
+        without: string;
     };
 } | {
     type: 'commit.COMMIT_REWRITTEN';
@@ -6260,6 +6296,7 @@ declare namespace __FeatureSettings_Code {
         showStashes: boolean;
         showCommits: boolean;
         showWorktrees: boolean;
+        trailersRemovedOnCommit: string[];
         cliPaths: {
             [k: string]: string;
         };

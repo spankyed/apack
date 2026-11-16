@@ -10,7 +10,7 @@ import type { HistoryCommit, HistoryPage, RewriteStep } from 'apack-git'
 import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { storedSignIn } from './github.ts'
 import { isHostName } from '../services/sign-in.ts'
-import type { CommitFailure, GitProgress, OperationMove, RepositoryChange, RewriteAction, StartableOperation } from '../types.ts'
+import type { CommitFailure, CommitTrailer, GitProgress, OperationMove, RepositoryChange, RewriteAction, StartableOperation } from '../types.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
 
 const surfaceId = 'code' as const
@@ -25,12 +25,23 @@ export interface CodeCommitSystemContext {
   code?: AnyActorRef
 }
 
+/**
+ * A message as the panel commits it: without the trailers the code settings name (`trailersRemovedOnCommit`), by
+ * key whatever its case, as git reads a key
+ */
+function asCommitted(repository: AppGitRepository, message: string): Promise<string> {
+  const removed = new Set(featureSettings.forFeature('code').get().trailersRemovedOnCommit.map(key => key.toLowerCase()))
+  return removed.size === 0 ? Promise.resolve(message) : repository.withoutTrailers(message, ({ key }) => removed.has(key.toLowerCase()))
+}
+
 export type Event =
   | { type: 'commit.GET_GIT_STATUS' }
   | { type: 'commit.GET_GIT_DIFF'; path?: string; staged?: boolean }
   | { type: 'commit.STAGE_FILES'; paths: string[] }
   | { type: 'commit.UNSTAGE_FILES'; paths: string[] }
   | { type: 'commit.COMMIT'; message: string }
+  | { type: 'commit.READ_TRAILERS'; message: string }
+  | { type: 'commit.REMOVE_TRAILER'; message: string; trailer: CommitTrailer }
   | { type: 'commit.GET_CURRENT_BRANCH' }
   | { type: 'commit.REVERT_FILE'; path: string }
   | { type: 'commit.REVERT_FILES'; paths: string[] }
@@ -620,7 +631,7 @@ export const commitSystem = setup({
       const { message, evenIfPublished } = event as { type: 'commit.AMEND'; message?: string; evenIfPublished?: boolean }
       if (!requireGitRepository(context, reply)) return
       const repository = context.gitRepository
-      answerRewrite(repository.amend({ message, evenIfPublished }).then(() => {
+      answerRewrite((message === undefined ? Promise.resolve(undefined) : asCommitted(repository, message)).then(committed => repository.amend({ message: committed, evenIfPublished })).then(() => {
         answer(reply, { type: 'commit.AMENDED' })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
         return answerUndoable(repository, reply)
@@ -632,6 +643,24 @@ export const commitSystem = setup({
       if (!requireGitRepository(context, reply)) return
       context.gitRepository.commitMessage(hash).then(
         message => answer(reply, { type: 'commit.COMMIT_MESSAGE_RECEIVED', data: { hash, message } }),
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
+      )
+    },
+
+    readTrailers: ({ event, context, reply }) => {
+      const { message } = event as { type: 'commit.READ_TRAILERS'; message: string }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.trailersIn(message).then(
+        trailers => answer(reply, { type: 'commit.TRAILERS_READ', data: { message, trailers } }),
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
+      )
+    },
+
+    removeTrailer: ({ event, context, reply }) => {
+      const { message, trailer } = event as { type: 'commit.REMOVE_TRAILER'; message: string; trailer: CommitTrailer }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.withoutTrailers(message, ({ key, value }) => key === trailer.key && value === trailer.value).then(
+        without => answer(reply, { type: 'commit.TRAILER_REMOVED', data: { message, without } }),
         (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
       )
     },
@@ -694,14 +723,15 @@ export const commitSystem = setup({
           return
         }
 
-        return context.gitRepository!.commit(ev.message).then(() => {
+        const repository = context.gitRepository!
+        return asCommitted(repository, ev.message).then(message => repository.commit(message).then(() => {
           answer(reply, {
             type: 'commit.COMMIT_SUCCESS',
-            data: { message: ev.message }
+            data: { message }
           })
           self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-          return answerUndoable(context.gitRepository!, reply)
-        })
+          return answerUndoable(repository, reply)
+        }))
       }).catch((error: unknown) => {
         // What failed and why, with what can be done about it (a trust to give, a hook's output); two of git's
         // messages are said in words of the panel's
@@ -1410,6 +1440,8 @@ export const commitSystem = setup({
         'commit.GET_COMMIT_MESSAGE': {
           actions: 'commitMessage'
         },
+        'commit.READ_TRAILERS': { actions: 'readTrailers' },
+        'commit.REMOVE_TRAILER': { actions: 'removeTrailer' },
         'commit.REWRITE_COMMIT': {
           actions: 'rewriteCommit'
         },
