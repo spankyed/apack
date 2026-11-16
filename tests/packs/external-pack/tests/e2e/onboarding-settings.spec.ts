@@ -18,11 +18,11 @@ test('real onboarding writes app and feature preferences without a settings asse
     await expect(appPage.getByRole('heading', { name: 'Settings JSON' })).toBeVisible();
     await expect(appPage.locator('.monaco-editor')).toBeVisible();
   };
-  const readJson = () => appPage.evaluate(() => (window as any).monaco.editor.getEditors()
+  const readJson = () => appPage.evaluate(async () => (await (window as any).__loadMonaco()).editor.getEditors()
     .find((editor: any) => editor.getDomNode()?.getBoundingClientRect().width > 0
       && editor.getModel()?.getLanguageId() === 'json').getModel().getValue() as string);
   const saveJson = async (text: string) => {
-    await appPage.evaluate(text => (window as any).monaco.editor.getEditors()
+    await appPage.evaluate(async text => (await (window as any).__loadMonaco()).editor.getEditors()
       .find((editor: any) => editor.getDomNode()?.getBoundingClientRect().width > 0
         && editor.getModel()?.getLanguageId() === 'json').getModel().setValue(text), text);
     await appPage.getByRole('button', { name: 'Save', exact: true }).click();

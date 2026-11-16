@@ -30,8 +30,9 @@ test('pack pane and form failures leave other panes and host settings usable', a
     settings.send({ type: 'GENERAL_NAV.SELECT', item: 'json' });
   });
   await expect(appPage.getByRole('heading', { name: 'Settings JSON', exact: true })).toBeVisible();
-  const defaults = await appPage.evaluate(() => {
-    const model = (window as any).monaco.editor.getModels().find((model: any) => model.getLanguageId() === 'json');
+  await expect(appPage.locator('.monaco-editor')).toBeVisible();
+  const defaults = await appPage.evaluate(async () => {
+    const model = (await (window as any).__loadMonaco()).editor.getModels().find((model: any) => model.getLanguageId() === 'json');
     return JSON.parse(model.getValue()).features['e2e-fixture/faults'];
   });
   expect(defaults).toEqual({ message: 'Still here' });

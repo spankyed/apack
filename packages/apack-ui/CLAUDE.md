@@ -120,3 +120,12 @@ npm run packages:build && npm run packages:check   # dist, publint, attw (esm-on
 npm test -w @app/publish-checks       # the published-* dist checks
 npm test -w @apackdev/cli               # the fe-bundler-*ui specs
 ```
+
+## Monaco runtime ownership
+
+The host calls `provideMonacoRuntime(app, load)` from `components/monaco-config` before
+mounting Vue. Its asynchronous factory supplies the locally configured Monaco instance; loading
+is memoized per application and starts with the first `useMonacoRuntime()` consumer. The
+namespaced Vue injection key also works for a bundled UI copy. Components gate editor mounting
+on resolution and ignore late results after disposal. `initializeMonaco` takes the instance
+explicitly; configuration never reads a window global.

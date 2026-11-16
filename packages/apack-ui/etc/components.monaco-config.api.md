@@ -4,8 +4,10 @@
 
 ```ts
 
+import { App } from 'vue';
 import type { editor } from 'monaco-editor';
 import { monacoEditor } from 'monaco-editor';
+import { ShallowRef } from 'vue';
 
 // @public (undocumented)
 export function clearDslParamsType(monaco: Monaco, language?: Language): void;
@@ -47,7 +49,7 @@ export function getMonacoState(): {
 };
 
 // @public
-export function initializeMonaco(options?: InitializeMonacoOptions): void;
+export function initializeMonaco(monaco: Monaco, options?: InitializeMonacoOptions): void;
 
 // @public (undocumented)
 export interface InitializeMonacoOptions {
@@ -61,6 +63,9 @@ export interface InitializeMonacoOptions {
 
 // @public
 export function isDslFile(filePath: string): boolean;
+
+// @public
+export function provideMonacoRuntime(app: App, load: MonacoResource): void;
 
 // @public
 export function resetMonacoState(): void;
@@ -88,6 +93,12 @@ export function setupMonacoForFile(monaco: Monaco, options: SetupFileOptions): (
 export function updateDslParamsType(monaco: Monaco, _dslType: string, params: Record<string, {
     type: string;
 }>, language?: Language): void;
+
+// @public
+export function useMonacoRuntime(): {
+    monaco: ShallowRef<Monaco_2 | undefined>;
+    problem: ShallowRef<string | undefined>;
+};
 
 // (No @packageDocumentation comment for this package)
 

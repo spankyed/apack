@@ -6,7 +6,7 @@ import { createActor } from 'xstate';
 import type { Actor } from 'xstate';
 import App from './views/App.vue'
 import './style.css'
-import './boot/monaco';
+import { provideMonacoRuntime } from '@apackdev/ui/components/monaco-config';
 // highlight.js's stylesheet is global (.hljs, pre code.hljs), so the app owns it: imported from
 // @apackdev/ui it would ship again inside every build.bundleUi pack and restyle code everywhere.
 import 'highlight.js/styles/github-dark.css'
@@ -37,6 +37,8 @@ declare global {
     __sendToSystem?: (systemId: string, event: { type: string } & Record<string, unknown>) => void;
     /** Developer/test recording; the authenticated backend refuses production admission. */
     __performance: typeof windowPerformance;
+    /** Editor/worker inspection for browser tests; invoking this loads the runtime on demand. */
+    __loadMonaco: () => Promise<typeof import("monaco-editor")>;
     appVersion: string;
   }
 }
@@ -108,6 +110,9 @@ window.electronAPI?.protocolAction?.onAction(({ action, params }) => {
 });
 
 const app = createApp(App);
+const loadMonaco = async () => (await import('./boot/monaco')).monaco;
+provideMonacoRuntime(app, loadMonaco);
+window.__loadMonaco = loadMonaco;
 
 app.config.errorHandler = (err, _instance, info) => {
   handleVueError(err, info);

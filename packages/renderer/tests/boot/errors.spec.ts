@@ -59,7 +59,7 @@ describe('the renderer\'s global error handling', () => {
     installGlobalErrorHandling();
     const error = new Error('Canceled');
     error.name = 'Canceled';
-    error.stack = 'Canceled: Canceled\n at dispose (file:///app/assets/monaco-abc123.js:1:1)';
+    error.stack = 'Canceled: Canceled\n at dispose (file:///app/assets/monaco-vendor-abc123.js:1:1)';
     const event = new ErrorEvent('error', { error, message: error.message, cancelable: true });
     window.dispatchEvent(event);
     expect(event.defaultPrevented).toBe(true);
@@ -68,7 +68,7 @@ describe('the renderer\'s global error handling', () => {
     window.dispatchEvent(new ErrorEvent('error', { error, message: error.message, cancelable: true }));
     expect(write).toHaveBeenCalledWith(expect.objectContaining({ message: 'Canceled', fatal: true }));
     write.mockClear();
-    error.stack = 'Canceled: Canceled\n at app (file:///app/features/code.js:1:1)\n at dispatch (file:///app/assets/monaco-abc123.js:1:1)';
+    error.stack = 'Canceled: Canceled\n at app (file:///app/features/code.js:1:1)\n at dispatch (file:///app/assets/monaco-vendor-abc123.js:1:1)';
     window.dispatchEvent(new ErrorEvent('error', { error, message: error.message, cancelable: true }));
     expect(write).toHaveBeenCalledWith(expect.objectContaining({ message: 'Canceled', fatal: true }));
   });
@@ -77,7 +77,7 @@ describe('the renderer\'s global error handling', () => {
     installGlobalErrorHandling();
     const error = new Error('Canceled');
     error.name = 'Canceled';
-    error.stack = 'Canceled: Canceled\n at dispose (file:///app/assets/monaco-abc123.js:1:1)';
+    error.stack = 'Canceled: Canceled\n at dispose (file:///app/assets/monaco-vendor-abc123.js:1:1)';
     const event = new Event('unhandledrejection', { cancelable: true });
     Object.defineProperty(event, 'reason', { value: error });
     window.dispatchEvent(event);
@@ -91,7 +91,7 @@ describe('the renderer\'s global error handling', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     const error = new Error('Canceled');
     error.name = 'Canceled';
-    error.stack = 'Canceled: Canceled\n at dispose (file:///app/assets/monaco-abc123.js:1:1)';
+    error.stack = 'Canceled: Canceled\n at dispose (file:///app/assets/monaco-vendor-abc123.js:1:1)';
     handleVueError(error, 'beforeUnmount hook');
     expect(write).not.toHaveBeenCalled();
     expect(show).not.toHaveBeenCalled();

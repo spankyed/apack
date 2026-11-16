@@ -5,7 +5,8 @@ import { installMonacoErrorFilters } from './monaco-error-filters.ts'
 </script>
 
 <template>
-  <div class="w-full h-full unified-monaco-editor">
+  <p v-if="monacoProblem" role="status">The editor could not be loaded: {{ monacoProblem }}</p>
+  <div v-else-if="monacoRuntime" class="w-full h-full unified-monaco-editor">
     <!-- Diff Editor Mode -->
     <VueMonacoDiffEditor
       v-if="mode === 'diff'"
@@ -43,6 +44,7 @@ import {
   getLanguageFromPath,
   getDslTypeFromPath,
   getEditorPresetForFile,
+  useMonacoRuntime,
   initializeMonaco,
   setupMonacoForFile,
   createEditorActions,
@@ -91,6 +93,8 @@ export interface UnifiedMonacoEditorProps {
   preserveViewState?: boolean
 }
 
+const { monaco: monacoRuntime, problem: monacoProblem } = useMonacoRuntime()
+
 const props = withDefaults(defineProps<UnifiedMonacoEditorProps>(), {
   theme: 'vs-dark',
   mode: 'simple',
@@ -137,7 +141,7 @@ let releaseDslLibraries = () => {}
 const dslDeclarations = useDslDeclarations()
 const configureFile = (filePath = props.filePath || '') => {
   releaseDslLibraries(); releaseDslLibraries = () => {}
-  const monaco = (window as any).monaco
+  const monaco = monacoRuntime.value
   if (!monaco || !editorInstance.value) return
   const dslType = props.dslType ?? getDslTypeFromPath(filePath) ?? undefined
   const isDsl = props.functionBody || dslType !== undefined
@@ -189,7 +193,7 @@ const resolvedOptions = computed<editor.IStandaloneEditorConstructionOptions>(()
 const switchToFile = (filePath: string, content: string) => {
   if (!editorInstance.value || props.mode !== 'multi-file') return
   
-  const monaco = (window as any).monaco
+  const monaco = monacoRuntime.value
   if (!monaco) return
   
   configureFile(filePath)
@@ -212,7 +216,7 @@ const switchToFile = (filePath: string, content: string) => {
     const uri = monaco.Uri.file(filePath)
     // Check Monaco's global registry first — a model with this URI may still exist
     // from a previous component instance that didn't fully clean up
-    model = monaco.editor.getModel(uri)
+    model = monaco.editor.getModel(uri) ?? undefined
     if (model) {
       if (model.getValue() !== content) {
         model.setValue(content)
@@ -272,7 +276,7 @@ const handleUpdate = (value: string | undefined) => {
 
 const handleMount = (editor: editor.IStandaloneCodeEditor) => {
   editorInstance.value = editor
-  const monaco = (window as any).monaco
+  const monaco = monacoRuntime.value
   
   if (!monaco) return
   
@@ -282,7 +286,7 @@ const handleMount = (editor: editor.IStandaloneCodeEditor) => {
     enableSuggestions: isDslMode.value,
     setupLanguages: true
   }
-  initializeMonaco(initOptions)
+  initializeMonaco(monaco, initOptions)
   
   configureFile()
 
@@ -342,11 +346,11 @@ const handleMount = (editor: editor.IStandaloneCodeEditor) => {
 
 const handleDiffMount = (diffEditor: editor.IStandaloneDiffEditor) => {
   diffEditorInstance.value = diffEditor
-  const monaco = (window as any).monaco
+  const monaco = monacoRuntime.value
   if (!monaco) return
 
   // Initialize Monaco
-  initializeMonaco({
+  initializeMonaco(monaco, {
     enableTypeChecking: false,
     enableSuggestions: false
   })
@@ -483,7 +487,7 @@ watch([resolvedDslType, resolvedLanguage], () => configureFile())
 
 // Watch for dslParams changes
 watch(() => props.dslParams, (newParams) => {
-  const monaco = (window as any).monaco
+  const monaco = monacoRuntime.value
   if (!monaco || !isDslMode.value) return
   const dslType = props.dslType || (props.filePath ? getDslTypeFromPath(props.filePath) : null)
   if (!dslType || dslType === 'database') return
@@ -508,7 +512,7 @@ onBeforeUnmount(() => {
 onUnmounted(() => {
   // Clear dynamic params type if in DSL mode
   if (isDslMode.value) {
-    const monaco = (window as any).monaco
+    const monaco = monacoRuntime.value
     if (monaco) {
       clearDslParamsType(monaco)
     }

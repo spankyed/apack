@@ -45,8 +45,10 @@ import { compileSettingsCatalog } from '@apackdev/host/fe'
 import type * as Monaco from 'monaco-editor'
 import { registerSettingsEditorSchemas } from '@/views/settings/schema'
 import { ref, computed, onMounted, onScopeDispose, toRaw, watch } from 'vue'
+import { useMonacoRuntime } from '@apackdev/ui/components/monaco-config'
 import SimpleMonacoEditor from '@apackdev/ui/components/SimpleMonacoEditor'
 
+const { monaco: monacoRuntime } = useMonacoRuntime()
 const snapshot = useWindowSettingsSnapshot()
 const settings = computed(() => snapshot.value?.values)
 const catalog = computed(() => snapshot.value && toRaw(snapshot.value.catalog))
@@ -83,11 +85,13 @@ watch(settings, () => {
   if (!isDirty.value) loadSettings()
 })
 
+watch(monacoRuntime, () => refreshSchemas())
+
 function refreshSchemas() {
   removeSchemas?.()
   removeSchemas = undefined
   const model = editor?.getModel()
-  const monaco = (window as Window & { monaco?: typeof Monaco }).monaco
+  const monaco = monacoRuntime.value
   if (model && monaco && catalog.value) {
     removeSchemas = registerSettingsEditorSchemas(monaco.json.jsonDefaults, catalog.value, model.uri.toString())
   }

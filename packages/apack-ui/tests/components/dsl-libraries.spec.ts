@@ -65,7 +65,7 @@ it('ignores empty prefixes, selects the unique longest prefix, and refuses ambig
 
 it('loads explicit DSL libraries for an untitled file through the public setup API and releases them', () => {
   const f = fixture();
-  vi.stubGlobal('window', { monaco: f.monaco }); initializeMonaco({ setupLanguages: false });
+  initializeMonaco(f.monaco, { setupLanguages: false });
   const release = setupMonacoForFile(f.monaco, { filePath: 'untitled', dslType: 'memo' });
   try { expect(f.completions()).toContain('before'); }
   finally { release(); }
