@@ -20,6 +20,8 @@
   "scripts": {
     "preinstall": "[ \"$NODE_ENV\" = 'production' ] && echo '\u26a0\ufe0f  NODE_ENV=production \u2014 devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true",
     "postinstall": "node scripts/postinstall.mjs",
+    "fetch:terminal-broker": "node scripts/fetch-terminal-broker.mjs",
+    "pin:apack-terminal": "node scripts/pin-apack-terminal.mjs",
     "link:elmdb": "node scripts/link-elmdb.mjs",
     "link:apack-terminal": "node scripts/link-apack-terminal.mjs",
     "link:apack-git": "node scripts/link-apack-git.mjs",

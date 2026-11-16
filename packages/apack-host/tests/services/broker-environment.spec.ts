@@ -113,19 +113,14 @@ describe('where the broker listens', () => {
 });
 
 /**
- * **Where the binary comes from, which is the package and not a path.** It was a path derived from
- * `SHIPPED_PACKS_DIR` into the vendored checkout's `target/debug`, and it was wrong about the one thing a
- * path has to get right: `cargo` writes `apack-terminal.exe` on Windows, so `existsSync` answered false and
- * the caller got a refusal telling it to run `cargo build` in a checkout where `cargo build` had just
- * succeeded. The terminal never started on Windows at all, and from a Mac every case passed. A package that
- * answers for its own binary cannot be wrong about its own name, which is why there are two cases here
- * rather than three about naming.
+ * **Where the binary comes from, which is the package and not a path.** A package that answers for its own
+ * binary cannot be wrong about its name, which carries `.exe` on Windows, nor about which commit's build it is,
+ * since `@app/terminal-broker` answers the path of the pinned commit's alone.
  */
 describe('where the broker binary comes from', () => {
-  it('is whatever the apack-terminal package ships', () => {
+  it('is the pinned build @app/terminal-broker installed', () => {
     const shipped = packagedBrokerBinary();
-    expect(shipped, '`cargo xtask package` has not staged a binary in the apack-terminal checkout')
-      .toBeTruthy();
+    expect(shipped, 'the pinned broker is not installed: `npm run fetch:terminal-broker`').toBeTruthy();
 
     expect(findBrokerBinary()).toBe(shipped);
   });

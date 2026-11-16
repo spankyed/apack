@@ -125,6 +125,20 @@ describe("the packaged app's file list", () => {
   });
 
   /**
+   * The terminal broker the app runs, as a packaged app resolves it: through `node_modules/@app/terminal-broker`,
+   * whose resolver is in `src/` — which `packages/*` + `/src/**` keeps out of the app's own copy of `packages/` —
+   * and whose installed build is in `bin/`. The population is the package as installed here, so a build the
+   * install has not fetched is not asked about, and the resolver always is.
+   */
+  it('carries the terminal broker where the packaged app resolves it', () => {
+    const installed = population('the terminal broker package', [...filesUnder('packages/terminal-broker/src'), ...filesUnder('packages/terminal-broker/bin')])
+      .map((file) => path.join('node_modules/@app/terminal-broker', path.relative('packages/terminal-broker', file)));
+    expect(installed.filter((file) => !ships(file))).toEqual([]);
+    // And it is `node_modules/**` that carries them, so the case can fail
+    expect(installed.filter((file) => shipsUnder(without('node_modules/**/*'), file))).toEqual([]);
+  });
+
+  /**
    * A pack's working directory, which `packages/**` would take — dotted directories included, since
    * electron-builder reads no `.gitignore`. `apack pack build` keeps its dependency cache, its staging and
    * its record of what each bundling phase read there, and the app loads none of it: measured, the built-in

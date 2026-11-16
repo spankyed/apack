@@ -119,30 +119,30 @@ export function brokerBinary(): string {
   const found = findBrokerBinary();
   if (found) return found;
   throw new Error(
-    'No terminal broker: run `cargo xtask package` in the apack-terminal checkout to stage its binary into '
-    + 'the apack-terminal package (`npm run link:apack-terminal` makes the link), or set '
-    + 'APACK_TERMINAL_BINARY to a build of your own',
+    'No terminal broker: the release build `packages/terminal-broker/src/pin.json` pins is not installed for this '
+    + 'platform. Run `npm run fetch:terminal-broker` (the install runs it), or set APACK_TERMINAL_BINARY to a build '
+    + 'of your own',
   );
 }
 
 /**
- * The broker the `apack-terminal` package ships, or absence.
+ * The pinned broker, as `@app/terminal-broker` installed it, or absence.
  *
- * **Asked of the package rather than derived from a path**, because the package is what knows: the binary's
- * name differs by platform — `cargo` writes `apack-terminal.exe` on Windows — and it sits beside that
- * package's own file wherever Node resolved it from. A packaged app therefore finds it the way it finds
- * every other dependency, with no rule of its own, which is the arrangement elmdb's binding has here.
+ * **A release build of the commit the app pins, verified against its hash at install**, not a build of anything
+ * here: the package answers the path of the pinned commit's files for this platform, so a broker of another
+ * commit is never what this finds (`packages/terminal-broker/src/index.js`).
  *
  * Resolved from `import.meta.url` rather than from a path of ours: this module is bundled into the API's
  * build, so its directory at runtime is `packages/api/dist`, and Node's lookup walks up from there to the
- * app's `node_modules` — the same place the checkout's hoisted copy is.
+ * app's `node_modules`, in a checkout and in a packaged app alike.
  *
  * A package that isn't installed is an absence, and anything else it throws is a real failure worth
  * seeing rather than one more silent `undefined`.
  */
 export function packagedBrokerBinary(): string | undefined {
   try {
-    const shipping = createRequire(import.meta.url)('apack-terminal') as typeof import('apack-terminal');
+    // Plain JavaScript with no declarations, so the one function this reaches is said here
+    const shipping = createRequire(import.meta.url)('@app/terminal-broker') as { brokerBinary(): string | undefined };
     return shipping.brokerBinary();
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') return undefined;

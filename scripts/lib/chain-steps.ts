@@ -395,6 +395,22 @@ const VENDOR_PINS = fs.existsSync(path.join(REPO_ROOT, 'vendor'))
 const ROOT = ['package-lock.json', ...VENDOR_PINS];
 
 /**
+ * The terminal broker the app runs: `@app/terminal-broker`'s resolver and the pin naming the release build its
+ * install fetched. **An input of every step that starts the broker** — the host pool's terminal suites and every
+ * step that launches the app — since the host loads it at run time rather than importing it, which leaves it out
+ * of the dependency edges the rest of a key is derived from (`RUNTIME_ONLY_DEPS`). The fetched build itself is
+ * not an input: its path carries the pinned commit and its bytes were checked against the pin's hashes, so the
+ * pin stands for it as the lockfile stands for `node_modules`.
+ */
+const TERMINAL_BROKER = ['packages/terminal-broker/package.json', 'packages/terminal-broker/src'];
+
+/**
+ * Where the install puts that build. A step reading every source tree reads around it, for the reason above: the
+ * pin in `TERMINAL_BROKER` stands for it, and the install, not any chain step, writes it.
+ */
+const TERMINAL_BROKER_INSTALL = 'packages/terminal-broker/bin';
+
+/**
  * The root vitest config a run of one half uses — which projects it pools is an input to every suite in it.
  *
  * `CONFIG_BY_HALF` is the one record of which file runs which half, and the one `hasHalf` and so
@@ -695,7 +711,8 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   'apack-testing': { packages: true },
   // `@apackdev/testing`'s bundle; and `sdk-bridge-drift.spec.ts` reads `dist/runtime/index.cjs` when it is
   // there and skips when it is not, so the tree decides whether that check checks anything
-  'apack-host': { packages: true, pack: true },
+  // and its terminal suites start the broker it loads at run time (`TERMINAL_BROKER`)
+  'apack-host': { packages: true, pack: true, inputs: TERMINAL_BROKER },
   // Boots the app runtime, which loads the built-in pack: `dist/runtime/index.cjs` and `settings.content.json`.
   // The runtime also imports root package metadata for the app version.
   api: { pack: true, inputs: ['package.json'] },
@@ -804,7 +821,7 @@ function inputsForSuites(suites: readonly UnitSuite[], half: Half): Pick<ChainSt
   return {
     inputs: [...new Set(suites.flatMap((suite) => suiteInputs(suite, half)))].sort(),
     ...(suites.some((suite) => SUITE_READS[suite.dir]?.repo)
-      ? { excludes: [...(half !== 'fast' ? [] : FIXTURE_OUTPUTS), ...FIXTURE_TEST_OUTPUT] }
+      ? { excludes: [...(half !== 'fast' ? [] : FIXTURE_OUTPUTS), ...FIXTURE_TEST_OUTPUT, TERMINAL_BROKER_INSTALL] }
       : {}),
   };
 }
@@ -875,8 +892,9 @@ const TYPECHECK_STEPS: readonly ChainStep[] = TYPECHECK_LEGS
     inputs: legInputs(leg),
     // A leg reading every source tree reads around the fixture packs' build output for the same reason
     // the single step did: `tsc -p tests` compiles `e2e/**` only and `check:specifiers` filters
-    // `__generated__` itself, so hashing it would tie the leg to a build it does not depend on.
-    ...(scopeOf(leg) === 'repo' ? { excludes: [...FIXTURE_OUTPUTS, ...FIXTURE_TEST_OUTPUT] } : {}),
+    // `__generated__` itself, so hashing it would tie the leg to a build it does not depend on. The installed
+    // terminal broker likewise (`TERMINAL_BROKER_INSTALL`).
+    ...(scopeOf(leg) === 'repo' ? { excludes: [...FIXTURE_OUTPUTS, ...FIXTURE_TEST_OUTPUT, TERMINAL_BROKER_INSTALL] } : {}),
   }));
 
 /**
@@ -1057,7 +1075,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // built bundle, which launches Electron, finds the window and bypasses onboarding. Reached by package
     // name rather than by path, so nothing that reads a step's text can see the edge
     keepsOnFailure: FIXTURE_TEST_OUTPUT,
-    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-app.sh',
+    inputs: [...ROOT, ...BOUNDED_RUNNER, ...TERMINAL_BROKER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-app.sh',
       'tests/acceptance/external-pack/test-default-pack-fork.ts', 'tests/acceptance/external-pack/prepare-default-pack-fork.ts', DEFAULT_FORK_OUTPUT, 'tests/acceptance/external-pack/support.sh', 'playwright.config.ts', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   // Never cached: it drives real Electron with real timing and is the likeliest step to be flaky, and a
   // flaky pass cached green hides an intermittent failure indefinitely. 28s is cheap enough to always pay.
@@ -1086,7 +1104,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // account of why an app did not start or did not close. Playwright clears the directory on the way in,
     // so the next run would take it
     evidence: ['.apack/tests/results'],
-    inputs: [...ROOT, 'tests/e2e/smoke', 'playwright.config.ts',
+    inputs: [...ROOT, ...TERMINAL_BROKER, 'tests/e2e/smoke', 'playwright.config.ts',
       ...SOURCE_RUNNER, ...APP_ENTRY, ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   // The rest of the E2E suite. **Opt-in, not a gate** — `npm run chain -- --e2e`.
   //
@@ -1102,7 +1120,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // from one of them — and `packages:check` packs a tarball inside those trees and recreates them, which a
     // reader must not observe. Declaring them is what makes that a mutex instead of a scheduling accident;
     // the step is never cached, so it buys the ordering and costs no precision
-    inputs: [...ROOT, 'tests/e2e', 'tests/_support', 'playwright.config.ts', ...SOURCE_RUNNER, ...APP_ENTRY,
+    inputs: [...ROOT, ...TERMINAL_BROKER, 'tests/e2e', 'tests/_support', 'playwright.config.ts', ...SOURCE_RUNNER, ...APP_ENTRY,
       ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   /**
    * Two steps, split at the app boundary: only the last of the check's nine phases launches one.
@@ -1121,6 +1139,6 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh',
       'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   { name: 'test:packaged-authoring:app', budget: 'suite', expensive: true,
-    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
+    inputs: [...ROOT, ...BOUNDED_RUNNER, ...TERMINAL_BROKER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
       'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
 ];

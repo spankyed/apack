@@ -54,6 +54,7 @@
     "./views": "./src/views/index.ts"
   },
   "dependencies": {
+    "@app/terminal-broker": "*",
     "@ai-sdk/anthropic": "^4.0.53",
     "@ai-sdk/cohere": "^4.0.41",
     "@ai-sdk/google": "^4.0.69",
