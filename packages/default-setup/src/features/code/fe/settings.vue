@@ -326,8 +326,9 @@
               Blink the cursor
             </label>
             <p class="mt-1 text-xs text-neutral-600">
-              Default blinks, unless a program has chosen otherwise. On or off holds for every program; Program decides
-              follows what the program asked for
+              Left to programs, the cursor blinks until one says otherwise. Blinking or steady is yours to say: a
+              program that only shows the cursor again no longer changes it, and one that asks for a cursor of its
+              own is still given it
             </p>
           </div>
           <select
@@ -336,10 +337,9 @@
             @change="emit('update-setting', { path: ['cursorBlink'], value: cursorBlink })"
             class="bg-neutral-800 border border-neutral-600 rounded px-2 py-1 text-sm text-neutral-200 focus:outline-none focus:border-blue-600"
           >
-            <option value="default">Default (blinks)</option>
-            <option value="on">On</option>
-            <option value="off">Off</option>
-            <option value="program">Program decides</option>
+            <option value="program">Left to programs</option>
+            <option value="on">Blinking</option>
+            <option value="off">Steady</option>
           </select>
         </div>
 
@@ -745,7 +745,7 @@ const terminalClipboardWrite = useSettingsDraft(() => props.settings?.terminalCl
 const copyOnSelect = useSettingsDraft(() => props.settings?.copyOnSelect ?? false)
 const cursorStyle = useSettingsDraft(() => props.settings?.cursorStyle ?? 'bar')
 const cursorInactiveStyle = useSettingsDraft(() => props.settings?.cursorInactiveStyle ?? 'hollow')
-const cursorBlink = useSettingsDraft(() => props.settings?.cursorBlink ?? 'default')
+const cursorBlink = useSettingsDraft(() => props.settings?.cursorBlink ?? 'program')
 const linkPreview = useSettingsDraft(() => props.settings?.linkPreview ?? 'osc8')
 const bellFlash = useSettingsDraft(() => props.settings?.bellFlash ?? true)
 const bellNotification = useSettingsDraft(() => props.settings?.bellNotification ?? false)

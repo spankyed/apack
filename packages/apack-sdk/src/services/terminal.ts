@@ -158,8 +158,9 @@ export interface TerminalColors {
 export type TerminalCursorStyle = 'block' | 'bar' | 'underline';
 
 /**
- * Whether a session's cursor blinks when no program has chosen (`on` and `program` blink by default; `off` is steady).
- * `on` and `off` also override what a program asks in a window; `program` leaves it to the program.
+ * Whether a session's cursor blinks when no program has asked for a cursor (`on` and `program` blink; `off` is
+ * steady), and whether a program's DEC mode 12 changes that: with `on` or `off` it does not, and with `program` it
+ * does. A program that asks for a cursor (DECSCUSR) is given its blink whichever this is.
  */
 export type TerminalCursorBlink = 'on' | 'off' | 'program';
 

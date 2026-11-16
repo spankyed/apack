@@ -6231,7 +6231,7 @@ declare namespace __FeatureSettings_Code {
         copyOnSelect: boolean;
         cursorStyle?: "bar" | "block" | "underline";
         cursorInactiveStyle?: "bar" | "block" | "hollow" | "underline";
-        cursorBlink?: "default" | "off" | "on" | "program";
+        cursorBlink?: "off" | "on" | "program";
         linkPreview?: "all" | "off" | "osc8";
         bellFlash: boolean;
         bellNotification: boolean;
