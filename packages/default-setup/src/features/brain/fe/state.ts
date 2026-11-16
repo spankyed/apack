@@ -403,6 +403,10 @@ const brainState = setup({
     // Where the surface asks for what it starts from: the shell hands it this in a delivery naming the surface
     SURFACE_STARTED: { actions: 'requestSurfaceData' },
     BRAIN_STATE: { actions: 'setBrainState' },
+    // Inspect mode is the feature's rather than a run's, and a panel beside another surface shows by it, so a toggle
+    // and what it became are taken before this surface's first tree as after it
+    TOGGLE_INSPECT: { actions: 'toggleInspect' },
+    INSPECT_TOGGLED: { actions: 'setInspectEnabled' },
   },
   states: {
     loading: {
@@ -466,12 +470,6 @@ const brainState = setup({
         },
         TOGGLE_LEFT_PANEL: {
           actions: 'toggleLeftPanel'
-        },
-        TOGGLE_INSPECT: {
-          actions: 'toggleInspect'
-        },
-        INSPECT_TOGGLED: {
-          actions: 'setInspectEnabled'
         },
         TOGGLE_ANIMATIONS: {
           actions: 'toggleAnimations'
