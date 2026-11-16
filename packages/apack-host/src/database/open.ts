@@ -17,31 +17,6 @@ const logger = createLogger('run-history');
 const databaseLogger = createLogger('database');
 
 /**
- * The elmdb whose derived data a database's was last built by, as far as apack's databases need to know. elmdb's format
- * 1 changed its derived data in place (elmdb's `docs/architecture/format.md`, Versions), which an elmdb built after such
- * a change may misread rather than refuse, and nothing in a database says which elmdb wrote it: so apack writes this
- * checkpoint once a writable open has rebuilt every index, and an open that finds another rebuilds them. Change it when
- * `vendor/elmdb.rev` moves past another such change.
- */
-const DERIVED_DATA_OF = 'elmdb 2029f9c';
-const DERIVED_DATA_CHECKPOINT = 'apack:derived-data-of';
-
-/** Rebuilds every index of `database` unless its checkpoint says `DERIVED_DATA_OF` built them, a new database's included */
-function rebuildOnce(database: EarsDatabase): void {
-  const built = database.checkpoint(DERIVED_DATA_CHECKPOINT);
-  if (built && new TextDecoder().decode(built) === DERIVED_DATA_OF) return;
-  database.rebuild();
-  const unit = database.begin();
-  try {
-    unit.setCheckpoint(DERIVED_DATA_CHECKPOINT, new TextEncoder().encode(DERIVED_DATA_OF));
-    unit.commit();
-  } catch (error) {
-    if (unit.isOpen) unit.abort();
-    throw error;
-  }
-}
-
-/**
  * Opens the elmdb database `options` name, as every open here does, saying what the open found: that a power loss or a
  * failed sync took it back to its last synced commit, the commits after it gone, and that the record of its last sync
  * named another file than the one opened. elmdb reports a restore at every open until it is acknowledged, which a
@@ -49,9 +24,6 @@ function rebuildOnce(database: EarsDatabase): void {
  */
 function openDatabase(options: DatabaseOptions): EarsDatabase {
   const database = openElmdb(options);
-  if (!options.readOnly) {
-    try { rebuildOnce(database); } catch (error) { database.close(); throw error; }
-  }
   const { restored, notBorneOut } = database.openReport;
   if (restored) {
     const at = restored.sequence === null ? 'its last synced commit' : `its last synced commit, sequence ${restored.sequence}`;
