@@ -1,6 +1,5 @@
-// What the host's opens of an elmdb database do beyond opening it: rebuild its indexes once, where an older elmdb may
-// have built them, and say what the open found restored. A restore needs a power loss to make, so the database's
-// report is stood in for; everything else is a real database on disk
+// What the host's opens of an elmdb database say beyond opening it: what the open found restored. A restore needs a
+// power loss to make, so the database's report is stood in for; everything else is a real database on disk
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -12,7 +11,6 @@ const fake = vi.hoisted(() => ({
   report: undefined as Partial<OpenReport> | undefined,
   acknowledged: 0,
   acknowledgeFails: false,
-  rebuilt: 0,
   warnings: [] as string[],
 }));
 
@@ -29,7 +27,6 @@ vi.mock('@apackdev/ears/lmdb', async (importOriginal) => {
             fake.acknowledged++;
           };
         }
-        if (key === 'rebuild') return (...args: Parameters<EarsDatabase['rebuild']>) => { fake.rebuilt++; target.rebuild(...args); };
         const value: unknown = Reflect.get(target, key, target);
         return typeof value === 'function' ? value.bind(target) : value;
       },
@@ -50,7 +47,7 @@ vi.mock('@apackdev/sdk/logger', async (importOriginal) => {
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'host-open-'));
 const open: RunsDatabase[] = [];
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
-beforeEach(() => Object.assign(fake, { report: undefined, acknowledged: 0, acknowledgeFails: false, rebuilt: 0, warnings: [] }));
+beforeEach(() => Object.assign(fake, { report: undefined, acknowledged: 0, acknowledgeFails: false, warnings: [] }));
 afterEach(() => { for (const runs of open.splice(0)) if (runs.database.isOpen) runs.database.close(); });
 
 const dir = () => path.join(fs.mkdtempSync(path.join(root, 'case-')), 'run-history');
@@ -60,44 +57,6 @@ function opened(at: string, options: { readOnly?: boolean } = {}): RunsDatabase 
   return runs;
 }
 const closed = (runs: RunsDatabase) => runs.database.close();
-
-describe('the indexes an older elmdb built', () => {
-  it('are rebuilt at the first writable open, and not at the next', () => {
-    const at = dir();
-    const first = opened(at);
-    expect(fake.rebuilt).toBe(1);
-    const sequence = first.database.sequence;
-    closed(first);
-
-    const second = opened(at);
-    expect(fake.rebuilt, 'the database says it was rebuilt by this elmdb').toBe(1);
-    expect(second.database.sequence, 'and the open committed nothing').toBe(sequence);
-  });
-
-  it('are rebuilt again for a database whose mark names another elmdb', () => {
-    const at = dir();
-    const first = opened(at);
-    const unit = first.database.begin();
-    unit.setCheckpoint('apack:derived-data-of', new TextEncoder().encode('elmdb 4b67670'));
-    unit.commit();
-    closed(first);
-
-    opened(at);
-    expect(fake.rebuilt).toBe(2);
-  });
-
-  it('are left as they are by a read-only open, which writes nothing', () => {
-    const at = dir();
-    const first = opened(at);
-    const unit = first.database.begin();
-    unit.setCheckpoint('apack:derived-data-of', new TextEncoder().encode('elmdb 4b67670'));
-    unit.commit();
-    closed(first);
-
-    opened(at, { readOnly: true });
-    expect(fake.rebuilt).toBe(1);
-  });
-});
 
 describe('a restore the open found', () => {
   it('is said, with the sequence the database was taken back to, and marked read by a writable open', () => {
