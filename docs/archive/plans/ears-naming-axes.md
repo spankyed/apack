@@ -1,6 +1,8 @@
 # A name carries the operation; structure carries the rest
 
-**Status:** done: phases 0 (the rule, in `packages/apack-ears/CLAUDE.md`), 1 (no ambient engine: the binding and the operations over it are `@apackdev/sdk/ears`), 2 (the engine is `Ears` with `admin` beside it), 3 (`qx` is `query`, kept as the console's injected name) and 4 (`store.read(partition)` → `LmdbReader`, `db.ears`, `findEntities*`; `packages/apack-host/tests/query-vocabulary.spec.ts` holds `query` to the operation). **The chain is green at each phase**, `npm run chain -- --no-native` on a 10-core budget, 2026-10-22: phase 1 before `dd64090d0`, 2 before `be15e554f`, 3 before `4e9fecf98` (phase 0 is prose no step reads), and phase 4 at `e9649ec60` once the disk had room — while it was full, `test:integration` failed with ENOSPC at the default width and passed at `--cores 2`. It lands after [`ears-public-api.md`](ears-public-api.md), whose change 4
+> Archive: this records earlier design and behavior. Examples use current EARS names; descriptions of former behavior are historical, not current guarantees.
+
+**Status:** done: phases 0 (the rule, in `packages/apack-ears/CLAUDE.md`), 1 (no ambient engine: the binding and the operations over it are `@apackdev/sdk/ears`), 2 (the engine is `Ears` with `admin` beside it), 3 (the former query shorthand is `query`, kept as the console's injected name) and 4 (`store.read(partition)` → `LmdbReader`, `db.ears`, `findEntities*`; `packages/apack-host/tests/query-vocabulary.spec.ts` holds `query` to the operation). **The chain is green at each phase**, `npm run chain -- --no-native` on a 10-core budget, 2026-10-22: phase 1 before `dd64090d0`, 2 before `be15e554f`, 3 before `4e9fecf98` (phase 0 is prose no step reads), and phase 4 at `e9649ec60` once the disk had room — while it was full, `test:integration` failed with ENOSPC at the default width and passed at `--cores 2`. It lands after [`ears-public-api.md`](ears-public-api.md), whose change 4
 it **supersedes** on one point (see [What this supersedes](#what-this-supersedes)).
 Source read at `886c11bd5` (2026-10-22). Call-site figures are text searches over `packages` for
 `*.ts`/`*.vue`, excluding `dist/`, `publish/` and `__generated__/`; each is an upper bound on the work and
@@ -18,13 +20,13 @@ an operation got welded into names, one at a time, and every weld was locally re
 | axis | what it says | carried today by |
 |---|---|---|
 | **capability** | who may do this — anyone, or the engine's creator | the face: `engine.query` vs `engine.admin` |
-| **operation** | read or write | `qx` vs `create`/`upsert`/`write` |
+| **operation** | read or write | the former query shorthand vs `create`/`upsert`/`write` |
 | **checkedness** | checked against a pack's shapes, or not | the `untyped` prefix |
 | **binding** | which engine — one you hold, or the ambient installed one | nothing names it |
 
 Three of those do not belong in a name. The one that is not named at all — binding — is what makes the
 surface sprawl: an operation needs an `untyped` twin for no reason except to mean *on the ambient engine*,
-which is 92 `untypedQx` sites, 168 `untyped{Create,Upsert,Write}` and 133 `installedEngine()`.
+which is 92 `untypedQuery` sites, 168 `untyped{Create,Upsert,Write}` and 133 `installedEngine()`.
 
 **The sharpest symptom is that "query" names three things, none of which is a query.**
 
@@ -32,10 +34,10 @@ which is 92 `untypedQx` sites, 168 `untyped{Create,Upsert,Write}` and 133 `insta
 |---|---|---|
 | the engine's pack-facing face | `engine.query`, `EarsQuery` | 374, with 37 naming the type |
 | the LMDB partition reader | `store.query(partition)`, `LmdbQuery` | 26 |
-| a data dir's open engine | `db.query` (`AppDatabase`) | 28 |
-| four lookups that are `find`s | `queryEntitiesByAttribute`, `…ByRole`, `…InRelationTo`, `…ByRelationTo` | 39 |
+| a data dir's open engine | `db.ears` (`AppDatabase`) | 28 |
+| four lookups that are `find`s | `findEntitiesByAttribute`, `…ByRole`, `…InRelationTo`, `…ByRelationTo` | 39 |
 
-Meanwhile the operation that *is* a query is `qx`: 476 sites in 68 files. The word is spent three times on
+Meanwhile the operation that *is* a query is the former query shorthand: 476 sites in 68 files. The word is spent three times on
 things that are not queries and never on the thing that is.
 
 This matters beyond taste for the reason that plan opens with — EARS is the most reusable thing in the tree,
@@ -76,7 +78,7 @@ not a security boundary"* (`packages/apack-ears/CLAUDE.md`). A contract the comp
 being bought; the runtime nicety was never load-bearing, and a pack that casts past the type has a dozen
 easier ways in.
 
-**And it is what frees the word `query`** for the operation, which no rename of `qx` can do while the face
+**And it is what frees the word `query`** for the operation, which no rename of the former query shorthand can do while the face
 holds it.
 
 ### Checkedness stays a prefix
@@ -88,16 +90,16 @@ exactly one place — the SDK's pack-facing surface — instead of shadowing eve
 
 ### Terseness is carried by the console's scope
 
-> **Superseded (2026-10-22):** the console takes `query` too. Keeping `qx` there saved three characters and cost
-> a second name for one operation, an alias (`query as qx`) to keep it alive, and console code that read
+> **Superseded (2026-10-22):** the console takes `query` too. Keeping the former query shorthand there saved three characters and cost
+> a second name for one operation, an alias (the retired console alias) to keep it alive, and console code that read
 > unlike pack code — while everything around it (`apack db query`, the `query` step, `runQueryCode`) already
 > said `query`. The console's injected names are the library's now, and `query-vocabulary.spec.ts` checks
 > `READ_HELPER_NAMES` so the exception can't return. What follows is the reasoning as it was.
 
-`qx` is short for a real reason: people type it by hand in `db repl`, `db query` and the Database surface.
+The former query shorthand is short for a real reason: people type it by hand in `db repl`, `db query` and the Database surface.
 That is a genuine requirement and it should not name the library. The console already injects a deliberate,
 enumerated vocabulary (`readHelpers`/`READ_HELPER_NAMES`, `apack-sdk/src/database-console/index.ts:46`), so
-`qx` lives on there as the console's name for `query`, which is what an injected vocabulary is for. Terse
+The former query shorthand lives on there as the console's name for `query`, which is what an injected vocabulary is for. Terse
 where it is typed, explicit where it is read.
 
 That split is also why renaming the API is affordable at all: the one population that benefits from two
@@ -113,8 +115,8 @@ next**, and any other order touches the same lines twice.
 | 0 | The rule above, in `packages/apack-ears/CLAUDE.md` | — | It is the deliverable the renames only follow from, and it makes the rest reviewable |
 | 1 | No ambient engine (that plan's change 4) | 92 + 168 + 133 | It **deletes** the names the later phases would otherwise rename. Anything before it renames functions into existence and then removes them |
 | 2 | Flatten the face: `engine.query.X` → `engine.X`; `EarsQuery` → `Ears` | 374 + 37 | Frees `query`. Before phase 1 it would touch every free function's body twice |
-| 3 | `qx` → `query`, with `qx` kept as the console's injected name | 476 in 68 files | Mechanical, and the typecheck names every site |
-| 4 | Every other "query": `store.query(partition)` → `store.read(partition)` and `LmdbQuery` → `LmdbReader`; `AppDatabase.query` → `db.ears` (beside its `db.admin`); `queryEntities*` → `findEntities*` | 26 + 28 + 39 | Last, so that when it lands the word means one thing |
+| 3 | the former query shorthand → `query`, with the former query shorthand kept as the console's injected name | 476 in 68 files | Mechanical, and the typecheck names every site |
+| 4 | Every other "query": `store.query(partition)` → `store.read(partition)` and `LmdbQuery` → `LmdbReader`; `db.ears` → `db.ears` (beside its `db.admin`); `queryEntities*` → `findEntities*` | 26 + 28 + 39 | Last, so that when it lands the word means one thing |
 
 Phase 1 is the leverage and it is already planned and owned. Phases 2–4 are worth nothing until it lands.
 
@@ -127,7 +129,7 @@ are: they become `findEntities*` and join the family they belonged to all along.
 
 **What the `untyped` prefix is attached to afterwards**, since it is the pack-facing surface and a pack's
 code names it: `untypedQuery`, `untypedCreate`, `untypedUpsert`, `untypedWrite`. Phase 3 renames
-`untypedQx` with `qx`; the other three keep their names throughout.
+`untypedQuery` with the former query shorthand; the other three keep their names throughout.
 
 ## Verification
 
@@ -136,14 +138,14 @@ Renames are proved by the typecheck, so the cases worth writing are the ones a r
 1. **Phase 2:** `Ears` does not admit `admin` — a spec that fails to compile if it does, which is an
    assertion with a comment naming the edit that would make it fire, per the repo's rule for a check that
    cannot fail today.
-2. **Phase 3:** the console still answers `qx(...)`, and `READ_HELPER_NAMES` still lists it. The console
+2. **Phase 3:** the console still answers `query(...)`, and `READ_HELPER_NAMES` still lists it. The console
    vocabulary is spelled out precisely so that moving a name through it is deliberate.
 3. **Phase 3:** a pack's `#generated/ears` exports `query`. Codegen writes that export list literally
-   (`apack-sdk/src/build/generate-entries.ts:1240`, `qx, create, upsert, write, transact, findById, …`), so
+   (`apack-sdk/src/build/generate-entries.ts:1240`, `query, create, upsert, write, transact, findById, …`), so
    the name is in the generated facade of every pack: `build:default-setup` regenerates, the type fixture
    moves (`apack-cli/tests/_support/facade-packs.ts`) and `facade:update -w @app/default-setup` re-records.
    This is the one place [`ears-public-api.md`](ears-public-api.md#7-everything-that-teaches-the-api-moves-with-it)'s
-   inventory does not already cover, because renaming `tx` left that line's other entries alone.
+   inventory does not already cover, because renaming the former write shorthand left that line's other entries alone.
 4. **Phase 4:** `query` names one thing. Asserted over the exported declarations of `@apackdev/ears`,
    `/sdk` and `@apackdev/host` rather than grepped, so it cannot look at nothing, and it fails today —
    four populations answer to the word (the table in [Why](#why)), which is what makes the case worth
@@ -180,12 +182,12 @@ beside them. The same direction one level further, and it is named here rather t
 that whoever reads that plan afterwards knows which of the two is current.
 
 Keeping the two faces is what this plan exists to rule out, because it leaves `query` spent on a set that is
-not a category and the operation that is a query still called `qx`.
+not a category and the operation that is a query still called the former query shorthand.
 
 ## Deliberately not doing
 
-- **Not renaming anything for symmetry.** `tx` was retired because it promised atomicity it did not have and
-  one argument meant three things; `qx` has neither defect since it refuses an unregistered type and `.ids`
+- **Not renaming anything for symmetry.** the former write shorthand was retired because it promised atomicity it did not have and
+  one argument meant three things; the former query shorthand has neither defect since it refuses an unregistered type and `.ids`
   and `.all` carry the other meanings. The case for phase 3 is that the word is free and the current name is
   opaque, which is a different argument, and the weaker one is the reason that plan orders its changes by
   damage rather than by consistency.

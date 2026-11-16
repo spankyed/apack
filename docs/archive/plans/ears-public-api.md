@@ -1,5 +1,7 @@
 # EARS's API says what it does
 
+> Archive: this records earlier design and behavior. Examples use current EARS names; descriptions of former behavior are historical, not current guarantees.
+
 **Status:** done through phase 3; phase 4 (change 4) is carried out as [`ears-naming-axes.md`](ears-naming-axes.md)'s phase 1. Source read
 at `ff45e4ff7` (2026-10-22). Call-site figures come from a TypeScript AST pass over every `.ts`/`.vue` file
 outside `dist/`, `__generated__/` and `node_modules`, on that tree; the typecheck is the exact count once a
@@ -19,7 +21,7 @@ the package from npm.
 
 Four rules decide every change below:
 
-1. **A name promises its semantics.** `tx` promises atomicity, `where` promises a predicate, `put` with a
+1. **A name promises its semantics.** the former write shorthand promises atomicity, `where` promises a predicate, `put` with a
    flag promises nothing at all.
 2. **One argument, one meaning.** A string is a type or an id because of where it's passed, never because
    of what the engine happens to have registered.
@@ -81,7 +83,7 @@ partition nothing reads back. That is not what `link`'s default decides, and it 
 Ordered by how much damage the current behaviour can do, not by implementation order
 ([Phases](#phases) has that).
 
-### 1. `tx` becomes a builder, and a transaction becomes real
+### 1. the former write shorthand becomes a builder, and a transaction becomes real
 
 **Today.** Every builder method writes memory and calls the persistence sink immediately
 (`transaction.ts`, `self.put` onward). There is no commit and no rollback, so a chain that throws partway
@@ -120,38 +122,38 @@ The LMDB adapter has two more paths that a unit would have to survive and today 
   (`npm run bench -w @apackdev/ears`, +10% median tolerance) covers both paths, with a new case for a
   1,000-write unit.
 
-The builder stops being called `tx` (see 2). The word "transaction" belongs to `transact` alone.
+The builder stops being called the former write shorthand (see 2). The word "transaction" belongs to `transact` alone.
 
 ### 2. One argument, one meaning
 
-**Today.** `tx(typeOrId, useProvidedId)` and `qx(start)` decide what a string is by asking
+**Today.** `write(typeOrId, useProvidedId)` and `query(start)` decide what a string is by asking
 `isEntityType` at runtime (`transaction.ts`, `transaction()`; `query.ts`, `resolveStart`):
 
-- `tx('Memo')` on an engine without that type writes attributes to an entity whose id is `"Memo"`.
-- `qx('Memo')` returns nothing instead of failing.
-- `qx(['Note', 'Task'])` is a list of types only if *every* item is a registered type; one unregistered
+- `create('Memo')` on an engine without that type writes attributes to an entity whose id is `"Memo"`.
+- `query('Memo')` returns nothing instead of failing.
+- `query(['Note', 'Task'])` is a list of types only if *every* item is a registered type; one unregistered
   name turns the whole list into ids.
-- `tx(id, true)` is a boolean meaning "this id is new": 95 call sites, of which 9 are production code (plus
+- `create(type, { id })` is a boolean meaning "this id is new": 95 call sites, of which 9 are production code (plus
   one through `createEntityWithDefaults(…, providedId)`), 47 are tests and 39 are ears' own tests.
-- `qx()` with no argument means every entity, relations included: 17 real calls.
+- `query.all()` with no argument means every entity, relations included: 17 real calls.
 
 **Change.** Each meaning gets its own entry point, and each refuses what it can't account for:
 
 | Today | After | An unaccountable argument |
 |---|---|---|
-| `tx(type)` | `create(type)` | an unregistered type throws `UNKNOWN_ENTITY_TYPE` |
-| `tx(id, true)` | `create(type, { id, createdAt? })` | as above; an id already in use throws |
-| `exists ? tx(id) : tx(id, true)` | `upsert(type, id)` | as `create` when absent; an existing id of another type throws |
-| `tx(id)` | `write(id)` | an id not in the engine throws `NO_SUCH_ENTITY` |
-| `qx(type)`, `qx([types])` | `qx(type)`, `qx([types])` | any unregistered type throws, `undefined` included |
-| `qx(id)`, `qx([ids])` | `qx.ids(idOrIds)` | absent ids are dropped (a query over ids is a filter) |
-| `qx()` | `qx.all()` | — excludes `Relation`, which `findRelations` serves |
+| New entity by type | `create(type)` | an unregistered type throws `UNKNOWN_ENTITY_TYPE` |
+| New entity with a caller-selected id | `create(type, { id, createdAt? })` | as above; an id already in use throws |
+| Existing entity or creation by id | `upsert(type, id)` | as `create` when absent; an existing id of another type throws |
+| Write an existing entity by id | `write(id)` | an id not in the engine throws `NO_SUCH_ENTITY` |
+| Read entities of declared types | `query(type)`, `query([types])` | any unregistered type throws, `undefined` included |
+| Read selected entity ids | `query.ids(idOrIds)` | absent ids are dropped (a query over ids is a filter) |
+| Read all entities | `query.all()` | — excludes `Relation`, which `findRelations` serves |
 
 **`upsert` exists because five production sites already hand-write it**: the host's `AppState-app`
 (`app-state/index.ts:103`), `Settings-app` (`features/settings/be/store.ts:104`) and
 `AppliedContent-<packId>` (`app-state/applied-content.ts:110`), the browser's tab sync
 (`browser/be/repository/commands.ts:33`, a frontend-supplied id), and the root TNode
-(`brain/be/repository/index.ts:498`, which today creates it with a bare `tx(rootId)` and relies on implicit
+(`brain/be/repository/index.ts:498`, which then used the former write shorthand and relied on implicit
 creation). Each is a singleton or a caller-keyed row, which is the case `create` and `write` each refuse
 half of.
 
@@ -162,7 +164,7 @@ write to TNodes from asynchronous step completions with no existence check, so a
 `tnodeRepository.updateTNodeResult` already checks. Both get the same guard, and that fix needn't wait for
 this plan. Every other write by id (the format applier, trash, the update step, the actions, prompts,
 threads, notes and code repositories, the library/notes/threads importers through `hasIdCollision`) checks
-first or writes an id it just created. Backup import and restore use admin bulk loads, not `tx`, and no
+first or writes an id it just created. Backup import and restore use admin bulk loads, not the former write shorthand, and no
 migration or seed calls it. `write(id).destroy()` on an absent id throws like any other `write`; every
 current destroy checks first (threads `system.ts:809`, the search index, the CLI's `destructive.ts:156`).
 
@@ -179,18 +181,18 @@ splitting the functions makes the compiler list every typed call site. Only `unt
 **The current permissiveness is documented as deliberate, and the split is the answer to its reason.**
 `packages/apack-ears/CLAUDE.md` states it outright — an unknown name "could equally be a typo, an id with no
 type prefix, or a type whose pack isn't installed, and the engine can't tell which" — and names the specs
-that pin both sides (`tests/engine/queries.spec.ts:36` pins `qx('Memo').ids()` as `[]`, and
+that pin both sides (`tests/engine/queries.spec.ts:36` pins `query('Memo').ids()` as `[]`, and
 `transactions.spec.ts` the write). That reason is a statement about *one* entry point carrying two meanings:
 the engine cannot tell which was meant because the caller was never asked. Separate entry points ask, which
-is what makes refusing correct rather than merely stricter — `qx(type)` is a claim about a type and
-`qx.ids(…)` a claim about ids, and each can be held to its own claim. So that paragraph and those cases move
+is what makes refusing correct rather than merely stricter — `query(type)` is a claim about a type and
+`query.ids(…)` a claim about ids, and each can be held to its own claim. So that paragraph and those cases move
 in this change, with their rationale replaced rather than deleted.
 
-**`qx.all()` excluding relations breaks no caller.** Every production `qx()` narrows by a role or a
+**`query.all()` excluding relations breaks no caller.** Every production `query.all()` narrows by a role or a
 relation (`withRole` at `flow-repository.ts:132,221`, `flow-to-dsl.ts:354`, threads `repository/index.ts:55`,
 `apack-testing/src/app.ts:269`; `relatedTo(id).ofType(Artifact)` at threads `:315,416`), and none wants a
 `Relation` row. What moves: `apack-ears/tests/engine/queries.spec.ts:27,37`, which count 5 entities plus 3
-relations as 8, and the comment at `apack-host/src/database/schema.ts:35`, which describes `qx(undefined)`
+relations as 8, and the comment at `apack-host/src/database/schema.ts:35`, which describes `query(undefined)`
 answering with the whole database.
 
 This makes [Part 1 of `undeclared-entity-names.md`](undeclared-entity-names.md#part-1--ears-refuses-a-name-it-cannot-account-for)
@@ -199,13 +201,13 @@ the engine's default behaviour; that plan's Parts 2–3 (the console's schema) a
 **That plan lands first, and this does not wait for it**, because the two fix different things: its Parts 3
 and 2 make the console *answer correctly* on a data dir with no snapshots, and nothing here can — the
 engine's refusal only stops a wrong answer. Its Part 1 is then a diagnostic: the engine catches
-`qx(undefined)` once `qx.all()` exists, and what the console's `Proxy` adds is a message naming the known
+`query(undefined)` once `query.all()` exists, and what the console's `Proxy` adds is a message naming the known
 types and `--schema-from`, which an engine that sees only `undefined` cannot produce. It also closes that plan's first recorded adjacent bug — `TypedQx` accepting
 `undefined` as a start — for free, since the no-argument overload is what the typed facade widens.
 
-Nothing in `qx` stands in the way: `setIds` re-enters with `start === undefined` on every chained step
+Nothing in the former query shorthand stands in the way: `setIds` re-enters with `start === undefined` on every chained step
 (`query.ts:74-75`), but it re-enters the internal `qxImpl` with `known` already resolved, and the public
-`qx` is a one-argument wrapper over it (`query.ts:276`). So `qx.all()` is a change to the public entry
+the former query shorthand is a one-argument wrapper over it (`query.ts:276`). So `query.all()` is a change to the public entry
 alone, and the chaining is untouched.
 
 ### 3. One record of each fact
@@ -244,7 +246,7 @@ with a missing end, and rows read with `entityType` and `createdAt`.
 
 ### 4. The package holds no ambient engine
 
-**Today.** Every free export (`untypedQx`, `untypedTx`, `repository`, `findRelations`, `grantRole`,
+**Today.** Every free export (`untypedQuery`, `untypedWrite`, `repository`, `findRelations`, `grantRole`,
 `spawn`, the graph walks, the `defineEars` facades) acts on a module-level engine set by `installEngine`
 (`installed.ts`) and throws `NO_ENGINE_INSTALLED` without one. `createEarsEngine()` returns a working
 instance, but most of the API ignores it, and two engines in one process means swapping the global (17
@@ -342,7 +344,7 @@ builder's entity. `patchLink`'s one real caller (`reindexHandles`) already held 
 `ensure` has no production caller: the console's examples (`database/fe/components/query-editor/transaction-examples.ts:59`),
 the transaction prompt (`content/prompts/db-transaction-system.ts:78`), `docs/public-facing/services-and-data.md:334`
 and ears' own specs. `flowRepository.grantRootFlowRole` (`flow-repository.ts:220-224`) hand-writes the same
-exclusivity over `qx().withRole(ROOT_FLOW)`, and becomes `grantExclusive(ROOT_FLOW, qx('Flow').ids())`.
+exclusivity over `query.all().withRole(ROOT_FLOW)`, and becomes `grantExclusive(ROOT_FLOW, query('Flow').ids())`.
 `BlueprintBuilder.ensure` is a different builder (`bp`, `spawn`) and keeps its name.
 
 **Reserved names.** `set`, `setMany`, `add`, `merge` and the `delete*` family refuse the engine's own kinds
@@ -376,7 +378,7 @@ offset (`query.ts`), so a write between pages skips or repeats rows.
 
 - `has(k)` and `lacks(k)` for presence; `where(k, v)` requires `v` and refuses `undefined`. No caller passes
   a possibly-undefined value. The single-argument callers are the Database surface's generated queries
-  (`database/fe/constants.ts:7,23`, `graph/constants.ts:9,16`, which become `qx.all().has('…')`), the query
+  (`database/fe/constants.ts:7,23`, `graph/constants.ts:9,16`, which become `query.all().has('…')`), the query
   prompt (`db-query-system.ts:46`), ears' own spec and the completion fixtures (`facade-packs.ts:370,383`).
 - `where(k, predicate)` for anything `===` can't express, so object values have an answer.
 - `page()` is deleted: its only caller is `apack-ears/tests/engine/queries.spec.ts:104-107`. A cursor that
@@ -388,8 +390,8 @@ offset (`query.ts`), so a write between pages skips or repeats rows.
 ### 7. Everything that teaches the API moves with it
 
 Users type this API, and an LLM is taught it. The console (`apack-sdk/src/database-console/index.ts:44-72`)
-exposes `qx: untypedQx` and `tx: untypedTx` to code run by `apack db exec`/`script`/`repl` and the in-app
-Database console, so renaming `tx` changes what a user writes there. Every one of these moves in Phase 3,
+exposes `query: untypedQuery` and `write: untypedWrite` to code run by `apack db exec`/`script`/`repl` and the in-app
+Database console, so renaming the former write shorthand changes what a user writes there. Every one of these moves in Phase 3,
 in the same commit as the code:
 
 - **The console**: its globals; `WRITE_HELPER_NAMES`, which the query step refuses
@@ -403,7 +405,7 @@ in the same commit as the code:
   `content-parity:update` re-records there.
 - **Docs**: `docs/public-facing/cli.md`, `services-and-data.md` and `getting-started.md`;
   `packages/apack-sdk/TYPED-EARS.md`; `packages/apack-ears/CLAUDE.md`, `packages/default-setup/CLAUDE.md`
-  and the root CLAUDE.md's `tx`/`untypedTx` twin.
+  and the root CLAUDE.md's the former write shorthand/`untypedWrite` twin.
 - **Type fixtures**: `apack-cli/tests/_support/facade-packs.ts`.
 
 The CLI's pack templates need nothing (their repository template is empty), nor does `generate-entries`.
@@ -417,7 +419,7 @@ Each phase leaves the chain green and is one commit.
 |---|---|---|---|
 | 0. Check the data | The stored-data probe | — | **Done 2026-10-22**: [What the stored data says](#what-the-stored-data-says) |
 | 1. `transact` | 1, with the adapter's unit flush and buffered destroy | — | **Done** (`110ee8f1a`): a throwing unit leaves memory and the LMDB files as they were (one case per write, each mutation-checked); a returning unit reaches one LMDB transaction per environment; writes outside a unit cost what they did |
-| 2. The reshape | 2, 5, 6 and 7 in one migration of every call site | 1 | **Done** (`467f2be2d`): no `tx`, `put`, `update`, `batchPut`, `updateBatch`, `linkOne`, `safeLink`, `unlinkIf`, `unlinkWhere`, `relPatch`, `patchLink`, `ensure`, `define`, `page` in the tree; the reserved-name and unknown-name refusals each have a firing case; DSL re-import replaces a flow whole |
+| 2. The reshape | 2, 5, 6 and 7 in one migration of every call site | 1 | **Done** (`467f2be2d`): no the former write shorthand, `put`, `update`, `batchPut`, `updateBatch`, `linkOne`, `safeLink`, `unlinkIf`, `unlinkWhere`, `relPatch`, `patchLink`, `ensure`, `define`, `page` in the tree; the reserved-name and unknown-name refusals each have a firing case; DSL re-import replaces a flow whole |
 | 3. One record of each fact | 3: one id parser, `entityType` read from the id, one record per relation, no endpoint rows, format 2 and its conversion | 0, 2 | **Done**: every doubled fact reads zero on a converted copy of the prod data, which hydrates with no phantom relations |
 | 4. No ambient engine | 4 | 2 | Carried out as [`ears-naming-axes.md`](ears-naming-axes.md)'s phase 1, which supersedes change 4's `engine.query` |
 
@@ -428,7 +430,7 @@ re-import uses it.
 The TNode updaters' existence guard (see 2) landed first, on its own (`6ad0a966a`).
 
 Phase 3 is one pass on purpose: entry points (2) and builder members (5) appear on the same lines, and
-moving them in two passes touches every line twice. Its size, as tx-family calls outside the engine's own
+moving them in two passes touches every line twice. Its size, as write-family calls outside the engine's own
 source:
 
 | Package | Source | Tests |
@@ -456,7 +458,7 @@ Every phase that moves a public export runs `npm run api:update` (ears and SDK) 
   (`write(id).set('title', t)`) and doesn't collide with `updateEntity`; `upsert` is the conventional name for
   what five sites hand-wrote.
 - **`EntityId` keeps its `${string}-${string}` template.** Every id in the data has a dash, literal ids
-  (`'TNode-Root'`) keep compiling, and the split already turns `qx('user-note')` into a compile error, which
+  (`'TNode-Root'`) keep compiling, and the split already turns `query.ids('user-note')` into a compile error, which
   is what TYPED-EARS.md's Incidents asked for. The untyped twins reject an id-shaped name through
   `TypeName<E>` (`write.ts`).
 

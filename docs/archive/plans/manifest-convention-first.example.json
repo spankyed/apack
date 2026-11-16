@@ -9,7 +9,6 @@
   "hostVersion": ">=0.3.0",
   "data": {
     "relations": [
-      "parent_of",
       "has",
       "relates_to"
     ]
@@ -193,20 +192,22 @@
         "prefix": "database:",
         "globals": {
           "EARS": "typeof _dsl.EARS",
-          "qx": "typeof _dsl.qx",
+          "query": "typeof _dsl.query",
           "getAllEntities": "typeof _dsl.getAllEntities",
           "getAll": "typeof _dsl.getAll",
-          "queryEntitiesByRelationTo": "typeof _dsl.queryEntitiesByRelationTo",
+          "findEntitiesByRelationTo": "typeof _dsl.findEntitiesByRelationTo",
           "findAttr": "typeof _dsl.findAttr",
           "getAttrs": "typeof _dsl.getAttrs",
           "getRoles": "typeof _dsl.getRoles",
           "getEntitiesOfType": "typeof _dsl.getEntitiesOfType",
-          "queryEntitiesByAttribute": "typeof _dsl.queryEntitiesByAttribute",
-          "queryEntitiesInRelationTo": "typeof _dsl.queryEntitiesInRelationTo",
+          "findEntitiesByAttribute": "typeof _dsl.findEntitiesByAttribute",
+          "findEntitiesInRelationTo": "typeof _dsl.findEntitiesInRelationTo",
           "findRelations": "typeof _dsl.findRelations",
           "getRelationStats": "typeof _dsl.getRelationStats",
           "getSchemaStats": "typeof _dsl.getSchemaStats",
-          "tx": "typeof _dsl.tx",
+          "create": "typeof _dsl.create",
+          "upsert": "typeof _dsl.upsert",
+          "write": "typeof _dsl.write",
           "destroyEntity": "typeof _dsl.destroyEntity",
           "prepareEntity": "typeof _dsl.prepareEntity",
           "createEntityWithDefaults": "typeof _dsl.createEntityWithDefaults",
