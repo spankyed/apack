@@ -3,19 +3,12 @@
 # (`node/`), and the built-in pack's on the view (`view/`). Locally that path is a link to a checkout
 # (`npm run link:apack-terminal`, which builds the view); CI can't reach one, so it fetches the pinned commit.
 #
-# **The view is always built, the broker only where a terminal has to work.** What a consumer of the view
-# bundles is its `dist/`, which is not tracked, and the built-in pack is built by nearly every job — so there
-# is no job that needs the clone and not that build. It is TypeScript and a few seconds. The broker's
-# package needs only its `package.json` for `npm ci` to resolve, which is the clone; its binary is a Rust
-# release build, which is minutes, and a job that neither packages the app nor starts a broker needs none.
-# So `build` defaults to false and the jobs that need one say so — rather than every job paying for it, or
-# the dependency being optional, which is how a release ships with no terminal.
+# **The view is built here; the broker is not.** What a consumer of the view bundles is its `dist/`, which is not
+# tracked, and the built-in pack is built by nearly every job, so the clone always builds it — TypeScript, a few
+# seconds. The broker the app runs is a release build apack-terminal publishes per commit, which `npm ci`'s
+# postinstall downloads and verifies against `packages/terminal-broker/src/pin.json`, so no job builds Rust.
 name: apack-terminal
-description: Clone apack-terminal at the pinned commit into vendor/apack-terminal, build its view, and optionally stage the broker's npm package
-inputs:
-  build:
-    description: Build the broker for release and stage it into its npm package. Needed wherever a terminal has to work.
-    default: 'false'
+description: Clone apack-terminal at the pinned commit into vendor/apack-terminal and build its view
 runs:
   using: composite
   steps:
@@ -32,14 +25,3 @@ runs:
       run: |
         npm ci --no-audit --no-fund
         npm run build
-    - if: inputs.build == 'true'
-      uses: Swatinem/rust-cache@v2
-      with:
-        workspaces: vendor/apack-terminal
-    - name: Stage the broker into its npm package
-      if: inputs.build == 'true'
-      shell: bash
-      working-directory: vendor/apack-terminal
-      run: |
-        rustup show active-toolchain
-        cargo xtask package

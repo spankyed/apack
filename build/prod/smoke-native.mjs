@@ -10,8 +10,8 @@
 //   elmdb             opens a database in a temp dir, writes its schema, closes, opens it again and reads it back
 //   @napi-rs/keyring  loads its binding, without touching the credential store
 //
-//   apack-terminal    runs the broker binary the package ships, and sees it bind a socket; on Windows, finds the
-//                     ConPTY it runs its sessions on beside it
+//   apack-terminal    runs the pinned broker `@app/terminal-broker` installed, every file the pin names for this
+//                     platform being there (on Windows, the ConPTY beside the binary)
 //
 // **The broker is a binary rather than a module, so its probe is a spawn.** A pty belongs to the
 // `apack-terminal` broker, which the app starts as a child process; what can be wrong with it is what can
@@ -84,22 +84,14 @@ async function main() {
   // be wrong in a release: a binary built for another architecture never reaches its own argument check,
   // and one the package did not carry is not there to run. Asked of the package, not of a path, because
   // the name carries .exe on Windows and the package is what knows that.
-  const broker = load('apack-terminal').brokerBinary();
-  if (!broker) throw new Error('the apack-terminal package carries no binary for this platform');
+  const broker = load('@app/terminal-broker').brokerBinary();
+  if (!broker) throw new Error('@app/terminal-broker holds no broker for this platform, or not every file its pin names');
   const ran = require('node:child_process').spawnSync(broker, [], { encoding: 'utf8' });
   if (ran.error) throw new Error('apack-terminal did not run: ' + ran.error.message);
   if (ran.status !== 2 || !/usage: apack-terminal/.test(ran.stderr || '')) {
     throw new Error('apack-terminal answered ' + ran.status + ' and ' + JSON.stringify(ran.stderr) + ', not its usage');
   }
   console.log('apack-terminal: the broker binary runs');
-  // **On Windows the broker runs its sessions on the ConPTY beside it**, which it finds only there: without
-  // it the system's is used, which drops images and mouse reporting before the broker sees them, and the
-  // broker still starts. So its being there is asked of the files, as nothing the broker answers shows it
-  if (process.platform === 'win32') {
-    const beside = ['conpty.dll', 'OpenConsole.exe'].filter((file) => !require('node:fs').existsSync(path.join(path.dirname(broker), file)));
-    if (beside.length) throw new Error('apack-terminal ships without ' + beside.join(' and ') + ' beside its binary');
-    console.log('apack-terminal: its ConPTY is beside it');
-  }
 }
 main().catch((error) => { console.error(error?.stack ?? String(error)); process.exit(1); });
 `;

@@ -90,8 +90,6 @@ jobs:
 
       - uses: ./.github/actions/elmdb
       - uses: ./.github/actions/apack-terminal
-        with:
-          build: 'true'
       - uses: ./.github/actions/apack-git
 
       - name: Install dependencies

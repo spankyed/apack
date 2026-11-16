@@ -296,6 +296,9 @@ export const LAYERS: {
   // Both check the repo rather than run in it, and reach the host for the build and freshness primitives
   { name: '@app/repo-checks', dir: 'packages/repo-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
   { name: '@app/publish-checks', dir: 'packages/publish-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
+  // The pinned broker's resolver, which the host and a packaged app's smoke check reach: plain Node, below
+  // every layer, so it imports none of them
+  { name: '@app/terminal-broker', dir: 'packages/terminal-broker', allowed: [] },
 ];
 
 /**
