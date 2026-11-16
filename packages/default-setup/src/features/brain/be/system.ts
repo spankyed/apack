@@ -416,6 +416,10 @@ export const brainSystem = setup({
       REQUEST_SURFACE_DATA: {
         actions: 'sendSurfaceData',
       },
+      // A setting of the feature rather than of a run, so it toggles whether a flow runs or not
+      TOGGLE_INSPECT: {
+        actions: 'toggleInspect',
+      },
       ERROR: {
         actions: 'logError',
       },
@@ -450,9 +454,6 @@ export const brainSystem = setup({
           },
           GET_RUN_NODE_DETAILS: {
             actions: 'getRunNodeDetails',
-          },
-          TOGGLE_INSPECT: {
-            actions: 'toggleInspect',
           },
           KILL_BRAIN: {
             actions: 'killBrain',
