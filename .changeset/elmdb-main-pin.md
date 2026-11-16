@@ -14,3 +14,6 @@ EARS runs on elmdb's `main` (`vendor/elmdb.rev` at `2029f9c`), whose blocking re
 
 `admin.waitForIndexBuilds()` now throws `SYNC_BEHIND` or `READERS_FULL` when what holds a build up is a sync that
 failed or a full reader table, rather than waiting on it.
+
+A `QueryStage` from `explain()` gains the fields elmdb now reports: `places`, `set`, `within`, `held`, `sorted` and
+`wants`.
