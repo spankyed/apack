@@ -1,5 +1,6 @@
 import { defineConfig } from 'tsup';
-import { appBuildOutput } from '../../build/build-metadata.ts';
+import { appBuildOutput, recordBundledPackages } from '../../build/build-metadata.ts';
+import { esbuildBundledPackages, installedPackage } from '@apackdev/host/build/bundled-packages';
 
 export default defineConfig((options) => {
   const isDev = options.env?.NODE_ENV === 'development';
@@ -38,6 +39,10 @@ export default defineConfig((options) => {
       esbuildOptions.conditions = ['@apackdev/source', 'module'];
     },
     esbuildPlugins: [
+    // What the bundle inlined, for the app's third-party notices (scripts/lib/third-party-notices.ts); the ESM and
+    // CJS runs each hand over their list, and the record merges them
+    // esbuild is found from tsup, which runs the esbuild it depends on rather than the one installed beside this package
+    esbuildBundledPackages(packages => recordBundledPackages('api', packages), { fromDir: installedPackage('tsup', import.meta.dirname).dir }),
     {
       name: 'externalize-vue',
       setup(build) {

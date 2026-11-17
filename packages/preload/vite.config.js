@@ -1,4 +1,5 @@
-import {appBuildOutput} from '../../build/build-metadata.ts';
+import {appBuildOutput, recordBundledPackages} from '../../build/build-metadata.ts';
+import {rollupBundledPackages} from '@apackdev/host/build/bundled-packages';
 import {getChromeMajorVersion} from '@app/electron-versions';
 import {defaultServerConditions, defineConfig} from 'vite';
 
@@ -33,7 +34,11 @@ export default defineConfig(({mode}) => /** @type {import('vite').UserConfig} */
     emptyOutDir: true,
     reportCompressedSize: false,
   },
-  plugins: [handleHotReload()],
+  plugins: [
+    handleHotReload(),
+    // What the bundle inlined, for the app's third-party notices (scripts/lib/third-party-notices.ts)
+    rollupBundledPackages(packages => recordBundledPackages('preload', packages), {fromDir: import.meta.dirname}),
+  ],
 }));
 
 

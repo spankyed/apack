@@ -110,6 +110,16 @@ third-party API names such as electron-builder’s `artifactName` and GitHub’s
 
 Do not edit release/version metadata unless the user explicitly asks for a release or version bump. This includes `package.json` version fields, `package-lock.json` root package versions, app version constants, release notes, changelogs, and generated release files. The release process owns those changes.
 
+## Third-party notices
+
+The packaged app carries every notice its dependencies' licenses ask a redistribution to carry: never exclude a
+license, notice or copying file in `electron-builder.mjs`, have every bundler of an app workspace record what it inlined
+(`recordBundledPackages`), and keep a built-in pack's bundles saying what they inlined, in source maps or esbuild's
+module comments, which the notices read back. `afterPack` writes `THIRD-PARTY-NOTICES.txt` from what the app carries and those
+records, and fails a production or beta build on a package with no text or a license outside `ACCEPTED`: add the
+package's text to `OVERRIDES` with why, never widen `ACCEPTED` without reading the license
+(`scripts/lib/third-party-notices.ts`).
+
 ## Backward compatibility
 
 **There is none to keep, and assuming otherwise is the more expensive mistake.** Change a signature, a manifest key,

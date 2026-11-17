@@ -83,9 +83,39 @@ function buildOutputHashes(root: string): Record<string, string> {
   ]));
 }
 
-/** Written only after all four bundlers succeed; an interrupted run cannot be packaged. */
+/** Where a workspace's record of the third-party packages its bundle inlined is kept, outside its sealed `dist` */
+export function bundledPackagesFile(root: string, workspace: AppWorkspace): string {
+  return path.join(root, 'bundled-packages', `${workspace}.json`);
+}
+
+/**
+ * Adds to a workspace's record of the packages its bundle inlined, for `scripts/lib/third-party-notices.ts` to
+ * credit. One build can hand over several lists — a Vite build and each of its worker bundles, a tsup build's ESM
+ * and CJS runs — so each is merged into what is there. Without a staging build there is nothing to record into.
+ */
+export function recordBundledPackages(workspace: AppWorkspace, packages: { name: string; version: string; dir: string }[]): void {
+  const root = process.env.APACK_BUILD_ROOT;
+  if (!root) return;
+  const file = bundledPackagesFile(root, workspace);
+  const held = fs.existsSync(file) ? (JSON.parse(fs.readFileSync(file, 'utf8')) as { packages: typeof packages }).packages : [];
+  const byDir = new Map([...held, ...packages].map(entry => [entry.dir, entry]));
+  const key = (entry: { name: string; version: string }) => `${entry.name}@${entry.version}`;
+  const merged = [...byDir.values()].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ packages: merged }, null, 2) + '\n');
+}
+
+/**
+ * Written only after all four bundlers succeed; an interrupted run cannot be packaged. Each bundler has to have
+ * recorded what it inlined, an empty list included: the build root is new for each run, so a record there is this
+ * run's, and one missing is a bundler that no longer records, whose packages the notices would leave out.
+ */
 export function sealBuildSession(root: string): void {
   readBuildManifest(root);
+  const unrecorded = APP_WORKSPACES.filter(workspace => !fs.existsSync(bundledPackagesFile(root, workspace)));
+  if (unrecorded.length) {
+    throw new Error(`No record of the packages ${unrecorded.join(', ')} inlined: each bundler's config records them (recordBundledPackages)`);
+  }
   fs.writeFileSync(path.join(root, 'build-integrity.json'), JSON.stringify(buildOutputHashes(root), null, 2) + '\n');
 }
 

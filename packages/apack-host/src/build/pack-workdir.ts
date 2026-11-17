@@ -15,5 +15,11 @@
 /** The pack-relative working directory: dependency cache, staging, release output, build records */
 export const PACK_WORK_DIR = '.apack';
 
+/**
+ * Where `apack pack build` builds a pack before it copies the result to `dist/`. A bundle's source map is written
+ * there, so its relative `sources` are relative to this directory, not to the copy in `dist/` that ships.
+ */
+export const PACK_BUILD_STAGING_DIR = `${PACK_WORK_DIR}/build`;
+
 /** What each bundling phase of `apack pack build` read, pack-relative. Written by the build, read by the chain. */
 export const PACK_READS_FILE = `${PACK_WORK_DIR}/reads.json`;
