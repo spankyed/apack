@@ -7,7 +7,9 @@ import { createBuildSession } from '../../../build/build-metadata.ts';
 import { completeBuildFixture } from './_support/app-build.ts';
 import { PACKAGE_DIRS } from '../../../scripts/lib/workspace-deps.ts';
 import { PACK_WORK_DIR } from '@apackdev/host/build/pack-workdir';
+import * as fileMatcher from 'app-builder-lib/out/fileMatcher.js';
 import { FileMatcher } from 'app-builder-lib/out/fileMatcher.js';
+import { doMergeConfigs } from 'app-builder-lib/out/util/config/config.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // What the app installs, asked of the matcher electron-builder itself builds from `electron-builder.mjs`.
@@ -74,6 +76,30 @@ const shipsUnder = (used: string[], relative: string): boolean =>
 const ships = (relative: string) => shipsUnder(patterns, relative);
 const without = (...dropped: string[]) => patterns.filter((pattern) => !dropped.includes(pattern));
 
+// **A dependency's files are asked of another matcher**, the one electron-builder copies `node_modules` with
+// (app-builder-lib's `getNodeModuleFileMatcher`): `**/*` followed by the list's patterns, as electron-builder's
+// config merge normalizes them into one file set, which `doMergeConfigs` does here too.
+//
+// The function is exported but marked `@internal`, so app-builder-lib's declarations leave it out: its shape here is
+// the one `platformPackager.js` calls it with.
+const { getNodeModuleFileMatcher } = fileMatcher as unknown as {
+  getNodeModuleFileMatcher(appDir: string, destination: string, macroExpander: (pattern: string) => string,
+    platformSpecificBuildOptions: object, packager: never): FileMatcher;
+};
+const nodeModuleFilters = new Map<readonly string[], (file: string, stat: never) => boolean>();
+function nodeModuleFilterFor(used: string[]): (file: string, stat: never) => boolean {
+  // A copy, because the merge normalizes the array it is given in place
+  const packager = { config: doMergeConfigs([{ files: [...used] }]), debugLogger: { isEnabled: false } };
+  const known = nodeModuleFilters.get(used)
+    ?? getNodeModuleFileMatcher(REPO_ROOT, 'app', (pattern: string) => pattern, {}, packager as never).createFilter();
+  nodeModuleFilters.set(used, known);
+  return known;
+}
+
+/** Whether the app would carry `relative`, a file of a dependency under `node_modules`, under the given patterns */
+const dependencyShipsUnder = (used: string[], relative: string): boolean =>
+  nodeModuleFilterFor(used)(path.join(REPO_ROOT, relative), { isDirectory: () => false } as never);
+
 /**
  * Every file under `dir`, relative to the repo root — the population a case asks about, never a literal.
  *
@@ -87,6 +113,43 @@ function filesUnder(dir: string): string[] {
     .filter((entry) => entry.isFile())
     .map((entry) => path.relative(REPO_ROOT, path.join(entry.parentPath, entry.name)));
 }
+
+/**
+ * A license, licence, notice or copying file, in any case and with any extension, the word anywhere in the name:
+ * `@tiptap/pm` keeps the notices of what it bundles in `THIRD_PARTY_LICENSES.md`
+ */
+const LICENSE_LIKE = /(licen[cs]e|notice|copying)/i;
+
+/** A directory entry that is a directory, or a link to one: the workspaces and vendored packages are links */
+const isDirectory = (dir: string, entry: fs.Dirent): boolean =>
+  entry.isDirectory()
+  || (entry.isSymbolicLink() && fs.statSync(path.join(dir, entry.name), { throwIfNoEntry: false })?.isDirectory() === true);
+
+/**
+ * The files at the root of every package installed at the top of `node_modules`, linked ones included, relative to
+ * the repo root: one read per package rather than a walk of the whole tree, which is hundreds of thousands of files.
+ * Nested installs are left out: the patterns judge a file by its name and path, so a nested copy's license file is
+ * judged as a top-level one is, unless its path runs through a directory a pattern names.
+ */
+function dependencyRootFiles(): string[] {
+  const nodeModules = path.join(REPO_ROOT, 'node_modules');
+  const packageDirs = fs.readdirSync(nodeModules, { withFileTypes: true })
+    .filter((entry) => isDirectory(nodeModules, entry) && !entry.name.startsWith('.'))
+    .flatMap((entry) => entry.name.startsWith('@')
+      ? fs.readdirSync(path.join(nodeModules, entry.name), { withFileTypes: true })
+        .filter((scoped) => isDirectory(path.join(nodeModules, entry.name), scoped)).map((scoped) => path.join(entry.name, scoped.name))
+      : [entry.name]);
+  return packageDirs.flatMap((dir) => fs.readdirSync(path.join(nodeModules, dir), { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join('node_modules', dir, entry.name)));
+}
+
+/**
+ * Whether the package a dependency file is at the root of ships at all: the list leaves out some packages whole
+ * (`@types`, test runners), and a license file of a package the app doesn't carry is owed to nobody. It asks the
+ * matcher under test, so a pattern dropping a whole package is not caught here; one is dropped on purpose.
+ */
+const packageShips = (file: string): boolean => dependencyShipsUnder(patterns, path.join(path.dirname(file), 'package.json'));
 
 /** Every `packages/<pkg>/<part>` that exists: the populations below are per-package, and derived */
 const perPackage = (part: string): string[] =>
@@ -133,9 +196,10 @@ describe("the packaged app's file list", () => {
   it('carries the terminal broker where the packaged app resolves it', () => {
     const installed = population('the terminal broker package', [...filesUnder('packages/terminal-broker/src'), ...filesUnder('packages/terminal-broker/bin')])
       .map((file) => path.join('node_modules/@app/terminal-broker', path.relative('packages/terminal-broker', file)));
-    expect(installed.filter((file) => !ships(file))).toEqual([]);
-    // And it is `node_modules/**` that carries them, so the case can fail
-    expect(installed.filter((file) => shipsUnder(without('node_modules/**/*'), file))).toEqual([]);
+    expect(installed.filter((file) => !dependencyShipsUnder(patterns, file))).toEqual([]);
+    // And the case can fail: an exclusion naming `src` takes the resolver
+    const resolver = installed.filter((file) => file.includes('/src/'));
+    expect(population('the broker resolver', resolver).filter((file) => dependencyShipsUnder([...patterns, '!**/src/**'], file))).toEqual([]);
   });
 
   /**
@@ -166,6 +230,54 @@ describe("the packaged app's file list", () => {
     const stripped = without(`!packages/*/${PACK_WORK_DIR}/**`);
     expect(found.filter((file) => shipsUnder(stripped, file)).length,
       'nothing came back, so this pattern is not what keeps the working directories out').toBeGreaterThan(0);
+  });
+
+  /**
+   * Every license and notice file of every installed dependency ships, which the dependencies' licenses ask a
+   * redistribution to carry: the population is what is installed here, so a dependency added later is asked about
+   * without anyone naming it.
+   */
+  const dependencyLicenses = () => population('the dependencies\' license and notice files',
+    dependencyRootFiles().filter((file) => LICENSE_LIKE.test(path.basename(file)) && packageShips(file)));
+
+  it("ships every dependency's license and notice files", () => {
+    expect(dependencyLicenses().filter((file) => !dependencyShipsUnder(patterns, file))).toEqual([]);
+  });
+
+  it("ships the app's own license", () => {
+    const own = population("the app's own license files", fs.readdirSync(REPO_ROOT).filter((name) => LICENSE_LIKE.test(name)));
+    expect(own.filter((file) => !ships(file))).toEqual([]);
+  });
+
+  /** The mutation: an exclusion of `LICENSE*` takes nearly all of them */
+  it('would lose them to an exclusion of LICENSE*', () => {
+    const stripped = [...patterns, '!**/LICENSE*'];
+    expect(dependencyLicenses().filter((file) => !dependencyShipsUnder(stripped, file)).length,
+      'nothing was dropped, so the case cannot tell a list that keeps them from one that does not').toBeGreaterThan(0);
+  });
+
+  /**
+   * Markdown is excluded, and a license only in Markdown (esbuild's and vite's are `LICENSE.md`) still ships: the
+   * exclusion spares license-like names. Both halves, so the pattern can neither stop excluding Markdown nor start
+   * excluding licenses without one of them failing.
+   */
+  const markdownExclusion = () => {
+    const found = patterns.filter((pattern) => pattern.startsWith('!') && pattern.endsWith('.md'));
+    expect(found, 'the list should hold exactly one Markdown exclusion').toHaveLength(1);
+    return found[0];
+  };
+
+  it('ships license files written in Markdown, and leaves out other Markdown', () => {
+    const markdown = dependencyRootFiles().filter((file) => file.toLowerCase().endsWith('.md') && packageShips(file));
+    const licenses = population('the license files in Markdown', markdown.filter((file) => LICENSE_LIKE.test(path.basename(file))));
+    // README and CHANGELOG files electron-builder drops by itself whatever the list says, so they say nothing of it
+    const others = population('the other Markdown files', markdown.filter((file) =>
+      !LICENSE_LIKE.test(path.basename(file)) && !/^(readme|changelog)\.md$/i.test(path.basename(file))));
+    expect(licenses.filter((file) => !dependencyShipsUnder(patterns, file))).toEqual([]);
+    expect(others.filter((file) => dependencyShipsUnder(patterns, file))).toEqual([]);
+    // The mutation: a plain `*.md` exclusion drops the Markdown licenses
+    const plain = patterns.map((pattern) => (pattern === markdownExclusion() ? '!**/*.md' : pattern));
+    expect(licenses.filter((file) => !dependencyShipsUnder(plain, file)).length).toBeGreaterThan(0);
   });
 
   it('ships no package source', () => {
