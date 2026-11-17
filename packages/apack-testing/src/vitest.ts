@@ -20,8 +20,8 @@ export interface IsolatedDataDir {
   /** `test.globalSetup`: removes the run's data dir when the run ends */
   globalSetup: string[];
   /**
-   * `test.setupFiles`, first: ends a worker whose vitest is gone, and points the worker at its own subdir before
-   * anything opens a store
+   * `test.setupFiles`, first: ends a worker whose vitest is gone, keeps the machine's git config from its git, and
+   * points the worker at its own subdir before anything opens a store
    */
   setupFiles: string[];
 }
@@ -105,7 +105,7 @@ export function isolatedDataDir(prefix = 'apack-tests-'): IsolatedDataDir {
     dir,
     env: { APACK_ENV: 'test', APACK_USER_DATA_DIR: dir },
     globalSetup: [sibling('vitest-teardown')],
-    setupFiles: [sibling('vitest-exit-with-parent'), sibling('vitest-progress-guard'), sibling('vitest-worker')],
+    setupFiles: [sibling('vitest-exit-with-parent'), sibling('vitest-progress-guard'), sibling('vitest-git-config'), sibling('vitest-worker')],
   };
 }
 

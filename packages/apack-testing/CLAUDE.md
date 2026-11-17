@@ -93,6 +93,12 @@ its children's from `ps`, the reading `boundedSpawn` takes, and holds the budget
 which this package does not depend on. `@app/repo-checks`' `progress-guard.integration.spec.ts` is the guard over
 a real run.
 
+**Git in a test reads none of the machine's config** (`src/vitest-git-config.ts`, in `isolatedDataDir`'s setup files
+and every host config's): `GIT_CONFIG_GLOBAL` is the null device, `GIT_CONFIG_NOSYSTEM=1`, and an inherited
+`GIT_CONFIG_PARAMETERS`/`GIT_CONFIG_COUNT` is dropped. A spec needing an identity, a branch name or a setting gives it
+to its own repository or command; one testing what git does with a user's config writes that file and points
+`GIT_CONFIG_GLOBAL` at it, which outranks `HOME`. `suite-timeouts.spec.ts` holds every vitest config to loading it.
+
 **A file fails when it ends with a process it started running on out of its worker's reach**
 (`src/leftover-processes.ts`, read by the guard from one `ps` listing as each file ends). Two shapes: a descendant
 of the worker in a process group of its own (a broker started detached), and a process in the worker's group whose

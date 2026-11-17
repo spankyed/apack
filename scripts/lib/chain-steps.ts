@@ -591,6 +591,7 @@ const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.
  */
 export const SUITE_SETUP_FILES = ['packages/apack-testing/src/vitest-exit-with-parent.ts',
   'packages/apack-testing/src/vitest-progress-guard.ts',
+  'packages/apack-testing/src/vitest-git-config.ts',
   // Not a setup file itself: the guard's module for what a file left running, which fails files as the guard does
   'packages/apack-testing/src/leftover-processes.ts'];
 
