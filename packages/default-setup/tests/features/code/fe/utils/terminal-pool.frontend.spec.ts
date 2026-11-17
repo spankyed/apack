@@ -459,6 +459,28 @@ describe('finding text in a terminal', () => {
     await vi.waitFor(() => { expect(count.textContent).toBe('No results') })
   })
 
+  it('counts again when output changes what was found, while the bar is open', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const mountedIn = host()
+    const attachment = terminalPool.attach(info.id, mountedIn)!
+    const view = lastView()
+    view.matches = 1
+    attachment.find()
+    const input = bar(mountedIn)!.querySelector('input')!
+    const count = bar(mountedIn)!.querySelector<HTMLElement>('[data-terminal-find-count]')!
+    typeInto(input, 'error')
+    await vi.waitFor(() => { expect(count.textContent).toBe('1 of 1') })
+
+    view.reportFound(4)
+    expect(count.textContent, 'the count stayed as the last search left it').toBe('1 of 4')
+
+    press(input, 'Escape')
+    // A bar that is gone says nothing, and a change after it closed throws nothing
+    view.reportFound(6)
+    expect(bar(mountedIn)).toBeNull()
+  })
+
   it('closes on Escape, with nothing left marked and the terminal typed at again', async () => {
     const info = terminal()
     terminalPool.ensure(info)
