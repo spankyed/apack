@@ -1,8 +1,9 @@
 import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {APP_WORKSPACES, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
+import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
 import {shipElectronNotices} from './scripts/lib/electron-notices.ts';
+import {brokerNoticesFile, writeAppNotices} from './scripts/lib/third-party-notices.ts';
 
 /**
  * Electron Builder Configuration
@@ -48,6 +49,25 @@ export default /** @type import('electron-builder').Configuration */
       electronDist: path.join(context.packager.info.projectDir, 'node_modules', 'electron', 'dist'),
       packagedVersion: context.packager.info.framework.version,
     });
+    // THIRD-PARTY-NOTICES.txt at the app's root: what it carries and inlines (scripts/lib/third-party-notices.ts). A
+    // problem fails a production or beta build there, and is reported here on a preview
+    const projectDir = context.packager.info.projectDir;
+    const broker = brokerNoticesFile(appDir);
+    const problems = writeAppNotices({
+      appDir,
+      buildRoot,
+      bundleRecords: APP_WORKSPACES.map(workspace => bundledPackagesFile(buildRoot, workspace)),
+      // The built-in pack, whose dist the app ships from the repository
+      packDirs: [path.join(projectDir, 'packages', 'default-setup')],
+      licensesDir: path.join(projectDir, 'build', 'licenses'),
+      channel: metadata.channel,
+      native: [
+        {pointer: "Electron's and Chromium's: LICENSE.electron.txt and LICENSES.chromium.html, in the app's Resources folder on macOS and beside its executable elsewhere"},
+        {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", file: path.join(appDir, 'node_modules', 'elmdb', 'THIRD-PARTY-NOTICES')},
+        {pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin", file: broker ?? null},
+      ],
+    });
+    for (const problem of problems) console.warn(`  • third-party notices: ${problem}`);
   },
   directories: {
     output: isPreview ? 'dist/preview' : 'dist',
