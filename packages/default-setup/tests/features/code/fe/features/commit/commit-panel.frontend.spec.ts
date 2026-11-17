@@ -38,13 +38,13 @@ afterEach(() => {
 
 const settle = async () => { await nextTick(); await nextTick() }
 
-/** The panel, over a commit machine that has read `status` from the repository */
-async function panel(status: { files?: File[]; commitsAhead?: number; hasUpstream?: boolean; operation?: unknown } = {}) {
+/** The panel, over a commit machine that has read `status` from the repository, with the code settings `codeSettings` */
+async function panel(status: { files?: File[]; commitsAhead?: number; hasUpstream?: boolean; operation?: unknown } = {}, codeSettings: Record<string, unknown> = {}) {
   const codeMachine = createMachine({
     types: {} as { context: { baseDirectory: string; openFiles: unknown[]; settings: Record<string, unknown> }; events: AnyEventObject },
     id: CODE_SURFACE,
     invoke: { id: 'commit', src: commitState },
-    context: { baseDirectory: '/work/repo', openFiles: [], settings: { showStashes: true, showCommits: true } },
+    context: { baseDirectory: '/work/repo', openFiles: [], settings: { showStashes: true, showCommits: true, ...codeSettings } },
     on: { 'commit.*': { actions: sendTo('commit', ({ event }) => event) } },
   })
   code = createActor(codeMachine, { id: CODE_SURFACE }).start()
@@ -89,6 +89,20 @@ async function typeMessage(text: string) {
   box.dispatchEvent(new Event('input'))
   await settle()
 }
+
+it('lists the trailers git read under the message, marks those the settings leave out of a commit, and takes one out when asked', async () => {
+  const commit = await panel({ files: [staged] }, { trailersRemovedOnCommit: ['co-authored-by'] })
+  await typeMessage('feat\n\nCo-authored-by: A\nSigned-off-by: B')
+  commit.send({ type: 'commit.TRAILERS_READ', data: { message: 'feat\n\nCo-authored-by: A\nSigned-off-by: B', trailers: [{ key: 'Co-authored-by', value: 'A' }, { key: 'Signed-off-by', value: 'B' }] } })
+  await settle()
+
+  const chips = [...document.querySelectorAll<HTMLElement>('[data-commit-trailer]')]
+  expect(chips.map(chip => chip.textContent?.includes('removed on commit'))).toEqual([true, false])
+
+  chips[1]!.querySelector('button')!.click()
+  expect(sendToSystem.mock.calls.map(([, event]) => event).filter(event => event.type === 'commit.REMOVE_TRAILER'))
+    .toEqual([{ type: 'commit.REMOVE_TRAILER', message: 'feat\n\nCo-authored-by: A\nSigned-off-by: B', trailer: { key: 'Signed-off-by', value: 'B' } }])
+})
 
 it('says a push the user stopped was stopped, not pushed', async () => {
   const commit = await panel({ commitsAhead: 2 })

@@ -3,7 +3,7 @@
 // and one `Contract` per feature would collide there. Codegen reads this without running anything.
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
-  CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
+  CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CommitTrailer, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   PRBranchCheckout, GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
   SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
@@ -121,6 +121,10 @@ export type IncomingCommitEvents =
   | { type: 'commit.AMEND'; message?: string; evenIfPublished?: boolean }
   /** A commit's whole message, for rewording it */
   | { type: 'commit.GET_COMMIT_MESSAGE'; hash: string }
+  /** The trailers git reads at the end of the message being written */
+  | { type: 'commit.READ_TRAILERS'; message: string }
+  /** The message being written without one of its trailers, each line of it */
+  | { type: 'commit.REMOVE_TRAILER'; message: string; trailer: CommitTrailer }
   /** Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it */
   | { type: 'commit.REWRITE_COMMIT'; hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }
   /** What merging a branch in would do, before it is done */
@@ -152,6 +156,10 @@ export type OutgoingCommitEvents =
   | { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }
   | { type: 'commit.AMENDED' }
   | { type: 'commit.COMMIT_MESSAGE_RECEIVED'; data: { hash: string; message: string } }
+  /** The trailers of the message asked about, which the answer names */
+  | { type: 'commit.TRAILERS_READ'; data: { message: string; trailers: CommitTrailer[] } }
+  /** The message asked about without the trailer asked to remove: `without` is `message` when it had no such trailer */
+  | { type: 'commit.TRAILER_REMOVED'; data: { message: string; without: string } }
   | { type: 'commit.COMMIT_REWRITTEN'; data: { hash: string; action: RewriteAction } }
   /** A remote branch already holds commits the amend or rewrite would change: done only once the user says to go on */
   | { type: 'commit.REWRITE_NEEDS_CONFIRMATION'; data: { message: string } }

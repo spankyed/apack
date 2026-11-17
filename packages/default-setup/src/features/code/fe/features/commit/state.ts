@@ -5,9 +5,18 @@ import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from 'apack-git/staging';
-import type { BlameLine, ChangedFile, MergePreview, CommitFailure, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, RewriteAction, SignInHelp, SlowStatus, StartableOperation } from '../../../be/types.ts';
+import type { BlameLine, ChangedFile, MergePreview, CommitFailure, CommitTrailer, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, RepositoryChange, RepositoryOperation, RewriteAction, SignInHelp, SlowStatus, StartableOperation } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
+
+/**
+ * What the trailers a message ends with are read from: its last paragraph, when it has more than one. A message of
+ * one paragraph has none, that being its subject (`trailersIn`), so typing one asks git nothing
+ */
+export function trailerParagraph(message: string): string | undefined {
+  const paragraphs = message.split(/\r?\n\s*\r?\n/).filter(paragraph => paragraph.trim())
+  return paragraphs.length > 1 ? paragraphs.at(-1) : undefined
+}
 
 // Git types
 export interface GitStatusFile {
@@ -60,6 +69,10 @@ export interface CodeCommitContext {
   isGitLoading: boolean
   selectedGitFile: GitStatusFile | null
   commitMessage: string
+  /** The trailers git reads at the end of the message, as of the last paragraph it was asked about */
+  trailers: CommitTrailer[]
+  /** The last paragraph the trailers were last asked for, which an answer for another is not taken for */
+  trailersAsked: string | undefined
   revertDialogFile: GitStatusFile | null
   /**
    * Which of what a discard would remove cannot be brought back, as last asked: kept with the rows it was asked
@@ -319,6 +332,10 @@ export type Event =
   | { type: 'commit.STAGE_FILES'; paths: string[] }
   | { type: 'commit.UNSTAGE_FILES'; paths: string[] }
   | { type: 'commit.UPDATE_MESSAGE'; message: string }
+  /** Takes one of the trailers listed under the message out of it */
+  | { type: 'commit.REMOVE_TRAILER'; trailer: CommitTrailer }
+  | { type: 'commit.TRAILERS_READ'; data: { message: string; trailers: CommitTrailer[] } }
+  | { type: 'commit.TRAILER_REMOVED'; data: { message: string; without: string } }
   | { type: 'commit.COMMIT' }
   | { type: 'commit.VIEW_DIFF'; path: string; staged: boolean }
   | { type: 'commit.CLEAR_DIFF' }
@@ -651,6 +668,12 @@ export const commitState = setup({
   guards: {
     answersADiffRefresh: ({ context, event }) => settleCall(context.diffRefreshes, event).recorded !== undefined,
     answersTheStatusAsked: ({ context, event }) => answersCall(event, context.statusAsk),
+    /** Trailers read of the paragraph the message ends with now, and not of one it ended with before */
+    readOfTheMessage: ({ context, event }) =>
+      trailerParagraph((event as { type: 'commit.TRAILERS_READ'; data: { message: string } }).data.message) === trailerParagraph(context.commitMessage),
+    /** A trailer taken out of the message as it still is: one changed since is left as it was changed */
+    removedFromTheMessage: ({ context, event }) =>
+      (event as { type: 'commit.TRAILER_REMOVED'; data: { message: string } }).data.message === context.commitMessage,
     answersTheBranchesAsked: ({ context, event }) => answersCall(event, context.listAsks.branches),
     answersTheStashesAsked: ({ context, event }) => answersCall(event, context.listAsks.stashes),
     answersTheWorktreesAsked: ({ context, event }) => answersCall(event, context.listAsks.worktrees),
@@ -765,15 +788,39 @@ export const commitState = setup({
       }
     }),
 
-    /** Asks for a commit, one at a time; a message of nothing but co-author lines is said to be one rather than sent */
+    /**
+     * Asks for a commit, one at a time, of the message as written: what the settings say to leave out of it
+     * (`trailersRemovedOnCommit`) is left out by the system, which reads its trailers as git does
+     */
     commit: enqueueActions(({ context, enqueue }) => {
       if (context.isCommitting) return
-      const message = context.commitMessage.replace(/\n*Co-Authored-By:.*$/gim, '').trim()
-      if (!message) {
-        if (context.commitMessage.trim()) enqueue.assign({ gitError: 'The message has only Co-Authored-By lines: write what the commit does above them.', gitFailure: null })
-        return
-      }
+      const message = context.commitMessage.trim()
+      if (!message) return
       askBusy(enqueue, 'commit', { isCommitting: true }, call => { sendToSystem('code', { type: 'commit.COMMIT', message }, { call }) })
+    }),
+
+    /**
+     * Asks which trailers the message ends with, once its last paragraph is not the one last asked about: a message
+     * of one paragraph has none, and is not asked about
+     */
+    followTrailers: enqueueActions(({ context, enqueue }) => {
+      const paragraph = trailerParagraph(context.commitMessage)
+      if (paragraph === context.trailersAsked) return
+      enqueue.assign({ trailersAsked: paragraph, ...(paragraph === undefined && { trailers: [] }) })
+      if (paragraph !== undefined) enqueue(() => { sendToSystem('code', { type: 'commit.READ_TRAILERS', message: context.commitMessage }) })
+    }),
+
+    setTrailers: assign({
+      trailers: ({ event }) => (event as { type: 'commit.TRAILERS_READ'; data: { message: string; trailers: CommitTrailer[] } }).data.trailers,
+    }),
+
+    removeTrailer: ({ context, event }) => {
+      const { trailer } = event as { type: 'commit.REMOVE_TRAILER'; trailer: CommitTrailer }
+      sendToSystem('code', { type: 'commit.REMOVE_TRAILER', message: context.commitMessage, trailer })
+    },
+
+    takeMessageWithoutTrailer: assign({
+      commitMessage: ({ event }) => (event as { type: 'commit.TRAILER_REMOVED'; data: { message: string; without: string } }).data.without,
     }),
 
     handleCommitSuccess: assign({
@@ -1353,6 +1400,8 @@ export const commitState = setup({
   context: {
     diffRefreshes: {},
     commitMessage: '',
+    trailers: [],
+    trailersAsked: undefined,
     directory: '',
     isWatchingRepository: true,
     isWatchSilent: false,
@@ -1427,13 +1476,16 @@ export const commitState = setup({
           actions: 'handleDiffReceived'
         },
         'commit.UPDATE_MESSAGE': {
-          actions: 'updateCommitMessage'
+          actions: ['updateCommitMessage', 'followTrailers']
         },
+        'commit.REMOVE_TRAILER': { actions: 'removeTrailer' },
+        'commit.TRAILERS_READ': { guard: 'readOfTheMessage', actions: 'setTrailers' },
+        'commit.TRAILER_REMOVED': { guard: 'removedFromTheMessage', actions: ['takeMessageWithoutTrailer', 'followTrailers'] },
         'commit.COMMIT': {
           actions: 'commit'
         },
         'commit.COMMIT_SUCCESS': {
-          actions: ['handleCommitSuccess', 'refreshGitStatus']
+          actions: ['handleCommitSuccess', 'followTrailers', 'refreshGitStatus']
         },
         'commit.TOGGLE_REVERT_DIALOG': {
           actions: 'toggleRevertDialog'
@@ -1570,7 +1622,7 @@ export const commitState = setup({
         },
         'commit.AMEND': { actions: 'requestRewrite' },
         'commit.REWRITE_COMMIT': { actions: 'requestRewrite' },
-        'commit.AMENDED': { actions: [assign({ pendingRewrite: null, commitMessage: '', isCommitting: false }), 'requestLogList'] },
+        'commit.AMENDED': { actions: [assign({ pendingRewrite: null, commitMessage: '', isCommitting: false }), 'followTrailers', 'requestLogList'] },
         'commit.COMMIT_REWRITTEN': { actions: [assign({ pendingRewrite: null, rewording: null }), 'requestLogList'] },
         'commit.REWRITE_NEEDS_CONFIRMATION': {
           actions: assign({
@@ -1673,7 +1725,7 @@ export const commitState = setup({
           actions: 'setGeneratingMessage'
         },
         'commit.MESSAGE_GENERATED': {
-          actions: 'handleMessageGenerated'
+          actions: ['handleMessageGenerated', 'followTrailers']
         },
         'commit.STASH_PUSH': {
           actions: 'stashPush'
@@ -1686,7 +1738,7 @@ export const commitState = setup({
           actions: 'handleStashListReceived'
         },
         'commit.STASH_SUCCESS': {
-          actions: ['handleStashSuccess', 'refreshGitStatus']
+          actions: ['handleStashSuccess', 'followTrailers', 'refreshGitStatus']
         },
         // A stash applied leaves the message typed as it is; one popped is gone from the list
         'commit.STASH_APPLIED': {
