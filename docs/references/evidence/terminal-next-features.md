@@ -882,15 +882,25 @@ wired the find bar. Measured on the same Mac at a load average of 45 to 60.
   search and told nobody, so the count stood as of the last search or step. It has `onFound`, which the pool says
   the count from.
 - **What waits for a hold is bounded in bytes**, 1 MiB, as well as at 64 questions: a search waits with its needle.
-- **A steady cursor replays steady.** The core's redraw writes mode 12 only when set, so a keyframe of a steady
-  cursor replayed into a session, whose cursor blinks by default, blinked. A redraw ends with mode 12 reset for one.
+- **A recording's keyframe is the core's own snapshot of its terminal** (spankyed/apack-terminal#53, pinned at
+  `60bf75c`), where it was the sequences that redraw one screen. Those left out the cursor's shape, a steady
+  cursor, a saved cursor, so that a replay printed over the wrong cells, and the shell's screen under a
+  full-screen program. A replay now puts the terminal back whole, under the settings of the session replaying
+  it, with its images where their pixels fit. A keyframe of a screen and a thousand lines is about 390 KB where
+  a redraw was about 105 KB, 0.75 ms to write out and 0.5 ms to put back (`benches/keyframe.rs`, load average
+  about 140).
+- **Held by a property, not by reading.** Over generated output a terminal put back reads as the one written out
+  and still does after whatever is written next; 300,000 cases each. It found two defects of the change itself
+  and what the core's snapshot does not hold inside left and right margins: a wrap pending at a right margin,
+  and which rows keep a prompt mark across a scroll. Both are pinned by cases that fail when the core holds them.
 - **`cargo xtask check-exclusions` could not fail.** cargo-mutants 27.1 lists its `delete field` mutants whatever
   pattern it is given, so every exclusion counted at least fifteen. With those left out the check named five
   exclusions that excluded nothing; four are repointed and one, for a line that is gone, removed.
 
 ### Not done
 
-- A keyframe does not record the cursor's shape: the core's redraw does not write it, and the terminal has no read
-  for it outside a render state. A recording of a block cursor replays as the session's default shape.
+- A keyframe is read by the core that wrote it, and upstream says its snapshot format will change: a recording
+  made under another core is refused when looked back through, and a session restored from one starts fresh.
+- The two gaps in the core's snapshot are not reported upstream yet.
 - Nothing here was seen in a real window, as above.
 
