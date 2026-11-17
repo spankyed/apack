@@ -1,4 +1,3 @@
-/// <reference path="./spdx.d.ts" />
 /**
  * The app's `THIRD-PARTY-NOTICES.txt`: the license and notices of every third-party package the packaged app carries,
  * which their licenses ask a redistribution to carry, written into the app by `afterPack` (`electron-builder.mjs`).
