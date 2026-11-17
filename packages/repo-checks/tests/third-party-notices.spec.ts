@@ -56,13 +56,26 @@ describe('which license a package is under', () => {
     expect(chooseLicense('LGPL-3.0-only', 'both')).toBeUndefined();
   });
 
+  it("understands SPDX's + as spdx-satisfies does, and still names the branch that comes first in ACCEPTED", () => {
+    expect(chooseLicense('GPL-2.0+', 'files')).toBeUndefined();
+    expect(chooseLicense('GPL-2.0+ OR MIT', 'files')).toBe('MIT');
+    // spdx-satisfies accepts LGPL-2.1+ for a shipped package, and MIT still comes first
+    expect(chooseLicense('MIT OR LGPL-2.1+', 'files')).toBe('MIT');
+    expect(chooseLicense('(MIT AND LGPL-2.1) OR ISC', 'files')).toBe('ISC');
+  });
+
+  it('judges a license with a WITH exception as the license, and names it with the exception', () => {
+    expect(chooseLicense('Apache-2.0 WITH LLVM-exception', 'inlined')).toBe('Apache-2.0 WITH LLVM-exception');
+    expect(chooseLicense('GPL-3.0-only WITH GCC-exception-3.1', 'files')).toBeUndefined();
+  });
+
   it('refuses a license it does not know', () => {
     expect(chooseLicense('GPL-3.0-only', 'files')).toBeUndefined();
     expect(chooseLicense('SEE LICENSE IN EULA.txt', 'files')).toBeUndefined();
   });
 
   it('refuses an expression that does not parse, rather than reading part of it', () => {
-    for (const malformed of ['MIT and GPL-3.0', 'MIT OR', '(MIT', 'MIT)', 'MIT WITH', 'OR MIT']) {
+    for (const malformed of ['MIT and ISC', 'MIT or ISC', 'MIT OR', '(MIT', 'MIT)', 'MIT WITH', 'OR MIT']) {
       expect(chooseLicense(malformed, 'files'), malformed).toBeUndefined();
     }
     expect(chooseLicense('(MIT OR GPL-3.0-only) AND BSD-3-Clause', 'files')).toBe('MIT AND BSD-3-Clause');

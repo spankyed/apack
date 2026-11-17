@@ -34,6 +34,8 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import parse, { type Node as SpdxNode } from 'spdx-expression-parse';
+import satisfies from 'spdx-satisfies';
 import { bundledPackages, installedPackage, type BundledPackage } from '@apackdev/host/build/bundled-packages';
 import { PACK_BUILD_STAGING_DIR } from '@apackdev/host/build/pack-workdir';
 
@@ -119,48 +121,38 @@ export function declaredLicense(manifest: { license?: unknown; licenses?: unknow
   return undefined;
 }
 
+/** An expression tree written back as an SPDX expression, with or without its exceptions */
+function spdxText(node: SpdxNode, exceptions = true): string {
+  if ('license' in node) return `${node.license}${node.plus ? '+' : ''}${exceptions && node.exception ? ` WITH ${node.exception}` : ''}`;
+  const [left, right] = [spdxText(node.left, exceptions), spdxText(node.right, exceptions)];
+  return node.conjunction === 'and' ? `${left} AND ${right}` : `(${left} OR ${right})`;
+}
+
 /**
- * The accepted license an SPDX expression comes to, or `undefined` when none or when it does not parse: an OR takes
- * the branch whose license comes first in `ACCEPTED`; an AND needs all of its parts and comes to them joined. `WITH`
- * exceptions are kept with their license. Operators are SPDX's, upper case, so `MIT and GPL-3.0` does not parse.
+ * The accepted license an SPDX expression comes to, or `undefined` when it is not accepted or does not parse.
+ * `spdx-expression-parse` reads the expression, refusing what is not SPDX (`MIT and ISC`, whose operators are not
+ * upper case, or `(MIT`), and `spdx-satisfies` decides whether it is accepted, `+` and `-or-later` included. A `WITH`
+ * exception only grants more than its license does, so a license with one is judged as the license, and the notices
+ * name it with the exception. What is chosen is what the notices name: an AND comes to all of its parts, and an OR to
+ * its accepted branch whose parts are each satisfied earliest in `ACCEPTED`.
  */
 export function chooseLicense(expression: string, carried: Carried): string | undefined {
-  const tokens = expression.replace(/[()]/g, ' $& ').trim().split(/\s+/);
-  let at = 0;
-  const accepted = (id: string) => (ACCEPTED as readonly string[]).includes(id) && !(carried !== 'files' && SHIPPED_ONLY.test(id));
-  const rank = (choice: string) => Math.max(...choice.split(' AND ').map((id) => ACCEPTED.indexOf(id.split(' WITH ')[0] as never)));
-  let malformed = false;
-  const operand = (token: string | undefined) => token !== undefined && !['(', ')', 'AND', 'OR', 'WITH'].includes(token);
-  function primary(): string | undefined {
-    if (tokens[at] === '(') {
-      at++;
-      const inner = either();
-      if (tokens[at++] !== ')') malformed = true;
-      return inner;
-    }
-    const id = tokens[at++];
-    if (!operand(id)) { malformed = true; return undefined; }
-    if (tokens[at] === 'WITH') {
-      at++;
-      const exception = tokens[at++];
-      if (!operand(exception)) { malformed = true; return undefined; }
-      return accepted(id) ? `${id} WITH ${exception}` : undefined;
-    }
-    return accepted(id) ? id : undefined;
-  }
-  function both(): string | undefined {
-    const parts = [primary()];
-    while (tokens[at] === 'AND') { at++; parts.push(primary()); }
-    return parts.every(Boolean) ? parts.join(' AND ') : undefined;
-  }
-  function either(): string | undefined {
-    const choices = [both()];
-    while (tokens[at] === 'OR') { at++; choices.push(both()); }
-    const fine = choices.filter((choice): choice is string => !!choice);
-    return fine.sort((a, b) => rank(a) - rank(b))[0];
-  }
-  const chosen = either();
-  return malformed || at !== tokens.length ? undefined : chosen;
+  const allowed = ACCEPTED.filter((id) => !(carried !== 'files' && SHIPPED_ONLY.test(id)));
+  let tree: SpdxNode;
+  try { tree = parse(expression); } catch { return undefined; }
+  const fine = (node: SpdxNode) => satisfies(spdxText(node, false), allowed);
+  if (!fine(tree)) return undefined;
+  // Where in ACCEPTED a chosen license first satisfies, so `MIT OR LGPL-2.1+` names MIT, as `LGPL-2.1+` is satisfied
+  // only by a later entry, whatever ids spdx-satisfies reads it as
+  const position = (part: SpdxNode) => allowed.findIndex((id) => satisfies(spdxText(part, false), [id]));
+  const parts = (node: SpdxNode): SpdxNode[] => ('license' in node || node.conjunction === 'or' ? [node] : [...parts(node.left), ...parts(node.right)]);
+  const choose = (node: SpdxNode): SpdxNode => {
+    if ('license' in node) return node;
+    if (node.conjunction === 'and') return { left: choose(node.left), conjunction: 'and', right: choose(node.right) };
+    const rank = (branch: SpdxNode) => Math.max(...parts(branch).map(position));
+    return [node.left, node.right].filter(fine).map(choose).sort((x, y) => rank(x) - rank(y))[0];
+  };
+  return spdxText(choose(tree));
 }
 
 /** A package's own license files, read, sorted by name */
