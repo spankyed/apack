@@ -311,6 +311,20 @@ export interface PackServiceAccess {
 }
 
 // @public
+export interface ProgramStatusRecord {
+    readonly app: string | null;
+    readonly changed: number;
+    readonly confirmed: 'matched' | 'mismatched' | 'unknown';
+    readonly id: string;
+    readonly kind: 'permission' | 'question' | 'auth' | null;
+    readonly message: string | null;
+    readonly progress: number | null;
+    readonly sinceMs: number;
+    readonly state: 'idle' | 'working' | 'blocked' | 'done' | 'error';
+    readonly title: string | null;
+}
+
+// @public
 export type ProviderName = 'google' | 'anthropic' | 'openai' | 'groq' | 'mistral' | 'cohere';
 
 // @public
@@ -602,6 +616,14 @@ export type TerminalEvent =
 } | {
     readonly kind: 'cwdChanged';
     readonly cwd: string;
+}
+/**
+* What the session's programs say they are doing changed. **Every record the session holds, as it
+* stands**, never a change to them: replace what you held. Empty when the last record went
+*/
+| {
+    readonly kind: 'programStatus';
+    readonly statuses: readonly ProgramStatusRecord[];
 };
 
 // @public
@@ -612,6 +634,7 @@ export interface TerminalFacts {
     readonly outcome: CommandOutcome | null;
     readonly refused: number;
     readonly running: boolean;
+    readonly statuses: readonly ProgramStatusRecord[];
     readonly vouched: boolean;
 }
 
@@ -703,6 +726,7 @@ export interface TerminalSessionSummary {
     readonly rows: number;
     // (undocumented)
     readonly running: boolean;
+    readonly statuses: readonly ProgramStatusRecord[];
     readonly title: string | null;
 }
 

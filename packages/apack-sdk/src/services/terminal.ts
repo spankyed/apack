@@ -76,7 +76,58 @@ export type TerminalEvent =
   | { readonly kind: 'commandStarted'; readonly command: string | null }
   /** What was running ended, and how as far as anything said. Never `running` */
   | { readonly kind: 'commandFinished'; readonly outcome: CommandOutcome }
-  | { readonly kind: 'cwdChanged'; readonly cwd: string };
+  | { readonly kind: 'cwdChanged'; readonly cwd: string }
+  /**
+   * What the session's programs say they are doing changed. **Every record the session holds, as it
+   * stands**, never a change to them: replace what you held. Empty when the last record went
+   */
+  | { readonly kind: 'programStatus'; readonly statuses: readonly ProgramStatusRecord[] };
+
+/**
+ * One thing a program says it is doing (OSC 7501, the Program Status Protocol): idle, working, done,
+ * blocked on the person, or failed.
+ *
+ * **A claim, to show and never to act on.** Any program in the terminal can write a report, and one
+ * naming another program is as well formed as an honest one: a file printed to the terminal can say an
+ * agent is asking for permission. `confirmed` is what the host could check of it. `title` and `message`
+ * are text the program chose — free of control characters, and still not markup.
+ *
+ * The host keeps the records by the protocol's rules, which is why every reading of them is the whole
+ * set: a program's command ending takes what it was in the middle of, and what it finished or failed at
+ * stays until it is replaced or the session ends.
+ */
+export interface ProgramStatusRecord {
+  /** Which record this is. Empty for the program itself; `build/test` is beneath `build` */
+  readonly id: string;
+  /**
+   * What the program says it is doing: at rest (`idle`), `working`, unable to go on until the person does
+   * something (`blocked`), finished with something they have not looked at (`done`), or failed (`error`)
+   */
+  readonly state: 'idle' | 'working' | 'blocked' | 'done' | 'error';
+  /** What a blocked program needs. `null` for every other state, and where it did not say */
+  readonly kind: 'permission' | 'question' | 'auth' | null;
+  /** How far along, from 0 to 100, where the program gave a figure */
+  readonly progress: number | null;
+  /** The program's name for a machine to match on (`codex`, `claude-code`): its own, or its nearest ancestor record's */
+  readonly app: string | null;
+  /** A short label for the record */
+  readonly title: string | null;
+  /** One line saying what it is doing, waiting for or finished */
+  readonly message: string | null;
+  /**
+   * Moved by every report that changed a record of this session, so a later change is a larger number.
+   * What "has the person seen this" is compared on, within one session
+   */
+  readonly changed: number;
+  /** When the record entered the state it is in, in milliseconds since the Unix epoch. To show and to order by; decide nothing on it */
+  readonly sinceMs: number;
+  /**
+   * Whether the program in front of the terminal was the one the record names, when the record was taken:
+   * `matched`, `mismatched` when it was another program, and `unknown` when there was nothing to compare —
+   * the record names no program, or the platform cannot say what is in front (Windows)
+   */
+  readonly confirmed: 'matched' | 'mismatched' | 'unknown';
+}
 
 /** What a session's owner hears from it. All of it is news: nobody asked, and none of it answers a call. */
 export interface TerminalListeners {
@@ -137,6 +188,8 @@ export interface TerminalFacts {
    * of step with its session and a stream forging marks both move it; a shell that marks nothing does not
    */
   readonly refused: number;
+  /** What the session's programs say they are doing, as a `programStatus` event last carried it. Claims, each of them */
+  readonly statuses: readonly ProgramStatusRecord[];
 }
 
 /** A colour as `#rrggbb` */
@@ -342,6 +395,8 @@ export interface TerminalSessionSummary {
   readonly cwd: string | null;
   readonly command: string | null;
   readonly running: boolean;
+  /** What its programs say they are doing: what a caller that did not hear the events starts from */
+  readonly statuses: readonly ProgramStatusRecord[];
 }
 
 /**
