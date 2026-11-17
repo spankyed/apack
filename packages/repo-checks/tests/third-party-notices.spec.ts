@@ -282,6 +282,8 @@ describe("the app's SBOM", () => {
         'node_modules/a/node_modules/vue': { version: '3.4.0', integrity: 'sha512-nested' },
         'node_modules/linked': { resolved: 'packages/linked', link: true },
         'node_modules/aliased': { name: 'real-name', version: '1.0.0', integrity: 'sha512-aliased' },
+        'node_modules/b/node_modules/vue': { version: '3.5.0', integrity: 'sha512-later-copy' },
+        'node_modules/unversioned': { integrity: 'sha512-unversioned' },
       } }),
     });
     const { purls, integrity } = sbomIdentity(root, { elmdb: 'elmdb#crates/elmdb-node', 'apack-terminal': 'apack-terminal' });
@@ -289,7 +291,8 @@ describe("the app's SBOM", () => {
       elmdb: 'pkg:github/spankyed/elmdb@abc123#crates/elmdb-node',
       'apack-terminal': 'pkg:github/spankyed/apack-terminal@def456',
     });
-    expect(Object.fromEntries(integrity)).toEqual({
+    // The first copy of a release is the one hashed; an entry without a version or an integrity is not hashed at all
+    expect(Object.fromEntries(integrity)).toStrictEqual({
       'vue@3.5.0': 'sha512-hoisted', 'vue@3.4.0': 'sha512-nested', 'real-name@1.0.0': 'sha512-aliased',
     });
   });
