@@ -50,7 +50,7 @@ test.describe('stream a deterministic reply through the real CLI flow and persis
           const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/code').getSnapshot().context as unknown as { settings: { cliPaths?: Record<string, string> } };
           return context.settings.cliPaths?.['claude-code'];
         })).toBe(executable);
-        await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/code', { type: 'SET_BASE_DIRECTORY', path: directory }), directory);
+        await app.send('default-setup/code', { type: 'SET_BASE_DIRECTORY', path: directory });
         await expect.poll(() => appPage.evaluate(() => {
           const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/code').getSnapshot().context as unknown as { baseDirectory?: string };
           return context.baseDirectory;

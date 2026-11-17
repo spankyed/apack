@@ -20,6 +20,7 @@ export const APP_READY_STATE = "running.connected";
 
 // @public (undocumented)
 export interface AppDriver {
+    ask: (system: string, event: SystemEvent) => Promise<SystemEvent>;
     // (undocumented)
     getContext: () => Promise<{
         activeSurfaceId: string;
@@ -32,6 +33,7 @@ export interface AppDriver {
     report: (name: string, value: unknown) => Promise<string>;
     // (undocumented)
     screenshot: (name: string) => Promise<Buffer>;
+    send: (system: string, event: SystemEvent) => Promise<void>;
     // (undocumented)
     sendEvent: (event: Record<string, unknown>) => Promise<void>;
     // (undocumented)
@@ -89,7 +91,7 @@ export interface AttachTargets {
 export function attachToApp(input: AttachOptions): Promise<AttachedApp>;
 
 // @public
-export function createAppDriver(page: Page, screenshotDir: string): AppDriver;
+export function createAppDriver(page: Page, screenshotDir: string, appPid?: number): AppDriver;
 
 // @public (undocumented)
 export function createTest(options?: CreateTestOptions): {
@@ -128,6 +130,12 @@ export { expect }
 
 // @public
 export function findWindow<T extends AttachTargets>(browser: T, timeoutMs: number): Promise<Page>;
+
+// @public
+export type SystemEvent = {
+    type: string;
+    [key: string]: unknown;
+};
 
 // @public (undocumented)
 export const test: TestType<PlaywrightTestArgs & PlaywrightTestOptions & {

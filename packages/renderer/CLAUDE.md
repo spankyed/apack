@@ -36,7 +36,7 @@ Its static imports are evaluated first, `virtual:host-shared-modules` among them
 6. Sets the globals:
    - `window.applicationState` is the actor. The E2E fixture (`@apackdev/testing`) finds the main window by it and drives it.
    - `window.__disableOnboardingUI()` sends `ONBOARDING_COMPLETE`.
-   - `window.__sendToSystem` is `untypedSendToSystem`, for the E2E suite: a send to a backend system is otherwise only reachable over the API's tRPC WebSocket, which is a client to stand up rather than a call to make.
+   - `window.__e2eSystems` is the E2E suite's door to the backend's systems (`src/transport/e2e-door.ts`), which `app.send` and `app.ask` (`@apackdev/testing`) call and specs never touch: `send` over this window's connection, rejecting with the API's refusal, and `ask`, which claims `HOST.e2e` and resolves with the system's `reply`, taken off the subscription before the shell sees it.
 7. Subscribes to `protocolAction`: `apack://install?pack=…&sourceKind=…` → `installFromProtocol` (`@apackdev/host/fe`), which reads the parameters and sends `INSTALL_PACK` to the `packs` system.
 8. Mounts `views/App.vue`, sets a Vue `errorHandler`, then calls `electronAPI.rendererReady()`, which tells main to show the window.
 

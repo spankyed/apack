@@ -18,4 +18,10 @@ export const HOST = {
    * keeps working and no second address grammar exists. Nothing holds it unless a drive session is running.
    */
   drive: resolveName('drive', HOST_PACK_ID),
+  /**
+   * The E2E suite asking a system something from a window. The window claims this name on its own connection
+   * when `app.ask` (`@apackdev/testing`) asks, so the system's `reply` comes back to that window, where the
+   * renderer hands it to the waiting ask instead of to a surface. Claimed, never registered, as `drive` is.
+   */
+  e2e: resolveName('e2e', HOST_PACK_ID),
 } as const;

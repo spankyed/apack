@@ -29,7 +29,6 @@ export interface PerformanceViewCompletion {
 }
 export interface PerformanceWindow {
   __waitForPerformanceView(options: PerformanceViewCompletion): Promise<void>;
-  __sendToSystem(system: string, event: Record<string, unknown>): void;
   __performance: {
     start(mode: RecordingMode): Promise<void>;
     begin: Controller['begin'];

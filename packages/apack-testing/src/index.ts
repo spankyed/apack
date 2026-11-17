@@ -34,7 +34,39 @@ export interface AppDriver {
   navigate: (surfaceId: string) => Promise<void>;
   waitForState: (check: string, timeout?: number) => Promise<void>;
   waitForSurface: (surfaceId: string, timeout?: number) => Promise<void>;
+  /**
+   * Sends a backend system an event as a surface in this window does, the system named as the pack under test's
+   * code names one (its own by feature id, any other as `<packId>/<featureId>`).
+   *
+   * Over the window's own connection, so a handler that answers the window it was asked from answers this one.
+   * Resolves once the API accepted the send, and rejects with its refusal: a system nothing provides, or an event
+   * the system does not take, fails the spec there rather than as a wait for something that never happens.
+   *
+   * It names no return address, so a system's `reply` to it has nowhere to go. Use `ask` for an answer.
+   */
+  send: (system: string, event: SystemEvent) => Promise<void>;
+  /**
+   * Sends as `send` does, and resolves with the event the system's `reply` answers it with, matched by the call
+   * the ask was sent under: another ask in flight, or a broadcast of the same type, is never taken for it.
+   *
+   * A refusal the system *answers* with (an `…_ERROR` event) is an answer, resolved like any other; the spec
+   * asserts on its type. The wait lasts as long as the app is working, not for a fixed time, so a loaded machine
+   * makes an answer late and never fails it; an app that has stopped working without answering fails it, saying so.
+   */
+  ask: (system: string, event: SystemEvent) => Promise<SystemEvent>;
 }
+
+/** An event to or from a backend system */
+export type SystemEvent = { type: string; [key: string]: unknown };
+
+/** What the fixture calls of the renderer's door to the backend's systems (`packages/renderer/src/transport/e2e-door.ts`) */
+type E2eWindow = {
+  __e2eSystems?: { send(to: string, event: SystemEvent): Promise<void>; ask(to: string, event: SystemEvent): Promise<SystemEvent> };
+};
+
+/** The door, or a failure naming why there is none: an app built before it existed */
+const E2E_DOOR_MISSING = 'This app has no window.__e2eSystems, the door app.send and app.ask reach its systems through; '
+  + 'it was built before the door existed. Rebuild the renderer (npm run build -w @app/renderer), or test a newer app.';
 
 export interface CreateTestOptions extends TestHostOptions {
   screenshotDir?: string;
@@ -203,10 +235,10 @@ async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Prom
  * its whole suite while dead, because every test it runs asks the app about something else.
  */
 /**
- * The ref a spec's surface name is, as the pack under test's own code names surfaces: its features by id, any
- * other (the host's too) as `<packId>/<featureId>`.
+ * The ref a spec's surface or system name is, as the pack under test's own code names them: its features by id,
+ * any other (the host's too) as `<packId>/<featureId>`.
  */
-function resolveSurface(name: string): string {
+function resolveFeature(name: string): string {
   return resolveName(name, getPackManifest()?.id);
 }
 
@@ -359,8 +391,11 @@ export function waitForAppReady(page: Page, { state = APP_READY_STATE, timeout =
  *
  * `screenshotDir` is the one thing it closes over; the report directory is resolved per call, since a run
  * that reports nothing should leave no directory behind.
+ *
+ * `appPid` is the app's process, which `ask` waits on while it works. A page reached over CDP has no process this
+ * knows, and its asks are then bounded by the test's own timeout.
  */
-export function createAppDriver(page: Page, screenshotDir: string): AppDriver {
+export function createAppDriver(page: Page, screenshotDir: string, appPid?: number): AppDriver {
   const app: AppDriver = {
     sendEvent: async (event) => {
       await page.evaluate((e) => {
@@ -403,7 +438,7 @@ export function createAppDriver(page: Page, screenshotDir: string): AppDriver {
     },
   
     navigate: async (surfaceId) => {
-      const id0 = resolveSurface(surfaceId);
+      const id0 = resolveFeature(surfaceId);
       await page.evaluate((id) => {
         (window as any).applicationState.send({ type: 'SELECT_SURFACE', surface: id });
       }, id0);
@@ -418,10 +453,29 @@ export function createAppDriver(page: Page, screenshotDir: string): AppDriver {
     },
   
     waitForSurface: async (surfaceId, timeout = 30_000) =>
-      awaitShell(page, { kind: 'surface', ref: resolveSurface(surfaceId) }, timeout),
+      awaitShell(page, { kind: 'surface', ref: resolveFeature(surfaceId) }, timeout),
 
     waitForState: async (check, timeout = 10_000) =>
       awaitShell(page, { kind: 'state', path: check }, timeout),
+
+    send: async (system, event) => {
+      await page.evaluate(async ({ to, event, missing }) => {
+        const door = (window as unknown as E2eWindow).__e2eSystems;
+        if (!door) throw new Error(missing);
+        await door.send(to, event);
+      }, { to: resolveFeature(system), event, missing: E2E_DOOR_MISSING });
+    },
+
+    ask: async (system, event) => {
+      const to = resolveFeature(system);
+      const answer = page.evaluate(({ to, event, missing }) => {
+        const door = (window as unknown as E2eWindow).__e2eSystems;
+        if (!door) throw new Error(missing);
+        return door.ask(to, event);
+      }, { to, event, missing: E2E_DOOR_MISSING });
+      if (appPid === undefined) return answer;
+      return answerWhileWorking(answer, { work: fromNow(processWork(appPid)), what: `${to}, asked ${event.type},` });
+    },
   };
   return app;
 }
@@ -738,8 +792,8 @@ export function createTest(options: CreateTestOptions = {}) {
       }
     },
 
-    app: async ({ appPage: page }, use) => {
-      await use(createAppDriver(page, screenshotDir));
+    app: async ({ appPage: page, electronApp }, use) => {
+      await use(createAppDriver(page, screenshotDir, electronApp.process().pid));
     },
   });
 

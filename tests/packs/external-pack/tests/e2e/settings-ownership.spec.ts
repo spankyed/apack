@@ -49,9 +49,7 @@ test('backup import restores all settings owners and updates an open window', as
   const backupResult = () => appPage.evaluate(() => (window as any).applicationState.system
     .get('default-setup/database').getSnapshot().context.backupResult);
   try {
-    await appPage.evaluate(packSlug => (window as any).__sendToSystem('host/packs', {
-      type: 'INSTALL_PACK', packSlug, sourceKind: 'local',
-    }), companion);
+    await app.send('host/packs', { type: 'INSTALL_PACK', packSlug: companion, sourceKind: 'local' });
     await app.waitForSurface('bundled-ui-fixture/scribbles');
     const original = await change('Saved');
     const companionRuntime = await acceptedRuntime(appPage, 'bundled-ui-fixture');
@@ -142,9 +140,7 @@ test('backup import restores all settings owners and updates an open window', as
     await appPage.getByText('e2e-fixture/assistant', { exact: true }).click();
     await expect(appPage.getByLabel('Fixture assistant name', { exact: true }))
       .toHaveValue(JSON.parse(original).packs['e2e-fixture'].assistant.name);
-    await appPage.evaluate(() => (window as any).__sendToSystem('host/packs', {
-      type: 'UNINSTALL_PACK', packId: 'bundled-ui-fixture',
-    }));
+    await app.send('host/packs', { type: 'UNINSTALL_PACK', packId: 'bundled-ui-fixture' });
     await expect(appPage.getByText('bundled-ui-fixture/assistant', { exact: true })).toHaveCount(0);
   } finally {
     await second?.close();
@@ -153,9 +149,7 @@ test('backup import restores all settings owners and updates an open window', as
 });
 
 test('two external assistant groups survive independent edits, disable, reset and reinstall', async ({ app, appPage }) => {
-  const install = () => appPage.evaluate(packSlug => (window as any).__sendToSystem('host/packs', {
-    type: 'INSTALL_PACK', packSlug, sourceKind: 'local',
-  }), companion);
+  const install = () => app.send('host/packs', { type: 'INSTALL_PACK', packSlug: companion, sourceKind: 'local' });
   await install();
   await app.waitForSurface('bundled-ui-fixture/scribbles');
   await app.navigate('host/settings');
@@ -197,7 +191,7 @@ test('two external assistant groups survive independent edits, disable, reset an
   await select('bundled-ui-fixture');
   await scribbles.fill('Restored Sydney'); await scribbles.blur();
   await expect(appPage.getByText('Settings saved', { exact: true })).toBeVisible();
-  await appPage.evaluate(() => (window as any).__sendToSystem('host/packs', { type: 'UNINSTALL_PACK', packId: 'bundled-ui-fixture' }));
+  await app.send('host/packs', { type: 'UNINSTALL_PACK', packId: 'bundled-ui-fixture' });
   await expect(appPage.getByText('bundled-ui-fixture/assistant', { exact: true })).toHaveCount(0);
   await install();
   await app.waitForSurface('bundled-ui-fixture/scribbles');
@@ -259,9 +253,7 @@ test('accepted dependency credentials enforce shared, owner-only and reload boun
   try {
     await ready;
     await client.mutation('bus.claim', { as: 'host/drive' });
-    await appPage.evaluate(packSlug => (window as any).__sendToSystem('host/packs', {
-      type: 'INSTALL_PACK', packSlug, sourceKind: 'local',
-    }), companion);
+    await app.send('host/packs', { type: 'INSTALL_PACK', packSlug: companion, sourceKind: 'local' });
     await app.waitForSurface('bundled-ui-fixture/scribbles');
     fs.symlinkSync(path.join(root, 'node_modules'), path.join(dependent, 'node_modules'), 'dir');
     fs.writeFileSync(path.join(dependent, 'package.json'), JSON.stringify({ name: id, type: 'module' }));
@@ -293,9 +285,7 @@ shared.set({ path: ['name'], value: 2 });
     });
     const outcome = nextEvent(event => (event.type === 'PACK_INSTALL_COMPLETE' || event.type === 'PACK_INSTALL_FAILED')
       && event.packSlug === dependent);
-    await appPage.evaluate(packSlug => (window as any).__sendToSystem('host/packs', {
-      type: 'INSTALL_PACK', packSlug, sourceKind: 'local',
-    }), dependent);
+    await app.send('host/packs', { type: 'INSTALL_PACK', packSlug: dependent, sourceKind: 'local' });
     expect(await outcome).toMatchObject({ type: 'PACK_INSTALL_COMPLETE', packId: id });
     expect((await loaded()).map(pack => pack.id)).toContain(id);
     installed = true;
@@ -365,7 +355,7 @@ shared.set({ path: ['name'], value: 2 });
     expect(await ask(owner, { type: 'RESET_SETTINGS', target: target('restricted') })).toMatchObject({ type: 'SETTINGS_SAVED' });
   } finally {
     subscription?.unsubscribe(); ws.close();
-    if (installed) await appPage.evaluate(packId => (window as any).__sendToSystem('host/packs', { type: 'UNINSTALL_PACK', packId }), id);
+    if (installed) await app.send('host/packs', { type: 'UNINSTALL_PACK', packId: id });
     fs.rmSync(dependent, { recursive: true, force: true });
   }
 });

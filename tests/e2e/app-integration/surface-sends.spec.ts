@@ -13,13 +13,12 @@ interface Received { surface: string; type: string; data?: unknown; savedBookmar
 
 type RecordingWindow = {
   __received?: Received[];
-  __sendToSystem: (systemId: string, event: Record<string, unknown>) => void;
   applicationState: { system: { inspect(observer: (event: { type: string; actorRef: { id: string }; event: Received }) => void): void } };
 };
 
 /**
- * The id a built-in feature's system and surface run under. This spec drives the app the way pack code
- * can't — the raw `sendToSystem` and the actor ids — so it writes the ids rather than the names.
+ * The id a built-in feature's system and surface run under. This spec reads the surfaces' actors by id, which pack
+ * code can't, so it writes the ids rather than the names.
  */
 const builtIn = (feature: string) => `default-setup/${feature}`;
 
@@ -43,24 +42,13 @@ async function received(appPage: Page, feature: string, type: string): Promise<R
     .filter((event) => event.surface === surface && event.type === type), { surface: builtIn(feature), type });
 }
 
-/**
- * Sends a backend system an event as a surface does, through `window.__sendToSystem` — the renderer's door
- * for this suite (`packages/renderer/src/main.ts`), which is the SDK's `untypedSendToSystem`. A pack writes
- * the typed `sendToSystem` its `#generated/events` builds, which `defineEvents` wraps around that one.
- */
-async function sendToSystem(appPage: Page, feature: string, event: Record<string, unknown>): Promise<void> {
-  await appPage.evaluate(({ systemId, event }) => {
-    (window as unknown as RecordingWindow).__sendToSystem(systemId, event);
-  }, { systemId: builtIn(feature), event });
-}
-
 let workDir: string | undefined;
 test.afterEach(() => {
   if (workDir) fs.rmSync(workDir, { recursive: true, force: true });
   workDir = undefined;
 });
 
-test("the code system's file watcher and a terminal's news reach the code surface", async ({ appPage }) => {
+test("the code system's file watcher and a terminal's news reach the code surface", async ({ app, appPage }) => {
   workDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-surface-sends-')));
   // The code system watches a git working directory
   execFileSync('git', ['init', '-q'], { cwd: workDir });
@@ -68,13 +56,15 @@ test("the code system's file watcher and a terminal's news reach the code surfac
 
   const changed = path.join(workDir, 'changed-outside.txt');
   fs.writeFileSync(changed, 'first');
-  await sendToSystem(appPage, 'code', { type: 'SET_BASE_DIRECTORY', path: workDir, fromUserNavigation: false });
+  await app.send(builtIn('code'), { type: 'SET_BASE_DIRECTORY', path: workDir, fromUserNavigation: false });
+  // The watcher reports changes to open files, and a read opens one. The system sets its base directory after
+  // the send is accepted, and refuses a read asked before then, so the read is asked until it is answered with the file
+  await expect.poll(async () => (await app.ask(builtIn('code'), { type: 'explorer.READ_FILE', path: changed })).type)
+    .toBe('explorer.FILE_CONTENT');
+  // Written again on each check, since the watcher may be a moment from reporting when the read is answered.
+  // The broadcast is what this test is about
   let writes = 0;
-  // The watcher reports changes to open files, and a read opens one. The read is asked again on each check, since
-  // one asked before the base directory is set is refused, and it's answered to no one: a send made outside a
-  // handler names no sender, so its FILE_CONTENT has nowhere to go. The broadcast is what this test is about
   await expect.poll(async () => {
-    await sendToSystem(appPage, 'code', { type: 'explorer.READ_FILE', path: changed });
     fs.writeFileSync(changed, `write ${++writes}`);
     return (await received(appPage, 'code', 'explorer.FILE_CHANGED_EXTERNALLY'))
       .some((event) => JSON.stringify(event.data).includes('changed-outside.txt'));
@@ -84,25 +74,25 @@ test("the code system's file watcher and a terminal's news reach the code surfac
   // asked, and this send names none. So this test's terminal is the one made after it asked
   const created = async () => (await received(appPage, 'code', 'terminal.CREATED')).map((event) => (event.data as { terminalId: string }).terminalId);
   const before = new Set(await created());
-  await sendToSystem(appPage, 'code', { type: 'terminal.CREATE_TERMINAL', title: 'e2e surface sends', cwd: workDir });
+  await app.send(builtIn('code'), { type: 'terminal.CREATE_TERMINAL', title: 'e2e surface sends', cwd: workDir });
   await expect.poll(async () => (await created()).filter((id) => !before.has(id))).toHaveLength(1);
   const terminalId = (await created()).find((id) => !before.has(id))!;
   try {
     // What a program prints is drawn by the window from its session and is no event; what it *does* is.
     // This asks for text on the clipboard (OSC 52), which the system hands the surface as a claim
-    await sendToSystem(appPage, 'code', { type: 'terminal.TERMINAL_INPUT', terminalId, data: `printf '\\033]52;c;${Buffer.from('e2e-marker-42').toString('base64')}\\007'\r` });
+    await app.send(builtIn('code'), { type: 'terminal.TERMINAL_INPUT', terminalId, data: `printf '\\033]52;c;${Buffer.from('e2e-marker-42').toString('base64')}\\007'\r` });
     await expect.poll(async () => (await received(appPage, 'code', 'terminal.CLIPBOARD'))
       .filter((event) => (event.data as { terminalId: string }).terminalId === terminalId)
       .map((event) => (event.data as { text: string }).text)).toContain('e2e-marker-42');
   } finally {
-    await sendToSystem(appPage, 'code', { type: 'terminal.CLOSE_TERMINAL', terminalId });
+    await app.send(builtIn('code'), { type: 'terminal.CLOSE_TERMINAL', terminalId });
   }
 });
 
-test("a reloaded pack's browser surface restores what its system saved, asking as it starts", async ({ appPage }) => {
+test("a reloaded pack's browser surface restores what its system saved, asking as it starts", async ({ app, appPage }) => {
   const url = `https://example.com/e2e-surface-sends-${Date.now()}`;
   await recordSurfaceEvents(appPage);
-  await sendToSystem(appPage, 'browser', { type: 'SYNC_BOOKMARKS', bookmarks: [{ url, title: 'E2E bookmark', displayOrder: 0 }] });
+  await app.send(builtIn('browser'), { type: 'SYNC_BOOKMARKS', bookmarks: [{ url, title: 'E2E bookmark', displayOrder: 0 }] });
   const { apiPort, apiToken } = await appPage.evaluate(() => {
     const api = (window as { electronAPI?: { apiPort?: number; apiToken?: string } }).electronAPI;
     return { apiPort: api?.apiPort, apiToken: api?.apiToken ?? '' };
@@ -124,6 +114,6 @@ test("a reloaded pack's browser surface restores what its system saved, asking a
     await expect.poll(async () => (await received(appPage, 'browser', 'SAVED_SESSION_READ'))
       .some((event) => (event.savedBookmarks ?? []).some((bookmark) => bookmark.url === url))).toBe(true);
   } finally {
-    await sendToSystem(appPage, 'browser', { type: 'SYNC_BOOKMARKS', bookmarks: [] });
+    await app.send(builtIn('browser'), { type: 'SYNC_BOOKMARKS', bookmarks: [] });
   }
 });
