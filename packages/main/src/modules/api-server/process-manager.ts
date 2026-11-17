@@ -1,7 +1,7 @@
 import { ChildProcess } from 'child_process';
 import { BrowserWindow, app } from 'electron';
 import { API_EVENTS } from './config.ts';
-import { logInfo, logError } from './logger.ts';
+import { logInfo, logError, logWarn } from './logger.ts';
 
 export interface ProcessHandlers {
   onReady?: (port: number) => void;
@@ -154,7 +154,11 @@ export class ProcessManager {
    * the signal after that: before, and it is stripped with the handlers it replaces. Stripping them first
    * is also what keeps this off `onExit`, so a reload is never counted as a crash.
    *
-   * A process that survives the force-kill rejects the wait; it must not be reported as stopped.
+   * **A force-kill is waited out, never timed out.** SIGKILL cannot be refused: what is left after it is the
+   * kernel tearing the process down, which a loaded machine, or a process in the middle of a disk write, can
+   * take seconds over. A clock on it reports a process that is dying as one that survived, and a quit that hears
+   * that has nothing left to do. A kill still pending a second after it was sent is logged, so a slow one is
+   * seen.
    */
   stop(signal: NodeJS.Signals = 'SIGTERM', forceKillDelay = 5000): Promise<void> {
     if (this.stopping) return this.stopping;
@@ -162,28 +166,22 @@ export class ProcessManager {
     if (!child || !this.isRunning()) return Promise.resolve();
     this.cleanup();
 
-    const signalling = new Promise<void>((resolve, reject) => {
-      let forceKill: ReturnType<typeof setTimeout> | undefined;
-      let giveUp: ReturnType<typeof setTimeout> | undefined;
-      const done = (): void => {
-        // `cleanup()` took the handler that normally sets this, and `isRunning()` reads it
-        this.exited = true;
-        clearTimeout(giveUp);
-        clearTimeout(forceKill);
-        resolve();
-      };
-      const refuse = () => {
-        child.removeListener('exit', done);
-        clearTimeout(forceKill);
-        reject(new Error('API process did not exit after shutdown signals'));
-      };
-      child.once('exit', done);
-      if (forceKillDelay > 0) forceKill = setTimeout(() => {
-        // Start the exit grace when escalation actually runs; overdue timers must leave an I/O turn for exit.
-        giveUp = setTimeout(refuse, 1000);
+    const signalling = new Promise<void>((resolve) => {
+      let slowKill: ReturnType<typeof setTimeout> | undefined;
+      const forceKill = setTimeout(() => {
+        // Timed from the kill as it is sent, which an overdue timer may be well past its deadline
+        slowKill = setTimeout(() => {
+          logWarn(`[MAIN] The API process ${child.pid} has not exited 1s after SIGKILL; waiting for it to go`);
+        }, 1000);
         this.signal(child, 'SIGKILL');
       }, forceKillDelay);
-      else giveUp = setTimeout(refuse, forceKillDelay + 1000);
+      child.once('exit', () => {
+        // `cleanup()` took the handler that normally sets this, and `isRunning()` reads it
+        this.exited = true;
+        clearTimeout(forceKill);
+        clearTimeout(slowKill);
+        resolve();
+      });
       this.signal(child, signal);
     });
     this.stopping = signalling.finally(() => { this.stopping = undefined; });

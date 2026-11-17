@@ -1,9 +1,13 @@
 // Stop must observe child exit before reload or quit can proceed. Real children cover that boundary;
-// simulated children expose signal escalation and refusal without runner cleanup masking a defect.
+// simulated children expose signal escalation, and how late an exit may arrive, without runner cleanup masking a
+// defect.
 import { describe, expect, it, vi } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { EventEmitter, once } from 'node:events';
 import { ProcessManager } from '../src/modules/api-server/process-manager.ts';
+import { logWarn } from '../src/modules/api-server/logger.ts';
+
+vi.mock('../src/modules/api-server/logger.ts', () => ({ logInfo: vi.fn(), logError: vi.fn(), logWarn: vi.fn() }));
 
 /** A child that goes on the first signal, which is what the API does. */
 const obedient = () => spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000);']);
@@ -78,19 +82,37 @@ describe('stopping the API process', () => {
   });
 
   /**
-   * A process that ignores the signal is escalated to SIGKILL, and the wait still ends.
+   * A process that ignores the signal is escalated to SIGKILL, and the wait goes on until it has gone.
+   *
+   * **SIGKILL cannot be refused, but the kernel can take a while to finish a process off**: seconds, on a
+   * loaded machine or for one in the middle of a disk write. That is a stop arriving late, never a process
+   * that survived it: a wait that refused on a clock left a quit cancelled with nothing to retry it, and the
+   * app running, idle, until something killed it.
    *
    * **The guard here cannot be `child.killed`**, which Node sets as soon as a signal is *delivered* — so
    * it is already true when the force-kill timer runs, and a force-kill conditioned on it never fires.
    */
-  it('escalates to SIGKILL for a child that will not take the signal', async () => {
-    const manager = new ProcessManager({});
-    const { child, signals } = unresponsive();
-    manager.setProcess(child);
+  it('escalates to SIGKILL for a child that will not take the signal, and waits however long its exit takes', async () => {
+    vi.useFakeTimers();
+    try {
+      const manager = new ProcessManager({});
+      const { child, signals } = unresponsive();
+      manager.setProcess(child);
+      let settled: string | undefined;
+      const stopped = manager.stop('SIGTERM', 50).then(() => { settled = 'stopped'; }, (error: Error) => { settled = error.message; });
 
-    await expect(manager.stop('SIGTERM', 50)).rejects.toThrow('did not exit');
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(signals, 'asked politely, then insisted').toEqual(['SIGTERM', 'SIGKILL']);
+      expect(settled, 'still waiting for the kill to land').toBeUndefined();
+      expect(logWarn, 'a slow kill is reported').toHaveBeenCalledWith(expect.stringContaining('has not exited 1s after SIGKILL'));
 
-    expect(signals, 'asked politely, then insisted').toEqual(['SIGTERM', 'SIGKILL']);
+      child.emit('exit', null, 'SIGKILL');
+      await stopped;
+      expect(settled).toBe('stopped');
+      expect(manager.isRunning()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   /**
@@ -134,22 +156,6 @@ describe('stopping the API process', () => {
     child.emit('exit', 0, null);
     await first;
     expect(manager.isRunning()).toBe(false);
-  });
-
-  it('recognizes an exit that happened after the previous wait timed out', async () => {
-    vi.useFakeTimers();
-    try {
-      const manager = new ProcessManager({});
-      const { child, signals } = unresponsive();
-      manager.setProcess(child);
-      const refused = expect(manager.stop('SIGTERM', 50)).rejects.toThrow('did not exit');
-      await vi.advanceTimersByTimeAsync(1050);
-      await refused;
-      Object.assign(child, { exitCode: 0 });
-      await manager.stop();
-      expect(signals).toEqual(['SIGTERM', 'SIGKILL']);
-      expect(manager.isRunning()).toBe(false);
-    } finally { vi.useRealTimers(); }
   });
 
   /**

@@ -478,7 +478,10 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
   `timeout: 0` and bounds the whole close, the quit sequence included, with `answerWhileWorking` over the
   app's process tree. A kept profile took over a minute to write at a load of a hundred, which failed the
   worker on the 60s it inherited from the test after its test had passed. An app that stops working without
-  closing is ended with its API, and the worker fails naming that. The app's output closing is what ends the
+  closing is ended with its API, and the worker fails naming that and where its quit had stopped
+  (`quit-stage.ts`): still held in `before-quit` (the app's code), past `will-quit` and not exited (Chromium's
+  shutdown, the kept profile's writes among it), or exited with a process it started holding its output. The
+  failure names the app's output log too. The app's output closing is what ends the
   wait, seen on its process: that is when Chromium's helpers have gone too, which its exit alone is not, and
   Playwright's own `close()` is not waited for past it.
 
