@@ -3,7 +3,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  OVERRIDES, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages, renderNotices, writeAppNotices,
+  OVERRIDES, appSbom, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages, renderNotices, sbomIdentity,
+  writeAppNotices,
   type NoticePackage,
 } from '../../../scripts/lib/third-party-notices.ts';
 
@@ -216,10 +217,83 @@ describe('the notices written into the app', () => {
 
   it('renders the same notices from the same packages, whatever order they come in', () => {
     const notices = [
-      { package: { name: 'b', version: '1.0.0', dir: '/b', carried: 'files' as const }, license: 'MIT', text: 'same' },
-      { package: { name: 'a', version: '1.0.0', dir: '/a', carried: 'inlined' as const }, license: 'MIT', text: 'same' },
+      { package: { name: 'b', version: '1.0.0', dir: '/b', carried: 'files' as const }, declared: 'MIT', license: 'MIT', text: 'same' },
+      { package: { name: 'a', version: '1.0.0', dir: '/a', carried: 'inlined' as const }, declared: 'MIT', license: 'MIT', text: 'same' },
     ];
     expect(renderNotices(notices, [])).toBe(renderNotices([...notices].reverse(), []));
     expect(renderNotices(notices, [])).toContain('Covering:\n  a 1.0.0, MIT, inlined\n  b 1.0.0, MIT, shipped\n\nsame');
+  });
+});
+
+describe("the app's SBOM", () => {
+  /** Packages with manifests, as the SBOM reads each one's declared license from its own */
+  function carried() {
+    const root = tree({
+      ...installed('vue', { license: 'MIT', version: '3.5.0' }),
+      ...installed('@tiptap/pm', { license: '(MPL-2.0 OR Apache-2.0)', version: '3.0.0' }),
+      ...installed('elmdb', { license: 'MIT OR Apache-2.0', version: '0.0.0' }),
+      ...installed('bare', { version: '1.0.0' }),
+      ...installed('weird', { license: 'UNLICENSED', version: '1.0.0' }),
+      ...installed('plus', { license: 'MIT+', version: '1.0.0' }),
+    });
+    const pkg = (name: string, version: string, carried: NoticePackage['carried']): NoticePackage =>
+      ({ name, version, dir: path.join(root, 'node_modules', name), carried });
+    return [pkg('vue', '3.5.0', 'both'), pkg('@tiptap/pm', '3.0.0', 'inlined'), pkg('elmdb', '0.0.0', 'files'), pkg('bare', '1.0.0', 'files'),
+      pkg('weird', '1.0.0', 'files'), pkg('plus', '1.0.0', 'files')];
+  }
+  const identity = {
+    purls: { elmdb: 'pkg:github/spankyed/elmdb@abc123' },
+    integrity: new Map([['vue@3.5.0', `sha512-${Buffer.from('vue bytes').toString('base64')}`]]),
+  };
+
+  it('lists every package carried with its purl, hash, declared license and how it is carried, then the others', () => {
+    const sbom = appSbom({ name: 'apack', version: '0.3.14' }, carried(), identity,
+      [{ type: 'framework', name: 'electron', version: '44.9.3', purl: 'pkg:npm/electron@44.9.3', license: 'MIT' }]) as {
+      specVersion: string; metadata: { component: { name: string } }; components: Record<string, unknown>[];
+    };
+    expect(sbom.specVersion).toBe('1.5');
+    expect(sbom.metadata.component.name).toBe('apack');
+    expect(sbom.components.map((component) => component.purl)).toEqual([
+      'pkg:github/spankyed/elmdb@abc123', 'pkg:npm/%40tiptap/pm@3.0.0', 'pkg:npm/bare@1.0.0', 'pkg:npm/electron@44.9.3', 'pkg:npm/plus@1.0.0',
+      'pkg:npm/vue@3.5.0', 'pkg:npm/weird@1.0.0',
+    ]);
+    const byName = Object.fromEntries(sbom.components.map((component) => [component.name, component]));
+    expect(byName['@tiptap/pm']).toMatchObject({ licenses: [{ expression: '(MPL-2.0 OR Apache-2.0)' }], properties: [{ name: 'apack:carried', value: 'inlined' }] });
+    expect(byName.vue).toMatchObject({ licenses: [{ license: { id: 'MIT' } }], hashes: [{ alg: 'SHA-512', content: Buffer.from('vue bytes').toString('hex') }] });
+    expect(byName.weird).toMatchObject({ licenses: [{ license: { name: 'UNLICENSED' } }] });
+    expect(byName.plus).toMatchObject({ licenses: [{ expression: 'MIT+' }] });
+    // A package that declares no license, whose notice is a problem, is listed all the same
+    expect(byName.bare).not.toHaveProperty('licenses');
+  });
+
+  it('is the same file for the same app, whatever order the packages come in', () => {
+    const packages = carried();
+    expect(JSON.stringify(appSbom({ name: 'apack', version: '1' }, packages, identity, [])))
+      .toBe(JSON.stringify(appSbom({ name: 'apack', version: '1' }, [...packages].reverse(), identity, [])));
+  });
+
+  it("names vendored packages by their pinned commit and directory, and hashes the lockfile's", () => {
+    const root = tree({
+      'vendor/elmdb.rev': 'abc123\n',
+      'vendor/apack-terminal.rev': 'def456\n',
+      'package-lock.json': JSON.stringify({ packages: {
+        '': { name: 'apack', version: '0.3.14' },
+        'node_modules/vue': { version: '3.5.0', integrity: 'sha512-hoisted' },
+        'node_modules/a/node_modules/vue': { version: '3.4.0', integrity: 'sha512-nested' },
+        'node_modules/linked': { resolved: 'packages/linked', link: true },
+        'node_modules/aliased': { name: 'real-name', version: '1.0.0', integrity: 'sha512-aliased' },
+        'node_modules/b/node_modules/vue': { version: '3.5.0', integrity: 'sha512-later-copy' },
+        'node_modules/unversioned': { integrity: 'sha512-unversioned' },
+      } }),
+    });
+    const { purls, integrity } = sbomIdentity(root, { elmdb: 'elmdb#crates/elmdb-node', 'apack-terminal': 'apack-terminal' });
+    expect(purls).toEqual({
+      elmdb: 'pkg:github/spankyed/elmdb@abc123#crates/elmdb-node',
+      'apack-terminal': 'pkg:github/spankyed/apack-terminal@def456',
+    });
+    // The first copy of a release is the one hashed; an entry without a version or an integrity is not hashed at all
+    expect(Object.fromEntries(integrity)).toStrictEqual({
+      'vue@3.5.0': 'sha512-hoisted', 'vue@3.4.0': 'sha512-nested', 'real-name@1.0.0': 'sha512-aliased',
+    });
   });
 });
