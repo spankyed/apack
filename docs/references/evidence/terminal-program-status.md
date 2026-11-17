@@ -194,3 +194,48 @@ seconds apart in one terminal; a second terminal's `sh -c` printed a record nami
 **What the first runs taught, which is the protocol working:** a shell's own `printf` reports and is gone
 in the same read, since a program's records go with its command. A status is only ever seen from a
 program that keeps running.
+
+## Closing (2026-11-17)
+
+Source: `4fde23efdc` on `session/terminal-program-status`
+([spankyed/apack#533](https://github.com/spankyed/apack/pull/533)).
+
+### The strict run: passed
+
+`gh workflow run ci.yml --ref session/terminal-program-status -f strict_chain=true`,
+[run 44158508186](https://github.com/spankyed/apack/actions/runs/44158508186) on `4fde23efdc`: all six jobs
+passed — producers, both integration shards, both native shards, and the app half with the remaining checks.
+
+The app half passed on its second attempt. On the first, one e2e spec of 52 failed,
+`tests/e2e/ui/settings-help.spec.ts:53`, on a 10-second wait for a surface to be selected. It does not
+touch a terminal, and passed unchanged when the job was run again. Its cause was not diagnosed.
+
+Two earlier dispatches were cancelled because they were on commits before a fix.
+
+### The local chain: not passed in one run
+
+`npm run chain` was run six times on this branch and never passed whole. What each run stopped at:
+
+| Run | Stopped at | Cause |
+|---|---|---|
+| 1 | `test:e2e`, 2 of 52 | Whole-test timeouts in `db-write-through-boot` and `settings-recovery`. Both passed alone, in 19 s and 7 s. Every step before e2e had passed |
+| 2 | `test:unit:host` | **A defect, fixed** (`49df58fb43`): the packaged app left out the broker's license files, and the resolver answers no binary without them |
+| 3 | `test:integration` | `spec-durations-reporter.integration.spec.ts`, a CPU-measurement case. Passed alone three times of three |
+| 4, 5 | `test:unit:pack` | **Caused by this change, fixed** (`4fde23efdc`): every test passed, and the new backend spec sat in the pool's slow tail, which moved the tail's edge past a spec marked `@slow`. Split into two specs |
+| 6 | `test:integration` | Not diagnosed. Stopped by hand |
+
+The machine was the limit for the runs that were not defects: its load average read between 30 and 260 on
+ten cores through the afternoon, most of it macOS file indexing (`fseventsd`, `mds_stores`,
+`StorageManagementService`), and it slept during one run. `npm run check:idle` refused it throughout.
+
+So the goal's closing condition "`npm run chain` passes on the final source" is **not met**, and the goal is
+not archived. Every step of the chain has passed on this branch in some run, and the strict run passed all
+of them on the final commit; neither is the single local pass the condition asks for.
+
+### What the closing runs found beyond the goal
+
+- **The packaged app would have had no terminal** since the pin first named the broker's notices, which
+  `master`'s pin already did. Fixed here, with the packaging spec holding a notice to it.
+- **`packaged-app-files.spec.ts` passed in run 1 and failed in run 2 with nothing about it changed.** Its
+  population is what the install put in `packages/terminal-broker/bin`, which no step's fingerprint covers,
+  so the host pool had kept an earlier result. The spec now also asks about a path it names itself.

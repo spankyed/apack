@@ -1,6 +1,6 @@
 # Goal: a terminal's program says what it is doing, and the app listens (OSC 7501)
 
-**Status: planned, 2026-11-16.** Nothing is started. Owners: the terminal broker (`spankyed/apack-terminal`),
+**Status: implemented, 2026-11-17; one closing check open.** See Current handoff. Owners: the terminal broker (`spankyed/apack-terminal`),
 the host's broker client and terminal service (`packages/apack-host`), the SDK's terminal contract
 (`packages/apack-sdk`) and the Code feature (`packages/default-setup/src/features/code`).
 [The second goal](goal-needs-you.md) builds on Phases 1 to 3 of this one.
@@ -346,8 +346,17 @@ Done when, recorded with screenshots from `.apack/drive/screenshots/`:
 
 ## Current handoff
 
-- **Source:** nothing started. Monorepo `master` at `c7d4ec6ce5`; broker `master` at `db029f4`, which the
-  app pins.
-- **Next:** Phase 0.
-- **Proven:** the facts under Why, on 2026-11-16.
-- **Unresolved:** what Claude Code sends.
+- **Source:** `session/terminal-program-status` at the commit that records this handoff, in
+  [spankyed/apack#533](https://github.com/spankyed/apack/pull/533). The broker is merged as `b367539`
+  ([spankyed/apack-terminal#57](https://github.com/spankyed/apack-terminal/pull/57)) and the app pins it.
+- **Done, with evidence:** Phases 0 to 4, and the strict run, in
+  [the evidence record](../references/evidence/terminal-program-status.md).
+- **Not done:** one closing condition. `npm run chain` has not passed in a single local run; the record
+  says what each of six runs stopped at. Two were defects, both fixed. The rest did not reproduce alone, on
+  a machine whose load average was between 30 and 260 on ten cores.
+- **Next:** on a quiet machine (`npm run check:idle`), run `npm run chain` once in the worktree
+  `monorepo-worktrees.noindex/terminal-program-status`. If it passes, write Outcome, archive this goal,
+  repair the links from [the second goal](goal-needs-you.md) and the evidence record, and commit. If a step
+  fails, reproduce that case alone before running the chain again.
+- **Also open:** what Claude Code sends for a permission prompt and a finished turn, which needs the
+  standalone `claude` signed in on the development machine. The broker keeps whatever the protocol allows.
