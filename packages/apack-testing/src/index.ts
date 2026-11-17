@@ -16,6 +16,7 @@ import { appLaunchEnv, pinsViewport } from './launch-env.ts';
 import { assertCheckoutPackagesFresh } from './checkout-freshness.ts';
 import { assertPrebuiltPackCurrent, packArchiveAcceptance } from './prebuilt-pack.ts';
 import { connectToApp, type AppConnection } from './connection.ts';
+import { describeQuitStage, type QuitProgress } from './quit-stage.ts';
 export type { AppConnection, BusMessage, PackRuntime } from './connection.ts';
 
 export interface AppDriver {
@@ -214,10 +215,11 @@ const WILL_QUIT_MARKER = '[e2e] will-quit';
  * What Electron does after that is Chromium's shutdown, flushing the profile — slow under load, and the
  * fixture's to skip for a profile it deletes (the teardown below).
  */
-async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Promise<void> }> {
+async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Promise<void>; progress(): QuitProgress }> {
   const child = app.process();
+  let willQuit = false;
   const done = new Promise<void>(resolve => {
-    const onData = (data: Buffer) => { if (data.toString().includes(WILL_QUIT_MARKER)) resolve(); };
+    const onData = (data: Buffer) => { if (data.toString().includes(WILL_QUIT_MARKER)) { willQuit = true; resolve(); } };
     child.stdout?.on('data', onData);
     child.once('exit', () => resolve());
   });
@@ -225,7 +227,7 @@ async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Prom
     app.once('will-quit', () => { process.stdout.write(`${marker}\n`); });
   }, WILL_QUIT_MARKER);
   // Wrapped, since an async function returning a promise would hand back its settlement instead
-  return { done };
+  return { done, progress: () => ({ willQuit, exitCode: child.exitCode, signalCode: child.signalCode }) };
 }
 
 /**
@@ -643,9 +645,13 @@ export function createTest(options: CreateTestOptions = {}) {
           } catch (error) {
             // It settles when the kills below end the app, and nothing waits for it any more
             closed.catch(() => {});
+            // Read before the kills, which would make every quit read as one that exited
+            const stage = describeQuitStage(quitSequence.progress());
             if (app.process().exitCode === null && app.process().signalCode === null) app.process().kill('SIGKILL');
             if (apiPid !== undefined) { try { process.kill(apiPid, 'SIGKILL'); } catch { /* it had exited */ } }
-            throw error;
+            const log = appLogs.get(app);
+            throw new Error(`${error instanceof Error ? error.message : String(error)}: ${stage}.`
+              + (log ? ` Full Electron and API output: ${log}` : ''), { cause: error });
           }
         } finally { clearTimeout(inspectShutdown); }
         // Electron close must include its API child; otherwise deleting storage races the final writes.
