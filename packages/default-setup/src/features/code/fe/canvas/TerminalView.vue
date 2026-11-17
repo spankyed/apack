@@ -130,6 +130,7 @@ import { terminalPool, type TerminalAttachment, type Command } from '#features/c
 import TerminalMenuExtras from '#features/code/fe/features/terminal/TerminalMenuExtras.vue'
 import TerminalRewind from '#features/code/fe/features/terminal/TerminalRewind.vue'
 import { panelChild } from '../features/children.ts';
+import { useStatusSeen } from '../features/terminal/useStatusSeen.ts'
 import { dropShellOf, dropText } from '../utils/drop-text.ts';
 
 /* --------------------------------------------------------------------------
@@ -145,6 +146,7 @@ defineEmits<{
 
 const codeActor: CodeState = useSurface()
 const terminalActor = panelChild(codeActor, 'terminal')!
+useStatusSeen(terminalActor, () => props.terminalInfo.id)
 // Whether this terminal's bell is flashing now, which the state starts and ends
 const bellFlashing = useSelector(terminalActor, (state) => state.context.bells[props.terminalInfo.id] === 'flashing')
 

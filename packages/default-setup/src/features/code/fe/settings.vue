@@ -447,6 +447,24 @@
 
         <div class="flex items-center justify-between">
           <div class="flex-1">
+            <label for="terminal-status-notification" class="text-sm font-medium text-neutral-200">
+              Notify me when a program in a terminal needs me while the app is in the background
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              Sends a system notification when a program such as Codex or Claude Code says it is waiting on you, has finished or has failed. Once for a terminal until you look at it
+            </p>
+          </div>
+          <input
+            id="terminal-status-notification"
+            v-model="terminalStatusNotification"
+            type="checkbox"
+            @change="emit('update-setting', { path: ['terminalStatusNotification'], value: terminalStatusNotification })"
+            class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
             <label for="enable-shell-integration" class="text-sm font-medium text-neutral-200">
               Enable shell integration
             </label>
@@ -792,6 +810,7 @@ const cursorBlink = useSettingsDraft(() => props.settings?.cursorBlink ?? 'progr
 const linkPreview = useSettingsDraft(() => props.settings?.linkPreview ?? 'osc8')
 const bellFlash = useSettingsDraft(() => props.settings?.bellFlash ?? true)
 const bellNotification = useSettingsDraft(() => props.settings?.bellNotification ?? false)
+const terminalStatusNotification = useSettingsDraft(() => props.settings?.terminalStatusNotification ?? true)
 const enableShellIntegration = useSettingsDraft(() => props.settings?.enableShellIntegration ?? false)
 const confirmTerminalClose = useSettingsDraft(() => props.settings?.confirmTerminalClose ?? true)
 const closeTerminalOnTabClose = useSettingsDraft(() => props.settings?.closeTerminalOnTabClose ?? true)

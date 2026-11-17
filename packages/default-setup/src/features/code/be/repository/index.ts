@@ -48,6 +48,14 @@ export interface TerminalEntity {
    * names nothing, and the terminal is then one that cannot be brought back.
    */
   target?: string
+  /**
+   * How far into what its programs say they are doing the person has looked: the session the mark is for,
+   * and the count the latest record had when they looked (`ProgramStatusRecord.changed`). A record of that
+   * session past the count is one they have not seen. A mark for a session the terminal no longer has says
+   * nothing, since a count starts again with each session.
+   */
+  statusSeenSession?: string
+  statusSeenChanged?: number
   createdAt: number
   updatedAt: number
 }
@@ -99,6 +107,13 @@ export const terminalCommands = {
     write(id).setMany({
       customTitle
     })
+  },
+
+  /** Records how far into `session`'s status records the person has looked */
+  recordStatusSeen: (id: EARS.EntityId, session: string, changed: number): void => {
+    if (!query.ids(id).exists()) return
+
+    write(id).setMany({ statusSeenSession: session, statusSeenChanged: changed })
   },
 
   updateCwd: (id: EARS.EntityId, cwd: string, title?: string): void => {

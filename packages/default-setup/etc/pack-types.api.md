@@ -15,7 +15,7 @@ import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
 import { FlowEdge } from '@apackdev/sdk/repositories';
-import { HostServices } from '@apackdev/sdk/services';
+import { HostServices, ProgramStatusRecord } from '@apackdev/sdk/services';
 import { ExecutionContext, FieldMapping, RunNode, RunNodeId, RunStatus, RunTree, StepInput, StepRuntimeError } from '@apackdev/sdk/steps';
 import { BinaryOperator } from '@apackdev/sdk/utils';
 import { z } from 'zod';
@@ -2724,6 +2724,11 @@ type IncomingTerminalEvents =
     terminalId: string;
     kept: boolean;
 }
+/** The person is looking at that terminal: what its programs have said they finished or failed at is seen */
+ | {
+    type: 'terminal.STATUS_SEEN';
+    terminalId: string;
+}
 /** Open that terminal's recording to look back through, drawn at this size. Answered with `terminal.REWOUND` */
  | {
     type: 'terminal.REWIND';
@@ -4577,6 +4582,17 @@ type OutgoingTerminalEvents =
     };
 }
 /**
+ * What a terminal's programs say they are doing changed, or what of it the person has seen did: news for
+ * every window. **Every record, as it stands** — a window replaces what it held. Empty when there is none
+ */
+ | {
+    type: 'terminal.STATUS';
+    data: {
+        terminalId: string;
+        statuses: TerminalStatus[];
+    };
+}
+/**
  * A recording is open, for the window that asked: `session` is what its view is drawn from, and it runs
  * between `first` and `last`, in milliseconds since the Unix epoch.
  */
@@ -5633,6 +5649,14 @@ interface TerminalEntity {
      * names nothing, and the terminal is then one that cannot be brought back.
      */
     target?: string;
+    /**
+     * How far into what its programs say they are doing the person has looked: the session the mark is for,
+     * and the count the latest record had when they looked (`ProgramStatusRecord.changed`). A record of that
+     * session past the count is one they have not seen. A mark for a session the terminal no longer has says
+     * nothing, since a count starts again with each session.
+     */
+    statusSeenSession?: string;
+    statusSeenChanged?: number;
     createdAt: number;
     updatedAt: number;
 }
@@ -5699,6 +5723,14 @@ interface TerminalInfo {
         unreached?: true;
     };
     /**
+     * What its programs say they are doing (OSC 7501), every record as it stands. Absent when there is none.
+     *
+     * **Claims, drawn and never acted on**: any program in the terminal can write one, and `confirmed` says
+     * whether the program in front was the one a record names. A terminal whose shell has gone keeps what
+     * its programs finished or failed at until it is closed or started again.
+     */
+    statuses?: TerminalStatus[];
+    /**
      * The session's size **when this was published**, which is a starting point and not a live reading.
      *
      * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
@@ -5720,6 +5752,14 @@ interface TerminalInfo {
      * command sits on screen looking typed, and nothing happens. Measured on Windows rather than assumed.
      */
     submit: string;
+}
+
+/**
+ * One thing a terminal's program says it is doing, as a window is told it: the host's record with its text made
+ * plain, and `seen` — whether the person has looked at the terminal since the record last changed
+ */
+interface TerminalStatus extends ProgramStatusRecord {
+    seen: boolean;
 }
 
 interface TerminalTab extends OpenFile {
@@ -6286,6 +6326,7 @@ declare namespace __FeatureSettings_Code {
         linkPreview?: "all" | "off" | "osc8";
         bellFlash: boolean;
         bellNotification: boolean;
+        terminalStatusNotification: boolean;
         defaultBaseDirectory: string | null;
         baseDirectory: string | null;
         enableShellIntegration: boolean;
@@ -7446,6 +7487,8 @@ declare const terminalCommands: {
      */
     recordSession: (id: EARS.EntityId, session: string) => void;
     rename: (id: EARS.EntityId, customTitle: string) => void;
+    /** Records how far into `session`'s status records the person has looked */
+    recordStatusSeen: (id: EARS.EntityId, session: string, changed: number) => void;
     updateCwd: (id: EARS.EntityId, cwd: string, title?: string) => void;
     /**
      * The terminal is gone, so its row goes to the trash — **the one way a Terminal row ends** (L3).

@@ -161,7 +161,7 @@
                 :title="`Runs on ${terminal.target.label}`"
                 data-terminal-on
               >{{ terminal.target.label }}</span>
-              <TerminalActivityBadge :activity="activity[terminal.id]" :kept="terminal.kept === true" />
+              <TerminalActivityBadge :activity="activity[terminal.id]" :kept="terminal.kept === true" :status="statusToShow(terminal.statuses)" />
               <!-- **A terminal whose shell died is kept so its last output can be read**, which only works
                    if the list says so: drawn like a live one, it invites typing that goes nowhere and gives
                    no reason for the screen having stopped. -->
@@ -257,6 +257,8 @@ import { terminalNameFor } from '#features/code/fe/utils/terminal-name.ts'
 import { useTerminalActions } from '#features/code/fe/composables/useTerminalActions.ts'
 import RunScriptPopover from './RunScriptPopover.vue'
 import TerminalActivityBadge from './TerminalActivityBadge.vue'
+import { statusToShow } from './status.ts'
+import { useStatusSeen } from './useStatusSeen.ts'
 import TerminalMenuExtras from './TerminalMenuExtras.vue'
 import TerminalRewind from './TerminalRewind.vue'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
@@ -273,6 +275,7 @@ const terminalActor = panelChild(codeActor, 'terminal')!
 
 // State selectors
 const panelTerminalId = useSelector(codeActor, (state) => state.context.panelTerminalId)
+useStatusSeen(terminalActor, () => panelTerminalId.value ?? undefined)
 const openFiles = useSelector(codeActor, (state) => state.context.openFiles)
 const terminals = useSelector(terminalActor, (state) => state.context.terminals)
 const activity = useSelector(terminalActor, (state) => state.context.activity)

@@ -3,18 +3,19 @@ import { featureSettings } from '#generated/settings.ts';
 import { newId } from '#generated/ears.ts';
 import * as path from 'path'
 import { randomBytes } from 'node:crypto'
-import type { TerminalInfo, TerminalCreate } from '../types.ts'
+import type { TerminalInfo, TerminalCreate, TerminalStatus } from '../types.ts'
 import type { TerminalEntity } from '../repository/index.ts'
 import type { CodeSettings } from '../types.ts'
 import { EARS } from '#generated/ears.ts'
 import { repository } from '#generated/repository.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import { services } from '#generated/services.ts'
-import type { TerminalCellSize, TerminalCursorBlink, TerminalCursorStyle, TerminalEvent, TerminalRewind, TerminalSession, TerminalSessionSummary } from '@apackdev/sdk/services'
+import type { ProgramStatusRecord, TerminalCellSize, TerminalCursorBlink, TerminalCursorStyle, TerminalEvent, TerminalRewind, TerminalSession, TerminalSessionSummary } from '@apackdev/sdk/services'
 import { resolveAppEnvironment } from '@apackdev/sdk/env'
 import { TERMINAL_COLORS } from '../terminal-colors.ts'
 import { directoryToStart, shellToStart, submitFor } from './known-shells.ts'
 import { cwdAsReported } from '../utils/osc-cwd.ts'
+import { toldStatuses } from '../utils/terminal-status.ts'
 import { integrationDirectory, integrationFor, MARKS_KEY_VARIABLE } from './shell-integration.ts'
 
 const logger = createLogger('terminal');
@@ -109,6 +110,14 @@ interface Terminal {
    */
   decided: Grid
   /**
+   * What the terminal's programs say they are doing, and how far into it the person has looked.
+   *
+   * **The session's, not the terminal's**: the host counts changes per session, so the records and the mark
+   * are both held with the session they are of. A terminal started again has none until its new shell's
+   * programs report; one whose shell has gone keeps what they finished or failed at, to be looked at.
+   */
+  status?: { session: string; records: readonly ProgramStatusRecord[]; seen: number }
+  /**
    * Which decision's write-back is still the current one.
    *
    * `session.resize` is a round trip, so two decisions about one pty are open together and answer in
@@ -142,6 +151,7 @@ const published = (terminal: Terminal): TerminalInfo => ({
   ...(terminal.state.kind === 'exited' && {
     exited: { code: terminal.state.code, ...(terminal.state.unreached && { unreached: true as const }) },
   }),
+  ...(terminal.status?.records.length && { statuses: toldStatuses(terminal.status.records, terminal.status.seen) }),
 })
 
 /**
@@ -457,6 +467,11 @@ class TerminalService {
       // would be dropped as a shell already replaced — leaving a terminal shown live over nothing
       terminal.state = { kind: 'live', session, opening }
       if (target) terminal.resumes = session.id
+      // What the last shell's programs said is not what this one's are. A shell taken up again is the one
+      // that was reporting, and starts from what the target holds of it
+      terminal.status = resumed && there
+        ? { session: session.id, records: there.statuses, seen: terminal.status?.session === session.id ? terminal.status.seen : 0 }
+        : undefined
       const { recorded: _was, ...described } = terminal.info
       terminal.info = {
         ...described, pid: session.pid, generation: terminal.info.generation + 1, ...this.targetOf(target, session),
@@ -830,6 +845,38 @@ class TerminalService {
     return true
   }
 
+  /**
+   * Takes what a terminal's programs now say they are doing — every record, as the host sends them — and
+   * answers the records as windows were told them before and are to be told them now. `null` for a terminal
+   * that is not there.
+   */
+  heardStatuses(id: string, records: readonly ProgramStatusRecord[]): { before: TerminalStatus[]; after: TerminalStatus[] } | null {
+    const terminal = this.terminals.get(id)
+    if (!terminal) return null
+    const before = published(terminal).statuses ?? []
+    // The count the mark is compared with starts again with each session, so a mark is kept only for the
+    // session it was made in. A shell that has gone is heard from once more, as it ends
+    const session = terminal.state.kind === 'exited' ? terminal.status?.session : terminal.state.session.id
+    if (session === undefined) return null
+    terminal.status = { session, records, seen: terminal.status?.session === session ? terminal.status.seen : 0 }
+    return { before, after: published(terminal).statuses ?? [] }
+  }
+
+  /**
+   * The person has looked at this terminal: everything its programs have said so far is seen. Answers the
+   * records as windows are now to be told them, or `null` when looking changed nothing.
+   */
+  statusesSeen(id: string): TerminalStatus[] | null {
+    const terminal = this.terminals.get(id)
+    const status = terminal?.status
+    if (!terminal || !status) return null
+    const latest = Math.max(0, ...status.records.map(record => record.changed))
+    if (latest <= status.seen) return null
+    terminal.status = { ...status, seen: latest }
+    repository.terminalCommands.recordStatusSeen(id as EARS.EntityId, status.session, latest)
+    return published(terminal).statuses ?? []
+  }
+
   updateCwd(id: string, newCwd: string): { cwd: string; title?: string } | null {
     const terminal = this.terminals.get(id)
     if (!terminal) return null
@@ -1005,7 +1052,15 @@ class TerminalService {
         ...(listed?.kept && { kept: true }),
         ...(listed?.recorded && { recorded: true }),
       }
-      this.terminals.set(row.id, { info, state: { kind: 'live', session: taken, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0 })
+      this.terminals.set(row.id, {
+        info, state: { kind: 'live', session: taken, opening }, fittedBy: new Map(), decided: { cols: info.cols, rows: info.rows }, sizing: 0,
+        // What its programs were saying while nothing here was listening, and how far the person had looked
+        status: {
+          session,
+          records: listed?.statuses ?? [],
+          seen: row.statusSeenSession === session ? row.statusSeenChanged ?? 0 : 0,
+        },
+      })
       logger.info(`Took up session ${session} again for terminal ${row.title} (${row.id}); its shell and its output survived`)
       return true
     } catch (error) {

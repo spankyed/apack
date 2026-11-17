@@ -6,7 +6,7 @@ import type {
   CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CommitTrailer, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
   PRBranchCheckout, GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, ProgressDuring, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
-  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
+  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, TerminalStatus, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
 } from './types.ts';
 import type { GitHubApiFailure, PRListState } from './services/github-api.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
@@ -328,6 +328,8 @@ export type IncomingTerminalEvents =
   | { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
   /** Whether that terminal's shell goes on running when the app is not, to be taken up again at the next start */
   | { type: 'terminal.KEEP_TERMINAL'; terminalId: string; kept: boolean }
+  /** The person is looking at that terminal: what its programs have said they finished or failed at is seen */
+  | { type: 'terminal.STATUS_SEEN'; terminalId: string }
   /** Open that terminal's recording to look back through, drawn at this size. Answered with `terminal.REWOUND` */
   | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
   /** Show an open recording as it was at `at`, in milliseconds since the Unix epoch */
@@ -392,6 +394,11 @@ export type OutgoingTerminalEvents =
   | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
   /** Whether a terminal's shell outlives the app changed: news for every window, which each draws on its tab */
   | { type: 'terminal.KEPT'; data: { terminalId: string; kept: boolean } }
+  /**
+   * What a terminal's programs say they are doing changed, or what of it the person has seen did: news for
+   * every window. **Every record, as it stands** — a window replaces what it held. Empty when there is none
+   */
+  | { type: 'terminal.STATUS'; data: { terminalId: string; statuses: TerminalStatus[] } }
   /**
    * A recording is open, for the window that asked: `session` is what its view is drawn from, and it runs
    * between `first` and `last`, in milliseconds since the Unix epoch.
