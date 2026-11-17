@@ -5,7 +5,8 @@ import {spawn} from 'child_process';
 import electronPath from 'electron';
 import {defineConfig, defaultServerConditions} from 'vite';
 import {viteStaticCopy} from 'vite-plugin-static-copy';
-import {appBuildOutput} from '../../build/build-metadata.ts';
+import {appBuildOutput, recordBundledPackages} from '../../build/build-metadata.ts';
+import {rollupBundledPackages} from '@apackdev/host/build/bundled-packages';
 
 export default defineConfig(({mode}) => /** @type {import('vite').UserConfig} */ ({
   // Bundle SDK and host source into main: packaged builds strip .ts files, so they can't be imported at runtime
@@ -51,6 +52,8 @@ export default defineConfig(({mode}) => /** @type {import('vite').UserConfig} */
       ]
     }),
     handleHotReload(),
+    // What the bundle inlined, for the app's third-party notices (scripts/lib/third-party-notices.ts)
+    rollupBundledPackages(packages => recordBundledPackages('main', packages), {fromDir: import.meta.dirname}),
   ],
 }));
 

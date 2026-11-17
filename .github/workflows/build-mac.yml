@@ -128,7 +128,7 @@ jobs:
           for file in dist/"${PREFIX}"-*.dmg dist/"${PREFIX}"-*.zip; do
             (cd dist && shasum -a 256 "$(basename "$file")" > "$(basename "$file").sha256")
           done
-          assets=(dist/"${PREFIX}"-*.dmg dist/"${PREFIX}"-*.zip dist/"${PREFIX}"-*.sha256)
+          assets=(dist/"${PREFIX}"-*.dmg dist/"${PREFIX}"-*.zip dist/"${PREFIX}"-*.sha256 dist/"${PREFIX}"-*.cdx.json)
 
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
