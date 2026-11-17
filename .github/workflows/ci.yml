@@ -81,9 +81,9 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24.22.2
           cache: npm
@@ -194,9 +194,9 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24.22.2
           cache: npm
@@ -212,7 +212,7 @@ jobs:
       # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed
       # on the runner and the locked version, so a bump fetches once and every later job restores it.
       - name: Cache Electron's binary
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/Library/Caches/electron
           key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -235,7 +235,7 @@ jobs:
 
       - name: Upload test output
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: external-pack-e2e
           include-hidden-files: true
