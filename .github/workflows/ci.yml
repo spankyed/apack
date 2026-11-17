@@ -76,7 +76,9 @@ jobs:
   check:
     if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
     runs-on: macos-26
-    timeout-minutes: 25
+    # Measured 2026-11-17: 25 minutes reached the CLI integration tests with four steps to go, every finished
+    # step passing; building elmdb from source alone takes about five. A budget for a stuck job, not a target
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -187,7 +189,9 @@ jobs:
   external-pack-e2e:
     if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
     runs-on: macos-26
-    timeout-minutes: 30
+    # Measured 2026-11-17: 30 minutes reached the packaged pack authoring E2E, its last step, with every
+    # earlier step passing. A budget for a stuck job, not a target
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
