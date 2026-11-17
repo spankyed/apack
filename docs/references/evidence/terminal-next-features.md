@@ -783,3 +783,85 @@ Nothing is pushed or merged, no PR is open, and `vendor/apack-terminal.rev` is n
 - **Not seen in a real window.** The cursor's look and the link title's timing are checked in jsdom only.
 
 **App switched to the live setters.** The code surface's pool (`packages/default-setup/src/features/code/fe/utils/terminal-pool.ts`, `setViewSettings`) no longer makes a drawn view again when the cursor-inactive, cursor-blink or link-preview setting changes. Each changed setting calls its setter on every drawn view (`setCursorInactive`, `setCursorBlink`, `setLinkPreview`, pinned at `vendor/apack-terminal` 4ba0b01294), so the element, selection and scroll position are kept. A view made later takes the current values from its constructor. Only a change of the session still makes a view again, through the existing shell-replacement path. Copy-on-select is unchanged. The pool spec asserts each setter call with the element's identity, and that an unchanged setting calls nothing. A mutant that remade the view on a cursor change failed the identity assertion.
+
+## Follow-ups: reads during a hold, the search's cost, the blink rule, a flaky case (2026-11-16)
+
+Broker and view: branch `fix/terminal-followups`, spankyed/apack-terminal#47, commits `bb7cf26`, `24a7fde`, `a765e37`,
+`4c1590b`, `42ff307`. App: branch `fix/terminal-followups-app`, commit `5be4639504`. Measured on an arm64 Mac with
+10 cores at a load average between 30 and 120 throughout, which is why costs are given in instructions where they
+are compared.
+
+### Reads during a hold
+
+- **Was.** The word at a cell, the line it is on, the text of a span and a search were answered from the live
+  terminal while a program held the screen (mode 2026). A copy or a double-click that landed inside a redraw named
+  text the view was never sent. This was the gap Phase 1 left open.
+- **Is.** Each waits for the hold to end, by the program letting go or by the broker's one-second limit, and is
+  answered after the frame the view is sent (`Screen::once_whole`). A hold keeps at most 64 waiting; one past that is
+  answered from the screen as it stands. Lines fetched by number still answer at once with the rows last sent.
+- **Tests.** Five in `tests/view_frames.rs` on the screen, and one in `tests/view_broker.rs` through the broker with
+  a real program that takes the screen and waits to be told to finish its frame.
+- **Mutation.** Never waiting, answering before the frame, a hold that runs out answering nothing, and no cap: each
+  fails the case written for it. The session answering at once fails the case through the broker.
+
+### The cost of a case-sensitive search
+
+- **Was.** The gap closed on 2026-11-12 made a case-sensitive search run to the end of the history. The core has no
+  rule for case and keeps every match it finds, so that was unbounded. `benches/search.rs`, over 100,000 lines of 80
+  columns: a search for `a` in a history of `A` took 10.8 s and 12.0 s in two runs with the session's lock held,
+  and the process peaked at 4.0 GB. A log whose every line has the word twice in another case took 430 ms.
+- **Is.** It reads back 20,000 candidates, ten times what a search answers with, and stops. The same two cases
+  measure 82 ms and 52 ms, the process peaks at 108 MB, and a word that is not in the history at all, which every
+  search has always cost, measures 85 ms.
+- **What it gives up, and says.** An exact match older than those candidates is not found. The answer carries
+  `more`, true when there are or may be older matches than the ones listed, so a find bar's count says so however
+  few it holds, and a search that found nothing without looking through everything says "None in the newest
+  output". Both halves of the view's wire moved, with the vectors re-recorded.
+- **Mutation.** No candidate limit, never saying more, saying more only when stopped short, saying more only past
+  the cap: each fails a case in `tests/view_reads.rs`. The view ignoring the flag and the broker source dropping it
+  each fail a view case.
+
+### The blink rule (D8)
+
+- **Was.** With the blink set on or off a view drew that over whatever a program asked for, which D8 does not say:
+  a program's DECSCUSR choice is meant to win.
+- **Is.** Ghostty's rule for a set `cursor-style-blink`: DEC mode 12 is ignored, and a program asking for a cursor
+  is given its blink. The core keeps one blink for both sequences and has no such option, so the broker settles it
+  where the output is parsed (`vt::Terminal::watched`): a sequence that begins `CSI ?` and may name mode 12 is parsed
+  up to where the core says it is between sequences, and mode 12 is put back if the blink changed. A view draws the
+  blink a frame says; its `cursorBlink` option and `setCursorBlink` are gone. The app's setting has three values,
+  not four: the default and "program decides" were one state.
+- **Cost.** `benches/blink.rs`, 32 MiB of output, in instructions retired with nobody having chosen a blink and with
+  one chosen: plain text 1.55 G and 1.57 G; text coloured a word at a time 4.03 G and 4.06 G; a redraw that sets
+  mode 12 twice every 70 bytes 3.89 G and 5.88 G, which is about two thousand instructions for each sequence that
+  names mode 12.
+- **Mutation.** The first push's mutants job found 23 survivors, all in the watch. Eight changed only how many
+  sequences are watched, which no answer shows, so that is counted now (`Terminal::sequences_watched`) and held by
+  a case. Seven were in a path no case took, a terminal parsed with nothing to stop at, where a parse that stops
+  early drops the rest; the cases now run there too. Five were conditions that could not change an outcome, and
+  are deleted. One, the floor on what the core says it parsed, is excluded with its reason in `.cargo/mutants.toml`.
+  Fifty-four hand-written mutants of the reworked code: 43 fail a case, 10 hang, which a mutants run counts as
+  caught at its deadline, and that one is excluded.
+
+### The flaky case
+
+- **What it was.** `keeping::a_session_begins_with_the_screen_its_recording_holds` failed about one run in four on
+  2026-11-12, each time after fifteen seconds. It asked for the history and waited for the rows, dropping whatever
+  else arrived. A dropped frame is an unacknowledged one, and a view is sent no more until it acknowledges its
+  last, so when the new shell's prompt arrived inside that wait the rest of the case waited for output never sent.
+- **How it was found.** It did not reproduce: 30 runs at the old pin and 24 on current master all passed, under
+  more load than when it failed. Typing a space just before the fetch, so a frame is certain to arrive inside the
+  wait, failed it every time at 15.79 s with the same message; with the frames taken as a view takes them the same
+  forced case passes every time.
+- **A theory ruled out.** That a line typed before the new shell is reading is lost: a shell started two seconds
+  late still ran what was typed before it began, six times of six.
+
+### Not verified
+
+- Nothing here was seen in a real window: the cursor's blink under an editor, the find bar's wording, a copy made
+  during a redraw.
+- A real program's hold, and a real history of the worst shape for a search, were not used; the cases write the
+  sequences and the text themselves.
+- The app is not moved to the new broker. Its change stands at the pin it has (`db029f4`): the pack typecheck is
+  clean and 770 Code surface tests pass there, and against the fixed broker too. The pin moves once #47 is merged
+  and its release build exists.

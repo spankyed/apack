@@ -23,9 +23,8 @@ export interface FakeView {
   readonly element: HTMLDivElement
   readonly options: ViewOptions
   /** The setter calls a view was given after it was made, in order: which setter, and the value it was given */
-  readonly settingChanges: Array<{ setter: 'setCursorInactive' | 'setCursorBlink' | 'setLinkPreview'; value: string }>
+  readonly settingChanges: Array<{ setter: 'setCursorInactive' | 'setLinkPreview'; value: string }>
   setCursorInactive(style: string): void
-  setCursorBlink(mode: string): void
   setLinkPreview(mode: string): void
   /** The element it is mounted in, or `null` while no host has it */
   mountedIn: HTMLElement | null
@@ -43,6 +42,8 @@ export interface FakeView {
   /** Whether each search asked for the needle's own case */
   readonly matchCases: boolean[]
   matches: number
+  /** Whether the next search is said to have stopped before the oldest line */
+  stoppedShort: boolean
   /** Which match it is on, from one */
   current: number
   /** The commands the session's shell is said to have marked, and the ones whose output was selected */
@@ -147,9 +148,8 @@ export function viewModule(): Record<string, unknown> {
     }
     focus(): void { this.focused += 1 }
     setCopyOnSelect(on: boolean): void { this.copyOnSelect = on }
-    readonly settingChanges: Array<{ setter: 'setCursorInactive' | 'setCursorBlink' | 'setLinkPreview'; value: string }> = []
+    readonly settingChanges: Array<{ setter: 'setCursorInactive' | 'setLinkPreview'; value: string }> = []
     setCursorInactive(style: string): void { this.settingChanges.push({ setter: 'setCursorInactive', value: style }) }
-    setCursorBlink(mode: string): void { this.settingChanges.push({ setter: 'setCursorBlink', value: mode }) }
     setLinkPreview(mode: string): void { this.settingChanges.push({ setter: 'setLinkPreview', value: mode }) }
     readonly typed: string[] = []
     readonly copiedCommands: number[] = []
@@ -163,6 +163,8 @@ export function viewModule(): Record<string, unknown> {
     selectAll(): void { this.selectedAll += 1 }
     async paste(text: string): Promise<void> { this.pasted.push(text) }
     async copy(): Promise<boolean> { this.copies += 1; return true }
+    /** Whether the search is said to have stopped before the oldest line, as a case-sensitive one over a long history does */
+    stoppedShort = false
     async find(needle: string, options: { matchCase?: boolean } = {}): Promise<number> {
       this.searches.push(needle)
       this.matchCases.push(options.matchCase ?? false)
@@ -172,7 +174,7 @@ export function viewModule(): Record<string, unknown> {
     }
     get found(): { current: number; total: number; more: boolean } {
       const searched = this.searches.at(-1) !== undefined
-      return { current: this.current, total: searched ? Math.min(this.matches, 1000) : 0, more: searched && this.matches > 1000 }
+      return { current: this.current, total: searched ? Math.min(this.matches, 1000) : 0, more: searched && (this.matches > 1000 || this.stoppedShort) }
     }
     findNext(direction: -1 | 1 = 1): void {
       const held = Math.min(this.matches, 1000)

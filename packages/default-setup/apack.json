@@ -641,10 +641,9 @@
             "cursorBlink": {
               "type": "string",
               "enum": [
-                "default",
+                "program",
                 "on",
-                "off",
-                "program"
+                "off"
               ]
             },
             "linkPreview": {
@@ -866,7 +865,7 @@
           "copyOnSelect": false,
           "cursorStyle": "bar",
           "cursorInactiveStyle": "hollow",
-          "cursorBlink": "default",
+          "cursorBlink": "program",
           "linkPreview": "osc8",
           "bellFlash": true,
           "bellNotification": false,

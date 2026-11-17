@@ -216,15 +216,16 @@ export interface TerminalHandlers {
 /**
  * The cursor a session starts with and returns to on a reset, from the code settings.
  *
- * **Blink is the broker's reset value, and the view's override is the app's own.** Unset (`default`) resets to a
- * blinking cursor, as the broker's `On` does, and a program's choice holds until it resets (D8). `on` and `off`
- * are sent as they are, and the view applies them over what a program asks; `program` leaves the blink to the program.
+ * **Blink is the broker's to apply, and is sent as it is set.** `program`, which is what a setting left alone is,
+ * blinks until a program says otherwise by either of the two ways it can. `on` and `off` are a person's answer: a
+ * program's DEC mode 12 then leaves the blink as it is, and a program that asks for a cursor (DECSCUSR) is still
+ * given its blink until it resets (D8).
  */
 export function cursorDefaultsOf(settings: CodeSettings | undefined): { style: TerminalCursorStyle; blink: TerminalCursorBlink } {
   const blink = settings?.cursorBlink
   return {
     style: settings?.cursorStyle ?? 'bar',
-    blink: blink === 'off' || blink === 'program' ? blink : 'on',
+    blink: blink === 'on' || blink === 'off' ? blink : 'program',
   }
 }
 
