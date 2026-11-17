@@ -20,6 +20,9 @@ import { connectApiClient, type ApiClient, type BusMessage } from '../../src/eng
 
 const TOKEN = 'a-test-token';
 
+/** A loaded pack as `packs.loaded` lists one: its runtime's four fields, and more the client must not forward */
+const LOADED = { id: 'fixture', registrationId: 'r1', declarationRevision: 'd1', buildRevision: 'b1', feEntry: 'fe/index.js' };
+
 /** How the router behaves, set per case before the client connects */
 let behaviour: {
   claimRefuses?: boolean;
@@ -27,6 +30,7 @@ let behaviour: {
   settingsOpens?: number;
   sent?: unknown[];
   emit?: unknown[];
+  packSettingsOpened?: unknown[];
   completeSubscription?: boolean;
 } = {};
 
@@ -41,6 +45,21 @@ const router = t.router({
       if (behaviour.settingsRefuses) throw new TRPCError({ code: 'FORBIDDEN', message: 'settings access refused' });
       return 'tool-settings-access';
     }),
+    // Strict, as the real `settings.openPack` is: a field beyond the runtime's four is a refusal
+    openPack: t.procedure.input((input: unknown) => {
+      const keys = Object.keys(input as object).sort();
+      if (keys.join() !== 'buildRevision,declarationRevision,id,registrationId') {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `unrecognized keys: ${keys.join()}` });
+      }
+      return input as { id: string; registrationId: string };
+    }).mutation(({ input }) => {
+      behaviour.packSettingsOpened?.push(input);
+      if (input.registrationId === 'gone') throw new TRPCError({ code: 'FORBIDDEN', message: 'Settings access is unavailable' });
+      return `access-for-${input.id}`;
+    }),
+  }),
+  packs: t.router({
+    loaded: t.procedure.query(() => [LOADED]),
   }),
   bus: t.router({
     // Returns nothing, exactly as the real `bus.claim` and `bus.send` do: the success frame carries no `data`
@@ -280,4 +299,28 @@ it('refuses settings writes without issuing a bus mutation when bootstrap is ref
   await client.send({ to: 'another/feature', event: { type: 'PING' } });
   expect(behaviour.sent).toHaveLength(1);
   expect(behaviour.settingsOpens).toBe(1);
+});
+
+describe('pack settings access', () => {
+  it('lists the loaded packs over a query frame', async () => {
+    await serve(); client = await connect();
+    await expect(client.loadedPacks()).resolves.toEqual([LOADED]);
+  });
+
+  it("opens access with the runtime's four fields alone, and rejects with the app's refusal for one gone", async () => {
+    behaviour.packSettingsOpened = [];
+    await serve(); client = await connect();
+    const [runtime] = await client.loadedPacks();
+    await expect(client.openPackSettings(runtime)).resolves.toBe('access-for-fixture');
+    expect(behaviour.packSettingsOpened).toEqual([{ id: 'fixture', registrationId: 'r1', declarationRevision: 'd1', buildRevision: 'b1' }]);
+    await expect(client.openPackSettings({ ...runtime, registrationId: 'gone' })).rejects.toThrow('Settings access is unavailable');
+  });
+
+  it('carries the access a send is given', async () => {
+    behaviour.sent = [];
+    await serve(); client = await connect();
+    const message = { to: 'host/settings', event: { type: 'UPDATE_SETTINGS' }, sender: 'host/e2eConnection', call: 'c1', settingsCredential: 'access-for-fixture' };
+    await client.send(message);
+    expect(behaviour.sent).toEqual([message]);
+  });
 });

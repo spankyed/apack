@@ -485,6 +485,7 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 | `electronApp` | worker | Launched Electron app (shared across tests in a worker) |
 | `appPage`     | test   | Main renderer Page (waits for `running.connected`, bypasses onboarding) |
 | `app`         | test   | `AppDriver` — high-level API |
+| `connection`  | test   | `AppConnection` — the spec's own client to the API, apart from the window: `send`, `ask` and `next(match)` over it, `messages` it was delivered, `loadedPacks()` and `openPackSettings(runtime)`. Claims `host/e2eConnection`; opened only for a test that names it, closed after |
 
 ### AppDriver methods
 
