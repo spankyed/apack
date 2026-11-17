@@ -1,15 +1,15 @@
 {
-  "commit": "db029f40babcf8435111f0a4ca70bf63be8a580f",
+  "commit": "b17ecde3c689f8857b6184b8c936be61b3e2f662",
   "files": {
     "darwin-arm64": {
-      "apack-terminal": "29421849a0456fc54105b28d17827b90c44bb86a74af5d902fb14d0e210f6c85"
+      "apack-terminal": "193505a258add6edb56591a918820397357bd9dbbd757ad883577e5204b229d1"
     },
     "linux-x64": {
-      "apack-terminal": "a12b427968cfbe066c780d093d239a94a9a465c31a090d6ae4eedb83344c09d3"
+      "apack-terminal": "64f20ff013208772eeca214d714f07c94d6749be364faf160ea241da83d282df"
     },
     "win32-x64": {
       "OpenConsole.exe": "b17e48b07ef153b420f0a6e178bacd31fb4c3390e21ae746586213fc0719a775",
-      "apack-terminal.exe": "7bfcfb162ee55b7001c6e504c4a49206c56bc87f9d234088e0769d0ec4b0c849",
+      "apack-terminal.exe": "dd0a5cb3f09f0513e3df99f4376b9c218b59eba540bb91206a713ece1053219a",
       "conpty.dll": "e971856f89748dc3b458125e9afdd79b5e9574a7c937676116d3cbbd3b71f492"
     }
   }
