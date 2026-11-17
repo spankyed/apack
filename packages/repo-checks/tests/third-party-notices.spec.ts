@@ -3,7 +3,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  OVERRIDES, appSbom, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages, renderNotices, writeAppNotices,
+  OVERRIDES, appSbom, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages, renderNotices, sbomIdentity,
+  writeAppNotices,
   type NoticePackage,
 } from '../../../scripts/lib/third-party-notices.ts';
 
@@ -269,5 +270,27 @@ describe("the app's SBOM", () => {
     const packages = carried();
     expect(JSON.stringify(appSbom({ name: 'apack', version: '1' }, packages, identity, [])))
       .toBe(JSON.stringify(appSbom({ name: 'apack', version: '1' }, [...packages].reverse(), identity, [])));
+  });
+
+  it("names vendored packages by their pinned commit and directory, and hashes the lockfile's", () => {
+    const root = tree({
+      'vendor/elmdb.rev': 'abc123\n',
+      'vendor/apack-terminal.rev': 'def456\n',
+      'package-lock.json': JSON.stringify({ packages: {
+        '': { name: 'apack', version: '0.3.14' },
+        'node_modules/vue': { version: '3.5.0', integrity: 'sha512-hoisted' },
+        'node_modules/a/node_modules/vue': { version: '3.4.0', integrity: 'sha512-nested' },
+        'node_modules/linked': { resolved: 'packages/linked', link: true },
+        'node_modules/aliased': { name: 'real-name', version: '1.0.0', integrity: 'sha512-aliased' },
+      } }),
+    });
+    const { purls, integrity } = sbomIdentity(root, { elmdb: 'elmdb#crates/elmdb-node', 'apack-terminal': 'apack-terminal' });
+    expect(purls).toEqual({
+      elmdb: 'pkg:github/spankyed/elmdb@abc123#crates/elmdb-node',
+      'apack-terminal': 'pkg:github/spankyed/apack-terminal@def456',
+    });
+    expect(Object.fromEntries(integrity)).toEqual({
+      'vue@3.5.0': 'sha512-hoisted', 'vue@3.4.0': 'sha512-nested', 'real-name@1.0.0': 'sha512-aliased',
+    });
   });
 });

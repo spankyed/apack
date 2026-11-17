@@ -1,6 +1,8 @@
 /**
  * The app's `THIRD-PARTY-NOTICES.txt`: the license and notices of every third-party package the packaged app carries,
  * which their licenses ask a redistribution to carry, written into the app by `afterPack` (`electron-builder.mjs`).
+ * Beside it, the release's CycloneDX SBOM (`appSbom`) lists the same packages with their purls, hashes and declared
+ * licenses, written next to the release files for the release workflows to upload.
  *
  * **What the app carries, three ways.**
  *
@@ -457,8 +459,9 @@ export function readBundleRecord(file: string): NoticePackage[] {
 }
 
 /**
- * Writes `THIRD-PARTY-NOTICES.txt` into the packaged app, answering the problems found: on a production or beta build
- * they throw, failing the build, and on a preview they are returned for the caller to report.
+ * Writes `THIRD-PARTY-NOTICES.txt` into the packaged app, and the SBOM where `sbom` says, answering the problems found:
+ * on a production or beta build they throw, failing the build, and on a preview they are returned for the caller to
+ * report.
  */
 export function writeAppNotices(options: {
   appDir: string;

@@ -120,7 +120,8 @@ records, and fails a production or beta build on what it reports, which a previe
 text or a license outside `ACCEPTED` (add the package's text to `OVERRIDES` with why, never widen `ACCEPTED` without
 reading the license), a native binary whose notices are missing (bump its pin to a release that ships them), a missing
 bundle record, a pack bundle whose packages can't be told, or an `OVERRIDES` entry no longer needed
-(`scripts/lib/third-party-notices.ts`).
+(`scripts/lib/third-party-notices.ts`). Beside the release files it writes a CycloneDX SBOM, `<releasePrefix>-<version>-<os>-<arch>.cdx.json`, which
+the release workflows upload by that name: rename a release file and their `*.cdx.json` globs with it.
 
 ## Backward compatibility
 
