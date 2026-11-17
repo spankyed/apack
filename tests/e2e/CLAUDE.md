@@ -2,8 +2,8 @@
 
 Read [the test placement guide](../README.md) for ownership and commands. This suite contains real
 Electron checks: `smoke/` is the app gate, `ui/` checks rendered behavior, and `app-integration/` checks
-real process boundaries. The latter two are opt-in, not ordinary chain gates. One-off driving belongs
-in `drive/`.
+real process boundaries. The chain gates on all three: `smoke/` as `test:smoke`, the rest as `test:e2e` after
+it. One-off driving belongs in `drive/`.
 
 Run the affected spec with `npm run test:e2e -- ui/<spec>` or
 `npm run test:e2e -- app-integration/<spec>`. Tests use the built app; rebuild the affected output first.
