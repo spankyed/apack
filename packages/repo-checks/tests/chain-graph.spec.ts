@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
-import { CHAIN_STEPS, chainSteps, conflictsOf, dependsOn, keptOnFailure, orderedSteps, STEP_TABLES, type ChainStep } from '../../../scripts/lib/chain-steps.ts';
+import { CHAIN_STEPS, conflictsOf, dependsOn, keptOnFailure, orderedSteps, STEP_TABLES, type ChainStep } from '../../../scripts/lib/chain-steps.ts';
 import { unitFor } from '../../../scripts/lib/chain-stamps.ts';
 import { declaredAt } from '../../../scripts/lib/chain-output.ts';
 import { reachableText, rootScripts, withoutComments } from '../../../scripts/lib/npm-scripts.ts';
@@ -87,8 +87,7 @@ describe('the chain graph', () => {
    * steps is not a property of either.
    */
   it('runs the smoke gate before the harness they are mutexed by', () => {
-    const order = orderedSteps(chainSteps(['test:e2e'])).map((step) => step.name);
-    expect(order, 'the opt-in harness is not in this plan, so there is nothing to order').toContain('test:e2e');
+    const order = orderedSteps(CHAIN_STEPS).map((step) => step.name);
     const smoke = CHAIN_STEPS.find((step) => step.name === 'test:smoke')!;
     expect(conflictsOf(smoke), 'the two no longer share a path, so this preference has lost its subject')
       .toContain('test:e2e');
@@ -184,37 +183,10 @@ describe('the chain graph', () => {
       + 'step that opted out').toEqual([]);
   });
 
-  /**
-   * An opt-in step is declared but not gated on. The declarations are the reason it stays: `chain-inputs`
-   * reads every step's `inputs` to prove the tracked tree is covered, so deleting the E2E step would leave
-   * `tests/e2e` watched by nothing while looking like a simplification.
-   */
-  describe('a step the chain knows about but does not gate on', () => {
-    it('is left out by default and put back when asked for', () => {
-      const byDefault = chainSteps().map((s) => s.name);
-      expect(byDefault, 'the E2E suite drives the app; it is not a regression gate').not.toContain('test:e2e');
-      expect(chainSteps(['test:e2e']).map((s) => s.name), '`--e2e` runs it').toContain('test:e2e');
-    });
-
-    it('says why, as an uncached step has to', () => {
-      expect(CHAIN_STEPS.filter((s) => s.optInBecause !== undefined && s.optInBecause.length < 20).map((s) => s.name),
-        'an opt-in step needs a reason, not a flag').toEqual([]);
-    });
-
-    /**
-     * The one way this breaks: something depends on a step the default run does not include, so the chain
-     * is missing a dependency and finds out halfway through. It fails at the selector instead.
-     *
-     * Asked of `chainSteps` rather than `orderedSteps`, because that is the only place it can be asked
-     * now. Edges derive from the list they are given, so a step filtered out of the list is simply not
-     * depended on by it; the refusal has to derive against the *whole* table, which is what `chainSteps`
-     * does and why it takes one.
-     */
-    it('refuses a graph where something depends on one', () => {
-      const steps = CHAIN_STEPS.map((s) => (s.name === 'build:runtime' ? { ...s, optInBecause: 'for the case' } : s));
-      expect(() => chainSteps([], steps))
-        .toThrow(/depends on build:runtime, which is opt-in/);
-    });
+  it('gates on the whole E2E suite, uncached, so a spec the app moves under fails the next run', () => {
+    const e2e = CHAIN_STEPS.find((step) => step.name === 'test:e2e');
+    expect(orderedSteps(CHAIN_STEPS).map((step) => step.name)).toContain('test:e2e');
+    expect(e2e?.neverCachedBecause, 'a flaky pass cached green would hide the intermittent failure').toBeDefined();
   });
 
   it('does not cache the step that guarantees the built packages', () => {
