@@ -14,7 +14,6 @@ import { test, expect } from '@apackdev/testing';
 const CODE = 'default-setup/code';
 
 type DrivenWindow = {
-  __sendToSystem: (systemId: string, event: Record<string, unknown>) => void;
   applicationState: { send(event: Record<string, unknown>): void };
 };
 
@@ -51,13 +50,11 @@ test.afterEach(() => {
   workDir = undefined;
 });
 
-test.beforeEach(async ({ app, appPage }) => {
+test.beforeEach(async ({ app }) => {
   workDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-terminal-view-')));
   await app.waitForSurface(CODE);
   await app.navigate(CODE);
-  await appPage.evaluate(({ code, dir }) => {
-    (window as unknown as DrivenWindow).__sendToSystem(code, { type: 'SET_BASE_DIRECTORY', path: dir, fromUserNavigation: false });
-  }, { code: CODE, dir: workDir });
+  await app.send(CODE, { type: 'SET_BASE_DIRECTORY', path: workDir, fromUserNavigation: false });
 });
 
 test('a shell is drawn, and what is typed into it runs', async ({ appPage }) => {

@@ -61,7 +61,7 @@ test('real onboarding writes app and feature preferences without a settings asse
     values.app.projects = [{ name: 'Acceptance project', directories: [directory], color: '#3B82F6' }];
     values.features['default-setup/code'].cliPaths = { 'claude-code': cli, codex: cli };
     await saveJson(JSON.stringify(values, null, 2));
-    await appPage.evaluate(() => (window as any).__sendToSystem('default-setup/brain', { type: 'START_BRAIN' }));
+    await app.send('default-setup/brain', { type: 'START_BRAIN' });
     await app.navigate('default-setup/threads');
     await expect(appPage.getByText('Welcome! Ready to get started?', { exact: true })).toBeVisible();
     await appPage.getByText("Let's go", { exact: true }).click();
@@ -80,7 +80,7 @@ test('real onboarding writes app and feature preferences without a settings asse
     await openJson();
     await saveJson(original);
     expect(await lifecycle()).toEqual(before);
-    await appPage.evaluate(() => (window as any).__sendToSystem('default-setup/brain', { type: 'RESTART_BRAIN' }));
+    await app.send('default-setup/brain', { type: 'RESTART_BRAIN' });
     expect(await lifecycle()).toEqual(before);
   } catch (error) {
     failed = true;

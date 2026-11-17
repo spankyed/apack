@@ -17,7 +17,7 @@ import 'virtual:host-shared-modules';
 import { bindRendererHost } from '@/runtime';
 import { fePacks } from '@/runtime/packs';
 import { handleVueError, installGlobalErrorHandling, reportRendererError } from '@/boot/errors';
-import { untypedSendToSystem } from '@apackdev/sdk/events';
+import { e2eSystems, type E2eSystems } from '@/transport/e2e-door';
 
 declare const __APP_VERSION__: string;
 
@@ -25,16 +25,8 @@ declare global {
   interface Window {
     applicationState: Actor<ReturnType<typeof createAppShell>>;
     __disableOnboardingUI?: () => void;
-    /**
-     * Sends a backend system an event the way a surface does, for the E2E suite.
-     *
-     * A door of its own, because the suite has no other: a send to a system goes through the API's
-     * `bus.send`, which is tRPC over a WebSocket — a client to stand up rather than a call to make — and
-     * nothing else in the page exposes one. Borrowing a door that production code needs is what this
-     * avoids: such a door is then load-bearing for a test, and removing it breaks the suite for reasons
-     * that have nothing to do with it.
-     */
-    __sendToSystem?: (systemId: string, event: { type: string } & Record<string, unknown>) => void;
+    /** The E2E suite's sends and asks to the backend's systems (`transport/e2e-door.ts`) */
+    __e2eSystems?: E2eSystems;
     /** Developer/test recording; the authenticated backend refuses production admission. */
     __performance: typeof windowPerformance;
     appVersion: string;
@@ -88,7 +80,7 @@ window.__disableOnboardingUI = () => {
   console.log('Onboarding UI hiding disabled');
 };
 
-window.__sendToSystem = untypedSendToSystem;
+window.__e2eSystems = e2eSystems;
 window.__performance = windowPerformance;
 
 applicationState.subscribe({

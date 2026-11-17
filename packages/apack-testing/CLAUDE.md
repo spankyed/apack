@@ -498,6 +498,8 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 | `report(name, value)` | Write `.apack/drive/results/{name}.json` and print one `[drive:report] {name} {json}` line, for a driving run whose answer is meant to be read by a program rather than watched. Returns the path |
 | `waitForState(check, ms?)` | Wait for dot-separated state path (e.g. `'running.connected'`), default 10s |
 | `waitForSurface(surfaceId, ms?)` | Wait for a surface to appear in the surface list, default 30s |
+| `send(system, event)` | Send a backend system an event as this window does, the system named as the pack's code names one. Resolves once the API accepted it and rejects with its refusal. Names no return address, so a `reply` to it goes nowhere |
+| `ask(system, event)` | Send as `send` does and resolve with the event the system's `reply` answers it with, matched by the call it was sent under. Waits while the app works, not for a fixed time |
 
 ### `createTest(options?)`
 

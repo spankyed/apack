@@ -5,7 +5,6 @@ import type { Page, TestInfo } from '@playwright/test';
 import { test, expect, type AppDriver } from '@apackdev/testing';
 import { richThreadFixture } from '../../_support/conversations.ts';
 interface PagingWindow {
-  __sendToSystem(system: string, event: Record<string, unknown>): void;
   applicationState: {
     system: { get(ref: string): { getSnapshot(): { context: {
       currentThread?: { id: string };
@@ -29,7 +28,7 @@ async function prepare(app: AppDriver, page: Page, name: string) {
     writeFileSync(path.join(directory, 'exported-threads.json'), JSON.stringify({ ...fixture, threads }));
     await app.waitForSurface('default-setup/threads');
     await app.navigate('default-setup/threads');
-    await page.evaluate(directory => (window as unknown as PagingWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
+    await app.send('default-setup/threads', { type: 'IMPORT_THREADS', directory });
     await page.waitForFunction(id => {
       const context = (window as unknown as PagingWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
       return !!context.threadMap[id];

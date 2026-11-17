@@ -8,6 +8,7 @@ import { trpc, reconnectApiClient } from '@/transport';
 import { globalToast } from '@/adapters/toast';
 import { windowSettings, connectWindowSettings, disconnectWindowSettings } from '@/runtime/settings';
 import { windowCatalog } from '@/runtime/catalog';
+import { receiveE2eAnswer } from '@/transport/e2e-door';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 /** What the Electron main process reports about the API process */
@@ -83,7 +84,9 @@ export const feClient: ShellClient = {
         },
         onData: (message) => {
           if (!current()) return;
-          _withPerformanceCarrier(message.diagnostics, () => { if (!windowSettings.receive(message)) connection.onMessage(message); });
+          _withPerformanceCarrier(message.diagnostics, () => {
+            if (!receiveE2eAnswer(message) && !windowSettings.receive(message)) connection.onMessage(message);
+          });
         },
       });
     };
