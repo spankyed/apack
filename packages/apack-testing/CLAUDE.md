@@ -97,7 +97,7 @@ a real run.
 and every host config's): `GIT_CONFIG_GLOBAL` is the null device, `GIT_CONFIG_NOSYSTEM=1`, and an inherited
 `GIT_CONFIG_PARAMETERS`/`GIT_CONFIG_COUNT` is dropped. A spec needing an identity, a branch name or a setting gives it
 to its own repository or command; one testing what git does with a user's config writes that file and points
-`GIT_CONFIG_GLOBAL` at it, which outranks `HOME`. `suite-timeouts.spec.ts` holds every vitest config to loading it.
+`GIT_CONFIG_GLOBAL` at it, which outranks `HOME`. A new vitest config lists it beside the progress guard.
 
 **A file fails when it ends with a process it started running on out of its worker's reach**
 (`src/leftover-processes.ts`, read by the guard from one `ps` listing as each file ends). Two shapes: a descendant

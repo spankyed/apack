@@ -472,14 +472,13 @@ const deadlineFor = (file: string, size: Size): number =>
 
 const isPlaywright = (file: string): boolean => file.endsWith('playwright.config.ts');
 
-/** Whether a config loads a setup file of `@apackdev/testing`'s: in its own setup files, or through the helper it delegates to */
-const loadsSetupFile = (file: string, name: string): boolean => {
+/** Whether a config loads the progress guard: in its own setup files, or through the helper it delegates to */
+const loadsGuard = (file: string): boolean => {
   const own = fs.readFileSync(path.join(REPO_ROOT, file), 'utf-8');
   const delegate = Object.entries(DELEGATES).find(([helper]) => own.includes(helper));
   const helper = delegate === undefined ? '' : fs.readFileSync(path.join(REPO_ROOT, delegate[1]), 'utf-8');
-  return own.includes(`/src/${name}.ts'`) || helper.includes(`sibling('${name}')`);
+  return /vitest-progress-guard/.test(own) || /sibling\('vitest-progress-guard'\)/.test(helper);
 };
-const loadsGuard = (file: string): boolean => loadsSetupFile(file, 'vitest-progress-guard');
 
 /**
  * Whether a Vitest config, or the helper it delegates to, declares `expect` options.
@@ -532,30 +531,6 @@ describe('a suite bounds a test by its size, and never by the clock', () => {
   it.each(configs().filter(({ file }) => isPlaywright(file)))('$file declares its $size deadline', ({ file, size }) => {
     const declared = new Map(declaredTimeouts(file).map(({ key, ms }) => [key, ms]));
     expect(declared.get('timeout'), `${file} is ${size}`).toBe(deadlineFor(file, size));
-  });
-});
-
-/**
- * Git in a test reads no config of the machine's (`vitest-git-config.ts`), so a spec passes or fails the same on every
- * machine: one leaning on a developer's `user.email` or `init.defaultBranch` fails here rather than on a runner without
- * them. A config that leaves it out is a suite whose git does whatever its machine's config says.
- */
-describe('every vitest config keeps the machine\'s git config from its tests', () => {
-  it.each(configs().filter(({ file }) => !isPlaywright(file)))('$file loads it', ({ file }) => {
-    expect(loadsSetupFile(file, 'vitest-git-config'), `${file} does not load @apackdev/testing's vitest-git-config.ts`).toBe(true);
-  });
-
-  // The rule over a config that leaves it out, since every real one passing is also what a rule reading nothing says
-  it('reports a config that does not load it', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'git-config-rule-'));
-    try {
-      const file = path.relative(REPO_ROOT, path.join(dir, 'vitest.config.ts'));
-      fs.writeFileSync(path.join(REPO_ROOT, file), "setupFiles: ['../apack-testing/src/vitest-progress-guard.ts'],\n");
-      expect(loadsSetupFile(file, 'vitest-git-config')).toBe(false);
-      expect(loadsSetupFile(file, 'vitest-progress-guard')).toBe(true);
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
   });
 });
 

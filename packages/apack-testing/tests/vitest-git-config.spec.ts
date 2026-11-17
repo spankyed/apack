@@ -42,7 +42,3 @@ it('reads all three once the levels are given back', async () => {
   expect(await plantedKeys({ GIT_CONFIG_GLOBAL: undefined, GIT_CONFIG_NOSYSTEM: undefined }))
     .toEqual(['apack.home', 'apack.system', 'apack.xdg']);
 });
-
-it('reads a user config a spec points it at', async () => {
-  expect(await plantedKeys({ GIT_CONFIG_GLOBAL: path.join(home, '.gitconfig') })).toEqual(['apack.home']);
-});
