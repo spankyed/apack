@@ -24,4 +24,10 @@ export const HOST = {
    * renderer hands it to the waiting ask instead of to a surface. Claimed, never registered, as `drive` is.
    */
   e2e: resolveName('e2e', HOST_PACK_ID),
+  /**
+   * An E2E spec's own connection to the API (the `connection` fixture, `@apackdev/testing`), beside the window's:
+   * it claims this name so a system's reply to its asks reaches it. Its own name rather than `e2e`, which the window
+   * claims, since a name is held by one connection at a time.
+   */
+  e2eConnection: resolveName('e2eConnection', HOST_PACK_ID),
 } as const;

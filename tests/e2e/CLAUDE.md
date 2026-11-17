@@ -54,6 +54,7 @@ Three fixtures are provided, each at a different scope:
 | `electronApp`  | worker | The launched Electron app (shared across tests in a worker) |
 | `appPage`      | test   | The main renderer Page (waits for `running.connected`, bypasses onboarding) |
 | `app`          | test   | `AppDriver` — high-level API below |
+| `connection`   | test   | `AppConnection` — the spec's own client to the API, apart from the window (`packages/apack-testing/src/connection.ts`) |
 
 ### AppDriver methods
 
@@ -74,6 +75,11 @@ A spec reaches a system through `app.send` and `app.ask` and nothing else; the r
 that calls the renderer's door they use. Both go over the window's own connection, so a handler that answers the
 window it was asked from answers this one. `send` names no return address, so a system's `reply` to it goes nowhere:
 use `ask` when the spec needs the answer, rather than watching a surface for a side effect of it.
+
+A spec about what the API grants a *client* — settings access issued to one pack's runtime, and refused once that
+runtime has gone — asks it as the `connection` fixture instead: a client of its own, so what it is granted is its
+own and not the window's. It waits for a broadcast with `connection.next(match)`, armed before the send whose
+outcome it awaits. Never write a tRPC client in a spec; extend `connection` with the verb it lacks.
 
 ### Direct page access
 

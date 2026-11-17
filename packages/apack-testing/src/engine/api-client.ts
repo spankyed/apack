@@ -11,6 +11,7 @@
 //
 // ```
 // → { id, jsonrpc: '2.0', method: 'mutation',          params: { path: 'bus.claim', input: { as } } }
+// → { id, jsonrpc: '2.0', method: 'query',             params: { path: 'packs.loaded' } }            // input absent
 // → { id, jsonrpc: '2.0', method: 'subscription',      params: { path: 'bus.sub' } }
 // → { id, jsonrpc: '2.0', method: 'subscription.stop' }                      // no params; cancels by id
 // ← { id, jsonrpc, result: { type: 'started' } }                             // advisory, may follow data
@@ -56,6 +57,17 @@ export interface BusMessage {
  * (`bus.send`'s schema names it) and reads `answering` off the answer (`bus.sub` delivers a backend `reply`
  * with it). `client` is the one field that stays out of a send, being stamped from the connection. */
 
+/**
+ * A pack runtime the app has accepted, as `packs.loaded` lists it: the four fields that identify it, which is what
+ * `settings.openPack` takes. The wire carries more (its frontend entry, its development URL); nothing here reads them.
+ */
+export interface PackRuntime {
+  readonly id: string;
+  readonly registrationId: string;
+  readonly declarationRevision: string;
+  readonly buildRevision: string;
+}
+
 /** Where the API is and what it accepts. Resolved by the caller, so this module owns no app lifecycle. */
 export interface ApiAddress {
   readonly port: number;
@@ -66,10 +78,22 @@ export interface ApiAddress {
 export interface ApiClient {
   /** Takes a name on this connection, so a system can be told to answer it. Rejects when another holds it. */
   claim(ref: string): Promise<void>;
-  /** Sends to a system. Rejects on a refusal, where the page route used to drop it silently. */
-  send(message: { to: string; event: Record<string, unknown>; sender?: string; call?: string }): Promise<void>;
+  /**
+   * Sends to a system. Rejects on a refusal, where the page route used to drop it silently.
+   *
+   * `settingsCredential` is access `openPackSettings` issued, for a send acting as that pack toward `host/settings`;
+   * the API refuses a settings mutation without one, and one whose runtime has gone.
+   */
+  send(message: { to: string; event: Record<string, unknown>; sender?: string; call?: string; settingsCredential?: string }): Promise<void>;
   /** Explicit trusted-tool settings access; ordinary bus sends never borrow this authority. */
   sendSettings: ApiClient['send'];
+  /** The pack runtimes the app has accepted (`packs.loaded`) */
+  loadedPacks(): Promise<PackRuntime[]>;
+  /**
+   * Settings access for one pack runtime (`settings.openPack`), as that pack's frontend is issued it. Refused for a
+   * runtime the app no longer runs, which is how a spec shows a disabled pack's access ending.
+   */
+  openPackSettings(runtime: PackRuntime): Promise<string>;
   /** Every message the subscription delivers; returns the unsubscribe */
   onMessage(listener: (message: BusMessage) => void): () => void;
   /**
@@ -187,14 +211,15 @@ export async function connectApiClient({ port, token, host = API_HOST }: ApiAddr
   });
 
   /** Sends a frame that will be answered, and resolves when its answer arrives */
-  const callMutation = (path: string, what: string, input: unknown): Promise<unknown> => {
+  const call = (method: 'query' | 'mutation', path: string, what: string, input: unknown): Promise<unknown> => {
     if (failure !== null) return Promise.reject(new Error(`${what}: ${failure}`));
     const id = nextId++;
     return new Promise((resolve, reject) => {
       pending.set(id, { resolve, reject, what });
-      socket.send(JSON.stringify({ id, jsonrpc: '2.0', method: 'mutation', params: { path, input } }));
+      socket.send(JSON.stringify({ id, jsonrpc: '2.0', method, params: { path, input } }));
     });
   };
+  const callMutation = (path: string, what: string, input: unknown): Promise<unknown> => call('mutation', path, what, input);
 
   /**
    * Sends the subscribe frame and resolves on the send rather than on an answer: `started` is advisory and may
@@ -237,6 +262,14 @@ export async function connectApiClient({ port, token, host = API_HOST }: ApiAddr
       const credential = await openSettings();
       await callMutation('bus.send', `sending ${message.event.type} to ${message.to}`, { ...message, settingsCredential: credential });
     },
+    loadedPacks: () => call('query', 'packs.loaded', 'listing the loaded packs', undefined) as Promise<PackRuntime[]>,
+    // The four fields and no more: the procedure's input is strict, and a loaded entry carries others
+    openPackSettings: ({ id, registrationId, declarationRevision, buildRevision }) =>
+      callMutation('settings.openPack', `opening settings access for ${id}`, { id, registrationId, declarationRevision, buildRevision })
+        .then(credential => {
+          if (typeof credential !== 'string' || !credential) throw new Error(`The app returned no settings credential for ${id}`);
+          return credential;
+        }),
     onMessage: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);

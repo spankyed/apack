@@ -15,6 +15,8 @@ import { appVersion } from './app-version.ts';
 import { appLaunchEnv, pinsViewport } from './launch-env.ts';
 import { assertCheckoutPackagesFresh } from './checkout-freshness.ts';
 import { assertPrebuiltPackCurrent, packArchiveAcceptance } from './prebuilt-pack.ts';
+import { connectToApp, type AppConnection } from './connection.ts';
+export type { AppConnection, BusMessage, PackRuntime } from './connection.ts';
 
 export interface AppDriver {
   sendEvent: (event: Record<string, unknown>) => Promise<void>;
@@ -484,7 +486,7 @@ export function createTest(options: CreateTestOptions = {}) {
   const screenshotDir = resolveScreenshotDir(options.screenshotDir);
 
   const test = base.extend<
-    { appPage: Page; app: AppDriver },
+    { appPage: Page; app: AppDriver; connection: AppConnection },
     { electronApp: ElectronApplication }
   >({
     // Playwright's signature for a fixture that depends on no other fixture. It always passes an object, and
@@ -794,6 +796,16 @@ export function createTest(options: CreateTestOptions = {}) {
 
     app: async ({ appPage: page, electronApp }, use) => {
       await use(createAppDriver(page, screenshotDir, electronApp.process().pid));
+    },
+
+    // Opened only for a test that names it, and closed after it, so its claim on `HOST.e2eConnection` ends with it
+    connection: async ({ appPage: page, electronApp }, use) => {
+      const connection = await connectToApp(page, { resolve: resolveFeature, appPid: electronApp.process().pid });
+      try {
+        await use(connection);
+      } finally {
+        await connection.close();
+      }
     },
   });
 

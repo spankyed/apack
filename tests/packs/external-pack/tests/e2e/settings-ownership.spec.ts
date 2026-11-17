@@ -1,11 +1,9 @@
 import { fileURLToPath } from 'node:url';
 import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
-import { randomUUID } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createTRPCUntypedClient, createWSClient, wsLink } from '@trpc/client';
 import type { SettingsSnapshot } from '@apackdev/sdk/types';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { test, expect } from '@apackdev/testing';
@@ -201,58 +199,25 @@ test('two external assistant groups survive independent edits, disable, reset an
   await expect(memo).toHaveValue('Morgan');
 });
 
-test('accepted dependency credentials enforce shared, owner-only and reload boundaries', async ({ appPage, app }, testInfo) => {
+test('accepted dependency credentials enforce shared, owner-only and reload boundaries', async ({ appPage, app, connection }, testInfo) => {
   // One cold backend build (180s), typecheck (20s), then credential/lifecycle checks (40s).
   test.setTimeout(240_000);
   const root = fileURLToPath(new URL('../../../../../', import.meta.url));
   const dependent = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-settings-dependent-'));
   const id = 'settings-dependent';
   let installed = false;
-  const messages: { answering?: string; event: Record<string, unknown> }[] = [];
-  const address = await appPage.evaluate(() => ({
-    port: (window as any).electronAPI.apiPort as number,
-    token: (window as any).electronAPI.apiToken as string,
-  }));
-  const ws = createWSClient({ url: `ws://127.0.0.1:${address.port}`, WebSocket: class extends WebSocket {
-    constructor(url: string | URL) { super(url, ['apack', `apack-token.${address.token}`]); }
-  } });
-  const client = createTRPCUntypedClient({ links: [wsLink({ client: ws })] });
-  let subscription: { unsubscribe(): void } | undefined;
+  // This case's own client, apart from the window: the settings access it is issued, and refused, is its own
+  const loaded = () => connection.loadedPacks();
+  const credential = async (packId: string) => connection.openPackSettings((await loaded()).find(pack => pack.id === packId)!);
+  const ask = (settingsCredential: string, event: Record<string, unknown> & { type: string }) =>
+    connection.ask('host/settings', event, { settingsCredential });
   // The packs system broadcasts how an install or a toggle ended, failed ones included; the case waits for that
   // event, however long the operation takes on this machine, rather than for a clock
-  const waiters: { match: (event: Record<string, unknown>) => boolean; resolve: (event: Record<string, unknown>) => void }[] = [];
-  const nextEvent = (match: (event: Record<string, unknown>) => boolean) =>
-    new Promise<Record<string, unknown>>(resolve => waiters.push({ match, resolve }));
-  const ready = new Promise<void>((resolve, reject) => {
-    subscription = client.subscription('bus.sub', undefined, { onStarted: () => resolve(), onError: reject,
-      onData: data => {
-        const message = data as (typeof messages)[number];
-        messages.push(message);
-        for (const waiter of waiters.filter(w => w.match(message.event))) {
-          waiters.splice(waiters.indexOf(waiter), 1);
-          waiter.resolve(message.event);
-        }
-      } });
-  });
-  const loaded = async () => await client.query('packs.loaded') as { id: string; registrationId: string; declarationRevision: string; buildRevision: string }[];
-  const credential = async (packId: string) => {
-    const origin = (await loaded()).find(pack => pack.id === packId)!;
-    return await client.mutation('settings.openPack', {
-      id: origin.id, registrationId: origin.registrationId, declarationRevision: origin.declarationRevision, buildRevision: origin.buildRevision,
-    }) as string;
-  };
-  const ask = async (settingsCredential: string, event: Record<string, unknown>) => {
-    const call = randomUUID();
-    await client.mutation('bus.send', { to: 'host/settings', sender: 'host/drive', call, settingsCredential, event });
-    await expect.poll(() => messages.find(message => message.answering === call)).toBeTruthy();
-    return messages.find(message => message.answering === call)!.event;
-  };
+  const nextEvent = (match: (event: Record<string, unknown>) => boolean) => connection.next(match);
   const target = (groupId: string) => ({ kind: 'pack', packId: 'bundled-ui-fixture', groupId });
   const toggle = () => appPage.evaluate(packId => (window as any).applicationState.system.get('host/packs')
     .send({ type: 'UI.TOGGLE_ENABLED', packId }), id);
   try {
-    await ready;
-    await client.mutation('bus.claim', { as: 'host/drive' });
     await app.send('host/packs', { type: 'INSTALL_PACK', packSlug: companion, sourceKind: 'local' });
     await app.waitForSurface('bundled-ui-fixture/scribbles');
     fs.symlinkSync(path.join(root, 'node_modules'), path.join(dependent, 'node_modules'), 'dir');
@@ -293,7 +258,7 @@ shared.set({ path: ['name'], value: 2 });
     const access = await credential(id);
     expect(await ask(owner, { type: 'UPDATE_SETTINGS', target: target('restricted'), path: ['count'], value: 3 })).toMatchObject({ type: 'SETTINGS_SAVED' });
     const before = (await ask(access, { type: 'GET_SETTINGS' })).snapshot as SettingsSnapshot;
-    const messageStart = messages.length;
+    const messageStart = connection.messages.length;
     expect(before.values.packs['bundled-ui-fixture'].restricted).toEqual({ count: 3 });
     for (const event of [
       { type: 'UPDATE_SETTINGS', target: target('restricted'), path: ['count'], value: 4, caller: 'bundled-ui-fixture' },
@@ -313,7 +278,7 @@ shared.set({ path: ['name'], value: 2 });
         contentType: 'application/json',
         body: JSON.stringify({ before: { revision: before.revision, values: before.values },
           after: { revision: unchanged.revision, values: unchanged.values },
-          updates: messages.slice(messageStart).filter(message => message.event.type === 'SETTINGS_UPDATED')
+          updates: connection.messages.slice(messageStart).filter(message => message.event.type === 'SETTINGS_UPDATED')
             .map(message => {
               const snapshot = message.event.snapshot as SettingsSnapshot;
               return { revision: snapshot.revision, values: snapshot.values };
@@ -345,16 +310,12 @@ shared.set({ path: ['name'], value: 2 });
     const replacementRuntime = (await loaded()).find(pack => pack.id === id)!;
     expect(replacementRuntime.buildRevision).toBe(previousRuntime.buildRevision);
     expect(replacementRuntime.registrationId).not.toBe(previousRuntime.registrationId);
-    await expect(client.mutation('settings.openPack', {
-      id, registrationId: previousRuntime.registrationId,
-      declarationRevision: previousRuntime.declarationRevision, buildRevision: previousRuntime.buildRevision,
-    })).rejects.toThrow('Settings access is unavailable');
+    await expect(connection.openPackSettings(previousRuntime)).rejects.toThrow('Settings access is unavailable');
     const fresh = await credential(id);
     expect(await ask(fresh, { type: 'UPDATE_SETTINGS', target: target('assistant'), path: ['name'], value: 'Fresh' })).toMatchObject({ type: 'SETTINGS_SAVED' });
     await expect(appPage.getByLabel('Scribbles assistant name', { exact: true })).toHaveValue('Fresh');
     expect(await ask(owner, { type: 'RESET_SETTINGS', target: target('restricted') })).toMatchObject({ type: 'SETTINGS_SAVED' });
   } finally {
-    subscription?.unsubscribe(); ws.close();
     if (installed) await app.send('host/packs', { type: 'UNINSTALL_PACK', packId: id });
     fs.rmSync(dependent, { recursive: true, force: true });
   }
