@@ -166,6 +166,8 @@ interface PoolEntry {
   following: boolean
   /** The connection its view is drawn over ended and was not made again (`lost`) */
   unreachable: boolean
+  /** Says the find bar's count again, while one is open over this terminal */
+  recount: (() => void) | null
 }
 
 /**
@@ -442,6 +444,8 @@ class TerminalPool {
         entry.handlers.onFollowingChange?.(following)
       },
       onSelectionChange: (selected) => entry.handlers.onSelectionChange?.(selected),
+      // Output moved what an open find bar counts: the match it is on, how many, or whether there are more
+      onFound: () => entry.recount?.(),
       // A URL from a terminal is whatever a program printed, so it goes through the app's own policy for
       // what may be opened; a path is the feature's to resolve against where the shell is
       onLink: (link) => {
@@ -544,6 +548,7 @@ class TerminalPool {
       const none = more ? 'None in the newest output' : 'No results'
       count.textContent = input.value === '' ? '' : total === 0 ? none : `${current} of ${more ? `${total}+` : total}`
     }
+    entry.recount = said
     const search = () => entry.view?.find(input.value, { matchCase }).then(said)
     const step = (direction: -1 | 1) => {
       entry.view?.findNext(direction)
@@ -551,6 +556,7 @@ class TerminalPool {
     }
     const close = () => {
       bar.remove()
+      entry.recount = null
       void entry.view?.find('')
       entry.view?.focus()
     }
@@ -661,7 +667,7 @@ class TerminalPool {
     wrapper.appendChild(notice)
     const entry: PoolEntry = {
       terminalId: info.id, info, session: undefined, pid: info.pid, view: null, wrapper, notice,
-      attachedContainer: null, handlers: {}, following: true, unreachable: false, folded: new Set(),
+      attachedContainer: null, handlers: {}, following: true, unreachable: false, folded: new Set(), recount: null,
     }
     this.entries.set(info.id, entry)
     this.draw(entry, info)
