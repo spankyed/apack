@@ -62,8 +62,10 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(pack, 'apack.json'), 'utf-8'));
     expect(manifest.dependencies).toEqual({});
     const workflow = fs.readFileSync(path.join(pack, '.github', 'workflows', 'release.yml'), 'utf-8');
-    // A runner has no installed app, so the build resolves built-in dependencies from a downloaded beta
-    expect(workflow).toMatch(/runs-on: macos-14/);
+    // A runner has no installed app, so the build resolves built-in dependencies from a downloaded beta, which
+    // is macOS arm64. The moving label, since a pinned image is retired under an author's repository and every
+    // job naming it is refused before it starts
+    expect(workflow).toMatch(/runs-on: macos-latest/);
     expect(workflow).toMatch(/APACK_HOST: beta/);
   });
 
