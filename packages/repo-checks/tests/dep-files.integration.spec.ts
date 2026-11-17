@@ -71,22 +71,26 @@ const rendererBuildInfos = (): string[] => (fs.existsSync(RENDERER_TMP)
  * No dep file means no typecheck has run here, which is missing evidence rather than a finding about
  * coverage — and the same of a pack nothing has built and of the renderer's build infos. Evaluated once at
  * module scope so a refusal names its cause once rather than per case.
+ *
+ * Ten dep files at least, the bar this file already read a full `npm run typecheck` against, which a leg or two run
+ * alone do not: fewer are a partial run's, whose missing legs would read as legs that lost their dep files.
  */
 const DEP_FILES = evidenceOrRefuse({
   what: 'dep file in node_modules/.cache/tsbuildinfo',
   from: 'npm run typecheck',
-  present: depFileNames().length > 0,
+  found: depFileNames().length,
+  atLeast: 10,
 });
 const BUILD_RECORDS = evidenceOrRefuse({
   what: 'pack with a .apack/reads.json',
   from: 'npm run build:default-setup',
-  present: buildReads.packsWithReads().length > 0,
+  found: buildReads.packsWithReads().length,
 });
 /** The renderer's leg writes these instead of a dep file, which is the fact its own case is about */
 const RENDERER_INFOS = evidenceOrRefuse({
   what: 'build info in packages/renderer/node_modules/.tmp',
   from: 'npm run typecheck:renderer',
-  present: rendererBuildInfos().length > 0,
+  found: rendererBuildInfos().length,
 });
 
 describe('the compiler says what it read', () => {
@@ -116,7 +120,6 @@ describe('the compiler says what it read', () => {
   it('reads dep files with reads in them, or says which run would have left them', (ctx) => {
     DEP_FILES.orSkip(ctx);
     const found = depFileNames();
-    population('dep files', found, { atLeast: 10 });
     expect(found.flatMap((name) => readsOf(name) ?? []).length, 'every dep file is empty of repo files')
       .toBeGreaterThan(100);
   });

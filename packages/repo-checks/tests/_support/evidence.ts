@@ -19,8 +19,12 @@
  * refuses instead. Absent evidence in a chain run is itself worth refusing on — the run that produces the
  * evidence is the run that is asking.
  *
- * `population` (`@apackdev/sdk/testing`) is the neighbour and the other half of the same question: this one
- * answers whether there is anything to read, that one whether what was read is enough to assert over.
+ * **Too little evidence is no evidence, not wrong evidence.** A run of part of what produces it — a chain run
+ * `--only` a few steps, one typecheck leg — leaves a few records where a full run leaves dozens. Read as
+ * evidence, the steps that did not run look like defects: the failure this module exists to prevent, in a
+ * worktree that ran anything at all. So a check names the least a full run leaves, and anything short of it
+ * is answered as absence is. `population` (`@apackdev/sdk/testing`) asks the same of what a case reads once
+ * the evidence is there.
  */
 import { runningChain } from '../../../../scripts/lib/chain-lock.ts';
 
@@ -50,13 +54,15 @@ export interface Evidence {
  * cause rather than the same message once per case.
  */
 export function evidenceOrRefuse(
-  { what, from, present, holder = runningChain() }: {
+  { what, from, found, atLeast = 1, holder = runningChain() }: {
     /** What is missing and where it would be: `'stamp store at node_modules/.cache/apack-chain'` */
     what: string;
     /** The command that produces it, so the remedy is in the message rather than in someone's memory */
     from: string;
-    /** Whether this checkout has it */
-    present: boolean;
+    /** How many records of it this checkout has */
+    found: number;
+    /** The fewest a full run of `from` leaves; fewer are a partial run's, and answered as none are */
+    atLeast?: number;
     /**
      * Who holds the chain lock, defaulting to whoever really does. Injected by the cases that drive both
      * answers: taking the real lock in a spec would refuse the chain run that is running the spec, which is
@@ -65,11 +71,14 @@ export function evidenceOrRefuse(
     holder?: string | null;
   },
 ): Evidence {
-  if (present) return { present, orSkip: () => {} };
-  const missing = `no ${what}: \`${from}\` produces it. An empty one is not a passing run.`;
+  if (found >= atLeast) return { present: true, orSkip: () => {} };
+  const missing = found === 0
+    ? `no ${what}: \`${from}\` produces it. An empty one is not a passing run.`
+    : `${what}: found ${found}, fewer than the ${atLeast} a full \`${from}\` leaves, so a partial run's, `
+      + `which would read every step it left out as a defect: \`${from}\` produces the rest.`;
   if (holder !== null) {
     throw new Error(`${missing}\n\nRefused rather than skipped: ${holder} is running, so this run is the `
       + 'gate and a skip in it would pass the chain over a check that looked at nothing.');
   }
-  return { present, orSkip: (ctx) => { ctx.skip(missing); } };
+  return { present: false, orSkip: (ctx) => { ctx.skip(missing); } };
 }
