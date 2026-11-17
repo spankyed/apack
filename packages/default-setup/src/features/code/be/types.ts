@@ -147,6 +147,9 @@ export interface GitProgress {
   percent: number
 }
 
+/** The commands whose progress the window that asked for one is told: a push, a pull, a checkout, a submodule update */
+export type ProgressDuring = 'push' | 'pull' | 'checkout' | 'submodule'
+
 /** One piece of a file's change, as git cuts it */
 export interface DiffHunk {
   /** What names this piece when it is staged or unstaged: the same for as long as git cuts the same piece */
