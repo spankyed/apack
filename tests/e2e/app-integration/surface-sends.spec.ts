@@ -70,13 +70,13 @@ test("the code system's file watcher and a terminal's news reach the code surfac
       .some((event) => JSON.stringify(event.data).includes('changed-outside.txt'));
   }, { intervals: [500] }).toBe(true);
 
-  // Every window hears a terminal made, by its id alone: what it is goes in `terminal.OPENED`, to the window that
-  // asked, and this send names none. So this test's terminal is the one made after it asked
-  const created = async () => (await received(appPage, 'code', 'terminal.CREATED')).map((event) => (event.data as { terminalId: string }).terminalId);
-  const before = new Set(await created());
-  await app.send(builtIn('code'), { type: 'terminal.CREATE_TERMINAL', title: 'e2e surface sends', cwd: workDir });
-  await expect.poll(async () => (await created()).filter((id) => !before.has(id))).toHaveLength(1);
-  const terminalId = (await created()).find((id) => !before.has(id))!;
+  // What a terminal is goes in `terminal.OPENED`, to whoever asked; every window hears that one was made, by its
+  // id alone, which is the news this test is about
+  const opened = await app.ask(builtIn('code'), { type: 'terminal.CREATE_TERMINAL', title: 'e2e surface sends', cwd: workDir });
+  expect(opened.type).toBe('terminal.OPENED');
+  const terminalId = (opened.data as { id: string }).id;
+  await expect.poll(async () => (await received(appPage, 'code', 'terminal.CREATED'))
+    .map((event) => (event.data as { terminalId: string }).terminalId)).toContain(terminalId);
   try {
     // What a program prints is drawn by the window from its session and is no event; what it *does* is.
     // This asks for text on the clipboard (OSC 52), which the system hands the surface as a claim
