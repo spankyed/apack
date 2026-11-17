@@ -118,8 +118,9 @@ license, notice or copying file in `electron-builder.mjs`, have every bundler of
 module comments, which the notices read back. `afterPack` writes `THIRD-PARTY-NOTICES.txt` from what the app carries and those
 records, and fails a production or beta build on what it reports, which a preview build only prints: a package with no
 text or a license outside `ACCEPTED` (add the package's text to `OVERRIDES` with why, never widen `ACCEPTED` without
-reading the license), a native binary whose notices are missing (bump its pin to a release that ships them), a missing
-bundle record, a pack bundle whose packages can't be told, or an `OVERRIDES` entry no longer needed
+reading the license), a native binary whose notices are missing (bump its pin to a release that ships them) or that is
+missing itself, a missing bundle record, a built-in pack with no bundle or one whose packages can't be told, an `OVERRIDES`
+entry no longer needed, or no third-party package at all
 (`scripts/lib/third-party-notices.ts`).
 
 ## Backward compatibility
