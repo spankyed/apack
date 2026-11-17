@@ -118,17 +118,18 @@ export class ApiServer implements AppModule {
 
     app.whenReady().then(() => this.startApiServer());
     
+    // The quit waits for the API to have gone, and then finishes whatever the wait ended in. Nothing asks for a
+    // quit twice — not a harness, not the OS — so one cancelled for good leaves the app up and idle. An API that
+    // outlived it is ended by the next launch, which kills an orphaned one before starting its own.
     app.on('before-quit', event => {
       if (this.shutdownComplete) return;
       event.preventDefault();
       this.isShuttingDown = true;
       this.shutdown ??= this.processManager.stop('SIGTERM', API_CONFIG.SHUTDOWN_TIMEOUT)
+        .catch(error => { logError('[MAIN] API shutdown failed; quitting without it:', error); })
         .then(() => {
           this.shutdownComplete = true;
           app.quit();
-        }).catch(error => {
-          this.shutdown = undefined;
-          logError('[MAIN] API shutdown failed:', error);
         });
     });
 
