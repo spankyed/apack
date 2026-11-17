@@ -198,7 +198,7 @@ For local signed builds, create `.env.signing` (gitignored) from `.env.signing.e
 
 ## CI Workflow
 
-`.github/workflows/build-mac.yml` runs on `macos-14` (Apple Silicon):
+`.github/workflows/build-mac.yml` runs on `macos-26` (Apple Silicon):
 
 - **Triggers**: tag push (`v*`) or manual dispatch
 - **Validates**: tag version matches `package.json`

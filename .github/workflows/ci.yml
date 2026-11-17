@@ -75,7 +75,7 @@ concurrency:
 jobs:
   check:
     if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
-    runs-on: macos-14
+    runs-on: macos-26
     timeout-minutes: 25
 
     steps:
@@ -186,7 +186,7 @@ jobs:
   # suite from the pack dir against the built app — the third-party pack path.
   external-pack-e2e:
     if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
-    runs-on: macos-14
+    runs-on: macos-26
     timeout-minutes: 30
 
     steps:
