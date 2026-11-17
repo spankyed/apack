@@ -105,6 +105,9 @@ const CARRIED_LABEL: Record<Carried, string> = { files: 'shipped', inlined: 'inl
 /** One package's notice: what it is under, and the text the notices give for it */
 export interface PackageNotice {
   package: NoticePackage;
+  /** The SPDX expression the package declares */
+  declared: string;
+  /** What the notices name it under, chosen from `declared` */
   license: string;
   text: string;
   source?: string;
@@ -296,7 +299,7 @@ export function noticeOf(pkg: NoticePackage, licensesDir: string, byName: Readon
   const author = typeof manifest.author === 'string' ? manifest.author : (manifest.author as { name?: string } | undefined)?.name;
   const source = SOURCE_NAMED.test(license) ? where
     : CREATOR_NAMED.test(license) ? `${where}; created by ${CREATORS[pkg.name] ?? author ?? 'its authors'}` : undefined;
-  return { package: pkg, license, text: texts.join('\n\n'), source };
+  return { package: pkg, declared, license, text: texts.join('\n\n'), source };
 }
 
 /** The notices' text: a header naming what else carries notices, then each distinct text with the packages it covers */
@@ -325,6 +328,101 @@ export function renderNotices(notices: readonly PackageNotice[], pointers: reado
     '',
     ...sections,
   ].join('\n');
+}
+
+/** A component of the app's SBOM beside its third-party packages: its runtime, or a binary it ships */
+export interface SbomComponent {
+  type: 'framework' | 'application';
+  name: string;
+  version: string;
+  purl: string;
+  license?: string;
+}
+
+/** An npm package's purl, whose scope's `@` is encoded */
+export const npmPurl = (name: string, version: string) => `pkg:npm/${name.replace(/^@/, '%40')}@${version}`;
+
+/** How the SBOM names a package: its purl, and its hash where the lockfile records one */
+export interface SbomIdentity {
+  /** A package not from npm, by name, such as a vendored checkout: the purl naming it where it is from */
+  purls: Readonly<Record<string, string>>;
+  /** The lockfile's integrity of a package, `sha512-<base64>`, by `name@version` */
+  integrity: ReadonlyMap<string, string>;
+}
+
+/**
+ * A license entry of a CycloneDX component, which the schema holds to SPDX: a plain SPDX license as an id, any other
+ * SPDX expression (`MIT+`, `LicenseRef-…`, `MIT OR ISC`) as an expression, and what is not SPDX (`UNLICENSED`, `BSD`)
+ * as a name
+ */
+function sbomLicenses(declared: string): object[] {
+  let tree: SpdxNode;
+  try { tree = parse(declared); } catch { return [{ license: { name: declared } }]; }
+  const plain = 'license' in tree && !tree.plus && !tree.exception && !tree.license.startsWith('LicenseRef-') && !tree.license.startsWith('DocumentRef-');
+  return plain ? [{ license: { id: declared } }] : [{ expression: declared }];
+}
+
+/**
+ * The app's CycloneDX 1.5 SBOM: the app, every third-party package it carries with its declared license, how it is
+ * carried and its hash, and the other components given. Every package carried is listed, whether or not its notice
+ * could be written, so a preview's SBOM is whole too. No timestamp or serial number, so the same app writes the same
+ * file.
+ */
+export function appSbom(app: { name: string; version: string }, packages: readonly NoticePackage[], identity: SbomIdentity, others: readonly SbomComponent[]): object {
+  const libraries = packages.map((pkg) => {
+    const purl = identity.purls[pkg.name] ?? npmPurl(pkg.name, pkg.version);
+    const declared = declaredLicense(manifestOf(pkg.dir));
+    const integrity = identity.integrity.get(`${pkg.name}@${pkg.version}`);
+    const sha512 = integrity?.startsWith('sha512-') ? Buffer.from(integrity.slice(7), 'base64').toString('hex') : undefined;
+    return {
+      type: 'library',
+      'bom-ref': purl,
+      name: pkg.name,
+      version: pkg.version,
+      purl,
+      ...(sha512 ? { hashes: [{ alg: 'SHA-512', content: sha512 }] } : {}),
+      ...(declared ? { licenses: sbomLicenses(declared) } : {}),
+      properties: [{ name: 'apack:carried', value: CARRIED_LABEL[pkg.carried] }],
+    };
+  });
+  const rest = others.map((component) => ({
+    type: component.type,
+    'bom-ref': component.purl,
+    name: component.name,
+    version: component.version,
+    purl: component.purl,
+    ...(component.license ? { licenses: sbomLicenses(component.license) } : {}),
+  }));
+  const components = [...libraries, ...rest].sort((a, b) => (a['bom-ref'] < b['bom-ref'] ? -1 : a['bom-ref'] > b['bom-ref'] ? 1 : 0));
+  return {
+    bomFormat: 'CycloneDX',
+    specVersion: '1.5',
+    version: 1,
+    metadata: { component: { type: 'application', 'bom-ref': `app:${app.name}@${app.version}`, name: app.name, version: app.version } },
+    components,
+  };
+}
+
+/**
+ * The SBOM's identity for the packages of a repository: the vendored checkouts it pins, by the packages each provides,
+ * as GitHub purls at the pinned commit (`vendor/<repo>.rev`), since none is published to npm, each named
+ * `<repo>` or `<repo>#<directory>` for a package in a directory of its repository, the purl's subpath, so two from one
+ * repository are told apart; and the lockfile's integrity of every package installed from a registry
+ */
+export function sbomIdentity(repoRoot: string, vendored: Readonly<Record<string, string>>): SbomIdentity {
+  const purls: Record<string, string> = {};
+  for (const [name, where] of Object.entries(vendored)) {
+    const [repo, subpath] = where.split('#');
+    const rev = fs.readFileSync(path.join(repoRoot, 'vendor', `${repo}.rev`), 'utf8').trim();
+    purls[name] = `pkg:github/spankyed/${repo}@${rev}${subpath ? `#${subpath}` : ''}`;
+  }
+  const lock = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8')) as { packages: Record<string, { version?: string; integrity?: string; name?: string }> };
+  const integrity = new Map<string, string>();
+  for (const [key, entry] of Object.entries(lock.packages)) {
+    const name = entry.name ?? key.split('node_modules/').pop();
+    if (name && entry.version && entry.integrity && !integrity.has(`${name}@${entry.version}`)) integrity.set(`${name}@${entry.version}`, entry.integrity);
+  }
+  return { purls, integrity };
 }
 
 /**
@@ -376,6 +474,8 @@ export function writeAppNotices(options: {
   channel: string;
   /** What else carries notices, named in the header, each with the file that has to exist, or `null` when its binary is missing */
   native: readonly { pointer: string; file?: string | null }[];
+  /** Where to write the app's CycloneDX SBOM (`appSbom`), with what it names beside the packages */
+  sbom?: { file: string; app: { name: string; version: string }; identity: SbomIdentity; others: readonly SbomComponent[] };
 }): string[] {
   const problems: string[] = [];
   const records = options.bundleRecords.flatMap((file) => {
@@ -406,6 +506,9 @@ export function writeAppNotices(options: {
     else if (file && !fs.existsSync(file)) problems.push(`${file} is missing, so its binary would ship without its notices`);
   }
   fs.writeFileSync(path.join(options.appDir, 'THIRD-PARTY-NOTICES.txt'), renderNotices(notices, options.native.map(({ pointer }) => pointer)));
+  if (options.sbom) {
+    fs.writeFileSync(options.sbom.file, `${JSON.stringify(appSbom(options.sbom.app, packages, options.sbom.identity, options.sbom.others), null, 2)}\n`);
+  }
   if (problems.length && options.channel !== 'preview') {
     throw new Error(`The app's third-party notices are incomplete:\n  ${problems.join('\n  ')}`);
   }

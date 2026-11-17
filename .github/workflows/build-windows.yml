@@ -52,9 +52,11 @@ jobs:
           if [[ "$TAG_VERSION" == *-beta* ]] || [[ "${{ inputs.channel }}" == "beta" ]]; then
             echo "is_beta=true" >> "$GITHUB_OUTPUT"
             echo "product_name=apack Beta" >> "$GITHUB_OUTPUT"
+            echo "release_prefix=apack-Beta" >> "$GITHUB_OUTPUT"
           else
             echo "is_beta=false" >> "$GITHUB_OUTPUT"
             echo "product_name=apack" >> "$GITHUB_OUTPUT"
+            echo "release_prefix=apack" >> "$GITHUB_OUTPUT"
           fi
           echo "tag_version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
 
@@ -95,7 +97,9 @@ jobs:
           fi
           # Wait briefly for the macOS workflow to create the release
           sleep 30
-          assets=(dist/${APP_NAME}-*.exe)
+          # The release prefix, which names the files (electron-builder.mjs), not the product name, which has a space
+          PREFIX="${{ steps.channel.outputs.release_prefix }}"
+          assets=(dist/"${PREFIX}"-*.exe dist/"${PREFIX}"-*.cdx.json)
 
           # Upload to existing release, or create if mac workflow hasn't yet
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then

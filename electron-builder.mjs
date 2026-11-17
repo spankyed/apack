@@ -1,9 +1,10 @@
 import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
+import {Arch} from 'electron-builder';
 import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
 import {shipElectronNotices} from './scripts/lib/electron-notices.ts';
-import {brokerNoticesFile, writeAppNotices} from './scripts/lib/third-party-notices.ts';
+import {brokerNoticesFile, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
 
 /**
  * Electron Builder Configuration
@@ -53,6 +54,10 @@ export default /** @type import('electron-builder').Configuration */
     // problem fails a production or beta build there, and is reported here on a preview
     const projectDir = context.packager.info.projectDir;
     const broker = brokerNoticesFile(appDir);
+    const electronVersion = context.packager.info.framework.version;
+    // The broker's build is under bin/<commit>/<platform>/, so its directory names the commit it was built from
+    const brokerCommit = broker && path.basename(path.dirname(path.dirname(broker)));
+    const os = {darwin: 'mac', win32: 'win', linux: 'linux'}[context.electronPlatformName];
     const problems = writeAppNotices({
       appDir,
       buildRoot,
@@ -66,6 +71,17 @@ export default /** @type import('electron-builder').Configuration */
         {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", file: path.join(appDir, 'node_modules', 'elmdb', 'THIRD-PARTY-NOTICES')},
         {pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin", file: broker ?? null},
       ],
+      // The release's CycloneDX SBOM, beside its installers and named as they are, which the release workflows upload
+      sbom: {
+        file: path.join(context.outDir, `${releasePrefix}-${metadata.version}-${os}-${Arch[context.arch]}.cdx.json`),
+        app: {name: productName, version: metadata.version},
+        // The vendored checkouts' packages, by the repository each is pinned from, which no registry publishes
+        identity: sbomIdentity(projectDir, {elmdb: 'elmdb#crates/elmdb-node', 'apack-git': 'apack-git', 'apack-terminal': 'apack-terminal#node', 'apack-terminal-view': 'apack-terminal#view'}),
+        others: [
+          {type: 'framework', name: 'electron', version: electronVersion, purl: `pkg:npm/electron@${electronVersion}`, license: 'MIT'},
+          ...(brokerCommit ? [{type: 'application', name: 'apack-terminal', version: brokerCommit, purl: `pkg:github/spankyed/apack-terminal@${brokerCommit}`, license: 'MIT OR Apache-2.0'}] : []),
+        ],
+      },
     });
     for (const problem of problems) console.warn(`  • third-party notices: ${problem}`);
   },
