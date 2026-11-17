@@ -27,8 +27,8 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24.22.2
           cache: npm
@@ -47,7 +47,7 @@ jobs:
       # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed
       # on the runner and the locked version, so a bump fetches once and every later job restores it.
       - name: Cache Electron's binary
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/Library/Caches/electron
           key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -74,14 +74,14 @@ jobs:
           node scripts/with-source.mjs npx tsx scripts/strict-job-artifact.ts > "$RUNNER_TEMP/producers.list"
           tar -czf "$RUNNER_TEMP/producers.tgz" -T "$RUNNER_TEMP/producers.list"
       - name: Hand producer outputs on
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: strict-producers-${{ github.sha }}
           path: ${{ runner.temp }}/producers.tgz
           retention-days: 1
       - name: Retain validation evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: strict-chain-${{ github.sha }}-producers
           include-hidden-files: true
@@ -111,8 +111,8 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24.22.2
           cache: npm
@@ -128,7 +128,7 @@ jobs:
       # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed
       # on the runner and the locked version, so a bump fetches once and every later job restores it.
       - name: Cache Electron's binary
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/Library/Caches/electron
           key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -147,7 +147,7 @@ jobs:
         # pack, which is `ci.yml`'s `check`.
         run: npm ci
       - name: Receive producer outputs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: strict-producers-${{ github.sha }}
           path: ${{ runner.temp }}
@@ -164,7 +164,7 @@ jobs:
           npm run chain -- "${args[@]}" | tee "$RUNNER_TEMP/strict-chain.log"
       - name: Retain validation evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: strict-chain-${{ github.sha }}-${{ matrix.name }}
           include-hidden-files: true
