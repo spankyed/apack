@@ -139,7 +139,7 @@ Monorepo branch `session/terminal-program-status`: `de083926a2` (host and SDK) a
 `b367539`).
 
 - `npm run pin:apack-terminal -- b367539c88595320507d6a9f4592b3a7d18b1031` wrote the pin and fetched and
-  verified the macOS build. The macOS and Linux hashes moved, since the binary did.
+  verified the macOS build. The binary's hash moved on all three platforms, since the binary did.
 - `packages/apack-host/tests/broker/program-status.spec.ts`, against the pinned release build with no
   override: 3 passed. A report a shell prints arrives as the event, `facts()` and `sessions()` answer the
   same records, a second client that adopts the session reads them, and a wait for a status is met.
