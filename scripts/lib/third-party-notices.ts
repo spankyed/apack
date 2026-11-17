@@ -121,7 +121,6 @@ export function declaredLicense(manifest: { license?: unknown; licenses?: unknow
   return undefined;
 }
 
-/** An SPDX expression as `spdx-expression-parse` reads it */
 /** An expression tree written back as an SPDX expression, with or without its exceptions */
 function spdxText(node: SpdxNode, exceptions = true): string {
   if ('license' in node) return `${node.license}${node.plus ? '+' : ''}${exceptions && node.exception ? ` WITH ${node.exception}` : ''}`;
