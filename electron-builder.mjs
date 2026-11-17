@@ -2,6 +2,7 @@ import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {APP_WORKSPACES, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
+import {shipElectronNotices} from './scripts/lib/electron-notices.ts';
 
 /**
  * Electron Builder Configuration
@@ -39,6 +40,14 @@ export default /** @type import('electron-builder').Configuration */
       : path.join(context.appOutDir, 'resources/app');
     verifyPackagedBuild(appDir, buildRoot);
     execFileSync(process.execPath, ['build/prod/verify-node-modules.mjs', appDir], {stdio: 'inherit'});
+    // Electron's own notices, which electron-builder deletes on macOS (scripts/lib/electron-notices.ts)
+    shipElectronNotices({
+      platform: context.electronPlatformName,
+      appOutDir: context.appOutDir,
+      resources: path.join(context.appOutDir, `${productName}.app`, 'Contents/Resources'),
+      electronDist: path.join(context.packager.info.projectDir, 'node_modules', 'electron', 'dist'),
+      packagedVersion: context.packager.info.framework.version,
+    });
   },
   directories: {
     output: isPreview ? 'dist/preview' : 'dist',
@@ -131,8 +140,12 @@ export default /** @type import('electron-builder').Configuration */
     'packages/**/*',
     'node_modules/**/*',
     '!**/test/**',
-    '!**/*.md',
-    '!**/LICENSE*',
+    // **Every license and notice file ships**, the root's and each dependency's, which their licenses ask a
+    // redistribution to carry. Nothing excludes `LICENSE*`, and since matching is case-sensitive, the Markdown
+    // exclusion spares license, licence, notice and copying files in any case: some packages have their license
+    // only as Markdown, esbuild's `LICENSE.md` and `@tiptap/pm`'s `THIRD_PARTY_LICENSES.md` among them
+    // (packaged-app-files.spec.ts)
+    '!**/!(*[Ll][Ii][Cc][Ee][Nn][CcSs][Ee]*|*[Nn][Oo][Tt][Ii][Cc][Ee]*|*[Cc][Oo][Pp][Yy][Ii][Nn][Gg]*).md',
     '!**/.git',
     '!**/*.map',
     '!**/*.d.ts.map',
