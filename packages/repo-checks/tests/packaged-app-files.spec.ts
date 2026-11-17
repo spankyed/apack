@@ -134,8 +134,15 @@ describe("the packaged app's file list", () => {
     const installed = population('the terminal broker package', [...filesUnder('packages/terminal-broker/src'), ...filesUnder('packages/terminal-broker/bin')])
       .map((file) => path.join('node_modules/@app/terminal-broker', path.relative('packages/terminal-broker', file)));
     expect(installed.filter((file) => !ships(file))).toEqual([]);
-    // And it is `node_modules/**` that carries them, so the case can fail
-    expect(installed.filter((file) => shipsUnder(without('node_modules/**/*'), file))).toEqual([]);
+    // And it is these two patterns that carry them, so the case can fail
+    const BROKER_INSTALL = 'node_modules/@app/terminal-broker/bin/**/*';
+    expect(installed.filter((file) => shipsUnder(without('node_modules/**/*', BROKER_INSTALL), file))).toEqual([]);
+    // **The second is what carries a release's notices**, which the list otherwise leaves out of every package:
+    // the resolver answers no binary while one file the pin names is missing, so dropping it is an app with no
+    // terminal. Asked of a path rather than of what is installed here, since a pin names no license on every platform
+    const notice = 'node_modules/@app/terminal-broker/bin/0000000000000000000000000000000000000000/darwin-arm64/LICENSE-MIT';
+    expect(ships(notice)).toBe(true);
+    expect(shipsUnder(without(BROKER_INSTALL), notice)).toBe(false);
   });
 
   /**

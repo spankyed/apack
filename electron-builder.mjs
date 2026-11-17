@@ -133,6 +133,11 @@ export default /** @type import('electron-builder').Configuration */
     '!**/test/**',
     '!**/*.md',
     '!**/LICENSE*',
+    // **The terminal broker's install is carried whole, its licenses included.** `@app/terminal-broker` answers
+    // the binary only when every file the pin names for the platform is there, and a release names the notices
+    // its licenses ask a redistribution to carry — so without this the exclusion above leaves a packaged app
+    // with no terminal. `packaged-app-files.spec.ts` holds it
+    'node_modules/@app/terminal-broker/bin/**/*',
     '!**/.git',
     '!**/*.map',
     '!**/*.d.ts.map',
