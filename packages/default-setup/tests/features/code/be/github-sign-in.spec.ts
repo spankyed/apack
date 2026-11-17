@@ -3,8 +3,8 @@
 // account, and signing out forgets it, asking git's credential helpers to forget it too. That no other pack can
 // read the secret is the host's binding, held in `@apackdev/host`'s secrets specs.
 //
-// Git is run here with a home of its own and no system configuration, so the helpers it asks are only the ones a
-// case names: this machine's own credential store is never asked to erase anything.
+// Git is run here with a home of its own, whose `.gitconfig` is its user config, and no system configuration, so the
+// helpers it asks are only the ones a case names: this machine's own credential store is never asked to erase anything.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -20,7 +20,7 @@ function homeWithHelper() {
   dirs.push(home);
   const erased = path.join(home, 'erased');
   fs.writeFileSync(path.join(home, '.gitconfig'), `[credential]\n\thelper = "!f() { test \\"$1\\" = erase && cat >> '${erased}'; }; f"\n`);
-  const environment: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' };
+  const environment: NodeJS.ProcessEnv = { PATH: process.env.PATH, HOME: home, XDG_CONFIG_HOME: home, GIT_CONFIG_GLOBAL: path.join(home, '.gitconfig'), GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' };
   return { environment, erased: () => fs.existsSync(erased) ? fs.readFileSync(erased, 'utf8') : '' };
 }
 
