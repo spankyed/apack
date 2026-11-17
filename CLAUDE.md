@@ -426,7 +426,7 @@ npm run chain                    # Before a merge: every check in dependency ord
                                  # `npm run chain -- --help` lists its flags
 
 npm test                         # Fresh builds and every suite, without test-result caches
-npm run test:e2e                 # Playwright E2E — a harness, not a gate (see below)
+npm run test:e2e                 # Playwright E2E, which the chain gates on as test:e2e (see below)
 npm run test:unit                # The host pool and the pack pool (scripts/lib/unit-suites.ts)
 npm run test:unit:host           # One pool, only the projects whose inputs changed
 npm run test:unit:pack           # The pack pool, resolving the published dist
@@ -492,10 +492,10 @@ never ends, and the app is up the whole time.
 **`tests/e2e/smoke/` is a gate**, as its own chain step (`test:smoke`): the app launches, reaches
 `connected`, has its surfaces, and runs in its own data dir.
 
-**The rest of the suite is not a gate.** A spec earns a place there when it asserts something a future change
-could break **and** needs the real process boundary (`app-integration/dev-reload.spec.ts` is the example);
-anything else is a harness test or a driving script. `npm run chain -- --e2e` runs the suite after
-`test:smoke`; `npm run test:e2e` runs it alone.
+**The rest of the suite is a gate too**, as the chain's `test:e2e` step after `test:smoke`, never cached: a spec
+nothing runs breaks unseen when the app moves under it. A spec earns a place there when it asserts something a
+future change could break **and** needs the real process boundary (`app-integration/dev-reload.spec.ts` is the
+example); anything else is a driving script, kept out of `tests/e2e`. `npm run test:e2e` runs the suite alone.
 
 Playwright tests launch the full Electron app and interact via `window.applicationState` (the XState actor). Use to visually verify UI changes.
 

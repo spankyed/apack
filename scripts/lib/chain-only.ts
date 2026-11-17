@@ -45,6 +45,20 @@ export function selectOnly<T extends Selectable>(steps: readonly T[], names: rea
 }
 
 /**
+ * Why `packages:ensure` is not current here, for `--only`'s producer check: the published packages it builds that
+ * are stale, with each one's reason, or null when none is. The one never-cached producer, so it has no chain stamp
+ * to read; its readers are told the packages are built (`APACK_PACKAGES_PREBUILT`), so a stale one left to them is
+ * refused as though it went stale under a run that built it — true in a whole chain, where it ran first, and not
+ * under `--only` that leaves it out, in a fresh checkout or after an edit. Asked here, it is refused before any step
+ * starts, and says what would make it current.
+ */
+export function packagesNotCurrent(stale: readonly { workspace: string; reason: string }[]): string | null {
+  if (stale.length === 0) return null;
+  const which = stale.map(({ workspace, reason }) => `${workspace}: ${reason}`).join('; ');
+  return `${which}; name packages:ensure in --only too, or run npm run packages:ensure first`;
+}
+
+/**
  * The jobs of the strict gate, which runs the chain as parallel CI jobs (`.github/workflows/strict-chain.yml`).
  *
  * Derived from the graph rather than listed, so a step added to the table lands in a job without an edit to

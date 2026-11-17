@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseShard, selectOnly, shardArg, STRICT_JOBS, strictJobSteps } from '../../../scripts/lib/chain-only.ts';
+import { packagesNotCurrent, parseShard, selectOnly, shardArg, STRICT_JOBS, strictJobSteps } from '../../../scripts/lib/chain-only.ts';
 import { CHAIN_STEPS, needsApp, orderedSteps } from '../../../scripts/lib/chain-steps.ts';
 import { TYPECHECK_LEGS } from '../../../scripts/lib/typecheck-legs.ts';
 
@@ -22,6 +22,22 @@ describe('--shard', () => {
 });
 
 describe('--only', () => {
+  it('finds packages:ensure current when no published package is stale', () => {
+    expect(packagesNotCurrent([])).toBeNull();
+  });
+
+  it('refuses a leg that reads packages:ensure while a published package is stale, saying which, why, and what makes it current', () => {
+    const why = packagesNotCurrent([
+      { workspace: '@apackdev/ears', reason: 'not built (no packages/apack-ears/dist)' },
+      { workspace: '@apackdev/sdk', reason: 'its inputs changed since the last successful run' },
+    ]);
+    expect(why).toBe('@apackdev/ears: not built (no packages/apack-ears/dist); @apackdev/sdk: its inputs changed since the last successful run; '
+      + 'name packages:ensure in --only too, or run npm run packages:ensure first');
+    expect(() => selectOnly([{ name: 'packages:ensure', dependsOn: [] }, { name: 'build', dependsOn: ['packages:ensure'] }], ['build'],
+      (producer) => producer === 'packages:ensure' ? why : null))
+      .toThrow(/build reads packages:ensure, which is not current here \(@apackdev\/ears: not built/);
+  });
+
   it('runs the named steps alone, keeping only the edges between them', () => {
     expect(selectOnly(STEPS, ['prepare', 'test'], () => null)).toEqual([
       { name: 'prepare', dependsOn: [] },

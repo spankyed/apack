@@ -38,8 +38,8 @@
 // the way to a shorter chain is a cheaper step.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { changedInputs, diffableStamp, firstChange, freshnessSweep, INPUTS_CHANGED, PACKAGES_PREBUILT_ENV, REPO_ROOT, stampedRun, stampRecord, unitStaleReason } from '@apackdev/host/build/packages-built';
-import { CHAIN_STEPS, type ChainStep, chainSteps, keptOnFailure, needsApp, orderedSteps, STEP_TABLES } from './lib/chain-steps.ts';
+import { changedInputs, diffableStamp, firstChange, freshnessSweep, INPUTS_CHANGED, PACKAGES_PREBUILT_ENV, REPO_ROOT, stalePackageUnits, stampedRun, stampRecord, unitStaleReason } from '@apackdev/host/build/packages-built';
+import { CHAIN_STEPS, type ChainStep, keptOnFailure, needsApp, orderedSteps, STEP_TABLES } from './lib/chain-steps.ts';
 import { stampFor, STAMP_DIR, unitFor } from './lib/chain-stamps.ts';
 import { evidenceLine, openRunEvidence, pruneRunEvidence, type RunEvidence } from './lib/chain-evidence.ts';
 import { CHAIN_FLAGS, chainHelp } from './lib/chain-flags.ts';
@@ -59,8 +59,8 @@ import { briefly, criticalPathLine, pathSavingsLine, cores, declaredAt, dim, DRY
 import { slowestTests } from './lib/slow-tests.ts';
 import { overBudgetLines } from './lib/over-budget.ts';
 import { CHAIN_RUN_ENV, CHAIN_CORES_ENV, poolWorkerLimit, poolForStep, poolDurationLines } from './lib/unit-pool.ts';
-import { parseShard, selectOnly, shardArg, STRICT_JOBS, strictJobSteps, type Shard, type StrictJob } from './lib/chain-only.ts';
-import { TYPECHECK_LEGS } from './lib/typecheck-legs.ts';
+import { packagesNotCurrent, parseShard, selectOnly, shardArg, STRICT_JOBS, strictJobSteps, type Shard, type StrictJob } from './lib/chain-only.ts';
+import { ENSURE, TYPECHECK_LEGS } from './lib/typecheck-legs.ts';
 import { exitOnEpipe } from './lib/exit-on-epipe.ts';
 
 exitOnEpipe();
@@ -361,8 +361,6 @@ async function main(): Promise<void> {
   // expected to be cached is not. It reports each step against the tree as it stands, so the verdicts after
   // the first step that would run are what that step would produce nothing for: a plan, not a prediction.
   const dry = args.flags.has('dry');
-  // The E2E suite is a harness for driving the app rather than a gate, so it runs when asked for
-  const e2e = args.flags.has('e2e');
   // The native half is the longest step and rarely what an edit touches; leaving it out is said on the result
   const noNative = args.flags.has('no-native');
   // A step whose inputs moved while it ran verified nothing, which is always reported; this decides whether
@@ -387,7 +385,7 @@ async function main(): Promise<void> {
 
   // Derived from each step's `needs`, and validated first: an unknown dependency or a cycle fails here rather
   // than halfway through a six-minute run
-  let steps = orderedSteps(chainSteps(e2e ? ['test:e2e'] : []));
+  let steps = orderedSteps(CHAIN_STEPS);
   if (noNative) {
     const dependent = steps.find((step) => step.dependsOn.includes('test:native'));
     if (dependent !== undefined) return refuse(`--no-native would leave out what ${dependent.name} reads`);
@@ -423,11 +421,12 @@ async function main(): Promise<void> {
       : asking.staleReason(unitFor(step, budget), stampFor(step.name));
 
   if (only !== undefined) {
-    // A never-cached producer is verified by its readers instead: `packages:ensure`'s are told the packages are
-    // built (`PACKAGES_PREBUILT_ENV`) and refuse a stale one rather than rebuilding it
+    // `packages:ensure` has no chain stamp: what it guarantees is the packages' own stamps, so those say whether it
+    // is current here. Any other never-cached producer is verified by its readers
     const sweep = freshnessSweep();
     try {
       steps = selectOnly(steps, only, (producer) => {
+        if (producer === ENSURE) return packagesNotCurrent(stalePackageUnits());
         const step = steps.find((candidate) => candidate.name === producer)!;
         return step.neverCachedBecause !== undefined ? null : staleReason(step, sweep);
       });
