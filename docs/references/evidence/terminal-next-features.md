@@ -91,9 +91,8 @@ the pin `3a2140c`. Nothing is pushed or merged; the app pin still names `3a2140c
 
 ### Hold timeout measurement (2026-11-12)
 
-Commit `fad909e` on `session/next-features-measure` (from `origin/master`, `3b8ef5c`, where the broker work is merged
-as #24 and #25) adds `benches/hold.rs`. Command: `cargo bench --bench hold` in the `next-features-measure` worktree.
-It reports and never fails.
+`benches/hold.rs` in apack-terminal (spankyed/apack-terminal#50). Command: `cargo bench --bench hold`. It reports
+and never fails. The figures below were taken at `3b8ef5c`, where the broker work is merged as #24 and #25.
 
 - **Machine:** `uname -m` arm64; 10 cores; **loaded**. Load average was 44.2 at the start of the session and 33 to
   36 during the runs (`uptime`), so the cost figures are upper bounds on an idle machine.
@@ -862,6 +861,46 @@ are compared.
   during a redraw.
 - A real program's hold, and a real history of the worst shape for a search, were not used; the cases write the
   sequences and the text themselves.
-- The app is not moved to the new broker. Its change stands at the pin it has (`db029f4`): the pack typecheck is
-  clean and 770 Code surface tests pass there, and against the fixed broker too. The pin moves once #47 is merged
-  and its release build exists.
+- The app was moved to the merged broker (`b17ecde`) in spankyed/apack#511.
+
+## What the review of #47 left open (2026-11-17)
+
+Broker and view: spankyed/apack-terminal#50, merged. App: spankyed/apack#527, which moved the pin past it and
+wired the find bar. Measured on the same Mac at a load average of 45 to 60.
+
+- **The hold bench is in the broker's tree.** Run again there: release p50 465 us, p95 581 us, max 1233 us; view
+  fetch p50 385 us, p95 434 us; a hold never released ended at p50 1003 ms.
+- **The blink watch's cost, as merged.** `benches/blink.rs`, 32 MiB, instructions retired with the blink left to
+  programs and with one chosen: plain text 1.57 G and 1.59 G; a colour a word 4.04 G and 4.08 G; a link a word
+  5.72 G and 6.39 G; a redraw that sets mode 12 twice every 70 bytes 3.89 G and 6.05 G. These replace the figures
+  under "The blink rule" above, which were taken before the review's fixes and had no case for links.
+- **An answer follows the frame it is about.** A view that had yet to draw a frame was answered at once, about a
+  screen it was not sent until it drew. Its questions now wait with it and are answered as it acknowledges, behind
+  the frame that is then sent; a view whose undrawn frame is still the screen, and every other view, is answered
+  at once. Three cases in `tests/view_frames.rs`.
+- **The find bar counts again when output changes what a search finds.** The view refreshed its matches under a
+  search and told nobody, so the count stood as of the last search or step. It has `onFound`, which the pool says
+  the count from.
+- **What waits for a hold is bounded in bytes**, 1 MiB, as well as at 64 questions: a search waits with its needle.
+- **A recording's keyframe is the core's own snapshot of its terminal** (spankyed/apack-terminal#53, pinned at
+  `60bf75c`), where it was the sequences that redraw one screen. Those left out the cursor's shape, a steady
+  cursor, a saved cursor, so that a replay printed over the wrong cells, and the shell's screen under a
+  full-screen program. A replay now puts the terminal back whole, under the settings of the session replaying
+  it, with its images where their pixels fit. A keyframe of a screen and a thousand lines is about 390 KB where
+  a redraw was about 105 KB, 0.75 ms to write out and 0.5 ms to put back (`benches/keyframe.rs`, load average
+  about 140).
+- **Held by a property, not by reading.** Over generated output a terminal put back reads as the one written out
+  and still does after whatever is written next; 300,000 cases each. It found two defects of the change itself
+  and what the core's snapshot does not hold inside left and right margins: a wrap pending at a right margin,
+  and which rows keep a prompt mark across a scroll. Both are pinned by cases that fail when the core holds them.
+- **`cargo xtask check-exclusions` could not fail.** cargo-mutants 27.1 lists its `delete field` mutants whatever
+  pattern it is given, so every exclusion counted at least fifteen. With those left out the check named five
+  exclusions that excluded nothing; four are repointed and one, for a line that is gone, removed.
+
+### Not done
+
+- A keyframe is read by the core that wrote it, and upstream says its snapshot format will change: a recording
+  made under another core is refused when looked back through, and a session restored from one starts fresh.
+- The two gaps in the core's snapshot are not reported upstream yet.
+- Nothing here was seen in a real window, as above.
+

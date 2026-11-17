@@ -53,6 +53,7 @@ export interface FakeView {
   reportFit(columns: number, rows: number, cellWidth?: number, cellHeight?: number): void
   reportFollowing(following: boolean): void
   reportSelection(selected: boolean): void
+  reportFound(matches: number): void
 }
 
 /** A connection to a broker that a case holds the far end of: what arrives on it and when it ends are the case's to say */
@@ -190,6 +191,11 @@ export function viewModule(): Record<string, unknown> {
     }
     reportFollowing(following: boolean): void { this.options.onFollowingChange?.(following) }
     reportSelection(selected: boolean): void { this.options.onSelectionChange?.(selected) }
+    /** Output changed what a search found, as a search the view runs again by itself says */
+    reportFound(matches: number): void {
+      this.matches = matches
+      this.options.onFound?.(this.found)
+    }
   }
 
   return { BrokerViews, TerminalView, xtermPalette: (ansi: readonly number[]) => [...ansi] }
