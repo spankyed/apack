@@ -137,6 +137,8 @@
     "playwright-core": "1.55.1",
     "postcss-import": "^16.2.0",
     "publint": "^0.3.24",
+    "spdx-expression-parse": "^3.0.1",
+    "spdx-satisfies": "^6.0.1",
     "tsc-alias": "^1.8.16",
     "tsdown": "^0.21.10",
     "tsup": "^9.0.0",
