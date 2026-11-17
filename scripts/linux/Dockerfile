@@ -2,8 +2,8 @@
 # the Node version CI pins, a C toolchain and Node headers for the native modules and fixtures, git for the
 # specs that ask it, rsync for the runner's copy, the shared libraries an Electron binary loads, and the Rust
 # toolchain elmdb pins (its rust-toolchain.toml, which the runner passes as RUST_TOOLCHAIN), to build its binding.
-# lsof and less for apack-terminal's suite, which a vendored checkout runs here: its reaper finds a proxy-started
-# broker with lsof (and refuses a machine without it), and one case drives less onto the alternate screen.
+# lsof and less so apack-terminal's suite can be run here by hand (the chain does not run it): its reaper finds a
+# proxy-started broker with lsof (and refuses a machine without it), and one case drives less onto the alternate screen.
 FROM node:24.22.2-bookworm
 RUN npm install --global npm@11.21.1
 ARG RUST_TOOLCHAIN
