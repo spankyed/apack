@@ -4,7 +4,7 @@
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
   CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CommitTrailer, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
-  PRBranchCheckout, GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
+  PRBranchCheckout, GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, ProgressDuring, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
   SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
 } from './types.ts';
@@ -104,6 +104,8 @@ export type IncomingCommitEvents =
   | { type: 'commit.GET_STASH_CHANGES'; index: number }
   /** Who last changed each line of a file, from the top of the folder, for the editor's gutter */
   | { type: 'commit.GET_BLAME'; path: string }
+  /** Bring a submodule to the commit the repository records for it, setting it up first if it is not */
+  | { type: 'commit.UPDATE_SUBMODULE'; path: string }
   /** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
   | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.WORKTREE_LIST' }
@@ -177,8 +179,8 @@ export type OutgoingCommitEvents =
   | { type: 'commit.PUSH_STOPPED' }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
-  /** How far along a push, a pull or a checkout is, for the window that asked for it */
-  | { type: 'commit.PROGRESS'; data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }
+  /** How far along a push, a pull, a checkout or a submodule update is, for the window that asked for it */
+  | { type: 'commit.PROGRESS'; data: { during: ProgressDuring } & GitProgress }
   | { type: 'commit.UNTRACKED_LISTED'; data: { path: string; files: string[]; truncated: boolean } }
   /** Git signs in to this host with the app's GitHub sign-in now */
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
@@ -206,6 +208,8 @@ export type OutgoingCommitEvents =
   /** The files a stash holds, read without applying it, for the window that asked */
   | { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }
   | { type: 'commit.BLAME_RECEIVED'; data: { path: string; lines: BlameLine[] } }
+  /** The submodule is at the commit the repository records for it */
+  | { type: 'commit.SUBMODULE_UPDATED'; data: { path: string } }
   | { type: 'commit.STASH_SUCCESS'; data: { message: string } }
   /** A stash was applied, or with `popped` applied and dropped, without a conflict */
   | { type: 'commit.STASH_APPLIED'; data: { index: number; popped: boolean } }

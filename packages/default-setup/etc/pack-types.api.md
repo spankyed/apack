@@ -2093,6 +2093,11 @@ type IncomingCommitEvents = {
     type: 'commit.GET_BLAME';
     path: string;
 }
+/** Bring a submodule to the commit the repository records for it, setting it up first if it is not */
+ | {
+    type: 'commit.UPDATE_SUBMODULE';
+    path: string;
+}
 /** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
  | {
     type: 'commit.UNDO_LAST';
@@ -3628,11 +3633,11 @@ type OutgoingCommitEvents =
         hunk: string;
     };
 }
-/** How far along a push, a pull or a checkout is, for the window that asked for it */
+/** How far along a push, a pull, a checkout or a submodule update is, for the window that asked for it */
  | {
     type: 'commit.PROGRESS';
     data: {
-        during: 'checkout' | 'pull' | 'push';
+        during: ProgressDuring;
     } & GitProgress;
 } | {
     type: 'commit.UNTRACKED_LISTED';
@@ -3744,6 +3749,13 @@ type OutgoingCommitEvents =
     data: {
         path: string;
         lines: BlameLine[];
+    };
+}
+/** The submodule is at the commit the repository records for it */
+ | {
+    type: 'commit.SUBMODULE_UPDATED';
+    data: {
+        path: string;
     };
 } | {
     type: 'commit.STASH_SUCCESS';
@@ -4936,6 +4948,9 @@ type Predicate = {
     operator: BinaryOperator;
     value?: any;
 } | ((context: any) => boolean);
+
+/** The commands whose progress the window that asked for one is told: a push, a pull, a checkout, a submodule update */
+type ProgressDuring = 'checkout' | 'pull' | 'push' | 'submodule';
 
 declare class PromptService {
     findByLabel(label: string): _apackdev_sdk.PromptEntity | undefined;

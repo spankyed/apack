@@ -19,7 +19,7 @@ const { commitState } = await import('#features/code/fe/features/commit/state.ts
 const { default: CommitPanel } = await import('#features/code/fe/features/commit/CommitPanel.vue')
 
 const CODE_SURFACE = 'default-setup/code'
-type File = { path: string; status: string; staged: boolean; nameNotText?: true }
+type File = { path: string; status: string; staged: boolean; nameNotText?: true; submodule?: { commit: boolean; modified: boolean; untracked: boolean } }
 
 let app: App | undefined
 let code: AnyActorRef | undefined
@@ -102,6 +102,33 @@ it('lists the trailers git read under the message, marks those the settings leav
   chips[1]!.querySelector('button')!.click()
   expect(sendToSystem.mock.calls.map(([, event]) => event).filter(event => event.type === 'commit.REMOVE_TRAILER'))
     .toEqual([{ type: 'commit.REMOVE_TRAILER', message: 'feat\n\nCo-authored-by: A\nSigned-off-by: B', trailer: { key: 'Signed-off-by', value: 'B' } }])
+})
+
+it('offers to update a submodule on another commit, one at a time, saying how far along it is, until it is answered', async () => {
+  const moved: File = { path: 'lib', status: 'modified', staged: false, submodule: { commit: true, modified: false, untracked: false } }
+  const edited: File = { path: 'vendor', status: 'modified', staged: false, submodule: { commit: false, modified: true, untracked: false } }
+  const commit = await panel({ files: [moved, edited, unstaged] })
+  const updates = () => [...document.querySelectorAll<HTMLButtonElement>('[data-testid="update-submodule"]')]
+  expect(updates()).toHaveLength(1)
+
+  updates()[0]!.click()
+  await settle()
+  updates()[0]!.click()
+  commit.send(answerTo(latest('commit.UPDATE_SUBMODULE'), { type: 'commit.PROGRESS', data: { during: 'submodule', stage: 'Receiving objects', percent: 40 } }))
+  await settle()
+  expect(sendToSystem.mock.calls.map(([, event]) => event).filter(event => event.type === 'commit.UPDATE_SUBMODULE')).toEqual([{ type: 'commit.UPDATE_SUBMODULE', path: 'lib' }])
+  expect(updates()[0]!.disabled).toBe(true)
+  expect(updates()[0]!.title).toBe('Updating submodule Receiving objects 40%')
+
+  commit.send(answerTo(latest('commit.UPDATE_SUBMODULE'), { type: 'commit.ERROR_RECEIVED', data: { message: 'lib has local changes', code: 'local-changes' } }))
+  await settle()
+  expect(updates()[0]!.disabled, 'a failed update lets go of the button').toBe(false)
+  expect(document.body.textContent).toContain('lib has local changes')
+
+  updates()[0]!.click()
+  commit.send(answerTo(latest('commit.UPDATE_SUBMODULE'), { type: 'commit.SUBMODULE_UPDATED', data: { path: 'lib' } }))
+  await settle()
+  expect(updates()[0]!.disabled, 'an update answered lets go of the button').toBe(false)
 })
 
 it('says a push the user stopped was stopped, not pushed', async () => {

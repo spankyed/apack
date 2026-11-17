@@ -711,6 +711,16 @@
                   <span class="w-7 flex-shrink-0" />
                 </template>
                 <template #actions>
+                  <button
+                    v-if="file.submodule?.commit"
+                    @click.stop="updateSubmodule(file)"
+                    :disabled="updatingSubmodule !== null"
+                    class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-50"
+                    :title="updatingSubmodule === file.path ? `Updating submodule${progressOf('submodule')}` : 'Update submodule to the commit this repository records'"
+                    data-testid="update-submodule"
+                  >
+                    <component :is="updatingSubmodule === file.path ? Loader2 : FolderSync" :class="['w-3 h-3 text-neutral-400', updatingSubmodule === file.path && 'animate-spin']" />
+                  </button>
                   <button @click.stop="openRevertDialog(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Discard changes">
                     <RotateCcw class="w-3 h-3 text-red-400" />
                   </button>
@@ -721,6 +731,9 @@
                 <template #menuItems>
                   <ContextMenuItem @select="stageFile(file)" :class="MENU_ITEM_CLASS">
                     <Plus class="w-4 h-4" /> Stage
+                  </ContextMenuItem>
+                  <ContextMenuItem v-if="file.submodule?.commit" :disabled="updatingSubmodule !== null" @select="updateSubmodule(file)" :class="MENU_ITEM_CLASS">
+                    <FolderSync class="w-4 h-4" /> Update Submodule
                   </ContextMenuItem>
                   <ContextMenuItem v-if="!file.isDirectory" @select="stashFile(file)" :class="MENU_ITEM_CLASS">
                     <Archive class="w-4 h-4" /> Stash this file
@@ -974,7 +987,7 @@ import { useSelector } from '@xstate/vue'
 import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
-import type { CommitTrailer, ConflictKind, OperationMove } from '#features/code/be/types.ts'
+import type { CommitTrailer, ConflictKind, OperationMove, ProgressDuring } from '#features/code/be/types.ts'
 import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText, GitPullRequestArrow, Pencil, Tag, Upload, Archive } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS } from '#features/code/fe/features/explorer/constants.ts'
@@ -1261,7 +1274,7 @@ const shouldShowActionButton = computed(() => {
 
 const progress = useSelector(commitActor, (state) => state.context.progress)
 /** How far along git says it is, once it has said: `Writing objects 42%` */
-const progressOf = (during: 'push' | 'pull') => (progress.value?.during === during ? ` ${progress.value.stage} ${progress.value.percent}%` : '...')
+const progressOf = (during: ProgressDuring) => (progress.value?.during === during ? ` ${progress.value.stage} ${progress.value.percent}%` : '...')
 const actionButtonText = computed(() => {
   if (isPushing.value) return `Pushing${progressOf('push')}`
   if (isPulling.value) return `Pulling${progressOf('pull')}`
@@ -1516,6 +1529,14 @@ const startRenameBranch = (branch: string) => {
   renamingBranch.value = branch
   newBranchName.value = branch
   nextTick(() => newBranchInput.value?.select())
+}
+
+/** The submodule being brought to the commit this repository records for it, which holds the others back until it is */
+const updatingSubmodule = useSelector(commitActor, (state) => state.context.updatingSubmodule)
+
+/** Brings a submodule whose row says it is on another commit to the one this repository records */
+const updateSubmodule = (file: GitStatusFile) => {
+  commitActor?.send({ type: 'commit.UPDATE_SUBMODULE', path: file.path })
 }
 
 /** Stashes one file's changes, leaving the rest as they are */

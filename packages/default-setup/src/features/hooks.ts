@@ -3,9 +3,11 @@ import { removeAllListeners as removeAllAdHocListeners } from './brain/be/servic
 import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
 import { services } from '#generated/services.ts';
 import { startTerminalSizing } from './code/be/features/terminal.ts';
+import { startStoppingWindowReads } from './code/be/services/window-reads.ts';
 
 /** What the pack's backend follows for as long as it runs */
 let stopTerminalSizing: (() => void) | undefined;
+let stopStoppingWindowReads: (() => void) | undefined;
 
 /**
  * The pack's backend started.
@@ -22,6 +24,8 @@ let stopTerminalSizing: (() => void) | undefined;
 export const onInit = () => {
   // A terminal's grid is the smallest fit of the windows showing it, so it has to hear when one goes
   stopTerminalSizing = startTerminalSizing();
+  // A blame or a history a window asked for is stopped when the window goes
+  stopStoppingWindowReads = startStoppingWindowReads();
   const folded = services.repository.chatCommands.foldStrandedMessageText();
   if (folded > 0) services.logger.info('folded the text of messages a turn left unfinished', { messages: folded });
 };
@@ -41,6 +45,8 @@ export const onShutdown = () => {
   // deliberate end is the user closing a terminal, which is `terminalService.kill`.
   stopTerminalSizing?.();
   stopTerminalSizing = undefined;
+  stopStoppingWindowReads?.();
+  stopStoppingWindowReads = undefined;
   clearAllSchedules();
   removeAllAdHocListeners();
   clearFlowActorRegistry();
