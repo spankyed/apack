@@ -156,7 +156,9 @@ function compiled(at: CheckoutPaths, pkg: string, ...extraInputs: string[]): Bui
       // and why this is declared instead
       pkgFile('apack-host', 'src', 'replace-dir.ts'), ...extraInputs,
       pkgFile(pkg, 'src'),
-      pkgFile(pkg, 'package.json'), pkgFile(pkg, 'tsconfig.json'), pkgFile(pkg, 'tsconfig.package.json')],
+      pkgFile(pkg, 'package.json'), pkgFile(pkg, 'tsconfig.json'), pkgFile(pkg, 'tsconfig.package.json'),
+      // npm publishes a package's root LICENSE whatever its `files` say, so the staged tree copies it
+      pkgFile(pkg, 'LICENSE')],
     outputs: [pkgFile(pkg, 'dist'), pkgFile(pkg, PUBLISH_TREE)],
   };
 }
@@ -185,10 +187,13 @@ function bundled(at: CheckoutPaths, pkg: string, ...copiedPaths: string[]): Buil
   return {
     inputs: [...sharedInputs(at), repoFile('scripts', 'bundle-package.ts'),
       repoFile('scripts', 'lib', 'published-imports.ts'), ...copiedPaths.map(file => pkgFile(pkg, file)),
+      // The repository's license, which the bundle copies into the published package
+      repoFile('LICENSE'),
       pkgFile(pkg, 'src'), pkgFile(pkg, 'package.json'), pkgFile(pkg, 'tsconfig.json'),
       pkgFile('apack-host', 'src'), pkgFile('apack-host', 'package.json'),
       ...INLINED_SOURCE_DIRS.flatMap((dir) => [pkgFile(dir, 'src'), pkgFile(dir, 'package.json')])],
     outputs: [pkgFile(pkg, 'dist', 'package', 'package.json'), pkgFile(pkg, 'dist', 'package', 'dist'),
+      pkgFile(pkg, 'dist', 'package', 'LICENSE'),
       ...copiedPaths.map(file => pkgFile(pkg, 'dist', 'package', file))],
   };
 }
