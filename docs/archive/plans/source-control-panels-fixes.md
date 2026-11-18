@@ -1,6 +1,6 @@
 # Fixing the source-control and pull request panels
 
-Status: decided 2026-11-14 (its four decisions below). Phases 1 to 4 landed 2026-11-14; phase 5 landed 2026-11-15, with its engine half (apack-git #34).
+Status: decided 2026-11-14 (its four decisions below). Phases 1 to 4 landed 2026-11-14; phase 5 landed 2026-11-15, with its engine half (apack-git #34). Done, and archived.
 
 Surveyed at monorepo `origin/master` `eb567581ac` and apack-git `cf7be5d` (the pin), by four read-only reviews — the
 commit panel and the pull request panel, frontend and backend each — and a check of the findings against the code.
@@ -110,12 +110,12 @@ pull request whose base moved on shows only its own changes; a fork's pull reque
 Branch confirms and deletes the right branch.
 
 **Landed 2026-11-14**, in apack-git #30 (`readRemote`, `mergeBase`, `fetchRemoteBranch`, `deleteRemoteBranch`) and
-apack #486, with 6.1–6.3. Left over, each for a later phase:
+apack #486, with 6.1–6.3. What it left over has landed since:
 
-- After Delete Branch, the local tracking ref (`origin/<branch>`) stays until the next fetch prunes it: pruning one
-  ref needs an engine method, which goes with phase 3's engine changes.
-- 2.8 pages a pull request's comments and its review threads, but not the comments inside one thread, which are read
-  as its last 100.
+- After Delete Branch, the local tracking ref (`origin/<branch>`) is removed too (`deleteRemoteTrackingBranch`, an
+  engine method from phase 3's engine changes).
+- The comments inside one review thread are paged back to the first, as 2.8 pages a pull request's comments and its
+  review threads.
 
 Driven against a scratch repository on github.com, signed in through the app: a pull request whose base moved on
 after the branch was cut showed only the branch's line, the diff's original side being the merge-base's; a comment
