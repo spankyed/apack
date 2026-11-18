@@ -47,6 +47,7 @@ import { ChainLockHeld, chainInvocation, holdChainLock } from './lib/chain-lock.
 import { expensiveSteps, MachineLockRefused } from './lib/machine-lock.ts';
 import { deadlinesNote, vendoredDriftLine } from './lib/chain-evidence.ts';
 import { vendoredStates } from './lib/vendored-checkouts.ts';
+import { installRefusals } from './lib/installed-dependencies.ts';
 import type { ExclusiveLock } from '@apackdev/host/exclusive-lock';
 import { budgetMsFor, whyKilled, type BudgetClass } from './lib/step-budgets.ts';
 import { box } from './lib/core-budget.ts';
@@ -433,7 +434,14 @@ async function main(): Promise<void> {
     } catch (err) { return refuse((err as Error).message); }
   }
 
+  // An install that is not what the checkout pins makes a run that cannot pass, and says so only as a step
+  // failing late for a reason it does not name (`installed-dependencies.ts`). A plan is still a plan over it, so
+  // `--dry` says it and goes on; a run refuses before it takes the lock.
+  const install = installRefusals(REPO_ROOT);
+  if (install.length > 0 && !dry) return refuse(`The chain refuses this install:\n  ${install.join('\n  ')}`);
+
   if (dry) {
+    if (install.length > 0) console.log(`\na run would refuse this install:\n  ${install.join('\n  ')}`);
     // One question about every step, and nothing runs while it is asked, so one reading of the tree answers it all
     const sweep = freshnessSweep();
     /**
