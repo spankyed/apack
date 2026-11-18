@@ -1,19 +1,19 @@
 {
-  "commit": "60bf75c76135886744fb2ef3308f72992db4561c",
+  "commit": "726a7697ef9273f11d07cc9d38e68d3152ba9197",
   "files": {
     "darwin-arm64": {
       "COPYRIGHT-rust-library.html": "5647be074c8edf7339fd863055923a8fc80bc5610a8d4661ec3b767b9d392c27",
       "LICENSE-APACHE": "1e02ee38d54daa90e27e8b3b89edfa3bb169543211c0eeccc522fb4f655a114e",
       "LICENSE-MIT": "4eb4e32db6202b8f69f20d72654a29f3cee90b3154375df820b3c47805061e1c",
       "THIRD-PARTY-NOTICES": "1408b8ad5ae95bef4a9029175305323443fdc4e92106f0e70a8982b6a51bd64c",
-      "apack-terminal": "92aa8c952e609668b7deafd8420c0c7cea3cb8ea736a13bbbc13331b7bb0d176"
+      "apack-terminal": "f317c581d36cd7ffeb410c72ee009cc0c4acac3fdd7b5227e29838fd4bf20d3a"
     },
     "linux-x64": {
       "COPYRIGHT-rust-library.html": "5647be074c8edf7339fd863055923a8fc80bc5610a8d4661ec3b767b9d392c27",
       "LICENSE-APACHE": "1e02ee38d54daa90e27e8b3b89edfa3bb169543211c0eeccc522fb4f655a114e",
       "LICENSE-MIT": "4eb4e32db6202b8f69f20d72654a29f3cee90b3154375df820b3c47805061e1c",
       "THIRD-PARTY-NOTICES": "1408b8ad5ae95bef4a9029175305323443fdc4e92106f0e70a8982b6a51bd64c",
-      "apack-terminal": "e83adc2d0bec01596ab448321012659df071f9a1d9974a33583fa7b97780d843"
+      "apack-terminal": "748db33640a0f3232362ee06411a8df37522bf6070a9a0a3149eb9c14baa00bf"
     },
     "win32-x64": {
       "COPYRIGHT-rust-library.html": "5647be074c8edf7339fd863055923a8fc80bc5610a8d4661ec3b767b9d392c27",
@@ -21,7 +21,7 @@
       "LICENSE-MIT": "4eb4e32db6202b8f69f20d72654a29f3cee90b3154375df820b3c47805061e1c",
       "OpenConsole.exe": "b17e48b07ef153b420f0a6e178bacd31fb4c3390e21ae746586213fc0719a775",
       "THIRD-PARTY-NOTICES": "1408b8ad5ae95bef4a9029175305323443fdc4e92106f0e70a8982b6a51bd64c",
-      "apack-terminal.exe": "41952893f7de070e0b09cf7c355c9d02b29938b81401eadcaadcbebfe4608ec5",
+      "apack-terminal.exe": "a69772f2a4e3bfdfd7e521d64a6052aba05acbaf5ac3d5856eeb70fa8540a771",
       "conpty.dll": "e971856f89748dc3b458125e9afdd79b5e9574a7c937676116d3cbbd3b71f492"
     }
   }
