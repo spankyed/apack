@@ -147,7 +147,7 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
     const ears = path.join(consumer!, 'node_modules', '@apackdev', 'ears');
     expect(await resolveFromConsumer('@apackdev/ears')).toBe(pathToFileURL(fs.realpathSync(path.join(ears, 'dist', 'index.js'))).href);
     const shipped = fs.readdirSync(path.join(sdk, 'dist'), { recursive: true }).map(String);
-    expect(fs.readdirSync(sdk).sort()).toEqual(['apack.schema.json', 'dist', 'package.json']);
+    expect(fs.readdirSync(sdk).sort()).toEqual(['LICENSE', 'apack.schema.json', 'dist', 'package.json']);
     // Source maps would point at src, which isn't published
     expect(shipped.filter((f) => f.endsWith('.map'))).toEqual([]);
   });
@@ -161,7 +161,7 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
     );
     expect(output).toBe('Flow contains object');
     const ears = fs.readdirSync(path.join(consumer!, 'node_modules', '@apackdev', 'ears')).sort();
-    expect(ears).toEqual(['dist', 'package.json']);
+    expect(ears).toEqual(['LICENSE', 'dist', 'package.json']);
   });
 
   /**
