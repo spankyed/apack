@@ -61,6 +61,12 @@ export interface PackBuilderOptions {
   readonly refreshPackages?: () => void;
   /** What a failed refresh is compared against. Injected for tests. */
   readonly packagesState?: () => string;
+  /**
+   * How long a frontend input check may go without the dev process doing any work before it is answered for as not
+   * current; the shared stall window when absent. Injected for tests, whose deliberately blocked dev process would
+   * otherwise idle as long as the watchdog around the whole run, which then ends the run before the check answers.
+   */
+  readonly frontendInputCheckIdleMs?: number;
 }
 
 /** A pack retains its accepted compiler and frontend until a replacement is ready. */
@@ -72,6 +78,7 @@ export function createPackBuilder(root: string, {
     if (checkoutFor(cli) !== checkoutFor(root)) ensureCheckoutPackages(cli);
   },
   packagesState = () => packageBuildState(checkoutBuildUnits([root, cliPackageDirectory()])),
+  frontendInputCheckIdleMs,
 }: PackBuilderOptions = {}): PackBuilder {
   interface Generation { compiler: CompilerInstallation; frontend?: PackFrontend; configuration?: string; inputs?: CompilerWatchPaths }
   let current: Generation | undefined;
@@ -131,7 +138,7 @@ export function createPackBuilder(root: string, {
       if (!owned.has(generation)) return;
       generation.inputs = mergeCompilerWatchPaths(generation.inputs ?? new Map(), inputs.paths);
       publishInputs(inputs.changed && generation === current);
-    });
+    }, { inputCheckIdleMs: frontendInputCheckIdleMs });
     if (readPackDevServerInputs(root) !== configuration) {
       await generation.frontend.close();
       generation.frontend = undefined;

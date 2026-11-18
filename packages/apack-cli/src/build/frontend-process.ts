@@ -26,7 +26,7 @@ export interface PackFrontend {
 
 /** A generation's Vite modules are private; authored sources stay live for HMR. */
 export async function startPackFrontend(root: string, compiler: CompilerInstallation, signal: AbortSignal,
-  onInputs?: (inputs: FrontendInputUpdate) => void): Promise<PackFrontend> {
+  onInputs?: (inputs: FrontendInputUpdate) => void, { inputCheckIdleMs }: { readonly inputCheckIdleMs?: number } = {}): Promise<PackFrontend> {
   signal.throwIfAborted();
   assertCompilerLibraryEnvironment();
   const grouped = process.platform !== 'win32';
@@ -95,7 +95,7 @@ export async function startPackFrontend(root: string, compiler: CompilerInstalla
     // for, however little of a core the machine gives it: a shorter window reads a starved process as a blocked one,
     // and an answer of not current fails the dev server's request
     const watch = child.pid === undefined ? undefined
-      : watchWork({ work: fromNow(processWork(child.pid)), onRefused: () => finish(false) });
+      : watchWork({ work: fromNow(processWork(child.pid)), idleMs: inputCheckIdleMs, onRefused: () => finish(false) });
     const response = (message: unknown) => {
       if (!message || typeof message !== 'object' || !('type' in message) || message.type !== 'frontend-inputs'
         || !('id' in message) || message.id !== id) return;
