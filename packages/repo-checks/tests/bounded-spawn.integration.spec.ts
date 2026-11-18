@@ -111,11 +111,20 @@ while [ ! -s ${JSON.stringify(pidFile)} ]; do sleep 0.05; done`],
     expect(result.left).toBeUndefined();
   });
 
+  // What it left runs until it is killed, since how long the look for it takes is the machine's: each look is a `ps`,
+  // which a busy machine takes seconds over, and a process with an end of its own can be gone before the last one
   it('keeps the code of a command that failed by itself, and still says what it left', async () => {
-    const result = await boundedSpawn('sh', ['-c', 'sleep 30 >/dev/null 2>&1 & exit 3'], 30_000);
+    const pidFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bounded-spawn-')), 'grandchild.pid');
+    const result = await boundedSpawn('sh',
+      ['-c', `${process.execPath} -e 'require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(()=>{},1000)' >/dev/null 2>&1 &
+while [ ! -s ${JSON.stringify(pidFile)} ]; do sleep 0.05; done; exit 3`],
+      30_000);
+    const grandchild = Number(fs.readFileSync(pidFile, 'utf-8'));
+    expect(grandchild, 'nothing is proven if the grandchild never started').toBeGreaterThan(0);
 
     expect(result.code).toBe(3);
-    expect(result.left?.map(left => left.command)).toEqual(['sleep 30']);
+    expect(result.left?.map(left => left.pid)).toEqual([grandchild]);
+    await expectGone(grandchild);
   });
 });
 
@@ -129,9 +138,12 @@ describe('a bounded spawn that stops making progress', () => {
 
   it('ends a silent tree that only ticks a timer as stalled, long before its budget', async () => {
     const [command, args] = node('setInterval(() => {}, 5)');
-    const result = await boundedSpawn(command, args, 30_000, { idleMs: 2_000 });
+    const budget = 30_000;
+    const result = await boundedSpawn(command, args, budget, { idleMs: 2_000 });
     expect(result).toMatchObject({ code: 124, timedOut: true, stalled: true });
-    expect(result.ms).toBeLessThan(15_000);
+    // Long before its budget in CPU, the measure that counts: on the clock a busy machine stretches how soon a
+    // stall is found, since each reading is a `ps` it takes seconds over
+    expect(result.cpuMs).toBeLessThan(budget / 10);
   });
 
   // Unix alone: Windows has no listing that says what state a process is in
