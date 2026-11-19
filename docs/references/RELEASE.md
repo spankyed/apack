@@ -50,8 +50,8 @@ Then open the app normally. This only needs to be done once per download.
 This step is not needed once the app is signed and notarized (see [Code Signing & Notarization](#code-signing--notarization)).
 
 On Linux, the release holds an AppImage and a deb for x64. They need glibc 2.39 or later: Ubuntu 24.04, Debian 13,
-Fedora 40 and newer (see [CI Workflow](#ci-workflow)). Install the deb with `sudo apt install ./<the .deb>`, or make
-the AppImage executable (`chmod +x`) and run it; an AppImage needs FUSE 2 (`libfuse2t64` on Ubuntu 24.04).
+Fedora 40 and newer (see [CI Workflow](#ci-workflow)). Install the deb with `sudo apt install ./apack-<version>-linux-amd64.deb`, or
+make `apack-<version>-linux-x86_64.AppImage` executable (`chmod +x`) and run it; an AppImage needs FUSE 2 (`libfuse2t64` on Ubuntu 24.04).
 
 ## How a Release Works
 
