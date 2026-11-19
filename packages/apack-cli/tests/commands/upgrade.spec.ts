@@ -44,9 +44,12 @@ describe('pickAppRelease', () => {
     expect(pickAppRelease(onlyBeta, 'production')).toBeNull();
   });
 
-  it('refuses an incomplete latest release instead of substituting an older one', () => {
-    const picked = pickAppRelease([release('0.4.2', { checksum: false }), release('0.4.1')], 'production');
-    expect(picked).toBeNull();
+  // A release whose zip is there and whose checksum is not is incomplete too: passed over, as one with no macOS files
+  // is (`app-install.spec.ts`), and never substituted for when it is the version asked for
+  it('passes over a latest release with no checksum, and never substitutes for one asked for by version', () => {
+    const releases = [release('0.4.2', { checksum: false }), release('0.4.1')];
+    expect(pickAppRelease(releases, 'production')?.version).toBe('0.4.1');
+    expect(pickAppRelease(releases, 'production', '0.4.2')).toBeNull();
   });
 
   it('ignores a draft', () => {
