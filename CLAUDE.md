@@ -119,7 +119,8 @@ module comments, which the notices read back. `afterPack` writes `THIRD-PARTY-NO
 records, and fails a production or beta build on what it reports, which a preview build only prints: a package with no
 text or a license outside `ACCEPTED` (add the package's text to `OVERRIDES` with why, never widen `ACCEPTED` without
 reading the license), a native binary whose notices are missing (bump its pin to a release that ships them) or that is
-missing itself, a missing bundle record, a built-in pack with no bundle or one whose packages can't be told, an `OVERRIDES`
+missing itself, a binary a package's install downloads that is another release than its `EXTRAS` texts were read for
+(read them again at that release), a missing bundle record, a built-in pack with no bundle or one whose packages can't be told, an `OVERRIDES`
 entry no longer needed (one naming a platform is asked of that platform's build alone), or no third-party package at all
 (`scripts/lib/third-party-notices.ts`). Beside the release files it writes a CycloneDX SBOM,
 `<releasePrefix>-<version>-<os>-<arch>.cdx.json`, which the release workflows upload by that name: rename a release file

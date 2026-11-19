@@ -18,7 +18,8 @@
  *
  * **Where a package's text comes from**, first that applies: its own license, licence, notice and copying files, in
  * any case and with any extension; for a platform binary package, which ships none, its parent's (`PLATFORM_PARENTS`);
- * the committed texts of `OVERRIDES`, each with why. A package with none of these is a problem.
+ * the committed texts of `OVERRIDES`, each with why. A package with none of these is a problem. To that, `EXTRAS` adds
+ * the committed texts of what a package's binary is built from, which its own license does not cover.
  *
  * **What licenses it accepts** (`ACCEPTED`): the package's declared SPDX expression, taking from an OR the branch
  * whose license comes first in `ACCEPTED`. LGPL only for a package shipped as its own files, since inlined it would be
@@ -30,9 +31,10 @@
  *
  * Native code carries notices of its own, which this points to rather than repeats: Electron's and Chromium's
  * (`scripts/lib/electron-notices.ts`), elmdb's binding's and the terminal broker's, each shipped beside its binary.
- * A missing one is a problem. The prebuilt binaries of npm packages (esbuild's, Rollup's, keyring's, fsevents') are
- * credited by their packages' licenses; esbuild's, built with Go, add Go's (`PLATFORM_EXTRAS`), and the Rust
- * standard library and the crates compiled into Rollup's, keyring's and Linux's lzma's carry no notice here.
+ * A missing one is a problem. The prebuilt binaries of npm packages ship no notices of their own: a package's license
+ * covers its own code, and `EXTRAS` adds the texts of what a binary is built from that is not the package's own, Go
+ * for esbuild's and ripgrep and PCRE2 for the `rg` @vscode/ripgrep's install downloads. The Rust standard library and
+ * the crates compiled into Rollup's, keyring's and Linux's lzma's binaries carry no notice here.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -73,9 +75,32 @@ export const PLATFORM_PARENTS: readonly (readonly [pattern: RegExp, parent: stri
   [/^@parcel\/watcher-/, '@parcel/watcher'],
 ];
 
-/** Texts a platform binary package adds to its parent's, for what its binary is built with, committed under `build/licenses/` */
-export const PLATFORM_EXTRAS: readonly (readonly [pattern: RegExp, files: readonly string[], why: string])[] = [
-  [/^@esbuild\//, ['go-LICENSE'], "esbuild's binary is built with Go, whose license asks a binary to carry its notice"],
+/** Texts a package adds to its own, or a platform binary package to its parent's, for what its binary is built from */
+export interface Extra {
+  pattern: RegExp;
+  /** Committed under `build/licenses/` */
+  files: readonly string[];
+  why: string;
+  /**
+   * For a binary the package's install downloads, the release the texts were read for, as the package's own code
+   * declares it: a new release of the package can move the binary without its license files changing, so a build
+   * carrying another release is a problem until the texts are read again (`staleExtras`)
+   */
+  readFor?: { file: string; declared: RegExp; release: string; reread: string };
+}
+
+export const EXTRAS: readonly Extra[] = [
+  { pattern: /^@esbuild\//, files: ['go-LICENSE'], why: "esbuild's binary is built with Go, whose license asks a binary to carry its notice" },
+  {
+    pattern: /^@vscode\/ripgrep$/,
+    files: ['ripgrep-COPYING', 'ripgrep-LICENSE-MIT', 'ripgrep-UNLICENSE', 'pcre2-LICENCE.md'],
+    why: "its install downloads bin/rg from microsoft/ripgrep-prebuilt: ripgrep, built with PCRE2, under licenses that ask a binary to carry them, where the package's own is Microsoft's, for its wrapper",
+    // ripgrep-prebuilt v15.0.1 is ripgrep 15.0.0 built with +pcre2, and its Cargo.lock's pcre2-sys 0.2.10 bundles PCRE2 10.46
+    readFor: {
+      file: 'lib/postinstall.js', declared: /^const VERSION = '([^']+)';$/m, release: 'v15.0.1',
+      reread: "ripgrep's LICENSE-MIT, UNLICENSE and COPYING at the ripgrep tag that release builds, and the LICENCE of the PCRE2 its Cargo.lock's pcre2-sys bundles",
+    },
+  },
 ];
 
 /**
@@ -312,7 +337,7 @@ export function noticeOf(pkg: NoticePackage, licensesDir: string, byName: Readon
     texts = OVERRIDES[pkg.name].files.map((file) => fs.readFileSync(path.join(licensesDir, file), 'utf8').replace(/\r\n/g, '\n').trim());
   }
   if (!texts.length) return `${label} ships no license file: add its text to OVERRIDES, with why`;
-  for (const [pattern, files] of PLATFORM_EXTRAS) {
+  for (const { pattern, files } of EXTRAS) {
     if (pattern.test(pkg.name)) texts = [...texts, ...files.map((file) => fs.readFileSync(path.join(licensesDir, file), 'utf8').replace(/\r\n/g, '\n').trim())];
   }
   const where = `${repositoryOf(manifest) ?? 'npm'}, ${pkg.name} ${pkg.version}`;
@@ -323,6 +348,21 @@ export function noticeOf(pkg: NoticePackage, licensesDir: string, byName: Readon
   const source = creator || named.some((id) => SOURCE_NAMED.test(id))
     ? `${where}${creator ? `; created by ${CREATORS[pkg.name] ?? author ?? 'its authors'}` : ''}` : undefined;
   return { package: pkg, declared, license, text: texts.join('\n\n'), source };
+}
+
+/**
+ * The packages whose binary is another release than their `EXTRAS`' texts were read for, or whose code no longer says
+ * which release it downloads, each as a problem
+ */
+export function staleExtras(packages: readonly NoticePackage[]): string[] {
+  return packages.flatMap((pkg) => EXTRAS.flatMap(({ pattern, readFor }) => {
+    if (!readFor || !pattern.test(pkg.name)) return [];
+    const file = path.join(pkg.dir, readFor.file);
+    const declared = fs.existsSync(file) ? readFor.declared.exec(fs.readFileSync(file, 'utf8'))?.[1] : undefined;
+    if (!declared) return [`${pkg.name}@${pkg.version}'s ${readFor.file} no longer says which release of its binary it downloads, so EXTRAS' texts for it cannot be checked: find where it does, and update readFor`];
+    if (declared === readFor.release) return [];
+    return [`${pkg.name}@${pkg.version} downloads ${declared}, and EXTRAS' texts for it were read for ${readFor.release}: re-read ${readFor.reread}, then update them and readFor`];
+  }));
 }
 
 /** The notices' text: a header naming what else carries notices, then each distinct text with the packages it covers */
@@ -520,6 +560,7 @@ export function writeAppNotices(options: {
     if (typeof notice === 'string') problems.push(notice);
     else notices.push(notice);
   }
+  problems.push(...staleExtras(packages));
   // An override for a package the app no longer carries is a text nobody reads, and a stale reason
   const carried = new Set(packages.map((pkg) => pkg.name));
   for (const [name, { platform }] of Object.entries(OVERRIDES)) {

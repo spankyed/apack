@@ -3,9 +3,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import {
-  OVERRIDES, appSbom, brokerNoticesFile, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages, renderNotices,
-  sbomIdentity, writeAppNotices,
+  EXTRAS, OVERRIDES, appSbom, brokerNoticesFile, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages,
+  renderNotices, sbomIdentity, staleExtras, writeAppNotices,
   type NoticePackage,
 } from '../../../scripts/lib/third-party-notices.ts';
 
@@ -103,6 +104,35 @@ describe("where a package's text comes from", () => {
     // The parent at the platform package's own version, then what its binary is built with
     expect(noticeOf(at(root, '@esbuild/darwin-arm64'), licenses, byName))
       .toMatchObject({ license: 'MIT', text: 'esbuild license\n\ngo license' });
+  });
+
+  it("adds to a package's own text what its downloaded binary is built from: ripgrep's and PCRE2's to @vscode/ripgrep's", () => {
+    const root = tree(installed('@vscode/ripgrep', { license: 'MIT' }, { LICENSE: 'wrapper license' }));
+    const ripgrep = EXTRAS.find(({ pattern }) => pattern.test('@vscode/ripgrep'))!;
+    const licenses = tree(Object.fromEntries(ripgrep.files.map((file) => [file, `${file} text`])));
+    expect(ripgrep.files).toEqual(['ripgrep-COPYING', 'ripgrep-LICENSE-MIT', 'ripgrep-UNLICENSE', 'pcre2-LICENCE.md']);
+    expect(noticeOf(at(root, '@vscode/ripgrep'), licenses, new Map())).toMatchObject({
+      text: ['wrapper license', ...ripgrep.files.map((file) => `${file} text`)].join('\n\n'),
+    });
+  });
+
+  it('refuses a downloaded binary of another release than its texts were read for, or one its code no longer names', () => {
+    const declaring = (version?: string) => {
+      const root = tree(installed('@vscode/ripgrep', { license: 'MIT' }, version ? { 'lib/postinstall.js': `const X = 1;\nconst VERSION = '${version}';\n` } : {}));
+      return staleExtras([at(root, '@vscode/ripgrep')]);
+    };
+    const { release } = EXTRAS.find(({ pattern }) => pattern.test('@vscode/ripgrep'))!.readFor!;
+    expect(declaring(release)).toEqual([]);
+    expect(declaring('v99.0.0')).toEqual([expect.stringContaining(`downloads v99.0.0, and EXTRAS' texts for it were read for ${release}: re-read ripgrep's`)]);
+    expect(declaring()).toEqual([expect.stringMatching(/lib\/postinstall\.js no longer says which release of its binary it downloads/)]);
+  });
+
+  it("holds the installed @vscode/ripgrep to the release its texts were read for, and every committed text to a file", () => {
+    const dir = path.join(REPO_ROOT, 'node_modules', '@vscode', 'ripgrep');
+    const { version } = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as { version: string };
+    expect(staleExtras([{ name: '@vscode/ripgrep', version, dir, carried: 'files' }])).toEqual([]);
+    const named = [...EXTRAS.flatMap(({ files }) => files), ...Object.values(OVERRIDES).flatMap(({ files }) => files)];
+    expect(named.filter((file) => !fs.existsSync(path.join(REPO_ROOT, 'build', 'licenses', file)))).toEqual([]);
   });
 
   it('takes a committed override, and names the problem when there is none', () => {
@@ -257,6 +287,16 @@ describe('the notices written into the app', () => {
     const problems = write(setup, 'preview', { native: [{ pointer: 'elmdb', file: path.join(setup.app, 'NOTICES') }, { pointer: 'the broker', file: null }] });
     expect(problems).toContainEqual(expect.stringMatching(/NOTICES is missing, so its binary would ship without its notices/));
     expect(problems).toContainEqual('No binary was found for the broker');
+  });
+
+  it('reports a carried package whose downloaded binary is another release than its texts were read for', () => {
+    const setup = packaged();
+    for (const [file, text] of Object.entries(installed('@vscode/ripgrep', { license: 'MIT' }, { LICENSE: 'x', 'lib/postinstall.js': "const VERSION = 'v0.0.1';" }))) {
+      fs.mkdirSync(path.dirname(path.join(setup.app, file)), { recursive: true });
+      fs.writeFileSync(path.join(setup.app, file), text);
+    }
+    for (const file of EXTRAS.flatMap(({ files }) => files)) fs.writeFileSync(path.join(setup.licenses, file), file);
+    expect(write(setup, 'preview')).toContainEqual(expect.stringContaining('@vscode/ripgrep@1.0.0 downloads v0.0.1'));
   });
 
   it("points at the broker's notices built for the app's own platform, never another's", () => {
