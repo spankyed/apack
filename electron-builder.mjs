@@ -166,11 +166,12 @@ export default /** @type import('electron-builder').Configuration */
     ]
   },
   
+  // The deb states its glibc floor to apt, on top of electron-builder's own dependencies, which a set `depends` would
+  // otherwise replace (FpmTarget's defaults, kept): build-linux.yml reads the floor back from the built deb and holds
+  // every binary in the app to it (build/prod/glibc-floor.sh)
+  deb: {depends: [...debDefaultDepends(), `libc6 (>= ${LINUX_GLIBC_FLOOR})`]},
+
   linux: {
-    // The deb states its glibc floor to apt, which a set `depends` would otherwise drop with electron-builder's own list
-    // (FpmTarget's defaults, kept): build-linux.yml reads the floor back from the built deb and holds every binary in
-    // the app to it (build/prod/glibc-floor.sh)
-    deb: {depends: [...debDefaultDepends(), `libc6 (>= ${LINUX_GLIBC_FLOOR})`]},
     target: [
       {
         target: 'AppImage',
