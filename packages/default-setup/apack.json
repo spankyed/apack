@@ -660,6 +660,9 @@
             "bellNotification": {
               "type": "boolean"
             },
+            "terminalStatusNotification": {
+              "type": "boolean"
+            },
             "defaultBaseDirectory": {
               "type": [
                 "string",
@@ -782,6 +785,7 @@
             "copyOnSelect",
             "bellFlash",
             "bellNotification",
+            "terminalStatusNotification",
             "defaultBaseDirectory",
             "baseDirectory",
             "enableShellIntegration",
@@ -869,6 +873,7 @@
           "linkPreview": "osc8",
           "bellFlash": true,
           "bellNotification": false,
+          "terminalStatusNotification": true,
           "defaultBaseDirectory": null,
           "baseDirectory": null,
           "enableShellIntegration": true,

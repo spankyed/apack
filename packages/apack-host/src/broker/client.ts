@@ -17,7 +17,7 @@ import { holdExclusiveLockWaiting, type ExclusiveLock } from '../exclusive-lock.
 // The protocol's types, generated from the broker's Rust and shipped by its package — not a copy of them.
 // There was a copy here, with a script that re-derived and compared it; a package with the file in it
 // leaves nothing to carry (`apack-terminal/node/protocol.ts`, `cargo xtask check-generated` there).
-import type { CommandOutcome, ErrorCode, Event, Request } from 'apack-terminal';
+import type { CommandOutcome, ErrorCode, Event, Request, StatusRecord } from 'apack-terminal';
 
 /**
  * The protocol this client speaks. The broker refuses a connection that does not match.
@@ -88,6 +88,31 @@ export interface BrokerFacts {
    * foreground process group at all.
    */
   readonly foreground: BrokerForeground | null;
+  /** What the session's programs say they are doing (OSC 7501), every record as it stands. Claims */
+  readonly statuses: readonly BrokerStatusRecord[];
+}
+
+/**
+ * One thing a program says it is doing, as the broker keeps it (`apack-terminal`'s `src/status.rs`, which is
+ * the only place the rules for keeping one are written). The SDK's `ProgramStatusRecord`, which this shape is.
+ */
+export interface BrokerStatusRecord {
+  readonly id: string;
+  readonly state: 'idle' | 'working' | 'blocked' | 'done' | 'error';
+  readonly kind: 'permission' | 'question' | 'auth' | null;
+  readonly progress: number | null;
+  readonly app: string | null;
+  readonly title: string | null;
+  readonly message: string | null;
+  readonly changed: number;
+  readonly sinceMs: number;
+  readonly confirmed: 'matched' | 'mismatched' | 'unknown';
+}
+
+/** A record as the broker sends it, in the shape a holder is told it */
+function statusRecord(record: StatusRecord): BrokerStatusRecord {
+  const { since_ms: sinceMs, ...rest } = record;
+  return { ...rest, sinceMs };
 }
 
 /** The process group reading a session's pty, as the OS reports it */
@@ -119,7 +144,12 @@ export type BrokerWaitUntil =
   /** `text` appears in the screen or its history — the fallback for a program that reports nothing */
   | { readonly kind: 'text'; readonly text: string }
   /** The process ended */
-  | { readonly kind: 'exit' };
+  | { readonly kind: 'exit' }
+  /**
+   * The session's program says it is in one of `states` (OSC 7501): what it reports of itself, not of
+   * anything it reports on. Never met by a program that reports nothing
+   */
+  | { readonly kind: 'status'; readonly states: readonly BrokerStatusRecord['state'][] };
 
 /** How a wait ended */
 export type BrokerWaitOutcome =
@@ -275,6 +305,7 @@ export interface BrokerSessionSummary {
   readonly cwd: string | null;
   readonly command: string | null;
   readonly running: boolean;
+  readonly statuses: readonly BrokerStatusRecord[];
 }
 
 /** A recording opened to be looked back through: a session with no process, which a view attaches to */
@@ -298,7 +329,8 @@ export type BrokerSessionEvent =
   | { readonly kind: 'progress'; readonly state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; readonly percent: number | null }
   | { readonly kind: 'commandStarted'; readonly command: string | null }
   | { readonly kind: 'commandFinished'; readonly outcome: CommandOutcome }
-  | { readonly kind: 'cwdChanged'; readonly cwd: string };
+  | { readonly kind: 'cwdChanged'; readonly cwd: string }
+  | { readonly kind: 'programStatus'; readonly statuses: readonly BrokerStatusRecord[] };
 
 /**
  * A broker event that is news about a session's program, in the shape a holder hears it, or `undefined`
@@ -314,6 +346,7 @@ function sessionEvent(event: Event): BrokerSessionEvent | undefined {
     case 'command_started': return { kind: 'commandStarted', command: event.command };
     case 'command_finished': return { kind: 'commandFinished', outcome: event.outcome };
     case 'cwd_changed': return { kind: 'cwdChanged', cwd: event.cwd };
+    case 'program_status': return { kind: 'programStatus', statuses: event.statuses.map(statusRecord) };
     default: return undefined;
   }
 }
@@ -919,6 +952,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
           vouched: answer.vouched,
           refused: answer.refused,
           foreground: answer.foreground ?? null,
+          statuses: answer.statuses.map(statusRecord),
         };
       },
       async search(text, history = 0) {
@@ -928,7 +962,12 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         return answer.matches;
       },
       async wait(until, timeoutMs) {
-        connection.send({ kind: 'wait', session: id, until, timeout_ms: timeoutMs });
+        connection.send({
+          kind: 'wait',
+          session: id,
+          until: until.kind === 'status' ? { kind: 'status', states: [...until.states] } : until,
+          timeout_ms: timeoutMs,
+        });
         // **The deadline is the broker's**, so this waits for its answer rather than racing a timer of its
         // own: two deadlines would disagree, and the one that matters is the one holding the waiter
         const answer = await connection.next(event => event.kind === 'waited' && event.session === id, { session: id });
@@ -1045,6 +1084,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
       return answer.sessions.map(one => ({
         id: one.session, pid: one.pid, cols: one.cols, rows: one.rows, kept: one.kept, recorded: one.recorded,
         title: one.title, cwd: one.cwd, command: one.command, running: one.running,
+        statuses: one.statuses.map(statusRecord),
       }));
     },
     async rewind(recording, size) {

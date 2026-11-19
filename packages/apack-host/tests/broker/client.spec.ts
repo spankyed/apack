@@ -599,7 +599,7 @@ setInterval(() => {}, 1_000);
     const fake = await broker({
       ...OPENS,
       facts: [
-        { kind: 'facts', session: 's-1', cwd: '/home/me/w d', command: 'cargo test', running: true, outcome: null, finished: 0, vouched: true, refused: 0 },
+        { kind: 'facts', session: 's-1', cwd: '/home/me/w d', command: 'cargo test', running: true, outcome: null, finished: 0, vouched: true, refused: 0, statuses: [] },
       ],
     });
     const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
@@ -616,6 +616,7 @@ setInterval(() => {}, 1_000);
       // `facts.foreground?.name` cannot tell those apart, and one reading `'foreground' in facts` would
       // get a different answer on Windows than on a shell this broker could not measure
       foreground: null,
+      statuses: [],
     });
   });
 
@@ -636,6 +637,7 @@ setInterval(() => {}, 1_000);
           vouched: false,
           refused: 2,
           foreground: { pid: 4321, name: 'vim' },
+          statuses: [],
         },
       ],
     });
@@ -650,6 +652,7 @@ setInterval(() => {}, 1_000);
       vouched: false,
       refused: 2,
       foreground: { pid: 4321, name: 'vim' },
+      statuses: [],
     });
   });
 
@@ -668,7 +671,7 @@ setInterval(() => {}, 1_000);
     for (const outcome of outcomes) {
       const fake = await broker({
         ...OPENS,
-        facts: [{ kind: 'facts', session: 's-1', cwd: null, command: null, running: false, outcome, finished: 1, vouched: outcome.kind !== 'claimed', refused: 0 }],
+        facts: [{ kind: 'facts', session: 's-1', cwd: null, command: null, running: false, outcome, finished: 1, vouched: outcome.kind !== 'claimed', refused: 0, statuses: [] }],
       });
       const session = await fake.open({ cols: 80, rows: 24 }, { onOutput() {}, onExit() {} });
 

@@ -1,3 +1,4 @@
+import type { ProgramStatusRecord } from '@apackdev/sdk/services'
 import type { SignInHelp } from './services/sign-in.ts';
 import { EARS } from '#generated/ears.ts'
 
@@ -328,6 +329,14 @@ export interface GhReviewComment {
 }
 
 // Terminal types
+/**
+ * One thing a terminal's program says it is doing, as a window is told it: the host's record with its text made
+ * plain, and `seen` — whether the person has looked at the terminal since the record last changed
+ */
+export interface TerminalStatus extends ProgramStatusRecord {
+  seen: boolean
+}
+
 export interface TerminalInfo {
   id: EARS.EntityId
   /**
@@ -382,6 +391,14 @@ export interface TerminalInfo {
    * and starting the terminal again is what finds out.
    */
   exited?: { code: number | null; unreached?: true }
+  /**
+   * What its programs say they are doing (OSC 7501), every record as it stands. Absent when there is none.
+   *
+   * **Claims, drawn and never acted on**: any program in the terminal can write one, and `confirmed` says
+   * whether the program in front was the one a record names. A terminal whose shell has gone keeps what
+   * its programs finished or failed at until it is closed or started again.
+   */
+  statuses?: TerminalStatus[]
   /**
    * The session's size **when this was published**, which is a starting point and not a live reading.
    *

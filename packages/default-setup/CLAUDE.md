@@ -172,8 +172,9 @@ again only the diffs it has open of the files the news names. The open-file watc
 neither watcher needs to be exact.
 
 - **An event the platform never delivered is made up for by reading again**, when something says a change is
-  likely: `CHECK_FOR_EXTERNAL_CHANGES`, sent when a window gains focus, a terminal command finishes and an agent's
-  turn ends. A new source of change sends that event; it does not add a watch.
+  likely: `CHECK_FOR_EXTERNAL_CHANGES`, sent when a window gains focus, a terminal command finishes, an agent's
+  turn ends, and a program in a terminal says it has stopped working (its OSC 7501 status leaves `working`). A
+  new source of change sends that event; it does not add a watch.
 - **A check compares with the last check, not the last read.** One window's own ask can read a change first, and
   the check is what tells the others.
 - **The watcher names the files it saw change, and only those are read.** A report carries the working-tree paths

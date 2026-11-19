@@ -1,7 +1,7 @@
 # Goal: one list of what needs the person
 
 **Status: planned, 2026-11-16.** Nothing is started. **Start after Phases 1 to 3 of
-[the terminal program status goal](goal-terminal-program-status.md) are merged**: Phase 4 here feeds from
+[the terminal program status goal](../archive/goals/goal-terminal-program-status.md) are merged**: Phase 4 here feeds from
 what that goal makes the Code feature hold. Phases 1 to 3 here do not depend on it and may start sooner.
 Owners: a new host service (`packages/apack-sdk`, `packages/apack-host`), the shell
 (`packages/apack-host/src/features/application`, `packages/renderer/src/views/layout`), Electron main and
@@ -18,7 +18,7 @@ Written so that an implementer who did not write it can finish it. Seams were re
 Implement docs/goals/goal-needs-you.md. Follow CLAUDE.md and docs/AGENTS.md.
 Read Scope, Decisions, Phases, Constraints and Current handoff before continuing.
 The survey was made at monorepo c7d4ec6ce5; inspect current code before relying on it.
-Phase 4 needs docs/goals/goal-terminal-program-status.md Phases 1 to 3 merged; confirm that first.
+Phase 4 needs docs/archive/goals/goal-terminal-program-status.md Phases 1 to 3 merged; confirm that first.
 Follow the current checkout arrangement and preserve unrelated work.
 
 Work the phases in order. A phase is finished when its Done-when conditions hold on current source.
@@ -95,7 +95,7 @@ At monorepo `c7d4ec6ce5`:
 - **Windows and focus in main:** `packages/main/src/modules/window-manager/WindowManager.ts` uses
   `BrowserWindow.getFocusedWindow()` (`:128`). Nothing sets a dock badge today.
 - **Opening a surface from data:** `untypedOpenSurface(ref, event?)`, `@apackdev/sdk/fe`.
-- **Terminal feeder:** what [the first goal](goal-terminal-program-status.md) adds to
+- **Terminal feeder:** what [the first goal](../archive/goals/goal-terminal-program-status.md) adds to
   `packages/default-setup/src/features/code/be/services/terminal.ts` and `be/features/terminal.ts`: each
   terminal's status set, its seen mark, and the notification its frontend raises. The Code surface's
   inbox is `fe/contract.ts:143`; it has no event that shows one terminal by id.
@@ -234,7 +234,7 @@ Done when: those pass.
 
 ### Phase 4. The feeders
 
-First confirm [the first goal](goal-terminal-program-status.md)'s Phases 1 to 3 are merged.
+First confirm [the first goal](../archive/goals/goal-terminal-program-status.md)'s Phases 1 to 3 are merged.
 
 - Add the Code surface inbox event that shows one terminal by id, and use it as the target.
 - The terminal feeder, by D9. Remove the first goal's frontend notification and its

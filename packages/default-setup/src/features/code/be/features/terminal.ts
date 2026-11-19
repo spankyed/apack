@@ -9,6 +9,7 @@ import { setup, assign, fromPromise } from 'xstate'
 import { terminalService } from '../services/terminal.ts'
 import type { TerminalInfo } from '../types.ts'
 import { cwdAsReported } from '../utils/osc-cwd.ts'
+import { statusMoves } from '../utils/terminal-status.ts'
 import type { TerminalEvent } from '@apackdev/sdk/services'
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { onConnectionEnded } from '@apackdev/sdk/events';
@@ -46,6 +47,7 @@ export type Event =
   | { type: 'terminal.REFRESH_LIST' }
   | { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
   | { type: 'terminal.KEEP_TERMINAL'; terminalId: string; kept: boolean }
+  | { type: 'terminal.STATUS_SEEN'; terminalId: string }
   | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
   | { type: 'terminal.REWIND_SEEK'; session: string; at: number }
   | { type: 'terminal.REWIND_CLOSE'; session: string }
@@ -57,7 +59,7 @@ export type Event =
 /** A terminal's news, for every window showing the code surface: what its process did, never a listing */
 type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.CLIPBOARD' | 'terminal.BELL' | 'terminal.NOTIFIED'
   | 'terminal.PROGRESS' | 'terminal.TITLED' | 'terminal.CLOSED' | 'terminal.CREATED'
-  | 'terminal.CRASHED' | 'terminal.RESTARTED' | 'terminal.RESIZED' | 'terminal.KEPT'
+  | 'terminal.CRASHED' | 'terminal.RESTARTED' | 'terminal.RESIZED' | 'terminal.KEPT' | 'terminal.STATUS'
 type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
 
 /** Tell every window showing the code surface what a terminal did */
@@ -131,6 +133,28 @@ const terminalHandlers = {
       case 'title':
         emitToFrontend({ type: 'terminal.TITLED', data: { terminalId, title: event.title } })
         break
+      // **What the terminal's programs say they are doing** (OSC 7501): shown, and never acted on for them.
+      // Two things follow from a change, neither of which answers the program. A record leaving `working`
+      // is an agent's turn ending as far as anything says, and it may have changed the repository with no
+      // file event for it — the same hint a finished command gives. And a flow may be waiting to hear
+      case 'programStatus': {
+        const heard = terminalService.heardStatuses(terminalId, event.statuses)
+        if (!heard) break
+        emitToFrontend({ type: 'terminal.STATUS', data: { terminalId, statuses: heard.after } })
+        const { moves, leftWorking } = statusMoves(heard.before, heard.after)
+        if (leftWorking) sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+        for (const { record, previous } of moves) {
+          // A record naming a program that is not the one in front is drawn as such and tells no flow:
+          // a flow acts on what it hears
+          if (record.confirmed === 'mismatched') continue
+          sendToSystem({ role: 'brain' }, {
+            type: 'TRIGGER_BRAIN_EVENT',
+            eventType: 'terminal.status',
+            payload: { terminalId, id: record.id, app: record.app, state: record.state, kind: record.kind, previous },
+          })
+        }
+        break
+      }
       // The shell saying a command began is the start of nothing this feature tracks
       case 'commandStarted':
         break
@@ -410,6 +434,13 @@ export const terminalSystem = setup({
       }).catch(error => failTerminal(reply, 'keep', error, ev.terminalId))
     },
 
+    /** News rather than a reply: what one window's person has looked at, every window stops marking */
+    markStatusSeen: ({ event }) => {
+      const ev = event as { type: 'terminal.STATUS_SEEN'; terminalId: string }
+      const statuses = terminalService.statusesSeen(ev.terminalId)
+      if (statuses) emitToFrontend({ type: 'terminal.STATUS', data: { terminalId: ev.terminalId, statuses } })
+    },
+
     /** Replied: a recording is opened for the window that asked to look, and nobody else is looking */
     rewindTerminal: ({ event, reply, client }) => {
       const ev = event as { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
@@ -538,6 +569,9 @@ export const terminalSystem = setup({
         },
         'terminal.KEEP_TERMINAL': {
           actions: 'keepTerminal'
+        },
+        'terminal.STATUS_SEEN': {
+          actions: 'markStatusSeen'
         },
         'terminal.REWIND': {
           actions: 'rewindTerminal'

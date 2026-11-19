@@ -94,10 +94,35 @@ broker's suite writes from its encoder and the view's suite reads where it lies,
 - **Selection, search and links are asked of the broker** — the word at a cell, the text of a range, where
   a string appears — because the core's rules for them are the ones every other terminal built on it has.
 - **What a program does that is not on its screen is an event** on the control connection: a title, a
-  bell, a clipboard write, a notification, progress, and each command the shell marks (OSC 133, OSC 633).
+  bell, a clipboard write, a notification, progress, what it says it is doing, and each command the shell
+  marks (OSC 133, OSC 633).
   The pack's shell integration arranges for zsh, bash, fish and PowerShell to mark them, around whatever
   prompt hooks the user's own configuration has. A clipboard write reaches the clipboard only while the
   code setting that allows it is on.
+- **What a program says it is doing is kept by the broker and sent whole** (OSC 7501, the
+  [Program Status Protocol](https://www.superlogical.com/rex/docs/build/program-status)): idle, working,
+  done, blocked on the person with what it needs (permission, a question, a sign-in), or failed. Codex
+  reports unasked; Claude Code asks whether the terminal reads the protocol first, and the broker answers.
+  - **The broker is the only place the records' rules are written** (`src/status.rs`): a report replaces
+    its record, a clear takes a subtree, at most 256 are held, and a program's command or session ending
+    takes what it was in the middle of and keeps what it finished or failed at. A `programStatus` event,
+    `facts()` and a session's summary each carry every record as it stands, so nothing downstream merges
+    anything, and an app that restarted picks them up from the summary.
+  - **A record is a claim, checked against the program in front.** Anything in a terminal can write one —
+    a file printed there can say an agent is asking for permission — so each carries `confirmed`:
+    `matched` when the foreground process was the program it names, `mismatched` when it was another, and
+    `unknown` where there was nothing to compare, which is every record on Windows. A mismatched record is
+    drawn faint on its tab, raises no notification and tells no flow.
+  - **Nothing is done for the program.** The Code feature shows the most urgent record on the terminal's
+    tab, raises one system notification for a terminal until the person looks at it (the
+    `terminalStatusNotification` setting), checks the repository when a record leaves `working`, and fires
+    the flow event `terminal.status` with `{ terminalId, id, app, state, kind, previous }` for each state a
+    record enters. It never types an answer.
+  - **What the person has seen is the app's to know.** The terminal's row keeps the session and the count
+    its latest record had when they last looked (`ProgramStatusRecord.changed`), and a record past that is
+    unseen. Looking is the terminal on screen in a focused window.
+  - **A recording replayed reports nothing**, and a terminal started again has no records until its new
+    shell's programs report.
 - **The colours a program changes are the frame's.** A program that redefines the palette or the default
   colours (OSC 4, 10, 11, 12) or turns on reverse video is drawn that way: a frame says which colours
   differ from the ones the session was started with, and the view lays them over its theme.

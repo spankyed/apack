@@ -10,7 +10,7 @@
 // So fidelity lives here once. A case records what it cares about by reading the slice it wants off the
 // returned object; nothing is per-spec except which slice it reads.
 import { mockService } from '@apackdev/testing/harness'
-import type { TerminalCellSize, TerminalColors, TerminalCommand, TerminalCursorBlink, TerminalCursorStyle, TerminalService, TerminalTarget, TerminalEvent, TerminalListeners, TerminalRewind, TerminalSession, TerminalSessionSummary, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
+import type { ProgramStatusRecord, TerminalCellSize, TerminalColors, TerminalCommand, TerminalCursorBlink, TerminalCursorStyle, TerminalService, TerminalTarget, TerminalEvent, TerminalListeners, TerminalRewind, TerminalSession, TerminalSessionSummary, TerminalSignal, TerminalSignalScope } from '@apackdev/sdk/services'
 
 /** The options the service was opened with, whole, so a case reads the field it is about */
 export interface OpenOptions {
@@ -138,6 +138,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
   const refusals = new Map<number, string>()
   const refusedTerminations = new Map<string, string>()
   const reportedCwds = new Map<string, string | null>()
+  const statuses = new Map<string, readonly ProgramStatusRecord[]>()
   const finishedCommands = new Map<string, number>()
   /** Sessions whose next resize is held, and what releases each */
   const deferredResizes = new Map<string, () => void>()
@@ -187,6 +188,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       finished: finishedCommands.get(id) ?? 0,
       vouched: false,
       refused: 0,
+      statuses: statuses.get(id) ?? [],
     }),
     setCursorDefaults: async (style: TerminalCursorStyle, blink: TerminalCursorBlink) => { cursors.push({ id, style, blink }) },
     pause: async () => { flow.push({ id, kind: 'pause' }) },
@@ -253,6 +255,7 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
     sessions: async (): Promise<TerminalSessionSummary[]> => (reach(target), [...live]).map(id => ({
       id, pid: opened.find(one => one.id === id)?.pid ?? 0, cols: 80, rows: 24, kept: kept.has(id), recorded: opened.find(one => one.id === id)?.options.record !== undefined,
       title: null, cwd: reportedCwds.get(id) ?? null, command: null, running: false,
+      statuses: statuses.get(id) ?? [],
     })),
 
     rewind: async (recording: string, size: { cols: number; rows: number }): Promise<TerminalRewind> => {
@@ -292,7 +295,11 @@ export function recordingBroker({ pidBase = 1000 }: { pidBase?: number } = {}): 
       live.delete(id)
       listenersFor(id).onExit(code, signal)
     },
-    happens: (id, event) => listenersFor(id).onEvent?.(event),
+    happens: (id, event) => {
+      // The broker holds what a session's programs say they are doing, and answers it to whoever asks after
+      if (event.kind === 'programStatus') statuses.set(id, event.statuses)
+      listenersFor(id).onEvent?.(event)
+    },
     refuseOpen: (nth, why = 'the broker would not start') => { refusals.set(nth, why) },
     targetsUnreachable: (why) => { unreachable = why },
     get refusedByTarget() { return refusedByTarget },

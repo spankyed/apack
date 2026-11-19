@@ -1,9 +1,9 @@
 # Goal: a terminal's program says what it is doing, and the app listens (OSC 7501)
 
-**Status: planned, 2026-11-16.** Nothing is started. Owners: the terminal broker (`spankyed/apack-terminal`),
+**Status: done, closed 2026-11-19.** See Outcome; the text above it is the plan as written. Owners: the terminal broker (`spankyed/apack-terminal`),
 the host's broker client and terminal service (`packages/apack-host`), the SDK's terminal contract
 (`packages/apack-sdk`) and the Code feature (`packages/default-setup/src/features/code`).
-[The second goal](goal-needs-you.md) builds on Phases 1 to 3 of this one.
+[The second goal](../../goals/goal-needs-you.md) builds on Phases 1 to 3 of this one.
 
 Written so that an implementer who did not write it can finish it. Every seam is named with a file and a line,
 read at the commits under Verified seams. Re-read each before editing.
@@ -66,11 +66,11 @@ In:
 Out:
 
 - **One list across terminals and threads, the dock badge, a jump hotkey.** That is
-  [the second goal](goal-needs-you.md).
+  [the second goal](../../goals/goal-needs-you.md).
 - **Answering a blocked program from outside its terminal.** The app never types for the person
   (Decision D7).
 - **Reading an agent's state off its screen.** A program that sends no reports has no status here. The
-  screen-rule design stays in [the deferred target](../deferred/terminal-runtime-refactor-target.md).
+  screen-rule design stays in [the deferred target](../../deferred/terminal-runtime-refactor-target.md).
 - **The app's own commands sending reports** (`npm run chain`, `apack pack build`). Wanted, and not in
   this goal: a command run as `npm run chain` has `npm` in front, so its records would fail the check
   in Decision D5 until that rule learns npm scripts. Open it as its own change after this goal closes.
@@ -332,7 +332,7 @@ Done when, recorded with screenshots from `.apack/drive/screenshots/`:
 
 - `npm run chain` passes on the final source, and one strict run is dispatched for it:
   `gh workflow run ci.yml --ref <branch> -f strict_chain=true`.
-- [The broker reference](../references/terminal-broker.md) describes statuses: the record, who owns the
+- [The broker reference](../../references/terminal-broker.md) describes statuses: the record, who owns the
   rules, the check against the program in front, and that a record is a claim.
 - The pull request is opened ready for review.
 
@@ -344,10 +344,39 @@ Done when, recorded with screenshots from `.apack/drive/screenshots/`:
 - No timer decides anything about a status. `since_ms` is shown and sorted on, never compared to decide.
 - A fixture never holds screen bytes from an agent's session.
 
-## Current handoff
+## Outcome (2026-11-19)
 
-- **Source:** nothing started. Monorepo `master` at `c7d4ec6ce5`; broker `master` at `db029f4`, which the
-  app pins.
-- **Next:** Phase 0.
-- **Proven:** the facts under Why, on 2026-11-16.
-- **Unresolved:** what Claude Code sends.
+Phases 0 to 4 are implemented, in [spankyed/apack#533](https://github.com/spankyed/apack/pull/533) and, for
+the broker, [spankyed/apack-terminal#57](https://github.com/spankyed/apack-terminal/pull/57), merged as
+`b367539`. What each phase ran and showed is in
+[the evidence record](../../references/evidence/terminal-program-status.md).
+
+- **The broker** keeps a session's records by the specification's rules (`src/status.rs`), says of each
+  whether the program in front of the pty is the one it names, sends the whole set on every change, answers
+  it in facts and session summaries, and can wait on a status. `PROTOCOL_VERSION` is 1.
+- **The host and the SDK** carry the records to a pack as `ProgramStatusRecord`, on `TerminalFacts`,
+  `TerminalSessionSummary` and the `programStatus` terminal event.
+- **The Code feature** holds each terminal's records with whether the person has looked, draws the one that
+  matters on its tab in every layout, drawing faint a record whose program is not the one in front, notifies
+  once for a terminal that newly needs the person (the `terminalStatusNotification` setting), checks the
+  repository when a program stops working, and fires the flow event `terminal.status`.
+- **The contract** is described in [the broker reference](../../references/terminal-broker.md) and the
+  broker's `docs/architecture/protocol.md`.
+
+### Closing, as it went
+
+- **The strict run passed** on the closing source, `8a303d0e9d`, which is the branch merged with `master`:
+  all six jobs, first attempt.
+- **`npm run chain` did not pass in one local run**, in eleven tries. Two stops were defects and were fixed;
+  none of the others was in this goal's code, and each that was tried alone passed alone. The goal was closed
+  on the strict run by the lead developer's decision on 2026-11-19, with that condition recorded as not met.
+  The evidence record has what every run stopped at.
+
+### Not done
+
+- **What Claude Code sends for a permission prompt and for a finished turn was not observed.** The standalone
+  `claude` on the development machine is signed out, so only its support query, `idle`, `working`,
+  `blocked:kind=auth` and its clear were seen. The broker keeps whatever the protocol allows.
+- **Two checks fail under machine load alone**, on any branch: the pack pool's `@slow:` marker gate, whose bar
+  is the run's own p90, and the 30-second poll on a pack reload in
+  `tests/e2e/app-integration/surface-sends.spec.ts`. Neither was changed here.
