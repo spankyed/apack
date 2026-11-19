@@ -73,7 +73,10 @@ echo "  Staging: $APACK_BUILD_ROOT"
 echo -e "${GREEN}✓${NC} Dependencies installed"
 echo ""
 
-# Generate pack entries (safety net — prepare hook covers this during npm install)
+# Generate the built-in pack's entries. Codegen reads each feature's contract with the types the SDK's packages
+# export, which resolve to their dist: a checkout that never built them, as every CI runner's is, reads those types as
+# `any`, and codegen refuses the contract. So the packages are built first
+npm run packages:ensure
 npm run generate:entries -w @app/default-setup
 
 # Step 3: Compile default-setup
