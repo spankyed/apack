@@ -240,6 +240,8 @@ function installedThrough(source: string, fromDir: string): BundledPackage | und
  */
 export function packBundledPackages(packDir: string): { packages: NoticePackage[]; problems: string[] } {
   const dist = path.join(packDir, 'dist');
+  const noBundle = `${dist} holds no bundle: build the pack before packaging`;
+  if (!fs.existsSync(dist)) return { packages: [], problems: [noBundle] };
   const bundles = fs.readdirSync(dist, { recursive: true, encoding: 'utf8' }).filter((file) => /\.(c|m)?js$/.test(file));
   const ids: string[] = [];
   const named = new Map<string, BundledPackage>();
@@ -272,7 +274,7 @@ export function packBundledPackages(packDir: string): { packages: NoticePackage[
     }
     if (!modules.length) problems.push(`${path.relative(packDir, file)} has no source map and names no module, so what it inlined is unknown`);
   }
-  if (!bundles.length) problems.push(`${dist} holds no bundle: build the pack before packaging`);
+  if (!bundles.length) problems.push(noBundle);
   // What the bundlers inject with no module of a package: esbuild's and Vite's helpers, plugin-vue's, and the pack's
   // CSS, which Tailwind writes (the pack builder runs every pack's CSS through it)
   const css = fs.readdirSync(dist, { recursive: true, encoding: 'utf8' }).some((file) => file.endsWith('.css'));

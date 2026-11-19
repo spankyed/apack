@@ -197,6 +197,13 @@ describe('the packages the notices cover', () => {
     expect(packages.map((pkg) => pkg.name).sort()).toEqual(['@vitejs/plugin-vue', 'esbuild', 'vite', 'zod']);
     expect(problems).toEqual([expect.stringMatching(/minified\.mjs has no source map and names no module/)]);
   });
+
+  it('reports a pack never built, with no dist at all, as holding no bundle', () => {
+    const repo = tree({ ...bundlers, 'pack/package.json': JSON.stringify({ name: '@apackdev/pack' }) });
+    expect(packBundledPackages(path.join(repo, 'pack'))).toEqual({
+      packages: [], problems: [`${path.join(repo, 'pack', 'dist')} holds no bundle: build the pack before packaging`],
+    });
+  });
 });
 
 /** The bundlers a pack reader credits, installed inside a fixture pack */
