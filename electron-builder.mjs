@@ -4,7 +4,7 @@ import {execFileSync} from 'node:child_process';
 import {Arch} from 'electron-builder';
 import {createRequire} from 'node:module';
 import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
-import {shipElectronNotices} from './scripts/lib/electron-notices.ts';
+import {electronNoticesPointer, shipElectronNotices} from './scripts/lib/electron-notices.ts';
 import {brokerNoticesFile, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
 
 /**
@@ -56,13 +56,15 @@ export default /** @type import('electron-builder').Configuration */
       : path.join(context.appOutDir, 'resources/app');
     verifyPackagedBuild(appDir, buildRoot);
     execFileSync(process.execPath, ['build/prod/verify-node-modules.mjs', appDir], {stdio: 'inherit'});
-    // Electron's own notices, which electron-builder deletes on macOS (scripts/lib/electron-notices.ts)
+    // Electron's own notices, which electron-builder deletes on macOS, and there the licenses of the frameworks they
+    // don't name (scripts/lib/electron-notices.ts)
     shipElectronNotices({
       platform: context.electronPlatformName,
       appOutDir: context.appOutDir,
       resources: path.join(context.appOutDir, `${productName}.app`, 'Contents/Resources'),
       electronDist: path.join(context.packager.info.projectDir, 'node_modules', 'electron', 'dist'),
       packagedVersion: context.packager.info.framework.version,
+      licensesDir: path.join(context.packager.info.projectDir, 'build', 'licenses'),
     });
     // THIRD-PARTY-NOTICES.txt at the app's root: what it carries and inlines (scripts/lib/third-party-notices.ts). A
     // problem fails a production or beta build there, and is reported here on a preview
@@ -84,7 +86,7 @@ export default /** @type import('electron-builder').Configuration */
       channel: metadata.channel,
       platform: context.electronPlatformName,
       native: [
-        {pointer: "Electron's and Chromium's: LICENSE.electron.txt and LICENSES.chromium.html, in the app's Resources folder on macOS and beside its executable elsewhere"},
+        {pointer: electronNoticesPointer(context.electronPlatformName)},
         {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", file: path.join(appDir, 'node_modules', 'elmdb', 'THIRD-PARTY-NOTICES')},
         {pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin", file: broker ?? null},
       ],

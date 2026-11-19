@@ -9,6 +9,11 @@
  * and puts them nowhere. So on macOS `afterPack` copies them from the installed `electron` package into the
  * bundle's `Contents/Resources`, and on the others it checks they are there — the rename swallows its own
  * failure, and a missing source in `extraResources` is only logged, so neither would fail a build on its own.
+ *
+ * **On macOS Electron carries two frameworks those notices don't name** (`MAC_FRAMEWORKS`): Mantle and ReactiveObjC,
+ * which its updater, Squirrel.Mac, is built with. Their licenses, committed under `build/licenses/` from the commits
+ * Electron's DEPS pins, are copied beside Electron's, and a framework the app carries that nothing credits fails the
+ * build.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -19,6 +24,42 @@ export const ELECTRON_NOTICES = [
   { from: 'LICENSES.chromium.html', to: 'LICENSES.chromium.html' },
 ] as const;
 type Notice = (typeof ELECTRON_NOTICES)[number];
+
+/**
+ * Every framework Electron's macOS app carries, and the license each adds to Electron's notices, from
+ * `build/licenses/`, for one `LICENSES.chromium.html` does not name: it names Electron Framework's libraries and
+ * Squirrel, and not the two Squirrel is built with
+ */
+export const MAC_FRAMEWORKS: readonly { framework: string; license?: { from: string; to: string } }[] = [
+  { framework: 'Electron Framework.framework' },
+  { framework: 'Squirrel.framework' },
+  { framework: 'Mantle.framework', license: { from: 'Mantle-LICENSE.md', to: 'LICENSE.Mantle.md' } },
+  { framework: 'ReactiveObjC.framework', license: { from: 'ReactiveObjC-LICENSE.md', to: 'LICENSE.ReactiveObjC.md' } },
+];
+
+/** Where the app's notices say Electron's are, on the platform it is built for */
+export function electronNoticesPointer(platform: string): string {
+  if (platform !== 'darwin') return "Electron's and Chromium's: LICENSE.electron.txt and LICENSES.chromium.html, beside the app's executable";
+  const frameworks = MAC_FRAMEWORKS.flatMap(({ license }) => (license ? [license.to] : []));
+  return `Electron's and Chromium's: LICENSE.electron.txt and LICENSES.chromium.html in the app's Resources folder, with ${frameworks.join(' and ')} there for the frameworks Electron's updater is built with`;
+}
+
+/**
+ * The licenses of the frameworks the packaged macOS app carries, refusing a framework `MAC_FRAMEWORKS` does not name,
+ * whose license nothing would carry, and one it names that the app no longer carries, whose text is stale
+ */
+function macFrameworkLicenses(frameworksDir: string, licensesDir: string): { from: string; to: string }[] {
+  const carried = fs.existsSync(frameworksDir) ? fs.readdirSync(frameworksDir).filter((name) => name.endsWith('.framework')) : [];
+  const unnamed = carried.filter((name) => !MAC_FRAMEWORKS.some(({ framework }) => framework === name));
+  if (unnamed.length) {
+    throw new Error(`${frameworksDir} holds ${unnamed.join(', ')}, which nothing credits: find each one's license, and add it to MAC_FRAMEWORKS`);
+  }
+  const gone = MAC_FRAMEWORKS.filter(({ framework }) => !carried.includes(framework)).map(({ framework }) => framework);
+  if (gone.length) {
+    throw new Error(`MAC_FRAMEWORKS names ${gone.join(', ')}, which ${frameworksDir} does not hold: remove each one, and its license`);
+  }
+  return MAC_FRAMEWORKS.flatMap(({ license }) => (license ? [{ from: path.join(licensesDir, license.from), to: license.to }] : []));
+}
 
 /**
  * The installed Electron's two files, refusing when they are missing or come from another Electron than the one
@@ -44,19 +85,23 @@ export function electronNoticeSources(electronDist: string, packagedVersion: str
 }
 
 /**
- * Puts Electron's notices where a packaged app carries them: copied into `resources` on macOS; checked beside the
- * executable, in `appOutDir`, on Windows and Linux, where electron-builder put them.
+ * Puts Electron's notices where a packaged app carries them: copied into `resources` on macOS, with the licenses of the
+ * frameworks they don't name; checked beside the executable, in `appOutDir`, on Windows and Linux, where
+ * electron-builder put them.
  */
 export function shipElectronNotices(options: {
   platform: string;
   appOutDir: string;
-  /** The macOS bundle's `Contents/Resources` */
+  /** The macOS bundle's `Contents/Resources`, beside the `Contents/Frameworks` it reads */
   resources: string;
   electronDist: string;
   packagedVersion: string;
+  /** `build/licenses/`, holding `MAC_FRAMEWORKS`' texts */
+  licensesDir: string;
 }): string[] {
   if (options.platform === 'darwin') {
-    return electronNoticeSources(options.electronDist, options.packagedVersion).map(({ from, to }) => {
+    const frameworks = macFrameworkLicenses(path.join(options.resources, '..', 'Frameworks'), options.licensesDir);
+    return [...electronNoticeSources(options.electronDist, options.packagedVersion), ...frameworks].map(({ from, to }) => {
       const destination = path.join(options.resources, to);
       fs.copyFileSync(from, destination);
       return destination;
