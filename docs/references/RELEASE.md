@@ -49,6 +49,10 @@ Then open the app normally. This only needs to be done once per download.
 
 This step is not needed once the app is signed and notarized (see [Code Signing & Notarization](#code-signing--notarization)).
 
+On Linux, the release holds an AppImage and a deb for x64. They need glibc 2.39 or later: Ubuntu 24.04, Debian 13,
+Fedora 40 and newer (see [CI Workflow](#ci-workflow)). Install the deb with `sudo apt install ./<the .deb>`, or make
+the AppImage executable (`chmod +x`) and run it; an AppImage needs FUSE 2 (`libfuse2t64` on Ubuntu 24.04).
+
 ## How a Release Works
 
 ```
@@ -90,7 +94,8 @@ Run `npm run chain` before releasing to validate changes, including migration te
 **Notes:**
 - ASAR is disabled — API server needs direct filesystem access to `node_modules`
 - No native module is rebuilt for Electron's Node: elmdb and `@napi-rs/keyring` are N-API, and the terminal's native half is the `apack-terminal` broker, a binary of its own rather than an addon
-- Target: macOS Apple Silicon (arm64) only
+- Targets: macOS Apple Silicon (arm64) on a Mac, Windows x64 on Windows, and Linux x64 (AppImage and deb) on Linux;
+  each platform's CI workflow builds its own
 - Requires Node >= 23.0.0 and Xcode Command Line Tools
 
 ## Production Debugging
@@ -205,6 +210,16 @@ For local signed builds, create `.env.signing` (gitignored) from `.env.signing.e
 - **Builds**: full 7-step production pipeline
 - **Signs + notarizes**: when secrets are configured
 - **Publishes**: GitHub Release with release files and auto-generated notes
+
+`.github/workflows/build-windows.yml` (`windows-latest`) and `.github/workflows/build-linux.yml` (`ubuntu-24.04`) run
+the same pipeline on the same triggers, unsigned, and upload their release files to the tag's release, which whichever
+workflow finishes first creates. A dispatch builds without publishing; the Linux workflow keeps what it built as the
+run's artifacts.
+
+The Linux release's glibc floor (`GLIBC_FLOOR` in `build-linux.yml`) is the newest glibc any binary the app ships
+needs, and the runner's: 2.39, which the terminal broker apack-terminal publishes needs, and elmdb's binding, built on
+the runner. The workflow reads every ELF file in the packaged app and fails on one needing a newer glibc. Lowering the
+floor means building the broker and elmdb against an older glibc first.
 
 ### GitHub Secrets
 

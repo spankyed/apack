@@ -1,0 +1,165 @@
+name: Build Linux
+
+# **The Linux release: an AppImage and a deb for x64**, built by the same production pipeline as macOS and Windows
+# (`build/build.sh`, which packages with electron-builder's `linux` targets and runs the native smoke check in the
+# packaged app), with the app's CycloneDX SBOM beside them. A tag `v*` uploads them to its GitHub release, which
+# build-mac.yml or this creates; a dispatch builds them and keeps them as the run's artifacts, publishing nothing.
+#
+# **The glibc floor is the newest glibc any binary the app ships needs** (`GLIBC_FLOOR`). The runner's is the same,
+# so the smoke check above runs at the floor. Every ELF file in the packaged app is read after the build: one that
+# needs a glibc past the floor fails it, since that binary wouldn't load on a system at the floor. The terminal
+# broker apack-terminal publishes is built on Ubuntu 24.04 and needs 2.39, and elmdb's binding is built here, on
+# the runner, so the floor is Ubuntu 24.04's. Lowering it means building both against an older glibc.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (e.g. 0.1.0). Leave empty to use package.json version.'
+        required: false
+        type: string
+      channel:
+        description: 'Build channel (production or beta)'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - beta
+
+concurrency:
+  group: release-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+env:
+  GLIBC_FLOOR: '2.39'
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.22.2
+          cache: npm
+      - name: Install pinned npm
+        run: npm install -g npm@11.21.1
+
+      - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+      - uses: ./.github/actions/apack-git
+
+      - name: Detect channel
+        id: channel
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "$TAG_VERSION" == *-beta* ]] || [[ "${{ inputs.channel }}" == "beta" ]]; then
+            echo "is_beta=true" >> "$GITHUB_OUTPUT"
+            echo "product_name=apack Beta" >> "$GITHUB_OUTPUT"
+            echo "release_prefix=apack-Beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_beta=false" >> "$GITHUB_OUTPUT"
+            echo "product_name=apack" >> "$GITHUB_OUTPUT"
+            echo "release_prefix=apack" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag_version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate version matches tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_VERSION="${{ steps.channel.outputs.tag_version }}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "Tag version: $TAG_VERSION"
+          echo "Package version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Build and package
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          BETA_FLAG=""
+          if [ "${{ steps.channel.outputs.is_beta }}" = "true" ]; then
+            BETA_FLAG="-- --beta"
+          fi
+          npm run build:production $BETA_FLAG
+
+      # Each ELF file's newest glibc symbol version, read from its dynamic symbols; the app needs the newest of them
+      - name: Every binary loads at the glibc floor
+        run: |
+          floor="$GLIBC_FLOOR"
+          newest_all=""
+          over=()
+          count=0
+          while IFS= read -r -d '' file; do
+            if ! head -c 4 "$file" | grep -q $'\x7fELF'; then continue; fi
+            count=$((count + 1))
+            newest=$(nm -D --undefined-only "$file" 2> /dev/null | grep -o '@GLIBC_[0-9.]*' | sed 's/@GLIBC_//' | sort -uV | tail -1)
+            [ -z "$newest" ] && continue
+            echo "$newest ${file#dist/linux-unpacked/}"
+            newest_all=$(printf '%s\n%s\n' "$newest_all" "$newest" | sed '/^$/d' | sort -V | tail -1)
+            if [ "$(printf '%s\n%s\n' "$newest" "$floor" | sort -V | tail -1)" != "$floor" ]; then over+=("$newest ${file#dist/linux-unpacked/}"); fi
+          done < <(find dist/linux-unpacked -type f -print0)
+          echo "read $count ELF files; the app needs glibc $newest_all, and the floor is $floor"
+          if [ "$count" -eq 0 ] || [ -z "$newest_all" ]; then
+            echo "::error::No ELF file in dist/linux-unpacked named a glibc version, so none was read"
+            exit 1
+          fi
+          if [ "${#over[@]}" -gt 0 ]; then
+            printf '::error::Past the glibc floor %s: %s\n' "$floor" "${over[@]}"
+            exit 1
+          fi
+
+      - name: Keep the packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ steps.channel.outputs.release_prefix }}
+          path: |
+            dist/${{ steps.channel.outputs.release_prefix }}-*.AppImage
+            dist/${{ steps.channel.outputs.release_prefix }}-*.deb
+            dist/${{ steps.channel.outputs.release_prefix }}-*.cdx.json
+          if-no-files-found: error
+
+      - name: Upload release files to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APP_NAME="${{ steps.channel.outputs.product_name }}"
+          PRERELEASE_FLAG=""
+          if [ "${{ steps.channel.outputs.is_beta }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          # Wait briefly for the macOS workflow to create the release
+          sleep 30
+          # The release prefix, which names the files (electron-builder.mjs), not the product name, which has a space
+          PREFIX="${{ steps.channel.outputs.release_prefix }}"
+          assets=(dist/"${PREFIX}"-*.AppImage dist/"${PREFIX}"-*.deb dist/"${PREFIX}"-*.cdx.json)
+
+          # Upload to existing release, or create if mac workflow hasn't yet
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --generate-notes \
+              --title "${APP_NAME} $GITHUB_REF_NAME" \
+              $PRERELEASE_FLAG \
+              "${assets[@]}" || {
+                status=$?
+                if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+                  gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+                else
+                  exit "$status"
+                fi
+              }
+          fi
