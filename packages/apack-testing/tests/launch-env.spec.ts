@@ -14,6 +14,7 @@ describe('appLaunchEnv', () => {
       PLAYWRIGHT_TEST: 'true',
       APACK_USER_DATA_DIR: '/tmp/data',
       ZDOTDIR: path.join('/tmp/data', 'zsh-config'),
+      APACK_BASHRC: path.join('/tmp/data', 'bash-config', '.bashrc'),
     });
   });
 
