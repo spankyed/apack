@@ -170,6 +170,12 @@ export function chooseLicense(expression: string, carried: Carried): string | un
   return spdxText(choose(tree));
 }
 
+/** Every license an SPDX expression names, without its `+` or exceptions: each part of an AND, each branch of an OR */
+function licensesIn(expression: string): string[] {
+  const leaves = (node: SpdxNode): string[] => ('license' in node ? [node.license] : [...leaves(node.left), ...leaves(node.right)]);
+  return leaves(parse(expression));
+}
+
 /** A package's own license files, read, sorted by name */
 function ownLicenseTexts(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true })
@@ -309,8 +315,11 @@ export function noticeOf(pkg: NoticePackage, licensesDir: string, byName: Readon
   }
   const where = `${repositoryOf(manifest) ?? 'npm'}, ${pkg.name} ${pkg.version}`;
   const author = typeof manifest.author === 'string' ? manifest.author : (manifest.author as { name?: string } | undefined)?.name;
-  const source = SOURCE_NAMED.test(license) ? where
-    : CREATOR_NAMED.test(license) ? `${where}; created by ${CREATORS[pkg.name] ?? author ?? 'its authors'}` : undefined;
+  // Any license the package is named under can ask for these, so `MIT AND MPL-2.0` names the source as MPL-2.0 does
+  const named = licensesIn(license);
+  const creator = named.some((id) => CREATOR_NAMED.test(id));
+  const source = creator || named.some((id) => SOURCE_NAMED.test(id))
+    ? `${where}${creator ? `; created by ${CREATORS[pkg.name] ?? author ?? 'its authors'}` : ''}` : undefined;
   return { package: pkg, declared, license, text: texts.join('\n\n'), source };
 }
 

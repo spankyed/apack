@@ -120,6 +120,17 @@ describe("where a package's text comes from", () => {
     expect(noticeOf(at(caniuse, 'caniuse'), caniuse, new Map()))
       .toMatchObject({ source: 'https://github.com/browserslist/caniuse-lite, caniuse 1.0.0; created by Ben Briggs' });
   });
+
+  it('names them for a license that asks anywhere in an AND, not only first', () => {
+    const root = tree({
+      ...installed('mixed', { license: 'MIT AND MPL-2.0', repository: 'a/mixed' }, { LICENSE: 'x' }),
+      ...installed('data', { license: 'MIT AND CC-BY-4.0', author: 'Ada', repository: 'a/data' }, { LICENSE: 'x' }),
+      ...installed('plain', { license: 'MIT AND ISC' }, { LICENSE: 'x' }),
+    });
+    expect(noticeOf(at(root, 'mixed'), root, new Map())).toMatchObject({ source: 'https://github.com/a/mixed, mixed 1.0.0' });
+    expect(noticeOf(at(root, 'data'), root, new Map())).toMatchObject({ source: 'https://github.com/a/data, data 1.0.0; created by Ada' });
+    expect(noticeOf(at(root, 'plain'), root, new Map())).toMatchObject({ source: undefined });
+  });
 });
 
 describe('the packages the notices cover', () => {
