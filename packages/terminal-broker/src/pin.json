@@ -1,19 +1,21 @@
 {
-  "commit": "b367539c88595320507d6a9f4592b3a7d18b1031",
+  "commit": "3b538ca19733957a56039eb8842aed2156db7a10",
   "files": {
     "darwin-arm64": {
       "COPYRIGHT-rust-library.html": "5647be074c8edf7339fd863055923a8fc80bc5610a8d4661ec3b767b9d392c27",
       "LICENSE-APACHE": "1e02ee38d54daa90e27e8b3b89edfa3bb169543211c0eeccc522fb4f655a114e",
       "LICENSE-MIT": "4eb4e32db6202b8f69f20d72654a29f3cee90b3154375df820b3c47805061e1c",
       "THIRD-PARTY-NOTICES": "1408b8ad5ae95bef4a9029175305323443fdc4e92106f0e70a8982b6a51bd64c",
-      "apack-terminal": "89ea582fd1fa2409be503e3f245e9ed772c90f92b1905aa3fd7c8e3c04de121d"
+      "apack-terminal": "8b08952ccd7577de5279c1264e716db757758c8c7e977b7bdfa9de3b6c6399f6",
+      "apack-terminal.cdx.json": "0f6dc428585ada618b0211e9f0bcde4e73f26d0ee6c167fecfd552af32d035bf"
     },
     "linux-x64": {
       "COPYRIGHT-rust-library.html": "5647be074c8edf7339fd863055923a8fc80bc5610a8d4661ec3b767b9d392c27",
       "LICENSE-APACHE": "1e02ee38d54daa90e27e8b3b89edfa3bb169543211c0eeccc522fb4f655a114e",
       "LICENSE-MIT": "4eb4e32db6202b8f69f20d72654a29f3cee90b3154375df820b3c47805061e1c",
       "THIRD-PARTY-NOTICES": "1408b8ad5ae95bef4a9029175305323443fdc4e92106f0e70a8982b6a51bd64c",
-      "apack-terminal": "f35ae961fd44028ebbcbe81a598d92b856fd376a6ee3536c12022aba2aeea616"
+      "apack-terminal": "a9aada75ce090ab348ae00f9fdcffbff163239e2512e7e35918ba277fc418930",
+      "apack-terminal.cdx.json": "c0dae357091fa958620ce917706162dcda41730ad6cc97a26d043f88501c583a"
     },
     "win32-x64": {
       "COPYRIGHT-rust-library.html": "5647be074c8edf7339fd863055923a8fc80bc5610a8d4661ec3b767b9d392c27",
@@ -21,7 +23,8 @@
       "LICENSE-MIT": "4eb4e32db6202b8f69f20d72654a29f3cee90b3154375df820b3c47805061e1c",
       "OpenConsole.exe": "b17e48b07ef153b420f0a6e178bacd31fb4c3390e21ae746586213fc0719a775",
       "THIRD-PARTY-NOTICES": "1408b8ad5ae95bef4a9029175305323443fdc4e92106f0e70a8982b6a51bd64c",
-      "apack-terminal.exe": "ef990703ae49ea1a3a51d77928166a7bc7977f687630d69b0b187b453afa6119",
+      "apack-terminal.cdx.json": "ebf12fdf843ee8e2b8d76da26018407d6db781f34510ab20af62c5d15c146c7b",
+      "apack-terminal.exe": "e4a30718ff038740e6ab4616483df53a22a0c9897e68677ecb80bae5138d1a9f",
       "conpty.dll": "e971856f89748dc3b458125e9afdd79b5e9574a7c937676116d3cbbd3b71f492"
     }
   }
