@@ -1,7 +1,5 @@
 // A send missing a field is reported against the event its `type` names, not every event of the system,
 // so the error says which event the send is for.
-//
-// @slow: it builds a TypeScript program over the pack to check that diagnostic
 import * as path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
