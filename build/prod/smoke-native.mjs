@@ -46,7 +46,8 @@ function findExecutable() {
     const { productName } = JSON.parse(fs.readFileSync(path.join(appDir, 'build-manifest.json'), 'utf-8'));
     return path.join(unpacked, `${productName}.exe`);
   }
-  // Linux names the executable after the package by default, so take the one file there that is the app
+  // Linux names the executable per channel (electron-builder.mjs, `linuxExecutable`), so take the one file there that
+  // is the app rather than spell the name twice
   const candidates = fs.readdirSync(unpacked, { withFileTypes: true })
     .filter((entry) => entry.isFile() && !ELECTRON_OWN.test(entry.name))
     .filter((entry) => (fs.statSync(path.join(unpacked, entry.name)).mode & 0o111) !== 0)

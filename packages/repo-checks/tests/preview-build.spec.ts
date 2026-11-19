@@ -100,7 +100,7 @@ describe('local preview builds', () => {
 
   it("names a Linux install for its channel, so Beta installs beside production and none takes the CLI's name", async () => {
     const linux = async (env: string) => {
-      const stage = createBuildSession({ APACK_ENV: env });
+      const stage = createBuildSession(env === 'preview' ? previewEnvironment('0.4.0-preview.1', {}) : { APACK_ENV: env });
       dirs.push(stage);
       completeBuildFixture(stage);
       vi.stubEnv('APACK_BUILD_ROOT', stage);
@@ -115,12 +115,14 @@ describe('local preview builds', () => {
     };
     const production = await linux('production');
     const beta = await linux('beta');
+    const preview = await linux('preview');
     expect(production).toEqual({ pkg: 'apack', exe: 'apack-desktop', desktop: 'apack-desktop.desktop', synced: true, mime: ['x-scheme-handler/apack'] });
     expect(beta).toEqual({ pkg: 'apack-beta', exe: 'apack-beta-desktop', desktop: 'apack-beta-desktop.desktop', synced: true, mime: ['x-scheme-handler/apack-beta'] });
+    expect(preview).toEqual({ pkg: 'apack-preview', exe: 'apack-preview-desktop', desktop: 'apack-preview-desktop.desktop', synced: true, mime: ['x-scheme-handler/apack-preview'] });
     // The `apack` command line tool is installed under its own name, which no app executable may take
     const cli = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../apack-cli/package.json'), 'utf8')) as { bin: Record<string, string> };
     expect(Object.keys(cli.bin)).toContain('apack');
-    expect([production.exe, beta.exe]).not.toContain('apack');
+    expect([production.exe, beta.exe, preview.exe]).not.toContain('apack');
   });
 
   it("loads electron-builder's internals at the versions electron-builder itself requires", () => {
