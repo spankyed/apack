@@ -18,7 +18,8 @@
  *
  * **Where a package's text comes from**, first that applies: its own license, licence, notice and copying files, in
  * any case and with any extension; for a platform binary package, which ships none, its parent's (`PLATFORM_PARENTS`);
- * the committed texts of `OVERRIDES`, each with why. A package with none of these is a problem.
+ * the committed texts of `OVERRIDES`, each with why. A package with none of these is a problem. To that, `EXTRAS` adds
+ * the committed texts of what a package's binary is built from, which its own license does not cover.
  *
  * **What licenses it accepts** (`ACCEPTED`): the package's declared SPDX expression, taking from an OR the branch
  * whose license comes first in `ACCEPTED`. LGPL only for a package shipped as its own files, since inlined it would be
@@ -28,11 +29,17 @@
  * **A problem fails a production or beta build and is reported on a preview**, keyed on the build's channel: a
  * release must not ship without a notice it owes, and a developer's preview keeps building while one is being added.
  *
+ * **Third-party code adapted into the app's own files** is credited at the end (`ADAPTED`): each file, where it is from,
+ * and its license's texts, committed under `build/licenses/`. Every shipped source file that says it was adapted,
+ * ported or copied from somewhere is named there or in `ADAPTED_FIRST_PARTY` (`uncreditedAdaptations`, which
+ * `third-party-notices.spec.ts` runs over the tree).
+ *
  * Native code carries notices of its own, which this points to rather than repeats: Electron's and Chromium's
  * (`scripts/lib/electron-notices.ts`), elmdb's binding's and the terminal broker's, each shipped beside its binary.
- * A missing one is a problem. The prebuilt binaries of npm packages (esbuild's, Rollup's, keyring's, fsevents') are
- * credited by their packages' licenses; esbuild's, built with Go, add Go's (`PLATFORM_EXTRAS`), and the Rust
- * standard library and the crates compiled into Rollup's, keyring's and Linux's lzma's carry no notice here.
+ * A missing one is a problem. The prebuilt binaries of npm packages ship no notices of their own: a package's license
+ * covers its own code, and `EXTRAS` adds the texts of what a binary is built from that is not the package's own, Go
+ * for esbuild's and ripgrep and PCRE2 for the `rg` @vscode/ripgrep's install downloads. The Rust standard library and
+ * the crates compiled into Rollup's, keyring's and Linux's lzma's binaries carry no notice here.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -73,9 +80,32 @@ export const PLATFORM_PARENTS: readonly (readonly [pattern: RegExp, parent: stri
   [/^@parcel\/watcher-/, '@parcel/watcher'],
 ];
 
-/** Texts a platform binary package adds to its parent's, for what its binary is built with, committed under `build/licenses/` */
-export const PLATFORM_EXTRAS: readonly (readonly [pattern: RegExp, files: readonly string[], why: string])[] = [
-  [/^@esbuild\//, ['go-LICENSE'], "esbuild's binary is built with Go, whose license asks a binary to carry its notice"],
+/** Texts a package adds to its own, or a platform binary package to its parent's, for what its binary is built from */
+export interface Extra {
+  pattern: RegExp;
+  /** Committed under `build/licenses/` */
+  files: readonly string[];
+  why: string;
+  /**
+   * For a binary the package's install downloads, the release the texts were read for, as the package's own code
+   * declares it: a new release of the package can move the binary without its license files changing, so a build
+   * carrying another release is a problem until the texts are read again (`staleExtras`)
+   */
+  readFor?: { file: string; declared: RegExp; release: string; reread: string };
+}
+
+export const EXTRAS: readonly Extra[] = [
+  { pattern: /^@esbuild\//, files: ['go-LICENSE'], why: "esbuild's binary is built with Go, whose license asks a binary to carry its notice" },
+  {
+    pattern: /^@vscode\/ripgrep$/,
+    files: ['ripgrep-COPYING', 'ripgrep-LICENSE-MIT', 'ripgrep-UNLICENSE', 'pcre2-LICENCE.md'],
+    why: "its install downloads bin/rg from microsoft/ripgrep-prebuilt: ripgrep, built with PCRE2, under licenses that ask a binary to carry them, where the package's own is Microsoft's, for its wrapper",
+    // ripgrep-prebuilt v15.0.1 is ripgrep 15.0.0 built with +pcre2, and its Cargo.lock's pcre2-sys 0.2.10 bundles PCRE2 10.46
+    readFor: {
+      file: 'lib/postinstall.js', declared: /^const VERSION = '([^']+)';$/m, release: 'v15.0.1',
+      reread: "ripgrep's LICENSE-MIT, UNLICENSE and COPYING at the ripgrep tag that release builds, and the LICENCE of the PCRE2 its Cargo.lock's pcre2-sys bundles",
+    },
+  },
 ];
 
 /**
@@ -99,6 +129,63 @@ export const OVERRIDES: Readonly<Record<string, { files: readonly string[]; why:
     platform: 'linux',
   },
 };
+
+/** A file of the app's own adapted from third-party code: where it is from, under what, and the texts that license asks for */
+export interface Adaptation {
+  /** The file, from the repository's root */
+  file: string;
+  upstream: string;
+  license: string;
+  /** Committed under `build/licenses/` */
+  files: readonly string[];
+}
+
+/** The app's own files adapted from third-party code */
+export const ADAPTED: readonly Adaptation[] = [
+  {
+    file: 'packages/default-setup/src/content/actions/codex/_helpers/goal-prompts.ts',
+    upstream: "OpenAI Codex's goal templates, https://github.com/openai/codex, codex-rs/ext/goal/templates/goals",
+    license: 'Apache-2.0',
+    // Apache-2.0 asks a derivative work to carry the license and the upstream's NOTICE
+    files: ['codex-LICENSE', 'codex-NOTICE'],
+  },
+  {
+    file: 'packages/apack-host/src/features/application/fe/input.ts',
+    upstream: "VueUse's useMagicKeys, https://github.com/vueuse/vueuse, packages/core/useMagicKeys",
+    license: 'MIT',
+    files: ['vueuse-LICENSE'],
+  },
+];
+
+/** What a source file says when its code came from elsewhere */
+export const SAYS_ADAPTED = /\b(adapted|ported|copied) from\b/i;
+
+/** Shipped source files that say so of first-party code, each with why, which `uncreditedAdaptations` passes over */
+export const ADAPTED_FIRST_PARTY: Readonly<Record<string, string>> = {};
+
+/** Whether a file, from the repository's root, is source the app ships code from: in a package's `src/` or `native/`, and not a guide */
+export const shippedSource = (file: string): boolean => /^(packages\/[^/]+\/src|native)\//.test(file)
+  && path.posix.basename(file) !== 'CLAUDE.md' && /\.([cm]?[jt]sx?|vue|css|html|md|swift|ps1|sh)$/.test(file);
+
+/**
+ * Of the files given, from the repository's root, each shipped source file that says it was adapted from elsewhere
+ * and that `adapted` does not credit, nor
+ * `firstParty` excuse, and each entry of either naming a file that no longer says so, as a problem
+ */
+export function uncreditedAdaptations(
+  sources: readonly { file: string; text: string }[],
+  adapted: readonly Adaptation[] = ADAPTED,
+  firstParty: Readonly<Record<string, string>> = ADAPTED_FIRST_PARTY,
+): string[] {
+  const saying = new Set(sources.filter(({ file, text }) => shippedSource(file) && SAYS_ADAPTED.test(text)).map(({ file }) => file));
+  const named = new Set([...adapted.map(({ file }) => file), ...Object.keys(firstParty)]);
+  return [
+    ...[...saying].filter((file) => !named.has(file)).map((file) =>
+      `${file} says its code was adapted from elsewhere, and ADAPTED does not credit it: add it with its upstream's license, or to ADAPTED_FIRST_PARTY with why`),
+    ...[...named].filter((file) => !saying.has(file)).map((file) =>
+      `${file} is named in ADAPTED or ADAPTED_FIRST_PARTY, and no shipped source by that name says it was adapted from anything: remove it, and its texts`),
+  ];
+}
 
 /** How the app carries a package: as its own files, inlined into a bundle, or both */
 export type Carried = 'files' | 'inlined' | 'both';
@@ -170,6 +257,12 @@ export function chooseLicense(expression: string, carried: Carried): string | un
   return spdxText(choose(tree));
 }
 
+/** Every license an SPDX expression names, without its `+` or exceptions: each part of an AND, each branch of an OR */
+function licensesIn(expression: string): string[] {
+  const leaves = (node: SpdxNode): string[] => ('license' in node ? [node.license] : [...leaves(node.left), ...leaves(node.right)]);
+  return leaves(parse(expression));
+}
+
 /** A package's own license files, read, sorted by name */
 function ownLicenseTexts(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true })
@@ -234,6 +327,8 @@ function installedThrough(source: string, fromDir: string): BundledPackage | und
  */
 export function packBundledPackages(packDir: string): { packages: NoticePackage[]; problems: string[] } {
   const dist = path.join(packDir, 'dist');
+  const noBundle = `${dist} holds no bundle: build the pack before packaging`;
+  if (!fs.existsSync(dist)) return { packages: [], problems: [noBundle] };
   const bundles = fs.readdirSync(dist, { recursive: true, encoding: 'utf8' }).filter((file) => /\.(c|m)?js$/.test(file));
   const ids: string[] = [];
   const named = new Map<string, BundledPackage>();
@@ -266,7 +361,7 @@ export function packBundledPackages(packDir: string): { packages: NoticePackage[
     }
     if (!modules.length) problems.push(`${path.relative(packDir, file)} has no source map and names no module, so what it inlined is unknown`);
   }
-  if (!bundles.length) problems.push(`${dist} holds no bundle: build the pack before packaging`);
+  if (!bundles.length) problems.push(noBundle);
   // What the bundlers inject with no module of a package: esbuild's and Vite's helpers, plugin-vue's, and the pack's
   // CSS, which Tailwind writes (the pack builder runs every pack's CSS through it)
   const css = fs.readdirSync(dist, { recursive: true, encoding: 'utf8' }).some((file) => file.endsWith('.css'));
@@ -304,18 +399,39 @@ export function noticeOf(pkg: NoticePackage, licensesDir: string, byName: Readon
     texts = OVERRIDES[pkg.name].files.map((file) => fs.readFileSync(path.join(licensesDir, file), 'utf8').replace(/\r\n/g, '\n').trim());
   }
   if (!texts.length) return `${label} ships no license file: add its text to OVERRIDES, with why`;
-  for (const [pattern, files] of PLATFORM_EXTRAS) {
+  for (const { pattern, files } of EXTRAS) {
     if (pattern.test(pkg.name)) texts = [...texts, ...files.map((file) => fs.readFileSync(path.join(licensesDir, file), 'utf8').replace(/\r\n/g, '\n').trim())];
   }
   const where = `${repositoryOf(manifest) ?? 'npm'}, ${pkg.name} ${pkg.version}`;
   const author = typeof manifest.author === 'string' ? manifest.author : (manifest.author as { name?: string } | undefined)?.name;
-  const source = SOURCE_NAMED.test(license) ? where
-    : CREATOR_NAMED.test(license) ? `${where}; created by ${CREATORS[pkg.name] ?? author ?? 'its authors'}` : undefined;
+  // Any license the package is named under can ask for these, so `MIT AND MPL-2.0` names the source as MPL-2.0 does
+  const named = licensesIn(license);
+  const creator = named.some((id) => CREATOR_NAMED.test(id));
+  const source = creator || named.some((id) => SOURCE_NAMED.test(id))
+    ? `${where}${creator ? `; created by ${CREATORS[pkg.name] ?? author ?? 'its authors'}` : ''}` : undefined;
   return { package: pkg, declared, license, text: texts.join('\n\n'), source };
 }
 
-/** The notices' text: a header naming what else carries notices, then each distinct text with the packages it covers */
-export function renderNotices(notices: readonly PackageNotice[], pointers: readonly string[]): string {
+/**
+ * The packages whose binary is another release than their `EXTRAS`' texts were read for, or whose code no longer says
+ * which release it downloads, each as a problem
+ */
+export function staleExtras(packages: readonly NoticePackage[]): string[] {
+  return packages.flatMap((pkg) => EXTRAS.flatMap(({ pattern, readFor }) => {
+    if (!readFor || !pattern.test(pkg.name)) return [];
+    const file = path.join(pkg.dir, readFor.file);
+    const declared = fs.existsSync(file) ? readFor.declared.exec(fs.readFileSync(file, 'utf8'))?.[1] : undefined;
+    if (!declared) return [`${pkg.name}@${pkg.version}'s ${readFor.file} no longer says which release of its binary it downloads, so EXTRAS' texts for it cannot be checked: find where it does, and update readFor`];
+    if (declared === readFor.release) return [];
+    return [`${pkg.name}@${pkg.version} downloads ${declared}, and EXTRAS' texts for it were read for ${readFor.release}: re-read ${readFor.reread}, then update them and readFor`];
+  }));
+}
+
+/**
+ * The notices' text: a header naming what else carries notices, then each distinct text with the packages it covers,
+ * then each file of the app's own adapted from third-party code, with its texts
+ */
+export function renderNotices(notices: readonly PackageNotice[], pointers: readonly string[], adapted: readonly (Adaptation & { text: string })[] = []): string {
   const groups = new Map<string, PackageNotice[]>();
   for (const notice of notices) groups.set(notice.text, [...(groups.get(notice.text) ?? []), notice]);
   const line = (notice: PackageNotice) => `  ${notice.package.name} ${notice.package.version}, ${notice.license}, `
@@ -333,12 +449,14 @@ export function renderNotices(notices: readonly PackageNotice[], pointers: reado
     '',
     "apack is built from its own code and from third-party packages, each under its own license. This file holds the",
     'license and notices of each package the app carries, as files under its node_modules or inlined into its',
-    "bundles; a package carried as files also keeps its own license files beside it. Native code carries its own",
-    'notices beside it:',
+    "bundles; a package carried as files also keeps its own license files beside it. It ends with the licenses of",
+    "third-party code adapted into apack's own files. Native code carries its own notices beside it:",
     '',
     ...pointers.map((pointer) => `  - ${pointer}`),
     '',
     ...sections,
+    ...[...adapted].sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : 0)).map(({ file, upstream, license, text }) =>
+      `${'='.repeat(80)}\nAdapted into apack's own code:\n  ${file}, from ${upstream}, ${license}\n\n${text}\n`),
   ].join('\n');
 }
 
@@ -453,13 +571,14 @@ export function noticePackages(sources: readonly (readonly NoticePackage[])[]): 
 
 /**
  * The terminal broker's notices in the packaged app, `bin/<commit>/<platform>/THIRD-PARTY-NOTICES` of its package,
- * where the install puts what the pinned release publishes beside the binary, or `undefined` when the package holds
- * no build at all
+ * where the install puts what the pinned release publishes beside the binary, for the build's own `<platform>`
+ * (`darwin-arm64`, as `process.platform` and `process.arch` name it), or `undefined` when the package holds no build
+ * for it
  */
-export function brokerNoticesFile(appDir: string): string | undefined {
+export function brokerNoticesFile(appDir: string, platform: string): string | undefined {
   const bin = path.join(appDir, 'node_modules', '@app', 'terminal-broker', 'bin');
-  const builds = fs.existsSync(bin) ? fs.readdirSync(bin).flatMap((commit) =>
-    fs.readdirSync(path.join(bin, commit)).map((platform) => path.join(bin, commit, platform))) : [];
+  const builds = fs.existsSync(bin) ? fs.readdirSync(bin).map((commit) => path.join(bin, commit, platform))
+    .filter((build) => fs.existsSync(build)) : [];
   return builds.length ? path.join(builds[0], 'THIRD-PARTY-NOTICES') : undefined;
 }
 
@@ -482,13 +601,16 @@ export function writeAppNotices(options: {
   bundleRecords: readonly string[];
   /** The built-in packs whose bundles the app ships, by their directory in the repository */
   packDirs: readonly string[];
-  /** `build/licenses/`, holding `OVERRIDES`' texts */
+  /** `build/licenses/`, holding the texts of `OVERRIDES`, `EXTRAS` and `ADAPTED` */
   licensesDir: string;
   channel: string;
   /** The platform the app is built for, which decides which of `OVERRIDES` it carries */
   platform: NodeJS.Platform;
-  /** What else carries notices, named in the header, each with the file that has to exist, or `null` when its binary is missing */
-  native: readonly { pointer: string; file?: string | null }[];
+  /**
+   * What else carries notices, named in the header, each with the file that has to exist, or `null` when its binary is
+   * missing, and why the pointer may be wrong, when it may
+   */
+  native: readonly { pointer: string; file?: string | null; problem?: string }[];
   /** Where to write the app's CycloneDX SBOM (`appSbom`), with what it names beside the packages */
   sbom?: { file: string; app: { name: string; version: string }; identity: SbomIdentity; others: readonly SbomComponent[] };
 }): string[] {
@@ -508,6 +630,7 @@ export function writeAppNotices(options: {
     if (typeof notice === 'string') problems.push(notice);
     else notices.push(notice);
   }
+  problems.push(...staleExtras(packages));
   // An override for a package the app no longer carries is a text nobody reads, and a stale reason
   const carried = new Set(packages.map((pkg) => pkg.name));
   for (const [name, { platform }] of Object.entries(OVERRIDES)) {
@@ -517,11 +640,15 @@ export function writeAppNotices(options: {
       problems.push(`OVERRIDES names ${name}, which now ships its own license file: remove it and its text`);
     }
   }
-  for (const { pointer, file } of options.native) {
+  for (const { pointer, file, problem } of options.native) {
+    if (problem) problems.push(problem);
     if (file === null) problems.push(`No binary was found for ${pointer}`);
     else if (file && !fs.existsSync(file)) problems.push(`${file} is missing, so its binary would ship without its notices`);
   }
-  fs.writeFileSync(path.join(options.appDir, 'THIRD-PARTY-NOTICES.txt'), renderNotices(notices, options.native.map(({ pointer }) => pointer)));
+  const adapted = ADAPTED.map((entry) => ({
+    ...entry, text: entry.files.map((file) => fs.readFileSync(path.join(options.licensesDir, file), 'utf8').replace(/\r\n/g, '\n').trim()).join('\n\n'),
+  }));
+  fs.writeFileSync(path.join(options.appDir, 'THIRD-PARTY-NOTICES.txt'), renderNotices(notices, options.native.map(({ pointer }) => pointer), adapted));
   if (options.sbom) {
     fs.writeFileSync(options.sbom.file, `${JSON.stringify(appSbom(options.sbom.app, packages, options.sbom.identity, options.sbom.others), null, 2)}\n`);
   }

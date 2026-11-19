@@ -4,7 +4,7 @@ import {execFileSync} from 'node:child_process';
 import {Arch} from 'electron-builder';
 import {createRequire} from 'node:module';
 import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
-import {shipElectronNotices} from './scripts/lib/electron-notices.ts';
+import {electronNoticesPointer, ffmpegSource, shipElectronNotices} from './scripts/lib/electron-notices.ts';
 import {brokerNoticesFile, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
 
 /**
@@ -56,18 +56,22 @@ export default /** @type import('electron-builder').Configuration */
       : path.join(context.appOutDir, 'resources/app');
     verifyPackagedBuild(appDir, buildRoot);
     execFileSync(process.execPath, ['build/prod/verify-node-modules.mjs', appDir], {stdio: 'inherit'});
-    // Electron's own notices, which electron-builder deletes on macOS (scripts/lib/electron-notices.ts)
+    // Electron's own notices, which electron-builder deletes on macOS, and there the licenses of the frameworks they
+    // don't name (scripts/lib/electron-notices.ts)
     shipElectronNotices({
       platform: context.electronPlatformName,
       appOutDir: context.appOutDir,
       resources: path.join(context.appOutDir, `${productName}.app`, 'Contents/Resources'),
       electronDist: path.join(context.packager.info.projectDir, 'node_modules', 'electron', 'dist'),
       packagedVersion: context.packager.info.framework.version,
+      licensesDir: path.join(context.packager.info.projectDir, 'build', 'licenses'),
     });
     // THIRD-PARTY-NOTICES.txt at the app's root: what it carries and inlines (scripts/lib/third-party-notices.ts). A
     // problem fails a production or beta build there, and is reported here on a preview
     const projectDir = context.packager.info.projectDir;
-    const broker = brokerNoticesFile(appDir);
+    // The broker built for this platform and arch, named as Node names them, which electron-builder's Arch does for
+    // the x64 and arm64 the app is built for
+    const broker = brokerNoticesFile(appDir, `${context.electronPlatformName}-${Arch[context.arch]}`);
     const electronVersion = context.packager.info.framework.version;
     // The broker's build is under bin/<commit>/<platform>/, so its directory names the commit it was built from
     const brokerCommit = broker && path.basename(path.dirname(path.dirname(broker)));
@@ -82,11 +86,15 @@ export default /** @type import('electron-builder').Configuration */
       channel: metadata.channel,
       platform: context.electronPlatformName,
       native: [
-        {pointer: "Electron's and Chromium's: LICENSE.electron.txt and LICENSES.chromium.html, in the app's Resources folder on macOS and beside its executable elsewhere"},
+        {pointer: electronNoticesPointer(context.electronPlatformName)},
+        // Where FFmpeg's source is, which its LGPL asks for, read for one Electron and a problem for another
+        ffmpegSource(electronVersion),
         {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", file: path.join(appDir, 'node_modules', 'elmdb', 'THIRD-PARTY-NOTICES')},
         {pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin", file: broker ?? null},
       ],
-      // The release's CycloneDX SBOM, beside its installers and named as they are, which the release workflows upload
+      // The release's CycloneDX SBOM, beside its installers, which the release workflows upload by the `*.cdx.json` they
+      // match. Its arch is electron-builder's name for it (x64, arm64), which the macOS and Windows installers share
+      // and the Linux ones don't: the AppImage names x64 x86_64 and the deb amd64 (builder-util's getArtifactArchName)
       sbom: {
         file: path.join(context.outDir, `${releasePrefix}-${metadata.version}-${os}-${Arch[context.arch]}.cdx.json`),
         app: {name: productName, version: metadata.version},

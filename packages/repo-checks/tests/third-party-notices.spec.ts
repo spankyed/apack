@@ -3,11 +3,14 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { population } from '@apackdev/sdk/testing';
 import {
-  OVERRIDES, appSbom, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages, renderNotices, sbomIdentity,
-  writeAppNotices,
+  ADAPTED, ADAPTED_FIRST_PARTY, EXTRAS, OVERRIDES, appSbom, brokerNoticesFile, chooseLicense, declaredLicense, noticeOf, noticePackages,
+  packBundledPackages, renderNotices, sbomIdentity, shippedSource, staleExtras, uncreditedAdaptations, writeAppNotices,
   type NoticePackage,
 } from '../../../scripts/lib/third-party-notices.ts';
+import { repoFiles } from './_support/repo-files.ts';
 
 /**
  * The app's third-party notices (`scripts/lib/third-party-notices.ts`), written by `afterPack` into the packaged app:
@@ -105,6 +108,35 @@ describe("where a package's text comes from", () => {
       .toMatchObject({ license: 'MIT', text: 'esbuild license\n\ngo license' });
   });
 
+  it("adds to a package's own text what its downloaded binary is built from: ripgrep's and PCRE2's to @vscode/ripgrep's", () => {
+    const root = tree(installed('@vscode/ripgrep', { license: 'MIT' }, { LICENSE: 'wrapper license' }));
+    const ripgrep = EXTRAS.find(({ pattern }) => pattern.test('@vscode/ripgrep'))!;
+    const licenses = tree(Object.fromEntries(ripgrep.files.map((file) => [file, `${file} text`])));
+    expect(ripgrep.files).toEqual(['ripgrep-COPYING', 'ripgrep-LICENSE-MIT', 'ripgrep-UNLICENSE', 'pcre2-LICENCE.md']);
+    expect(noticeOf(at(root, '@vscode/ripgrep'), licenses, new Map())).toMatchObject({
+      text: ['wrapper license', ...ripgrep.files.map((file) => `${file} text`)].join('\n\n'),
+    });
+  });
+
+  it('refuses a downloaded binary of another release than its texts were read for, or one its code no longer names', () => {
+    const declaring = (version?: string) => {
+      const root = tree(installed('@vscode/ripgrep', { license: 'MIT' }, version ? { 'lib/postinstall.js': `const X = 1;\nconst VERSION = '${version}';\n` } : {}));
+      return staleExtras([at(root, '@vscode/ripgrep')]);
+    };
+    const { release } = EXTRAS.find(({ pattern }) => pattern.test('@vscode/ripgrep'))!.readFor!;
+    expect(declaring(release)).toEqual([]);
+    expect(declaring('v99.0.0')).toEqual([expect.stringContaining(`downloads v99.0.0, and EXTRAS' texts for it were read for ${release}: re-read ripgrep's`)]);
+    expect(declaring()).toEqual([expect.stringMatching(/lib\/postinstall\.js no longer says which release of its binary it downloads/)]);
+  });
+
+  it("holds the installed @vscode/ripgrep to the release its texts were read for, and every committed text to a file", () => {
+    const dir = path.join(REPO_ROOT, 'node_modules', '@vscode', 'ripgrep');
+    const { version } = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as { version: string };
+    expect(staleExtras([{ name: '@vscode/ripgrep', version, dir, carried: 'files' }])).toEqual([]);
+    const named = [...EXTRAS.flatMap(({ files }) => files), ...Object.values(OVERRIDES).flatMap(({ files }) => files)];
+    expect(named.filter((file) => !fs.existsSync(path.join(REPO_ROOT, 'build', 'licenses', file)))).toEqual([]);
+  });
+
   it('takes a committed override, and names the problem when there is none', () => {
     const licenses = tree({ 'dlv-LICENSE': 'dlv text' });
     const root = tree({ ...installed('dlv', { license: 'MIT' }), ...installed('bare', { license: 'MIT' }) });
@@ -119,6 +151,17 @@ describe("where a package's text comes from", () => {
     const caniuse = tree(installed('caniuse', { license: 'CC-BY-4.0', author: 'Ben Briggs', repository: 'browserslist/caniuse-lite' }, { LICENSE: 'cc' }));
     expect(noticeOf(at(caniuse, 'caniuse'), caniuse, new Map()))
       .toMatchObject({ source: 'https://github.com/browserslist/caniuse-lite, caniuse 1.0.0; created by Ben Briggs' });
+  });
+
+  it('names them for a license that asks anywhere in an AND, not only first', () => {
+    const root = tree({
+      ...installed('mixed', { license: 'MIT AND MPL-2.0', repository: 'a/mixed' }, { LICENSE: 'x' }),
+      ...installed('data', { license: 'MIT AND CC-BY-4.0', author: 'Ada', repository: 'a/data' }, { LICENSE: 'x' }),
+      ...installed('plain', { license: 'MIT AND ISC' }, { LICENSE: 'x' }),
+    });
+    expect(noticeOf(at(root, 'mixed'), root, new Map())).toMatchObject({ source: 'https://github.com/a/mixed, mixed 1.0.0' });
+    expect(noticeOf(at(root, 'data'), root, new Map())).toMatchObject({ source: 'https://github.com/a/data, data 1.0.0; created by Ada' });
+    expect(noticeOf(at(root, 'plain'), root, new Map())).toMatchObject({ source: undefined });
   });
 });
 
@@ -186,6 +229,13 @@ describe('the packages the notices cover', () => {
     expect(packages.map((pkg) => pkg.name).sort()).toEqual(['@vitejs/plugin-vue', 'esbuild', 'vite', 'zod']);
     expect(problems).toEqual([expect.stringMatching(/minified\.mjs has no source map and names no module/)]);
   });
+
+  it('reports a pack never built, with no dist at all, as holding no bundle', () => {
+    const repo = tree({ ...bundlers, 'pack/package.json': JSON.stringify({ name: '@apackdev/pack' }) });
+    expect(packBundledPackages(path.join(repo, 'pack'))).toEqual({
+      packages: [], problems: [`${path.join(repo, 'pack', 'dist')} holds no bundle: build the pack before packaging`],
+    });
+  });
 });
 
 /** The bundlers a pack reader credits, installed inside a fixture pack */
@@ -198,7 +248,8 @@ describe('the notices written into the app', () => {
     const app = tree(installed('ws', { license: 'MIT' }, { LICENSE: 'ws license' }));
     const root = tree(Object.fromEntries(Object.entries(records).map(([name, record]) => [`bundled-packages/${name}`, JSON.stringify(record)])));
     const pack = tree({ 'package.json': '{"name":"@apackdev/pack"}', 'dist/a.js': '// src/a.ts\n', 'src/a.ts': '', ...bundlersFor() });
-    const licenses = tree(Object.fromEntries(Object.values(OVERRIDES).flatMap(({ files }) => files.map((file) => [file, file]))));
+    const committed = [...Object.values(OVERRIDES), ...EXTRAS, ...ADAPTED].flatMap(({ files }) => files);
+    const licenses = tree(Object.fromEntries(committed.map((file) => [file, file])));
     return { app, root, pack, licenses };
   }
   const write = (setup: ReturnType<typeof packaged>, channel: string, extra: Partial<Parameters<typeof writeAppNotices>[0]> = {}) =>
@@ -212,6 +263,11 @@ describe('the notices written into the app', () => {
     const problems = write(setup, 'preview');
     const text = fs.readFileSync(path.join(setup.app, 'THIRD-PARTY-NOTICES.txt'), 'utf8');
     expect(text).toContain('  ws 1.0.0, MIT, shipped\n\nws license');
+    // Each adapted file, with its texts, which the fixture's licenses directory holds as their own names
+    for (const { file, files } of ADAPTED) {
+      expect(text).toContain(`Adapted into apack's own code:\n  ${file}, from `);
+      expect(text).toContain(files.join('\n\n'));
+    }
     // Every override names a package this fixture does not carry
     expect(problems).toEqual(Object.keys(OVERRIDES).map((name) => expect.stringContaining(`OVERRIDES names ${name}`)));
   });
@@ -241,6 +297,30 @@ describe('the notices written into the app', () => {
     expect(problems).toContainEqual('No binary was found for the broker');
   });
 
+  it("reports why a native pointer may be wrong, and still names it in the header", () => {
+    const setup = packaged();
+    expect(write(setup, 'preview', { native: [{ pointer: 'FFmpeg', problem: 'read for another Electron' }] })).toContainEqual('read for another Electron');
+    expect(fs.readFileSync(path.join(setup.app, 'THIRD-PARTY-NOTICES.txt'), 'utf8')).toContain('  - FFmpeg\n');
+  });
+
+  it('reports a carried package whose downloaded binary is another release than its texts were read for', () => {
+    const setup = packaged();
+    for (const [file, text] of Object.entries(installed('@vscode/ripgrep', { license: 'MIT' }, { LICENSE: 'x', 'lib/postinstall.js': "const VERSION = 'v0.0.1';" }))) {
+      fs.mkdirSync(path.dirname(path.join(setup.app, file)), { recursive: true });
+      fs.writeFileSync(path.join(setup.app, file), text);
+    }
+    expect(write(setup, 'preview')).toContainEqual(expect.stringContaining('@vscode/ripgrep@1.0.0 downloads v0.0.1'));
+  });
+
+  it("points at the broker's notices built for the app's own platform, never another's", () => {
+    const broker = 'node_modules/@app/terminal-broker/bin/abc123';
+    const app = tree({ [`${broker}/darwin-arm64/THIRD-PARTY-NOTICES`]: 'x', [`${broker}/darwin-x64/THIRD-PARTY-NOTICES`]: 'x' });
+    expect(brokerNoticesFile(app, 'darwin-x64')).toBe(path.join(app, broker, 'darwin-x64', 'THIRD-PARTY-NOTICES'));
+    expect(brokerNoticesFile(app, 'darwin-arm64')).toBe(path.join(app, broker, 'darwin-arm64', 'THIRD-PARTY-NOTICES'));
+    expect(brokerNoticesFile(app, 'linux-x64')).toBeUndefined();
+    expect(brokerNoticesFile(tree(), 'linux-x64')).toBeUndefined();
+  });
+
   it('renders the same notices from the same packages, whatever order they come in', () => {
     const notices = [
       { package: { name: 'b', version: '1.0.0', dir: '/b', carried: 'files' as const }, declared: 'MIT', license: 'MIT', text: 'same' },
@@ -248,6 +328,47 @@ describe('the notices written into the app', () => {
     ];
     expect(renderNotices(notices, [])).toBe(renderNotices([...notices].reverse(), []));
     expect(renderNotices(notices, [])).toContain('Covering:\n  a 1.0.0, MIT, inlined\n  b 1.0.0, MIT, shipped\n\nsame');
+  });
+});
+
+describe("third-party code adapted into the app's own files", () => {
+  const credit = { file: 'packages/a/src/ported.ts', upstream: 'up', license: 'MIT', files: ['up-LICENSE'] };
+
+  it('reports a shipped source that says it was adapted, ported or copied from elsewhere and is not credited', () => {
+    const sources = ['Adapted from x', 'ported from y', 'Copied from z'].map((text, i) => ({ file: `packages/a/src/f${i}.ts`, text: `// ${text}` }));
+    expect(uncreditedAdaptations(sources, [], {})).toEqual(sources.map(({ file }) => expect.stringContaining(`${file} says its code was adapted from elsewhere, and ADAPTED does not credit it`)));
+  });
+
+  it('passes a credited file or an excused one, and source the app does not ship', () => {
+    const sources = [
+      { file: credit.file, text: '// Ported from up' },
+      { file: 'native/speech/helper.swift', text: '// adapted from our own helper' },
+      { file: 'packages/a/tests/a.spec.ts', text: '// copied from upstream' },
+      { file: 'packages/a/src/CLAUDE.md', text: 'ported from somewhere' },
+      { file: 'packages/a/src/plain.ts', text: '// imported from a module' },
+    ];
+    expect(uncreditedAdaptations(sources, [credit], { 'native/speech/helper.swift': 'first-party' })).toEqual([]);
+  });
+
+  it('reports an entry naming a file that no longer says it was adapted, or is gone', () => {
+    expect(uncreditedAdaptations([{ file: credit.file, text: '// all ours now' }], [credit], { 'native/x.sh': 'why' })).toEqual([
+      expect.stringContaining(`${credit.file} is named in ADAPTED or ADAPTED_FIRST_PARTY, and no shipped source by that name says`),
+      expect.stringContaining('native/x.sh is named in ADAPTED or ADAPTED_FIRST_PARTY'),
+    ]);
+  });
+
+  it('credits every shipped source in the tree that says it was adapted, each with its texts committed', () => {
+    const sources = population('shipped source files', repoFiles('packages', 'native').filter(shippedSource), { atLeast: 500 })
+      .map((file) => ({ file, text: fs.readFileSync(path.join(REPO_ROOT, file), 'utf8') }));
+    expect(uncreditedAdaptations(sources)).toEqual([]);
+    expect(ADAPTED.length + Object.keys(ADAPTED_FIRST_PARTY).length).toBeGreaterThan(0);
+    const named = ADAPTED.flatMap(({ files }) => files);
+    expect(named.filter((file) => !fs.existsSync(path.join(REPO_ROOT, 'build', 'licenses', file)))).toEqual([]);
+  });
+
+  it('ends the notices with each adapted file, where it is from, its license and its texts', () => {
+    const text = renderNotices([], [], [{ ...credit, text: 'up license' }]);
+    expect(text).toContain(`Adapted into apack's own code:\n  ${credit.file}, from up, MIT\n\nup license\n`);
   });
 });
 
