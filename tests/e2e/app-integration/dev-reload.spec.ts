@@ -38,11 +38,30 @@ function renameWrittenDocument(records: LibraryRecord[], from: string, to: strin
  * The test edits the worker's installed build, which later spec files on this worker's app share, so the restore
  * can't live in the test body: a Playwright timeout rejects the test without unwinding it, and a `finally` left
  * unrun would leave the renamed document in that build. A hook runs either way.
+ *
+ * **Restoring the files is half of it: the app has to be reloaded onto them.** The window loads a pack's frontend
+ * from `pack://<id>/builds/<revision>/`, and the protocol serves a file only while the installed build still has
+ * that revision. Put back without a reload, the window keeps the edited build's revision, and every chunk it has not
+ * loaded yet is refused: the next spec on this worker to open the code surface found its canvas missing.
  */
 const originalFiles = new Map<string, Buffer>();
-test.afterEach(() => {
+let reloadedFrom: { apiPort: number; apiToken: string; revision: string } | undefined;
+test.afterEach(async ({ appPage }) => {
   for (const [file, bytes] of originalFiles) fs.writeFileSync(file, bytes);
   originalFiles.clear();
+  if (!reloadedFrom) return;
+  const { apiPort, apiToken, revision } = reloadedFrom;
+  reloadedFrom = undefined;
+  const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: apiToken },
+    body: JSON.stringify({ packId: PACK_ID }),
+  });
+  expect(response.status, await response.text()).toBe(200);
+  // A reloaded frontend's stylesheet is linked from the build the window accepted, so this is the window on the
+  // restored build rather than the API alone
+  await expect.poll(() => appPage.evaluate((base) => document.querySelector(`link[href^="${base}"]`) !== null,
+    `pack://${PACK_ID}/builds/${revision}/`), `the window loads ${PACK_ID} from its restored build`).toBe(true);
 });
 
 test('a rebuilt built-in pack reloads with the content the rebuild changed', async ({ app, appPage, electronApp }) => {
@@ -75,6 +94,7 @@ test('a rebuilt built-in pack reloads with the content the rebuild changed', asy
   const manifest = JSON.parse(originalFiles.get(path.join(installed, PACK_LAYOUT.manifest))!.toString());
   sealPackBuild(installed, manifest, build.integrity.sdkVersion);
 
+  reloadedFrom = { apiPort: apiPort!, apiToken, revision: build.revision };
   const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: apiToken },
