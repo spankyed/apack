@@ -32,7 +32,7 @@
  * (`scripts/lib/electron-notices.ts`), elmdb's binding's and the terminal broker's, each shipped beside its binary.
  * A missing one is a problem. The prebuilt binaries of npm packages (esbuild's, Rollup's, keyring's, fsevents') are
  * credited by their packages' licenses; esbuild's, built with Go, add Go's (`PLATFORM_EXTRAS`), and the Rust
- * standard library compiled into Rollup's and keyring's carries no notice here.
+ * standard library and the crates compiled into Rollup's, keyring's and Linux's lzma's carry no notice here.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';

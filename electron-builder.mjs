@@ -2,6 +2,7 @@ import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {Arch} from 'electron-builder';
+import {createRequire} from 'node:module';
 import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
 import {shipElectronNotices} from './scripts/lib/electron-notices.ts';
 import {brokerNoticesFile, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
@@ -23,6 +24,19 @@ const isPreview = metadata.channel === 'preview';
 const {appId, productName, urlScheme} = metadata;
 // File names without spaces: GitHub rewrites spaces in release asset names, and
 // `apack pack test --channel beta` looks for apack-Beta-<version>-mac-arm64.zip
+/**
+ * The newest glibc any binary the Linux app ships needs: the terminal broker apack-terminal publishes is built on
+ * Ubuntu 24.04 and needs 2.39. It is the deb's `libc6` floor, and build-linux.yml fails when it isn't exactly the
+ * newest need, so it can't drift from the binaries
+ */
+const LINUX_GLIBC_FLOOR = '2.39';
+
+/** electron-builder's own deb dependencies, which a set `depends` replaces: read from its FpmTarget, as it reads them */
+function debDefaultDepends() {
+  const {default: FpmTarget} = createRequire(import.meta.url)('app-builder-lib/out/targets/FpmTarget.js');
+  return FpmTarget.prototype.getDefaultDepends('deb');
+}
+
 export const releasePrefix = productName.replace(/ /g, '-');
 
 // Only include speech helpers for the target platform
@@ -153,6 +167,10 @@ export default /** @type import('electron-builder').Configuration */
   },
   
   linux: {
+    // The deb states its glibc floor to apt, which a set `depends` would otherwise drop with electron-builder's own list
+    // (FpmTarget's defaults, kept): build-linux.yml reads the floor back from the built deb and holds every binary in
+    // the app to it (build/prod/glibc-floor.sh)
+    deb: {depends: [...debDefaultDepends(), `libc6 (>= ${LINUX_GLIBC_FLOOR})`]},
     target: [
       {
         target: 'AppImage',

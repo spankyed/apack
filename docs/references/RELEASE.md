@@ -82,21 +82,24 @@ Run `npm run chain` before releasing to validate changes, including migration te
 | 2. Install | `npm install`, then create a fresh staging directory |
 | 3. Compile DSL | `npm run build:default-setup` (skip with `SKIP_DEFAULT_SETUP_BUILD=1`) |
 | 4. Build packages | API (tsc + tsup), main/preload (Vite), renderer (Vite); outputs go to the staging directory |
-| 5. Native helpers | macOS speech recognition binary |
-| 6. Package | electron-builder → `.app`, `.dmg`, `.zip` in `dist/` |
+| 5. Native helpers | macOS speech recognition binary (macOS only) |
+| 6. Package | electron-builder → on macOS `.app`, `.dmg`, `.zip`; on Windows `.exe`; on Linux `.AppImage`, `.deb`; each with its SBOM, in `dist/` |
 | 7. Verify signing | Validates code signature + notarization (skipped if unsigned) |
 
-**Output:**
+**Output on macOS:**
 - `dist/mac-arm64/apack.app` — app bundle
 - `dist/apack-*.dmg` — installer
 - `dist/apack-*.zip` — archive
+
+On Windows, `dist/apack-*.exe`; on Linux, `dist/apack-*.AppImage` and `dist/apack-*.deb`, unpacked in
+`dist/linux-unpacked`. Each platform's `dist/apack-*.cdx.json` is its SBOM.
 
 **Notes:**
 - ASAR is disabled — API server needs direct filesystem access to `node_modules`
 - No native module is rebuilt for Electron's Node: elmdb and `@napi-rs/keyring` are N-API, and the terminal's native half is the `apack-terminal` broker, a binary of its own rather than an addon
 - Targets: macOS Apple Silicon (arm64) on a Mac, Windows x64 on Windows, and Linux x64 (AppImage and deb) on Linux;
   each platform's CI workflow builds its own
-- Requires Node >= 23.0.0 and Xcode Command Line Tools
+- Requires Node >= 23.0.0, and on macOS the Xcode Command Line Tools
 
 ## Production Debugging
 
@@ -213,13 +216,16 @@ For local signed builds, create `.env.signing` (gitignored) from `.env.signing.e
 
 `.github/workflows/build-windows.yml` (`windows-latest`) and `.github/workflows/build-linux.yml` (`ubuntu-24.04`) run
 the same pipeline on the same triggers, unsigned, and upload their release files to the tag's release, which whichever
-workflow finishes first creates. A dispatch builds without publishing; the Linux workflow keeps what it built as the
-run's artifacts.
+workflow finishes first creates. A dispatch from a branch builds without publishing (one on a tag uploads, as the tag's
+run would); the Linux workflow keeps what a dispatch built as the run's artifacts, for 14 days.
 
-The Linux release's glibc floor (`GLIBC_FLOOR` in `build-linux.yml`) is the newest glibc any binary the app ships
-needs, and the runner's: 2.39, which the terminal broker apack-terminal publishes needs, and elmdb's binding, built on
-the runner. The workflow reads every ELF file in the packaged app and fails on one needing a newer glibc. Lowering the
-floor means building the broker and elmdb against an older glibc first.
+The Linux release's glibc floor is the newest glibc any binary the app ships needs, and the runner's: 2.39, which the
+terminal broker apack-terminal publishes needs (elmdb's binding, built on the runner, needs 2.38, on 2026-11-19). It is
+`LINUX_GLIBC_FLOOR` in `electron-builder.mjs`, which the deb states to apt as `libc6 (>= 2.39)`. The workflow reads the
+floor back from the built deb, and `build/prod/glibc-floor.sh` reads every ELF file in the packaged app: it fails on one
+needing a newer glibc, on one linking glibc whose symbols it couldn't read, and on a floor that isn't the newest need, so
+the floor stated here can't drift from the binaries. Lowering it means building the broker and elmdb against an older
+glibc first.
 
 ### GitHub Secrets
 

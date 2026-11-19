@@ -3,13 +3,15 @@ name: Build Linux
 # **The Linux release: an AppImage and a deb for x64**, built by the same production pipeline as macOS and Windows
 # (`build/build.sh`, which packages with electron-builder's `linux` targets and runs the native smoke check in the
 # packaged app), with the app's CycloneDX SBOM beside them. A tag `v*` uploads them to its GitHub release, which
-# build-mac.yml or this creates; a dispatch builds them and keeps them as the run's artifacts, publishing nothing.
+# build-mac.yml or this creates; a dispatch from a branch builds them and keeps them as the run's artifacts,
+# publishing nothing.
 #
-# **The glibc floor is the newest glibc any binary the app ships needs** (`GLIBC_FLOOR`). The runner's is the same,
-# so the smoke check above runs at the floor. Every ELF file in the packaged app is read after the build: one that
-# needs a glibc past the floor fails it, since that binary wouldn't load on a system at the floor. The terminal
-# broker apack-terminal publishes is built on Ubuntu 24.04 and needs 2.39, and elmdb's binding is built here, on
-# the runner, so the floor is Ubuntu 24.04's. Lowering it means building both against an older glibc.
+# **The glibc floor is the newest glibc any binary the app ships needs**, which the deb states to apt as
+# `libc6 (>= …)` (`LINUX_GLIBC_FLOOR`, electron-builder.mjs). The runner's glibc is the same, so the smoke check above
+# runs at the floor. Every ELF file in the packaged app is read after the build (build/prod/glibc-floor.sh): one past
+# the floor fails it, since it wouldn't load on a system at the floor, and so does a floor that isn't the newest need.
+# The terminal broker apack-terminal publishes is built on Ubuntu 24.04 and needs 2.39; lowering the floor means
+# building it, and elmdb's binding, which is built here on the runner, against an older glibc.
 on:
   push:
     tags: ['v*']
@@ -34,9 +36,6 @@ concurrency:
 
 permissions:
   contents: write
-
-env:
-  GLIBC_FLOOR: '2.39'
 
 jobs:
   build-linux:
@@ -79,7 +78,9 @@ jobs:
           PKG_VERSION=$(node -p "require('./package.json').version")
           echo "Tag version: $TAG_VERSION"
           echo "Package version: $PKG_VERSION"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+          # release.sh tags v<version>-beta.0 on a production release that had no beta
+          # (beta-before-production rule); that tag builds the same version as apack Beta
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ] && [ "$TAG_VERSION" != "${PKG_VERSION}-beta.0" ]; then
             echo "::error::Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION)"
             exit 1
           fi
@@ -94,35 +95,22 @@ jobs:
           fi
           npm run build:production $BETA_FLAG
 
-      # Each ELF file's newest glibc symbol version, read from its dynamic symbols; the app needs the newest of them
-      - name: Every binary loads at the glibc floor
+      - name: Every binary loads at the glibc floor the deb states
         run: |
-          floor="$GLIBC_FLOOR"
-          newest_all=""
-          over=()
-          count=0
-          while IFS= read -r -d '' file; do
-            if ! head -c 4 "$file" | grep -q $'\x7fELF'; then continue; fi
-            count=$((count + 1))
-            newest=$(nm -D --undefined-only "$file" 2> /dev/null | grep -o '@GLIBC_[0-9.]*' | sed 's/@GLIBC_//' | sort -uV | tail -1)
-            [ -z "$newest" ] && continue
-            echo "$newest ${file#dist/linux-unpacked/}"
-            newest_all=$(printf '%s\n%s\n' "$newest_all" "$newest" | sed '/^$/d' | sort -V | tail -1)
-            if [ "$(printf '%s\n%s\n' "$newest" "$floor" | sort -V | tail -1)" != "$floor" ]; then over+=("$newest ${file#dist/linux-unpacked/}"); fi
-          done < <(find dist/linux-unpacked -type f -print0)
-          echo "read $count ELF files; the app needs glibc $newest_all, and the floor is $floor"
-          if [ "$count" -eq 0 ] || [ -z "$newest_all" ]; then
-            echo "::error::No ELF file in dist/linux-unpacked named a glibc version, so none was read"
+          deb=$(ls dist/${{ steps.channel.outputs.release_prefix }}-*.deb)
+          floor=$(dpkg-deb -f "$deb" Depends | sed -n 's/.*libc6 (>= \([0-9.]*\)).*/\1/p')
+          if [ -z "$floor" ]; then
+            echo "::error::$deb states no libc6 floor (electron-builder.mjs, LINUX_GLIBC_FLOOR)"
             exit 1
           fi
-          if [ "${#over[@]}" -gt 0 ]; then
-            printf '::error::Past the glibc floor %s: %s\n' "$floor" "${over[@]}"
-            exit 1
-          fi
+          build/prod/glibc-floor.sh dist/linux-unpacked "$floor"
 
+      # A dispatch's packages, for whoever dispatched it; a tag's are its release's
       - name: Keep the packages
-        uses: actions/upload-artifact@v4
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v6
         with:
+          retention-days: 14
           name: linux-${{ steps.channel.outputs.release_prefix }}
           path: |
             dist/${{ steps.channel.outputs.release_prefix }}-*.AppImage

@@ -36,6 +36,7 @@ const NOT_A_CHAIN_INPUT: Record<string, string> = {
   'build/release/release.sh': 'the release path, which the chain never runs',
   'build/release/beta-tag.sh': 'the release path; its rule is covered by release-beta-rule.test.sh',
   'build/release/unrelease.sh': 'the release path',
+  'build/prod/glibc-floor.sh': "the Linux release's glibc floor, which build-linux.yml checks a packaged app against",
   'build/resources/gen-icons.sh': 'regenerates committed icons by hand',
   'native/speech/macos/build.sh': 'builds the native speech helper, which build:production invokes',
 };

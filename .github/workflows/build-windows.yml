@@ -68,7 +68,9 @@ jobs:
           PKG_VERSION=$(node -p "require('./package.json').version")
           echo "Tag version: $TAG_VERSION"
           echo "Package version: $PKG_VERSION"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+          # release.sh tags v<version>-beta.0 on a production release that had no beta
+          # (beta-before-production rule); that tag builds the same version as apack Beta
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ] && [ "$TAG_VERSION" != "${PKG_VERSION}-beta.0" ]; then
             echo "::error::Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION)"
             exit 1
           fi
