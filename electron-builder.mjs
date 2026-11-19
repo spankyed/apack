@@ -1,7 +1,10 @@
 import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {APP_WORKSPACES, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
+import {Arch} from 'electron-builder';
+import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
+import {shipElectronNotices} from './scripts/lib/electron-notices.ts';
+import {brokerNoticesFile, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
 
 /**
  * Electron Builder Configuration
@@ -39,6 +42,48 @@ export default /** @type import('electron-builder').Configuration */
       : path.join(context.appOutDir, 'resources/app');
     verifyPackagedBuild(appDir, buildRoot);
     execFileSync(process.execPath, ['build/prod/verify-node-modules.mjs', appDir], {stdio: 'inherit'});
+    // Electron's own notices, which electron-builder deletes on macOS (scripts/lib/electron-notices.ts)
+    shipElectronNotices({
+      platform: context.electronPlatformName,
+      appOutDir: context.appOutDir,
+      resources: path.join(context.appOutDir, `${productName}.app`, 'Contents/Resources'),
+      electronDist: path.join(context.packager.info.projectDir, 'node_modules', 'electron', 'dist'),
+      packagedVersion: context.packager.info.framework.version,
+    });
+    // THIRD-PARTY-NOTICES.txt at the app's root: what it carries and inlines (scripts/lib/third-party-notices.ts). A
+    // problem fails a production or beta build there, and is reported here on a preview
+    const projectDir = context.packager.info.projectDir;
+    const broker = brokerNoticesFile(appDir);
+    const electronVersion = context.packager.info.framework.version;
+    // The broker's build is under bin/<commit>/<platform>/, so its directory names the commit it was built from
+    const brokerCommit = broker && path.basename(path.dirname(path.dirname(broker)));
+    const os = {darwin: 'mac', win32: 'win', linux: 'linux'}[context.electronPlatformName];
+    const problems = writeAppNotices({
+      appDir,
+      buildRoot,
+      bundleRecords: APP_WORKSPACES.map(workspace => bundledPackagesFile(buildRoot, workspace)),
+      // The built-in pack, whose dist the app ships from the repository
+      packDirs: [path.join(projectDir, 'packages', 'default-setup')],
+      licensesDir: path.join(projectDir, 'build', 'licenses'),
+      channel: metadata.channel,
+      native: [
+        {pointer: "Electron's and Chromium's: LICENSE.electron.txt and LICENSES.chromium.html, in the app's Resources folder on macOS and beside its executable elsewhere"},
+        {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", file: path.join(appDir, 'node_modules', 'elmdb', 'THIRD-PARTY-NOTICES')},
+        {pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin", file: broker ?? null},
+      ],
+      // The release's CycloneDX SBOM, beside its installers and named as they are, which the release workflows upload
+      sbom: {
+        file: path.join(context.outDir, `${releasePrefix}-${metadata.version}-${os}-${Arch[context.arch]}.cdx.json`),
+        app: {name: productName, version: metadata.version},
+        // The vendored checkouts' packages, by the repository each is pinned from, which no registry publishes
+        identity: sbomIdentity(projectDir, {elmdb: 'elmdb#crates/elmdb-node', 'apack-git': 'apack-git', 'apack-terminal': 'apack-terminal#node', 'apack-terminal-view': 'apack-terminal#view'}),
+        others: [
+          {type: 'framework', name: 'electron', version: electronVersion, purl: `pkg:npm/electron@${electronVersion}`, license: 'MIT'},
+          ...(brokerCommit ? [{type: 'application', name: 'apack-terminal', version: brokerCommit, purl: `pkg:github/spankyed/apack-terminal@${brokerCommit}`, license: 'MIT OR Apache-2.0'}] : []),
+        ],
+      },
+    });
+    for (const problem of problems) console.warn(`  • third-party notices: ${problem}`);
   },
   directories: {
     output: isPreview ? 'dist/preview' : 'dist',
@@ -131,13 +176,12 @@ export default /** @type import('electron-builder').Configuration */
     'packages/**/*',
     'node_modules/**/*',
     '!**/test/**',
-    '!**/*.md',
-    '!**/LICENSE*',
-    // **The terminal broker's install is carried whole, its licenses included.** `@app/terminal-broker` answers
-    // the binary only when every file the pin names for the platform is there, and a release names the notices
-    // its licenses ask a redistribution to carry — so without this the exclusion above leaves a packaged app
-    // with no terminal. `packaged-app-files.spec.ts` holds it
-    'node_modules/@app/terminal-broker/bin/**/*',
+    // **Every license and notice file ships**, the root's and each dependency's, which their licenses ask a
+    // redistribution to carry. Nothing excludes `LICENSE*`, and since matching is case-sensitive, the Markdown
+    // exclusion spares license, licence, notice and copying files in any case: some packages have their license
+    // only as Markdown, esbuild's `LICENSE.md` and `@tiptap/pm`'s `THIRD_PARTY_LICENSES.md` among them
+    // (packaged-app-files.spec.ts)
+    '!**/!(*[Ll][Ii][Cc][Ee][Nn][CcSs][Ee]*|*[Nn][Oo][Tt][Ii][Cc][Ee]*|*[Cc][Oo][Pp][Yy][Ii][Nn][Gg]*).md',
     '!**/.git',
     '!**/*.map',
     '!**/*.d.ts.map',

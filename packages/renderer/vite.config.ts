@@ -1,4 +1,5 @@
-import { appBuildOutput } from '../../build/build-metadata.ts'
+import { appBuildOutput, recordBundledPackages } from '../../build/build-metadata.ts'
+import { rollupBundledPackages } from '@apackdev/host/build/bundled-packages'
 import { fileURLToPath } from 'node:url'
 import { readFileSync } from 'node:fs'
 import { delimiter, dirname, resolve } from 'node:path'
@@ -225,7 +226,15 @@ export default defineConfig(({ command }) => ({
       },
     }),
     vueDevTools(),
+    // What the bundle inlined, for the app's third-party notices (scripts/lib/third-party-notices.ts). Tailwind is
+    // named because its preflight reaches the CSS through PostCSS, which no module id records
+    rollupBundledPackages((packages) => recordBundledPackages('renderer', packages), { fromDir: import.meta.dirname, named: ['tailwindcss'] }),
   ],
+  // Each `?worker` import is a bundle of its own, built with these plugins rather than the ones above: monaco's
+  // editor and language workers inline monaco
+  worker: {
+    plugins: () => [rollupBundledPackages((packages) => recordBundledPackages('renderer', packages), { fromDir: import.meta.dirname })],
+  },
   resolve: {
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     conditions: ['@apackdev/source', ...defaultClientConditions],

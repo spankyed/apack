@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { PACK_BUILD_STAGING_DIR } from '@apackdev/host/build/pack-workdir';
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { readPackBuild } from '@apackdev/host/packs';
 import { replaceDir } from '@apackdev/host/replace-dir';
@@ -11,7 +12,7 @@ export interface PackBuildCandidate {
 
 /** Keep candidates on the same filesystem as dist; the build lock lives outside this cleared tree. */
 export function buildStagingDir(root: string): string {
-  return path.join(root, '.apack', 'build');
+  return path.join(root, PACK_BUILD_STAGING_DIR);
 }
 
 /** The caller holds the pack lock and, for public builds, has waited for compiler process closure. */

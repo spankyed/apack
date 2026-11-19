@@ -302,6 +302,9 @@ async function main(): Promise<void> {
     publishConfig: { access: 'public', provenance: true },
   };
   fs.writeFileSync(path.join(stagedDir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
+  // The license the manifest names, as a file: npm publishes a package's LICENSE whatever its `files` say, and MIT
+  // asks a copy to carry its text. The repository's, whose license the published package is under
+  fs.copyFileSync(path.join(repoRoot, 'LICENSE'), path.join(stagedDir, 'LICENSE'));
   assertPublishedPathsExist(config, pkgDir, stagedDir, pkg.name);
 
   // The declarations must name only packages a consumer installs. `tsc --emitDeclarationOnly` copies a bare

@@ -200,6 +200,26 @@ it("reads a busy pull request's discussion and threads newest first, back to the
   expect(requests.filter(request => request.body.variables.before).map(request => request.body.variables.before)).toEqual(['C', 'T']);
 });
 
+it("reads a long review thread's own comments back to the first, and asks nothing more of a short one", async () => {
+  const comment = (id: number) => ({ id: `RC_${id}`, databaseId: id, body: `reply ${id}`, author: { login: 'hubot' }, createdAt: '' });
+  const { gh, requests } = await api({ graphql: [
+    ['node(id: $id)', request => ({ body: { data: { node: { comments: request.body.variables.before === 'C2'
+      ? { pageInfo: { hasPreviousPage: true, startCursor: 'C1' }, nodes: [comment(2)] }
+      : { pageInfo: { hasPreviousPage: false }, nodes: [comment(1)] } } } } })],
+    ['reviewThreads(', { body: { data: { repository: { pullRequest: { id: 'PR_1', reviewThreads: { pageInfo: { hasPreviousPage: false }, nodes: [
+      { id: 'LONG', isResolved: false, isOutdated: false, path: 'a.ts', line: 1, comments: { pageInfo: { hasPreviousPage: true, startCursor: 'C2' }, nodes: [comment(3)] } },
+      { id: 'SHORT', isResolved: false, isOutdated: false, path: 'a.ts', line: 2, comments: { pageInfo: { hasPreviousPage: false }, nodes: [comment(4)] } },
+    ] } } } } } }],
+  ] });
+
+  const threads = await gh.getReviewThreads(7);
+
+  expect(threads.map(thread => [thread.id, thread.comments.map(c => c.id)])).toEqual([['LONG', ['RC_1', 'RC_2', 'RC_3']], ['SHORT', ['RC_4']]]);
+  expect(requests.filter(request => request.body.query.includes('node(id: $id)')).map(request => request.body.variables)).toEqual([
+    { owner: 'octo', name: 'repo', id: 'LONG', before: 'C2' }, { owner: 'octo', name: 'repo', id: 'LONG', before: 'C1' },
+  ]);
+});
+
 it('asks nothing again of a closed or merged pull request, whose merge state GitHub never works out', async () => {
   const { gh, pauses } = await api({ graphql: [['pullRequest(', { body: { data: { repository: { pullRequest: pullRequestNode({ state: 'MERGED', mergeable: 'UNKNOWN', mergeStateStatus: 'UNKNOWN' }) } } } }]] });
 

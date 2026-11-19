@@ -33,6 +33,7 @@ rather than the script it borrows from. The family is split by subject, not by a
 | `published-ui-types` | `@apackdev/ui`'s declarations compile for a consumer |
 | `published-specifiers`, `published-ui-dist` | what the built `dist` trees contain: declared bare imports, no SFC source shipped, no relative CSS `@import` left |
 | `published-manifest-paths` | that each of the **five** published trees names only files its tarball holds, publishes no `scripts` and ships no `src/`. The only spec here that covers `@apackdev/cli` and `@apackdev/testing` too, because their manifests are generated and their shape is not the other three's |
+| `published-license` | that each published package carries the repository's `LICENSE`: the copies in the three packages staged from their own directory, and every one of the five published trees once built |
 
 `src/published-packages.ts` is the fixture: `installPublishedPackages()` (npm-packs the three into a temp
 `node_modules`), `packedFiles()` (one `npm pack --dry-run`, for a check that needs the file list and not a

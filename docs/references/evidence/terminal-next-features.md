@@ -85,7 +85,8 @@ the pin `3a2140c`. Nothing is pushed or merged; the app pin still names `3a2140c
 - A rerun on `a91ea40` in this session: 429 passed, 1 failed. The failure is
   `keeping::a_session_begins_with_the_screen_its_recording_holds`.
 - That test is flaky, and it is flaky at the pin too: `3a2140c` failed 1 of 4 runs, and `a91ea40` failed 1 of 4 in a
-  separate sample. It is not caused by Phase 1. It is recorded as a pre-existing flake and is not fixed here.
+  separate sample. It is not caused by Phase 1, and Phase 1 left it unfixed. Its cause and fix are under
+  [The flaky case](#the-flaky-case) (spankyed/apack-terminal#46).
 - Mutation check: disabling the shown-rows branch in `fetch` makes
   `lines_fetched_while_the_program_is_holding_the_screen_are_those_from_before_the_hold` fail; restored, it passes.
 

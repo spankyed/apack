@@ -135,27 +135,37 @@ export function createStallTracker(idleMs: number, startedAt: number) {
 const WIN32_PROCESSES = 'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $($_.UserModeTime + $_.KernelModeTime) $(if ($_.CreationDate) { $_.CreationDate.ToFileTimeUtc() } else { 0 })" }';
 
 /**
- * How long one listing of every process answers every reading taken in this process. A listing describes the whole
- * machine, so watchers reading at once need only one, which matters where taking one means starting PowerShell.
+ * How long one listing of every process answers every reading taken in this process, from when it was taken. A
+ * listing describes the whole machine, so watchers reading at once need only one, which matters where taking one
+ * means starting PowerShell.
+ *
+ * From when it finished, and a listing still being taken answers whoever asks meanwhile: on a busy machine a `ps`
+ * takes seconds, and a window counted from its start had lapsed by the time it answered, so the question a watch
+ * asks straight after a reading (`storageHold`) started a second listing behind the first and doubled every reading.
  */
 const LISTING_REUSE_MS = 1_000;
 
 /** The real clock, held before a spec's fake timers could replace it: a listing reused for ever is no reading */
 const realNow = Date.now.bind(Date);
 
-let latest: { readonly at: number; readonly rows: Promise<ProcessRow[] | undefined> } | undefined;
+/** The last listing, and when it finished: absent while it is still being taken */
+let latest: { finishedAt?: number; readonly rows: Promise<ProcessRow[] | undefined> } | undefined;
 
 /** Every process on the machine, or nothing where no listing could be taken */
 function listProcesses(): Promise<ProcessRow[] | undefined> {
-  const at = realNow();
-  if (latest !== undefined && at - latest.at < LISTING_REUSE_MS) return latest.rows;
-  const rows = new Promise<ProcessRow[] | undefined>((resolve) => {
-    execFile(LISTING.file, [...LISTING.args], LISTING.options, (error, stdout) => {
-      resolve(error ? undefined : LISTING.parse(stdout));
-    });
-  });
-  latest = { at, rows };
-  return rows;
+  if (latest !== undefined && (latest.finishedAt === undefined || realNow() - latest.finishedAt < LISTING_REUSE_MS)) {
+    return latest.rows;
+  }
+  const taking: NonNullable<typeof latest> = {
+    rows: new Promise<ProcessRow[] | undefined>((resolve) => {
+      execFile(LISTING.file, [...LISTING.args], LISTING.options, (error, stdout) => {
+        taking.finishedAt = realNow();
+        resolve(error ? undefined : LISTING.parse(stdout));
+      });
+    }),
+  };
+  latest = taking;
+  return taking.rows;
 }
 
 /** How this platform lists every process, and how the listing reads */
@@ -261,10 +271,12 @@ export function treeProcessesIn(rows: ReadonlyArray<TreeProcess & { readonly pgi
 }
 
 /**
- * How long the listing a stall report takes may run. The report is taken at the moment a tree is about to be
- * ended for doing nothing, and a `ps` that hung would keep it alive.
+ * The CPU the listing a stall report takes may spend. The report is taken at the moment a tree is about to be
+ * ended for doing nothing, and a `ps` that hung would keep it alive, so the listing is bounded by its progress: one
+ * doing nothing is ended after `IDLE_MS`, and one only slow on a busy machine is waited for. A listing spends well
+ * under a second.
  */
-const TREE_LISTING_TIMEOUT_MS = 10_000;
+const TREE_LISTING_CPU_MS = 10_000;
 
 /**
  * What each process of `leader`'s tree is doing, for a report that the tree stopped working: nothing where no
@@ -277,18 +289,15 @@ const TREE_LISTING_TIMEOUT_MS = 10_000;
  */
 export function describeTree(leader: number): Promise<string | undefined> {
   if (process.platform === 'win32') return Promise.resolve(undefined);
-  return new Promise((resolve) => {
-    execFile('ps', ['-A', '-o', 'pid=,ppid=,pgid=,stat=,etime=,time=,wchan=,args='],
-      { maxBuffer: 64 * 1024 * 1024, encoding: 'utf8', timeout: TREE_LISTING_TIMEOUT_MS, env: { ...process.env, LC_ALL: 'C' } },
-      (error, stdout) => {
-        if (error) return resolve(undefined);
-        const tree = treeProcessesIn(treeProcessRows(stdout), leader);
-        if (tree.length === 0) return resolve(undefined);
-        resolve(`Its process tree when it was found doing nothing (state D waits on a disk, S on an event, R runs, Z has exited):\n${
-          tree.map((each) => `  pid ${each.pid} (parent ${each.ppid}) ${each.state}, ${each.cpu} CPU in ${each.elapsed}${
-            each.waitingIn === '-' ? '' : `, asleep in ${each.waitingIn}`}: ${each.command.slice(0, 220)}${threadsOf(each.pid)}`).join('\n')}\n${machineWaits()}`);
-      });
-  });
+  return execFileWhileWorking('ps', ['-A', '-o', 'pid=,ppid=,pgid=,stat=,etime=,time=,wchan=,args='],
+    { maxBuffer: 64 * 1024 * 1024, encoding: 'utf8', timeout: TREE_LISTING_CPU_MS, env: { ...process.env, LC_ALL: 'C' } })
+    .then(({ stdout }) => {
+      const tree = treeProcessesIn(treeProcessRows(stdout), leader);
+      if (tree.length === 0) return undefined;
+      return `Its process tree when it was found doing nothing (state D waits on a disk, S on an event, R runs, Z has exited):\n${
+        tree.map((each) => `  pid ${each.pid} (parent ${each.ppid}) ${each.state}, ${each.cpu} CPU in ${each.elapsed}${
+          each.waitingIn === '-' ? '' : `, asleep in ${each.waitingIn}`}: ${each.command.slice(0, 220)}${threadsOf(each.pid)}`).join('\n')}\n${machineWaits()}`;
+    }, () => undefined);
 }
 
 /** A file under `/proc` as text, or nothing where there is none: every reading here is one a system may not give */
