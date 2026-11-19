@@ -67,7 +67,9 @@ export default /** @type import('electron-builder').Configuration */
     // THIRD-PARTY-NOTICES.txt at the app's root: what it carries and inlines (scripts/lib/third-party-notices.ts). A
     // problem fails a production or beta build there, and is reported here on a preview
     const projectDir = context.packager.info.projectDir;
-    const broker = brokerNoticesFile(appDir);
+    // The broker built for this platform and arch, named as Node names them, which electron-builder's Arch does for
+    // the x64 and arm64 the app is built for
+    const broker = brokerNoticesFile(appDir, `${context.electronPlatformName}-${Arch[context.arch]}`);
     const electronVersion = context.packager.info.framework.version;
     // The broker's build is under bin/<commit>/<platform>/, so its directory names the commit it was built from
     const brokerCommit = broker && path.basename(path.dirname(path.dirname(broker)));

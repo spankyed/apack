@@ -4,8 +4,8 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  OVERRIDES, appSbom, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages, renderNotices, sbomIdentity,
-  writeAppNotices,
+  OVERRIDES, appSbom, brokerNoticesFile, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages, renderNotices,
+  sbomIdentity, writeAppNotices,
   type NoticePackage,
 } from '../../../scripts/lib/third-party-notices.ts';
 
@@ -257,6 +257,15 @@ describe('the notices written into the app', () => {
     const problems = write(setup, 'preview', { native: [{ pointer: 'elmdb', file: path.join(setup.app, 'NOTICES') }, { pointer: 'the broker', file: null }] });
     expect(problems).toContainEqual(expect.stringMatching(/NOTICES is missing, so its binary would ship without its notices/));
     expect(problems).toContainEqual('No binary was found for the broker');
+  });
+
+  it("points at the broker's notices built for the app's own platform, never another's", () => {
+    const broker = 'node_modules/@app/terminal-broker/bin/abc123';
+    const app = tree({ [`${broker}/darwin-arm64/THIRD-PARTY-NOTICES`]: 'x', [`${broker}/darwin-x64/THIRD-PARTY-NOTICES`]: 'x' });
+    expect(brokerNoticesFile(app, 'darwin-x64')).toBe(path.join(app, broker, 'darwin-x64', 'THIRD-PARTY-NOTICES'));
+    expect(brokerNoticesFile(app, 'darwin-arm64')).toBe(path.join(app, broker, 'darwin-arm64', 'THIRD-PARTY-NOTICES'));
+    expect(brokerNoticesFile(app, 'linux-x64')).toBeUndefined();
+    expect(brokerNoticesFile(tree(), 'linux-x64')).toBeUndefined();
   });
 
   it('renders the same notices from the same packages, whatever order they come in', () => {

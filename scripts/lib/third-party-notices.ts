@@ -464,13 +464,14 @@ export function noticePackages(sources: readonly (readonly NoticePackage[])[]): 
 
 /**
  * The terminal broker's notices in the packaged app, `bin/<commit>/<platform>/THIRD-PARTY-NOTICES` of its package,
- * where the install puts what the pinned release publishes beside the binary, or `undefined` when the package holds
- * no build at all
+ * where the install puts what the pinned release publishes beside the binary, for the build's own `<platform>`
+ * (`darwin-arm64`, as `process.platform` and `process.arch` name it), or `undefined` when the package holds no build
+ * for it
  */
-export function brokerNoticesFile(appDir: string): string | undefined {
+export function brokerNoticesFile(appDir: string, platform: string): string | undefined {
   const bin = path.join(appDir, 'node_modules', '@app', 'terminal-broker', 'bin');
-  const builds = fs.existsSync(bin) ? fs.readdirSync(bin).flatMap((commit) =>
-    fs.readdirSync(path.join(bin, commit)).map((platform) => path.join(bin, commit, platform))) : [];
+  const builds = fs.existsSync(bin) ? fs.readdirSync(bin).map((commit) => path.join(bin, commit, platform))
+    .filter((build) => fs.existsSync(build)) : [];
   return builds.length ? path.join(builds[0], 'THIRD-PARTY-NOTICES') : undefined;
 }
 
