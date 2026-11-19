@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   OVERRIDES, appSbom, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages, renderNotices, sbomIdentity,
@@ -146,6 +147,21 @@ describe('the packages the notices cover', () => {
     const { packages, problems } = packBundledPackages(path.join(repo, 'pack'));
     expect(problems).toEqual([]);
     expect(packages.map((pkg) => pkg.name).sort()).toEqual(['@vitejs/plugin-vue', 'esbuild', 'linked-view', 'vidstack', 'vite']);
+  });
+
+  it("reads a map source named by its file: URL, as esbuild names one no relative path reaches", () => {
+    const repo = tree({
+      ...bundlers,
+      ...installed('vidstack', { license: 'MIT' }, { 'prod/a.js': '' }),
+      'pack/src/own.ts': '',
+      'pack/package.json': JSON.stringify({ name: '@apackdev/pack' }),
+      'pack/dist/a.js': 'x',
+    });
+    const sources = [path.join(repo, 'node_modules/vidstack/prod/a.js'), path.join(repo, 'pack/src/own.ts')].map((file) => pathToFileURL(file).href);
+    fs.writeFileSync(path.join(repo, 'pack/dist/a.js.map'), JSON.stringify({ sources }));
+    const { packages, problems } = packBundledPackages(path.join(repo, 'pack'));
+    expect(problems).toEqual([]);
+    expect(packages.map((pkg) => pkg.name)).toContain('vidstack');
   });
 
   it('refuses a map source that is not where the build left it, rather than dropping its package', () => {
