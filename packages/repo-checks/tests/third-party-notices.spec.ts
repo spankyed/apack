@@ -4,11 +4,13 @@ import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
+import { population } from '@apackdev/sdk/testing';
 import {
-  EXTRAS, OVERRIDES, appSbom, brokerNoticesFile, chooseLicense, declaredLicense, noticeOf, noticePackages, packBundledPackages,
-  renderNotices, sbomIdentity, staleExtras, writeAppNotices,
+  ADAPTED, ADAPTED_FIRST_PARTY, EXTRAS, OVERRIDES, appSbom, brokerNoticesFile, chooseLicense, declaredLicense, noticeOf, noticePackages,
+  packBundledPackages, renderNotices, sbomIdentity, shippedSource, staleExtras, uncreditedAdaptations, writeAppNotices,
   type NoticePackage,
 } from '../../../scripts/lib/third-party-notices.ts';
+import { repoFiles } from './_support/repo-files.ts';
 
 /**
  * The app's third-party notices (`scripts/lib/third-party-notices.ts`), written by `afterPack` into the packaged app:
@@ -246,7 +248,8 @@ describe('the notices written into the app', () => {
     const app = tree(installed('ws', { license: 'MIT' }, { LICENSE: 'ws license' }));
     const root = tree(Object.fromEntries(Object.entries(records).map(([name, record]) => [`bundled-packages/${name}`, JSON.stringify(record)])));
     const pack = tree({ 'package.json': '{"name":"@apackdev/pack"}', 'dist/a.js': '// src/a.ts\n', 'src/a.ts': '', ...bundlersFor() });
-    const licenses = tree(Object.fromEntries(Object.values(OVERRIDES).flatMap(({ files }) => files.map((file) => [file, file]))));
+    const committed = [...Object.values(OVERRIDES), ...EXTRAS, ...ADAPTED].flatMap(({ files }) => files);
+    const licenses = tree(Object.fromEntries(committed.map((file) => [file, file])));
     return { app, root, pack, licenses };
   }
   const write = (setup: ReturnType<typeof packaged>, channel: string, extra: Partial<Parameters<typeof writeAppNotices>[0]> = {}) =>
@@ -260,6 +263,11 @@ describe('the notices written into the app', () => {
     const problems = write(setup, 'preview');
     const text = fs.readFileSync(path.join(setup.app, 'THIRD-PARTY-NOTICES.txt'), 'utf8');
     expect(text).toContain('  ws 1.0.0, MIT, shipped\n\nws license');
+    // Each adapted file, with its texts, which the fixture's licenses directory holds as their own names
+    for (const { file, files } of ADAPTED) {
+      expect(text).toContain(`Adapted into apack's own code:\n  ${file}, from `);
+      expect(text).toContain(files.join('\n\n'));
+    }
     // Every override names a package this fixture does not carry
     expect(problems).toEqual(Object.keys(OVERRIDES).map((name) => expect.stringContaining(`OVERRIDES names ${name}`)));
   });
@@ -301,7 +309,6 @@ describe('the notices written into the app', () => {
       fs.mkdirSync(path.dirname(path.join(setup.app, file)), { recursive: true });
       fs.writeFileSync(path.join(setup.app, file), text);
     }
-    for (const file of EXTRAS.flatMap(({ files }) => files)) fs.writeFileSync(path.join(setup.licenses, file), file);
     expect(write(setup, 'preview')).toContainEqual(expect.stringContaining('@vscode/ripgrep@1.0.0 downloads v0.0.1'));
   });
 
@@ -321,6 +328,47 @@ describe('the notices written into the app', () => {
     ];
     expect(renderNotices(notices, [])).toBe(renderNotices([...notices].reverse(), []));
     expect(renderNotices(notices, [])).toContain('Covering:\n  a 1.0.0, MIT, inlined\n  b 1.0.0, MIT, shipped\n\nsame');
+  });
+});
+
+describe("third-party code adapted into the app's own files", () => {
+  const credit = { file: 'packages/a/src/ported.ts', upstream: 'up', license: 'MIT', files: ['up-LICENSE'] };
+
+  it('reports a shipped source that says it was adapted, ported or copied from elsewhere and is not credited', () => {
+    const sources = ['Adapted from x', 'ported from y', 'Copied from z'].map((text, i) => ({ file: `packages/a/src/f${i}.ts`, text: `// ${text}` }));
+    expect(uncreditedAdaptations(sources, [], {})).toEqual(sources.map(({ file }) => expect.stringContaining(`${file} says its code was adapted from elsewhere, and ADAPTED does not credit it`)));
+  });
+
+  it('passes a credited file or an excused one, and source the app does not ship', () => {
+    const sources = [
+      { file: credit.file, text: '// Ported from up' },
+      { file: 'native/speech/helper.swift', text: '// adapted from our own helper' },
+      { file: 'packages/a/tests/a.spec.ts', text: '// copied from upstream' },
+      { file: 'packages/a/src/CLAUDE.md', text: 'ported from somewhere' },
+      { file: 'packages/a/src/plain.ts', text: '// imported from a module' },
+    ];
+    expect(uncreditedAdaptations(sources, [credit], { 'native/speech/helper.swift': 'first-party' })).toEqual([]);
+  });
+
+  it('reports an entry naming a file that no longer says it was adapted, or is gone', () => {
+    expect(uncreditedAdaptations([{ file: credit.file, text: '// all ours now' }], [credit], { 'native/x.sh': 'why' })).toEqual([
+      expect.stringContaining(`${credit.file} is named in ADAPTED or ADAPTED_FIRST_PARTY, and no shipped source by that name says`),
+      expect.stringContaining('native/x.sh is named in ADAPTED or ADAPTED_FIRST_PARTY'),
+    ]);
+  });
+
+  it('credits every shipped source in the tree that says it was adapted, each with its texts committed', () => {
+    const sources = population('shipped source files', repoFiles('packages', 'native').filter(shippedSource), { atLeast: 500 })
+      .map((file) => ({ file, text: fs.readFileSync(path.join(REPO_ROOT, file), 'utf8') }));
+    expect(uncreditedAdaptations(sources)).toEqual([]);
+    expect(ADAPTED.length + Object.keys(ADAPTED_FIRST_PARTY).length).toBeGreaterThan(0);
+    const named = ADAPTED.flatMap(({ files }) => files);
+    expect(named.filter((file) => !fs.existsSync(path.join(REPO_ROOT, 'build', 'licenses', file)))).toEqual([]);
+  });
+
+  it('ends the notices with each adapted file, where it is from, its license and its texts', () => {
+    const text = renderNotices([], [], [{ ...credit, text: 'up license' }]);
+    expect(text).toContain(`Adapted into apack's own code:\n  ${credit.file}, from up, MIT\n\nup license\n`);
   });
 });
 
