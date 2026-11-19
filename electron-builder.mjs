@@ -88,7 +88,9 @@ export default /** @type import('electron-builder').Configuration */
         {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", file: path.join(appDir, 'node_modules', 'elmdb', 'THIRD-PARTY-NOTICES')},
         {pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin", file: broker ?? null},
       ],
-      // The release's CycloneDX SBOM, beside its installers and named as they are, which the release workflows upload
+      // The release's CycloneDX SBOM, beside its installers, which the release workflows upload by the `*.cdx.json` they
+      // match. Its arch is electron-builder's name for it (x64, arm64), which the macOS and Windows installers share
+      // and the Linux ones don't: the AppImage names x64 x86_64 and the deb amd64 (builder-util's getArtifactArchName)
       sbom: {
         file: path.join(context.outDir, `${releasePrefix}-${metadata.version}-${os}-${Arch[context.arch]}.cdx.json`),
         app: {name: productName, version: metadata.version},
