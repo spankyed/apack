@@ -50,8 +50,15 @@ Then open the app normally. This only needs to be done once per download.
 This step is not needed once the app is signed and notarized (see [Code Signing & Notarization](#code-signing--notarization)).
 
 On Linux, the release holds an AppImage and a deb for x64. They need glibc 2.39 or later: Ubuntu 24.04, Debian 13,
-Fedora 40 and newer (see [CI Workflow](#ci-workflow)). Install the deb with `sudo apt install ./apack-<version>-linux-amd64.deb`, or
-make `apack-<version>-linux-x86_64.AppImage` executable (`chmod +x`) and run it; an AppImage needs FUSE 2 (`libfuse2t64` on Ubuntu 24.04).
+Fedora 40 and newer (see [CI Workflow](#ci-workflow)). Install the deb with
+`sudo apt install ./apack-<version>-linux-amd64.deb`, or make `apack-<version>-linux-x86_64.AppImage` executable
+(`chmod +x`) and run it; an AppImage needs FUSE 2 (`libfuse2t64` on Ubuntu 24.04).
+
+Each channel installs as its own package beside the others: the deb's package is `apack`, `apack-beta` or
+`apack-preview`, and the app is started as `apack-desktop`, `apack-beta-desktop` or `apack-preview-desktop`, so the
+`apack` command stays the command line tool's. The deb installs electron-builder's AppArmor profile for the app.
+The AppImage has none, and Ubuntu 24.04 restricts the unprivileged user namespaces Chromium's sandbox uses, so there it
+may not start until run with `--no-sandbox` (not yet tried on a desktop, 2026-11-19).
 
 ## How a Release Works
 

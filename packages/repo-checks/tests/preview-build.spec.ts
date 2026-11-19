@@ -98,4 +98,44 @@ describe('local preview builds', () => {
     expect(config.deb.depends).toEqual([...defaults, expect.stringMatching(/^libc6 \(>= \d+\.\d+\)$/)]);
   });
 
+  it("names a Linux install for its channel, so Beta installs beside production and none takes the CLI's name", async () => {
+    const linux = async (env: string) => {
+      const stage = createBuildSession({ APACK_ENV: env });
+      dirs.push(stage);
+      completeBuildFixture(stage);
+      vi.stubEnv('APACK_BUILD_ROOT', stage);
+      vi.resetModules();
+      const configUrl = pathToFileURL(path.resolve(__dirname, '../../../electron-builder.mjs')).href;
+      const config = (await import(configUrl)).default as {
+        deb: { packageName: string }; linux: { executableName: string; syncDesktopName: boolean; mimeTypes: string[] };
+        extraMetadata: { desktopName: string };
+      };
+      return { pkg: config.deb.packageName, exe: config.linux.executableName, desktop: config.extraMetadata.desktopName,
+        synced: config.linux.syncDesktopName, mime: config.linux.mimeTypes };
+    };
+    const production = await linux('production');
+    const beta = await linux('beta');
+    expect(production).toEqual({ pkg: 'apack', exe: 'apack-desktop', desktop: 'apack-desktop.desktop', synced: true, mime: ['x-scheme-handler/apack'] });
+    expect(beta).toEqual({ pkg: 'apack-beta', exe: 'apack-beta-desktop', desktop: 'apack-beta-desktop.desktop', synced: true, mime: ['x-scheme-handler/apack-beta'] });
+    // The `apack` command line tool is installed under its own name, which no app executable may take
+    const cli = JSON.parse(fs.readFileSync(path.resolve(__dirname, '../../apack-cli/package.json'), 'utf8')) as { bin: Record<string, string> };
+    expect(Object.keys(cli.bin)).toContain('apack');
+    expect([production.exe, beta.exe]).not.toContain('apack');
+  });
+
+  it("loads electron-builder's internals at the versions electron-builder itself requires", () => {
+    // electron-builder.mjs and these specs load app-builder-lib and builder-util by their internal paths; a copy at
+    // another version than electron-builder's would be read in its place without a word
+    const root = path.resolve(__dirname, '../../..');
+    const read = (file: string) => JSON.parse(fs.readFileSync(file, 'utf8')) as { dependencies?: Record<string, string>; devDependencies?: Record<string, string> };
+    const builder = read(path.join(root, 'node_modules/electron-builder/package.json')).dependencies!;
+    const pins = { ...read(path.join(root, 'package.json')).devDependencies };
+    const repoChecks = { ...read(path.join(root, 'packages/repo-checks/package.json')).dependencies, ...read(path.join(root, 'packages/repo-checks/package.json')).devDependencies };
+    for (const name of ['app-builder-lib', 'builder-util']) {
+      expect(pins[name], `package.json's ${name}`).toBe(builder[name]);
+      if (repoChecks[name]) expect(repoChecks[name], `packages/repo-checks' ${name}`).toBe(builder[name]);
+      expect(fs.existsSync(path.join(root, 'node_modules/electron-builder/node_modules', name)), `a second ${name} under electron-builder`).toBe(false);
+    }
+  });
+
 });

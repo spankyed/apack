@@ -39,17 +39,28 @@ function debDefaultDepends() {
 // `apack pack test --channel beta` looks for apack-Beta-<version>-mac-arm64.zip
 export const releasePrefix = productName.replace(/ /g, '-');
 
-// Only include speech helpers for the target platform
-const speechResources = process.platform === 'win32'
-  ? [{ from: 'native/speech/windows/SpeechHelper.ps1', to: 'native/speech/SpeechHelper.ps1', filter: ['**/*'] }]
-  : [{ from: 'native/speech/macos/SpeechHelper', to: 'native/speech/SpeechHelper', filter: ['**/*'] }];
+// Only include speech helpers for the target platform; Linux has none
+const speechResources = {
+  win32: [{ from: 'native/speech/windows/SpeechHelper.ps1', to: 'native/speech/SpeechHelper.ps1', filter: ['**/*'] }],
+  darwin: [{ from: 'native/speech/macos/SpeechHelper', to: 'native/speech/SpeechHelper', filter: ['**/*'] }],
+}[process.platform] ?? [];
+
+/**
+ * **A Linux install is named for its channel**, as a Mac's `.app` and Windows' install directory are by `productName`:
+ * electron-builder names the deb's package after package.json's `name` and the executable it links into `/usr/bin`
+ * after the package, both `apack` on every channel, so a Beta deb replaced production and `/usr/bin/apack` took the
+ * name of the `apack` command line tool. The package is the channel's URL scheme (`apack`, `apack-beta`,
+ * `apack-preview`) and the executable that with `-desktop`, and the `.desktop` file is named after the executable, as
+ * Electron's window class is (package.json's `desktopName`), so the dock groups the app's windows under its entry
+ */
+const linuxExecutable = `${urlScheme}-desktop`;
 
 export default /** @type import('electron-builder').Configuration */
 ({
   // Basic configuration
   appId,
   productName,
-  extraMetadata: {version: metadata.version},
+  extraMetadata: {version: metadata.version, desktopName: `${linuxExecutable}.desktop`},
   afterPack: async (context) => {
     const appDir = context.electronPlatformName === 'darwin'
       ? path.join(context.appOutDir, `${productName}.app`, 'Contents/Resources/app')
@@ -169,9 +180,13 @@ export default /** @type import('electron-builder').Configuration */
   // The deb states its glibc floor to apt, on top of electron-builder's own dependencies, which a set `depends` would
   // otherwise replace (FpmTarget's defaults, kept): build-linux.yml reads the floor back from the built deb and holds
   // every binary in the app to it (build/prod/glibc-floor.sh)
-  deb: {depends: [...debDefaultDepends(), `libc6 (>= ${LINUX_GLIBC_FLOOR})`]},
+  deb: {packageName: urlScheme, depends: [...debDefaultDepends(), `libc6 (>= ${LINUX_GLIBC_FLOOR})`]},
 
   linux: {
+    executableName: linuxExecutable,
+    syncDesktopName: true,
+    // The app's links (`apack://…`), which the `.desktop` entry hands it
+    mimeTypes: [`x-scheme-handler/${urlScheme}`],
     target: [
       {
         target: 'AppImage',
