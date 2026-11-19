@@ -110,7 +110,6 @@ jobs:
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
         uses: actions/upload-artifact@v6
         with:
-          retention-days: 14
           name: linux-${{ steps.channel.outputs.release_prefix }}
           path: |
             dist/${{ steps.channel.outputs.release_prefix }}-*.AppImage

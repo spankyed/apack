@@ -22,8 +22,6 @@ const metadata = readBuildManifest(buildRoot);
 const isBeta = metadata.channel === 'beta';
 const isPreview = metadata.channel === 'preview';
 const {appId, productName, urlScheme} = metadata;
-// File names without spaces: GitHub rewrites spaces in release asset names, and
-// `apack pack test --channel beta` looks for apack-Beta-<version>-mac-arm64.zip
 /**
  * The newest glibc any binary the Linux app ships needs: the terminal broker apack-terminal publishes is built on
  * Ubuntu 24.04 and needs 2.39. It is the deb's `libc6` floor, and build-linux.yml fails when it isn't exactly the
@@ -37,6 +35,8 @@ function debDefaultDepends() {
   return FpmTarget.prototype.getDefaultDepends('deb');
 }
 
+// File names without spaces: GitHub rewrites spaces in release asset names, and
+// `apack pack test --channel beta` looks for apack-Beta-<version>-mac-arm64.zip
 export const releasePrefix = productName.replace(/ /g, '-');
 
 // Only include speech helpers for the target platform

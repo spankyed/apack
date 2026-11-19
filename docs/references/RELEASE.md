@@ -217,7 +217,8 @@ For local signed builds, create `.env.signing` (gitignored) from `.env.signing.e
 `.github/workflows/build-windows.yml` (`windows-latest`) and `.github/workflows/build-linux.yml` (`ubuntu-24.04`) run
 the same pipeline on the same triggers, unsigned, and upload their release files to the tag's release, which whichever
 workflow finishes first creates. A dispatch from a branch builds without publishing (one on a tag uploads, as the tag's
-run would); the Linux workflow keeps what a dispatch built as the run's artifacts, for 14 days.
+run would); the Linux workflow keeps what a dispatch from a branch built as the run's artifacts, for the repository's
+artifact retention (2 days, on 2026-11-19).
 
 The Linux release's glibc floor is the newest glibc any binary the app ships needs, and the runner's: 2.39, which the
 terminal broker apack-terminal publishes needs (elmdb's binding, built on the runner, needs 2.38, on 2026-11-19). It is
