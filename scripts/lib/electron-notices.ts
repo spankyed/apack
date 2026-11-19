@@ -14,6 +14,10 @@
  * which its updater, Squirrel.Mac, is built with. Their licenses, committed under `build/licenses/` from the commits
  * Electron's DEPS pins, are copied beside Electron's, and a framework the app carries that nothing credits fails the
  * build.
+ *
+ * **FFmpeg, which Electron builds in on every platform, is under LGPL-2.1-or-later**, which asks a binary's recipient
+ * to be told where its source is: `ffmpegSource` is that pointer, for the notices' header, read for one Electron
+ * (`READ_FOR_ELECTRON`), and a problem for any other.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -36,6 +40,31 @@ export const MAC_FRAMEWORKS: readonly { framework: string; license?: { from: str
   { framework: 'Mantle.framework', license: { from: 'Mantle-LICENSE.md', to: 'LICENSE.Mantle.md' } },
   { framework: 'ReactiveObjC.framework', license: { from: 'ReactiveObjC-LICENSE.md', to: 'LICENSE.ReactiveObjC.md' } },
 ];
+
+/**
+ * The Electron `ffmpegSource` and `MAC_FRAMEWORKS`' licenses were read for: its DEPS at that tag pins `chromium`, whose
+ * DEPS pins `third_party/ffmpeg` at `ffmpeg`, which Electron patches (`patches/ffmpeg` at its tag), and pins the Mantle
+ * and ReactiveObjC commits whose licenses are committed
+ */
+export const READ_FOR_ELECTRON = { electron: '44.9.3', chromium: '152.0.7977.167', ffmpeg: '2b68d2babae73714846961fb0ee47e3b3d2e39a9' } as const;
+
+/**
+ * Where the source of the FFmpeg Electron builds in is, as a pointer for the notices' header, and a problem when the
+ * app packages another Electron than the one it was read for
+ */
+export function ffmpegSource(packagedVersion: string): { pointer: string; problem?: string } {
+  const { electron, chromium, ffmpeg } = READ_FOR_ELECTRON;
+  const pointer = "FFmpeg's, the media library Electron builds in (libffmpeg.dylib, ffmpeg.dll or libffmpeg.so), under "
+    + `LGPL-2.1-or-later: its notice is in LICENSES.chromium.html, and its source is https://chromium.googlesource.com/chromium/third_party/ffmpeg at ${ffmpeg}, `
+    + `the revision Chromium ${chromium} pins, with Electron's patches in https://github.com/electron/electron/tree/v${electron}/patches/ffmpeg`;
+  if (packagedVersion === electron) return { pointer };
+  return {
+    pointer,
+    problem: `The app packages Electron ${packagedVersion}, and FFmpeg's source and the macOS frameworks' licenses were read for Electron ${electron}: `
+      + `read Electron's DEPS at v${packagedVersion} for its chromium_version, mantle_version and reactiveobjc_version, that Chromium's DEPS for its ffmpeg_revision, `
+      + 'and the LICENSE.md of Mantle and ReactiveObjC at those commits, then update READ_FOR_ELECTRON and the texts',
+  };
+}
 
 /** Where the app's notices say Electron's are, on the platform it is built for */
 export function electronNoticesPointer(platform: string): string {

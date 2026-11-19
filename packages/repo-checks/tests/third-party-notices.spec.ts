@@ -289,6 +289,12 @@ describe('the notices written into the app', () => {
     expect(problems).toContainEqual('No binary was found for the broker');
   });
 
+  it("reports why a native pointer may be wrong, and still names it in the header", () => {
+    const setup = packaged();
+    expect(write(setup, 'preview', { native: [{ pointer: 'FFmpeg', problem: 'read for another Electron' }] })).toContainEqual('read for another Electron');
+    expect(fs.readFileSync(path.join(setup.app, 'THIRD-PARTY-NOTICES.txt'), 'utf8')).toContain('  - FFmpeg\n');
+  });
+
   it('reports a carried package whose downloaded binary is another release than its texts were read for', () => {
     const setup = packaged();
     for (const [file, text] of Object.entries(installed('@vscode/ripgrep', { license: 'MIT' }, { LICENSE: 'x', 'lib/postinstall.js': "const VERSION = 'v0.0.1';" }))) {

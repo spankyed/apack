@@ -3,7 +3,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
-import { ELECTRON_NOTICES, MAC_FRAMEWORKS, electronNoticesPointer, shipElectronNotices } from '../../../scripts/lib/electron-notices.ts';
+import {
+  ELECTRON_NOTICES, MAC_FRAMEWORKS, READ_FOR_ELECTRON, electronNoticesPointer, ffmpegSource, shipElectronNotices,
+} from '../../../scripts/lib/electron-notices.ts';
 
 /**
  * Electron's notices in the packaged app: copied into the bundle on macOS, where electron-builder deletes them,
@@ -77,6 +79,22 @@ describe("Electron's notices in the packaged app", () => {
     for (const { license } of MAC_FRAMEWORKS) {
       if (license) expect(fs.existsSync(path.join(REPO_ROOT, 'build', 'licenses', license.from)), license.from).toBe(true);
     }
+  });
+
+  it("points at FFmpeg's source for the Electron it was read for, and is a problem for another", () => {
+    const { electron, chromium, ffmpeg } = READ_FOR_ELECTRON;
+    const read = ffmpegSource(electron);
+    expect(read.problem).toBeUndefined();
+    expect(read.pointer).toContain(`https://chromium.googlesource.com/chromium/third_party/ffmpeg at ${ffmpeg}, the revision Chromium ${chromium} pins`);
+    expect(read.pointer).toContain(`https://github.com/electron/electron/tree/v${electron}/patches/ffmpeg`);
+    const problem = ffmpegSource('99.0.0').problem;
+    expect(problem).toContain(`The app packages Electron 99.0.0, and FFmpeg's source and the macOS frameworks' licenses were read for Electron ${electron}`);
+    expect(problem).toContain("read Electron's DEPS at v99.0.0");
+  });
+
+  it('was read for the Electron this repository installs', () => {
+    const { version } = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'node_modules', 'electron', 'package.json'), 'utf8')) as { version: string };
+    expect(ffmpegSource(version).problem).toBeUndefined();
   });
 
   it('refuses the notices of another Electron than the one packaged', () => {

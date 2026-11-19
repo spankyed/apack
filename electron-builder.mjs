@@ -4,7 +4,7 @@ import {execFileSync} from 'node:child_process';
 import {Arch} from 'electron-builder';
 import {createRequire} from 'node:module';
 import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
-import {electronNoticesPointer, shipElectronNotices} from './scripts/lib/electron-notices.ts';
+import {electronNoticesPointer, ffmpegSource, shipElectronNotices} from './scripts/lib/electron-notices.ts';
 import {brokerNoticesFile, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
 
 /**
@@ -87,6 +87,8 @@ export default /** @type import('electron-builder').Configuration */
       platform: context.electronPlatformName,
       native: [
         {pointer: electronNoticesPointer(context.electronPlatformName)},
+        // Where FFmpeg's source is, which its LGPL asks for, read for one Electron and a problem for another
+        ffmpegSource(electronVersion),
         {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", file: path.join(appDir, 'node_modules', 'elmdb', 'THIRD-PARTY-NOTICES')},
         {pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin", file: broker ?? null},
       ],

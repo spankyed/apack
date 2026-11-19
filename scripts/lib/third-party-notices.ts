@@ -539,8 +539,11 @@ export function writeAppNotices(options: {
   channel: string;
   /** The platform the app is built for, which decides which of `OVERRIDES` it carries */
   platform: NodeJS.Platform;
-  /** What else carries notices, named in the header, each with the file that has to exist, or `null` when its binary is missing */
-  native: readonly { pointer: string; file?: string | null }[];
+  /**
+   * What else carries notices, named in the header, each with the file that has to exist, or `null` when its binary is
+   * missing, and why the pointer may be wrong, when it may
+   */
+  native: readonly { pointer: string; file?: string | null; problem?: string }[];
   /** Where to write the app's CycloneDX SBOM (`appSbom`), with what it names beside the packages */
   sbom?: { file: string; app: { name: string; version: string }; identity: SbomIdentity; others: readonly SbomComponent[] };
 }): string[] {
@@ -570,7 +573,8 @@ export function writeAppNotices(options: {
       problems.push(`OVERRIDES names ${name}, which now ships its own license file: remove it and its text`);
     }
   }
-  for (const { pointer, file } of options.native) {
+  for (const { pointer, file, problem } of options.native) {
+    if (problem) problems.push(problem);
     if (file === null) problems.push(`No binary was found for ${pointer}`);
     else if (file && !fs.existsSync(file)) problems.push(`${file} is missing, so its binary would ship without its notices`);
   }
