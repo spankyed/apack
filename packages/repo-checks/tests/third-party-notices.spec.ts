@@ -188,7 +188,7 @@ describe('the notices written into the app', () => {
   const write = (setup: ReturnType<typeof packaged>, channel: string, extra: Partial<Parameters<typeof writeAppNotices>[0]> = {}) =>
     writeAppNotices({
       appDir: setup.app, buildRoot: setup.root, bundleRecords: [path.join(setup.root, 'bundled-packages', 'main.json')],
-      packDirs: [setup.pack], licensesDir: setup.licenses, channel, native: [], ...extra,
+      packDirs: [setup.pack], licensesDir: setup.licenses, channel, platform: 'linux', native: [], ...extra,
     });
 
   it('writes each text with the packages it covers', () => {
@@ -198,6 +198,16 @@ describe('the notices written into the app', () => {
     expect(text).toContain('  ws 1.0.0, MIT, shipped\n\nws license');
     // Every override names a package this fixture does not carry
     expect(problems).toEqual(Object.keys(OVERRIDES).map((name) => expect.stringContaining(`OVERRIDES names ${name}`)));
+  });
+
+  it("asks a platform's override of that platform's build alone", () => {
+    const linuxOnly = Object.entries(OVERRIDES).filter(([, { platform }]) => platform === 'linux').map(([name]) => name);
+    expect(linuxOnly).toContain('@napi-rs/lzma-linux-x64-gnu');
+    const stale = (platform: NodeJS.Platform) =>
+      write(packaged(), 'preview', { platform }).filter((problem) => linuxOnly.some((name) => problem.includes(`OVERRIDES names ${name}`)));
+    expect(stale('linux')).toHaveLength(linuxOnly.length);
+    expect(stale('darwin')).toEqual([]);
+    expect(stale('win32')).toEqual([]);
   });
 
   it('fails a production or beta build on a problem, and reports it on a preview', () => {

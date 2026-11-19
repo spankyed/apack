@@ -66,6 +66,7 @@ export default /** @type import('electron-builder').Configuration */
       packDirs: [path.join(projectDir, 'packages', 'default-setup')],
       licensesDir: path.join(projectDir, 'build', 'licenses'),
       channel: metadata.channel,
+      platform: context.electronPlatformName,
       native: [
         {pointer: "Electron's and Chromium's: LICENSE.electron.txt and LICENSES.chromium.html, in the app's Resources folder on macOS and beside its executable elsewhere"},
         {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", file: path.join(appDir, 'node_modules', 'elmdb', 'THIRD-PARTY-NOTICES')},
