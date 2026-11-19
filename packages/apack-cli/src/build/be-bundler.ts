@@ -153,16 +153,23 @@ function capturedSourcesPlugin(compilation: CompilationInputs, workingDir: strin
  * another drive than the pack, so a `file:` URL is projected too; any other scheme names no file and is kept. An
  * origin still on another drive than the map is named by its own `file:` URL.
  */
-export function sourceMapOrigins(text: string, file: string, tree: Pick<CompilerReadTree, 'sourcePath'>): string {
+export function sourceMapOrigins(
+  text: string,
+  file: string,
+  tree: Pick<CompilerReadTree, 'sourcePath'>,
+  // The platform's path rules, which a spec replaces with Windows' to reach the cross-drive case on any machine
+  paths: typeof path = path,
+): string {
+  const windows = paths.sep === '\\';
   const map = JSON.parse(text);
   map.sources = map.sources.map((source: string) => {
     const url = source.startsWith('file:');
-    if (/^[a-z][\w+.-]*:/i.test(source) && !path.isAbsolute(source) && !url) return source;
-    const readPath = url ? fileURLToPath(source) : path.resolve(path.dirname(file), map.sourceRoot ?? '', source);
+    if (/^[a-z][\w+.-]*:/i.test(source) && !paths.isAbsolute(source) && !url) return source;
+    const readPath = url ? fileURLToPath(source, { windows }) : paths.resolve(paths.dirname(file), map.sourceRoot ?? '', source);
     const original = tree.sourcePath(readPath);
     if (original === readPath) return source;
-    const relative = path.relative(path.dirname(file), original);
-    return path.isAbsolute(relative) ? pathToFileURL(original).href : relative.split(path.sep).join('/');
+    const relative = paths.relative(paths.dirname(file), original);
+    return paths.isAbsolute(relative) ? pathToFileURL(original, { windows }).href : relative.split(paths.sep).join('/');
   });
   return JSON.stringify(map);
 }
