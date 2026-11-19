@@ -1,6 +1,6 @@
 # Evidence: a terminal's program status (OSC 7501)
 
-Checkpoint log for [the program status goal](../../goals/goal-terminal-program-status.md). Each phase adds a
+Checkpoint log for [the program status goal](../../archive/goals/goal-terminal-program-status.md). Each phase adds a
 section with its date, what was run, what it showed and what was not verified.
 
 ## Phase 0. What the two agents send (2026-11-17)
@@ -195,26 +195,44 @@ seconds apart in one terminal; a second terminal's `sh -c` printed a record nami
 in the same read, since a program's records go with its command. A status is only ever seen from a
 program that keeps running.
 
-## Closing (2026-11-17)
+## Closing (2026-11-17 to 2026-11-19)
 
-Source: `4fde23efdc` on `session/terminal-program-status`
-([spankyed/apack#533](https://github.com/spankyed/apack/pull/533)).
+Source: `session/terminal-program-status`
+([spankyed/apack#533](https://github.com/spankyed/apack/pull/533)). The branch was merged with `master` twice
+while closing: `5e11427c03`, which took `master`'s packaging change and elmdb pin, and `0725fbca4a`, which
+took `master`'s broker pin, `3b538ca`. That pin is a later commit of the broker's `master` and contains
+`b367539`; the protocol module and the generated types are the same at both.
 
-### The strict run: passed
+### The strict runs: passed
 
-`gh workflow run ci.yml --ref session/terminal-program-status -f strict_chain=true`,
-[run 44158508186](https://github.com/spankyed/apack/actions/runs/44158508186) on `4fde23efdc`: all six jobs
-passed — producers, both integration shards, both native shards, and the app half with the remaining checks.
+`gh workflow run ci.yml --ref session/terminal-program-status -f strict_chain=true`:
 
-The app half passed on its second attempt. On the first, one e2e spec of 52 failed,
-`tests/e2e/ui/settings-help.spec.ts:53`, on a 10-second wait for a surface to be selected. It does not
-touch a terminal, and passed unchanged when the job was run again. Its cause was not diagnosed.
+| Run | Source | Result |
+|---|---|---|
+| [44158508186](https://github.com/spankyed/apack/actions/runs/44158508186) | `4fde23efdc`, before either merge | All six jobs passed. The app half passed on its second attempt |
+| [44563012157](https://github.com/spankyed/apack/actions/runs/44563012157) | `5e11427c03`, the first merge | All six jobs passed on the first attempt |
+
+The six jobs are producers, both integration shards, both native shards, and the app half with the remaining
+checks.
+
+In the first run's app half, one e2e spec of 52 failed on the first attempt,
+`tests/e2e/ui/settings-help.spec.ts:53`, on a 10-second wait for a surface to be selected. It does not touch
+a terminal, and passed unchanged when the job was run again. Its cause was not diagnosed.
 
 Two earlier dispatches were cancelled because they were on commits before a fix.
 
+### The second merge, checked alone
+
+`0725fbca4a` differs from the source of the second strict run by the broker pin only. Against the pinned
+release build of `3b538ca`, on the development machine:
+
+- `packages/apack-host/tests/broker/program-status.spec.ts`, which starts a real broker: 3 of 3.
+- `tests/e2e/app-integration/terminal-view.spec.ts` and `surface-sends.spec.ts`: 10 of 10.
+
 ### The local chain: not passed in one run
 
-`npm run chain` was run six times on this branch and never passed whole. What each run stopped at:
+`npm run chain` was run eleven times on this branch and never passed whole. Runs 1 to 6 were on the source
+before the first merge, runs 7 to 11 on `5e11427c03`. What each stopped at:
 
 | Run | Stopped at | Cause |
 |---|---|---|
@@ -223,19 +241,31 @@ Two earlier dispatches were cancelled because they were on commits before a fix.
 | 3 | `test:integration` | `spec-durations-reporter.integration.spec.ts`, a CPU-measurement case. Passed alone three times of three |
 | 4, 5 | `test:unit:pack` | **Caused by this change, fixed** (`4fde23efdc`): every test passed, and the new backend spec sat in the pool's slow tail, which moved the tail's edge past a spec marked `@slow`. Split into two specs |
 | 6 | `test:integration` | Not diagnosed. Stopped by hand |
+| 7 | `test:e2e`, 3 of 52 | `surface-sends.spec.ts:116` on a 30-second poll for a pack reload, and `terminal-view.spec.ts:79` and `:143` on waits for a program's output. Both files passed alone, 10 of 10 |
+| 8, 9 | `test:unit:pack` | The `@slow:` marker gate, with all 1752 tests passing. `harness-app-stop.spec.ts` and `send-to-system-diagnostics.spec.ts`, neither changed here, read below the pool's p90, which was 9.1 s and then 10.6 s. Run 10 passed this step unchanged once `npm run check:idle` passed |
+| 10 | `test:native` | Docker was not running, so the step exited at once |
+| 11 | `test:e2e`, 1 of 52, and `test:native`, 1 of 79 | `surface-sends.spec.ts:116` again: the app's log shows the reload taking 40 s, against 2 s when the file is run alone. And `frontend-resources-watch.native.spec.ts`, "watches initially empty external Tailwind content through nested directory links", on a build deadline after the step had run 100 minutes in the container; the step reported its process tree waiting on storage for 95 s. That case was not run alone |
 
-The machine was the limit for the runs that were not defects: its load average read between 30 and 260 on
-ten cores through the afternoon, most of it macOS file indexing (`fseventsd`, `mds_stores`,
-`StorageManagementService`), and it slept during one run. `npm run check:idle` refused it throughout.
+The machine was the limit for the runs that were not defects. On 2026-11-17 its load average read between 30
+and 260 on ten cores, most of it macOS file indexing (`fseventsd`, `mds_stores`,
+`StorageManagementService`), and it slept during one run. On 2026-11-19 it read between 30 and 80, from other
+work running on the machine.
 
-So the goal's closing condition "`npm run chain` passes on the final source" is **not met**, and the goal is
-not archived. Every step of the chain has passed on this branch in some run, and the strict run passed all
-of them on the final commit; neither is the single local pass the condition asks for.
+So the goal's closing condition "`npm run chain` passes on the final source" is **not met**. Every step of
+the chain has passed on this branch in some run, and the strict runs passed all of them; neither is the
+single local pass the condition asks for. The goal was closed on the strict run by the lead developer's
+decision on 2026-11-19, with this recorded.
 
 ### What the closing runs found beyond the goal
 
-- **The packaged app would have had no terminal** since the pin first named the broker's notices, which
-  `master`'s pin already did. Fixed here, with the packaging spec holding a notice to it.
+- **The packaged app would have had no terminal**: it left out the broker's license files, and the resolver
+  answers no binary without them. `49df58fb43` fixed that here; `master` fixed it too, by shipping every
+  license file, and the first merge took `master`'s `electron-builder.mjs` and `packaged-app-files.spec.ts`
+  in place of this branch's.
 - **`packaged-app-files.spec.ts` passed in run 1 and failed in run 2 with nothing about it changed.** Its
-  population is what the install put in `packages/terminal-broker/bin`, which no step's fingerprint covers,
-  so the host pool had kept an earlier result. The spec now also asks about a path it names itself.
+  population was what the install put in `packages/terminal-broker/bin`, which no step's fingerprint covered,
+  so the host pool had kept an earlier result. Whether `master`'s version of the spec has the same gap was
+  not checked.
+- **Two checks fail under load alone**: the pack pool's `@slow:` marker gate, whose bar is the run's own p90
+  and so rises with the slowest files while a spec that mostly waits stays where it was, and the 30-second
+  poll on a pack reload in `surface-sends.spec.ts`. Neither was changed here.
