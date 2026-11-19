@@ -36,6 +36,7 @@
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import parse, { type Node as SpdxNode } from 'spdx-expression-parse';
 import satisfies from 'spdx-satisfies';
 import { bundledPackages, installedPackage, type BundledPackage } from '@apackdev/host/build/bundled-packages';
@@ -243,7 +244,9 @@ export function packBundledPackages(packDir: string): { packages: NoticePackage[
       const { sources = [] } = JSON.parse(fs.readFileSync(`${file}.map`, 'utf8')) as { sources?: string[] };
       // A pack is built in a staging directory and copied, so a source's relative path is the staging directory's
       const staged = path.join(packDir, PACK_BUILD_STAGING_DIR, path.dirname(bundle));
-      for (const source of sources) {
+      for (const entry of sources) {
+        // A source no relative path reaches, such as one on another drive than the map on Windows, is a `file:` URL
+        const source = entry.startsWith('file:') ? fileURLToPath(entry) : entry;
         const installed = installedThrough(source, packDir);
         if (installed) { named.set(installed.dir, installed); continue; }
         if (source.startsWith('\0')) { ids.push(source); continue; }
