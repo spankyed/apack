@@ -365,7 +365,8 @@ the broker, [spankyed/apack-terminal#57](https://github.com/spankyed/apack-termi
 
 ### Closing, as it went
 
-- **The strict run passed** on the branch merged with `master`: all six jobs, first attempt.
+- **The strict run passed** on the closing source, `8a303d0e9d`, which is the branch merged with `master`:
+  all six jobs, first attempt.
 - **`npm run chain` did not pass in one local run**, in eleven tries. Two stops were defects and were fixed;
   none of the others was in this goal's code, and each that was tried alone passed alone. The goal was closed
   on the strict run by the lead developer's decision on 2026-11-19, with that condition recorded as not met.

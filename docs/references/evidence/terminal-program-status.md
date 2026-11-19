@@ -211,6 +211,7 @@ took `master`'s broker pin, `3b538ca`. That pin is a later commit of the broker'
 |---|---|---|
 | [44158508186](https://github.com/spankyed/apack/actions/runs/44158508186) | `4fde23efdc`, before either merge | All six jobs passed. The app half passed on its second attempt |
 | [44563012157](https://github.com/spankyed/apack/actions/runs/44563012157) | `5e11427c03`, the first merge | All six jobs passed on the first attempt |
+| [44574494019](https://github.com/spankyed/apack/actions/runs/44574494019) | `8a303d0e9d`, the second merge and the closure | All six jobs passed on the first attempt |
 
 The six jobs are producers, both integration shards, both native shards, and the app half with the remaining
 checks.
