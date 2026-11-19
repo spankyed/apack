@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -76,6 +77,25 @@ describe('local preview builds', () => {
     const name = config.artifactName
       .replace('${version}', '0.4.0-beta.1').replace('${os}', 'mac').replace('${arch}', 'arm64').replace('${ext}', 'zip');
     expect(name).toBe('apack-Beta-0.4.0-beta.1-mac-arm64.zip');
+  });
+
+  it("is a configuration electron-builder takes, whose deb keeps electron-builder's dependencies and states the glibc floor", async () => {
+    const stage = createBuildSession({ APACK_ENV: 'production' });
+    dirs.push(stage);
+    completeBuildFixture(stage);
+    vi.stubEnv('APACK_BUILD_ROOT', stage);
+    vi.resetModules();
+    const configUrl = pathToFileURL(path.resolve(__dirname, '../../../electron-builder.mjs')).href;
+    const config = (await import(configUrl)).default as { deb: { depends: string[] } };
+    // electron-builder checks its configuration against its schema only when it packages, after the whole build
+    const require = createRequire(path.resolve(__dirname, '../../../package.json'));
+    const { validateConfiguration } = require('app-builder-lib/out/util/config/config.js');
+    const { DebugLogger } = require('builder-util/out/DebugLogger.js');
+    await expect(validateConfiguration(config, new DebugLogger(false))).resolves.toBeUndefined();
+    const { default: FpmTarget } = require('app-builder-lib/out/targets/FpmTarget.js');
+    const defaults: string[] = FpmTarget.prototype.getDefaultDepends('deb');
+    expect(defaults.length).toBeGreaterThan(0);
+    expect(config.deb.depends).toEqual([...defaults, expect.stringMatching(/^libc6 \(>= \d+\.\d+\)$/)]);
   });
 
 });

@@ -32,10 +32,11 @@
  * (`scripts/lib/electron-notices.ts`), elmdb's binding's and the terminal broker's, each shipped beside its binary.
  * A missing one is a problem. The prebuilt binaries of npm packages (esbuild's, Rollup's, keyring's, fsevents') are
  * credited by their packages' licenses; esbuild's, built with Go, add Go's (`PLATFORM_EXTRAS`), and the Rust
- * standard library compiled into Rollup's and keyring's carries no notice here.
+ * standard library and the crates compiled into Rollup's, keyring's and Linux's lzma's carry no notice here.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import parse, { type Node as SpdxNode } from 'spdx-expression-parse';
 import satisfies from 'spdx-satisfies';
 import { bundledPackages, installedPackage, type BundledPackage } from '@apackdev/host/build/bundled-packages';
@@ -77,8 +78,12 @@ export const PLATFORM_EXTRAS: readonly (readonly [pattern: RegExp, files: readon
   [/^@esbuild\//, ['go-LICENSE'], "esbuild's binary is built with Go, whose license asks a binary to carry its notice"],
 ];
 
-/** Texts for packages that ship no license file, committed under `build/licenses/`, each with why */
-export const OVERRIDES: Readonly<Record<string, { files: readonly string[]; why: string }>> = {
+/**
+ * Texts for packages that ship no license file, committed under `build/licenses/`, each with why. One a single
+ * platform's build carries, a platform binary whose parent isn't installed, names that platform: a build for another
+ * doesn't carry the package, and doesn't call the override stale for it
+ */
+export const OVERRIDES: Readonly<Record<string, { files: readonly string[]; why: string; platform?: NodeJS.Platform }>> = {
   dlv: { files: ['dlv-LICENSE'], why: 'declares MIT and ships no license file, nor does its repository' },
   '@ai-sdk/provider-utils': {
     files: ['vercel-ai-LICENSE', 'Apache-2.0.txt'],
@@ -87,6 +92,11 @@ export const OVERRIDES: Readonly<Record<string, { files: readonly string[]; why:
   'apack-terminal': {
     files: ['apack-terminal-LICENSE-MIT'],
     why: "the terminal broker's protocol package, whose license files are at its repository's root, outside it",
+  },
+  '@napi-rs/lzma-linux-x64-gnu': {
+    files: ['napi-rs-lzma-LICENSE'],
+    why: "Rollup's optional dependency on Linux x64, without its parent @napi-rs/lzma: it declares MIT, and neither it, its parent nor their repository ships a license file",
+    platform: 'linux',
   },
 };
 
@@ -234,7 +244,9 @@ export function packBundledPackages(packDir: string): { packages: NoticePackage[
       const { sources = [] } = JSON.parse(fs.readFileSync(`${file}.map`, 'utf8')) as { sources?: string[] };
       // A pack is built in a staging directory and copied, so a source's relative path is the staging directory's
       const staged = path.join(packDir, PACK_BUILD_STAGING_DIR, path.dirname(bundle));
-      for (const source of sources) {
+      for (const entry of sources) {
+        // A source no relative path reaches, such as one on another drive than the map on Windows, is a `file:` URL
+        const source = entry.startsWith('file:') ? fileURLToPath(entry) : entry;
         const installed = installedThrough(source, packDir);
         if (installed) { named.set(installed.dir, installed); continue; }
         if (source.startsWith('\0')) { ids.push(source); continue; }
@@ -473,6 +485,8 @@ export function writeAppNotices(options: {
   /** `build/licenses/`, holding `OVERRIDES`' texts */
   licensesDir: string;
   channel: string;
+  /** The platform the app is built for, which decides which of `OVERRIDES` it carries */
+  platform: NodeJS.Platform;
   /** What else carries notices, named in the header, each with the file that has to exist, or `null` when its binary is missing */
   native: readonly { pointer: string; file?: string | null }[];
   /** Where to write the app's CycloneDX SBOM (`appSbom`), with what it names beside the packages */
@@ -496,7 +510,8 @@ export function writeAppNotices(options: {
   }
   // An override for a package the app no longer carries is a text nobody reads, and a stale reason
   const carried = new Set(packages.map((pkg) => pkg.name));
-  for (const name of Object.keys(OVERRIDES)) {
+  for (const [name, { platform }] of Object.entries(OVERRIDES)) {
+    if (platform && platform !== options.platform) continue;
     if (!carried.has(name)) problems.push(`OVERRIDES names ${name}, which the app no longer carries: remove it and its text`);
     else if (byName.get(name)!.some((pkg) => ownLicenseTexts(pkg.dir).length)) {
       problems.push(`OVERRIDES names ${name}, which now ships its own license file: remove it and its text`);
