@@ -1,0 +1,152 @@
+name: Build Linux
+
+# **The Linux release: an AppImage and a deb for x64**, built by the same production pipeline as macOS and Windows
+# (`build/build.sh`, which packages with electron-builder's `linux` targets and runs the native smoke check in the
+# packaged app), with the app's CycloneDX SBOM beside them. A tag `v*` uploads them to its GitHub release, which
+# build-mac.yml or this creates; a dispatch from a branch builds them and keeps them as the run's artifacts,
+# publishing nothing.
+#
+# **The glibc floor is the newest glibc any binary the app ships needs**, which the deb states to apt as
+# `libc6 (>= …)` (`LINUX_GLIBC_FLOOR`, electron-builder.mjs). The runner's glibc is the same, so the smoke check above
+# runs at the floor. Every ELF file in the packaged app is read after the build (build/prod/glibc-floor.sh): one past
+# the floor fails it, since it wouldn't load on a system at the floor, and so does a floor that isn't the newest need.
+# The terminal broker apack-terminal publishes is built on Ubuntu 24.04 and needs 2.39; lowering the floor means
+# building it, and elmdb's binding, which is built here on the runner, against an older glibc.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (e.g. 0.1.0). Leave empty to use package.json version.'
+        required: false
+        type: string
+      channel:
+        description: 'Build channel (production or beta)'
+        required: false
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - beta
+
+concurrency:
+  group: release-linux-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24.22.2
+          cache: npm
+      - name: Install pinned npm
+        run: npm install -g npm@11.21.1
+
+      - uses: ./.github/actions/elmdb
+      - uses: ./.github/actions/apack-terminal
+      - uses: ./.github/actions/apack-git
+
+      - name: Detect channel
+        id: channel
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "$TAG_VERSION" == *-beta* ]] || [[ "${{ inputs.channel }}" == "beta" ]]; then
+            echo "is_beta=true" >> "$GITHUB_OUTPUT"
+            echo "product_name=apack Beta" >> "$GITHUB_OUTPUT"
+            echo "release_prefix=apack-Beta" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_beta=false" >> "$GITHUB_OUTPUT"
+            echo "product_name=apack" >> "$GITHUB_OUTPUT"
+            echo "release_prefix=apack" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag_version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate version matches tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG_VERSION="${{ steps.channel.outputs.tag_version }}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          echo "Tag version: $TAG_VERSION"
+          echo "Package version: $PKG_VERSION"
+          # release.sh tags v<version>-beta.0 on a production release that had no beta
+          # (beta-before-production rule); that tag builds the same version as apack Beta
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ] && [ "$TAG_VERSION" != "${PKG_VERSION}-beta.0" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION)"
+            exit 1
+          fi
+
+      - name: Build and package
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          BETA_FLAG=""
+          if [ "${{ steps.channel.outputs.is_beta }}" = "true" ]; then
+            BETA_FLAG="-- --beta"
+          fi
+          npm run build:production $BETA_FLAG
+
+      - name: Every binary loads at the glibc floor the deb states
+        run: |
+          deb=$(ls dist/${{ steps.channel.outputs.release_prefix }}-*.deb)
+          floor=$(dpkg-deb -f "$deb" Depends | sed -n 's/.*libc6 (>= \([0-9.]*\)).*/\1/p')
+          if [ -z "$floor" ]; then
+            echo "::error::$deb states no libc6 floor (electron-builder.mjs, LINUX_GLIBC_FLOOR)"
+            exit 1
+          fi
+          build/prod/glibc-floor.sh dist/linux-unpacked "$floor"
+
+      # A dispatch's packages, for whoever dispatched it; a tag's are its release's
+      - name: Keep the packages
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: linux-${{ steps.channel.outputs.release_prefix }}
+          path: |
+            dist/${{ steps.channel.outputs.release_prefix }}-*.AppImage
+            dist/${{ steps.channel.outputs.release_prefix }}-*.deb
+            dist/${{ steps.channel.outputs.release_prefix }}-*.cdx.json
+          if-no-files-found: error
+
+      - name: Upload release files to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          APP_NAME="${{ steps.channel.outputs.product_name }}"
+          PRERELEASE_FLAG=""
+          if [ "${{ steps.channel.outputs.is_beta }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          # Wait briefly for the macOS workflow to create the release
+          sleep 30
+          # The release prefix, which names the files (electron-builder.mjs), not the product name, which has a space
+          PREFIX="${{ steps.channel.outputs.release_prefix }}"
+          assets=(dist/"${PREFIX}"-*.AppImage dist/"${PREFIX}"-*.deb dist/"${PREFIX}"-*.cdx.json)
+
+          # Upload to existing release, or create if mac workflow hasn't yet
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --generate-notes \
+              --title "${APP_NAME} $GITHUB_REF_NAME" \
+              $PRERELEASE_FLAG \
+              "${assets[@]}" || {
+                status=$?
+                if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+                  gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+                else
+                  exit "$status"
+                fi
+              }
+          fi
