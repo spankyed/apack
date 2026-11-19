@@ -31,6 +31,27 @@ describe("a pack's source map origins", () => {
     expect(project([pathToFileURL(read).href])).toEqual(['../../../src/__generated__/ref.ts']);
   });
 
+  describe('under Windows path rules', () => {
+    // The read tree mirrors each original path under a temporary directory on C:, as createCompilerReadTree does
+    const temp = 'C:\\Users\\runner\\AppData\\Local\\Temp\\apack-build-inputs-x\\apack-inputs-1-y\\443a5c';
+    const winTree = {
+      sourcePath: (file: string) => (file.startsWith(`${temp}\\`) ? `${file.slice(temp.length + 1, temp.length + 2)}:${file.slice(temp.length + 2)}` : file),
+    };
+    const winMap = 'D:\\a\\apack\\packages\\default-setup\\.apack\\build\\runtime\\index.cjs.map';
+    const winProject = (sources: string[]) =>
+      (JSON.parse(sourceMapOrigins(JSON.stringify({ version: 3, sources }), winMap, winTree, path.win32)) as { sources: string[] }).sources;
+
+    it('names a source the build read from C: by its path relative to the map on D:', () => {
+      expect(winProject(['file:///C:/Users/runner/AppData/Local/Temp/apack-build-inputs-x/apack-inputs-1-y/443a5c/D/a/apack/packages/default-setup/src/__generated__/ref.ts']))
+        .toEqual(['../../../src/__generated__/ref.ts']);
+    });
+
+    it('names an origin no relative path from the map reaches by its own file: URL', () => {
+      expect(winProject(['file:///C:/Users/runner/AppData/Local/Temp/apack-build-inputs-x/apack-inputs-1-y/443a5c/E/vendored/view/index.ts']))
+        .toEqual(['file:///E:/vendored/view/index.ts']);
+    });
+  });
+
   it('keeps a source outside the read tree, and one under another scheme, as they are', () => {
     const outside = pathToFileURL(path.join(pack, 'src', 'a.ts')).href;
     expect(project([outside, 'webpack://pack/a.ts', '../../../src/b.ts'])).toEqual([outside, 'webpack://pack/a.ts', '../../../src/b.ts']);
