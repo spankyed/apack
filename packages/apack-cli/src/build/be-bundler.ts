@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { APP_ONLY_EXPORTS, HOST_RESOLVED_BINARIES, SHARED_DEPS, sharedInstanceExternals } from '@apackdev/host/build/shared-deps';
 import { CONTENT_COMPILERS_FILE, STEPS_BUILD_MODULE, WORKERS_DIR } from '@apackdev/sdk/build';
 import { checkContentRuntimeLoads } from './content-runtime-check';
@@ -145,14 +146,23 @@ function capturedSourcesPlugin(compilation: CompilationInputs, workingDir: strin
   } };
 }
 
-/** Only source-map metadata is projected; authored source text and its embedded values stay intact. */
-function sourceMapOrigins(text: string, file: string, tree: CompilerReadTree): string {
+/**
+ * Only source-map metadata is projected; authored source text and its embedded values stay intact. A source the
+ * build read from the read tree is named where it came from instead, relative to the map. esbuild names one as a
+ * `file:` URL when no relative path reaches it, as on Windows, where the read tree is under a temporary directory on
+ * another drive than the pack, so a `file:` URL is projected too; any other scheme names no file and is kept. An
+ * origin still on another drive than the map is named by its own `file:` URL.
+ */
+export function sourceMapOrigins(text: string, file: string, tree: Pick<CompilerReadTree, 'sourcePath'>): string {
   const map = JSON.parse(text);
   map.sources = map.sources.map((source: string) => {
-    if (/^[a-z][\w+.-]*:/i.test(source) && !path.isAbsolute(source)) return source;
-    const readPath = path.resolve(path.dirname(file), map.sourceRoot ?? '', source);
+    const url = source.startsWith('file:');
+    if (/^[a-z][\w+.-]*:/i.test(source) && !path.isAbsolute(source) && !url) return source;
+    const readPath = url ? fileURLToPath(source) : path.resolve(path.dirname(file), map.sourceRoot ?? '', source);
     const original = tree.sourcePath(readPath);
-    return original === readPath ? source : path.relative(path.dirname(file), original).split(path.sep).join('/');
+    if (original === readPath) return source;
+    const relative = path.relative(path.dirname(file), original);
+    return path.isAbsolute(relative) ? pathToFileURL(original).href : relative.split(path.sep).join('/');
   });
   return JSON.stringify(map);
 }
