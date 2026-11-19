@@ -2,9 +2,8 @@
 // backend stops: default-setup's boot.onShutdown clears it, and @apackdev/testing runs it when a test's last app stops
 // (the harness stops apps after each test), so a real schedule from one test never ticks into the next
 //
-// @slow: the wait is the assertion
 // It starts and stops real pack backends and then waits to prove a cron schedule does *not* tick into the
-// next test; shortening the wait removes what the test checks.
+// next test: the wait is the assertion, and shortening it removes what the test checks.
 import { describe, expect, it, vi } from 'vitest'
 import { importFlows, startApp, type TestApp } from '@apackdev/testing/harness'
 import { settles, testRootEvents } from '@apackdev/sdk/testing'
