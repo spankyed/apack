@@ -15,7 +15,6 @@ name: Build Linux
 on:
   push:
     tags: ['v*']
-    branches: [session/linux-release]
   workflow_dispatch:
     inputs:
       version:
