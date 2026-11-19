@@ -131,9 +131,17 @@ jobs:
           PREFIX="${{ steps.channel.outputs.release_prefix }}"
           assets=(dist/"${PREFIX}"-*.AppImage dist/"${PREFIX}"-*.deb dist/"${PREFIX}"-*.cdx.json)
 
+          # A release that can't be read is not one that isn't there: only gh's `release not found` counts as none, since
+          # creating one beside a release that exists would make a second draft for the tag, holding this platform's files
+          release_exists() {
+            if gh release view "$GITHUB_REF_NAME" > /dev/null 2> view.err; then return 0; fi
+            if grep -q 'release not found' view.err; then return 1; fi
+            cat view.err
+            exit 1
+          }
           # Upload to the tag's release, or create it as a draft: build-mac.yml publishes it once the macOS files, which
           # `apack install` and `upgrade` read, are on it, so the release never shows without them
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+          if release_exists; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else
             gh release create "$GITHUB_REF_NAME" \
@@ -143,7 +151,7 @@ jobs:
               $PRERELEASE_FLAG \
               "${assets[@]}" || {
                 status=$?
-                if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+                if release_exists; then
                   gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
                 else
                   exit "$status"

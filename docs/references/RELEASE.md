@@ -101,7 +101,8 @@ On Windows, `dist/apack-*.exe`; on Linux, `dist/apack-*.AppImage` and `dist/apac
 - No native module is rebuilt for Electron's Node: elmdb and `@napi-rs/keyring` are N-API, and the terminal's native half is the `apack-terminal` broker, a binary of its own rather than an addon
 - Targets: macOS Apple Silicon (arm64) on a Mac, Windows x64 on Windows, and Linux x64 (AppImage and deb) on Linux;
   each platform's CI workflow builds its own
-- Requires the Node `package.json`'s `engines` names, and on macOS the Xcode Command Line Tools
+- Requires the Node version `package.json`'s `engines` names (^24.12.0 on 2026-11-19), and on macOS the Xcode
+  Command Line Tools
 
 ## Production Debugging
 
