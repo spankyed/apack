@@ -14,7 +14,7 @@
   "devDependencies": {
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
-    "app-builder-lib": "26.15.3",
+    "app-builder-lib": "26.18.1",
     "tsx": "^4.23.15",
     "typescript": "^5.8.3",
     "vite": "^7.3.7",
