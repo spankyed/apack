@@ -36,8 +36,9 @@ echo "  icon.icns"
 sips -z 512 512 "$WORK/icon-1024.png" --out "$OUT_DIR/icon.png" >/dev/null
 echo "  icon.png"
 
-# Windows .ico (256x256)
-sips -z 256 256 "$WORK/icon-1024.png" --out "$OUT_DIR/icon.ico" >/dev/null
+# Windows .ico (256x256): sips writes the format it is told, not the one the file name says, so `-s format ico`; without
+# it the file is a PNG, which electron-builder refuses as no ICO
+sips -z 256 256 "$WORK/icon-1024.png" -s format ico --out "$OUT_DIR/icon.ico" >/dev/null
 echo "  icon.ico"
 
 echo "Done — icons in $OUT_DIR/"
