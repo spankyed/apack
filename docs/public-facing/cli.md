@@ -20,7 +20,7 @@ Packs pin `@apackdev/cli` in `devDependencies`. Any `apack` run inside a pack ha
 | Command | Purpose |
 |---|---|
 | `apack open` | Open the installed production app; `--channel beta` or `--channel preview` selects another installed app |
-| `apack install`, `upgrade`, `uninstall` | Manage published production/beta apps |
+| `apack install`, `upgrade`, `uninstall` | Manage published production/beta apps (macOS on Apple Silicon; Windows and Linux builds are on the release page) |
 | `apack status` | Installed app version, running state, and paths; supports `--json` |
 | `apack logs` | Recent installed-app logs; `--follow` streams new output |
 | `apack doctor` | Read-only installed-app diagnostics; supports `--json` |

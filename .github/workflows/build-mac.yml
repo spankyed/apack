@@ -73,6 +73,26 @@ jobs:
             exit 1
           fi
 
+      # A tag's release must be signed and notarized: every secret it takes is there before the build starts
+      - name: Signing secrets are configured
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          CERTIFICATE: ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          missing=()
+          for name in CERTIFICATE CERTIFICATE_PASSWORD TEAM_ID API_KEY API_KEY_ID API_ISSUER; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::A release must be signed and notarized, and these secrets are empty: ${missing[*]}"
+            exit 1
+          fi
+
       - name: Write notarization API key to file
         if: env.APPLE_API_KEY != ''
         env:
@@ -105,12 +125,15 @@ jobs:
           fi
           npm run build:production $BETA_FLAG
 
+      # A tag's app is published, so it must be signed, notarized and stapled, or the release doesn't go out; a
+      # dispatch from a branch may build unsigned, and only reports
       - name: Verify signing
-        continue-on-error: true
+        continue-on-error: ${{ !startsWith(github.ref, 'refs/tags/') }}
         run: |
           APP_NAME="${{ steps.channel.outputs.product_name }}"
           codesign --verify --deep --strict "dist/mac-arm64/${APP_NAME}.app"
           xcrun stapler validate "dist/mac-arm64/${APP_NAME}.app"
+          spctl --assess --type exec --verbose "dist/mac-arm64/${APP_NAME}.app"
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -130,8 +153,19 @@ jobs:
           done
           assets=(dist/"${PREFIX}"-*.dmg dist/"${PREFIX}"-*.zip dist/"${PREFIX}"-*.sha256 dist/"${PREFIX}"-*.cdx.json)
 
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+          # A release that can't be read is not one that isn't there: only gh's `release not found` counts as none, since
+          # creating one beside a release that exists would make a second draft for the tag, holding this platform's files
+          release_exists() {
+            if gh release view "$GITHUB_REF_NAME" > /dev/null 2> view.err; then return 0; fi
+            if grep -q 'release not found' view.err; then return 1; fi
+            cat view.err
+            exit 1
+          }
+          # The Windows and Linux workflows create the tag's release as a draft when they finish first; it is published
+          # here, once the files `apack install` and `upgrade` read are on it
+          if release_exists; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+            gh release edit "$GITHUB_REF_NAME" --draft=false
           else
             gh release create "$GITHUB_REF_NAME" \
               --generate-notes \
@@ -139,8 +173,9 @@ jobs:
               $PRERELEASE_FLAG \
               "${assets[@]}" || {
                 status=$?
-                if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+                if release_exists; then
                   gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+                  gh release edit "$GITHUB_REF_NAME" --draft=false
                 else
                   exit "$status"
                 fi

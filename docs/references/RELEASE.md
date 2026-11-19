@@ -39,7 +39,9 @@ three commands, matching `APACK_USER_DATA_DIR`; its logs are collected from that
 
 ## Installing (Unsigned Builds)
 
-Until code signing is configured, downloaded builds will be blocked by macOS Gatekeeper. After opening the DMG and dragging apack to Applications, run:
+A release's macOS app is signed and notarized (its workflow refuses to publish one that isn't). A macOS build that
+isn't, such as a local preview or a dispatch without signing secrets, is blocked by Gatekeeper. After opening the DMG
+and dragging apack to Applications, run:
 
 ```bash
 xattr -cr /Applications/apack.app
@@ -47,7 +49,7 @@ xattr -cr /Applications/apack.app
 
 Then open the app normally. This only needs to be done once per download.
 
-This step is not needed once the app is signed and notarized (see [Code Signing & Notarization](#code-signing--notarization)).
+The Windows installer is unsigned, so Windows SmartScreen warns before running it ("More info", then "Run anyway").
 
 On Linux, the release holds an AppImage and a deb for x64. They need glibc 2.39 or later: Ubuntu 24.04, Debian 13,
 Fedora 40 and newer (see [CI Workflow](#ci-workflow)). Install the deb with `sudo apt install ./apack-<version>-linux-amd64.deb`, or
@@ -99,7 +101,8 @@ On Windows, `dist/apack-*.exe`; on Linux, `dist/apack-*.AppImage` and `dist/apac
 - No native module is rebuilt for Electron's Node: elmdb and `@napi-rs/keyring` are N-API, and the terminal's native half is the `apack-terminal` broker, a binary of its own rather than an addon
 - Targets: macOS Apple Silicon (arm64) on a Mac, Windows x64 on Windows, and Linux x64 (AppImage and deb) on Linux;
   each platform's CI workflow builds its own
-- Requires Node >= 23.0.0, and on macOS the Xcode Command Line Tools
+- Requires the Node version `package.json`'s `engines` names (^24.12.0 on 2026-11-19), and on macOS the Xcode
+  Command Line Tools
 
 ## Production Debugging
 
@@ -211,12 +214,15 @@ For local signed builds, create `.env.signing` (gitignored) from `.env.signing.e
 - **Triggers**: tag push (`v*`) or manual dispatch
 - **Validates**: tag version matches `package.json`
 - **Builds**: full 7-step production pipeline
-- **Signs + notarizes**: when secrets are configured
-- **Publishes**: GitHub Release with release files and auto-generated notes
+- **Signs + notarizes**: when secrets are configured; on a tag, every signing secret must be set and `codesign`,
+  `stapler` and `spctl` must pass, or the release isn't published
+- **Publishes**: the GitHub Release, with release files and auto-generated notes
 
 `.github/workflows/build-windows.yml` (`windows-latest`) and `.github/workflows/build-linux.yml` (`ubuntu-24.04`) run
-the same pipeline on the same triggers, unsigned, and upload their release files to the tag's release, which whichever
-workflow finishes first creates. A dispatch from a branch builds without publishing (one on a tag uploads, as the tag's
+the same pipeline on the same triggers, unsigned, and upload their release files to the tag's release. One that finishes
+before macOS creates it as a draft, and build-mac.yml publishes it once the macOS files are on it, so a published
+release always holds the files `apack install` and `upgrade` read. A tag whose macOS build fails leaves its release a
+draft. A dispatch from a branch builds without publishing (one on a tag uploads, as the tag's
 run would); the Linux workflow keeps what a dispatch from a branch built as the run's artifacts, for the repository's
 artifact retention (2 days, on 2026-11-19).
 
