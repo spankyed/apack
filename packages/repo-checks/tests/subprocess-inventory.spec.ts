@@ -93,6 +93,10 @@ const INVENTORY: Record<string, { calls: number; why: string }> = {
     why: 'a nested `vitest run`: the harness under test is what launches a run, so it cannot be the run that is launching it' },
   'packages/apack-cli/tests/harness/harness-setup.integration.spec.ts': { calls: 1,
     why: 'a nested `vitest run`, for the same reason — and the one whose spawner reaches the binary through a variable' },
+  'packages/apack-ears/tests/_support/packed.ts': { calls: 1,
+    why: '`npm pack` and `tar` make the tarball a consumer installs; each supported TypeScript compiles that consumer, '
+      + 'the 5.7 floor in-process being a second typescript instance in one; and `node -e` in the consumer resolves '
+      + 'each export as its runtime does. One `run`, shared by the specs that pack the package' },
   'packages/publish-checks/tests/published-exports.integration.spec.ts': { calls: 1,
     why: 'CONSUMER_MATRIX compiles a consumer with each supported TypeScript, and the subprocess is the fidelity: running the 5.7 floor in-process would put two typescript instances in one process' },
   'packages/publish-checks/tests/published-sdk-types.integration.spec.ts': { calls: 2,

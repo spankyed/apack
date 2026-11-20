@@ -694,6 +694,9 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   'repo-checks': { packages: true, repo: true, inputs: ['docs'], integrationInputs: FIXTURE_OUTPUTS },
   // `pretest: ensure-packages-built`; it npm-packs the built packages into a consumer and compiles it
   'publish-checks': { packages: true },
+  // Its integration half npm-packs its own build into a consumer and compiles it, with the oldest TypeScript it
+  // supports among the compilers (`typescript-floor`); its fast half reads source alone
+  'apack-ears': { integrationInputs: ['packages/apack-ears/dist', 'packages/typescript-floor/package.json'] },
 };
 
 

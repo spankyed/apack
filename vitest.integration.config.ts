@@ -31,6 +31,7 @@ export default defineConfig({
       'packages/apack-cli/vitest.integration.config.ts',
       'packages/repo-checks/vitest.integration.config.ts',
       'packages/publish-checks/vitest.integration.config.ts',
+      'packages/apack-ears/vitest.integration.config.ts',
     ],
     /**
      * Half the cores, because half is **faster** than all of them.
