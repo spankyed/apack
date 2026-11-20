@@ -22,16 +22,24 @@ concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: true
 
+# What builds reads the repository and nothing more. The one job whose token writes is the release job, which runs
+# gh over the files the build job kept and no code from the checkout or its dependencies
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-mac:
     runs-on: macos-26 # Apple Silicon runner
     timeout-minutes: 30
+    outputs:
+      is_beta: ${{ steps.channel.outputs.is_beta }}
+      product_name: ${{ steps.channel.outputs.product_name }}
+      release_prefix: ${{ steps.channel.outputs.release_prefix }}
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v5
         with:
@@ -93,37 +101,43 @@ jobs:
             exit 1
           fi
 
-      - name: Write notarization API key to file
-        if: env.APPLE_API_KEY != ''
+      # The install runs every dependency's install script, so it is a step of its own that holds no signing secret.
+      # @vscode/ripgrep's postinstall reads the GitHub API, where a shared runner address without a token is over the
+      # rate limit; this job's token reads this repository and writes nothing
+      - name: Install dependencies
         env:
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-        run: |
-          echo "$APPLE_API_KEY" > /tmp/AuthKey.p8
-          chmod 600 /tmp/AuthKey.p8
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
 
+      # The signing secrets reach this step alone, as environment variables, never as script text. electron-builder
+      # fails on a signing variable that is set and empty, so each is exported only when its secret is configured
       - name: Build, package, sign
         env:
-          # @vscode/ripgrep downloads from GitHub API during postinstall;
-          # without auth the shared CI runner IP hits the 60 req/hr rate limit.
-          GITHUB_TOKEN: ${{ github.token }}
+          APACK_DEPENDENCIES_INSTALLED: '1'
+          CERTIFICATE: ${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: |
-          # Only export signing env vars if secrets are configured
-          # (empty strings cause electron-builder to fail)
-          if [ -n "${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}" ]; then
-            export CSC_LINK="${{ secrets.MAC_CERTIFICATE_P12_BASE64 }}"
-            export CSC_KEY_PASSWORD="${{ secrets.MAC_CERTIFICATE_PASSWORD }}"
+          if [ -n "$CERTIFICATE" ]; then
+            export CSC_LINK="$CERTIFICATE"
+            export CSC_KEY_PASSWORD="$CERTIFICATE_PASSWORD"
           fi
-          if [ -n "${{ secrets.APPLE_TEAM_ID }}" ]; then
-            export APPLE_TEAM_ID="${{ secrets.APPLE_TEAM_ID }}"
-            export APPLE_API_KEY_ID="${{ secrets.APPLE_API_KEY_ID }}"
-            export APPLE_API_ISSUER="${{ secrets.APPLE_API_ISSUER }}"
-            export APPLE_API_KEY="/tmp/AuthKey.p8"
+          if [ -n "$TEAM_ID" ]; then
+            # notarytool reads the API key from a file
+            (umask 077 && printf '%s\n' "$API_KEY" > "$RUNNER_TEMP/AuthKey.p8")
+            export APPLE_TEAM_ID="$TEAM_ID"
+            export APPLE_API_KEY_ID="$API_KEY_ID"
+            export APPLE_API_ISSUER="$API_ISSUER"
+            export APPLE_API_KEY="$RUNNER_TEMP/AuthKey.p8"
           fi
-          BETA_FLAG=""
+          args=()
           if [ "${{ steps.channel.outputs.is_beta }}" = "true" ]; then
-            BETA_FLAG="-- --beta"
+            args=(-- --beta)
           fi
-          npm run build:production $BETA_FLAG
+          npm run build:production "${args[@]}"
 
       # A tag's app is published, so it must be signed, notarized and stapled, or the release doesn't go out; a
       # dispatch from a branch may build unsigned, and only reports
@@ -135,22 +149,62 @@ jobs:
           xcrun stapler validate "dist/mac-arm64/${APP_NAME}.app"
           spctl --assess --type exec --verbose "dist/mac-arm64/${APP_NAME}.app"
 
+      # `apack pack test --channel beta` verifies downloads against these
+      - name: Checksums
+        working-directory: dist
+        run: |
+          # electron-builder.mjs artifactName: the product name without spaces
+          for file in "${{ steps.channel.outputs.release_prefix }}"-*.dmg "${{ steps.channel.outputs.release_prefix }}"-*.zip; do
+            shasum -a 256 "$file" > "$file.sha256"
+          done
+
+      # What the release job uploads on a tag, and what a dispatch leaves for whoever dispatched it
+      - name: Keep the release files
+        uses: actions/upload-artifact@v6
+        with:
+          name: mac-${{ steps.channel.outputs.release_prefix }}
+          path: |
+            dist/${{ steps.channel.outputs.release_prefix }}-*.dmg
+            dist/${{ steps.channel.outputs.release_prefix }}-*.zip
+            dist/${{ steps.channel.outputs.release_prefix }}-*.sha256
+            dist/${{ steps.channel.outputs.release_prefix }}-*.cdx.json
+          if-no-files-found: error
+          compression-level: 0
+
+  # The one job whose token writes. It runs for a dispatch from a branch too, where it stops after reading the files
+  # the build kept, so the hand-over between the two jobs is exercised without a tag
+  release:
+    needs: build-mac
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      APP_NAME: ${{ needs.build-mac.outputs.product_name }}
+      PREFIX: ${{ needs.build-mac.outputs.release_prefix }}
+      IS_BETA: ${{ needs.build-mac.outputs.is_beta }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: mac-${{ needs.build-mac.outputs.release_prefix }}
+          path: dist
+
+      - name: The files to release
+        run: |
+          ls -l dist
+          cd dist
+          shasum -a 256 -c "${PREFIX}"-*.sha256
+
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          APP_NAME="${{ steps.channel.outputs.product_name }}"
           PRERELEASE_FLAG=""
-          if [ "${{ steps.channel.outputs.is_beta }}" = "true" ]; then
+          if [ "$IS_BETA" = "true" ]; then
             PRERELEASE_FLAG="--prerelease"
           fi
-          # `apack pack test --channel beta` verifies downloads against these
-          # electron-builder.mjs artifactName: the product name without spaces
-          PREFIX="${{ steps.channel.outputs.release_prefix }}"
-          for file in dist/"${PREFIX}"-*.dmg dist/"${PREFIX}"-*.zip; do
-            (cd dist && shasum -a 256 "$(basename "$file")" > "$(basename "$file").sha256")
-          done
           assets=(dist/"${PREFIX}"-*.dmg dist/"${PREFIX}"-*.zip dist/"${PREFIX}"-*.sha256 dist/"${PREFIX}"-*.cdx.json)
 
           # A release that can't be read is not one that isn't there: only gh's `release not found` counts as none, since
