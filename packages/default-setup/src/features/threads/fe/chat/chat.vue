@@ -4,7 +4,7 @@
     contain: 'size',
     '--native-chat-min-height': nativeChatMinHeight,
     '--composer-workspace-history-reserve': nativeWorkspaceReading ? '2rem' : undefined,
-    '--composer-navigation-height': nativeConversationNavigation ? '2.5rem' : undefined,
+    '--composer-navigation-height': nativeConversationNavigation ? '2rem' : undefined,
     '--agent-composer-history-reserve': nativeWorkspaceReading ? '2rem' : undefined,
   }">
     <!-- Main content: optional inline dashboard + chat -->
@@ -120,7 +120,7 @@
                 <div v-if="nativeComposerOwner?.preview" data-native-stream-preview class="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed" role="status" aria-label="Claude response in progress"><NativeStatusText :text="nativeComposerOwner.preview.output" /></div>
               </div>
             </div>
-            <div v-if="nativeConversationNavigation" aria-label="Conversation navigation" class="relative h-10 shrink-0">
+            <div v-if="nativeConversationNavigation" aria-label="Conversation navigation" class="relative h-8 shrink-0 [&>button]:bottom-0">
               <ScrollToBottomFob :visible="!isNearBottom" aria-label="Scroll to latest message" @click="scrollToBottom('smooth')" />
             </div>
             <ScrollToBottomFob v-else-if="!currentThread?.context?.claudeCode" :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
