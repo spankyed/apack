@@ -102,14 +102,14 @@ test("a reloaded pack's browser surface restores what its system saved, asking a
 
   try {
     // The reload restarts the pack's systems and replaces its frontend's actors, each of which the shell starts
-    await expect.poll(async () => {
-      const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: apiToken },
-        body: JSON.stringify({ packId: 'default-setup' }),
-      });
-      return response.status;
-    }).toBe(200);
+    // Asked once and awaited to its answer: a reload loads the pack's runtime from disk, which a busy disk makes
+    // slow, and an assertion's backstop around the request would give up on one still in flight
+    const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: apiToken },
+      body: JSON.stringify({ packId: 'default-setup' }),
+    });
+    expect(response.status, await response.text()).toBe(200);
 
     await expect.poll(async () => (await received(appPage, 'browser', 'SAVED_SESSION_READ'))
       .some((event) => (event.savedBookmarks ?? []).some((bookmark) => bookmark.url === url))).toBe(true);

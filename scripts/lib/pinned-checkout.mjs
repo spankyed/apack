@@ -1,11 +1,19 @@
-// A vendored checkout that holds its pin, for the checkouts `session:new` and `session:check` make.
+// The checkout at a vendored pin, for the checkouts `session:new` and `session:check` make.
 //
-// **Each linker refuses a checkout that does not hold its pin**, since it could not build what the pin names. The
-// default checkout is the one someone works in, so it is on whatever branch their own work is: one not descended
-// from the pin made every new session fail before installing anything, for a reason that had nothing to do with
-// the session. A worktree of that checkout at the pin answers instead — one already there, or one made beside the
-// checkout as `<checkout>-worktrees.noindex/for-apack-<rev>`, the name such worktrees had been made by hand under.
-// The checkout someone works in is never moved.
+// **A session links the pinned commit itself, never a checkout that merely descends from it.** The default
+// checkout is the one someone works in, so it is wherever their own work is: commits past the pin, or a branch
+// the pin is not on. Either is other code than the pin names, and CI clones the pin, so a session linked to it
+// builds an app nothing else tests — and one whose engine has moved under the app fails at boot, in the app's
+// words rather than the pin's. A worktree of that checkout at the pin answers instead — one already there, or one
+// made beside the checkout as `<checkout>-worktrees.noindex/for-apack-<rev>`. The checkout someone works in is
+// never moved.
+//
+// **Each linker asks less** — that a checkout's HEAD descends from the pin — because linking the checkout one
+// works in, to try a change to it against the app, is something a person does on purpose, and the linker says
+// how far from the pin it is. This is the default nobody chose, so it is exact.
+//
+// What is committed is what is compared: a checkout at the pin with edits in its tree, or a build left from
+// another commit, is not told apart here.
 //
 // Plain Node with no dependencies, like the linkers: it runs before anything is installed.
 import { execFileSync } from 'node:child_process';
@@ -23,11 +31,10 @@ function git(checkout, args, timeout = 20_000) {
   }).trim();
 }
 
-/** Whether `checkout`'s HEAD descends from `rev`, which is what each linker asks @param {string} checkout @param {string} rev */
-function holds(checkout, rev) {
+/** Whether `checkout`'s HEAD is `rev`, which may be written short @param {string} checkout @param {string} rev */
+function isAt(checkout, rev) {
   try {
-    git(checkout, ['merge-base', '--is-ancestor', rev, 'HEAD']);
-    return true;
+    return git(checkout, ['rev-parse', 'HEAD']).startsWith(rev);
   } catch {
     return false;
   }
@@ -49,12 +56,12 @@ export function worktreeAt(checkout, rev) {
 }
 
 /**
- * The checkout to link for a pin: `checkout` itself when it holds `rev`, else a worktree of it at `rev`, made when
+ * The checkout to link for a pin: `checkout` itself when its HEAD is `rev`, else a worktree of it at `rev`, made when
  * there is none. `made` says the second was made here, so a caller knows nothing has been built in it.
  * @param {{ checkout: string, rev: string }} options @returns {{ dir: string, made: boolean }}
  */
 export function checkoutAtPin({ checkout, rev }) {
-  if (holds(checkout, rev)) return { dir: checkout, made: false };
+  if (isAt(checkout, rev)) return { dir: checkout, made: false };
   const found = worktreeAt(checkout, rev);
   if (found) return { dir: found, made: false };
   const dir = path.join(path.dirname(checkout), `${path.basename(checkout)}-worktrees.noindex`, `for-apack-${rev.slice(0, 7)}`);

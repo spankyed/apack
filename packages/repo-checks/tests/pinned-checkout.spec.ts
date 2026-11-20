@@ -1,7 +1,7 @@
 // Which checkout a new session links for a vendored pin, over real repositories made per case.
 //
-// Real git rather than a table, because what is being asked is git's own: whether a HEAD descends from a commit,
-// what `worktree list` reports, and that `worktree add` leaves the checkout someone works in where it was.
+// Real git rather than a table, because what is being asked is git's own: where a HEAD is, what `worktree list`
+// reports, and that `worktree add` leaves the checkout someone works in where it was.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -30,11 +30,27 @@ beforeEach(async () => {
 afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
 
 describe('the checkout linked for a pin', () => {
-  it('is the checkout itself when its HEAD holds the pin, ahead of it or not', async () => {
+  it('is the checkout itself when its HEAD is the pin', async () => {
     const pin = await commit('pinned');
-    await commit('the next bump, being prepared');
 
     expect(checkoutAtPin({ checkout, rev: pin })).toEqual({ dir: checkout, made: false });
+    expect(checkoutAtPin({ checkout, rev: pin.slice(0, 12) }).dir, 'a short pin names it too').toBe(checkout);
+  });
+
+  /**
+   * A checkout past its pin holds the pin and is other code: an engine that had moved under the app was linked
+   * into a new session this way, and the app it built failed at boot. The session gets the pin itself.
+   */
+  it('is a worktree made at the pin when the checkout has moved past it, which stays where it was', async () => {
+    const pin = await commit('pinned');
+    const next = await commit('the next bump, being prepared');
+
+    const { dir, made } = checkoutAtPin({ checkout, rev: pin });
+
+    expect(made).toBe(true);
+    expect(dir).not.toBe(checkout);
+    expect(await git(dir, 'rev-parse', 'HEAD'), 'the worktree is at the pin').toBe(pin);
+    expect(await git(checkout, 'rev-parse', 'HEAD'), 'the checkout someone works in did not move').toBe(next);
   });
 
   /**
