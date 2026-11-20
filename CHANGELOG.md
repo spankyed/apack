@@ -1,4 +1,4 @@
--e # Changelog
+# Changelog
 
 ## v0.3.14 (2026-06-14)
 
@@ -36,7 +36,6 @@
 - chore(video): remove apack-film-landscape.mp4 output file
 - style(renderer): reorder enum literal types to match declaration order
 
--e # Changelog
 
 ## v0.3.13 (2026-06-09)
 
@@ -62,7 +61,6 @@
 ### Other
 - Merge pull request #163 from spankyed/as/popout-plugins
 
--e # Changelog
 
 ## v0.3.12 (2026-06-08)
 
@@ -99,7 +97,6 @@
 - test(api): add dedupe test for parallel tracks with same event but different trackKeys
 - Refine onboarding into focused letter and chat flow
 
--e # Changelog
 
 ## v0.3.11 (2026-06-07)
 
@@ -113,7 +110,6 @@
 - Revert "chore(release): v0.3.11"
 - chore: remove stale log file reference from release documentation
 
--e # Changelog
 
 ## v0.3.10 (2026-06-07)
 
@@ -133,7 +129,6 @@
 - Revert "chore(release): v0.3.10"
 - Revert "chore(release): v0.3.10"
 
--e # Changelog
 
 ## v0.3.9 (2026-06-06)
 
@@ -201,7 +196,6 @@
 - perf(threads): add virtual scrolling to thread sidebar lists
 - chore(deps): add electron-log dependency and update lockfile
 
--e # Changelog
 
 ## v0.3.8 (2026-06-04)
 
@@ -222,7 +216,6 @@
 - style(code): align directory menu to the right in CodePanelHeader
 - style(browser): make tab close button always visible and adjust color
 
--e # Changelog
 
 ## v0.3.7 (2026-06-01)
 
@@ -291,7 +284,6 @@
 - style(threads): hide button labels on small screens using container queries
 - style(renderer): remove inline background-color from canvas panel
 
--e # Changelog
 
 ## v0.3.6 (2026-05-31)
 
@@ -351,7 +343,6 @@
 - chore(deps): upgrade monaco-editor to v0.55.1 and refresh lockfile
 - Add refresh button to explorer panel header
 
--e # Changelog
 
 ## v0.3.5 (2026-05-31)
 
@@ -362,7 +353,6 @@
 - notes): make the notes inspection panel header a window drag region, with interactive controls excluded so they remain clickable.
 - ui): hide canvas header and thread tab scrollbars
 
--e # Changelog
 
 ## v0.3.4 (2026-05-22)
 
@@ -378,7 +368,6 @@
 - Normalize thread state storage
 - test(handle-fork): add stress tests for session state resolution and cliUuid lookup
 
--e # Changelog
 
 ## v0.3.3 (2026-05-22)
 
@@ -412,7 +401,6 @@
 - Merge pull request #156 from spankyed/as/services-preliminary-rework
 - docs: add architecture document for user-defined services
 
--e # Changelog
 
 ## v0.3.2 (2026-05-21)
 
@@ -446,7 +434,6 @@
 - Use ripgrep safely for agent grep tool
 - Fix Windows OAuth browser opener
 
--e # Changelog
 
 ## v0.3.1 (2026-05-18)
 
@@ -474,7 +461,6 @@
 - Concat Codex messages with a new line
 - Shorten Codex resume session titles
 
--e # Changelog
 
 ## v0.3.0 (2026-05-18)
 
@@ -538,7 +524,6 @@
 - never manually update version
 - Merge pull request #151 from spankyed/AS/codex-cli-integration
 
--e # Changelog
 
 ## v0.2.23 (2026-05-17)
 
@@ -607,7 +592,6 @@
 - Prevent connections into trigger nodes
 - update defs
 
--e # Changelog
 
 ## v0.2.22 (2026-05-16)
 
@@ -669,14 +653,12 @@
 - Merge remote-tracking branch 'origin/master' into AS/hermes-integration
 - Merge remote-tracking branch 'origin/master' into AS/hermes-integration
 
--e # Changelog
 
 ## v0.2.21 (2026-05-16)
 
 ### Fixes
 - renderer): increase backend connection timeout from 5s to 30s
 
--e # Changelog
 
 ## v0.2.20 (2026-05-16)
 
@@ -722,7 +704,6 @@
 - update defs
 - docs: add Twitter/X data scraping tools landscape overview
 
--e # Changelog
 
 ## v0.2.19 (2026-05-13)
 
@@ -758,7 +739,6 @@
 - docs: add macOS Electron code signing and notarization guide
 - chore: update wording in stream-consumer comments and error message
 
--e # Changelog
 
 ## v0.2.18 (2026-05-11)
 
@@ -768,7 +748,6 @@
 ### Fixes
 - claude-code): prevent session-expired error after cancel → revert sequence
 
--e # Changelog
 
 ## v0.2.17 (2026-05-10)
 
@@ -777,7 +756,6 @@
 - actions): handle ACTION.SELECT in detail state so "Edit Template" updates the viewed action
 - code): allow regular files to be editable in diff read-only check
 
--e # Changelog
 
 ## v0.2.16 (2026-05-07)
 
@@ -794,7 +772,6 @@
 - update defs
 - style(kanban): prevent column header text wrapping
 
--e # Changelog
 
 ## v0.2.15 (2026-05-05)
 
@@ -820,7 +797,6 @@
 ### Other
 - docs(default-setup): add "Adding a command" guide to CLAUDE.md
 
--e # Changelog
 
 ## v0.2.14 (2026-05-05)
 
@@ -844,7 +820,6 @@
 - Revert "chore(release): v0.2.14"
 - Revert "chore(release): v0.2.14"
 
--e # Changelog
 
 ## v0.2.13 (2026-05-04)
 
@@ -935,7 +910,6 @@
 - update defs
 - update restore/kill button texts
 
--e # Changelog
 
 ## v0.2.12 (2026-04-27)
 
@@ -950,7 +924,6 @@
 ### Other
 - Revert "fix(threads): archive thread without disrupting chat view"
 
--e # Changelog
 
 ## v0.2.11 (2026-04-27)
 
@@ -974,7 +947,6 @@
 - add blue pinned icon
 - style(chat): adjust background color and border opacity in chat UI
 
--e # Changelog
 
 ## v0.2.10 (2026-04-25)
 
@@ -1031,7 +1003,6 @@
 - Fix: add spacing between collapsible section headers and content
 - pinned threads will now always appear at the top of the list
 
--e # Changelog
 
 ## v0.2.9 (2026-04-24)
 
@@ -1084,7 +1055,6 @@
 - Centralize external URLs into core constants file
 - Add min-width to main left area to prevent layout collapse
 
--e # Changelog
 
 ## v0.2.8 (2026-04-22)
 
@@ -1135,7 +1105,6 @@
 - rework onboarding: replace tour with letter modal, add CLI detection + cc-import steps
 - docs(issues): document revert flow session expiry bug and broken recovery UX
 
--e # Changelog
 
 ## v0.2.7 (2026-04-22)
 
@@ -1175,7 +1144,6 @@
 - Remove /gcmsg command and make /pr2md output an artifact
 - ci: auto-delete old artifacts before upload and set 1-day retention
 
--e # Changelog
 
 ## v0.2.6 (2026-04-21)
 
@@ -1220,7 +1188,6 @@
 - Fix chatState resetting to idle when switching threads mid-turn
 - Add copy logs button to logs panel
 
--e # Changelog
 
 ## v0.2.5 (2026-04-21)
 
@@ -1246,7 +1213,6 @@
 - Rename claude-session thread tag to claude-code
 - Move chatState from session artifact onto thread entity as canonical source
 
--e # Changelog
 
 ## v0.2.4 (2026-04-20)
 
@@ -1320,7 +1286,6 @@
 - increase terminal list width
 - Reduce app window size in dev mode (1400×900)
 
--e # Changelog
 
 ## v0.2.3 (2026-04-19)
 
@@ -1393,7 +1358,6 @@
 - Show full plan text in plan block with fixed-height scroll
 - Fix Cmd+Shift+F to focus search input when already on search panel and prefill with editor selection
 
--e # Changelog
 
 ## v0.2.2 (2026-04-17)
 
@@ -1445,14 +1409,12 @@
 - Fix recent threads dot color to reflect chat state
 - Move tool activity dots indicator to text baseline
 
--e # Changelog
 
 ## v0.2.1 (2026-04-16)
 
 ### Fixes
 - main): add nvm node path to production PATH for CLI shebang resolution
 
--e # Changelog
 
 ## v0.2.0 (2026-04-16)
 
@@ -1729,7 +1691,6 @@
 - chore(claude-code): add debug logging + make flow re-seed idempotent
 - ix(claude-code): address code review findings + add unit tests
 
--e # Changelog
 
 ## v0.1.5 (2026-04-10)
 
@@ -1767,7 +1728,6 @@
 - style(settings): restyle CLI provider rows as cards
 - update readme
 
--e # Changelog
 
 ## v0.1.4 (2026-04-09)
 
@@ -1781,7 +1741,6 @@
 ### Other
 - Merge pull request #111 from spankyed/AS/DS-command-listener
 
--e # Changelog
 
 ## v0.1.3 (2026-04-09)
 
@@ -1812,7 +1771,6 @@
 - Merge pull request #110 from spankyed/AS/fix-tab-previewing
 - rename undo-release script to unrelease
 
--e # Changelog
 
 ## v0.1.2 (2026-04-09)
 
@@ -1902,7 +1860,6 @@
 - Merge pull request #104 from spankyed/AS/overhaul-thread-export-import
 - Add version validation for thread imports
 
--e # Changelog
 
 ## v0.1.1 (2026-04-08)
 
@@ -1932,7 +1889,6 @@
 - document thread export/import overhaul plan
 - docs: document GitHub token PR permissions false positive issue
 
--e # Changelog
 
 ## v0.1.0 (2026-04-08)
 
@@ -2041,7 +1997,6 @@
 - Merge pull request #97 from spankyed/AS/agent-threads-merger
 - BE merger of agent & threads systems
 
--e # Changelog
 
 ## v0.0.2 (2026-04-07)
 
@@ -2265,7 +2220,6 @@
 - docs: update README.md with project details and features
 - reorganize docs
 
--e # Changelog
 
 ## v0.0.1 (2026-04-03)
 
@@ -5692,7 +5646,6 @@
 - Bolt new bootstrap
 - Project init
 
--e # Changelog
 
 ## v0.0.1 (2026-04-03)
 
@@ -9116,7 +9069,6 @@
 - Bolt new bootstrap
 - Project init
 
--e # Changelog
 
 ## v0.0.1 (2026-04-03)
 
@@ -12537,7 +12489,6 @@
 - Bolt new bootstrap
 - Project init
 
--e # Changelog
 
 ## v0.0.2 (2026-04-03)
 
@@ -15937,7 +15888,6 @@
 - Bolt new bootstrap
 - Project init
 
--e # Changelog
 
 ## v0.0.1 (2026-04-03)
 

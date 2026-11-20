@@ -17,10 +17,6 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version override (e.g. 0.1.0). Leave empty to use package.json version.'
-        required: false
-        type: string
       channel:
         description: 'Build channel (production or beta)'
         required: false
@@ -34,16 +30,24 @@ concurrency:
   group: release-linux-${{ github.ref }}
   cancel-in-progress: true
 
+# What builds reads the repository and nothing more. The one job whose token writes is the release job, which runs
+# gh over the files the build job kept and no code from the checkout or its dependencies
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    outputs:
+      is_beta: ${{ steps.channel.outputs.is_beta }}
+      product_name: ${{ steps.channel.outputs.product_name }}
+      release_prefix: ${{ steps.channel.outputs.release_prefix }}
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v5
         with:
@@ -57,18 +61,22 @@ jobs:
       - uses: ./.github/actions/apack-terminal
       - uses: ./.github/actions/apack-git
 
+      # A tag names its channel, and the `channel` input is read for a branch alone: a tag's files go into its
+      # release, where a beta build dispatched on a production tag would put apack Beta's files
       - name: Detect channel
         id: channel
+        env:
+          CHANNEL: ${{ inputs.channel }}
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "$TAG_VERSION" == *-beta* ]] || [[ "${{ inputs.channel }}" == "beta" ]]; then
-            echo "is_beta=true" >> "$GITHUB_OUTPUT"
-            echo "product_name=apack Beta" >> "$GITHUB_OUTPUT"
-            echo "release_prefix=apack-Beta" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            CHANNEL=production
+            if [[ "$TAG_VERSION" == *-beta* ]]; then CHANNEL=beta; fi
+          fi
+          if [ "$CHANNEL" = beta ]; then
+            printf '%s\n' is_beta=true 'product_name=apack Beta' release_prefix=apack-Beta >> "$GITHUB_OUTPUT"
           else
-            echo "is_beta=false" >> "$GITHUB_OUTPUT"
-            echo "product_name=apack" >> "$GITHUB_OUTPUT"
-            echo "release_prefix=apack" >> "$GITHUB_OUTPUT"
+            printf '%s\n' is_beta=false product_name=apack release_prefix=apack >> "$GITHUB_OUTPUT"
           fi
           echo "tag_version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
 
@@ -86,15 +94,23 @@ jobs:
             exit 1
           fi
 
-      - name: Build and package
+      # The install runs every dependency's install script, so it is a step of its own that holds no signing secret.
+      # @vscode/ripgrep's postinstall reads the GitHub API, where a shared runner address without a token is over the
+      # rate limit; this job's token reads this repository and writes nothing
+      - name: Install dependencies
         env:
           GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
+
+      - name: Build and package
+        env:
+          APACK_DEPENDENCIES_INSTALLED: '1'
         run: |
-          BETA_FLAG=""
+          args=()
           if [ "${{ steps.channel.outputs.is_beta }}" = "true" ]; then
-            BETA_FLAG="-- --beta"
+            args=(-- --beta)
           fi
-          npm run build:production $BETA_FLAG
+          npm run build:production "${args[@]}"
 
       - name: Every binary loads at the glibc floor the deb states
         run: |
@@ -106,31 +122,63 @@ jobs:
           fi
           build/prod/glibc-floor.sh dist/linux-unpacked "$floor"
 
-      # A dispatch's packages, for whoever dispatched it; a tag's are its release's
-      - name: Keep the packages
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      # One `<file>.sha256` beside each download, in the form `shasum` writes and the CLI's `downloadVerified` reads
+      - name: Checksums
+        working-directory: dist
+        run: |
+          for file in "${{ steps.channel.outputs.release_prefix }}"-*.AppImage "${{ steps.channel.outputs.release_prefix }}"-*.deb; do
+            printf '%s  %s\n' "$(sha256sum "$file" | cut -d ' ' -f 1)" "$file" > "$file.sha256"
+          done
+
+      # What the release job uploads on a tag, and what a dispatch leaves for whoever dispatched it
+      - name: Keep the release files
         uses: actions/upload-artifact@v6
         with:
           name: linux-${{ steps.channel.outputs.release_prefix }}
           path: |
             dist/${{ steps.channel.outputs.release_prefix }}-*.AppImage
             dist/${{ steps.channel.outputs.release_prefix }}-*.deb
+            dist/${{ steps.channel.outputs.release_prefix }}-*.sha256
             dist/${{ steps.channel.outputs.release_prefix }}-*.cdx.json
           if-no-files-found: error
+          compression-level: 0
+
+  # The one job whose token writes. It runs for a dispatch from a branch too, where it stops after reading the files
+  # the build kept, so the hand-over between the two jobs is exercised without a tag
+  release:
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      APP_NAME: ${{ needs.build-linux.outputs.product_name }}
+      PREFIX: ${{ needs.build-linux.outputs.release_prefix }}
+      IS_BETA: ${{ needs.build-linux.outputs.is_beta }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: linux-${{ needs.build-linux.outputs.release_prefix }}
+          path: dist
+
+      - name: The files to release
+        run: |
+          ls -l dist
+          cd dist
+          shasum -a 256 -c "${PREFIX}"-*.sha256
 
       - name: Upload release files to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          APP_NAME="${{ steps.channel.outputs.product_name }}"
           PRERELEASE_FLAG=""
-          if [ "${{ steps.channel.outputs.is_beta }}" = "true" ]; then
+          if [ "$IS_BETA" = "true" ]; then
             PRERELEASE_FLAG="--prerelease"
           fi
           # The release prefix, which names the files (electron-builder.mjs), not the product name, which has a space
-          PREFIX="${{ steps.channel.outputs.release_prefix }}"
-          assets=(dist/"${PREFIX}"-*.AppImage dist/"${PREFIX}"-*.deb dist/"${PREFIX}"-*.cdx.json)
+          assets=(dist/"${PREFIX}"-*.AppImage dist/"${PREFIX}"-*.deb dist/"${PREFIX}"-*.sha256 dist/"${PREFIX}"-*.cdx.json)
 
           # A release that can't be read is not one that isn't there: only gh's `release not found` counts as none, since
           # creating one beside a release that exists would make a second draft for the tag, holding this platform's files
@@ -145,7 +193,7 @@ jobs:
           if release_exists; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" \
+            gh release create "$GITHUB_REF_NAME" --verify-tag \
               --draft \
               --generate-notes \
               --title "${APP_NAME} $GITHUB_REF_NAME" \

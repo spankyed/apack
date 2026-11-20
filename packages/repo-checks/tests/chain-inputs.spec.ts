@@ -33,9 +33,9 @@ const NOT_A_CHAIN_INPUT: Record<string, string> = {
   // signs or releases it, so none of this runs in any step — listed per file rather than as a `build/`
   // prefix so that something chain-relevant landing there has to be noticed.
   'build/build.sh': 'npm run build:production; packaging, which no chain step does',
-  'build/release/release.sh': 'the release path, which the chain never runs',
+  'build/release/release.sh': 'the release path, which the chain never runs; release-scripts.test.sh runs it against a scratch origin',
   'build/release/beta-tag.sh': 'the release path; its rule is covered by release-beta-rule.test.sh',
-  'build/release/unrelease.sh': 'the release path',
+  'build/release/unrelease.sh': 'the release path; covered by release-scripts.test.sh',
   'build/prod/glibc-floor.sh': "the Linux release's glibc floor, which build-linux.yml checks a packaged app against",
   'build/resources/gen-icons.sh': 'regenerates committed icons by hand',
   'native/speech/macos/build.sh': 'builds the native speech helper, which build:production invokes',

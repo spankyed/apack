@@ -8,6 +8,12 @@
 # 2. Deletes the remote and local git tag
 # 3. Reverts the release commit
 # 4. Pushes the revert to origin
+#
+# A production release that had no beta is two tags on one commit: v<version>, and the companion v<version>-beta.0
+# that release.sh adds for the beta-before-production rule (beta-tag.sh), each with a GitHub release of its own. They
+# are one release and are undone together, whichever of the two is named. With no version, the release undone is the
+# newest release commit in this branch's history that still has its tag: the commit's message names it, where
+# `git describe` would pick either of two tags on one commit.
 
 set -e
 
@@ -34,13 +40,30 @@ for arg in "$@"; do
   esac
 done
 
-# Default to latest tag if no version specified
+# The commit release.sh made for a tag, or nothing
+release_commit_for() {
+  git log --all --fixed-strings --grep="chore(release): $1" --format="%H %s" | awk -v subject="chore(release): $1" '
+    { hash = $1; sub(/^[^ ]+ /, "") }
+    $0 == subject { print hash; exit }'
+}
+
 if [ -z "$VERSION" ]; then
-  VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+  while read -r candidate; do
+    if [ -n "$(git tag -l "$candidate")" ]; then
+      VERSION="$candidate"
+      break
+    fi
+  done < <(git log --grep='^chore(release): v' --format='%s' | sed -n 's/^chore(release): \(v[^ ]*\)$/\1/p')
   if [ -z "$VERSION" ]; then
-    echo -e "${RED}✗ No tags found and no version specified.${NC}"
+    echo -e "${RED}✗ No release with a tag found in this branch's history, and no version specified.${NC}"
     exit 1
   fi
+fi
+
+# A companion beta tag names no release commit of its own: it is undone as the production release it was tagged with
+if [ -z "$(release_commit_for "$VERSION")" ] && [[ "$VERSION" == *-beta.0 ]] && [ -n "$(release_commit_for "${VERSION%-beta.0}")" ]; then
+  echo "$VERSION is the companion beta tag of ${VERSION%-beta.0}: undoing both"
+  VERSION="${VERSION%-beta.0}"
 fi
 
 echo "=========================================="
@@ -56,7 +79,7 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 # Find the release commit
-RELEASE_COMMIT=$(git log --all --oneline --grep="^chore(release): $VERSION\$" --format="%H" | head -1)
+RELEASE_COMMIT=$(release_commit_for "$VERSION")
 
 if [ -z "$RELEASE_COMMIT" ]; then
   echo -e "${RED}✗ Could not find release commit for $VERSION${NC}"
@@ -66,33 +89,38 @@ fi
 
 RELEASE_COMMIT_SHORT=$(echo "$RELEASE_COMMIT" | cut -c1-8)
 
-# Check if tag exists
-LOCAL_TAG=$(git tag -l "$VERSION")
-REMOTE_TAG=$(git ls-remote --tags origin "refs/tags/$VERSION" 2>/dev/null | head -1)
+# What a tag names on origin, or nothing
+remote_tag_commit() {
+  git ls-remote --tags origin "refs/tags/$1" 2>/dev/null | head -1 | cut -f1
+}
 
-# Check if GitHub release exists
-GH_RELEASE=""
-if command -v gh &> /dev/null; then
-  GH_RELEASE=$(gh release view "$VERSION" --json tagName --jq '.tagName' 2>/dev/null || echo "")
+# The release's tags: its own, and the companion beta tag when one sits on the same commit. A v<version>-beta.0 on
+# another commit is an earlier beta release, which this one didn't make and doesn't undo
+TAGS=("$VERSION")
+if [[ "$VERSION" != *-* ]]; then
+  COMPANION="${VERSION}-beta.0"
+  if [ "$(git rev-parse --quiet --verify "refs/tags/${COMPANION}^{commit}" || true)" = "$RELEASE_COMMIT" ] \
+    || [ "$(remote_tag_commit "$COMPANION")" = "$RELEASE_COMMIT" ]; then
+    TAGS+=("$COMPANION")
+  fi
 fi
+
+LOCAL_TAGS=()
+REMOTE_TAGS=()
+GH_RELEASES=()
+for tag in "${TAGS[@]}"; do
+  if [ -n "$(git tag -l "$tag")" ]; then LOCAL_TAGS+=("$tag"); fi
+  if [ -n "$(remote_tag_commit "$tag")" ]; then REMOTE_TAGS+=("$tag"); fi
+  if command -v gh &> /dev/null && [ -n "$(gh release view "$tag" --json tagName --jq '.tagName' 2>/dev/null || true)" ]; then
+    GH_RELEASES+=("$tag")
+  fi
+done
 
 # Show what will happen
 echo -e "${BLUE}Actions:${NC}"
-if [ -n "$GH_RELEASE" ]; then
-  echo "  1. Delete GitHub release: $VERSION"
-else
-  echo "  1. Delete GitHub release: (not found, skipping)"
-fi
-if [ -n "$REMOTE_TAG" ]; then
-  echo "  2. Delete remote tag: $VERSION"
-else
-  echo "  2. Delete remote tag: (not found, skipping)"
-fi
-if [ -n "$LOCAL_TAG" ]; then
-  echo "  3. Delete local tag: $VERSION"
-else
-  echo "  3. Delete local tag: (not found, skipping)"
-fi
+echo "  1. Delete GitHub release: ${GH_RELEASES[*]:-(not found, skipping)}"
+echo "  2. Delete remote tag: ${REMOTE_TAGS[*]:-(not found, skipping)}"
+echo "  3. Delete local tag: ${LOCAL_TAGS[*]:-(not found, skipping)}"
 echo "  4. Revert commit: $RELEASE_COMMIT_SHORT (chore(release): $VERSION)"
 echo "  5. Push revert to origin"
 echo ""
@@ -112,28 +140,30 @@ fi
 echo ""
 
 # Step 1: Delete GitHub release
-if [ -n "$GH_RELEASE" ]; then
+if [ "${#GH_RELEASES[@]}" -gt 0 ]; then
   echo -e "${BLUE}[1/5]${NC} Deleting GitHub release..."
-  gh release delete "$VERSION" --yes
-  echo -e "${GREEN}✓${NC} GitHub release deleted"
+  for tag in "${GH_RELEASES[@]}"; do
+    gh release delete "$tag" --yes
+  done
+  echo -e "${GREEN}✓${NC} GitHub release deleted: ${GH_RELEASES[*]}"
 else
   echo -e "${BLUE}[1/5]${NC} GitHub release not found, skipping"
 fi
 
 # Step 2: Delete remote tag
-if [ -n "$REMOTE_TAG" ]; then
+if [ "${#REMOTE_TAGS[@]}" -gt 0 ]; then
   echo -e "${BLUE}[2/5]${NC} Deleting remote tag..."
-  git push --delete origin "$VERSION"
-  echo -e "${GREEN}✓${NC} Remote tag deleted"
+  git push --atomic --delete origin "${REMOTE_TAGS[@]}"
+  echo -e "${GREEN}✓${NC} Remote tag deleted: ${REMOTE_TAGS[*]}"
 else
   echo -e "${BLUE}[2/5]${NC} Remote tag not found, skipping"
 fi
 
 # Step 3: Delete local tag
-if [ -n "$LOCAL_TAG" ]; then
+if [ "${#LOCAL_TAGS[@]}" -gt 0 ]; then
   echo -e "${BLUE}[3/5]${NC} Deleting local tag..."
-  git tag -d "$VERSION"
-  echo -e "${GREEN}✓${NC} Local tag deleted"
+  git tag -d "${LOCAL_TAGS[@]}"
+  echo -e "${GREEN}✓${NC} Local tag deleted: ${LOCAL_TAGS[*]}"
 else
   echo -e "${BLUE}[3/5]${NC} Local tag not found, skipping"
 fi
