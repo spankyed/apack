@@ -17,7 +17,7 @@ const sent = () => sendToSystem.mock.calls.map(([, event]) => event)
 
 function started() {
   const actor = createActor(terminalState).start()
-  actor.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-1'), aTerminal('t-2')] })
+  actor.send({ type: 'ASK_ANSWERED', asked: 'terminal.REFRESH_LIST', answer: [aTerminal('t-1'), aTerminal('t-2')] })
   sendToSystem.mockClear()
   return { actor, activity: () => actor.getSnapshot().context.activity, context: () => actor.getSnapshot().context }
 }
@@ -104,16 +104,16 @@ describe('looking back through a terminal', () => {
     expect(sent()).toEqual([{ type: 'terminal.REWIND', terminalId: 't-1', cols: 90, rows: 30 }])
     expect(context().rewind).toBeNull()
 
-    actor.send({ type: 'terminal.REWOUND', data: { terminalId: 't-1', session: 'r-4', first: 100, last: 900 } })
+    actor.send({ type: 'ASK_ANSWERED', asked: 'terminal.REWIND', answer: { terminalId: 't-1', session: 'r-4', first: 100, last: 900 } })
     expect(context().rewind).toEqual({ terminalId: 't-1', session: 'r-4', first: 100, last: 900, at: 900 })
 
     sendToSystem.mockClear()
     actor.send({ type: 'terminal.REWIND_SEEK', at: 450 })
     expect(sent()).toEqual([{ type: 'terminal.REWIND_SEEK', session: 'r-4', at: 450 }])
     // The answer for a recording this window no longer has open says nothing about the one it has
-    actor.send({ type: 'terminal.REWIND_SOUGHT', data: { session: 'r-3', at: 1 } })
+    actor.send({ type: 'ASK_ANSWERED', asked: 'terminal.REWIND_SEEK', answer: { session: 'r-3', at: 1 } })
     expect(context().rewind?.at).toBe(900)
-    actor.send({ type: 'terminal.REWIND_SOUGHT', data: { session: 'r-4', at: 450 } })
+    actor.send({ type: 'ASK_ANSWERED', asked: 'terminal.REWIND_SEEK', answer: { session: 'r-4', at: 450 } })
     expect(context().rewind?.at).toBe(450)
 
     sendToSystem.mockClear()

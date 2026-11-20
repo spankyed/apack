@@ -10,8 +10,8 @@ import type { AddressInfo } from 'node:net';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
 import { services } from '#generated/services.ts';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 const servers: http.Server[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
@@ -54,14 +54,15 @@ const signedIn = async () => {
   await app!.send('code', { type: 'SECRETS_CHANGED' });
 };
 
-const ask = (event: { type: string; host?: string; during?: 'push' | 'pull' }) => app!.send('code', event, { sender: CODE, client: 'c-main' });
+const ask = (event: { type: string; host?: string; during?: 'push' | 'pull' }) => app!.ask('code', event, { client: 'c-main' });
 
 it('tells the window that pushed why the push failed, that it can be run again, and what sign-in is missing', async () => {
   await codeOverARemoteWantingASignIn();
 
-  const call = await ask({ type: 'commit.PUBLISH_BRANCH' });
+  const call = ask({ type: 'commit.PUBLISH_BRANCH' });
 
-  expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: call })).data).toEqual({
+  expect(await refused(call)).toEqual({
+    kind: 'git',
     message: 'Failed to push: The remote asked for a sign-in that git does not have.',
     code: 'authentication',
     during: 'push',
@@ -74,17 +75,18 @@ describe('taking the offer to sign in to GitHub', () => {
     await codeOverARemoteWantingASignIn();
     await signedIn();
 
-    const call = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' });
+    const call = ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' });
 
-    expect((await app!.nextEmit('code', 'commit.SIGN_IN_SET_UP', { answering: call })).data).toEqual({ host: 'github.com', during: 'push' });
+    expect(await answered(call)).toEqual({ host: 'github.com', during: 'push' });
   });
 
   it('leaves the offer standing while the app is not signed in, with the pull it was for', async () => {
     await codeOverARemoteWantingASignIn();
 
-    const call = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'pull' });
+    const call = ask({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'pull' });
 
-    expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: call })).data).toEqual({
+    expect(await refused(call)).toEqual({
+      kind: 'git',
       message: 'Sign in to GitHub to give git a sign-in for github.com.',
       code: 'authentication',
       during: 'pull',
@@ -96,10 +98,10 @@ describe('taking the offer to sign in to GitHub', () => {
     await codeOverARemoteWantingASignIn();
     await signedIn();
 
-    const option = await ask({ type: 'commit.SET_UP_SIGN_IN', host: '--help' });
-    expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: option })).data).toMatchObject({ message: 'Not a host name: "--help"' });
-    const elsewhere = await ask({ type: 'commit.SET_UP_SIGN_IN', host: 'gitlab.com' });
-    expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: elsewhere })).data).toEqual({ message: 'The app signs git in to GitHub, not to gitlab.com.' });
+    const option = ask({ type: 'commit.SET_UP_SIGN_IN', host: '--help' });
+    expect(await refused(option)).toMatchObject({ message: 'Not a host name: "--help"' });
+    const elsewhere = ask({ type: 'commit.SET_UP_SIGN_IN', host: 'gitlab.com' });
+    expect(await refused(elsewhere)).toEqual({ kind: 'git', message: 'The app signs git in to GitHub, not to gitlab.com.' });
   });
 });
 
@@ -119,9 +121,9 @@ it('tells the window that pushed how far along the push is', async () => {
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const call = await ask({ type: 'commit.PUBLISH_BRANCH' });
+  const call = ask({ type: 'commit.PUBLISH_BRANCH' });
 
-  await app.nextEmit('code', 'commit.BRANCH_PUSHED', { answering: call });
+  await answered(call);
   const progress = app.emitted('code').filter(event => event.type === 'commit.PROGRESS').map(event => event.data as { during: string; stage: string; percent: number });
   expect(progress.at(-1)).toEqual({ during: 'push', stage: 'Writing objects', percent: 100 });
 });

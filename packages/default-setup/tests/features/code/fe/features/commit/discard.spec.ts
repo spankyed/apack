@@ -18,7 +18,7 @@ beforeEach(() => sendToSystem.mockReset());
 
 const sent = () => sendToSystem.mock.calls.map(([, event]) => event as { type: string });
 const panel = () => createActor(commitState).start();
-const discarded = (paths: string[], kept: { id?: string; notKept: string[] }) => ({ type: 'commit.FILES_REVERTED' as const, data: { paths, kept } });
+const discarded = (paths: string[], kept: { id?: string; notKept: string[] }) => ({ type: 'ASK_ANSWERED' as const, asked: 'commit.REVERT_FILES' as const, answer: { paths, kept } });
 
 it('asks what cannot be brought back as the dialog for a file opens, and holds the answer with what it was asked of', () => {
   const actor = panel();
@@ -26,7 +26,7 @@ it('asks what cannot be brought back as the dialog for a file opens, and holds t
   actor.send({ type: 'commit.TOGGLE_REVERT_DIALOG', file: { path: 'big/', status: 'untracked', staged: false, isDirectory: true } });
   expect(sent()).toContainEqual({ type: 'commit.PREVIEW_DISCARD', paths: ['big/'] });
 
-  actor.send({ type: 'commit.DISCARD_PREVIEWED', data: { paths: ['big/'], notKept: ['big/video.bin'] } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.PREVIEW_DISCARD' as const, answer: { paths: ['big/'], notKept: ['big/video.bin'] } });
   expect(actor.getSnapshot().context.discardPreview).toEqual({ paths: ['big/'], notKept: ['big/video.bin'] });
 });
 
@@ -55,7 +55,7 @@ it('drops the offer once undone, and says what was left alone until that is dism
   const actor = panel();
   actor.send(discarded(['a.txt', 'b.txt'], { id: 'abc123', notKept: [] }));
 
-  actor.send({ type: 'commit.DISCARD_RESTORED', data: { id: 'abc123', restored: ['a.txt'], left: ['b.txt'] } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.RESTORE_DISCARDED' as const, answer: { id: 'abc123', restored: ['a.txt'], left: ['b.txt'] } });
   expect(actor.getSnapshot().context).toMatchObject({ lastDiscard: null, discardLeft: ['b.txt'] });
 
   actor.send({ type: 'commit.DISMISS_DISCARD' });
@@ -68,7 +68,7 @@ it('leaves the offer for a newer discard when an older one is answered as put ba
   actor.send(discarded(['a.txt'], { id: 'older', notKept: [] }));
   actor.send(discarded(['b.txt'], { id: 'newer', notKept: [] }));
 
-  actor.send({ type: 'commit.DISCARD_RESTORED', data: { id: 'older', restored: ['a.txt'], left: [] } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.RESTORE_DISCARDED' as const, answer: { id: 'older', restored: ['a.txt'], left: [] } });
 
   expect(actor.getSnapshot().context.lastDiscard?.id).toBe('newer');
 });

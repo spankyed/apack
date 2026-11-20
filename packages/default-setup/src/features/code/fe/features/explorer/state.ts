@@ -1,5 +1,7 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
 import { sendToSystem } from '#generated/events.ts';
+import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
+import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { updateParentState, getParentContext, addTabToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, renameInTabViewHistory } from '../../utils/tab-management.ts';
 import { addRecentFile } from '../../utils/recent-files.ts';
@@ -78,10 +80,6 @@ export type Event =
   | { type: 'explorer.WRITE_FILE'; path: string; content: string }
   | { type: 'explorer.CLOSE_FILE'; path: string }
   | { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
-  | { type: 'explorer.FILES_LISTED'; data: { path: string; files: FileInfo[] } }
-  | { type: 'explorer.FILE_DELETED'; data: { path: string } }
-  | { type: 'explorer.FILE_RENAMED'; data: { oldPath: string; newPath: string } }
-  | { type: 'explorer.DIRECTORY_CREATED'; data: { path: string } }
   | { type: 'explorer.ERROR'; message: string }
   // Tree view events
   | { type: 'explorer.EXPAND_DIRECTORY'; path: string }
@@ -89,23 +87,21 @@ export type Event =
   | { type: 'explorer.SELECT_ITEMS'; paths: string[] }
   | { type: 'explorer.MOVE_ITEMS'; sourcePaths: string[]; targetDir: string }
   // Backend events that affect file state
-  | { type: 'explorer.FILE_CONTENT'; data: { path: string; content: string; encoding: string } }
-  | { type: 'explorer.FILE_SAVED'; data: { path: string } }
   | { type: 'explorer.FILE_CHANGED_EXTERNALLY'; data: { path: string; modifiedAt: Date; changeType: 'add' | 'change' | 'unlink' } }
-  | { type: 'explorer.CODE_ERROR'; data: { message: string; code?: string; path?: string } }
   // Quick open events
   | { type: 'explorer.QUICK_OPEN_SEARCH'; baseDirectory: string }
-  | { type: 'explorer.QUICK_OPEN_RESULTS'; data: QuickOpenResult[] }
-  // Move/copy results from backend
-  | { type: 'explorer.FILES_MOVED'; data: { sourcePaths: string[]; targetDir: string; movedPaths: string[] } }
-  | { type: 'explorer.FILES_COPIED'; data: { targetDir: string; copiedPaths: string[] } }
   | { type: 'explorer.COPY_FILES'; sourcePaths: string[]; targetDir: string }
   // Reveal in tree
   | { type: 'explorer.REVEAL_IN_TREE'; path: string }
   | { type: 'explorer.CLEAR_REVEAL' }
   | { type: 'explorer.REFRESH_TREE' }
-  // Broadcast events from parent
-  | { type: 'CODE_STARTED'; data: { baseDirectory: string | null } };
+  // What the surface starts from, handed on by the surface
+  | { type: 'CODE_STARTED'; data: { baseDirectory: string | null } }
+  // The answers to the explorer's asks, which the surface routes here
+  | AnswersOf<CodeSystemContract, ExplorerAsk>;
+
+/** The asks the explorer makes of the code system */
+type ExplorerAsk = Extract<keyof CodeSystemContract['asks'], `explorer.${string}`>;
 
 export const explorerState = setup({
   types: {
@@ -118,7 +114,7 @@ export const explorerState = setup({
     },
 
     handleFileContent: assign(({ event, context, self }) => {
-      const ev = event as { type: 'explorer.FILE_CONTENT'; data: { path: string; content: string; encoding: string; size?: number; isBinary?: boolean } }
+      const ev = { data: answerOf(event, 'explorer.READ_FILE') }
       const parentContext = getParentContext(self)
       const openFiles = parentContext?.openFiles || []
       const existingFile = openFiles.find((f: any) => f.path === ev.data.path)
@@ -173,7 +169,7 @@ export const explorerState = setup({
     }),
 
     handleFileSaved: ({ event, self }) => {
-      const ev = event as { type: 'explorer.FILE_SAVED'; data: { path: string } }
+      const ev = { data: answerOf(event, 'explorer.WRITE_FILE') }
       const parentContext = getParentContext(self)
 
       const updatedFiles = (parentContext?.openFiles || []).map((f: any) => {
@@ -226,7 +222,7 @@ export const explorerState = setup({
     },
 
     handleCodeError: ({ event, self }) => {
-      const ev = event as { type: 'explorer.CODE_ERROR'; data: { message: string; code?: string; path?: string } }
+      const ev = { data: (event as { type: 'ASK_FAILED'; failure: { message: string; code?: string; path?: string } }).failure }
 
       // A tab restored from storage whose file has since gone: drop the tab rather than leave one that can
       // never load. A pinned one goes too — `removeTabs` exempts nothing, deliberately, because pinning is
@@ -251,7 +247,7 @@ export const explorerState = setup({
     },
 
     assignFiles: assign(({ event, context, self }) => {
-      const ev = event as { type: 'explorer.FILES_LISTED'; data: { path: string; files: FileInfo[] } }
+      const ev = { data: answerOf(event, 'explorer.LIST_FILES') }
       const parentContext = getParentContext(self)
       const baseDirectory = parentContext?.baseDirectory || ''
 
@@ -411,13 +407,13 @@ export const explorerState = setup({
     },
 
     handleFilesCopied: assign(({ event }) => {
-      const ev = event as { type: 'explorer.FILES_COPIED'; data: { targetDir: string; copiedPaths: string[] } }
+      const ev = { data: answerOf(event, 'explorer.COPY_FILES') }
       sendToSystem('code', { type: 'explorer.LIST_FILES', path: ev.data.targetDir })
       return { selectedPaths: [] as string[] }
     }),
 
     handleFilesMoved: assign(({ event }) => {
-      const ev = event as { type: 'explorer.FILES_MOVED'; data: { sourcePaths: string[]; targetDir: string; movedPaths: string[] } }
+      const ev = { data: answerOf(event, 'explorer.MOVE_FILES') }
 
       // Refresh the target directory
       sendToSystem('code', { type: 'explorer.LIST_FILES', path: ev.data.targetDir })
@@ -433,7 +429,7 @@ export const explorerState = setup({
     }),
 
     handleFileDeleted: ({ event, self }) => {
-      const ev = event as { type: 'explorer.FILE_DELETED'; data: { path: string } }
+      const ev = { data: answerOf(event, 'explorer.DELETE_FILE') }
       const parentContext = getParentContext(self)
 
       // Refresh the parent directory of the deleted file
@@ -453,7 +449,7 @@ export const explorerState = setup({
     },
 
     handleFileRenamed: ({ event, self }) => {
-      const ev = event as { type: 'explorer.FILE_RENAMED'; data: { oldPath: string; newPath: string } }
+      const ev = { data: answerOf(event, 'explorer.RENAME_FILE') }
       const parentContext = getParentContext(self)
 
       // Refresh the parent directory of the renamed file
@@ -487,7 +483,7 @@ export const explorerState = setup({
     },
 
     handleDirectoryCreated: assign(({ event, context }) => {
-      const ev = event as { type: 'explorer.DIRECTORY_CREATED'; data: { path: string } }
+      const ev = { data: answerOf(event, 'explorer.CREATE_DIRECTORY') }
 
       // Refresh the parent directory to show the new directory
       const parentDir = getParentDir(ev.data.path)
@@ -519,7 +515,7 @@ export const explorerState = setup({
     },
 
     handleQuickOpenResults: ({ event, self }) => {
-      const ev = event as { type: 'explorer.QUICK_OPEN_RESULTS'; data: QuickOpenResult[] }
+      const ev = { data: answerOf(event, 'explorer.QUICK_OPEN_SEARCH') }
       updateParentState(self, {
         quickOpenResults: ev.data,
         quickOpenLoading: false
@@ -577,9 +573,6 @@ export const explorerState = setup({
         'explorer.LIST_FILES': {
           actions: ['setLoading', 'listFiles']
         },
-        'explorer.FILES_LISTED': {
-          actions: 'assignFiles'
-        },
         'explorer.DELETE_FILE': {
           actions: 'deleteFile'
         },
@@ -610,39 +603,14 @@ export const explorerState = setup({
         'explorer.MOVE_ITEMS': {
           actions: 'moveItems'
         },
-        'explorer.FILES_MOVED': {
-          actions: 'handleFilesMoved'
-        },
         'explorer.COPY_FILES': {
           actions: 'copyFiles'
-        },
-        'explorer.FILES_COPIED': {
-          actions: 'handleFilesCopied'
-        },
-        'explorer.FILE_DELETED': {
-          actions: 'handleFileDeleted'
-        },
-        'explorer.FILE_RENAMED': {
-          actions: 'handleFileRenamed'
-        },
-        'explorer.DIRECTORY_CREATED': {
-          actions: 'handleDirectoryCreated'
         },
         'explorer.ERROR': {
           actions: 'assignError'
         },
-        // Handle backend events
-        'explorer.FILE_CONTENT': {
-          actions: 'handleFileContent'
-        },
-        'explorer.FILE_SAVED': {
-          actions: 'handleFileSaved'
-        },
         'explorer.FILE_CHANGED_EXTERNALLY': {
           actions: 'handleFileChangedExternally'
-        },
-        'explorer.CODE_ERROR': {
-          actions: 'handleCodeError'
         },
         'explorer.WRITE_FILE': {
           actions: 'writeFile'
@@ -653,9 +621,19 @@ export const explorerState = setup({
         'explorer.QUICK_OPEN_SEARCH': {
           actions: 'quickOpenSearch'
         },
-        'explorer.QUICK_OPEN_RESULTS': {
-          actions: 'handleQuickOpenResults'
-        },
+        // The answers to the explorer's asks, each taken by the ask it answers
+        ASK_ANSWERED: [
+          { guard: ({ event }) => isAnswered(event, 'explorer.LIST_FILES'), actions: 'assignFiles' },
+          { guard: ({ event }) => isAnswered(event, 'explorer.READ_FILE'), actions: 'handleFileContent' },
+          { guard: ({ event }) => isAnswered(event, 'explorer.WRITE_FILE'), actions: 'handleFileSaved' },
+          { guard: ({ event }) => isAnswered(event, 'explorer.DELETE_FILE'), actions: 'handleFileDeleted' },
+          { guard: ({ event }) => isAnswered(event, 'explorer.RENAME_FILE'), actions: 'handleFileRenamed' },
+          { guard: ({ event }) => isAnswered(event, 'explorer.CREATE_DIRECTORY'), actions: 'handleDirectoryCreated' },
+          { guard: ({ event }) => isAnswered(event, 'explorer.MOVE_FILES'), actions: 'handleFilesMoved' },
+          { guard: ({ event }) => isAnswered(event, 'explorer.COPY_FILES'), actions: 'handleFilesCopied' },
+          { guard: ({ event }) => isAnswered(event, 'explorer.QUICK_OPEN_SEARCH'), actions: 'handleQuickOpenResults' },
+        ],
+        ASK_FAILED: { actions: 'handleCodeError' },
         'explorer.REVEAL_IN_TREE': {
           actions: 'revealInTree'
         },

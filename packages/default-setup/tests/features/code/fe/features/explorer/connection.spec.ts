@@ -26,7 +26,7 @@ it('reads the connected directory without turning restoration into a settings ch
 });
 
 it('clears the previous tree when reconnecting without a directory', () => {
-  actor.send({ type: 'explorer.FILES_LISTED', data: { path: '/work', files: [{ name: 'file', path: '/work/file', type: 'file' }] } });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'explorer.LIST_FILES', answer: { path: '/work', files: [{ name: 'file', path: '/work/file', type: 'file' }] } });
   expect(actor.getSnapshot().context.rootFiles).toHaveLength(1);
   sendToSystem.mockReset(); updateParentState.mockReset();
   actor.send({ type: 'CODE_STARTED', data: { baseDirectory: null } });

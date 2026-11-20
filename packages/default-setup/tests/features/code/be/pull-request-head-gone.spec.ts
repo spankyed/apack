@@ -9,8 +9,7 @@ import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
 
-const CODE = 'default-setup/code';
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -49,18 +48,12 @@ it("reads a closed pull request's changes after its branch is deleted, and says 
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: checkout });
   await app.settle();
 
-  const files = await app.nextEmit('code', 'pr.BRANCH_DIFF_RECEIVED', {
-    answering: await app.send('code', { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main', headBranch: 'feature', prNumber: 1 }, asWindow),
-  });
-  expect(files.data).toMatchObject({ baseBranch: 'main', headBranch: 'feature', files: [{ path: 'b.txt' }] });
+  expect(await app.ask('code', { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main', headBranch: 'feature', prNumber: 1 }, asWindow))
+    .toMatchObject({ ok: true, value: { baseBranch: 'main', headBranch: 'feature', files: [{ path: 'b.txt' }] } });
 
-  const file = await app.nextEmit('code', 'pr.FILE_DIFF_RECEIVED', {
-    answering: await app.send('code', { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'b.txt', baseBranch: 'main', headBranch: 'feature', prNumber: 1 }, asWindow),
-  });
-  expect(file.data).toMatchObject({ path: 'b.txt', originalContent: '', modifiedContent: 'two\n' });
+  expect(await app.ask('code', { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'b.txt', baseBranch: 'main', headBranch: 'feature', prNumber: 1 }, asWindow))
+    .toMatchObject({ ok: true, value: { path: 'b.txt', originalContent: '', modifiedContent: 'two\n' } });
 
-  const gone = await app.nextEmit('code', 'pr.ERROR', {
-    answering: await app.send('code', { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main', headBranch: 'feature' }, asWindow),
-  });
-  expect(gone).toMatchObject({ message: 'feature is no longer on the remote, so its changes cannot be compared.' });
+  expect(await app.ask('code', { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main', headBranch: 'feature' }, asWindow))
+    .toMatchObject({ ok: false, failure: { message: 'feature is no longer on the remote, so its changes cannot be compared.' } });
 });

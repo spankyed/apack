@@ -12,8 +12,8 @@ import { repository } from '#generated/repository.ts'
 import { EARS, newId } from '#generated/ears.ts'
 import { defaultShell } from '#features/code/be/services/known-shells.ts'
 import type { TerminalInfo } from '#features/code/be/types.ts'
+import { answered } from './_support/answered.ts'
 
-const CODE = 'default-setup/code'
 const WINDOW = 'c-main'
 
 type App = Awaited<ReturnType<typeof startApp>>
@@ -31,10 +31,9 @@ async function started() {
 }
 
 async function created(app: App, title = 'one'): Promise<TerminalInfo> {
-  await app.send('code', { type: 'terminal.CREATE_TERMINAL', title }, { sender: CODE, client: WINDOW })
-  const opened = await app.nextEmit('code', 'terminal.OPENED')
+  const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title }, { client: WINDOW }))
   await app.settle()
-  return opened.data as TerminalInfo
+  return opened
 }
 
 afterEach(() => { resetTestData() })
@@ -58,7 +57,7 @@ describe("a terminal's recording", () => {
     expect(first.record, 'named for the terminal, so the shell after this one finds it').toContain(terminal.id)
     expect(first).toMatchObject({ restore: false, images: true })
 
-    await app.send('code', { type: 'terminal.RESTART_TERMINAL', terminalId: terminal.id }, { sender: CODE, client: WINDOW })
+    answered(await app.ask('code', { type: 'terminal.RESTART_TERMINAL', terminalId: terminal.id }, { client: WINDOW }))
     await app.nextEmit('code', 'terminal.RESTARTED')
     expect(broker.opened[1]!.options).toMatchObject({ record: first.record, restore: true, images: true })
     await app.stop()
@@ -87,7 +86,7 @@ describe("a terminal's recording", () => {
   it('goes when the terminal is closed', async () => {
     const { app, broker, removed } = await started()
     const terminal = await created(app)
-    await app.send('code', { type: 'terminal.CLOSE_TERMINAL', terminalId: terminal.id }, { sender: CODE, client: WINDOW })
+    answered(await app.ask('code', { type: 'terminal.CLOSE_TERMINAL', terminalId: terminal.id }, { client: WINDOW }))
     await app.nextEmit('code', 'terminal.CLOSED')
     await app.settle()
     expect(removed).toEqual([broker.opened[0]!.options.record])
@@ -99,15 +98,14 @@ describe('a terminal asked to keep running', () => {
   it('has its session kept, and every window is told', async () => {
     const { app, broker } = await started()
     const terminal = await created(app)
-    await app.send('code', { type: 'terminal.KEEP_TERMINAL', terminalId: terminal.id, kept: true }, { sender: CODE, client: WINDOW })
+    answered(await app.ask('code', { type: 'terminal.KEEP_TERMINAL', terminalId: terminal.id, kept: true }, { client: WINDOW }))
     expect(await app.nextEmit('code', 'terminal.KEPT')).toMatchObject({ data: { terminalId: terminal.id, kept: true } })
     expect(broker.kept).toEqual([broker.opened[0]!.id])
 
-    await app.send('code', { type: 'terminal.REFRESH_LIST' }, { sender: CODE, client: WINDOW })
-    const listed = await app.nextEmit('code', 'terminal.TERMINALS_LISTED')
-    expect((listed.data as TerminalInfo[]).find(({ id }) => id === terminal.id)?.kept).toBe(true)
+    const listed = answered<TerminalInfo[]>(await app.ask('code', { type: 'terminal.REFRESH_LIST' }, { client: WINDOW }))
+    expect(listed.find(({ id }) => id === terminal.id)?.kept).toBe(true)
 
-    await app.send('code', { type: 'terminal.KEEP_TERMINAL', terminalId: terminal.id, kept: false }, { sender: CODE, client: WINDOW })
+    answered(await app.ask('code', { type: 'terminal.KEEP_TERMINAL', terminalId: terminal.id, kept: false }, { client: WINDOW }))
     await app.nextEmit('code', 'terminal.KEPT')
     expect(broker.kept).toEqual([])
     await app.stop()
@@ -134,10 +132,10 @@ describe('a terminal asked to keep running', () => {
   it('keeps the shell that replaces its own running too', async () => {
     const { app, broker } = await started()
     const terminal = await created(app)
-    await app.send('code', { type: 'terminal.KEEP_TERMINAL', terminalId: terminal.id, kept: true }, { sender: CODE, client: WINDOW })
+    answered(await app.ask('code', { type: 'terminal.KEEP_TERMINAL', terminalId: terminal.id, kept: true }, { client: WINDOW }))
     await app.nextEmit('code', 'terminal.KEPT')
 
-    await app.send('code', { type: 'terminal.RESTART_TERMINAL', terminalId: terminal.id }, { sender: CODE, client: WINDOW })
+    answered(await app.ask('code', { type: 'terminal.RESTART_TERMINAL', terminalId: terminal.id }, { client: WINDOW }))
     const restarted = (await app.nextEmit('code', 'terminal.RESTARTED')).data as TerminalInfo
     await app.settle()
 
@@ -152,8 +150,8 @@ describe('a terminal asked to keep running', () => {
     const terminal = await created(app)
     expect(terminal.recorded).toBeUndefined()
 
-    await app.send('code', { type: 'terminal.KEEP_TERMINAL', terminalId: terminal.id, kept: true }, { sender: CODE, client: WINDOW })
-    expect(await app.nextEmit('code', 'terminal.ERROR')).toMatchObject({ data: { terminalId: terminal.id } })
+    expect(await app.ask('code', { type: 'terminal.KEEP_TERMINAL', terminalId: terminal.id, kept: true }, { client: WINDOW }))
+      .toMatchObject({ ok: false, failure: { message: expect.stringContaining('only while terminals are restored') } })
     expect(takeSystemErrors()).toHaveLength(1)
     expect(broker.kept).toEqual([])
     await app.stop()
@@ -182,8 +180,8 @@ describe('a terminal asked to keep running', () => {
 
   it('refuses for a terminal that is not there, to the window that asked', async () => {
     const { app } = await started()
-    await app.send('code', { type: 'terminal.KEEP_TERMINAL', terminalId: 'Terminal:none', kept: true }, { sender: CODE, client: WINDOW })
-    expect(await app.nextEmit('code', 'terminal.ERROR')).toMatchObject({ data: { terminalId: 'Terminal:none' } })
+    expect(await app.ask('code', { type: 'terminal.KEEP_TERMINAL', terminalId: 'Terminal:none', kept: true }, { client: WINDOW }))
+      .toMatchObject({ ok: false, failure: { message: expect.stringContaining('Terminal:none') } })
     expect(takeSystemErrors()).toHaveLength(1)
     await app.stop()
   })
@@ -193,16 +191,14 @@ describe('looking back through a terminal', () => {
   it('opens its recording for the window that asked, shows the moment asked for, and closes', async () => {
     const { app, broker } = await started()
     const terminal = await created(app)
-    await app.send('code', { type: 'terminal.REWIND', terminalId: terminal.id, cols: 100, rows: 30 }, { sender: CODE, client: WINDOW })
-    const rewound = await app.nextEmit('code', 'terminal.REWOUND')
-    expect(rewound.data).toEqual({ terminalId: terminal.id, session: 'rewind-1', first: 1_000, last: 9_000 })
+    const rewound = await app.ask('code', { type: 'terminal.REWIND', terminalId: terminal.id, cols: 100, rows: 30 }, { client: WINDOW })
+    expect(rewound).toEqual({ ok: true, value: { terminalId: terminal.id, session: 'rewind-1', first: 1_000, last: 9_000 } })
     expect(broker.rewound[0]).toMatchObject({ recording: broker.opened[0]!.options.record, cols: 100, rows: 30 })
 
-    await app.send('code', { type: 'terminal.REWIND_SEEK', session: 'rewind-1', at: 50_000 }, { sender: CODE, client: WINDOW })
-    expect(await app.nextEmit('code', 'terminal.REWIND_SOUGHT'), 'held to what the recording covers')
-      .toMatchObject({ data: { session: 'rewind-1', at: 9_000 } })
+    expect(await app.ask('code', { type: 'terminal.REWIND_SEEK', session: 'rewind-1', at: 50_000 }, { client: WINDOW }), 'held to what the recording covers')
+      .toEqual({ ok: true, value: { session: 'rewind-1', at: 9_000 } })
 
-    await app.send('code', { type: 'terminal.REWIND_CLOSE', session: 'rewind-1' }, { sender: CODE, client: WINDOW })
+    await app.send('code', { type: 'terminal.REWIND_CLOSE', session: 'rewind-1' }, { client: WINDOW })
     await app.settle()
     expect(broker.rewound[0]!.closed).toBe(true)
     // And the terminal it was a recording of was never touched
@@ -214,8 +210,8 @@ describe('looking back through a terminal', () => {
     const { app, broker } = await started()
     const terminal = await created(app)
     broker.refuseRewind()
-    await app.send('code', { type: 'terminal.REWIND', terminalId: terminal.id, cols: 80, rows: 24 }, { sender: CODE, client: WINDOW })
-    expect(await app.nextEmit('code', 'terminal.ERROR')).toMatchObject({ data: { terminalId: terminal.id } })
+    expect(await app.ask('code', { type: 'terminal.REWIND', terminalId: terminal.id, cols: 80, rows: 24 }, { client: WINDOW }))
+      .toMatchObject({ ok: false, failure: { kind: 'failed' } })
     expect(takeSystemErrors()).toHaveLength(1)
     await app.stop()
   })
@@ -223,10 +219,9 @@ describe('looking back through a terminal', () => {
   it('is drawn at the grid the window showing it fitted', async () => {
     const { app, broker } = await started()
     const terminal = await created(app)
-    await app.send('code', { type: 'terminal.REWIND', terminalId: terminal.id, cols: 80, rows: 24 }, { sender: CODE, client: WINDOW })
-    await app.nextEmit('code', 'terminal.REWOUND')
+    answered(await app.ask('code', { type: 'terminal.REWIND', terminalId: terminal.id, cols: 80, rows: 24 }, { client: WINDOW }))
 
-    await app.send('code', { type: 'terminal.REWIND_RESIZE', session: 'rewind-1', cols: 132, rows: 40 }, { sender: CODE, client: WINDOW })
+    await app.send('code', { type: 'terminal.REWIND_RESIZE', session: 'rewind-1', cols: 132, rows: 40 }, { client: WINDOW })
     await app.settle()
 
     expect(broker.rewound[0]).toMatchObject({ cols: 132, rows: 40 })
@@ -236,10 +231,8 @@ describe('looking back through a terminal', () => {
   it('closes the recording a window was looking at when that window opens another', async () => {
     const { app, broker } = await started()
     const [one, two] = [await created(app, 'one'), await created(app, 'two')]
-    await app.send('code', { type: 'terminal.REWIND', terminalId: one.id, cols: 80, rows: 24 }, { sender: CODE, client: WINDOW })
-    await app.nextEmit('code', 'terminal.REWOUND')
-    await app.send('code', { type: 'terminal.REWIND', terminalId: two.id, cols: 80, rows: 24 }, { sender: CODE, client: WINDOW })
-    await app.nextEmit('code', 'terminal.REWOUND')
+    answered(await app.ask('code', { type: 'terminal.REWIND', terminalId: one.id, cols: 80, rows: 24 }, { client: WINDOW }))
+    answered(await app.ask('code', { type: 'terminal.REWIND', terminalId: two.id, cols: 80, rows: 24 }, { client: WINDOW }))
     await app.settle()
 
     expect(broker.rewound.map(({ closed }) => closed)).toEqual([true, false])
@@ -249,8 +242,7 @@ describe('looking back through a terminal', () => {
   it('closes a recording whose window has gone', async () => {
     const { app, broker } = await started()
     const terminal = await created(app)
-    await app.send('code', { type: 'terminal.REWIND', terminalId: terminal.id, cols: 80, rows: 24 }, { sender: CODE, client: WINDOW })
-    await app.nextEmit('code', 'terminal.REWOUND')
+    answered(await app.ask('code', { type: 'terminal.REWIND', terminalId: terminal.id, cols: 80, rows: 24 }, { client: WINDOW }))
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
     await terminalService.forgetClient('c-another')
     await app.settle()

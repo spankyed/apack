@@ -60,7 +60,7 @@ test("the code system's file watcher and a terminal's news reach the code surfac
   // The watcher reports changes to open files, and a read opens one. The system sets its base directory after
   // the send is accepted, and refuses a read asked before then, so the read is asked until it is answered with the file
   await expect.poll(async () => (await app.ask(builtIn('code'), { type: 'explorer.READ_FILE', path: changed })).type)
-    .toBe('explorer.FILE_CONTENT');
+    .toBe('ASK_ANSWERED');
   // Written again on each check, since the watcher may be a moment from reporting when the read is answered.
   // The broadcast is what this test is about
   let writes = 0;
@@ -70,11 +70,11 @@ test("the code system's file watcher and a terminal's news reach the code surfac
       .some((event) => JSON.stringify(event.data).includes('changed-outside.txt'));
   }, { intervals: [500] }).toBe(true);
 
-  // What a terminal is goes in `terminal.OPENED`, to whoever asked; every window hears that one was made, by its
-  // id alone, which is the news this test is about
+  // What a terminal is goes in the answer, to whoever asked; every window hears that one was made, by its id alone,
+  // which is the news this test is about
   const opened = await app.ask(builtIn('code'), { type: 'terminal.CREATE_TERMINAL', title: 'e2e surface sends', cwd: workDir });
-  expect(opened.type).toBe('terminal.OPENED');
-  const terminalId = (opened.data as { id: string }).id;
+  expect(opened.type).toBe('ASK_ANSWERED');
+  const terminalId = (opened.answer as { id: string }).id;
   await expect.poll(async () => (await received(appPage, 'code', 'terminal.CREATED'))
     .map((event) => (event.data as { terminalId: string }).terminalId)).toContain(terminalId);
   try {

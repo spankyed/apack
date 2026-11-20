@@ -2,7 +2,7 @@
 // the status it is sent, and has git carry on with it, skip a commit or give it up.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -25,10 +25,7 @@ function panelTold(operation?: RepositoryOperation, fetchSuspended?: boolean) {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.REFRESH_STATUS' });
   const [, , { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];
-  actor.send(answerTo(call, {
-    type: 'commit.STATUS_RECEIVED' as const,
-    data: { files: [], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true, operation, fetchSuspended },
-  }));
+  actor.send(askAnswered(call, 'commit.GET_GIT_STATUS', { files: [], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true, operation, fetchSuspended }));
   return actor;
 }
 
@@ -49,7 +46,7 @@ it('has git move it on, and is busy with that until git answers', () => {
   expect(sendToSystem).toHaveBeenLastCalledWith('code', { type: 'commit.MOVE_OPERATION', move: 'continue' }, { call: expect.any(String) });
   expect(actor.getSnapshot().context.isMovingOperation).toBe(true);
 
-  actor.send({ type: 'commit.OPERATION_MOVED', data: { move: 'continue' } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.MOVE_OPERATION' as const, answer: { move: 'continue' } });
   expect(actor.getSnapshot().context.isMovingOperation).toBe(false);
 });
 
@@ -57,7 +54,7 @@ it('says why when git could not, and is no longer busy', () => {
   const actor = panelTold(MERGE);
   actor.send({ type: 'commit.MOVE_OPERATION', move: 'continue' });
 
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.MOVE_OPERATION'), { type: 'commit.ERROR_RECEIVED' as const, data: { message: 'you have unmerged files' } }));
+  actor.send(askFailed(sentCall(sendToSystem, 'commit.MOVE_OPERATION'), 'commit.MOVE_OPERATION', { kind: 'git', message: 'you have unmerged files' }));
 
   expect(actor.getSnapshot().context).toMatchObject({ isMovingOperation: false, gitError: 'you have unmerged files', operation: MERGE });
 });

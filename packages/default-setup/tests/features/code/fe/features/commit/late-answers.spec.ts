@@ -3,7 +3,7 @@
 // only the answer to the latest ask of each list is shown.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -29,11 +29,14 @@ const commit = (of: string) => ({ hash: of, parents: [], subject: of, authorName
 
 /** Each list: the event that asks for it, where the panel holds it, and an answer naming what it is of */
 const LISTS = [
-  { ask: 'commit.GET_ALL_BRANCHES', held: 'availableBranches', answer: (of: string) => ({ type: 'commit.BRANCHES_RECEIVED' as const, data: { branches: [of] } }), shown: (of: string): unknown[] => [of] },
-  { ask: 'commit.STASH_LIST', held: 'stashList', answer: (of: string) => ({ type: 'commit.STASH_LIST_RECEIVED' as const, data: { stashes: [stash(of)] } }), shown: (of: string): unknown[] => [stash(of)] },
-  { ask: 'commit.WORKTREE_LIST', held: 'worktreeList', answer: (of: string) => ({ type: 'commit.WORKTREE_LIST_RECEIVED' as const, data: { worktrees: [worktree(of)] } }), shown: (of: string): unknown[] => [worktree(of)] },
-  { ask: 'commit.LOG_LIST', held: 'commitLog', answer: (of: string) => ({ type: 'commit.LOG_LIST_RECEIVED' as const, data: { commits: [commit(of)] } }), shown: (of: string): unknown[] => [commit(of)] },
+  { ask: 'commit.GET_ALL_BRANCHES', held: 'availableBranches', answer: (of: string) => ({ branches: [of] }), shown: (of: string): unknown[] => [of] },
+  { ask: 'commit.STASH_LIST', held: 'stashList', answer: (of: string) => ({ stashes: [stash(of)] }), shown: (of: string): unknown[] => [stash(of)] },
+  { ask: 'commit.WORKTREE_LIST', held: 'worktreeList', answer: (of: string) => ({ worktrees: [worktree(of)] }), shown: (of: string): unknown[] => [worktree(of)] },
+  { ask: 'commit.LOG_LIST', held: 'commitLog', answer: (of: string) => ({ commits: [commit(of)] }), shown: (of: string): unknown[] => [commit(of)] },
 ] as const;
+
+/** One of these lists' answers, to the ask made under `call`: the table pairs each ask with its answer, which the compiler cannot follow */
+const answered = (call: string, ask: string, answer: object) => askAnswered(call, ask, answer) as never;
 
 it.each(LISTS)('shows what answers the latest $ask, and not the answer to the one made over the folder before', ({ ask, held, answer, shown }) => {
   const actor = createActor(commitState).start();
@@ -45,18 +48,18 @@ it.each(LISTS)('shows what answers the latest $ask, and not the answer to the on
   const overTwo = sentCall(sendToSystem, ask, 1);
 
   // The first folder's answer arrives once the second is open
-  actor.send(answerTo(overOne, answer('one')));
+  actor.send(answered(overOne, ask, answer('one')));
   expect(actor.getSnapshot().context[held], 'the answer of the folder before is not shown').toEqual([]);
 
-  actor.send(answerTo(overTwo, answer('two')));
+  actor.send(answered(overTwo, ask, answer('two')));
   expect(actor.getSnapshot().context[held]).toEqual(shown('two'));
 });
 
-it.each(LISTS)('shows nothing for a $ask answer that answers no ask of this panel', ({ held, answer }) => {
+it.each(LISTS)('shows nothing for a $ask answer that answers no ask of this panel', ({ ask, held, answer }) => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'CODE_STARTED' });
 
-  actor.send(answer('elsewhere'));
+  actor.send(answered('c-asked-elsewhere', ask, answer('elsewhere')));
 
   expect(actor.getSnapshot().context[held]).toEqual([]);
 });

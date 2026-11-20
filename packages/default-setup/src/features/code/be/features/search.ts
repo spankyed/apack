@@ -1,13 +1,9 @@
-import { answer } from '../answer.ts'
-import { defineHandlers } from '@apackdev/sdk/framework';
-import { assign, setup } from 'xstate'
+import type { AnswersTo, SearchAsks } from '../contract.ts'
+import { sendToWindow } from '#generated/events.ts'
+import { assign, setup, type ActorRefFrom, type AnyActorRef } from 'xstate'
 
 import { FileSystemRepository } from '../services/filesystem.ts'
-import type { SearchOptions } from '../types.ts'
-
-// Incoming events from frontend
-
-// Outgoing events to frontend
+import type { SearchOptions, SearchProgress, SearchResult } from '../types.ts'
 
 export interface CodeSearchSystemContext {
   repository: FileSystemRepository | null
@@ -15,23 +11,10 @@ export interface CodeSearchSystemContext {
 }
 
 export type Event =
-  | { type: 'search.SEARCH_FILES';
-      query: string;
-      path: string;
-      includePattern?: string;
-      excludePattern?: string;
-      caseSensitive?: boolean;
-      wholeWord?: boolean;
-      useRegex?: boolean;
-      maxResults?: number;
-    }
   | { type: 'search.CANCEL_SEARCH' }
   | { type: 'search.ASSIGN_SEARCH_CONTROLLER'; controller: AbortController }
   | { type: 'search.CLEAR_SEARCH_CONTROLLER'; controller: AbortController }
   | { type: 'search.UPDATE_BASE_DIRECTORY'; path: string };
-
-/** Hands each handler the answer for the message it is handling — see `defineHandlers` */
-const handlers = defineHandlers<CodeSearchSystemContext, Event>();
 
 export const searchSystem = setup({
   types: {
@@ -39,102 +22,18 @@ export const searchSystem = setup({
     events: {} as Event,
     input: {} as { baseDirectory: string | null },
   },
-  actions: handlers.actions({
-    searchFiles: async ({ event, context, self, reply }) => {
-      const ev = event as {
-        type: 'search.SEARCH_FILES';
-        query: string;
-        path: string;
-        includePattern?: string;
-        excludePattern?: string;
-        caseSensitive?: boolean;
-        wholeWord?: boolean;
-        useRegex?: boolean;
-        maxResults?: number;
-      }
-
-      if (!context.repository) {
-        answer(reply, {
-          type: 'search.ERROR',
-          data: { message: 'No directory selected. Please select a directory first.' }
-        })
-        return
-      }
-
-      // Cancel any existing search
-      if (context.activeSearchController) {
-        context.activeSearchController.abort()
-      }
-
-      // Create new abort controller
-      const controller = new AbortController()
-      self.send({ type: 'search.ASSIGN_SEARCH_CONTROLLER', controller })
-
-      try {
-        const searchOptions: SearchOptions = {
-          query: ev.query,
-          path: ev.path,
-          includePattern: ev.includePattern,
-          excludePattern: ev.excludePattern,
-          caseSensitive: ev.caseSensitive,
-          wholeWord: ev.wholeWord,
-          useRegex: ev.useRegex,
-          maxResults: ev.maxResults
-        }
-
-        let totalMatches = 0
-
-        const results = await context.repository.searchFiles(
-          searchOptions,
-          // Progress callback
-          (filesSearched, totalFiles, currentFile) => {
-            if (!controller.signal.aborted) {
-              answer(reply, {
-                type: 'search.PROGRESS',
-                data: { filesSearched, totalFiles, currentFile }
-              })
-            }
-          },
-          // Result callback (incremental results)
-          (result) => {
-            if (!controller.signal.aborted) {
-              totalMatches += result.matches.length
-              answer(reply, {
-                type: 'search.RESULT',
-                data: result
-              })
-            }
-          },
-          controller.signal
-        )
-
-        if (!controller.signal.aborted) {
-          answer(reply, {
-            type: 'search.COMPLETE',
-            data: { results, totalMatches }
-          })
-        }
-      } catch (error: any) {
-        if (!controller.signal.aborted) {
-          answer(reply, {
-            type: 'search.ERROR',
-            data: { message: error.message }
-          })
-        }
-      } finally {
-        self.send({ type: 'search.CLEAR_SEARCH_CONTROLLER', controller })
-      }
-    },
-
+  actions: {
     cancelSearch: ({ context }) => {
       if (context.activeSearchController) {
         context.activeSearchController.abort()
       }
     },
 
+    // One search runs at a time: the one under way stops, and this one is held for a cancel to stop
     assignSearchController: assign({
-      activeSearchController: ({ event }) => {
+      activeSearchController: ({ context, event }) => {
         const ev = event as { type: 'search.ASSIGN_SEARCH_CONTROLLER'; controller: AbortController }
+        context.activeSearchController?.abort()
         return ev.controller
       }
     }),
@@ -154,7 +53,7 @@ export const searchSystem = setup({
         return new FileSystemRepository(ev.path)
       }
     }),
-  })
+  },
 }).createMachine({
   id: 'search',
   initial: 'idle',
@@ -165,9 +64,6 @@ export const searchSystem = setup({
   states: {
     idle: {
       on: {
-        'search.SEARCH_FILES': {
-          actions: 'searchFiles'
-        },
         'search.CANCEL_SEARCH': {
           actions: 'cancelSearch'
         },
@@ -184,3 +80,54 @@ export const searchSystem = setup({
     }
   }
 })
+/** The search, as the code system holds it: the folder searched, and the search under way */
+const searchOf = (code: AnyActorRef) => code.getSnapshot().children.search as ActorRefFrom<typeof searchSystem> | undefined
+
+/** The search asks, answered by the code system (`answers`, `system.ts`) over the search's folder */
+export const searchAnswers: AnswersTo<SearchAsks> = {
+  /**
+   * Answered with every match once the search ends, and told as it goes to the window that asked: how far it is, and
+   * each file's matches as they are found. A search asked for while it runs stops it, which is refused as superseded
+   */
+  'search.SEARCH_FILES': async ({ ask, self, client, failure }) => {
+    const search = searchOf(self)
+    const repository = search?.getSnapshot().context.repository
+    if (!search || !repository) throw new Error('No directory selected. Please select a directory first.')
+
+    const controller = new AbortController()
+    search.send({ type: 'search.ASSIGN_SEARCH_CONTROLLER', controller })
+    const tell = (event: { type: 'search.PROGRESS'; data: SearchProgress } | { type: 'search.RESULT'; data: SearchResult }) => {
+      if (client && !controller.signal.aborted) sendToWindow(client, 'code', event)
+    }
+    try {
+      const options: SearchOptions = {
+        query: ask.query,
+        path: ask.path,
+        includePattern: ask.includePattern,
+        excludePattern: ask.excludePattern,
+        caseSensitive: ask.caseSensitive,
+        wholeWord: ask.wholeWord,
+        useRegex: ask.useRegex,
+        maxResults: ask.maxResults,
+      }
+      let totalMatches = 0
+      const results = await repository.searchFiles(
+        options,
+        (filesSearched, totalFiles, currentFile) => tell({ type: 'search.PROGRESS', data: { filesSearched, totalFiles, currentFile } }),
+        (result) => {
+          if (controller.signal.aborted) return
+          totalMatches += result.matches.length
+          tell({ type: 'search.RESULT', data: result })
+        },
+        controller.signal,
+      ).catch((error: unknown) => {
+        if (controller.signal.aborted) return undefined
+        throw error
+      })
+      if (!results || controller.signal.aborted) throw failure('superseded', 'Another search was asked for, or this one was cancelled')
+      return { results, totalMatches }
+    } finally {
+      search.send({ type: 'search.CLEAR_SEARCH_CONTROLLER', controller })
+    }
+  },
+}

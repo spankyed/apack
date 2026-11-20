@@ -2,7 +2,7 @@
 // with the status that follows a change, and when the folder itself is said to have changed.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered } from '@apackdev/sdk/testing';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
 vi.mock('#generated/events.ts', () => ({ sendToSystem }));
@@ -32,12 +32,9 @@ function panelShowing(files: ReturnType<typeof folder>[]) {
 function tellStatus(actor: ReturnType<typeof createActor<typeof commitState>>, files: ReturnType<typeof folder>[]) {
   actor.send({ type: 'commit.REFRESH_STATUS' });
   const [, , { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];
-  actor.send(answerTo(call, {
-    type: 'commit.STATUS_RECEIVED' as const,
-    data: { files, truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true },
-  }));
+  actor.send(askAnswered(call, 'commit.GET_GIT_STATUS', { files, truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true }));
 }
-const listed = (path: string, files: string[], truncated = false) => ({ type: 'commit.UNTRACKED_LISTED' as const, data: { path, files, truncated } });
+const listed = (path: string, files: string[], truncated = false) => ({ type: 'ASK_ANSWERED' as const, asked: 'commit.LIST_UNTRACKED' as const, answer: { path, files, truncated } });
 const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false, refs: false };
 
 it('opens a folder\'s row by asking what is in it, lists that, and closes it again', () => {

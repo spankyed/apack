@@ -6,8 +6,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -16,7 +16,7 @@ afterEach(async () => {
   resetTestData();
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const git = async (cwd: string, ...args: string[]) =>
   String((await execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd })).stdout).trim();
 
@@ -37,8 +37,8 @@ it('answers the branches with each local one\'s standing against what it follows
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const asked = await app.send('code', { type: 'commit.GET_ALL_BRANCHES' }, asWindow);
-  const { data } = await app.nextEmit('code', 'commit.BRANCHES_RECEIVED', { answering: asked });
+  const asked = app.ask('code', { type: 'commit.GET_ALL_BRANCHES' }, asWindow);
+  const data = await answered(asked);
 
   expect((data as { standing: unknown }).standing).toEqual({ main: { upstream: 'origin/main', ahead: 1, behind: 1 } });
 });

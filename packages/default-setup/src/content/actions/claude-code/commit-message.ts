@@ -57,7 +57,7 @@ export async function action(
 
   if (!diff?.trim()) {
     services.emitter.sendToWindow(client, 'default-setup/code', {
-      type: 'commit.ERROR_RECEIVED',
+      type: 'commit.MESSAGE_NOT_GENERATED',
       data: { message: 'No diff provided' },
     });
     return { success: false, error: 'Empty diff' };
@@ -74,7 +74,7 @@ export async function action(
 
     if (!fullPrompt) {
       services.emitter.sendToWindow(client, 'default-setup/code', {
-        type: 'commit.ERROR_RECEIVED',
+        type: 'commit.MESSAGE_NOT_GENERATED',
         data: { message: 'Commit Message prompt template not found. Import the pack content.' },
       });
       return { success: false, error: 'Prompt not found' };
@@ -89,7 +89,7 @@ export async function action(
 
     if (!message) {
       services.emitter.sendToWindow(client, 'default-setup/code', {
-        type: 'commit.ERROR_RECEIVED',
+        type: 'commit.MESSAGE_NOT_GENERATED',
         data: { message: 'Claude returned an empty response.' },
       });
       return { success: false, error: 'Empty response' };
@@ -104,7 +104,7 @@ export async function action(
   } catch (error: any) {
     const errorMessage = formatProviderError(error, 'Claude Code');
     services.emitter.sendToWindow(client, 'default-setup/code', {
-      type: 'commit.ERROR_RECEIVED',
+      type: 'commit.MESSAGE_NOT_GENERATED',
       data: { message: errorMessage },
     });
     return { success: false, error: errorMessage };

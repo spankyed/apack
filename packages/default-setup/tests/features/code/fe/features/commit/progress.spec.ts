@@ -1,7 +1,7 @@
 // How far along a push, a pull or a checkout is: the panel holds what git last said until the command is answered
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -20,8 +20,8 @@ beforeEach(() => sendToSystem.mockReset());
 const WRITING = { during: 'push', stage: 'Writing objects', percent: 42 } as const;
 
 it.each([
-  ['it is pushed', { type: 'commit.BRANCH_PUSHED', data: { branchName: 'main' } }],
-  ['git refuses it', { type: 'commit.ERROR_RECEIVED', data: { message: 'Failed to push' } }],
+  ['it is pushed', (call: string) => askAnswered(call, 'commit.PUBLISH_BRANCH', { branchName: 'main', stopped: false })],
+  ['git refuses it', (call: string) => askFailed(call, 'commit.PUBLISH_BRANCH', { kind: 'git' as const, message: 'Failed to push' })],
 ] as const)('holds how far along a push is, and lets go of it once %s', (_when, answer) => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.PUSH_BRANCH' });
@@ -29,6 +29,6 @@ it.each([
   actor.send({ type: 'commit.PROGRESS', data: WRITING });
   expect(actor.getSnapshot().context.progress).toEqual(WRITING);
 
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.PUBLISH_BRANCH'), answer));
+  actor.send(answer(sentCall(sendToSystem, 'commit.PUBLISH_BRANCH')));
   expect(actor.getSnapshot().context).toMatchObject({ progress: null, isPushing: false });
 });

@@ -3,7 +3,7 @@
 // was read before the write landed, and the answer to a status asked before the latest one.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed } from '@apackdev/sdk/testing';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
 vi.mock('#generated/events.ts', () => ({ sendToSystem }));
@@ -27,14 +27,15 @@ const NOTHING = { status: false, diffs: false, history: false, stashes: false, w
 const asked = (type: string): string[] => sendToSystem.mock.calls
   .filter(([, event]) => (event as { type: string }).type === type)
   .map(([, , options]) => (options as { call: string }).call);
-const status = (files: GitStatusFile[]) =>
-  ({ type: 'commit.STATUS_RECEIVED' as const, data: { files, truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true } });
+/** The status the ask under `call` is answered with */
+const status = (call: string, files: GitStatusFile[]) =>
+  askAnswered(call, 'commit.GET_GIT_STATUS', { files, truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true });
 
 /** A panel that has asked for the status and been told `a.ts` is edited and not staged */
 function panelShowingAnEdit() {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.REFRESH_STATUS' });
-  actor.send(answerTo(asked('commit.GET_GIT_STATUS').at(-1)!, status([edited])));
+  actor.send(status(asked('commit.GET_GIT_STATUS').at(-1)!, [edited]));
   const listed = () => actor.getSnapshot().context.gitStatus;
   expect(listed()).toEqual([edited]);
   return { actor, listed };
@@ -48,22 +49,22 @@ it('moves a staged file at once, holds a status read before the write landed, an
 
   // Another window's news has the panel ask again, and the answer is of the repository before the write
   actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, status: true } });
-  actor.send(answerTo(asked('commit.GET_GIT_STATUS').at(-1)!, status([edited])));
+  actor.send(status(asked('commit.GET_GIT_STATUS').at(-1)!, [edited]));
   expect(listed(), 'the file is not put back').toEqual([staged]);
 
   const statusAsks = asked('commit.GET_GIT_STATUS').length;
-  actor.send(answerTo(asked('commit.STAGE_FILES').at(-1)!, { type: 'commit.FILES_STAGED' as const, paths: ['a.ts'] }));
+  actor.send(askAnswered(asked('commit.STAGE_FILES').at(-1)!, 'commit.STAGE_FILES', { paths: ['a.ts'] }));
   expect(asked('commit.GET_GIT_STATUS'), 'git is asked once the write is answered').toHaveLength(statusAsks + 1);
 
   const fromGit: GitStatusFile[] = [staged, { path: 'b.ts', status: 'untracked', staged: false }];
-  actor.send(answerTo(asked('commit.GET_GIT_STATUS').at(-1)!, status(fromGit)));
+  actor.send(status(asked('commit.GET_GIT_STATUS').at(-1)!, fromGit));
   expect(listed()).toEqual(fromGit);
 });
 
 it('moves an unstaged file at once', () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.REFRESH_STATUS' });
-  actor.send(answerTo(asked('commit.GET_GIT_STATUS').at(-1)!, status([staged])));
+  actor.send(status(asked('commit.GET_GIT_STATUS').at(-1)!, [staged]));
 
   actor.send({ type: 'commit.UNSTAGE_FILES', paths: ['a.ts'] });
 
@@ -74,9 +75,9 @@ it('puts a file back, and says why, when staging it is refused', () => {
   const { actor, listed } = panelShowingAnEdit();
   actor.send({ type: 'commit.STAGE_FILES', paths: ['a.ts'] });
 
-  actor.send(answerTo(asked('commit.STAGE_FILES').at(-1)!, { type: 'commit.ERROR_RECEIVED' as const, data: { message: 'the index is locked' } }));
+  actor.send(askFailed(asked('commit.STAGE_FILES').at(-1)!, 'commit.STAGE_FILES', { kind: 'git', message: 'the index is locked' }));
   expect(actor.getSnapshot().context.gitError).toBe('the index is locked');
-  actor.send(answerTo(asked('commit.GET_GIT_STATUS').at(-1)!, status([edited])));
+  actor.send(status(asked('commit.GET_GIT_STATUS').at(-1)!, [edited]));
 
   expect(listed()).toEqual([edited]);
 });
@@ -87,10 +88,10 @@ it('asks git for the list once, after the last of several writes is answered', (
   actor.send({ type: 'commit.UNSTAGE_FILES', paths: ['a.ts'] });
   const statusAsks = asked('commit.GET_GIT_STATUS').length;
 
-  actor.send(answerTo(asked('commit.STAGE_FILES').at(-1)!, { type: 'commit.FILES_STAGED' as const, paths: ['a.ts'] }));
+  actor.send(askAnswered(asked('commit.STAGE_FILES').at(-1)!, 'commit.STAGE_FILES', { paths: ['a.ts'] }));
   expect(asked('commit.GET_GIT_STATUS'), 'one write is still unanswered').toHaveLength(statusAsks);
 
-  actor.send(answerTo(asked('commit.UNSTAGE_FILES').at(-1)!, { type: 'commit.FILES_UNSTAGED' as const, paths: ['a.ts'] }));
+  actor.send(askAnswered(asked('commit.UNSTAGE_FILES').at(-1)!, 'commit.UNSTAGE_FILES', { paths: ['a.ts'] }));
   expect(asked('commit.GET_GIT_STATUS')).toHaveLength(statusAsks + 1);
 });
 
@@ -102,9 +103,9 @@ it('shows the answer to the latest status it asked for, and no earlier one', () 
   actor.send({ type: 'commit.REFRESH_STATUS' });
   const [earlier, latest] = asked('commit.GET_GIT_STATUS').slice(-2);
 
-  actor.send(answerTo(earlier!, status([])));
+  actor.send(status(earlier!, []));
   expect(listed(), 'the earlier answer is not shown').toEqual([edited]);
 
-  actor.send(answerTo(latest!, status([staged])));
+  actor.send(status(latest!, [staged]));
   expect(listed()).toEqual([staged]);
 });

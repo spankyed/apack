@@ -29,7 +29,7 @@ const record = (over: Partial<TerminalStatus> = {}): TerminalStatus => ({
 function aWindow(settings: Record<string, unknown> = {}) {
   parent.getParentContext.mockReturnValue({ settings } as never)
   const actor = createActor(terminalState).start()
-  actor.send({ type: 'terminal.TERMINALS_LISTED', data: [
+  actor.send({ type: 'ASK_ANSWERED', asked: 'terminal.REFRESH_LIST', answer: [
     { id: 't-1', title: 'one', cwd: '/work/api', active: true },
     { id: 't-2', title: 'two', cwd: '/work/web', active: true },
   ] as never })

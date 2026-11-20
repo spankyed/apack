@@ -18,7 +18,7 @@ import { featureSettings } from '#generated/settings.ts';
 import type { Contract } from './contract.ts';
 import type { AppSettings } from '@apackdev/sdk/types';
 import { services } from '#generated/services.ts';
-import { broadcastToSurface } from '#generated/events.ts';
+import { broadcastToSurface, sendToWindow } from '#generated/events.ts';
 import { clearCliPathCache, isCliName, testCli } from './utils/resolve-cli.ts';
 import { terminalService } from './services/terminal.ts';
 import { createLogger, setDebugEnabled } from '@apackdev/sdk/logger';
@@ -29,27 +29,23 @@ import { setup, enqueueActions, assign, sendTo, type AnyActorRef } from 'xstate'
 import { defineSystem } from '@apackdev/sdk/framework'
 import { AppGitRepository, GIT_COMMAND_LOG, openGitRepository, openGitWatcher, repositoryHandle, repositoryOf, watcherHandle, watcherOf } from './services/app-git-repository.ts'
 import { gitWatcherActor } from './git-watcher-actor.ts'
-import { answer } from './answer.ts'
 
 // child systems; their events come from the contract, which is where every child's now live
-import { explorerSystem } from './features/explorer.ts'
-import { searchSystem } from './features/search.ts'
-import { commitSystem } from './features/commit.ts'
-import { pullRequestSystem } from './features/pull-request.ts'
-import { forgetHeldSignIn, githubSystem } from './features/github.ts'
-import { terminalSystem } from './features/terminal.ts'
-import { actionsSystem } from './features/actions.ts'
-import { promptsSystem } from './features/prompts.ts'
+import { explorerAnswers, explorerSystem } from './features/explorer.ts'
+import { searchAnswers, searchSystem } from './features/search.ts'
+import { commitAnswers, commitSystem } from './features/commit.ts'
+import { pullRequestAnswers, pullRequestSystem } from './features/pull-request.ts'
+import { forgetHeldSignIn, githubAnswers, githubSystem } from './features/github.ts'
+import { terminalAnswers, terminalSystem } from './features/terminal.ts'
+import { actionsAnswers } from './features/actions.ts'
+import { promptsAnswers } from './features/prompts.ts'
 
 /** One of this system's children, by the id it was spawned under */
 function child(self: AnyActorRef, id: string): AnyActorRef | undefined {
   return self.getSnapshot().children[id];
 }
 
-// Union all incoming events from child systems
-// Union all outgoing events from child systems  
-// Import only the type needed for broadcast event
-import type { CodeConnectedData, CodeSettings } from './types.ts'
+import type { CodeSettings } from './types.ts'
 
 export const codeSpec = defineSystem<Contract>();
 
@@ -81,6 +77,45 @@ function resolveInitialDirectory(
   return null
 }
 
+/**
+ * Every ask the code system answers: its own, and each child's, whose handlers live beside that child's machine and
+ * do its work over this system's repository and folder. A code answer is data its asker shows — a file, a diff, a
+ * status, a pull request — so one nobody asked for goes nowhere. What happens unasked — a file changing on disk, the
+ * repository changing, the directory moving, a terminal's lifecycle — is news, broadcast where it happens with no
+ * listing on it, and each window asks for what it shows.
+ */
+export const answers = codeSpec.answers({
+  GET_CODE_START: ({ context }) => ({
+    baseDirectory: context.baseDirectory,
+    settings: featureSettings.forFeature('code').get(),
+  }),
+  /** Everything under the folder the user opened, for the picker */
+  'commit.LIST_REPOSITORIES': async ({ context }) => {
+    const folder = context.openedDirectory ?? context.baseDirectory
+    const none = { repositories: [], truncated: false, current: context.baseDirectory }
+    if (!folder) return none
+    const { repositories, truncated } = await AppGitRepository.repositoriesUnder(folder).catch(() => none)
+    return { repositories, truncated, current: context.baseDirectory }
+  },
+  'commit.WORKTREE_SWITCH': async ({ ask: { path }, context, self }) => {
+    const repository = repositoryOf(context.gitRepository)
+    if (!repository) throw new Error('No repository is open to switch worktrees in.')
+    const worktrees = await repository.worktreeList()
+    if (!worktrees.some(worktree => worktree.path === path)) throw new Error(`Not a worktree of this repository: ${path}`)
+    // A worktree is one of the repositories the picker offers, so the picker keeps the folder it lists
+    self.send({ type: 'SET_BASE_DIRECTORY', path, fromUserNavigation: true, fromPicker: true })
+    return { path }
+  },
+  ...explorerAnswers,
+  ...searchAnswers,
+  ...commitAnswers,
+  ...pullRequestAnswers,
+  ...terminalAnswers,
+  ...actionsAnswers,
+  ...promptsAnswers,
+  ...githubAnswers,
+})
+
 export const systemMachine = setup({
   types: codeSpec.types,
   actors: {
@@ -91,10 +126,10 @@ export const systemMachine = setup({
     pullRequestSystem,
     githubSystem,
     terminalSystem,
-    actionsSystem,
-    promptsSystem
   },
-  actions: codeSpec.actions({
+  actions: {
+    ...answers.actions,
+    ...codeSpec.actions({
     spawnFeatureActors: enqueueActions(({ enqueue, context, self }) => {
       // The children are this system's own: nothing outside it looks them up, so none has a system id
       enqueue.spawnChild('explorerSystem', {
@@ -117,14 +152,7 @@ export const systemMachine = setup({
           code: self
         }
       });
-      enqueue.spawnChild('pullRequestSystem', {
-        id: 'pr',
-        input: {
-          baseDirectory: context.baseDirectory,
-          gitRepository: repositoryOf(context.gitRepository),
-          code: self
-        }
-      });
+      enqueue.spawnChild('pullRequestSystem', { id: 'pr' });
       enqueue.spawnChild('terminalSystem', {
         id: 'terminal',
         input: {
@@ -132,8 +160,6 @@ export const systemMachine = setup({
         }
       });
       enqueue.spawnChild('githubSystem', { id: 'github' });
-      enqueue.spawnChild('actionsSystem', { id: 'codeActions' });
-      enqueue.spawnChild('promptsSystem', { id: 'codePrompts' });
     }),
 
     routeEvent: ({ event, self }) => {
@@ -149,44 +175,6 @@ export const systemMachine = setup({
       if (ev.fromUserNavigation !== false) {
         featureSettings.forFeature('code').set({ path: ['baseDirectory'], value: ev.path })
       }
-    },
-
-    /** What the repository picker lists, for the window that asked: everything under the folder the user opened */
-    listRepositories: ({ context, reply }) => {
-      const folder = context.openedDirectory ?? context.baseDirectory
-      if (!folder) {
-        reply?.({ type: 'commit.REPOSITORIES_RECEIVED', data: { repositories: [], truncated: false, current: context.baseDirectory } })
-        return
-      }
-      void AppGitRepository.repositoriesUnder(folder).then(
-        ({ repositories, truncated }) => reply?.({ type: 'commit.REPOSITORIES_RECEIVED', data: { repositories, truncated, current: context.baseDirectory } }),
-        () => reply?.({ type: 'commit.REPOSITORIES_RECEIVED', data: { repositories: [], truncated: false, current: context.baseDirectory } }),
-      )
-    },
-
-    /**
-     * Moves the code surface to one of the repository's worktrees, and answers the window that asked: switched, or
-     * why not. A path the repository does not list as a worktree is refused, and the folder stays where it is
-     */
-    switchWorktree: ({ context, event, self, reply }) => {
-      const { path } = codeSpec.typeOf('commit.WORKTREE_SWITCH', event)
-      const repository = repositoryOf(context.gitRepository)
-      if (!repository) {
-        answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: 'No repository is open to switch worktrees in.' } })
-        return
-      }
-      void repository.worktreeList().then(
-        (worktrees) => {
-          if (!worktrees.some(worktree => worktree.path === path)) {
-            answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: `Not a worktree of this repository: ${path}` } })
-            return
-          }
-          // A worktree is one of the repositories the picker offers, so the picker keeps the folder it lists
-          self.send({ type: 'SET_BASE_DIRECTORY', path, fromUserNavigation: true, fromPicker: true })
-          answer(reply, { type: 'commit.WORKTREE_SWITCHED', data: { path } })
-        },
-        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message: error instanceof Error ? error.message : String(error) } }),
-      )
     },
 
     updateBaseDirectory: assign({
@@ -229,11 +217,7 @@ export const systemMachine = setup({
         path: newPath,
         gitRepository: repositoryOf(context.gitRepository)!
       });
-      child(self, 'pr')?.send({
-        type: 'pr.UPDATE_BASE_DIRECTORY',
-        path: newPath,
-        gitRepository: repositoryOf(context.gitRepository)!
-      });
+      child(self, 'pr')?.send({ type: 'pr.UPDATE_BASE_DIRECTORY', path: newPath });
       // Note: Updates terminal's base directory for new terminal creation.
       // Individual terminal processes track their own cwd independently.
       child(self, 'terminal')?.send({ type: 'terminal.UPDATE_BASE_DIRECTORY', path: newPath });
@@ -246,12 +230,12 @@ export const systemMachine = setup({
      * Resolves a CLI and records where it was found, in this feature's own settings. It lives here because
      * `resolve-cli` and the stored paths are this feature's; the Settings view asks for it and is told the result.
      */
-    testCliProvider: ({ event, reply }) => {
+    testCliProvider: ({ event, client }) => {
       const { provider } = event as { type: 'TEST_CLI_PROVIDER'; provider: string };
-      // The Settings view that asked; with nobody to answer, the Settings view in every window
+      // The Settings view of the window that asked; with no window, the Settings view in every window
       const answer = (result: { success: boolean; error?: string; resolvedPath?: string }) => {
         const tested = { type: 'CLI_TEST_RESULT' as const, provider, ...result };
-        if (reply) reply(tested); else broadcastToSurface('host/settings', tested);
+        if (client) sendToWindow(client, 'host/settings', tested); else broadcastToSurface('host/settings', tested);
       };
 
       if (!isCliName(provider)) return answer({ success: false, error: `Unknown CLI provider: ${provider}` });
@@ -304,19 +288,6 @@ export const systemMachine = setup({
     },
     
     /**
-     * What a window's code surface starts from, answered to it: the directory and the settings, then — the same ask
-     * handed on, so it answers that window too — the running terminals. The panels ask for their own on the answer
-     */
-    sendCodeStart: ({ self, context, event, reply }) => {
-      const connectedData: CodeConnectedData = {
-        baseDirectory: context.baseDirectory,
-        settings: featureSettings.forFeature('code').get(),
-      };
-      reply?.({ type: 'CODE_STARTED', data: connectedData });
-      child(self, 'terminal')?.send(event);
-    },
-    
-    /**
      * Something may have changed on disk that no file event reported. The watches are brought in line with the
      * checkout first — it may have become a repository, or a watch may have failed — and then git and the open
      * files say what, if anything, differs.
@@ -333,7 +304,8 @@ export const systemMachine = setup({
     selectGitWatcher: sendTo('gitWatcher', ({ context }) => ({
       type: 'WATCH', selection: { watcher: watcherOf(context.gitWatcher), repository: repositoryOf(context.gitRepository) },
     })),
-  })
+  }),
+  },
 }).createMachine({
   id: 'code',
   initial: 'idle',
@@ -373,9 +345,8 @@ export const systemMachine = setup({
   states: {
     idle: {
       on: {
-        GET_CODE_START: {
-          actions: 'sendCodeStart',
-        },
+        // Taken here rather than at the root, where every event this state does not name would be routed past them
+        ...answers.on,
         // Handle settings updates
         TEST_CLI_PROVIDER: { actions: 'testCliProvider' },
         CHECK_FOR_EXTERNAL_CHANGES: { actions: 'checkForExternalChanges' },
@@ -393,7 +364,6 @@ export const systemMachine = setup({
           },
           { actions: 'rememberBaseDirectory' },
         ],
-        LIST_REPOSITORIES: { actions: 'listRepositories' },
         SECRETS_CHANGED: { actions: () => forgetHeldSignIn() },
         SELECT_REPOSITORY: {
           actions: ({ event, self }) => {
@@ -401,8 +371,6 @@ export const systemMachine = setup({
             self.send({ type: 'SET_BASE_DIRECTORY', path: ev.path, fromUserNavigation: true, fromPicker: true })
           },
         },
-        // A worktree switch changes the folder, which is this system's: it is not routed to the commit child
-        'commit.WORKTREE_SWITCH': { actions: 'switchWorktree' },
         // All other events get routed to children
         '*': {
           actions: 'routeEvent'

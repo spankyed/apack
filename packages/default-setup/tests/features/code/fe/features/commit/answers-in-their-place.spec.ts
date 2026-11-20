@@ -4,7 +4,7 @@
 // history is asked for again as that file's.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -48,10 +48,7 @@ it('leaves nothing busy and no write outstanding when the surface starts over an
     isPushing: false, isStashing: false, isWorktreeLoading: false, isApplyingHunk: false, busyAsks: {},
   });
   // The new folder's status is shown: no write of the folder before is waited on
-  actor.send(answerTo(lastCall('commit.GET_GIT_STATUS'), {
-    type: 'commit.STATUS_RECEIVED' as const,
-    data: { files: [{ path: 'b.txt', status: 'modified' as const, staged: false }], truncated: false, branch: 'main', hasUpstream: true, commitsAhead: 0, commitsBehind: 0, watching: true },
-  }));
+  actor.send(askAnswered(lastCall('commit.GET_GIT_STATUS'), 'commit.GET_GIT_STATUS', { files: [{ path: 'b.txt', status: 'modified' as const, staged: false }], truncated: false, branch: 'main', hasUpstream: true, commitsAhead: 0, commitsBehind: 0, watching: true }));
   expect(actor.getSnapshot().context.gitStatus.map(file => file.path)).toEqual(['b.txt']);
 });
 
@@ -61,10 +58,10 @@ it('takes only the answer to the latest ask for an open diff', () => {
   actor.send({ type: 'commit.VIEW_DIFF', path: 'a.txt', staged: false });
   actor.send({ type: 'commit.VIEW_DIFF', path: 'a.txt', staged: false });
   const [older, newer] = [sentCall(sendToSystem, 'commit.GET_GIT_DIFF', 0), sentCall(sendToSystem, 'commit.GET_GIT_DIFF', 1)];
-  const diff = (modifiedContent: string) => ({ type: 'commit.DIFF_RECEIVED' as const, data: { path: 'a.txt', staged: false, originalContent: '', modifiedContent } });
+  const diff = (modifiedContent: string) => ({ path: 'a.txt', staged: false, originalContent: '', modifiedContent });
 
-  actor.send(answerTo(newer, diff('newer')));
-  actor.send(answerTo(older, diff('older')));
+  actor.send(askAnswered(newer, 'commit.GET_GIT_DIFF', diff('newer')));
+  actor.send(askAnswered(older, 'commit.GET_GIT_DIFF', diff('older')));
 
   expect(sendEventToParent.mock.calls.map(([, event]) => event.diff.modifiedContent)).toEqual(['newer']);
   expect(addTabToParent).not.toHaveBeenCalled();
@@ -73,9 +70,9 @@ it('takes only the answer to the latest ask for an open diff', () => {
 it('holds a piece staged from one diff in that diff\'s tab, through another file\'s diff being read', () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.APPLY_HUNK', path: 'a.txt', staged: false, hunk: 'h1' });
-  actor.send({ type: 'commit.HUNK_APPLIED', data: { path: 'a.txt', staged: false, hunk: 'h1' } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.APPLY_HUNK' as const, answer: { path: 'a.txt', staged: false, hunk: 'h1' } });
 
-  actor.send({ type: 'commit.DIFF_RECEIVED', data: { path: 'b.txt', staged: false, originalContent: '', modifiedContent: '' } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.GET_GIT_DIFF' as const, answer: { path: 'b.txt', staged: false, originalContent: '', modifiedContent: '' } });
 
   expect(actor.getSnapshot().context.appliedHunks, 'and not in the same file\'s staged diff').toEqual({ 'diff:a.txt:unstaged': ['h1'] });
 });
@@ -83,10 +80,7 @@ it('holds a piece staged from one diff in that diff\'s tab, through another file
 /** A stash list answering the latest ask for one */
 function stashesListed(actor: ReturnType<typeof createActor<typeof commitState>>, messages: string[]) {
   actor.send({ type: 'commit.STASH_LIST' });
-  actor.send(answerTo(lastCall('commit.STASH_LIST'), {
-    type: 'commit.STASH_LIST_RECEIVED' as const,
-    data: { stashes: messages.map((message, index) => ({ index, ref: `stash@{${index}}`, message, date: `2026-11-1${index}` })) },
-  }));
+  actor.send(askAnswered(lastCall('commit.STASH_LIST'), 'commit.STASH_LIST', { stashes: messages.map((message, index) => ({ index, ref: `stash@{${index}}`, message, date: `2026-11-1${index}` })) }));
 }
 const files = (path: string) => [{ path, status: 'modified' }] as never;
 
@@ -94,13 +88,13 @@ it('lets go of a stash\'s files once the list moves, and of an answer asked of t
   const actor = createActor(commitState).start();
   stashesListed(actor, ['first', 'second']);
   actor.send({ type: 'commit.TOGGLE_STASH_FILES', index: 0 });
-  actor.send(answerTo(lastCall('commit.GET_STASH_CHANGES'), { type: 'commit.STASH_CHANGES_RECEIVED' as const, data: { index: 0, files: files('first.txt') } }));
+  actor.send(askAnswered(lastCall('commit.GET_STASH_CHANGES'), 'commit.GET_STASH_CHANGES', { index: 0, files: files('first.txt') }));
   actor.send({ type: 'commit.TOGGLE_STASH_FILES', index: 1 });
   const askedBefore = lastCall('commit.GET_STASH_CHANGES');
 
   // The first stash is dropped: the second is at index 0 now
   stashesListed(actor, ['second']);
-  actor.send(answerTo(askedBefore, { type: 'commit.STASH_CHANGES_RECEIVED' as const, data: { index: 1, files: files('second.txt') } }));
+  actor.send(askAnswered(askedBefore, 'commit.GET_STASH_CHANGES', { index: 1, files: files('second.txt') }));
 
   expect(actor.getSnapshot().context.stashFiles).toEqual({});
 });
@@ -109,7 +103,7 @@ it('keeps a stash\'s files open when the list is read again unchanged', () => {
   const actor = createActor(commitState).start();
   stashesListed(actor, ['first']);
   actor.send({ type: 'commit.TOGGLE_STASH_FILES', index: 0 });
-  actor.send(answerTo(lastCall('commit.GET_STASH_CHANGES'), { type: 'commit.STASH_CHANGES_RECEIVED' as const, data: { index: 0, files: files('first.txt') } }));
+  actor.send(askAnswered(lastCall('commit.GET_STASH_CHANGES'), 'commit.GET_STASH_CHANGES', { index: 0, files: files('first.txt') }));
 
   stashesListed(actor, ['first']);
 
@@ -125,6 +119,6 @@ it('asks for a file\'s history again as that file\'s when the history moves, and
 
   expect(sentOf('commit.LOG_LIST').at(-1)![1]).toEqual({ type: 'commit.LOG_LIST', path: 'a.txt' });
   const commit = { hash: 'abc', parents: [], subject: 'edit a', authorName: 'A', authorEmail: 'a@x', date: '2026-11-14', refs: [] };
-  actor.send(answerTo(lastCall('commit.LOG_LIST'), { type: 'commit.LOG_LIST_RECEIVED' as const, data: { commits: [commit], path: 'a.txt' } }));
+  actor.send(askAnswered(lastCall('commit.LOG_LIST'), 'commit.LOG_LIST', { commits: [commit], path: 'a.txt' }));
   expect(actor.getSnapshot().context.commitLog).toEqual([commit]);
 });

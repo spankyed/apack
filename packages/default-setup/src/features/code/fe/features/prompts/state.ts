@@ -2,6 +2,8 @@ import type { PromptTab } from '../../contract.ts';
 export type { PromptTab } from '../../contract.ts';
 import { setup , type ActorRefFrom } from 'xstate';
 import { sendToSurface, sendToSystem } from '#generated/events.ts';
+import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
+import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { updateParentState, getParentContext, addTabToParent } from '../../utils/parent-communication.ts';
 import type { PromptEntity } from '@apackdev/sdk';
 import type { EARS } from '#generated/ears.ts';
@@ -11,8 +13,8 @@ export type Event =
   | { type: 'codePrompts.OPEN_PROMPT'; promptId: string }
   | { type: 'codePrompts.SAVE_PROMPT'; promptId: string; content: string }
   // Backend events
-  | { type: 'codePrompts.PROMPT_SELECTED'; promptId: string; data: PromptEntity & { templateFnContent?: string } }
-  | { type: 'codePrompts.PROMPT_UPDATED'; prompt: PromptEntity; promptId: string }
+  // The answers to the asks about prompts' code, which the surface routes here
+  | AnswersOf<CodeSystemContract, 'codePrompts.OPEN_PROMPT' | 'codePrompts.SAVE_PROMPT'>
   // Tab restoration
   | { type: 'codePrompts.OPEN_TABS'; promptIds: string[] }
   /**
@@ -53,7 +55,8 @@ export const promptsState = setup({
     },
 
     handlePromptSelected: ({ event, self }) => {
-      const ev = event as { type: 'codePrompts.PROMPT_SELECTED'; promptId: string; data: PromptEntity & { templateFnContent?: string } }
+      const data = answerOf(event, 'codePrompts.OPEN_PROMPT')
+      const ev = { promptId: data.id as string, data }
       const parentContext = getParentContext(self)
       const openFiles = parentContext?.openFiles || []
       const promptPath = `prompt:${ev.promptId}`
@@ -80,7 +83,8 @@ export const promptsState = setup({
     },
 
     updatePromptInOpenFiles: ({ event, self }) => {
-      const ev = event as { type: 'codePrompts.PROMPT_UPDATED'; prompt: PromptEntity; promptId: string }
+      const prompt = answerOf(event, 'codePrompts.SAVE_PROMPT')
+      const ev = { prompt, promptId: prompt.id as string }
       const parentContext = getParentContext(self)
       const openFiles = parentContext?.openFiles || []
 
@@ -144,13 +148,11 @@ export const promptsState = setup({
     'codePrompts.OPEN_TABS': {
       actions: 'openPromptTabs'
     },
-    // Backend events
-    'codePrompts.PROMPT_SELECTED': {
-      actions: 'handlePromptSelected'
-    },
-    'codePrompts.PROMPT_UPDATED': {
-      actions: 'updatePromptInOpenFiles'
-    },
+    // The answers to its asks
+    ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'codePrompts.OPEN_PROMPT'), actions: 'handlePromptSelected' },
+      { guard: ({ event }) => isAnswered(event, 'codePrompts.SAVE_PROMPT'), actions: 'updatePromptInOpenFiles' },
+    ],
     // The panel's asks of the prompts surface
     'codePrompts.UPDATE_INPUTS': { actions: 'updatePromptInputs' },
     'codePrompts.UPDATE_LABEL': { actions: 'updatePromptLabel' },

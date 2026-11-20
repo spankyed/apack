@@ -1,9 +1,9 @@
 // A window's view of the GitHub sign-in: the code for the sign-in it started, how that ended, and the account every
-// window is told. Starting a second sign-in ends the first, whose ending then arrives too: only the answers to the
-// sign-in still asked for are this window's to show.
+// window is told. Starting a second sign-in ends the first, whose ending then arrives too: only the answer to the
+// sign-in still asked for, and the ending of the sign-in whose code it shows, are this window's to show.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -27,26 +27,39 @@ it('shows the code of the sign-in it asked for, and not one an earlier sign-in e
   actor.send({ type: 'github.SIGN_IN' });
   const second = sentCall(sendToSystem, 'github.SIGN_IN', 1);
 
-  actor.send(answerTo(first, { type: 'github.SIGN_IN_FAILED', reason: 'cancelled', message: 'Signing in to GitHub was cancelled.' }));
+  actor.send(askFailed(first, 'github.SIGN_IN', { kind: 'cancelled', message: 'Signing in to GitHub was cancelled.' }));
   expect(actor.getSnapshot().context.signIn, "the first one's ending leaves the second").toEqual({});
 
-  actor.send(answerTo(second, { type: 'github.SIGN_IN_CODE', ...code }));
+  actor.send(askAnswered(second, 'github.SIGN_IN', code));
   expect(actor.getSnapshot().context.signIn).toEqual({ code });
 });
 
 it('says why a sign-in failed, but not that one was cancelled', () => {
   const denied = started();
-  denied.actor.send(answerTo(denied.call, { type: 'github.SIGN_IN_FAILED', reason: 'denied', message: 'The sign-in was refused at GitHub.' }));
+  denied.actor.send(askAnswered(denied.call, 'github.SIGN_IN', code));
+  denied.actor.send({ type: 'github.SIGN_IN_FAILED', userCode: code.userCode, reason: 'denied', message: 'The sign-in was refused at GitHub.' });
   expect(denied.actor.getSnapshot().context).toMatchObject({ signIn: null, failure: { reason: 'denied' } });
 
   const cancelled = started();
-  cancelled.actor.send(answerTo(cancelled.call, { type: 'github.SIGN_IN_FAILED', reason: 'cancelled', message: 'Signing in to GitHub was cancelled.' }));
+  cancelled.actor.send(askAnswered(cancelled.call, 'github.SIGN_IN', code));
+  cancelled.actor.send({ type: 'github.SIGN_IN_FAILED', userCode: code.userCode, reason: 'cancelled', message: 'Signing in to GitHub was cancelled.' });
   expect(cancelled.actor.getSnapshot().context).toMatchObject({ signIn: null, failure: null });
+
+  const unconfigured = started();
+  unconfigured.actor.send(askFailed(unconfigured.call, 'github.SIGN_IN', { kind: 'unconfigured', message: 'Signing in to GitHub is not set up.' }));
+  expect(unconfigured.actor.getSnapshot().context, 'nor one GitHub gave no code for').toMatchObject({ signIn: null, failure: { reason: 'unconfigured' } });
+});
+
+it('takes no ending of a sign-in other than the one whose code it shows', () => {
+  const { actor, call } = started();
+  actor.send(askAnswered(call, 'github.SIGN_IN', code));
+  actor.send({ type: 'github.SIGN_IN_FAILED', userCode: 'OLD0-0000', reason: 'expired', message: 'The code expired.' });
+  expect(actor.getSnapshot().context).toMatchObject({ signIn: { code }, failure: null });
 });
 
 it('takes the account any window signed in as, ending the sign-in it shows', () => {
   const { actor, call } = started();
-  actor.send(answerTo(call, { type: 'github.SIGN_IN_CODE', ...code }));
+  actor.send(askAnswered(call, 'github.SIGN_IN', code));
 
   actor.send({ type: 'github.ACCOUNT_CHANGED', account: { login: 'octocat' } });
 
@@ -62,10 +75,10 @@ it("copies its sign-in's code and opens GitHub's page for it in the system brows
     actor.send({ type: 'github.SIGN_IN' });
     const second = sentCall(sendToSystem, 'github.SIGN_IN', 1);
 
-    actor.send(answerTo(first, { type: 'github.SIGN_IN_CODE', ...code, userCode: 'OLD0-0000' }));
+    actor.send(askAnswered(first, 'github.SIGN_IN', { ...code, userCode: 'OLD0-0000' }));
     expect(writeText, 'a code from a sign-in this window has moved on from').not.toHaveBeenCalled();
 
-    actor.send(answerTo(second, { type: 'github.SIGN_IN_CODE', ...code }));
+    actor.send(askAnswered(second, 'github.SIGN_IN', code));
     expect(writeText.mock.calls).toEqual([['ABCD-1234']]);
     expect(openExternal.mock.calls).toEqual([['https://github.com/login/device']]);
   } finally {

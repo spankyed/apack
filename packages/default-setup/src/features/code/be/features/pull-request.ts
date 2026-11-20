@@ -1,32 +1,25 @@
-import { answering } from '../answer.ts'
-import type { OutgoingPullRequestEvents } from '../contract.ts'
+import type { AnswersTo, PRDetails, PullRequestAsks } from '../contract.ts'
 import { broadcastToSurface } from '#generated/events.ts';
-import { defineHandlers } from '@apackdev/sdk/framework';
 import { setup, assign, type AnyActorRef } from 'xstate'
 
 import { createLogger } from '@apackdev/sdk/logger'
 import { services } from '#generated/services.ts'
-import { openGitRepository, type AppGitRepository } from '../services/app-git-repository.ts'
-import { gitHubApiFor, gitHubOf, type GitHubOfCheckout } from './github.ts'
-import { GitHubApiError, type GitHubApi, type PRListState } from '../services/github-api.ts'
-import type { PRBranchCheckout } from '../types.ts'
+import type { AppGitRepository } from '../services/app-git-repository.ts'
+import { gitHubOf, type GitHubOfCheckout } from './github.ts'
+import { GitHubApiError, type GitHubApi, type GitHubApiFailure } from '../services/github-api.ts'
+import type { CodeSystemContext, PRBranchCheckout } from '../types.ts'
+import { gitRepositoryOf } from '../utils/git-helpers.ts'
 
 const logger = createLogger('pr')
 
 const surfaceId = 'code' as const
 
-// Incoming events from frontend
-
-// Outgoing events to frontend
-
+/**
+ * The pull request child, which holds what the code system's pull request answers read between asks: each
+ * comparison as its branch diff last fetched and read it, by `comparisonKey`, so that opening a file fetches nothing.
+ * Emptied when the folder changes
+ */
 export interface CodePullRequestSystemContext {
-  gitRepository: AppGitRepository | null
-  /** The code system, which routes a `commit.*` event to its commit child */
-  code?: AnyActorRef
-  /**
-   * Each comparison as its branch diff last fetched and read it, by `comparisonKey`: what a file's diff in it reads,
-   * so that opening a file fetches nothing. Emptied when the folder changes
-   */
   comparisons: Map<string, Comparison>
 }
 
@@ -43,33 +36,8 @@ interface ComparisonAsk { baseBranch: string; headBranch?: string; prNumber?: nu
 const comparisonKey = ({ baseBranch, headBranch, prNumber }: ComparisonAsk): string => `${baseBranch}...${headBranch ?? ''}#${prNumber ?? ''}`
 
 export type Event =
-  | { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
-  | { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; prNumber?: number; fetchMissing?: boolean }
-  | { type: 'pr.LIST_PRS'; state: PRListState; query?: string; after?: string }
-  | { type: 'pr.CHECKOUT_PR'; number: number }
-  | { type: 'pr.SELECT_PR'; number: number }
-  | { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
-  | { type: 'pr.MERGE_PR'; number: number; method?: 'merge' | 'squash' | 'rebase'; sha?: string }
-  | { type: 'pr.CLOSE_PR'; number: number }
-  | { type: 'pr.TOGGLE_DRAFT'; number: number; isDraft: boolean }
-  | { type: 'pr.CHECK_BRANCH_PR' }
-  | { type: 'pr.CHECK_GITHUB_ACCESS' }
-  | { type: 'pr.GET_PR_AUTOFILL' }
-  | { type: 'pr.GET_SMART_BASE_BRANCH' }
-  | { type: 'pr.DELETE_BRANCH'; number: number }
-  | { type: 'pr.UPDATE_PR'; number: number; title?: string; body?: string; base?: string }
-  | { type: 'pr.CREATE_COMMENT'; number: number; body: string }
-  | { type: 'pr.EDIT_COMMENT'; commentId: number; body: string }
-  | { type: 'pr.DELETE_COMMENT'; commentId: number }
-  | { type: 'pr.GET_COMMENTS'; number: number }
-  | { type: 'pr.GET_REVIEW_THREADS'; number: number }
-  | { type: 'pr.REPLY_TO_THREAD'; prNumber: number; commentId: number; body: string }
-  | { type: 'pr.RESOLVE_THREAD'; threadId: string }
-  | { type: 'pr.UNRESOLVE_THREAD'; threadId: string }
-  | { type: 'pr.EDIT_REVIEW_COMMENT'; commentId: number; body: string }
-  | { type: 'pr.DELETE_REVIEW_COMMENT'; commentId: number }
   | { type: 'pr.GIT_STATUS_CHANGED' }
-  | { type: 'pr.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository };
+  | { type: 'pr.UPDATE_BASE_DIRECTORY'; path: string };
 
 function humanizeBranchName(branch: string): string {
   const stripped = branch.replace(/^(feature|fix|bugfix|hotfix|chore|refactor|docs|test|ci|build|perf|style|revert|release|AS|as)[/_]/i, '')
@@ -79,50 +47,30 @@ function humanizeBranchName(branch: string): string {
     .trim()
 }
 
-/** How a handler answers: to the window that asked, and nowhere when nobody did (`answering`) */
-type Emit = (event: OutgoingPullRequestEvents) => void
+/** How an answer refuses for a reason of GitHub's: the `failure` its handler is handed */
+type GitHubRefusal = (kind: 'github', message: string, data: { reason: GitHubApiFailure }) => Error
 
-function emitError(emit: Emit, message: string) {
-  emit({ type: 'pr.ERROR', message })
-}
-
-/** A failure as the panel is told it: what to say, and for GitHub's, the reason it acts on */
-function emitFailure(emit: Emit, error: any) {
-  emit({ type: 'pr.ERROR', message: error?.message ?? String(error), ...(error instanceof GitHubApiError && { reason: error.reason }) })
-}
-
-/** Run async work that requires a git repository, answering through \`emit\`. Guards null repo, handles errors. */
-function withRepo<T>(
-  context: CodePullRequestSystemContext,
-  emit: Emit,
-  work: (repo: AppGitRepository) => Promise<T>,
-  onSuccess: (result: T) => void,
-  onError: (error: any) => void = (e) => emitError(emit, e.message)
-) {
-  if (!context.gitRepository) { emitError(emit, 'No git repository available'); return }
-  work(context.gitRepository).then(onSuccess).catch(onError)
+/** A refusal of GitHub's as the asker is told it, with the reason the panel acts on; any other error as it is */
+const refusedBy = (failure: GitHubRefusal) => (error: unknown): never => {
+  throw error instanceof GitHubApiError ? failure('github', error.message, { reason: error.reason }) : error
 }
 
 /**
- * Run async work against GitHub's API for the repository the checkout's remote names, with this app's sign-in, and
- * that remote, which every fetch and delete of the work uses. Refused, through `onError` — by default the asker is
- * told why, with GitHub's reason — where there is no repository, no remote on GitHub or no sign-in
+ * Runs `work` against GitHub's API for the repository the checkout's remote names, with this app's sign-in, and that
+ * remote, which every fetch and delete of the work uses. Refused — with GitHub's reason, where it gave one — where
+ * there is no repository, no remote on GitHub or no sign-in
  */
-function withGitHub<T>(
-  context: CodePullRequestSystemContext,
-  emit: Emit,
+async function onGitHub<T>(
+  context: CodeSystemContext,
+  failure: GitHubRefusal,
   work: (github: GitHubApi, repo: AppGitRepository, remotes: Omit<GitHubOfCheckout, 'github'>) => Promise<T>,
-  onSuccess: (result: T) => void,
-  onError: (error: any) => void = error => emitFailure(emit, error),
   /** Asked of the repository first, and GitHub is asked nothing where it answers */
   before?: (repo: AppGitRepository) => Promise<{ answer: T } | undefined>,
-) {
-  withRepo(context, emit, async repo => {
-    const early = await before?.(repo)
-    if (early) return early.answer
-    const { github, ...remotes } = await gitHubOf(repo)
-    return work(github, repo, remotes)
-  }, onSuccess, onError)
+): Promise<T> {
+  const repo = gitRepositoryOf(context)
+  const early = await before?.(repo)
+  if (early) return early.answer
+  return gitHubOf(repo).then(({ github, ...remotes }) => work(github, repo, remotes)).catch(refusedBy(failure))
 }
 
 /** The words for a detached HEAD, which is no branch to open a pull request from */
@@ -137,12 +85,16 @@ async function shown<T extends { body: string; rawBody?: string }>(github: GitHu
 }
 
 /** A pull request's details once GitHub has worked out whether it can merge, with the images in it loadable */
-async function settledDetails(github: GitHubApi, number: number) {
+async function settledDetails(github: GitHubApi, number: number): Promise<PRDetails> {
   const { comments = [], ...pr } = await github.fetchPRDetailsSettled(number)
   await shown(github, pr)
   for (const comment of comments) await shown(github, comment)
-  return { pr, comments }
+  return { pr, comments, fetchedAt: Date.now() }
 }
+
+/** Those details where GitHub gives them: a write that succeeded is not refused for a read after it that did not */
+const detailsIfRead = (github: GitHubApi, number: number): Promise<PRDetails | undefined> =>
+  settledDetails(github, number).catch(() => undefined)
 
 /**
  * The remotes a comparison fetches from: the head's, and the base's, which is where GitHub keeps a pull request's
@@ -225,472 +177,297 @@ async function headBranchOf(repo: AppGitRepository, { remote }: { remote: string
  * does: the pull request panel, which is what follows a merge, asks for no status. A fetch that fails leaves the
  * repository as it was, which the read finds
  */
-async function fetchAndAnnounce(context: CodePullRequestSystemContext): Promise<void> {
-  await context.gitRepository?.fetch().catch(() => undefined)
-  context.code?.send({ type: 'commit.GIT_STATUS_CHANGED' })
+async function fetchAndAnnounce(repo: AppGitRepository, code: AnyActorRef): Promise<void> {
+  await repo.fetch().catch(() => undefined)
+  announceWrite(code)
 }
 
-/** Hands each handler the answer for the message it is handling — see `defineHandlers` */
-const handlers = defineHandlers<CodePullRequestSystemContext, Event>();
+/** Has the commit child check the repository after a write here, and announce what it changed */
+const announceWrite = (code: AnyActorRef): void => {
+  code.getSnapshot().children.commit?.send({ type: 'commit.GIT_STATUS_CHANGED' })
+}
 
+/** The comparisons the pull request child holds, which a file's diff reads and a branch diff writes */
+const comparisonsOf = (code: AnyActorRef): Map<string, Comparison> =>
+  (code.getSnapshot().children.pr as AnyActorRef | undefined)?.getSnapshot().context.comparisons ?? new Map()
+
+/** What the pull request child keeps between asks, and the news it broadcasts when the repository moves */
 export const pullRequestSystem = setup({
   types: {
     context: {} as CodePullRequestSystemContext,
     events: {} as Event,
-    input: {} as { baseDirectory: string | null; gitRepository?: AppGitRepository | null; code?: AnyActorRef }
   },
-  actions: handlers.actions({
-    getSmartBaseBranch: ({ context, reply }) => {
-      const emit = answering(reply)
-      withRepo(context, emit,
-        repo => repo.getPRBaseBranch(),
-        branch => emit({ type: 'pr.SMART_BASE_BRANCH_RECEIVED', data: { branch } })
-      )
-    },
-
-    readBranchDiff: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.GET_BRANCH_DIFF'; baseBranch?: string; headBranch?: string; prNumber?: number }
-      withRepo(context, emit,
-        async repo => {
-          const baseBranch = ev.baseBranch ?? await repo.findBaseBranch({ preferUpstream: false })
-          const ask = { baseBranch, headBranch: ev.headBranch, prNumber: ev.prNumber }
-          const comparison = await compare(repo, ask)
-          const files = await repo.readBranchDiff(comparison.original, comparison.head)
-          context.comparisons.set(comparisonKey(ask), comparison)
-          return { files, baseBranch }
-        },
-        ({ files, baseBranch }) => emit({ type: 'pr.BRANCH_DIFF_RECEIVED', data: { files, baseBranch, headBranch: ev.headBranch } }),
-      )
-    },
-
-    getBranchFileDiff: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.GET_BRANCH_FILE_DIFF'; path: string; baseBranch: string; headBranch?: string; prNumber?: number; fetchMissing?: boolean }
-      const where = { path: ev.path, baseBranch: ev.baseBranch, headBranch: ev.headBranch, ...(ev.prNumber && { prNumber: ev.prNumber }) }
-      withRepo(context, emit,
-        repo => ev.fetchMissing ? repo.fetchingMissing(() => read(repo)) : read(repo),
-        ({ originalContent, modifiedContent, isImage }) => emit({
-          type: 'pr.FILE_DIFF_RECEIVED',
-          data: { path: ev.path, staged: false, originalContent, modifiedContent, isImage, baseBranch: ev.baseBranch, headBranch: ev.headBranch }
-        }),
-        error => error?.code === 'content-missing'
-          ? emit({ type: 'pr.FILE_CONTENT_MISSING', data: where })
-          : emitError(emit, error?.message ?? String(error)),
-      )
-      async function read(repo: AppGitRepository) {
-        // The comparison its file list was read from, which is fetched again only when that list is asked for
-        const key = comparisonKey(ev)
-        const comparison = context.comparisons.get(key) ?? await compare(repo, ev)
-        context.comparisons.set(key, comparison)
-        const isImage = repo.isImageFile(ev.path)
-        const getContent = isImage
-          ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
-          : (p: string, b: string) => repo.readFileContentFromBranch(p, b)
-        // A side that is missing reads as empty, which is right for a file one branch does not have and wrong
-        // for a branch that is not there: that is an error, said as one
-        if (!await repo.commitsExist(comparison.original, comparison.head)) {
-          throw new Error(`Failed to get file diff between branches: ${ev.baseBranch} or ${ev.headBranch ?? 'HEAD'} is not a commit here`)
-        }
-        // The editor draws the change from the file's two sides, so those are what is read: no patch is made. The
-        // original is the file where the head left the base, so what the base changed since is not shown as undone
-        const [originalContent, modifiedContent] = await Promise.all([
-          getContent(ev.path, comparison.original),
-          getContent(ev.path, comparison.head),
-        ])
-        return { originalContent, modifiedContent, isImage }
-      }
-    },
-
-    // --- GitHub ---
-
-    /** Whether this app's sign-in can work with the pull requests of the repository the checkout's remote names */
-    checkGitHubAccess: ({ context, reply }) => {
-      const emit = answering(reply)
-      if (!context.gitRepository) {
-        emit({ type: 'pr.GITHUB_ACCESS_CHECKED', data: { access: 'not-github', message: 'No git repository is open.' } })
-        return
-      }
-      withGitHub(context, emit,
-        github => github.checkAccess(),
-        () => emit({ type: 'pr.GITHUB_ACCESS_CHECKED', data: { access: 'ok' } }),
-        error => emit({ type: 'pr.GITHUB_ACCESS_CHECKED', data: { access: error instanceof GitHubApiError ? error.reason : 'failed', message: error?.message ?? String(error) } })
-      )
-    },
-
-    listPRs: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.LIST_PRS'; state: PRListState; query?: string; after?: string }
-      withGitHub(context, emit,
-        github => github.listPRs({ state: ev.state, ...(ev.query && { query: ev.query }), ...(ev.after && { after: ev.after }) }),
-        page => emit({ type: 'pr.PRS_LISTED', data: page }),
-      )
-    },
-
-    /**
-     * Checks out the pull request's head as a branch here. A head on the checkout's own remote is that remote's
-     * branch, fetched and checked out under its name, following it; any other — a fork's — is GitHub's ref of the
-     * pull request, fetched from the remote naming the repository it is on and checked out as `pr/<number>`,
-     * following nothing, since nothing here can push to it. A branch already here is moved only forward
-     * (`checkoutBranchAt`). Every window is shown the checkout, as after any write here
-     */
-    checkoutPR: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.CHECKOUT_PR'; number: number }
-      withGitHub(context, emit,
-        async (github, repo, remotes): Promise<{ branch: string; checkout: PRBranchCheckout }> => {
-          const { branch, headInRemote } = await github.readHead(ev.number)
-          if (headInRemote) {
-            const ref = await fetchSide(repo, branch, remotes.remote, 'head')
-            return { branch, checkout: await repo.checkoutBranchAt(branch, ref, { track: true }) }
-          }
-          const ref = await repo.fetchPullRequest(ev.number, await baseRemoteOf(repo, remotes))
-          const local = `pr/${ev.number}`
-          return { branch: local, checkout: await repo.checkoutBranchAt(local, ref) }
-        },
-        ({ branch, checkout }) => {
-          emit({ type: 'pr.PR_CHECKED_OUT', data: { number: ev.number, branch, checkout } })
-          context.code?.send({ type: 'commit.GIT_STATUS_CHANGED' })
-        },
-      )
-    },
-
-    selectPR: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.SELECT_PR'; number: number }
-      withGitHub(context, emit,
-        github => settledDetails(github, ev.number),
-        ({ pr, comments }) => {
-          emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { pr, comments, fetchedAt: Date.now() } })
-        }
-      )
-    },
-
-    createPR: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.CREATE_PR'; title: string; body: string; base?: string; draft?: boolean }
-      withGitHub(context, emit,
-        async (github, repo, remotes) => {
-          const head = await headBranchOf(repo, remotes)
-          const { comments: _comments, ...pr } = await github.createPR({ title: ev.title, body: ev.body, base: ev.base, head, draft: ev.draft })
-          return pr
-        },
-        pr => emit({ type: 'pr.PR_CREATED', data: { pr } }),
-        undefined,
-        async repo => { if (await onNoBranch(repo)) throw new Error(DETACHED); return undefined },
-      )
-    },
-
-    mergePR: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.MERGE_PR'; number: number; method?: 'merge' | 'squash' | 'rebase'; sha?: string }
-      withGitHub(context, emit,
-        github => github.mergePR(ev.number, ev.method, ev.sha),
-        () => {
-          emit({ type: 'pr.PR_MERGED', data: { number: ev.number } })
-          // GitHub moved the base: it is fetched, and every window shown what moved
-          void fetchAndAnnounce(context)
-        },
-        async err => {
-          // Merge was rejected server-side — refresh PR data so the UI reflects the
-          // current check / review / mergeability state the user is actually facing,
-          // not whatever stale data triggered the click.
-          try {
-            if (context.gitRepository) {
-              const result = await settledDetails(await gitHubApiFor(context.gitRepository), ev.number)
-              emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { ...result, fetchedAt: Date.now() } })
-            }
-          } catch { /* swallow — we still want to surface the merge error below */ }
-          emitFailure(emit, err)
-        }
-      )
-    },
-
-    closePR: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.CLOSE_PR'; number: number }
-      withGitHub(context, emit,
-        github => github.closePR(ev.number),
-        () => emit({ type: 'pr.PR_CLOSED', data: { number: ev.number } })
-      )
-    },
-
-    toggleDraft: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.TOGGLE_DRAFT'; number: number; isDraft: boolean }
-      // ev.isDraft is the CURRENT state, so true = draft → ready, false = ready → draft.
-      const goingReady = ev.isDraft
-      withGitHub(context, emit,
-        async github => {
-          if (goingReady) {
-            await github.markReady(ev.number)
-            // Marking a draft ready is GitHub's trigger to start computing
-            // mergeability. Same async-settle race as create / update-base — refetch
-            // with retry so the Merge button lands on the real state instead of stuck
-            // on UNKNOWN. Tolerate refetch failures (toggle already succeeded).
-            try {
-              return await settledDetails(github, ev.number)
-            } catch {
-              return null
-            }
-          }
-          await github.markDraft(ev.number)
-          return null
-        },
-        result => {
-          emit({ type: 'pr.PR_DRAFT_TOGGLED', data: { number: ev.number, isDraft: !ev.isDraft } })
-          if (result) emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { ...result, fetchedAt: Date.now() } })
-        }
-      )
-    },
-
-    checkBranchPR: ({ context, reply }) => {
-      const emit = answering(reply)
-      if (!context.gitRepository) {
-        emit({ type: 'pr.BRANCH_PR_CHECKED', data: { pr: null } })
-        return
-      }
-      withGitHub(context, emit,
-        async (github, repo, remotes) => {
-          const pr = await github.findPRForBranch(await headBranchOf(repo, remotes))
-          return pr && shown(github, pr)
-        },
-        pr => emit({ type: 'pr.BRANCH_PR_CHECKED', data: { pr } }),
-        undefined,
-        // A detached HEAD is no branch, and so has no pull request of its own: GitHub is not asked
-        async repo => await onNoBranch(repo) ? { answer: null } : undefined,
-      )
-    },
-
-    getPRAutofill: ({ context, reply }) => {
-      const emit = answering(reply)
-      withRepo(context, emit,
-        repo => Promise.all([repo.getPRBaseBranch(), repo.readCurrentBranch()])
-          .then(([baseBranch, currentBranch]) =>
-            repo.readCommitsBetween(baseBranch).then(commits => ({ currentBranch, commits }))
-          ),
-        ({ currentBranch, commits }) => {
-          let title = ''
-          let body = ''
-          if (commits.length === 1) {
-            title = commits[0].subject
-            body = commits[0].body
-          } else if (commits.length > 1) {
-            title = humanizeBranchName(currentBranch)
-            body = commits.map(c => `- ${c.subject}`).join('\n')
-          }
-          emit({ type: 'pr.AUTOFILL_RECEIVED', data: { title, body } })
-        },
-        () => emit({ type: 'pr.AUTOFILL_RECEIVED', data: { title: '', body: '' } })
-      )
-    },
-
-    updatePR: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.UPDATE_PR'; number: number; title?: string; body?: string; base?: string }
-      withGitHub(context, emit,
-        async github => {
-          await github.updatePR(ev.number, { title: ev.title, body: ev.body, base: ev.base })
-          // Base changes cause GitHub to recompute mergeability asynchronously —
-          // fetch fresh details with retry so the Merge button settles correctly.
-          // Title / body edits don't affect mergeability, so skip the extra round-trip.
-          if (!ev.base) return null
-          // Tolerate refetch failures — the edit above already succeeded, so we
-          // must still emit PR_UPDATED. PR_DETAILS_RECEIVED only fires when we actually
-          // have fresh data; otherwise the UI keeps the old mergeability until the next
-          // refresh, which is strictly better than a misleading error banner.
-          try {
-            return await settledDetails(github, ev.number)
-          } catch {
-            return null
-          }
-        },
-        result => {
-          emit({ type: 'pr.PR_UPDATED', data: { number: ev.number, title: ev.title, body: ev.body, base: ev.base } })
-          if (result) emit({ type: 'pr.PR_DETAILS_RECEIVED', data: { ...result, fetchedAt: Date.now() } })
-        }
-      )
-    },
-
-    // --- Comment actions ---
-
-    createComment: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.CREATE_COMMENT'; number: number; body: string }
-      withGitHub(context, emit,
-        github => github.createPRComment(ev.number, ev.body),
-        () => emit({ type: 'pr.COMMENT_CREATED', data: { number: ev.number } })
-      )
-    },
-
-    editComment: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.EDIT_COMMENT'; commentId: number; body: string }
-      withGitHub(context, emit,
-        github => github.editPRComment(ev.commentId, ev.body),
-        () => emit({ type: 'pr.COMMENT_EDITED', data: { commentId: ev.commentId } })
-      )
-    },
-
-    deleteComment: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.DELETE_COMMENT'; commentId: number }
-      withGitHub(context, emit,
-        github => github.deletePRComment(ev.commentId),
-        () => emit({ type: 'pr.COMMENT_DELETED', data: { commentId: ev.commentId } })
-      )
-    },
-
-    getComments: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.GET_COMMENTS'; number: number }
-      withGitHub(context, emit,
-        async github => {
-          const comments = await github.getPRComments(ev.number)
-          for (const comment of comments) await shown(github, comment)
-          return comments
-        },
-        comments => emit({ type: 'pr.COMMENTS_RECEIVED', data: { number: ev.number, comments } }),
-        // Swallow errors — this is the post-mutation refresh. The mutation itself
-        // already succeeded; a transient refetch failure shouldn't surface as a red
-        // error banner for the user. Next mutation or manual refresh re-populates.
-        err => logger.warn('GET_COMMENTS refetch failed', { prNumber: ev.number, error: err?.message }),
-      )
-    },
-
-    getReviewThreads: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.GET_REVIEW_THREADS'; number: number }
-      withGitHub(context, emit,
-        github => github.getReviewThreads(ev.number),
-        threads => emit({ type: 'pr.REVIEW_THREADS_RECEIVED', data: { threads } })
-      )
-    },
-
-    replyToThread: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.REPLY_TO_THREAD'; prNumber: number; commentId: number; body: string }
-      withGitHub(context, emit,
-        github => github.replyToReviewThread(ev.prNumber, ev.commentId, ev.body),
-        () => emit({ type: 'pr.THREAD_REPLIED', data: { prNumber: ev.prNumber } })
-      )
-    },
-
-    resolveThread: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.RESOLVE_THREAD'; threadId: string }
-      withGitHub(context, emit,
-        github => github.resolveReviewThread(ev.threadId),
-        () => emit({ type: 'pr.THREAD_RESOLVED', data: { threadId: ev.threadId } })
-      )
-    },
-
-    unresolveThread: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.UNRESOLVE_THREAD'; threadId: string }
-      withGitHub(context, emit,
-        github => github.unresolveReviewThread(ev.threadId),
-        () => emit({ type: 'pr.THREAD_UNRESOLVED', data: { threadId: ev.threadId } })
-      )
-    },
-
-    editReviewComment: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.EDIT_REVIEW_COMMENT'; commentId: number; body: string }
-      withGitHub(context, emit,
-        github => github.editReviewComment(ev.commentId, ev.body),
-        () => emit({ type: 'pr.REVIEW_COMMENT_EDITED', data: { commentId: ev.commentId } })
-      )
-    },
-
-    deleteReviewComment: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.DELETE_REVIEW_COMMENT'; commentId: number }
-      withGitHub(context, emit,
-        github => github.deleteReviewComment(ev.commentId),
-        () => emit({ type: 'pr.REVIEW_COMMENT_DELETED', data: { commentId: ev.commentId } })
-      )
-    },
-
-    /**
-     * Deletes a pull request's branch through GitHub, only where it is a branch of the repository the checkout's
-     * remote names — another repository's is not this checkout's to delete — that no other open pull request is
-     * from. One GitHub already deleted, on merge say, is deleted
-     */
-    deleteBranch: ({ event, context, reply }) => {
-      const emit = answering(reply)
-      const ev = event as { type: 'pr.DELETE_BRANCH'; number: number }
-      withGitHub(context, emit,
-        async (github, repo, { remote }) => {
-          const { branch, headInRemote } = await github.readHead(ev.number)
-          if (!headInRemote) throw new Error(`#${ev.number} is from a branch of another repository, a fork, which is not this checkout's to delete.`)
-          const others = (await github.openPRsFromBranch(branch)).filter(number => number !== ev.number)
-          if (others.length > 0) throw new Error(`${branch} is kept: open pull request${others.length > 1 ? 's' : ''} ${others.map(number => `#${number}`).join(', ')} ${others.length > 1 ? 'are' : 'is'} from it too.`)
-          await github.deleteBranch(branch)
-          // Deleted through GitHub, so git's record of it here goes too, as a fetch that prunes would take it
-          await repo.deleteRemoteTrackingBranch(branch, remote)
-          return branch
-        },
-        branch => {
-          emit({ type: 'pr.BRANCH_DELETED', data: { branch } })
-          void fetchAndAnnounce(context)
-        },
-      )
-    },
-
+  actions: {
     // News for every window: the repository's commits or branches moved under them
     handleGitStatusChanged: () => {
       broadcastToSurface(surfaceId, { type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } })
     },
-
-    updateBaseDirectory: assign({
-      gitRepository: ({ event }) => {
-        const ev = event as { type: 'pr.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository }
-        return ev.gitRepository
-      },
-      comparisons: () => new Map(),
-    }),
-
-  })
+    forgetComparisons: assign({ comparisons: () => new Map() }),
+  },
 }).createMachine({
   id: 'pull-request',
   initial: 'idle',
-  context: ({ input }) => ({
-    gitRepository: input?.gitRepository || (input?.baseDirectory ? openGitRepository(input.baseDirectory) : null),
-    code: input?.code,
-    comparisons: new Map(),
-  }),
+  context: () => ({ comparisons: new Map() }),
   states: {
     idle: {
       on: {
-        'pr.GET_BRANCH_DIFF': { actions: 'readBranchDiff' },
-        'pr.GET_BRANCH_FILE_DIFF': { actions: 'getBranchFileDiff' },
-        'pr.LIST_PRS': { actions: 'listPRs' },
-        'pr.CHECKOUT_PR': { actions: 'checkoutPR' },
-        'pr.SELECT_PR': { actions: 'selectPR' },
-        'pr.CREATE_PR': { actions: 'createPR' },
-        'pr.MERGE_PR': { actions: 'mergePR' },
-        'pr.CLOSE_PR': { actions: 'closePR' },
-        'pr.TOGGLE_DRAFT': { actions: 'toggleDraft' },
-        'pr.CHECK_BRANCH_PR': { actions: 'checkBranchPR' },
-        'pr.GET_SMART_BASE_BRANCH': { actions: 'getSmartBaseBranch' },
-        'pr.DELETE_BRANCH': { actions: 'deleteBranch' },
-        'pr.UPDATE_PR': { actions: 'updatePR' },
-        'pr.CREATE_COMMENT': { actions: 'createComment' },
-        'pr.EDIT_COMMENT': { actions: 'editComment' },
-        'pr.DELETE_COMMENT': { actions: 'deleteComment' },
-        'pr.GET_COMMENTS': { actions: 'getComments' },
-        'pr.GET_REVIEW_THREADS': { actions: 'getReviewThreads' },
-        'pr.REPLY_TO_THREAD': { actions: 'replyToThread' },
-        'pr.RESOLVE_THREAD': { actions: 'resolveThread' },
-        'pr.UNRESOLVE_THREAD': { actions: 'unresolveThread' },
-        'pr.EDIT_REVIEW_COMMENT': { actions: 'editReviewComment' },
-        'pr.DELETE_REVIEW_COMMENT': { actions: 'deleteReviewComment' },
-        'pr.CHECK_GITHUB_ACCESS': { actions: 'checkGitHubAccess' },
-        'pr.GET_PR_AUTOFILL': { actions: 'getPRAutofill' },
         'pr.GIT_STATUS_CHANGED': { actions: 'handleGitStatusChanged' },
-        'pr.UPDATE_BASE_DIRECTORY': { actions: ['updateBaseDirectory'] }
+        'pr.UPDATE_BASE_DIRECTORY': { actions: 'forgetComparisons' },
       }
     }
   }
 })
+
+/** Reads the branch's commits for a new pull request's title and body: one commit's own, or the branch's name and a list */
+function autofillOf(currentBranch: string, commits: { subject: string; body: string }[]): { title: string; body: string } {
+  if (commits.length === 1) return { title: commits[0]!.subject, body: commits[0]!.body }
+  if (commits.length > 1) return { title: humanizeBranchName(currentBranch), body: commits.map(c => `- ${c.subject}`).join('\n') }
+  return { title: '', body: '' }
+}
+
+/** The pull-request asks, answered by the code system (`answers`, `system.ts`) */
+export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
+  'pr.GET_SMART_BASE_BRANCH': async ({ context }) => ({ branch: await gitRepositoryOf(context).getPRBaseBranch() }),
+
+  'pr.GET_BRANCH_DIFF': async ({ ask: { baseBranch: asked, headBranch, prNumber }, context, self }) => {
+    const repo = gitRepositoryOf(context)
+    const baseBranch = asked ?? await repo.findBaseBranch({ preferUpstream: false })
+    const comparisonAsk = { baseBranch, headBranch, prNumber }
+    const comparison = await compare(repo, comparisonAsk)
+    const files = await repo.readBranchDiff(comparison.original, comparison.head)
+    comparisonsOf(self).set(comparisonKey(comparisonAsk), comparison)
+    return { files, baseBranch, headBranch }
+  },
+
+  'pr.GET_BRANCH_FILE_DIFF': async ({ ask, context, self, failure }) => {
+    const repo = gitRepositoryOf(context)
+    const where = { path: ask.path, baseBranch: ask.baseBranch, headBranch: ask.headBranch, ...(ask.prNumber && { prNumber: ask.prNumber }) }
+    const read = async () => {
+      // The comparison its file list was read from, which is fetched again only when that list is asked for
+      const comparisons = comparisonsOf(self)
+      const key = comparisonKey(ask)
+      const comparison = comparisons.get(key) ?? await compare(repo, ask)
+      comparisons.set(key, comparison)
+      const isImage = repo.isImageFile(ask.path)
+      const getContent = isImage
+        ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
+        : (p: string, b: string) => repo.readFileContentFromBranch(p, b)
+      // A side that is missing reads as empty, which is right for a file one branch does not have and wrong
+      // for a branch that is not there: that is an error, said as one
+      if (!await repo.commitsExist(comparison.original, comparison.head)) {
+        throw new Error(`Failed to get file diff between branches: ${ask.baseBranch} or ${ask.headBranch ?? 'HEAD'} is not a commit here`)
+      }
+      // The editor draws the change from the file's two sides, so those are what is read: no patch is made. The
+      // original is the file where the head left the base, so what the base changed since is not shown as undone
+      const [originalContent, modifiedContent] = await Promise.all([
+        getContent(ask.path, comparison.original),
+        getContent(ask.path, comparison.head),
+      ])
+      return { originalContent, modifiedContent, isImage }
+    }
+    try {
+      const { originalContent, modifiedContent, isImage } = await (ask.fetchMissing ? repo.fetchingMissing(read) : read())
+      return { path: ask.path, staged: false, originalContent, modifiedContent, isImage, baseBranch: ask.baseBranch, headBranch: ask.headBranch }
+    } catch (error) {
+      throw (error as { code?: string } | null)?.code === 'content-missing'
+        ? failure('content-missing', `${ask.path} needs content this clone was not given`, where)
+        : error
+    }
+  },
+
+  // --- GitHub ---
+
+  /** Whether this app's sign-in can work with the pull requests of the repository the checkout's remote names */
+  'pr.CHECK_GITHUB_ACCESS': async ({ context }) => {
+    if (!context.gitRepository) return { access: 'not-github', message: 'No git repository is open.' }
+    try {
+      const { github } = await gitHubOf(gitRepositoryOf(context))
+      await github.checkAccess()
+      return { access: 'ok' }
+    } catch (error) {
+      return { access: error instanceof GitHubApiError ? error.reason : 'failed', message: (error as Error)?.message ?? String(error) }
+    }
+  },
+
+  'pr.LIST_PRS': ({ ask, context, failure }) => onGitHub(context, failure,
+    github => github.listPRs({ state: ask.state, ...(ask.query && { query: ask.query }), ...(ask.after && { after: ask.after }) })),
+
+  /**
+   * Checks out the pull request's head as a branch here. A head on the checkout's own remote is that remote's
+   * branch, fetched and checked out under its name, following it; any other — a fork's — is GitHub's ref of the
+   * pull request, fetched from the remote naming the repository it is on and checked out as `pr/<number>`,
+   * following nothing, since nothing here can push to it. A branch already here is moved only forward
+   * (`checkoutBranchAt`). Every window is shown the checkout, as after any write here
+   */
+  'pr.CHECKOUT_PR': async ({ ask: { number }, context, self, failure }) => {
+    const { branch, checkout } = await onGitHub(context, failure, async (github, repo, remotes): Promise<{ branch: string; checkout: PRBranchCheckout }> => {
+      const { branch, headInRemote } = await github.readHead(number)
+      if (headInRemote) {
+        const ref = await fetchSide(repo, branch, remotes.remote, 'head')
+        return { branch, checkout: await repo.checkoutBranchAt(branch, ref, { track: true }) }
+      }
+      const ref = await repo.fetchPullRequest(number, await baseRemoteOf(repo, remotes))
+      const local = `pr/${number}`
+      return { branch: local, checkout: await repo.checkoutBranchAt(local, ref) }
+    })
+    announceWrite(self)
+    return { number, branch, checkout }
+  },
+
+  'pr.SELECT_PR': ({ ask: { number }, context, failure }) => onGitHub(context, failure, github => settledDetails(github, number)),
+
+  'pr.CREATE_PR': ({ ask, context, failure }) => onGitHub(context, failure,
+    async (github, repo, remotes) => {
+      const head = await headBranchOf(repo, remotes)
+      const { comments: _comments, ...pr } = await github.createPR({ title: ask.title, body: ask.body, base: ask.base, head, draft: ask.draft })
+      return { pr }
+    },
+    async repo => { if (await onNoBranch(repo)) throw new Error(DETACHED); return undefined },
+  ),
+
+  /**
+   * A refused merge carries the pull request read again, so the panel reflects the check, review and mergeability
+   * state the user is actually facing rather than whatever stale data led to the click
+   */
+  'pr.MERGE_PR': async ({ ask: { number, method, sha }, context, self, failure }) => {
+    const repo = gitRepositoryOf(context)
+    const { github } = await gitHubOf(repo).catch(refusedBy(failure))
+    try {
+      await github.mergePR(number, method, sha)
+    } catch (error) {
+      if (!(error instanceof GitHubApiError)) throw error
+      const details = await detailsIfRead(github, number)
+      throw failure('github', error.message, { reason: error.reason, ...(details && { details }) })
+    }
+    // GitHub moved the base: it is fetched, and every window shown what moved
+    void fetchAndAnnounce(repo, self)
+    return { number }
+  },
+
+  'pr.CLOSE_PR': async ({ ask: { number }, context, failure }) => {
+    await onGitHub(context, failure, github => github.closePR(number))
+    return { number }
+  },
+
+  'pr.TOGGLE_DRAFT': ({ ask: { number, isDraft }, context, failure }) => onGitHub(context, failure, async github => {
+    // `isDraft` is what it is now, so true = draft → ready, false = ready → draft.
+    if (!isDraft) {
+      await github.markDraft(number)
+      return { number, isDraft: true }
+    }
+    await github.markReady(number)
+    // Marking a draft ready is GitHub's trigger to start computing mergeability: its details are read once
+    // settled, so the Merge button lands on the real state instead of stuck on UNKNOWN
+    const details = await detailsIfRead(github, number)
+    return { number, isDraft: false, ...(details && { details }) }
+  }),
+
+  'pr.CHECK_BRANCH_PR': async ({ context, failure }) => {
+    if (!context.gitRepository) return { pr: null }
+    const pr = await onGitHub(context, failure,
+      async (github, repo, remotes) => {
+        const pr = await github.findPRForBranch(await headBranchOf(repo, remotes))
+        return pr && shown(github, pr)
+      },
+      // A detached HEAD is no branch, and so has no pull request of its own: GitHub is not asked
+      async repo => await onNoBranch(repo) ? { answer: null } : undefined,
+    )
+    return { pr }
+  },
+
+  'pr.GET_PR_AUTOFILL': async ({ context }) => {
+    const repo = gitRepositoryOf(context)
+    try {
+      const [baseBranch, currentBranch] = await Promise.all([repo.getPRBaseBranch(), repo.readCurrentBranch()])
+      return autofillOf(currentBranch, await repo.readCommitsBetween(baseBranch))
+    } catch {
+      return { title: '', body: '' }
+    }
+  },
+
+  'pr.UPDATE_PR': ({ ask: { number, title, body, base }, context, failure }) => onGitHub(context, failure, async github => {
+    await github.updatePR(number, { title, body, base })
+    // Base changes cause GitHub to recompute mergeability asynchronously — its details are read once settled so the
+    // Merge button settles correctly. Title / body edits don't affect mergeability, so skip the extra round-trip
+    const details = base ? await detailsIfRead(github, number) : undefined
+    return { number, title, body, base, ...(details && { details }) }
+  }),
+
+  // --- Comments ---
+
+  'pr.CREATE_COMMENT': async ({ ask: { number, body }, context, failure }) => {
+    await onGitHub(context, failure, github => github.createPRComment(number, body))
+    return { number }
+  },
+
+  'pr.EDIT_COMMENT': async ({ ask: { commentId, body }, context, failure }) => {
+    await onGitHub(context, failure, github => github.editPRComment(commentId, body))
+    return { commentId }
+  },
+
+  'pr.DELETE_COMMENT': async ({ ask: { commentId }, context, failure }) => {
+    await onGitHub(context, failure, github => github.deletePRComment(commentId))
+    return { commentId }
+  },
+
+  /** The discussion read again after a write: the panel shows no error for it, the write itself having landed */
+  'pr.GET_COMMENTS': async ({ ask: { number }, context, failure }) => {
+    const comments = await onGitHub(context, failure, async github => {
+      const comments = await github.getPRComments(number)
+      for (const comment of comments) await shown(github, comment)
+      return comments
+    }).catch((error: unknown) => {
+      logger.warn('GET_COMMENTS refetch failed', { prNumber: number, error: (error as Error)?.message })
+      throw error
+    })
+    return { number, comments }
+  },
+
+  'pr.GET_REVIEW_THREADS': async ({ ask: { number }, context, failure }) =>
+    ({ threads: await onGitHub(context, failure, github => github.getReviewThreads(number)) }),
+
+  'pr.REPLY_TO_THREAD': async ({ ask: { prNumber, commentId, body }, context, failure }) => {
+    await onGitHub(context, failure, github => github.replyToReviewThread(prNumber, commentId, body))
+    return { prNumber }
+  },
+
+  'pr.RESOLVE_THREAD': async ({ ask: { threadId }, context, failure }) => {
+    await onGitHub(context, failure, github => github.resolveReviewThread(threadId))
+    return { threadId }
+  },
+
+  'pr.UNRESOLVE_THREAD': async ({ ask: { threadId }, context, failure }) => {
+    await onGitHub(context, failure, github => github.unresolveReviewThread(threadId))
+    return { threadId }
+  },
+
+  'pr.EDIT_REVIEW_COMMENT': async ({ ask: { commentId, body }, context, failure }) => {
+    await onGitHub(context, failure, github => github.editReviewComment(commentId, body))
+    return { commentId }
+  },
+
+  'pr.DELETE_REVIEW_COMMENT': async ({ ask: { commentId }, context, failure }) => {
+    await onGitHub(context, failure, github => github.deleteReviewComment(commentId))
+    return { commentId }
+  },
+
+  /**
+   * Deletes a pull request's branch through GitHub, only where it is a branch of the repository the checkout's
+   * remote names — another repository's is not this checkout's to delete — that no other open pull request is
+   * from. One GitHub already deleted, on merge say, is deleted
+   */
+  'pr.DELETE_BRANCH': async ({ ask: { number }, context, self, failure }) => {
+    const branch = await onGitHub(context, failure, async (github, repo, { remote }) => {
+      const { branch, headInRemote } = await github.readHead(number)
+      if (!headInRemote) throw new Error(`#${number} is from a branch of another repository, a fork, which is not this checkout's to delete.`)
+      const others = (await github.openPRsFromBranch(branch)).filter(other => other !== number)
+      if (others.length > 0) throw new Error(`${branch} is kept: open pull request${others.length > 1 ? 's' : ''} ${others.map(other => `#${other}`).join(', ')} ${others.length > 1 ? 'are' : 'is'} from it too.`)
+      await github.deleteBranch(branch)
+      // Deleted through GitHub, so git's record of it here goes too, as a fetch that prunes would take it
+      await repo.deleteRemoteTrackingBranch(branch, remote)
+      return branch
+    })
+    void fetchAndAnnounce(gitRepositoryOf(context), self)
+    return { branch }
+  },
+}

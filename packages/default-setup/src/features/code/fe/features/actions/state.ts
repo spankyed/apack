@@ -2,6 +2,8 @@ import type { ActionTab } from '../../contract.ts';
 export type { ActionTab } from '../../contract.ts';
 import { setup , type ActorRefFrom } from 'xstate';
 import { sendToSurface, sendToSystem } from '#generated/events.ts';
+import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
+import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { updateParentState, getParentContext, addTabToParent } from '../../utils/parent-communication.ts';
 import type { ActionEntity } from '@apackdev/sdk';
 import type { EARS } from '#generated/ears.ts';
@@ -11,8 +13,8 @@ export type Event =
   | { type: 'codeActions.OPEN_ACTION'; actionId: string }
   | { type: 'codeActions.SAVE_ACTION'; actionId: string; content: string }
   // Backend events
-  | { type: 'codeActions.ACTION_SELECTED'; actionId: string; data: ActionEntity & { actionFnContent?: string } }
-  | { type: 'codeActions.ACTION_UPDATED'; action: ActionEntity; actionId: string }
+  // The answers to the asks about actions' code, which the surface routes here
+  | AnswersOf<CodeSystemContract, 'codeActions.OPEN_ACTION' | 'codeActions.SAVE_ACTION'>
   // Tab restoration
   | { type: 'codeActions.OPEN_TABS'; actionIds: string[] }
   /**
@@ -53,7 +55,8 @@ export const actionsState = setup({
     },
 
     handleActionSelected: ({ event, self }) => {
-      const ev = event as { type: 'codeActions.ACTION_SELECTED'; actionId: string; data: ActionEntity & { actionFnContent?: string } }
+      const data = answerOf(event, 'codeActions.OPEN_ACTION')
+      const ev = { actionId: data.id as string, data }
       const parentContext = getParentContext(self)
       const openFiles = parentContext?.openFiles || []
       const actionPath = `action:${ev.actionId}`
@@ -80,7 +83,8 @@ export const actionsState = setup({
     },
 
     updateActionInOpenFiles: ({ event, self }) => {
-      const ev = event as { type: 'codeActions.ACTION_UPDATED'; action: ActionEntity; actionId: string }
+      const action = answerOf(event, 'codeActions.SAVE_ACTION')
+      const ev = { action, actionId: action.id as string }
       const parentContext = getParentContext(self)
       const openFiles = parentContext?.openFiles || []
 
@@ -144,13 +148,11 @@ export const actionsState = setup({
     'codeActions.OPEN_TABS': {
       actions: 'openActionTabs'
     },
-    // Backend events
-    'codeActions.ACTION_SELECTED': {
-      actions: 'handleActionSelected'
-    },
-    'codeActions.ACTION_UPDATED': {
-      actions: 'updateActionInOpenFiles'
-    },
+    // The answers to its asks
+    ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'codeActions.OPEN_ACTION'), actions: 'handleActionSelected' },
+      { guard: ({ event }) => isAnswered(event, 'codeActions.SAVE_ACTION'), actions: 'updateActionInOpenFiles' },
+    ],
     // The panel's asks of the actions surface
     'codeActions.UPDATE_INPUT': { actions: 'updateActionInput' },
     'codeActions.UPDATE_LABEL': { actions: 'updateActionLabel' },

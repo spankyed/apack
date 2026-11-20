@@ -2,7 +2,7 @@
 // error, sets git's sign-in up when the user signs in to GitHub, and then runs the command again.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -24,7 +24,7 @@ const sent = () => sendToSystem.mock.calls.map(([, event]) => (event as { type: 
 /** A panel whose push or pull was refused for want of a sign-in */
 function panelRefused(during: 'push' | 'pull' | undefined) {
   const actor = createActor(commitState).start();
-  actor.send({ type: 'commit.ERROR_RECEIVED', data: { message: 'Failed: the remote asked for a sign-in', code: 'authentication', during, signIn: GITHUB } });
+  actor.send({ type: 'ASK_FAILED' as const, asked: 'commit.PUBLISH_BRANCH' as const, failure: { kind: 'git' as const, message: 'Failed: the remote asked for a sign-in', code: 'authentication', during, signIn: GITHUB } });
   sendToSystem.mockReset();
   return actor;
 }
@@ -45,7 +45,7 @@ it('asks for the sign-in to be set up for the host, and is busy with it until it
   expect(sendToSystem, 'with the push that was refused, which the answer brings back').toHaveBeenCalledWith('code', { type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' }, { call: expect.any(String) });
   expect(actor.getSnapshot().context.isSettingUpSignIn).toBe(true);
 
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.SET_UP_SIGN_IN'), { type: 'commit.ERROR_RECEIVED' as const, data: { message: 'Sign in to GitHub to give git a sign-in for github.com.', code: 'authentication' as const, signIn: GITHUB } }));
+  actor.send(askFailed(sentCall(sendToSystem, 'commit.SET_UP_SIGN_IN'), 'commit.SET_UP_SIGN_IN', { kind: 'git', message: 'Sign in to GitHub to give git a sign-in for github.com.', code: 'authentication' as const, signIn: GITHUB }));
   expect(actor.getSnapshot().context, 'a setup that failed is answered too').toMatchObject({ isSettingUpSignIn: false, gitError: 'Sign in to GitHub to give git a sign-in for github.com.' });
 });
 
@@ -53,7 +53,7 @@ it.each([['push', 'commit.PUBLISH_BRANCH', 'isPushing'], ['pull', 'commit.PULL_B
   'runs the %s again once git can sign in, and clears the error', (during, command, busy) => {
     const actor = panelRefused(during);
 
-    actor.send({ type: 'commit.SIGN_IN_SET_UP', data: { host: 'github.com', during } });
+    actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.SET_UP_SIGN_IN' as const, answer: { host: 'github.com', during } });
 
     expect(sent()).toEqual([command]);
     expect(actor.getSnapshot().context).toMatchObject({ gitError: null, gitFailure: null, isSettingUpSignIn: false, [busy]: true });
@@ -63,7 +63,7 @@ it.each([['push', 'commit.PUBLISH_BRANCH', 'isPushing'], ['pull', 'commit.PULL_B
 it('runs nothing again when the sign-in was not for a push or a pull', () => {
   const actor = panelRefused(undefined);
 
-  actor.send({ type: 'commit.SIGN_IN_SET_UP', data: { host: 'github.com' } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.SET_UP_SIGN_IN' as const, answer: { host: 'github.com' } });
 
   expect(sent()).toEqual([]);
 });
@@ -72,10 +72,7 @@ it('holds what can be done about the sign-in that stopped fetching, as the statu
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.REFRESH_STATUS' });
   const [, , { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];
-  const status = (signIn?: typeof GITHUB) => answerTo(call, {
-    type: 'commit.STATUS_RECEIVED' as const,
-    data: { files: [], truncated: false, branch: 'main', hasUpstream: true, commitsAhead: 0, commitsBehind: 0, watching: true, fetchSuspended: signIn !== undefined, signIn },
-  });
+  const status = (signIn?: typeof GITHUB) => askAnswered(call, 'commit.GET_GIT_STATUS', { files: [], truncated: false, branch: 'main', hasUpstream: true, commitsAhead: 0, commitsBehind: 0, watching: true, fetchSuspended: signIn !== undefined, signIn });
 
   actor.send(status(GITHUB));
   expect(actor.getSnapshot().context.fetchSignIn).toEqual(GITHUB);
@@ -90,7 +87,7 @@ it('runs the push again when a status was answered while the sign-in was being s
   actor.send({ type: 'commit.DISMISS_ERROR' });
   sendToSystem.mockReset();
 
-  actor.send({ type: 'commit.SIGN_IN_SET_UP', data: { host: 'github.com', during: asked.during } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.SET_UP_SIGN_IN' as const, answer: { host: 'github.com', during: asked.during } });
 
   expect(sent()).toEqual(['commit.PUBLISH_BRANCH']);
 });
@@ -99,7 +96,7 @@ it('runs the push again when the sign-in is set up at the second try', () => {
   const actor = panelRefused('push');
   actor.send({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com' });
   // A set-up that failed answers with the push it was for, as it was asked
-  actor.send({ type: 'commit.ERROR_RECEIVED', data: { message: 'Sign in to GitHub to give git a sign-in for github.com.', code: 'authentication', during: 'push', signIn: GITHUB } });
+  actor.send({ type: 'ASK_FAILED' as const, asked: 'commit.PUBLISH_BRANCH' as const, failure: { kind: 'git' as const, message: 'Sign in to GitHub to give git a sign-in for github.com.', code: 'authentication', during: 'push', signIn: GITHUB } });
   sendToSystem.mockReset();
 
   actor.send({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com' });

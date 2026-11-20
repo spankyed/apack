@@ -18,7 +18,7 @@ beforeEach(() => sendToSystem.mockReset());
 
 const sent = () => sendToSystem.mock.calls.map(([, event]) => event as { type: string });
 const trust = { repository: '/work/repo/.git', asks: [{ kind: 'hook' as const, name: 'pre-commit', file: '/work/repo/.git/hooks/pre-commit' }] };
-const refused = { type: 'commit.ERROR_RECEIVED' as const, data: { message: 'This repository has settings or hooks that make git run programs.', code: 'untrusted' as const, trust } };
+const refused = { type: 'ASK_FAILED' as const, asked: 'commit.GET_GIT_STATUS' as const, failure: { kind: 'git' as const, message: 'This repository has settings or hooks that make git run programs.', code: 'untrusted' as const, trust } };
 
 it('holds what the repository asks to be trusted for, and says the user trusts it by the repository named', () => {
   const actor = createActor(commitState).start();
@@ -35,7 +35,7 @@ it('drops the refusal once the repository is trusted, and asks for its status', 
   actor.send(refused);
   sendToSystem.mockReset();
 
-  actor.send({ type: 'commit.REPOSITORY_TRUSTED', data: { repository: '/work/repo/.git' } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.TRUST_REPOSITORY' as const, answer: { repository: '/work/repo/.git' } });
 
   expect(actor.getSnapshot().context).toMatchObject({ gitError: null, gitFailure: null });
   expect(sent()).toContainEqual({ type: 'commit.GET_GIT_STATUS' });

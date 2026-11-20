@@ -13,10 +13,10 @@
 // cannot — a window can have two creates in flight, and the intent held for each (a tab or the panel, a
 // command to run) is not interchangeable, so one slot could not hold both.
 //
-// `answerTo` is how a spec with no delivery door in front of it builds an answer that names a call.
+// `askAnswered` and `askFailed` are how a spec with no delivery door in front of it builds an answer that names a call.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -68,7 +68,7 @@ it('asks for the list again on the news, and opens nothing', () => {
 
   other.send({ type: 'terminal.CREATED', data: { terminalId: 't-1' } });
   expect(sendToSystem, 'the news names the terminal; the list is an answer').toHaveBeenCalledWith('code', { type: 'terminal.REFRESH_LIST' });
-  other.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-0'), aTerminal('t-1')] });
+  other.send({ type: 'ASK_ANSWERED', asked: 'terminal.REFRESH_LIST', answer: [aTerminal('t-0'), aTerminal('t-1')] });
 
   expect(terminals(other)).toEqual(['t-0', 't-1']);
   expect(parent.updateParentState, 'and nothing is routed into a panel nobody asked about').not.toHaveBeenCalled();
@@ -78,7 +78,7 @@ it('asks for the list again on the news, and opens nothing', () => {
 it('opens the terminal for the window that asked', () => {
   const actor = asked();
 
-  actor.send(answerTo(createCall(0), { type: 'terminal.OPENED', data: aTerminal('t-1') }));
+  actor.send(askAnswered(createCall(0), 'terminal.CREATE_TERMINAL', aTerminal('t-1')));
 
   expect(parent.updateParentState).toHaveBeenCalledWith(expect.anything(), { panelTerminalId: 't-1', panelTerminalExpanded: true });
   // The command this window typed is run in the terminal this window asked for, and nowhere else
@@ -89,7 +89,7 @@ it('opens it as a tab when that is what was asked for', () => {
   const actor = createActor(terminalState).start();
   actor.send({ type: 'terminal.CREATE', target: 'tab' });
 
-  actor.send(answerTo(createCall(0), { type: 'terminal.OPENED', data: aTerminal('t-2') }));
+  actor.send(askAnswered(createCall(0), 'terminal.CREATE_TERMINAL', aTerminal('t-2')));
 
   expect(parent.addTabToParent).toHaveBeenCalled();
   expect(parent.updateParentState, 'a tab, so not also the panel').not.toHaveBeenCalled();
@@ -105,9 +105,9 @@ it('leaves the asker with one entry and one open', () => {
   const actor = asked();
 
   actor.send({ type: 'terminal.CREATED', data: { terminalId: 't-3' } });
-  actor.send(answerTo(createCall(0), { type: 'terminal.OPENED', data: aTerminal('t-3') }));
+  actor.send(askAnswered(createCall(0), 'terminal.CREATE_TERMINAL', aTerminal('t-3')));
   showing('t-3');
-  actor.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-3')] });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'terminal.REFRESH_LIST', answer: [aTerminal('t-3')] });
 
   expect(terminals(actor)).toEqual(['t-3']);
   expect(parent.updateParentState).toHaveBeenCalledTimes(1);
@@ -130,8 +130,8 @@ it('opens two terminals asked for together the way each was asked for', () => {
   const [build, test] = [createCall(0), createCall(1)];
   expect(build, 'two asks, two calls').not.toEqual(test);
 
-  actor.send(answerTo(test, { type: 'terminal.OPENED', data: aTerminal('t-test') }));
-  actor.send(answerTo(build, { type: 'terminal.OPENED', data: aTerminal('t-build') }));
+  actor.send(askAnswered(test, 'terminal.CREATE_TERMINAL', aTerminal('t-test')));
+  actor.send(askAnswered(build, 'terminal.CREATE_TERMINAL', aTerminal('t-build')));
 
   // Each command in the terminal its own ask created, which is the whole of T4
   expect(sendToSystem).toHaveBeenCalledWith('code', expect.objectContaining({ terminalId: 't-build', data: 'build\n' }));
@@ -144,7 +144,7 @@ it('opens two terminals asked for together the way each was asked for', () => {
 /**
  * An answer settles its ask, whether it opened a terminal or failed to.
  *
- * Both are replied, so both name the call. Without the removal on the error path a create that failed would
+ * Both are answers to the ask, so both name the call. Without the removal on the error path a create that failed would
  * leave its target and command in the map for the life of the surface — and the map is the one piece of state
  * here that grows per ask.
  */
@@ -154,11 +154,11 @@ it('holds an intent only while its ask is outstanding', () => {
   actor.send({ type: 'terminal.CREATE', command: 'echo hi' });
   expect(pendingOpens(actor), 'one ask outstanding').toEqual([createCall(0)]);
 
-  actor.send(answerTo(createCall(0), { type: 'terminal.OPENED', data: aTerminal('t-1') }));
+  actor.send(askAnswered(createCall(0), 'terminal.CREATE_TERMINAL', aTerminal('t-1')));
   expect(pendingOpens(actor), 'settled by the answer').toEqual([]);
 
   actor.send({ type: 'terminal.CREATE', command: 'fails' });
-  actor.send(answerTo(createCall(1), { type: 'terminal.ERROR', data: { message: 'no shell' } }));
+  actor.send(askFailed(createCall(1), 'terminal.CREATE_TERMINAL', { kind: 'failed', message: 'no shell' }));
   expect(pendingOpens(actor), 'settled by the failure too').toEqual([]);
 });
 
@@ -172,7 +172,7 @@ it('opens a terminal it has no record of asking for into the panel, with no comm
   const actor = createActor(terminalState).start();
   actor.send({ type: 'terminal.CREATE', command: 'echo hi', target: 'tab' });
 
-  actor.send(answerTo('c-another-ask', { type: 'terminal.OPENED', data: aTerminal('t-stray') }));
+  actor.send(askAnswered('c-another-ask', 'terminal.CREATE_TERMINAL', aTerminal('t-stray')));
 
   expect(parent.updateParentState, 'the panel, not the tab the other ask wanted').toHaveBeenCalledWith(expect.anything(), { panelTerminalId: 't-stray', panelTerminalExpanded: true });
   expect(parent.addTabToParent).not.toHaveBeenCalled();

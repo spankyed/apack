@@ -4,7 +4,7 @@
 // status read reports, never a write's.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -20,7 +20,8 @@ const { commitState } = await import('#features/code/fe/features/commit/state.ts
 
 beforeEach(() => sendToSystem.mockReset());
 
-const failed = (message: string, extra: object = {}) => ({ type: 'commit.ERROR_RECEIVED' as const, data: { message, ...extra } });
+/** Git's refusal of the ask sent as `asked` under `call` */
+const failed = <K extends string>(call: string, asked: K, message: string, extra: object = {}) => askFailed(call, asked, { kind: 'git' as const, message, ...extra });
 
 it('ends a running push only on its own failure, not on a failed blame', () => {
   const actor = createActor(commitState).start();
@@ -28,13 +29,13 @@ it('ends a running push only on its own failure, not on a failed blame', () => {
   actor.send({ type: 'commit.PROGRESS', data: { during: 'push', stage: 'Writing objects', percent: 42 } });
   actor.send({ type: 'commit.SHOW_BLAME', path: 'a.txt' });
 
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.GET_BLAME'), failed('no such path in HEAD')));
+  actor.send(failed(sentCall(sendToSystem, 'commit.GET_BLAME'), 'commit.GET_BLAME', 'no such path in HEAD'));
 
   expect(actor.getSnapshot().context, 'the blame is let go of, the push goes on').toMatchObject({
     blame: null, isPushing: true, progress: { during: 'push' }, gitError: 'no such path in HEAD',
   });
 
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.PUBLISH_BRANCH'), failed('Failed to push')));
+  actor.send(failed(sentCall(sendToSystem, 'commit.PUBLISH_BRANCH'), 'commit.PUBLISH_BRANCH', 'Failed to push'));
   expect(actor.getSnapshot().context).toMatchObject({ isPushing: false, progress: null, gitError: 'Failed to push' });
 });
 
@@ -42,7 +43,8 @@ it('shows an error that answers no ask it holds, and ends nothing with it', () =
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.PUSH_BRANCH' });
 
-  actor.send(failed('something else failed'));
+  // The pull request panel's checkout, whose answer comes to this panel by its name
+  actor.send(failed('c-asked-elsewhere', 'commit.CHECKOUT_BRANCH', 'something else failed'));
 
   expect(actor.getSnapshot().context).toMatchObject({ isPushing: true, gitError: 'something else failed' });
 });
@@ -59,7 +61,7 @@ it.each([
   actor.send(ask);
   expect(actor.getSnapshot().context[busy]).toBe(true);
 
-  actor.send(answerTo(sentCall(sendToSystem, sent), failed('git refused')));
+  actor.send(failed(sentCall(sendToSystem, sent), sent as string, 'git refused') as never);
 
   expect(actor.getSnapshot().context).toMatchObject({ [busy]: false, gitError: 'git refused' });
 });
@@ -68,7 +70,7 @@ it('stops reading a commit\'s message to reword it once the read fails', () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.START_REWORD', hash: 'abc123' });
 
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.GET_COMMIT_MESSAGE'), failed('bad object abc123')));
+  actor.send(failed(sentCall(sendToSystem, 'commit.GET_COMMIT_MESSAGE'), 'commit.GET_COMMIT_MESSAGE', 'bad object abc123'));
 
   expect(actor.getSnapshot().context.rewording).toBeNull();
 });
@@ -77,7 +79,7 @@ it('is no longer busy with a worktree switch once the backend says it switched',
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.WORKTREE_SWITCH', path: '/work/two' });
 
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.WORKTREE_SWITCH'), { type: 'commit.WORKTREE_SWITCHED' as const, data: { path: '/work/two' } }));
+  actor.send(askAnswered(sentCall(sendToSystem, 'commit.WORKTREE_SWITCH'), 'commit.WORKTREE_SWITCH', { path: '/work/two' }));
 
   expect(actor.getSnapshot().context.isWorktreeLoading).toBe(false);
 });
@@ -86,18 +88,15 @@ it('is no longer busy with a worktree switch once the backend says it switched',
 function statusAnswered(actor: ReturnType<typeof createActor<typeof commitState>>) {
   actor.send({ type: 'commit.REFRESH_STATUS' });
   const call = sentCall(sendToSystem, 'commit.GET_GIT_STATUS', sendToSystem.mock.calls.filter(([, event]) => (event as { type: string }).type === 'commit.GET_GIT_STATUS').length - 1);
-  return (answer: typeof STATUS | ReturnType<typeof failed>) => actor.send(answerTo(call, answer));
+  return (answer: (call: string) => object) => actor.send(answer(call) as never);
 }
-const STATUS = {
-  type: 'commit.STATUS_RECEIVED' as const,
-  data: { files: [], truncated: false, branch: 'main', hasUpstream: true, commitsAhead: 1, commitsBehind: 0, watching: true },
-};
+const STATUS = (call: string) => askAnswered(call, 'commit.GET_GIT_STATUS', { files: [], truncated: false, branch: 'main', hasUpstream: true, commitsAhead: 1, commitsBehind: 0, watching: true });
 
 it('keeps a failed push\'s error, and what can be done about it, through a status read', () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.PUSH_BRANCH' });
   const signIn = { host: 'github.com', kind: 'github' } as const;
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.PUBLISH_BRANCH'), failed('the remote asked for a sign-in', { code: 'authentication', during: 'push', signIn })));
+  actor.send(failed(sentCall(sendToSystem, 'commit.PUBLISH_BRANCH'), 'commit.PUBLISH_BRANCH', 'the remote asked for a sign-in', { code: 'authentication', during: 'push', signIn }));
 
   statusAnswered(actor)(STATUS);
 
@@ -106,7 +105,7 @@ it('keeps a failed push\'s error, and what can be done about it, through a statu
 
 it('clears the status read\'s own failure once a status is read', () => {
   const actor = createActor(commitState).start();
-  statusAnswered(actor)(failed('Not a git repository'));
+  statusAnswered(actor)(call => failed(call, 'commit.GET_GIT_STATUS', 'Not a git repository'));
   expect(actor.getSnapshot().context).toMatchObject({ gitError: 'Not a git repository', isGitLoading: false });
 
   statusAnswered(actor)(STATUS);
@@ -117,7 +116,7 @@ it('clears the status read\'s own failure once a status is read', () => {
 it('clears a refusal of the kind a status read reports, whichever ask it answered, once a status is read', () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.STASH_PUSH' });
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.STASH_PUSH'), failed('Not trusted.', { code: 'untrusted' })));
+  actor.send(failed(sentCall(sendToSystem, 'commit.STASH_PUSH'), 'commit.STASH_PUSH', 'Not trusted.', { code: 'untrusted' }));
 
   statusAnswered(actor)(STATUS);
 

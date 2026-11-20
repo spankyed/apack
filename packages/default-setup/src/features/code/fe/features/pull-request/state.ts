@@ -1,6 +1,7 @@
 import type { GitHubApiFailure, PRListState } from '#features/code/be/services/github-api.ts'
 import { setup, assign, enqueueActions , type ActorRefFrom } from 'xstate';
-import { answersCall, newCall, recordCall, settleCall, type CallOptions } from '@apackdev/sdk/events';
+import { answerOf, answersCall, isAnswered, newCall, recordCall, settleCall, type AnswersOf, type CallOptions } from '@apackdev/sdk/events';
+import type { Contract as CodeSystemContract, PRDetails, PullRequestAsks } from '#features/code/be/contract.ts';
 import { sendToSystem } from '#generated/events.ts';
 import type { GitStatusFile, GitDiff } from '../commit/state.ts';
 import type { GhPullRequest, GhPRComment, GhReviewThread, PRBranchCheckout } from '#generated/types.ts';
@@ -375,39 +376,13 @@ export type Event =
   | { type: 'pr.VIEW_DIFF'; path: string }
   /** The user asked for the content the diff of `missingFileDiff` lacks to be downloaded */
   | { type: 'pr.FETCH_MISSING_DIFF' }
-  | { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string; prNumber?: number } }
-  | { type: 'pr.ERROR'; message: string; reason?: GitHubApiFailure }
-  | { type: 'pr.BRANCH_DIFF_RECEIVED'; data: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
-  | { type: 'pr.FILE_DIFF_RECEIVED'; data: GitDiff & { baseBranch: string; headBranch?: string } }
   | { type: 'pr.OPEN_FILE'; file: GitStatusFile }
   | { type: 'pr.GIT_STATUS_REFRESHED'; data: { timestamp: Date } }
   | { type: 'CODE_STARTED' }
-  // GitHub PR events from backend
+  // The answers to the panel's asks of the code system
+  | AnswersOf<CodeSystemContract, keyof PullRequestAsks>
   | { type: 'pr.CHECK_GITHUB_ACCESS' }
-  | { type: 'pr.GITHUB_ACCESS_CHECKED'; data: { access: GitHubAccess; message?: string } }
   | { type: 'pr.NAVIGATE_TO_HELP' }
-  | { type: 'pr.PRS_LISTED'; data: { prs: GhPullRequest[]; next: string | null } }
-  | { type: 'pr.PR_CHECKED_OUT'; data: { number: number; branch: string; checkout: PRBranchCheckout } }
-  | { type: 'pr.PR_DETAILS_RECEIVED'; data: { pr: GhPullRequest; comments: GhPRComment[]; fetchedAt: number } }
-  | { type: 'pr.PR_CREATED'; data: { pr: GhPullRequest } }
-  | { type: 'pr.PR_MERGED'; data: { number: number } }
-  | { type: 'pr.PR_CLOSED'; data: { number: number } }
-  | { type: 'pr.PR_DRAFT_TOGGLED'; data: { number: number; isDraft: boolean } }
-  | { type: 'pr.BRANCH_PR_CHECKED'; data: { pr: GhPullRequest | null } }
-  | { type: 'pr.SMART_BASE_BRANCH_RECEIVED'; data: { branch: string } }
-  | { type: 'pr.BRANCH_DELETED'; data: { branch: string } }
-  | { type: 'pr.PR_UPDATED'; data: { number: number; title?: string; body?: string; base?: string } }
-  | { type: 'pr.COMMENT_CREATED'; data: { number: number } }
-  | { type: 'pr.COMMENT_EDITED'; data: { commentId: number } }
-  | { type: 'pr.COMMENT_DELETED'; data: { commentId: number } }
-  | { type: 'pr.COMMENTS_RECEIVED'; data: { number: number; comments: GhPRComment[] } }
-  | { type: 'pr.REVIEW_THREADS_RECEIVED'; data: { threads: GhReviewThread[] } }
-  | { type: 'pr.THREAD_REPLIED'; data: { prNumber: number } }
-  | { type: 'pr.THREAD_RESOLVED'; data: { threadId: string } }
-  | { type: 'pr.THREAD_UNRESOLVED'; data: { threadId: string } }
-  | { type: 'pr.REVIEW_COMMENT_EDITED'; data: { commentId: number } }
-  | { type: 'pr.REVIEW_COMMENT_DELETED'; data: { commentId: number } }
-  | { type: 'pr.AUTOFILL_RECEIVED'; data: { title: string; body: string } }
   // User actions
   | { type: 'pr.SELECT_PR_BY_NUMBER'; number: number }
   | { type: 'pr.SET_VIEW_MODE'; mode: 'files' | 'pr' }
@@ -440,6 +415,18 @@ export type Event =
   | { type: 'pr.REFRESH_PR'; number: number }
   | { type: 'pr.BACK_TO_BRANCH' }
   | { type: 'pr.CLEAR_ERROR' };
+
+/**
+ * The details of a pull request an answer carries: the ones asked for, those a write read again once GitHub had
+ * settled, or those a refused merge read so the panel shows what refused it
+ */
+function detailsIn(event: Event): PRDetails | undefined {
+  if (isAnswered(event, 'pr.SELECT_PR')) return answerOf(event, 'pr.SELECT_PR')
+  if (isAnswered(event, 'pr.TOGGLE_DRAFT')) return answerOf(event, 'pr.TOGGLE_DRAFT').details
+  if (isAnswered(event, 'pr.UPDATE_PR')) return answerOf(event, 'pr.UPDATE_PR').details
+  if (event.type === 'ASK_FAILED' && event.asked === 'pr.MERGE_PR' && event.failure.kind === 'github') return event.failure.details
+  return undefined
+}
 
 /** What an `enqueueActions` body is handed that the helpers below use */
 interface Enqueue {
@@ -509,15 +496,6 @@ export const pullRequestState = setup({
     context: {} as CodePullRequestContext,
     events: {} as Event
   },
-  guards: {
-    answersTheListAsked: ({ context, event }) => answersCall(event, context.prList.asked?.call ?? null),
-    answersTheAccessAsked: ({ context, event }) => answersCall(event, context.asks.access),
-    answersTheAutofillAsked: ({ context, event }) => answersCall(event, context.asks.autofill),
-    answersTheBranchPRAsked: ({ context, event }) => answersCall(event, context.asks.branchPR),
-    answersTheSmartBaseAsked: ({ context, event }) => answersCall(event, context.asks.smartBase),
-    answersTheCommentsAsked: ({ context, event }) => answersCall(event, context.asks.comments),
-    answersTheThreadsAsked: ({ context, event }) => answersCall(event, context.asks.threads),
-  },
   actions: {
     /** Asks GitHub for what the top row shows, where a folder is open */
     refreshStatus: enqueueActions(({ enqueue, context, self }) => {
@@ -561,10 +539,11 @@ export const pullRequestState = setup({
 
     /** Answers a diff this machine asked for that needs content the clone lacks: the request is over, and the offer shown */
     handleFileContentMissing: enqueueActions(({ enqueue, context, event }) => {
-      const ev = event as { type: 'pr.FILE_CONTENT_MISSING'; data: { path: string; baseBranch: string; headBranch?: string; prNumber?: number } }
+      if (event.type !== 'ASK_FAILED' || event.asked !== 'pr.GET_BRANCH_FILE_DIFF' || event.failure.kind !== 'content-missing') return
+      const { kind: _kind, message: _message, ...where } = event.failure
       const { recorded, pending } = settleCall(context.fileDiffAsks, event)
       if (recorded === undefined) return
-      enqueue.assign({ fileDiffAsks: pending, missingFileDiff: ev.data })
+      enqueue.assign({ fileDiffAsks: pending, missingFileDiff: where })
     }),
 
     /** Asks for the same diff again, allowed to download what it lacks */
@@ -581,10 +560,12 @@ export const pullRequestState = setup({
      * GitHub access, where GitHub's reason is the sign-in or the repository, and as the panel's error otherwise.
      */
     takeError: enqueueActions(({ enqueue, context, event }) => {
-      const ev = event as { type: 'pr.ERROR'; message: string; reason?: GitHubApiFailure }
-      const updates: Partial<CodePullRequestContext> = ev.reason && ACCESS_FAILURES.includes(ev.reason)
-        ? { githubAccess: ev.reason, githubAccessMessage: ev.message }
-        : { prError: ev.message }
+      if (event.type !== 'ASK_FAILED') return
+      const { failure } = event
+      const reason = failure.kind === 'github' ? (failure as { reason: GitHubApiFailure }).reason : undefined
+      const updates: Partial<CodePullRequestContext> = reason && ACCESS_FAILURES.includes(reason)
+        ? { githubAccess: reason, githubAccessMessage: failure.message }
+        : { prError: failure.message }
       const asks = { ...context.asks }
       for (const which of ASKS) {
         if (!answersCall(event, asks[which])) continue
@@ -613,8 +594,7 @@ export const pullRequestState = setup({
     }),
 
     handleSmartBaseBranchReceived: enqueueActions(({ enqueue, event, context }) => {
-      const ev = event as { type: 'pr.SMART_BASE_BRANCH_RECEIVED'; data: { branch: string } }
-      const newBase = ev.data.branch
+      const newBase = answerOf(event, 'pr.GET_SMART_BASE_BRANCH').branch
       enqueue.assign({ prBaseBranch: newBase, asks: { ...context.asks, smartBase: null } })
       // A branch with no PR compares against no head
       if (!context.diffsByRef[refKey(newBase)] || context.diffStale) askDiff(enqueue, newBase)
@@ -630,12 +610,12 @@ export const pullRequestState = setup({
      * them; there is nothing stale about "no longer loading".
      */
     handleBranchDiffReceived: enqueueActions(({ enqueue, context, event }) => {
-      const ev = event as { type: 'pr.BRANCH_DIFF_RECEIVED'; data: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
+      const { files } = answerOf(event, 'pr.GET_BRANCH_DIFF')
       const { recorded, pending } = settleCall(context.diffAsks, event)
       if (recorded === undefined) return
       enqueue.assign({
         diffAsks: pending,
-        diffsByRef: { ...context.diffsByRef, [recorded]: ev.data.files },
+        diffsByRef: { ...context.diffsByRef, [recorded]: files },
         isPrLoading: false,
         diffStale: false,
       })
@@ -647,12 +627,12 @@ export const pullRequestState = setup({
      * an answer for a file the user has since moved off opens nothing either.
      */
     handleFileDiffReceived: enqueueActions(({ enqueue, self, context, event }) => {
-      const ev = event as { type: 'pr.FILE_DIFF_RECEIVED'; data: GitDiff & { baseBranch: string; headBranch?: string } }
+      const diff: GitDiff = answerOf(event, 'pr.GET_BRANCH_FILE_DIFF')
       const { recorded, pending } = settleCall(context.fileDiffAsks, event)
       if (recorded === undefined) return
       enqueue.assign({ fileDiffAsks: pending })
       const selected = context.selectedPrFile
-      if (selected?.path !== ev.data.path) return
+      if (selected?.path !== diff.path) return
       enqueue(() => {
         const diffTab = {
           path: `pr-diff:${selected.path}`,
@@ -660,7 +640,7 @@ export const pullRequestState = setup({
           modified: false,
           isDiff: true,
           isPrDiff: true,
-          gitDiff: ev.data,
+          gitDiff: diff,
           gitFile: selected
         }
         addTabToParent(self, diffTab)
@@ -697,10 +677,9 @@ export const pullRequestState = setup({
       ask(enqueue, 'access', (o) => sendToSystem('code', { type: 'pr.CHECK_GITHUB_ACCESS' }, o))
     }),
 
-    handleGitHubAccessChecked: assign({
-      githubAccess: ({ event }) => (event as { type: 'pr.GITHUB_ACCESS_CHECKED'; data: { access: GitHubAccess } }).data.access,
-      githubAccessMessage: ({ event }) => (event as { type: 'pr.GITHUB_ACCESS_CHECKED'; data: { message?: string } }).data.message ?? null,
-      asks: ({ context }) => ({ ...context.asks, access: null }),
+    handleGitHubAccessChecked: assign(({ context, event }) => {
+      const { access, message } = answerOf(event, 'pr.CHECK_GITHUB_ACCESS')
+      return { githubAccess: access, githubAccessMessage: message ?? null, asks: { ...context.asks, access: null } }
     }),
 
     navigateToHelp: () => {
@@ -709,9 +688,9 @@ export const pullRequestState = setup({
 
     /** A page of the list, after the ones read where it was asked as the next, and as the list otherwise */
     takeListPage: assign(({ context, event }) => {
-      const ev = event as { type: 'pr.PRS_LISTED'; data: { prs: GhPullRequest[]; next: string | null } }
+      const page = answerOf(event, 'pr.LIST_PRS')
       const list = context.prList
-      return { prList: { ...list, prs: list.asked?.append ? joined(list.prs, ev.data.prs) : ev.data.prs, next: ev.data.next, asked: null, read: true } }
+      return { prList: { ...list, prs: list.asked?.append ? joined(list.prs, page.prs) : page.prs, next: page.next, asked: null, read: true } }
     }),
 
     showList: enqueueActions(({ enqueue, context }) => {
@@ -741,42 +720,42 @@ export const pullRequestState = setup({
 
     /**
      * Takes a pull request's details when they answer the latest ask for them, or a write's re-read of the
-     * pull request still shown — and not when an answer accepted for that number was fetched later. Then
-     * asks for its diff and its review threads.
+     * pull request still shown (`detailsIn`) — and not when an answer accepted for that number was fetched later.
+     * Then asks for its diff and its review threads.
      *
      * **It sets `prBaseBranch`, and that is load-bearing.** The base the view is on is half the key its
      * files are read under; every asker names the base it is asking about, and no answer does.
      */
     takeDetails: enqueueActions(({ enqueue, event, context }) => {
-      const ev = event as { type: 'pr.PR_DETAILS_RECEIVED'; data: { pr: GhPullRequest; comments: GhPRComment[]; fetchedAt: number } }
-      const prNumber = ev.data.pr.number
       const asked = answersCall(event, context.asks.details)
       const refresh = settleCall(context.detailRefreshes, event)
-      const refreshed = refresh.recorded === prNumber && context.selectedPR?.number === prNumber
       enqueue.assign({
         detailRefreshes: refresh.pending,
         ...(asked && { asks: { ...context.asks, details: null }, isLoadingDetails: false }),
       })
+      const details = detailsIn(event)
+      if (!details) return
+      const prNumber = details.pr.number
+      const refreshed = refresh.recorded === prNumber && context.selectedPR?.number === prNumber
       if (!asked && !refreshed) return
-      if (ev.data.fetchedAt < (context.latestPrDetailsFetchedAt[prNumber] ?? 0)) return
+      if (details.fetchedAt < (context.latestPrDetailsFetchedAt[prNumber] ?? 0)) return
       enqueue.assign(({ context }) => {
-        const left = selecting(context, ev.data.pr)
+        const left = selecting(context, details.pr)
         const held = { ...context, ...left }
         return {
           ...left,
-          ...withWrites(held, held.writes, { comments: ev.data.comments }),
+          ...withWrites(held, held.writes, { comments: details.comments }),
           commentsFor: prNumber,
-          latestPrDetailsFetchedAt: { ...context.latestPrDetailsFetchedAt, [prNumber]: ev.data.fetchedAt },
-          prBaseBranch: ev.data.pr.baseRefName,
+          latestPrDetailsFetchedAt: { ...context.latestPrDetailsFetchedAt, [prNumber]: details.fetchedAt },
+          prBaseBranch: details.pr.baseRefName,
         }
       })
-      askDiff(enqueue, ev.data.pr.baseRefName, ev.data.pr.headRefName, prNumber)
+      askDiff(enqueue, details.pr.baseRefName, details.pr.headRefName, prNumber)
       ask(enqueue, 'threads', (o) => sendToSystem('code', { type: 'pr.GET_REVIEW_THREADS', number: prNumber }, o))
     }),
 
     handleBranchPRChecked: enqueueActions(({ enqueue, event, context }) => {
-      const ev = event as { type: 'pr.BRANCH_PR_CHECKED'; data: { pr: GhPullRequest | null } }
-      const incoming = ev.data.pr
+      const incoming = answerOf(event, 'pr.CHECK_BRANCH_PR').pr
       const unchanged = incoming?.number === context.selectedPR?.number
         && incoming?.updatedAt === context.selectedPR?.updatedAt
 
@@ -823,56 +802,50 @@ export const pullRequestState = setup({
       if (comment && number !== undefined) ask(enqueue, 'comments', (o) => sendToSystem('code', { type: 'pr.GET_COMMENTS', number }, o))
       if (thread && number !== undefined) ask(enqueue, 'threads', (o) => sendToSystem('code', { type: 'pr.GET_REVIEW_THREADS', number }, o))
 
-      const ev = event as Event
-      switch (ev.type) {
-        case 'pr.PR_CREATED':
-          enqueue.assign(({ context }) => ({
-            ...selecting(context, ev.data.pr),
-            createTitle: '',
-            createBody: '',
-            createBaseBranch: '',
-            createDraft: false,
-            // The newly-created PR is the branch PR, so it is not pinned
-            isManualPRSelection: false,
-          }))
-          askStatus(enqueue)
-          break
-        case 'pr.PR_MERGED':
-        case 'pr.PR_CLOSED': {
-          const state = ev.type === 'pr.PR_MERGED' ? 'MERGED' as const : 'CLOSED' as const
-          const done = (pr: GhPullRequest | null) => pr?.number === ev.data.number ? { ...pr, state } : pr
-          // A picked PR stays picked, so its Delete Branch is there to press
-          enqueue.assign(({ context }) => ({ selectedPR: done(context.selectedPR), branchPR: done(context.branchPR) }))
-          askStatus(enqueue)
-          break
-        }
-        case 'pr.PR_DRAFT_TOGGLED':
-          enqueue.assign(({ context }) => ({
-            selectedPR: context.selectedPR?.number === ev.data.number ? { ...context.selectedPR, isDraft: ev.data.isDraft } : context.selectedPR,
-          }))
-          break
-        case 'pr.BRANCH_DELETED':
-          enqueue.assign(({ context }) => ({ ...selecting(context, null), branchPR: null, isManualPRSelection: false }))
-          break
-        case 'pr.PR_CHECKED_OUT':
-          // The pull request stays shown, picked or not: a fork's is checked out as `pr/<n>`, which is no branch
-          // GitHub has a pull request from, and the checkout's announcement asks for the branch's own
-          enqueue.assign({ lastCheckout: ev.data })
-          break
-        case 'pr.PR_UPDATED':
-          enqueue.assign(({ context }) => ({
-            selectedPR: context.selectedPR?.number === ev.data.number
-              ? {
-                  ...context.selectedPR,
-                  ...(ev.data.title && { title: ev.data.title }),
-                  ...(ev.data.body !== undefined && { body: ev.data.body, rawBody: ev.data.body }),
-                  ...(ev.data.base && { baseRefName: ev.data.base }),
-                }
-              : context.selectedPR,
-            diffStale: ev.data.base ? true : context.diffStale,
-          }))
-          if (getParentContext(self)?.baseDirectory) askStatus(enqueue)
-          break
+      if (isAnswered(event, 'pr.CREATE_PR')) {
+        const { pr } = answerOf(event, 'pr.CREATE_PR')
+        enqueue.assign(({ context }) => ({
+          ...selecting(context, pr),
+          createTitle: '',
+          createBody: '',
+          createBaseBranch: '',
+          createDraft: false,
+          // The newly-created PR is the branch PR, so it is not pinned
+          isManualPRSelection: false,
+        }))
+        askStatus(enqueue)
+      } else if (isAnswered(event, 'pr.MERGE_PR') || isAnswered(event, 'pr.CLOSE_PR')) {
+        const state = event.asked === 'pr.MERGE_PR' ? 'MERGED' as const : 'CLOSED' as const
+        const { number } = event.answer
+        const done = (pr: GhPullRequest | null) => pr?.number === number ? { ...pr, state } : pr
+        // A picked PR stays picked, so its Delete Branch is there to press
+        enqueue.assign(({ context }) => ({ selectedPR: done(context.selectedPR), branchPR: done(context.branchPR) }))
+        askStatus(enqueue)
+      } else if (isAnswered(event, 'pr.TOGGLE_DRAFT')) {
+        const { number, isDraft } = answerOf(event, 'pr.TOGGLE_DRAFT')
+        enqueue.assign(({ context }) => ({
+          selectedPR: context.selectedPR?.number === number ? { ...context.selectedPR, isDraft } : context.selectedPR,
+        }))
+      } else if (isAnswered(event, 'pr.DELETE_BRANCH')) {
+        enqueue.assign(({ context }) => ({ ...selecting(context, null), branchPR: null, isManualPRSelection: false }))
+      } else if (isAnswered(event, 'pr.CHECKOUT_PR')) {
+        // The pull request stays shown, picked or not: a fork's is checked out as `pr/<n>`, which is no branch
+        // GitHub has a pull request from, and the checkout's announcement asks for the branch's own
+        enqueue.assign({ lastCheckout: answerOf(event, 'pr.CHECKOUT_PR') })
+      } else if (isAnswered(event, 'pr.UPDATE_PR')) {
+        const { number, title, body, base } = answerOf(event, 'pr.UPDATE_PR')
+        enqueue.assign(({ context }) => ({
+          selectedPR: context.selectedPR?.number === number
+            ? {
+                ...context.selectedPR,
+                ...(title && { title }),
+                ...(body !== undefined && { body, rawBody: body }),
+                ...(base && { baseRefName: base }),
+              }
+            : context.selectedPR,
+          diffStale: base ? true : context.diffStale,
+        }))
+        if (getParentContext(self)?.baseDirectory) askStatus(enqueue)
       }
     }),
 
@@ -921,16 +894,9 @@ export const pullRequestState = setup({
       ask(enqueue, 'autofill', (o) => sendToSystem('code', { type: 'pr.GET_PR_AUTOFILL' }, o))
     }),
 
-    handleAutofillReceived: assign({
-      createTitle: ({ event, context }) => {
-        const ev = event as { type: 'pr.AUTOFILL_RECEIVED'; data: { title: string; body: string } }
-        return context.createTitle || ev.data.title
-      },
-      createBody: ({ event, context }) => {
-        const ev = event as { type: 'pr.AUTOFILL_RECEIVED'; data: { title: string; body: string } }
-        return context.createBody || ev.data.body
-      },
-      asks: ({ context }) => ({ ...context.asks, autofill: null }),
+    handleAutofillReceived: assign(({ context, event }) => {
+      const { title, body } = answerOf(event, 'pr.GET_PR_AUTOFILL')
+      return { createTitle: context.createTitle || title, createBody: context.createBody || body, asks: { ...context.asks, autofill: null } }
     }),
 
     updateCreateField: assign({
@@ -1088,19 +1054,19 @@ export const pullRequestState = setup({
 
     /** The discussion read again: shown with the comment writes still unanswered laid over it */
     handleCommentsReceived: assign(({ context, event }) => {
-      const ev = event as { type: 'pr.COMMENTS_RECEIVED'; data: { number: number; comments: GhPRComment[] } }
+      const { number, comments } = answerOf(event, 'pr.GET_COMMENTS')
       return {
-        ...withWrites(context, context.writes, { comments: ev.data.comments }),
-        commentsFor: ev.data.number,
+        ...withWrites(context, context.writes, { comments }),
+        commentsFor: number,
         asks: { ...context.asks, comments: null },
       }
     }),
 
     /** The review threads read again: shown with the thread writes still unanswered laid over them */
     handleReviewThreadsReceived: assign(({ context, event }) => {
-      const ev = event as { type: 'pr.REVIEW_THREADS_RECEIVED'; data: { threads: GhReviewThread[] } }
+      const { threads } = answerOf(event, 'pr.GET_REVIEW_THREADS')
       return {
-        ...withWrites(context, context.writes, { threads: ev.data.threads }),
+        ...withWrites(context, context.writes, { threads }),
         asks: { ...context.asks, threads: null },
       }
     }),
@@ -1115,42 +1081,45 @@ export const pullRequestState = setup({
         'pr.REFRESH_STATUS': { actions: 'refreshStatus' },
         'pr.SELECT_FILE': { actions: ['selectPrFile', assign({ missingFileDiff: null })] },
         'pr.VIEW_DIFF': { actions: 'viewPrDiff' },
-        'pr.FILE_CONTENT_MISSING': { actions: 'handleFileContentMissing' },
         'pr.FETCH_MISSING_DIFF': { actions: 'fetchMissingDiff' },
         'pr.OPEN_FILE': { actions: 'openFile' },
-        'pr.ERROR': { actions: 'takeError' },
-        'pr.BRANCH_DIFF_RECEIVED': { actions: 'handleBranchDiffReceived' },
-        'pr.FILE_DIFF_RECEIVED': { actions: 'handleFileDiffReceived' },
         // News: the repository's commits or branches moved
         'pr.GIT_STATUS_REFRESHED': { actions: 'followRepositoryChange' },
         'CODE_STARTED': { actions: 'startFolder' },
 
-        // GitHub PR events from backend
+        // The answers to the panel's asks. A read is taken when it answers the latest ask of it; a write's answer
+        // settles that write, and a write that read the pull request again brings its details
+        ASK_ANSWERED: [
+          { guard: ({ event }) => isAnswered(event, 'pr.GET_BRANCH_DIFF'), actions: 'handleBranchDiffReceived' },
+          { guard: ({ event }) => isAnswered(event, 'pr.GET_BRANCH_FILE_DIFF'), actions: 'handleFileDiffReceived' },
+          { guard: ({ context, event }) => isAnswered(event, 'pr.CHECK_GITHUB_ACCESS') && answersCall(event, context.asks.access), actions: 'handleGitHubAccessChecked' },
+          { guard: ({ context, event }) => isAnswered(event, 'pr.LIST_PRS') && answersCall(event, context.prList.asked?.call ?? null), actions: 'takeListPage' },
+          { guard: ({ context, event }) => isAnswered(event, 'pr.CHECK_BRANCH_PR') && answersCall(event, context.asks.branchPR), actions: 'handleBranchPRChecked' },
+          { guard: ({ context, event }) => isAnswered(event, 'pr.GET_SMART_BASE_BRANCH') && answersCall(event, context.asks.smartBase), actions: 'handleSmartBaseBranchReceived' },
+          { guard: ({ context, event }) => isAnswered(event, 'pr.GET_PR_AUTOFILL') && answersCall(event, context.asks.autofill), actions: 'handleAutofillReceived' },
+          { guard: ({ context, event }) => isAnswered(event, 'pr.GET_COMMENTS') && answersCall(event, context.asks.comments), actions: 'handleCommentsReceived' },
+          { guard: ({ context, event }) => isAnswered(event, 'pr.GET_REVIEW_THREADS') && answersCall(event, context.asks.threads), actions: 'handleReviewThreadsReceived' },
+          { guard: ({ event }) => isAnswered(event, 'pr.SELECT_PR'), actions: 'takeDetails' },
+          // The write is the pull request's before the details it read again are taken over it
+          { guard: ({ event }) => isAnswered(event, 'pr.TOGGLE_DRAFT') || isAnswered(event, 'pr.UPDATE_PR'), actions: ['takeWriteAnswer', 'takeDetails'] },
+          { actions: 'takeWriteAnswer' },
+        ],
+        ASK_FAILED: [
+          {
+            guard: ({ event }) => event.asked === 'pr.GET_BRANCH_FILE_DIFF' && event.failure.kind === 'content-missing',
+            actions: 'handleFileContentMissing',
+          },
+          // A read of the discussion after a write that landed: its failure is no error of the write's to show
+          {
+            guard: ({ event }) => event.asked === 'pr.GET_COMMENTS',
+            actions: assign(({ context, event }) => answersCall(event, context.asks.comments) ? { asks: { ...context.asks, comments: null } } : {}),
+          },
+          // A refused merge brings the pull request read again, shown with the refusal
+          { guard: ({ event }) => event.asked === 'pr.MERGE_PR', actions: ['takeDetails', 'takeError'] },
+          { actions: 'takeError' },
+        ],
         'pr.CHECK_GITHUB_ACCESS': { actions: 'checkGitHubAccess' },
-        'pr.GITHUB_ACCESS_CHECKED': { guard: 'answersTheAccessAsked', actions: 'handleGitHubAccessChecked' },
         'pr.NAVIGATE_TO_HELP': { actions: 'navigateToHelp' },
-        'pr.PRS_LISTED': { guard: 'answersTheListAsked', actions: 'takeListPage' },
-        'pr.PR_CHECKED_OUT': { actions: 'takeWriteAnswer' },
-        'pr.PR_DETAILS_RECEIVED': { actions: 'takeDetails' },
-        'pr.BRANCH_PR_CHECKED': { guard: 'answersTheBranchPRAsked', actions: 'handleBranchPRChecked' },
-        'pr.SMART_BASE_BRANCH_RECEIVED': { guard: 'answersTheSmartBaseAsked', actions: 'handleSmartBaseBranchReceived' },
-        'pr.AUTOFILL_RECEIVED': { guard: 'answersTheAutofillAsked', actions: 'handleAutofillReceived' },
-        'pr.COMMENTS_RECEIVED': { guard: 'answersTheCommentsAsked', actions: 'handleCommentsReceived' },
-        'pr.REVIEW_THREADS_RECEIVED': { guard: 'answersTheThreadsAsked', actions: 'handleReviewThreadsReceived' },
-        'pr.PR_CREATED': { actions: 'takeWriteAnswer' },
-        'pr.PR_MERGED': { actions: 'takeWriteAnswer' },
-        'pr.PR_CLOSED': { actions: 'takeWriteAnswer' },
-        'pr.PR_DRAFT_TOGGLED': { actions: 'takeWriteAnswer' },
-        'pr.BRANCH_DELETED': { actions: 'takeWriteAnswer' },
-        'pr.PR_UPDATED': { actions: 'takeWriteAnswer' },
-        'pr.COMMENT_CREATED': { actions: 'takeWriteAnswer' },
-        'pr.COMMENT_EDITED': { actions: 'takeWriteAnswer' },
-        'pr.COMMENT_DELETED': { actions: 'takeWriteAnswer' },
-        'pr.THREAD_REPLIED': { actions: 'takeWriteAnswer' },
-        'pr.THREAD_RESOLVED': { actions: 'takeWriteAnswer' },
-        'pr.THREAD_UNRESOLVED': { actions: 'takeWriteAnswer' },
-        'pr.REVIEW_COMMENT_EDITED': { actions: 'takeWriteAnswer' },
-        'pr.REVIEW_COMMENT_DELETED': { actions: 'takeWriteAnswer' },
 
         // User actions
         'pr.SELECT_PR_BY_NUMBER': { actions: 'selectPRAndLoadDiff' },

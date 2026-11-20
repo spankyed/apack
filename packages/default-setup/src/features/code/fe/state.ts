@@ -18,8 +18,9 @@ import type { CodeSettings } from '#generated/types.ts';
 import type { ActionTab, CodeContext, CodeInboxEvent, OpenFile, PanelType, PromptTab, TerminalTab } from './contract.ts';
 export type { OpenFile, TerminalTab, QuickOpenResult, PanelType } from './contract.ts';
 export type { CodeContext } from './contract.ts';
-import type { OutgoingCodeEvents } from '#features/code/be/contract.ts';
-import type { GitDiff } from '#features/code/be/types.ts';
+import type { Contract as CodeSystemContract, OutgoingCodeEvents } from '#features/code/be/contract.ts';
+import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
+import type { CodeConnectedData, GitDiff } from '#features/code/be/types.ts';
 import { sendToSystem } from '#generated/events.ts';
 
 // Import child state machines
@@ -63,6 +64,10 @@ export type { TabGroupColor, TabGroup };
 
 export type Event =
   | OutgoingCodeEvents
+  // The answers to the asks this window makes of the code system: its own, and its panels', which it hands them
+  | AnswersOf<CodeSystemContract>
+  // What the surface starts from, which it hands every panel as it starts over a folder
+  | { type: 'CODE_STARTED'; data: CodeConnectedData }
   // The app's, when the code surface's settings change
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
   // Generic update event for child actors to update parent state
@@ -551,7 +556,7 @@ const codeState = setup({
       error: null
     }),
     initializeSurface: ({ self }) => {
-      // Explorer is initialized by the CODE_STARTED answer — no re-init needed here.
+      // The explorer starts from the start the surface hands it — no re-init needed here.
       codeChild(self, 'terminal')?.send({ type: 'terminal.REFRESH_LIST' });
       // The window shows the repository from here on, which is when it follows what changes in it
       codeChild(self, 'commit')?.send({ type: 'commit.SHOWN' });
@@ -589,7 +594,7 @@ const codeState = setup({
         : persistedTabs[0]?.path ?? null
 
       // Mark tabs as restored immediately (even if empty)
-      // Collect terminal tab IDs to restore later (when TERMINALS_LISTED arrives from backend)
+      // Collect terminal tab IDs to restore later (when the terminal list, `terminal.REFRESH_LIST`'s answer, arrives)
       const terminalTabIds = persistedTabs.filter(t => t.type === 'terminal').map(t => t.terminalId!)
       const restoredPanelTerminal = persistedPanelTerminal && terminalTabIds.includes(persistedPanelTerminal)
         ? null
@@ -641,7 +646,7 @@ const codeState = setup({
         }
 
         // Terminal tabs are NOT sent here — they're deferred to assignTerminals
-        // (when TERMINALS_LISTED arrives) to avoid racing with backend restore.
+        // (when the terminal list arrives) to avoid racing with backend restore.
         // See pendingTerminalTabIds in context.
 
         // Send action IDs to restore
@@ -677,11 +682,18 @@ const codeState = setup({
     // handling the start reads the folder the start just set (`getParentContext`), where a send made from inside
     // the transition would be handled first and read the folder before it.
     broadcastToAllFeatures: enqueueActions(({ enqueue, event, self }) => {
+      const started = { type: 'CODE_STARTED' as const, data: answerOf(event, 'GET_CODE_START') }
       for (const id of CODE_CHILD_IDS) {
         const child = self.getSnapshot().children[id] as AnyActorRef | undefined
-        if (child) enqueue.sendTo(child, event)
+        if (child) enqueue.sendTo(child, started)
       }
     }),
+
+    // An answer goes to the panel its ask is named for (`commit.*` to the commit panel), as the panel's events do
+    routeAnswer: ({ event, self }) => {
+      const { asked } = event as { type: 'ASK_ANSWERED' | 'ASK_FAILED'; asked: string };
+      if (asked.includes('.')) routeToCodeChild(self, asked.split('.')[0]!, event);
+    },
 
     routeEvent: ({ event, self }) => {
       const eventType = event.type;
@@ -788,7 +800,7 @@ const codeState = setup({
     },
 
     handleCodeConnected: assign(({ event, context }) => {
-      const ev = event as { type: 'CODE_STARTED'; data: { baseDirectory: string | null; settings?: CodeSettings } }
+      const ev = { data: answerOf(event, 'GET_CODE_START') }
 
       // Extract hotkeys from settings - filter out undefined values
       const hotkeys: HotkeysMap = {};
@@ -801,7 +813,7 @@ const codeState = setup({
       }
 
       // Update directory state from backend
-      // Explorer child will receive CODE_STARTED via broadcastToAllFeatures and initialize itself
+      // Each panel is handed the start (`broadcastToAllFeatures`) and asks for what it shows
       const baseDirectory = ev.data.baseDirectory || ''
 
       return {
@@ -1419,11 +1431,16 @@ const codeState = setup({
         BASE_DIRECTORY_CHANGED: {
           actions: () => { sendToSystem('code', { type: 'GET_CODE_START' }) },
         },
-        // The answer, handed to every feature, each of which asks for what its panel shows
-        CODE_STARTED: {
-          // The saved settings reach the terminals at start, as they do when they change
-          actions: ['handleCodeConnected', 'applyCopyOnSelect', 'applyViewSettings', 'broadcastToAllFeatures']
-        },
+        ASK_ANSWERED: [
+          // The answer, handed to every feature, each of which asks for what its panel shows. The saved settings
+          // reach the terminals at start, as they do when they change
+          {
+            guard: ({ event }) => isAnswered(event, 'GET_CODE_START'),
+            actions: ['handleCodeConnected', 'applyCopyOnSelect', 'applyViewSettings', 'broadcastToAllFeatures'],
+          },
+          { actions: 'routeAnswer' },
+        ],
+        ASK_FAILED: { actions: 'routeAnswer' },
         // Handle settings updates
         FEATURE_SETTINGS_UPDATED: {
           actions: ['handleSettingsUpdate', 'applyCopyOnSelect', 'applyViewSettings']

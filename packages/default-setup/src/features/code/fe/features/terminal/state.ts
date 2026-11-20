@@ -1,6 +1,7 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
 import { sendToSystem } from '#generated/events.ts';
-import { newCall, recordCall, settleCall } from '@apackdev/sdk/events';
+import { answerOf, isAnswered, newCall, recordCall, settleCall, type AnswersOf, type AskName } from '@apackdev/sdk/events';
+import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { terminalPool } from '../../utils/terminal-pool.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, nextActiveFromHistory } from '../../utils/tab-management.ts';
@@ -96,8 +97,8 @@ export interface CodeTerminalContext {
    * "build" then "test" before the first answer and `test` runs in the build terminal
    * (`docs/issues/ISSUE-terminal-integration-review.md`, T4).
    *
-   * An entry is removed by whichever answer settles the ask (`terminal.OPENED` or `terminal.ERROR`, both
-   * replied), so the map holds only what is genuinely in flight.
+   * An entry is removed by whichever answer settles the ask, the terminal or the refusal, so the map holds only
+   * what is genuinely in flight.
    */
   pendingOpens: Record<string, PendingOpen>
   /**
@@ -119,7 +120,20 @@ export interface CodeTerminalContext {
   statusNotified: Record<string, true>
 }
 
+/** The asks this panel makes of the code system, whose answers the surface hands it */
+type TerminalAsk = Extract<AskName<CodeSystemContract>, `terminal.${string}`>
+
+/** A grid the pty runs at: broadcast when it moved, or the answer to this window's own fit when that was refused */
+type TerminalGrid = { terminalId: string; cols: number; rows: number }
+
+/** The grid an event carries, as `terminal.RESIZED` or as the answer to this window's `terminal.RESIZE_TERMINAL` */
+const gridIn = (event: Event): TerminalGrid | null =>
+  isAnswered(event, 'terminal.RESIZE_TERMINAL') ? answerOf(event, 'terminal.RESIZE_TERMINAL') : (event as { data: TerminalGrid }).data
+
 export type Event =
+  | AnswersOf<CodeSystemContract, TerminalAsk>
+  /** The surface started over its folder: the panel asks for the running terminals */
+  | { type: 'CODE_STARTED' }
   | { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string; on?: string }
   | { type: 'terminal.CLOSE'; terminalId: string }
   | { type: 'terminal.RESTART'; terminalId: string }
@@ -131,9 +145,7 @@ export type Event =
   | { type: 'terminal.REFRESH_LIST' }
   | { type: 'terminal.OPEN_TAB'; terminalInfo: TerminalInfo }
   | { type: 'terminal.OPEN_TABS'; terminalIds: string[] }
-  | { type: 'terminal.TERMINALS_LISTED'; data: TerminalInfo[] }
   | { type: 'terminal.CREATED'; data: { terminalId: string } }
-  | { type: 'terminal.OPENED'; data: TerminalInfo }
   | { type: 'terminal.CLOSED'; data: { terminalId: string } }
   | { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
   | { type: 'terminal.RESTARTED'; data: TerminalInfo }
@@ -155,14 +167,10 @@ export type Event =
   | { type: 'terminal.KEEP'; terminalId: string; kept: boolean }
   | { type: 'terminal.KEPT'; data: { terminalId: string; kept: boolean } }
   | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
-  | { type: 'terminal.REWOUND'; data: { terminalId: string; session: string; first: number; last: number } }
   | { type: 'terminal.REWIND_SEEK'; at: number }
-  | { type: 'terminal.REWIND_SOUGHT'; data: { session: string; at: number } }
   | { type: 'terminal.REWIND_CLOSE' }
   | { type: 'terminal.REWIND_RESIZE'; cols: number; rows: number }
-  | { type: 'terminal.ERROR'; data: { message: string; terminalId?: string } }
-  | { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
-  | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
+  | { type: 'terminal.RESIZED'; data: TerminalGrid }
 
 /**
  * Asks the main process to show the system notification a bell asks for. Through the bridge, because a window's own
@@ -262,8 +270,7 @@ export const terminalState = setup({
     },
 
     assignTerminals: enqueueActions(({ enqueue, self, event }) => {
-      const ev = event as { type: 'terminal.TERMINALS_LISTED'; data: TerminalInfo[] }
-      const terminals = ev.data || []
+      const terminals = answerOf(event, 'terminal.REFRESH_LIST')
       enqueue(assign({ terminals }))
 
       enqueue(() => {
@@ -369,8 +376,10 @@ export const terminalState = setup({
      * the list does.
      */
     describeTerminal: ({ context, event }) => {
-      const data = (event as { data?: { terminalId?: string; id?: string } }).data
-      const id = data?.terminalId ?? data?.id
+      const data = event.type === 'terminal.RESIZED' || isAnswered(event, 'terminal.RESIZE_TERMINAL')
+        ? gridIn(event)
+        : (event as { data?: { terminalId?: string; id?: string } }).data
+      const id = data && ('terminalId' in data ? data.terminalId : data.id)
       const info = context.terminals.find(terminal => terminal.id === id)
       if (info) terminalPool.describe(info)
     },
@@ -414,12 +423,13 @@ export const terminalState = setup({
      * session's own frames, which carry the grid in force; this is the same fact for whatever lists it.
      */
     updateTerminalGrid: assign(({ context, event }) => {
-      const ev = event as { type: 'terminal.RESIZED'; data: { terminalId: string; cols: number; rows: number } }
-      // It arrives two ways and both end here: broadcast when the size moved, and replied to this window
+      // It arrives two ways and both end here: broadcast when the size moved, and answered to this window
       // alone when its own fit was refused.
+      const grid = gridIn(event)
+      if (!grid) return {}
       return {
-        terminals: context.terminals.map(terminal => terminal.id === ev.data.terminalId
-          ? { ...terminal, cols: ev.data.cols, rows: ev.data.rows }
+        terminals: context.terminals.map(terminal => terminal.id === grid.terminalId
+          ? { ...terminal, cols: grid.cols, rows: grid.rows }
           : terminal),
       }
     }),
@@ -458,7 +468,7 @@ export const terminalState = setup({
      * — the app raises the toast. This surface held the message in a context field instead, which nothing
      * rendered, and that is what made every terminal failure silent.
      *
-     * A replied error settles the ask it answers, so its intent goes with it: a create that failed would
+     * A refusal settles the ask it answers, so its intent goes with it: a create that failed would
      * otherwise leave its target and command in the map for the life of the surface. Only `pending` is
      * wanted here — there is nothing to do with what the failed ask meant.
      */
@@ -635,10 +645,10 @@ export const terminalState = setup({
 
     /** A recording opened for this window: shown at its end, which is where the terminal is now */
     openRewind: assign(({ context, event }) => {
-      const ev = event as { type: 'terminal.REWOUND'; data: { terminalId: string; session: string; first: number; last: number } }
+      const opened = answerOf(event, 'terminal.REWIND')
       // The one this window was looking at is closed where it was opened; what drew it goes here
-      if (context.rewind && context.rewind.session !== ev.data.session) terminalPool.dispose(rewindViewId(context.rewind.session))
-      return { rewind: { ...ev.data, at: ev.data.last } }
+      if (context.rewind && context.rewind.session !== opened.session) terminalPool.dispose(rewindViewId(context.rewind.session))
+      return { rewind: { ...opened, at: opened.last } }
     }),
 
     resizeRewind: ({ context, event }) => {
@@ -652,9 +662,9 @@ export const terminalState = setup({
     },
 
     noteRewindSought: assign(({ context, event }) => {
-      const ev = event as { type: 'terminal.REWIND_SOUGHT'; data: { session: string; at: number } }
-      if (context.rewind?.session !== ev.data.session) return {}
-      return { rewind: { ...context.rewind, at: ev.data.at } }
+      const sought = answerOf(event, 'terminal.REWIND_SEEK')
+      if (!sought || context.rewind?.session !== sought.session) return {}
+      return { rewind: { ...context.rewind, at: sought.at } }
     }),
 
     closeRewind: assign(({ context }) => {
@@ -683,7 +693,7 @@ export const terminalState = setup({
      * Opens the terminal *this* window asked for, the way *that* ask asked for it.
      *
      * **Two correlations, answering different questions.** Addressing says *which window*: only the asker is
-     * sent `terminal.OPENED`, so hang this off the broadcast `terminal.CREATED` instead and every open
+     * answered with the terminal, so hang this off the broadcast `terminal.CREATED` instead and every open
      * window routes a terminal it never asked for into its own panel and runs a command nobody typed there.
      * The call says *which of that window's asks*, which addressing cannot — see `pendingOpens`.
      *
@@ -695,8 +705,7 @@ export const terminalState = setup({
       const { target, command } = recorded ?? { target: null, command: null }
       enqueue.assign({ pendingOpens: pending })
       enqueue(() => {
-        const ev = event as { type: 'terminal.OPENED'; data: TerminalInfo }
-        const terminalInfo = ev.data
+        const terminalInfo = answerOf(event, 'terminal.CREATE_TERMINAL')
 
         if (target === 'tab') {
           // Explicit tab target — create canvas tab
@@ -785,7 +794,7 @@ export const terminalState = setup({
     },
 
     handleTerminalTabOpened: ({ event, self }) => {
-      const ev = event as { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
+      const ev = { data: answerOf(event, 'terminal.OPEN_TERMINAL_TAB') }
       const parentContext = getParentContext(self)
       const openFiles = parentContext?.openFiles || []
       const terminalPath = `terminal:${ev.data.id}`
@@ -848,17 +857,14 @@ export const terminalState = setup({
     'terminal.OPEN_TABS': {
       actions: 'openTerminalTabs'
     },
-    'terminal.TERMINALS_LISTED': {
-      actions: 'assignTerminals'
+    // The surface started over its folder: what is running there
+    CODE_STARTED: {
+      actions: 'listTerminals'
     },
     // The news, which every window takes: the list grows and nothing else happens
     // A terminal exists, in some window: ask for the list again, which the system answers this window alone
     'terminal.CREATED': {
       actions: 'listTerminals'
-    },
-    // The answer, which only the window that asked is sent
-    'terminal.OPENED': {
-      actions: ['handleTerminalOpened']
     },
     'terminal.CLOSED': {
       actions: ['handleTerminalClosed', 'forgetActivity']
@@ -890,20 +896,25 @@ export const terminalState = setup({
     'terminal.KEEP': { actions: 'keepTerminal' },
     'terminal.KEPT': { actions: ['markKept', 'describeTerminal'] },
     'terminal.REWIND': { actions: 'askForRewind' },
-    'terminal.REWOUND': { actions: 'openRewind' },
     'terminal.REWIND_SEEK': { actions: 'seekRewind' },
-    'terminal.REWIND_SOUGHT': { actions: 'noteRewindSought' },
     'terminal.REWIND_CLOSE': { actions: 'closeRewind' },
     'terminal.REWIND_RESIZE': { actions: 'resizeRewind' },
-    'terminal.ERROR': {
-      actions: 'settleFailedAsk'
-    },
     'terminal.RESIZED': {
       actions: ['updateTerminalGrid', 'describeTerminal']
     },
-    'terminal.TERMINAL_TAB_OPENED': {
-      actions: 'handleTerminalTabOpened'
-    }
+    // The answers to this window's asks, which only the window that asked is sent
+    ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'terminal.REFRESH_LIST'), actions: 'assignTerminals' },
+      { guard: ({ event }) => isAnswered(event, 'terminal.CREATE_TERMINAL'), actions: 'handleTerminalOpened' },
+      { guard: ({ event }) => isAnswered(event, 'terminal.OPEN_TERMINAL_TAB'), actions: 'handleTerminalTabOpened' },
+      { guard: ({ event }) => isAnswered(event, 'terminal.REWIND'), actions: 'openRewind' },
+      { guard: ({ event }) => isAnswered(event, 'terminal.REWIND_SEEK'), actions: 'noteRewindSought' },
+      // This window's fit was refused: the grid the pty runs at instead
+      { guard: ({ event }) => isAnswered(event, 'terminal.RESIZE_TERMINAL') && gridIn(event) !== null, actions: ['updateTerminalGrid', 'describeTerminal'] },
+    ],
+    ASK_FAILED: {
+      actions: 'settleFailedAsk'
+    },
   },
   states: {
     idle: {

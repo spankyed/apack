@@ -1,8 +1,9 @@
 // The app's sign-in to GitHub as a window shows it: who it is signed in as, and a sign-in under way with the code
 // to type at github.com. The backend holds the token; a window holds only what it shows.
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
-import { answersCall, newCall } from '@apackdev/sdk/events'
+import { answerOf, answersCall, isAnswered, newCall, type AnswersOf } from '@apackdev/sdk/events'
 import { sendToSystem } from '#generated/events.ts'
+import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts'
 import type { GitHubAccount, GitHubSignInFailure } from '#features/code/be/services/github.ts'
 
 export interface GitHubSignInCode {
@@ -32,9 +33,8 @@ export type Event =
   | { type: 'github.CANCEL_SIGN_IN' }
   | { type: 'github.SIGN_OUT' }
   // What the backend answers, and its news
-  | { type: 'github.ACCOUNT'; account: GitHubAccount | null }
-  | { type: 'github.SIGN_IN_CODE'; userCode: string; verificationUri: string; expiresAt: number }
-  | { type: 'github.SIGN_IN_FAILED'; reason: GitHubSignInFailure; message: string }
+  | AnswersOf<CodeSystemContract, 'github.GET_ACCOUNT' | 'github.SIGN_IN'>
+  | { type: 'github.SIGN_IN_FAILED'; userCode: string; reason: GitHubSignInFailure; message: string }
   | { type: 'github.ACCOUNT_CHANGED'; account: GitHubAccount | null }
 
 export const githubState = setup({
@@ -43,7 +43,9 @@ export const githubState = setup({
     events: {} as Event,
   },
   guards: {
-    answersTheSignIn: ({ context, event }) => answersCall(event, context.signInAsk),
+    /** A sign-in ending that is of the one this window shows: the one it was given that code for */
+    endsTheSignInShown: ({ context, event }) =>
+      event.type === 'github.SIGN_IN_FAILED' && context.signIn?.code?.userCode === event.userCode,
   },
   actions: {
     /**
@@ -76,17 +78,27 @@ export const githubState = setup({
     },
     'github.SIGN_OUT': { actions: () => { sendToSystem('code', { type: 'github.SIGN_OUT' }) } },
 
-    'github.ACCOUNT': { actions: assign({ account: ({ event }) => event.account }) },
-    'github.SIGN_IN_CODE': {
-      guard: 'answersTheSignIn',
-      actions: [
-        assign({ signIn: ({ event }) => ({ code: { userCode: event.userCode, verificationUri: event.verificationUri, expiresAt: event.expiresAt } }) }),
-        { type: 'handOverCode', params: ({ event }) => ({ userCode: event.userCode, verificationUri: event.verificationUri }) },
-      ],
-    },
+    ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'github.GET_ACCOUNT'), actions: assign({ account: ({ event }) => answerOf(event, 'github.GET_ACCOUNT') }) },
+      {
+        guard: ({ context, event }) => isAnswered(event, 'github.SIGN_IN') && answersCall(event, context.signInAsk),
+        actions: [
+          assign({ signIn: ({ event }) => ({ code: answerOf(event, 'github.SIGN_IN') }) }),
+          { type: 'handOverCode', params: ({ event }) => answerOf(event, 'github.SIGN_IN') },
+        ],
+      },
+    ],
     // A cancel is not a failure to show
+    ASK_FAILED: {
+      guard: ({ context, event }) => event.asked === 'github.SIGN_IN' && answersCall(event, context.signInAsk),
+      actions: assign({
+        signIn: () => null,
+        signInAsk: () => null,
+        failure: ({ event }) => event.failure.kind === 'cancelled' ? null : { reason: event.failure.kind === 'unavailable' ? 'failed' : event.failure.kind, message: event.failure.message },
+      }),
+    },
     'github.SIGN_IN_FAILED': {
-      guard: 'answersTheSignIn',
+      guard: 'endsTheSignInShown',
       actions: assign({
         signIn: () => null,
         signInAsk: () => null,

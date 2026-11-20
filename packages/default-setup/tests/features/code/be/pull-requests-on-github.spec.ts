@@ -12,8 +12,7 @@ import { services } from '#generated/services.ts';
 import { createGitHubSignIn } from '#features/code/be/services/github.ts';
 import { pullRequestNode, startGitHubApiStandIn, type StandInRoutes } from './_support/github-api-stand-in.ts';
 
-const CODE = 'default-setup/code';
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const dirs: string[] = [];
 const stops: Array<() => Promise<void>> = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
@@ -56,12 +55,21 @@ async function codeOver(remote: (web: string) => string, routes: StandInRoutes, 
   return { app, requests: standIn.requests, web: standIn.endpoints.web, directory };
 }
 
-/** The answer to one ask of a window's, of the type it is answered with */
-const ask = async (running: NonNullable<typeof app>, event: { type: string; [key: string]: unknown }, answeredWith: string): Promise<Record<string, any>> =>
-  running.nextEmit('code', answeredWith, { answering: await running.send('code', event, asWindow) });
+/** The answer to one ask of a window's, which has to be answered rather than refused */
+const answered = async (running: NonNullable<typeof app>, event: { type: string; [key: string]: unknown }): Promise<Record<string, any>> => {
+  const outcome = await running.ask('code', event, asWindow);
+  if (!outcome.ok) throw new Error(`${event.type} was refused: ${outcome.failure.message}`);
+  return outcome.value as Record<string, any>;
+};
 
-const access = async (running: NonNullable<typeof app>) =>
-  (await running.nextEmit('code', 'pr.GITHUB_ACCESS_CHECKED', { answering: await running.send('code', { type: 'pr.CHECK_GITHUB_ACCESS' }, asWindow) })).data;
+/** Why one ask of a window's was refused, which has to be refused */
+const refusal = async (running: NonNullable<typeof app>, event: { type: string; [key: string]: unknown }) => {
+  const outcome = await running.ask('code', event, asWindow);
+  if (outcome.ok) throw new Error(`${event.type} was answered, not refused`);
+  return outcome.failure;
+};
+
+const access = (running: NonNullable<typeof app>) => answered(running, { type: 'pr.CHECK_GITHUB_ACCESS' });
 
 const repositoryAnswer = { body: { data: { repository: { pullRequests: { totalCount: 1 } } } } };
 
@@ -91,32 +99,32 @@ it("opens a pull request from the checkout's branch, and reads one's details wit
     ],
   });
 
-  const created = await running.nextEmit('code', 'pr.PR_CREATED', { answering: await running.send('code', { type: 'pr.CREATE_PR', title: 'Add the thing', body: 'It adds the thing.' }, asWindow) });
-  expect(created.data).toMatchObject({ pr: { number: 7, headRefName: 'feature/thing' } });
+  const created = await answered(running, { type: 'pr.CREATE_PR', title: 'Add the thing', body: 'It adds the thing.' });
+  expect(created).toMatchObject({ pr: { number: 7, headRefName: 'feature/thing' } });
   expect(requests.find(request => request.path === '/repos/octo/repo/pulls')?.body).toMatchObject({ head: 'feature/thing', base: 'main' });
 
-  const details = await running.nextEmit('code', 'pr.PR_DETAILS_RECEIVED', { answering: await running.send('code', { type: 'pr.SELECT_PR', number: 7 }, asWindow) });
-  expect(details.data).toMatchObject({ pr: { number: 7, mergeable: 'MERGEABLE' }, comments: [{ body: 'Looks good', author: { login: 'hubot' } }] });
+  const details = await answered(running, { type: 'pr.SELECT_PR', number: 7 });
+  expect(details).toMatchObject({ pr: { number: 7, mergeable: 'MERGEABLE' }, comments: [{ body: 'Looks good', author: { login: 'hubot' } }] });
 });
 
 it('says why the pull requests could not be read, rather than that there are none', async () => {
   const signedOut = await codeOver(onStandIn(), {}, { signedIn: false });
-  expect(await ask(signedOut.app, { type: 'pr.LIST_PRS', state: 'open' }, 'pr.ERROR')).toMatchObject({ reason: 'signed-out' });
-  expect(await ask(signedOut.app, { type: 'pr.CHECK_BRANCH_PR' }, 'pr.ERROR')).toMatchObject({ reason: 'signed-out' });
+  expect(await refusal(signedOut.app, { type: 'pr.LIST_PRS', state: 'open' })).toMatchObject({ reason: 'signed-out' });
+  expect(await refusal(signedOut.app, { type: 'pr.CHECK_BRANCH_PR' })).toMatchObject({ reason: 'signed-out' });
   await signedOut.app.stop();
   app = undefined;
 
   const refused = await codeOver(onStandIn(), { graphql: [['pullRequests(', { status: 502, body: { message: 'Server Error' } }]] });
-  expect(await ask(refused.app, { type: 'pr.LIST_PRS', state: 'open' }, 'pr.ERROR')).toMatchObject({ reason: 'failed', message: expect.stringContaining('Server Error') });
-  expect(await ask(refused.app, { type: 'pr.CHECK_BRANCH_PR' }, 'pr.ERROR')).toMatchObject({ reason: 'failed' });
+  expect(await refusal(refused.app, { type: 'pr.LIST_PRS', state: 'open' })).toMatchObject({ reason: 'failed', message: expect.stringContaining('Server Error') });
+  expect(await refusal(refused.app, { type: 'pr.CHECK_BRANCH_PR' })).toMatchObject({ reason: 'failed' });
 });
 
 it('opens no pull request from a detached HEAD, and opens one from a branch under the name it has on the remote', async () => {
   const created = { status: 201, body: { number: 7 } };
   const settled = { body: { data: { repository: { pullRequest: pullRequestNode() } } } };
   const detached = await codeOver(onStandIn(), { rest: { 'POST /repos/octo/repo/pulls': created } }, { prepare: directory => git(directory, 'checkout', '--quiet', '--detach') });
-  expect(await ask(detached.app, { type: 'pr.CREATE_PR', title: 'Add the thing', body: '' }, 'pr.ERROR')).toMatchObject({ message: expect.stringContaining('detached HEAD') });
-  expect((await ask(detached.app, { type: 'pr.CHECK_BRANCH_PR' }, 'pr.BRANCH_PR_CHECKED')).data).toEqual({ pr: null });
+  expect(await refusal(detached.app, { type: 'pr.CREATE_PR', title: 'Add the thing', body: '' })).toMatchObject({ message: expect.stringContaining('detached HEAD') });
+  expect(await answered(detached.app, { type: 'pr.CHECK_BRANCH_PR' })).toEqual({ pr: null });
   expect(detached.requests, 'GitHub is asked nothing of a branch named HEAD').toEqual([]);
   await detached.app.stop();
   app = undefined;
@@ -130,7 +138,7 @@ it('opens no pull request from a detached HEAD, and opens one from a branch unde
     await git(directory, 'update-ref', 'refs/remotes/origin/feature/thing', 'HEAD');
     await git(directory, 'branch', '--quiet', '--set-upstream-to=origin/feature/thing');
   } });
-  await ask(renamed.app, { type: 'pr.CREATE_PR', title: 'Add the thing', body: '' }, 'pr.PR_CREATED');
+  await answered(renamed.app, { type: 'pr.CREATE_PR', title: 'Add the thing', body: '' });
   expect(renamed.requests.find(request => request.path === '/repos/octo/repo/pulls')?.body).toMatchObject({ head: 'feature/thing' });
 });
 
@@ -146,10 +154,10 @@ it('carries the description and each comment as written beside them as shown, wi
   web = running.web;
   const shown = '![shot](https://objects.example/signed)';
 
-  const details = (await ask(running.app, { type: 'pr.SELECT_PR', number: 7 }, 'pr.PR_DETAILS_RECEIVED')).data;
+  const details = (await answered(running.app, { type: 'pr.SELECT_PR', number: 7 }));
   expect(details.pr).toMatchObject({ body: shown, rawBody: written() });
   expect(details.comments[0]).toMatchObject({ body: shown, rawBody: written() });
-  expect((await ask(running.app, { type: 'pr.GET_COMMENTS', number: 7 }, 'pr.COMMENTS_RECEIVED')).data.comments[0]).toMatchObject({ body: shown, rawBody: written() });
+  expect((await answered(running.app, { type: 'pr.GET_COMMENTS', number: 7 })).comments[0]).toMatchObject({ body: shown, rawBody: written() });
 });
 
 it("deletes a pull request's branch through GitHub only where it is this repository's and no other open pull request is from it", async () => {
@@ -166,13 +174,13 @@ it("deletes a pull request's branch through GitHub only where it is this reposit
   });
   const deletes = () => requests.filter(request => request.method === 'DELETE');
 
-  expect(await ask(running, { type: 'pr.DELETE_BRANCH', number: 7 }, 'pr.ERROR')).toMatchObject({ message: expect.stringContaining('fork') });
+  expect(await refusal(running, { type: 'pr.DELETE_BRANCH', number: 7 })).toMatchObject({ message: expect.stringContaining('fork') });
   head = { headRefName: 'feature/thing', headRepository: ours };
-  expect(await ask(running, { type: 'pr.DELETE_BRANCH', number: 7 }, 'pr.ERROR')).toMatchObject({ message: expect.stringContaining('#9') });
+  expect(await refusal(running, { type: 'pr.DELETE_BRANCH', number: 7 })).toMatchObject({ message: expect.stringContaining('#9') });
   expect(deletes()).toEqual([]);
 
   others = [];
-  expect((await ask(running, { type: 'pr.DELETE_BRANCH', number: 7 }, 'pr.BRANCH_DELETED')).data).toEqual({ branch: 'feature/thing' });
+  expect(await answered(running, { type: 'pr.DELETE_BRANCH', number: 7 })).toEqual({ branch: 'feature/thing' });
   expect(deletes().map(request => request.path)).toEqual(['/repos/octo/repo/git/refs/heads/feature/thing']);
 });
 
@@ -194,7 +202,7 @@ it('reads the sign-in once for every git run and GitHub ask, again once the secr
   const repositoryAnswer = { body: { data: { repository: { pullRequests: { totalCount: 1 } } } } };
   const { app: running } = await codeOver(onStandIn(), { graphql: [['pullRequests(first: 0)', repositoryAnswer]] });
   for (let i = 0; i < 3; i++) expect(await access(running)).toEqual({ access: 'ok' });
-  await ask(running, { type: 'commit.GET_GIT_STATUS' }, 'commit.STATUS_RECEIVED');
+  await answered(running, { type: 'commit.GET_GIT_STATUS' });
   expect(reads, 'read once, for every git run and ask since').toBe(1);
 
   unreadable = true;
@@ -221,22 +229,22 @@ it("works from a fork on its parent's pull requests: listed and opened there, th
   });
   await git(directory, 'remote', 'add', 'upstream', `${web}/OCTO/repo.git`);
 
-  const listed = (await ask(running, { type: 'pr.LIST_PRS', state: 'open' }, 'pr.PRS_LISTED')).data;
+  const listed = (await answered(running, { type: 'pr.LIST_PRS', state: 'open' }));
   expect(listed).toMatchObject({ prs: [{ number: 6, headInRemote: true }], next: null });
   expect(requests.find(request => String(request.body?.query).includes('pullRequests(states:'))?.body.variables).toMatchObject({ owner: 'octo', name: 'repo' });
 
-  expect((await ask(running, { type: 'pr.CHECK_BRANCH_PR' }, 'pr.BRANCH_PR_CHECKED')).data.pr, "the parent's own branch of the name is not the fork's").toMatchObject({ number: 6 });
+  expect((await answered(running, { type: 'pr.CHECK_BRANCH_PR' })).pr, "the parent's own branch of the name is not the fork's").toMatchObject({ number: 6 });
 
-  await ask(running, { type: 'pr.CREATE_PR', title: 'Add the thing', body: '' }, 'pr.PR_CREATED');
+  await answered(running, { type: 'pr.CREATE_PR', title: 'Add the thing', body: '' });
   expect(requests.find(request => request.path === '/repos/octo/repo/pulls')?.body).toMatchObject({ head: 'someone:feature/thing', base: 'main' });
 
   // A pull request's changes are fetched from the remote naming the parent, in whatever case it names it. The
   // stand-in is no git server, so the fetch fails, and git says where it went
   const diff = { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main', headBranch: 'other', prNumber: 6 };
-  expect(await ask(running, diff, 'pr.ERROR')).toMatchObject({ message: expect.stringContaining('/OCTO/repo.git') });
+  expect(await refusal(running, diff)).toMatchObject({ message: expect.stringContaining('/OCTO/repo.git') });
   // and without one, they are not read from the fork's copy of its base, which may be behind
   await git(directory, 'remote', 'remove', 'upstream');
-  expect(await ask(running, diff, 'pr.ERROR')).toMatchObject({ message: expect.stringContaining(`git remote add upstream ${web}/octo/repo.git`) });
+  expect(await refusal(running, diff)).toMatchObject({ message: expect.stringContaining(`git remote add upstream ${web}/octo/repo.git`) });
 });
 
 /**
@@ -282,18 +290,18 @@ it.skipIf(process.platform === 'win32')("checks out a pull request's branch: its
   const branch = async () => (await git(directory, 'symbolic-ref', '--short', 'HEAD')).stdout.trim();
   const follows = (name: string) => git(directory, 'rev-parse', '--abbrev-ref', `${name}@{upstream}`).then(({ stdout }) => stdout.trim(), () => null);
 
-  expect((await ask(running, { type: 'pr.CHECKOUT_PR', number: 8 }, 'pr.PR_CHECKED_OUT')).data).toEqual({ number: 8, branch: 'topic', checkout: 'created' });
+  expect(await answered(running, { type: 'pr.CHECKOUT_PR', number: 8 })).toEqual({ number: 8, branch: 'topic', checkout: 'created' });
   expect(await branch()).toBe('topic');
   expect(await follows('topic')).toBe('origin/topic');
   expect(fs.existsSync(path.join(directory, 'ours.txt'))).toBe(true);
 
-  expect((await ask(running, { type: 'pr.CHECKOUT_PR', number: 9 }, 'pr.PR_CHECKED_OUT')).data).toEqual({ number: 9, branch: 'pr/9', checkout: 'created' });
+  expect(await answered(running, { type: 'pr.CHECKOUT_PR', number: 9 })).toEqual({ number: 9, branch: 'pr/9', checkout: 'created' });
   expect(await branch()).toBe('pr/9');
   expect(await follows('pr/9'), "a fork's branch follows nothing here").toBeNull();
   expect(fs.existsSync(path.join(directory, 'theirs.txt'))).toBe(true);
 
   await proposes('more.txt', 'refs/pull/9/head');
   await git(directory, 'checkout', '--quiet', 'main');
-  expect((await ask(running, { type: 'pr.CHECKOUT_PR', number: 9 }, 'pr.PR_CHECKED_OUT')).data.checkout).toBe('fast-forwarded');
+  expect((await answered(running, { type: 'pr.CHECKOUT_PR', number: 9 })).checkout).toBe('fast-forwarded');
   expect(fs.existsSync(path.join(directory, 'more.txt'))).toBe(true);
 });

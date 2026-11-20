@@ -22,7 +22,7 @@ function window(settings: Record<string, unknown> = {}) {
   bellsSent = 0
   parent.getParentContext.mockReturnValue({ settings } as never)
   const actor = createActor(terminalState).start()
-  actor.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-1'), aTerminal('t-2')] })
+  actor.send({ type: 'ASK_ANSWERED', asked: 'terminal.REFRESH_LIST', answer: [aTerminal('t-1'), aTerminal('t-2')] })
   // A flash begins where the terminal stops not flashing and starts: a change to some other field is not one
   const flashes: number[] = []
   let now = 0

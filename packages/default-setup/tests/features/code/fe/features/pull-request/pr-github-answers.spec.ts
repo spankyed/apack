@@ -5,7 +5,7 @@
 // a pull request is checked out once at a time.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../../../_support/calls.ts';
 import type { GhPullRequest } from '#generated/types.ts';
 
@@ -29,12 +29,16 @@ const pr = (number: number, extra: Partial<GhPullRequest> = {}) =>
   ({ number, baseRefName: 'main', headRefName: 'feature', headRefOid: `sha-${number}`, isCrossRepository: false, headInRemote: true, openFromSameHead: [], state: 'MERGED', isDraft: false, updatedAt: 't', body: 'shown', rawBody: 'written', ...extra }) as unknown as GhPullRequest;
 
 const asked = (type: string) => sendToSystem.mock.calls.filter(([, event]) => (event as { type: string }).type === type);
-const answer = <E extends { type: string }>(actor: Actor, type: string, event: E) =>
-  actor.send(answerTo(sentCall(sendToSystem, type, asked(type).length - 1), event) as never);
+/** The answer to the latest ask of `type`, as the code system's handler gives it */
+const answer = (actor: Actor, type: string, value: unknown) =>
+  actor.send(askAnswered(sentCall(sendToSystem, type, asked(type).length - 1), type, value) as never);
+/** The refusal of the latest ask of `type`: of GitHub's, with its reason, where a reason is given */
+const refuse = (actor: Actor, type: string, message: string, reason?: string) =>
+  actor.send(askFailed(sentCall(sendToSystem, type, asked(type).length - 1), type, reason ? { kind: 'github', message, reason } : { kind: 'failed', message }) as never);
 
 const pick = (actor: Actor, which: GhPullRequest) => {
   actor.send({ type: 'pr.SELECT_PR_BY_NUMBER', number: which.number });
-  answer(actor, 'pr.SELECT_PR', { type: 'pr.PR_DETAILS_RECEIVED', data: { pr: which, comments: [], fetchedAt: Date.now() } });
+  answer(actor, 'pr.SELECT_PR', { pr: which, comments: [], fetchedAt: Date.now() });
 };
 
 beforeEach(() => {
@@ -47,11 +51,11 @@ it('shows a refusal about the sign-in as the access, and any other as the error'
   const actor = started();
   actor.send({ type: 'pr.REFRESH_STATUS' });
 
-  answer(actor, 'pr.CHECK_BRANCH_PR', { type: 'pr.ERROR', message: 'Sign in to GitHub.', reason: 'signed-out' });
+  refuse(actor, 'pr.CHECK_BRANCH_PR', 'Sign in to GitHub.', 'signed-out');
   expect(context(actor)).toMatchObject({ githubAccess: 'signed-out', githubAccessMessage: 'Sign in to GitHub.', prError: null });
 
   actor.send({ type: 'pr.REFRESH_STATUS' });
-  answer(actor, 'pr.CHECK_BRANCH_PR', { type: 'pr.ERROR', message: 'GitHub takes more at 10:00.', reason: 'rate-limited' });
+  refuse(actor, 'pr.CHECK_BRANCH_PR', 'GitHub takes more at 10:00.', 'rate-limited');
   expect(context(actor)).toMatchObject({ prError: 'GitHub takes more at 10:00.', branchPRCheckFailed: true, isCheckingBranchPR: false });
 });
 
@@ -79,12 +83,12 @@ it('starts the next edit from the description just saved', () => {
   const actor = started();
   pick(actor, pr(7, { state: 'OPEN' }));
   actor.send({ type: 'pr.UPDATE_PR', number: 7, body: 'saved' });
-  answer(actor, 'pr.UPDATE_PR', { type: 'pr.PR_UPDATED', data: { number: 7, body: 'saved' } });
+  answer(actor, 'pr.UPDATE_PR', { number: 7, body: 'saved' });
 
   expect(context(actor).selectedPR).toMatchObject({ body: 'saved', rawBody: 'saved' });
 });
 
-const listed = (prs: GhPullRequest[], next: string | null) => ({ type: 'pr.PRS_LISTED', data: { prs, next } });
+const listed = (prs: GhPullRequest[], next: string | null) => ({ prs, next });
 
 it('reads the list when it is opened, a page at a time, each pull request once', () => {
   const actor = started();
@@ -117,7 +121,7 @@ it("takes only the page asked for what the list shows: a filter or search change
 
   actor.send({ type: 'pr.SET_LIST_STATE', state: 'merged' });
   expect(context(actor).prList).toMatchObject({ state: 'merged', prs: [], read: false });
-  actor.send(answerTo(more, listed([pr(1)], null)) as never);
+  actor.send(askAnswered(more, 'pr.LIST_PRS', listed([pr(1)], null)));
   expect(context(actor).prList.prs, "the open list's page is not the merged one's").toEqual([]);
 
   actor.send({ type: 'pr.SET_LIST_QUERY', query: '  flaky ' });
@@ -128,7 +132,7 @@ it("takes only the page asked for what the list shows: a filter or search change
   expect(context(actor).prList).toMatchObject({ state: 'merged', query: '  flaky ', prs: [{ number: 3 }], read: true });
 
   actor.send({ type: 'pr.SET_LIST_QUERY', query: 'other' });
-  answer(actor, 'pr.LIST_PRS', { type: 'pr.ERROR', message: 'GitHub could not be reached' });
+  refuse(actor, 'pr.LIST_PRS', 'GitHub could not be reached');
   expect(context(actor).prList.asked, 'a refused page is no longer being asked for').toBeNull();
 });
 
@@ -143,7 +147,7 @@ it('says a merge was refused for a moved head until the merge is asked again', (
   const actor = started();
   pick(actor, pr(7, { state: 'OPEN' }));
   actor.send({ type: 'pr.MERGE' });
-  answer(actor, 'pr.MERGE_PR', { type: 'pr.ERROR', message: 'nothing was merged', reason: 'head-moved' });
+  refuse(actor, 'pr.MERGE_PR', 'nothing was merged', 'head-moved');
   expect(context(actor).prError).toBe('nothing was merged');
 
   actor.send({ type: 'pr.MERGE' });
@@ -162,10 +166,10 @@ it('checks out an open pull request once at a time, and keeps what the checkout 
   expect(asked('pr.CHECKOUT_PR').map(([, event]) => event)).toEqual([{ type: 'pr.CHECKOUT_PR', number: 8 }]);
   expect(context(actor).isCheckingOut).toBe(true);
 
-  answer(actor, 'pr.CHECKOUT_PR', { type: 'pr.PR_CHECKED_OUT', data: { number: 8, branch: 'pr/8', checkout: 'kept' } });
+  answer(actor, 'pr.CHECKOUT_PR', { number: 8, branch: 'pr/8', checkout: 'kept' });
   expect(context(actor)).toMatchObject({ isCheckingOut: false, lastCheckout: { number: 8, branch: 'pr/8', checkout: 'kept' }, selectedPR: { number: 8 } });
 
   actor.send({ type: 'pr.CHECKOUT' });
-  answer(actor, 'pr.CHECKOUT_PR', { type: 'pr.ERROR', message: 'Cannot switch branches' });
+  refuse(actor, 'pr.CHECKOUT_PR', 'Cannot switch branches');
   expect(context(actor)).toMatchObject({ isCheckingOut: false, lastCheckout: null, prError: 'Cannot switch branches' });
 });

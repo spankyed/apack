@@ -1,5 +1,7 @@
 import { setup, assign , type ActorRefFrom } from 'xstate';
 import { sendToSystem } from '#generated/events.ts';
+import { isAnswered, type AnswersOf } from '@apackdev/sdk/events';
+import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { getParentContext } from '../../utils/parent-communication.ts';
 
 // Search types
@@ -45,11 +47,11 @@ export type Event =
   | { type: 'search.UPDATE_OPTIONS'; options: Partial<CodeSearchContext['searchOptions']> }
   | { type: 'search.RESULT'; data: SearchResult }
   | { type: 'search.PROGRESS'; data: SearchProgress }
-  | { type: 'search.COMPLETE' }
-  | { type: 'search.ERROR'; message: string }
   | { type: 'search.CLEAR_ERROR' }
   | { type: 'search.DIRECTORY_CHANGED'; baseDirectory: string }
-  | { type: 'CODE_STARTED' };
+  | { type: 'CODE_STARTED' }
+  // The answer to the search asked for, which the surface routes here
+  | AnswersOf<CodeSystemContract, 'search.SEARCH_FILES'>;
 
 export const searchState = setup({
   types: {
@@ -107,10 +109,7 @@ export const searchState = setup({
     }),
 
     assignSearchError: assign({
-      searchError: ({ event }) => {
-        const ev = event as { type: 'search.ERROR'; message: string }
-        return ev.message
-      },
+      searchError: ({ event }) => (event as { type: 'ASK_FAILED'; failure: { message: string } }).failure.message,
       isSearching: false,
       searchProgress: null
     }),
@@ -187,10 +186,13 @@ export const searchState = setup({
           guard: ({ context }) => context.searchQuery !== '',
           actions: 'assignSearchProgress'
         },
-        'search.COMPLETE': {
+        ASK_ANSWERED: {
+          guard: ({ event }) => isAnswered(event, 'search.SEARCH_FILES'),
           actions: 'assignSearchComplete'
         },
-        'search.ERROR': {
+        // A search another replaced is not this one's to end
+        ASK_FAILED: {
+          guard: ({ event }) => event.asked === 'search.SEARCH_FILES' && event.failure.kind !== 'superseded',
           actions: 'assignSearchError'
         },
         'search.CLEAR_ERROR': {

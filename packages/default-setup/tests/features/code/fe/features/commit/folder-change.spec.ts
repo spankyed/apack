@@ -22,9 +22,9 @@ const trust = { repository: '/work/one/.git', asks: [{ kind: 'hook' as const, na
 function held() {
   const actor = createActor(commitState).start();
   actor.send({ type: 'CODE_STARTED' });
-  actor.send({ type: 'commit.FILES_REVERTED', data: { paths: ['a.txt', 'b.txt'], kept: { id: 'abc123', notKept: [] } } });
-  actor.send({ type: 'commit.DISCARD_RESTORED', data: { id: 'abc123', restored: ['a.txt'], left: ['b.txt'] } });
-  actor.send({ type: 'commit.ERROR_RECEIVED', data: { message: 'Not trusted.', code: 'untrusted', trust } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.REVERT_FILES' as const, answer: { paths: ['a.txt', 'b.txt'], kept: { id: 'abc123', notKept: [] } } });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.RESTORE_DISCARDED' as const, answer: { id: 'abc123', restored: ['a.txt'], left: ['b.txt'] } });
+  actor.send({ type: 'ASK_FAILED' as const, asked: 'commit.GET_GIT_STATUS' as const, failure: { kind: 'git' as const, message: 'Not trusted.', code: 'untrusted', trust } });
   return actor;
 }
 

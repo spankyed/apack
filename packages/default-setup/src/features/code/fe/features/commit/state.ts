@@ -1,11 +1,12 @@
 import { setup, assign, enqueueActions , type ActorRefFrom } from 'xstate';
-import { answersCall, newCall, recordCall, settleCall } from '@apackdev/sdk/events';
+import { answerOf, answersCall, isAnswered, newCall, recordCall, settleCall, type AnswersOf, type AskName } from '@apackdev/sdk/events';
+import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { viewWrites, writeAnswered, writeSent, writing, type ViewWrites } from '@apackdev/sdk/fe';
 import { sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from 'apack-git/staging';
-import type { BlameLine, ChangedFile, MergePreview, CommitFailure, CommitTrailer, ConflictKind, LineCount, DiffHunk, DiscardKept, DiscardRestored, GitProgress, OperationMove, ProgressDuring, RepositoryChange, RepositoryOperation, RewriteAction, SignInHelp, SlowStatus, StartableOperation } from '../../../be/types.ts';
+import type { BlameLine, ChangedFile, MergePreview, CommitFailure, CommitTrailer, ConflictKind, LineCount, DiffHunk, GitProgress, OperationMove, ProgressDuring, RepositoryChange, RepositoryOperation, RewriteAction, SignInHelp, SlowStatus, StartableOperation } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 
 
@@ -331,6 +332,18 @@ export interface CommitLogEntry {
   refs: string[]
 }
 
+/** The asks this panel's answers are to: the commit ones, the code system's own picker and worktree switch among them */
+type CommitAskName = Extract<AskName<CodeSystemContract>, `commit.${string}`>
+
+/** The answer to one of the commit asks, which the surface hands this panel */
+type CommitAnswer = AnswersOf<CodeSystemContract, CommitAskName>
+
+/** A guard taking the answer to `asked` */
+const answered = (asked: CommitAskName) => ({ event }: { event: Event }) => isAnswered(event, asked)
+
+/** A guard taking the refusal of one of `asked` */
+const refused = (...asked: CommitAskName[]) => ({ event }: { event: Event }) => event.type === 'ASK_FAILED' && (asked as string[]).includes(event.asked)
+
 export type Event =
   | { type: 'commit.REFRESH_STATUS' }
   | { type: 'commit.SELECT_FILE'; file: GitStatusFile }
@@ -339,8 +352,6 @@ export type Event =
   | { type: 'commit.UPDATE_MESSAGE'; message: string }
   /** Takes one of the trailers listed under the message out of it */
   | { type: 'commit.REMOVE_TRAILER'; trailer: CommitTrailer }
-  | { type: 'commit.TRAILERS_READ'; data: { message: string; trailers: CommitTrailer[] } }
-  | { type: 'commit.TRAILER_REMOVED'; data: { message: string; without: string } }
   | { type: 'commit.COMMIT' }
   | { type: 'commit.VIEW_DIFF'; path: string; staged: boolean }
   | { type: 'commit.CLEAR_DIFF' }
@@ -353,64 +364,32 @@ export type Event =
   | { type: 'commit.CHECKOUT_BRANCH' }
   | { type: 'commit.PUSH_BRANCH' }
   | { type: 'commit.PULL_BRANCH' }
-  | { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; counts?: LineCount[]; pullPreview?: MergePreview; hasIdentity?: boolean; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
-  | { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
-  | { type: 'commit.FILES_STAGED'; paths: string[] }
-  | { type: 'commit.FILES_UNSTAGED'; paths: string[] }
-  | { type: 'commit.COMMIT_SUCCESS'; message: string }
-  | { type: 'commit.FILE_REVERTED'; data: { path: string; kept: DiscardKept } }
-  | { type: 'commit.FILES_REVERTED'; data: { paths: string[]; kept: DiscardKept } }
   | { type: 'commit.PREVIEW_DISCARD'; paths: string[] }
-  | { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }
   | { type: 'commit.UNDO_DISCARD' }
   /** Opens a stash in the list to show its files, or closes it */
   | { type: 'commit.TOGGLE_STASH_FILES'; index: number }
-  | { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }
   /** Shows who last changed each line of a file in the editor, or stops */
   | { type: 'commit.SHOW_BLAME'; path: string }
   | { type: 'commit.UPDATE_SUBMODULE'; path: string }
-  | { type: 'commit.SUBMODULE_UPDATED'; data: { path: string } }
   | { type: 'commit.CLEAR_BLAME' }
-  | { type: 'commit.BLAME_RECEIVED'; data: { path: string; lines: BlameLine[] } }
-  | { type: 'commit.REPOSITORIES_RECEIVED'; data: { repositories: CodeCommitContext['repositories']; truncated: boolean; current: string | null } }
   /** The picker chose another repository under the folder the user opened */
   | { type: 'commit.SELECT_REPOSITORY'; path: string }
   /** Undo the last write; `evenIfPublished` once the user said to for a commit already pushed */
   | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.DISMISS_UNDO' }
-  | { type: 'commit.UNDOABLE_RECEIVED'; data: { id: string; summary: string } | null }
-  | { type: 'commit.UNDONE'; data: { id: string; summary: string } }
-  | { type: 'commit.UNDO_NEEDS_CONFIRMATION'; data: { message: string } }
   | { type: 'commit.DISMISS_DISCARD' }
-  | { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }
   | { type: 'commit.TRUST_REPOSITORY' }
-  | { type: 'commit.REPOSITORY_TRUSTED'; data: { repository: string } }
   | { type: 'commit.TRUST_OWNERSHIP' }
-  | { type: 'commit.OWNERSHIP_TRUSTED'; data: { directory: string } }
-  | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.SET_UP_SIGN_IN'; host: string }
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
-  | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
   | { type: 'commit.PROGRESS'; data: { during: ProgressDuring } & GitProgress }
   | { type: 'commit.TOGGLE_FOLDER'; path: string }
-  | { type: 'commit.UNTRACKED_LISTED'; data: { path: string } & OpenFolder }
-  | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
-  | { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[]; standing?: CodeCommitContext['branchStanding']; tags?: { name: string; commit: string }[] } }
   | { type: 'commit.CREATE_TAG'; name: string; commit?: string; message?: string }
   | { type: 'commit.DELETE_TAG'; name: string }
   | { type: 'commit.PUSH_TAG'; name: string }
   | { type: 'commit.RENAME_BRANCH'; name: string; to: string }
   | { type: 'commit.SPEED_UP_STATUS' }
-  | { type: 'commit.STATUS_SPED_UP'; data: { fileMonitor: boolean; untrackedCache: boolean } }
-  | { type: 'commit.TAG_CREATED'; data: { name: string } }
-  | { type: 'commit.TAG_DELETED'; data: { name: string } }
-  | { type: 'commit.TAG_PUSHED'; data: { name: string } }
-  | { type: 'commit.BRANCH_RENAMED'; data: { name: string; to: string } }
-  | { type: 'commit.BRANCH_CHECKOUT_SUCCESS'; data: { branchName: string } }
-  | { type: 'commit.BRANCH_PUSHED'; data: { branchName: string } }
   | { type: 'commit.STOP_PUSH' }
-  | { type: 'commit.PUSH_STOPPED' }
-  | { type: 'commit.BRANCH_PULLED'; data: { branchName: string } }
   | { type: 'commit.DISMISS_ERROR' }
   | { type: 'commit.GENERATE_MESSAGE' }
   | { type: 'commit.GENERATING_MESSAGE' }
@@ -421,41 +400,23 @@ export type Event =
   | { type: 'commit.STASH_POP'; index: number }
   | { type: 'commit.STASH_DROP'; index: number }
   | { type: 'commit.STASH_CLEAR' }
-  | { type: 'commit.STASH_LIST_RECEIVED'; data: { stashes: StashEntry[] } }
-  | { type: 'commit.STASH_SUCCESS'; data: { message: string } }
-  | { type: 'commit.STASH_APPLIED'; data: { index: number; popped: boolean } }
   | { type: 'commit.CREATE_BRANCH'; branchName: string }
   | { type: 'commit.WORKTREE_LIST' }
   | { type: 'commit.WORKTREE_ADD'; path: string; branch?: string; createBranch?: boolean }
   | { type: 'commit.WORKTREE_REMOVE'; path: string; force?: boolean }
   | { type: 'commit.WORKTREE_SWITCH'; path: string }
-  /** The switch was made: the code surface is over the worktree now */
-  | { type: 'commit.WORKTREE_SWITCHED'; data: { path: string } }
-  | { type: 'commit.WORKTREE_LIST_RECEIVED'; data: { worktrees: WorktreeEntry[] } }
-  | { type: 'commit.WORKTREE_ADDED'; data: { path: string; branch: string } }
-  | { type: 'commit.WORKTREE_REMOVED'; data: { path: string } }
   | { type: 'commit.RESOLVE_CONFLICT'; path: string; strategy: 'ours' | 'theirs' }
   | { type: 'commit.MARK_RESOLVED'; path: string }
   | { type: 'commit.RESOLVE_ALL_CONFLICTS'; strategy: 'ours' | 'theirs' }
-  | { type: 'commit.CONFLICT_RESOLVED'; path: string }
-  | { type: 'commit.ALL_CONFLICTS_RESOLVED' }
   | { type: 'commit.MOVE_OPERATION'; move: OperationMove }
-  | { type: 'commit.OPERATION_MOVED'; data: { move: OperationMove } }
   | { type: 'commit.START_OPERATION'; kind: StartableOperation; target: string }
   | RewriteRequest
-  | { type: 'commit.AMENDED' }
   | { type: 'commit.START_REWORD'; hash: string }
   | { type: 'commit.CANCEL_REWORD' }
-  | { type: 'commit.COMMIT_MESSAGE_RECEIVED'; data: { hash: string; message: string } }
-  | { type: 'commit.COMMIT_REWRITTEN'; data: { hash: string; action: RewriteAction } }
-  | { type: 'commit.REWRITE_NEEDS_CONFIRMATION'; data: { message: string } }
   | { type: 'commit.CONFIRM_REWRITE' }
   | { type: 'commit.DISMISS_REWRITE' }
-  | { type: 'commit.OPERATION_STARTED'; data: { kind: StartableOperation; target: string; stopped: boolean } }
   | { type: 'commit.PREVIEW_MERGE'; target: string }
-  | { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }
   | { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
-  | { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[]; cursor?: string; path?: string; continued?: boolean } }
   /** The next page of the history the log shows */
   | { type: 'commit.LOAD_MORE_LOG' }
   /** A file's history in the log, followed across its renames, until it is cleared */
@@ -463,9 +424,10 @@ export type Event =
   | { type: 'commit.CLEAR_FILE_HISTORY' }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
-  | { type: 'commit.REVERT_COMMIT_SUCCESS'; data: { hash: string } }
-  | { type: 'commit.RESET_COMMIT_SUCCESS'; data: { hash: string } }
   | { type: 'CODE_STARTED' }
+  /** The flow writing a commit message for this window made none, and says why */
+  | { type: 'commit.MESSAGE_NOT_GENERATED'; data: { message: string } }
+  | CommitAnswer
   | { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
   | { type: 'commit.SHOWN' }
   | { type: 'commit.HIDDEN' };
@@ -676,17 +638,6 @@ export const commitState = setup({
   },
   guards: {
     answersADiffRefresh: ({ context, event }) => settleCall(context.diffRefreshes, event).recorded !== undefined,
-    answersTheStatusAsked: ({ context, event }) => answersCall(event, context.statusAsk),
-    /** Trailers read of the paragraph the message ends with now, and not of one it ended with before */
-    readOfTheMessage: ({ context, event }) =>
-      trailerParagraph((event as { type: 'commit.TRAILERS_READ'; data: { message: string } }).data.message) === trailerParagraph(context.commitMessage),
-    /** A trailer taken out of the message as it still is: one changed since is left as it was changed */
-    removedFromTheMessage: ({ context, event }) =>
-      (event as { type: 'commit.TRAILER_REMOVED'; data: { message: string } }).data.message === context.commitMessage,
-    answersTheBranchesAsked: ({ context, event }) => answersCall(event, context.listAsks.branches),
-    answersTheStashesAsked: ({ context, event }) => answersCall(event, context.listAsks.stashes),
-    answersTheWorktreesAsked: ({ context, event }) => answersCall(event, context.listAsks.worktrees),
-    answersTheLogAsked: ({ context, event }) => answersCall(event, context.listAsks.log),
   },
   actions: {
     refreshGitStatus: enqueueActions(({ enqueue }) => {
@@ -820,7 +771,7 @@ export const commitState = setup({
     }),
 
     setTrailers: assign({
-      trailers: ({ event }) => (event as { type: 'commit.TRAILERS_READ'; data: { message: string; trailers: CommitTrailer[] } }).data.trailers,
+      trailers: ({ event }) => answerOf(event, 'commit.READ_TRAILERS').trailers,
     }),
 
     removeTrailer: ({ context, event }) => {
@@ -829,7 +780,7 @@ export const commitState = setup({
     },
 
     takeMessageWithoutTrailer: assign({
-      commitMessage: ({ event }) => (event as { type: 'commit.TRAILER_REMOVED'; data: { message: string; without: string } }).data.without,
+      commitMessage: ({ event }) => answerOf(event, 'commit.REMOVE_TRAILER').without,
     }),
 
     handleCommitSuccess: assign({
@@ -851,12 +802,12 @@ export const commitState = setup({
     },
 
     setDiscardPreview: assign({
-      discardPreview: ({ event }) => (event as { type: 'commit.DISCARD_PREVIEWED'; data: { paths: string[]; notKept: string[] } }).data,
+      discardPreview: ({ event }) => answerOf(event, 'commit.PREVIEW_DISCARD'),
     }),
 
     /** A discard that kept something is offered to be undone; one that kept nothing leaves the last offer as it was */
     setLastDiscard: assign(({ context, event }) => {
-      const { data } = event as { type: 'commit.FILE_REVERTED'; data: { path: string; kept: DiscardKept } } | { type: 'commit.FILES_REVERTED'; data: { paths: string[]; kept: DiscardKept } }
+      const data = isAnswered(event, 'commit.REVERT_FILE') ? answerOf(event, 'commit.REVERT_FILE') : answerOf(event, 'commit.REVERT_FILES')
       const paths = 'paths' in data ? data.paths : [data.path]
       return {
         lastDiscard: data.kept.id ? { id: data.kept.id, paths, notKept: data.kept.notKept } : context.lastDiscard,
@@ -879,7 +830,7 @@ export const commitState = setup({
 
     /** Undone: the offer goes, and what was left alone is said until it is dismissed */
     handleDiscardRestored: assign(({ context, event }) => {
-      const { id, left } = (event as { type: 'commit.DISCARD_RESTORED'; data: { id: string } & DiscardRestored }).data
+      const { id, left } = answerOf(event, 'commit.RESTORE_DISCARDED')
       return context.lastDiscard?.id === id ? { lastDiscard: null, discardLeft: left } : {}
     }),
 
@@ -957,52 +908,33 @@ export const commitState = setup({
       })
     },
 
-    handleStatusReceived: assign({
-      statusAsk: null,
-      // Each file's count as git gives it, by whether it is staged and its path; none past what the status counts
-      lineCounts: ({ event }) => Object.fromEntries(((event as { type: 'commit.STATUS_RECEIVED'; data: { counts?: LineCount[] } }).data.counts ?? [])
-        .map(count => [`${count.staged}:${count.path}`, count])),
-      gitStatus: ({ context, event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
+    handleStatusReceived: assign(({ context, event }) => {
+      const status = answerOf(event, 'commit.GET_GIT_STATUS')
+      return {
+        statusAsk: null,
+        // Each file's count as git gives it, by whether it is staged and its path; none past what the status counts
+        lineCounts: Object.fromEntries((status.counts ?? []).map(count => [`${count.staged}:${count.path}`, count])),
         // Read before a write that the list already shows landed: git is asked again once that write is answered
-        return writing(context.stagingWrites) ? context.gitStatus : ev.data.files
-      },
-      hasIdentity: ({ event }) => (event as { type: 'commit.STATUS_RECEIVED'; data: { hasIdentity?: boolean } }).data.hasIdentity ?? true,
-      pullPreview: ({ event }) => (event as { type: 'commit.STATUS_RECEIVED'; data: { pullPreview?: MergePreview } }).data.pullPreview ?? null,
-      slowStatus: ({ event }) => (event as { type: 'commit.STATUS_RECEIVED'; data: { slowStatus?: SlowStatus } }).data.slowStatus ?? null,
-      gitBranch: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
-        return ev.data.branch
-      },
-      hasUpstream: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
-        return ev.data.hasUpstream
-      },
-      commitsAhead: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
-        return ev.data.commitsAhead
-      },
-      commitsBehind: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
-        return ev.data.commitsBehind
-      },
-      isStatusTruncated: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
-        return ev.data.truncated
-      },
-      isWatchingRepository: ({ event }) => {
-        const ev = event as { type: 'commit.STATUS_RECEIVED'; data: { files: GitStatusFile[]; truncated: boolean; branch: string; hasUpstream: boolean; commitsAhead: number; commitsBehind: number; watching: boolean; operation?: RepositoryOperation; fetchSuspended?: boolean } }
-        return ev.data.watching
-      },
-      operation: ({ event }) => (event as { data: { operation?: RepositoryOperation } }).data.operation ?? null,
-      isFetchSuspended: ({ event }) => (event as { data: { fetchSuspended?: boolean } }).data.fetchSuspended === true,
-      isWatchSilent: ({ event }) => (event as { data: { watchSilent?: boolean } }).data.watchSilent === true,
-      fetchSignIn: ({ event }) => (event as { data: { signIn?: SignInHelp } }).data.signIn ?? null,
-      isGitLoading: false,
-      // A write's failure stays until it is dismissed: only what a status read reports is gone once one succeeds
-      gitError: ({ context }) => statusReadClears(context) ? null : context.gitError,
-      gitFailure: ({ context }) => statusReadClears(context) ? null : context.gitFailure,
-      statusFailed: false,
+        gitStatus: writing(context.stagingWrites) ? context.gitStatus : status.files,
+        hasIdentity: status.hasIdentity ?? true,
+        pullPreview: status.pullPreview ?? null,
+        slowStatus: status.slowStatus ?? null,
+        gitBranch: status.branch,
+        hasUpstream: status.hasUpstream,
+        commitsAhead: status.commitsAhead,
+        commitsBehind: status.commitsBehind,
+        isStatusTruncated: status.truncated,
+        isWatchingRepository: status.watching,
+        operation: status.operation ?? null,
+        isFetchSuspended: status.fetchSuspended === true,
+        isWatchSilent: status.watchSilent === true,
+        fetchSignIn: status.signIn ?? null,
+        isGitLoading: false,
+        // A write's failure stays until it is dismissed: only what a status read reports is gone once one succeeds
+        gitError: statusReadClears(context) ? null : context.gitError,
+        gitFailure: statusReadClears(context) ? null : context.gitFailure,
+        statusFailed: false,
+      }
     }),
 
     /**
@@ -1010,7 +942,8 @@ export const commitState = setup({
      * nothing about a push still running, and an error answering no ask held here clears nothing
      */
     handleErrorReceived: assign(({ context, event }) => {
-      const { message, code, during, signIn, trust, ownership, hook, missingBranch } = (event as { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }).data
+      // A git failure carries what the panel can do about it; any other refusal, only its message
+      const { message, code, during, signIn, trust, ownership, hook, missingBranch } = (event as { type: 'ASK_FAILED'; failure: CommitFailure }).failure
       const ofStatus = answersCall(event, context.statusAsk)
       const { recorded, pending } = settleCall(context.busyAsks, event)
       return {
@@ -1023,6 +956,12 @@ export const commitState = setup({
     }),
 
     dismissError: assign({ gitError: null, gitFailure: null }),
+
+    /** What Undo would take back after the write just answered, where its answer could say */
+    takeUndoable: assign(({ context, event }) => {
+      const answer = (event as { type: 'ASK_ANSWERED'; answer: { undoable?: { id: string; summary: string } | null } | undefined }).answer
+      return answer && 'undoable' in answer ? { lastUndoable: answer.undoable ?? null } : { lastUndoable: context.lastUndoable }
+    }),
 
     /** The user trusts the repository the panel was refused in: said to the backend, which remembers it */
     trustRepository: ({ context }) => {
@@ -1049,7 +988,7 @@ export const commitState = setup({
 
     /** What a folder holds, kept if its row is still open: the answer is the folder's, whichever ask it answers */
     folderListed: assign(({ context, event }) => {
-      const { path, files, truncated } = (event as { type: 'commit.UNTRACKED_LISTED'; data: { path: string } & OpenFolder }).data
+      const { path, files, truncated } = answerOf(event, 'commit.LIST_UNTRACKED')
       return path in context.openFolders ? { openFolders: { ...context.openFolders, [path]: { files, truncated } } } : {}
     }),
 
@@ -1087,7 +1026,7 @@ export const commitState = setup({
 
     /** Git can sign in now, so the push or the pull that was refused is run again: it is what the user was doing */
     signInSetUp: enqueueActions(({ event, enqueue }) => {
-      const { during } = (event as { type: 'commit.SIGN_IN_SET_UP'; data: { during?: 'push' | 'pull' } }).data
+      const { during } = answerOf(event, 'commit.SET_UP_SIGN_IN')
       enqueue.assign({ gitError: null, gitFailure: null, isSettingUpSignIn: false })
       if (during === 'push') enqueue.raise({ type: 'commit.PUSH_BRANCH' })
       if (during === 'pull') enqueue.raise({ type: 'commit.PULL_BRANCH' })
@@ -1133,7 +1072,7 @@ export const commitState = setup({
       sendToSystem('code', { type: 'commit.PREVIEW_MERGE', target })
     },
 
-    handleMergePreviewed: assign({ mergePreview: ({ event }) => (event as { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }).data }),
+    handleMergePreviewed: assign({ mergePreview: ({ event }) => answerOf(event, 'commit.PREVIEW_MERGE') }),
 
     // Busy from when the backend says it has begun
     requestGenerateMessage: enqueueActions(({ enqueue }) => {
@@ -1141,6 +1080,13 @@ export const commitState = setup({
     }),
 
     setGeneratingMessage: assign({ isGeneratingMessage: true }),
+
+    /** The flow made no message: why is shown, as a failed command is */
+    handleMessageNotGenerated: assign(({ event }) => ({
+      gitError: (event as { type: 'commit.MESSAGE_NOT_GENERATED'; data: { message: string } }).data.message,
+      gitFailure: {},
+      isGeneratingMessage: false,
+    })),
 
     handleMessageGenerated: assign({
       commitMessage: ({ event }) => {
@@ -1159,7 +1105,7 @@ export const commitState = setup({
      * have been closed since, and a diff the user is not looking at does not take the window.
      */
     handleDiffReceived: enqueueActions(({ enqueue, self, event, context }) => {
-      const ev = event as { type: 'commit.DIFF_RECEIVED'; data: GitDiff }
+      const ev = { data: answerOf(event, 'commit.GET_GIT_DIFF') }
       const { recorded, pending } = settleCall(context.diffRefreshes, event)
       // An ask made since for the same tab has the diff as it is now: this one is of the file before it
       if (recorded?.superseded) return enqueue.assign({ diffRefreshes: pending })
@@ -1224,13 +1170,9 @@ export const commitState = setup({
       sendToSystem('code', { type: 'commit.RENAME_BRANCH', name, to })
     },
 
-    handleBranchesReceived: assign({
-      tags: ({ event }) => (event as { type: 'commit.BRANCHES_RECEIVED'; data: { tags?: { name: string; commit: string }[] } }).data.tags ?? [],
-      branchStanding: ({ event }) => (event as { type: 'commit.BRANCHES_RECEIVED'; data: { standing?: CodeCommitContext['branchStanding'] } }).data.standing ?? {},
-      availableBranches: ({ event }) => {
-        const ev = event as { type: 'commit.BRANCHES_RECEIVED'; data: { branches: string[] } }
-        return ev.data.branches
-      }
+    handleBranchesReceived: assign(({ event }) => {
+      const { tags, standing, branches } = answerOf(event, 'commit.GET_ALL_BRANCHES')
+      return { tags: tags ?? [], branchStanding: standing ?? {}, availableBranches: branches }
     }),
 
     handleBranchCheckoutSuccess: assign({
@@ -1243,16 +1185,12 @@ export const commitState = setup({
       askBusy(enqueue, 'push', { isPushing: true, pushStopped: false }, call => { sendToSystem('code', { type: 'commit.PUBLISH_BRANCH' }, { call }) })
     }),
 
-    handleBranchPushed: assign({
+    /** Pushed, or stopped by the user, which the panel says instead of "Pushed" */
+    handleBranchPushed: assign(({ event }) => ({
       isPushing: false,
+      pushStopped: answerOf(event, 'commit.PUBLISH_BRANCH').stopped,
       progress: null
-    }),
-
-    handlePushStopped: assign({
-      isPushing: false,
-      pushStopped: true,
-      progress: null
-    }),
+    })),
 
     pullBranch: enqueueActions(({ enqueue }) => {
       askBusy(enqueue, 'pull', { isPulling: true }, call => { sendToSystem('code', { type: 'commit.PULL_BRANCH' }, { call }) })
@@ -1273,7 +1211,7 @@ export const commitState = setup({
         // Refresh git status when directory is available
         self.send({ type: 'commit.REFRESH_STATUS' })
         // The repositories under the folder the user opened, for the picker
-        enqueue(() => sendToSystem('code', { type: 'LIST_REPOSITORIES' }))
+        enqueue(() => sendToSystem('code', { type: 'commit.LIST_REPOSITORIES' }))
         const { asks, send } = listAsks(['stashes', 'worktrees', 'branches'])
         enqueue.assign(({ context }) => ({ listAsks: { ...context.listAsks, ...asks } }))
         enqueue(send)
@@ -1301,7 +1239,7 @@ export const commitState = setup({
      * index is another, so the files open and the asks for them go
      */
     handleStashListReceived: assign(({ context, event }) => {
-      const { stashes } = (event as { type: 'commit.STASH_LIST_RECEIVED'; data: { stashes: StashEntry[] } }).data
+      const { stashes } = answerOf(event, 'commit.STASH_LIST')
       return sameStashes(context.stashList, stashes) ? { stashList: stashes } : { stashList: stashes, stashFiles: {}, stashFileAsks: {} }
     }),
 
@@ -1337,10 +1275,7 @@ export const commitState = setup({
     }),
 
     handleWorktreeListReceived: assign({
-      worktreeList: ({ event }) => {
-        const ev = event as { type: 'commit.WORKTREE_LIST_RECEIVED'; data: { worktrees: WorktreeEntry[] } }
-        return ev.data.worktrees
-      },
+      worktreeList: ({ event }) => answerOf(event, 'commit.WORKTREE_LIST').worktrees,
       isWorktreeLoading: false
     }),
 
@@ -1385,7 +1320,7 @@ export const commitState = setup({
      * shows a file's history, a page of another history (one asked again because the repository moved) is not it
      */
     handleLogListReceived: enqueueActions(({ context, event, enqueue }) => {
-      const { data } = event as { type: 'commit.LOG_LIST_RECEIVED'; data: { commits: CommitLogEntry[]; cursor?: string; path?: string; continued?: boolean } }
+      const data = answerOf(event, 'commit.LOG_LIST')
       if ((data.path ?? null) !== context.logPath) return
       enqueue.assign({
         commitLog: data.continued ? [...context.commitLog, ...data.commits] : data.commits,
@@ -1432,44 +1367,20 @@ export const commitState = setup({
         'commit.REFRESH_STATUS': {
           actions: ['setGitLoading', 'refreshGitStatus']
         },
-        // An answer to an ask made before the latest is of the repository as it was before it
-        'commit.STATUS_RECEIVED': {
-          guard: 'answersTheStatusAsked',
-          actions: ['handleStatusReceived', 'followOpenFolders']
-        },
         'commit.PROGRESS': {
           actions: assign({ progress: ({ event }) => (event as { data: { during: ProgressDuring } & GitProgress }).data })
         },
         'commit.TOGGLE_FOLDER': {
           actions: 'toggleFolder'
         },
-        'commit.UNTRACKED_LISTED': {
-          actions: 'folderListed'
-        },
-        'commit.ERROR_RECEIVED': [
-          // Nobody asked for a diff that was read again, so its failing is said to nobody: the tab stays as it was
-          { guard: 'answersADiffRefresh', actions: 'forgetDiffRefresh' },
-          { actions: ['handleErrorReceived', 'settleRefusedStaging'] },
-        ],
         'commit.DISMISS_ERROR': {
           actions: 'dismissError'
         },
         'commit.SET_UP_SIGN_IN': {
           actions: 'setUpSignIn'
         },
-        'commit.SIGN_IN_SET_UP': {
-          actions: 'signInSetUp'
-        },
         'commit.APPLY_HUNK': {
           actions: 'applyHunk'
-        },
-        'commit.HUNK_APPLIED': {
-          // The tab still shows the piece until its diff is read again, and git no longer cuts it
-          actions: assign(({ context, event }) => {
-            const { data } = event as { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
-            const tab = diffTabPath(data)
-            return { isApplyingHunk: false, appliedHunks: { ...context.appliedHunks, [tab]: [...(context.appliedHunks[tab] ?? []), data.hunk] } }
-          })
         },
         'commit.SELECT_FILE': {
           actions: 'selectGitFile'
@@ -1480,29 +1391,15 @@ export const commitState = setup({
         'commit.UNSTAGE_FILES': {
           actions: 'unstageFiles'
         },
-        'commit.FILES_STAGED': {
-          actions: 'settleStaging'
-        },
-        'commit.FILES_UNSTAGED': {
-          actions: 'settleStaging'
-        },
         'commit.VIEW_DIFF': {
           actions: 'viewDiff'
-        },
-        'commit.DIFF_RECEIVED': {
-          actions: 'handleDiffReceived'
         },
         'commit.UPDATE_MESSAGE': {
           actions: ['updateCommitMessage', 'followTrailers']
         },
         'commit.REMOVE_TRAILER': { actions: 'removeTrailer' },
-        'commit.TRAILERS_READ': { guard: 'readOfTheMessage', actions: 'setTrailers' },
-        'commit.TRAILER_REMOVED': { guard: 'removedFromTheMessage', actions: ['takeMessageWithoutTrailer', 'followTrailers'] },
         'commit.COMMIT': {
           actions: 'commit'
-        },
-        'commit.COMMIT_SUCCESS': {
-          actions: ['handleCommitSuccess', 'followTrailers', 'refreshGitStatus']
         },
         'commit.TOGGLE_REVERT_DIALOG': {
           actions: 'toggleRevertDialog'
@@ -1513,30 +1410,11 @@ export const commitState = setup({
         'commit.REVERT_FILES': {
           actions: 'revertFiles'
         },
-        'commit.FILE_REVERTED': {
-          actions: ['handleFileReverted', 'setLastDiscard', 'refreshGitStatus']
-        },
-        'commit.FILES_REVERTED': {
-          actions: ['setLastDiscard', 'refreshGitStatus']
-        },
         'commit.PREVIEW_DISCARD': {
           actions: 'previewDiscard'
         },
-        'commit.DISCARD_PREVIEWED': {
-          actions: 'setDiscardPreview'
-        },
         'commit.UNDO_LAST': { actions: 'undoLast' },
         'commit.DISMISS_UNDO': { actions: assign({ lastUndoable: null, undoConfirmation: null }) },
-        'commit.UNDOABLE_RECEIVED': {
-          actions: assign({ lastUndoable: ({ event }) => (event as { type: 'commit.UNDOABLE_RECEIVED'; data: { id: string; summary: string } | null }).data }),
-        },
-        'commit.UNDONE': { actions: assign({ undoConfirmation: null }) },
-        'commit.UNDO_NEEDS_CONFIRMATION': {
-          actions: assign({ undoConfirmation: ({ event }) => (event as { type: 'commit.UNDO_NEEDS_CONFIRMATION'; data: { message: string } }).data.message }),
-        },
-        'commit.REPOSITORIES_RECEIVED': {
-          actions: assign({ repositories: ({ event }) => (event as { type: 'commit.REPOSITORIES_RECEIVED'; data: { repositories: CodeCommitContext['repositories'] } }).data.repositories }),
-        },
         'commit.SELECT_REPOSITORY': {
           actions: ({ event }) => sendToSystem('code', { type: 'SELECT_REPOSITORY', path: (event as { type: 'commit.SELECT_REPOSITORY'; path: string }).path }),
         },
@@ -1551,15 +1429,6 @@ export const commitState = setup({
               enqueue.assign({ stashFileAsks: recordCall(context.stashFileAsks, call, index) })
               enqueue(() => sendToSystem('code', { type: 'commit.GET_STASH_CHANGES', index }, { call }))
             }
-          }),
-        },
-        // Only an answer to an ask made of the stash list as it stands: the index of one asked before names another stash now
-        'commit.STASH_CHANGES_RECEIVED': {
-          actions: assign(({ context, event }) => {
-            const { recorded, pending } = settleCall(context.stashFileAsks, event)
-            if (recorded === undefined) return {}
-            const { files } = (event as { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }).data
-            return { stashFileAsks: pending, stashFiles: { ...context.stashFiles, [recorded]: files } }
           }),
         },
         'commit.LOAD_MORE_LOG': {
@@ -1587,31 +1456,17 @@ export const commitState = setup({
           }),
         },
         'commit.CLEAR_BLAME': { actions: assign({ blame: null }) },
-        // Only for the file blame was last asked of: an answer for one since left is no answer
-        'commit.BLAME_RECEIVED': {
-          guard: ({ context, event }) => context.blame?.path === (event as { type: 'commit.BLAME_RECEIVED'; data: { path: string } }).data.path,
-          actions: assign({ blame: ({ event }) => (event as { type: 'commit.BLAME_RECEIVED'; data: { path: string; lines: BlameLine[] } }).data }),
-        },
         'commit.UNDO_DISCARD': {
           actions: 'undoDiscard'
         },
         'commit.DISMISS_DISCARD': {
           actions: 'dismissDiscard'
         },
-        'commit.DISCARD_RESTORED': {
-          actions: ['handleDiscardRestored', 'refreshGitStatus']
-        },
         'commit.TRUST_REPOSITORY': {
           actions: 'trustRepository'
         },
-        'commit.REPOSITORY_TRUSTED': {
-          actions: ['repositoryTrusted', 'refreshGitStatus']
-        },
         'commit.TRUST_OWNERSHIP': {
           actions: 'trustOwnership'
-        },
-        'commit.OWNERSHIP_TRUSTED': {
-          actions: ['repositoryTrusted', 'refreshGitStatus']
         },
         'commit.RESOLVE_CONFLICT': {
           actions: 'resolveConflict'
@@ -1622,33 +1477,14 @@ export const commitState = setup({
         'commit.RESOLVE_ALL_CONFLICTS': {
           actions: 'resolveAllConflicts'
         },
-        'commit.CONFLICT_RESOLVED': {
-          actions: 'refreshGitStatus'
-        },
-        'commit.ALL_CONFLICTS_RESOLVED': {
-          actions: 'refreshGitStatus'
-        },
         'commit.MOVE_OPERATION': {
           actions: 'moveOperation'
-        },
-        'commit.OPERATION_MOVED': {
-          actions: 'handleOperationMoved'
         },
         'commit.START_OPERATION': {
           actions: 'startOperation'
         },
         'commit.AMEND': { actions: 'requestRewrite' },
         'commit.REWRITE_COMMIT': { actions: 'requestRewrite' },
-        'commit.AMENDED': { actions: [assign({ pendingRewrite: null, commitMessage: '', isCommitting: false }), 'followTrailers', 'requestLogList'] },
-        'commit.COMMIT_REWRITTEN': { actions: [assign({ pendingRewrite: null, rewording: null }), 'requestLogList'] },
-        'commit.REWRITE_NEEDS_CONFIRMATION': {
-          actions: assign({
-            isCommitting: false,
-            rewriteConfirmation: ({ context, event }) => context.pendingRewrite
-              ? { message: (event as { type: 'commit.REWRITE_NEEDS_CONFIRMATION'; data: { message: string } }).data.message, request: context.pendingRewrite }
-              : null,
-          }),
-        },
         'commit.CONFIRM_REWRITE': { actions: 'confirmRewrite' },
         'commit.START_REWORD': {
           actions: enqueueActions(({ event, enqueue }) => {
@@ -1657,23 +1493,9 @@ export const commitState = setup({
           }),
         },
         'commit.CANCEL_REWORD': { actions: assign({ rewording: null }) },
-        'commit.COMMIT_MESSAGE_RECEIVED': {
-          actions: assign({
-            rewording: ({ context, event }) => {
-              const { hash, message } = (event as { type: 'commit.COMMIT_MESSAGE_RECEIVED'; data: { hash: string; message: string } }).data
-              return context.rewording?.hash === hash ? { hash, message } : context.rewording
-            },
-          }),
-        },
         'commit.DISMISS_REWRITE': { actions: assign({ rewriteConfirmation: null, pendingRewrite: null }) },
-        'commit.OPERATION_STARTED': {
-          actions: ['handleOperationStarted', 'requestLogList']
-        },
         'commit.PREVIEW_MERGE': {
           actions: 'previewMerge'
-        },
-        'commit.MERGE_PREVIEWED': {
-          actions: 'handleMergePreviewed'
         },
         'commit.CLEAR_DIFF': {
           actions: 'clearGitDiff'
@@ -1690,10 +1512,6 @@ export const commitState = setup({
         'commit.CHECKOUT_BRANCH': {
           actions: 'checkoutBranch'
         },
-        'commit.BRANCHES_RECEIVED': {
-          guard: 'answersTheBranchesAsked',
-          actions: 'handleBranchesReceived'
-        },
         'commit.CREATE_TAG': { actions: 'createTag' },
         'commit.DELETE_TAG': { actions: 'deleteTag' },
         'commit.PUSH_TAG': { actions: 'pushTag' },
@@ -1703,37 +1521,17 @@ export const commitState = setup({
             askBusy(enqueue, 'speedUp', { isSpeedingUpStatus: true }, call => { sendToSystem('code', { type: 'commit.SPEED_UP_STATUS' }, { call }) })
           }),
         },
-        // The status that follows says whether it is still slow
-        'commit.STATUS_SPED_UP': { actions: assign({ isSpeedingUpStatus: false, slowStatus: null }) },
-        'commit.TAG_CREATED': { actions: ['getAllBranches', 'requestLogList'] },
-        'commit.TAG_DELETED': { actions: [assign({ tagBusy: null }), 'getAllBranches', 'requestLogList'] },
-        'commit.TAG_PUSHED': {
-          actions: assign({ tagBusy: null, tagPushed: ({ event }) => ({ name: (event as { type: 'commit.TAG_PUSHED'; data: { name: string } }).data.name }) }),
-        },
-        'commit.BRANCH_RENAMED': { actions: ['getAllBranches', 'requestLogList'] },
-        'commit.BRANCH_CHECKOUT_SUCCESS': {
-          actions: ['handleBranchCheckoutSuccess', 'getAllBranches']
-        },
         'commit.CREATE_BRANCH': { actions: 'createBranch' },
         'commit.PUSH_BRANCH': {
           actions: 'pushBranch'
-        },
-        'commit.BRANCH_PUSHED': {
-          actions: 'handleBranchPushed'
         },
         // Only while a push runs: the backend has nothing to stop otherwise
         'commit.STOP_PUSH': {
           guard: ({ context }) => context.isPushing,
           actions: () => { sendToSystem('code', { type: 'commit.STOP_PUSH' }) }
         },
-        'commit.PUSH_STOPPED': {
-          actions: 'handlePushStopped'
-        },
         'commit.PULL_BRANCH': {
           actions: 'pullBranch'
-        },
-        'commit.BRANCH_PULLED': {
-          actions: 'handleBranchPulled'
         },
         'commit.GENERATE_MESSAGE': {
           actions: 'requestGenerateMessage'
@@ -1750,17 +1548,6 @@ export const commitState = setup({
         'commit.STASH_LIST': {
           actions: 'requestStashList'
         },
-        'commit.STASH_LIST_RECEIVED': {
-          guard: 'answersTheStashesAsked',
-          actions: 'handleStashListReceived'
-        },
-        'commit.STASH_SUCCESS': {
-          actions: ['handleStashSuccess', 'followTrailers', 'refreshGitStatus']
-        },
-        // A stash applied leaves the message typed as it is; one popped is gone from the list
-        'commit.STASH_APPLIED': {
-          actions: ['refreshGitStatus', 'requestStashList']
-        },
         'commit.STASH_APPLY': {
           actions: 'stashApply'
         },
@@ -1776,10 +1563,6 @@ export const commitState = setup({
         'commit.WORKTREE_LIST': {
           actions: 'requestWorktreeList'
         },
-        'commit.WORKTREE_LIST_RECEIVED': {
-          guard: 'answersTheWorktreesAsked',
-          actions: 'handleWorktreeListReceived'
-        },
         'commit.WORKTREE_ADD': {
           actions: 'worktreeAdd'
         },
@@ -1789,21 +1572,8 @@ export const commitState = setup({
         'commit.WORKTREE_SWITCH': {
           actions: 'worktreeSwitch'
         },
-        'commit.WORKTREE_SWITCHED': {
-          actions: 'handleWorktreeSwitched'
-        },
-        'commit.WORKTREE_ADDED': {
-          actions: ['handleWorktreeAdded', 'requestWorktreeList']
-        },
-        'commit.WORKTREE_REMOVED': {
-          actions: ['handleWorktreeRemoved', 'requestWorktreeList']
-        },
         'commit.LOG_LIST': {
           actions: 'requestLogList'
-        },
-        'commit.LOG_LIST_RECEIVED': {
-          guard: 'answersTheLogAsked',
-          actions: 'handleLogListReceived'
         },
         'commit.REVERT_COMMIT': {
           actions: 'revertCommit'
@@ -1811,18 +1581,131 @@ export const commitState = setup({
         'commit.RESET_TO_COMMIT': {
           actions: 'resetToCommit'
         },
-        'commit.REVERT_COMMIT_SUCCESS': {
-          actions: ['refreshGitStatus', 'requestLogList']
-        },
-        'commit.RESET_COMMIT_SUCCESS': {
-          actions: [assign({ resettingTo: null }), 'refreshGitStatus', 'requestLogList']
-        },
         'commit.UPDATE_SUBMODULE': {
           guard: ({ context }) => context.updatingSubmodule === null,
           actions: 'updateSubmodule'
         },
-        'commit.SUBMODULE_UPDATED': {
-          actions: assign(({ context }) => ({ updatingSubmodule: null, ...progressUnless(context, 'submodule') }))
+        // The answers to this panel's asks, each by the ask it answers. An answer to an ask made before the latest of
+        // its kind is of the repository as it was then, and is taken by no transition
+        ASK_ANSWERED: [
+          {
+            guard: ({ context, event }) => isAnswered(event, 'commit.GET_GIT_STATUS') && answersCall(event, context.statusAsk),
+            actions: ['handleStatusReceived', 'followOpenFolders']
+          },
+          { guard: answered('commit.LIST_UNTRACKED'), actions: 'folderListed' },
+          { guard: answered('commit.SET_UP_SIGN_IN'), actions: 'signInSetUp' },
+          {
+            guard: answered('commit.APPLY_HUNK'),
+            // The tab still shows the piece until its diff is read again, and git no longer cuts it
+            actions: assign(({ context, event }) => {
+              const data = answerOf(event, 'commit.APPLY_HUNK')
+              const tab = diffTabPath(data)
+              return { isApplyingHunk: false, appliedHunks: { ...context.appliedHunks, [tab]: [...(context.appliedHunks[tab] ?? []), data.hunk] } }
+            })
+          },
+          { guard: ({ event }) => isAnswered(event, 'commit.STAGE_FILES') || isAnswered(event, 'commit.UNSTAGE_FILES'), actions: 'settleStaging' },
+          { guard: answered('commit.GET_GIT_DIFF'), actions: 'handleDiffReceived' },
+          { guard: ({ context, event }) => isAnswered(event, 'commit.READ_TRAILERS') && trailerParagraph(answerOf(event, 'commit.READ_TRAILERS').message) === trailerParagraph(context.commitMessage), actions: 'setTrailers' },
+          { guard: ({ context, event }) => isAnswered(event, 'commit.REMOVE_TRAILER') && answerOf(event, 'commit.REMOVE_TRAILER').message === context.commitMessage, actions: ['takeMessageWithoutTrailer', 'followTrailers'] },
+          { guard: answered('commit.COMMIT'), actions: ['handleCommitSuccess', 'followTrailers', 'refreshGitStatus', 'takeUndoable'] },
+          { guard: answered('commit.REVERT_FILE'), actions: ['handleFileReverted', 'setLastDiscard', 'refreshGitStatus'] },
+          { guard: answered('commit.REVERT_FILES'), actions: ['setLastDiscard', 'refreshGitStatus'] },
+          { guard: answered('commit.PREVIEW_DISCARD'), actions: 'setDiscardPreview' },
+          { guard: answered('commit.UNDO_LAST'), actions: [assign({ undoConfirmation: null }), 'takeUndoable'] },
+          {
+            guard: answered('commit.LIST_REPOSITORIES'),
+            actions: assign({ repositories: ({ event }) => answerOf(event, 'commit.LIST_REPOSITORIES').repositories }),
+          },
+          {
+            // Only an answer to an ask made of the stash list as it stands: the index of one asked before names another stash now
+            guard: answered('commit.GET_STASH_CHANGES'),
+            actions: assign(({ context, event }) => {
+              const { recorded, pending } = settleCall(context.stashFileAsks, event)
+              if (recorded === undefined) return {}
+              const { files } = answerOf(event, 'commit.GET_STASH_CHANGES')
+              return { stashFileAsks: pending, stashFiles: { ...context.stashFiles, [recorded]: files } }
+            }),
+          },
+          {
+            // Only for the file blame was last asked of: an answer for one since left is no answer
+            guard: ({ context, event }) => isAnswered(event, 'commit.GET_BLAME') && context.blame?.path === answerOf(event, 'commit.GET_BLAME').path,
+            actions: assign({ blame: ({ event }) => answerOf(event, 'commit.GET_BLAME') }),
+          },
+          { guard: answered('commit.RESTORE_DISCARDED'), actions: ['handleDiscardRestored', 'refreshGitStatus'] },
+          { guard: ({ event }) => isAnswered(event, 'commit.TRUST_REPOSITORY') || isAnswered(event, 'commit.TRUST_OWNERSHIP'), actions: ['repositoryTrusted', 'refreshGitStatus'] },
+          {
+            guard: ({ event }) => isAnswered(event, 'commit.RESOLVE_CONFLICT') || isAnswered(event, 'commit.MARK_RESOLVED') || isAnswered(event, 'commit.RESOLVE_ALL_CONFLICTS'),
+            actions: 'refreshGitStatus'
+          },
+          { guard: answered('commit.MOVE_OPERATION'), actions: 'handleOperationMoved' },
+          { guard: answered('commit.AMEND'), actions: [assign({ pendingRewrite: null, commitMessage: '', isCommitting: false }), 'followTrailers', 'requestLogList', 'takeUndoable'] },
+          { guard: answered('commit.REWRITE_COMMIT'), actions: [assign({ pendingRewrite: null, rewording: null }), 'requestLogList', 'takeUndoable'] },
+          {
+            guard: answered('commit.GET_COMMIT_MESSAGE'),
+            actions: assign({
+              rewording: ({ context, event }) => {
+                const { hash, message } = answerOf(event, 'commit.GET_COMMIT_MESSAGE')
+                return context.rewording?.hash === hash ? { hash, message } : context.rewording
+              },
+            }),
+          },
+          { guard: answered('commit.START_OPERATION'), actions: ['handleOperationStarted', 'requestLogList', 'takeUndoable'] },
+          { guard: answered('commit.PREVIEW_MERGE'), actions: 'handleMergePreviewed' },
+          { guard: ({ context, event }) => isAnswered(event, 'commit.GET_ALL_BRANCHES') && answersCall(event, context.listAsks.branches), actions: 'handleBranchesReceived' },
+          // The status that follows says whether it is still slow
+          { guard: answered('commit.SPEED_UP_STATUS'), actions: assign({ isSpeedingUpStatus: false, slowStatus: null }) },
+          { guard: answered('commit.CREATE_TAG'), actions: ['getAllBranches', 'requestLogList'] },
+          { guard: answered('commit.DELETE_TAG'), actions: [assign({ tagBusy: null }), 'getAllBranches', 'requestLogList'] },
+          {
+            guard: answered('commit.PUSH_TAG'),
+            actions: assign({ tagBusy: null, tagPushed: ({ event }) => ({ name: answerOf(event, 'commit.PUSH_TAG').name }) }),
+          },
+          { guard: answered('commit.RENAME_BRANCH'), actions: ['getAllBranches', 'requestLogList'] },
+          { guard: ({ event }) => isAnswered(event, 'commit.CHECKOUT_BRANCH') || isAnswered(event, 'commit.CREATE_BRANCH'), actions: ['handleBranchCheckoutSuccess', 'getAllBranches'] },
+          { guard: answered('commit.PUBLISH_BRANCH'), actions: 'handleBranchPushed' },
+          { guard: answered('commit.PULL_BRANCH'), actions: 'handleBranchPulled' },
+          { guard: ({ context, event }) => isAnswered(event, 'commit.STASH_LIST') && answersCall(event, context.listAsks.stashes), actions: 'handleStashListReceived' },
+          { guard: answered('commit.STASH_PUSH'), actions: ['handleStashSuccess', 'followTrailers', 'refreshGitStatus'] },
+          // A stash applied leaves the message typed as it is; one popped is gone from the list
+          { guard: ({ event }) => isAnswered(event, 'commit.STASH_APPLY') || isAnswered(event, 'commit.STASH_POP'), actions: ['refreshGitStatus', 'requestStashList'] },
+          { guard: ({ event }) => isAnswered(event, 'commit.STASH_DROP') || isAnswered(event, 'commit.STASH_CLEAR'), actions: 'takeUndoable' },
+          { guard: ({ context, event }) => isAnswered(event, 'commit.WORKTREE_LIST') && answersCall(event, context.listAsks.worktrees), actions: 'handleWorktreeListReceived' },
+          { guard: answered('commit.WORKTREE_SWITCH'), actions: 'handleWorktreeSwitched' },
+          { guard: answered('commit.WORKTREE_ADD'), actions: ['handleWorktreeAdded', 'requestWorktreeList'] },
+          { guard: answered('commit.WORKTREE_REMOVE'), actions: ['handleWorktreeRemoved', 'requestWorktreeList'] },
+          { guard: ({ context, event }) => isAnswered(event, 'commit.LOG_LIST') && answersCall(event, context.listAsks.log), actions: 'handleLogListReceived' },
+          { guard: answered('commit.REVERT_COMMIT'), actions: ['refreshGitStatus', 'requestLogList'] },
+          { guard: answered('commit.RESET_TO_COMMIT'), actions: [assign({ resettingTo: null }), 'refreshGitStatus', 'requestLogList', 'takeUndoable'] },
+          {
+            guard: answered('commit.UPDATE_SUBMODULE'),
+            actions: assign(({ context }) => ({ updatingSubmodule: null, ...progressUnless(context, 'submodule') }))
+          },
+        ],
+        ASK_FAILED: [
+          // Nobody asked for a diff that was read again, so its failing is said to nobody: the tab stays as it was
+          { guard: 'answersADiffRefresh', actions: 'forgetDiffRefresh' },
+          // A read the window asked for again before it was done: the newer ask is the one it waits on
+          { guard: ({ event }) => event.type === 'ASK_FAILED' && event.failure.kind === 'stopped' },
+          // The commit to be undone is already on a remote branch: undone only once the user says so, and this says why
+          {
+            guard: ({ event }) => refused('commit.UNDO_LAST')({ event }) && (event as { failure: { kind: string } }).failure.kind === 'published',
+            actions: assign({ undoConfirmation: ({ event }) => (event as { type: 'ASK_FAILED'; failure: { message: string } }).failure.message }),
+          },
+          // A remote branch already holds commits the amend or rewrite would change: done only once the user says to go on
+          {
+            guard: ({ event }) => refused('commit.AMEND', 'commit.REWRITE_COMMIT')({ event }) && (event as { failure: { kind: string } }).failure.kind === 'published',
+            actions: assign({
+              isCommitting: false,
+              rewriteConfirmation: ({ context, event }) => context.pendingRewrite
+                ? { message: (event as { type: 'ASK_FAILED'; failure: { message: string } }).failure.message, request: context.pendingRewrite }
+                : null,
+            }),
+          },
+          // Whichever ask it refuses, what failed is shown
+          { actions: ['handleErrorReceived', 'settleRefusedStaging'] },
+        ],
+        'commit.MESSAGE_NOT_GENERATED': {
+          actions: 'handleMessageNotGenerated'
         },
         'CODE_STARTED': {
           actions: 'handleCodeStartup'

@@ -10,7 +10,7 @@
 // different mechanisms.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../../../_support/calls.ts';
 import type { GhPullRequest } from '#generated/types.ts';
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts';
@@ -40,22 +40,22 @@ const started = () => createActor(pullRequestState).start();
 
 const asked = () => sendToSystem.mock.calls.map(([, event]) => event as Record<string, unknown>);
 
-/** The answer to the latest ask of `type`, as the backend's `reply` would deliver it */
-const answerLatest = <E extends { type: string }>(actor: ReturnType<typeof started>, type: string, event: E) => {
+/** The answer to the latest ask of `type`, as the code system's handler gives it */
+const answerLatest = (actor: ReturnType<typeof started>, type: string, answer: unknown) => {
   const sent = asked().filter((e) => e.type === type).length;
-  actor.send(answerTo(sentCall(sendToSystem, type, sent - 1), event) as never);
+  actor.send(askAnswered(sentCall(sendToSystem, type, sent - 1), type, answer) as never);
 };
 
 /** The branch-only view: no PR for the branch, so it asks for the base to compare against, and gets `base` */
 const onBranchWithoutPR = (actor: ReturnType<typeof started>, base: string) => {
   actor.send({ type: 'pr.REFRESH_STATUS' });
-  answerLatest(actor, 'pr.CHECK_BRANCH_PR', { type: 'pr.BRANCH_PR_CHECKED', data: { pr: null } });
-  answerLatest(actor, 'pr.GET_SMART_BASE_BRANCH', { type: 'pr.SMART_BASE_BRANCH_RECEIVED', data: { branch: base } });
+  answerLatest(actor, 'pr.CHECK_BRANCH_PR', { pr: null });
+  answerLatest(actor, 'pr.GET_SMART_BASE_BRANCH', { branch: base });
 };
 
 /** The answer to the nth branch diff asked */
 const diffAnswer = (actor: ReturnType<typeof started>, nth: number, files: GitStatusFile[], baseBranch: string, headBranch?: string) =>
-  actor.send(answerTo(sentCall(sendToSystem, 'pr.GET_BRANCH_DIFF', nth), { type: 'pr.BRANCH_DIFF_RECEIVED' as const, data: { files, baseBranch, headBranch } }));
+  actor.send(askAnswered(sentCall(sendToSystem, 'pr.GET_BRANCH_DIFF', nth), 'pr.GET_BRANCH_DIFF', { files, baseBranch, headBranch }));
 
 /** What the view shows: the slot for the comparison it is on */
 const shown = (actor: ReturnType<typeof started>) => {
@@ -73,7 +73,7 @@ const shown = (actor: ReturnType<typeof started>) => {
  */
 const selectPR = (actor: ReturnType<typeof started>, which: GhPullRequest) => {
   actor.send({ type: 'pr.SELECT_PR_BY_NUMBER', number: which.number });
-  answerLatest(actor, 'pr.SELECT_PR', { type: 'pr.PR_DETAILS_RECEIVED', data: { pr: which, comments: [], fetchedAt: Date.now() } });
+  answerLatest(actor, 'pr.SELECT_PR', { pr: which, comments: [], fetchedAt: Date.now() });
 };
 
 beforeEach(() => {
@@ -128,15 +128,14 @@ describe('a branch diff', () => {
    * **Why the answer must not write `prBaseBranch`.** That field is half the key the view reads under, so
    * an answer that set it would point the view at its own slot — and be read after all.
    *
-   * The base moves under a selected PR when it is edited: the edit is answered, then the PR's details
-   * read again, which ask for the new comparison while the old one is still in flight.
+   * The base moves under a selected PR when it is edited: the edit is answered with the PR's details read
+   * again, which ask for the new comparison while the old one is still in flight.
    */
   it('does not let a late answer move the view onto its own comparison', () => {
     const actor = started();
     selectPR(actor, pr(1, 'main', 'feature-a'));
     actor.send({ type: 'pr.UPDATE_PR', number: 1, base: 'develop' });
-    answerLatest(actor, 'pr.UPDATE_PR', { type: 'pr.PR_UPDATED', data: { number: 1, base: 'develop' } });
-    answerLatest(actor, 'pr.UPDATE_PR', { type: 'pr.PR_DETAILS_RECEIVED', data: { pr: pr(1, 'develop', 'feature-a'), comments: [], fetchedAt: Date.now() + 1 } });
+    answerLatest(actor, 'pr.UPDATE_PR', { number: 1, base: 'develop', details: { pr: pr(1, 'develop', 'feature-a'), comments: [], fetchedAt: Date.now() + 1 } });
 
     diffAnswer(actor, 0, [file('old.ts')], 'main', 'feature-a');
 
@@ -148,7 +147,7 @@ describe('a branch diff', () => {
     const actor = started();
     onBranchWithoutPR(actor, 'main');
 
-    actor.send({ type: 'pr.BRANCH_DIFF_RECEIVED', data: { files: [file('someone-elses.ts')], baseBranch: 'main' } });
+    actor.send(askAnswered('c-never-asked', 'pr.GET_BRANCH_DIFF', { files: [file('someone-elses.ts')], baseBranch: 'main' }));
 
     expect(actor.getSnapshot().context.diffsByRef).toEqual({});
   });
@@ -178,7 +177,7 @@ describe('a file diff, whose answer opens a tab', () => {
     selectPR(actor, pr(1, 'main', 'feature-a'));
     ask(actor, 'a.ts');
 
-    answerLatest(actor, 'pr.GET_BRANCH_FILE_DIFF', { type: 'pr.FILE_DIFF_RECEIVED', data: { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'feature-a' } });
+    answerLatest(actor, 'pr.GET_BRANCH_FILE_DIFF', { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'feature-a' });
 
     expect(addTabToParent).toHaveBeenCalledTimes(1);
     expect(addTabToParent.mock.calls[0]?.[1]).toMatchObject({ path: 'pr-diff:a.ts', isPrDiff: true });
@@ -195,8 +194,8 @@ describe('a file diff, whose answer opens a tab', () => {
     ask(actor, 'a.ts');
     const answer = { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'feature-a' };
 
-    answerLatest(actor, 'pr.GET_BRANCH_FILE_DIFF', { type: 'pr.FILE_DIFF_RECEIVED', data: answer });
-    answerLatest(actor, 'pr.GET_BRANCH_FILE_DIFF', { type: 'pr.FILE_DIFF_RECEIVED', data: answer });
+    answerLatest(actor, 'pr.GET_BRANCH_FILE_DIFF', answer);
+    answerLatest(actor, 'pr.GET_BRANCH_FILE_DIFF', answer);
 
     expect(addTabToParent).toHaveBeenCalledTimes(1);
   });
@@ -207,7 +206,7 @@ describe('a file diff, whose answer opens a tab', () => {
     selectPR(actor, pr(1, 'main', 'feature-a'));
     ask(actor, 'a.ts');
 
-    actor.send({ type: 'pr.FILE_DIFF_RECEIVED', data: { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'feature-a' } });
+    actor.send(askAnswered('c-never-asked', 'pr.GET_BRANCH_FILE_DIFF', { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'feature-a' }));
 
     expect(addTabToParent).not.toHaveBeenCalled();
   });
@@ -223,7 +222,7 @@ describe('a file diff, whose answer opens a tab', () => {
     ask(actor, 'a.ts');
     actor.send({ type: 'pr.SELECT_FILE', file: file('b.ts') });
 
-    answerLatest(actor, 'pr.GET_BRANCH_FILE_DIFF', { type: 'pr.FILE_DIFF_RECEIVED', data: { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'feature-a' } });
+    answerLatest(actor, 'pr.GET_BRANCH_FILE_DIFF', { path: 'a.ts', staged: false, baseBranch: 'main', headBranch: 'feature-a' });
 
     expect(addTabToParent).not.toHaveBeenCalled();
   });

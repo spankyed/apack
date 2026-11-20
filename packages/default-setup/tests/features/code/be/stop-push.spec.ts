@@ -7,8 +7,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 const before = process.env.GIT_SSH_COMMAND;
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
@@ -20,7 +20,7 @@ afterEach(async () => {
   else process.env.GIT_SSH_COMMAND = before;
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const git = (cwd: string, ...args: string[]) =>
   execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd });
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -53,10 +53,10 @@ setInterval(() => { if (!require('fs').existsSync(${JSON.stringify(fixture)})) p
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const pushed = await app.send('code', { type: 'commit.PUBLISH_BRANCH' }, asWindow);
+  const pushed = app.ask('code', { type: 'commit.PUBLISH_BRANCH' }, asWindow);
   const ssh = await until(() => { const pid = fs.existsSync(pidFile) ? Number(fs.readFileSync(pidFile, 'utf8')) : 0; return pid > 0 ? pid : undefined; });
   await app.send('code', { type: 'commit.STOP_PUSH' }, asWindow);
 
-  await app.nextEmit('code', 'commit.PUSH_STOPPED', { answering: pushed });
+  expect(await answered(pushed), 'answered as stopped, which is no failure').toMatchObject({ stopped: true });
   await until(() => (alive(ssh) ? undefined : true));
 });

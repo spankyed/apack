@@ -2,6 +2,8 @@
 // nothing to show as an error.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { askAnswered } from '@apackdev/sdk/testing';
+import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
 vi.mock('#generated/events.ts', () => ({ sendToSystem }));
@@ -33,7 +35,7 @@ it('leaves pushing once the push is stopped, with no error to show', () => {
   actor.send({ type: 'commit.PUSH_BRANCH' });
   expect(actor.getSnapshot().context.isPushing).toBe(true);
 
-  actor.send({ type: 'commit.PUSH_STOPPED' });
+  actor.send(askAnswered(sentCall(sendToSystem, 'commit.PUBLISH_BRANCH'), 'commit.PUBLISH_BRANCH', { branchName: 'main', stopped: true }));
 
   expect(actor.getSnapshot().context).toMatchObject({ isPushing: false, gitError: null, progress: null });
 });

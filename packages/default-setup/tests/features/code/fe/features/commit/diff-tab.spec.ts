@@ -1,6 +1,6 @@
 // Which file's diff opens in which tab.
 //
-// `commit.DIFF_RECEIVED` carries the diff's own `path` and `staged` (`GitDiff`, `code/be/types.ts`), so
+// The answer to `commit.GET_GIT_DIFF` carries the diff's own `path` and `staged` (`GitDiff`, `code/be/types.ts`), so
 // the answer says which file it is about. The handler built the tab from `context.selectedGitFile`
 // instead — the file selected *now* — so selecting another file while a diff was in flight opened the
 // first file's content in a tab labelled the second.
@@ -9,7 +9,7 @@
 // and reading it is the whole fix. Nothing needs a pending field.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed } from '@apackdev/sdk/testing';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
 const addTabToParent = vi.hoisted(() => vi.fn());
@@ -41,7 +41,7 @@ it('opens a diff in the tab for the file the diff is about', () => {
 
   actor.send({ type: 'commit.SELECT_FILE', file: aFile('a.ts') });
   actor.send({ type: 'commit.VIEW_DIFF', path: 'a.ts', staged: false });
-  actor.send({ type: 'commit.DIFF_RECEIVED', data: aDiff('a.ts') });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.GET_GIT_DIFF' as const, answer: aDiff('a.ts') });
 
   expect(openedTabs()).toEqual(['diff:a.ts:unstaged']);
   expect(lastTab().gitDiff.path, 'and the content is that file\'s').toBe('a.ts');
@@ -61,7 +61,7 @@ it('does not open one file\'s diff in another file\'s tab', () => {
   // the user clicks b.ts before a.ts's diff comes back
   actor.send({ type: 'commit.SELECT_FILE', file: aFile('b.ts') });
 
-  actor.send({ type: 'commit.DIFF_RECEIVED', data: aDiff('a.ts') });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.GET_GIT_DIFF' as const, answer: aDiff('a.ts') });
 
   expect(openedTabs(), 'a.ts\'s diff belongs in a.ts\'s tab').toEqual(['diff:a.ts:unstaged']);
   expect(lastTab().gitDiff.path).toBe('a.ts');
@@ -72,8 +72,8 @@ it('keeps the staged and unstaged diffs of one file apart', () => {
   actor.send({ type: 'commit.SHOWN' });
 
   actor.send({ type: 'commit.SELECT_FILE', file: aFile('a.ts', true) });
-  actor.send({ type: 'commit.DIFF_RECEIVED', data: aDiff('a.ts', true) });
-  actor.send({ type: 'commit.DIFF_RECEIVED', data: aDiff('a.ts', false) });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.GET_GIT_DIFF' as const, answer: aDiff('a.ts', true) });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.GET_GIT_DIFF' as const, answer: aDiff('a.ts', false) });
 
   expect(openedTabs()).toEqual(['diff:a.ts:staged', 'diff:a.ts:unstaged']);
 });
@@ -83,7 +83,7 @@ it('opens a diff even when no file is selected', () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.SHOWN' });
 
-  actor.send({ type: 'commit.DIFF_RECEIVED', data: aDiff('a.ts') });
+  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.GET_GIT_DIFF' as const, answer: aDiff('a.ts') });
 
   expect(openedTabs()).toEqual(['diff:a.ts:unstaged']);
 });
@@ -103,7 +103,7 @@ it('shows a diff that is already open at once, and brings it up to date without 
   const [, asked, { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];
   expect(asked).toEqual({ type: 'commit.GET_GIT_DIFF', path: 'a.ts', staged: false });
 
-  actor.send(answerTo(call, { type: 'commit.DIFF_RECEIVED' as const, data: aDiff('a.ts') }));
+  actor.send(askAnswered(call, 'commit.GET_GIT_DIFF', aDiff('a.ts')));
 
   expect(openedTabs(), 'no tab is opened for it').toEqual([]);
   expect(sendEventToParent).toHaveBeenCalledWith(expect.anything(), { type: 'REFRESH_DIFF_TAB', diff: aDiff('a.ts') });
@@ -119,9 +119,9 @@ it('says nothing when reading an open diff again fails, and still says when a di
 
   actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, diffs: true, files: ['a.ts'] } });
   const [, , { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];
-  actor.send(answerTo(call, { type: 'commit.ERROR_RECEIVED' as const, data: { message: 'the file went away' } }));
+  actor.send(askFailed(call, 'commit.GET_GIT_DIFF', { kind: 'git', message: 'the file went away' }));
   expect(actor.getSnapshot().context.gitError).toBeNull();
 
-  actor.send({ type: 'commit.ERROR_RECEIVED', data: { message: 'not a diff anyone can read' } });
+  actor.send({ type: 'ASK_FAILED' as const, asked: 'commit.GET_GIT_DIFF' as const, failure: { kind: 'git' as const, message: 'not a diff anyone can read' } });
   expect(actor.getSnapshot().context.gitError).toBe('not a diff anyone can read');
 });

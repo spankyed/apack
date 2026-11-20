@@ -36,8 +36,7 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const CODE = 'default-setup/code';
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const stops: Array<() => Promise<void>> = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -54,14 +53,14 @@ it('shows the asker the code, keeps the token as its own secret, tells every win
   app = await startApp({ systems: ['code'] });
   await app.connect();
 
-  expect((await app.nextEmit('code', 'github.ACCOUNT', { answering: await app.send('code', { type: 'github.GET_ACCOUNT' }, asWindow) })).account).toBeNull();
+  expect(await app.ask('code', { type: 'github.GET_ACCOUNT' }, asWindow)).toEqual({ ok: true, value: null });
 
-  const call = await app.send('code', { type: 'github.SIGN_IN' }, asWindow);
-  expect(await app.nextEmit('code', 'github.SIGN_IN_CODE', { answering: call })).toMatchObject({ userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device' });
-  expect((await app.nextEmit('code', 'github.ACCOUNT_CHANGED')).account).toMatchObject({ login: 'octocat' });
+  const changed = app.nextEmit('code', 'github.ACCOUNT_CHANGED');
+  expect(await app.ask('code', { type: 'github.SIGN_IN' }, asWindow)).toMatchObject({ ok: true, value: { userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device' } });
+  expect((await changed).account).toMatchObject({ login: 'octocat' });
 
   expect(storedSignIn()).toMatchObject({ token: STAND_IN_TOKEN, scopes: ['repo', 'workflow'], account: { login: 'octocat' } });
-  expect((await app.nextEmit('code', 'github.ACCOUNT', { answering: await app.send('code', { type: 'github.GET_ACCOUNT' }, asWindow) })).account).toMatchObject({ login: 'octocat' });
+  expect(await app.ask('code', { type: 'github.GET_ACCOUNT' }, asWindow)).toMatchObject({ ok: true, value: { login: 'octocat' } });
 
   await app.send('code', { type: 'github.SIGN_OUT' }, asWindow);
   expect((await app.nextEmit('code', 'github.ACCOUNT_CHANGED')).account).toBeNull();
@@ -85,8 +84,9 @@ it('tells the asker why a sign-in ended without an account, and keeps nothing', 
   app = await startApp({ systems: ['code'] });
   await app.connect();
 
-  const call = await app.send('code', { type: 'github.SIGN_IN' }, asWindow);
+  const ended = app.nextEmit('code', 'github.SIGN_IN_FAILED');
+  const asked = await app.ask('code', { type: 'github.SIGN_IN' }, asWindow);
 
-  expect(await app.nextEmit('code', 'github.SIGN_IN_FAILED', { answering: call })).toMatchObject({ reason: 'denied' });
+  expect(await ended, 'the window given the code is told how its sign-in ended').toMatchObject({ reason: 'denied', userCode: asked.ok ? (asked.value as { userCode: string }).userCode : undefined });
   expect(storedSignIn()).toBeNull();
 });

@@ -8,7 +8,7 @@
 // nothing they could see.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -40,7 +40,7 @@ beforeEach(() => {
 describe('the terminal the panel shows next', () => {
   it('is never the one that just closed', () => {
     const actor = createActor(terminalState).start();
-    actor.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-1'), aTerminal('t-2')] });
+    actor.send({ type: 'ASK_ANSWERED', asked: 'terminal.REFRESH_LIST', answer: [aTerminal('t-1'), aTerminal('t-2')] });
     // The panel is showing t-1, and t-1 is what exits
     parent.getParentContext.mockReturnValue({ panelTerminalId: 't-1', openFiles: [] } as never);
     parent.updateParentState.mockReset();
@@ -53,7 +53,7 @@ describe('the terminal the panel shows next', () => {
 
   it('is nothing at all when the one that closed was the only one', () => {
     const actor = createActor(terminalState).start();
-    actor.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-1')] });
+    actor.send({ type: 'ASK_ANSWERED', asked: 'terminal.REFRESH_LIST', answer: [aTerminal('t-1')] });
     parent.getParentContext.mockReturnValue({ panelTerminalId: 't-1', openFiles: [] } as never);
     parent.updateParentState.mockReset();
 
@@ -64,7 +64,7 @@ describe('the terminal the panel shows next', () => {
 
   it('is left alone when some other terminal closed', () => {
     const actor = createActor(terminalState).start();
-    actor.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-1'), aTerminal('t-2')] });
+    actor.send({ type: 'ASK_ANSWERED', asked: 'terminal.REFRESH_LIST', answer: [aTerminal('t-1'), aTerminal('t-2')] });
     parent.getParentContext.mockReturnValue({ panelTerminalId: 't-1', openFiles: [] } as never);
     parent.updateParentState.mockReset();
 
@@ -80,7 +80,7 @@ describe('a terminal routed to the panel', () => {
     // No target: the panel is where a create goes unless a tab was asked for
     actor.send({ type: 'terminal.CREATE', cwd: '/repo' });
 
-    actor.send(answerTo(createCall(0), { type: 'terminal.OPENED', data: aTerminal('t-1') }));
+    actor.send(askAnswered(createCall(0), 'terminal.CREATE_TERMINAL', aTerminal('t-1')));
 
     expect(panelUpdates()).toEqual([{ panelTerminalId: 't-1', panelTerminalExpanded: true }]);
   });
@@ -89,7 +89,7 @@ describe('a terminal routed to the panel', () => {
     const actor = createActor(terminalState).start();
     actor.send({ type: 'terminal.CREATE', target: 'tab' });
 
-    actor.send(answerTo(createCall(0), { type: 'terminal.OPENED', data: aTerminal('t-1') }));
+    actor.send(askAnswered(createCall(0), 'terminal.CREATE_TERMINAL', aTerminal('t-1')));
 
     expect(parent.addTabToParent).toHaveBeenCalled();
     expect(panelUpdates()).toEqual([]);

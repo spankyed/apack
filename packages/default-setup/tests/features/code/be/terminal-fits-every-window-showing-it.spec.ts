@@ -21,6 +21,8 @@
 import { describe, expect, it } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
 import { recordingBroker } from './_support/terminal-broker.ts'
+import { answered } from './_support/answered.ts'
+import type { TerminalInfo } from '#features/code/be/types.ts'
 
 /** The sizes that reached the pty, without the session they reached — one terminal per case here */
 const sizes = (broker: ReturnType<typeof recordingBroker>) =>
@@ -35,6 +37,7 @@ const announced = (app: Awaited<ReturnType<typeof startApp>>) =>
       return { cols, rows }
     })
 
+/** Who a window's sends come from: the code surface */
 const CODE = 'default-setup/code'
 /** Two connections: the API mints one per WebSocket, so two windows are two of these */
 const BIG = 'c-big'
@@ -45,22 +48,19 @@ async function aTerminal() {
   const broker = recordingBroker()
   const app = await startApp({ systems: ['code'] })
   await app.connect()
-  await app.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { sender: CODE, client: BIG })
-  const opened = await app.nextEmit('code', 'terminal.OPENED')
+  const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { client: BIG }))
   await app.settle()
-  return { broker, app, terminalId: (opened as unknown as { data: { id: string } }).data.id }
+  return { broker, app, terminalId: opened.id }
 }
 
 describe('the grid a terminal runs at', () => {
   it('is the smaller of two windows showing it, whichever fitted first', async () => {
     const { broker, app, terminalId } = await aTerminal()
 
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 },
-      { sender: CODE, client: BIG })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 }, { client: BIG })
     await app.settle()
     // The second window fits its own host and sends what it fitted — a view cannot know it is the second one
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 20 },
-      { sender: CODE, client: SMALL })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 20 }, { client: SMALL })
     await app.settle()
 
     expect(sizes(broker), 'the pty went to the big fit, then down to the one both windows can draw')
@@ -74,11 +74,9 @@ describe('the grid a terminal runs at', () => {
     // whole grid would leave the other drawing columns or rows the pty does not have
     const { broker, app, terminalId } = await aTerminal()
 
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 50 },
-      { sender: CODE, client: BIG })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 50 }, { client: BIG })
     await app.settle()
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 200, rows: 20 },
-      { sender: CODE, client: SMALL })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 200, rows: 20 }, { client: SMALL })
     await app.settle()
 
     expect(sizes(broker).at(-1)).toEqual({ cols: 60, rows: 20 })
@@ -90,10 +88,8 @@ describe('the grid a terminal runs at', () => {
     // **The defect this replaced.** The small window goes; the big one is still showing the terminal and
     // has already said what it fits, so the pty grows back to it without anything being asked again
     const { broker, app, terminalId } = await aTerminal()
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 },
-      { sender: CODE, client: BIG })
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 20 },
-      { sender: CODE, client: SMALL })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 }, { client: BIG })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 20 }, { client: SMALL })
     await app.settle()
 
     await app.endConnection(SMALL)
@@ -110,13 +106,11 @@ describe('the grid a terminal runs at', () => {
     // as a different `client`. Under ownership that window was refused its own terminal for the life of the
     // process, because nothing could release the id it used to hold
     const { broker, app, terminalId } = await aTerminal()
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 },
-      { sender: CODE, client: BIG })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 }, { client: BIG })
     await app.settle()
 
     await app.endConnection(BIG)
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 90, rows: 30 },
-      { sender: CODE, client: 'c-big-again' })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 90, rows: 30 }, { client: 'c-big-again' })
     await app.settle()
 
     expect(sizes(broker).at(-1)).toEqual({ cols: 90, rows: 30 })
@@ -129,10 +123,8 @@ describe('the grid a terminal runs at', () => {
     // popped-out window that fitted a terminal small and then switched to a different one would hold every
     // other window to that grid for as long as its connection lived
     const { broker, app, terminalId } = await aTerminal()
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 },
-      { sender: CODE, client: BIG })
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 20 },
-      { sender: CODE, client: SMALL })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 }, { client: BIG })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 20 }, { client: SMALL })
     await app.settle()
 
     await app.send('code', { type: 'terminal.STOPPED_FITTING', terminalId }, { sender: CODE, client: SMALL })
@@ -150,8 +142,7 @@ describe('the grid a terminal runs at', () => {
     // action, whose creator is not a window at all
     const { broker, app, terminalId } = await aTerminal()
 
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 200, rows: 50 },
-      { sender: CODE, client: SMALL })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 200, rows: 50 }, { client: SMALL })
     await app.settle()
 
     expect(sizes(broker), 'the first window to fit it is the only constraint there is')
@@ -167,8 +158,7 @@ describe('the grid a terminal runs at', () => {
     // is then told, and which the next fit reads as a move.
     const { broker, app, terminalId } = await aTerminal()
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 },
-      { sender: CODE, client: BIG })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 }, { client: BIG })
     await app.settle()
 
     broker.deferResize('broker-1')
@@ -194,13 +184,11 @@ describe('the grid a terminal runs at', () => {
     recordingBroker()
     const app = await startApp({ systems: ['code'] })
     await app.connect()
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { sender: CODE, client: BIG })
-    const opened = await app.nextEmit('code', 'terminal.OPENED')
+    const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { client: BIG }))
     await app.settle()
-    const terminalId = (opened as unknown as { data: { id: string } }).data.id
+    const terminalId = opened.id
 
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 },
-      { sender: CODE, client: BIG })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 120, rows: 40 }, { client: BIG })
     await app.nextEmit('code', 'terminal.RESIZED')
     await app.settle()
 
@@ -213,57 +201,39 @@ describe('the grid a terminal runs at', () => {
    * **A fit that was not honoured is answered, and is nobody else's business.**
    *
    * A window that asked for 200 columns and got 60 goes on rendering at 200 unless it is told, which is
-   * F18. It is a reply rather than news because nothing moved: broadcasting it would tell every other
-   * window a thing that had not happened.
+   * F18. It is the answer to its fit rather than news because nothing moved: broadcasting it would tell every
+   * other window a thing that had not happened.
    */
-  it('answers a window whose fit it did not honour with the grid in force', async () => {
+  it('answers a window whose fit it did not honour with the grid in force, and tells no other', async () => {
     recordingBroker()
     const app = await startApp({ systems: ['code'] })
     await app.connect()
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { sender: CODE, client: BIG })
-    const opened = await app.nextEmit('code', 'terminal.OPENED')
+    const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { client: BIG }))
     await app.settle()
-    const terminalId = (opened as unknown as { data: { id: string } }).data.id
+    const terminalId = opened.id
 
     // The small window first, so the big one's fit is the one that changes nothing
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 20 },
-      { sender: CODE, client: SMALL })
+    await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 20 }, { client: SMALL })
     await app.settle()
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 200, rows: 50 },
-      { sender: CODE, client: BIG })
+    const notHonoured = await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 200, rows: 50 }, { client: BIG })
     await app.settle()
 
-    expect(announced(app), "the big window was told the grid in force rather than left believing its own")
-      .toEqual([{ cols: 60, rows: 20 }, { cols: 60, rows: 20 }])
+    expect(notHonoured, "the big window was told the grid in force rather than left believing its own")
+      .toEqual({ ok: true, value: { terminalId, cols: 60, rows: 20 } })
+    expect(announced(app), 'and only the move was news').toEqual([{ cols: 60, rows: 20 }])
     await app.stop()
     resetTestData()
   })
 
-  /**
-   * **The case that tells that answer from news**: it is stamped as answering the fit it did not honour.
-   *
-   * Broadcasting it instead would tell every other window a grid change that had not happened. `answering`
-   * is on the envelope rather than the event, so this is the only way a pack test can see which it was.
-   */
-  it('stamps that answer as answering the fit it did not honour', async () => {
+  it('answers a fit that took with nothing to correct', async () => {
     recordingBroker()
     const app = await startApp({ systems: ['code'] })
     await app.connect()
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { sender: CODE, client: BIG })
-    const opened = await app.nextEmit('code', 'terminal.OPENED')
+    const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { client: BIG }))
     await app.settle()
-    const terminalId = (opened as unknown as { data: { id: string } }).data.id
 
-    await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 60, rows: 20 },
-      { sender: CODE, client: SMALL })
-    await app.settle()
-    const notHonoured = await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId, cols: 200, rows: 50 },
-      { sender: CODE, client: BIG })
-
-    const answer = await app.nextEmit('code', 'terminal.RESIZED', { answering: notHonoured })
-
-    expect((answer as unknown as { data: { cols: number; rows: number } }).data)
-      .toEqual({ terminalId, cols: 60, rows: 20 })
+    expect(await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId: opened.id, cols: 120, rows: 40 }, { client: BIG }))
+      .toEqual({ ok: true, value: null })
     await app.stop()
     resetTestData()
   })

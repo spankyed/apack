@@ -326,7 +326,7 @@ describe("the feature's settings reaching the terminals", () => {
     const actor = started()
     vi.mocked(terminalPool.setCopyOnSelect).mockClear()
 
-    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work', settings: { copyOnSelect: true } } } as never)
+    actor.send({ type: 'ASK_ANSWERED', asked: 'GET_CODE_START', answer: { baseDirectory: '/work', settings: { copyOnSelect: true } } } as never)
     expect(terminalPool.setCopyOnSelect, 'the saved value reaches the terminals at start').toHaveBeenLastCalledWith(true)
   })
 
@@ -348,7 +348,7 @@ describe("the feature's settings reaching the terminals", () => {
     const actor = started()
     vi.mocked(terminalPool.setViewSettings).mockClear()
 
-    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work', settings: { cursorInactiveStyle: 'underline', linkPreview: 'all' } } } as never)
+    actor.send({ type: 'ASK_ANSWERED', asked: 'GET_CODE_START', answer: { baseDirectory: '/work', settings: { cursorInactiveStyle: 'underline', linkPreview: 'all' } } } as never)
     expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'underline', linkPreview: 'all' })
 
     // The blink is not a view's setting: one changed leaves the view's as they were, at their defaults here
@@ -363,10 +363,10 @@ describe('starting over a folder', () => {
     const actor = started()
     vi.mocked(sendToSystem).mockClear()
 
-    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work' } } as never)
+    actor.send({ type: 'ASK_ANSWERED', asked: 'GET_CODE_START', answer: { baseDirectory: '/work' } } as never)
 
     const asked = vi.mocked(sendToSystem).mock.calls.map(([, event]) => (event as { type: string }).type)
     expect(asked, 'the pull request panel asks whether GitHub answers for it').toContain('pr.CHECK_GITHUB_ACCESS')
-    expect(asked, 'the commit panel asks for the repositories under it').toContain('LIST_REPOSITORIES')
+    expect(asked, 'the commit panel asks for the repositories under it').toContain('commit.LIST_REPOSITORIES')
   })
 })
