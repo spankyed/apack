@@ -53,8 +53,8 @@ Then open the app normally. This only needs to be done once per download.
 The Windows installer is unsigned, so Windows SmartScreen warns before running it ("More info", then "Run anyway").
 Signing it waits on a decision: see the [Windows code signing plan](../plans/deferred/windows-code-signing.md).
 
-On Linux, the release holds an AppImage and a deb for x64. They need glibc 2.39 or later: Ubuntu 24.04, Debian 13,
-Fedora 40 and newer (see [CI Workflow](#ci-workflow)). Install the deb with
+On Linux, the release holds an AppImage and a deb for x64. They need glibc 2.28 or later: Ubuntu 20.04, Debian 10,
+Fedora 29, RHEL 8 and newer (see [CI Workflow](#ci-workflow)). Install the deb with
 `sudo apt install ./apack-<version>-linux-amd64.deb`, or make `apack-<version>-linux-x86_64.AppImage` executable
 (`chmod +x`) and run it; an AppImage needs FUSE 2 (`libfuse2t64` on Ubuntu 24.04).
 
@@ -256,13 +256,13 @@ draft. A dispatch from a branch builds without publishing (one on a tag uploads,
 run would): its `release` job reads the files the build kept and stops. Every run keeps what it built as the run's
 artifact, for the repository's artifact retention (2 days, on 2026-11-19).
 
-The Linux release's glibc floor is the newest glibc any binary the app ships needs, and the runner's: 2.39, which the
-terminal broker apack-terminal publishes needs (elmdb's binding, built on the runner, needs 2.38, on 2026-11-19). It is
-`LINUX_GLIBC_FLOOR` in `electron-builder.mjs`, which the deb states to apt as `libc6 (>= 2.39)`. The workflow reads the
+The Linux release's glibc floor is the newest glibc any binary the app ships needs: 2.28, which the terminal broker
+apack-terminal publishes and elmdb's binding, built by the release in manylinux_2_28, are each built against. It is
+`LINUX_GLIBC_FLOOR` in `electron-builder.mjs`, which the deb states to apt as `libc6 (>= 2.28)`. The workflow reads the
 floor back from the built deb, and `build/prod/glibc-floor.sh` reads every ELF file in the packaged app: it fails on one
 needing a newer glibc, on one linking glibc whose symbols it couldn't read, and on a floor that isn't the newest need, so
-the floor stated here can't drift from the binaries. Lowering it means building the broker and elmdb against an older
-glibc first.
+the floor stated here can't drift from the binaries. The runner's own glibc is 2.39, so the packaged app's smoke check
+runs there and not at the floor; nothing has run the app on a 2.28 system.
 
 ### GitHub Secrets
 
