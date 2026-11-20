@@ -263,7 +263,11 @@ for (const BASH of BASHES_HERE.length > 0 ? BASHES_HERE : BASHES.slice(0, 1)) {
     })
 
     /** Starts bash with the integration file over `bashrc`, types `lines` and answers what it printed */
-    async function typed(bashrc: string, lines: string[], { keyed = true } = {}): Promise<string> {
+    async function typed(
+      bashrc: string,
+      lines: string[],
+      { keyed = true, env = {} }: { keyed?: boolean; env?: Record<string, string> } = {},
+    ): Promise<string> {
       const arranged = integrationFor(BASH, path.join(home, 'integration'), 'darwin', {})!
       for (const file of arranged.files) {
         await mkdir(path.dirname(path.join(home, 'integration', file.at)), { recursive: true })
@@ -280,6 +284,7 @@ for (const BASH of BASHES_HERE.length > 0 ? BASHES_HERE : BASHES.slice(0, 1)) {
             HOME: home, PATH: process.env.PATH ?? '', TERM: 'dumb',
             // As the feature starts it: a key for a hook that vouches, and only for one
             ...(keyed && arranged.keyed && { [MARKS_KEY_VARIABLE]: KEY }),
+            ...env,
           },
           cwd: home,
         },
@@ -294,6 +299,17 @@ for (const BASH of BASHES_HERE.length > 0 ? BASHES_HERE : BASHES.slice(0, 1)) {
       // before it is its quoted-insert
       literally: character => `\u0016${character}`,
       marksEveryLine: hasPs0,
+    })
+
+    it('sources the file APACK_BASHRC names in place of the user\'s .bashrc, and none where it names nothing', async () => {
+      await writeFile(path.join(home, 'elsewhere'), 'echo "from-$((1+1))-elsewhere"\n')
+      const named = await typed('echo "from-$((1+1))-home"\n', ['true'], { env: { APACK_BASHRC: path.join(home, 'elsewhere') } })
+      expect(named).toContain('from-2-elsewhere')
+      expect(named).not.toContain('from-2-home')
+
+      const nothing = await typed('echo "from-$((1+1))-home"\n', ['true'], { env: { APACK_BASHRC: path.join(home, 'absent') } })
+      expect(nothing).not.toContain('from-2-home')
+      expect(nothing).not.toContain('from-2-elsewhere')
     })
 
     it("leaves the user's own prompt command, DEBUG trap and unset-variable rule working", async () => {
