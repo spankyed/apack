@@ -1,7 +1,7 @@
 // Compile-time checks, run by `vue-tsc` (npm run typecheck:pack). Exact type equality fails when a
 // generated entity shape regresses to `any` or loses its declared field types.
 import { describe, expectTypeOf, it } from 'vitest';
-import type { BaseEntity } from '@apackdev/ears';
+import type { BaseEntity } from '@apackdev/sdk/ears';
 import type { SdkEntityShapes, ActionEntity, FlowEntity, NodeBase } from '@apackdev/sdk';
 import type { NodeEntity } from '#generated/types.ts';
 import type { EntityShape, OwnEntityShapes, PackShapes } from '#generated/ears.ts';

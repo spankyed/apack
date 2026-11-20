@@ -14,7 +14,7 @@ import { dropAttribute } from '@apackdev/sdk/testing';
 import { findRelations, untypedWrite } from '@apackdev/sdk/ears';
 import { repository } from '#generated/repository.ts';
 import { PACK_DIR, applyAfter, resetDatabase } from './harness.ts';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@apackdev/sdk';
 
 type FlowRow = { id: EARS.EntityId; label: string; contentHash?: string };
 const flow = (label: string) => query('Flow').where('label', label).pickAll() as FlowRow[];

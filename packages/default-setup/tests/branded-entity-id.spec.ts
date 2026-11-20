@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
 import { expectTypeOf } from 'vitest';
-import type { QueryBuilder } from '@apackdev/ears';
+import type { QueryBuilder } from '@apackdev/sdk/ears';
 import { EARS, newId, query, type EntityShape, type PackSchema } from '#generated/ears.ts';
 
 // ─── EntityId<E> phantom brand ─────────────────────────────────────────
