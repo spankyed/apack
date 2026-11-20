@@ -1,8 +1,7 @@
 // A query's result goes to the view that ran it, not to every window.
 //
 // Two windows each show the Database surface with their own editor and their own pending request, and a
-// `broadcastToSurface` reached both. `reply` answers the sender of the message being handled, on the connection
-// it came from — so a person querying in one window and an agent driving in another stop seeing each other's
+// `broadcastToSurface` reached both. An ask is answered to its sender, on the connection it came from — so a person querying in one window and an agent driving in another stop seeing each other's
 // results.
 //
 // What this file cannot check is the *delivery narrowing*: the harness has one client, so `emitted` sees
@@ -27,53 +26,42 @@ const DATABASE = 'default-setup/database'
 const WINDOW = 'c-window'
 
 describe('a query run by a surface', () => {
-  /**
-   * **The call is the ask's, and the answer names it on the envelope rather than in the payload.**
-   *
-   * `app.send` returns what it sent under, `reply` stamps it as `Message.answering`, and `nextEmit`'s
-   * `answering` is what reads it. The event itself says nothing about which ask it belongs to, which is the
-   * point: no event type declares a correlation field, so none can declare one and mint nothing.
-   */
-  it('is answered to the asker, naming the call it asked under', async () => {
+  const window = { client: WINDOW }
+
+  it('is answered to the window that asked', async () => {
     const app = await startApp({ systems: ['database'] })
     await app.connect()
 
-    const call = await app.send('database', { type: 'EXECUTE_QUERY', code: 'return 1 + 1' }, { sender: DATABASE, client: WINDOW })
-    const answer = await app.nextEmit('database', 'QUERY_RESULT', { answering: call })
-
-    expect(answer).toMatchObject({ type: 'QUERY_RESULT', result: 2 })
+    expect(await app.ask('database', { type: 'EXECUTE_QUERY', code: 'return 1 + 1' }, window))
+      .toMatchObject({ ok: true, value: { result: 2 } })
   })
 
-  // The failing path answers too, and answers once: the reply sits outside the try so a throw cannot send twice
-  it('answers a failing query with the error, naming the same call', async () => {
+  it('answers a failing query with why, and only that', async () => {
     const app = await startApp({ systems: ['database'] })
     await app.connect()
 
-    const call = await app.send('database', { type: 'EXECUTE_QUERY', code: 'return nope' }, { sender: DATABASE, client: WINDOW })
-    const answer = await app.nextEmit('database', 'QUERY_ERROR', { answering: call })
-
-    expect(answer).toMatchObject({ type: 'QUERY_ERROR' })
-    expect(app.emitted('database').filter((event) => event.type === 'QUERY_RESULT'), 'and not also a result').toEqual([])
+    expect(await app.ask('database', { type: 'EXECUTE_QUERY', code: 'return nope' }, window))
+      .toMatchObject({ ok: false, failure: { kind: 'failed' } })
+    expect(app.emitted('database').filter((event) => event.type === 'ASK_ANSWERED'), 'and not also a result').toEqual([])
   })
 
   /**
-   * Two queries in flight, each answered under its own call — the case the correlation exists for.
+   * Two queries in flight, each answered to its own ask.
    *
-   * The handler is `async` on a state with no re-entry guard, so the second ask is accepted while the first
-   * is still awaiting. Nothing in the system stores the call: `reply` is bound to the delivery each handler
-   * was entered in, so two answers carry two calls without the machine holding either. Written rather than
-   * found, and it is what fails if `reply` is ever rebound to the latest delivery instead of its own.
+   * The handler is `async` on a state with no re-entry guard, so the second ask is taken while the first is still
+   * awaiting. Nothing in the system stores the call: each answer goes out under the delivery its handler was entered
+   * in, and this is what fails if that were ever the latest delivery instead.
    */
-  it('answers two overlapping queries each under its own call', async () => {
+  it('answers two overlapping queries each to its own ask', async () => {
     const app = await startApp({ systems: ['database'] })
     await app.connect()
 
-    const first = await app.send('database', { type: 'EXECUTE_QUERY', code: 'return "first"' }, { sender: DATABASE, client: WINDOW })
-    const second = await app.send('database', { type: 'EXECUTE_QUERY', code: 'return "second"' }, { sender: DATABASE, client: WINDOW })
-
-    expect(first, 'two asks, two calls').not.toEqual(second)
-    expect(await app.nextEmit('database', 'QUERY_RESULT', { answering: first })).toMatchObject({ result: 'first' })
-    expect(await app.nextEmit('database', 'QUERY_RESULT', { answering: second })).toMatchObject({ result: 'second' })
+    const [first, second] = await Promise.all([
+      app.ask('database', { type: 'EXECUTE_QUERY', code: 'return "first"' }, window),
+      app.ask('database', { type: 'EXECUTE_QUERY', code: 'return "second"' }, window),
+    ])
+    expect(first).toMatchObject({ ok: true, value: { result: 'first' } })
+    expect(second).toMatchObject({ ok: true, value: { result: 'second' } })
   })
 
   /**
@@ -89,7 +77,7 @@ describe('a query run by a surface', () => {
 
     await app.send('database', { type: 'EXECUTE_QUERY', code: 'return 1' }, { sender: DATABASE, client: WINDOW })
 
-    await expect(app.nextEmit('database', 'QUERY_RESULT', { timeoutMs: 200 }))
+    await expect(app.nextEmit('database', 'ASK_ANSWERED', { timeoutMs: 200 }))
       .rejects.toThrow(/No client has connected/)
   })
 
@@ -99,14 +87,12 @@ describe('a query run by a surface', () => {
    * It walks the whole store, so it is no view a commit should re-run, and a transaction tells nobody else: another
    * window shows the schema it last asked for until it asks again.
    */
-  it('answers a transaction to its asker alone, and the schema to whoever asks for it', async () => {
+  it('answers a transaction to its asker alone', async () => {
     const app = await startApp({ systems: ['database'] })
     await app.connect()
 
-    const ran = await app.send('database', { type: 'EXECUTE_TRANSACTION', code: 'return 1' }, { sender: DATABASE, client: WINDOW })
-    await app.nextEmit('database', 'TRANSACTION_RESULT', { answering: ran })
+    expect(await app.ask('database', { type: 'EXECUTE_TRANSACTION', code: 'return 1' }, window)).toMatchObject({ ok: true })
     await app.settle()
-    expect(app.emitted('database').map((event) => event.type), 'nothing broadcast beside the answer').toEqual(['TRANSACTION_RESULT'])
-
+    expect(app.emitted('database'), 'nothing broadcast to the other windows').toEqual([])
   })
 })

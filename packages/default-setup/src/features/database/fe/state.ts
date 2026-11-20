@@ -3,10 +3,11 @@ import breadcrumb from '@apackdev/sdk/fe'
 import { contextMenu, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import { targetIs, TRAIL_CLICK, type TrailClickEvent } from '@apackdev/sdk/fe'
-import { answersCall, newCall } from '@apackdev/sdk/events'
+import { answerOf, answersCall, isAnswered, newCall, type AnswersOf } from '@apackdev/sdk/events'
 import type { DatabaseSettings } from '#generated/types.ts'
 import type { DatabaseContext, DatabaseInboxEvent } from './contract.ts'
 import type { DatabaseSchemaInfo, OutgoingDatabaseEvents } from '#features/database/be/types.ts'
+import type { Contract as DatabaseSystemContract } from '#features/database/be/contract.ts'
 import { sendToSystem } from '#generated/events.ts'
 import { fromView } from '#generated/fe.ts'
 import { attributeQueryTemplate, entityQueryTemplate, exampleQuery, relationQueryTemplate } from './constants.ts'
@@ -64,7 +65,7 @@ type UIEvent =
   | { type: 'BACKUP.READ_INFO'; path: string }
   | TrailClickEvent
 
-export type DatabaseEvents = UIEvent | SystemEvent
+export type DatabaseEvents = UIEvent | SystemEvent | AnswersOf<DatabaseSystemContract>
 const typeOf = safeEvents<DatabaseEvents>()
 
 const generateQueryForSchemaItem = (type: 'entity' | 'attribute' | 'relation', value: string): string => {
@@ -92,7 +93,7 @@ const databaseState = setup({
   guards: {
     targetIs,
     /**
-     * Whether an answer answers the ask still outstanding.
+     * Whether an answer answers the query or the transaction still outstanding, landed or refused.
      *
      * A transition guard rather than a check inside each handler: an action that has to decide whether
      * to do nothing is one someone later edits into doing something, and `threads`' `SET_VIEW_DATA` does
@@ -102,8 +103,8 @@ const databaseState = setup({
      * case this refuses rather than one it admits — see its doc for why the comparison cannot be written
      * by hand.
      */
-    answersPendingQuery: ({ context, event }) => answersCall(event, context.pendingQueryCall),
-    answersPendingTransaction: ({ context, event }) => answersCall(event, context.pendingTransactionCall),
+    answersPendingQuery: ({ context, event }) => event.type.startsWith('ASK_') && (event as { asked?: string }).asked === 'EXECUTE_QUERY' && answersCall(event, context.pendingQueryCall),
+    answersPendingTransaction: ({ context, event }) => event.type.startsWith('ASK_') && (event as { asked?: string }).asked === 'EXECUTE_TRANSACTION' && answersCall(event, context.pendingTransactionCall),
     /**
      * Whether these events are the page the viewer is waiting for: the right flow *and* the right offset.
      *
@@ -113,8 +114,9 @@ const databaseState = setup({
      * echoes its `offset` now, which is what lets this say *which* page rather than only which flow.
      */
     answersCurrentPage: ({ context, event }) => {
-      const ev = event as { flowId?: string; offset?: number };
-      return ev.flowId === context.currentFlowId && ev.offset === context.runPagination.offset;
+      if (!isAnswered(event, 'GET_FLOW_EVENTS')) return false;
+      const { flowId, offset } = answerOf(event, 'GET_FLOW_EVENTS');
+      return flowId === context.currentFlowId && offset === context.runPagination.offset;
     },
   },
   actions: {
@@ -189,7 +191,7 @@ const databaseState = setup({
     }),
 
     setQueryResult: assign(({ event }) => {
-      const ev = typeOf('QUERY_RESULT', event);
+      const ev = answerOf(event, 'EXECUTE_QUERY');
       return {
         queryResult: ev.result,
         executionTime: ev.executionTime,
@@ -201,16 +203,15 @@ const databaseState = setup({
     }),
 
     setQueryError: assign(({ event }) => {
-      const ev = typeOf('QUERY_ERROR', event);
       return {
-        error: ev.error,
+        error: typeOf('ASK_FAILED', event).failure.message,
         isLoading: false,
         pendingQueryCall: null,
       };
     }),
 
     setTransactionResult: enqueueActions(({ event, enqueue }) => {
-      const ev = typeOf('TRANSACTION_RESULT', event);
+      const ev = answerOf(event, 'EXECUTE_TRANSACTION');
       const settled = {
         queryResult: ev.result,
         executionTime: ev.executionTime,
@@ -245,9 +246,8 @@ const databaseState = setup({
     }),
 
     setTransactionError: assign(({ event }) => {
-      const ev = typeOf('TRANSACTION_ERROR', event);
       return {
-        error: ev.error,
+        error: typeOf('ASK_FAILED', event).failure.message,
         isLoading: false,
         pendingTransactionCall: null,
       };
@@ -328,7 +328,7 @@ const databaseState = setup({
     },
 
     setFlowRuns: assign(({ event }) => {
-      const ev = typeOf('FLOW_RUNS_RESULT', event);
+      const ev = answerOf(event, 'GET_FLOW_RUNS');
       // Newest first, as the run history lists them
       const sortedFlows = ev.flows;
 
@@ -376,7 +376,7 @@ const databaseState = setup({
     }),
 
     setFlowEvents: assign(({ event, context }) => {
-      const ev = typeOf('FLOW_EVENTS_RESULT', event);
+      const ev = answerOf(event, 'GET_FLOW_EVENTS');
       return {
         // The page this answer is *for*. Equal to the context's offset today, because the guard admits
         // only the page being awaited — so no case can tell the two readings apart, and none pretends to.
@@ -439,7 +439,7 @@ const databaseState = setup({
     }),
 
     setNodeDetails: assign(({ event, context }) => {
-      const ev = typeOf('NODE_DETAILS_RESULT', event);
+      const ev = answerOf(event, 'GET_NODE_DETAILS');
       if (ev.details) {
         const newDetails = new Map(context.nodeDetails);
         newDetails.set(ev.nodeId, ev.details);
@@ -456,7 +456,7 @@ const databaseState = setup({
     },
 
     setBackupInfo: assign(({ event }) => {
-      const ev = typeOf('BACKUP_INFO_RESULT', event);
+      const ev = answerOf(event, 'GET_BACKUP_INFO');
       return {
         backupInfo: ev.info,
       };
@@ -534,20 +534,24 @@ const databaseState = setup({
     'SCHEMA.READ': { actions: 'setSchema' },
     'SCHEMA.FAILED': { actions: 'setSchemaError' },
     DATABASE_REPLACED: { actions: 'dropReplacedResults' },
-    QUERY_RESULT: { guard: 'answersPendingQuery', actions: 'setQueryResult' },
-    QUERY_ERROR: { guard: 'answersPendingQuery', actions: 'setQueryError' },
-    TRANSACTION_RESULT: { guard: 'answersPendingTransaction', actions: 'setTransactionResult' },
-    TRANSACTION_ERROR: { guard: 'answersPendingTransaction', actions: 'setTransactionError' },
     AI_QUERY_ERROR: { actions: 'setAiQueryError' },
 AI_QUERY_LOADING: { actions: 'setAiQueryLoading' },
     AI_QUERY_GENERATED: { actions: 'setAiQueryResult' },
     FEATURE_SETTINGS_UPDATED: { actions: 'setDatabaseSettings' },
-    // Run history viewer events
-    FLOW_RUNS_RESULT: { actions: 'setFlowRuns' },
-    FLOW_EVENTS_RESULT: { guard: 'answersCurrentPage', actions: 'setFlowEvents' },
-    NODE_DETAILS_RESULT: { actions: 'setNodeDetails' },
-    // Backup events
-    BACKUP_INFO_RESULT: { actions: 'setBackupInfo' },
+    // The answers to what this window asks: a query or a transaction it is waiting on, a page of the run history, a
+    // backup's summary. A query's answer is the console's only while it is the one outstanding
+    ASK_ANSWERED: [
+      { guard: 'answersPendingQuery', actions: 'setQueryResult' },
+      { guard: 'answersPendingTransaction', actions: 'setTransactionResult' },
+      { guard: ({ event }) => isAnswered(event, 'GET_FLOW_RUNS'), actions: 'setFlowRuns' },
+      { guard: 'answersCurrentPage', actions: 'setFlowEvents' },
+      { guard: ({ event }) => isAnswered(event, 'GET_NODE_DETAILS'), actions: 'setNodeDetails' },
+      { guard: ({ event }) => isAnswered(event, 'GET_BACKUP_INFO'), actions: 'setBackupInfo' },
+    ],
+    ASK_FAILED: [
+      { guard: 'answersPendingQuery', actions: 'setQueryError' },
+      { guard: 'answersPendingTransaction', actions: 'setTransactionError' },
+    ],
     EXPORT_DATABASE_SUCCESS: { actions: 'exportFinished' },
     EXPORT_DATABASE_ERROR: { actions: 'exportFinished' },
     IMPORT_DATABASE_SUCCESS: { actions: 'importFinished' },

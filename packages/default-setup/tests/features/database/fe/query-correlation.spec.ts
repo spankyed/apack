@@ -12,7 +12,7 @@
 // call.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -33,7 +33,7 @@ it('takes the result for the query it is waiting on', () => {
   const actor = console_();
   actor.send({ type: 'QUERY.EXECUTE', code: 'return 1' });
 
-  actor.send(answerTo(callFor('EXECUTE_QUERY'), { type: 'QUERY_RESULT', result: 'mine', executionTime: 1 }));
+  actor.send(askAnswered(callFor('EXECUTE_QUERY'), 'EXECUTE_QUERY', { result: 'mine', executionTime: 1 }));
 
   expect(actor.getSnapshot().context.queryResult).toBe('mine');
 });
@@ -45,17 +45,17 @@ it('ignores a result for a query it has stopped waiting on', () => {
   // Asked again, so the first is no longer the outstanding one
   actor.send({ type: 'QUERY.EXECUTE', code: 'return 2' });
 
-  actor.send(answerTo(abandoned, { type: 'QUERY_RESULT', result: 'stale', executionTime: 1 }));
+  actor.send(askAnswered(abandoned, 'EXECUTE_QUERY', { result: 'stale', executionTime: 1 }));
   expect(actor.getSnapshot().context.queryResult, 'not taken').toBeNull();
 
-  actor.send(answerTo(callFor('EXECUTE_QUERY', 1), { type: 'QUERY_RESULT', result: 'current', executionTime: 1 }));
+  actor.send(askAnswered(callFor('EXECUTE_QUERY', 1), 'EXECUTE_QUERY', { result: 'current', executionTime: 1 }));
   expect(actor.getSnapshot().context.queryResult).toBe('current');
 });
 
 /**
  * The two verbs keep separate slots, which matters because they share the result field.
  *
- * A `TRANSACTION_RESULT` writes `queryResult`, so the only thing keeping a transaction's answer out of a
+ * A transaction's answer writes `queryResult`, so the only thing keeping a transaction's answer out of a
  * query's result is that it is matched against `pendingTransactionCall` — empty here, since no transaction
  * was asked. One slot for both would take this.
  */
@@ -64,7 +64,7 @@ it('does not let one verb take the other verb\'s answer', () => {
   actor.send({ type: 'QUERY.EXECUTE', code: 'return 1' });
 
   // A transaction answer naming the *query's* call: the right call, the wrong slot
-  actor.send(answerTo(callFor('EXECUTE_QUERY'), { type: 'TRANSACTION_RESULT', result: 'wrong slot', executionTime: 1 }));
+  actor.send(askAnswered(callFor('EXECUTE_QUERY'), 'EXECUTE_TRANSACTION', { result: 'wrong slot', executionTime: 1 }));
 
   expect(actor.getSnapshot().context.queryResult, 'no transaction was outstanding').toBeNull();
 });
@@ -78,7 +78,7 @@ it('does not let one verb take the other verb\'s answer', () => {
 it('refuses a result carrying no call when no query is outstanding', () => {
   const actor = console_();
 
-  actor.send({ type: 'QUERY_RESULT', result: 'nobody asked', executionTime: 1 });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'nobody asked', executionTime: 1 } });
 
   expect(actor.getSnapshot().context.queryResult).toBeNull();
 });
@@ -86,9 +86,9 @@ it('refuses a result carrying no call when no query is outstanding', () => {
 it('refuses one once the query it was waiting on has settled', () => {
   const actor = console_();
   actor.send({ type: 'QUERY.EXECUTE', code: 'return 1' });
-  actor.send(answerTo(callFor('EXECUTE_QUERY'), { type: 'QUERY_RESULT', result: 'mine', executionTime: 1 }));
+  actor.send(askAnswered(callFor('EXECUTE_QUERY'), 'EXECUTE_QUERY', { result: 'mine', executionTime: 1 }));
 
-  actor.send({ type: 'QUERY_RESULT', result: 'stray', executionTime: 1 });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'stray', executionTime: 1 } });
 
   expect(actor.getSnapshot().context.queryResult, 'the settled answer still stands').toBe('mine');
 });

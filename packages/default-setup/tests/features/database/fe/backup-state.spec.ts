@@ -2,7 +2,7 @@
 // system reports how it ended, and the outcome is kept for the Backup & Restore view to report.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered } from '@apackdev/sdk/testing';
 import { sentCall } from '../../../_support/calls.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
@@ -39,14 +39,14 @@ it.each(['IMPORT_DATABASE_SUCCESS', 'RESET_DATABASE_SUCCESS', 'DATABASE_REPLACED
     const actor = createActor(databaseState).start();
     actor.send({ type: 'QUERY.UPDATE', code: 'return "keep this editor"' });
     actor.send({ type: 'QUERY.EXECUTE', code: 'return "old rows"' });
-    actor.send(answerTo(sentCall(sendToSystem, 'EXECUTE_QUERY'), { type: 'QUERY_RESULT', result: 'old rows', executionTime: 1 }));
+    actor.send(askAnswered(sentCall(sendToSystem, 'EXECUTE_QUERY'), 'EXECUTE_QUERY', { result: 'old rows', executionTime: 1 }));
     expect(actor.getSnapshot().context.queryResult).toBe('old rows');
     actor.send({ type: 'QUERY.EXECUTE', code: 'return "late rows"' });
     const abandoned = sentCall(sendToSystem, 'EXECUTE_QUERY', 1);
     actor.send({ type, message: 'Completed' });
     expect(actor.getSnapshot().context).toMatchObject({ currentQuery: 'return "keep this editor"',
       queryResult: null, isLoading: false, pendingQueryCall: null, pendingTransactionCall: null });
-    actor.send(answerTo(abandoned, { type: 'QUERY_RESULT', result: 'late rows', executionTime: 2 }));
+    actor.send(askAnswered(abandoned, 'EXECUTE_QUERY', { result: 'late rows', executionTime: 2 }));
     expect(actor.getSnapshot().context.queryResult).toBeNull();
     actor.stop();
   },
@@ -64,7 +64,7 @@ it('keeps mutable run history state separate between windows', () => {
 it('keeps the current database results when import is refused', () => {
   const actor = createActor(databaseState).start();
   actor.send({ type: 'QUERY.EXECUTE', code: 'return "current rows"' });
-  actor.send(answerTo(sentCall(sendToSystem, 'EXECUTE_QUERY'), { type: 'QUERY_RESULT', result: 'current rows', executionTime: 1 }));
+  actor.send(askAnswered(sentCall(sendToSystem, 'EXECUTE_QUERY'), 'EXECUTE_QUERY', { result: 'current rows', executionTime: 1 }));
   actor.send({ type: 'IMPORT_DATABASE_ERROR', error: 'Invalid settings' });
   expect(actor.getSnapshot().context.queryResult).toBe('current rows');
   expect(backup(actor).backupResult?.error).toBe('Invalid settings');

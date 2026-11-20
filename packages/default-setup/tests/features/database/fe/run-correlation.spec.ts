@@ -6,8 +6,8 @@
 // it from an answer the viewer has left behind. Without the flow half, clicking two flows quickly shows
 // the first one's events under the second.
 //
-// **The offset half was the gap this file used to describe rather than cover.** `FLOW_EVENTS_RESULT`
-// echoed `flowId` and `hasMore` only, and `setFlowEvents` decided append-or-replace from whatever offset
+// **The offset half was the gap this file used to describe rather than cover.** The answer to
+// `GET_FLOW_EVENTS` echoed `flowId` and `hasMore` only, and `setFlowEvents` decided append-or-replace from whatever offset
 // the context had since reached — so re-selecting a flow while a later page was in flight let that page
 // *replace* the whole list, page two shown as if it were the flow. The reply carries its `offset` now,
 // which is what lets the viewer place an answer by the page it is for instead of by where it has got to.
@@ -29,7 +29,7 @@ const anEvent = (id: string) => ({ id, label: id, children: [] }) as unknown as 
 
 /** An answer, which says which page of which flow it is */
 const page = (flowId: string, offset: number, ids: string[], hasMore = false) =>
-  ({ type: 'FLOW_EVENTS_RESULT' as const, flowId, offset, hasMore, events: ids.map(anEvent) });
+  ({ type: 'ASK_ANSWERED' as const, asked: 'GET_FLOW_EVENTS' as const, answer: { flowId, offset, hasMore, events: ids.map(anEvent) } });
 
 /** The run history viewer, which is where flow selection is handled */
 function viewing() {
