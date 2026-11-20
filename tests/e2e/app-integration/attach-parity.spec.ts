@@ -74,6 +74,12 @@ test.describe('a connected page and a launched one', () => {
     });
     launched = await mainWindow(app);
     await waitForAppReady(launched);
+    // Attached once the splash has gone. The app closes it after the main window shows, and a connection made while
+    // it is being destroyed fails: Playwright's runner sets up every page of a new CDP context, and that one closes
+    // under it ("Target page, context or browser has been closed"), which a busy machine makes likely. Only a launch
+    // under Playwright hides the splash, and this app is launched as development, so it is shown
+    await Promise.all(app.windows().filter((window) => window !== launched)
+      .map((window) => window.isClosed() ? undefined : window.waitForEvent('close', { timeout: 0 })));
 
     // Read rather than assumed: `--remote-debugging-port=0` means Chromium picks one, and the number it
     // picked is the only thing that can say which
