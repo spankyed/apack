@@ -20,6 +20,7 @@
 // depend on and which `published-imports` refuses. One hoisted `playwright-core` is what lets the two be
 // the same `Page`, so the public type can be the one the fixture already hands round.
 import type { Browser, Page } from '@playwright/test';
+import { isMainApplicationWindow } from '../application-window.ts';
 
 /** What the app published, and what this needs to find it */
 export interface AttachOptions {
@@ -86,8 +87,9 @@ export interface AttachTargets {
  * The app's main window among the targets the connection exposes.
  *
  * **Never `pages()[0]`.** A connected app had two live targets in the spike — the window and a second one
- * — and which comes first is not something to rely on. The predicate is the fixture's own: the main
- * renderer is the page that has `window.applicationState`, which is also what tells it from the splash.
+ * — and which comes first is not something to rely on. The predicate is the fixture's own,
+ * `isMainApplicationWindow`: the page whose shell owns the last active surface, which tells it from the splash and
+ * from a surface popout.
  *
  * It waits rather than asking once, because a window that is still loading has no `applicationState` yet
  * and a page can appear after the connection does.
@@ -100,7 +102,7 @@ export async function findWindow<T extends AttachTargets>(browser: T, timeoutMs:
       for (const page of context.pages()) {
         if (seen.has(page)) continue;
         seen.add(page);
-        const has = await page.evaluate(() => !!(window as { applicationState?: unknown }).applicationState).catch(() => false);
+        const has = await page.evaluate(isMainApplicationWindow).catch(() => false);
         if (has) return page as unknown as Page;
       }
     }
@@ -110,7 +112,7 @@ export async function findWindow<T extends AttachTargets>(browser: T, timeoutMs:
   }
   const targets = browser.contexts().flatMap((context) => context.pages().map((page) => page.url()));
   throw new Error(
-    `No window with applicationState appeared within ${timeoutMs}ms. `
+    `No main window appeared within ${timeoutMs}ms. `
     + (targets.length === 0 ? 'The connection exposed no pages.' : `Saw: ${targets.join(', ')}.`),
   );
 }
