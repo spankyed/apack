@@ -4,8 +4,9 @@
  * Two flavours, because the CLI has two very different execution modes:
  *
  * 1. `execOnce` — one-shot subcommands (`claude mcp list`, `claude auth status`,
- *    …). Resolves when the child exits. Uses a bounded timeout. Translates
- *    spawn/exit errors into typed `ClaudeCodeError` subclasses.
+ *    …). Runs the child with `runProcess` (`@apackdev/sdk/progress`), which
+ *    owns its whole life, and translates each way it can fail into a typed
+ *    `ClaudeCodeError` subclass. Settles once the child is gone.
  *
  * 2. `spawnStream` — long-lived `claude -p --input-format stream-json
  *    --output-format stream-json` for interactive conversations. Returns a
@@ -22,6 +23,7 @@ import {
   type ChildProcessByStdio,
   type ChildProcess,
 } from 'child_process'
+import { describeRefusal, runProcess } from '@apackdev/sdk/progress'
 import type { Readable, Writable } from 'stream'
 
 import { resolveForService } from '../../utils/resolve-cli.ts'
@@ -33,6 +35,7 @@ import {
   ClaudeAbortError,
   ClaudeCliNotFoundError,
   ClaudeExitError,
+  ClaudeStalledError,
   ClaudeTimeoutError,
 } from './errors.ts'
 
@@ -52,7 +55,7 @@ export interface ExecOnceOptions {
   env?: NodeJS.ProcessEnv
   /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
   input?: string
-  /** Milliseconds until the child is SIGKILL'd and a ClaudeTimeoutError thrown. */
+  /** Milliseconds on the clock until the child is stopped and a ClaudeTimeoutError thrown. */
   timeoutMs?: number
   signal?: AbortSignal
   /** Override the resolved CLI path (primarily for testing). */
@@ -180,72 +183,27 @@ export async function execOnce(
 ): Promise<ExecOnceResult> {
   const cliPath = opts.cliPath ?? await resolveForService('claude-code')
   const timeoutMs = opts.timeoutMs ?? 30_000
-
-  return new Promise<ExecOnceResult>((resolve, reject) => {
-    const chunksOut: Buffer[] = []
-    const chunksErr: Buffer[] = []
-    let settled = false
-
-    // Timer must be created before spawn so the timeout also covers spawn itself.
-    const settle = (fn: () => void) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      opts.signal?.removeEventListener('abort', onAbort)
-      fn()
-    }
-
-    const timer = setTimeout(() => {
-      child?.kill('SIGKILL')
-      settle(() => reject(new ClaudeTimeoutError(timeoutMs, args)))
-    }, timeoutMs)
-
-    let child: ChildProcess
-    try {
-      child = spawn(cliPath, args as string[], {
-        cwd: opts.cwd,
-        env: buildChildEnv(opts.env),
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
-    } catch (err) {
-      clearTimeout(timer)
-      reject(wrapSpawnError(err, cliPath))
-      return
-    }
-
-    const onAbort = () => {
-      child.kill('SIGTERM')
-      settle(() => reject(new ClaudeAbortError(opts.signal?.reason)))
-    }
-    if (opts.signal) {
-      if (opts.signal.aborted) {
-        onAbort()
-        return
-      }
-      opts.signal.addEventListener('abort', onAbort, { once: true })
-    }
-
-    child.stdout?.on('data', c => chunksOut.push(c))
-    child.stderr?.on('data', c => chunksErr.push(c))
-
-    child.on('error', err => settle(() => reject(wrapSpawnError(err, cliPath))))
-
-    child.on('close', (code, signal) => {
-      const stdout = Buffer.concat(chunksOut).toString('utf8')
-      const stderr = Buffer.concat(chunksErr).toString('utf8')
-      if (code === 0) {
-        settle(() => resolve({ stdout, stderr, exitCode: 0 }))
-      } else {
-        settle(() => reject(new ClaudeExitError(code, signal, stderr, args)))
-      }
-    })
-
-    if (opts.input !== undefined && child.stdin) {
-      child.stdin.end(opts.input)
-    } else {
-      child.stdin?.end()
-    }
+  // The one clock here, and the caller's: a subcommand that asks a model waits on the network, which no reading
+  // of the child's CPU describes. Everything else about the child's life is `runProcess`'s
+  const deadline = AbortSignal.timeout(timeoutMs)
+  const outcome = await runProcess(cliPath, args, {
+    cwd: opts.cwd,
+    env: buildChildEnv(opts.env),
+    input: opts.input,
+    signal: opts.signal === undefined ? deadline : AbortSignal.any([opts.signal, deadline]),
   })
+  if (outcome.ok) return { stdout: outcome.stdout, stderr: outcome.stderr, exitCode: 0 }
+
+  const { failure } = outcome
+  switch (failure.kind) {
+    case 'not-started': throw wrapSpawnError(failure.error, cliPath)
+    case 'exited': throw new ClaudeExitError(failure.exitCode, failure.signal, failure.stderr, args)
+    // Whichever signal aborted first is the reason the run was stopped for
+    case 'aborted': throw failure.reason === deadline.reason
+      ? new ClaudeTimeoutError(timeoutMs, args)
+      : new ClaudeAbortError(failure.reason)
+    case 'refused': throw new ClaudeStalledError(describeRefusal(failure.refusal), args)
+  }
 }
 
 /**

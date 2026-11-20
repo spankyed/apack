@@ -685,6 +685,10 @@ const CLOCK_BY_DESIGN: Record<string, string> = {
   'packages/apack-host/src/packs/installer.ts': 'a pack download: network, which no CPU reading describes',
   'packages/default-setup/src/features/code/be/services/github-api.ts': "a request to GitHub's API: network, which no CPU reading describes",
   'packages/default-setup/src/features/code/be/services/github.ts': "a request to GitHub's sign-in or API: network, which no CPU reading describes",
+  'packages/default-setup/src/features/code/be/services/claude-code/runner.ts':
+    "a one-shot claude subcommand waits on the model's API, during which the child is idle by design",
+  'packages/default-setup/src/features/code/be/services/codex/runner.ts':
+    "a one-shot codex task waits on the model's API, during which the child is idle by design",
   'packages/default-setup/src/features/code/be/services/codex/app-server.ts':
     "a request to the codex app-server waits on the model's API, during which the server is idle by design",
   // The native loader queries run before admission has verified the process, so they may load nothing into it. A

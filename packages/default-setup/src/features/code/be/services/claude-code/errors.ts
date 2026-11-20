@@ -70,6 +70,14 @@ export class ClaudeTimeoutError extends ClaudeCodeError {
   }
 }
 
+/** A one-shot subcommand was ended for doing no work, or for spending its CPU: `why` ends the sentence "it …". */
+export class ClaudeStalledError extends ClaudeCodeError {
+  readonly code = 'STALLED'
+  constructor(readonly why: string, readonly args: readonly string[]) {
+    super(`claude ${args.join(' ')} was ended: it ${why}`)
+  }
+}
+
 /** The CLI emitted a line we could not JSON.parse. */
 export class ClaudeProtocolError extends ClaudeCodeError {
   readonly code = 'PROTOCOL_ERROR'
