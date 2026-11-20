@@ -2,7 +2,7 @@
 '@apackdev/ears': minor
 ---
 
-EARS runs on elmdb's `main` (`vendor/elmdb.rev` at `2029f9c`), whose blocking read is `read`, no longer `readSync`.
+EARS runs on elmdb's `main` (`vendor/elmdb.rev` at `eb6c6dd`), whose blocking read is `read`, no longer `readSync`.
 
 `EarsDatabase`, the port a database is passed to `createEarsEngine` through, follows the binding:
 
@@ -13,7 +13,10 @@ EARS runs on elmdb's `main` (`vendor/elmdb.rev` at `2029f9c`), whose blocking re
 - `rebuild(type?, index?)` writes every index's derived data again, or one's.
 
 `admin.waitForIndexBuilds()` now throws `SYNC_BEHIND` or `READERS_FULL` when what holds a build up is a sync that
-failed or a full reader table, rather than waiting on it.
+failed or a full reader table, rather than waiting on it; `CLOSED` on a closed database; `DATA_REPLACED` while another
+process's replacement of every row is not adopted; `BUILDS_STOPPED` where a close at exit gave up and left builds; and
+`THREAD_REFUSED` where the system won't start the builder's thread, which a second call starts. It no longer waits for
+the order of an index's strings that another elmdb's writes put off, which reads sort meanwhile.
 
 A `QueryStage` from `explain()` gains the fields elmdb now reports: `places`, `set`, `within`, `held`, `sorted` and
 `wants`.
