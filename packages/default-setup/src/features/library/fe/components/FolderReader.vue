@@ -5,8 +5,9 @@ import { watch } from 'vue'
 import { useSurface } from '@apackdev/sdk/fe'
 import { useView } from '#generated/fe.ts'
 import type { LibraryActor } from '../state.ts'
+import type { EARS } from '#generated/ears.ts'
 
-const props = defineProps<{ folderId: string | null }>()
+const props = defineProps<{ folderId: EARS.EntityId | null }>()
 const actor = useSurface<LibraryActor>()
 const folder = useView('library', 'folder', () => ({ folderId: props.folderId }))
 watch(() => folder.data, (data) => {

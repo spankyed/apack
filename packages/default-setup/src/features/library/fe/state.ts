@@ -1,11 +1,14 @@
 import { entityIs } from '@apackdev/sdk/fe'
-import { answersCall, newCall, type OpenEntity } from '@apackdev/sdk/events'
+import type { AnswersOf, OpenEntity } from '@apackdev/sdk/events'
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
 import type { DocumentDTO, DocumentView, FolderContents, FolderView, LibraryIndex, LibraryItem, DocumentItem } from '#generated/types.ts'
 import type { Contract, LibraryContext, LibraryInboxEvent } from './contract.ts'
 import type { OutgoingLibraryEvents } from '#features/library/be/types.ts'
 import type { SearchIndexFormData } from './types/search-index.ts'
-import { sendToSystem } from '#generated/events.ts'
+import { fromAsk, sendToSystem } from '#generated/events.ts'
+import type { EARS } from '#generated/ears.ts'
+import { onOutcome, outcomeOf } from '@apackdev/sdk/helpers'
+import type { Contract as LibrarySystemContract } from '#features/library/be/contract.ts'
 import { Trash2 } from 'lucide-vue-next'
 import { contextMenuFn } from '@apackdev/sdk/fe'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
@@ -58,7 +61,7 @@ function findItemById(context: LibraryContext, id: string): LibraryItem | undefi
 export const id = 'library' as const;
 
 /** The folders this window shows: the one open, and each one expanded in the tree */
-function shownFolders(context: LibraryContext): (string | null)[] {
+function shownFolders(context: LibraryContext): (EARS.EntityId | null)[] {
   return [context.currentFolderId, ...context.expandedFolderIds.filter(each => each !== context.currentFolderId)]
 }
 
@@ -164,8 +167,8 @@ export type LibraryEvents =
   // Document events
   | { type: 'CREATE_DOCUMENT' }
   | LibraryInboxEvent
-  | { type: 'DELETE_DOCUMENT'; documentId: string }
-  | { type: 'SAVE_DOCUMENT'; name: string; content: ContentSection[]; tags: string[]; collectionId?: string }
+  | { type: 'DELETE_DOCUMENT'; documentId: EARS.EntityId }
+  | { type: 'SAVE_DOCUMENT'; name: string; content: ContentSection[]; tags: string[]; collectionId?: EARS.EntityId }
   | { type: 'CANCEL_EDIT' }
 
   // Search Index events
@@ -185,31 +188,31 @@ export type LibraryEvents =
   | { type: 'CANCEL_TEST_SEARCH' }
 
   // Collection events
-  | { type: 'CREATE_COLLECTION'; name: string; description?: string; parentId?: string }
+  | { type: 'CREATE_COLLECTION'; name: string; description?: string; parentId?: EARS.EntityId }
 
   // Tree view events
-  | { type: 'EXPAND_FOLDER'; folderId: string }
-  | { type: 'COLLAPSE_FOLDER'; folderId: string }
+  | { type: 'EXPAND_FOLDER'; folderId: EARS.EntityId }
+  | { type: 'COLLAPSE_FOLDER'; folderId: EARS.EntityId }
 
   // File browser events
   | { type: 'DOUBLE_CLICK_ITEM'; item: LibraryItem }
-  | { type: 'SELECT_ITEMS'; itemIds: string[] }
-  | { type: 'RENAME_ITEM'; itemId: string; name: string }
+  | { type: 'SELECT_ITEMS'; itemIds: EARS.EntityId[] }
+  | { type: 'RENAME_ITEM'; itemId: EARS.EntityId; name: string }
   | { type: 'DELETE_SELECTED_ITEMS' }
   | { type: 'CREATE_FOLDER'; name: string }
   | { type: 'SORT_BY'; column: 'name' | 'modified' | 'size' | 'kind' }
-  | { type: 'MOVE_ITEMS'; itemIds: string[]; targetFolderId: string | null }
+  | { type: 'MOVE_ITEMS'; itemIds: EARS.EntityId[]; targetFolderId: EARS.EntityId | null }
   | { type: 'SEARCH'; query: string }
-  | { type: 'BREADCRUMB_CLICK'; folderId: string | null }
+  | { type: 'BREADCRUMB_CLICK'; folderId: EARS.EntityId | null }
   | { type: 'CLEAR_ITEM_TO_EDIT' }
   // Symlink events
   | { type: 'CREATE_SYMLINK'; symlinkPath: string }
-  | { type: 'REFRESH_FOLDER'; folderId: string }
-  | { type: 'RELINK_SYMLINK'; collectionId: string; newPath: string }
-  | { type: 'REMOVE_BROKEN_SYMLINK'; collectionId: string }
+  | { type: 'REFRESH_FOLDER'; folderId: EARS.EntityId }
+  | { type: 'RELINK_SYMLINK'; collectionId: EARS.EntityId; newPath: string }
+  | { type: 'REMOVE_BROKEN_SYMLINK'; collectionId: EARS.EntityId }
   // View results, from the canvas
-  | { type: 'FOLDER.READ'; folderId: string | null; folder: FolderView }
-  | { type: 'DOCUMENT.READ'; documentId: string; document: DocumentView }
+  | { type: 'FOLDER.READ'; folderId: EARS.EntityId | null; folder: FolderView }
+  | { type: 'DOCUMENT.READ'; documentId: EARS.EntityId; document: DocumentView }
   | { type: 'INDEX.READ'; index: LibraryIndex }
   | { type: 'CLEAR_WRITE_ERROR' }
   // Import/Export events
@@ -224,11 +227,20 @@ export type LibraryEvents =
   | { type: 'NAVIGATE_BACK' }
   | { type: 'NAVIGATE_FORWARD' }
   | OutgoingLibraryEvents
+  // The answers to what this window asks the library, which it goes on from: its writes and its fetches of folders
+  | AnswersOf<LibrarySystemContract>
+
+/** How a fetch of the document open on disk ended */
+type DocumentFetched = Awaited<ReturnType<typeof import('#generated/events.ts').ask<'library', 'GET_DOCUMENT'>>>
 
 export const librarySystem = setup({
   types: {
     context: {} as LibraryContext,
     events: {} as LibraryEvents,
+  },
+  actors: {
+    // A document on disk is read when it is opened, which no view can do for it
+    getDocument: fromAsk('library', 'GET_DOCUMENT'),
   },
   actions: {
     // File browser actions
@@ -251,9 +263,10 @@ export const librarySystem = setup({
       enqueue(() => checkSymlinks(folder.contents))
     }),
     folderFetched: enqueueActions(({ event, enqueue }) => {
-      if (event.type !== 'FOLDER_CONTENTS_LOADED') return
-      enqueue.assign(({ context }) => folderShown(context, event.data))
-      enqueue(() => checkSymlinks(event.data))
+      if (event.type !== 'ASK_ANSWERED' || event.asked !== 'GET_FOLDER_CONTENTS') return
+      const contents = event.answer
+      enqueue.assign(({ context }) => folderShown(context, contents))
+      enqueue(() => checkSymlinks(contents))
     }),
     fetchChangedFolders: ({ context, event }) => {
       if (event.type !== 'FOLDER_CHANGED') return
@@ -263,9 +276,10 @@ export const librarySystem = setup({
       }
     },
     markBrokenSymlinks: assign(({ context, event }) => {
-      if (event.type !== 'SYMLINKS_CHECKED') return {}
-      const mark = (items: LibraryItem[]) => items.map(item => (item.type === 'folder' && event.ids.includes(item.id)
-        ? { ...item, isBroken: event.broken.includes(item.id) }
+      if (event.type !== 'ASK_ANSWERED' || event.asked !== 'CHECK_SYMLINKS') return {}
+      const { ids, broken } = event.answer
+      const mark = (items: LibraryItem[]) => items.map(item => (item.type === 'folder' && ids.includes(item.id)
+        ? { ...item, isBroken: broken.includes(item.id) }
         : item))
       return {
         items: mark(context.items),
@@ -282,7 +296,7 @@ export const librarySystem = setup({
     },
     createDocument: ({ context, event }) => {
       if (event.type === 'SAVE_DOCUMENT') {
-        const targetCollectionId = event.collectionId?.trim() || context.currentFolderId || undefined
+        const targetCollectionId = event.collectionId || context.currentFolderId || undefined
 
         if (event.tags?.length) tagStorage.addTags(event.tags)
 
@@ -323,7 +337,8 @@ export const librarySystem = setup({
     },
     // Tree view actions
     expandFolder: assign(({ context, event }) => {
-      const folderId = (event as any).folderId as string
+      if (event.type !== 'EXPAND_FOLDER') return {}
+      const { folderId } = event
       const alreadyExpanded = context.expandedFolderIds.includes(folderId)
       if (alreadyExpanded) return {}
       const isCached = folderId in context.expandedFolderChildren
@@ -335,7 +350,8 @@ export const librarySystem = setup({
       }
     }),
     collapseFolder: assign(({ context, event }) => {
-      const folderId = (event as any).folderId as string
+      if (event.type !== 'COLLAPSE_FOLDER') return {}
+      const { folderId } = event
       return {
         expandedFolderIds: context.expandedFolderIds.filter(id => id !== folderId),
         loadingFolderIds: context.loadingFolderIds.filter(id => id !== folderId),
@@ -379,19 +395,18 @@ export const librarySystem = setup({
       selectedItems: [],
       selectedDocument: null,
     }),
-    readDocument: enqueueActions(({ context, event, enqueue }) => {
-      if (event.type !== 'DOCUMENT.READ' || event.documentId !== context.editingDocumentId) return
+    readDocument: assign(({ context, event }) => {
+      if (event.type !== 'DOCUMENT.READ' || event.documentId !== context.editingDocumentId) return {}
       const { document } = event
-      if (document.onDisk) {
-        if (!context.editingDocument) {
-          // Minted here, since the send is deferred past the assign that records it
-          const call = newCall()
-          enqueue.assign({ documentFetch: call })
-          enqueue(() => sendToSystem(id, { type: 'GET_DOCUMENT', id: event.documentId }, { call }))
-        }
-        return
-      }
-      if (document.document) enqueue.assign({ editingDocument: document.document })
+      return !document.onDisk && document.document ? { editingDocument: document.document } : {}
+    }),
+    takeFetchedDocument: assign(({ event }) => {
+      const outcome = outcomeOf<DocumentFetched>(event)
+      return outcome.ok ? { editingDocument: outcome.value.document } : {}
+    }),
+    takeFetchFailure: assign(({ event }) => {
+      const outcome = outcomeOf<DocumentFetched>(event)
+      return outcome.ok ? {} : { writeError: outcome.failure.message }
     }),
     takeIndex: ({ event }) => {
       if (event.type === 'INDEX.READ') tagStorage.updateTagsFromDocuments(event.index.documents)
@@ -414,7 +429,6 @@ export const librarySystem = setup({
           name: event.name,
           content: event.content,
           tags: event.tags,
-          collectionId: event.collectionId,
         })
       }
     },
@@ -432,12 +446,15 @@ export const librarySystem = setup({
       editingDocument: undefined,
     }),
     takeFailure: assign(({ event }) => (event.type === 'ASK_FAILED' ? { writeError: event.failure.message } : {})),
+    // The folder this window made opens for naming here, and nowhere else; one made on disk is shown by fetching it
+    nameCreatedFolder: assign(({ event }) => {
+      if (event.type !== 'ASK_ANSWERED' || (event.asked !== 'CREATE_COLLECTION' && event.asked !== 'CREATE_SYMLINK_COLLECTION')) return {}
+      const collection = event.answer.collection
+      return collection ? { itemToEdit: collection.id, newItemId: collection.id } : {}
+    }),
     sendDeleteDocument: ({ event }) => {
-      const ev = event as { type: 'DELETE_DOCUMENT'; documentId: string };
-      sendToSystem(id, {
-        type: 'DELETE_ITEMS',
-        ids: [ev.documentId],
-      });
+      if (event.type !== 'DELETE_DOCUMENT') return
+      sendToSystem(id, { type: 'DELETE_ITEMS', ids: [event.documentId] })
     },
     // [SEARCH_INDEX_FF] Search index actions — commented out
     // requestSearchIndices: ({ context }) => {
@@ -692,13 +709,9 @@ export const librarySystem = setup({
     /** The document open is gone: deleted here or in another window */
     documentGone: ({ context, event }) => event.type === 'DOCUMENT.READ' && event.documentId === context.editingDocumentId
       && !event.document.onDisk && event.document.document === null,
-    /**
-     * The document open is on disk and is not there to read. By its kind and not its wording, and only for the
-     * fetch of the document that is open: a fetch refused for another reason leaves the editor where it is, and
-     * so does the answer to a fetch this window has since moved on from.
-     */
-    openDocumentGone: ({ context, event }) => event.type === 'ASK_FAILED' && event.failure.kind === 'not-found'
-      && answersCall(event, context.documentFetch),
+    /** The document open is a file on disk, not yet read: it is fetched, which no view can do for it */
+    documentToFetch: ({ context, event }) => event.type === 'DOCUMENT.READ' && event.documentId === context.editingDocumentId
+      && event.document.onDisk && !context.editingDocument,
   },
 }).createMachine({
   id: 'library',
@@ -748,12 +761,11 @@ export const librarySystem = setup({
     lastKnownPath: null,
 
     writeError: null,
-    documentFetch: null,
 
     // Import/Export
     libraryImport: { status: 'idle' as const, errors: [], importedCount: 0 },
     libraryExport: { status: 'idle' as const, errors: [], filePath: '', itemCount: 0 },
-    navHistory: createNavHistory<string | null>(null),
+    navHistory: createNavHistory<EARS.EntityId | null>(null),
   },
   on: {
     OPEN_ENTITY: [
@@ -770,18 +782,17 @@ export const librarySystem = setup({
     FOLDER_CHANGED: {
       actions: 'fetchChangedFolders',
     },
-    SYMLINKS_CHECKED: {
-      actions: 'markBrokenSymlinks',
-    },
+    // The answers to this window's fetches of what is on disk, and to the writes that make a folder it names
+    ASK_ANSWERED: [
+      { guard: ({ event }) => event.asked === 'GET_FOLDER_CONTENTS', actions: 'folderFetched' },
+      { guard: ({ event }) => event.asked === 'CHECK_SYMLINKS', actions: 'markBrokenSymlinks' },
+      { guard: ({ event }) => event.asked === 'CREATE_COLLECTION' || event.asked === 'CREATE_SYMLINK_COLLECTION', actions: 'nameCreatedFolder' },
+    ],
     VIEW_BROWSER: {
       target: '.browser',
     },
 
     // File browser events
-    FOLDER_CONTENTS_LOADED: {
-      // actions: ['setFolderContents', 'clearSelection', 'requestSearchIndices'], // [SEARCH_INDEX_FF] removed 'requestSearchIndices'
-      actions: 'folderFetched',
-    },
     NAVIGATE_TO_FOLDER: {
       target: '.browser',
       actions: ['navigate', 'clearSelection'],
@@ -884,12 +895,8 @@ export const librarySystem = setup({
       actions: 'handleLibraryExportFailed',
     },
 
-    // Answers to this window's writes. What a write changed reaches every window through the views
-    COLLECTION_CREATED: {
-      // The folder this window made opens for naming here, and nowhere else
-      actions: assign(({ event }) => ({ itemToEdit: event.data.collection.id, newItemId: event.data.collection.id })),
-    },
-    // A write or a fetch this window asked for and did not get: shown, whichever it was
+    // A write or a fetch this window asked for and did not get: shown, whichever it was. What a write changed reaches
+    // every window through the views
     ASK_FAILED: {
       actions: 'takeFailure',
     },
@@ -953,7 +960,27 @@ export const librarySystem = setup({
     },
     edit: {
       entry: assign({ currentView: 'edit' }),
-      exit: assign({ editingDocumentId: undefined, documentFetch: null }),
+      exit: assign({ editingDocumentId: undefined }),
+      initial: 'ready',
+      states: {
+        ready: {},
+        fetching: {
+          invoke: {
+            src: 'getDocument',
+            input: ({ context }) => ({ id: context.editingDocumentId! }),
+            onDone: onOutcome<DocumentFetched>()({
+              done: { target: 'ready', actions: 'takeFetchedDocument' },
+              failed: {
+                // Nothing to edit: back to where it was opened from, saying why
+                'not-found': { target: '#library.browser', actions: ['clearEditingDocument', 'takeFetchFailure'] },
+                'no-access': { target: 'ready', actions: 'takeFetchFailure' },
+                failed: { target: 'ready', actions: 'takeFetchFailure' },
+                unavailable: { target: 'ready', actions: 'takeFetchFailure' },
+              },
+            }),
+          },
+        },
+      },
       meta: {
         ...breadcrumbWithParams<LibraryContext>({
           target: 'edit',
@@ -969,18 +996,9 @@ export const librarySystem = setup({
       on: {
         'DOCUMENT.READ': [
           { guard: 'documentGone', target: 'browser', actions: 'clearEditingDocument' },
+          { guard: 'documentToFetch', target: '.fetching' },
           { actions: 'readDocument' },
         ],
-        // Nothing to edit: back to where it was opened from, saying why. Any other refusal is the root's to show
-        ASK_FAILED: {
-          guard: 'openDocumentGone',
-          target: 'browser',
-          actions: ['clearEditingDocument', 'takeFailure'],
-        },
-        DOCUMENT_LOADED: {
-          guard: ({ context, event }) => context.editingDocumentId === event.data.document.id,
-          actions: assign({ editingDocument: ({ event }) => event.data.document }),
-        },
         SAVE_DOCUMENT: {
           target: 'browser',
           actions: ['updateDocument', 'clearEditingDocument'],

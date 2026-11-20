@@ -3,7 +3,6 @@ import type { Contract } from './contract.ts';
 
 import { setup } from 'xstate'
 import { defineSystem } from '@apackdev/sdk/framework'
-import type { EARS } from '#generated/ears.ts'
 // [SEARCH_INDEX_FF] import type { SearchIndex } from './search-index/types/search-index'
 import { broadcastToSurface } from '#generated/events.ts'
 import { repository } from '#generated/repository.ts';
@@ -16,7 +15,7 @@ import { toMap, toIdentifierSet, mapArray } from '@apackdev/sdk/utils'
 import { exportLibrary } from './export-library.ts'
 import { importLibrary } from './import-library.ts'
 import type { Reply } from '@apackdev/sdk/events';
-import type { LibraryFailureKind, OutgoingLibraryEvents } from './types.ts';
+import type { OutgoingLibraryEvents } from './types.ts';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 /** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
@@ -34,17 +33,6 @@ const answer = (reply: Reply<OutgoingLibraryEvents> | undefined, event: Outcome)
   (reply ? reply(event) : broadcastToSurface('library', event));
 
 export const librarySpec = defineSystem<Contract>();
-
-/**
- * Which of the library's kinds an error from the disk is: what is under a symlinked folder can be gone, or closed
- * to this user, while the library still lists it.
- */
-function diskFailureKind(error: unknown): LibraryFailureKind | undefined {
-  const code = (error as NodeJS.ErrnoException | undefined)?.code
-  if (code === 'ENOENT' || code === 'ENOTDIR') return 'not-found'
-  if (code === 'EACCES' || code === 'EPERM') return 'no-access'
-  return undefined
-}
 
 /**
  * Tells every window that something on disk under a symlinked folder changed, which no view can see: `folderId`'s
@@ -72,93 +60,70 @@ function resolveHomePath(inputPath: string): string {
 
 /**
  * A window's writes to the library and its fetches of what is on disk, each answered to whoever asked: with what it
- * made or read, that it landed, or why it could not be done. The surface holds its views behind its own unanswered
- * writes and shows nothing for a fetch until it is answered, which `answers` holds whichever way a handler ends.
- * What a write changed reaches every window through the views; a write on disk, which no view can see, is told
- * (`diskChanged`).
+ * made or read, or why it could not be done. The surface holds its views behind its own unanswered writes and shows
+ * nothing for a fetch until it is answered, which the table holds whichever way a handler ends. An error from the disk
+ * under a symlinked folder is answered as the kind it is (`not-found`, `no-access`) where the ask declares it.
  */
-const answers = librarySpec.answers({
-  CREATE_DOCUMENT: async ({ event }) => {
+export const answers = librarySpec.answers({
+  CREATE_DOCUMENT: async ({ ask }) => {
     await libraryService.create({
-      name: event.name,
-      content: event.content,
-      tags: event.tags,
-      parentId: event.collectionId,
-      documentType: event.documentType,
+      name: ask.name,
+      content: ask.content,
+      tags: ask.tags,
+      parentId: ask.collectionId,
+      documentType: ask.documentType,
     })
-    if (event.collectionId && repository.libraryQueries.isDiskFolder(event.collectionId)) diskChanged(event.collectionId)
+    if (ask.collectionId && repository.libraryQueries.isDiskFolder(ask.collectionId)) diskChanged(ask.collectionId)
   },
-  UPDATE_DOCUMENT: async ({ event }) => {
-    await libraryService.update({
-      id: event.id,
-      name: event.name,
-      content: event.content,
-      tags: event.tags,
-    })
-    if (repository.libraryQueries.isDiskDocument(event.id)) diskChanged(diskParentOf(event.id))
+  UPDATE_DOCUMENT: async ({ ask }) => {
+    await libraryService.update({ id: ask.id, name: ask.name, content: ask.content, tags: ask.tags })
+    if (repository.libraryQueries.isDiskDocument(ask.id)) diskChanged(diskParentOf(ask.id))
   },
-  DELETE_DOCUMENT: ({ event }) => { repository.libraryCommands.deleteDocument(event.id as EARS.EntityId) },
-  GET_DOCUMENT: async ({ event }) => {
-    const document = await libraryService.find(event.id as EARS.EntityId)
-    if (!document) throw librarySpec.failure('not-found', 'Document not found')
-    return { type: 'DOCUMENT_LOADED' as const, data: { document } }
+  DELETE_DOCUMENT: ({ ask }) => { repository.libraryCommands.deleteDocument(ask.id) },
+  GET_DOCUMENT: async ({ ask, failure }) => {
+    const document = await libraryService.find(ask.id)
+    if (!document) throw failure('not-found', 'Document not found')
+    return { document }
   },
-  CREATE_COLLECTION: async ({ event }) => {
-    if (event.parentId && repository.libraryQueries.isDiskFolder(event.parentId)) {
-      await libraryService.createFolder({ name: event.name, parentId: event.parentId })
-      diskChanged(event.parentId)
-      return
+  CREATE_COLLECTION: async ({ ask }) => {
+    if (ask.parentId && repository.libraryQueries.isDiskFolder(ask.parentId)) {
+      await libraryService.createFolder({ name: ask.name, parentId: ask.parentId })
+      diskChanged(ask.parentId)
+      return {}
     }
-    const collection = repository.libraryCommands.createCollection(
-      event.name,
-      event.description,
-      event.parentId ? event.parentId as EARS.EntityId : undefined
-    )
     // Only the window that asked names it; every window's folder shows it through the folder view
-    return { type: 'COLLECTION_CREATED' as const, data: { collection } }
+    return { collection: repository.libraryCommands.createCollection(ask.name, ask.description, ask.parentId) }
   },
-  UPDATE_COLLECTION: ({ event }) => { repository.libraryCommands.updateCollection(event.id as EARS.EntityId, event.name, event.description) },
-  DELETE_COLLECTION: ({ event }) => { repository.libraryCommands.deleteCollection(event.id as EARS.EntityId) },
-  MOVE_DOCUMENT: ({ event }) => {
-    repository.libraryCommands.moveDocument(event.documentId as EARS.EntityId, event.collectionId ? event.collectionId as EARS.EntityId : undefined)
-  },
+  UPDATE_COLLECTION: ({ ask }) => { repository.libraryCommands.updateCollection(ask.id, ask.name, ask.description) },
+  DELETE_COLLECTION: ({ ask }) => { repository.libraryCommands.deleteCollection(ask.id) },
+  MOVE_DOCUMENT: ({ ask }) => { repository.libraryCommands.moveDocument(ask.documentId, ask.collectionId) },
   // File browser
-  GET_FOLDER_CONTENTS: async ({ event }) => ({
-    type: 'FOLDER_CONTENTS_LOADED' as const,
-    data: await repository.libraryQueries.getFolderContents(event.folderId ? event.folderId as EARS.EntityId : null),
-  }),
-  CHECK_SYMLINKS: async ({ event }) => ({
-    type: 'SYMLINKS_CHECKED' as const, ids: event.ids, broken: await repository.libraryQueries.brokenSymlinks(event.ids),
-  }),
-  RENAME_ITEM: async ({ event }) => {
-    if (symlink.isSymlinkId(event.id)) {
+  GET_FOLDER_CONTENTS: ({ ask }) => repository.libraryQueries.getFolderContents(ask.folderId),
+  CHECK_SYMLINKS: async ({ ask }) => ({ ids: ask.ids, broken: await repository.libraryQueries.brokenSymlinks(ask.ids) }),
+  RENAME_ITEM: async ({ ask }) => {
+    if (symlink.isSymlinkId(ask.id)) {
       // Worked out before the rename, while the path still resolves
-      const parent = diskParentOf(event.id)
-      await libraryService.rename(event.id, event.name)
+      const parent = diskParentOf(ask.id)
+      await libraryService.rename(ask.id, ask.name)
       diskChanged(parent)
       return
     }
-    repository.libraryCommands.renameItem(event.id as EARS.EntityId, event.name, event.itemType)
+    repository.libraryCommands.renameItem(ask.id, ask.name, ask.itemType)
   },
-  DELETE_ITEMS: async ({ event }) => {
-    await libraryService.remove(event.ids)
-    if (event.ids.some(symlink.isSymlinkId)) diskChanged(null)
+  DELETE_ITEMS: async ({ ask }) => {
+    await libraryService.remove(ask.ids)
+    if (ask.ids.some(symlink.isSymlinkId)) diskChanged(null)
   },
-  MOVE_ITEMS: async ({ event }) => {
-    await libraryService.move(event.ids, event.targetFolderId)
-    if (event.ids.some(symlink.isSymlinkId) || repository.libraryQueries.isDiskFolder(event.targetFolderId)) diskChanged(null)
+  MOVE_ITEMS: async ({ ask }) => {
+    await libraryService.move(ask.ids, ask.targetFolderId)
+    if (ask.ids.some(symlink.isSymlinkId) || repository.libraryQueries.isDiskFolder(ask.targetFolderId)) diskChanged(null)
   },
   // Symlinked folders
-  CREATE_SYMLINK_COLLECTION: ({ event }) => {
-    const collection = repository.libraryCommands.createSymlinkCollection(
-      event.name,
-      resolveHomePath(event.symlinkPath),
-      event.parentId ? event.parentId as EARS.EntityId : undefined
-    )
-    return { type: 'COLLECTION_CREATED' as const, data: { collection } }
-  },
-  UPDATE_SYMLINK_PATH: async ({ event }) => {
-    const resolvedPath = resolveHomePath(event.newPath)
+  CREATE_SYMLINK_COLLECTION: ({ ask }) => ({
+    collection: repository.libraryCommands.createSymlinkCollection(ask.name, resolveHomePath(ask.symlinkPath), ask.parentId),
+  }),
+  UPDATE_SYMLINK_PATH: async ({ ask, failure }) => {
+    const resolvedPath = resolveHomePath(ask.newPath)
     // A folder to link has to be one: missing, or a file, is refused
     let isDirectory = false
     try {
@@ -166,11 +131,11 @@ const answers = librarySpec.answers({
     } catch {
       // Missing: refused below
     }
-    if (!isDirectory) throw librarySpec.failure('not-found', `Path does not exist: ${resolvedPath}`)
-    repository.libraryCommands.updateSymlinkPath(event.collectionId as EARS.EntityId, resolvedPath)
-    diskChanged(event.collectionId)
+    if (!isDirectory) throw failure('not-found', `Path does not exist: ${resolvedPath}`)
+    repository.libraryCommands.updateSymlinkPath(ask.collectionId, resolvedPath)
+    diskChanged(ask.collectionId)
   },
-}, { landed: { type: 'LIBRARY_WRITTEN' }, source: 'library', kindOf: diskFailureKind })
+})
 
 export const librarySystem = setup({
   types: librarySpec.types,

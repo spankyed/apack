@@ -6,7 +6,11 @@ import type { NoteSummary } from '#generated/types.ts';
 
 vi.hoisted(() => { (globalThis as { addEventListener?: unknown }).addEventListener ??= () => {}; });
 const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+// A fetch a surface invokes is the system's to answer, which no case here reaches
+vi.mock('#generated/events.ts', async () => {
+  const { fromPromise } = await import('xstate');
+  return { sendToSystem, fromAsk: () => fromPromise(() => new Promise(() => {})) };
+});
 const { default: actions } = await import('#features/actions/fe/state.ts');
 const { default: prompts } = await import('#features/prompts/fe/state.ts');
 const { default: notes } = await import('#features/notes/fe/state.ts');

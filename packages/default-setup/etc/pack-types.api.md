@@ -9,7 +9,7 @@ import * as _apackdev_sdk from '@apackdev/sdk';
 import { ActionEntity, ActionParameter, ContentSection, DocumentShortCode, EARS as EARS$1, FlowEntity, NodeBase, PromptEntity, SdkEntityShapes, TemplateInput } from '@apackdev/sdk';
 import { ArtifactItem } from '@apackdev/sdk/artifacts';
 import * as _apackdev_sdk_build from '@apackdev/sdk/build';
-import { AskFailedEvent, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, Reply, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
+import { ContractAsks, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, Reply, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
 import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
@@ -1047,6 +1047,7 @@ type Contract$h = {
     context: LibrarySystemContext;
     incoming: IncomingLibraryEvents;
     outgoing: OutgoingLibraryEvents;
+    asks: LibraryAsks;
 };
 
 type Contract$i = {
@@ -2372,77 +2373,11 @@ type IncomingGitHubEvents =
     type: 'SECRETS_CHANGED';
 };
 
+/**
+ * What a window sends the library and is answered for by an outcome every window should know of rather than by a reply:
+ * an import's or an export's, which tells every window when nobody asked (`answer` in `be/system.ts`).
+ */
 type IncomingLibraryEvents = {
-    type: 'CREATE_DOCUMENT';
-    name: string;
-    content: ContentSection[];
-    tags: string[];
-    collectionId?: string;
-    documentType?: string;
-} | {
-    type: 'UPDATE_DOCUMENT';
-    id: string;
-    name: string;
-    content: ContentSection[];
-    tags: string[];
-    collectionId?: string;
-} | {
-    type: 'DELETE_DOCUMENT';
-    id: string;
-}
-/** A document on disk, which no view can watch: answered with `DOCUMENT_LOADED` */
- | {
-    type: 'GET_DOCUMENT';
-    id: string;
-} | {
-    type: 'CREATE_COLLECTION';
-    name: string;
-    description?: string;
-    parentId?: string;
-} | {
-    type: 'UPDATE_COLLECTION';
-    id: string;
-    name: string;
-    description?: string;
-} | {
-    type: 'DELETE_COLLECTION';
-    id: string;
-} | {
-    type: 'MOVE_DOCUMENT';
-    documentId: string;
-    collectionId?: string;
-}
-/** A folder on disk, which no view can watch: answered with `FOLDER_CONTENTS_LOADED` */
- | {
-    type: 'GET_FOLDER_CONTENTS';
-    folderId: string | null;
-}
-/** Which of these symlinked collections no longer reach their folder on disk: answered with `SYMLINKS_CHECKED` */
- | {
-    type: 'CHECK_SYMLINKS';
-    ids: string[];
-} | {
-    type: 'RENAME_ITEM';
-    id: string;
-    name: string;
-    itemType: 'document' | 'folder';
-} | {
-    type: 'DELETE_ITEMS';
-    ids: string[];
-} | {
-    type: 'MOVE_ITEMS';
-    ids: string[];
-    targetFolderId: string | null;
-} | {
-    type: 'CREATE_SYMLINK_COLLECTION';
-    name: string;
-    symlinkPath: string;
-    parentId?: string;
-} | {
-    type: 'UPDATE_SYMLINK_PATH';
-    collectionId: string;
-    newPath: string;
-} | {
     type: 'IMPORT_LIBRARY';
     directory: string;
 } | {
@@ -2919,27 +2854,156 @@ interface LLMNode extends NodeBase {
     systemPrompt?: string;
 }
 
+/**
+ * What a window asks the library, each answered once: a write with what it made or that it landed, a fetch of what is
+ * on disk (which no view can watch) with what it read. What a write changed in the library itself reaches every
+ * window through the views; a write on disk, which no view sees, is told (`FOLDER_CHANGED`).
+ */
+type LibraryAsks = {
+    CREATE_DOCUMENT: {
+        ask: {
+            name: string;
+            content: ContentSection[];
+            tags: string[];
+            collectionId?: EARS.EntityId;
+            documentType?: string;
+        };
+        fails: OnDisk;
+    };
+    UPDATE_DOCUMENT: {
+        ask: {
+            id: EARS.EntityId;
+            name: string;
+            content: ContentSection[];
+            tags: string[];
+        };
+        fails: OnDisk;
+    };
+    DELETE_DOCUMENT: {
+        ask: {
+            id: EARS.EntityId;
+        };
+    };
+    /** A document, read from disk when it is a file under a symlinked folder */
+    GET_DOCUMENT: {
+        ask: {
+            id: EARS.EntityId;
+        };
+        answer: {
+            document: DocumentDTO;
+        };
+        fails: OnDisk;
+    };
+    /** Answered with the folder it made in the library, for the window that asked to name; one on disk is only made */
+    CREATE_COLLECTION: {
+        ask: {
+            name: string;
+            description?: string;
+            parentId?: EARS.EntityId;
+        };
+        answer: {
+            collection?: CollectionDTO;
+        };
+        fails: OnDisk;
+    };
+    UPDATE_COLLECTION: {
+        ask: {
+            id: EARS.EntityId;
+            name: string;
+            description?: string;
+        };
+    };
+    DELETE_COLLECTION: {
+        ask: {
+            id: EARS.EntityId;
+        };
+    };
+    MOVE_DOCUMENT: {
+        ask: {
+            documentId: EARS.EntityId;
+            collectionId?: EARS.EntityId;
+        };
+    };
+    /** A folder's contents, read from disk when it is a symlinked folder or one inside one */
+    GET_FOLDER_CONTENTS: {
+        ask: {
+            folderId: EARS.EntityId | null;
+        };
+        answer: FolderContents;
+        fails: OnDisk;
+    };
+    /** Which of these symlinked collections no longer reach their folder on disk */
+    CHECK_SYMLINKS: {
+        ask: {
+            ids: EARS.EntityId[];
+        };
+        answer: {
+            ids: EARS.EntityId[];
+            broken: EARS.EntityId[];
+        };
+    };
+    RENAME_ITEM: {
+        ask: {
+            id: EARS.EntityId;
+            name: string;
+            itemType: 'document' | 'folder';
+        };
+        fails: OnDisk;
+    };
+    DELETE_ITEMS: {
+        ask: {
+            ids: EARS.EntityId[];
+        };
+        fails: OnDisk;
+    };
+    MOVE_ITEMS: {
+        ask: {
+            ids: EARS.EntityId[];
+            targetFolderId: EARS.EntityId | null;
+        };
+        fails: OnDisk;
+    };
+    CREATE_SYMLINK_COLLECTION: {
+        ask: {
+            name: string;
+            symlinkPath: string;
+            parentId?: EARS.EntityId;
+        };
+        answer: {
+            collection: CollectionDTO;
+        };
+    };
+    /** Refused as `not-found` for a path that is no folder */
+    UPDATE_SYMLINK_PATH: {
+        ask: {
+            collectionId: EARS.EntityId;
+            newPath: string;
+        };
+        fails: {
+            'not-found': {};
+        };
+    };
+};
+
 interface LibraryContext {
     currentView: 'browser' | 'create' | 'create-index' | 'edit' | 'edit-index' | 'test-index';
     editingDocument?: DocumentDTO;
-    editingDocumentId?: string;
-    /** The fetch under way of the document open, when it is on disk: what answers it is that document's, or why it is not shown */
-    documentFetch: string | null;
+    editingDocumentId?: EARS.EntityId;
     items: LibraryItem[];
-    currentFolderId: string | null;
+    currentFolderId: EARS.EntityId | null;
     currentPath: string[];
-    selectedItems: string[];
+    selectedItems: EARS.EntityId[];
     selectedDocument: DocumentDTO | null;
     sortBy: 'kind' | 'modified' | 'name' | 'size';
     sortDirection: 'asc' | 'desc';
     breadcrumbs: BreadcrumbItem[];
     editingItem?: LibraryItem;
-    itemToEdit?: string | null;
-    newItemId?: string | null;
-    expandedFolderIds: string[];
-    expandedFolderChildren: Record<string, LibraryItem[]>;
-    loadingFolderIds: string[];
-    diskFolderIds: (string | null)[];
+    itemToEdit?: EARS.EntityId | null;
+    newItemId?: EARS.EntityId | null;
+    expandedFolderIds: EARS.EntityId[];
+    expandedFolderChildren: Record<EARS.EntityId, LibraryItem[]>;
+    loadingFolderIds: EARS.EntityId[];
+    diskFolderIds: (EARS.EntityId | null)[];
     searchIndices: SearchIndex[];
     editingIndexId?: string;
     editingIndex?: SearchIndex;
@@ -2965,22 +3029,16 @@ interface LibraryContext {
         filePath: string;
         itemCount: number;
     };
-    navHistory: NavHistory<string | null>;
+    navHistory: NavHistory<EARS.EntityId | null>;
 }
-
-/**
- * Why a write or a fetch was not done, where the window that asked can act on it: what it named is gone (a document,
- * or a file or folder on disk under a symlinked folder), or is closed to this user.
- */
-type LibraryFailureKind = 'no-access' | 'not-found';
 
 /** Where an editor link into the library lands */
 type LibraryInboxEvent = {
     type: 'EDIT_DOCUMENT';
-    documentId: string;
+    documentId: EARS.EntityId;
 } | {
     type: 'NAVIGATE_TO_FOLDER';
-    folderId: string | null;
+    folderId: EARS.EntityId | null;
 };
 
 /**
@@ -3331,6 +3389,15 @@ declare const OPERATION_KINDS: readonly ["merge", "rebase", "cherry-pick", "reve
 
 /** What can be done with what git is in the middle of: carry on once its conflicts are settled, leave out the commit a rebase stopped at, or give it up */
 declare const OPERATION_MOVES: readonly ["continue", "skip", "abort"];
+
+/**
+ * What a write or a fetch under a symlinked folder may find on disk, beside the standard two: what it named is gone,
+ * or is closed to this user. The disk's own errors are these kinds wherever an ask declares them.
+ */
+type OnDisk = {
+    'not-found': {};
+    'no-access': {};
+};
 
 interface OpenFile {
     path: string;
@@ -4108,47 +4175,15 @@ type OutgoingGitHubEvents = {
 };
 
 /**
- * What the library system sends: the answers to a window's writes and fetches, an import's or an export's outcome,
- * and the one notification there is, a folder on disk having changed. What the library stores is its views; what is
- * on disk is fetched, since a view watches the engine and nothing else.
+ * What the library system sends beside its answers: an import's or an export's outcome, and the one notification
+ * there is, a folder on disk having changed. What the library stores is its views; what is on disk is fetched.
  */
 type OutgoingLibraryEvents = 
-/** The folder a `CREATE_COLLECTION` made, for the window that asked to name */
-{
-    type: 'COLLECTION_CREATED';
-    data: {
-        collection: CollectionDTO;
-    };
-}
-/** Any other write landed */
- | {
-    type: 'LIBRARY_WRITTEN';
-}
-/** A write or a fetch was not done: which, and why (`LibraryFailureKind`) */
- | AskFailedEvent<LibraryFailureKind, IncomingLibraryEvents['type']>
-/** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
- | {
-    type: 'FOLDER_CONTENTS_LOADED';
-    data: FolderContents;
-}
-/** A document on disk, as `GET_DOCUMENT` asked */
- | {
-    type: 'DOCUMENT_LOADED';
-    data: {
-        document: DocumentDTO;
-    };
-}
-/** The symlinked collections `CHECK_SYMLINKS` named whose folder is gone */
- | {
-    type: 'SYMLINKS_CHECKED';
-    ids: string[];
-    broken: string[];
-}
 /**
  * Something on disk under a symlinked folder changed — `folderId`'s contents, or, with `null`, which is not known —
  * for every window showing such a folder to fetch it again. A notification: no window asked for it.
  */
- | {
+{
     type: 'FOLDER_CHANGED';
     folderId: string | null;
 } | {
@@ -4865,6 +4900,21 @@ type PackSurfaceState = {
     'brain': SurfaceStateOf<Contract$2>;
     'database': SurfaceStateOf<Contract$1>;
     'logs': SurfaceStateOf<Contract>;
+};
+
+/** Feature id → the asks this pack's system for that feature answers, by name (dependents name it `default-setup/<feature>`). */
+type PackSystemAsks = {
+    'threads': ContractAsks<SystemContracts['threads']>;
+    'code': ContractAsks<SystemContracts['code']>;
+    'notes': ContractAsks<SystemContracts['notes']>;
+    'browser': ContractAsks<SystemContracts['browser']>;
+    'library': ContractAsks<SystemContracts['library']>;
+    'flows': ContractAsks<SystemContracts['flows']>;
+    'actions': ContractAsks<SystemContracts['actions']>;
+    'prompts': ContractAsks<SystemContracts['prompts']>;
+    'brain': ContractAsks<SystemContracts['brain']>;
+    'database': ContractAsks<SystemContracts['database']>;
+    'logs': ContractAsks<SystemContracts['logs']>;
 };
 
 /** Feature id → the events this pack's system for that feature receives (dependents name it `default-setup/<feature>`). */
@@ -7203,7 +7253,7 @@ declare const libraryQueries: {
     /** A folder's contents wherever they are: on disk for a symlinked folder, else in the library */
     readonly getFolderContents: (folderId: EARS.EntityId | null) => Promise<FolderContents>;
     /** The symlinked collections among `ids` whose folder on disk is gone */
-    readonly brokenSymlinks: (ids: readonly string[]) => Promise<string[]>;
+    readonly brokenSymlinks: <Id extends string>(ids: readonly Id[]) => Promise<Id[]>;
     /**
      * A folder's contents as the library stores them: its folders and documents, its path and breadcrumbs. It reads the
      * engine and nothing else, so a view can watch it; whether a symlinked folder still reaches its disk is
@@ -7677,5 +7727,5 @@ declare function visitThread(threadId: EARS.EntityId, options?: {
     restore?: boolean;
 }): void;
 
-export type { PackShapes as PackEntityShapes, PackFeatureSettings, PackGroupSettings, PackStepNodes, PackSurfaceEvents, PackSurfaceState, PackSystemEvents, Repositories, Services };
+export type { PackShapes as PackEntityShapes, PackFeatureSettings, PackGroupSettings, PackStepNodes, PackSurfaceEvents, PackSurfaceState, PackSystemAsks, PackSystemEvents, Repositories, Services };
 ```

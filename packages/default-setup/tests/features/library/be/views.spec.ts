@@ -6,6 +6,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { startApp, takeSystemErrors } from '@apackdev/testing/harness'
+import { settles } from '@apackdev/sdk/testing'
 import { importCompiledContent } from '@apackdev/sdk/utils'
 import { repository } from '#generated/repository.ts'
 import type { EARS } from '#generated/ears.ts'
@@ -13,8 +14,8 @@ import type { DocumentView, FolderContents, FolderView, LibraryIndex } from '#ge
 
 /** Where `apack pack build` writes this pack's compiled content */
 const DIST = path.resolve(import.meta.dirname, '../../../../dist', 'runtime', 'content')
-const LIBRARY = 'default-setup/library'
-const asked = { sender: LIBRARY, client: 'c-main' }
+/** Asked as a window asks, on its connection */
+const window = { client: 'c-main' }
 
 const folder = (name: string, parentId?: EARS.EntityId) => repository.libraryCommands.createCollection(name, undefined, parentId).id as EARS.EntityId
 const names = (update: { ok: boolean; value?: unknown }) => {
@@ -83,9 +84,8 @@ describe('a symlinked folder', () => {
     await app.connect()
     expect(await app.watchView('library', 'folder', { folderId: linked }).next()).toEqual({ ok: true, value: { onDisk: true }, commit: expect.any(Number) })
 
-    const call = await app.send('library', { type: 'GET_FOLDER_CONTENTS', folderId: linked }, asked)
-    const fetched = await app.nextEmit('library', 'FOLDER_CONTENTS_LOADED', { answering: call }) as unknown as { data: FolderContents }
-    expect(fetched.data.items.map(item => item.name)).toEqual(['on-disk.md'])
+    const fetched = await app.ask('library', { type: 'GET_FOLDER_CONTENTS', folderId: linked }, window)
+    expect(fetched.ok && (fetched.value as FolderContents).items.map(item => item.name)).toEqual(['on-disk.md'])
   })
 
   it('announces a write under it, which no view can see, and is reported broken once its folder is gone', async () => {
@@ -99,8 +99,7 @@ describe('a symlinked folder', () => {
     expect(fs.readdirSync(dir)).toContain('written.md')
 
     fs.rmSync(dir, { recursive: true })
-    const call = await app.send('library', { type: 'CHECK_SYMLINKS', ids: [linked] }, asked)
-    expect(await app.nextEmit('library', 'SYMLINKS_CHECKED', { answering: call })).toMatchObject({ ids: [linked], broken: [linked] })
+    expect(await app.ask('library', { type: 'CHECK_SYMLINKS', ids: [linked] }, window)).toEqual({ ok: true, value: { ids: [linked], broken: [linked] } })
   })
 })
 
@@ -111,9 +110,8 @@ describe('a write to the library', () => {
     const root = app.watchView('library', 'folder', { folderId: null })
     await root.next()
 
-    const call = await app.send('library', { type: 'CREATE_COLLECTION', name: 'Fresh' }, asked)
-    const created = await app.nextEmit('library', 'COLLECTION_CREATED', { answering: call }) as unknown as { data: { collection: { name: string } } }
-    expect(created.data.collection.name).toBe('Fresh')
+    const created = await app.ask('library', { type: 'CREATE_COLLECTION', name: 'Fresh' }, window)
+    expect(created).toMatchObject({ ok: true, value: { collection: { name: 'Fresh' } } })
     expect(names(await root.next())).toContain('Fresh')
   })
 
@@ -122,10 +120,9 @@ describe('a write to the library', () => {
     const app = await startApp({ systems: ['library'] })
     await app.connect()
 
-    const landed = await app.send('library', { type: 'CREATE_COLLECTION', name: 'Asked' }, asked)
-    await app.nextEmit('library', 'COLLECTION_CREATED', { answering: landed })
-    const refused = await app.send('library', { type: 'UPDATE_SYMLINK_PATH', collectionId: linked, newPath: path.join(os.tmpdir(), 'no-such-library-folder') }, asked)
-    expect(await app.nextEmit('library', 'ASK_FAILED', { answering: refused })).toMatchObject({ failure: { kind: 'not-found', message: expect.stringContaining('no-such-library-folder') } })
+    expect(await app.ask('library', { type: 'CREATE_COLLECTION', name: 'Asked' }, window)).toMatchObject({ ok: true })
+    expect(await app.ask('library', { type: 'UPDATE_SYMLINK_PATH', collectionId: linked, newPath: path.join(os.tmpdir(), 'no-such-library-folder') }, window))
+      .toEqual({ ok: false, failure: { kind: 'not-found', message: expect.stringContaining('no-such-library-folder') } })
 
     await app.send('library', { type: 'CREATE_COLLECTION', name: 'Unasked' })
     await app.settle()
@@ -134,7 +131,12 @@ describe('a write to the library', () => {
 
     // A refusal nobody asked for has no window to show it, so it is reported
     await app.send('library', { type: 'UPDATE_SYMLINK_PATH', collectionId: linked, newPath: path.join(os.tmpdir(), 'no-such-library-folder') })
-    await app.settle()
-    expect(takeSystemErrors()).toEqual([expect.objectContaining({ source: 'library', message: expect.stringContaining('no-such-library-folder') })])
+    // Reported once the handler has looked at the disk, which is after the bus has settled
+    const reported = await settles(() => {
+      const errors = takeSystemErrors()
+      if (errors.length === 0) throw new Error('No error reported yet for the refusal nobody asked for')
+      return errors
+    })
+    expect(reported).toEqual([expect.objectContaining({ source: 'default-setup/library', message: expect.stringContaining('no-such-library-folder') })])
   })
 })

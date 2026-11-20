@@ -1,7 +1,6 @@
 export type * from './export-types.ts';
 import type { EARS } from '#generated/ears.ts'
 import type { ContentSection, DocumentShortCode } from '@apackdev/sdk';
-import type { AskFailedEvent } from '@apackdev/sdk/events';
 
 /**
  * The document model is the SDK's (`@apackdev/sdk`): the app reads documents, so the entities, their
@@ -131,55 +130,53 @@ export type {
 } from './search-index/types/search-index.ts'
 
 /**
- * Why a write or a fetch was not done, where the window that asked can act on it: what it named is gone (a document,
- * or a file or folder on disk under a symlinked folder), or is closed to this user.
+ * What a write or a fetch under a symlinked folder may find on disk, beside the standard two: what it named is gone,
+ * or is closed to this user. The disk's own errors are these kinds wherever an ask declares them.
  */
-export type LibraryFailureKind = 'not-found' | 'no-access'
+type OnDisk = { 'not-found': {}; 'no-access': {} }
 
+/**
+ * What a window asks the library, each answered once: a write with what it made or that it landed, a fetch of what is
+ * on disk (which no view can watch) with what it read. What a write changed in the library itself reaches every
+ * window through the views; a write on disk, which no view sees, is told (`FOLDER_CHANGED`).
+ */
+export type LibraryAsks = {
+  CREATE_DOCUMENT: { ask: { name: string; content: ContentSection[]; tags: string[]; collectionId?: EARS.EntityId; documentType?: string }; fails: OnDisk }
+  UPDATE_DOCUMENT: { ask: { id: EARS.EntityId; name: string; content: ContentSection[]; tags: string[] }; fails: OnDisk }
+  DELETE_DOCUMENT: { ask: { id: EARS.EntityId } }
+  /** A document, read from disk when it is a file under a symlinked folder */
+  GET_DOCUMENT: { ask: { id: EARS.EntityId }; answer: { document: DocumentDTO }; fails: OnDisk }
+  /** Answered with the folder it made in the library, for the window that asked to name; one on disk is only made */
+  CREATE_COLLECTION: { ask: { name: string; description?: string; parentId?: EARS.EntityId }; answer: { collection?: CollectionDTO }; fails: OnDisk }
+  UPDATE_COLLECTION: { ask: { id: EARS.EntityId; name: string; description?: string } }
+  DELETE_COLLECTION: { ask: { id: EARS.EntityId } }
+  MOVE_DOCUMENT: { ask: { documentId: EARS.EntityId; collectionId?: EARS.EntityId } }
+  /** A folder's contents, read from disk when it is a symlinked folder or one inside one */
+  GET_FOLDER_CONTENTS: { ask: { folderId: EARS.EntityId | null }; answer: FolderContents; fails: OnDisk }
+  /** Which of these symlinked collections no longer reach their folder on disk */
+  CHECK_SYMLINKS: { ask: { ids: EARS.EntityId[] }; answer: { ids: EARS.EntityId[]; broken: EARS.EntityId[] } }
+  RENAME_ITEM: { ask: { id: EARS.EntityId; name: string; itemType: 'document' | 'folder' }; fails: OnDisk }
+  DELETE_ITEMS: { ask: { ids: EARS.EntityId[] }; fails: OnDisk }
+  MOVE_ITEMS: { ask: { ids: EARS.EntityId[]; targetFolderId: EARS.EntityId | null }; fails: OnDisk }
+  CREATE_SYMLINK_COLLECTION: { ask: { name: string; symlinkPath: string; parentId?: EARS.EntityId }; answer: { collection: CollectionDTO } }
+  /** Refused as `not-found` for a path that is no folder */
+  UPDATE_SYMLINK_PATH: { ask: { collectionId: EARS.EntityId; newPath: string }; fails: { 'not-found': {} } }
+}
+
+/**
+ * What a window sends the library and is answered for by an outcome every window should know of rather than by a reply:
+ * an import's or an export's, which tells every window when nobody asked (`answer` in `be/system.ts`).
+ */
 export type IncomingLibraryEvents =
-  | { type: 'CREATE_DOCUMENT'; name: string; content: ContentSection[]; tags: string[]; collectionId?: string; documentType?: string }
-  | { type: 'UPDATE_DOCUMENT'; id: string; name: string; content: ContentSection[]; tags: string[]; collectionId?: string }
-  | { type: 'DELETE_DOCUMENT'; id: string }
-  /** A document on disk, which no view can watch: answered with `DOCUMENT_LOADED` */
-  | { type: 'GET_DOCUMENT'; id: string }
-  | { type: 'CREATE_COLLECTION'; name: string; description?: string; parentId?: string }
-  | { type: 'UPDATE_COLLECTION'; id: string; name: string; description?: string }
-  | { type: 'DELETE_COLLECTION'; id: string }
-  | { type: 'MOVE_DOCUMENT'; documentId: string; collectionId?: string }
-  // File browser events
-  /** A folder on disk, which no view can watch: answered with `FOLDER_CONTENTS_LOADED` */
-  | { type: 'GET_FOLDER_CONTENTS'; folderId: string | null }
-  /** Which of these symlinked collections no longer reach their folder on disk: answered with `SYMLINKS_CHECKED` */
-  | { type: 'CHECK_SYMLINKS'; ids: string[] }
-  | { type: 'RENAME_ITEM'; id: string; name: string; itemType: 'document' | 'folder' }
-  | { type: 'DELETE_ITEMS'; ids: string[] }
-  | { type: 'MOVE_ITEMS'; ids: string[]; targetFolderId: string | null }
   // [SEARCH_INDEX_FF] Search index events — commented out
-  // Symlink events
-  | { type: 'CREATE_SYMLINK_COLLECTION'; name: string; symlinkPath: string; parentId?: string }
-  | { type: 'UPDATE_SYMLINK_PATH'; collectionId: string; newPath: string }
-  // Import/Export events
   | { type: 'IMPORT_LIBRARY'; directory: string }
   | { type: 'EXPORT_LIBRARY'; directory: string; format: 'markdown' | 'json' }
 
 /**
- * What the library system sends: the answers to a window's writes and fetches, an import's or an export's outcome,
- * and the one notification there is, a folder on disk having changed. What the library stores is its views; what is
- * on disk is fetched, since a view watches the engine and nothing else.
+ * What the library system sends beside its answers: an import's or an export's outcome, and the one notification
+ * there is, a folder on disk having changed. What the library stores is its views; what is on disk is fetched.
  */
 export type OutgoingLibraryEvents =
-  /** The folder a `CREATE_COLLECTION` made, for the window that asked to name */
-  | { type: 'COLLECTION_CREATED'; data: { collection: CollectionDTO } }
-  /** Any other write landed */
-  | { type: 'LIBRARY_WRITTEN' }
-  /** A write or a fetch was not done: which, and why (`LibraryFailureKind`) */
-  | AskFailedEvent<LibraryFailureKind, IncomingLibraryEvents['type']>
-  /** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
-  | { type: 'FOLDER_CONTENTS_LOADED'; data: FolderContents }
-  /** A document on disk, as `GET_DOCUMENT` asked */
-  | { type: 'DOCUMENT_LOADED'; data: { document: DocumentDTO } }
-  /** The symlinked collections `CHECK_SYMLINKS` named whose folder is gone */
-  | { type: 'SYMLINKS_CHECKED'; ids: string[]; broken: string[] }
   /**
    * Something on disk under a symlinked folder changed — `folderId`'s contents, or, with `null`, which is not known —
    * for every window showing such a folder to fetch it again. A notification: no window asked for it.
