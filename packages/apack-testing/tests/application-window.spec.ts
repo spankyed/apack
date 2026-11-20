@@ -22,6 +22,24 @@ it('finds readiness in an existing window without waiting for another window to 
   expect(application.listenerCount('window')).toBe(0);
   expect(vi.getTimerCount()).toBe(0);
 });
+it('passes over a surface popout ready before the main window', async () => {
+  vi.useFakeTimers();
+  // The predicate runs against each page's own window, as Playwright runs it in the page; the main window's
+  // shell starts after the popout's, so taking any shell finds the popout
+  let mainStarted = false;
+  const shellPage = (main: boolean) => ({ evaluate: vi.fn(async (predicate: () => unknown) => {
+    vi.stubGlobal('window', main && !mainStarted ? {}
+      : { applicationState: { getSnapshot: () => ({ context: { ownsLastActiveSurface: main } }) } });
+    try { return predicate(); } finally { vi.unstubAllGlobals(); }
+  }) }) as unknown as Page;
+  const popout = shellPage(false);
+  const main = shellPage(true);
+  const pending = waitForApplicationWindow(app([popout, main]), 45_000);
+  await vi.advanceTimersByTimeAsync(0);
+  mainStarted = true;
+  await vi.advanceTimersByTimeAsync(200);
+  expect(await pending).toBe(main);
+});
 it.each(['closed', 'unresponsive'])('wakes on a new window beside a %s candidate', async (candidate) => {
   vi.useFakeTimers();
   const pages = [{ evaluate: vi.fn(() => candidate === 'unresponsive' ? new Promise<boolean>(() => {}) : Promise.reject(Error('page closed'))) } as unknown as Page];
