@@ -1,6 +1,8 @@
 import { setup, type ActorRefFrom, assign } from 'xstate';
 import { safeEvents, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import { sendToSystem } from '#generated/events.ts';
+import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
+import type { Contract as LogsSystemContract } from '#features/logs/be/contract.ts';
 import type { LogsSettings } from '#generated/types.ts';
 import type { LogsContext } from './contract.ts';
 import type { OutgoingLogsEvents } from '#features/logs/be/types.ts';
@@ -23,6 +25,7 @@ type LogsEvents =
   | { type: 'SET_SEARCH'; search: string }
   | { type: 'CLEAR_LOGS' }
   | OutgoingLogsEvents
+  | AnswersOf<LogsSystemContract>
   | SurfaceLifecycleEvent
   // The app's, when the logs surface's settings change; the canvas sends one itself to show a change at once
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: LogsSettings };
@@ -42,8 +45,8 @@ const logsState = setup({
       sendToSystem(id, { type: 'GET_LOGS' });
     },
     setLogs: assign(({ event }) => {
-      const ev = typeOf('LOGS_READ', event);
-      return { logs: ev.logs, settings: ev.settings };
+      const { logs, settings } = answerOf(event, 'GET_LOGS');
+      return { logs, settings };
     }),
     addLog: assign({
       logs: ({ context, event }) => {
@@ -97,7 +100,8 @@ const logsState = setup({
         SURFACE_STARTED: {
           actions: 'requestLogs',
         },
-        'LOGS_READ': {
+        ASK_ANSWERED: {
+          guard: ({ event }) => isAnswered(event, 'GET_LOGS'),
           actions: 'setLogs',
         },
         'LOG_ADDED': {

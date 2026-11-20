@@ -19,10 +19,12 @@ export interface LogsState {
 // Its own shape, which the app stores without knowing: the app owns the document, each feature its slice.
 export type LogsSettings = import('#generated/settings.ts').SettingsOf<'logs'>;
 
-export type IncomingLogEvents =
-  | { type: 'CLEAR_LOGS' }
-  /** The buffer as the settings filter it, and the settings: answered with \`LOGS_READ\` */
-  | { type: 'GET_LOGS' };
+export type IncomingLogEvents = { type: 'CLEAR_LOGS' };
+
+/** What the logs system answers: the buffer as the settings filter it, and the settings, for a window as it starts */
+export type LogsAsks = {
+  GET_LOGS: { answer: { logs: LogEntry[]; settings: LogsSettings } };
+};
 
 export type LogsInternalEvents =
   | {
@@ -30,12 +32,8 @@ export type LogsInternalEvents =
     log: Omit<LogEntry, 'id' | 'timestamp'>;
   };
 
-/**
- * What the logs system sends: the buffer, to the window that asked for it (as it starts, and when the settings that
- * filter it change); and to every window, each entry as it is logged — a feed — and that the buffer was cleared.
- */
+/** What the logs system sends every window: each entry as it is logged — a feed — and that the buffer was cleared */
 export type OutgoingLogsEvents =
-  | { type: 'LOGS_READ'; logs: LogEntry[]; settings: LogsSettings }
   | { type: 'LOG_ADDED'; log: LogEntry }
   | { type: 'LOGS_CLEARED' };
 

@@ -20,7 +20,7 @@ it('asks for the buffer when it starts and when its settings change, and shows w
   actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { maxLogs: 10, excludedSources: [] } as never })
   expect(asks()).toBe(2)
 
-  actor.send({ type: 'LOGS_READ', logs: [{ id: 'l1', timestamp: 1, level: 'info', message: 'hello' }], settings: { maxLogs: 10, excludedSources: [] } as never })
+  actor.send({ type: 'ASK_ANSWERED', asked: 'GET_LOGS', answer: { logs: [{ id: 'l1', timestamp: 1, level: 'info', message: 'hello' }], settings: { maxLogs: 10, excludedSources: [] } as never } })
   expect(actor.getSnapshot().context.logs.map((log) => log.message)).toEqual(['hello'])
   actor.stop()
 })

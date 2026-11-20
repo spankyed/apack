@@ -9,6 +9,8 @@ import type { BrowserSettings } from '#generated/types.ts';
 import type { Bookmark, BrowserContext, BrowserInboxEvent, BrowserTab, BrowserTabPersistedId } from './contract.ts';
 import { autocomplete, recordVisit, updateHistoryMeta, displayUrl, type AutocompleteSuggestion } from './history.ts';
 import { sendToSystem } from '#generated/events.ts';
+import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
+import type { Contract as BrowserSystemContract } from '#features/browser/be/contract.ts';
 import { openSurface } from '#generated/fe.ts';
 import { getNextAvailableColor, saveTabGroups, loadTabGroups, type TabGroup, type TabGroupColor } from '@apackdev/sdk/fe';
 
@@ -75,7 +77,7 @@ type BrowserEvents =
   | { type: 'BOOKMARK.REMOVE'; url: string }
   | { type: 'BOOKMARK.NAVIGATE'; url: string }
   // Backend events
-  | { type: 'SAVED_SESSION_READ'; savedTabs: SavedTab[]; savedBookmarks: Bookmark[] }
+  | AnswersOf<BrowserSystemContract>
   | SurfaceLifecycleEvent
   // IPC bridge events
   | { type: 'IPC.TAB_CREATED'; tab: BrowserTabState }
@@ -562,17 +564,20 @@ const browserState = setup({
         SURFACE_STARTED: {
           actions: () => { sendToSystem(id, { type: 'GET_SAVED_SESSION' }); },
         },
-        'SAVED_SESSION_READ': {
+        ASK_ANSWERED: {
+          guard: ({ event }) => isAnswered(event, 'GET_SAVED_SESSION'),
           actions: [
             assign(({ event }) => ({
               tabGroups: loadTabGroups(storage, 'tab-groups'),
-              bookmarks: event.savedBookmarks ?? [],
+              // A page with no favicon is saved without one, which the bar shows as an empty one
+              bookmarks: answerOf(event, 'GET_SAVED_SESSION').savedBookmarks.map((bookmark) => ({ ...bookmark, favicon: bookmark.favicon ?? '' })),
             })),
             ({ context, event }) => {
-              const normalized = normalizeSavedTabs(event.savedTabs ?? []);
+              const { savedTabs } = answerOf(event, 'GET_SAVED_SESSION');
+              const normalized = normalizeSavedTabs(savedTabs);
               if (normalized.invalidCount > 0) {
                 console.warn('[Browser] Dropping invalid saved tabs before restore', {
-                  rawCount: event.savedTabs?.length ?? 0,
+                  rawCount: savedTabs.length,
                   repairedCount: normalized.tabs.length,
                   invalidCount: normalized.invalidCount,
                 });
