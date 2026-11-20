@@ -281,6 +281,10 @@ export default /** @type import('electron-builder').Configuration */
     '!**/node_modules/elmdb/{src,target}/**',
     '!**/node_modules/elmdb/{build.rs,Cargo.toml}',
     '!**/node_modules/elmdb/protocol/*.js',
+    // EARS is linked from the same checkout, so its source, specs, benchmarks and API reports sit beside the `dist`
+    // it publishes (its package.json `files`); only what it publishes ships. `scripts` and `*.ts` go above
+    '!**/node_modules/@elmdb/ears/{src,tests,bench,etc,.temp}/**',
+    '!**/node_modules/@elmdb/ears/{tsconfig*.json,vitest*.config.ts}',
     ...APP_WORKSPACES.map(name => ({
       from: path.join(buildRoot, 'packages', name, 'dist'), to: `packages/${name}/dist`, filter: ['**/*'],
     })),
