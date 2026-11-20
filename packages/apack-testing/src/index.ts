@@ -610,22 +610,11 @@ export function createAppDriver(page: Page, screenshotDir: string, appPid?: numb
     navigate: async (surfaceId) => {
       const id0 = resolveFeature(surfaceId);
       await page.evaluate((id) => {
-        (window as any).__navigateSentAt = Date.now();
         (window as any).applicationState.send({ type: 'SELECT_SURFACE', surface: id });
       }, id0);
       await page.waitForFunction((id) => {
-        const win = window as any;
-        const snap = win.applicationState?.getSnapshot();
-        if (snap?.context?.activeSurface?.id !== id) {
-          // A window that reloads after the send (a settings reset reloads it) starts on another surface and never
-          // hears the first one, so the selection is sent again while it isn't active, at most twice a second
-          const now = Date.now();
-          if (win.applicationState && now - (win.__navigateSentAt ?? 0) > 500) {
-            win.__navigateSentAt = now;
-            win.applicationState.send({ type: 'SELECT_SURFACE', surface: id });
-          }
-          return false;
-        }
+        const snap = (window as any).applicationState?.getSnapshot();
+        if (snap?.context?.activeSurface?.id !== id) return false;
         // The state switching is not the canvas being on screen: Vue renders on the next flush, and a
         // test that clicks or screenshots straight after a navigate needs that flush to have happened.
         // data-active-surface (WebApp.vue) is written in the flush that swaps the canvas.
