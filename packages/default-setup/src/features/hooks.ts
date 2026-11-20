@@ -4,6 +4,8 @@ import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
 import { services } from '#generated/services.ts';
 import { startTerminalSizing } from './code/be/features/terminal.ts';
 import { startStoppingWindowReads } from './code/be/services/window-reads.ts';
+import { endAllTurns as endClaudeTurns } from './code/be/services/claude-code/handle-store.ts';
+import { stopCodex } from './code/be/services/codex/index.ts';
 
 /** What the pack's backend follows for as long as it runs */
 let stopTerminalSizing: (() => void) | undefined;
@@ -43,6 +45,13 @@ export const onShutdown = () => {
   // however the process died — and, with no owner holding it, the broker's own rule that the last client
   // leaving ends them, which is what keeps a dev run or a test from leaving a shell behind. The only
   // deliberate end is the user closing a terminal, which is `terminalService.kill`.
+  //
+  // **An agent's processes are the opposite case, and are ended.** A terminal is the user's and is held by the
+  // broker, outside this process; a `claude` turn and the Codex app server are this pack's own children, held
+  // only by its modules. The pack stopping is not always the process ending: a reload replaces those modules in
+  // a process that goes on, where a child they started would run on with nothing left to end it.
+  endClaudeTurns();
+  stopCodex();
   stopTerminalSizing?.();
   stopTerminalSizing = undefined;
   stopStoppingWindowReads?.();

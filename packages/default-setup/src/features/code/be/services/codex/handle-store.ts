@@ -30,6 +30,14 @@ export function getHandle(key: string): CodexTurnHandle | undefined {
   return activeHandles.get(key)
 }
 
+/**
+ * Holds no turn any longer: for the pack's backend stopping. Nothing is interrupted here, since every Codex turn
+ * runs in the one app server, and stopping that (`stopCodex`) is the end of all of them.
+ */
+export function forgetAllTurns(): void {
+  activeHandles.clear()
+}
+
 export function clearHandle(key: string): void {
   activeHandles.delete(key)
 }
