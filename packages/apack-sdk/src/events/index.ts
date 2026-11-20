@@ -15,8 +15,8 @@ import type { ContractIncoming, ContractOutgoing, SystemEvents } from '../framew
 
 export { eventTypes, type TypeOfEvent } from './event-types.ts';
 export {
-  ASK_ANSWER_TYPES, AskError, isAskAnswer, _answered, _askFailureOf, _failedAnswer, _failure, _unavailable,
-  type AnswerPayload, type AnswersOf, type AskAnswered, type AskDeclaration, type AskEventOf, type AskEventsOf, type AskFailed,
+  ASK_ANSWER_TYPES, AskError, answerOf, isAnswered, isAskAnswer, _answered, _askFailureOf, _failedAnswer, _failure, _unavailable,
+  type AnsweredEvent, type AnswerPayload, type AnswersOf, type AskAnswered, type AskDeclaration, type AskEventOf, type AskEventsOf, type AskFailed,
   type AskFailure, type AskName, type AskOutcome, type AskPayload, type ContractAsks, type DeclaredFailureKind,
   type DeclaredFailures, type FailureOf, type StandardFailureKind, type SystemAskMap,
 } from './ask.ts';

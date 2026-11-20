@@ -153,3 +153,25 @@ export const _unavailable = (asked: string, message: string) => _failedAnswer(as
 /** Whether an event is one of the two answers an ask gets */
 export const isAskAnswer = (event: { type: string }): event is AskAnswered | AskFailed =>
   event.type === 'ASK_ANSWERED' || event.type === 'ASK_FAILED';
+
+/** The answer an event is to one ask, where it is: an `ASK_ANSWERED` whose `asked` is `asked` */
+export type AnsweredEvent<E, K extends string> = Extract<E, { type: 'ASK_ANSWERED'; asked: K }>;
+
+/**
+ * Whether `event` answers ask `asked`, narrowing it to that answer: a machine's guard reads it, as a surface's write
+ * transitions tell one ask's answer from another's.
+ */
+export const isAnswered = <E extends { type: string }, K extends string>(event: E, asked: K): event is E & AnsweredEvent<E, K> =>
+  event.type === 'ASK_ANSWERED' && (event as { asked?: unknown }).asked === asked;
+
+/**
+ * What ask `asked` was answered with, for an action wired to a transition that only that answer takes. Throws for any
+ * other event, which is an action wired to the wrong transition.
+ */
+export function answerOf<E extends { type: string }, K extends string>(event: E, asked: K): AnswerIn<AnsweredEvent<E, K>> {
+  if (!isAnswered(event, asked)) throw new Error(`Expected the answer to ${asked}, got ${event.type}`);
+  return (event as unknown as { answer: AnswerIn<AnsweredEvent<E, K>> }).answer;
+}
+
+/** What an answered event carries */
+type AnswerIn<E> = E extends { answer: infer Answer } ? Answer : never;

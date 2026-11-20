@@ -40,6 +40,13 @@ export const ALL_COLORS: readonly ["blue", "orange", "purple", "green", "red", "
 // @public (undocumented)
 export type ArtifactFrontendBinding = ViewerFrontendBinding<ArtifactDeclaration, ArtifactDefinition>;
 
+// @public
+export interface AskState<Args extends unknown[], O> {
+    ask(...args: Args): Promise<O>;
+    readonly outcome: O | undefined;
+    readonly pending: boolean;
+}
+
 // @public (undocumented)
 export type BlockFrontendBinding = ViewerFrontendBinding<BlockDeclaration, BlockDefinition>;
 
@@ -1014,6 +1021,9 @@ export function useAppSettings(): Readonly<Ref<AppSettings | undefined>>;
 
 // @public
 export function useArtifactDeclarations(): ComputedRef<readonly ArtifactCatalogEntry[]>;
+
+// @public
+export function useAsk<Args extends unknown[], O>(run: (...args: Args) => Promise<O>): AskState<Args, O>;
 
 // @public
 export function useBlockDeclarations(): ComputedRef<readonly BlockCatalogEntry[]>;

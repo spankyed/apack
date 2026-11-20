@@ -11,6 +11,17 @@ import { PromiseActorLogic } from 'xstate';
 export const _answered: (asked: string, answer: unknown) => AskAnswered;
 
 // @public
+export type AnsweredEvent<E, K extends string> = Extract<E, {
+    type: 'ASK_ANSWERED';
+    asked: K;
+}>;
+
+// @public
+export function answerOf<E extends {
+    type: string;
+}, K extends string>(event: E, asked: K): AnswerIn<AnsweredEvent<E, K>>;
+
+// @public
 export type AnswerPayload<D> = D extends {
     answer: infer Answer;
 } ? Answer : void;
@@ -307,6 +318,11 @@ export type HostSystemEvents = {
 
 // @public
 export type IncomingEventsOf<C> = ContractIncoming<C>;
+
+// @public
+export const isAnswered: <E extends {
+    type: string;
+}, K extends string>(event: E, asked: K) => event is E & AnsweredEvent<E, K>;
 
 // @public
 export const isAskAnswer: (event: {
