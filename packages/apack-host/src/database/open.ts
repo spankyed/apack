@@ -1,6 +1,6 @@
 // Opening an app's database: the one composition of the elmdb database and the engine, which the API's boot and tools
 // (apack db) share, so both open a data dir the same way
-import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears } from '@apackdev/ears';
+import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears, type EarsWarning } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
 import { openDatabase as openElmdb, type DatabaseOptions } from '@apackdev/ears/lmdb';
 import { _RUN_HISTORY_SCHEMA } from '@apackdev/sdk/services';
@@ -40,13 +40,25 @@ function openDatabase(options: DatabaseOptions): EarsDatabase {
 }
 
 export interface DatabaseStoreOptions {
-  /** Told when a query does something its data will make slow (the engine's `warn`); the app passes one in development */
+  /**
+   * Told when a query does something its data will make slow (the engine's `warn`, `packDeclarationWarning`'s
+   * message); the app passes one in development
+   */
   warn?: (message: string) => void;
   /** The database directory */
   path: string;
   /** The entity types: the app's registered packs, or the installed packs' manifests */
   schema: DatabaseSchema;
   readOnly?: boolean;
+}
+
+/**
+ * The engine's warning, saying where a pack declares its fix: a value index the engine names in a type's row rules is
+ * the `indexes` of that type's entry in the pack's `apack.json`, which codegen writes the rules from
+ */
+export function packDeclarationWarning(message: string, warning: EarsWarning): string {
+  if (warning.kind !== 'unindexedWalk') return message;
+  return `${message}, which a pack declares in the ${warning.types.join('/')} entry of its apack.json`;
 }
 
 /**
@@ -57,7 +69,7 @@ export interface DatabaseStoreOptions {
  */
 export function openDatabaseStore({ path, schema, readOnly, warn }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
   const database = openDatabase({ path, readOnly });
-  const engine = createEarsEngine({ database, warn });
+  const engine = createEarsEngine({ database, ...(warn && { warn: (message: string, warning: EarsWarning) => warn(packDeclarationWarning(message, warning)) }) });
   if (!readOnly) {
     try {
       engine.admin.declare(engineSchemaOf(schema));
