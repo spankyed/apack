@@ -6,6 +6,7 @@
 //
 //   tsx scripts/api-reports.ts packages/apack-sdk [--local]
 import * as fs from 'node:fs';
+import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import { CompilerState, Extractor, ExtractorConfig, ExtractorLogLevel } from '@microsoft/api-extractor';
 import { packagesBuiltOrRefuse, PUBLISHED_TREES } from '@apackdev/host/build/packages-built';
@@ -136,8 +137,32 @@ const compilerState = prepared.length === 0 ? undefined : CompilerState.create(p
   additionalEntryPoints: all.slice(1).map(([, declaration]) => declaration),
 });
 
+/**
+ * elmdb's generated protocol directory, when the package resolves `elmdb`. The binding ships the protocol as `.ts`
+ * files of types alone, which `@apackdev/ears`' declarations import. API Extractor refuses a program holding any file
+ * but declarations (`ae-wrong-input-file-type`), so that refusal is dropped for a program whose only other files are
+ * the protocol's. Resolved from `node_modules`, the protocol is external, and a report names its types as imports.
+ */
+const elmdbProtocol = (() => {
+  try {
+    return path.join(path.dirname(fs.realpathSync(createRequire(path.join(pkgDir, 'package.json')).resolve('elmdb/package.json'))), 'protocol') + path.sep;
+  } catch {
+    return undefined;
+  }
+})();
+const onlyProtocolSources = elmdbProtocol !== undefined && compilerState !== undefined
+  && (compilerState.program as { getSourceFiles(): ReadonlyArray<{ fileName: string }> }).getSourceFiles()
+    .every(({ fileName }) => ExtractorConfig.hasDtsFileExtension(fileName) || path.resolve(fileName).startsWith(elmdbProtocol));
+
 for (const { key, config } of prepared) {
-  const result = Extractor.invoke(config, { localBuild: local, showVerboseMessages: false, compilerState });
+  const result = Extractor.invoke(config, {
+    localBuild: local,
+    showVerboseMessages: false,
+    compilerState,
+    messageCallback: (message) => {
+      if (message.messageId === 'ae-wrong-input-file-type' && onlyProtocolSources) message.logLevel = ExtractorLogLevel.None;
+    },
+  });
   if (result.apiReportChanged) changed++;
   if (!result.succeeded) {
     failed++;
