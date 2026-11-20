@@ -235,6 +235,77 @@ async function watchQuitSequence(app: ElectronApplication): Promise<QuitSequence
   return sequence;
 }
 
+/** How `launchApp` starts an app */
+export interface LaunchAppOptions {
+  /** The data dir it runs on, which the caller made and removes */
+  readonly userDataDir: string;
+  /**
+   * The environment the app resolves: `test`, as the fixture launches it, or `development`, for what only a
+   * development app has, such as its debug port. `test` when not given
+   */
+  readonly environment?: 'test' | 'development';
+  /** Arguments after the app's own, such as `--remote-debugging-port=0` */
+  readonly args?: readonly string[];
+  /** A file its output is appended to, which a failed close names */
+  readonly logFile?: string;
+}
+
+/** An app `launchApp` started, and the window its shell runs in */
+export interface LaunchedApp {
+  /** The app, for what only it answers: its windows, and `evaluate` in its main process */
+  readonly app: ElectronApplication;
+  /** The window the app's shell runs in, found as the fixture finds its own: the one that has `applicationState` */
+  readonly page: Page;
+  /**
+   * `closeApp` on this app's data dir. `keepProfile` says whether a later launch reads what Chromium was writing:
+   * one that reads only what the app's backend stored does not, and waiting for the profile is a wait on Chromium
+   */
+  close(options: { readonly keepProfile: boolean }): Promise<void>;
+}
+
+/** How to start the app under test: a checkout's sources with its own Electron, or a packaged app's executable */
+function electronLaunch(host: AppLaunch): { executablePath: string; args: string[]; cwd?: string } {
+  return host.kind === 'source'
+    ? {
+      executablePath: createRequire(path.join(host.root, 'package.json'))('electron') as unknown as string,
+      args: [path.join(host.root, '.')],
+      cwd: host.root,
+    }
+    : { executablePath: host.executable, args: [] };
+}
+
+/**
+ * Starts the app under test for a spec that needs one of its own, rather than the worker's the fixture gives: one it
+ * relaunches on the same data dir, or one in another environment. Started and closed as the fixture starts and closes
+ * its own, its output captured and its quit watched, so a spec that owns an app writes none of that lifecycle itself.
+ *
+ * **The one way a spec here starts Electron**: `check:specifiers` refuses `_electron.launch` anywhere else. Each spec
+ * that once started its own copied the launch and closed it with Playwright's `close()`, which waits on Chromium
+ * writing its profile, and each failed under load one at a time after the fixture's close had been fixed.
+ */
+export async function launchApp({ userDataDir, environment = 'test', args = [], logFile }: LaunchAppOptions): Promise<LaunchedApp> {
+  const launch = electronLaunch(resolveTestHost({}));
+  const env = appLaunchEnv(process.env, userDataDir);
+  if (environment === 'development') {
+    // Playwright's own marker makes the app resolve `test`, which has no debug port
+    delete env.PLAYWRIGHT_TEST;
+    env.APACK_ENV = 'development';
+    env.PLAYWRIGHT_VISIBLE = '';
+  }
+  const app = await _electron.launch({ ...launch, args: [...launch.args, ...args], env });
+  userDataDirs.set(app, userDataDir);
+  captureOutput(app, logFile);
+  // From the launch, as the fixture's: a quit the app starts itself is seen too
+  await watchQuitSequence(app);
+  let page: Page;
+  try { page = await findMainWindow(app); }
+  catch (error) {
+    await closeApp(app, { userDataDir, keepProfile: false }).catch(() => {});
+    throw error;
+  }
+  return { app, page, close: ({ keepProfile }) => closeApp(app, { userDataDir, keepProfile }) };
+}
+
 /** How `closeApp` ends an app */
 export interface CloseAppOptions {
   /** The data dir the app runs on, which names the API it started */
@@ -647,13 +718,7 @@ export function createTest(options: CreateTestOptions = {}) {
         }
 
         // A checkout runs its sources with its own electron, so packs don't need electron installed
-        const launch = appLaunch.kind === 'source'
-          ? {
-            executablePath: createRequire(path.join(appLaunch.root, 'package.json'))('electron') as unknown as string,
-            args: [path.join(appLaunch.root, '.')],
-            cwd: appLaunch.root,
-          }
-          : { executablePath: appLaunch.executable, args: [] };
+        const launch = electronLaunch(appLaunch);
 
         const monotonicStart = performance.now();
         reportLaunchPhase('requested', monotonicStart);

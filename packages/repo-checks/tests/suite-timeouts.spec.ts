@@ -281,7 +281,8 @@ function dottedName(node: ts.Expression): string | undefined {
  * **And the bound is per test, because `test.setTimeout(n)` raises it.** The config's figure alone is not
  * it: a 60s poll inside a case that has already declared 180s is correct, with two minutes to spare, so a
  * check reading the config would report it and an exception table would then carry a plausible reason for a
- * defect that does not exist — the dead text this repo refuses. The budget is the enclosing test's.
+ * defect that does not exist — the dead text this repo refuses. The budget is the enclosing test's, and a test
+ * that turned its clock off with `test.setTimeout(0)` has none for a wait to run past.
  *
  * **What it does not catch**, so nobody over-trusts it: a wait *under* the budget can still lose to whatever
  * the test does around it — 55s of polling after 10s of setup in a 60s test dies at the setup's expense.
@@ -296,7 +297,8 @@ function waitsPastTheirTest(file: string, configBound: number): string[] {
     .flatMap((clock) => {
       const owner = tests.find((one) => clock.line >= one.from && clock.line <= one.to);
       const bound = owner?.budget ?? configBound;
-      return clock.ms! >= bound
+      // `test.setTimeout(0)` is Playwright's no timeout at all, which no wait can outlast
+      return bound !== 0 && clock.ms! >= bound
         ? [`${clock.file}:${clock.line}: ${clock.what} waits ${clock.ms}ms inside a ${bound}ms test`]
         : [];
     });
@@ -621,9 +623,10 @@ describe('a Playwright wait fits inside the test it runs in', () => {
   /**
    * The firing case, because the table above is empty and nothing in this repo trips the rule today.
    *
-   * Three files, one rule each way: a wait given its test's whole budget is reported; the same wait under a
+   * Four files, one rule each way: a wait given its test's whole budget is reported; the same wait under a
    * `test.setTimeout` that raises the budget past it is not — which is the false positive the first version
-   * of this check produced; and a wait comfortably inside the config's own budget is not.
+   * of this check produced; nor under `test.setTimeout(0)`, which turns the test's clock off; and a wait
+   * comfortably inside the config's own budget is not.
    */
   it('reports a wait past its test, and not one the test gave itself room for', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'playwright-backstops-'));
@@ -643,6 +646,12 @@ describe('a Playwright wait fits inside the test it runs in', () => {
         + '  test.setTimeout(180_000);\n'
         + '  await expect.poll(() => true, { timeout: 60_000 }).toBe(true);\n'
         + '});\n');
+      const unbounded = write('unbounded.spec.ts',
+        "import { test, expect } from '@playwright/test';\n"
+        + "test('turned its clock off', async () => {\n"
+        + '  test.setTimeout(0);\n'
+        + '  await expect.poll(() => true, { timeout: 60_000 }).toBe(true);\n'
+        + '});\n');
       const inside = write('inside.spec.ts',
         "import { test, expect } from '@playwright/test';\n"
         + "test('waits for part of its test', async () => {\n"
@@ -652,6 +661,7 @@ describe('a Playwright wait fits inside the test it runs in', () => {
       expect(waitsPastTheirTest(past, 60_000)).toHaveLength(1);
       expect(waitsPastTheirTest(past, 60_000)[0]).toContain('60000ms inside a 60000ms test');
       expect(waitsPastTheirTest(roomy, 60_000)).toEqual([]);
+      expect(waitsPastTheirTest(unbounded, 60_000), 'a test with no timeout').toEqual([]);
       expect(waitsPastTheirTest(inside, 60_000)).toEqual([]);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
