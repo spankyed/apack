@@ -24,7 +24,9 @@
  * **What licenses it accepts** (`ACCEPTED`): the package's declared SPDX expression, taking from an OR the branch
  * whose license comes first in `ACCEPTED`. LGPL only for a package shipped as its own files, since inlined it would be
  * linked into the bundle; MPL, EPL and LGPL notices name where the package's source is, and CC-BY ones its creator.
- * Any other license, or an expression that does not parse, is a problem.
+ * Any other license, or an expression that does not parse, is a problem. A manifest that declares none that reads as
+ * SPDX (`SEE LICENSE IN LICENSE`, `BSD`, `Apache 2.0`) is judged under the `license` its `OVERRIDES` entry gives, read
+ * from the package's own license text, and held to `ACCEPTED` like any other.
  *
  * **A problem fails a production or beta build and is reported on a preview**, keyed on the build's channel: a
  * release must not ship without a notice it owes, and a developer's preview keeps building while one is being added.
@@ -41,6 +43,7 @@
  * for esbuild's and ripgrep and PCRE2 for the `rg` @vscode/ripgrep's install downloads. The Rust standard library and
  * the crates compiled into Rollup's, keyring's and Linux's lzma's binaries carry no notice here.
  */
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -91,7 +94,14 @@ export interface Extra {
    * declares it: a new release of the package can move the binary without its license files changing, so a build
    * carrying another release is a problem until the texts are read again (`staleExtras`)
    */
-  readFor?: { file: string; declared: RegExp; release: string; reread: string };
+  readFor?: {
+    file: string; declared: RegExp; release: string; reread: string;
+    /**
+     * The binary that release holds, for the SBOM (`downloadedBinaries`): what it is a build of, at which version, the
+     * GitHub repository whose release it is downloaded from, and where the install leaves it in the package
+     */
+    binary: { name: string; version: string; repository: string; license: string; file: string };
+  };
 }
 
 export const EXTRAS: readonly Extra[] = [
@@ -104,16 +114,31 @@ export const EXTRAS: readonly Extra[] = [
     readFor: {
       file: 'lib/postinstall.js', declared: /^const VERSION = '([^']+)';$/m, release: 'v15.0.1',
       reread: "ripgrep's LICENSE-MIT, UNLICENSE and COPYING at the ripgrep tag that release builds, and the LICENCE of the PCRE2 its Cargo.lock's pcre2-sys bundles",
+      binary: { name: 'ripgrep', version: '15.0.0', repository: 'microsoft/ripgrep-prebuilt', license: 'Unlicense OR MIT', file: 'bin/rg' },
     },
   },
 ];
 
+/** What a package's own files don't say, or say unreadably, with why */
+export interface Override {
+  /** The package's license texts, committed under `build/licenses/`, for one that ships no license file; else empty */
+  files: readonly string[];
+  /**
+   * The SPDX expression the package is under, as its license text reads, for one whose manifest declares none that
+   * reads as SPDX. It is held to `ACCEPTED` as a declared one is, and is never read over a manifest's that does parse
+   */
+  license?: string;
+  why: string;
+  /** The one platform whose build carries the package */
+  platform?: NodeJS.Platform;
+}
+
 /**
- * Texts for packages that ship no license file, committed under `build/licenses/`, each with why. One a single
- * platform's build carries, a platform binary whose parent isn't installed, names that platform: a build for another
- * doesn't carry the package, and doesn't call the override stale for it
+ * Texts for packages that ship no license file, and licenses for packages whose manifest declares none that reads as
+ * SPDX, each with why. One a single platform's build carries, a platform binary whose parent isn't installed, names
+ * that platform: a build for another doesn't carry the package, and doesn't call the override stale for it
  */
-export const OVERRIDES: Readonly<Record<string, { files: readonly string[]; why: string; platform?: NodeJS.Platform }>> = {
+export const OVERRIDES: Readonly<Record<string, Override>> = {
   dlv: { files: ['dlv-LICENSE'], why: 'declares MIT and ships no license file, nor does its repository' },
   '@ai-sdk/provider-utils': {
     files: ['vercel-ai-LICENSE', 'Apache-2.0.txt'],
@@ -203,7 +228,7 @@ const CARRIED_LABEL: Record<Carried, string> = { files: 'shipped', inlined: 'inl
 /** One package's notice: what it is under, and the text the notices give for it */
 export interface PackageNotice {
   package: NoticePackage;
-  /** The SPDX expression the package declares */
+  /** The SPDX expression the package is judged under: what it declares, or its override's `license` (`judgedLicense`) */
   declared: string;
   /** What the notices name it under, chosen from `declared` */
   license: string;
@@ -221,6 +246,20 @@ export function declaredLicense(manifest: { license?: unknown; licenses?: unknow
   if (manifest.license) return named(manifest.license);
   if (Array.isArray(manifest.licenses)) return manifest.licenses.map(named).filter(Boolean).join(' OR ') || undefined;
   return undefined;
+}
+
+/** Whether what a manifest declares reads as an SPDX expression */
+function readsAsSpdx(declared: string | undefined): declared is string {
+  if (!declared) return false;
+  try { parse(declared); return true; } catch { return false; }
+}
+
+/**
+ * The expression a package is judged under: what its manifest declares when that reads as SPDX, whatever license it
+ * names, and otherwise its override's `license`, when it gives one
+ */
+export function judgedLicense(declared: string | undefined, override: Override | undefined): string | undefined {
+  return readsAsSpdx(declared) ? declared : override?.license ?? declared;
 }
 
 /** An expression tree written back as an SPDX expression, with or without its exceptions */
@@ -306,24 +345,35 @@ export function shippedPackages(appDir: string): NoticePackage[] {
   return found;
 }
 
+/** The packages a module path runs through `node_modules` to, outermost first */
+const namedThrough = (module: string): string[] => [...module.matchAll(/node_modules[\\/]((?:@[^\\/]+[\\/])?[^\\/]+)/g)].map(([, name]) => name.replace('\\', '/'));
+
 /**
- * The package a module path runs through `node_modules` to, found from `fromDir` one `node_modules` at a time as
- * Node finds a nested install, or `undefined` for a path through none
+ * The package a module path runs through `node_modules` to, by its names alone, for a path that is no file: found from
+ * `fromDir` one `node_modules` at a time, as Node finds a nested install. It throws for a name that isn't installed,
+ * so a nested package that is gone is never taken for the one it was nested in
  */
-function installedThrough(source: string, fromDir: string): BundledPackage | undefined {
-  const names = [...source.matchAll(/node_modules\/((?:@[^/]+\/)?[^/]+)/g)].map(([, name]) => name);
-  let found: BundledPackage | undefined;
-  for (const name of names) {
-    try { found = installedPackage(name, found?.dir ?? fromDir); } catch { return found; }
-  }
+function installedThrough(names: readonly string[], fromDir: string): BundledPackage {
+  let found = installedPackage(names[0], fromDir);
+  for (const name of names.slice(1)) found = installedPackage(name, found.dir);
   return found;
 }
+
+/** A path to a script with no space in it, which a `// ` line naming no file is still taken for a module by */
+const SCRIPT_PATH = /^\S+\.[cm]?[jt]sx?$/;
 
 /**
  * Every third-party package a built pack's bundles inlined, read from the bundles themselves: a bundle with a source
  * map names its modules in the map's `sources`, relative to the map; one without, as esbuild writes a pack's build
- * helpers, names each module in a `// <path>` comment, relative to the pack. A bundle with neither cannot say what it
- * inlined, and is a problem rather than an empty list.
+ * helpers, names each module in a `// <path>` comment, relative to the pack, whatever the module is: a script, a
+ * package's JSON, a path with spaces. A bundle with neither cannot say what it inlined, and is a problem rather than an
+ * empty list.
+ *
+ * **A module is its package's by where its file is** (`packageOf`): a pack can inline another workspace's or a vendored
+ * checkout's copy of a package the pack itself would resolve at another version. Only a module that is no file is told
+ * by the names in its path, and one whose names don't resolve is a problem.
+ *
+ * A pack's CSS says nothing of where it came from, so a package a pack takes only CSS from is not found here.
  */
 export function packBundledPackages(packDir: string): { packages: NoticePackage[]; problems: string[] } {
   const dist = path.join(packDir, 'dist');
@@ -333,8 +383,19 @@ export function packBundledPackages(packDir: string): { packages: NoticePackage[
   const ids: string[] = [];
   const named = new Map<string, BundledPackage>();
   const problems: string[] = [];
+  const isFile = (file: string) => fs.statSync(file, { throwIfNoEntry: false })?.isFile() === true;
+  const credit = (module: string, resolved: string, unknown: string) => {
+    if (isFile(resolved)) { ids.push(resolved); return; }
+    const names = namedThrough(module);
+    if (!names.length) { problems.push(unknown); return; }
+    try {
+      const installed = installedThrough(names, packDir);
+      named.set(installed.dir, installed);
+    } catch (error) { problems.push(`${unknown}: ${(error as Error).message}`); }
+  };
   for (const bundle of bundles) {
     const file = path.join(dist, bundle);
+    const name = path.relative(packDir, file);
     if (fs.existsSync(`${file}.map`)) {
       const { sources = [] } = JSON.parse(fs.readFileSync(`${file}.map`, 'utf8')) as { sources?: string[] };
       // A pack is built in a staging directory and copied, so a source's relative path is the staging directory's
@@ -342,24 +403,19 @@ export function packBundledPackages(packDir: string): { packages: NoticePackage[
       for (const entry of sources) {
         // A source no relative path reaches, such as one on another drive than the map on Windows, is a `file:` URL
         const source = entry.startsWith('file:') ? fileURLToPath(entry) : entry;
-        const installed = installedThrough(source, packDir);
-        if (installed) { named.set(installed.dir, installed); continue; }
-        if (source.startsWith('\0')) { ids.push(source); continue; }
-        const resolved = path.resolve(staged, source);
-        if (fs.existsSync(resolved)) ids.push(resolved);
-        else problems.push(`${path.relative(packDir, file)}.map names ${source}, which is not where its build left it, so its package is unknown`);
+        // A bundler's own virtual module, which `packageOf` knows by its id, unless it is a package's file under a query
+        if (source.startsWith('\0') && !namedThrough(source).length) { ids.push(source); continue; }
+        const module = (source.startsWith('\0') ? source.slice(1) : source).split('?')[0];
+        credit(module, path.resolve(staged, module), `${name}.map names ${source}, which is not where its build left it, so its package is unknown`);
       }
       continue;
     }
-    const modules = [...fs.readFileSync(file, 'utf8').matchAll(/^\/\/ (\S+\.[cm]?[jt]sx?)$/gm)].map(([, module]) => module);
-    for (const module of modules) {
-      const installed = installedThrough(module, packDir);
-      const resolved = path.resolve(packDir, module);
-      if (installed) named.set(installed.dir, installed);
-      else if (fs.existsSync(resolved)) ids.push(resolved);
-      else problems.push(`${path.relative(packDir, file)} names ${module}, which is not there, so its package is unknown`);
-    }
-    if (!modules.length) problems.push(`${path.relative(packDir, file)} has no source map and names no module, so what it inlined is unknown`);
+    // esbuild keeps no comment of the source's but a legal one, so a `// ` line is a module's, or text inside a string:
+    // one naming a file is a module, and one naming none is taken for a module only when it looks like a script's path
+    const modules = [...fs.readFileSync(file, 'utf8').matchAll(/^\/\/ (.+)$/gm)].map(([, module]) => module)
+      .filter((module) => isFile(path.resolve(packDir, module)) || SCRIPT_PATH.test(module));
+    for (const module of modules) credit(module, path.resolve(packDir, module), `${name} names ${module}, which is not there, so its package is unknown`);
+    if (!modules.length) problems.push(`${name} has no source map and names no module, so what it inlined is unknown`);
   }
   if (!bundles.length) problems.push(noBundle);
   // What the bundlers inject with no module of a package: esbuild's and Vite's helpers, plugin-vue's, and the pack's
@@ -367,7 +423,11 @@ export function packBundledPackages(packDir: string): { packages: NoticePackage[
   const css = fs.readdirSync(dist, { recursive: true, encoding: 'utf8' }).some((file) => file.endsWith('.css'));
   const injected = ['esbuild', 'vite', '@vitejs/plugin-vue', ...(css ? ['tailwindcss'] : [])];
   let fromModules: BundledPackage[] = [];
-  try { fromModules = bundledPackages(ids, packDir, injected); } catch (error) { problems.push((error as Error).message); }
+  try {
+    // Two esbuilds write a pack's bundles: the one the pack builder calls for the build helpers, and the one Vite
+    // depends on, which transforms and minifies the frontend and is another install when Vite asks for a newer one
+    fromModules = [...bundledPackages(ids, packDir, injected), installedPackage('esbuild', installedPackage('vite', packDir).dir)];
+  } catch (error) { problems.push((error as Error).message); }
   const found = new Map([...fromModules, ...named.values()].map((pkg) => [pkg.dir, pkg]));
   const packages = [...found.values()].filter((pkg) => !firstParty(pkg.name)).map((pkg) => ({ ...pkg, carried: 'inlined' as const }));
   return { packages, problems };
@@ -381,22 +441,39 @@ function repositoryOf(manifest: { repository?: unknown; name: string }): string 
   return repository.replace(/^git\+/, '').replace(/\.git$/, '');
 }
 
+/** The package a platform binary package belongs to, at its own version, which a release of both is published at */
+function parentOf(pkg: NoticePackage, byName: ReadonlyMap<string, readonly NoticePackage[]>): NoticePackage | undefined {
+  const parentName = PLATFORM_PARENTS.find(([pattern]) => pattern.test(pkg.name))?.[1];
+  const parents = parentName ? byName.get(parentName) ?? [] : [];
+  return parents.find((candidate) => candidate.version === pkg.version) ?? parents[0];
+}
+
+/** What a package's manifest declares as its license, or its parent's for a platform binary package that declares none */
+function statedLicense(pkg: NoticePackage, byName: ReadonlyMap<string, readonly NoticePackage[]>): string | undefined {
+  const parent = parentOf(pkg, byName);
+  return declaredLicense(manifestOf(pkg.dir)) ?? (parent && declaredLicense(manifestOf(parent.dir)));
+}
+
 /** One package's notice, or the problem that keeps it from having one */
-export function noticeOf(pkg: NoticePackage, licensesDir: string, byName: ReadonlyMap<string, readonly NoticePackage[]>): PackageNotice | string {
+export function noticeOf(
+  pkg: NoticePackage, licensesDir: string, byName: ReadonlyMap<string, readonly NoticePackage[]>, overrides: Readonly<Record<string, Override>> = OVERRIDES,
+): PackageNotice | string {
   const manifest = manifestOf(pkg.dir);
   const label = `${pkg.name}@${pkg.version} (${CARRIED_LABEL[pkg.carried]})`;
-  const parentName = PLATFORM_PARENTS.find(([pattern]) => pattern.test(pkg.name))?.[1];
-  // The parent at the platform package's own version, which a release of both is published at
-  const parents = parentName ? byName.get(parentName) ?? [] : [];
-  const parent = parents.find((candidate) => candidate.version === pkg.version) ?? parents[0];
-  const declared = declaredLicense(manifest) ?? (parent && declaredLicense(manifestOf(parent.dir)));
-  if (!declared) return `${label} declares no license`;
+  const parent = parentOf(pkg, byName);
+  const override = overrides[pkg.name] as Override | undefined;
+  const stated = statedLicense(pkg, byName);
+  const declared = judgedLicense(stated, override);
+  // What to do about a manifest that is the trouble, said only while no override answers it
+  const unreadable = declared === stated && !readsAsSpdx(stated)
+    ? ": when its own license text is one ACCEPTED names, give that as the license of its OVERRIDES entry, with why" : '';
+  if (!declared) return `${label} declares no license${unreadable}`;
   const license = chooseLicense(declared, pkg.carried);
-  if (!license) return `${label} is under ${declared}, which does not parse as SPDX or which this app may not ${pkg.carried === 'files' ? 'ship' : 'inline'} (ACCEPTED)`;
+  if (!license) return `${label} is under ${declared}, which does not parse as SPDX or which this app may not ${pkg.carried === 'files' ? 'ship' : 'inline'} (ACCEPTED)${unreadable}`;
   let texts = ownLicenseTexts(pkg.dir);
   if (!texts.length && parent) texts = ownLicenseTexts(parent.dir);
-  if (!texts.length && OVERRIDES[pkg.name]) {
-    texts = OVERRIDES[pkg.name].files.map((file) => fs.readFileSync(path.join(licensesDir, file), 'utf8').replace(/\r\n/g, '\n').trim());
+  if (!texts.length && override) {
+    texts = override.files.map((file) => fs.readFileSync(path.join(licensesDir, file), 'utf8').replace(/\r\n/g, '\n').trim());
   }
   if (!texts.length) return `${label} ships no license file: add its text to OVERRIDES, with why`;
   for (const { pattern, files } of EXTRAS) {
@@ -460,13 +537,18 @@ export function renderNotices(notices: readonly PackageNotice[], pointers: reado
   ].join('\n');
 }
 
-/** A component of the app's SBOM beside its third-party packages: its runtime, or a binary it ships */
+/** A component of the app's SBOM beside its third-party packages: its runtime, a binary it ships, or a file of one */
 export interface SbomComponent {
-  type: 'framework' | 'application';
+  type: 'framework' | 'application' | 'library' | 'file';
   name: string;
-  version: string;
-  purl: string;
+  version?: string;
+  /** Where it is from; a file has none, and is named by the component that holds it */
+  purl?: string;
   license?: string;
+  /** The SHA-256 of the file it is, in hex */
+  sha256?: string;
+  /** What is shipped inside it: the libraries a runtime builds in, the files beside a binary */
+  components?: readonly SbomComponent[];
 }
 
 /** An npm package's purl, whose scope's `@` is encoded */
@@ -493,15 +575,18 @@ function sbomLicenses(declared: string): object[] {
 }
 
 /**
- * The app's CycloneDX 1.5 SBOM: the app, every third-party package it carries with its declared license, how it is
- * carried and its hash, and the other components given. Every package carried is listed, whether or not its notice
- * could be written, so a preview's SBOM is whole too. No timestamp or serial number, so the same app writes the same
- * file.
+ * The app's CycloneDX 1.5 SBOM: the app, every third-party package it carries with the license it is judged under, how
+ * it is carried and its hash, and the other components given, each with what is shipped inside it. Every package
+ * carried is listed, whether or not its notice could be written, so a preview's SBOM is whole too. No timestamp or
+ * serial number, so the same app writes the same file.
  */
-export function appSbom(app: { name: string; version: string }, packages: readonly NoticePackage[], identity: SbomIdentity, others: readonly SbomComponent[]): object {
+export function appSbom(
+  app: { name: string; version: string }, packages: readonly NoticePackage[], identity: SbomIdentity, others: readonly SbomComponent[],
+  overrides: Readonly<Record<string, Override>> = OVERRIDES,
+): object {
   const libraries = packages.map((pkg) => {
     const purl = identity.purls[pkg.name] ?? npmPurl(pkg.name, pkg.version);
-    const declared = declaredLicense(manifestOf(pkg.dir));
+    const declared = judgedLicense(declaredLicense(manifestOf(pkg.dir)), overrides[pkg.name]);
     const integrity = identity.integrity.get(`${pkg.name}@${pkg.version}`);
     const sha512 = integrity?.startsWith('sha512-') ? Buffer.from(integrity.slice(7), 'base64').toString('hex') : undefined;
     return {
@@ -515,21 +600,67 @@ export function appSbom(app: { name: string; version: string }, packages: readon
       properties: [{ name: 'apack:carried', value: CARRIED_LABEL[pkg.carried] }],
     };
   });
-  const rest = others.map((component) => ({
-    type: component.type,
-    'bom-ref': component.purl,
-    name: component.name,
-    version: component.version,
-    purl: component.purl,
-    ...(component.license ? { licenses: sbomLicenses(component.license) } : {}),
-  }));
-  const components = [...libraries, ...rest].sort((a, b) => (a['bom-ref'] < b['bom-ref'] ? -1 : a['bom-ref'] > b['bom-ref'] ? 1 : 0));
+  const appRef = `app:${app.name}@${app.version}`;
+  const byRef = (a: { 'bom-ref': string }, b: { 'bom-ref': string }) => (a['bom-ref'] < b['bom-ref'] ? -1 : a['bom-ref'] > b['bom-ref'] ? 1 : 0);
+  // A component with no purl is one of the component holding it, whose reference its own extends to stay the only one
+  const other = (component: SbomComponent, within: string): Record<string, unknown> & { 'bom-ref': string } => {
+    const ref = component.purl ?? `${within}#${component.name}`;
+    return {
+      type: component.type,
+      'bom-ref': ref,
+      name: component.name,
+      ...(component.version ? { version: component.version } : {}),
+      ...(component.purl ? { purl: component.purl } : {}),
+      ...(component.sha256 ? { hashes: [{ alg: 'SHA-256', content: component.sha256 }] } : {}),
+      ...(component.license ? { licenses: sbomLicenses(component.license) } : {}),
+      ...(component.components?.length ? { components: component.components.map((held) => other(held, ref)).sort(byRef) } : {}),
+    };
+  };
   return {
     bomFormat: 'CycloneDX',
     specVersion: '1.5',
     version: 1,
-    metadata: { component: { type: 'application', 'bom-ref': `app:${app.name}@${app.version}`, name: app.name, version: app.version } },
-    components,
+    metadata: { component: { type: 'application', 'bom-ref': appRef, name: app.name, version: app.version } },
+    components: [...libraries, ...others.map((component) => other(component, appRef))].sort(byRef),
+  };
+}
+
+/**
+ * The binaries the carried packages' installs downloaded, as SBOM components: each `EXTRAS` entry's `readFor.binary`,
+ * at the release its texts were read for, with the hash of the file the app carries. A package downloading another
+ * release adds none: which version of what that release holds is unread, and `staleExtras` reports it.
+ */
+export function downloadedBinaries(packages: readonly NoticePackage[]): SbomComponent[] {
+  const found = new Map<string, SbomComponent>();
+  for (const pkg of packages) {
+    for (const { pattern, readFor } of EXTRAS) {
+      if (!readFor || !pattern.test(pkg.name) || staleExtras([pkg]).length) continue;
+      const { binary, release } = readFor;
+      const file = [binary.file, `${binary.file}.exe`].map((name) => path.join(pkg.dir, name)).find((candidate) => fs.existsSync(candidate));
+      const purl = `pkg:github/${binary.repository}@${release}`;
+      found.set(purl, {
+        type: 'application', name: binary.name, version: binary.version, purl, license: binary.license,
+        ...(file ? { sha256: createHash('sha256').update(fs.readFileSync(file)).digest('hex') } : {}),
+      });
+    }
+  }
+  return [...found.values()];
+}
+
+/**
+ * The terminal broker as an SBOM component, from its pin (`packages/terminal-broker/src/pin.json`): the pinned commit
+ * it was built from, the hash of its binary for the build's own `<platform>` (`darwin-arm64`), and each file its release
+ * ships beside the binary with its hash; or `undefined` when the pin holds no build for the platform
+ */
+export function brokerSbomComponent(pinFile: string, platform: string): SbomComponent | undefined {
+  const pin = JSON.parse(fs.readFileSync(pinFile, 'utf8')) as { commit: string; files: Record<string, Record<string, string>> };
+  if (!Object.hasOwn(pin.files, platform)) return undefined;
+  const files = pin.files[platform];
+  const binary = ['apack-terminal', 'apack-terminal.exe'].find((name) => Object.hasOwn(files, name));
+  return {
+    type: 'application', name: 'apack-terminal', version: pin.commit, purl: `pkg:github/spankyed/apack-terminal@${pin.commit}`, license: 'MIT OR Apache-2.0',
+    ...(binary ? { sha256: files[binary] } : {}),
+    components: Object.entries(files).filter(([name]) => name !== binary).map(([name, sha256]) => ({ type: 'file' as const, name, sha256 })),
   };
 }
 
@@ -607,14 +738,17 @@ export function writeAppNotices(options: {
   /** The platform the app is built for, which decides which of `OVERRIDES` it carries */
   platform: NodeJS.Platform;
   /**
-   * What else carries notices, named in the header, each with the file that has to exist, or `null` when its binary is
-   * missing, and why the pointer may be wrong, when it may
+   * What else carries notices, named in the header, each with the files it names, which have to exist, or `null` when
+   * its binary is missing, and why the pointer may be wrong, when it may
    */
-  native: readonly { pointer: string; file?: string | null; problem?: string }[];
-  /** Where to write the app's CycloneDX SBOM (`appSbom`), with what it names beside the packages */
+  native: readonly { pointer: string; files?: readonly string[] | null; problem?: string }[];
+  /** What the packages' own files don't say: `OVERRIDES`, unless given */
+  overrides?: Readonly<Record<string, Override>>;
+  /** Where to write the app's CycloneDX SBOM (`appSbom`), with what it names beside the packages and the binaries their installs downloaded */
   sbom?: { file: string; app: { name: string; version: string }; identity: SbomIdentity; others: readonly SbomComponent[] };
 }): string[] {
   const problems: string[] = [];
+  const overrides = options.overrides ?? OVERRIDES;
   const records = options.bundleRecords.flatMap((file) => {
     try { return readBundleRecord(file); } catch (error) { problems.push((error as Error).message); return []; }
   });
@@ -626,31 +760,38 @@ export function writeAppNotices(options: {
   for (const pkg of packages) byName.set(pkg.name, [...(byName.get(pkg.name) ?? []), pkg]);
   const notices: PackageNotice[] = [];
   for (const pkg of packages) {
-    const notice = noticeOf(pkg, options.licensesDir, byName);
+    const notice = noticeOf(pkg, options.licensesDir, byName, overrides);
     if (typeof notice === 'string') problems.push(notice);
     else notices.push(notice);
   }
   problems.push(...staleExtras(packages));
-  // An override for a package the app no longer carries is a text nobody reads, and a stale reason
-  const carried = new Set(packages.map((pkg) => pkg.name));
-  for (const [name, { platform }] of Object.entries(OVERRIDES)) {
+  // An override for a package the app no longer carries is a text nobody reads, and a stale reason; so is the half of
+  // one the package now answers itself, its texts once it ships a license file, its license once its manifest reads
+  for (const [name, { platform, files, license }] of Object.entries(overrides)) {
     if (platform && platform !== options.platform) continue;
-    if (!carried.has(name)) problems.push(`OVERRIDES names ${name}, which the app no longer carries: remove it and its text`);
-    else if (byName.get(name)!.some((pkg) => ownLicenseTexts(pkg.dir).length)) {
-      problems.push(`OVERRIDES names ${name}, which now ships its own license file: remove it and its text`);
+    const copies = byName.get(name);
+    if (!files.length && !license) problems.push(`OVERRIDES names ${name} with neither a text nor a license: remove it, or give it what the package lacks`);
+    if (!copies) { problems.push(`OVERRIDES names ${name}, which the app no longer carries: remove it and its text`); continue; }
+    if (files.length && copies.some((pkg) => ownLicenseTexts(pkg.dir).length)) {
+      problems.push(`OVERRIDES names ${name}, which now ships its own license file: remove ${license ? "the entry's files" : 'it'} and its text`);
+    }
+    if (license && copies.every((pkg) => readsAsSpdx(statedLicense(pkg, byName)))) {
+      problems.push(`OVERRIDES gives ${name} a license, and its manifest now declares one that reads as SPDX: remove the entry's license`);
     }
   }
-  for (const { pointer, file, problem } of options.native) {
+  for (const { pointer, files, problem } of options.native) {
     if (problem) problems.push(problem);
-    if (file === null) problems.push(`No binary was found for ${pointer}`);
-    else if (file && !fs.existsSync(file)) problems.push(`${file} is missing, so its binary would ship without its notices`);
+    if (files === null) problems.push(`No binary was found for ${pointer}`);
+    for (const file of files ?? []) {
+      if (!fs.existsSync(file)) problems.push(`${file} is missing, so its binary would ship without its notices`);
+    }
   }
   const adapted = ADAPTED.map((entry) => ({
     ...entry, text: entry.files.map((file) => fs.readFileSync(path.join(options.licensesDir, file), 'utf8').replace(/\r\n/g, '\n').trim()).join('\n\n'),
   }));
   fs.writeFileSync(path.join(options.appDir, 'THIRD-PARTY-NOTICES.txt'), renderNotices(notices, options.native.map(({ pointer }) => pointer), adapted));
   if (options.sbom) {
-    fs.writeFileSync(options.sbom.file, `${JSON.stringify(appSbom(options.sbom.app, packages, options.sbom.identity, options.sbom.others), null, 2)}\n`);
+    fs.writeFileSync(options.sbom.file, `${JSON.stringify(appSbom(options.sbom.app, packages, options.sbom.identity, [...options.sbom.others, ...downloadedBinaries(packages)], overrides), null, 2)}\n`);
   }
   if (problems.length && options.channel !== 'preview') {
     throw new Error(`The app's third-party notices are incomplete:\n  ${problems.join('\n  ')}`);

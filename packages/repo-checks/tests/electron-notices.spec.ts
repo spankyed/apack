@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import {
-  ELECTRON_NOTICES, MAC_FRAMEWORKS, READ_FOR_ELECTRON, electronNoticesPointer, ffmpegSource, shipElectronNotices,
+  ELECTRON_NOTICES, MAC_FRAMEWORKS, READ_FOR_ELECTRON, electronNoticesPointer, electronSbomComponent, ffmpegSource, shipElectronNotices,
 } from '../../../scripts/lib/electron-notices.ts';
 
 /**
@@ -90,6 +90,23 @@ describe("Electron's notices in the packaged app", () => {
     const problem = ffmpegSource('99.0.0').problem;
     expect(problem).toContain(`The app packages Electron 99.0.0, and FFmpeg's source and the macOS frameworks' licenses were read for Electron ${electron}`);
     expect(problem).toContain("read Electron's DEPS at v99.0.0");
+  });
+
+  it("names Electron in the SBOM by its GitHub release, holding the Chromium and FFmpeg it was read for, and neither for another", () => {
+    const { electron, chromium, ffmpeg } = READ_FOR_ELECTRON;
+    expect(electronSbomComponent(electron)).toEqual({
+      type: 'framework', name: 'electron', version: electron, purl: `pkg:github/electron/electron@v${electron}`, license: 'MIT',
+      components: [
+        { type: 'framework', name: 'chromium', version: chromium, purl: `pkg:github/chromium/chromium@${chromium}`, license: 'BSD-3-Clause' },
+        {
+          type: 'library', name: 'ffmpeg', version: ffmpeg, license: 'LGPL-2.1-or-later',
+          purl: `pkg:generic/ffmpeg@${ffmpeg}?vcs_url=git%2Bhttps%3A%2F%2Fchromium.googlesource.com%2Fchromium%2Fthird_party%2Fffmpeg%40${ffmpeg}`,
+        },
+      ],
+    });
+    expect(electronSbomComponent('99.0.0')).toEqual({
+      type: 'framework', name: 'electron', version: '99.0.0', purl: 'pkg:github/electron/electron@v99.0.0', license: 'MIT', components: [],
+    });
   });
 
   it('was read for the Electron this repository installs', () => {

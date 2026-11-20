@@ -4,8 +4,8 @@ import {execFileSync} from 'node:child_process';
 import {Arch} from 'electron-builder';
 import {createRequire} from 'node:module';
 import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
-import {electronNoticesPointer, ffmpegSource, shipElectronNotices} from './scripts/lib/electron-notices.ts';
-import {brokerNoticesFile, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
+import {electronNoticesPointer, electronSbomComponent, ffmpegSource, shipElectronNotices} from './scripts/lib/electron-notices.ts';
+import {brokerNoticesFile, brokerSbomComponent, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
 
 /**
  * Electron Builder Configuration
@@ -82,10 +82,12 @@ export default /** @type import('electron-builder').Configuration */
     const projectDir = context.packager.info.projectDir;
     // The broker built for this platform and arch, named as Node names them, which electron-builder's Arch does for
     // the x64 and arm64 the app is built for
-    const broker = brokerNoticesFile(appDir, `${context.electronPlatformName}-${Arch[context.arch]}`);
+    const brokerPlatform = `${context.electronPlatformName}-${Arch[context.arch]}`;
+    const broker = brokerNoticesFile(appDir, brokerPlatform);
     const electronVersion = context.packager.info.framework.version;
-    // The broker's build is under bin/<commit>/<platform>/, so its directory names the commit it was built from
-    const brokerCommit = broker && path.basename(path.dirname(path.dirname(broker)));
+    // The pin the broker's install downloads and checks its files against, for the SBOM's commit and hashes
+    const brokerPin = path.join(projectDir, 'packages', 'terminal-broker', 'src', 'pin.json');
+    const elmdb = path.join(appDir, 'node_modules', 'elmdb');
     const os = {darwin: 'mac', win32: 'win', linux: 'linux'}[context.electronPlatformName];
     const problems = writeAppNotices({
       appDir,
@@ -100,8 +102,11 @@ export default /** @type import('electron-builder').Configuration */
         {pointer: electronNoticesPointer(context.electronPlatformName)},
         // Where FFmpeg's source is, which its LGPL asks for, read for one Electron and a problem for another
         ffmpegSource(electronVersion),
-        {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", file: path.join(appDir, 'node_modules', 'elmdb', 'THIRD-PARTY-NOTICES')},
-        {pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin", file: broker ?? null},
+        {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", files: ['THIRD-PARTY-NOTICES', 'COPYRIGHT-rust-library.html'].map(name => path.join(elmdb, name))},
+        {
+          pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin",
+          files: broker ? [broker, path.join(path.dirname(broker), 'COPYRIGHT-rust-library.html')] : null,
+        },
       ],
       // The release's CycloneDX SBOM, beside its installers, which the release workflows upload by the `*.cdx.json` they
       // match. Its arch is electron-builder's name for it (x64, arm64), which the macOS and Windows installers share
@@ -111,10 +116,8 @@ export default /** @type import('electron-builder').Configuration */
         app: {name: productName, version: metadata.version},
         // The vendored checkouts' packages, by the repository each is pinned from, which no registry publishes
         identity: sbomIdentity(projectDir, {elmdb: 'elmdb#crates/elmdb-node', 'apack-git': 'apack-git', 'apack-terminal': 'apack-terminal#node', 'apack-terminal-view': 'apack-terminal#view'}),
-        others: [
-          {type: 'framework', name: 'electron', version: electronVersion, purl: `pkg:npm/electron@${electronVersion}`, license: 'MIT'},
-          ...(brokerCommit ? [{type: 'application', name: 'apack-terminal', version: brokerCommit, purl: `pkg:github/spankyed/apack-terminal@${brokerCommit}`, license: 'MIT OR Apache-2.0'}] : []),
-        ],
+        // The runtime the app ships, with the Chromium and FFmpeg inside it, and the broker with its release's files
+        others: [electronSbomComponent(electronVersion), ...(broker ? [brokerSbomComponent(brokerPin, brokerPlatform)] : [])].filter(Boolean),
       },
     });
     for (const problem of problems) console.warn(`  • third-party notices: ${problem}`);
