@@ -284,11 +284,15 @@ export async function closeApp(app: ElectronApplication, { userDataDir, keepProf
     closed.catch(() => {});
     // Read before the kills, which would make every quit read as one that exited
     const stage = describeQuitStage(quitSequence.progress());
-    if (app.process().exitCode === null && app.process().signalCode === null) app.process().kill('SIGKILL');
-    if (apiPid !== undefined) { try { process.kill(apiPid, 'SIGKILL'); } catch { /* it had exited */ } }
     const log = appLogs.get(app);
+    const running = app.process().exitCode === null && app.process().signalCode === null;
+    // Taken before the kill, which leaves nothing to say where the process was stuck
+    const sample = running && pid !== undefined ? await sampleStuckApp(pid, log) : undefined;
+    if (running) app.process().kill('SIGKILL');
+    if (apiPid !== undefined) { try { process.kill(apiPid, 'SIGKILL'); } catch { /* it had exited */ } }
     throw new Error(`${error instanceof Error ? error.message : String(error)}: ${stage}.`
-      + (log ? ` Full Electron and API output: ${log}` : ''), { cause: error });
+      + (log ? ` Full Electron and API output: ${log}` : '')
+      + (sample ? ` Where its main process was stuck: ${sample}` : ''), { cause: error });
   }
   // Electron close must include its API child; otherwise deleting storage races the final writes
   if (apiPid !== undefined) {
@@ -301,6 +305,20 @@ export async function closeApp(app: ElectronApplication, { userDataDir, keepProf
     }
     if (alive) throw new Error(`Electron closed while API process ${apiPid} was still alive`);
   }
+}
+
+/**
+ * Where an app that stopped working without closing was stuck: a macOS `sample` of its main process, written beside its
+ * log. A hang there is rare and idle, so the stack at the moment it is found is the one piece of evidence, and the kill
+ * that follows destroys it. Undefined off macOS, where there is no `sample`, and when the sample fails.
+ */
+function sampleStuckApp(pid: number, log: string | undefined): Promise<string | undefined> {
+  if (process.platform !== 'darwin') return Promise.resolve(undefined);
+  const output = `${log ?? path.join(os.tmpdir(), `apack-e2e-${pid}`)}.close.sample.txt`;
+  return new Promise(resolve => {
+    // `sample` runs the 2s it is asked for; the clock bounds only a `sample` that hangs itself
+    execFile('/usr/bin/sample', [String(pid), '2', '-file', output], { timeout: 10_000 }, error => resolve(error ? undefined : output));
+  });
 }
 
 /**
