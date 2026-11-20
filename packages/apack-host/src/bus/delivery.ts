@@ -21,7 +21,7 @@ import { _withPerformanceDelivery } from '@apackdev/sdk/runtime';
 // handler creates inside it, a timer included — so a send made minutes later, long after the asker stopped
 // waiting, carried that asker's address, and a `reply` made there would have answered a request nobody was
 // listening for. Binding at entry cannot do that: a handler either took an answer with it or it did not.
-import { _runDelivery, type _Asker, type Message } from '@apackdev/sdk/events';
+import { _replyTo, _runDelivery, _unavailable, type _AskDelivery, type _Asker, type Message } from '@apackdev/sdk/events';
 
 /**
  * The way back to whoever sent this message, read off the envelope.
@@ -49,7 +49,17 @@ function askerOf({ sender, client }: Pick<Message, 'sender' | 'client'>): _Asker
  * Synchronous by design — see the header. A send a handler makes after an `await` carries no sender, which
  * `tests/bus/delivery-is-synchronous.spec.ts` pins, so the limit is a decision rather than a surprise.
  */
-export function deliverAs<T>(message: Pick<Message, 'to' | 'sender' | 'client' | 'call' | 'diagnostics'>, event: object, body: () => T): T {
-  const run = () => _runDelivery({ receiver: message.to, asker: askerOf(message), event, ...(message.call === undefined ? {} : { call: message.call }) }, body);
+export function deliverAs<T>(message: Pick<Message, 'to' | 'sender' | 'client' | 'call' | 'diagnostics'>, event: object, body: () => T, ask?: _AskDelivery): T {
+  const run = () => _runDelivery({ receiver: message.to, asker: askerOf(message), event, ...(message.call === undefined ? {} : { call: message.call }), ...(ask ? { ask } : {}) }, body);
   return _withPerformanceDelivery(event, message.diagnostics, run);
+}
+
+/**
+ * Answers an ask nothing took — the system that would is not running, or the state it is in does not take the ask —
+ * as `unavailable`, to whoever asked and on the channel they asked on. An ask that named no asker has nobody to
+ * answer, and is left as an event nobody handled.
+ */
+export function answerUnavailable(message: Pick<Message, 'to' | 'sender' | 'client' | 'call' | 'event'>, why: string): void {
+  const reply = _replyTo({ receiver: message.to, asker: askerOf(message), ...(message.call === undefined ? {} : { call: message.call }) });
+  reply?.(_unavailable(message.event.type, why));
 }

@@ -325,7 +325,12 @@ export type SystemEvents =
 */
 | {
     type: 'DATA_CHANGED_ELSEWHERE';
-};
+}
+/**
+* The answers to this system's own asks of another system, when it handles them as events rather than awaiting
+* them (`ask`): every system may ask, so every system receives them
+*/
+| AskAnswered | AskFailed;
 
 // @public
 export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>, Extract<ContractOutgoing<C>, {
@@ -341,12 +346,9 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
     }): {
         [K in keyof P]: (args: SystemArgs<C>, params: P[K]) => void;
     };
-    answers<TAsked extends Extract<ContractIncoming<C>, {
-        type: string;
-    }>['type']>(defs: {
-        [T in TAsked]: (args: AnswerArgs<C, T>) => AnswerOf<C> | void | PromiseLike<AnswerOf<C> | void>;
-    }, options: AnswersOptions<C>): Answers<C, TAsked>;
-    failure(kind: ContractFailureKind<C>, message: string): AskError<ContractFailureKind<C>>;
+    answers(defs: {
+        readonly [K in AskName<C>]: AnswerHandler<C, K>;
+    }): Answers<C>;
     input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & {
         reply?: Reply<Extract<ContractOutgoing<C>, {
             type: string;

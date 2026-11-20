@@ -9,11 +9,18 @@ import { randomId } from '../utils/random-id.ts';
 import type { ApplicationHotkeys } from '../types/index.ts';
 import { eventTypes } from './event-types.ts';
 import { _currentDelivery, type _Delivery } from './delivery.ts';
+import { ASK_ANSWER_TYPES, isAskAnswer, _unavailable, type AskAnswered, type AskFailed, type AskFailure, type AskOutcome, type AskPayload, type SystemAskMap } from './ask.ts';
+import { fromPromise, type PromiseActorLogic } from 'xstate';
 import type { ContractIncoming, ContractOutgoing, SystemEvents } from '../framework/define-system.ts';
 
 export { eventTypes, type TypeOfEvent } from './event-types.ts';
-export { answerWith, askFailureOf, AskError, type AnswerWithOptions, type AskFailedEvent, type AskFailure } from './answer.ts';
-export { _currentDelivery, _runDelivery, type _Delivery, type _Asker } from './delivery.ts';
+export {
+  ASK_ANSWER_TYPES, AskError, isAskAnswer, _answered, _askFailureOf, _failedAnswer, _failure, _unavailable,
+  type AnswerPayload, type AnswersOf, type AskAnswered, type AskDeclaration, type AskEventOf, type AskEventsOf, type AskFailed,
+  type AskFailure, type AskName, type AskOutcome, type AskPayload, type ContractAsks, type DeclaredFailureKind,
+  type DeclaredFailures, type FailureOf, type StandardFailureKind, type SystemAskMap,
+} from './ask.ts';
+export { _currentDelivery, _runDelivery, type _Delivery, type _Asker, type _AskDelivery } from './delivery.ts';
 
 /**
  * A message on the bus: the ref of the system or surface it goes to, and the event exactly as the sender wrote it.
@@ -290,8 +297,12 @@ export type FeatureSettingsUpdated = { type: 'FEATURE_SETTINGS_UPDATED'; setting
 /** Open a canonical entity ID at this surface's declared destination. */
 export type OpenEntity = { type: 'OPEN_ENTITY'; id: import('@apackdev/ears').EARS.EntityId };
 
-/** The event types every surface receives from the app, beside those its pack's systems declare. */
-export const SURFACE_EVENT_TYPES = eventTypes<FeatureSettingsUpdated | OpenEntity>()('FEATURE_SETTINGS_UPDATED', 'OPEN_ENTITY');
+/**
+ * The event types every surface receives from the app, beside those its pack's systems declare: its settings
+ * changing, an entity to open, and the two answers an ask gets, which come back to whoever asked whichever system
+ * it asked.
+ */
+export const SURFACE_EVENT_TYPES = eventTypes<FeatureSettingsUpdated | OpenEntity | AskAnswered | AskFailed>()('FEATURE_SETTINGS_UPDATED', 'OPEN_ENTITY', ...ASK_ANSWER_TYPES);
 
 /** `M` keyed `<PackId>/<key>`: a pack's features by their refs */
 export type Qualified<PackId extends string, M> = { [K in keyof M & string as `${PackId}/${K}`]: M[K] };
@@ -385,6 +396,12 @@ export type HostSurfaceEvents = {
     | { type: 'HELP.OPEN'; target: import('../framework/pack-help.ts').HelpTarget }
     | { type: 'CLI_TEST_RESULT'; provider: string; success: boolean; error?: string; resolvedPath?: string };
 };
+
+/**
+ * The asks the host app's own systems answer for pack code, by ref: none yet. `#generated/events` includes this map,
+ * as it includes `HostSystemEvents`, so the day one declares an ask every pack can `ask` it.
+ */
+export type HostSystemAsks = {};
 
 /** Events the host app's own systems receive from pack code, which names them `host/<feature>` */
 export type HostSystemEvents = {
@@ -568,7 +585,124 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
       sendIncoming({ to: typeof to === 'string' ? resolve(to) : getDesignated(to.role), event, call, ...labels, ...answerAddress() });
       return call;
     },
+
+    /**
+     * Asks a system one of the asks its contract declares, and answers with how it ended: the answer, or why it was
+     * not done. It never rejects for the ask — a failure is a value — and rejects only when `signal` aborts.
+     */
+    ask(to: SystemTarget, event: { type: string; [key: string]: unknown }, options?: AskOptions): Promise<UntypedAskOutcome> {
+      return askVia(typeof to === 'string' ? resolve(to) : getDesignated(to.role), event, labels, options);
+    },
+
+    /**
+     * An ask as actor logic, for a machine to invoke: its input is the ask's fields, its output how it ended
+     * (`onOutcome`, `@apackdev/sdk/helpers`, writes a transition per way). Stopping the invoking state gives up on
+     * the answer, which the handler goes on to give anyway.
+     */
+    fromAsk(to: SystemTarget, type: string): PromiseActorLogic<UntypedAskOutcome, object | undefined> {
+      return fromPromise<UntypedAskOutcome, object | undefined>(({ input, signal }) =>
+        askVia(typeof to === 'string' ? resolve(to) : getDesignated(to.role), { ...input, type }, labels, { signal }));
+    },
   };
+}
+
+/** What an ask takes beside the event */
+export interface AskOptions {
+  /** Gives up on the answer: the ask's promise rejects with the signal's reason. The handler is not stopped by it */
+  signal?: AbortSignal;
+}
+
+/** How an ask ended, where nothing types it */
+export type UntypedAskOutcome = { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly failure: AskFailure };
+
+/**
+ * The asks this process is waiting on, by the call each was sent under: settled by the answer that names the call
+ * (`_settleAsk`), which the doors an answer arrives through take off before routing it anywhere.
+ *
+ * Module scope rather than per host, for the reason the delivery in scope is: one SDK instance per process
+ * (`SHARED_INSTANCE_PACKAGES`), and a call is unique to the process that minted it, so an answer naming one of
+ * these can be for nobody else.
+ */
+const pendingAsks = new Map<string, (outcome: UntypedAskOutcome) => void>();
+
+/**
+ * Where an answer to an ask made outside any delivery is addressed: a participant that is always registered, so the
+ * answer is routed to this process, where it is taken off by its call before anything reads the address. Inside a
+ * delivery the receiver is the address, as for any send, so the diagnostics name who asked.
+ */
+const ASK_RETURN_ADDRESS = { window: 'host/application', backend: 'host/bus' } as const;
+
+function askVia(to: string, event: { type: string; [key: string]: unknown }, labels: Pick<Message, 'from' | 'via'>, options?: AskOptions, client?: string): Promise<UntypedAskOutcome> {
+  const call = newCall();
+  const asked = event.type;
+  const signal = options?.signal;
+  return new Promise<UntypedAskOutcome>((resolve, reject) => {
+    if (signal?.aborted) { reject(signal.reason); return; }
+    const abort = () => { pendingAsks.delete(call); reject(signal!.reason); };
+    pendingAsks.set(call, (outcome) => { pendingAsks.delete(call); signal?.removeEventListener('abort', abort); resolve(outcome); });
+    signal?.addEventListener('abort', abort, { once: true });
+    const inWindow = _isFeHostBound();
+    const sender = _currentDelivery()?.receiver ?? (inWindow || client !== undefined ? ASK_RETURN_ADDRESS.window : ASK_RETURN_ADDRESS.backend);
+    const message = _performanceEnvelope({ to, event, call, ...labels, sender, ...(client === undefined ? {} : { client }) });
+    // A send the API refuses is an ask nothing will answer: no system of that name runs. Answered here as the bus
+    // answers one that runs and takes nothing, so the asker has its answer either way
+    if (inWindow) boundFeHost().client.send(message, () => _settleAsk({ answering: call, event: _unavailable(asked, `No "${to}" system is running to answer "${asked}"`) }));
+    else sendIncoming(message);
+  });
+}
+
+/**
+ * @internal Asks as a window on connection `client` would, for the pack test harness, which stands in for one: no
+ * process but the API's sets a connection, and the harness is that process for a test.
+ */
+export function _askOnConnection(client: string, to: string, event: { type: string; [key: string]: unknown }): Promise<UntypedAskOutcome> {
+  return askVia(to, event, {}, undefined, client);
+}
+
+/**
+ * @internal Settles the ask in this process that `message` answers, and says whether there was one: `true` means
+ * the message was this process's to take, and goes no further. Every door an answer arrives through asks this first
+ * — a window's subscription, and the bus's routing to a system.
+ */
+export function _settleAsk(message: Pick<Message, 'answering' | 'event'>): boolean {
+  const call = message.answering;
+  const settle = call === undefined ? undefined : pendingAsks.get(call);
+  if (settle === undefined || !isAskAnswer(message.event)) return false;
+  const { event } = message;
+  settle(event.type === 'ASK_ANSWERED' ? { ok: true, value: event.answer } : { ok: false, failure: event.failure as AskFailure });
+  return true;
+}
+
+/** @internal Whether this process is waiting on the answer to `call`: the bus answers one nothing will take */
+export const _isPendingAsk = (call: string | undefined): boolean => call !== undefined && pendingAsks.has(call);
+
+/** A signal that never aborts, for an ask whose asker no connection's end can take away */
+const NEVER_ABORTS = new AbortController().signal;
+
+/** Per bound bus, each connection's controller: aborted when the connection ends */
+const connectionSignals = new WeakMap<object, Map<string, AbortController>>();
+
+/**
+ * @internal A signal that aborts when connection `client` ends: what an ask's handler is handed, so work done for a
+ * window that has gone can stop. One that never aborts for an asker on no connection — another system — and where no
+ * backend is bound to hear of one ending.
+ */
+export function _connectionSignal(client: string | undefined): AbortSignal {
+  if (client === undefined || !_isHostBound()) return NEVER_ABORTS;
+  const { rootEvents } = boundHost().transport;
+  let controllers = connectionSignals.get(rootEvents);
+  if (controllers === undefined) {
+    const made = new Map<string, AbortController>();
+    connectionSignals.set(rootEvents, made);
+    rootEvents.onConnectionEnded((ended) => {
+      made.get(ended)?.abort(new Error('The window that asked is gone'));
+      made.delete(ended);
+    });
+    controllers = made;
+  }
+  let controller = controllers.get(client);
+  if (controller === undefined) controllers.set(client, controller = new AbortController());
+  return controller.signal;
 }
 
 /** The sends made by nobody in particular: the untyped ones below, which packs and tooling use directly. */
@@ -725,6 +859,14 @@ export function untypedSendToSystem(to: SystemTarget, event: { type: string; [ke
 }
 
 
+/**
+ * Asks a system one of its declared asks, by ref or by the role it plays, and answers with how it ended. Untyped:
+ * packs use the `ask` from their `#generated/events`, which checks the ask and types its answer.
+ */
+export function untypedAsk(to: SystemTarget, event: { type: string; [key: string]: unknown }, options?: AskOptions): Promise<UntypedAskOutcome> {
+  return unboundSends.ask(to, event, options);
+}
+
 /** Calls `callback` each time a client connects; returns the unsubscribe (backend only) */
 export function onConnected(callback: () => void): () => void {
   return boundHost().transport.rootEvents.onConnected(callback);
@@ -784,8 +926,25 @@ export type TypedSendToSystem<S extends SystemEventMap> = (<Id extends keyof S &
   options?: CallOptions,
 ) => string) & ((target: { role: string }, event: { type: string; [key: string]: unknown }, options?: CallOptions) => string) & ((system: FeatureRef, event: SystemEvents, options?: CallOptions) => string);
 
+/**
+ * `ask` typed against a system ask map: the ask's fields are checked against its declaration, and the answer and
+ * the failure kinds are its own. A role names whichever system plays it, which the build can't know, so asking one
+ * is untyped.
+ */
+export type TypedAsk<A extends SystemAskMap> = (<Id extends keyof A & string, K extends keyof A[Id] & string>(
+  system: Id,
+  event: { type: K } & AskPayload<A[Id][K]>,
+  options?: AskOptions,
+) => Promise<AskOutcome<A[Id][K]>>) & ((target: { role: string }, event: { type: string; [key: string]: unknown }, options?: AskOptions) => Promise<UntypedAskOutcome>);
+
+/** `fromAsk` typed against a system ask map: the actor's input is the ask's fields, its output how it ended */
+export type TypedFromAsk<A extends SystemAskMap> = <Id extends keyof A & string, K extends keyof A[Id] & string>(
+  system: Id,
+  type: K,
+) => PromiseActorLogic<AskOutcome<A[Id][K]>, AskPayload<A[Id][K]>>;
+
 /** A pack's typed sends */
-export interface TypedEvents<P extends SurfaceEvents, S extends SystemEventMap> {
+export interface TypedEvents<P extends SurfaceEvents, S extends SystemEventMap, A extends SystemAskMap = {}> {
   /** Backend: over the bus, to every window showing that surface */
   broadcastToSurface: TypedSendToSurface<P>;
   /** Backend: to that surface on one connection — the window a handler is serving, handed to it as `client` */
@@ -793,6 +952,10 @@ export interface TypedEvents<P extends SurfaceEvents, S extends SystemEventMap> 
   /** Renderer: straight to this window's actor for that surface */
   sendToSurface: TypedSendToSurface<P>;
   sendToSystem: TypedSendToSystem<S>;
+  /** Asks a system, and answers with its answer or why it was not done */
+  ask: TypedAsk<A>;
+  /** An ask as actor logic, for a machine to invoke */
+  fromAsk: TypedFromAsk<A>;
 }
 
 /**
@@ -800,6 +963,6 @@ export interface TypedEvents<P extends SurfaceEvents, S extends SystemEventMap> 
  * feature, the host's included, as `<packId>/<featureId>` (`@apackdev/sdk/ids`). The types reject a name nothing declares, and the app reports a
  * send it has no receiver for.
  */
-export function defineEvents<P extends SurfaceEvents, S extends SystemEventMap>(packId: string): TypedEvents<P, S> {
-  return createSends({ resolve: (name) => resolveName(name, packId), from: packId }) as unknown as TypedEvents<P, S>;
+export function defineEvents<P extends SurfaceEvents, S extends SystemEventMap, A extends SystemAskMap = {}>(packId: string): TypedEvents<P, S, A> {
+  return createSends({ resolve: (name) => resolveName(name, packId), from: packId }) as unknown as TypedEvents<P, S, A>;
 }

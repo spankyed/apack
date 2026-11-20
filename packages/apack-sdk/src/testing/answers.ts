@@ -1,4 +1,4 @@
-import { _callOn } from '../events/index.ts';
+import { _callOn, type AskAnswered, type AskFailed } from '../events/index.ts';
 
 /**
  * The answer to `call`, as a delivery door would deliver it: `event` with the call it answers on it.
@@ -18,4 +18,20 @@ import { _callOn } from '../events/index.ts';
  */
 export function answerTo<E extends { type: string }>(call: string, event: E): E {
   return { ...event, ..._callOn({ answering: call }) };
+}
+
+/**
+ * The answer to an ask a machine made and goes on from — a surface's write over a view it shows — as the asked
+ * system's handler gives it, for a spec that drives the machine directly: `actor.send(askAnswered(call, 'RENAME_ITEM', answer))`.
+ */
+export function askAnswered<K extends string, A>(call: string, asked: K, answer: A): AskAnswered<K, A> {
+  return answerTo(call, { type: 'ASK_ANSWERED', asked, answer });
+}
+
+/**
+ * The refusal of an ask, as the asked system's handler or the bus gives it, for a spec that drives the asking machine
+ * directly: `actor.send(askFailed(call, 'RENAME_ITEM', { kind: 'name-taken', message: 'Taken', existing: id }))`.
+ */
+export function askFailed<K extends string, F extends { kind: string; message: string }>(call: string, asked: K, failure: F): AskFailed<K, F> {
+  return answerTo(call, { type: 'ASK_FAILED', asked, failure });
 }

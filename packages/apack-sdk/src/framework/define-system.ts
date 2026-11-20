@@ -1,7 +1,7 @@
 import { _withPerformanceEvent } from '../runtime/performance.ts';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
-import { _clientOf, _currentDelivery, _replyTo, answerWith, askFailureOf, AskError, type AskFailedEvent, type Reply } from '../events/index.ts';
+import { _answered, _askFailureOf, _clientOf, _connectionSignal, _currentDelivery, _failedAnswer, _failure, _replyTo, ASK_ANSWER_TYPES, type AnswerPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskFailed, type AskName, type AskEventsOf, type ContractAsks, type FailureOf, type Reply } from '../events/index.ts';
 import { reportError } from '../logger/report-error.ts';
 import type { ArrayChanges } from '../utils/change-detection.ts';
 import { eventTypes } from '../events/event-types.ts';
@@ -45,12 +45,18 @@ export type SystemEvents =
    * this arrives.
    */
   | { type: 'DATA_CHANGED_ELSEWHERE' }
+  /**
+   * The answers to this system's own asks of another system, when it handles them as events rather than awaiting
+   * them (`ask`): every system may ask, so every system receives them
+   */
+  | AskAnswered
+  | AskFailed
 
 /**
  * The event types every system accepts, as a value: a send of one to a feature that runs no system is nobody's, and
  * dropped without a warning.
  */
-export const SYSTEM_EVENT_TYPES = eventTypes<SystemEvents>()('SEND_STATE', 'CLIENT_CONNECTED', 'PACK_CHANGED', 'FEATURE_SETTINGS_UPDATED', 'DATA_REPLACED', 'DATA_CHANGED_ELSEWHERE');
+export const SYSTEM_EVENT_TYPES = eventTypes<SystemEvents>()('SEND_STATE', 'CLIENT_CONNECTED', 'PACK_CHANGED', 'FEATURE_SETTINGS_UPDATED', 'DATA_REPLACED', 'DATA_CHANGED_ELSEWHERE', ...ASK_ANSWER_TYPES);
 
 /**
  * What a system's contract declares. A feature exports one as `Contract` from its `be/contract.ts`, and `apack.json`
@@ -73,6 +79,12 @@ export const SYSTEM_EVENT_TYPES = eventTypes<SystemEvents>()('SEND_STATE', 'CLIE
 export interface SystemContract {
   context?: unknown;
   incoming?: { type: string };
+  /**
+   * The asks it answers, by name: each an event an asker sends (`{ type: name, ...ask }`), answered exactly once
+   * with `answer` or with a failure of one of the kinds `fails` declares (`AskDeclaration`). Answered by the
+   * table `defineSystem`'s `answers` builds, which has to cover every one.
+   */
+  asks?: Record<string, AskDeclaration>;
   internal?: { type: string };
   outgoing: { type: string };
 }
@@ -87,7 +99,7 @@ export interface SystemContract {
 // narrowing it to nothing.
 
 /** The events a contract says the system receives from outside itself — what a sender may write */
-export type ContractIncoming<C> = C extends { incoming: infer Events } ? Events : never;
+export type ContractIncoming<C> = (C extends { incoming: infer Events } ? Events : never) | AskEventsOf<C>;
 /** The events a contract says the system's own children send it; nobody else's to send */
 export type ContractInternal<C> = C extends { internal: infer Events } ? Events : never;
 /** The events a contract says the system sends to surfaces */
@@ -213,34 +225,30 @@ export function defineHandlers<
   };
 }
 
-/** The reasons a contract says its asks can fail as: the kinds of the `AskFailedEvent` among what it sends */
-export type ContractFailureKind<C> = Extract<ContractOutgoing<C>, { type: 'ASK_FAILED' }> extends { failure: { kind: infer Kind } }
-  ? Exclude<Kind, 'failed'> & string : never;
-
-/** What a handler under `answers` may answer with: anything the system sends but the refusal, which is thrown */
-type AnswerOf<C> = Exclude<Extract<ContractOutgoing<C>, { type: string }>, { type: 'ASK_FAILED' }>;
-
-/** What a handler under `answers` is handed: the event it answers, narrowed, and the connection that asked */
-type AnswerArgs<C extends SystemContract, TAsked extends string> =
-  Omit<SystemArgs<C>, 'event'> & { event: Extract<ContractIncoming<C>, { type: TAsked }>; client?: string };
-
-/** How a system's `answers` answer where a handler does not say */
-export interface AnswersOptions<C extends SystemContract> {
-  /** The answer to an ask whose handler returns nothing: a write that landed and has nothing to hand back */
-  readonly landed: AnswerOf<C>;
-  /** What names this system where a failure nobody asked about is reported: the string its logger is named */
-  readonly source: string;
-  /**
-   * Which of the contract's kinds an error is, for the errors a handler does not throw itself: a file that is
-   * gone, a typed error of a service it calls. Nothing for one it cannot place, which is answered as `'failed'`.
-   */
-  readonly kindOf?: (error: unknown) => ContractFailureKind<C> | undefined;
+/** What one of a system's ask handlers is handed */
+export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
+  /** The ask, as the asker sent it */
+  readonly ask: AskEventOf<C, K>;
+  /** The system's context as the ask arrived: a handler reads it, and changes it by sending its machine an event */
+  readonly context: ContractContext<C>;
+  /** The system's own actor, to send it an event — a state the answer moves it into */
+  readonly self: SystemArgs<C>['self'];
+  /** Aborts when the window that asked goes; never, for an ask another system made */
+  readonly signal: AbortSignal;
+  /** The connection the ask arrived on, absent for one another system made */
+  readonly client?: string;
+  /** Builds a refusal of one of the kinds the ask declares, for the handler to throw */
+  readonly failure: FailureOf<ContractAsks<C>[K]>;
 }
 
-/** What `answers` makes: the actions to give `setup`, and the transitions that run each on the event it answers */
-export interface Answers<C extends SystemContract, TAsked extends string> {
-  readonly actions: { [T in TAsked]: (args: SystemArgs<C>, params: undefined) => void };
-  readonly on: { readonly [T in TAsked]: { readonly actions: T } };
+/** One of a system's ask handlers: it returns the answer, or a promise of it, and throws a refusal */
+export type AnswerHandler<C extends SystemContract, K extends AskName<C>> =
+  (args: AnswerArgs<C, K>) => AnswerPayload<ContractAsks<C>[K]> | PromiseLike<AnswerPayload<ContractAsks<C>[K]>>;
+
+/** What `answers` makes: the actions to give `setup`, and the transitions that run each on the ask it answers */
+export interface Answers<C extends SystemContract> {
+  readonly actions: { readonly [K in AskName<C>]: (args: SystemArgs<C>, params: undefined) => void };
+  readonly on: { readonly [K in AskName<C>]: { readonly actions: K } };
 }
 
 /** The definition object returned by `defineSystem()`. */
@@ -272,38 +280,33 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
    */
   input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & { reply?: Reply<Extract<ContractOutgoing<C>, { type: string }>>; client?: string }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
   /**
-   * The system's answers, keyed by the event each answers: **a handler returns its answer, and is not handed
-   * the means to give it.**
+   * The table that answers the system's asks (`asks` in its contract): one handler per ask, and it has to cover every
+   * one. **A handler returns its answer and throws its refusal; it is not handed the means to give either.**
    *
    * ```ts
-   * const answers = notesSpec.answers({
-   *   GET_NOTE: async ({ event }) => ({ type: 'NOTE_LOADED', note: await read(event.id) }),
-   *   DELETE_NOTE: ({ event }) => { remove(event.id) },
-   * }, { landed: { type: 'NOTE_WRITTEN' }, source: 'notes' });
+   * export const answers = librarySpec.answers({
+   *   GET_DOCUMENT: async ({ ask, signal, failure }) => {
+   *     const document = await libraryService.find(ask.id, { signal })
+   *     if (!document) throw failure('not-found', 'Document not found')
+   *     return { document }
+   *   },
+   * })
    *
-   * setup({ types: notesSpec.types, actions: { ...answers.actions } })
-   *   .createMachine({ on: { ...answers.on } });
+   * setup({ types: librarySpec.types, actions: { ...answers.actions } })
+   *   .createMachine({ on: { ...answers.on } })
    * ```
    *
-   * Whoever asked is answered whichever way the handler ends, which is the point: a window that asked shows
-   * nothing until it is answered, and an answer a handler has to remember on its failure path is one a new
-   * handler forgets. What it returns is the answer; returning nothing answers `landed`; and anything it throws,
-   * or a promise it returns rejects with, answers `ASK_FAILED` — with the kind of an `AskError` (`failure`),
-   * else the kind `kindOf` reads off the error, else `'failed'`. The work runs whether or not anybody asked, and
-   * a failure nobody asked about is reported, since no window shows it.
+   * Whoever asked is answered whichever way the handler ends, which is the point: a window that asked shows nothing
+   * until it is answered, and an answer a handler has to remember on its failure path is one a new handler forgets.
+   * What it returns is `ASK_ANSWERED`'s `answer`; what it throws is `ASK_FAILED`, of the kind `failure` named, or
+   * for an error from the disk the kind it is where the ask declares it (`not-found`, `no-access`), or else
+   * `failed`. The work runs whether or not anybody asked, and a failure nobody asked about is reported, since no
+   * window shows it. An ask the machine's current state does not take is answered `unavailable` by the bus.
    *
-   * A contract whose asks are answered this way declares `AskFailedEvent` among what it sends. One that does
-   * not has no kinds to refuse with, and the surface is sent an event it never declared.
-   *
-   * For an ask and its one answer. A handler that answers more than once (progress, then a result), or tells
-   * every window when nobody asked, is an action and is handed `reply`.
+   * `answers.on` goes wherever the asks are taken: at the root for a system that takes them in every state, under a
+   * state for one that takes them only there.
    */
-  answers<TAsked extends Extract<ContractIncoming<C>, { type: string }>['type']>(
-    defs: { [T in TAsked]: (args: AnswerArgs<C, T>) => AnswerOf<C> | void | PromiseLike<AnswerOf<C> | void> },
-    options: AnswersOptions<C>,
-  ): Answers<C, TAsked>;
-  /** A refusal for a handler under `answers` to throw: one of the contract's kinds, and what to tell the asker */
-  failure(kind: ContractFailureKind<C>, message: string): AskError<ContractFailureKind<C>>;
+  answers(defs: { readonly [K in AskName<C>]: AnswerHandler<C, K> }): Answers<C>;
 }
 
 /**
@@ -328,30 +331,48 @@ export function defineSystem<C extends SystemContract>(): SystemSpec<C> {
     },
     typeOf: safeEvents<MachineEvents<C>>(),
     ...defineHandlers<ContractContext<C>, MachineEvents<C>>(),
-    answers: (defs, options) => {
-      type Out = Extract<ContractOutgoing<C>, { type: string }>;
-      type Handler = (args: object) => Out | void | PromiseLike<Out | void>;
+    answers: (defs) => {
       const asks = Object.keys(defs);
-      const landed = (made: Out | void): Out => made ?? options.landed as Out;
+      const handlers = defs as unknown as Record<string, (args: object) => unknown>;
       return {
-        actions: Object.fromEntries(asks.map((asked) => [asked, handing(({ reply, ...args }: { reply?: Reply<Out> }) => {
-          void answerWith<Out>(reply, () => {
-            const made = (defs as Record<string, Handler>)[asked]!(args);
-            return isThenable(made) ? Promise.resolve(made).then(landed) : landed(made);
-          }, {
-            failed: (error) => ({ type: 'ASK_FAILED', asked, failure: askFailureOf(error, options.kindOf) } satisfies AskFailedEvent as unknown as Out),
-            unasked: (error) => reportError({ error, title: `${asked} failed`, source: options.source }),
-          });
-        })])),
+        actions: Object.fromEntries(asks.map((asked) => [asked, (args: SystemArgs<C>) =>
+          _withPerformanceEvent(args.event, () => answer(asked, handlers[asked]!, args))])),
         on: Object.fromEntries(asks.map((asked) => [asked, { actions: asked }])),
-      } as never;
+      } as unknown as Answers<C>;
     },
-    failure: (kind, message) => new AskError(kind, message),
   };
 }
 
-const isThenable = <T>(value: T | PromiseLike<T>): value is PromiseLike<T> =>
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
   typeof (value as { then?: unknown } | null)?.then === 'function';
+
+/**
+ * Runs one ask's handler and answers its asker, whichever way the handler ends. Synchronous work is answered before
+ * this returns, so a system that answers from what it holds answers within the delivery.
+ */
+function answer(asked: string, handler: (args: object) => unknown, args: { event: unknown; context: unknown; self: unknown }): void {
+  const delivery = answerable(args);
+  // Taken: the bus answers an ask nobody took, and this one is being answered
+  if (delivery?.ask) delivery.ask.taken = true;
+  const reply = _replyTo(delivery);
+  const client = _clientOf(delivery);
+  const refused = (error: unknown) => {
+    const failure = _askFailureOf(error, delivery?.ask?.kinds);
+    if (reply) reply(_failedAnswer(asked, failure));
+    // Nobody asked, so no window shows it: work a handler does for an applier, a migration or a timer
+    else reportError({ error, title: `${asked} failed`, source: delivery?.receiver ?? 'answers' });
+  };
+  let made: unknown;
+  try {
+    made = handler({ ask: args.event, context: args.context, self: args.self, signal: _connectionSignal(client), failure: _failure, ...(client === undefined ? {} : { client }) });
+  } catch (error) {
+    refused(error);
+    return;
+  }
+  // Two handlers rather than a `catch` after: a throw from answering is the bus's, not the work's, and is not answered again
+  if (isThenable(made)) Promise.resolve(made).then((value) => { reply?.(_answered(asked, value)); }, refused);
+  else reply?.(_answered(asked, made));
+}
 
 /**
  * Whether a system entry's machine was built from the contract given: `true`, or a sentence saying how they differ.

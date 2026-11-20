@@ -20,6 +20,33 @@ import type { SearchDeclaration } from '@apackdev/ears';
 import { z } from 'zod';
 
 // @public
+export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
+    readonly ask: AskEventOf<C, K>;
+    readonly client?: string;
+    readonly context: ContractContext<C>;
+    readonly failure: FailureOf<ContractAsks<C>[K]>;
+    readonly self: SystemArgs<C>['self'];
+    readonly signal: AbortSignal;
+}
+
+// @public
+export type AnswerHandler<C extends SystemContract, K extends AskName<C>> = (args: AnswerArgs<C, K>) => AnswerPayload<ContractAsks<C>[K]> | PromiseLike<AnswerPayload<ContractAsks<C>[K]>>;
+
+// @public
+export interface Answers<C extends SystemContract> {
+    // (undocumented)
+    readonly actions: {
+        readonly [K in AskName<C>]: (args: SystemArgs<C>, params: undefined) => void;
+    };
+    // (undocumented)
+    readonly on: {
+        readonly [K in AskName<C>]: {
+            readonly actions: K;
+        };
+    };
+}
+
+// @public
 export type ArrayChanges = Record<string, DiffResult<DiffItem>>;
 
 // @public (undocumented)
@@ -199,6 +226,7 @@ export interface FeatureEventContract {
     system?: {
         incoming: readonly string[];
         outgoing: readonly string[];
+        asks?: Readonly<Record<string, readonly string[]>>;
     };
 }
 
@@ -489,6 +517,7 @@ export interface PackFeatureSurface {
 
 // @public
 export interface PackFeatureSystem {
+    asks?: Readonly<Record<string, readonly string[]>>;
     // (undocumented)
     machine: AnyStateMachine;
     receives: readonly string[];
@@ -903,10 +932,11 @@ export interface SurfaceDeclaration {
 export function _surfaceTargets(surface: SurfaceDeclaration): [string, string][];
 
 // @public
-export const SYSTEM_EVENT_TYPES: readonly ["SEND_STATE", "CLIENT_CONNECTED", "PACK_CHANGED", "FEATURE_SETTINGS_UPDATED", "DATA_REPLACED", "DATA_CHANGED_ELSEWHERE"];
+export const SYSTEM_EVENT_TYPES: readonly ["SEND_STATE", "CLIENT_CONNECTED", "PACK_CHANGED", "FEATURE_SETTINGS_UPDATED", "DATA_REPLACED", "DATA_CHANGED_ELSEWHERE", "ASK_ANSWERED", "ASK_FAILED"];
 
 // @public
 export interface SystemContract {
+    asks?: Record<string, AskDeclaration>;
     // (undocumented)
     context?: unknown;
     // (undocumented)
@@ -986,7 +1016,12 @@ export type SystemEvents =
 */
 | {
     type: 'DATA_CHANGED_ELSEWHERE';
-};
+}
+/**
+* The answers to this system's own asks of another system, when it handles them as events rather than awaiting
+* them (`ask`): every system may ask, so every system receives them
+*/
+| AskAnswered | AskFailed;
 
 // @public
 export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>, Extract<ContractOutgoing<C>, {
@@ -1002,12 +1037,9 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
     }): {
         [K in keyof P]: (args: SystemArgs<C>, params: P[K]) => void;
     };
-    answers<TAsked extends Extract<ContractIncoming<C>, {
-        type: string;
-    }>['type']>(defs: {
-        [T in TAsked]: (args: AnswerArgs<C, T>) => AnswerOf<C> | void | PromiseLike<AnswerOf<C> | void>;
-    }, options: AnswersOptions<C>): Answers<C, TAsked>;
-    failure(kind: ContractFailureKind<C>, message: string): AskError<ContractFailureKind<C>>;
+    answers(defs: {
+        readonly [K in AskName<C>]: AnswerHandler<C, K>;
+    }): Answers<C>;
     input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & {
         reply?: Reply<Extract<ContractOutgoing<C>, {
             type: string;

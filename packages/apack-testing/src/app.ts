@@ -5,7 +5,7 @@ import { resolveName, resolveRegistered } from '@apackdev/sdk/ids';
 import type { PackLifecycleHooks, PackRegistration, ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
 import { createViewHost } from '@apackdev/host/views';
 import { boundEars } from '@apackdev/sdk/ears';
-import { newCall, type Message } from '@apackdev/sdk/events';
+import { _askOnConnection, newCall, untypedAsk, type Message, type UntypedAskOutcome } from '@apackdev/sdk/events';
 import { testRootEvents, testRunHistory } from '@apackdev/sdk/testing';
 import type { RunNodeId } from '@apackdev/sdk/services';
 import { untypedQuery } from '@apackdev/sdk/ears';
@@ -122,6 +122,13 @@ export interface TestApp {
     options?: { sender?: string; client?: string; call?: string; settingsAccess?: TestSettingsAccess },
   ): Promise<string>;
   /**
+   * Asks a system one of its declared asks and answers with how it ended — its answer, or why it was not done — as
+   * the app answers a window's or a system's ask: through the bus, so an ask the system's state does not take is
+   * answered `unavailable`. With `client`, the ask arrives on that connection, as a window's does, and its handler is
+   * handed it; without, it arrives as another system's would.
+   */
+  ask(systemId: string, event: { type: string; [key: string]: unknown }, options?: { client?: string }): Promise<UntypedAskOutcome>;
+  /**
    * The events delivered to one frontend surface (by `broadcastToSurface`, once connected), in order, exactly as
    * sent; the surface named as the pack names it (its own by feature id, any other as `<packId>/<featureId>`).
    * Readable after `stop`
@@ -186,6 +193,8 @@ interface AppPacks {
   getSurfaceEventValidationMap(): Map<string, Set<string>>;
   /** And what each system accepts, so a send a system declares no event for is reported rather than ignored */
   getEventValidationMap(): Map<string, Set<string>>;
+  /** The failure kinds a system declares for one of its asks, so an ask nothing took is answered as the app answers it */
+  askKinds(ref: string, type: string): readonly string[] | undefined;
   /** What a view's code is, which the view host reads and follows */
   getPackRegistration(packId: string): PackRegistration | null;
   onRegistrationChanged(listener: (packId: string) => void): () => void;
@@ -514,6 +523,11 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
       testRootEvents.emitIncoming({ to: resolveSystemId(systemId, systems), event: request, call: sentUnder, ...sender, ...client });
       await settle();
       return sentUnder;
+    }),
+    ask: (systemId, event, options) => call(async () => {
+      if (options?.client === '') throw new Error("app.ask was given client: '', which names no connection. Pass any non-empty name, or leave it out to ask as a system would.");
+      const to = resolveSystemId(systemId, systems);
+      return options?.client === undefined ? untypedAsk(to, event) : _askOnConnection(options.client, to, event);
     }),
     emitted(surface) {
       const id = resolveSurfaceId(surface);

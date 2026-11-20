@@ -141,6 +141,18 @@ export interface _Delivery {
    * and its handler is handed no \`reply\` — or it would answer the first message's asker about something it never asked.
    */
   event?: object;
+  /**
+   * Where the event is one of the receiver's declared asks: the failure kinds its contract declares, and whether a
+   * handler took it. Set by the bus, which reads the declaration, and marked by the handler that answers it — after
+   * the delivery the bus answers an ask no handler took (`unavailable`), so every ask is answered.
+   */
+  ask?: _AskDelivery;
+}
+
+/** An ask being delivered: what its declaration says it may fail as, and whether a handler took it */
+export interface _AskDelivery {
+  readonly kinds: readonly string[];
+  taken: boolean;
 }
 
 /** The holder, and the whole mechanism — in a window and on the backend alike */
