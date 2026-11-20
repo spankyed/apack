@@ -27,7 +27,7 @@ export type Event =
     }
   | { type: 'search.CANCEL_SEARCH' }
   | { type: 'search.ASSIGN_SEARCH_CONTROLLER'; controller: AbortController }
-  | { type: 'search.CLEAR_SEARCH_CONTROLLER' }
+  | { type: 'search.CLEAR_SEARCH_CONTROLLER'; controller: AbortController }
   | { type: 'search.UPDATE_BASE_DIRECTORY'; path: string };
 
 /** Hands each handler the answer for the message it is handling — see `defineHandlers` */
@@ -104,7 +104,8 @@ export const searchSystem = setup({
                 data: result
               })
             }
-          }
+          },
+          controller.signal
         )
 
         if (!controller.signal.aborted) {
@@ -121,7 +122,7 @@ export const searchSystem = setup({
           })
         }
       } finally {
-        self.send({ type: 'search.CLEAR_SEARCH_CONTROLLER' })
+        self.send({ type: 'search.CLEAR_SEARCH_CONTROLLER', controller })
       }
     },
 
@@ -138,8 +139,13 @@ export const searchSystem = setup({
       }
     }),
 
+    // A search that ends clears its own controller and no other: one replaced while it ran ends after the search
+    // that replaced it began, whose controller is the one held by then
     clearSearchController: assign({
-      activeSearchController: undefined
+      activeSearchController: ({ context, event }) => {
+        const ev = event as { type: 'search.CLEAR_SEARCH_CONTROLLER'; controller: AbortController }
+        return context.activeSearchController === ev.controller ? undefined : context.activeSearchController
+      }
     }),
 
     updateBaseDirectory: assign({

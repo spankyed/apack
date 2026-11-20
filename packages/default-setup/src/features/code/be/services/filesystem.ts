@@ -345,7 +345,9 @@ export class FileSystemRepository {
   async searchFiles(
     options: SearchOptions,
     onProgress?: (filesSearched: number, totalFiles: number, currentFile?: string) => void,
-    onResult?: (result: SearchResult) => void
+    onResult?: (result: SearchResult) => void,
+    /** Ends the search when it aborts: ripgrep is stopped, and the search rejects with the signal's reason */
+    signal?: AbortSignal
   ): Promise<SearchResult[]> {
     try {
       const validPath = this.validatePath(options.path)
@@ -396,7 +398,7 @@ export class FileSystemRepository {
       args.push(validPath)
       
       return new Promise((resolve, reject) => {
-        const rg = spawn(rgPath, args)
+        const rg = spawn(rgPath, args, { signal })
         
         let currentResult: SearchResult | null = null
         let filesSearched = 0
@@ -446,6 +448,8 @@ export class FileSystemRepository {
         
         rg.on('close', async (code) => {
           // The process is gone, and what it wrote may still be on its way through the decoder
+          // Stopped by its caller: whatever it had found is not an answer to anything still asked
+          if (signal?.aborted) { reject(signal.reason); return }
           try { await read } catch (error) {
             reject(this.createError('SEARCH_ERROR', `Search output could not be read: ${(error as Error).message}`))
             return
@@ -469,6 +473,8 @@ export class FileSystemRepository {
         })
         
         rg.on('error', (err) => {
+          // The abort itself, which the exit that follows it answers
+          if (signal?.aborted) return
           if (err.message.includes('ENOENT')) {
             reject(this.createError('SEARCH_ERROR', 'ripgrep (rg) is not installed. Please install it to use search functionality.'))
           } else {
@@ -477,7 +483,7 @@ export class FileSystemRepository {
         })
       })
     } catch (error: any) {
-      if (error.code === 'SEARCH_ERROR') {
+      if (error.code === 'SEARCH_ERROR' || signal?.aborted) {
         throw error
       }
       throw this.createError('SEARCH_ERROR', error.message)
