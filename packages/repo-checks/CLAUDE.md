@@ -58,7 +58,7 @@ names every workspace that has a second config.
 | Spec | Subject |
 |---|---|
 | `performance-scenario-view` | serialized renderer completion, receipt matching and cleanup for the manual performance harness |
-| `preview-build` | preview version parsing, isolated build environment, and isolated staging builds, build integrity before packaging, and beta release naming |
+| `preview-build` | preview version parsing, isolated build environment, and isolated staging builds, build integrity before packaging, that a build is not sealed while a bundler has recorded nothing of what it inlined, how a workspace's record merges the lists handed to it, and beta release naming |
 | `packaged-app` | manifest-based bundle selection, channel isolation, reset scope, captured exit status, signing assessment failures, and diagnostics from the selected app and profile |
 | `chain-graph`, `chain-schedule`, `step-timing` | the chain's run order, the scheduler that admits its steps on a core budget, and what a step costs. That a step's declared timeout rung matches its kind of work (`rungForKind`), with the reviewed exceptions, and what a step says when its rung killed it: the deadline and the recorded cost, without diagnosing slow from stalled. Every class a direct `npm run` bounds at through `scripts/bounded.ts` is on the ladder, and the scan is mutated in the spec because one that matched nothing would satisfy every assertion over it |
 | `step-durations` | the machine-local window of what each chain step cost when it passed: the median it answers, the oldest runs dropped, a damaged window read as no evidence, and the neutral figure a step with no reading counts at |

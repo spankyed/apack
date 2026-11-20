@@ -5,7 +5,10 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { previewEnvironment, previewVersion } from '../../../scripts/lib/preview-build.ts';
-import { APP_WORKSPACES, resolveBuildMetadata, createBuildSession, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild } from '../../../build/build-metadata.ts';
+import {
+  APP_WORKSPACES, bundledPackagesFile, resolveBuildMetadata, createBuildSession, readBuildManifest, recordBundledPackages, sealBuildSession,
+  verifyBuildOutputs, verifyPackagedBuild,
+} from '../../../build/build-metadata.ts';
 
 import { completeBuildFixture } from './_support/app-build.ts';
 
@@ -63,6 +66,42 @@ describe('local preview builds', () => {
     expect(() => verifyPackagedBuild(app, preview)).toThrow(/Packaged version/);
     fs.writeFileSync(path.join(preview, 'packages/api/dist/index.js'), 'changed after build');
     expect(() => verifyBuildOutputs(preview)).toThrow(/outputs differ/);
+  });
+
+  it('refuses to seal a build whose bundler recorded nothing of what it inlined, an empty list being a record', () => {
+    for (const unrecorded of APP_WORKSPACES) {
+      const stage = createBuildSession({ APACK_ENV: 'production' });
+      dirs.push(stage);
+      completeBuildFixture(stage);
+      fs.rmSync(path.join(stage, 'build-integrity.json'));
+      fs.rmSync(bundledPackagesFile(stage, unrecorded));
+      expect(() => sealBuildSession(stage)).toThrow(`No record of the packages ${unrecorded} inlined: each bundler's config records them (recordBundledPackages)`);
+      expect(fs.existsSync(path.join(stage, 'build-integrity.json'))).toBe(false);
+      fs.writeFileSync(bundledPackagesFile(stage, unrecorded), JSON.stringify({ packages: [] }));
+      expect(() => sealBuildSession(stage)).not.toThrow();
+    }
+  });
+
+  it("merges each list a bundler hands over into its workspace's record, one entry a directory, sorted", () => {
+    const stage = createBuildSession({ APACK_ENV: 'production' });
+    dirs.push(stage);
+    const vue = { name: 'vue', version: '3.5.0', dir: '/repo/node_modules/vue' };
+    const nested = { name: 'vue', version: '3.4.0', dir: '/repo/node_modules/a/node_modules/vue' };
+    const ws = { name: 'ws', version: '8.0.0', dir: '/repo/node_modules/ws' };
+    const recorded = (workspace: (typeof APP_WORKSPACES)[number]) =>
+      (JSON.parse(fs.readFileSync(bundledPackagesFile(stage, workspace), 'utf8')) as { packages: object[] }).packages;
+    // Outside a staging build there is nowhere to record into
+    vi.stubEnv('APACK_BUILD_ROOT', '');
+    recordBundledPackages('renderer', [ws]);
+    expect(fs.existsSync(bundledPackagesFile(stage, 'renderer'))).toBe(false);
+    vi.stubEnv('APACK_BUILD_ROOT', stage);
+    recordBundledPackages('renderer', [ws, vue]);
+    recordBundledPackages('renderer', [nested, vue]);
+    expect(recorded('renderer')).toEqual([nested, vue, ws]);
+    // A bundler that inlined nothing still leaves a record, and each workspace has its own
+    recordBundledPackages('preload', []);
+    expect(recorded('preload')).toEqual([]);
+    expect(fs.existsSync(bundledPackagesFile(stage, 'main'))).toBe(false);
   });
 
   it('names beta release files with characters GitHub preserves, using the staged manifest', async () => {
