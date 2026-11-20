@@ -60,7 +60,13 @@ export function useNativeTranscriptViewport(options: {
       })
     }
     requestFollow = () => { readerTarget = undefined; setFollowing(true); positionLatest() }
-    requestPause = () => { readerTarget = undefined; setFollowing(false); restoring = false; cancel(); if (valid()) top = viewport.scrollTop }
+    const pause = (announce = true) => {
+      readerTarget = undefined
+      if (announce) setFollowing(false)
+      else following = false
+      restoring = false; cancel(); if (valid()) top = viewport.scrollTop
+    }
+    requestPause = () => pause()
     const scrolled = () => {
       if (!restoring && valid()) {
         if (readerTarget !== undefined) { positionReader(); return }
@@ -71,6 +77,13 @@ export function useNativeTranscriptViewport(options: {
       }
     }
     const reading = (event: Event) => {
+      if ((event.type === 'pointerdown' || event.type === 'touchstart') && event.target instanceof Element
+        && event.target.closest('button, input, textarea, select, a, [contenteditable="true"], [role="button"]')) {
+        // Cancel following without inserting navigation between a control's down and up events.
+        // Its callback may reflow history; a later reader gesture can expose navigation normally.
+        pause(false)
+        return
+      }
       if (event instanceof WheelEvent && event.deltaY >= 0) { readerTarget = undefined; restoring = false; cancel(); return }
       if (event instanceof KeyboardEvent && !['ArrowUp', 'PageUp', 'Home'].includes(event.key)) {
         if (['ArrowDown', 'PageDown', 'End'].includes(event.key)) { readerTarget = undefined; restoring = false; cancel() }

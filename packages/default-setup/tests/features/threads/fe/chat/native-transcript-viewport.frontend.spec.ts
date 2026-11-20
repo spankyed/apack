@@ -141,3 +141,33 @@ it.each(['following', 'reading', 'reading near latest', 'new conversation', 'new
     observers.at(-1)!([],{} as ResizeObserver);flush();expect(element.scrollTop).toBe(80);expect(following.value).toBe(false)
   } finally { app.unmount();root.remove();editor.remove();vi.unstubAllGlobals() }
 })
+
+
+it('keeps native control activation from inserting navigation mid-click', async () => {
+  const frames = new Map<number, FrameRequestCallback>(), observers: ResizeObserverCallback[] = []
+  let serial = 0
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { frames.set(++serial, callback); return serial })
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
+  vi.stubGlobal('ResizeObserver', class { constructor(callback: ResizeObserverCallback) { observers.push(callback) } observe() {} disconnect() {} })
+  const viewport = ref<HTMLElement | null>(null), content = ref<HTMLElement | null>(null), following = ref(true)
+  const root = document.createElement('div'); document.body.append(root)
+  const pressed = vi.fn()
+  const app = createApp({ setup() {
+    useNativeTranscriptViewport({ viewport, content, owner: () => 'session', active: () => true, onFollowingChange: value => { following.value = value } })
+    return () => h('div', [h('div', { ref: viewport }, h('div', { ref: content }, h('article', { 'data-message-id': 'reply' }, h('button', { onClick: pressed }, 'Update preview')))), ...following.value ? [] : [h('nav', 'Latest message')]])
+  } })
+  app.mount(root)
+  try {
+    await nextTick(); const element = viewport.value!, button = root.querySelector('button')!
+    Object.defineProperties(element, { clientWidth: { value: 600 }, clientHeight: { get: () => following.value ? 100 : 60 }, scrollHeight: { value: 600 } })
+    element.getBoundingClientRect = () => ({ top: 0 }) as DOMRect
+    content.value!.firstElementChild!.getBoundingClientRect = () => ({ top: 450 - element.scrollTop, height: 30 }) as DOMRect
+    element.scrollTop = 450; observers.at(-1)!([], {} as ResizeObserver); expect(frames.size).toBe(1)
+    button.dispatchEvent(new Event('pointerdown', { bubbles: true })); await nextTick()
+    expect(frames.size).toBe(0); expect(root.querySelector('nav')).toBeNull(); expect(element.clientHeight).toBe(100)
+    observers.at(-1)!([], {} as ResizeObserver); expect(frames.size).toBe(0)
+    button.dispatchEvent(new Event('pointerup', { bubbles: true })); button.click(); expect(pressed).toHaveBeenCalledTimes(1)
+    element.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 })); await nextTick()
+    expect(root.querySelector('nav')).not.toBeNull()
+  } finally { app.unmount(); root.remove(); vi.unstubAllGlobals() }
+})
