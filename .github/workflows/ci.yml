@@ -111,6 +111,9 @@ jobs:
       - name: Release beta-before-production rule
         run: packages/repo-checks/tests/release-beta-rule.test.sh
 
+      - name: Release and unrelease, against a scratch origin
+        run: packages/repo-checks/tests/release-scripts.test.sh
+
       - name: Schema drift check
         run: npm run schema:check --workspace @apackdev/sdk
 
