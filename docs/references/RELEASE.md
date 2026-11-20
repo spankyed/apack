@@ -51,6 +51,7 @@ xattr -cr /Applications/apack.app
 Then open the app normally. This only needs to be done once per download.
 
 The Windows installer is unsigned, so Windows SmartScreen warns before running it ("More info", then "Run anyway").
+Signing it waits on a decision: see the [Windows code signing plan](../plans/deferred/windows-code-signing.md).
 
 On Linux, the release holds an AppImage and a deb for x64. They need glibc 2.39 or later: Ubuntu 24.04, Debian 13,
 Fedora 40 and newer (see [CI Workflow](#ci-workflow)). Install the deb with
