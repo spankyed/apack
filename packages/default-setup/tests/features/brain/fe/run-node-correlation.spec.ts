@@ -34,16 +34,20 @@ const details = (id: string) => ({ id, label: id }) as unknown as RunNode;
 /**
  * A started surface in `ready`, which is where node clicks are handled.
  *
- * `RECEIVE_SURFACE_DATA` is what moves it there, and `normalizeFlowRunNodeData` tolerates a missing
+ * The answer to its ask for a tree is what moves it there, and `normalizeFlowRunNodeData` tolerates a missing
  * `runNodeTree`, so nothing here has to build a tree to ask about correlation.
  */
 function ready() {
   const actor = createActor(brainState).start();
   actor.send({
-    type: 'RECEIVE_SURFACE_DATA',
-    // The fields the machine reads to reach `ready`; the rest of that payload is not this file's subject,
-    // and the cast sits on it rather than on the event so the type above stays checked
-    data: { flowRunNodeId: 'RunNode-f1', possibleEvents: [], flowHierarchy: [] } as never,
+    type: 'ASK_ANSWERED',
+    asked: 'REQUEST_SURFACE_DATA',
+    answer: {
+      // The fields the machine reads to reach `ready`; the rest of that payload is not this file's subject,
+      // and the cast sits on it rather than on the event so the type above stays checked
+      data: { flowRunNodeId: 'RunNode-f1', possibleEvents: [], flowHierarchy: [] } as never,
+      state: { type: 'BRAIN_STATE', rootFlowId: 'Flow-root' as never, paused: false, inspectEnabled: false },
+    },
   });
   return actor;
 }
@@ -60,8 +64,8 @@ it('shows the node last clicked, not the answer that arrived last', () => {
   expect(actor.getSnapshot().context.selectedStepNode?.id, 'the click sets it at once').toBe('n2');
 
   // n2 answers, then n1's older answer turns up
-  actor.send({ type: 'RUN_NODE_DETAILS', runNodeId: 'n2', details: details('n2') });
-  actor.send({ type: 'RUN_NODE_DETAILS', runNodeId: 'n1', details: details('n1') });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'GET_RUN_NODE_DETAILS', answer: { runNodeId: 'n2' as never, details: details('n2') } });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'GET_RUN_NODE_DETAILS', answer: { runNodeId: 'n1' as never, details: details('n1') } });
 
   expect(actor.getSnapshot().context.selectedStepNode?.id).toBe('n2');
 });
@@ -70,7 +74,7 @@ it('takes the details for the node it is waiting on', () => {
   const actor = ready();
   actor.send({ type: 'NODE.CLICK', nodeId: 'n1' });
 
-  actor.send({ type: 'RUN_NODE_DETAILS', runNodeId: 'n1', details: details('n1') });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'GET_RUN_NODE_DETAILS', answer: { runNodeId: 'n1' as never, details: details('n1') } });
   expect(actor.getSnapshot().context.selectedStepNode).toMatchObject({ id: 'n1', label: 'n1' });
 });
 
@@ -97,7 +101,7 @@ it("opens the failing node's details when a step errors", () => {
   actor.send(runtimeError('n-broke'));
   expect(askedAbout(), 'it asks about the node that failed').toEqual(['n-broke']);
 
-  actor.send({ type: 'RUN_NODE_DETAILS', runNodeId: 'n-broke', details: details('n-broke') });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'GET_RUN_NODE_DETAILS', answer: { runNodeId: 'n-broke' as never, details: details('n-broke') } });
 
   expect(actor.getSnapshot().context.selectedStepNode).toMatchObject({ id: 'n-broke', label: 'n-broke' });
 });
@@ -106,7 +110,7 @@ it("opens the failing node's details when a step errors", () => {
 it('leaves the selection alone for an error that names no node', () => {
   const actor = ready();
   actor.send({ type: 'NODE.CLICK', nodeId: 'n1' });
-  actor.send({ type: 'RUN_NODE_DETAILS', runNodeId: 'n1', details: details('n1') });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'GET_RUN_NODE_DETAILS', answer: { runNodeId: 'n1' as never, details: details('n1') } });
 
   actor.send(runtimeError());
 

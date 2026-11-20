@@ -9,7 +9,15 @@ vi.mock('#generated/events.ts', () => ({ sendToSystem }));
 const { default: brainState } = await import('#features/brain/fe/state.ts');
 
 const asks = () => sendToSystem.mock.calls.filter(([, event]) => event.type === 'REQUEST_SURFACE_DATA').map(([, event]) => event);
-const tree = (flowRunNodeId: `${string}-${string}`) => ({ type: 'RECEIVE_SURFACE_DATA' as const, data: { flowRunNodeId, runNodeTree: [], possibleEvents: [], flowHierarchy: [] } });
+import type { BrainStateEvent } from '#features/brain/be/types.ts';
+
+const RUNNING: BrainStateEvent = { type: 'BRAIN_STATE', rootFlowId: 'Flow-root' as never, paused: false, inspectEnabled: false };
+/** The answer to an ask for a run's tree, which carries the brain's state beside it */
+const tree = (flowRunNodeId: `${string}-${string}`, state: BrainStateEvent = RUNNING) => ({
+  type: 'ASK_ANSWERED' as const,
+  asked: 'REQUEST_SURFACE_DATA' as const,
+  answer: { data: { flowRunNodeId, runNodeTree: [], possibleEvents: [], flowHierarchy: [] }, state },
+});
 
 beforeEach(() => { sendToSystem.mockReset(); });
 
@@ -35,8 +43,7 @@ it('asks for the flow it shows on a pulse, and for the root when a run starts ag
 it("takes the brain's state from an answer without asking again", () => {
   const actor = createActor(brainState).start();
   actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
-  actor.send(tree('RunNode-root'));
-  actor.send({ type: 'BRAIN_STATE', rootFlowId: 'Flow-root' as never, paused: true, inspectEnabled: true });
+  actor.send(tree('RunNode-root', { type: 'BRAIN_STATE', rootFlowId: 'Flow-root' as never, paused: true, inspectEnabled: true }));
   expect(asks(), 'the one ask, answered').toHaveLength(1);
   expect(actor.getSnapshot().context).toMatchObject({ brainIsDead: false, runningRootFlowId: 'Flow-root', brainIsPaused: true, inspectEnabled: true });
 

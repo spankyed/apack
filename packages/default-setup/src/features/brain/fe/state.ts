@@ -6,7 +6,9 @@ import { contextMenuFn } from '@apackdev/sdk/fe';
 import { Activity, Play, RefreshCw, Power, PlayCircle, Pause } from 'lucide-vue-next';
 import { targetIs, type TrailClickEvent } from '@apackdev/sdk/fe';
 import type { BrainContext } from './contract.ts';
-import type { OutgoingBrainEvents } from '#features/brain/be/types.ts'
+import type { BrainStateEvent, OpenedRun, OutgoingBrainEvents } from '#features/brain/be/types.ts'
+import type { Contract as BrainSystemContract } from '#features/brain/be/contract.ts'
+import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
 import type { FlowRunNodeData } from '#generated/types.ts';
 import { sendToSystem } from '#generated/events.ts';
 import type { StepRuntimeError, RunNode, RunTree } from '@apackdev/sdk/steps';
@@ -22,7 +24,7 @@ export type BrainState = ActorRefFrom<typeof brainState>
 
 
 type SystemEvent = OutgoingBrainEvents
-  | { type: 'RUN_NODE_DETAILS'; runNodeId: string; details: RunNode | null }
+  | AnswersOf<BrainSystemContract>
   | { type: 'INSPECT_TOGGLED'; enabled: boolean }
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: any }
   | { type: 'BRAIN_PAUSED' }
@@ -52,6 +54,17 @@ type SurfaceEvent = SurfaceLifecycleEvent
 export type BrainEvents = UIEvent | SystemEvent | SurfaceEvent | TrailClickEvent
 const typeOf = safeEvents<BrainEvents>()
 
+/** The flow run an answer opened: going into one, or back out to the flow that ran it */
+const opensRun = (event: BrainEvents): boolean => isAnswered(event, 'OPEN_RUN_NODE') || isAnswered(event, 'GO_BACK_RUN_NODE')
+
+function openedRunOf(event: BrainEvents): OpenedRun {
+  return isAnswered(event, 'OPEN_RUN_NODE') ? answerOf(event, 'OPEN_RUN_NODE') : answerOf(event, 'GO_BACK_RUN_NODE')
+}
+
+function brainStateContext({ rootFlowId, startError, paused, inspectEnabled }: BrainStateEvent) {
+  return { brainIsDead: !rootFlowId, startError, runningRootFlowId: rootFlowId, brainIsPaused: paused, inspectEnabled }
+}
+
 function normalizeFlowRunNodeData(data: FlowRunNodeData): {
   normalizedTree?: NormalizedRunNodeTree;
   runNodeTree?: RunTree[];
@@ -76,25 +89,27 @@ const brainState = setup({
   actions: {
     setBrainData: assign(({ context, event }) => {
       if (context.brainIsDead) return {};
-      const typedEv = typeOf('RECEIVE_SURFACE_DATA', event);
-      const { normalizedTree, runNodeTree } = normalizeFlowRunNodeData(typedEv.data);
+      const { data } = answerOf(event, 'REQUEST_SURFACE_DATA');
+      const { normalizedTree, runNodeTree } = normalizeFlowRunNodeData(data);
       return {
-        flowRunNodeId: typedEv.data.flowRunNodeId,
+        flowRunNodeId: data.flowRunNodeId,
         runNodeTree,
         normalizedTree,
-        possibleEvents: typedEv.data.possibleEvents,
-        flowHierarchy: typedEv.data.flowHierarchy || [],
+        possibleEvents: data.possibleEvents,
+        flowHierarchy: data.flowHierarchy || [],
       };
     }),
+    /** The brain's state the tree was answered with, taken after the tree as a window just started hears it */
+    setAnsweredBrainState: assign(({ event }) => brainStateContext(answerOf(event, 'REQUEST_SURFACE_DATA').state)),
     setRunNodeData: assign(({ event }) => {
-      const typedEv = typeOf('RUN_NODE_OPENED', event);
-      const { normalizedTree, runNodeTree } = normalizeFlowRunNodeData(typedEv.data);
+      const { data } = openedRunOf(event);
+      const { normalizedTree, runNodeTree } = normalizeFlowRunNodeData(data);
       return {
-        flowRunNodeId: typedEv.data.flowRunNodeId,
+        flowRunNodeId: data.flowRunNodeId,
         runNodeTree,
         normalizedTree,
-        possibleEvents: typedEv.data.possibleEvents,
-        flowHierarchy: typedEv.data.flowHierarchy || [],
+        possibleEvents: data.possibleEvents,
+        flowHierarchy: data.flowHierarchy || [],
       };
     }),
     addRunNodeToTree: assign(({ context, event }) => {
@@ -268,9 +283,8 @@ const brainState = setup({
       };
     }),
     setStepNodeDetails: assign(({ event }) => {
-      if (event.type !== 'RUN_NODE_DETAILS') return {};
       return {
-        selectedStepNode: event.details || undefined
+        selectedStepNode: answerOf(event, 'GET_RUN_NODE_DETAILS').details || undefined
       };
     }),
     closeDetails: assign({
@@ -306,8 +320,7 @@ const brainState = setup({
       selectedStepNode: undefined,
     }),
     setBrainState: assign(({ event }) => {
-      const { rootFlowId, startError, paused, inspectEnabled } = typeOf('BRAIN_STATE', event);
-      return { brainIsDead: !rootFlowId, startError, runningRootFlowId: rootFlowId, brainIsPaused: paused, inspectEnabled };
+      return brainStateContext(typeOf('BRAIN_STATE', event));
     }),
     setBrainStarted: assign({
       brainIsDead: false,
@@ -382,7 +395,7 @@ const brainState = setup({
      * holds each asking action to it, rather than this comment enumerating them.
      */
     answersSelectedNode: ({ context, event }) =>
-      (event as { runNodeId?: string }).runNodeId === context.selectedStepNode?.id,
+      isAnswered(event, 'GET_RUN_NODE_DETAILS') && answerOf(event, 'GET_RUN_NODE_DETAILS').runNodeId === context.selectedStepNode?.id,
   },
 }).createMachine({
   id,
@@ -411,9 +424,10 @@ const brainState = setup({
   states: {
     loading: {
       on: {
-        RECEIVE_SURFACE_DATA: {
+        ASK_ANSWERED: {
+          guard: ({ event }) => isAnswered(event, 'REQUEST_SURFACE_DATA'),
           target: 'ready',
-          actions: 'setBrainData'
+          actions: ['setBrainData', 'setAnsweredBrainState']
         },
         BRAIN_RUNTIME_ERROR: {
           actions: 'addRuntimeError'
@@ -450,9 +464,11 @@ const brainState = setup({
         ]),
       },
       on: {
-        RECEIVE_SURFACE_DATA: {
-          actions: 'setBrainData'
-        },
+        ASK_ANSWERED: [
+          { guard: ({ event }) => isAnswered(event, 'REQUEST_SURFACE_DATA'), actions: ['setBrainData', 'setAnsweredBrainState'] },
+          { guard: 'answersSelectedNode', actions: 'setStepNodeDetails' },
+          { guard: ({ event }) => opensRun(event), actions: 'setRunNodeData' },
+        ],
         'NODE.CLICK': {
           actions: 'requestNodeDetails'
         },
@@ -477,18 +493,11 @@ const brainState = setup({
         CLOSE_DETAILS: {
           actions: 'closeDetails'
         },
-        RUN_NODE_DETAILS: {
-          guard: 'answersSelectedNode',
-          actions: 'setStepNodeDetails'
-        },
         SURFACE_ACTIVATED: {
           actions: 'requestSurfaceData'
         },
         SURFACE_DEACTIVATED: {
           // No action needed for deactivation
-        },
-        RUN_NODE_OPENED: {
-          actions: 'setRunNodeData'
         },
         RUN_NODE_SPAWNED: {
           actions: 'addRunNodeToTree'
