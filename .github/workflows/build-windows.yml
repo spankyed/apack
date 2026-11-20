@@ -5,10 +5,6 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version override (e.g. 0.1.0). Leave empty to use package.json version.'
-        required: false
-        type: string
       channel:
         description: 'Build channel (production or beta)'
         required: false
@@ -52,19 +48,23 @@ jobs:
       - uses: ./.github/actions/apack-terminal
       - uses: ./.github/actions/apack-git
 
+      # A tag names its channel, and the `channel` input is read for a branch alone: a tag's files go into its
+      # release, where a beta build dispatched on a production tag would put apack Beta's files
       - name: Detect channel
         id: channel
         shell: bash
+        env:
+          CHANNEL: ${{ inputs.channel }}
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "$TAG_VERSION" == *-beta* ]] || [[ "${{ inputs.channel }}" == "beta" ]]; then
-            echo "is_beta=true" >> "$GITHUB_OUTPUT"
-            echo "product_name=apack Beta" >> "$GITHUB_OUTPUT"
-            echo "release_prefix=apack-Beta" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            CHANNEL=production
+            if [[ "$TAG_VERSION" == *-beta* ]]; then CHANNEL=beta; fi
+          fi
+          if [ "$CHANNEL" = beta ]; then
+            printf '%s\n' is_beta=true 'product_name=apack Beta' release_prefix=apack-Beta >> "$GITHUB_OUTPUT"
           else
-            echo "is_beta=false" >> "$GITHUB_OUTPUT"
-            echo "product_name=apack" >> "$GITHUB_OUTPUT"
-            echo "release_prefix=apack" >> "$GITHUB_OUTPUT"
+            printf '%s\n' is_beta=false product_name=apack release_prefix=apack >> "$GITHUB_OUTPUT"
           fi
           echo "tag_version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
 
@@ -102,6 +102,15 @@ jobs:
           fi
           npm run build:production "${args[@]}"
 
+      # One `<file>.sha256` beside each download, in the form `shasum` writes and the CLI's `downloadVerified` reads
+      - name: Checksums
+        shell: bash
+        working-directory: dist
+        run: |
+          for file in "${{ steps.channel.outputs.release_prefix }}"-*.exe; do
+            printf '%s  %s\n' "$(sha256sum "$file" | cut -d ' ' -f 1)" "$file" > "$file.sha256"
+          done
+
       # What the release job uploads on a tag, and what a dispatch leaves for whoever dispatched it
       - name: Keep the release files
         uses: actions/upload-artifact@v6
@@ -109,6 +118,7 @@ jobs:
           name: windows-${{ steps.channel.outputs.release_prefix }}
           path: |
             dist/${{ steps.channel.outputs.release_prefix }}-*.exe
+            dist/${{ steps.channel.outputs.release_prefix }}-*.sha256
             dist/${{ steps.channel.outputs.release_prefix }}-*.cdx.json
           if-no-files-found: error
           compression-level: 0
@@ -134,6 +144,8 @@ jobs:
       - name: The files to release
         run: |
           ls -l dist
+          cd dist
+          shasum -a 256 -c "${PREFIX}"-*.sha256
 
       - name: Upload release files to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -146,7 +158,7 @@ jobs:
             PRERELEASE_FLAG="--prerelease"
           fi
           # The release prefix, which names the files (electron-builder.mjs), not the product name, which has a space
-          assets=(dist/"${PREFIX}"-*.exe dist/"${PREFIX}"-*.cdx.json)
+          assets=(dist/"${PREFIX}"-*.exe dist/"${PREFIX}"-*.sha256 dist/"${PREFIX}"-*.cdx.json)
 
           # A release that can't be read is not one that isn't there: only gh's `release not found` counts as none, since
           # creating one beside a release that exists would make a second draft for the tag, holding this platform's files
@@ -161,7 +173,7 @@ jobs:
           if release_exists; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" \
+            gh release create "$GITHUB_REF_NAME" --verify-tag \
               --draft \
               --generate-notes \
               --title "${APP_NAME} $GITHUB_REF_NAME" \
