@@ -71,7 +71,12 @@ export function useNativeTranscriptViewport(options: {
       if (!restoring && valid()) {
         if (readerTarget !== undefined) { positionReader(); return }
         // Upward reading intent survives while the short latest body is still visible.
-        if (viewport.clientWidth === width && viewport.clientHeight === height && !following && viewport.scrollTop > top) setFollowing(isAtNativeTranscriptLatest(viewport))
+        if (viewport.clientWidth === width && viewport.clientHeight === height && !following && viewport.scrollTop > top) {
+          // Reading a trailing native placement must not resume following an earlier short reply.
+          // Resume at the end only when that end is also the preferred latest position.
+          const tail = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
+          if (nativeTranscriptLatestTop(viewport) >= tail - 1) setFollowing(isAtNativeTranscriptLatest(viewport))
+        }
         // Browser anchoring can move a reader during reflow before ResizeObserver runs.
         top = viewport.scrollTop
       }

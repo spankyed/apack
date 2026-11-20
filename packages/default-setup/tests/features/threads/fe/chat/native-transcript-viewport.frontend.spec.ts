@@ -167,7 +167,13 @@ it('keeps native control activation from inserting navigation mid-click', async 
     expect(frames.size).toBe(0); expect(root.querySelector('nav')).toBeNull(); expect(element.clientHeight).toBe(100)
     observers.at(-1)!([], {} as ResizeObserver); expect(frames.size).toBe(0)
     button.dispatchEvent(new Event('pointerup', { bubbles: true })); button.click(); expect(pressed).toHaveBeenCalledTimes(1)
+    element.scrollTop = 480; element.dispatchEvent(new Event('scroll')); await nextTick()
+    observers.at(-1)!([], {} as ResizeObserver); expect(frames.size).toBe(0); expect(element.scrollTop).toBe(480)
+    expect(root.querySelector('nav')).toBeNull()
     element.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 })); await nextTick()
+    expect(root.querySelector('nav')).not.toBeNull()
+    element.scrollTop = 520; element.dispatchEvent(new Event('scroll')); await nextTick()
+    observers.at(-1)!([], {} as ResizeObserver); expect(frames.size).toBe(0); expect(element.scrollTop).toBe(520)
     expect(root.querySelector('nav')).not.toBeNull()
   } finally { app.unmount(); root.remove(); vi.unstubAllGlobals() }
 })
