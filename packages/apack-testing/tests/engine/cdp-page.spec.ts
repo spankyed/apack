@@ -4,7 +4,7 @@
 // right window in this app today, so an end-to-end assertion passes with the predicate replaced by "take
 // the first" — measured, by doing exactly that. The thing under test is a choice among several targets, and
 // only a fake can present several on purpose.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { INSTALL_PLAYWRIGHT_CORE, _chromium, attachFailureMessage, findWindow, type AttachTargets } from '../../src/engine/cdp-page.ts';
 
 /** A page that answers the predicate however the test says, and remembers being asked. */
@@ -16,7 +16,16 @@ const fakePage = (hasState: boolean | 'throws', url = 'pack://x') => ({
   },
 });
 
-const browser = (...pages: ReturnType<typeof fakePage>[]): AttachTargets =>
+/** A page whose window holds a shell, which the predicate itself is evaluated against */
+const shellPage = (ownsLastActiveSurface: boolean, url: string) => ({
+  url: () => url,
+  evaluate: async (predicate: () => unknown) => {
+    vi.stubGlobal('window', { applicationState: { getSnapshot: () => ({ context: { ownsLastActiveSurface } }) } });
+    try { return predicate(); } finally { vi.unstubAllGlobals(); }
+  },
+});
+
+const browser = (...pages: (ReturnType<typeof fakePage> | ReturnType<typeof shellPage>)[]): AttachTargets =>
   ({ contexts: () => [{ pages: () => pages }] });
 
 describe("finding the window among a connection's targets", () => {
@@ -25,6 +34,12 @@ describe("finding the window among a connection's targets", () => {
     const main = fakePage(true, 'file:///index.html');
     // The order that makes "take the first" wrong, which is the whole case
     expect(await findWindow(browser(splash, main), 1_000)).toBe(main);
+  });
+
+  it('passes over a surface popout, whose shell is the same but shows one surface', async () => {
+    const popout = shellPage(false, 'file:///index.html?popout=surface&surfaceId=default-setup%2Fnotes');
+    const main = shellPage(true, 'file:///index.html');
+    expect(await findWindow(browser(popout, main), 1_000)).toBe(main);
   });
 
   it('is unmoved by the order', async () => {
