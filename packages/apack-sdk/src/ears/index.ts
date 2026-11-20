@@ -9,7 +9,7 @@
  *
  * @packageDocumentation
  */
-import type { Create, Ears, Query, Upsert, Write } from '@apackdev/ears';
+import type { CallSiteNaming, Create, Ears, Query, Upsert, Write } from '@apackdev/ears';
 
 let bound: Ears | undefined;
 
@@ -29,6 +29,19 @@ export function _bindEars(engine: Ears | undefined): Ears | undefined {
   bound = engine;
   return previous;
 }
+
+/**
+ * How apack's engines name the code that made a counted call, or a watch given no label (`createEarsEngine`'s
+ * `callSites`): EARS' frames by the path of its package's source or build, since the development app's API bundles it
+ * and names its modules only through source maps, and a path cut at its last `packages/`, `node_modules/` or `packs/`
+ * directory, where two checkouts' paths, or two data directories' installed packs, stop differing.
+ *
+ * @internal
+ */
+export const _EARS_CALL_SITES: CallSiteNaming = {
+  engineFrames: /\/(?:apack-ears|@apackdev\/ears)\/(?:src|dist)\//,
+  roots: ['/packages/', '/node_modules/', '/packs/'],
+};
 
 /** The engine this process bound; throws when none is */
 export function boundEars(): Ears {
