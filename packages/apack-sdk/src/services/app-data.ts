@@ -18,7 +18,10 @@ export interface BackupSummary {
 export interface AppDataService {
   /**
    * Resets the whole app: deletes all stored data and keys, reopens empty stores (the in-memory database is cleared
-   * too), then runs each pack's init hook, the boot apply and the app migrations. Onboarding starts over
+   * too), then runs each pack's init hook, the boot apply and the app migrations. Onboarding starts over.
+   *
+   * Refused with `AppDataBusyError`, having changed nothing, while the data is being replaced or a pack is being
+   * installed or changed. Any other error is a reset that began: some of the data is already gone.
    */
   reset(): Promise<void>;
   /** Copies the chosen databases (and media, with the primary database) into a new backup directory under `targetPath`; returns its path */
@@ -44,6 +47,18 @@ export interface AppDataService {
   }>;
   /** A backup's metadata, or null when `backupPath` isn't a backup */
   readBackupSummary(backupPath: string): Promise<BackupSummary | null>;
+}
+
+/**
+ * The app's data could not be reset or replaced now, because something else is writing it: another replacement,
+ * or a pack being installed or changed. Nothing was touched, which is what tells it from an operation that began
+ * and failed partway, so a caller may simply ask again once the other work has finished.
+ */
+export class AppDataBusyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AppDataBusyError';
+  }
 }
 
 /**

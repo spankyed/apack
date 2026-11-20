@@ -445,7 +445,7 @@ export function createSettingsMachine(io: SettingsIO) {
         APP_RESET_FAILED: {
           actions: [
             assign({ resetting: false }),
-            ({ event }: { event: any }) => io.report(`Reset failed: ${event.error}`),
+            ({ event }) => io.report(`Reset failed: ${typeOf('APP_RESET_FAILED', event).error}`),
           ],
         },
       },
