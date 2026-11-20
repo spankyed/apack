@@ -62,9 +62,15 @@ echo ""
 
 # Step 2: Install dependencies
 echo -e "${BLUE}[2/7]${NC} Installing dependencies..."
-# Force development mode so devDependencies (typescript, @types/*, etc.) are installed
-# even if NODE_ENV=production leaked from a previous session (see docs/references/node-env-build-failure.md)
-NODE_ENV=development npm install --loglevel warn
+# A release workflow installs in a step of its own, which holds no signing secret while every dependency's install
+# script runs, and says so with APACK_DEPENDENCIES_INSTALLED; anywhere else the install is this one
+if [ -n "$APACK_DEPENDENCIES_INSTALLED" ]; then
+  echo "  Skipping npm install (APACK_DEPENDENCIES_INSTALLED set)"
+else
+  # Force development mode so devDependencies (typescript, @types/*, etc.) are installed
+  # even if NODE_ENV=production leaked from a previous session (see docs/references/node-env-build-failure.md)
+  NODE_ENV=development npm install --loglevel warn
+fi
 unset NODE_ENV
 APACK_BUILD_ROOT="$(npx tsx scripts/stage-app-build.ts)"
 export APACK_BUILD_ROOT

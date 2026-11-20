@@ -88,7 +88,7 @@ Run `npm run chain` before releasing to validate changes, including migration te
 | Step | What it does |
 |------|-------------|
 | 1. Prepare | Selects the production or beta build environment |
-| 2. Install | `npm install`, then create a fresh staging directory |
+| 2. Install | `npm install` (skipped when `APACK_DEPENDENCIES_INSTALLED` is set, as the release workflows do after their own `npm ci`), then create a fresh staging directory |
 | 3. Compile DSL | `npm run build:default-setup` (skip with `SKIP_DEFAULT_SETUP_BUILD=1`) |
 | 4. Build packages | API (tsc + tsup), main/preload (Vite), renderer (Vite); outputs go to the staging directory |
 | 5. Native helpers | macOS speech recognition binary (macOS only) |
@@ -220,18 +220,24 @@ For local signed builds, create `.env.signing` (gitignored) from `.env.signing.e
 
 - **Triggers**: tag push (`v*`) or manual dispatch
 - **Validates**: tag version matches `package.json`
-- **Builds**: full 7-step production pipeline
+- **Installs**: `npm ci`, in a step of its own that holds no signing secret, since it runs every dependency's install
+  script
+- **Builds**: the production pipeline, without its install
 - **Signs + notarizes**: when secrets are configured; on a tag, every signing secret must be set and `codesign`,
   `stapler` and `spctl` must pass, or the release isn't published
-- **Publishes**: the GitHub Release, with release files and auto-generated notes
+- **Publishes**: the GitHub Release, with release files and auto-generated notes, from a second job
+
+Each workflow is two jobs. The build job's token reads the repository and nothing more, and the signing secrets reach
+only its build step, as environment variables. It keeps the release files as the run's artifact. The `release` job is
+the one whose token writes: it downloads that artifact and runs `gh`, and no code from the checkout or its dependencies.
 
 `.github/workflows/build-windows.yml` (`windows-latest`) and `.github/workflows/build-linux.yml` (`ubuntu-24.04`) run
 the same pipeline on the same triggers, unsigned, and upload their release files to the tag's release. One that finishes
 before macOS creates it as a draft, and build-mac.yml publishes it once the macOS files are on it, so a published
 release always holds the files `apack install` and `upgrade` read. A tag whose macOS build fails leaves its release a
 draft. A dispatch from a branch builds without publishing (one on a tag uploads, as the tag's
-run would); the Linux workflow keeps what a dispatch from a branch built as the run's artifacts, for the repository's
-artifact retention (2 days, on 2026-11-19).
+run would): its `release` job reads the files the build kept and stops. Every run keeps what it built as the run's
+artifact, for the repository's artifact retention (2 days, on 2026-11-19).
 
 The Linux release's glibc floor is the newest glibc any binary the app ships needs, and the runner's: 2.39, which the
 terminal broker apack-terminal publishes needs (elmdb's binding, built on the runner, needs 2.38, on 2026-11-19). It is
