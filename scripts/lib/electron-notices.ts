@@ -17,10 +17,12 @@
  *
  * **FFmpeg, which Electron builds in on every platform, is under LGPL-2.1-or-later**, which asks a binary's recipient
  * to be told where its source is: `ffmpegSource` is that pointer, for the notices' header, read for one Electron
- * (`READ_FOR_ELECTRON`), and a problem for any other.
+ * (`READ_FOR_ELECTRON`), and a problem for any other. The SBOM names the same Electron, Chromium and FFmpeg
+ * (`electronSbomComponent`).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import type { SbomComponent } from './third-party-notices.ts';
 
 /** What Electron's release calls the two files, and what the packaged app calls them on every platform */
 export const ELECTRON_NOTICES = [
@@ -63,6 +65,25 @@ export function ffmpegSource(packagedVersion: string): { pointer: string; proble
     problem: `The app packages Electron ${packagedVersion}, and FFmpeg's source and the macOS frameworks' licenses were read for Electron ${electron}: `
       + `read Electron's DEPS at v${packagedVersion} for its chromium_version, mantle_version and reactiveobjc_version, that Chromium's DEPS for its ffmpeg_revision, `
       + 'and the LICENSE.md of Mantle and ReactiveObjC at those commits, then update READ_FOR_ELECTRON and the texts',
+  };
+}
+
+/**
+ * Electron as a component of the app's SBOM: the runtime of its GitHub release, which is what the app ships, where the
+ * npm package `electron` is only what downloads it. For the Electron `READ_FOR_ELECTRON` was read for it holds the
+ * Chromium it is built on and the FFmpeg that Chromium pins; for another, whose versions of them are unread, neither,
+ * and `ffmpegSource` reports it.
+ */
+export function electronSbomComponent(packagedVersion: string): SbomComponent {
+  const { electron, chromium, ffmpeg } = READ_FOR_ELECTRON;
+  const ffmpegRepository = 'https://chromium.googlesource.com/chromium/third_party/ffmpeg';
+  return {
+    type: 'framework', name: 'electron', version: packagedVersion, purl: `pkg:github/electron/electron@v${packagedVersion}`, license: 'MIT',
+    components: packagedVersion !== electron ? [] : [
+      { type: 'framework', name: 'chromium', version: chromium, purl: `pkg:github/chromium/chromium@${chromium}`, license: 'BSD-3-Clause' },
+      // No registry names Chromium's FFmpeg, so its purl is a generic one saying which repository the revision is of
+      { type: 'library', name: 'ffmpeg', version: ffmpeg, purl: `pkg:generic/ffmpeg@${ffmpeg}?vcs_url=${encodeURIComponent(`git+${ffmpegRepository}@${ffmpeg}`)}`, license: 'LGPL-2.1-or-later' },
+    ],
   };
 }
 

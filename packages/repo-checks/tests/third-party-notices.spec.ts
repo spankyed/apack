@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -6,9 +7,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { population } from '@apackdev/sdk/testing';
 import {
-  ADAPTED, ADAPTED_FIRST_PARTY, EXTRAS, OVERRIDES, appSbom, brokerNoticesFile, chooseLicense, declaredLicense, noticeOf, noticePackages,
-  packBundledPackages, renderNotices, sbomIdentity, shippedSource, staleExtras, uncreditedAdaptations, writeAppNotices,
-  type NoticePackage,
+  ADAPTED, ADAPTED_FIRST_PARTY, EXTRAS, OVERRIDES, appSbom, brokerNoticesFile, brokerSbomComponent, chooseLicense, declaredLicense, downloadedBinaries,
+  noticeOf, noticePackages, packBundledPackages, renderNotices, sbomIdentity, shippedSource, staleExtras, uncreditedAdaptations, writeAppNotices,
+  type NoticePackage, type Override,
 } from '../../../scripts/lib/third-party-notices.ts';
 import { repoFiles } from './_support/repo-files.ts';
 
@@ -145,6 +146,29 @@ describe("where a package's text comes from", () => {
     expect(noticeOf(at(root, 'bare'), licenses, new Map())).toMatch(/bare@1\.0\.0 \(shipped\) ships no license file/);
   });
 
+  it("judges a package whose manifest declares no SPDX license under its override's, held to ACCEPTED like any other", () => {
+    const root = tree({
+      ...installed('see', { license: 'SEE LICENSE IN LICENSE' }, { LICENSE: 'mit text' }),
+      ...installed('loose', { license: 'Apache 2.0' }, { LICENSE: 'apache text' }),
+      ...installed('copyleft', { license: 'GPL' }, { LICENSE: 'gpl text' }),
+      ...installed('honest', { license: 'GPL-3.0-only' }, { LICENSE: 'gpl text' }),
+    });
+    const overrides: Record<string, Override> = {
+      see: { files: [], license: 'MIT', why: 'its LICENSE is the MIT license' },
+      loose: { files: [], license: 'Apache-2.0', why: 'its LICENSE is Apache-2.0' },
+      copyleft: { files: [], license: 'GPL-3.0-only', why: 'its LICENSE is the GPL' },
+      honest: { files: [], license: 'MIT', why: 'an override that contradicts a manifest that reads' },
+    };
+    const notice = (name: string, given = overrides) => noticeOf(at(root, name), root, new Map(), given);
+    expect(notice('see')).toMatchObject({ declared: 'MIT', license: 'MIT', text: 'mit text' });
+    expect(notice('loose')).toMatchObject({ declared: 'Apache-2.0', license: 'Apache-2.0', text: 'apache text' });
+    // With no override it is a problem, which says what answers it
+    expect(notice('see', {})).toMatch(/^see@1\.0\.0 \(shipped\) is under SEE LICENSE IN LICENSE, which does not parse as SPDX .* give that as the license of its OVERRIDES entry, with why$/);
+    // An override's license is held to ACCEPTED, and never read over a manifest's that parses
+    expect(notice('copyleft')).toMatch(/^copyleft@1\.0\.0 \(shipped\) is under GPL-3\.0-only, .*\(ACCEPTED\)$/);
+    expect(notice('honest')).toMatch(/^honest@1\.0\.0 \(shipped\) is under GPL-3\.0-only, .*\(ACCEPTED\)$/);
+  });
+
   it('names where the source is for a license that asks for it', () => {
     const root = tree(installed('elk', { license: 'EPL-2.0', repository: 'kieler/elkjs' }, { LICENSE: 'epl' }));
     expect(noticeOf(at(root, 'elk', 'inlined'), root, new Map())).toMatchObject({ source: 'https://github.com/kieler/elkjs, elk 1.0.0' });
@@ -207,6 +231,64 @@ describe('the packages the notices cover', () => {
     expect(packages.map((pkg) => pkg.name)).toContain('vidstack');
   });
 
+  it("credits a module to the package its file is in, not to the one of that name the pack would resolve", () => {
+    const repo = tree({
+      ...bundlers,
+      ...installed('dep', { version: '1.0.0' }, { 'index.js': '' }),
+      // Another workspace's own copy, at another version, which the pack's bundle inlined
+      'other/node_modules/dep/package.json': JSON.stringify({ name: 'dep', version: '2.0.0' }),
+      'other/node_modules/dep/index.js': '',
+      'pack/package.json': JSON.stringify({ name: '@apackdev/pack' }),
+      'pack/dist/runtime/a.js': 'x',
+      'pack/dist/runtime/a.js.map': JSON.stringify({ sources: ['../../../../other/node_modules/dep/index.js'] }),
+      'pack/dist/build/helpers.mjs': '// ../other/node_modules/dep/index.js\nvar x;\n',
+    });
+    const { packages, problems } = packBundledPackages(path.join(repo, 'pack'));
+    expect(problems).toEqual([]);
+    expect(packages.filter((pkg) => pkg.name === 'dep').map((pkg) => pkg.version)).toEqual(['2.0.0']);
+  });
+
+  it("credits a package's file a bundler names under a virtual id and a query, as Vite's CommonJS proxies are", () => {
+    const repo = tree({
+      ...bundlers,
+      'other/node_modules/dep/package.json': JSON.stringify({ name: 'dep', version: '2.0.0' }),
+      'other/node_modules/dep/index.js': '',
+      'pack/package.json': JSON.stringify({ name: '@apackdev/pack' }),
+      'pack/dist/a.js': 'x',
+    });
+    const sources = [`\0${path.join(repo, 'other/node_modules/dep/index.js')}?commonjs-proxy`, '\0vite/preload-helper.js'];
+    fs.writeFileSync(path.join(repo, 'pack/dist/a.js.map'), JSON.stringify({ sources }));
+    const { packages, problems } = packBundledPackages(path.join(repo, 'pack'));
+    expect(problems).toEqual([]);
+    expect(packages.map((pkg) => `${pkg.name}@${pkg.version}`)).toContain('dep@2.0.0');
+  });
+
+  it('refuses a nested package that is not installed, rather than crediting the package it was nested in', () => {
+    const repo = tree({
+      ...bundlers,
+      ...installed('outer', {}),
+      'pack/package.json': JSON.stringify({ name: '@apackdev/pack' }),
+      'pack/dist/a.js': 'x',
+      'pack/dist/a.js.map': JSON.stringify({ sources: ['../../../../node_modules/outer/node_modules/inner/index.js'] }),
+    });
+    const { packages, problems } = packBundledPackages(path.join(repo, 'pack'));
+    expect(problems).toEqual([expect.stringMatching(/a\.js\.map names .*outer\/node_modules\/inner\/index\.js, which is not where its build left it, so its package is unknown: inner isn't installed above /)]);
+    expect(packages.map((pkg) => pkg.name)).not.toContain('outer');
+  });
+
+  it("credits the esbuild Vite depends on beside the pack builder's, when they are two installs", () => {
+    const repo = tree({
+      ...bundlers,
+      'node_modules/vite/node_modules/esbuild/package.json': JSON.stringify({ name: 'esbuild', version: '2.0.0' }),
+      'pack/package.json': JSON.stringify({ name: '@apackdev/pack' }),
+      'pack/src/own.ts': '',
+      'pack/dist/a.mjs': '// src/own.ts\n',
+    });
+    const { packages, problems } = packBundledPackages(path.join(repo, 'pack'));
+    expect(problems).toEqual([]);
+    expect(packages.filter((pkg) => pkg.name === 'esbuild').map((pkg) => pkg.version).sort()).toEqual(['1.0.0', '2.0.0']);
+  });
+
   it('refuses a map source that is not where the build left it, rather than dropping its package', () => {
     const repo = tree({
       ...bundlers,
@@ -228,6 +310,19 @@ describe('the packages the notices cover', () => {
     const { packages, problems } = packBundledPackages(path.join(repo, 'pack'));
     expect(packages.map((pkg) => pkg.name).sort()).toEqual(['@vitejs/plugin-vue', 'esbuild', 'vite', 'zod']);
     expect(problems).toEqual([expect.stringMatching(/minified\.mjs has no source map and names no module/)]);
+  });
+
+  it("reads a module comment naming any file, a package's JSON or a path with spaces, and passes over one naming none", () => {
+    const repo = tree({
+      ...bundlers,
+      ...installed('data', {}, { 'table.json': '{}' }),
+      ...installed('spaced', {}, { 'my file.js': '' }),
+      'pack/package.json': JSON.stringify({ name: '@apackdev/pack' }),
+      'pack/dist/build/helpers.mjs': '// ../node_modules/data/table.json\n// ../node_modules/spaced/my file.js\n// a line of a template literal\nvar x;\n',
+    });
+    const { packages, problems } = packBundledPackages(path.join(repo, 'pack'));
+    expect(problems).toEqual([]);
+    expect(packages.map((pkg) => pkg.name).sort()).toEqual(['@vitejs/plugin-vue', 'data', 'esbuild', 'spaced', 'vite']);
   });
 
   it('reports a pack never built, with no dist at all, as holding no bundle', () => {
@@ -252,6 +347,13 @@ describe('the notices written into the app', () => {
     const licenses = tree(Object.fromEntries(committed.map((file) => [file, file])));
     return { app, root, pack, licenses };
   }
+  /** Adds files to a tree already made */
+  const add = (root: string, files: Record<string, string>) => {
+    for (const [file, text] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+      fs.writeFileSync(path.join(root, file), text);
+    }
+  };
   const write = (setup: ReturnType<typeof packaged>, channel: string, extra: Partial<Parameters<typeof writeAppNotices>[0]> = {}) =>
     writeAppNotices({
       appDir: setup.app, buildRoot: setup.root, bundleRecords: [path.join(setup.root, 'bundled-packages', 'main.json')],
@@ -282,6 +384,26 @@ describe('the notices written into the app', () => {
     expect(stale('win32')).toEqual([]);
   });
 
+  it("calls an override's license stale once the manifest declares one that reads, and an override of nothing a problem", () => {
+    const carrying = (license: string) => {
+      const setup = packaged();
+      add(setup.app, installed('see', { license }, { LICENSE: 'mit text' }));
+      return setup;
+    };
+    const overrides: Record<string, Override> = { see: { files: [], license: 'MIT', why: 'its LICENSE is the MIT license' } };
+    const unreadable = carrying('SEE LICENSE IN LICENSE');
+    expect(write(unreadable, 'production', { overrides })).toEqual([]);
+    expect(fs.readFileSync(path.join(unreadable.app, 'THIRD-PARTY-NOTICES.txt'), 'utf8')).toContain('  see 1.0.0, MIT, shipped\n');
+    expect(write(carrying('MIT'), 'preview', { overrides }))
+      .toEqual(['OVERRIDES gives see a license, and its manifest now declares one that reads as SPDX: remove the entry\'s license']);
+    // One that reads and is refused is the manifest's to answer for, and the override is as stale
+    expect(write(carrying('GPL-3.0-only'), 'preview', { overrides })).toEqual([
+      expect.stringContaining('see@1.0.0 (shipped) is under GPL-3.0-only'), expect.stringContaining('OVERRIDES gives see a license'),
+    ]);
+    expect(write(carrying('MIT'), 'preview', { overrides: { see: { files: [], why: 'nothing' } } }))
+      .toEqual(['OVERRIDES names see with neither a text nor a license: remove it, or give it what the package lacks']);
+  });
+
   it('fails a production or beta build on a problem, and reports it on a preview', () => {
     const setup = packaged({});
     const missing = /main\.json is missing: the build that wrote the bundles did not record what they inlined/;
@@ -290,11 +412,13 @@ describe('the notices written into the app', () => {
     expect(() => write(setup, 'beta')).toThrow(missing);
   });
 
-  it("reports a native binary's notices that are missing, or a binary that is", () => {
+  it("reports each of a native binary's notices that is missing, or a binary that is", () => {
     const setup = packaged();
-    const problems = write(setup, 'preview', { native: [{ pointer: 'elmdb', file: path.join(setup.app, 'NOTICES') }, { pointer: 'the broker', file: null }] });
-    expect(problems).toContainEqual(expect.stringMatching(/NOTICES is missing, so its binary would ship without its notices/));
-    expect(problems).toContainEqual('No binary was found for the broker');
+    add(setup.app, { NOTICES: 'x' });
+    const files = ['NOTICES', 'COPYRIGHT.html'].map((name) => path.join(setup.app, name));
+    const problems = write(setup, 'preview', { overrides: {}, native: [{ pointer: 'elmdb', files }, { pointer: 'the broker', files: null }] });
+    // Every file a pointer names is looked for, not the first alone
+    expect(problems).toEqual([`${files[1]} is missing, so its binary would ship without its notices`, 'No binary was found for the broker']);
   });
 
   it("reports why a native pointer may be wrong, and still names it in the header", () => {
@@ -305,10 +429,7 @@ describe('the notices written into the app', () => {
 
   it('reports a carried package whose downloaded binary is another release than its texts were read for', () => {
     const setup = packaged();
-    for (const [file, text] of Object.entries(installed('@vscode/ripgrep', { license: 'MIT' }, { LICENSE: 'x', 'lib/postinstall.js': "const VERSION = 'v0.0.1';" }))) {
-      fs.mkdirSync(path.dirname(path.join(setup.app, file)), { recursive: true });
-      fs.writeFileSync(path.join(setup.app, file), text);
-    }
+    add(setup.app, installed('@vscode/ripgrep', { license: 'MIT' }, { LICENSE: 'x', 'lib/postinstall.js': "const VERSION = 'v0.0.1';" }));
     expect(write(setup, 'preview')).toContainEqual(expect.stringContaining('@vscode/ripgrep@1.0.0 downloads v0.0.1'));
   });
 
@@ -395,14 +516,14 @@ describe("the app's SBOM", () => {
 
   it('lists every package carried with its purl, hash, declared license and how it is carried, then the others', () => {
     const sbom = appSbom({ name: 'apack', version: '0.3.14' }, carried(), identity,
-      [{ type: 'framework', name: 'electron', version: '44.9.3', purl: 'pkg:npm/electron@44.9.3', license: 'MIT' }]) as {
+      [{ type: 'framework', name: 'electron', version: '44.9.3', purl: 'pkg:github/electron/electron@v44.9.3', license: 'MIT' }]) as {
       specVersion: string; metadata: { component: { name: string } }; components: Record<string, unknown>[];
     };
     expect(sbom.specVersion).toBe('1.5');
     expect(sbom.metadata.component.name).toBe('apack');
     expect(sbom.components.map((component) => component.purl)).toEqual([
-      'pkg:github/spankyed/elmdb@abc123', 'pkg:npm/%40tiptap/pm@3.0.0', 'pkg:npm/bare@1.0.0', 'pkg:npm/electron@44.9.3', 'pkg:npm/plus@1.0.0',
-      'pkg:npm/vue@3.5.0', 'pkg:npm/weird@1.0.0',
+      'pkg:github/electron/electron@v44.9.3', 'pkg:github/spankyed/elmdb@abc123', 'pkg:npm/%40tiptap/pm@3.0.0', 'pkg:npm/bare@1.0.0',
+      'pkg:npm/plus@1.0.0', 'pkg:npm/vue@3.5.0', 'pkg:npm/weird@1.0.0',
     ]);
     const byName = Object.fromEntries(sbom.components.map((component) => [component.name, component]));
     expect(byName['@tiptap/pm']).toMatchObject({ licenses: [{ expression: '(MPL-2.0 OR Apache-2.0)' }], properties: [{ name: 'apack:carried', value: 'inlined' }] });
@@ -417,6 +538,88 @@ describe("the app's SBOM", () => {
     const packages = carried();
     expect(JSON.stringify(appSbom({ name: 'apack', version: '1' }, packages, identity, [])))
       .toBe(JSON.stringify(appSbom({ name: 'apack', version: '1' }, [...packages].reverse(), identity, [])));
+  });
+
+  it('lists inside a component what is shipped inside it, each with its hash and a reference of its own', () => {
+    const broker = {
+      type: 'application' as const, name: 'broker', version: 'abc', purl: 'pkg:github/a/broker@abc', sha256: 'b1',
+      components: [{ type: 'file' as const, name: 'z.dll', sha256: 'f2' }, { type: 'file' as const, name: 'NOTICES', sha256: 'f1' }],
+    };
+    const { components } = appSbom({ name: 'apack', version: '1' }, [], identity, [broker]) as { components: object[] };
+    expect(components).toEqual([{
+      type: 'application', 'bom-ref': 'pkg:github/a/broker@abc', name: 'broker', version: 'abc', purl: 'pkg:github/a/broker@abc',
+      hashes: [{ alg: 'SHA-256', content: 'b1' }],
+      components: [
+        { type: 'file', 'bom-ref': 'pkg:github/a/broker@abc#NOTICES', name: 'NOTICES', hashes: [{ alg: 'SHA-256', content: 'f1' }] },
+        { type: 'file', 'bom-ref': 'pkg:github/a/broker@abc#z.dll', name: 'z.dll', hashes: [{ alg: 'SHA-256', content: 'f2' }] },
+      ],
+    }]);
+  });
+
+  it("names a package whose manifest declares no SPDX license by its override's", () => {
+    const root = tree(installed('see', { license: 'SEE LICENSE IN LICENSE' }));
+    const sbom = (overrides: Record<string, Override>) =>
+      (appSbom({ name: 'apack', version: '1' }, [at(root, 'see')], identity, [], overrides) as { components: { licenses: object[] }[] }).components[0].licenses;
+    expect(sbom({ see: { files: [], license: 'MIT', why: 'its LICENSE is the MIT license' } })).toEqual([{ license: { id: 'MIT' } }]);
+    expect(sbom({})).toEqual([{ license: { name: 'SEE LICENSE IN LICENSE' } }]);
+  });
+
+  it("names the terminal broker by its pin: the commit, its binary's hash, and each file beside it with its own", () => {
+    const pin = tree({ 'pin.json': JSON.stringify({ commit: 'abc', files: {
+      'win32-x64': { 'apack-terminal.exe': 'e1', 'conpty.dll': 'c1', 'THIRD-PARTY-NOTICES': 'n1' },
+      'darwin-arm64': { 'apack-terminal': 'd1', 'THIRD-PARTY-NOTICES': 'n1' },
+    } }) });
+    expect(brokerSbomComponent(path.join(pin, 'pin.json'), 'win32-x64')).toEqual({
+      type: 'application', name: 'apack-terminal', version: 'abc', purl: 'pkg:github/spankyed/apack-terminal@abc', license: 'MIT OR Apache-2.0', sha256: 'e1',
+      components: [{ type: 'file', name: 'conpty.dll', sha256: 'c1' }, { type: 'file', name: 'THIRD-PARTY-NOTICES', sha256: 'n1' }],
+    });
+    expect(brokerSbomComponent(path.join(pin, 'pin.json'), 'darwin-arm64')).toMatchObject({ sha256: 'd1', components: [{ name: 'THIRD-PARTY-NOTICES' }] });
+    expect(brokerSbomComponent(path.join(pin, 'pin.json'), 'linux-arm64')).toBeUndefined();
+    // The committed pin, for every platform it holds: a binary with a SHA-256, and the notices beside it
+    const committed = path.join(REPO_ROOT, 'packages', 'terminal-broker', 'src', 'pin.json');
+    const { files } = JSON.parse(fs.readFileSync(committed, 'utf8')) as { files: Record<string, unknown> };
+    expect(Object.keys(files).length).toBeGreaterThan(0);
+    for (const platform of Object.keys(files)) {
+      const component = brokerSbomComponent(committed, platform)!;
+      expect(component.sha256, platform).toMatch(/^[0-9a-f]{64}$/);
+      expect(component.components!.map(({ name }) => name), platform).toEqual(expect.arrayContaining(['THIRD-PARTY-NOTICES', 'COPYRIGHT-rust-library.html']));
+    }
+  });
+
+  it("names the binary a package's install downloaded, at the release its texts were read for, with the hash of the file carried", () => {
+    const { release, binary } = EXTRAS.find(({ pattern }) => pattern.test('@vscode/ripgrep'))!.readFor!;
+    const carrying = (declared: string, files: Record<string, string> = {}) => {
+      const root = tree(installed('@vscode/ripgrep', { license: 'MIT' }, { 'lib/postinstall.js': `const VERSION = '${declared}';\n`, ...files }));
+      return downloadedBinaries([at(root, '@vscode/ripgrep'), at(root, '@vscode/ripgrep', 'inlined')]);
+    };
+    const sha256 = (bytes: string | Buffer) => createHash('sha256').update(bytes).digest('hex');
+    expect(carrying(release, { 'bin/rg': 'rg bytes' })).toEqual([{
+      type: 'application', name: 'ripgrep', version: '15.0.0', purl: `pkg:github/microsoft/ripgrep-prebuilt@${release}`, license: 'Unlicense OR MIT', sha256: sha256('rg bytes'),
+    }]);
+    expect(carrying(release, { 'bin/rg.exe': 'exe bytes' })).toMatchObject([{ sha256: sha256('exe bytes') }]);
+    expect(carrying(release)).toEqual([expect.not.objectContaining({ sha256: expect.anything() })]);
+    // Another release's binary is of a version nobody read
+    expect(carrying('v99.0.0', { 'bin/rg': 'rg bytes' })).toEqual([]);
+    expect(binary.file).toBe('bin/rg');
+    // The installed package, whose install downloaded the binary this machine runs
+    const dir = path.join(REPO_ROOT, 'node_modules', '@vscode', 'ripgrep');
+    const installedBinary = [binary.file, `${binary.file}.exe`].map((file) => path.join(dir, file)).find((file) => fs.existsSync(file))!;
+    expect(downloadedBinaries([{ name: '@vscode/ripgrep', version: '0.0.0', dir, carried: 'files' }]))
+      .toMatchObject([{ name: 'ripgrep', sha256: sha256(fs.readFileSync(installedBinary)) }]);
+  });
+
+  it('writes the downloaded binaries into the SBOM beside the components given', () => {
+    const { release } = EXTRAS.find(({ pattern }) => pattern.test('@vscode/ripgrep'))!.readFor!;
+    const committed = [...Object.values(OVERRIDES), ...EXTRAS, ...ADAPTED].flatMap(({ files }) => files);
+    const licenses = tree(Object.fromEntries(committed.map((file) => [file, file])));
+    const app = tree(installed('@vscode/ripgrep', { license: 'MIT' }, { LICENSE: 'x', 'lib/postinstall.js': `const VERSION = '${release}';\n`, 'bin/rg': 'rg' }));
+    const file = path.join(app, 'app.cdx.json');
+    writeAppNotices({
+      appDir: app, buildRoot: app, bundleRecords: [], packDirs: [], licensesDir: licenses, channel: 'production', platform: 'linux', native: [], overrides: {},
+      sbom: { file, app: { name: 'apack', version: '1' }, identity, others: [{ type: 'framework', name: 'electron', version: '1', purl: 'pkg:github/electron/electron@v1' }] },
+    });
+    const { components } = JSON.parse(fs.readFileSync(file, 'utf8')) as { components: { purl: string }[] };
+    expect(components.map(({ purl }) => purl)).toEqual(['pkg:github/electron/electron@v1', `pkg:github/microsoft/ripgrep-prebuilt@${release}`, 'pkg:npm/%40vscode/ripgrep@1.0.0']);
   });
 
   it("names vendored packages by their pinned commit and directory, and hashes the lockfile's", () => {
