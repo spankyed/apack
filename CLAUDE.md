@@ -128,7 +128,8 @@ too: name the file in `ADAPTED` with its upstream's license texts under `build/l
 it was adapted, ported or copied from elsewhere has to be (`third-party-notices.spec.ts`). Beside the release files it
 writes a CycloneDX SBOM,
 `<releasePrefix>-<version>-<os>-<arch>.cdx.json`, which the release workflows upload by that name: rename a release file
-and their `*.cdx.json` globs with it.
+and their `*.cdx.json` globs with it. What neither covers yet, the Rust crates in npm packages' prebuilt binaries
+first, is in [the deferred plan](docs/plans/deferred/third-party-notices-gaps.md).
 
 ## Backward compatibility
 
