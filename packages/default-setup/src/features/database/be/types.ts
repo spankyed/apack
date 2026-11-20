@@ -39,7 +39,8 @@ type Ran = { result: any; executionTime: number }
 /**
  * What a window asks the database feature, each answered once. A query or a transaction is answered with its result
  * or refused as \`failed\` with why it could not run; the run history's reads answer with an empty page where they
- * cannot be read, as the viewer shows nothing either way.
+ * cannot be read, as the viewer shows nothing either way. Replacing or exporting the data answers with what it did,
+ * and generating a query with only that it started: the query comes from the flow it starts.
  */
 export type DatabaseAsks = {
   EXECUTE_QUERY: { ask: { code: string }; answer: Ran }
@@ -49,28 +50,30 @@ export type DatabaseAsks = {
   GET_FLOW_EVENTS: { ask: { flowId: string; offset?: number; limit?: number }; answer: { flowId: string; events: RunTree[]; hasMore: boolean; offset: number } }
   GET_NODE_DETAILS: { ask: { nodeId: string }; answer: { nodeId: string; details: RunNode | null } }
   GET_BACKUP_INFO: { ask: { path: string }; answer: { info: { timestamp: number; databases: string[]; size: number; hasMedia?: boolean } | null } }
+  /** Refused for an empty prompt; otherwise the flow that writes the query has started */
+  GENERATE_AI_QUERY: { ask: { prompt: string; mode?: 'query' | 'transaction' } }
+  /** Answered with the backup's path */
+  EXPORT_DATABASE: { ask: { path: string; name?: string; databases: ('lmdb' | 'runHistory')[] }; answer: { path: string } }
+  /**
+   * Answered with what to tell the user. A backup holding databases this app cannot is refused as
+   * `unknown-databases`, naming them, for the user to decide whether to import it without them
+   */
+  IMPORT_DATABASE: {
+    ask: { path: string; skipUnknownDatabases?: boolean }
+    answer: { message: string }
+    fails: { 'unknown-databases': { unknownDatabases: string[] } }
+  }
+  RESET_DATABASE: { answer: { message: string } }
 }
 
 /**
- * What a window sends the database feature and is answered for by an outcome every window should know of when nobody
- * asked, or by a flow: generating a query, and replacing or exporting the data.
- */
-export type IncomingDatabaseEvents =
-  | { type: 'GENERATE_AI_QUERY'; prompt: string; mode?: 'query' | 'transaction' }
-  | { type: 'EXPORT_DATABASE'; path: string; name?: string; databases: ('lmdb' | 'runHistory')[] }
-  | { type: 'IMPORT_DATABASE'; path: string; skipUnknownDatabases?: boolean }
-  | { type: 'RESET_DATABASE' };
-
-/**
- * What the database system sends beside its answers: the outcomes of replacing and exporting the data, which reach
- * every window when nobody asked; `DATABASE_REPLACED`, which is news for every window; and the generated query, which a
- * flow sends to the asking window by its connection.
+ * What the database system sends beside its answers: `DATABASE_REPLACED`, which is news for every window, and the
+ * generated query, which a flow sends to the asking window by its connection.
  */
 export type OutgoingDatabaseEvents =
   /**
    * The data was replaced — imported or reset — by any window: every window drops the results it shows and the run
-   * history it holds, which name rows that may be gone. A notification; the window that
-   * asked has its own outcome too.
+   * history it holds, which name rows that may be gone. A notification; the window that asked is answered too.
    */
   | { type: 'DATABASE_REPLACED' }
   /**
@@ -80,18 +83,8 @@ export type OutgoingDatabaseEvents =
   | { type: 'AI_QUERY_LOADING' }
   | { type: 'AI_QUERY_GENERATED'; query: string }
   /**
-   * Generating a query from a prompt failed, which is not a query failing.
-   *
-   * **Its own event because it answers nothing.** It is broadcast, not replied, so it carries no call — and
-   * the guard on `QUERY_ERROR` takes only an answer whose call is the one outstanding. Sent as a
-   * `QUERY_ERROR` it would be dropped by that guard every time and the surface's loading flag would never
-   * clear, which is the failure this split prevents. An answer and an announcement are different things,
-   * and one event cannot be both.
+   * Generating a query from a prompt failed in the flow, which is not a query failing. Its own event because it
+   * answers no ask: the flow sends it long after `GENERATE_AI_QUERY` was answered, so it carries no call, and the
+   * console's query answers are taken only for the call outstanding.
    */
-  | { type: 'AI_QUERY_ERROR'; error: string }
-  | { type: 'EXPORT_DATABASE_SUCCESS'; path: string }
-  | { type: 'EXPORT_DATABASE_ERROR'; error: string }
-  | { type: 'IMPORT_DATABASE_SUCCESS'; message?: string }
-  | { type: 'IMPORT_DATABASE_ERROR'; error: string; unknownDatabases?: string[] }
-  | { type: 'RESET_DATABASE_SUCCESS'; message: string }
-  | { type: 'RESET_DATABASE_ERROR'; error: string };
+  | { type: 'AI_QUERY_ERROR'; error: string };

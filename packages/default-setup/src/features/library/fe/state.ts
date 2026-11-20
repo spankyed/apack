@@ -1,5 +1,5 @@
 import { entityIs } from '@apackdev/sdk/fe'
-import type { AnswersOf, OpenEntity } from '@apackdev/sdk/events'
+import { answerOf, isAnswered, type AnswersOf, type OpenEntity } from '@apackdev/sdk/events'
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
 import type { DocumentDTO, DocumentView, FolderContents, FolderView, LibraryIndex, LibraryItem, DocumentItem } from '#generated/types.ts'
 import type { Contract, LibraryContext, LibraryInboxEvent } from './contract.ts'
@@ -220,14 +220,11 @@ export type LibraryEvents =
   | { type: 'LIBRARY.RESET_IMPORT_STATUS' }
   | { type: 'LIBRARY.EXPORT'; directory: string; format: 'markdown' | 'json' }
   | { type: 'LIBRARY.RESET_EXPORT_STATUS' }
-  | { type: 'LIBRARY_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'LIBRARY_IMPORT_FAILED'; errors: string[] }
-  | { type: 'LIBRARY_EXPORTED'; filePath: string; itemCount: number }
-  | { type: 'LIBRARY_EXPORT_FAILED'; errors: string[] }
   | { type: 'NAVIGATE_BACK' }
   | { type: 'NAVIGATE_FORWARD' }
   | OutgoingLibraryEvents
-  // The answers to what this window asks the library, which it goes on from: its writes and its fetches of folders
+  // The answers to what this window asks the library, which it goes on from: its writes, its fetches of folders, and
+  // its imports and exports
   | AnswersOf<LibrarySystemContract>
 
 /** How a fetch of the document open on disk ended */
@@ -624,29 +621,13 @@ export const librarySystem = setup({
     },
 
     handleLibraryImported: assign(({ event }) => {
-      if (event.type === 'LIBRARY_IMPORTED') {
-        return {
-          libraryImport: {
-            status: 'success' as const,
-            errors: event.errors || [],
-            importedCount: event.count,
-          },
-        }
-      }
-      return {}
+      const { count, errors } = answerOf(event, 'IMPORT_LIBRARY')
+      return { libraryImport: { status: 'success' as const, errors: errors || [], importedCount: count } }
     }),
 
     handleLibraryImportFailed: assign(({ event }) => {
-      if (event.type === 'LIBRARY_IMPORT_FAILED') {
-        return {
-          libraryImport: {
-            status: 'error' as const,
-            errors: event.errors,
-            importedCount: 0,
-          },
-        }
-      }
-      return {}
+      if (event.type !== 'ASK_FAILED') return {}
+      return { libraryImport: { status: 'error' as const, errors: event.failure.message.split('\n'), importedCount: 0 } }
     }),
 
     resetImportLibraryStatus: assign({
@@ -672,31 +653,13 @@ export const librarySystem = setup({
     },
 
     handleLibraryExported: assign(({ event }) => {
-      if (event.type === 'LIBRARY_EXPORTED') {
-        return {
-          libraryExport: {
-            status: 'success' as const,
-            errors: [] as string[],
-            filePath: event.filePath,
-            itemCount: event.itemCount,
-          },
-        }
-      }
-      return {}
+      const { filePath, itemCount } = answerOf(event, 'EXPORT_LIBRARY')
+      return { libraryExport: { status: 'success' as const, errors: [] as string[], filePath, itemCount } }
     }),
 
     handleLibraryExportFailed: assign(({ event }) => {
-      if (event.type === 'LIBRARY_EXPORT_FAILED') {
-        return {
-          libraryExport: {
-            status: 'error' as const,
-            errors: event.errors,
-            filePath: '',
-            itemCount: 0,
-          },
-        }
-      }
-      return {}
+      if (event.type !== 'ASK_FAILED') return {}
+      return { libraryExport: { status: 'error' as const, errors: [event.failure.message], filePath: '', itemCount: 0 } }
     }),
 
     resetExportLibraryStatus: assign({
@@ -782,8 +745,11 @@ export const librarySystem = setup({
     FOLDER_CHANGED: {
       actions: 'fetchChangedFolders',
     },
-    // The answers to this window's fetches of what is on disk, and to the writes that make a folder it names
+    // The answers to this window's fetches of what is on disk, to the writes that make a folder it names, and to its
+    // imports and exports
     ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'IMPORT_LIBRARY'), actions: 'handleLibraryImported' },
+      { guard: ({ event }) => isAnswered(event, 'EXPORT_LIBRARY'), actions: 'handleLibraryExported' },
       { guard: ({ event }) => event.asked === 'GET_FOLDER_CONTENTS', actions: 'folderFetched' },
       { guard: ({ event }) => event.asked === 'CHECK_SYMLINKS', actions: 'markBrokenSymlinks' },
       { guard: ({ event }) => event.asked === 'CREATE_COLLECTION' || event.asked === 'CREATE_SYMLINK_COLLECTION', actions: 'nameCreatedFolder' },
@@ -876,30 +842,20 @@ export const librarySystem = setup({
     'LIBRARY.RESET_IMPORT_STATUS': {
       actions: 'resetImportLibraryStatus',
     },
-    LIBRARY_IMPORTED: {
-      actions: 'handleLibraryImported',
-    },
-    LIBRARY_IMPORT_FAILED: {
-      actions: 'handleLibraryImportFailed',
-    },
     'LIBRARY.EXPORT': {
       actions: ['setExportingLibrary', 'sendExportLibrary'],
     },
     'LIBRARY.RESET_EXPORT_STATUS': {
       actions: 'resetExportLibraryStatus',
     },
-    LIBRARY_EXPORTED: {
-      actions: 'handleLibraryExported',
-    },
-    LIBRARY_EXPORT_FAILED: {
-      actions: 'handleLibraryExportFailed',
-    },
 
-    // A write or a fetch this window asked for and did not get: shown, whichever it was. What a write changed reaches
-    // every window through the views
-    ASK_FAILED: {
-      actions: 'takeFailure',
-    },
+    // An import or an export that failed is its status. A write or a fetch this window asked for and did not get is
+    // shown, whichever it was; what a write changed reaches every window through the views
+    ASK_FAILED: [
+      { guard: ({ event }) => event.asked === 'IMPORT_LIBRARY', actions: 'handleLibraryImportFailed' },
+      { guard: ({ event }) => event.asked === 'EXPORT_LIBRARY', actions: 'handleLibraryExportFailed' },
+      { actions: 'takeFailure' },
+    ],
     CLEAR_WRITE_ERROR: {
       actions: assign({ writeError: null }),
     },

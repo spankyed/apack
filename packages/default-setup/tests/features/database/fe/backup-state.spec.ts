@@ -1,5 +1,5 @@
-// The database surface's backup flow: an export or import is in progress from the request until the
-// system reports how it ended, and the outcome is kept for the Backup & Restore view to report.
+// The database surface's backup flow: an export or import is in progress from the ask until the system answers it,
+// and how it ended is kept for the Backup & Restore view to report.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import { askAnswered } from '@apackdev/sdk/testing';
@@ -28,14 +28,19 @@ beforeEach(() => {
 it('retains the import result instructions for the backup view', () => {
   const actor = backupView();
   const message = 'Import successful. Please restart the brain manually.';
-  actor.send({ type: 'IMPORT_DATABASE_SUCCESS', message });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'IMPORT_DATABASE', answer: { message } });
   expect(backup(actor).backupResult).toEqual({ operation: 'import', error: undefined, message });
   actor.stop();
 });
 
-// The asker's own outcome, and the notification every window hears when any one of them replaced the data
-it.each(['IMPORT_DATABASE_SUCCESS', 'RESET_DATABASE_SUCCESS', 'DATABASE_REPLACED'] as const)(
-  '%s discards old database results and late replies without restarting the window', type => {
+// The answer to the asker's own import or reset, and the notification every window hears when any one of them
+// replaced the data
+it.each([
+  ['IMPORT_DATABASE answered', { type: 'ASK_ANSWERED', asked: 'IMPORT_DATABASE', answer: { message: 'Completed' } }],
+  ['RESET_DATABASE answered', { type: 'ASK_ANSWERED', asked: 'RESET_DATABASE', answer: { message: 'Completed' } }],
+  ['DATABASE_REPLACED', { type: 'DATABASE_REPLACED' }],
+] as const)(
+  '%s discards old database results and late replies without restarting the window', (_, replaced) => {
     const actor = createActor(databaseState).start();
     actor.send({ type: 'QUERY.UPDATE', code: 'return "keep this editor"' });
     actor.send({ type: 'QUERY.EXECUTE', code: 'return "old rows"' });
@@ -43,7 +48,7 @@ it.each(['IMPORT_DATABASE_SUCCESS', 'RESET_DATABASE_SUCCESS', 'DATABASE_REPLACED
     expect(actor.getSnapshot().context.queryResult).toBe('old rows');
     actor.send({ type: 'QUERY.EXECUTE', code: 'return "late rows"' });
     const abandoned = sentCall(sendToSystem, 'EXECUTE_QUERY', 1);
-    actor.send({ type, message: 'Completed' });
+    actor.send(replaced);
     expect(actor.getSnapshot().context).toMatchObject({ currentQuery: 'return "keep this editor"',
       queryResult: null, isLoading: false, pendingQueryCall: null, pendingTransactionCall: null });
     actor.send(askAnswered(abandoned, 'EXECUTE_QUERY', { result: 'late rows', executionTime: 2 }));
@@ -65,19 +70,19 @@ it('keeps the current database results when import is refused', () => {
   const actor = createActor(databaseState).start();
   actor.send({ type: 'QUERY.EXECUTE', code: 'return "current rows"' });
   actor.send(askAnswered(sentCall(sendToSystem, 'EXECUTE_QUERY'), 'EXECUTE_QUERY', { result: 'current rows', executionTime: 1 }));
-  actor.send({ type: 'IMPORT_DATABASE_ERROR', error: 'Invalid settings' });
+  actor.send({ type: 'ASK_FAILED', asked: 'IMPORT_DATABASE', failure: { kind: 'failed', message: 'Invalid settings' } });
   expect(actor.getSnapshot().context.queryResult).toBe('current rows');
   expect(backup(actor).backupResult?.error).toBe('Invalid settings');
   actor.stop();
 });
 
-it('exports until the system reports success', () => {
+it('exports until the system answers', () => {
   const actor = backupView();
 
   actor.send({ type: 'BACKUP.EXPORT', path: '/backups', databases: ['lmdb'] });
   expect(backup(actor)).toEqual({ exporting: true, importing: false, backupResult: null });
 
-  actor.send({ type: 'EXPORT_DATABASE_SUCCESS', path: '/backups/backup-1' });
+  actor.send({ type: 'ASK_ANSWERED', asked: 'EXPORT_DATABASE', answer: { path: '/backups/backup-1' } });
   expect(backup(actor)).toEqual({ exporting: false, importing: false, backupResult: { operation: 'export', error: undefined } });
 });
 
@@ -88,7 +93,7 @@ it('keeps an import failure, also after leaving the backup view', () => {
   expect(backup(actor).importing).toBe(true);
   actor.send({ type: 'BACK_TO_EXPLORER' });
 
-  actor.send({ type: 'IMPORT_DATABASE_ERROR', error: 'no manifest' });
+  actor.send({ type: 'ASK_FAILED', asked: 'IMPORT_DATABASE', failure: { kind: 'failed', message: 'no manifest' } });
   expect(backup(actor)).toEqual({ exporting: false, importing: false, backupResult: { operation: 'import', error: 'no manifest' } });
 });
 
@@ -96,7 +101,11 @@ it("keeps the stores a newer apack's backup holds, so the view can ask, and impo
   const actor = backupView();
 
   actor.send({ type: 'BACKUP.IMPORT', path: '/backups/backup-1' });
-  actor.send({ type: 'IMPORT_DATABASE_ERROR', error: 'a newer apack made it', unknownDatabases: ['searchIndex'] });
+  actor.send({
+    type: 'ASK_FAILED',
+    asked: 'IMPORT_DATABASE',
+    failure: { kind: 'unknown-databases', message: 'a newer apack made it', unknownDatabases: ['searchIndex'] },
+  });
   expect(backup(actor)).toEqual({
     exporting: false,
     importing: false,

@@ -137,8 +137,9 @@ type OnDisk = { 'not-found': {}; 'no-access': {} }
 
 /**
  * What a window asks the library, each answered once: a write with what it made or that it landed, a fetch of what is
- * on disk (which no view can watch) with what it read. What a write changed in the library itself reaches every
- * window through the views; a write on disk, which no view sees, is told (`FOLDER_CHANGED`).
+ * on disk (which no view can watch) with what it read, an import or an export with what it did. What a write changed
+ * in the library itself reaches every window through the views; a write on disk, which no view sees, is told
+ * (`FOLDER_CHANGED`).
  */
 export type LibraryAsks = {
   CREATE_DOCUMENT: { ask: { name: string; content: ContentSection[]; tags: string[]; collectionId?: EARS.EntityId; documentType?: string }; fails: OnDisk }
@@ -161,20 +162,13 @@ export type LibraryAsks = {
   CREATE_SYMLINK_COLLECTION: { ask: { name: string; symlinkPath: string; parentId?: EARS.EntityId }; answer: { collection: CollectionDTO } }
   /** Refused as `not-found` for a path that is no folder */
   UPDATE_SYMLINK_PATH: { ask: { collectionId: EARS.EntityId; newPath: string }; fails: { 'not-found': {} } }
+  EXPORT_LIBRARY: { ask: { directory: string; format: 'markdown' | 'json' }; answer: { filePath: string; itemCount: number } }
+  /** Imported with what could not be, unless nothing could, which fails */
+  IMPORT_LIBRARY: { ask: { directory: string }; answer: { count: number; errors?: string[] } }
 }
 
 /**
- * What a window sends the library and is answered for by an outcome every window should know of rather than by a reply:
- * an import's or an export's, which tells every window when nobody asked (`answer` in `be/system.ts`).
- */
-export type IncomingLibraryEvents =
-  // [SEARCH_INDEX_FF] Search index events — commented out
-  | { type: 'IMPORT_LIBRARY'; directory: string }
-  | { type: 'EXPORT_LIBRARY'; directory: string; format: 'markdown' | 'json' }
-
-/**
- * What the library system sends beside its answers: an import's or an export's outcome, and the one notification
- * there is, a folder on disk having changed. What the library stores is its views; what is on disk is fetched.
+ * What the library system sends beside its answers: the one notification there is, a folder on disk having changed. What the library stores is its views; what is on disk is fetched.
  */
 export type OutgoingLibraryEvents =
   /**
@@ -189,8 +183,3 @@ export type OutgoingLibraryEvents =
   // | { type: 'SEARCH_INDEX_DELETED'; data: { indexId: string } }
   // | { type: 'SEARCH_RESULTS'; data: { results: any[] } }
   // | { type: 'INDEXING_PROGRESS'; data: { indexId: string; progress: number; total: number } }
-  // Import/Export events
-  | { type: 'LIBRARY_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'LIBRARY_IMPORT_FAILED'; errors: string[] }
-  | { type: 'LIBRARY_EXPORTED'; filePath: string; itemCount: number }
-  | { type: 'LIBRARY_EXPORT_FAILED'; errors: string[] }

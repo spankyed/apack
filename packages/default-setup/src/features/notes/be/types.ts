@@ -57,7 +57,7 @@ export type NotesSettings = import('#generated/settings.ts').SettingsOf<'notes'>
 /**
  * A window's writes to its notes, each answered once: the surface applies its own edits at once and holds the notes'
  * views while any of its writes is unanswered (`ViewWrites`), so every write is an ask. Creating one answers with the
- * note it made, for the window that asked to open.
+ * note it made, for the window that asked to open; an import or an export answers with what it did.
  */
 export type NoteAsks = {
   CREATE_NOTE: { ask: { title: string; content?: string; icon?: string | null; parentId?: string; skipContentSync?: boolean; noteType?: 'document' | 'tasklist' | 'task'; completed?: boolean; displayOrder?: number }; answer: { note?: NoteSummary } }
@@ -69,17 +69,14 @@ export type NoteAsks = {
   REORDER_NOTE: { ask: { id: string; newParentId: string | null; newIndex: number } }
   PERMANENTLY_DELETE_NOTE: { ask: { id: string } }
   EMPTY_TRASH: {}
+  EXPORT_NOTES: { ask: { directory: string; format: 'markdown' | 'json' }; answer: { filePath: string; itemCount: number } }
+  /** Imported with what could not be, unless nothing could, which fails */
+  IMPORT_NOTES: { ask: { directory: string }; answer: { count: number; errors?: string[] } }
 }
 
-/** What a window tells the notes system and is not answered for, and the import and export every window hears of */
+/** What a window tells the notes system and is not answered for */
 export type IncomingNoteEvents =
-  | { type: 'VIEW_NOTE'; id: string }
-  | { type: 'IMPORT_NOTES'; directory: string }
-  | { type: 'EXPORT_NOTES'; directory: string; format: 'markdown' | 'json' };
+  | { type: 'VIEW_NOTE'; id: string };
 
-/** What the notes system sends beside its answers: an import's or an export's outcome. The notes themselves are its views */
-export type OutgoingNotesEvents =
-  | { type: 'NOTES_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'NOTES_IMPORT_FAILED'; errors: string[] }
-  | { type: 'NOTES_EXPORTED'; filePath: string; itemCount: number }
-  | { type: 'NOTES_EXPORT_FAILED'; errors: string[] }
+/** The notes system sends no window anything of its own: the notes are its views, and each ask is answered */
+export type OutgoingNotesEvents = never

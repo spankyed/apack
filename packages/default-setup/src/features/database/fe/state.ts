@@ -32,11 +32,8 @@ function emptyDatabaseResults() {
 }
 
 /**
- * `OutgoingDatabaseEvents` and nothing of its own.
- *
- * It used to re-declare five of those members here as well. A union of a member with its own copy
- * narrows to *both*, so a field added to the canonical declaration read as optional with no type error
- * anywhere, so a field the backend adds reads as checked here when nothing checks it.
+ * `OutgoingDatabaseEvents` and nothing of its own: a union of a member with its own copy narrows to *both*, so a
+ * field added to the canonical declaration would read as optional here with no type error anywhere.
  */
 type SystemEvent = OutgoingDatabaseEvents |
   { type: 'FEATURE_SETTINGS_UPDATED'; settings: DatabaseSettings }
@@ -232,18 +229,13 @@ const databaseState = setup({
     }),
 
     /**
-     * Generating a query from a prompt failed.
-     *
-     * Its own handler because it is the only one of these that answers no request, and because it owns
-     * `isAiQueryLoading` — which `setQueryError` used to clear, back when one event meant both things.
+     * Generating a query from a prompt failed: refused as it was asked, or failed in the flow it started. Its own
+     * handler because it owns `isAiQueryLoading`, which no query's answer touches.
      */
-    setAiQueryError: assign(({ event }) => {
-      const ev = typeOf('AI_QUERY_ERROR', event);
-      return {
-        error: ev.error,
-        isAiQueryLoading: false,
-      };
-    }),
+    setAiQueryError: assign(({ event }) => ({
+      error: event.type === 'ASK_FAILED' ? event.failure.message : typeOf('AI_QUERY_ERROR', event).error,
+      isAiQueryLoading: false,
+    })),
 
     setTransactionError: assign(({ event }) => {
       return {
@@ -474,19 +466,23 @@ const databaseState = setup({
 
     exportFinished: assign(({ event }) => ({
       exporting: false,
-      backupResult: { operation: 'export' as const, error: event.type === 'EXPORT_DATABASE_ERROR' ? event.error : undefined },
+      backupResult: { operation: 'export' as const, error: event.type === 'ASK_FAILED' ? event.failure.message : undefined },
     })),
 
-    importFinished: assign(({ event }) => ({
-      ...(event.type === 'IMPORT_DATABASE_SUCCESS' ? emptyDatabaseResults() : {}),
-      importing: false,
-      backupResult: {
-        operation: 'import' as const,
-        error: event.type === 'IMPORT_DATABASE_ERROR' ? event.error : undefined,
-        ...(event.type === 'IMPORT_DATABASE_SUCCESS' ? { message: event.message } : {}),
-        ...(event.type === 'IMPORT_DATABASE_ERROR' && event.unknownDatabases ? { unknownDatabases: event.unknownDatabases } : {}),
-      },
-    })),
+    importFinished: assign(({ event }) => {
+      if (isAnswered(event, 'IMPORT_DATABASE')) {
+        return { ...emptyDatabaseResults(), importing: false, backupResult: { operation: 'import' as const, message: event.answer.message } };
+      }
+      const { failure } = typeOf('ASK_FAILED', event);
+      return {
+        importing: false,
+        backupResult: {
+          operation: 'import' as const,
+          error: failure.message,
+          ...(failure.kind === 'unknown-databases' ? { unknownDatabases: failure.unknownDatabases } : {}),
+        },
+      };
+    }),
 
     /* ── reset database actions ─────────────────────────── */
     resetDatabase: () => {
@@ -497,12 +493,7 @@ const databaseState = setup({
 
     handleResetSuccess: assign(emptyDatabaseResults),
 
-    handleResetError: assign(({ event }) => {
-      const ev = typeOf('RESET_DATABASE_ERROR', event);
-      return {
-        error: `Reset failed: ${ev.error}`,
-      };
-    }),
+    handleResetError: assign(({ event }) => ({ error: `Reset failed: ${typeOf('ASK_FAILED', event).failure.message}` })),
   },
 }).createMachine({
   id,
@@ -539,8 +530,12 @@ AI_QUERY_LOADING: { actions: 'setAiQueryLoading' },
     AI_QUERY_GENERATED: { actions: 'setAiQueryResult' },
     FEATURE_SETTINGS_UPDATED: { actions: 'setDatabaseSettings' },
     // The answers to what this window asks: a query or a transaction it is waiting on, a page of the run history, a
-    // backup's summary. A query's answer is the console's only while it is the one outstanding
+    // backup's summary, and replacing or exporting the data. A query's answer is the console's only while it is the one
+    // outstanding
     ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'EXPORT_DATABASE'), actions: 'exportFinished' },
+      { guard: ({ event }) => isAnswered(event, 'IMPORT_DATABASE'), actions: 'importFinished' },
+      { guard: ({ event }) => isAnswered(event, 'RESET_DATABASE'), actions: 'handleResetSuccess' },
       { guard: 'answersPendingQuery', actions: 'setQueryResult' },
       { guard: 'answersPendingTransaction', actions: 'setTransactionResult' },
       { guard: ({ event }) => isAnswered(event, 'GET_FLOW_RUNS'), actions: 'setFlowRuns' },
@@ -551,15 +546,13 @@ AI_QUERY_LOADING: { actions: 'setAiQueryLoading' },
     ASK_FAILED: [
       { guard: 'answersPendingQuery', actions: 'setQueryError' },
       { guard: 'answersPendingTransaction', actions: 'setTransactionError' },
+      { guard: ({ event }) => event.asked === 'GENERATE_AI_QUERY', actions: 'setAiQueryError' },
+      { guard: ({ event }) => event.asked === 'EXPORT_DATABASE', actions: 'exportFinished' },
+      { guard: ({ event }) => event.asked === 'IMPORT_DATABASE', actions: 'importFinished' },
+      { guard: ({ event }) => event.asked === 'RESET_DATABASE', actions: 'handleResetError' },
     ],
-    EXPORT_DATABASE_SUCCESS: { actions: 'exportFinished' },
-    EXPORT_DATABASE_ERROR: { actions: 'exportFinished' },
-    IMPORT_DATABASE_SUCCESS: { actions: 'importFinished' },
-    IMPORT_DATABASE_ERROR: { actions: 'importFinished' },
     // Reset database events. The request comes from the surface's settings, whatever view the surface is in
     'DATABASE.RESET': { actions: 'resetDatabase' },
-    RESET_DATABASE_SUCCESS: { actions: 'handleResetSuccess' },
-    RESET_DATABASE_ERROR: { actions: 'handleResetError' },
   },
   meta: {
     ...breadcrumb('explorer', 'Database Explorer', true),

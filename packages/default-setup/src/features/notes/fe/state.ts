@@ -9,9 +9,9 @@ import {
 } from '@apackdev/sdk/fe'
 import type { NoteDTO, NoteSummary } from '#generated/types.ts'
 import type { Contract, NotesContext, NotesInboxEvent } from './contract.ts'
-import type { NoteSummary as CreatedNote, OutgoingNotesEvents } from '#features/notes/be/types.ts'
+import type { NoteSummary as CreatedNote } from '#features/notes/be/types.ts'
 import type { Contract as NotesSystemContract } from '#features/notes/be/contract.ts'
-import type { AnswersOf } from '@apackdev/sdk/events'
+import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events'
 import { sendToSystem } from '#generated/events.ts'
 import { Trash2 } from 'lucide-vue-next'
 import { contextMenuFn } from '@apackdev/sdk/fe'
@@ -20,11 +20,7 @@ import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoFo
 export const id = 'notes' as const;
 export type NotesState = ActorRefFrom<typeof notesState>
 
-type SystemEvent = OutgoingNotesEvents | AnswersOf<NotesSystemContract>
-  | { type: 'NOTES_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'NOTES_IMPORT_FAILED'; errors: string[] }
-  | { type: 'NOTES_EXPORTED'; filePath: string; itemCount: number }
-  | { type: 'NOTES_EXPORT_FAILED'; errors: string[] }
+type SystemEvent = AnswersOf<NotesSystemContract>
 
 type UIEvent =
   | { type: 'NOTE.SELECT'; noteId: string }
@@ -603,29 +599,13 @@ const notesState = setup({
     },
 
     handleNotesImported: assign(({ event }) => {
-      if (event.type === 'NOTES_IMPORTED') {
-        return {
-          notesImport: {
-            status: 'success' as const,
-            errors: event.errors || [],
-            importedCount: event.count,
-          },
-        }
-      }
-      return {}
+      const { count, errors } = answerOf(event, 'IMPORT_NOTES')
+      return { notesImport: { status: 'success' as const, errors: errors || [], importedCount: count } }
     }),
 
     handleNotesImportFailed: assign(({ event }) => {
-      if (event.type === 'NOTES_IMPORT_FAILED') {
-        return {
-          notesImport: {
-            status: 'error' as const,
-            errors: event.errors,
-            importedCount: 0,
-          },
-        }
-      }
-      return {}
+      const { failure } = typeOf('ASK_FAILED', event)
+      return { notesImport: { status: 'error' as const, errors: failure.message.split('\n'), importedCount: 0 } }
     }),
 
     resetImportNotesStatus: assign({
@@ -651,31 +631,13 @@ const notesState = setup({
     },
 
     handleNotesExported: assign(({ event }) => {
-      if (event.type === 'NOTES_EXPORTED') {
-        return {
-          notesExport: {
-            status: 'success' as const,
-            errors: [] as string[],
-            filePath: event.filePath,
-            itemCount: event.itemCount,
-          },
-        }
-      }
-      return {}
+      const { filePath, itemCount } = answerOf(event, 'EXPORT_NOTES')
+      return { notesExport: { status: 'success' as const, errors: [] as string[], filePath, itemCount } }
     }),
 
     handleNotesExportFailed: assign(({ event }) => {
-      if (event.type === 'NOTES_EXPORT_FAILED') {
-        return {
-          notesExport: {
-            status: 'error' as const,
-            errors: event.errors,
-            filePath: '',
-            itemCount: 0,
-          },
-        }
-      }
-      return {}
+      const { failure } = typeOf('ASK_FAILED', event)
+      return { notesExport: { status: 'error' as const, errors: [failure.message], filePath: '', itemCount: 0 } }
     }),
 
     resetExportNotesStatus: assign({
@@ -755,9 +717,18 @@ const notesState = setup({
       { guard: 'writing', actions: 'holdView' },
       { actions: 'takeNote' },
     ],
-    // The answers to this window's writes; a refusal reads the notes as stored again
-    ASK_ANSWERED: { actions: 'settleWrite' },
-    ASK_FAILED: { actions: 'settleWrite' },
+    // An import's or an export's answer is its status; the rest answer this window's writes, and a refusal reads the
+    // notes as stored again
+    ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'IMPORT_NOTES'), actions: 'handleNotesImported' },
+      { guard: ({ event }) => isAnswered(event, 'EXPORT_NOTES'), actions: 'handleNotesExported' },
+      { actions: 'settleWrite' },
+    ],
+    ASK_FAILED: [
+      { guard: ({ event }) => event.asked === 'IMPORT_NOTES', actions: 'handleNotesImportFailed' },
+      { guard: ({ event }) => event.asked === 'EXPORT_NOTES', actions: 'handleNotesExportFailed' },
+      { actions: 'settleWrite' },
+    ],
     'NOTE.SOFT_DELETE': { actions: 'sendSoftDeleteNote' },
     'NOTE.RESTORE': { actions: 'sendRestoreNote' },
     'NOTE.TOGGLE_EXPAND': { actions: 'toggleExpand' },
@@ -781,12 +752,8 @@ const notesState = setup({
     'TASK.TOGGLE_HIDE_COMPLETED_CHILDREN': { actions: 'sendToggleHideCompletedChildren' },
     'NOTES.IMPORT': { actions: ['setImportingNotes', 'sendImportNotes'] },
     'NOTES.RESET_IMPORT_STATUS': { actions: 'resetImportNotesStatus' },
-    NOTES_IMPORTED: { actions: 'handleNotesImported' },
-    NOTES_IMPORT_FAILED: { actions: 'handleNotesImportFailed' },
     'NOTES.EXPORT': { actions: ['setExportingNotes', 'sendExportNotes'] },
     'NOTES.RESET_EXPORT_STATUS': { actions: 'resetExportNotesStatus' },
-    NOTES_EXPORTED: { actions: 'handleNotesExported' },
-    NOTES_EXPORT_FAILED: { actions: 'handleNotesExportFailed' },
     'NOTE.SHOW_TRASH': { actions: 'showTrash' },
     'NOTE.HIDE_TRASH': { actions: 'hideTrash' },
     'NOTE.PERMANENTLY_DELETE': { actions: 'sendPermanentlyDelete' },

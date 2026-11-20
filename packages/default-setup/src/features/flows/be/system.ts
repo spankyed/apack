@@ -1,7 +1,4 @@
-import { broadcastToSurface } from '#generated/events.ts';
 import { setup } from 'xstate';
-import type { Reply } from '@apackdev/sdk/events';
-import type { OutgoingFlowsEvents } from './types.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
 // import { addMessageToLatestThread, getLatestMessage } from './accessors';
 import { EARS } from '#generated/ears.ts';
@@ -12,20 +9,6 @@ import { availableModels } from '@apackdev/sdk/models';
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import { compileFlowDSL, validateFlowDSL, exportFlowsToDSL, type FlowDSL, type ValidationError } from '@apackdev/sdk/build';
 
-/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
-type OutcomeType = 'DSL_EXPORT_FAILED' | 'DSL_EXPORTED' | 'DSL_IMPORT_FAILED' | 'DSL_IMPORTED'
-type Outcome = Extract<OutgoingFlowsEvents, { type: OutcomeType }>
-
-/**
- * Answers whoever asked for this, and tells every window when nobody did.
- *
- * An import's or an export's *outcome* belongs to the window that started it — another window showing a
- * result for work it did not do, and flipping its own status to success, is what broadcasting it did. The
- * flows the import wrote reach every window through the feature's views.
- */
-const answer = (reply: Reply<OutgoingFlowsEvents> | undefined, event: Outcome): void =>
-  (reply ? reply(event) : broadcastToSurface('flows', event));
-import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const logger = createLogger('flows');
 
@@ -82,8 +65,8 @@ export const flowsSpec = defineSystem<Contract>();
  * so it sends a window only answers: to its writes, and the model catalog it asks for as it starts.
  */
 /**
- * A window's asks of the flows system, each answered to whoever asked: with what a create made, or that a write landed,
- * or why it was refused. The editor applies its own edits at once and holds the flow's view while any of its writes is
+ * A window's asks of the flows system, each answered to whoever asked: with what a create, an import or an export made,
+ * or that a write landed, or why it was refused. The editor applies its own edits at once and holds the flow's view while any of its writes is
  * unanswered, which the table holds whichever way a handler ends — an unanswered one would hold the view for good.
  * What the write changed reaches every window through the \`graph\` view.
  */
@@ -128,92 +111,48 @@ export const answers = flowsSpec.answers({
     if (ask.flowId) repository.flowsCommands.grantRootFlowRole(ask.flowId as EARS.EntityId);
     else if (previous) repository.flowsCommands.revokeRootFlowRole(previous);
   },
+  // Refused, naming every reference it could not resolve, unless every one resolves against the actions and prompts
+  IMPORT_DSL: ({ ask: { dsl } }) => {
+    logger.info('Importing DSL flows', { flowCount: Object.keys(dsl || {}).length });
+
+    const actions = repository.actionQueries.all();
+    const prompts = repository.promptQueries.all();
+    const available = {
+      actions: actions.map((a: ActionEntity) => a.label),
+      prompts: prompts.map((p: PromptEntity) => p.label),
+    };
+
+    const validation = validateFlowDSL(dsl, available);
+    if (!validation.valid) {
+      const errors = formatValidationErrors(validation.errors, available);
+      logger.warn('DSL validation failed', { errors });
+      throw new Error(errors.join('\n'));
+    }
+
+    const compiled = compileFlowDSL(dsl as FlowDSL, {
+      actions: new Map<string, string>(actions.map((a: ActionEntity) => [a.label, a.id])),
+      prompts: new Map<string, string>(prompts.map((p: PromptEntity) => [p.label, p.id])),
+    });
+    const { flowIds } = repository.flowsCommands.importFromDSL(compiled);
+
+    logger.info('DSL import complete', { flowIds });
+    return { flowIds };
+  },
+  EXPORT_DSL: ({ ask: { directory, flowId } }) => {
+    logger.info('Exporting flows to DSL', { directory, flowId });
+    const { filePath, flowCount, skipped } = exportFlowsToDSL(directory, {
+      rootFlowRole: EARS.RoleKind.ROOT_FLOW,
+      flowIds: flowId ? [flowId] : undefined,
+    });
+    logger.info('DSL export complete', { filePath, flowCount });
+    return { filePath, flowCount, skipped };
+  },
 });
 
 export const flowsSystem = setup({
   types: flowsSpec.types,
   actors: {},
-  actions: { ...answers.actions, ...flowsSpec.actions({
-    importDSL: ({ event, reply }) => {
-      const { dsl } = flowsSpec.typeOf('IMPORT_DSL', event);
-
-      logger.info('Importing DSL flows', { flowCount: Object.keys(dsl || {}).length });
-
-      // Get available actions and prompts for reference resolution
-      const actions = repository.actionQueries.all();
-      const prompts = repository.promptQueries.all();
-
-      // Validate DSL
-      const validation = validateFlowDSL(dsl, {
-        actions: actions.map((a: ActionEntity) => a.label),
-        prompts: prompts.map((p: PromptEntity) => p.label),
-      });
-
-      if (!validation.valid) {
-        const errors = formatValidationErrors(validation.errors, {
-          actions: actions.map((a: ActionEntity) => a.label),
-          prompts: prompts.map((p: PromptEntity) => p.label),
-        });
-        logger.warn('DSL validation failed', { errors });
-
-        answer(reply, {
-          type: 'DSL_IMPORT_FAILED',
-          errors,
-        });
-        return;
-      }
-
-      // Build lookup maps for compiler
-      const actionMap = new Map<string, string>(actions.map((a: ActionEntity) => [a.label, a.id]));
-      const promptMap = new Map<string, string>(prompts.map((p: PromptEntity) => [p.label, p.id]));
-
-      // Compile DSL
-      const compiled = compileFlowDSL(dsl as FlowDSL, {
-        actions: actionMap,
-        prompts: promptMap,
-      });
-
-      // Import into EARS
-      const { flowIds } = repository.flowsCommands.importFromDSL(compiled);
-
-      answer(reply, {
-        type: 'DSL_IMPORTED',
-        flowIds,
-      });
-
-      logger.info('DSL import complete', { flowIds });
-    },
-
-    exportDSL: ({ event, reply }) => {
-      const { directory, flowId } = flowsSpec.typeOf('EXPORT_DSL', event);
-
-      logger.info('Exporting flows to DSL', { directory, flowId });
-
-      try {
-        const { filePath, flowCount, skipped } = exportFlowsToDSL(directory, {
-          rootFlowRole: EARS.RoleKind.ROOT_FLOW,
-          flowIds: flowId ? [flowId] : undefined,
-        });
-
-        answer(reply, {
-          type: 'DSL_EXPORTED',
-          filePath,
-          flowCount,
-          skipped,
-        });
-
-        logger.info('DSL export complete', { filePath, flowCount });
-      } catch (error) {
-        const message = errorMessage(error);
-        logger.error('DSL export failed', { error: message });
-
-        answer(reply, {
-          type: 'DSL_EXPORT_FAILED',
-          errors: [message],
-        });
-      }
-    },
-  }) },
+  actions: { ...answers.actions },
   guards: {},
   delays: {}
 }).createMachine({
@@ -222,15 +161,7 @@ export const flowsSystem = setup({
   context: {},
   states: {
     idle: {
-      on: {
-        ...answers.on,
-        IMPORT_DSL: {
-          actions: 'importDSL',
-        },
-        EXPORT_DSL: {
-          actions: 'exportDSL',
-        },
-      }
+      on: { ...answers.on },
     },
   }
 });

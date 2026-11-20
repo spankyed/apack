@@ -126,7 +126,7 @@ describe('a feature whose settings change', () => {
     const app = await startApp({ systems: ['database', 'memo-pack/memos', 'host/settings'] });
     await app.connect();
 
-    await app.send('database', { type: 'IMPORT_DATABASE', path: '/backups/1' });
+    expect(await app.ask('database', { type: 'IMPORT_DATABASE', path: '/backups/1' }, { client: 'c-window' })).toMatchObject({ ok: true });
     await app.settle();
 
     expect(heardBy(app)).toEqual([{ type: 'FEATURE_SETTINGS_UPDATED', settings: { tags: [{ name: 'imported' }] }, changes: null }]);
@@ -154,7 +154,8 @@ describe('a feature whose settings change', () => {
       const app = await startApp({ systems: ['database', 'memo-pack/memos', 'host/settings'] });
       await app.connect();
 
-      await app.send('database', { type: 'IMPORT_DATABASE', path: '/backups/1' });
+      const imported = await app.ask('database', { type: 'IMPORT_DATABASE', path: '/backups/1' }, { client: 'c-window' });
+      expect(imported.ok).toBe(outcome === 'succeeds');
       await app.settle();
 
       expect(heardBy(app)).toEqual([{ type: 'FEATURE_SETTINGS_UPDATED', settings: { tags: [{ name: 'migrated' }] }, changes: null }]);
@@ -190,7 +191,8 @@ describe('a feature whose settings change', () => {
       const done = new Promise<void>((resolve) => { finish = resolve; });
       endImport = async () => { finish(); await app.settle(); };
       mockService('appData', { importBackup: () => getTestSettings().whileReplacingData(async () => { await done; return { databases: ['lmdb'], missingDatabases: [], unknownEntityTypes: [] }; }) });
-      await app.send('database', { type: 'IMPORT_DATABASE', path: '/backups/1' });
+      // Asked as a window asks, and not waited for: the import holds until `finish`
+      await app.send('database', { type: 'IMPORT_DATABASE', path: '/backups/1' }, { sender: 'default-setup/database', client: 'c-window' });
       return { finish };
     }
 

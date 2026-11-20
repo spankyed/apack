@@ -9,9 +9,8 @@ import {
   type TrailClickEvent,
 } from '@apackdev/sdk/fe'
 import type { Contract, PromptsContext, PromptsInboxEvent } from './contract.ts'
-import type { OutgoingPromptEvents } from '#features/prompts/be/types.ts'
 import type { Contract as PromptsSystemContract } from '#features/prompts/be/contract.ts'
-import type { AnswersOf } from '@apackdev/sdk/events'
+import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events'
 import type { PromptEntity, TemplateInput } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
 import { sendToSystem } from '#generated/events.ts'
@@ -56,7 +55,7 @@ type UIEvent =
   | { type: 'PROMPTS.EXPORT'; directory: string }
   | { type: 'PROMPTS.RESET_EXPORT_STATUS' }
 
-export type PromptsEvents = OpenEntity | UIEvent | OutgoingPromptEvents | TrailClickEvent | AnswersOf<PromptsSystemContract>
+export type PromptsEvents = OpenEntity | UIEvent | TrailClickEvent | AnswersOf<PromptsSystemContract>
 const typeOf = safeEvents<PromptsEvents>()
 
 const promptsState = setup({
@@ -273,22 +272,22 @@ const promptsState = setup({
     },
 
     handlePromptsImported: assign(({ event }) => {
-      const ev = typeOf('PROMPTS_IMPORTED', event);
+      const { count, errors } = answerOf(event, 'IMPORT_PROMPTS');
       return {
         promptsImport: {
           status: 'success' as const,
-          errors: ev.errors || [],
-          importedCount: ev.count,
+          errors: errors || [],
+          importedCount: count,
         },
       };
     }),
 
     handlePromptsImportFailed: assign(({ event }) => {
-      const ev = typeOf('PROMPTS_IMPORT_FAILED', event);
+      const { failure } = typeOf('ASK_FAILED', event);
       return {
         promptsImport: {
           status: 'error' as const,
-          errors: ev.errors,
+          errors: failure.message.split('\n'),
           importedCount: 0,
         },
       };
@@ -315,23 +314,23 @@ const promptsState = setup({
     },
 
     handlePromptsExported: assign(({ event }) => {
-      const ev = typeOf('PROMPTS_EXPORTED', event);
+      const { filePath, promptCount } = answerOf(event, 'EXPORT_PROMPTS');
       return {
         promptsExport: {
           status: 'success' as const,
           errors: [],
-          filePath: ev.filePath,
-          promptCount: ev.promptCount,
+          filePath,
+          promptCount,
         },
       };
     }),
 
     handlePromptsExportFailed: assign(({ event }) => {
-      const ev = typeOf('PROMPTS_EXPORT_FAILED', event);
+      const { failure } = typeOf('ASK_FAILED', event);
       return {
         promptsExport: {
           status: 'error' as const,
-          errors: ev.errors,
+          errors: [failure.message],
           filePath: '',
           promptCount: 0,
         },
@@ -400,9 +399,17 @@ const promptsState = setup({
     },
   },
   on: {
-    // A write this window asked for and did not get: shown until dismissed. What a write changed reaches every window
-    // through the views, so a landed one needs nothing here
-    ASK_FAILED: { actions: assign(({ event }) => ({ writeError: event.failure.message })) },
+    // An import's or an export's answer is its status. A write this window asked for and did not get is shown until
+    // dismissed; what a write changed reaches every window through the views, so a landed one needs nothing here
+    ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'IMPORT_PROMPTS'), actions: 'handlePromptsImported' },
+      { guard: ({ event }) => isAnswered(event, 'EXPORT_PROMPTS'), actions: 'handlePromptsExported' },
+    ],
+    ASK_FAILED: [
+      { guard: ({ event }) => event.asked === 'IMPORT_PROMPTS', actions: 'handlePromptsImportFailed' },
+      { guard: ({ event }) => event.asked === 'EXPORT_PROMPTS', actions: 'handlePromptsExportFailed' },
+      { actions: assign(({ event }) => ({ writeError: event.failure.message })) },
+    ],
     CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Prompt' } }, target: '.detail', actions: 'selectPrompt' },
     'PROMPT.SELECT': { target: '.detail', actions: 'selectPrompt' },
@@ -422,24 +429,12 @@ const promptsState = setup({
     'PROMPTS.RESET_IMPORT_STATUS': {
       actions: 'resetImportPromptsStatus',
     },
-    PROMPTS_IMPORTED: {
-      actions: 'handlePromptsImported',
-    },
-    PROMPTS_IMPORT_FAILED: {
-      actions: 'handlePromptsImportFailed',
-    },
     // Export events
     'PROMPTS.EXPORT': {
       actions: ['setExportingPrompts', 'sendExportPrompts'],
     },
     'PROMPTS.RESET_EXPORT_STATUS': {
       actions: 'resetExportPromptsStatus',
-    },
-    PROMPTS_EXPORTED: {
-      actions: 'handlePromptsExported',
-    },
-    PROMPTS_EXPORT_FAILED: {
-      actions: 'handlePromptsExportFailed',
     },
     'PROMPT.UPDATE_INPUTS': { actions: 'updatePromptInputs' },
     'PROMPT.CREATE_INLINE': { actions: 'createPromptInline' },

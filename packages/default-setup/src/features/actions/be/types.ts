@@ -15,15 +15,10 @@ export type ActionAsks = {
   CREATE_ACTION: { ask: { label: string; input: Record<string, any>; actionFn: string; output?: any; description?: string; category?: string } }
   UPDATE_ACTION: { ask: { actionId: string; label?: string; input?: Record<string, any>; actionFn?: string; output?: any; description?: string; category?: string } }
   DELETE_ACTION: { ask: { actionId: string } }
+  /** Imported with what could not be, unless nothing could, which fails */
+  IMPORT_ACTIONS: { ask: { actions: any }; answer: { count: number; errors?: string[] } }
+  EXPORT_ACTIONS: { ask: { directory: string }; answer: { filePath: string; actionCount: number } }
 }
 
-export type IncomingActionEvents =
-  | { type: 'IMPORT_ACTIONS'; actions: any }
-  | { type: 'EXPORT_ACTIONS'; directory: string }
-
-/** What the actions system answers with: an import's or an export's outcome. The actions themselves are its views. */
-export type OutgoingActionEvents =
-  | { type: 'ACTIONS_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'ACTIONS_IMPORT_FAILED'; errors: string[] }
-  | { type: 'ACTIONS_EXPORTED'; filePath: string; actionCount: number }
-  | { type: 'ACTIONS_EXPORT_FAILED'; errors: string[] }
+/** The actions system sends no window anything of its own: the actions are its views, and each ask is answered */
+export type OutgoingActionEvents = never

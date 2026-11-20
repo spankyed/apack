@@ -1,9 +1,6 @@
 import { query } from '#generated/ears.ts';
 import { wouldCreateCycle } from '@apackdev/sdk/ears';
-import { broadcastToSurface } from '#generated/events.ts';
 import { setup } from 'xstate';
-import type { Reply } from '@apackdev/sdk/events';
-import type { OutgoingNotesEvents } from './types.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
 
 import { EARS } from '#generated/ears.ts';
@@ -15,21 +12,6 @@ import { importNotes } from './import-notes.ts';
 import { createLogger } from '@apackdev/sdk/logger';
 import type { NoteEntity } from '#features/notes/be/types.ts';
 
-/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
-type OutcomeType = 'NOTES_EXPORT_FAILED' | 'NOTES_EXPORTED' | 'NOTES_IMPORT_FAILED' | 'NOTES_IMPORTED'
-type Outcome = Extract<OutgoingNotesEvents, { type: OutcomeType }>
-
-/**
- * Answers whoever asked for this, and tells every window when nobody did.
- *
- * An import's or an export's *outcome* belongs to the window that started it — another window showing
- * "imported 12" for work it did not do, and flipping its own status to success, is what broadcasting it
- * did. The notes the import wrote reach every window through the feature's views. `answerSettings`
- * (`@apackdev/host`) is the same shape for the same reason.
- */
-const answer = (reply: Reply<OutgoingNotesEvents> | undefined, event: Outcome): void =>
-  (reply ? reply(event) : broadcastToSurface('notes', event));
-import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const logger = createLogger('notes');
 
@@ -41,9 +23,10 @@ const wouldNestInItself = (noteId: EARS.EntityId, newParentId: EARS.EntityId) =>
 export const notesSpec = defineSystem<Contract>();
 
 /**
- * A window's writes to its notes, each answered to whoever asked: with the note it made, or that it landed, or why it
- * was refused. The surface applies its own edits at once and holds the notes' views while any of its writes is
- * unanswered (`ViewWrites`, `@apackdev/sdk/fe`), which the table holds whichever way a handler ends. The write runs
+ * A window's writes to its notes and its imports and exports, each answered to whoever asked: with the note it made,
+ * what it imported or exported, or that it landed, or why it was refused. The surface applies its own edits at once
+ * and holds the notes' views while any of its writes is unanswered (`ViewWrites`, `@apackdev/sdk/fe`), which the
+ * table holds whichever way a handler ends. The write runs
  * whether or not anybody asked: an applier's or a migration's has none, and its refusal is reported.
  */
 export const answers = notesSpec.answers({
@@ -226,6 +209,12 @@ export const answers = notesSpec.answers({
       }
     }
   },
+  EXPORT_NOTES: ({ ask: { directory, format } }) => exportNotes(directory, format),
+  IMPORT_NOTES: ({ ask: { directory } }) => {
+    const result = importNotes(directory);
+    if (result.created === 0 && result.errors.length > 0) throw new Error(result.errors.join('\n'));
+    return { count: result.created, ...(result.errors.length > 0 ? { errors: result.errors } : {}) };
+  },
 })
 
 export const notesSystem = setup({
@@ -244,53 +233,6 @@ export const notesSystem = setup({
       logger.info(`Cleaned up ${expired.length} expired soft-deleted notes`);
     },
 
-    importNotesItems: ({ event, reply }) => {
-      const ev = event as { type: 'IMPORT_NOTES'; directory: string };
-      try {
-        const result = importNotes(ev.directory);
-
-        if (result.created === 0 && result.errors.length > 0) {
-          answer(reply, {
-            type: 'NOTES_IMPORT_FAILED',
-            errors: result.errors,
-          });
-          return;
-        }
-
-        answer(reply, {
-          type: 'NOTES_IMPORTED',
-          count: result.created,
-          ...(result.errors.length > 0 ? { errors: result.errors } : {}),
-        });
-
-      } catch (err) {
-        const message = errorMessage(err);
-        answer(reply, {
-          type: 'NOTES_IMPORT_FAILED',
-          errors: [message],
-        });
-      }
-    },
-
-    exportNotesToFile: ({ event, reply }) => {
-      const ev = event as { type: 'EXPORT_NOTES'; directory: string; format: 'markdown' | 'json' };
-      try {
-        const { filePath, itemCount } = exportNotes(ev.directory, ev.format);
-
-        answer(reply, {
-          type: 'NOTES_EXPORTED',
-          filePath,
-          itemCount,
-        });
-      } catch (err) {
-        const message = errorMessage(err);
-        answer(reply, {
-          type: 'NOTES_EXPORT_FAILED',
-          errors: [message],
-        });
-      }
-    },
-
     viewNote: ({ event }) => {
       const ev = notesSpec.typeOf('VIEW_NOTE', event);
       if (!repository.noteQueries.byId(ev.id as EARS.EntityId)) return;
@@ -306,12 +248,6 @@ export const notesSystem = setup({
     ...answers.on,
     VIEW_NOTE: {
       actions: 'viewNote',
-    },
-    IMPORT_NOTES: {
-      actions: 'importNotesItems',
-    },
-    EXPORT_NOTES: {
-      actions: 'exportNotesToFile',
     },
   },
   states: {

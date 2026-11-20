@@ -12,7 +12,8 @@
 // Every case connects first: the bus holds sends to surfaces until a client does, so an answer would otherwise
 // have nowhere to go. The one case that deliberately does not is the last.
 import { describe, expect, it } from 'vitest'
-import { startApp } from '@apackdev/testing/harness'
+import { mockService, startApp } from '@apackdev/testing/harness'
+import { UnknownBackupDatabasesError } from '@apackdev/sdk/services'
 
 const DATABASE = 'default-setup/database'
 /**
@@ -94,5 +95,40 @@ describe('a query run by a surface', () => {
     expect(await app.ask('database', { type: 'EXECUTE_TRANSACTION', code: 'return 1' }, window)).toMatchObject({ ok: true })
     await app.settle()
     expect(app.emitted('database'), 'nothing broadcast to the other windows').toEqual([])
+  })
+})
+
+describe('replacing the data', () => {
+  const window = { client: WINDOW }
+
+  it('answers the window that imported, and tells every window the data was replaced', async () => {
+    mockService('appData', { importBackup: async () => ({ databases: ['lmdb'], missingDatabases: [], unknownEntityTypes: [] }) })
+    const app = await startApp({ systems: ['database'] })
+    await app.connect()
+
+    expect(await app.ask('database', { type: 'IMPORT_DATABASE', path: '/backups/1' }, window))
+      .toEqual({ ok: true, value: { message: 'Import successful. Please restart the brain manually.' } })
+    expect(app.emitted('database')).toContainEqual({ type: 'DATABASE_REPLACED' })
+  })
+
+  // The user decides whether to import it without them, so the stores reach the window as data, not as wording
+  it("refuses a newer apack's backup naming the stores it holds that this one doesn't", async () => {
+    mockService('appData', { importBackup: async () => { throw new UnknownBackupDatabasesError(['searchIndex']) } })
+    const app = await startApp({ systems: ['database'] })
+    await app.connect()
+
+    expect(await app.ask('database', { type: 'IMPORT_DATABASE', path: '/backups/1' }, window))
+      .toMatchObject({ ok: false, failure: { kind: 'unknown-databases', unknownDatabases: ['searchIndex'] } })
+    expect(app.emitted('database'), 'nothing was replaced').not.toContainEqual({ type: 'DATABASE_REPLACED' })
+  })
+})
+
+describe('generating a query', () => {
+  it('refuses an empty prompt to the window that asked', async () => {
+    const app = await startApp({ systems: ['database'] })
+    await app.connect()
+
+    expect(await app.ask('database', { type: 'GENERATE_AI_QUERY', prompt: '  ' }, { client: WINDOW }))
+      .toMatchObject({ ok: false, failure: { kind: 'failed', message: 'Please provide a valid prompt' } })
   })
 })

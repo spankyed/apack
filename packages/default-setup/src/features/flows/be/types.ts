@@ -75,16 +75,11 @@ export type FlowsAsks = {
   REINDEX_HANDLES: { ask: { flowId: string; nodeId: string; prefix: string; index: number; direction: 1 | -1 } }
   /** Makes a flow the root flow the brain runs (its root role), or, with null, leaves no flow the root */
   SET_ROOT_FLOW: { ask: { flowId: string | null } }
+  /** Answered with the flows it made; refused, with every reference it could not resolve, when one does not */
+  IMPORT_DSL: { ask: { dsl: any }; answer: { flowIds: EARS.EntityId[] } }
+  /** Every flow, or the one named, written to a file in `directory` */
+  EXPORT_DSL: { ask: { directory: string; flowId?: string }; answer: { filePath: string; flowCount: number; skipped: string[] } }
 }
 
-/** What a window sends the flows system and is answered for by an outcome every window hears of when nobody asked */
-export type IncomingFlowsEvents =
-  | { type: 'IMPORT_DSL'; dsl: any }
-  | { type: 'EXPORT_DSL'; directory: string; flowId?: string }
-
-/** What the flows system sends beside its answers: an import's or an export's outcome. The flows themselves are its views */
-export type OutgoingFlowsEvents =
-  | { type: 'DSL_IMPORTED'; flowIds: EARS.EntityId[]; errors?: string[] }
-  | { type: 'DSL_IMPORT_FAILED'; errors: string[] }
-  | { type: 'DSL_EXPORTED'; filePath: string; flowCount: number; skipped: string[] }
-  | { type: 'DSL_EXPORT_FAILED'; errors: string[] }
+/** The flows system sends no window anything of its own: the flows are its views, and each ask is answered */
+export type OutgoingFlowsEvents = never

@@ -10,7 +10,6 @@ import type { Services } from '#generated/services.ts';
 import type { SurfaceInboxOf } from '@apackdev/sdk/events';
 import { broadcastToSurface, sendToSystem, type SendableSurfaceEvents } from '#generated/events.ts';
 import { openSurface } from '#generated/fe.ts';
-import type { OutgoingActionEvents } from '#features/actions/be/types.ts';
 import type { OutgoingFlowsEvents } from '#features/flows/be/types.ts';
 import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts';
 import type { Contract as ThreadsContract } from '#features/threads/fe/contract.ts';
@@ -20,7 +19,6 @@ import type { Contract as FlowsContract } from '#features/flows/fe/contract.ts';
 type ThreadsAccepts = SurfaceInboxOf<ThreadsContract>;
 type FlowsAccepts = SurfaceInboxOf<FlowsContract>;
 
-declare const actionEvent: OutgoingActionEvents;
 declare const hotkeys: ApplicationHotkeys;
 // What a content action receives
 declare const services: Services;
@@ -52,8 +50,8 @@ describe('broadcastToSurface', () => {
 
   it('rejects an event the surface does not receive', () => {
     expectTypeOf(() => {
-      // @ts-expect-error the threads surface doesn't receive action events
-      broadcastToSurface('threads', actionEvent);
+      // @ts-expect-error the threads surface doesn't receive the database's news
+      broadcastToSurface('threads', { type: 'DATABASE_REPLACED' });
       // @ts-expect-error not an application event
       broadcastToSurface('host/application', { type: 'SETTINGS_LOADED' });
       // @ts-expect-error unknown surface

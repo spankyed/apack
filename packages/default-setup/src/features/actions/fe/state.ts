@@ -9,9 +9,8 @@ import {
   type TrailClickEvent,
 } from '@apackdev/sdk/fe'
 import type { Contract, ActionsContext, ActionsInboxEvent } from './contract.ts'
-import type { OutgoingActionEvents } from '#features/actions/be/types.ts'
 import type { Contract as ActionsSystemContract } from '#features/actions/be/contract.ts'
-import type { AnswersOf } from '@apackdev/sdk/events'
+import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events'
 import type { ActionEntity, ActionParameter } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
 import { sendToSystem } from '#generated/events.ts'
@@ -55,7 +54,7 @@ type UIEvent =
   | { type: 'ACTIONS.EXPORT'; directory: string }
   | { type: 'ACTIONS.RESET_EXPORT_STATUS' }
 
-export type ActionsEvents = OpenEntity | UIEvent | OutgoingActionEvents | TrailClickEvent | AnswersOf<ActionsSystemContract>
+export type ActionsEvents = OpenEntity | UIEvent | TrailClickEvent | AnswersOf<ActionsSystemContract>
 const typeOf = safeEvents<ActionsEvents>()
 
 const actionsState = setup({
@@ -272,22 +271,22 @@ const actionsState = setup({
     },
 
     handleActionsImported: assign(({ event }) => {
-      const ev = typeOf('ACTIONS_IMPORTED', event);
+      const { count, errors } = answerOf(event, 'IMPORT_ACTIONS');
       return {
         actionsImport: {
           status: 'success' as const,
-          errors: ev.errors || [],
-          importedCount: ev.count,
+          errors: errors || [],
+          importedCount: count,
         },
       };
     }),
 
     handleActionsImportFailed: assign(({ event }) => {
-      const ev = typeOf('ACTIONS_IMPORT_FAILED', event);
+      const { failure } = typeOf('ASK_FAILED', event);
       return {
         actionsImport: {
           status: 'error' as const,
-          errors: ev.errors,
+          errors: failure.message.split('\n'),
           importedCount: 0,
         },
       };
@@ -314,23 +313,23 @@ const actionsState = setup({
     },
 
     handleActionsExported: assign(({ event }) => {
-      const ev = typeOf('ACTIONS_EXPORTED', event);
+      const { filePath, actionCount } = answerOf(event, 'EXPORT_ACTIONS');
       return {
         actionsExport: {
           status: 'success' as const,
           errors: [],
-          filePath: ev.filePath,
-          actionCount: ev.actionCount,
+          filePath,
+          actionCount,
         },
       };
     }),
 
     handleActionsExportFailed: assign(({ event }) => {
-      const ev = typeOf('ACTIONS_EXPORT_FAILED', event);
+      const { failure } = typeOf('ASK_FAILED', event);
       return {
         actionsExport: {
           status: 'error' as const,
-          errors: ev.errors,
+          errors: [failure.message],
           filePath: '',
           actionCount: 0,
         },
@@ -399,9 +398,17 @@ const actionsState = setup({
     },
   },
   on: {
-    // A write this window asked for and did not get: shown until dismissed. What a write changed reaches every window
-    // through the views, so a landed one needs nothing here
-    ASK_FAILED: { actions: assign(({ event }) => ({ writeError: event.failure.message })) },
+    // An import's or an export's answer is its status. A write this window asked for and did not get is shown until
+    // dismissed; what a write changed reaches every window through the views, so a landed one needs nothing here
+    ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'IMPORT_ACTIONS'), actions: 'handleActionsImported' },
+      { guard: ({ event }) => isAnswered(event, 'EXPORT_ACTIONS'), actions: 'handleActionsExported' },
+    ],
+    ASK_FAILED: [
+      { guard: ({ event }) => event.asked === 'IMPORT_ACTIONS', actions: 'handleActionsImportFailed' },
+      { guard: ({ event }) => event.asked === 'EXPORT_ACTIONS', actions: 'handleActionsExportFailed' },
+      { actions: assign(({ event }) => ({ writeError: event.failure.message })) },
+    ],
     CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Action' } }, target: '.detail', actions: 'selectAction' },
     'ACTION.SELECT': { target: '.detail', actions: 'selectAction' },
@@ -421,24 +428,12 @@ const actionsState = setup({
     'ACTIONS.RESET_IMPORT_STATUS': {
       actions: 'resetImportActionsStatus',
     },
-    ACTIONS_IMPORTED: {
-      actions: 'handleActionsImported',
-    },
-    ACTIONS_IMPORT_FAILED: {
-      actions: 'handleActionsImportFailed',
-    },
     // Export events
     'ACTIONS.EXPORT': {
       actions: ['setExportingActions', 'sendExportActions'],
     },
     'ACTIONS.RESET_EXPORT_STATUS': {
       actions: 'resetExportActionsStatus',
-    },
-    ACTIONS_EXPORTED: {
-      actions: 'handleActionsExported',
-    },
-    ACTIONS_EXPORT_FAILED: {
-      actions: 'handleActionsExportFailed',
     },
     'ACTION.UPDATE_INPUT': { actions: 'updateActionInput' },
     'ACTION.CREATE_INLINE': { actions: 'createActionInline' },

@@ -14,15 +14,10 @@ export type PromptAsks = {
   CREATE_PROMPT: { ask: { label: string; inputs: Record<string, any>; templateFn: string; outputSchema?: any; description?: string; category?: string } }
   UPDATE_PROMPT: { ask: { promptId: string; label?: string; inputs?: Record<string, any>; templateFn?: string; outputSchema?: any; description?: string; category?: string } }
   DELETE_PROMPT: { ask: { promptId: string } }
+  /** Imported with what could not be, unless nothing could, which fails */
+  IMPORT_PROMPTS: { ask: { prompts: any }; answer: { count: number; errors?: string[] } }
+  EXPORT_PROMPTS: { ask: { directory: string }; answer: { filePath: string; promptCount: number } }
 }
 
-export type IncomingPromptEvents =
-  | { type: 'IMPORT_PROMPTS'; prompts: any }
-  | { type: 'EXPORT_PROMPTS'; directory: string }
-
-/** What the prompts system answers with: an import's or an export's outcome. The prompts themselves are its views. */
-export type OutgoingPromptEvents =
-  | { type: 'PROMPTS_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'PROMPTS_IMPORT_FAILED'; errors: string[] }
-  | { type: 'PROMPTS_EXPORTED'; filePath: string; promptCount: number }
-  | { type: 'PROMPTS_EXPORT_FAILED'; errors: string[] }
+/** The prompts system sends no window anything of its own: the prompts are its views, and each ask is answered */
+export type OutgoingPromptEvents = never

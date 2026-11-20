@@ -14,23 +14,6 @@ import * as symlink from './repository/symlink.ts'
 import { toMap, toIdentifierSet, mapArray } from '@apackdev/sdk/utils'
 import { exportLibrary } from './export-library.ts'
 import { importLibrary } from './import-library.ts'
-import type { Reply } from '@apackdev/sdk/events';
-import type { OutgoingLibraryEvents } from './types.ts';
-import { errorMessage } from '@apackdev/sdk/utils/pure';
-
-/** What may fall back to every window: a command's outcome, which someone must hear, and never data a window shows */
-type OutcomeType = 'LIBRARY_EXPORT_FAILED' | 'LIBRARY_EXPORTED' | 'LIBRARY_IMPORT_FAILED' | 'LIBRARY_IMPORTED'
-type Outcome = Extract<OutgoingLibraryEvents, { type: OutcomeType }>
-
-/**
- * Answers whoever asked for this, and tells every window when nobody did.
- *
- * An import's or an export's *outcome* belongs to the window that started it — another window showing a
- * result for work it did not do, and flipping its own status to success, is what broadcasting it did. What
- * the import stored reaches every window through the library's views.
- */
-const answer = (reply: Reply<OutgoingLibraryEvents> | undefined, event: Outcome): void =>
-  (reply ? reply(event) : broadcastToSurface('library', event));
 
 export const librarySpec = defineSystem<Contract>();
 
@@ -59,8 +42,8 @@ function resolveHomePath(inputPath: string): string {
 }
 
 /**
- * A window's writes to the library and its fetches of what is on disk, each answered to whoever asked: with what it
- * made or read, or why it could not be done. The surface holds its views behind its own unanswered writes and shows
+ * A window's writes to the library, its fetches of what is on disk and its imports and exports, each answered to
+ * whoever asked: with what it made, read, imported or exported, or why it could not be done. The surface holds its views behind its own unanswered writes and shows
  * nothing for a fetch until it is answered, which the table holds whichever way a handler ends. An error from the disk
  * under a symlinked folder is answered as the kind it is (`not-found`, `no-access`) where the ask declares it.
  */
@@ -135,6 +118,13 @@ export const answers = librarySpec.answers({
     repository.libraryCommands.updateSymlinkPath(ask.collectionId, resolvedPath)
     diskChanged(ask.collectionId)
   },
+  EXPORT_LIBRARY: ({ ask: { directory, format } }) => exportLibrary(directory, format),
+  // What an import stored reaches every window through the library's views, a part way import's included
+  IMPORT_LIBRARY: ({ ask: { directory } }) => {
+    const result = importLibrary(directory)
+    if (result.created === 0 && result.errors.length > 0) throw new Error(result.errors.join('\n'))
+    return { count: result.created, ...(result.errors.length > 0 ? { errors: result.errors } : {}) }
+  },
 })
 
 export const librarySystem = setup({
@@ -185,55 +175,6 @@ export const librarySystem = setup({
     //   )
     //   broadcastToSurface('library', { type: 'SEARCH_RESULTS', data: { results } })
     // },
-    // Import/Export actions
-    importLibraryItems: async ({ event, reply }) => {
-      const ev = event as { type: 'IMPORT_LIBRARY'; directory: string }
-
-      try {
-        const result = importLibrary(ev.directory)
-
-        if (result.created === 0 && result.errors.length > 0) {
-          answer(reply, {
-              type: 'LIBRARY_IMPORT_FAILED' as const,
-              errors: result.errors,
-            })
-          return
-        }
-
-        answer(reply, {
-            type: 'LIBRARY_IMPORTED' as const,
-            count: result.created,
-            ...(result.errors.length > 0 ? { errors: result.errors } : {}),
-          })
-
-      } catch (err) {
-        const message = errorMessage(err)
-        answer(reply, {
-            type: 'LIBRARY_IMPORT_FAILED' as const,
-            errors: [message],
-          })
-      }
-      // An import can fail part way, after creating documents
-    },
-    exportLibraryToFile: async ({ event, reply }) => {
-      const ev = event as { type: 'EXPORT_LIBRARY'; directory: string; format: 'markdown' | 'json' }
-
-      try {
-        const { filePath, itemCount } = exportLibrary(ev.directory, ev.format)
-
-        answer(reply, {
-            type: 'LIBRARY_EXPORTED' as const,
-            filePath,
-            itemCount,
-          })
-      } catch (err) {
-        const message = errorMessage(err)
-        answer(reply, {
-            type: 'LIBRARY_EXPORT_FAILED' as const,
-            errors: [message],
-          })
-      }
-    },
     handleSettingsUpdate: ({ event }) => {
       const { changes } = librarySpec.typeOf('FEATURE_SETTINGS_UPDATED', event)
       const tagChanges = changes?.tags
@@ -268,13 +209,6 @@ export const librarySystem = setup({
     idle: {
       on: {
         ...answers.on,
-        // Import/Export events
-        IMPORT_LIBRARY: {
-          actions: ['importLibraryItems'],
-        },
-        EXPORT_LIBRARY: {
-          actions: ['exportLibraryToFile'],
-        },
       },
     },
   },

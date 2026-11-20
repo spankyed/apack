@@ -15,7 +15,7 @@ import type {
   EdgeEntity,
 } from '#generated/types.ts'
 import type { Contract, FlowsContext, FlowsInboxEvent } from './contract.ts'
-import type { FlowExtendedData, OutgoingFlowsEvents } from '#features/flows/be/types.ts'
+import type { FlowExtendedData } from '#features/flows/be/types.ts'
 import type { Contract as FlowsSystemContract } from '#features/flows/be/contract.ts'
 import { sendToSystem } from '#generated/events.ts'
 import { getNodeConfig, isTriggerNode } from '@apackdev/ui/components/node-styles'
@@ -100,14 +100,8 @@ export const flowsId = 'flows' as const
 export const id = flowsId
 export type FlowsState = ActorRefFrom<typeof flowsState>
 
-type SystemEvent = OutgoingFlowsEvents | AnswersOf<FlowsSystemContract>
+type SystemEvent = AnswersOf<FlowsSystemContract>
   | FlowsInboxEvent
-  // DSL Import backend responses
-  | { type: 'DSL_IMPORTED'; flowIds: string[] }
-  | { type: 'DSL_IMPORT_FAILED'; errors: string[] }
-  // DSL Export backend responses
-  | { type: 'DSL_EXPORTED'; filePath: string; flowCount: number; skipped: string[] }
-  | { type: 'DSL_EXPORT_FAILED'; errors: string[] }
 
 type UIEvent =
   | { type: 'NODE.CLICK'; nodeId: string }
@@ -957,7 +951,7 @@ const flowsState = setup({
     },
 
     handleDSLImported: assign(({ context, event }) => {
-      typeOf('DSL_IMPORTED', event);
+      answerOf(event, 'IMPORT_DSL');
       return {
         dslImport: {
           status: 'success' as const,
@@ -968,11 +962,11 @@ const flowsState = setup({
     }),
 
     handleDSLImportFailed: assign(({ event }) => {
-      const ev = typeOf('DSL_IMPORT_FAILED', event);
+      const { failure } = typeOf('ASK_FAILED', event);
       return {
         dslImport: {
           status: 'error' as const,
-          errors: ev.errors,
+          errors: failure.message.split('\n'),
           importedFlowNames: [],
         },
       };
@@ -1010,24 +1004,24 @@ const flowsState = setup({
     },
 
     handleDSLExported: assign(({ event }) => {
-      const ev = typeOf('DSL_EXPORTED', event);
+      const { filePath, flowCount, skipped } = answerOf(event, 'EXPORT_DSL');
       return {
         dslExport: {
           status: 'success' as const,
           errors: [],
-          filePath: ev.filePath,
-          flowCount: ev.flowCount,
-          skipped: ev.skipped,
+          filePath,
+          flowCount,
+          skipped,
         },
       };
     }),
 
     handleDSLExportFailed: assign(({ event }) => {
-      const ev = typeOf('DSL_EXPORT_FAILED', event);
+      const { failure } = typeOf('ASK_FAILED', event);
       return {
         dslExport: {
           status: 'error' as const,
-          errors: ev.errors,
+          errors: [failure.message],
           filePath: '',
           flowCount: 0,
           skipped: [],
@@ -1125,10 +1119,17 @@ const flowsState = setup({
       // The answers to the editor's writes
       { guard: ({ event }) => isAnswered(event, 'CREATE_NODE'), actions: ['reconcileNodeId', 'settleWrite'] },
       { guard: ({ event }) => isAnswered(event, 'CREATE_EDGE'), actions: ['reconcileEdgeId', 'settleWrite'] },
+      // An import's or an export's answer is its status
+      { guard: ({ event }) => isAnswered(event, 'IMPORT_DSL'), actions: 'handleDSLImported' },
+      { guard: ({ event }) => isAnswered(event, 'EXPORT_DSL'), actions: 'handleDSLExported' },
       { actions: 'settleWrite' },
     ],
-    // A refused write: its reason, and the flow as stored read again once nothing else is unanswered
-    ASK_FAILED: { actions: ['surfaceWriteError', 'settleWrite'] },
+    ASK_FAILED: [
+      { guard: ({ event }) => event.asked === 'IMPORT_DSL', actions: 'handleDSLImportFailed' },
+      { guard: ({ event }) => event.asked === 'EXPORT_DSL', actions: 'handleDSLExportFailed' },
+      // A refused write: its reason, and the flow as stored read again once nothing else is unanswered
+      { actions: ['surfaceWriteError', 'settleWrite'] },
+    ],
     'CANVAS.CLEAR_ERROR': {
       actions: 'clearCanvasError',
     },
@@ -1139,24 +1140,12 @@ const flowsState = setup({
     'DSL.RESET_STATUS': {
       actions: 'resetImportStatus'
     },
-    DSL_IMPORTED: {
-      actions: 'handleDSLImported'
-    },
-    DSL_IMPORT_FAILED: {
-      actions: 'handleDSLImportFailed'
-    },
     // DSL Export events
     'DSL.EXPORT': {
       actions: ['setExporting', 'sendExportDSL']
     },
     'DSL.RESET_EXPORT_STATUS': {
       actions: 'resetExportStatus'
-    },
-    DSL_EXPORTED: {
-      actions: 'handleDSLExported'
-    },
-    DSL_EXPORT_FAILED: {
-      actions: 'handleDSLExportFailed'
     },
     NAVIGATE_BACK: [
       {
