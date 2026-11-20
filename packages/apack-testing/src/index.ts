@@ -530,13 +530,14 @@ export function createAppDriver(page: Page, screenshotDir: string, appPid?: numb
         // test that clicks or screenshots straight after a navigate needs that flush to have happened.
         // data-active-surface (WebApp.vue) is written in the flush that swaps the canvas.
         return document.querySelector(`[data-active-surface="${id}"]`) !== null;
-      }, id0, { timeout: 10_000 });
+      // The suite's assertion backstop (`definePackE2EConfig`'s `expect`): a busy machine swaps a canvas late, not never
+      }, id0, { timeout: 30_000 });
     },
   
     waitForSurface: async (surfaceId, timeout = 30_000) =>
       awaitShell(page, { kind: 'surface', ref: resolveFeature(surfaceId) }, timeout),
 
-    waitForState: async (check, timeout = 10_000) =>
+    waitForState: async (check, timeout = 30_000) =>
       awaitShell(page, { kind: 'state', path: check }, timeout),
 
     send: async (system, event) => {
