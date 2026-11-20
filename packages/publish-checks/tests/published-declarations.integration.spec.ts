@@ -28,11 +28,11 @@ afterAll(() => {
 });
 
 /**
- * Every declaration file the three published packages ship, each package confirmed to have contributed.
+ * Every declaration file the two published packages ship, each package confirmed to have contributed.
  *
  * Guarded per package rather than over their sum, because a sum cannot see one of them go missing: there are
- * 233 declarations between the three, so `ui` or `ears` failing to install still clears any floor worth
- * setting, and the check would compile the other two and report green having never read that package's types.
+ * hundreds of declarations between the two, so `ui` failing to install still clears any floor worth
+ * setting, and the check would compile the other and report green having never read that package's types.
  * A `dist` that is not there throws naming the path, where skipping it quietly made the check smaller.
  */
 function publishedDeclarations(root: string): string[] {
@@ -41,7 +41,7 @@ function publishedDeclarations(root: string): string[] {
     if (entry.isDirectory()) return walk(full);
     return entry.name.endsWith('.d.ts') || entry.name.endsWith('.d.vue.ts') ? [full] : [];
   });
-  return ['ears', 'sdk', 'ui'].flatMap((pkg) =>
+  return ['sdk', 'ui'].flatMap((pkg) =>
     [...population(`@apackdev/${pkg}'s published declarations`, walk(path.join(root, 'node_modules', '@apackdev', pkg, 'dist')))]);
 }
 
