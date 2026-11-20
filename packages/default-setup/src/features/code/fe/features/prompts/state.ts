@@ -5,7 +5,6 @@ import { sendToSurface, sendToSystem } from '#generated/events.ts';
 import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
 import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { updateParentState, getParentContext, addTabToParent } from '../../utils/parent-communication.ts';
-import type { PromptEntity } from '@apackdev/sdk';
 import type { EARS } from '#generated/ears.ts';
 
 
