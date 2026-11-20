@@ -3,7 +3,7 @@
 // lands after the window moved to another thread is not shown there.
 import { afterAll, beforeEach, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
-import { answerTo, startFeTestRuntime } from '@apackdev/sdk/testing'
+import { askAnswered, askFailed, startFeTestRuntime } from '@apackdev/sdk/testing'
 
 // The surface's module tracks the mouse for its hotkeys as it loads; the test setup's window is a bare stand-in
 vi.hoisted(() => { (globalThis as { addEventListener?: unknown }).addEventListener ??= () => {} })
@@ -29,15 +29,18 @@ function viewing(threadId: string) {
 function saveLinks(actor: ReturnType<typeof viewing>) {
   actor.send({ type: 'UPDATE_THREAD_FIELD', key: 'linkedThreads', value: links as never, state: 'view' })
   const save = sendToSystem.mock.results.at(-1)!.value as string
-  return (answer: { type: 'THREAD_WRITE_FAILED'; error: string } | { type: 'THREAD_WRITTEN' }) =>
-    actor.send(answerTo(save, answer) as never)
+  /** Answers the save: refused with the reason given, or landed with none */
+  return (refusal?: string) =>
+    actor.send(refusal === undefined
+      ? askAnswered(save, 'UPDATE_THREAD_FIELD', undefined)
+      : askFailed(save, 'UPDATE_THREAD_FIELD', { kind: 'failed', message: refusal }))
 }
 
 it("shows the reason a save of the open thread's links was refused, until a save lands", () => {
   const actor = viewing('Thread-a')
-  saveLinks(actor)({ type: 'THREAD_WRITE_FAILED', error: 'THR-2 already blocks THR-1' })
+  saveLinks(actor)('THR-2 already blocks THR-1')
   expect(actor.getSnapshot().context.linkRefusal).toBe('THR-2 already blocks THR-1')
-  saveLinks(actor)({ type: 'THREAD_WRITTEN' })
+  saveLinks(actor)()
   expect(actor.getSnapshot().context.linkRefusal).toBeNull()
 })
 
@@ -45,7 +48,7 @@ it('shows another thread no refusal of a save made before the window moved to it
   const actor = viewing('Thread-a')
   const answer = saveLinks(actor)
   actor.send({ type: 'SELECT_THREAD', id: 'Thread-c' })
-  answer({ type: 'THREAD_WRITE_FAILED', error: 'THR-2 already blocks THR-1' })
+  answer('THR-2 already blocks THR-1')
   expect(actor.getSnapshot().context.linkRefusal).toBeNull()
 })
 
@@ -53,6 +56,6 @@ it('takes no refusal of a write other than a links save', () => {
   const actor = viewing('Thread-a')
   actor.send({ type: 'UPDATE_THREAD_FIELD', key: 'topic', value: 'Renamed' as never, state: 'view' })
   const topic = sendToSystem.mock.results.at(-1)!.value as string
-  actor.send(answerTo(topic, { type: 'THREAD_WRITE_FAILED', error: 'Thread Thread-a not found' }) as never)
+  actor.send(askFailed(topic, 'UPDATE_THREAD_FIELD', { kind: 'failed', message: 'Thread Thread-a not found' }))
   expect(actor.getSnapshot().context.linkRefusal).toBeNull()
 })

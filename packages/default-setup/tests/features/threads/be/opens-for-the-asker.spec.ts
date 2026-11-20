@@ -1,9 +1,9 @@
 // Opening a thread reaches the window that opened it, and only a flow's reaches every window.
 //
 // A window opening a thread shows it already: what the system does is mark it visited, and every window's recent
-// list follows through its view. So it answers nothing. The thread a window's first message starts, or a fork, is the
-// system's to name, and it names it to that window alone (`SHOW_THREAD`); a thread a flow opens has no window to
-// answer, so every window is told. Put the window's answer back on a broadcast and the first case here fails.
+// list follows through its view. The thread a window's first message starts, or a fork, is the system's to name, and
+// it names it in its answer to that window alone; a thread a flow opens, or a message nobody asked about starts, has no
+// window to answer, so every window is told (`SHOW_THREAD`). Broadcast a window's thread too and the first case fails.
 import { beforeEach, describe, expect, it } from 'vitest'
 import { testRootEvents } from '@apackdev/sdk/testing'
 import { startApp } from '@apackdev/testing/harness'
@@ -38,15 +38,26 @@ describe('opening a thread', () => {
     const app = await startApp({ systems: ['threads'] })
     await app.connect()
 
-    await app.send('threads', { type: 'USER_MSG', text: 'Start something' }, { sender: THREADS, client: MAIN })
+    expect(await app.ask('threads', { type: 'USER_MSG', text: 'Start something' }, { client: MAIN }))
+      .toMatchObject({ ok: true, value: { started: true, threadId: expect.any(String) } })
+    await app.settle()
+
+    expect(clientsFor('SHOW_THREAD'), 'no other window told').toEqual([])
+  })
+
+  it('shows every window the thread a message nobody asked about started', async () => {
+    const app = await startApp({ systems: ['threads'] })
+    await app.connect()
+
+    await app.send('threads', { type: 'USER_MSG', text: 'Sent by a flow' })
     await app.nextEmit('threads', 'SHOW_THREAD')
     await app.settle()
 
-    expect(clientsFor('SHOW_THREAD'), 'one connection, not every window').toEqual([MAIN])
+    expect(clientsFor('SHOW_THREAD'), 'absent means every connection').toEqual([undefined])
   })
 
   /**
-   * The fallback, and why it is reply-*or*-broadcast rather than a bare `reply?.()`: a thread a flow opens —
+   * The fallback, and why it is answer-*or*-broadcast: a thread a flow opens —
    * onboarding, a session restore, a summarise — has no window waiting on it, and every window should follow.
    */
   it('shows a thread a flow opens to every window', async () => {
@@ -71,9 +82,9 @@ describe('opening a thread', () => {
     const topics = (update: { ok: boolean; value?: unknown }) => (update.value as Array<{ topic: string }>).map((t) => t.topic)
     expect(topics(await recent.next())[0]).toBe('Newer')
 
-    await app.send('threads', { type: 'OPEN_THREAD_CHAT', threadId: older }, { sender: THREADS, client: MAIN })
+    expect(await app.ask('threads', { type: 'OPEN_THREAD_CHAT', threadId: older }, { client: MAIN })).toEqual({ ok: true, value: undefined })
     expect(topics(await recent.next())[0], 'the visited thread first, in every window').toBe('Older')
     await app.settle()
-    expect(sent, 'and nothing sent back').toEqual([])
+    expect(sent, 'and nothing sent to any window').toEqual([])
   })
 })

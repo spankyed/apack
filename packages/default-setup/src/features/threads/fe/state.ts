@@ -16,9 +16,10 @@ import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, 
 import { viewRead, viewWrites, writeAnswered, writeSent, writing, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import { fromView } from '#generated/fe.ts';
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
-import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts';
+import type { MessageSent, OutgoingThreadsEvents } from '#features/threads/be/types.ts';
 import { sendToSystem } from '#generated/events.ts';
-import { answersCall } from '@apackdev/sdk/events';
+import { answerOf, answersCall, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
+import type { Contract as ThreadsSystemContract } from '#features/threads/be/contract.ts';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
@@ -155,6 +156,7 @@ const defaultChatThread: AgentThreadData = {
 
 type SystemEvent =
   | OutgoingThreadsEvents
+  | AnswersOf<ThreadsSystemContract>
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: ThreadsSettings }
   | SurfaceLifecycleEvent
 
@@ -269,7 +271,19 @@ type ThreadEvents =
   | ViewEvent
   | TrailClickEvent;
 
-const typeOf = safeEvents<ThreadEvents>();
+const typeOf = safeEvents<ThreadEvents>()
+
+/** The thread an answer says to open: one a message or a command started, or a fork */
+function threadToShow(event: ThreadEvents): MessageSent['threadId'] | undefined {
+  if (isAnswered(event, 'FORK_THREAD')) return answerOf(event, 'FORK_THREAD').threadId
+  for (const sent of ['USER_MSG', 'USER_COMMAND'] as const) {
+    if (isAnswered(event, sent)) {
+      const { threadId, started } = answerOf(event, sent)
+      return started ? threadId : undefined
+    }
+  }
+  return undefined
+};
 
 export type { ChatState, ThreadListItem } from './contract.ts';
 
@@ -517,10 +531,10 @@ const threadsState = setup({
     }),
     /** An answer to one of this window's writes */
     settleWrite: enqueueActions(({ context, event, enqueue }) => {
-      const writes = writeAnswered(context.writes, event as unknown as Record<string, unknown>, event.type === 'THREAD_WRITE_FAILED');
+      const writes = writeAnswered(context.writes, event as unknown as Record<string, unknown>, event.type === 'ASK_FAILED');
       enqueue.assign({ writes });
       if (answersCall(event as unknown as Record<string, unknown>, context.linkSave)) {
-        enqueue.assign({ linkSave: null, linkRefusal: event.type === 'THREAD_WRITE_FAILED' ? event.error : null });
+        enqueue.assign({ linkSave: null, linkRefusal: event.type === 'ASK_FAILED' ? event.failure.message : null });
       }
       if (writes.refreshes !== context.writes.refreshes) enqueue('refollowThreadViews');
     }),
@@ -711,7 +725,8 @@ const threadsState = setup({
      * chat leaves it, and the next tab opens in its place
      */
     dropThread: enqueueActions(({ context, event, enqueue, self }) => {
-      const { threadId } = event as { type: string; threadId: string };
+      // A thread whose view says it is gone, or one that was gone when this window asked to open it
+      const { threadId } = event.type === 'ASK_FAILED' ? event.failure as { threadId: string } : event as { type: string; threadId: string };
       const index = context.tabs.findIndex(t => t.id === threadId);
       const tabs = context.tabs.filter(t => t.id !== threadId);
       let activeTabId = context.activeTabId;
@@ -788,9 +803,22 @@ const threadsState = setup({
         }
       };
     }),
+    /** Opens the thread an answer says to: as a thread the system says to show, which every window handles alike */
+    showAnsweredThread: enqueueActions(({ event, enqueue }) => {
+      const threadId = threadToShow(event);
+      if (threadId) enqueue.raise({ type: 'SHOW_THREAD', threadId });
+    }),
+    /** The thread this window asked to create landed: its write settles, and it is marked new until its flag clears */
+    threadCreated: enqueueActions(({ event, enqueue }) => {
+      const created = answerOf(event, 'CREATE_THREAD').id as string;
+      enqueue('settleWrite');
+      enqueue('markCreated');
+      enqueue.stopChild(newThreadFlagTimer(created));
+      enqueue.spawnChild('clearNewThreadFlag', { id: newThreadFlagTimer(created), input: { id: created } });
+    }),
     /** The thread this window created: marked new in the list, for its animation, and the form emptied */
     markCreated: assign(({ context, event }) => {
-      const created = typeOf('THREAD_CREATED', event).id as string;
+      const created = answerOf(event, 'CREATE_THREAD').id as string;
       const freshThreadIds = [...context.freshThreadIds, created];
       return { freshThreadIds, create: defaultThread, ...threadStore({ ...context, freshThreadIds }, context.lists) };
     }),
@@ -909,7 +937,7 @@ const threadsState = setup({
       return optimisticFieldUpdate(context, threadId, 'topic', topic);
     }),
     setThreadsSettings: assign(({ event }) => {
-      const settings = event.type === 'CHAT_STARTED' ? event.data.settings : typeOf('FEATURE_SETTINGS_UPDATED', event).settings;
+      const settings = isAnswered(event, 'GET_CHAT_START') ? answerOf(event, 'GET_CHAT_START').settings : typeOf('FEATURE_SETTINGS_UPDATED', event).settings;
       const chat = (settings as any)?.chat as AgentSettings | undefined;
       return {
         settings,
@@ -986,16 +1014,12 @@ const threadsState = setup({
       }
     },
     handleThreadsImported: assign(({ event }) => {
-      if (event.type === 'THREADS_IMPORTED') {
-        return { threadsImport: { status: 'success' as const, errors: event.errors || [], importedCount: event.count } }
-      }
-      return {}
+      const { count, errors } = answerOf(event, 'IMPORT_THREADS')
+      return { threadsImport: { status: 'success' as const, errors: errors || [], importedCount: count } }
     }),
     handleThreadsImportFailed: assign(({ event }) => {
-      if (event.type === 'THREADS_IMPORT_FAILED') {
-        return { threadsImport: { status: 'error' as const, errors: event.errors, importedCount: 0 } }
-      }
-      return {}
+      const { failure } = typeOf('ASK_FAILED', event)
+      return { threadsImport: { status: 'error' as const, errors: failure.message.split('\n'), importedCount: 0 } }
     }),
     resetImportThreadsStatus: assign({
       threadsImport: { status: 'idle' as const, errors: [] as string[], importedCount: 0 },
@@ -1011,16 +1035,12 @@ const threadsState = setup({
       }
     },
     handleThreadsExported: assign(({ event }) => {
-      if (event.type === 'THREADS_EXPORTED') {
-        return { threadsExport: { status: 'success' as const, errors: [] as string[], filePath: event.filePath, threadCount: event.threadCount } }
-      }
-      return {}
+      const { filePath, threadCount } = answerOf(event, 'EXPORT_THREADS')
+      return { threadsExport: { status: 'success' as const, errors: [] as string[], filePath, threadCount } }
     }),
     handleThreadsExportFailed: assign(({ event }) => {
-      if (event.type === 'THREADS_EXPORT_FAILED') {
-        return { threadsExport: { status: 'error' as const, errors: event.errors, filePath: '', threadCount: 0 } }
-      }
-      return {}
+      const { failure } = typeOf('ASK_FAILED', event)
+      return { threadsExport: { status: 'error' as const, errors: [failure.message], filePath: '', threadCount: 0 } }
     }),
     resetExportThreadsStatus: assign({
       threadsExport: { status: 'idle' as const, errors: [] as string[], filePath: '', threadCount: 0 },
@@ -1185,7 +1205,7 @@ const threadsState = setup({
      * the ones this window kept and the ones every window opens — and the thread to open
      */
     startChat: enqueueActions(({ enqueue, context, event, self }) => {
-      const start: ChatStart = typeOf('CHAT_STARTED', event).data;
+      const start: ChatStart = answerOf(event, 'GET_CHAT_START');
       const extracted = extractChatSettings(start.settings?.chat || { modes: [], hotkeys: {} });
       const visibleModes = extracted.modes.filter(m => !m.hidden);
       const { mode, phase } = resolveDefaultModePhase(
@@ -1596,7 +1616,6 @@ const threadsState = setup({
   on: {
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation', 'followDetail'] },
     SURFACE_STARTED: { actions: 'startSurface' },
-    CHAT_STARTED: { actions: 'startChat' },
     // What the views gave
     'THREADS.READ': { actions: 'readThreads' },
     'ARCHIVED.READ': { actions: 'readArchived' },
@@ -1618,9 +1637,21 @@ const threadsState = setup({
       { guard: 'tabGone', actions: 'dropThread' },
       { actions: 'readTab' },
     ],
-    // Answers to this window's writes
-    THREAD_WRITTEN: { actions: 'settleWrite' },
-    THREAD_WRITE_FAILED: { actions: 'settleWrite' },
+    // Answers to this window's asks: its writes settle, and a thread a message or a fork made opens
+    ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'GET_CHAT_START'), actions: 'startChat' },
+      { guard: ({ event }) => isAnswered(event, 'CREATE_THREAD'), actions: 'threadCreated' },
+      { guard: ({ event }) => isAnswered(event, 'IMPORT_THREADS'), actions: 'handleThreadsImported' },
+      { guard: ({ event }) => isAnswered(event, 'EXPORT_THREADS'), actions: 'handleThreadsExported' },
+      { guard: ({ event }) => threadToShow(event) !== undefined, actions: 'showAnsweredThread' },
+      { actions: 'settleWrite' },
+    ],
+    ASK_FAILED: [
+      { guard: ({ event }) => event.asked === 'IMPORT_THREADS', actions: 'handleThreadsImportFailed' },
+      { guard: ({ event }) => event.asked === 'EXPORT_THREADS', actions: 'handleThreadsExportFailed' },
+      { guard: ({ event }) => event.asked === 'OPEN_THREAD_CHAT' && event.failure.kind === 'not-found', actions: 'dropThread' },
+      { actions: 'settleWrite' },
+    ],
     SHOW_THREAD: { actions: 'openThread' },
     // Thread management events
     SHOW_CREATE_FORM: {
@@ -1641,17 +1672,6 @@ const threadsState = setup({
     },
     CLEAR_NEW_THREAD_FLAG: {
       actions: ['clearNewThreadFlag', stopChild(({ event }) => newThreadFlagTimer(typeOf('CLEAR_NEW_THREAD_FLAG', event).id))]
-    },
-    THREAD_CREATED: {
-      actions: [
-        'settleWrite',
-        'markCreated',
-        stopChild(({ event }) => newThreadFlagTimer(typeOf('THREAD_CREATED', event).id)),
-        spawnChild('clearNewThreadFlag', {
-          id: ({ event }) => newThreadFlagTimer(typeOf('THREAD_CREATED', event).id),
-          input: ({ event }) => ({ id: typeOf('THREAD_CREATED', event).id })
-        })
-      ]
     },
     RENAME_THREAD: {
       actions: 'renameThread',
@@ -1686,26 +1706,11 @@ const threadsState = setup({
     'THREADS.RESET_IMPORT_STATUS': {
       actions: 'resetImportThreadsStatus',
     },
-    THREADS_IMPORTED: {
-      actions: 'handleThreadsImported',
-    },
-    THREADS_IMPORT_FAILED: {
-      actions: 'handleThreadsImportFailed',
-    },
-    THREAD_CHAT_ERROR: {
-      actions: 'dropThread',
-    },
     'THREADS.EXPORT': {
       actions: ['setExportingThreads', 'sendExportThreads'],
     },
     'THREADS.RESET_EXPORT_STATUS': {
       actions: 'resetExportThreadsStatus',
-    },
-    THREADS_EXPORTED: {
-      actions: 'handleThreadsExported',
-    },
-    THREADS_EXPORT_FAILED: {
-      actions: 'handleThreadsExportFailed',
     },
 
     // Filter events

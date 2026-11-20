@@ -237,6 +237,11 @@ export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
   readonly signal: AbortSignal;
   /** The connection the ask arrived on, absent for one another system made */
   readonly client?: string;
+  /**
+   * Whether anyone waits for the answer: false for an ask sent from no delivery — an action, a timer — whose outcome
+   * a handler that must still be heard tells every window itself
+   */
+  readonly waiting: boolean;
   /** Builds a refusal of one of the kinds the ask declares, for the handler to throw */
   readonly failure: FailureOf<ContractAsks<C>[K]>;
 }
@@ -364,7 +369,7 @@ function answer(asked: string, handler: (args: object) => unknown, args: { event
   };
   let made: unknown;
   try {
-    made = handler({ ask: args.event, context: args.context, self: args.self, signal: _connectionSignal(client), failure: _failure, ...(client === undefined ? {} : { client }) });
+    made = handler({ ask: args.event, context: args.context, self: args.self, signal: _connectionSignal(client), failure: _failure, waiting: reply !== undefined, ...(client === undefined ? {} : { client }) });
   } catch (error) {
     refused(error);
     return;

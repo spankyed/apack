@@ -19,7 +19,7 @@ function startThreads() {
 it('drops the new-thread timer once it clears the flag', () => {
   const actor = startThreads()
   actor.send({ type: 'THREADS.READ', threads: [{ id: 'Thread-t1', topic: 'New' } as never] })
-  actor.send({ type: 'THREAD_CREATED', id: 'Thread-t1' })
+  actor.send({ type: 'ASK_ANSWERED', asked: 'CREATE_THREAD', answer: { id: 'Thread-t1' } })
   expect(children(actor)).toContain('clear-new-thread-flag-Thread-t1')
   expect(actor.getSnapshot().context.threadMap['Thread-t1']?.isNew).toBe(true)
 

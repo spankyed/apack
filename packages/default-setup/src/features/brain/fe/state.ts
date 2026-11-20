@@ -11,7 +11,7 @@ import type { Contract as BrainSystemContract } from '#features/brain/be/contrac
 import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
 import type { FlowRunNodeData } from '#generated/types.ts';
 import { sendToSystem } from '#generated/events.ts';
-import type { StepRuntimeError, RunNode, RunTree } from '@apackdev/sdk/steps';
+import type { StepRuntimeError, RunTree } from '@apackdev/sdk/steps';
 import {
   applyRunNodeSpawn,
   denormalizeRunNodeTree,
