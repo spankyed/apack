@@ -5,7 +5,7 @@
 // the first" — measured, by doing exactly that. The thing under test is a choice among several targets, and
 // only a fake can present several on purpose.
 import { describe, expect, it } from 'vitest';
-import { INSTALL_PLAYWRIGHT_CORE, _chromium, findWindow, type AttachTargets } from '../../src/engine/cdp-page.ts';
+import { INSTALL_PLAYWRIGHT_CORE, _chromium, attachFailureMessage, findWindow, type AttachTargets } from '../../src/engine/cdp-page.ts';
 
 /** A page that answers the predicate however the test says, and remembers being asked. */
 const fakePage = (hasState: boolean | 'throws', url = 'pack://x') => ({
@@ -87,5 +87,18 @@ describe('a missing playwright-core', () => {
   it('hands back the connect when the module has one', async () => {
     const connectOverCDP = async () => ({}) as never;
     expect(await _chromium(() => Promise.resolve({ chromium: { connectOverCDP } }))).toEqual({ connectOverCDP });
+  });
+});
+
+describe('a connect that fails', () => {
+  it('calls a refused connection a miss, naming the port', () => {
+    expect(attachFailureMessage(9222, new Error('connect ECONNREFUSED 127.0.0.1:9222'))).toMatch(/^No app answered the debug port 9222/);
+  });
+
+  // The failure that read as a miss: the app answered, and a page it was closing went away while Playwright set it up
+  it('does not call a failure after the app answered a miss', () => {
+    const said = attachFailureMessage(9222, new Error('browserContext._wrapApiCall: Target page, context or browser has been closed'));
+    expect(said).not.toMatch(/No app answered/);
+    expect(said).toContain('Target page, context or browser has been closed');
   });
 });
