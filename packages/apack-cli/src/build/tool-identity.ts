@@ -28,13 +28,15 @@ export function buildToolHash(moduleUrl = import.meta.url): string {
     for (const [name, specifier] of [
       ['@apackdev/host', '@apackdev/host/build/shared-deps'],
       ['@apackdev/sdk', '@apackdev/sdk/build'],
-      ['@apackdev/ears', '@apackdev/ears'],
     ] as const) {
       // Exported metadata identifies the workspace owner, rather than its nested published dist.
       const owner = name === '@apackdev/host' ? packageRoot(require.resolve(specifier))
         : path.dirname(require.resolve(`${name}/package.json`));
       scopes.push({ name, root: owner, directory: 'src' });
     }
+    // EARS is consumed as its built `dist`, linked from the elmdb checkout, in source mode as in any other
+    const ears = path.dirname(require.resolve('@elmdb/ears/package.json'));
+    scopes.push({ name: '@elmdb/ears', root: ears, directory: 'dist' });
   } else {
     // Bundled code still reads installed SDK declarations, including package-root installations.
     const owner = path.dirname(require.resolve('@apackdev/sdk/package.json'));

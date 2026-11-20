@@ -9,18 +9,18 @@ import { appBridgedSpecifiers } from '../../src/build/render-sdk-modules.ts';
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..', '..');
 
 describe('APP_ONLY_EXPORTS', () => {
-  it('names exports @apackdev/ears has', () => {
-    const exported = sharedInstanceExports('@apackdev/ears', import.meta.filename);
+  it('names exports @elmdb/ears has', () => {
+    const exported = sharedInstanceExports('@elmdb/ears', import.meta.filename);
     for (const specifier of Object.keys(APP_ONLY_EXPORTS)) {
-      expect(Object.keys(exported)).toContain(`.${specifier.replace('@apackdev/ears', '')}`);
+      expect(Object.keys(exported)).toContain(`.${specifier.replace('@elmdb/ears', '')}`);
     }
   });
 
   it('leaves them out of the shared specifiers the harness bridges and the app bridge', () => {
-    const specifiers = sharedInstanceSpecifiers('@apackdev/ears', sharedInstanceExports('@apackdev/ears', import.meta.filename));
-    expect(specifiers).toContain('@apackdev/ears');
-    expect(specifiers).not.toContain('@apackdev/ears/lmdb');
-    expect(appBridgedSpecifiers(import.meta.filename)).not.toContain('@apackdev/ears/lmdb');
+    const specifiers = sharedInstanceSpecifiers('@elmdb/ears', sharedInstanceExports('@elmdb/ears', import.meta.filename));
+    expect(specifiers).toContain('@elmdb/ears');
+    expect(specifiers).not.toContain('@elmdb/ears/database');
+    expect(appBridgedSpecifiers(import.meta.filename)).not.toContain('@elmdb/ears/database');
   });
 });
 

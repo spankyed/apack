@@ -102,9 +102,7 @@ describe('pack FE Tailwind setup', () => {
       if (entry === '@apackdev' || entry.startsWith('.')) continue;
       fs.symlinkSync(path.join(REPO_ROOT, 'node_modules', entry), path.join(packDir, 'node_modules', entry), 'dir');
     }
-    for (const name of ['ears', 'sdk']) {
-      fs.symlinkSync(path.join(REPO_ROOT, 'packages', `apack-${name}`), path.join(modules, name), 'dir');
-    }
+    fs.symlinkSync(path.join(REPO_ROOT, 'packages', 'apack-sdk'), path.join(modules, 'sdk'), 'dir');
     fs.writeFileSync(path.join(modules, 'ui', 'package.json'), JSON.stringify({ name: '@apackdev/ui', version: '0.0.0', exports: { '.': './dist/index.js', './package.json': './package.json' } }));
     return packDir;
   }

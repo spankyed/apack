@@ -139,9 +139,6 @@ jobs:
         env:
           REQUIRE_CONTENT_RUNTIME: '1'
 
-      - name: Unit tests (ears)
-        run: npm test --workspace @apackdev/ears -- --reporter=verbose
-
       - name: Unit tests (host)
         run: npm test --workspace @apackdev/host -- --reporter=verbose
         env:
@@ -153,7 +150,7 @@ jobs:
 
       # After the build: a package's reports read its dependencies' published declarations
       - name: API reports
-        run: npm run api:check --workspace @apackdev/ears --workspace @apackdev/sdk --workspace @apackdev/ui
+        run: npm run api:check --workspace @apackdev/sdk --workspace @apackdev/ui
 
       # publint and arethetypeswrong on every packed package (@apackdev/cli ships no types, so attw skips it)
       - name: Validate packed packages

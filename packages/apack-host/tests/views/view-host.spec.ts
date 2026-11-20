@@ -4,7 +4,7 @@ import { createNodePerformanceController } from '../../src/diagnostics/node.ts';
 // the same view and arguments share one engine watch, the last to leave stops it, and the registry changing is what
 // a view's code changing is.
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { EarsEngine } from '@apackdev/ears';
+import type { EarsEngine } from '@elmdb/ears';
 import { defineViews, type PackRegistration, type ViewUpdate, type ViewRequest } from '@apackdev/sdk/framework';
 import { _createTestEngine } from '@apackdev/sdk/testing';
 import { createNativePackTestRegistry } from '../../src/testing/pack-registry.ts';

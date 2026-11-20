@@ -13,7 +13,7 @@ import { CHECKOUT_MARKER, buildUnitsIn, type BuildUnit } from '@apackdev/host/bu
  * The packages a pack depends on whose dist a checkout builds on demand. Every one is asked, because a
  * pack need not link them all: with @apackdev/sdk installed from the registry and @apackdev/ui linked to a
  * checkout, asking only the SDK would find no checkout and leave that linked dist stale and silent. The
- * pack's @apackdev/ears is its SDK's, from the same checkout or the same install.
+ * pack's @elmdb/ears is its SDK's, whose `dist` the elmdb checkout's link builds (`npm run link:elmdb`), not this.
  */
 const CHECKOUT_PACKAGES = ['@apackdev/sdk', '@apackdev/ui', '@apackdev/testing', '@apackdev/cli'];
 

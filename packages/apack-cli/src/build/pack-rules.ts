@@ -241,10 +241,10 @@ const RULE_LIST = [
   },
   {
     key: 'elmdb-imports',
-    rule: 'A pack reaches its data through the engine the app binds: neither elmdb nor @apackdev/ears/lmdb is '
+    rule: 'A pack reaches its data through the engine the app binds: neither elmdb nor @elmdb/ears/database is '
       + 'provided to a pack, so importing one fails at load',
     check(view, _place) {
-      return view.specifiers.filter(({ text }) => /^elmdb(\/|$)/.test(text) || /^@apackdev\/ears\/lmdb(\/|$)/.test(text))
+      return view.specifiers.filter(({ text }) => /^elmdb(\/|$)/.test(text) || /^@elmdb\/ears\/database(\/|$)/.test(text))
         .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
     },
   },

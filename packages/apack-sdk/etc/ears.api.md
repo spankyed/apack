@@ -4,31 +4,31 @@
 
 ```ts
 
-import { BaseEntity } from '@apackdev/ears';
-import type { CallSiteNaming } from '@apackdev/ears';
-import type { Create } from '@apackdev/ears';
-import { DatabaseCatalog } from '@apackdev/ears';
-import { defineEars } from '@apackdev/ears';
-import { EARS } from '@apackdev/ears';
-import type { Ears } from '@apackdev/ears';
-import { EarsSchema } from '@apackdev/ears';
-import { EntityRow } from '@apackdev/ears';
-import type { Query } from '@apackdev/ears';
-import { QueryBuilder } from '@apackdev/ears';
-import { QueryExplanation } from '@apackdev/ears';
-import { RelationMatch } from '@apackdev/ears';
-import { RelationPatch } from '@apackdev/ears';
-import { RelationRow } from '@apackdev/ears';
-import { RelationStats } from '@apackdev/ears';
-import { RESERVED_ATTRIBUTES } from '@apackdev/ears';
-import { SchemaStats } from '@apackdev/ears';
-import { ShapeOf } from '@apackdev/ears';
-import { ShortCode } from '@apackdev/ears';
-import { UnitOptions } from '@apackdev/ears';
-import { UntypedSchema } from '@apackdev/ears';
-import type { Upsert } from '@apackdev/ears';
-import type { Write } from '@apackdev/ears';
-import { WriteBuilder } from '@apackdev/ears';
+import { BaseEntity } from '@elmdb/ears';
+import type { CallSiteNaming } from '@elmdb/ears';
+import type { Create } from '@elmdb/ears';
+import { DatabaseCatalog } from '@elmdb/ears';
+import { defineEars } from '@elmdb/ears';
+import { EARS } from '@elmdb/ears';
+import type { Ears } from '@elmdb/ears';
+import { EarsSchema } from '@elmdb/ears';
+import { EntityRow } from '@elmdb/ears';
+import type { Query } from '@elmdb/ears';
+import { QueryBuilder } from '@elmdb/ears';
+import { QueryExplanation } from '@elmdb/ears';
+import { RelationMatch } from '@elmdb/ears';
+import { RelationPatch } from '@elmdb/ears';
+import { RelationRow } from '@elmdb/ears';
+import { RelationStats } from '@elmdb/ears';
+import { RESERVED_ATTRIBUTES } from '@elmdb/ears';
+import { SchemaStats } from '@elmdb/ears';
+import { ShapeOf } from '@elmdb/ears';
+import { ShortCode } from '@elmdb/ears';
+import { UnitOptions } from '@elmdb/ears';
+import { UntypedSchema } from '@elmdb/ears';
+import type { Upsert } from '@elmdb/ears';
+import type { Write } from '@elmdb/ears';
+import { WriteBuilder } from '@elmdb/ears';
 
 export { BaseEntity }
 

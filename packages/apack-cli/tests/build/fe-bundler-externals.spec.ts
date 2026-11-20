@@ -30,7 +30,7 @@ const ENTRY = [
   "export { ref } from 'vue';",                                              // a third-party dep
   "export { useSurface } from '@apackdev/sdk/fe';",                             // an SDK frontend module
   "export { useDebounce } from '@apackdev/ui/composables/useDebounce';",       // a UI kit module
-  "export { b64Encode } from '@apackdev/ears';",                               // NOT shared: the renderer keeps no EARS data
+  "export { b64Encode } from '@elmdb/ears';",                               // NOT shared: the renderer keeps no EARS data
 ].join('\n');
 
 async function buildFE(manifest: Record<string, unknown> = {}, entrySource = ENTRY): Promise<string[]> {
@@ -60,9 +60,9 @@ it('leaves a specifier from every population the host shares', async () => {
 it('inlines what the host does not share', async () => {
   const externals = await buildFE();
 
-  expect(externals, '@apackdev/ears is inlined on the frontend: the renderer keeps no EARS data to share')
-    .not.toContain('@apackdev/ears');
-  expect(fs.existsSync(path.join(REPO_ROOT, 'packages', 'apack-ears'))).toBe(true);
+  expect(externals, '@elmdb/ears is inlined on the frontend: the renderer keeps no EARS data to share')
+    .not.toContain('@elmdb/ears');
+  expect(fs.existsSync(path.join(REPO_ROOT, 'node_modules', '@elmdb', 'ears', 'package.json'))).toBe(true);
 });
 
 // The one that catches this going wrong. A specifier left bare that the host's map does not name is a pack

@@ -115,7 +115,6 @@ apack separates the desktop host from the features it runs:
 | `packages/default-setup` | Shipped features, extensions and content |
 | `packages/apack-sdk`, `packages/apack-ui` | Pack-facing APIs, types, components and editors |
 | `packages/apack-cli`, `packages/apack-testing` | Pack tooling, build pipeline and test helpers |
-| `packages/apack-ears` | Entity-attribute-relation data engine and LMDB persistence |
 | `packages/repo-checks`, `packages/publish-checks` | Repository tooling and package-consumer checks |
 
 See [architecture](docs/public-facing/architecture.md) for pack lifecycle and runtime boundaries.

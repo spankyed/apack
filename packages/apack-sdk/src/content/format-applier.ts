@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { EARS } from '../types/entities.ts';
 import { findRelations, boundEars as ears, untypedCreate, untypedWrite, untypedQuery as query } from '../ears/index.ts';
-import type { QueryBuilder } from '@apackdev/ears';
+import type { QueryBuilder } from '@elmdb/ears';
 import { _getMediaPath, loadJSON, selectsAll, type ContentApplier, type ApplyContext, type ApplyResult, type AppliedItem } from '../utils/index.ts';
 import { resolve, resolveRemoval, type LiveEntity } from './merge.ts';
 import { contentPath } from '../build/manifest.ts';

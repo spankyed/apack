@@ -1,4 +1,4 @@
-import type { Ears } from '@apackdev/ears';
+import type { Ears } from '@elmdb/ears';
 import type { EARS } from '../../../src/types/entities.ts';
 import type { CompiledRows } from '../../../src/build/compilers/flow-compiler.ts';
 

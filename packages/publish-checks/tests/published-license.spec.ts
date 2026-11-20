@@ -18,13 +18,13 @@ const STAGED = Object.entries(publishedTreeDirs()).filter(([, tree]) => path.bas
 
 describe('the license of each published package', () => {
   it("is the repository's, in each package staged from its own directory", () => {
-    const copies = population('the packages staged from their own directory', STAGED, { atLeast: 3 })
+    const copies = population('the packages staged from their own directory', STAGED, { atLeast: 2 })
       .map((pkg) => [pkg, path.join(REPO_ROOT, 'packages', pkg, 'LICENSE')] as const);
     expect(copies.filter(([, file]) => !fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== ROOT_LICENSE).map(([pkg]) => pkg)).toEqual([]);
   });
 
   it.skipIf(!PACKAGES_BUILT)("is in every published tree, and is the repository's", () => {
-    const trees = population('the published trees', Object.entries(publishedTreeDirs()), { atLeast: 5 });
+    const trees = population('the published trees', Object.entries(publishedTreeDirs()), { atLeast: 4 });
     const wrong = trees.filter(([, tree]) => {
       const file = path.join(tree, 'LICENSE');
       return !fs.existsSync(file) || fs.readFileSync(file, 'utf8') !== ROOT_LICENSE;

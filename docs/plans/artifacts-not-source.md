@@ -17,7 +17,7 @@ publishes the five `@apackdev` packages and the CLI. These two are native, unsco
 from source.** Both checkouts already ship real npm packages and the app already resolves them as
 dependencies —
 `"apack-terminal": "file:../../vendor/apack-terminal/node"` in `@apackdev/host` and the API,
-`"elmdb": "file:../../vendor/elmdb/crates/elmdb-node"` in `@apackdev/ears` and the API. So this changes
+`"elmdb": "file:../../vendor/elmdb/crates/elmdb-node"` in the API, and `"@elmdb/ears": "file:../../vendor/elmdb/packages/ears"` in the SDK, the host, the testing harness, the CLI and the API. So this changes
 **where the tarball comes from** and nothing about how the app reaches it. What it removes:
 
 | | |
@@ -167,7 +167,7 @@ condition of this work. Nothing here ships an Intel mac.
 | | |
 |---|---|
 | `scripts/link-elmdb.mjs`, `scripts/link-apack-terminal.mjs` | and the two `link:*` scripts |
-| `vendor/` and both `file:` dependencies | four declarations across `@apackdev/host`, `@apackdev/ears` and the API, replaced by version ranges |
+| `vendor/` and both `file:` dependencies | the `file:` declarations on the binding and EARS across the workspaces, replaced by version ranges |
 | `scripts/lib/vendored-checkouts.ts` | the derivation and its two consumers |
 | the `vendor/` paragraph in `CLAUDE.md` | and the `.rev`/link rules the guides repeat |
 

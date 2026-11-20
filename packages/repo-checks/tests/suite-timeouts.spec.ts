@@ -394,10 +394,7 @@ describe('no test is timed out by the clock', () => {
  * Specs allowed `promisify(execFile)`, and why. It is the clock's form of `execFileWhileWorking`: its `timeout` ends
  * a process at a wall time a busy machine reaches. An entry is a spec that cannot reach the other one.
  */
-const CLOCKED_EXEC_ALLOWED: Record<string, string> = {
-  'packages/apack-ears/tests/engine/watch.spec.ts':
-    '`@apackdev/ears` imports no other `@apackdev` package, its tests included, and these calls set no timeout to replace.',
-};
+const CLOCKED_EXEC_ALLOWED: Record<string, string> = {};
 
 /** Every `promisify(execFile)` in one file, read from its syntax tree so a string holding the text is not one */
 function clockedExecs(absFile: string): number[] {

@@ -102,7 +102,7 @@ let hostModulesKept = false;
  * **Resolution only, and it never throws.** `withModuleBridge`'s refusals are load-time diagnostics — they
  * tell a pack author to rebuild, at the moment the pack's runtime is being required — so they stay scoped to
  * that load. Keeping them installed would make them answer for host code too, and `appOnly` would then
- * refuse the app its own `@apackdev/ears/lmdb`.
+ * refuse the app its own `@elmdb/ears/database`.
  *
  * Safe to leave installed because the only CJS `require` of a bridged specifier in this process is a pack's:
  * host code is ESM, which never consults `Module._resolveFilename`, and the API bundle inlines these packages

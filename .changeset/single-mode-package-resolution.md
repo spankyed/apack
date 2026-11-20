@@ -4,7 +4,7 @@
 '@apackdev/cli': minor
 ---
 
-Packs resolve one layout: the `@apackdev` packages' published `dist`. Source-vs-dist detection is gone, with the exports and the environment variable that drove it. (`@apackdev/ears` and `@apackdev/ui` release at the same version, so they move with these three.)
+Packs resolve one layout: the `@apackdev` packages' published `dist`. Source-vs-dist detection is gone, with the exports and the environment variable that drove it. (`@apackdev/ui` releases at the same version, so it moves with these three.)
 
 **`@apackdev/testing/vitest` no longer exports `sourceConditions`.** A `vitest.config.ts` scaffolded by an older `apack init` fails at config load with:
 

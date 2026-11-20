@@ -23,7 +23,7 @@ import { PACK_LAYOUT } from '../../../../src/packs/layout.ts';
 import { applyPacks } from '../../../../src/packs/runtime/apply.ts';
 import { readAppPackSources } from '../../../../src/packs/app-sources.ts';
 import { createFormatApplier } from '@apackdev/sdk/content';
-import { type EARS } from '@apackdev/ears';
+import { type EARS } from '@elmdb/ears';
 import { untypedQuery, untypedWrite } from '@apackdev/sdk/ears';
 
 const referenceDeclarations = {

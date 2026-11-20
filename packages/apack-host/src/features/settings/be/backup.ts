@@ -1,4 +1,4 @@
-import type { Ears, EARS } from '@apackdev/ears';
+import type { Ears, EARS } from '@elmdb/ears';
 import type { SettingsCatalog } from '@apackdev/sdk/framework';
 import { compileSettingsCatalog } from '../validation.ts';
 

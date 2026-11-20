@@ -5,13 +5,13 @@
 ```ts
 
 import type { AnyActorRef } from 'xstate';
-import { Ears } from '@apackdev/ears';
-import { EARS as EARS_2 } from '@apackdev/ears';
-import type { EmbedDeclaration } from '@apackdev/ears';
-import type { RankDeclaration } from '@apackdev/ears';
-import type { RelationRules } from '@apackdev/ears';
-import type { RowRules } from '@apackdev/ears';
-import type { SearchDeclaration } from '@apackdev/ears';
+import { Ears } from '@elmdb/ears';
+import { EARS as EARS_2 } from '@elmdb/ears';
+import type { EmbedDeclaration } from '@elmdb/ears';
+import type { RankDeclaration } from '@elmdb/ears';
+import type { RelationRules } from '@elmdb/ears';
+import type { RowRules } from '@elmdb/ears';
+import type { SearchDeclaration } from '@elmdb/ears';
 import { z } from 'zod';
 
 // @public (undocumented)
@@ -699,28 +699,28 @@ export const ManifestSchema: z.ZodObject<{
         ranks: z.ZodOptional<z.ZodType<Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "out" | "in" | "both" | undefined;
+            direction?: "in" | "out" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "out" | "in" | "both" | undefined;
+            direction?: "in" | "out" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "out" | "in" | "both" | undefined;
+            direction?: "in" | "out" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "out" | "in" | "both" | undefined;
+            direction?: "in" | "out" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
@@ -1544,28 +1544,28 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         ranks: z.ZodOptional<z.ZodType<Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "out" | "in" | "both" | undefined;
+            direction?: "in" | "out" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "out" | "in" | "both" | undefined;
+            direction?: "in" | "out" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, z.core.$ZodTypeInternals<Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "out" | "in" | "both" | undefined;
+            direction?: "in" | "out" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;
         }>, Record<string, {
             types: readonly string[];
             relations: readonly string[];
-            direction?: "out" | "in" | "both" | undefined;
+            direction?: "in" | "out" | "both" | undefined;
             weights?: boolean | undefined;
             damping?: number | undefined;
             tolerance?: number | undefined;

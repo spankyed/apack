@@ -6,7 +6,7 @@
  */
 
 import type { AnyStateMachine } from 'xstate';
-import type { RankDeclaration, RelationRules, RowRules } from '@apackdev/ears';
+import type { RankDeclaration, RelationRules, RowRules } from '@elmdb/ears';
 
 /** A versioned change: declared target/description with a checked executable function. */
 export interface PackMigration {

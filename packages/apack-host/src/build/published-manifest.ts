@@ -1,8 +1,8 @@
 /**
  * The manifest a published tarball carries, derived from the workspace one, and what it may name.
  *
- * The workspace manifest cannot be published as it stands. Every export of `@apackdev/ears`, `@apackdev/sdk` and
- * `@apackdev/ui` names `./src/**` under the `@apackdev/source` condition, which `files` does not ship — 99 targets
+ * The workspace manifest cannot be published as it stands. Every export of `@apackdev/sdk` and `@apackdev/ui`
+ * names `./src/**` under the `@apackdev/source` condition, which `files` does not ship — 99 targets
  * measured 2026-09-27 — and Node picks a matching condition and *then* requires the file, with no fallback to
  * the next branch. So a consumer that enables the condition (a pack copying a config, a monorepo using the
  * same trick for its own packages) fails to resolve at all, with a message naming neither the condition nor
@@ -47,8 +47,8 @@ const DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependen
 
 /**
  * The workspace manifest as it is published: without the source condition, without an entry that condition was
- * the whole of, and without the fields above. A dependency on a linked directory (`file:`, as `@apackdev/ears`
- * depends on the elmdb checkout `vendor/elmdb` links to) is published as the version of the package there, which is
+ * the whole of, and without the fields above. A dependency on a linked directory (`file:`, as `@apackdev/sdk`
+ * depends on EARS in the elmdb checkout `vendor/elmdb` links to) is published as the version of the package there, which is
  * what a registry install resolves; `dir` is the directory the specs are relative to, and one is refused without it.
  *
  * An emptied entry is dropped rather than left as `{}`, and must not be given a published target instead.

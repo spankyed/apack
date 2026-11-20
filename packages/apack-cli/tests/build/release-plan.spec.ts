@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 
 /** The versions Changesets assigns the published packages, from the repo's manifests and config. */
-const PUBLISHED = { 'apack-ears': '@apackdev/ears', 'apack-sdk': '@apackdev/sdk', 'apack-ui': '@apackdev/ui', 'apack-cli': '@apackdev/cli', 'apack-testing': '@apackdev/testing' };
+const PUBLISHED = { 'apack-sdk': '@apackdev/sdk', 'apack-ui': '@apackdev/ui', 'apack-cli': '@apackdev/cli', 'apack-testing': '@apackdev/testing' };
 
 let scratch: string | undefined;
 afterEach(() => {
@@ -44,7 +44,7 @@ describe('release plan', () => {
   it("keeps every peer range on a sibling wide enough for the group's next version", () => {
     // Changesets gives a peer dependent a *major* bump when the version its peer moves to falls
     // outside the declared range (onlyUpdatePeerDependentsWhenOutOfRange), and the fixed group
-    // then carries that major to all five packages — before 1.0 that is a jump straight to 1.0.0.
+    // then carries that major to all four packages — before 1.0 that is a jump straight to 1.0.0.
     // So a range like "~0.1.0" or "^0.1.0" on a sibling, however right it looks for a 0.x package,
     // turns the group's next minor into a major release. It has to admit that version.
     for (const [dir, name] of Object.entries(PUBLISHED)) {
@@ -55,7 +55,7 @@ describe('release plan', () => {
         const next = major > 0 ? `${major}.${minor + 1}.0` : `0.${minor + 1}.0`;
         expect(
           satisfies(next, range as string),
-          `${name}'s peer range on ${peer} ("${range}") excludes ${next}, the version the fixed group moves to next, so a minor change would release all five as ${major + 1}.0.0`,
+          `${name}'s peer range on ${peer} ("${range}") excludes ${next}, the version the fixed group moves to next, so a minor change would release all four as ${major + 1}.0.0`,
         ).toBe(true);
       }
     }

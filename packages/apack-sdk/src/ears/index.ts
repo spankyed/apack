@@ -1,5 +1,5 @@
 /**
- * The app's engine, and the engine operations pack code calls without holding one. `@apackdev/ears` keeps no
+ * The app's engine, and the engine operations pack code calls without holding one. `@elmdb/ears` keeps no
  * engine of its own: an operation there is a member of the engine you hold (`engine.create(...)`). Here, the
  * engine is the one this process bound — the app's (`bindHost`), a test's (`startTestRuntime`) or a tool's
  * (`_bindEars`) — and each function acts on it, throwing naming how to bind one when none is.
@@ -9,15 +9,15 @@
  *
  * @packageDocumentation
  */
-import type { CallSiteNaming, Create, Ears, Query, Upsert, Write } from '@apackdev/ears';
+import type { CallSiteNaming, Create, Ears, Query, Upsert, Write } from '@elmdb/ears';
 
 // What packs and their generated `#generated/ears` use of EARS itself, so that a pack names apack's SDK alone and
 // loads the EARS that SDK was built with
-export { defineEars, RESERVED_ATTRIBUTES } from '@apackdev/ears';
+export { defineEars, RESERVED_ATTRIBUTES } from '@elmdb/ears';
 export type {
   BaseEntity, EarsSchema, QueryBuilder, QueryExplanation, RelationMatch, RelationRow, RelationStats, ShapeOf, ShortCode,
   UntypedSchema, WriteBuilder,
-} from '@apackdev/ears';
+} from '@elmdb/ears';
 
 let bound: Ears | undefined;
 
@@ -45,7 +45,7 @@ export function _bindEars(engine: Ears | undefined): Ears | undefined {
  * @internal
  */
 export const _EARS_CALL_SITES: CallSiteNaming = {
-  engineFrames: /\/(?:apack-ears|@apackdev\/ears)\/(?:src|dist)\//,
+  engineFrames: /\/(?:packages\/ears|@elmdb\/ears)\/(?:src|dist)\//,
   roots: ['/packages/', '/node_modules/', '/packs/'],
 };
 

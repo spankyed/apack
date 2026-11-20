@@ -1,5 +1,5 @@
 import { hasOwn } from '../utils/shared.ts';
-import type { EmbedDeclaration, RankDeclaration, RelationRules, RowRules, SearchDeclaration } from '@apackdev/ears';
+import type { EmbedDeclaration, RankDeclaration, RelationRules, RowRules, SearchDeclaration } from '@elmdb/ears';
 import type { EmbeddingModelId } from '../services/models.ts';
 
 /** One entity type's declaration: everything the manifest says about it, in its own entry */

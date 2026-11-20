@@ -356,7 +356,7 @@ export const CONTENT_RUNTIME_FILE = 'content-runtime.mjs';
 /**
  * Bundle the pack's content runtime (src/__generated__/content-runtime.ts: entity types, repositories,
  * content writers) into dist/build/content-runtime.mjs. Only the shared-instance packages (@apackdev/sdk and
- * @apackdev/ears) stay external, so a dependent's unit tests can load it with just their own installed
+ * @elmdb/ears) stay external, so a dependent's unit tests can load it with just their own installed
  * and share their instances. The
  * build then loads it that way, so a bundle that can't load fails here.
  */

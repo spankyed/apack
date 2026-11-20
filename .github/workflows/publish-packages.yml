@@ -1,6 +1,6 @@
 name: Publish packages
 
-# Versions @apackdev/ears, @apackdev/sdk, @apackdev/ui, @apackdev/cli and @apackdev/testing with Changesets and
+# Versions @apackdev/sdk, @apackdev/ui, @apackdev/cli and @apackdev/testing with Changesets and
 # publishes the built copies to npm with provenance. Until publishing is switched on, every run is a dry
 # run: it opens/updates the "Version packages" PR and runs `npm publish --dry-run`.
 #
@@ -96,7 +96,7 @@ jobs:
           exit 1
 
       - name: Check the published API surface
-        run: npm run api:check --workspace @apackdev/ears --workspace @apackdev/sdk --workspace @apackdev/ui
+        run: npm run api:check --workspace @apackdev/sdk --workspace @apackdev/ui
 
       - name: Build publishable packages
         run: npm run packages:build

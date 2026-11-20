@@ -29,8 +29,7 @@ function typecheck(tsc: TscVersion, moduleResolution: 'node16' | 'bundler') {
     "import '@apackdev/sdk/fe';",
     "export const popout = window.electronAPI?.surfaces.popout;",
     // Typed data access and events come only from the factories a pack's facade uses
-    "import { defineEars, type UntypedSchema } from '@apackdev/ears';",
-    "import { boundEars } from '@apackdev/sdk/ears';",
+    "import { boundEars, defineEars, type UntypedSchema } from '@apackdev/sdk/ears';",
     "import { defineEvents } from '@apackdev/sdk/events';",
     "import type { EARS } from '@apackdev/sdk';",
     "type IsAny<T> = 0 extends 1 & T ? true : false;",
@@ -47,15 +46,6 @@ function typecheck(tsc: TscVersion, moduleResolution: 'node16' | 'bundler') {
     "broadcastToSurface('memos', { type: 'MEMO_ADDED', id: 'm1' });",
     "// @ts-expect-error the memos surface doesn't receive this event",
     "broadcastToSurface('memos', { type: 'MEMO_REMOVED' });",
-    "// @ts-expect-error untyped query helpers aren't pack-facing",
-    "export { findAll } from '@apackdev/ears';",
-    // An engine is an instance a test or tool creates over a database; its admin face comes only with it
-    "import { createEarsEngine } from '@apackdev/ears';",
-    "import { openDatabase } from '@apackdev/ears/lmdb';",
-    "const database = openDatabase({ path: 'memos', schema: { types: { Memo: { required: [] } }, relations: {}, roles: [] } });",
-    "const engine = createEarsEngine({ database });",
-    "engine.create('Memo').set('title', 'held');",
-    "engine.admin.clear();",
     // Host-only modules live in the private @apackdev/host
   ] });
 }
@@ -144,15 +134,13 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
       { cwd: consumer!, env: { PATH: process.env.PATH }, encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 },
     )).stdout;
     expect(await resolveFromConsumer('@apackdev/sdk/repositories')).toBe(pathToFileURL(fs.realpathSync(path.join(sdk, 'dist', 'repositories', 'index.js'))).href);
-    const ears = path.join(consumer!, 'node_modules', '@apackdev', 'ears');
-    expect(await resolveFromConsumer('@apackdev/ears')).toBe(pathToFileURL(fs.realpathSync(path.join(ears, 'dist', 'index.js'))).href);
     const shipped = fs.readdirSync(path.join(sdk, 'dist'), { recursive: true }).map(String);
     expect(fs.readdirSync(sdk).sort()).toEqual(['LICENSE', 'apack.schema.json', 'dist', 'package.json']);
     // Source maps would point at src, which isn't published
     expect(shipped.filter((f) => f.endsWith('.map'))).toEqual([]);
   });
 
-  it('loads the SDK on the installed @apackdev/ears', async () => {
+  it('loads the SDK on the installed @elmdb/ears', async () => {
     // The SDK's EARS namespace and its repositories import the engine: a plain Node process resolves it from the consumer
     const { stdout: output } = await execFileAsync(
       process.execPath,
@@ -160,8 +148,6 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
       { cwd: consumer!, env: { PATH: process.env.PATH }, encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 },
     );
     expect(output).toBe('Flow contains object');
-    const ears = fs.readdirSync(path.join(consumer!, 'node_modules', '@apackdev', 'ears')).sort();
-    expect(ears).toEqual(['LICENSE', 'dist', 'package.json']);
   });
 
   /**
@@ -169,7 +155,7 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
    * `./src/**` that `files` does not ship. What a consumer installs is that manifest through
    * `publishedManifest` and nothing else: a field it does not derive is one the workspace still decides.
    */
-  it.each(['ears', 'sdk', 'ui'])('publishes the workspace package.json of @apackdev/%s, derived', (name) => {
+  it.each(['sdk', 'ui'])('publishes the workspace package.json of @apackdev/%s, derived', (name) => {
     const published = JSON.parse(fs.readFileSync(path.join(consumer!, 'node_modules', '@apackdev', name, 'package.json'), 'utf-8'));
     const dir = path.join(REPO_ROOT, 'packages', `apack-${name}`);
     const workspace = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8'));

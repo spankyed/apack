@@ -7,16 +7,16 @@
 import type { ActionArgs } from 'xstate';
 import type { AnyActorRef } from 'xstate';
 import type { AnyStateMachine } from 'xstate';
-import { EARS as EARS_2 } from '@apackdev/ears';
-import type { EmbedDeclaration } from '@apackdev/ears';
+import { EARS as EARS_2 } from '@elmdb/ears';
+import type { EmbedDeclaration } from '@elmdb/ears';
 import type { EventObject } from 'xstate';
 import type { MachineContext } from 'xstate';
 import type { Mapper } from 'xstate';
 import type { ParameterizedObject } from 'xstate';
-import type { RankDeclaration } from '@apackdev/ears';
-import type { RelationRules } from '@apackdev/ears';
-import type { RowRules } from '@apackdev/ears';
-import type { SearchDeclaration } from '@apackdev/ears';
+import type { RankDeclaration } from '@elmdb/ears';
+import type { RelationRules } from '@elmdb/ears';
+import type { RowRules } from '@elmdb/ears';
+import type { SearchDeclaration } from '@elmdb/ears';
 import { z } from 'zod';
 
 // @public

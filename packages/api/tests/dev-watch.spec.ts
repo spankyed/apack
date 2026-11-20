@@ -54,7 +54,7 @@ describe('the API dev watch', () => {
   });
 
   it('reports a bundled tree the script does not name', () => {
-    const inputs = ['src/server.ts', '../apack-ears/src/index.ts', '../apack-sdk/src/index.ts', '../../node_modules/zod/index.js'];
-    expect(unwatchedTrees(inputs, 'tsup --watch src --watch ../apack-sdk/src')).toEqual(['packages/apack-ears/src']);
+    const inputs = ['src/server.ts', '../apack-host/src/index.ts', '../apack-sdk/src/index.ts', '../../node_modules/zod/index.js'];
+    expect(unwatchedTrees(inputs, 'tsup --watch src --watch ../apack-sdk/src')).toEqual(['packages/apack-host/src']);
   });
 });

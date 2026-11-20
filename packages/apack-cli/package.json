@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "es-module-lexer": "^1.7.0",
-    "@apackdev/ears": "*",
+    "@elmdb/ears": "file:../../vendor/elmdb/packages/ears",
     "@apackdev/testing": "*",
     "@apackdev/ui": "*",
     "@app/publish-checks": "*",

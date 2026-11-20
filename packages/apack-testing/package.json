@@ -38,7 +38,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@apackdev/ears": "*",
+    "@elmdb/ears": "file:../../vendor/elmdb/packages/ears",
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
     "ajv": "^8.20.0",

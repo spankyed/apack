@@ -110,13 +110,14 @@ export function takeForward(distDir: string, stagedDir: string, files: readonly 
 /**
  * The `@apackdev` packages a pack's frontend compiles against, as the pack itself resolves them — workspace
  * source in a checkout, `node_modules` in an installed pack, which is the one layout a pack author has. The pack
- * names `@apackdev/sdk` and `@apackdev/ui`; `@apackdev/ears` is the SDK's dependency, so it is the copy the SDK
- * resolves, wherever npm put it.
+ * names `@apackdev/sdk` and `@apackdev/ui`, and with them the SDK's EARS (`@elmdb/ears`), the copy the SDK
+ * resolves wherever npm put it, since the SDK's types are largely EARS' and EARS can move while the SDK doesn't.
  *
- * **A package it cannot find is a refusal, not an omission.** Leaving one out of the scope would mean an
- * upgrade to it did not invalidate anything, and the build would take a bundle forward that was compiled
+ * **An `@apackdev` package it cannot find is a refusal, not an omission.** Leaving one out of the scope would
+ * mean an upgrade to it did not invalidate anything, and the build would take a bundle forward that was compiled
  * against the version before. `packagesBuiltOrRefuse` is the same shape: where the evidence is missing, say
- * so rather than answer from what is left.
+ * so rather than answer from what is left. EARS is the SDK's to bring, and an SDK that can't resolve it fails
+ * the compile on its own.
  */
 export function apackScope(packDir: string): { readonly dirs: readonly string[] } | { readonly missing: readonly string[] } {
   const fromPack = path.join(packDir, 'noop.js');
@@ -131,7 +132,12 @@ export function apackScope(packDir: string): { readonly dirs: readonly string[] 
     }
   };
   const sdk = resolveDir('@apackdev/sdk', fromPack);
-  const ears = sdk === undefined ? undefined : resolveDir('@apackdev/ears', path.join(sdk, 'package.json'));
+  let ears: string | undefined;
+  try {
+    ears = sdk === undefined ? undefined : path.dirname(fs.realpathSync(createRequire(path.join(sdk, 'package.json')).resolve('@elmdb/ears/package.json')));
+  } catch {
+    ears = undefined;
+  }
   const ui = resolveDir('@apackdev/ui', fromPack);
   for (const dir of [ears, sdk, ui]) if (dir !== undefined) dirs.push(path.join(dir, 'dist'));
   return missing.length > 0 ? { missing } : { dirs };

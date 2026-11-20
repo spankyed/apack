@@ -1,7 +1,7 @@
 // apack db export: each entity type's entities, with their attributes, to a file per type, and the relations
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { RESERVED_ENTITY_TYPES, type EARS } from '@apackdev/ears';
+import { RESERVED_ENTITY_TYPES, type EARS } from '@elmdb/ears';
 import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
 import { toCSV, toJSON } from './output';
 

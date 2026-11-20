@@ -257,8 +257,8 @@ export const processReportSchema: z.ZodObject<{
         windowLimitMs: z.ZodLiteral<30000>;
         durationMs: z.ZodNumber;
         stoppedBy: z.ZodEnum<{
-            limit: "limit";
             owner: "owner";
+            limit: "limit";
         }>;
     }, z.core.$strip>>;
     profileFailures: z.ZodOptional<z.ZodNumber>;
@@ -577,8 +577,8 @@ export const trialSchema: z.ZodObject<{
             windowLimitMs: z.ZodLiteral<30000>;
             durationMs: z.ZodNumber;
             stoppedBy: z.ZodEnum<{
-                limit: "limit";
                 owner: "owner";
+                limit: "limit";
             }>;
         }, z.core.$strip>>;
         profileFailures: z.ZodOptional<z.ZodNumber>;

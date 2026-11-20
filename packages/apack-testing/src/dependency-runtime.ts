@@ -8,7 +8,7 @@ import {
 import { withModuleBridge } from '@apackdev/host/packs';
 import type { PackRegistration } from '@apackdev/sdk/framework';
 
-/** The shared-instance exports (@apackdev/sdk, @apackdev/ears) a backend runtime can require, as the pack resolves them */
+/** The shared-instance exports (@apackdev/sdk, @elmdb/ears) a backend runtime can require, as the pack resolves them */
 function sharedSpecifiers(packDir: string): string[] {
   const fromFile = path.join(packDir, 'package.json');
   return SHARED_INSTANCE_PACKAGES.flatMap((pkg) => sharedInstanceSpecifiers(pkg, sharedInstanceExports(pkg, fromFile)));

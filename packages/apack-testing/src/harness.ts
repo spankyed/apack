@@ -28,7 +28,6 @@ import { appState, HOST_ENTITY_TYPES } from '@apackdev/host/app-state';
 import { createSettingsService, createSettingsStore } from '@apackdev/host/settings';
 import { getSettingsCatalog, onPackCatalogChanged, type ContentRuntime } from '@apackdev/sdk/framework';
 import { loadDependencyRuntime } from './dependency-runtime.ts';
-import { assertSharedEars } from './shared-ears.ts';
 import { setAppPacks, stopRunningApps } from './app.ts';
 import { startShell as startShellFor, stopRunningShells, type StartShellOptions, type TestShell } from './shell.ts';
 import { PROJECT_ROOT_KEY } from './vitest-teardown.ts';
@@ -275,7 +274,6 @@ export async function setupPackTests(options: PackTestOptions): Promise<void> {
     throw new Error('APACK_USER_DATA_DIR is unset: use isolatedDataDir() from @apackdev/testing/vitest in vitest.config.ts');
   }
   const packDir = options.packDir ?? findPackDir(projectRoot() ?? process.cwd());
-  assertSharedEars(packDir);
   const parsed = ManifestSchema.safeParse(JSON.parse(fs.readFileSync(path.join(packDir, 'apack.json'), 'utf-8')));
   if (!parsed.success) throw new Error(`Invalid source pack manifest: ${parsed.error.issues.map(issue => issue.message).join('; ')}`);
   const manifest = parsed.data;

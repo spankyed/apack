@@ -422,16 +422,12 @@ export const WORKSPACE_PARTS = [
   // `templates` is the CLI's scaffold: pack code the specifier rules read and the CLI's own suite renders,
   // so a change to one has to invalidate the steps that read the workspace
   'src', 'tests', 'scripts', 'bin', 'etc', 'templates', 'index.js',
-  // `bench` is in `@apackdev/ears`' tsconfig `include`, so its typecheck compiles the benchmark and has to
-  // re-run when it moves. Only that workspace has one; the dep-file gate is what noticed
-  'bench',
   // A pack's manifest, which `default-setup`'s specs import directly. Eleven workspaces have none
   // and the walk skips what is not there, so for those this adds a path and no bytes
   'apack.json',
   'package.json', 'tsconfig.json', 'tsconfig.package.json',
-  // The two vitest configs from `CONFIG_BY_HALF`, which is where that naming is declared, and the one
-  // `@apackdev/ears`' builds on: its own, which names nothing of apack's (`packages/apack-ears/vitest.config.ts`)
-  ...Object.values(CONFIG_BY_HALF), 'vitest.ears.config.ts', 'vite.config.ts', 'vite.config.js',
+  // The two vitest configs from `CONFIG_BY_HALF`, which is where that naming is declared
+  ...Object.values(CONFIG_BY_HALF), 'vite.config.ts', 'vite.config.js',
   'eslint.config.ts', 'postcss.config.cjs', 'tailwind.config.ts', 'tsdown.config.ts', 'env.d.ts',
 ];
 const workspace = (pkg: string): string[] => WORKSPACE_PARTS.map((part) => `packages/${pkg}/${part}`);
@@ -465,7 +461,7 @@ const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSP
   'drive/playwright.config.ts',
   'build/prod/verify-node-modules.mjs', 'build/prod/smoke-native.mjs',
   'packages/apack-cli/bin',
-  'packages/apack-ears/bench/ears.bench.ts', 'packages/api/tsup.config.ts',
+  'packages/api/tsup.config.ts',
   'packages/dev-mode.js', 'packages/entry-point.mjs'];
 
 /**
@@ -476,7 +472,11 @@ const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSP
 // Through `repoRelative`, because these land in `step.outputs` beside hand-written POSIX literals and
 // `writerOf` compares the two
 const relative = repoRelative;
-const PACKAGE_BUILD_INPUTS = [...new Set(Object.values(BUILD_UNITS).flatMap((unit) => unit.inputs.map(relative)))].sort();
+// A unit's input inside a vendored checkout (EARS' `dist`, which the CLI's and the harness's bundles inline) is left to
+// its pin, `vendor/<name>.rev` in every step's `ROOT`, with `vendoredOffPin` for a checkout away from it: the link is
+// gitignored, and its files are the checkout's, which no step here writes
+const PACKAGE_BUILD_INPUTS = [...new Set(Object.values(BUILD_UNITS).flatMap((unit) => unit.inputs.map(relative)))]
+  .filter((input) => !input.startsWith('vendor/')).sort();
 const PACKAGE_BUILD_OUTPUTS = [...new Set(Object.values(BUILD_UNITS).flatMap((unit) => unit.outputs.map(relative)))].sort();
 
 /**
@@ -694,9 +694,6 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   'repo-checks': { packages: true, repo: true, inputs: ['docs'], integrationInputs: FIXTURE_OUTPUTS },
   // `pretest: ensure-packages-built`; it npm-packs the built packages into a consumer and compiles it
   'publish-checks': { packages: true },
-  // Its integration half npm-packs its own build into a consumer and compiles it, with the oldest TypeScript it
-  // supports among the compilers (`typescript-floor`); its fast half reads source alone
-  'apack-ears': { integrationInputs: ['packages/apack-ears/dist', 'packages/typescript-floor/package.json'] },
 };
 
 
@@ -943,14 +940,14 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // report at all, so each is a module whose edit moves a report while the script that imports it does not.
     // The closure check in `chain-inputs.spec.ts` is what found them and what keeps the next one from hiding
     inputs: [...ROOT,
-      'packages/apack-ears/dist', 'packages/apack-sdk/dist', 'packages/apack-ui/dist',
-      'packages/apack-ears/package.json', 'packages/apack-sdk/package.json', 'packages/apack-ui/package.json',
+      'packages/apack-sdk/dist', 'packages/apack-ui/dist',
+      'packages/apack-sdk/package.json', 'packages/apack-ui/package.json',
       'scripts/api-check.ts', 'scripts/lib/api-report-packages.ts', 'scripts/lib/exit-on-epipe.ts',
       // `bounded-spawn` is how this runs the three extractions
       'scripts/lib/bounded-spawn.ts', 'scripts/lib/left-running.ts', 'packages/apack-sdk/src/progress.ts',
       'scripts/api-reports.ts', 'scripts/component-contracts.ts', 'scripts/lib/api-entries.ts',
-      'packages/apack-ears/etc', 'packages/apack-sdk/etc', 'packages/apack-ui/etc',
-      'packages/apack-ears/tsconfig.api-extractor.json', 'packages/apack-sdk/tsconfig.api-extractor.json',
+      'packages/apack-sdk/etc', 'packages/apack-ui/etc',
+      'packages/apack-sdk/tsconfig.api-extractor.json',
       'packages/apack-ui/tsconfig.package.json'],
     // A report is a function of the declarations a package built. The compiled output beside them is what
     // `declaration: true` emits past them, and no report has ever read one

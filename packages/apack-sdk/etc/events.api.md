@@ -4,7 +4,7 @@
 
 ```ts
 
-import { EARS } from '@apackdev/ears';
+import { EARS } from '@elmdb/ears';
 
 // @public
 export const answersCall: (event: {

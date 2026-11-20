@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc --noEmit && cross-env NODE_OPTIONS=--max-old-space-size=8192 tsup",
     "build:dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsup --env.NODE_ENV development",
-    "build:dev:watch": "cross-env-shell NODE_OPTIONS=--max-old-space-size=8192 tsup --env.NODE_ENV development --watch src --watch ../apack-ears/src --watch ../apack-host/src --watch ../apack-sdk/src",
+    "build:dev:watch": "cross-env-shell NODE_OPTIONS=--max-old-space-size=8192 tsup --env.NODE_ENV development --watch src --watch ../apack-host/src --watch ../apack-sdk/src",
     "dev:types": "tsc -p . --noEmit --watch --preserveWatchOutput",
     "dev:serve": "node ../../scripts/with-source.mjs tsx --watch src/server.ts",
     "start": "node ../../scripts/with-source.mjs node dist/server.js",
@@ -35,6 +35,7 @@
   "license": "ISC",
   "dependencies": {
     "@app/terminal-broker": "*",
+    "@elmdb/ears": "file:../../vendor/elmdb/packages/ears",
     "@napi-rs/keyring": "^1.3.0",
     "apack-terminal": "file:../../vendor/apack-terminal/node",
     "elmdb": "file:../../vendor/elmdb/crates/elmdb-node",
@@ -48,7 +49,6 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@apackdev/ears": "*",
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
     "@trpc/server": "^11.1.2",

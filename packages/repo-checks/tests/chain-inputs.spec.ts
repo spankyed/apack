@@ -365,7 +365,7 @@ describe('a step keys on a staged publish tree only if it reads one', () => {
   /** The data is a list, so the case mutates it rather than trusting that it could fail */
   it('names a step that starts keying on one', () => {
     const compile = CHAIN_STEPS.find((step) => step.name === 'build:default-setup')!;
-    const widened = { ...compile, inputs: [...compile.inputs, `packages/apack-ears/${PUBLISH_TREE}`] };
+    const widened = { ...compile, inputs: [...compile.inputs, `packages/apack-ui/${PUBLISH_TREE}`] };
     expect(unexplained([widened]), 'a step given a staged tree was not reported').toEqual([
       'build:default-setup keys on a staged publish tree and does not read one — spread PACKAGE_BUILD_READS',
     ]);

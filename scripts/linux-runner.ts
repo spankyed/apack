@@ -139,7 +139,7 @@ const FILTERS = [
   '--include=/packages/renderer/node_modules/', '--include=/packages/renderer/node_modules/.tmp/***',
   '--exclude=/packages/renderer/node_modules/*',
   '--exclude=node_modules',
-  ...['apack-ears', 'apack-sdk', 'apack-ui', 'apack-testing', 'apack-cli'].flatMap((pkg) =>
+  ...['apack-sdk', 'apack-ui', 'apack-testing', 'apack-cli'].flatMap((pkg) =>
     [`--exclude=/packages/${pkg}/dist`, `--exclude=/packages/${pkg}/publish`]),
   '--exclude=/packages/default-setup/dist', '--exclude=/packages/default-setup/.apack',
   ...['api', 'main', 'preload', 'renderer'].map(pkg => `--exclude=/packages/${pkg}/dist`),

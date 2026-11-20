@@ -2,8 +2,8 @@ import type { SettingsAdmin } from '../services/settings.ts';
 // The runtime a pack's unit tests run against: the EARS engine on a database in a temporary directory, without the app.
 // @apackdev/testing's harness drives it; it lives in the SDK so tests share the pack's SDK instance
 // (its query, repository and content-writer registries) instead of a copy.
-import { createEarsEngine, type CallCounting, type EarsDatabase, type EarsEngine, type EngineSchema, type RankDeclaration, type RelationRules, type RowRules } from '@apackdev/ears';
-import { createTemporaryDatabases } from '@apackdev/ears/lmdb';
+import { createEarsEngine, type CallCounting, type EarsDatabase, type EarsEngine, type EngineSchema, type RankDeclaration, type RelationRules, type RowRules } from '@elmdb/ears';
+import { createTemporaryDatabases } from '@elmdb/ears/database';
 import { _bindEars, _EARS_CALL_SITES } from '../ears/index.ts';
 import { _installProjections, type ProjectionRunner } from '../runtime/projections.ts';
 import type { ContentRuntime } from '../framework/content-runtime.ts';

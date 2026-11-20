@@ -164,16 +164,21 @@ function compiled(at: CheckoutPaths, pkg: string, ...extraInputs: string[]): Bui
 }
 
 /**
- * Each workspace whose source a bundle **inlines**, as a directory name.
+ * What a bundle **inlines** of each shared-instance package: the SDK's source in this checkout, and EARS' built
+ * `dist` in the elmdb checkout `vendor/elmdb` links to (in CI, the clone at the pin), with each one's manifest.
  *
- * Derived from the list of what is inlined rather than written out, so a third shared-instance package arrives
- * declared. The naming is the repo's own and holds for all of them: `@apackdev/x` lives in `packages/apack-x`.
+ * Keyed by the list of what is inlined, so a third shared-instance package fails to compile until it says where
+ * its code comes from.
  */
-const INLINED_SOURCE_DIRS = SHARED_INSTANCE_PACKAGES.map((name) => name.replace('@apackdev/', 'apack-'));
+const INLINED_FROM: Record<(typeof SHARED_INSTANCE_PACKAGES)[number], (at: CheckoutPaths) => string[]> = {
+  '@apackdev/sdk': ({ pkgFile }) => [pkgFile('apack-sdk', 'src'), pkgFile('apack-sdk', 'package.json')],
+  '@elmdb/ears': ({ repoFile }) => [repoFile('vendor', 'elmdb', 'packages', 'ears', 'dist'),
+    repoFile('vendor', 'elmdb', 'packages', 'ears', 'package.json')],
+};
 
 /**
- * A package esbuild bundles into `dist/package/`, inlining @apackdev/host and the shared-instance packages from
- * source (scripts/bundle-package.ts).
+ * A package esbuild bundles into `dist/package/`, inlining @apackdev/host and the shared-instance packages
+ * (scripts/bundle-package.ts): the host and the SDK from source, EARS from its built `dist`.
  *
  * **It declares every source it inlines, which is the whole of what it reads.** `apack-host/src` was there
  * and the shared-instance packages' were not, so an edit to `@apackdev/sdk/src` left the `@apackdev/cli` and
@@ -191,7 +196,7 @@ function bundled(at: CheckoutPaths, pkg: string, ...copiedPaths: string[]): Buil
       repoFile('LICENSE'),
       pkgFile(pkg, 'src'), pkgFile(pkg, 'package.json'), pkgFile(pkg, 'tsconfig.json'),
       pkgFile('apack-host', 'src'), pkgFile('apack-host', 'package.json'),
-      ...INLINED_SOURCE_DIRS.flatMap((dir) => [pkgFile(dir, 'src'), pkgFile(dir, 'package.json')])],
+      ...SHARED_INSTANCE_PACKAGES.flatMap((name) => INLINED_FROM[name](at))],
     outputs: [pkgFile(pkg, 'dist', 'package', 'package.json'), pkgFile(pkg, 'dist', 'package', 'dist'),
       pkgFile(pkg, 'dist', 'package', 'LICENSE'),
       ...copiedPaths.map(file => pkgFile(pkg, 'dist', 'package', file))],
@@ -202,7 +207,6 @@ function bundled(at: CheckoutPaths, pkg: string, ...copiedPaths: string[]): Buil
 export function buildUnitsIn(root: string): Record<string, BuildUnit> {
   const at = checkoutPaths(root);
   return {
-    '@apackdev/ears': compiled(at, 'apack-ears'),
     '@apackdev/sdk': compiled(at, 'apack-sdk'),
     '@apackdev/ui': compiled(at, 'apack-ui', at.pkgFile('apack-ui', 'tsdown.config.ts'), at.repoFile('scripts', 'build-ui-package.ts'),
       at.pkgFile('apack-ui', 'scripts', 'exports.ts')),
@@ -270,7 +274,7 @@ export const NOT_A_BUILD_INPUT: Record<string, string> = {
 
 /**
  * Package directory → the directory inside it that npm publishes, in publish order (a dependency before its
- * dependents). None of the five publishes its workspace `package.json`: `@apackdev/ears`, `/sdk` and `/ui` stage a
+ * dependents). None of the four publishes its workspace `package.json`: `@apackdev/sdk` and `/ui` stage a
  * derived one under `publish/` (`stagePublishTree`), and `@apackdev/cli` and `@apackdev/testing` a generated one
  * under `dist/package`.
  *
@@ -280,7 +284,6 @@ export const NOT_A_BUILD_INPUT: Record<string, string> = {
  * nothing publishes.
  */
 export const PUBLISHED_TREES: Record<string, string> = {
-  'apack-ears': PUBLISH_TREE,
   'apack-sdk': PUBLISH_TREE,
   'apack-ui': PUBLISH_TREE,
   'apack-testing': 'dist/package',
@@ -318,7 +321,7 @@ export const stampFile = (workspace: string): string => path.join(STAMP_DIR, `${
  * run's reads cannot invalidate on a file that was not read last time: a newly imported module would be
  * absent from it, so an edit to that module would change nothing and the unit would read fresh over a stale
  * bundle. That is exactly the failure this is here to *catch* — the `@apackdev/cli` and `@apackdev/testing`
- * bundles inline `@apackdev/sdk` and `@apackdev/ears` from source and declared neither, which no check could see,
+ * bundles inline `@apackdev/sdk` from source and didn't declare it, which no check could see,
  * because every other input check compares one declaration against another.
  *
  * In a `reads/` subdirectory so it can never be taken for a stamp: `stampFile` names its files in this
@@ -939,7 +942,7 @@ export function freshnessSweep(): {
   /**
    * Everything remembered at or under `target`, by prefix rather than by exact key.
    *
-   * A caller declares `packages/apack-ears/dist`; what is memoised are the files inside it and the listing
+   * A caller declares `packages/apack-sdk/dist`; what is memoised are the files inside it and the listing
    * of it, so forgetting the one key it was handed would leave every file under it stale in the maps. The
    * listing goes too — a build that adds or removes a file changes what a walk returns, not only what the
    * files contain.
