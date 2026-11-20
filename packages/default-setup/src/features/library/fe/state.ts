@@ -1,5 +1,5 @@
 import { entityIs } from '@apackdev/sdk/fe'
-import type { OpenEntity } from '@apackdev/sdk/events'
+import { answersCall, newCall, type OpenEntity } from '@apackdev/sdk/events'
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
 import type { DocumentDTO, DocumentView, FolderContents, FolderView, LibraryIndex, LibraryItem, DocumentItem } from '#generated/types.ts'
 import type { Contract, LibraryContext, LibraryInboxEvent } from './contract.ts'
@@ -383,7 +383,12 @@ export const librarySystem = setup({
       if (event.type !== 'DOCUMENT.READ' || event.documentId !== context.editingDocumentId) return
       const { document } = event
       if (document.onDisk) {
-        if (!context.editingDocument) enqueue(() => sendToSystem(id, { type: 'GET_DOCUMENT', id: event.documentId }))
+        if (!context.editingDocument) {
+          // Minted here, since the send is deferred past the assign that records it
+          const call = newCall()
+          enqueue.assign({ documentFetch: call })
+          enqueue(() => sendToSystem(id, { type: 'GET_DOCUMENT', id: event.documentId }, { call }))
+        }
         return
       }
       if (document.document) enqueue.assign({ editingDocument: document.document })
@@ -426,7 +431,7 @@ export const librarySystem = setup({
     clearEditingDocument: assign({
       editingDocument: undefined,
     }),
-    takeWriteError: assign(({ event }) => (event.type === 'LIBRARY_WRITE_FAILED' || event.type === 'LIBRARY_READ_FAILED' ? { writeError: event.error } : {})),
+    takeFailure: assign(({ event }) => (event.type === 'ASK_FAILED' ? { writeError: event.failure.message } : {})),
     sendDeleteDocument: ({ event }) => {
       const ev = event as { type: 'DELETE_DOCUMENT'; documentId: string };
       sendToSystem(id, {
@@ -687,6 +692,13 @@ export const librarySystem = setup({
     /** The document open is gone: deleted here or in another window */
     documentGone: ({ context, event }) => event.type === 'DOCUMENT.READ' && event.documentId === context.editingDocumentId
       && !event.document.onDisk && event.document.document === null,
+    /**
+     * The document open is on disk and is not there to read. By its kind and not its wording, and only for the
+     * fetch of the document that is open: a fetch refused for another reason leaves the editor where it is, and
+     * so does the answer to a fetch this window has since moved on from.
+     */
+    openDocumentGone: ({ context, event }) => event.type === 'ASK_FAILED' && event.failure.kind === 'not-found'
+      && answersCall(event, context.documentFetch),
   },
 }).createMachine({
   id: 'library',
@@ -736,6 +748,7 @@ export const librarySystem = setup({
     lastKnownPath: null,
 
     writeError: null,
+    documentFetch: null,
 
     // Import/Export
     libraryImport: { status: 'idle' as const, errors: [], importedCount: 0 },
@@ -876,12 +889,9 @@ export const librarySystem = setup({
       // The folder this window made opens for naming here, and nowhere else
       actions: assign(({ event }) => ({ itemToEdit: event.data.collection.id, newItemId: event.data.collection.id })),
     },
-    LIBRARY_WRITE_FAILED: {
-      actions: 'takeWriteError',
-    },
-    // Shown where a refused write is: either is something this window asked for and did not get
-    LIBRARY_READ_FAILED: {
-      actions: 'takeWriteError',
+    // A write or a fetch this window asked for and did not get: shown, whichever it was
+    ASK_FAILED: {
+      actions: 'takeFailure',
     },
     CLEAR_WRITE_ERROR: {
       actions: assign({ writeError: null }),
@@ -943,7 +953,7 @@ export const librarySystem = setup({
     },
     edit: {
       entry: assign({ currentView: 'edit' }),
-      exit: assign({ editingDocumentId: undefined }),
+      exit: assign({ editingDocumentId: undefined, documentFetch: null }),
       meta: {
         ...breadcrumbWithParams<LibraryContext>({
           target: 'edit',
@@ -961,6 +971,12 @@ export const librarySystem = setup({
           { guard: 'documentGone', target: 'browser', actions: 'clearEditingDocument' },
           { actions: 'readDocument' },
         ],
+        // Nothing to edit: back to where it was opened from, saying why. Any other refusal is the root's to show
+        ASK_FAILED: {
+          guard: 'openDocumentGone',
+          target: 'browser',
+          actions: ['clearEditingDocument', 'takeFailure'],
+        },
         DOCUMENT_LOADED: {
           guard: ({ context, event }) => context.editingDocumentId === event.data.document.id,
           actions: assign({ editingDocument: ({ event }) => event.data.document }),

@@ -1,6 +1,7 @@
 export type * from './export-types.ts';
 import type { EARS } from '#generated/ears.ts'
 import type { ContentSection, DocumentShortCode } from '@apackdev/sdk';
+import type { AskFailedEvent } from '@apackdev/sdk/events';
 
 /**
  * The document model is the SDK's (`@apackdev/sdk`): the app reads documents, so the entities, their
@@ -129,6 +130,12 @@ export type {
   IndexSearchResult,
 } from './search-index/types/search-index.ts'
 
+/**
+ * Why a write or a fetch was not done, where the window that asked can act on it: what it named is gone (a document,
+ * or a file or folder on disk under a symlinked folder), or is closed to this user.
+ */
+export type LibraryFailureKind = 'not-found' | 'no-access'
+
 export type IncomingLibraryEvents =
   | { type: 'CREATE_DOCUMENT'; name: string; content: ContentSection[]; tags: string[]; collectionId?: string; documentType?: string }
   | { type: 'UPDATE_DOCUMENT'; id: string; name: string; content: ContentSection[]; tags: string[]; collectionId?: string }
@@ -165,10 +172,8 @@ export type OutgoingLibraryEvents =
   | { type: 'COLLECTION_CREATED'; data: { collection: CollectionDTO } }
   /** Any other write landed */
   | { type: 'LIBRARY_WRITTEN' }
-  /** A write was refused, and why */
-  | { type: 'LIBRARY_WRITE_FAILED'; error: string }
-  /** A fetch of what is on disk could not be made, and why */
-  | { type: 'LIBRARY_READ_FAILED'; error: string }
+  /** A write or a fetch was not done: which, and why (`LibraryFailureKind`) */
+  | AskFailedEvent<LibraryFailureKind, IncomingLibraryEvents['type']>
   /** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
   | { type: 'FOLDER_CONTENTS_LOADED'; data: FolderContents }
   /** A document on disk, as `GET_DOCUMENT` asked */

@@ -73,7 +73,7 @@ it('opens a symlinked document from a double-click, fetching it once its view sa
   actor.send({ type: 'DOUBLE_CLICK_ITEM', item });
   expect(actor.getSnapshot().matches('edit')).toBe(true);
   actor.send({ type: 'DOCUMENT.READ', documentId: id, document: { onDisk: true } });
-  expect(sendToSystem).toHaveBeenCalledWith('library', { type: 'GET_DOCUMENT', id });
+  expect(sent('GET_DOCUMENT')).toEqual([{ type: 'GET_DOCUMENT', id }]);
   actor.send(loaded(id));
   expect(actor.getSnapshot().context.editingDocument?.id).toBe(id);
 });
@@ -141,6 +141,36 @@ it('names the folder this window made, once it is shown, and reports a refused w
   actor.send(stored(null, [folderItem('Collection-fresh')]));
   expect(actor.getSnapshot().context.selectedItems).toEqual(['Collection-fresh']);
 
-  actor.send(answerTo(call, { type: 'LIBRARY_WRITE_FAILED', error: 'Path does not exist' }));
+  actor.send(answerTo(call, { type: 'ASK_FAILED', asked: 'CREATE_COLLECTION', failure: { kind: 'failed', message: 'Path does not exist' } }));
   expect(actor.getSnapshot().context.writeError).toBe('Path does not exist');
+});
+
+/** A window with a document on disk open, which it has asked for: the actor, and the call of that fetch */
+function fetchingDiskDocument() {
+  const actor = view();
+  actor.send({ type: 'OPEN_ENTITY', id: 'Document-open' });
+  actor.send({ type: 'DOCUMENT.READ', documentId: 'Document-open', document: { onDisk: true } });
+  const [, , sending] = sendToSystem.mock.calls.filter(([, event]) => event.type === 'GET_DOCUMENT').at(-1)!;
+  return { actor, call: (sending as { call: string }).call };
+}
+
+it('returns to the browser, saying why, when the document it opened is no longer on disk', () => {
+  const { actor, call } = fetchingDiskDocument();
+  actor.send(answerTo(call, { type: 'ASK_FAILED', asked: 'GET_DOCUMENT', failure: { kind: 'not-found', message: 'Document not found' } }));
+  expect(actor.getSnapshot().matches('browser')).toBe(true);
+  expect(actor.getSnapshot().context.writeError).toBe('Document not found');
+});
+
+it('stays on the document when its fetch was refused for a reason other than its being gone', () => {
+  const { actor, call } = fetchingDiskDocument();
+  actor.send(answerTo(call, { type: 'ASK_FAILED', asked: 'GET_DOCUMENT', failure: { kind: 'no-access', message: 'EACCES: permission denied' } }));
+  expect(actor.getSnapshot().matches('browser')).toBe(false);
+  expect(actor.getSnapshot().context.writeError).toBe('EACCES: permission denied');
+});
+
+it('stays on the document when what is gone is something else this window asked for', () => {
+  const { actor } = fetchingDiskDocument();
+  actor.send(answerTo('c-another-ask', { type: 'ASK_FAILED', asked: 'UPDATE_SYMLINK_PATH', failure: { kind: 'not-found', message: 'Path does not exist: /gone' } }));
+  expect(actor.getSnapshot().matches('browser')).toBe(false);
+  expect(actor.getSnapshot().context.writeError).toBe('Path does not exist: /gone');
 });

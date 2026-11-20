@@ -125,7 +125,7 @@ describe('a write to the library', () => {
     const landed = await app.send('library', { type: 'CREATE_COLLECTION', name: 'Asked' }, asked)
     await app.nextEmit('library', 'COLLECTION_CREATED', { answering: landed })
     const refused = await app.send('library', { type: 'UPDATE_SYMLINK_PATH', collectionId: linked, newPath: path.join(os.tmpdir(), 'no-such-library-folder') }, asked)
-    expect(await app.nextEmit('library', 'LIBRARY_WRITE_FAILED', { answering: refused })).toMatchObject({ error: expect.stringContaining('no-such-library-folder') })
+    expect(await app.nextEmit('library', 'ASK_FAILED', { answering: refused })).toMatchObject({ failure: { kind: 'not-found', message: expect.stringContaining('no-such-library-folder') } })
 
     await app.send('library', { type: 'CREATE_COLLECTION', name: 'Unasked' })
     await app.settle()

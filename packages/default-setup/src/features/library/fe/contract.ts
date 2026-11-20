@@ -11,6 +11,8 @@ export interface LibraryContext {
   currentView: 'browser' | 'create' | 'edit' | 'create-index' | 'edit-index' | 'test-index'
   editingDocument?: DocumentDTO
   editingDocumentId?: string
+  /** The fetch under way of the document open, when it is on disk: what answers it is that document's, or why it is not shown */
+  documentFetch: string | null
 
   // File browser fields
   items: LibraryItem[]
@@ -52,7 +54,7 @@ export interface LibraryContext {
   isBroken: boolean
   lastKnownPath: string | null
 
-  // Why the last of this window's writes was refused, until the user dismisses it
+  // Why the last of this window's writes or fetches was not done, until the user dismisses it
   writeError: string | null
 
   // Import/Export

@@ -121,6 +121,13 @@ broadcasts, never both (`threads/be/answer.ts`), and takes only that feature's o
 result cannot reach the fallback. Code's `answer` (`code/be/answer.ts`) has no fallback: a code result is data its asker
 shows.
 
+- **An ask with one answer returns it, and is not handed `reply`.** `spec.answers({ GET_DOCUMENT: async ({ event }) => … })`
+  (`defineSystem`) is keyed by the event each handler answers: what it returns is replied, returning nothing replies the
+  system's `landed`, and anything it throws replies `ASK_FAILED { asked, failure: { kind, message } }`, so a handler
+  cannot leave its asker unanswered on the path where it fails. A refusal the asker can act on is thrown with a kind the
+  contract declares (`throw spec.failure('not-found', …)`, `AskFailedEvent<Kinds>` among what the system sends), and a
+  surface branches on `failure.kind`, never on the wording. The library is the worked example. A handler that answers
+  more than once, or tells every window when nobody asked, stays an action and is handed `reply`.
 - **`reply` answers the message being delivered, and only that one.** An event a machine makes while handling a
   message — a system telling its children something of its own — is not that message, and its handler is handed no
   `reply`; the same object forwarded to a child still is.

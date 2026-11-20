@@ -32,7 +32,7 @@ it('answers the window that asked for a file that is no longer on disk', async (
   await app.connect()
   const { folderId } = symlinkedFolder()
   const call = await app.send('library', { type: 'GET_DOCUMENT', id: `symlink:${folderId}/deleted.md` }, { sender: LIBRARY, client: MAIN })
-  expect(await app.nextEmit('library', 'LIBRARY_READ_FAILED', { answering: call })).toMatchObject({ error: expect.stringContaining('deleted.md') })
+  expect(await app.nextEmit('library', 'ASK_FAILED', { answering: call })).toMatchObject({ asked: 'GET_DOCUMENT', failure: { kind: 'not-found', message: expect.stringContaining('deleted.md') } })
 })
 
 // A folder nobody may read is not one for the user that owns everything, and Windows has no such mode
@@ -42,5 +42,5 @@ it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('answers the
   const { dir, folderId } = symlinkedFolder()
   fs.chmodSync(dir, 0o000)
   const call = await app.send('library', { type: 'GET_FOLDER_CONTENTS', folderId }, { sender: LIBRARY, client: MAIN })
-  expect(await app.nextEmit('library', 'LIBRARY_READ_FAILED', { answering: call })).toMatchObject({ error: expect.stringContaining('EACCES') })
+  expect(await app.nextEmit('library', 'ASK_FAILED', { answering: call })).toMatchObject({ asked: 'GET_FOLDER_CONTENTS', failure: { kind: 'no-access', message: expect.stringContaining('EACCES') } })
 })

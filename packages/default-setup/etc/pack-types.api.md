@@ -9,7 +9,7 @@ import * as _apackdev_sdk from '@apackdev/sdk';
 import { ActionEntity, ActionParameter, ContentSection, DocumentShortCode, EARS as EARS$1, FlowEntity, NodeBase, PromptEntity, SdkEntityShapes, TemplateInput } from '@apackdev/sdk';
 import { ArtifactItem } from '@apackdev/sdk/artifacts';
 import * as _apackdev_sdk_build from '@apackdev/sdk/build';
-import { HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, Reply, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
+import { AskFailedEvent, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, Reply, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
 import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
@@ -2921,6 +2921,8 @@ interface LibraryContext {
     currentView: 'browser' | 'create' | 'create-index' | 'edit' | 'edit-index' | 'test-index';
     editingDocument?: DocumentDTO;
     editingDocumentId?: string;
+    /** The fetch under way of the document open, when it is on disk: what answers it is that document's, or why it is not shown */
+    documentFetch: string | null;
     items: LibraryItem[];
     currentFolderId: string | null;
     currentPath: string[];
@@ -2963,6 +2965,12 @@ interface LibraryContext {
     };
     navHistory: NavHistory<string | null>;
 }
+
+/**
+ * Why a write or a fetch was not done, where the window that asked can act on it: what it named is gone (a document,
+ * or a file or folder on disk under a symlinked folder), or is closed to this user.
+ */
+type LibraryFailureKind = 'no-access' | 'not-found';
 
 /** Where an editor link into the library lands */
 type LibraryInboxEvent = {
@@ -4114,16 +4122,8 @@ type OutgoingLibraryEvents =
  | {
     type: 'LIBRARY_WRITTEN';
 }
-/** A write was refused, and why */
- | {
-    type: 'LIBRARY_WRITE_FAILED';
-    error: string;
-}
-/** A fetch of what is on disk could not be made, and why */
- | {
-    type: 'LIBRARY_READ_FAILED';
-    error: string;
-}
+/** A write or a fetch was not done: which, and why (`LibraryFailureKind`) */
+ | AskFailedEvent<LibraryFailureKind, IncomingLibraryEvents['type']>
 /** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
  | {
     type: 'FOLDER_CONTENTS_LOADED';
