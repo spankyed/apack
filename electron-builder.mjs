@@ -23,11 +23,11 @@ const isBeta = metadata.channel === 'beta';
 const isPreview = metadata.channel === 'preview';
 const {appId, productName, urlScheme} = metadata;
 /**
- * The newest glibc any binary the Linux app ships needs: the terminal broker apack-terminal publishes is built on
- * Ubuntu 24.04 and needs 2.39. It is the deb's `libc6` floor, and build-linux.yml fails when it isn't exactly the
- * newest need, so it can't drift from the binaries
+ * The newest glibc any binary the Linux app ships needs: 2.28, which the terminal broker apack-terminal publishes and
+ * elmdb's binding are each built against (manylinux_2_28), and which Electron's own Linux build needs. It is the deb's
+ * `libc6` floor, and build-linux.yml fails when it isn't exactly the newest need, so it can't drift from the binaries
  */
-const LINUX_GLIBC_FLOOR = '2.39';
+const LINUX_GLIBC_FLOOR = '2.28';
 
 /** electron-builder's own deb dependencies, which a set `depends` replaces: read from its FpmTarget, as it reads them */
 function debDefaultDepends() {
