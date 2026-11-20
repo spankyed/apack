@@ -17,10 +17,6 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version override (e.g. 0.1.0). Leave empty to use package.json version.'
-        required: false
-        type: string
       channel:
         description: 'Build channel (production or beta)'
         required: false
@@ -64,18 +60,22 @@ jobs:
       - uses: ./.github/actions/apack-terminal
       - uses: ./.github/actions/apack-git
 
+      # A tag names its channel, and the `channel` input is read for a branch alone: a tag's files go into its
+      # release, where a beta build dispatched on a production tag would put apack Beta's files
       - name: Detect channel
         id: channel
+        env:
+          CHANNEL: ${{ inputs.channel }}
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "$TAG_VERSION" == *-beta* ]] || [[ "${{ inputs.channel }}" == "beta" ]]; then
-            echo "is_beta=true" >> "$GITHUB_OUTPUT"
-            echo "product_name=apack Beta" >> "$GITHUB_OUTPUT"
-            echo "release_prefix=apack-Beta" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            CHANNEL=production
+            if [[ "$TAG_VERSION" == *-beta* ]]; then CHANNEL=beta; fi
+          fi
+          if [ "$CHANNEL" = beta ]; then
+            printf '%s\n' is_beta=true 'product_name=apack Beta' release_prefix=apack-Beta >> "$GITHUB_OUTPUT"
           else
-            echo "is_beta=false" >> "$GITHUB_OUTPUT"
-            echo "product_name=apack" >> "$GITHUB_OUTPUT"
-            echo "release_prefix=apack" >> "$GITHUB_OUTPUT"
+            printf '%s\n' is_beta=false product_name=apack release_prefix=apack >> "$GITHUB_OUTPUT"
           fi
           echo "tag_version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
 
