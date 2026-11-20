@@ -2,7 +2,8 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // Answering whoever asked, without the handler being told who that is.
 //
 // A system's handler is given `{ context, event, self, system }` and nothing about the message's sender, so the
-// bus names the message for the duration of the delivery and `reply` reads it back. The two things that makes
+// bus names the message for the duration of the delivery and `_replyTo` reads it back — which is what an ask's
+// answer (`defineSystem`'s `answers`) is sent through, and what these fixtures call directly. The two things that makes
 // true are: the answer goes to the ref that asked rather than to a name the handler had to write, and it goes on
 // the connection it was asked from rather than to every window.
 //
@@ -36,14 +37,19 @@ const after = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // These fixtures declare no context, so their handlers take XState's own open `MachineContext`
 const handlers = defineHandlers<MachineContext, AnyEventObject>();
 
+/** The answer for the message being delivered, read at entry as the `answers` table reads it */
+const replyNow = (): Reply | undefined => _replyTo(_currentDelivery());
+
 const answering = setup({
   actions: handlers.actions({
-    answer: async ({ event, reply }) => {
+    answer: async ({ event }) => {
+      const reply = replyNow();
       await after((event as { wait?: number }).wait ?? 0);
       reply?.({ type: 'MEMO_ADDED', tag: (event as { tag?: string }).tag });
     },
     // Progress and then a result, which is the ordinary shape a second answer has
-    answerTwice: ({ event, reply }) => {
+    answerTwice: ({ event }) => {
+      const reply = replyNow();
       reply?.({ type: 'MEMO_ADDED', tag: `${(event as { tag?: string }).tag}-first` });
       reply?.({ type: 'MEMO_ADDED', tag: `${(event as { tag?: string }).tag}-second` });
     },
@@ -84,7 +90,7 @@ const invoking = setup({
     working: {
       invoke: {
         src: 'answerLater',
-        input: handlers.input(({ event, reply }) => ({ tag: (event as { tag?: string }).tag, reply })),
+        input: handlers.input(({ event }) => ({ tag: (event as { tag?: string }).tag, reply: replyNow() })),
         onDone: 'idle',
         onError: 'idle',
       },

@@ -333,14 +333,9 @@ export type SystemEvents =
 | AskAnswered | AskFailed;
 
 // @public
-export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>, Extract<ContractOutgoing<C>, {
-    type: string;
-}>> {
+export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>> {
     actions<P extends ActionParams>(defs: {
         [K in keyof P]: (args: SystemArgs<C> & {
-            reply?: Reply<Extract<ContractOutgoing<C>, {
-                type: string;
-            }>>;
             client?: string;
         }, params: P[K]) => void;
     }): {
@@ -350,9 +345,6 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
         readonly [K in AskName<C>]: AnswerHandler<C, K>;
     }): Answers<C>;
     input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & {
-        reply?: Reply<Extract<ContractOutgoing<C>, {
-            type: string;
-        }>>;
         client?: string;
     }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
     // (undocumented)

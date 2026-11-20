@@ -1,7 +1,7 @@
 import { _withPerformanceEvent } from '../runtime/performance.ts';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
-import { _answered, _askFailureOf, _clientOf, _connectionSignal, _currentDelivery, _failedAnswer, _failure, _replyTo, ASK_ANSWER_TYPES, type AnswerPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskFailed, type AskName, type AskEventsOf, type ContractAsks, type FailureOf, type Reply } from '../events/index.ts';
+import { _answered, _askFailureOf, _clientOf, _connectionSignal, _currentDelivery, _failedAnswer, _failure, _replyTo, ASK_ANSWER_TYPES, type AnswerPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskFailed, type AskName, type AskEventsOf, type ContractAsks, type FailureOf } from '../events/index.ts';
 import { reportError } from '../logger/report-error.ts';
 import type { ArrayChanges } from '../utils/change-detection.ts';
 import { eventTypes } from '../events/event-types.ts';
@@ -159,25 +159,24 @@ const isCreatorResult = (value: unknown): boolean =>
   typeof value === 'function' && Object.prototype.hasOwnProperty.call(value, 'resolve');
 
 /**
- * Hands a handler what the delivery it is being run in lets it answer and address, both bound at entry.
- *
- * One read, two members: `reply` for the asker, `client` for the connection they asked from. Bound rather
- * than read at use so a handler that awaits or stores either still has the right address.
+ * Hands a handler the connection the message it handles arrived on, bound at entry so a handler that awaits or
+ * stores it still has the right one: what it sends that window (`sendToWindow(client, …)`, a feed beside an
+ * answer) goes there and nowhere else.
  */
 const handing = <F>(handler: F): F => {
   if (typeof handler !== 'function' || isCreatorResult(handler)) return handler;
   const run = handler as unknown as (args: object, params: unknown) => void;
   return ((args: object, params: unknown) => {
     const delivery = answerable(args);
-    const invoke = () => run({ ...args, reply: _replyTo(delivery), client: _clientOf(delivery) }, params);
+    const invoke = () => run({ ...args, client: _clientOf(delivery) }, params);
     const event = (args as { event?: unknown }).event;
     return _withPerformanceEvent(event, invoke);
   }) as unknown as F;
 };
 
 /**
- * The delivery a handler may answer: the one in scope when the event it handles is the message delivered (`_Delivery`'s
- * `event`), and none for an event its machine made while handling that message.
+ * The delivery a handler may answer or address: the one in scope when the event it handles is the message delivered
+ * (`_Delivery`'s `event`), and none for an event its machine made while handling that message.
  */
 const answerable = (args: object): ReturnType<typeof _currentDelivery> => {
   const delivery = _currentDelivery();
@@ -185,43 +184,31 @@ const answerable = (args: object): ReturnType<typeof _currentDelivery> => {
 };
 
 /**
- * What hands a machine's handlers their answers, for a machine that is not a feature's system.
- *
- * The seven machines under `code/be/features/` and the brain's flow and step systems are children a system
- * spawns: they declare their own context and events rather than a feature contract, so they have no
- * `defineSystem` to come from — and they are handlers like any other. `defineSystem` is this plus the
- * contract's types, so there is one implementation rather than a second shape to keep in step.
+ * What hands a machine's handlers the connection the message they handle arrived on, for a machine that is not a
+ * feature's system: a child a system spawns declares its own context and events rather than a feature contract, so it
+ * has no `defineSystem` to come from. `defineSystem` is this plus the contract's types.
  */
-export interface Handlers<TContext extends MachineContext, TEvent extends EventObject, TOut extends { type: string } = { type: string; [key: string]: unknown }> {
-  /** See `SystemSpec.actions` — this is the same wrapper, over a machine's own context and events */
+export interface Handlers<TContext extends MachineContext, TEvent extends EventObject> {
+  /** See `SystemSpec.actions` */
   actions<P extends ActionParams>(
-    defs: { [K in keyof P]: (args: Args<TContext, TEvent> & { reply?: Reply<TOut>; client?: string }, params: P[K]) => void },
+    defs: { [K in keyof P]: (args: Args<TContext, TEvent> & { client?: string }, params: P[K]) => void },
   ): { [K in keyof P]: (args: Args<TContext, TEvent>, params: P[K]) => void };
   /** See `SystemSpec.input` */
-  input<I>(build: (args: InputArgs<TContext, TEvent> & { reply?: Reply<TOut>; client?: string }) => I): Mapper<TContext, TEvent, I, TEvent>;
+  input<I>(build: (args: InputArgs<TContext, TEvent> & { client?: string }) => I): Mapper<TContext, TEvent, I, TEvent>;
 }
 
 /**
- * Hands the handlers of a machine that is not a feature's system the answer for the message being handled.
- *
  * ```ts
  * const handlers = defineHandlers<Context, Event>();
  * export const commitSystem = setup({ types: { … }, actions: handlers.actions({ … }) }).createMachine(…);
  * ```
  */
-export function defineHandlers<
-  TContext extends MachineContext,
-  TEvent extends EventObject,
-  TOut extends { type: string } = { type: string; [key: string]: unknown },
->(): Handlers<TContext, TEvent, TOut> {
+export function defineHandlers<TContext extends MachineContext, TEvent extends EventObject>(): Handlers<TContext, TEvent> {
   return {
     actions: (defs) => Object.fromEntries(
       Object.entries(defs).map(([name, handler]) => [name, handing(handler)]),
     ) as never,
-    input: (build) => (args) => {
-      const delivery = answerable(args);
-      return build({ ...args, reply: _replyTo(delivery), client: _clientOf(delivery) });
-    },
+    input: (build) => (args) => build({ ...args, client: _clientOf(answerable(args)) }),
   };
 }
 
@@ -257,33 +244,30 @@ export interface Answers<C extends SystemContract> {
 }
 
 /** The definition object returned by `defineSystem()`. */
-export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>, Extract<ContractOutgoing<C>, { type: string }>> {
+export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>> {
   types: { context: ContractContext<C>; events: MachineEvents<C> };
   typeOf: ReturnType<typeof safeEvents<MachineEvents<C>>>;
   /**
-   * The system's actions, each handed the answer for the message it is handling.
-   *
-   * `reply` is absent when that message named no sender, so a handler that answers has to say what it does
-   * when nobody asked — the question `_currentDelivery()?.replyTo === undefined` used to ask of a global.
+   * The system's actions, each handed the connection the message it handles arrived on (`client`), absent for a
+   * message no window sent. A result is not an action's to send: it is an ask's answer (`answers`).
    *
    * **It wraps the record, never `setup`.** What XState receives is exactly the type it expects, so its
    * inference, `SetupReturn.extend`/`createAction` and the prebound creators are all untouched. An action
-   * creator's result passes through whole, which gives the rule: an action that answers is a plain function.
+   * creator's result passes through whole, which gives the rule: an action that reads `client` is a plain function.
    *
    * **And it is in the record.** An action written inline in a `createMachine` config never passes through
-   * here, so it is handed nothing — five exist today and none answers, which is the arrangement to keep. A
-   * handler that comes to need an answer moves into the record and gains a name, which it wanted anyway.
+   * here, so it is handed nothing.
    */
   actions<P extends ActionParams>(
-    defs: { [K in keyof P]: (args: SystemArgs<C> & { reply?: Reply<Extract<ContractOutgoing<C>, { type: string }>>; client?: string }, params: P[K]) => void },
+    defs: { [K in keyof P]: (args: SystemArgs<C> & { client?: string }, params: P[K]) => void },
   ): { [K in keyof P]: (args: SystemArgs<C>, params: P[K]) => void };
   /**
-   * An `invoke.input`, handed the same answer, so an invoked actor receives one through its input.
+   * An `invoke.input`, handed the same `client`, so an invoked actor receives it through its input.
    *
    * `input` is evaluated while the transition is being processed — inside the delivery — which is what makes
-   * this work and what makes the answer it hands on bound rather than ambient.
+   * this work and what makes the connection it hands on bound rather than ambient.
    */
-  input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & { reply?: Reply<Extract<ContractOutgoing<C>, { type: string }>>; client?: string }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
+  input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & { client?: string }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
   /**
    * The table that answers the system's asks (`asks` in its contract): one handler per ask, and it has to cover every
    * one. **A handler returns its answer and throws its refusal; it is not handed the means to give either.**

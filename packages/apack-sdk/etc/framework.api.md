@@ -27,6 +27,7 @@ export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
     readonly failure: FailureOf<ContractAsks<C>[K]>;
     readonly self: SystemArgs<C>['self'];
     readonly signal: AbortSignal;
+    readonly waiting: boolean;
 }
 
 // @public
@@ -142,12 +143,7 @@ export function declaredContentKeys(manifest: {
 }): string[];
 
 // @public
-export function defineHandlers<TContext extends MachineContext, TEvent extends EventObject, TOut extends {
-    type: string;
-} = {
-    type: string;
-    [key: string]: unknown;
-}>(): Handlers<TContext, TEvent, TOut>;
+export function defineHandlers<TContext extends MachineContext, TEvent extends EventObject>(): Handlers<TContext, TEvent>;
 
 // @public
 export function defineProjections<const T extends ProjectionDefinitions>(projections: T): T;
@@ -264,22 +260,15 @@ export function getPackHelp(): HelpCatalog;
 export function getSettingsCatalog(): SettingsCatalog;
 
 // @public
-export interface Handlers<TContext extends MachineContext, TEvent extends EventObject, TOut extends {
-    type: string;
-} = {
-    type: string;
-    [key: string]: unknown;
-}> {
+export interface Handlers<TContext extends MachineContext, TEvent extends EventObject> {
     actions<P extends ActionParams>(defs: {
         [K in keyof P]: (args: Args<TContext, TEvent> & {
-            reply?: Reply<TOut>;
             client?: string;
         }, params: P[K]) => void;
     }): {
         [K in keyof P]: (args: Args<TContext, TEvent>, params: P[K]) => void;
     };
     input<I>(build: (args: InputArgs<TContext, TEvent> & {
-        reply?: Reply<TOut>;
         client?: string;
     }) => I): Mapper<TContext, TEvent, I, TEvent>;
 }
@@ -1024,14 +1013,9 @@ export type SystemEvents =
 | AskAnswered | AskFailed;
 
 // @public
-export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>, Extract<ContractOutgoing<C>, {
-    type: string;
-}>> {
+export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>> {
     actions<P extends ActionParams>(defs: {
         [K in keyof P]: (args: SystemArgs<C> & {
-            reply?: Reply<Extract<ContractOutgoing<C>, {
-                type: string;
-            }>>;
             client?: string;
         }, params: P[K]) => void;
     }): {
@@ -1041,9 +1025,6 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
         readonly [K in AskName<C>]: AnswerHandler<C, K>;
     }): Answers<C>;
     input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & {
-        reply?: Reply<Extract<ContractOutgoing<C>, {
-            type: string;
-        }>>;
         client?: string;
     }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
     // (undocumented)
