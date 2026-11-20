@@ -4,6 +4,7 @@ import { spawn, execFile } from 'child_process'
 import { rgPath } from '@vscode/ripgrep'
 import type { FileInfo, DirectoryContent, FileContent, CodeSystemError, SearchOptions, SearchResult, QuickOpenResult } from '../types.ts'
 import { createLogger } from '@apackdev/sdk/logger'
+import { decodeNdjson } from './claude-code/ndjson.ts'
 
 const logger = createLogger('filesystem')
 
@@ -401,53 +402,54 @@ export class FileSystemRepository {
         let filesSearched = 0
         let errorOutput = ''
         
-        rg.stdout.on('data', (data) => {
-          const lines = data.toString().split('\n').filter(Boolean)
-          
-          for (const line of lines) {
-            try {
-              const json = JSON.parse(line)
-              
-              if (json.type === 'match') {
-                const filePath = json.data.path.text
-                const lineNum = json.data.line_number
-                const lineText = json.data.lines.text.trimEnd()
-                const match = json.data.submatches[0]
-                
-                if (!currentResult || currentResult.path !== filePath) {
-                  if (currentResult) {
-                    results.push(currentResult)
-                    onResult?.(currentResult)
-                  }
-                  
-                  currentResult = {
-                    path: filePath,
-                    matches: []
-                  }
-                  
-                  filesSearched++
-                  onProgress?.(filesSearched, -1, filePath)
-                }
-                
-                currentResult.matches.push({
-                  line: lineNum,
-                  column: match.start + 1,
-                  lineText: lineText,
-                  matchStart: match.start,
-                  matchEnd: match.end
-                })
+        // One JSON value a line, read as lines: a read ends wherever the pipe did, in the middle of a line and
+        // of a character as often as not, so what is parsed is what the decoder has put back together
+        const read = (async () => {
+          for await (const line of decodeNdjson(rg.stdout)) {
+            if (!line.ok) continue
+            const json = line.value as { type?: string; data?: any }
+            if (json.type !== 'match') continue
+
+            const filePath = json.data.path.text
+            const lineNum = json.data.line_number
+            const lineText = json.data.lines.text.trimEnd()
+            const match = json.data.submatches[0]
+
+            if (!currentResult || currentResult.path !== filePath) {
+              if (currentResult) {
+                results.push(currentResult)
+                onResult?.(currentResult)
               }
-            } catch {
-              // Ignore JSON parse errors
+
+              currentResult = {
+                path: filePath,
+                matches: []
+              }
+
+              filesSearched++
+              onProgress?.(filesSearched, -1, filePath)
             }
+
+            currentResult.matches.push({
+              line: lineNum,
+              column: match.start + 1,
+              lineText: lineText,
+              matchStart: match.start,
+              matchEnd: match.end
+            })
           }
-        })
-        
+        })()
+
         rg.stderr.on('data', (data) => {
           errorOutput += data.toString()
         })
         
-        rg.on('close', (code) => {
+        rg.on('close', async (code) => {
+          // The process is gone, and what it wrote may still be on its way through the decoder
+          try { await read } catch (error) {
+            reject(this.createError('SEARCH_ERROR', `Search output could not be read: ${(error as Error).message}`))
+            return
+          }
           if (currentResult) {
             results.push(currentResult)
             onResult?.(currentResult)
