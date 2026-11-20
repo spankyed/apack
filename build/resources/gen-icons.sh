@@ -1,7 +1,7 @@
 #!/bin/bash
 # Usage: ./build/resources/gen-icons.sh [source.png|source.svg]
 # Generates icon.png, icon.icns, icon.ico in build/resources/
-# Requires: sips, iconutil (macOS). rsvg-convert needed only for SVG input.
+# Requires: sips, iconutil (macOS) and python3. rsvg-convert needed only for SVG input.
 
 set -euo pipefail
 
@@ -36,9 +36,42 @@ echo "  icon.icns"
 sips -z 512 512 "$WORK/icon-1024.png" --out "$OUT_DIR/icon.png" >/dev/null
 echo "  icon.png"
 
-# Windows .ico (256x256): sips writes the format it is told, not the one the file name says, so `-s format ico`; without
-# it the file is a PNG, which electron-builder refuses as no ICO
-sips -z 256 256 "$WORK/icon-1024.png" -s format ico --out "$OUT_DIR/icon.ico" >/dev/null
+# Windows .ico holding every size Windows draws, each resized from the master: given a single 256x256 image Windows
+# scales it down itself for the title bar, taskbar and file lists, and blurs it. sips writes one image per ICO, so
+# python3 packs the container: an ICONDIR, one ICONDIRENTRY per image, then the images. Every entry is a PNG, which
+# Windows Vista and later read at any size, and an entry's width and height bytes are 0 when the image is 256 wide.
+ICO_SIZES=(16 24 32 48 64 128 256)
+ICO_PNGS=()
+for size in "${ICO_SIZES[@]}"; do
+  sips -z "$size" "$size" "$WORK/icon-1024.png" --out "$WORK/ico-$size.png" >/dev/null
+  ICO_PNGS+=("$WORK/ico-$size.png")
+done
+python3 - "$OUT_DIR/icon.ico" "${ICO_PNGS[@]}" <<'PY'
+import struct
+import sys
+
+out, paths = sys.argv[1], sys.argv[2:]
+images = []
+for path in paths:
+    with open(path, "rb") as f:
+        data = f.read()
+    # A PNG's first chunk is IHDR, whose width and height are the big-endian words at bytes 16 and 20.
+    if data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        sys.exit(f"{path} is not a PNG")
+    width, height = struct.unpack(">II", data[16:24])
+    if width != height or not 0 < width <= 256:
+        sys.exit(f"{path} is {width}x{height}; an ICO image is square and at most 256 wide")
+    images.append((width, data))
+
+offset = 6 + 16 * len(images)
+header = struct.pack("<HHH", 0, 1, len(images))
+for width, data in images:
+    # Planes 1 and 32 bits per pixel, which is what a PNG entry states whatever its own colour type.
+    header += struct.pack("<BBBBHHII", width % 256, width % 256, 0, 0, 1, 32, len(data), offset)
+    offset += len(data)
+with open(out, "wb") as f:
+    f.write(header + b"".join(data for _, data in images))
+PY
 echo "  icon.ico"
 
 echo "Done — icons in $OUT_DIR/"
