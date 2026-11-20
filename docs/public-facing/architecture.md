@@ -34,7 +34,7 @@ The app is built from packages whose imports point down only (`npm run check:spe
 | `packages/api` | Transport (`node:http`, `ws`, tRPC routers, the log stream), process boot and composition | All of the above |
 | `packages/renderer` | The frontend composition: binds the frontend port | |
 
-Packs import `@apackdev/sdk`, `@apackdev/ears` and `@apackdev/ui`, never `@apackdev/host`. What an app owns is an instance its composition root creates and binds: the engine, the registered packs (`createPackRegistry()`, and in the renderer `createFePackRegistry()`) and the host services. No SDK, EARS or host module keeps them at module scope.
+Packs import `@apackdev/sdk` and `@apackdev/ui`, never `@apackdev/host`, and reach `@apackdev/ears`, the SDK's dependency, through the SDK. What an app owns is an instance its composition root creates and binds: the engine, the registered packs (`createPackRegistry()`, and in the renderer `createFePackRegistry()`) and the host services. No SDK, EARS or host module keeps them at module scope.
 
 ## Pack loading lifecycle
 

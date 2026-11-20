@@ -254,14 +254,14 @@ Pack code never imports `@apackdev/host`, the app's private package: `apack pack
 
 EARS is a graph database on elmdb, a Rust engine over LMDB, which keeps no copy of the data in memory. Packs declare entity types and relation kinds in the manifest, and use the repository pattern for data access.
 
-The engine is its own package, `@apackdev/ears`, which packs may depend on and import directly: the app shares one instance of it with every pack, as it does `@apackdev/sdk`. Import from:
+The engine is its own package, `@apackdev/ears`, which `@apackdev/sdk` depends on: a pack names only the SDK, and the app shares one instance of the engine with every pack, as it does `@apackdev/sdk`. Import from:
 
 | Module | What |
 |---|---|
 | `#generated/ears` | Your pack's `EARS` constants and the typed `query`, `create`, `upsert`, `write`, `transact`, `newId` and `getAttr` (checked against your, your dependencies' and the SDK's shapes). Use these by default |
 | `#generated/repository` | `repository`, typed with your and your dependencies' repositories |
-| `@apackdev/sdk/ears` | The app's engine, untyped: `untypedQuery`, `untypedCreate`, `untypedUpsert`, `untypedWrite`, `transact`, and the relation and role reads |
-| `@apackdev/ears` | The engine itself: `createEarsEngine` for tests and tooling, `EarsError`, the core `EARS` types and `BaseEntity` |
+| `@apackdev/sdk/ears` | The app's engine, untyped: `untypedQuery`, `untypedCreate`, `untypedUpsert`, `untypedWrite`, `transact`, and the relation and role reads; and the engine's own types and helpers: `BaseEntity`, `QueryBuilder`, `WriteBuilder`, `QueryExplanation`, the relation reads' `RelationRow`, `RelationMatch` and `RelationStats`, `RESERVED_ATTRIBUTES`, and `defineEars`, which `#generated/ears` binds to the app's engine |
+| `@apackdev/ears` | The engine itself, which the SDK brings: `createEarsEngine` and `EarsError`, for tests and tooling that hold an engine of their own. A pack's own code needs none of it |
 | `@apackdev/sdk/repositories` | The SDK entities' repositories, and `RepositoryError` (`NOT_FOUND`, `VALIDATION_ERROR`, `OPERATION_FAILED`), which a repository throws to refuse |
 | `@apackdev/sdk/types` | What the SDK adds to the engine's types: its `EARS` (with the SDK's entities and relation kinds) and the SDK entity shapes |
 | `@apackdev/sdk/repositories` | The SDK entities' repositories |
