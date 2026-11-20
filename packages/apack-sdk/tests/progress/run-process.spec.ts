@@ -99,7 +99,10 @@ describe('a process stopped by its caller', () => {
   it('is gone by the time its outcome is reported, with what it wrote and the reason it was stopped', async () => {
     const marker = path.join(dir, 'pid');
     const stopping = new AbortController();
-    const run = node(announcing(marker, `process.stdout.write('started'); setTimeout(() => {}, ${SELF_EXIT_MS});`), { signal: stopping.signal });
+    // Written, synchronously, before the child says it is running, so it has written when it is stopped: a pipe write
+    // that is queued dies with the process, and the case is about what reached the pipe
+    const run = node(`require('node:fs').writeSync(1, 'started'); ${announcing(marker, `setTimeout(() => {}, ${SELF_EXIT_MS});`)}`,
+      { signal: stopping.signal });
     const pid = await announced(marker);
     stopping.abort(new Error('changed my mind'));
     const failure = failureOf(await run, 'aborted');
