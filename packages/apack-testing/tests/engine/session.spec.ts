@@ -441,7 +441,7 @@ describe('settings', () => {
     await settle();
     expect(lastSend(send)).toMatchObject({ to: 'host/settings', event: { type: 'GET_SETTINGS' } });
     const snapshot = { runId: 'run', revision: 1, values: { app: { personal: { name: 'Ada' } } }, catalog: { revision: 2 } };
-    answer({ type: 'SETTINGS_LOADED', snapshot }, { answering: sentCall(send) });
+    answer({ type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot } }, { answering: sentCall(send) });
 
     await expect(reading).resolves.toEqual({ ok: true, value: snapshot });
   });
@@ -465,7 +465,7 @@ describe('settings', () => {
     const { session, send, answer, api } = sessionWith();
     await session.ready();
 
-    const { sent, result } = await write(session, send, answer, { kind: 'feature', featureRef: 'default-setup/code' }, { type: 'SETTINGS_SAVED' });
+    const { sent, result } = await write(session, send, answer, { kind: 'feature', featureRef: 'default-setup/code' }, { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: {} } });
 
     expect(sent).toMatchObject({
       to: 'host/settings',
@@ -481,7 +481,7 @@ describe('settings', () => {
   ] as const)('writes settings relative to $kind ownership', async (target) => {
     const { session, send, answer } = sessionWith();
     await session.ready();
-    const { sent } = await write(session, send, answer, target, { type: 'SETTINGS_SAVED' });
+    const { sent } = await write(session, send, answer, target, { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: {} } });
     expect(sent).toMatchObject({
       to: 'host/settings',
       event: { type: 'UPDATE_SETTINGS', target, path: ['personal', 'name'], value: 'Ada' },
@@ -499,8 +499,9 @@ describe('settings', () => {
     await session.ready();
 
     const { result } = await write(session, send, answer, { kind: 'pack', packId: 'default-setup', groupId: 'missing' }, {
-      type: 'SETTINGS_REFUSED',
-      problems: ['This settings definition is unavailable'],
+      type: 'ASK_FAILED',
+      asked: 'UPDATE_SETTINGS',
+      failure: { kind: 'refused', message: 'This settings definition is unavailable', problems: ['This settings definition is unavailable'] },
     });
 
     expect(result).toEqual({
@@ -514,8 +515,9 @@ describe('settings', () => {
     await session.ready();
 
     const { result } = await write(session, send, answer, { kind: 'app' }, {
-      type: 'SETTINGS_REFUSED',
-      problems: ['first reason', 'second reason'],
+      type: 'ASK_FAILED',
+      asked: 'UPDATE_SETTINGS',
+      failure: { kind: 'refused', message: 'first reason; second reason', problems: ['first reason', 'second reason'] },
     });
 
     expect(result).toEqual({ ok: false, error: 'setSetting: first reason; second reason' });

@@ -83,7 +83,7 @@ type UIEvent =
   | { type: 'PACK_CONTENT.RESET_STATUS' }
   | { type: 'APP.RESET' }
 
-export type SettingsEvents = UIEvent | Exclude<OutgoingSettingsEvents, { type: 'SETTINGS_LOADED' | 'SETTINGS_UPDATED' | 'SETTINGS_RESET' | 'SETTINGS_SAVED' | 'SETTINGS_REFUSED' }> | TrailClickEvent | HelpEvent
+export type SettingsEvents = UIEvent | Exclude<OutgoingSettingsEvents, { type: 'SETTINGS_LOADED' | 'SETTINGS_UPDATED' | 'SETTINGS_RESET' }> | TrailClickEvent | HelpEvent
   | { type: 'PACK_CONTENT_IMPORTED'; result: Record<string, { created: number; updated: number; skipped: number }>; errors: string[] }
   | { type: 'PACK_CONTENT_IMPORT_FAILED'; error: string }
   | { type: 'PACK_CONTENT_PREVIEW'; preview: PackContentPreview }

@@ -49,11 +49,11 @@ export interface AppDriver {
    */
   send: (system: string, event: SystemEvent) => Promise<void>;
   /**
-   * Sends as `send` does, and resolves with the event the system's `reply` answers it with, matched by the call
-   * the ask was sent under: another ask in flight, or a broadcast of the same type, is never taken for it.
+   * Sends as `send` does, and resolves with the system's answer to it, matched by the call the ask was sent under:
+   * another ask in flight, or a broadcast of the same type, is never taken for it.
    *
-   * A refusal the system *answers* with (an `…_ERROR` event) is an answer, resolved like any other; the spec
-   * asserts on its type. The wait lasts as long as the app is working, not for a fixed time, so a loaded machine
+   * A refusal is an answer, resolved like any other: `ASK_FAILED` with its failure, beside `ASK_ANSWERED` with the
+   * answer, and the spec asserts on which. The wait lasts as long as the app is working, not for a fixed time, so a loaded machine
    * makes an answer late and never fails it; an app that has stopped working without answering fails it, saying so.
    */
   ask: (system: string, event: SystemEvent) => Promise<SystemEvent>;

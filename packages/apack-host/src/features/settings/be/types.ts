@@ -5,19 +5,32 @@ import type { SecretMetadata, SecretsStatus } from '@apackdev/sdk/services';
 // The settings feature's contract: what its system receives, what it sends its surface, and its context.
 // A leaf the system module doesn't import back, so codegen reads it without resolving the machine.
 
-export type IncomingSettingsEvents =
-  | { type: 'GET_SETTINGS' }
-  | { type: 'RECOVER_SETTINGS'; request: SettingsRecoveryRequest }
-  // No correlation field on any of the three writes: addressing says which connection an answer came back on,
-  // and the envelope's `call` says which request it answers — `reply` stamps it, so a sender with several
-  // writes in flight (a drive session) tells its own answer from another's without either side declaring a
-  // field. A field declared here would need a producer in every sender, which is the part a per-event
-  // correlation gets wrong: declaring it is cheap and minting it everywhere is not.
-  | { type: 'UPDATE_SETTINGS'; target: SettingsTarget; path: string[]; value: unknown; condition?: SettingsWriteCondition }
-  | { type: 'RESET_SETTINGS'; target: SettingsTarget }
-  | { type: 'RESET_ALL_SETTINGS' }
-  | { type: 'REPLACE_SETTINGS'; data: unknown; condition?: SettingsWriteCondition }
-  | { type: 'RESET_APP' }
+export type IncomingSettingsEvents = { type: 'RESET_APP' };
+
+/** What a read of the settings answers with: the snapshot, or, while they need repair, what is wrong with them */
+export type SettingsRead = { snapshot: SettingsSnapshot } | { recovery: SettingsRecovery };
+
+/** A change refused, and why: the store's reasons, each the user's to fix, and nothing was stored */
+type Refusable = { fails: { refused: { problems: string[] } } };
+
+/** A change that was stored answers with the settings as they now are */
+type Stored = { answer: { snapshot: SettingsSnapshot } } & Refusable;
+
+/**
+ * What the settings system answers: a read, and each change, which whoever asked hears was stored or refused. A
+ * settings form says "Saved" only then, and a drive session's `/set-setting` answers `ok: false` only then.
+ */
+export type SettingsAsks = {
+  GET_SETTINGS: { answer: SettingsRead };
+  RECOVER_SETTINGS: { ask: { request: SettingsRecoveryRequest }; answer: { recovery: SettingsRecovery } } & Refusable;
+  UPDATE_SETTINGS: { ask: { target: SettingsTarget; path: string[]; value: unknown; condition?: SettingsWriteCondition } } & Stored;
+  RESET_SETTINGS: { ask: { target: SettingsTarget } } & Stored;
+  RESET_ALL_SETTINGS: Stored;
+  REPLACE_SETTINGS: { ask: { data: unknown; condition?: SettingsWriteCondition } } & Stored;
+};
+
+/** A change to the settings, as a window asks for one */
+export type SettingsChange = import('@apackdev/sdk/events').AskEventsOf<{ asks: Omit<SettingsAsks, 'GET_SETTINGS'> }>;
 
 // The host's secrets store sends this over the bus (`secrets/index.ts`, `forwardSecretsChanges`), so it arrives
 // from outside the feature like any other incoming event, not from a child of this system
@@ -37,10 +50,6 @@ export type OutgoingSettingsEvents =
   | { type: 'SETTINGS_LOADED'; snapshot: SettingsSnapshot }
   /** The installed packs changed, so what they answer with in Help has too */
   | { type: 'SETTINGS_UPDATED'; snapshot: SettingsSnapshot }
-  /** A change (`UPDATE_SETTINGS`, `REPLACE_SETTINGS`, `RESET_SETTINGS`) was stored */
-  | { type: 'SETTINGS_SAVED'; snapshot: SettingsSnapshot }
-  /** A change was refused, and stored nothing */
-  | { type: 'SETTINGS_REFUSED'; problems: string[] }
   | { type: 'SETTINGS_RESET'; snapshot: SettingsSnapshot }
   | { type: 'APPLICATION_HOTKEYS'; hotkeys: ApplicationHotkeys }
   // The four content events are sent by the `packs` system, not this one: the work is pack-level and lives
@@ -55,4 +64,8 @@ export type OutgoingSettingsEvents =
   /** The stored API keys, without values, and how they're protected */
   | { type: 'SECRETS_UPDATED'; secrets: SecretMetadata[]; status: SecretsStatus }
 
-export type SettingsContext = { applied: Record<string, unknown> };
+export type SettingsContext = {
+  applied: Record<string, unknown>;
+  /** Why a change is refused now, while the stored data is being replaced or reset: storing it would be lost with the data */
+  busy?: string;
+};

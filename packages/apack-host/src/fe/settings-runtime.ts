@@ -2,7 +2,7 @@ import { newCall, type Message } from '@apackdev/sdk/events';
 import { _settingsJsonProblems } from '@apackdev/sdk/framework';
 import type { SettingsPort } from '@apackdev/sdk/fe';
 import { settingsTargetPath, type SettingsSnapshot, type SettingsRecovery, type SettingsRecoveryRequest, type SettingsWriteCondition, type SettingsWriteResult } from '@apackdev/sdk/types';
-import type { IncomingSettingsEvents } from '../features/settings/be/types.ts';
+import type { SettingsChange } from '../features/settings/be/types.ts';
 import { getIn } from '../features/settings/document.ts';
 import { authorizeSettings } from '../features/settings/authorization.ts';
 import { HOST } from '../refs.ts';
@@ -16,6 +16,9 @@ export interface WindowSettingsIO {
 }
 
 const refused = (message: string): SettingsWriteResult => ({ status: 'refused', problems: [message] });
+
+/** The settings system's asks, whose answers this runtime takes */
+const SETTINGS_ASKS: ReadonlySet<string> = new Set(['GET_SETTINGS', 'RECOVER_SETTINGS', 'UPDATE_SETTINGS', 'RESET_SETTINGS', 'RESET_ALL_SETTINGS', 'REPLACE_SETTINGS']);
 
 /** One window owns this resource; the Settings view is an ordinary subscriber. */
 export function createWindowSettingsRuntime(io: WindowSettingsIO) {
@@ -59,14 +62,14 @@ export function createWindowSettingsRuntime(io: WindowSettingsIO) {
     tell();
   }
 
-  function send(event: IncomingSettingsEvents, call: string, transport = io.send): Promise<void> {
+  function send(event: SettingsChange | { type: 'GET_SETTINGS' }, call: string, transport = io.send): Promise<void> {
     // Routing labels are shared; the injected transport supplies the caller's authority separately.
     return transport({ to: HOST.settings, sender: HOST.settings, from: 'host', event, call });
   }
 
-  function change(event: IncomingSettingsEvents, transport = io.send, owner?: object): Promise<SettingsWriteResult> {
+  function change(event: SettingsChange, transport = io.send, owner?: object): Promise<SettingsWriteResult> {
     if (status !== 'ready' && !(status === 'recovery' && event.type === 'RECOVER_SETTINGS' && !owner)) return Promise.resolve(refused('Settings are not ready. Wait for the backend to reconnect.'));
-    let request: IncomingSettingsEvents;
+    let request: SettingsChange;
     try {
       if (_settingsJsonProblems(event).length) return Promise.resolve(refused('Settings changes must contain ordinary JSON data.'));
       request = structuredClone(event);
@@ -105,7 +108,38 @@ export function createWindowSettingsRuntime(io: WindowSettingsIO) {
     return true;
   }
 
-  function createPort(write: (event: IncomingSettingsEvents) => Promise<SettingsWriteResult>, caller?: string): SettingsPort {
+  /**
+   * Takes the settings' recovery: news that they need repair or were repaired, or the answer to a read or a repair.
+   * Recovery lasts until relaunch, so an older revision is stale and cannot undo a repair.
+   */
+  function takeRecovery(value: unknown, answering: string | undefined): boolean {
+    if (status === 'disposed' || status === 'disconnected') return true;
+    if (!snapshot && !recovery && (!readCall || answering !== readCall)) return true;
+    let next: SettingsRecovery;
+    try { next = readSettingsRecovery(value); }
+    catch (error) {
+      report(error);
+      if (!snapshot && !recovery) end('disconnected', 'The backend returned invalid settings recovery data.');
+      return true;
+    }
+    // Recovery lasts until relaunch, so an older revision is stale and cannot undo a repair.
+    if (!recovery || (next.version.runId === recovery.version.runId && next.version.revision >= recovery.version.revision)) {
+      clearTimeout(readTimer);
+      readCall = undefined;
+      snapshot = undefined;
+      recovery = next;
+      status = 'recovery';
+      for (const dispose of bindings) dispose();
+    }
+    for (const [call, request] of pending) {
+      if (!request.repair) settle(call, refused('Settings require recovery.'));
+      else if (call === answering) settle(call, next.problems.length ? refused('Some settings are still invalid.') : { status: 'saved' });
+    }
+    tell();
+    return true;
+  }
+
+  function createPort(write: (event: SettingsChange) => Promise<SettingsWriteResult>, caller?: string): SettingsPort {
     return {
       get: <T,>(target: import('@apackdev/sdk/types').SettingsTarget) => {
         if (snapshot && caller !== undefined) authorizeSettings(snapshot.catalog, target, caller);
@@ -194,41 +228,31 @@ export function createWindowSettingsRuntime(io: WindowSettingsIO) {
     receive(message: Message): boolean {
       if (message.to !== HOST.settings) return false;
       const event = message.event;
-      if (event.type === 'SETTINGS_RECOVERY') {
-        if (status === 'disposed' || status === 'disconnected') return true;
-        if (!snapshot && !recovery && (!readCall || message.answering !== readCall)) return true;
-        let next: SettingsRecovery;
-        try { next = readSettingsRecovery(event.recovery); }
-        catch (error) {
-          report(error);
-          if (!snapshot && !recovery) end('disconnected', 'The backend returned invalid settings recovery data.');
+      if (event.type === 'SETTINGS_RECOVERY') return takeRecovery((event as { recovery?: unknown }).recovery, message.answering);
+      if (event.type === 'ASK_ANSWERED' || event.type === 'ASK_FAILED') {
+        const { asked } = event as { asked?: unknown };
+        if (typeof asked !== 'string' || !SETTINGS_ASKS.has(asked)) return false;
+        if (event.type === 'ASK_ANSWERED') {
+          const answer = (event as { answer?: { snapshot?: unknown; recovery?: unknown } }).answer ?? {};
+          if (asked === 'RECOVER_SETTINGS' || (asked === 'GET_SETTINGS' && 'recovery' in answer)) return takeRecovery(answer.recovery, message.answering);
+          if (asked === 'GET_SETTINGS') {
+            if (status === 'disposed' || status === 'disconnected') return true;
+            if (!snapshot && !recovery && (!readCall || message.answering !== readCall)) return true;
+            acceptSnapshot(answer.snapshot);
+            return true;
+          }
+          if (message.answering && pending.has(message.answering)) {
+            settle(message.answering, acceptSnapshot(answer.snapshot) ? { status: 'saved' } : refused('The backend returned an invalid settings save snapshot.'));
+          }
           return true;
         }
-        // Recovery lasts until relaunch, so an older revision is stale and cannot undo a repair.
-        if (!recovery || (next.version.runId === recovery.version.runId && next.version.revision >= recovery.version.revision)) {
-          clearTimeout(readTimer);
-          readCall = undefined;
-          snapshot = undefined;
-          recovery = next;
-          status = 'recovery';
-          for (const dispose of bindings) dispose();
-        }
-        for (const [call, request] of pending) {
-          if (!request.repair) settle(call, refused('Settings require recovery.'));
-          else if (call === message.answering) settle(call, next.problems.length ? refused('Some settings are still invalid.') : { status: 'saved' });
-        }
-        tell();
-        return true;
-      }
-      if (event.type === 'SETTINGS_SAVED' || event.type === 'SETTINGS_REFUSED') {
-        const result: SettingsWriteResult = event.type === 'SETTINGS_SAVED' ? { status: 'saved' }
-          : Array.isArray(event.problems) && event.problems.length > 0 && event.problems.every(problem => typeof problem === 'string')
-            ? { status: 'refused', problems: [...event.problems] } : refused('The backend returned an invalid settings refusal.');
+        const failure = (event as { failure?: { message?: unknown; problems?: unknown } }).failure ?? {};
+        const problems = failure.problems;
+        const result: SettingsWriteResult = Array.isArray(problems) && problems.length > 0 && problems.every(problem => typeof problem === 'string')
+          ? { status: 'refused', problems: [...problems] }
+          : typeof failure.message === 'string' ? refused(failure.message) : refused('The backend returned an invalid settings refusal.');
         if (message.answering === readCall && readCall !== undefined) end('disconnected', 'The backend refused the settings read.');
-        else if (message.answering && pending.has(message.answering)) {
-          settle(message.answering, event.type === 'SETTINGS_SAVED' && !acceptSnapshot(event.snapshot)
-            ? refused('The backend returned an invalid settings save snapshot.') : result);
-        }
+        else if (message.answering && pending.has(message.answering)) settle(message.answering, result);
         return true;
       }
       if (!['SETTINGS_LOADED', 'SETTINGS_UPDATED', 'SETTINGS_RESET'].includes(event.type)) return false;

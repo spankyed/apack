@@ -1,9 +1,9 @@
 // Static host endpoint contracts; importing these constructs no systems or services.
-import { eventTypes, HOST_SURFACE_EVENT_TYPES } from '@apackdev/sdk/events';
+import { eventTypes, HOST_SURFACE_EVENT_TYPES, type DeclaredFailureKind } from '@apackdev/sdk/events';
 import type { PackEventContracts, HelpCatalog } from '@apackdev/sdk/framework';
 import type { AppPackSourceSummary, InstalledPackSummary } from '../packs/registry.ts';
 import type { IncomingPacksEvents } from './packs/be/types.ts';
-import type { IncomingSettingsEvents, IncomingSecretsEvents, OutgoingSettingsEvents } from './settings/be/types.ts';
+import type { IncomingSettingsEvents, IncomingSecretsEvents, OutgoingSettingsEvents, SettingsAsks } from './settings/be/types.ts';
 import { APPLICATION_SURFACE_EVENT_TYPES } from './application/events.ts';
 
 export type ApplicationClientEvent =
@@ -65,9 +65,22 @@ export const packsEvents = eventTypes<IncomingPacksEvents>()(
   'DELETE_CONTENT_ITEM',
 );
 
-export const settingsEvents = eventTypes<IncomingSettingsEvents | IncomingSecretsEvents>()(
-  'GET_SETTINGS', 'RECOVER_SETTINGS', 'UPDATE_SETTINGS', 'RESET_SETTINGS', 'RESET_ALL_SETTINGS', 'REPLACE_SETTINGS', 'RESET_APP', 'SECRETS_CHANGED',
-);
+
+/** The settings system's asks, each with the kinds it declares it may fail as */
+export const settingsAsks = {
+  GET_SETTINGS: [],
+  RECOVER_SETTINGS: ['refused'],
+  UPDATE_SETTINGS: ['refused'],
+  RESET_SETTINGS: ['refused'],
+  RESET_ALL_SETTINGS: ['refused'],
+  REPLACE_SETTINGS: ['refused'],
+} as const satisfies { readonly [K in keyof SettingsAsks]: readonly DeclaredFailureKind<SettingsAsks[K]>[] };
+
+/** Everything the settings system receives: its events, and its asks */
+export const settingsEvents = [
+  ...eventTypes<IncomingSettingsEvents | IncomingSecretsEvents>()('RESET_APP', 'SECRETS_CHANGED'),
+  ...Object.keys(settingsAsks) as (keyof typeof settingsAsks)[],
+];
 
 /** What the settings system sends its own surface: everything outgoing but the shell's hotkeys */
 export type SettingsSurfaceEvents = Exclude<OutgoingSettingsEvents, { type: 'APPLICATION_HOTKEYS' }>;
@@ -77,8 +90,6 @@ export const SETTINGS_SURFACE_EVENT_TYPES = eventTypes<SettingsSurfaceEvents>()(
   'SETTINGS_RECOVERY',
   'SETTINGS_LOADED',
   'SETTINGS_UPDATED',
-  'SETTINGS_SAVED',
-  'SETTINGS_REFUSED',
   'SETTINGS_RESET',
   'PACK_CONTENT_IMPORTED',
   'PACK_CONTENT_IMPORT_FAILED',
@@ -98,7 +109,11 @@ export const hostEventContracts = {
   help: { system: { incoming: helpEvents, outgoing: ['HELP_CATALOG'] } },
   packs: { system: { incoming: packsEvents, outgoing: PACKS_SURFACE_EVENT_TYPES }, surface: { receives: PACKS_SURFACE_EVENT_TYPES } },
   settings: {
-    system: { incoming: settingsEvents, outgoing: [...SETTINGS_SURFACE_EVENT_TYPES, 'APPLICATION_HOTKEYS'] },
+    system: {
+      incoming: settingsEvents,
+      outgoing: [...SETTINGS_SURFACE_EVENT_TYPES, 'APPLICATION_HOTKEYS'],
+      asks: settingsAsks,
+    },
     surface: { receives: ['HELP_CATALOG', ...SETTINGS_SURFACE_EVENT_TYPES, ...HOST_SURFACE_EVENT_TYPES['host/settings']] },
   },
 } satisfies PackEventContracts;
