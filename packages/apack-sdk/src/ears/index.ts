@@ -39,10 +39,8 @@ export function _bindEars(engine: Ears | undefined): Ears | undefined {
 }
 
 /**
- * How apack's engines name the code that made a counted call, or a watch given no label (`createEarsEngine`'s
- * `callSites`): EARS' frames by the path of its package's source or build, since the development app's API bundles it
- * and names its modules only through source maps, and a path cut at its last `packages/`, `node_modules/` or `packs/`
- * directory, where two checkouts' paths, or two data directories' installed packs, stop differing.
+ * How apack's engines name a call's site (`createEarsEngine`'s `callSites`): EARS' frames by its package's paths, since
+ * the development app's API bundles it, and a path cut where two checkouts' or two data directories' paths stop differing.
  *
  * @internal
  */

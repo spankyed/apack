@@ -406,21 +406,16 @@ describe('a spec is collected by some config', () => {
     return found;
   };
 
-  /**
-   * The sibling config a config builds on, imported by a relative path (`import … from './vitest.….config.ts'`), whose
-   * globs are the config's: `@apackdev/ears`' config is its own (`vitest.ears.config.ts`) with apack's bounds added
-   */
+  /** A sibling config a config builds on (`@apackdev/ears`' own, `vitest.ears.config.ts`), whose globs are its too */
   const SIBLING_CONFIG = /from '\.\/(vitest\.[\w-]+\.config\.ts)'/;
 
   const rootsOf = (file: string, key: 'include' | 'exclude'): string[] => {
     const own = fs.readFileSync(path.join(REPO_ROOT, file), 'utf-8');
-    const delegate = Object.entries(DELEGATES).find(([name]) => own.includes(name));
+    const delegate = Object.entries(DELEGATES).find(([name]) => own.includes(name))?.[1];
     const sibling = SIBLING_CONFIG.exec(own)?.[1];
-    const text = [
-      own,
-      ...(delegate === undefined ? [] : [fs.readFileSync(path.join(REPO_ROOT, delegate[1]), 'utf-8')]),
-      ...(sibling === undefined ? [] : [fs.readFileSync(path.join(REPO_ROOT, path.dirname(file), sibling), 'utf-8')]),
-    ].join('\n');
+    const text = [own, ...[delegate, sibling && path.join(path.dirname(file), sibling)]
+      .filter((other) => other !== undefined)
+      .map((other) => fs.readFileSync(path.join(REPO_ROOT, other), 'utf-8'))].join('\n');
     const found: string[] = [];
     for (const match of text.matchAll(new RegExp(`\\b${key}:\\s*\\[`, 'g'))) {
       for (const glob of globsFrom(text, match.index)) {
