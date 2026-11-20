@@ -12,7 +12,7 @@ import { _currentDelivery, type _Delivery } from './delivery.ts';
 import type { ContractIncoming, ContractOutgoing, SystemEvents } from '../framework/define-system.ts';
 
 export { eventTypes, type TypeOfEvent } from './event-types.ts';
-export { answerWith, type AnswerWithOptions } from './answer.ts';
+export { answerWith, askFailureOf, AskError, type AnswerWithOptions, type AskFailedEvent, type AskFailure } from './answer.ts';
 export { _currentDelivery, _runDelivery, type _Delivery, type _Asker } from './delivery.ts';
 
 /**

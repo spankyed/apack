@@ -1,7 +1,8 @@
 import { _withPerformanceEvent } from '../runtime/performance.ts';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
-import { _clientOf, _currentDelivery, _replyTo, type Reply } from '../events/index.ts';
+import { _clientOf, _currentDelivery, _replyTo, answerWith, askFailureOf, AskError, type AskFailedEvent, type Reply } from '../events/index.ts';
+import { reportError } from '../logger/report-error.ts';
 import type { ArrayChanges } from '../utils/change-detection.ts';
 import { eventTypes } from '../events/event-types.ts';
 
@@ -212,6 +213,36 @@ export function defineHandlers<
   };
 }
 
+/** The reasons a contract says its asks can fail as: the kinds of the `AskFailedEvent` among what it sends */
+export type ContractFailureKind<C> = Extract<ContractOutgoing<C>, { type: 'ASK_FAILED' }> extends { failure: { kind: infer Kind } }
+  ? Exclude<Kind, 'failed'> & string : never;
+
+/** What a handler under `answers` may answer with: anything the system sends but the refusal, which is thrown */
+type AnswerOf<C> = Exclude<Extract<ContractOutgoing<C>, { type: string }>, { type: 'ASK_FAILED' }>;
+
+/** What a handler under `answers` is handed: the event it answers, narrowed, and the connection that asked */
+type AnswerArgs<C extends SystemContract, TAsked extends string> =
+  Omit<SystemArgs<C>, 'event'> & { event: Extract<ContractIncoming<C>, { type: TAsked }>; client?: string };
+
+/** How a system's `answers` answer where a handler does not say */
+export interface AnswersOptions<C extends SystemContract> {
+  /** The answer to an ask whose handler returns nothing: a write that landed and has nothing to hand back */
+  readonly landed: AnswerOf<C>;
+  /** What names this system where a failure nobody asked about is reported: the string its logger is named */
+  readonly source: string;
+  /**
+   * Which of the contract's kinds an error is, for the errors a handler does not throw itself: a file that is
+   * gone, a typed error of a service it calls. Nothing for one it cannot place, which is answered as `'failed'`.
+   */
+  readonly kindOf?: (error: unknown) => ContractFailureKind<C> | undefined;
+}
+
+/** What `answers` makes: the actions to give `setup`, and the transitions that run each on the event it answers */
+export interface Answers<C extends SystemContract, TAsked extends string> {
+  readonly actions: { [T in TAsked]: (args: SystemArgs<C>, params: undefined) => void };
+  readonly on: { readonly [T in TAsked]: { readonly actions: T } };
+}
+
 /** The definition object returned by `defineSystem()`. */
 export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>, Extract<ContractOutgoing<C>, { type: string }>> {
   types: { context: ContractContext<C>; events: MachineEvents<C> };
@@ -240,6 +271,39 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
    * this work and what makes the answer it hands on bound rather than ambient.
    */
   input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & { reply?: Reply<Extract<ContractOutgoing<C>, { type: string }>>; client?: string }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
+  /**
+   * The system's answers, keyed by the event each answers: **a handler returns its answer, and is not handed
+   * the means to give it.**
+   *
+   * ```ts
+   * const answers = notesSpec.answers({
+   *   GET_NOTE: async ({ event }) => ({ type: 'NOTE_LOADED', note: await read(event.id) }),
+   *   DELETE_NOTE: ({ event }) => { remove(event.id) },
+   * }, { landed: { type: 'NOTE_WRITTEN' }, source: 'notes' });
+   *
+   * setup({ types: notesSpec.types, actions: { ...answers.actions } })
+   *   .createMachine({ on: { ...answers.on } });
+   * ```
+   *
+   * Whoever asked is answered whichever way the handler ends, which is the point: a window that asked shows
+   * nothing until it is answered, and an answer a handler has to remember on its failure path is one a new
+   * handler forgets. What it returns is the answer; returning nothing answers `landed`; and anything it throws,
+   * or a promise it returns rejects with, answers `ASK_FAILED` — with the kind of an `AskError` (`failure`),
+   * else the kind `kindOf` reads off the error, else `'failed'`. The work runs whether or not anybody asked, and
+   * a failure nobody asked about is reported, since no window shows it.
+   *
+   * A contract whose asks are answered this way declares `AskFailedEvent` among what it sends. One that does
+   * not has no kinds to refuse with, and the surface is sent an event it never declared.
+   *
+   * For an ask and its one answer. A handler that answers more than once (progress, then a result), or tells
+   * every window when nobody asked, is an action and is handed `reply`.
+   */
+  answers<TAsked extends Extract<ContractIncoming<C>, { type: string }>['type']>(
+    defs: { [T in TAsked]: (args: AnswerArgs<C, T>) => AnswerOf<C> | void | PromiseLike<AnswerOf<C> | void> },
+    options: AnswersOptions<C>,
+  ): Answers<C, TAsked>;
+  /** A refusal for a handler under `answers` to throw: one of the contract's kinds, and what to tell the asker */
+  failure(kind: ContractFailureKind<C>, message: string): AskError<ContractFailureKind<C>>;
 }
 
 /**
@@ -264,8 +328,30 @@ export function defineSystem<C extends SystemContract>(): SystemSpec<C> {
     },
     typeOf: safeEvents<MachineEvents<C>>(),
     ...defineHandlers<ContractContext<C>, MachineEvents<C>>(),
+    answers: (defs, options) => {
+      type Out = Extract<ContractOutgoing<C>, { type: string }>;
+      type Handler = (args: object) => Out | void | PromiseLike<Out | void>;
+      const asks = Object.keys(defs);
+      const landed = (made: Out | void): Out => made ?? options.landed as Out;
+      return {
+        actions: Object.fromEntries(asks.map((asked) => [asked, handing(({ reply, ...args }: { reply?: Reply<Out> }) => {
+          void answerWith<Out>(reply, () => {
+            const made = (defs as Record<string, Handler>)[asked]!(args);
+            return isThenable(made) ? Promise.resolve(made).then(landed) : landed(made);
+          }, {
+            failed: (error) => ({ type: 'ASK_FAILED', asked, failure: askFailureOf(error, options.kindOf) } satisfies AskFailedEvent as unknown as Out),
+            unasked: (error) => reportError({ error, title: `${asked} failed`, source: options.source }),
+          });
+        })])),
+        on: Object.fromEntries(asks.map((asked) => [asked, { actions: asked }])),
+      } as never;
+    },
+    failure: (kind, message) => new AskError(kind, message),
   };
 }
+
+const isThenable = <T>(value: T | PromiseLike<T>): value is PromiseLike<T> =>
+  typeof (value as { then?: unknown } | null)?.then === 'function';
 
 /**
  * Whether a system entry's machine was built from the contract given: `true`, or a sentence saying how they differ.

@@ -341,6 +341,12 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
     }): {
         [K in keyof P]: (args: SystemArgs<C>, params: P[K]) => void;
     };
+    answers<TAsked extends Extract<ContractIncoming<C>, {
+        type: string;
+    }>['type']>(defs: {
+        [T in TAsked]: (args: AnswerArgs<C, T>) => AnswerOf<C> | void | PromiseLike<AnswerOf<C> | void>;
+    }, options: AnswersOptions<C>): Answers<C, TAsked>;
+    failure(kind: ContractFailureKind<C>, message: string): AskError<ContractFailureKind<C>>;
     input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & {
         reply?: Reply<Extract<ContractOutgoing<C>, {
             type: string;

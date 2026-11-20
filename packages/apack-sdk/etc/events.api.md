@@ -43,6 +43,29 @@ export type _Asker =
     ref: string;
 };
 
+// @public
+export class AskError<TKind extends string = string> extends Error {
+    constructor(kind: TKind, message: string);
+    // (undocumented)
+    readonly kind: TKind;
+}
+
+// @public
+export type AskFailedEvent<TKind extends string = string, TAsked extends string = string> = {
+    type: 'ASK_FAILED';
+    asked: TAsked;
+    failure: AskFailure<TKind>;
+};
+
+// @public
+export type AskFailure<TKind extends string = string> = {
+    readonly kind: TKind | 'failed';
+    readonly message: string;
+};
+
+// @public
+export function askFailureOf<TKind extends string>(error: unknown, kindOf?: (error: unknown) => TKind | undefined): AskFailure<TKind>;
+
 // @internal
 export const _CALL_KEY = "_call";
 
