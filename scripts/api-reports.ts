@@ -138,13 +138,10 @@ const compilerState = prepared.length === 0 ? undefined : CompilerState.create(p
 });
 
 /**
- * The directory of elmdb's generated protocol, as the program names its files, when the package resolves `elmdb`.
- *
- * The binding ships its protocol as `.ts` files holding types alone, which its own `index.d.ts` imports and so does
- * `@apackdev/ears`, whose declarations import types from `elmdb/protocol/…`. API Extractor analyzes declarations alone
- * and refuses a program holding any other file (`ae-wrong-input-file-type`), naming only the first it finds; a
- * program whose every other file is the protocol's has its refusal dropped below, and any other is refused as before.
- * Resolved from `node_modules`, the protocol is external to the package, so a report names its types as imports.
+ * elmdb's generated protocol directory, when the package resolves `elmdb`. The binding ships the protocol as `.ts`
+ * files of types alone, which `@apackdev/ears`' declarations import. API Extractor refuses a program holding any file
+ * but declarations (`ae-wrong-input-file-type`), so that refusal is dropped for a program whose only other files are
+ * the protocol's. Resolved from `node_modules`, the protocol is external, and a report names its types as imports.
  */
 const elmdbProtocol = (() => {
   try {
