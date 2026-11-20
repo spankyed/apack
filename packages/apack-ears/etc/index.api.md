@@ -69,6 +69,12 @@ export interface CallSite {
 }
 
 // @public
+export interface CallSiteNaming {
+    engineFrames?: RegExp;
+    roots?: readonly string[];
+}
+
+// @public
 export interface ChangedEntities {
     complete: boolean;
     destroyed: string[];
@@ -360,7 +366,7 @@ export type EarsErrorCode =
 /** A write's value is one the database doesn't store: a function, a symbol, `undefined` in a list, or a number that isn't finite */
 | 'VALUE_INVALID'
 /**
-* `search` was on a type with no text index (no `search` in its manifest entry), `near`, `like`, `hybrid` or
+* `search` was on a type with no text index (no `search` in its row rules), `near`, `like`, `hybrid` or
 * `pendingEmbeddings` on one with no vector index (no `embed`), or `containing` or `matching` on one with no trigram
 * index (no `substrings`)
 */
@@ -408,9 +414,10 @@ export interface EarsOperationResult {
 
 // @public
 export interface EARSRuntimeDeps {
+    callSites?: CallSiteNaming;
     database: EarsDatabase;
     freeze?: boolean;
-    warn?: (message: string) => void;
+    warn?: (message: string, warning: EarsWarning) => void;
 }
 
 // @public
@@ -447,6 +454,27 @@ export interface EarsUnit {
     // (undocumented)
     write(batch: Uint8Array): Uint8Array;
 }
+
+// @public
+export type EarsWarning =
+/**
+* A `where` on `field`, straight after a start from `types`, filtered `visited` rows, since one of those types
+* declares no value index on the field (`RowRules.indexes`); `site` is the code that made the query
+*/
+    {
+    kind: 'unindexedWalk';
+    types: readonly string[];
+    field: string;
+    visited: number;
+    site: string;
+}
+/** The watch `label` cost `ms` a run, more than a flush's slice, `runs` runs in a row */
+| {
+    kind: 'slowWatch';
+    label: string;
+    ms: number;
+    runs: number;
+};
 
 // @public
 export type EdgeDirection = 'out' | 'in' | 'both';

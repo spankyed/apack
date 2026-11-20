@@ -1,4 +1,4 @@
-// What a stretch of the app's work costs in crossings to elmdb: every read, every write made outside a unit, and every
+// What a stretch of a program's work costs in crossings to elmdb: every read, every write made outside a unit, and every
 // unit with the writes it held, each counted with the time it took and the code that made it. The connection records
 // into it only while counting is started (`EarsAdmin.calls`), so an engine nobody is measuring pays one check per call.
 
@@ -69,12 +69,6 @@ export interface CallCounting {
 const SITE_FRAMES = 3;
 /** How deep a stack is read for them, past the engine's own frames */
 const STACK_DEPTH = 40;
-/**
- * The engine's frames, never a site: its package's own source or build, by path. A bundle that inlines the engine
- * (the development app's API) names those paths only through its source maps, which is why that bundle has them; the
- * directory this module loaded from isn't used, being the bundle's, which holds every host frame too
- */
-const ENGINE_FRAME = /\/(?:apack-ears|@apackdev\/ears)\/(?:src|dist)\//;
 
 function filePath(location: string): string {
   return location.startsWith('file://') ? decodeURIComponent(new URL(location).pathname) : location;
@@ -90,23 +84,38 @@ function framesOf(stack: string): string[] {
   return frames;
 }
 
-/**
- * A path from its last `packages/`, `node_modules/` or `packs/` directory on, which is where two checkouts' paths, or
- * two data directories' installed packs, stop differing
- */
-function shortened(frame: string): string {
-  const at = Math.max(...['/packages/', '/node_modules/', '/packs/'].map((dir) => frame.lastIndexOf(dir)));
-  return at === -1 ? frame : frame.slice(at + 1);
+/** How a counted call, or a watch given no label, names the code that made it (`EARSRuntimeDeps.callSites`) */
+export interface CallSiteNaming {
+  /**
+   * The paths of the engine's own frames, which are never a site. By default, those in the directory the engine's
+   * modules loaded from. A program that bundles the engine gives a pattern instead, since that directory is then the
+   * bundle's, holding the program's frames too
+   */
+  engineFrames?: RegExp;
+  /**
+   * Directories a site's path is named from, cut at the last of them it holds: where two machines' paths to one file
+   * stop differing. `['/node_modules/']` by default; a path holding none is named whole
+   */
+  roots?: readonly string[];
 }
 
-/** The code calling into the engine now, as `CallSite.site` names it */
-export function callSite(): string {
-  const limit = Error.stackTraceLimit;
-  Error.stackTraceLimit = STACK_DEPTH;
-  const stack = new Error().stack ?? '';
-  Error.stackTraceLimit = limit;
-  const outside = framesOf(stack).filter((frame) => !ENGINE_FRAME.test(frame) && !frame.startsWith('node:'));
-  return outside.length ? outside.slice(0, SITE_FRAMES).map(shortened).join(' < ') : 'unknown';
+/** What names the code calling into an engine now, as `CallSite.site` does */
+export function createCallSites({ engineFrames, roots = ['/node_modules/'] }: CallSiteNaming = {}): () => string {
+  // This module's own frame says which directory the engine loaded from: `import.meta` is empty in a CommonJS bundle
+  const own = framesOf(new Error().stack ?? '')[0] ?? '';
+  const engineDirectory = own.slice(0, Math.max(own.lastIndexOf('/'), own.lastIndexOf('\\')) + 1);
+  const isEngineFrame = engineFrames
+    ? (frame: string) => engineFrames.test(frame)
+    : (frame: string) => engineDirectory !== '' && frame.startsWith(engineDirectory);
+  const shortened = (frame: string) => frame.slice(Math.max(...roots.map((dir) => frame.lastIndexOf(dir))) + 1);
+  return () => {
+    const limit = Error.stackTraceLimit;
+    Error.stackTraceLimit = STACK_DEPTH;
+    const stack = new Error().stack ?? '';
+    Error.stackTraceLimit = limit;
+    const outside = framesOf(stack).filter((frame) => !isEngineFrame(frame) && !frame.startsWith('node:'));
+    return outside.length ? outside.slice(0, SITE_FRAMES).map(shortened).join(' < ') : 'unknown';
+  };
 }
 
 /** One count's tallies, and a unit being counted until it commits or aborts */

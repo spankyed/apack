@@ -4,6 +4,7 @@
 
 ```ts
 
+import type { CallSiteNaming } from '@apackdev/ears';
 import type { Create } from '@apackdev/ears';
 import { DatabaseCatalog } from '@apackdev/ears';
 import { EARS } from '@apackdev/ears';
@@ -26,6 +27,9 @@ export function boundEars(): Ears;
 
 // @public (undocumented)
 export const catalog: () => DatabaseCatalog;
+
+// @internal
+export const _EARS_CALL_SITES: CallSiteNaming;
 
 // @public (undocumented)
 export const findRelations: (match?: RelationMatch) => RelationRow[];

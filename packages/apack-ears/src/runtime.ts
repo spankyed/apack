@@ -9,6 +9,7 @@
 import type { EARS, EntityNameArg, EntityShapes, ShapeOf } from './entities.ts';
 import type { RESERVED_ATTRIBUTES } from './errors.ts';
 import type { EarsDatabase } from './database.ts';
+import type { CallSiteNaming } from './calls.ts';
 
 /**
  * An id as `write` takes it: an entity's, plain or tagged with its type, and never a relation's (`EARS.RelationId`),
@@ -37,26 +38,40 @@ export interface EARSRuntimeDeps {
   database: EarsDatabase;
   /**
    * Freezes every value a read gives back, as a test runtime does: code that changes one, expecting the database to
-   * change, throws there rather than silently not persisting in the app. Off by default
+   * change, throws there rather than silently not persisting where reads aren't frozen. Off by default
    */
   freeze?: boolean;
   /**
-   * Told when a query does something its data will make slow — a `where` filtering thousands of a type's rows for
-   * want of an index — once per call site. Nothing by default; the app passes one in development
+   * Told when the engine does something its data will make slow — a `where` filtering thousands of a type's rows for
+   * want of an index, once per call site, or a watch that keeps costing more than a flush's slice, once per watch —
+   * with a message saying what and how to fix it, and the same as data (`EarsWarning`), for a creator that says where
+   * its own declarations make that fix. Nothing by default
    */
-  warn?: (message: string) => void;
+  warn?: (message: string, warning: EarsWarning) => void;
+  /** How a counted call (`admin.calls`), or a watch given no label, names the code that made it (`CallSiteNaming`) */
+  callSites?: CallSiteNaming;
 }
 
+/** What the engine warns its creator of (`EARSRuntimeDeps.warn`), as data */
+export type EarsWarning =
+  /**
+   * A `where` on `field`, straight after a start from `types`, filtered `visited` rows, since one of those types
+   * declares no value index on the field (`RowRules.indexes`); `site` is the code that made the query
+   */
+  | { kind: 'unindexedWalk'; types: readonly string[]; field: string; visited: number; site: string }
+  /** The watch `label` cost `ms` a run, more than a flush's slice, `runs` runs in a row */
+  | { kind: 'slowWatch'; label: string; ms: number; runs: number };
+
 /**
- * What a created row of an entity type is held to, which codegen (`apack pack generate-entries`) writes from the pack's
- * declarations: the required fields read off its shape, and the short code prefix its manifest declares
+ * What a created row of an entity type is held to, and what the database keeps for it: the required fields (its
+ * shape's, where a program declares one), its short code prefix and its indexes, as the program declares them
  */
 export interface RowRules {
   /** The fields its row must hold: the shape's required ones. `create` refuses a row without one, and `delete` one */
   required: readonly string[];
   /**
-   * The prefix `create` numbers the row's `shortCode` with, `<prefix>-<n>`: the one the manifest declares for the type
-   * (its entry's `shortCode`), from which a pack's generated shapes type the field (`ShortCode<prefix>`). A number is never handed out twice
+   * The prefix `create` numbers the row's `shortCode` with, `<prefix>-<n>`, which a typed shape types the field from
+   * (`ShortCode<prefix>`). A number is never handed out twice
    * for a type and prefix, and a type with none holds no short code
    */
   shortCode?: string;
@@ -97,7 +112,7 @@ export type FieldType =
 /** A field's type, and whether the row may lack it (`?`) and whether it may hold `null` (`| null`) */
 export type FieldRule = FieldType & { readonly optional?: boolean; readonly nullable?: boolean };
 
-/** A type's text index, as its manifest entry declares it (`search`) */
+/** A type's text index, as its row rules declare it (`search`) */
 export interface SearchDeclaration {
   /** Each field the index reads, with its weight: a field of weight 3 counts each of its words three times */
   readonly fields: Readonly<Record<string, number>>;
@@ -106,7 +121,7 @@ export interface SearchDeclaration {
 }
 
 /**
- * A type's vector index, as its manifest entry declares it (`embed`). A write that changes one of its fields leaves the
+ * A type's vector index, as its row rules declare it (`embed`). A write that changes one of its fields leaves the
  * entity's chunks pending until an embedding of their text is stored (`embed`), which a later write's change refuses as
  * stale. Embeddings are compared by cosine distance
  */
@@ -267,8 +282,8 @@ export interface QueryExplanation<E extends string = string> {
 }
 
 /**
- * A short code, `<prefix>-<n>`: how a pack's generated shapes type `shortCode` for an entity type whose manifest entry
- * declares the prefix, and how the SDK's own shapes type theirs. `create` numbers it, and nothing writes it after
+ * A short code, `<prefix>-<n>`: how a shape types `shortCode` for an entity type whose row rules declare the prefix
+ * (`RowRules.shortCode`). `create` numbers it, and nothing writes it after
  */
 export type ShortCode<P extends string> = `${P}-${number}`;
 
@@ -279,8 +294,8 @@ export type ShortCode<P extends string> = `${P}-${number}`;
 type NoInferType<T> = [T][T extends unknown ? 0 : never];
 
 /**
- * What a typed builder is checked against, as one parameter: a pack's `#generated/ears` declares its own
- * (`PackSchema`), so an error or a hover names the schema rather than spelling out four types
+ * What a typed builder is checked against, as one parameter: a program declares its own and names it, so an error or a
+ * hover names the schema rather than spelling out four types
  */
 export interface EarsSchema {
   /** The entity shapes reads and writes are typed against */
@@ -297,7 +312,7 @@ export interface EarsSchema {
   rankIndexes: string;
 }
 
-/** No shapes and any name, kind or role: the untyped operations (`@apackdev/ears`'s own, and the SDK's `untyped*`) */
+/** No shapes and any name, kind or role: the untyped operations, the engine's own and any a program builds over it */
 export interface UntypedSchema extends EarsSchema {
   shapes: {};
   names: string;
@@ -308,7 +323,7 @@ export interface UntypedSchema extends EarsSchema {
 }
 
 /**
- * The query builder, typed by `D` (`UntypedSchema` unchecked, a pack's `PackSchema` from its `#generated/ears`).
+ * The query builder, typed by `D` (`UntypedSchema` unchecked, or a program's own `EarsSchema` through `defineEars`).
  *
  * Field parameters stay `keyof ShapeOf<D['shapes'], E> & string` and picked rows `Pick<ShapeOf<D['shapes'], E>, K>`:
  * that form is what gives editors field completions and lists the valid fields in a typo's error.
@@ -492,13 +507,13 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
   /** The ids reached, by their value of `field`, each group in query order; `query.ids(ids)` queries a group on */
   groupBy(field: keyof ShapeOf<D['shapes'], E> & string): Map<unknown, EARS.EntityId<E>[]>;
   /**
-   * The entities the type's text index (its manifest entry's `search`) matches to `query`, most relevant first: words,
+   * The entities the type's text index (its row rules' `search`) matches to `query`, most relevant first: words,
    * every one of which matches; `"a phrase"`; `-word`, which no match holds; `field:word`; `a OR b`. After other
    * steps it searches among the entities they reached
    */
   search(query: string, options?: SearchOptions<keyof ShapeOf<D['shapes'], E> & string>): QueryBuilder<E, D>;
   /**
-   * The entities whose text, in a field of the type's trigram index (its manifest entry's `substrings`), holds `text`
+   * The entities whose text, in a field of the type's trigram index (its row rules' `substrings`), holds `text`
    * as it is written, or with `caseInsensitive` in any case: an error message, an id, a path. Unranked: the query keeps
    * its order, and after other steps it filters the entities they reached
    */
@@ -510,7 +525,7 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
    */
   matching(pattern: string): QueryBuilder<E, D>;
   /**
-   * The `k` entities (10 unless given) whose embeddings in the type's vector index (its manifest entry's `embed`) are
+   * The `k` entities (10 unless given) whose embeddings in the type's vector index (its row rules' `embed`) are
    * nearest `vector`, nearest first, each scored `1 / (1 + distance)` by its nearest chunk; after other steps, among the
    * entities they reached. An entity whose chunks are pending is not found until they are embedded
    */
@@ -562,7 +577,7 @@ export interface QueryBuilder<E extends string = string, D extends EarsSchema = 
 
 /**
  * How `link` makes an edge. What a kind's edges are held to — no cycle through it, at most one edge between two
- * entities — is the kind's declaration (`apack.json` `data.relations`), not a link's
+ * entities — is the kind's declaration (`RelationRules`), not a link's
  */
 export interface LinkOptions {
   /**

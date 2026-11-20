@@ -429,8 +429,9 @@ export const WORKSPACE_PARTS = [
   // and the walk skips what is not there, so for those this adds a path and no bytes
   'apack.json',
   'package.json', 'tsconfig.json', 'tsconfig.package.json',
-  // The two vitest configs from `CONFIG_BY_HALF`, which is where that naming is declared
-  ...Object.values(CONFIG_BY_HALF), 'vite.config.ts', 'vite.config.js',
+  // The two vitest configs from `CONFIG_BY_HALF`, which is where that naming is declared, and the one
+  // `@apackdev/ears`' builds on: its own, which names nothing of apack's (`packages/apack-ears/vitest.config.ts`)
+  ...Object.values(CONFIG_BY_HALF), 'vitest.ears.config.ts', 'vite.config.ts', 'vite.config.js',
   'eslint.config.ts', 'postcss.config.cjs', 'tailwind.config.ts', 'tsdown.config.ts', 'env.d.ts',
 ];
 const workspace = (pkg: string): string[] => WORKSPACE_PARTS.map((part) => `packages/${pkg}/${part}`);
