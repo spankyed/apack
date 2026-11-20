@@ -110,7 +110,8 @@ test('backup import restores all settings owners and updates an open window', as
         { type: 'BACKUP.IMPORT', path: backupPath },
       ] });
     }, backup);
-    await expect.poll(backupResult).toMatchObject({ operation: 'import', error: undefined,
+    // Exactly this shape: an import that succeeded carries its message and no error at all
+    await expect.poll(backupResult).toEqual({ operation: 'import',
       message: expect.stringContaining('restart the brain manually') });
     await expect(other).toHaveValue('Saved Memos');
     await openJson();
