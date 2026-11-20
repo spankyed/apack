@@ -60,15 +60,39 @@ function branchesHolding(run, rev, remote) {
 const short = (/** @type {string} */ rev) => rev.slice(0, 12);
 
 /**
+ * Which of `packages` differ between `rev` and HEAD, or between HEAD and the working tree when `rev` is undefined;
+ * undefined when git can't say
+ * @param {(args: string[]) => string} run @param {string | undefined} rev @param {string[]} packages
+ * @returns {string[] | undefined}
+ */
+function differing(run, rev, packages) {
+  try {
+    return packages.filter((dir) => run(rev === undefined
+      ? ['status', '--porcelain', '--', dir]
+      : ['diff', '--name-only', rev, 'HEAD', '--', dir]).trim() !== '');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * What is worth saying about a vendored checkout's pin, as lines to warn with. Empty when the checkout sits
  * at the pin and the pin is pushed.
- * @param {{ name: string, rev: string, checkout: string, remote?: string, run: (args: string[]) => string }} options
+ *
+ * `packages` names the checkout's directories the app consumes, where one checkout ships more than one (elmdb: its
+ * binding and EARS). Then the warning names which of them differ from the pin, committed or not, since a checkout past
+ * its pin in a directory nothing here reads tests the same code as CI does there.
+ * @param {{ name: string, rev: string, checkout: string, remote?: string, run: (args: string[]) => string, packages?: string[] }} options
  * @returns {string[]}
  */
-export function pinWarnings({ name, rev, checkout, remote = 'origin', run }) {
+export function pinWarnings({ name, rev, checkout, remote = 'origin', run, packages = [] }) {
   /** @type {string[]} */
   const warnings = [];
   const revFile = `vendor/${name}.rev`;
+  /** What differs, said after "not testing the same code", for a checkout that ships more than one package */
+  const where = (/** @type {string[] | undefined} */ changed) => packages.length === 0 || changed === undefined ? ''
+    : changed.length === 0 ? `, though ${packages.join(' and ')} are the same at both`
+      : `: ${changed.join(' and ')} differ`;
 
   let head;
   try { head = run(['rev-parse', 'HEAD']).trim(); } catch { head = undefined; }
@@ -78,8 +102,15 @@ export function pinWarnings({ name, rev, checkout, remote = 'origin', run }) {
     const past = ahead && ahead !== '0' ? `${ahead} commit${ahead === '1' ? '' : 's'} past` : 'not at';
     warnings.push(
       `${checkout} is at ${short(head)}, ${past} the pinned ${short(rev)} (${revFile}).\n`
-      + `  A local run builds the checkout; CI clones the pin, so they are not testing the same code.\n`
+      + `  A local run builds the checkout; CI clones the pin, so they are not testing the same code${where(differing(run, rev, packages))}.\n`
       + `  git -C ${checkout} checkout ${short(rev)}   to match it, or bump ${revFile}.`,
+    );
+  }
+  const uncommitted = packages.length === 0 ? [] : differing(run, undefined, packages) ?? [];
+  if (uncommitted.length > 0) {
+    warnings.push(
+      `${checkout} has changes not committed in ${uncommitted.join(' and ')}.\n`
+      + `  A local run builds them; CI clones the pin, which holds none of them.`,
     );
   }
 

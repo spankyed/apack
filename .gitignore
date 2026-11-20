@@ -35,7 +35,7 @@ build/prod/logs/
 *.bundled_*.cjs
 
 
-# The elmdb checkout @apackdev/ears builds against, linked by `npm run link:elmdb` (scripts/link-elmdb.mjs); the
+# The elmdb checkout whose binding (`elmdb`) and EARS (`@elmdb/ears`) apack depends on, linked by `npm run link:elmdb` (scripts/link-elmdb.mjs); the
 # commit it is pinned to is vendor/elmdb.rev
 vendor/elmdb
 
