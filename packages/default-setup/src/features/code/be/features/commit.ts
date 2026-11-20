@@ -10,7 +10,8 @@ import type { HistoryCommit, HistoryPage, RewriteStep } from 'apack-git'
 import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { storedSignIn } from './github.ts'
 import { isHostName } from '../services/sign-in.ts'
-import type { CommitFailure, GitProgress, OperationMove, RepositoryChange, RewriteAction, StartableOperation } from '../types.ts'
+import type { CommitFailure, CommitTrailer, GitProgress, OperationMove, ProgressDuring, RepositoryChange, RewriteAction, StartableOperation } from '../types.ts'
+import { windowRead } from '../services/window-reads.ts'
 import { requireGitRepository } from '../utils/git-helpers.ts'
 
 const surfaceId = 'code' as const
@@ -25,12 +26,23 @@ export interface CodeCommitSystemContext {
   code?: AnyActorRef
 }
 
+/**
+ * A message as the panel commits it: without the trailers the code settings name (`trailersRemovedOnCommit`), by
+ * key whatever its case, as git reads a key
+ */
+function asCommitted(repository: AppGitRepository, message: string): Promise<string> {
+  const removed = new Set(featureSettings.forFeature('code').get().trailersRemovedOnCommit.map(key => key.toLowerCase()))
+  return removed.size === 0 ? Promise.resolve(message) : repository.withoutTrailers(message, ({ key }) => removed.has(key.toLowerCase()))
+}
+
 export type Event =
   | { type: 'commit.GET_GIT_STATUS' }
   | { type: 'commit.GET_GIT_DIFF'; path?: string; staged?: boolean }
   | { type: 'commit.STAGE_FILES'; paths: string[] }
   | { type: 'commit.UNSTAGE_FILES'; paths: string[] }
   | { type: 'commit.COMMIT'; message: string }
+  | { type: 'commit.READ_TRAILERS'; message: string }
+  | { type: 'commit.REMOVE_TRAILER'; message: string; trailer: CommitTrailer }
   | { type: 'commit.GET_CURRENT_BRANCH' }
   | { type: 'commit.REVERT_FILE'; path: string }
   | { type: 'commit.REVERT_FILES'; paths: string[] }
@@ -74,6 +86,7 @@ export type Event =
   | { type: 'commit.APPLY_HUNK'; path: string; staged: boolean; hunk: string }
   | { type: 'commit.LIST_UNTRACKED'; path: string }
   | { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
+  | { type: 'commit.UPDATE_SUBMODULE'; path: string }
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
   | { type: 'commit.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository }
@@ -82,10 +95,13 @@ export type Event =
   | { type: 'commit.REPOSITORY_MAY_HAVE_CHANGED'; reconcile?: boolean; byWindow?: boolean }
   | { type: 'commit.ANNOUNCE_REPOSITORY_CHANGED'; changed: RepositoryChange };
 
-/** Tells the window that asked for a push, a pull or a checkout how far along it is, as git says */
-const progressTo = (reply: Parameters<typeof answer>[0], during: 'push' | 'pull' | 'checkout') => (progress: GitProgress) => {
+/** Tells the window that asked for a push, a pull, a checkout or a submodule update how far along it is, as git says */
+const progressTo = (reply: Parameters<typeof answer>[0], during: ProgressDuring) => (progress: GitProgress) => {
   answer(reply, { type: 'commit.PROGRESS', data: { during, ...progress } })
 }
+
+/** Whether a read failed because it was stopped (`windowRead`), which nobody is waiting to be told */
+const stopped = (error: unknown): boolean => error instanceof GitError && error.code === 'aborted'
 
 /** What the panel is told of a command that failed: git's words, and why it failed where git said */
 /** What the user can do about a git that cannot be used */
@@ -620,7 +636,7 @@ export const commitSystem = setup({
       const { message, evenIfPublished } = event as { type: 'commit.AMEND'; message?: string; evenIfPublished?: boolean }
       if (!requireGitRepository(context, reply)) return
       const repository = context.gitRepository
-      answerRewrite(repository.amend({ message, evenIfPublished }).then(() => {
+      answerRewrite((message === undefined ? Promise.resolve(undefined) : asCommitted(repository, message)).then(committed => repository.amend({ message: committed, evenIfPublished })).then(() => {
         answer(reply, { type: 'commit.AMENDED' })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
         return answerUndoable(repository, reply)
@@ -632,6 +648,24 @@ export const commitSystem = setup({
       if (!requireGitRepository(context, reply)) return
       context.gitRepository.commitMessage(hash).then(
         message => answer(reply, { type: 'commit.COMMIT_MESSAGE_RECEIVED', data: { hash, message } }),
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
+      )
+    },
+
+    readTrailers: ({ event, context, reply }) => {
+      const { message } = event as { type: 'commit.READ_TRAILERS'; message: string }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.trailersIn(message).then(
+        trailers => answer(reply, { type: 'commit.TRAILERS_READ', data: { message, trailers } }),
+        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
+      )
+    },
+
+    removeTrailer: ({ event, context, reply }) => {
+      const { message, trailer } = event as { type: 'commit.REMOVE_TRAILER'; message: string; trailer: CommitTrailer }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.withoutTrailers(message, ({ key, value }) => key === trailer.key && value === trailer.value).then(
+        without => answer(reply, { type: 'commit.TRAILER_REMOVED', data: { message, without } }),
         (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
       )
     },
@@ -694,14 +728,15 @@ export const commitSystem = setup({
           return
         }
 
-        return context.gitRepository!.commit(ev.message).then(() => {
+        const repository = context.gitRepository!
+        return asCommitted(repository, ev.message).then(message => repository.commit(message).then(() => {
           answer(reply, {
             type: 'commit.COMMIT_SUCCESS',
-            data: { message: ev.message }
+            data: { message }
           })
           self.send({ type: 'commit.GIT_STATUS_CHANGED' })
-          return answerUndoable(context.gitRepository!, reply)
-        })
+          return answerUndoable(repository, reply)
+        }))
       }).catch((error: unknown) => {
         // What failed and why, with what can be done about it (a trust to give, a hook's output); two of git's
         // messages are said in words of the panel's
@@ -1185,13 +1220,14 @@ export const commitSystem = setup({
     },
 
     /** Who last changed each line of a file, leaving out the commits the repository lists to be ignored */
-    getBlame: ({ event, context, reply }) => {
+    getBlame: ({ event, context, reply, client }) => {
       const { path: file } = event as { type: 'commit.GET_BLAME'; path: string }
       if (!requireGitRepository(context, reply)) return
-      context.gitRepository.blame(file).then(
+      const read = windowRead(client, 'blame')
+      context.gitRepository.blame(file, { signal: read.signal }).then(
         lines => answer(reply, { type: 'commit.BLAME_RECEIVED', data: { path: file, lines } }),
-        (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }),
-      )
+        (error: unknown) => { if (!stopped(error)) answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }) },
+      ).finally(read.done)
     },
 
     stashDrop: ({ event, context, self, reply }) => {
@@ -1224,11 +1260,13 @@ export const commitSystem = setup({
       })
     },
 
-    logList: ({ event, context, reply }) => {
+    logList: ({ event, context, reply, client }) => {
       const { cursor, path: file } = event as { type: 'commit.LOG_LIST'; cursor?: string; path?: string }
       if (!requireGitRepository(context, reply)) return
 
       const repository = context.gitRepository
+      // The window takes the answer to its latest ask of the log alone, whichever history that ask was of
+      const read = windowRead(client, 'history')
       // The whole history is of every local branch with what is checked out, so another branch's commits are there
       // to be picked; a file's is of what is checked out, and a later page carries on from its cursor
       const refs = cursor || file ? Promise.resolve(undefined) : repository.refsModel().then(
@@ -1236,8 +1274,8 @@ export const commitSystem = setup({
         () => undefined,
       )
       // A branch checked out with no commit yet has no HEAD to start from, and its history is empty
-      refs.then(refs => repository.history({ refs, cursor, path: file, limit: LOG_PAGE }).catch(async (error: unknown): Promise<HistoryPage> => {
-        if (refs && !(await repository.commitsExist('HEAD'))) return { commits: [] }
+      refs.then(refs => repository.history({ refs, cursor, path: file, limit: LOG_PAGE, signal: read.signal }).catch(async (error: unknown): Promise<HistoryPage> => {
+        if (!stopped(error) && refs && !(await repository.commitsExist('HEAD'))) return { commits: [] }
         throw error
       })).then((page) => {
         answer(reply, {
@@ -1245,11 +1283,25 @@ export const commitSystem = setup({
           data: { commits: page.commits, ...(page.cursor && { cursor: page.cursor }), ...(file && { path: file }), ...(cursor && { continued: true }) },
         })
       }).catch((error: any) => {
+        if (stopped(error)) return
         answer(reply, {
           type: 'commit.ERROR_RECEIVED',
           data: failureOf(error)
         })
-      })
+      }).finally(read.done)
+    },
+
+    /**
+     * Brings a submodule to the commit the repository records for it, setting it up first if it is not: what makes a
+     * submodule's row that says it is on another commit go away, short of committing the commit it is on
+     */
+    updateSubmodule: ({ event, context, self, reply }) => {
+      const { path: submodule } = event as { type: 'commit.UPDATE_SUBMODULE'; path: string }
+      if (!requireGitRepository(context, reply)) return
+      context.gitRepository.updateSubmodules([submodule], { onProgress: progressTo(reply, 'submodule') }).then(() => {
+        answer(reply, { type: 'commit.SUBMODULE_UPDATED', data: { path: submodule } })
+        self.send({ type: 'commit.GIT_STATUS_CHANGED' })
+      }, (error: unknown) => answer(reply, { type: 'commit.ERROR_RECEIVED', data: failureOf(error) }))
     },
 
     revertCommit: ({ event, context, self, reply }) => {
@@ -1410,6 +1462,8 @@ export const commitSystem = setup({
         'commit.GET_COMMIT_MESSAGE': {
           actions: 'commitMessage'
         },
+        'commit.READ_TRAILERS': { actions: 'readTrailers' },
+        'commit.REMOVE_TRAILER': { actions: 'removeTrailer' },
         'commit.REWRITE_COMMIT': {
           actions: 'rewriteCommit'
         },
@@ -1485,6 +1539,7 @@ export const commitSystem = setup({
         'commit.GET_STASH_CHANGES': {
           actions: 'getStashChanges'
         },
+        'commit.UPDATE_SUBMODULE': { actions: 'updateSubmodule' },
         'commit.GET_BLAME': {
           actions: 'getBlame'
         },

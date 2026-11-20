@@ -171,7 +171,7 @@ describe('a window\'s connection to the terminal broker', () => {
 
   const GREETING = '{"kind":"hello","protocol":1,"role":"view"}\n';
 
-  async function connected(endpoint: { socket: string; greeting: string } | null) {
+  async function connected(endpoint: { socket: string; greeting: string; proof: string | null } | null) {
     process.argv = ['electron', 'app'];
     vi.resetModules();
     const { contextBridge, ipcRenderer } = await import('../tests/electron-stub');
@@ -200,7 +200,7 @@ describe('a window\'s connection to the terminal broker', () => {
   it('greets the broker with the line main gave it, and hands over what follows the answer', async () => {
     const far = await broker();
     try {
-      const near = await connected({ socket: far.socket, greeting: GREETING });
+      const near = await connected({ socket: far.socket, greeting: GREETING, proof: null });
       expect(await far.until((all) => all.includes('\n'))).toBe(GREETING);
 
       far.say('{"kind":"hello","protocol":1,"history":1000}\nABC');
@@ -218,7 +218,7 @@ describe('a window\'s connection to the terminal broker', () => {
   it('holds what the page sends until the broker has answered the greeting', async () => {
     const far = await broker();
     try {
-      const near = await connected({ socket: far.socket, greeting: GREETING });
+      const near = await connected({ socket: far.socket, greeting: GREETING, proof: null });
       near.stream.send(Uint8Array.of(1, 2, 3));
       await far.until((all) => all.includes('\n'));
       expect(await far.until(() => true), 'bytes reached the broker ahead of its answer').toBe(GREETING);
@@ -229,10 +229,38 @@ describe('a window\'s connection to the terminal broker', () => {
     } finally { far.close(); }
   });
 
+  /**
+   * **A broker that cannot answer main's question is not the app's**, whatever it says otherwise: another account
+   * can hold the address on Windows. Nothing the page sent reaches it and nothing it sends reaches the page.
+   */
+  it('is over when the answer does not carry the proof main expects, and sends it nothing the page sent', async () => {
+    const far = await broker();
+    try {
+      const near = await connected({ socket: far.socket, greeting: GREETING, proof: 'expected' });
+      near.stream.send(Uint8Array.of(1, 2, 3));
+      await far.until((all) => all.includes('\n'));
+      far.say('{"kind":"hello","protocol":1,"history":1000,"proof":"something-else"}\nXYZ');
+      await near.until(() => near.closed() > 0);
+      expect(near.text()).toBe('');
+      expect(await far.until(() => true), 'what the page sent reached a broker that proved nothing').toBe(GREETING);
+    } finally { far.close(); }
+  });
+
+  it('hands over what follows an answer that carries the proof main expects', async () => {
+    const far = await broker();
+    try {
+      const near = await connected({ socket: far.socket, greeting: GREETING, proof: 'expected' });
+      await far.until((all) => all.includes('\n'));
+      far.say('{"kind":"hello","protocol":1,"history":1000,"proof":"expected"}\nABC');
+      await near.until(() => near.text().length >= 3);
+      expect(near.text()).toBe('ABC');
+    } finally { far.close(); }
+  });
+
   it('is over when the broker refuses the greeting, and nothing of the refusal reaches the page', async () => {
     const far = await broker();
     try {
-      const near = await connected({ socket: far.socket, greeting: GREETING });
+      const near = await connected({ socket: far.socket, greeting: GREETING, proof: null });
       await far.until((all) => all.includes('\n'));
       far.say('{"kind":"failed","session":null,"code":"HANDSHAKE","message":"no"}\nXYZ');
       await near.until(() => near.closed() > 0);
@@ -244,7 +272,7 @@ describe('a window\'s connection to the terminal broker', () => {
   it('is over, once, when the broker goes or the page closes it', async () => {
     const far = await broker();
     try {
-      const near = await connected({ socket: far.socket, greeting: GREETING });
+      const near = await connected({ socket: far.socket, greeting: GREETING, proof: null });
       await far.until((all) => all.includes('\n'));
       far.say('{"kind":"hello","protocol":1,"history":1000}\n');
       far.hangUp();
@@ -262,7 +290,7 @@ describe('a window\'s connection to the terminal broker', () => {
 
     const far = await broker();
     far.close();
-    const refused = await connected({ socket: far.socket, greeting: GREETING });
+    const refused = await connected({ socket: far.socket, greeting: GREETING, proof: null });
     await refused.until(() => refused.closed() > 0);
     expect([none.closed(), refused.closed()]).toEqual([1, 1]);
   });

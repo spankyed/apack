@@ -19,7 +19,23 @@ import { TestType } from 'playwright/test';
 export const APP_READY_STATE = "running.connected";
 
 // @public (undocumented)
+export interface AppConnection {
+    ask(system: string, event: SystemEvent_2, options?: {
+        settingsCredential?: string;
+    }): Promise<SystemEvent_2>;
+    loadedPacks(): Promise<PackRuntime[]>;
+    readonly messages: readonly BusMessage[];
+    readonly name: string;
+    next(match: (event: SystemEvent_2) => boolean, what?: string): Promise<SystemEvent_2>;
+    openPackSettings(runtime: PackRuntime): Promise<string>;
+    send(system: string, event: SystemEvent_2, options?: {
+        settingsCredential?: string;
+    }): Promise<void>;
+}
+
+// @public (undocumented)
 export interface AppDriver {
+    ask: (system: string, event: SystemEvent) => Promise<SystemEvent>;
     // (undocumented)
     getContext: () => Promise<{
         activeSurfaceId: string;
@@ -32,6 +48,7 @@ export interface AppDriver {
     report: (name: string, value: unknown) => Promise<string>;
     // (undocumented)
     screenshot: (name: string) => Promise<Buffer>;
+    send: (system: string, event: SystemEvent) => Promise<void>;
     // (undocumented)
     sendEvent: (event: Record<string, unknown>) => Promise<void>;
     // (undocumented)
@@ -89,13 +106,51 @@ export interface AttachTargets {
 export function attachToApp(input: AttachOptions): Promise<AttachedApp>;
 
 // @public
-export function createAppDriver(page: Page, screenshotDir: string): AppDriver;
+export interface BusMessage {
+    // (undocumented)
+    readonly answering?: string;
+    // (undocumented)
+    readonly call?: string;
+    // (undocumented)
+    readonly client?: string;
+    // (undocumented)
+    readonly diagnostics?: {
+        traceparent?: string;
+        tracestate?: string;
+    };
+    // (undocumented)
+    readonly event: {
+        type: string;
+        [key: string]: unknown;
+    };
+    // (undocumented)
+    readonly from?: string;
+    // (undocumented)
+    readonly sender?: string;
+    // (undocumented)
+    readonly to: string;
+    // (undocumented)
+    readonly via?: string;
+}
+
+// @public
+export function closeApp(app: ElectronApplication, input: CloseAppOptions): Promise<void>;
+
+// @public
+export interface CloseAppOptions {
+    readonly keepProfile: boolean;
+    readonly userDataDir: string;
+}
+
+// @public
+export function createAppDriver(page: Page, screenshotDir: string, appPid?: number): AppDriver;
 
 // @public (undocumented)
 export function createTest(options?: CreateTestOptions): {
     test: TestType<PlaywrightTestArgs & PlaywrightTestOptions & {
     appPage: Page;
     app: AppDriver;
+    connection: AppConnection;
     }, PlaywrightWorkerArgs & PlaywrightWorkerOptions & {
     electronApp: ElectronApplication;
     }>;
@@ -112,6 +167,7 @@ export interface CreateTestOptions extends TestHostOptions {
 export const drive: TestType<PlaywrightTestArgs & PlaywrightTestOptions & {
 appPage: Page;
 app: AppDriver;
+connection: AppConnection;
 }, PlaywrightWorkerArgs & PlaywrightWorkerOptions & {
 electronApp: ElectronApplication;
 }>;
@@ -129,10 +185,49 @@ export { expect }
 // @public
 export function findWindow<T extends AttachTargets>(browser: T, timeoutMs: number): Promise<Page>;
 
+// @public
+export function launchApp(input: LaunchAppOptions): Promise<LaunchedApp>;
+
+// @public
+export interface LaunchAppOptions {
+    readonly args?: readonly string[];
+    readonly environment?: 'test' | 'development';
+    readonly logFile?: string;
+    readonly userDataDir: string;
+}
+
+// @public
+export interface LaunchedApp {
+    readonly app: ElectronApplication;
+    close(options: {
+        readonly keepProfile: boolean;
+    }): Promise<void>;
+    readonly page: Page;
+}
+
+// @public
+export interface PackRuntime {
+    // (undocumented)
+    readonly buildRevision: string;
+    // (undocumented)
+    readonly declarationRevision: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly registrationId: string;
+}
+
+// @public
+export type SystemEvent = {
+    type: string;
+    [key: string]: unknown;
+};
+
 // @public (undocumented)
 export const test: TestType<PlaywrightTestArgs & PlaywrightTestOptions & {
 appPage: Page;
 app: AppDriver;
+connection: AppConnection;
 }, PlaywrightWorkerArgs & PlaywrightWorkerOptions & {
 electronApp: ElectronApplication;
 }>;

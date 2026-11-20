@@ -91,11 +91,11 @@ The Windows status today, in plain terms:
 | The proxy, including a second proxy joining the broker | done on the VM |
 | Pipe access: owner and SYSTEM only | done (read off a live pipe, 2026-11-09) |
 | View: drawing, IME composition, third-level keys in headless Chromium | done on the VM (2026-11-12); AltGr is not a real key press |
-| Views and the proxy: 15 cases run on Windows; 26 are POSIX only | open: W5 |
+| Views and the proxy: all but seven run on Windows, and those seven test what a pipe or console does not have | done: W5 |
 | Kept sessions and recordings (the `keeping` suite, 15 cases) | not run on Windows | open: W3 |
 | Test brokers started by the proxy are not cleaned up on Windows | open: W4 |
 | Hooks inside the app's own code path | not verified: W2 |
-| Hooks and terminal inside the app's window | needs the owner's desktop session: W6 |
+| Hooks and terminal inside the app's window | waived by the owner: W6 |
 | ConPTY keeps the order of command markers under load | not tested: W1 |
 
 ### W1. ConPTY keeps the order of markers under load
@@ -128,16 +128,18 @@ Script: `.apack/w1-order.ts` on the VM (run by `tsx`, source condition); result 
 - **Size:** medium. It may need a headless harness; if the API cannot run headless on the VM, record why and say
   so before moving on.
 
-**Result (2026-11-13, partly met).** The API runs headless on the VM (`packages/api` dist, `SHIPPED_PACKS_DIR`
-set to `packages`, `APACK_ENV=development`, own data dir), loads the default-setup pack, and the app's
-terminal service opens a PowerShell through the broker over the named pipe (`terminal.CREATED`, `TITLED`).
-Typed input reaches the shell: a command typed through `terminal.TERMINAL_INPUT` wrote a marker file
-(`Set-Content`) that the VM then holds with the expected text. The app lists each terminal as `recorded: true`
-(`terminal.TERMINALS_LISTED`). **Not met:** the app's recorded command list with statuses cannot be read back
-on Windows. The rewind answers with a session (`terminal.REWOUND`) but no frames arrive, and no recording file
-is written under the data dir; the design says recordings and kept sessions run nowhere on Windows. That is W3.
-The broker's exe was built on the VM with Zig 0.17.0 (the version the repo's Windows CI installs), staged by
-`cargo xtask package`. Shells left by a run were gone once the API stopped.
+**Result (2026-11-15, met).** The API runs headless on the VM (`packages/api` dist, `SHIPPED_PACKS_DIR` set to
+`packages`, `APACK_ENV=development`, own data dir) and loads the default-setup pack. Through the bus, the script
+`.apack/w2-readback.ts` (run by `C:\Users\apackdev\w2-read.ps1`) asks the app's `default-setup/code` feature to
+create a PowerShell terminal, types three lines through `terminal.TERMINAL_INPUT`, then asks the broker over its
+named pipe for the commands of the one session the app opened. They come back in order with their statuses:
+`Write-Output "w2-one"` exited 0, `Get-Item C:\w2-does-not-exist` exited 1, `Write-Output "w2-three"` exited 0,
+and the session is `recorded`. The app keeps no command list of its own: the broker's record is the one the app's
+service reads, and an outcome is `exited` only when a mark carrying the key the app gave the shell said so.
+Result file `C:\apack-setup\w2-readback.json`; app at `3d5f18867`, broker at `6e9c953`, its exe built on the VM
+with Zig 0.17.0 and staged by `cargo xtask package`. The API's `dist` has to be built from the same source as the
+pack: a `dist` older than the pack fails to open a terminal (`session.setCursorDefaults is not a function`).
+Shells left by a run were gone once the API stopped.
 
 ### W3. Kept sessions and recordings on Windows
 - **Why:** the `keeping` suite (15 cases) runs only on POSIX. Each case ends by closing a connection that a reader
@@ -211,6 +213,34 @@ suite is not ported and has not run on the VM.
   same behaviour.
 - **Size:** medium.
 
+**Result (2026-11-15, met).** Of the 18 view and proxy cases still gated after the first round, 11 run on Windows,
+and the broker's suite passes there whole: 417 cases on the VM, none failing. What it took:
+
+- **The ConPTY was the cause of four.** The one built into Windows drops the image APC, the mouse-mode request
+  (`DECSET 1002`, `1006`) and a program's clipboard question before the broker sees them: read off a session's raw
+  output on the VM, none reached it. Microsoft's `Microsoft.Windows.Console.ConPTY` package (1.25.261109001, from
+  the Windows Terminal v1.25.3131.0 release) passes all three, so the broker now carries its `conpty.dll` and
+  `OpenConsole.exe` beside its binary (`windows/conpty/` in the broker, which `build.rs` and `cargo xtask package`
+  place; `portable-pty` loads it in preference to the system's). That made the three image cases and the
+  mouse-drag case run. Without it, images and mouse reporting did not work on Windows at all.
+- **Three read their program's input with `stty`, `head` and `od`.** A PowerShell program that switches its console
+  to raw VT input reads the same bytes; the Kitty keyboard, cursor-key and clipboard-question cases run with it.
+- **Three were gated for closing one direction of a connection and did not need to.** The second-hello, bad-frame
+  and last-view-leaving cases now close both ways, bound the refused write on a thread, or wait for the numbering
+  to end by attaching beside it.
+- **The proxy's default and its peer.** A proxy told no socket on Windows uses a pipe named for the user's SID
+  (the Windows twin of the POSIX default-socket case), and asks whose the pipe it reached is before carrying a byte, as it asks the peer's uid
+  on POSIX: a pipe's name is the machine's, and another account can create it first. Checked with a throwaway
+  second local account on the VM: it could not open the broker's pipe in any direction, and a pipe it created
+  first under the name a proxy was given was refused and received 0 bytes.
+
+The seven left gated test what a Windows pipe or console does not have: a socket file a dead broker left, one taken
+away, a directory other users can write to (two cases), a socket's and its directory's mode bits (whose Windows
+counterpart is the pipe's descriptor, read back in the suite and refused to the second account above), a view that
+closed one direction and goes on listening, and a connection whose far end closed one direction. Each says so on
+the case. With the ConPTY changed, W1's 10,000
+commands were run again through the packaged release build (below).
+
 ### W6. Desktop check of the app's window (needs the owner)
 - **Why:** the VM guide is explicit: SSH cannot show that an Electron window works in an interactive desktop
   session. Also not yet checked on a real keyboard: a German or similar layout typing `@`, `{`, `\` on Windows.
@@ -220,6 +250,8 @@ suite is not ported and has not run on the VM.
   example `ping -t localhost`) and send Ctrl+C from the terminal; check it stops and the next prompt appears.
 - **Done when:** the owner has done the check and reported it. The agent does not perform this step.
 - **Size:** small, but blocked on the owner.
+
+**Result: waived by the owner (2026-11-15).**
 
 ## Phase 3: speed and measurement
 
@@ -246,6 +278,23 @@ suite is not ported and has not run on the VM.
   does not fall by more than 10% against the baseline from P1; (c) the existing output and credit cases pass; (d)
   a case states the new behaviour: after a quiet moment, one byte is sent without waiting for the window.
 - **Size:** small to medium. Mutation-gate the new branch.
+
+**Result (2026-11-15, met).** `e2069c7` flushes held output after a 1 ms quiet gap (`OUTPUT_QUIET`), and
+`coalescing::a_pause_sends_what_is_held_and_the_next_burst_is_not_batched_with_it` states it. The bench was run at
+the commit before it (`7e570e3`) and at `50080ee`, alternated eight times on two quiet GitHub runners in one run
+(43714875496), so both sides saw the same machine. Medians, before → after:
+
+| Runner | `seq 1 1000000` throughput | Back-to-back echo |
+|---|---|---|
+| ubuntu-24.04 | 17.18 → 17.58 MB/s (×1.02) | 16.1 → 1.17 ms |
+| macos-15 (arm64, virtualized) | 6.80 → 8.51 MB/s (×1.25) | about 94 → 10 ms |
+
+Throughput does not fall on either. The echo target is met on the Linux runner and on the developer's Mac (median
+1.97 ms after, 18.1 ms before, six alternated rounds at load 50 to 190, 2026-11-15); the macOS runner is a virtual
+machine whose echo was 94 ms before the change, so its absolute figure says nothing about the 3 ms target. The
+throughput comparison is against the commit before the change on the same machine rather than against P1's 7.24 MB/s,
+which was a different machine at a different load. The output and credit cases pass on all three platforms (CI on
+`50080ee`).
 
 ## Phase 4: finish
 

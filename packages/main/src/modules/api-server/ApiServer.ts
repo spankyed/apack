@@ -27,6 +27,8 @@ export class ApiServer implements AppModule {
   private shutdownComplete = false;
   private shutdown?: Promise<void>;
   private restartAttempts = 0;
+  /** The current launch's forgiveness, pending: a launch that exits takes its own with it */
+  private restartReset?: ReturnType<typeof setTimeout>;
   /**
    * The current startup's readiness, which `waitForReady` hands out. A crash before the API is ready restarts it
    * within the same startup, so the promise is renewed only once it has settled: the launch that becomes ready
@@ -118,17 +120,18 @@ export class ApiServer implements AppModule {
 
     app.whenReady().then(() => this.startApiServer());
     
+    // The quit waits for the API to have gone, and then finishes whatever the wait ended in. Nothing asks for a
+    // quit twice — not a harness, not the OS — so one cancelled for good leaves the app up and idle. An API that
+    // outlived it is ended by the next launch, which kills an orphaned one before starting its own.
     app.on('before-quit', event => {
       if (this.shutdownComplete) return;
       event.preventDefault();
       this.isShuttingDown = true;
       this.shutdown ??= this.processManager.stop('SIGTERM', API_CONFIG.SHUTDOWN_TIMEOUT)
+        .catch(error => { logError('[MAIN] API shutdown failed; quitting without it:', error); })
         .then(() => {
           this.shutdownComplete = true;
           app.quit();
-        }).catch(error => {
-          this.shutdown = undefined;
-          logError('[MAIN] API shutdown failed:', error);
         });
     });
 
@@ -270,6 +273,8 @@ export class ApiServer implements AppModule {
 
   private handleProcessExit(code: number | null, signal: NodeJS.Signals | null): void {
     logError(`[MAIN] API server exited with code ${code} and signal ${signal}`);
+    // This launch did not stay up, so it forgives nothing
+    clearTimeout(this.restartReset);
     const errors = this.processManager.getFatalErrors();
     const stderr = this.processManager.getLastStderr();
     if (errors.length > 0) {
@@ -314,8 +319,18 @@ export class ApiServer implements AppModule {
     broadcastEvent(API_EVENTS.ERROR, { error: error.message });
   }
 
+  /**
+   * Forgives earlier crashes once the launch just made has stayed up for `SUCCESS_CHECK_DELAY`.
+   *
+   * **One per launch, and a launch's own.** Whether "the process is running" is asked when the timer fires, and by
+   * then the process may be a later launch: an API that dies a couple of seconds after each start was running, as
+   * its successor, at every earlier launch's moment, so each crash was forgiven and the restarts never ran out.
+   * A launch that exits cancels its own (`handleProcessExit`), and one replaced without exiting through there (a
+   * reload) is cancelled by the launch that replaces it.
+   */
   private scheduleRestartResetTimeout(): void {
-    setTimeout(() => {
+    clearTimeout(this.restartReset);
+    this.restartReset = setTimeout(() => {
       if (this.processManager.isRunning()) {
         this.restartAttempts = 0;
       }

@@ -1,6 +1,6 @@
 import { observeTerminalPicture, type TerminalPicture, type TerminalPictureSource } from './picture.ts'
 export type { TerminalPicture } from './picture.ts'
-import { BrokerViews, TerminalView, xtermPalette, type Command, type CursorBlink, type CursorShape, type Detector, type LinkPreview, type Theme, Modifier, type TerminalSource, type KeyInput } from 'apack-terminal-view'
+import { BrokerViews, TerminalView, xtermPalette, type Command, type CursorShape, type Detector, type LinkPreview, type Theme, Modifier, type TerminalSource, type KeyInput } from 'apack-terminal-view'
 
 /** A command the shell marked, as the view holds it: a host draws its command blocks from these without importing the view */
 export type { Command }
@@ -127,24 +127,20 @@ const paths: Detector = {
 export interface ViewSettings {
   /** The cursor drawn while the terminal does not have the keyboard */
   readonly cursorInactive: CursorShape
-  /** `on` and `off` override what a program asks; `program` leaves the blink to the program */
-  readonly cursorBlink: CursorBlink
   /** Which links show where they open when the pointer is over them */
   readonly linkPreview: LinkPreview
 }
 
 /**
  * The view settings the code settings give. A value that is unset, or not one the view knows, is the default:
- * a hollow inactive cursor, the program's own blink (the broker's reset value already blinks), and the links a
- * program declared.
+ * a hollow inactive cursor, and the links a program declared. Whether the cursor blinks is not among them: a view
+ * draws the blink its session says, which the backend sets from the same settings (`cursorDefaultsOf`).
  */
-export function viewSettingsOf(settings: { cursorInactiveStyle?: string; cursorBlink?: string; linkPreview?: string } | undefined): ViewSettings {
+export function viewSettingsOf(settings: { cursorInactiveStyle?: string; linkPreview?: string } | undefined): ViewSettings {
   const inactive = settings?.cursorInactiveStyle
-  const blink = settings?.cursorBlink
   const preview = settings?.linkPreview
   return {
     cursorInactive: inactive === 'block' || inactive === 'bar' || inactive === 'underline' || inactive === 'hollow' ? inactive : 'hollow',
-    cursorBlink: blink === 'on' || blink === 'off' || blink === 'program' ? blink : 'program',
     linkPreview: preview === 'off' || preview === 'osc8' || preview === 'all' ? preview : 'osc8',
   }
 }
@@ -174,6 +170,8 @@ interface PoolEntry {
   following: boolean
   /** The connection its view is drawn over ended and was not made again (`lost`) */
   unreachable: boolean
+  /** Says the find bar's count again, while one is open over this terminal */
+  recount: (() => void) | null
 }
 
 /**
@@ -298,13 +296,12 @@ class TerminalPool {
    */
   setViewSettings(next: ViewSettings): void {
     const current = this.viewSettings
-    if (next.cursorInactive === current.cursorInactive && next.cursorBlink === current.cursorBlink && next.linkPreview === current.linkPreview) return
+    if (next.cursorInactive === current.cursorInactive && next.linkPreview === current.linkPreview) return
     this.viewSettings = next
     for (const entry of this.entries.values()) {
       const view = entry.view
       if (!view) continue
       if (next.cursorInactive !== current.cursorInactive) view.setCursorInactive(next.cursorInactive)
-      if (next.cursorBlink !== current.cursorBlink) view.setCursorBlink(next.cursorBlink)
       if (next.linkPreview !== current.linkPreview) view.setLinkPreview(next.linkPreview)
     }
   }
@@ -451,6 +448,8 @@ class TerminalPool {
         entry.handlers.onFollowingChange?.(following)
       },
       onSelectionChange: (selected) => entry.handlers.onSelectionChange?.(selected),
+      // Output moved what an open find bar counts: the match it is on, how many, or whether there are more
+      onFound: () => entry.recount?.(),
       // A URL from a terminal is whatever a program printed, so it goes through the app's own policy for
       // what may be opened; a path is the feature's to resolve against where the shell is
       onLink: (link) => {
@@ -460,7 +459,6 @@ class TerminalPool {
       confirmPaste: (text) => this.confirmPaste(entry, text),
       copyOnSelect: this.copyOnSelect,
       cursorInactive: this.viewSettings.cursorInactive,
-      cursorBlink: this.viewSettings.cursorBlink,
       linkPreview: this.viewSettings.linkPreview,
       onCommands: (commands) => {
         this.applyFolds(entry)
@@ -548,9 +546,13 @@ class TerminalPool {
     let matchCase = false
     const said = () => {
       const { current, total, more } = entry.view?.found ?? { current: 0, total: 0, more: false }
-      // Past the highlights the view holds, the total is what it holds and says there are more
-      count.textContent = input.value === '' ? '' : total === 0 ? 'No results' : `${current} of ${more ? `${total}+` : total}`
+      // `more` is that there are, or may be, matches beyond the ones counted: past the highlights the view
+      // holds, or further back than the search looked. So a count says so, and a search that found nothing
+      // without looking through everything says that, where one that did says there are none
+      const none = more ? 'None in the newest output' : 'No results'
+      count.textContent = input.value === '' ? '' : total === 0 ? none : `${current} of ${more ? `${total}+` : total}`
     }
+    entry.recount = said
     const search = () => entry.view?.find(input.value, { matchCase }).then(said)
     const step = (direction: -1 | 1) => {
       entry.view?.findNext(direction)
@@ -558,6 +560,7 @@ class TerminalPool {
     }
     const close = () => {
       bar.remove()
+      entry.recount = null
       void entry.view?.find('')
       entry.view?.focus()
     }
@@ -668,7 +671,7 @@ class TerminalPool {
     wrapper.appendChild(notice)
     const entry: PoolEntry = {
       terminalId: info.id, info, session: undefined, pid: info.pid, view: null, wrapper, notice,
-      attachedContainer: null, handlers: {}, following: true, unreachable: false, folded: new Set(),
+      attachedContainer: null, handlers: {}, following: true, unreachable: false, folded: new Set(), recount: null,
     }
     this.entries.set(info.id, entry)
     this.draw(entry, info)

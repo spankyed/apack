@@ -504,6 +504,29 @@
           style="max-height: 200px"
           rows="4"
         />
+        <!-- The trailers git reads at the end of the message: each can be taken out, and those the settings name are left out of the commit -->
+        <div v-if="trailers.length > 0" class="flex flex-wrap items-center gap-1" data-testid="commit-trailers">
+          <span
+            v-for="(trailer, index) in trailers"
+            :key="`${index}:${trailer.key}:${trailer.value}`"
+            :class="[
+              'inline-flex items-center gap-1 max-w-full pl-1.5 pr-0.5 py-0.5 text-[11px] rounded border',
+              removedOnCommit(trailer) ? 'border-neutral-800 text-neutral-500' : 'border-neutral-700 text-neutral-300'
+            ]"
+            :title="removedOnCommit(trailer) ? `${trailer.key}: ${trailer.value} — removed on commit (Settings › Code)` : `${trailer.key}: ${trailer.value}`"
+            data-commit-trailer
+          >
+            <span :class="['truncate', removedOnCommit(trailer) && 'line-through']">{{ trailer.key }}: {{ trailer.value }}</span>
+            <span v-if="removedOnCommit(trailer)" class="flex-shrink-0 text-neutral-600">removed on commit</span>
+            <button
+              class="flex-shrink-0 p-0.5 text-neutral-500 hover:text-red-400 transition-colors"
+              :title="`Take ${trailer.key} out of the message`"
+              @click="commitActor?.send({ type: 'commit.REMOVE_TRAILER', trailer })"
+            >
+              <X :size="11" />
+            </button>
+          </span>
+        </div>
         <button
           v-if="shouldShowActionButton"
           @click="handleActionButton"
@@ -688,6 +711,16 @@
                   <span class="w-7 flex-shrink-0" />
                 </template>
                 <template #actions>
+                  <button
+                    v-if="file.submodule?.commit"
+                    @click.stop="updateSubmodule(file)"
+                    :disabled="updatingSubmodule !== null"
+                    class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-50"
+                    :title="updatingSubmodule === file.path ? `Updating submodule${progressOf('submodule')}` : 'Update submodule to the commit this repository records'"
+                    data-testid="update-submodule"
+                  >
+                    <component :is="updatingSubmodule === file.path ? Loader2 : FolderSync" :class="['w-3 h-3 text-neutral-400', updatingSubmodule === file.path && 'animate-spin']" />
+                  </button>
                   <button @click.stop="openRevertDialog(file)" class="p-0.5 hover:bg-neutral-700 rounded" title="Discard changes">
                     <RotateCcw class="w-3 h-3 text-red-400" />
                   </button>
@@ -698,6 +731,9 @@
                 <template #menuItems>
                   <ContextMenuItem @select="stageFile(file)" :class="MENU_ITEM_CLASS">
                     <Plus class="w-4 h-4" /> Stage
+                  </ContextMenuItem>
+                  <ContextMenuItem v-if="file.submodule?.commit" :disabled="updatingSubmodule !== null" @select="updateSubmodule(file)" :class="MENU_ITEM_CLASS">
+                    <FolderSync class="w-4 h-4" /> Update Submodule
                   </ContextMenuItem>
                   <ContextMenuItem v-if="!file.isDirectory" @select="stashFile(file)" :class="MENU_ITEM_CLASS">
                     <Archive class="w-4 h-4" /> Stash this file
@@ -951,7 +987,7 @@ import { useSelector } from '@xstate/vue'
 import { useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
-import type { ConflictKind, OperationMove } from '#features/code/be/types.ts'
+import type { CommitTrailer, ConflictKind, OperationMove, ProgressDuring } from '#features/code/be/types.ts'
 import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText, GitPullRequestArrow, Pencil, Tag, Upload, Archive } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
 import { MENU_ITEM_CLASS, MENU_ITEM_DANGER_CLASS } from '#features/code/fe/features/explorer/constants.ts'
@@ -977,6 +1013,9 @@ const commitActor = panelChild(codeActor, 'commit')!
 
 // Settings from code actor
 const codeSettings = useSelector(codeActor, (state) => state.context.settings)
+/** Whether the settings leave this trailer out of what is committed: by key, whatever its case, as git reads one */
+const removedOnCommit = (trailer: CommitTrailer) =>
+  (codeSettings.value?.trailersRemovedOnCommit ?? []).some(key => key.toLowerCase() === trailer.key.toLowerCase())
 
 // Section visibility context menu
 const { showMenu, menuPos, sectionMenuItems, onSectionContextMenu } = useSectionVisibilityMenu(codeSettings)
@@ -990,6 +1029,7 @@ const refusingHook = useSelector(commitActor, (state) => state.context.gitFailur
 const isGitLoading = useSelector(commitActor, (state) => state.context.isGitLoading)
 const selectedGitFile = useSelector(commitActor, (state) => state.context.selectedGitFile)
 const commitMessage = useSelector(commitActor, (state) => state.context.commitMessage)
+const trailers = useSelector(commitActor, (state) => state.context.trailers)
 const revertDialogFile = useSelector(commitActor, (state) => state.context.revertDialogFile)
 const discardPreview = useSelector(commitActor, (state) => state.context.discardPreview)
 const lastDiscard = useSelector(commitActor, (state) => state.context.lastDiscard)
@@ -1234,7 +1274,7 @@ const shouldShowActionButton = computed(() => {
 
 const progress = useSelector(commitActor, (state) => state.context.progress)
 /** How far along git says it is, once it has said: `Writing objects 42%` */
-const progressOf = (during: 'push' | 'pull') => (progress.value?.during === during ? ` ${progress.value.stage} ${progress.value.percent}%` : '...')
+const progressOf = (during: ProgressDuring) => (progress.value?.during === during ? ` ${progress.value.stage} ${progress.value.percent}%` : '...')
 const actionButtonText = computed(() => {
   if (isPushing.value) return `Pushing${progressOf('push')}`
   if (isPulling.value) return `Pulling${progressOf('pull')}`
@@ -1489,6 +1529,14 @@ const startRenameBranch = (branch: string) => {
   renamingBranch.value = branch
   newBranchName.value = branch
   nextTick(() => newBranchInput.value?.select())
+}
+
+/** The submodule being brought to the commit this repository records for it, which holds the others back until it is */
+const updatingSubmodule = useSelector(commitActor, (state) => state.context.updatingSubmodule)
+
+/** Brings a submodule whose row says it is on another commit to the one this repository records */
+const updateSubmodule = (file: GitStatusFile) => {
+  commitActor?.send({ type: 'commit.UPDATE_SUBMODULE', path: file.path })
 }
 
 /** Stashes one file's changes, leaving the rest as they are */

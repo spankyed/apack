@@ -92,6 +92,11 @@ export const RUNTIME_ONLY_DEPS = new Map<string, string>([
   ['packages/main @app/renderer', "main loads the renderer's built output by path, or a dev-server URL"],
   ['packages/main @apackdev/cli', 'the packaged app ships the CLI, and the launcher runs it from '
     + 'Resources/app/packages rather than from node_modules'],
+  ['packages/apack-host @app/terminal-broker', 'loaded at run time through `createRequire`, so the API\'s bundle '
+    + 'leaves it a package beside the broker it installs rather than inlining it; the steps that start the broker '
+    + 'declare it (`TERMINAL_BROKER`, chain-steps.ts)'],
+  ['packages/api @app/terminal-broker', 'the declaration is what puts the pinned broker in the packaged app, where '
+    + "the host's bundled code loads it at run time"],
   ['packages/apack-testing @apackdev/ears', 'the bundle inlines @apackdev/host, whose code imports @apackdev/ears, '
     + 'which stays external as a shared instance: the published package needs it though its own source imports it nowhere'],
 ]);

@@ -15,7 +15,7 @@ import * as symlink from './repository/symlink.ts'
 import { toMap, toIdentifierSet, mapArray } from '@apackdev/sdk/utils'
 import { exportLibrary } from './export-library.ts'
 import { importLibrary } from './import-library.ts'
-import type { Reply } from '@apackdev/sdk/events';
+import { answerWith, type Reply } from '@apackdev/sdk/events';
 import type { OutgoingLibraryEvents } from './types.ts';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 import { reportError } from '@apackdev/sdk/logger';
@@ -36,22 +36,30 @@ const answer = (reply: Reply<OutgoingLibraryEvents> | undefined, event: Outcome)
 
 export const librarySpec = defineSystem<Contract>();
 
+/** A failure nobody asked about, which no window shows: an applier's write, a migration's */
+const reportUnasked = (label: string) => (error: unknown) => reportError({ error, title: `${label} failed`, source: 'library' })
+
 /**
  * One of a window's writes to the library, answered to whoever asked: with the folder it made, or that it landed, or
- * why it was refused. The write runs whether or not anybody asked — an applier's or a migration's has no `reply` —
- * and a refusal nobody asked for is reported, since no window shows it.
+ * why it was refused. The surface holds its views behind its own unanswered writes, so every write is answered, and
+ * `answerWith` is what holds that on the path where the write fails. The write runs whether or not anybody asked.
  */
-async function answerWrite(reply: Reply<OutgoingLibraryEvents> | undefined, label: string, write: () => Promise<OutgoingLibraryEvents | void> | OutgoingLibraryEvents | void): Promise<void> {
-  let answer: OutgoingLibraryEvents
-  try {
-    answer = (await write()) ?? { type: 'LIBRARY_WRITTEN' }
-  } catch (error) {
-    if (reply) reply({ type: 'LIBRARY_WRITE_FAILED', error: errorMessage(error) || `${label} failed` })
-    else reportError({ error, title: `${label} failed`, source: 'library' })
-    return
-  }
-  reply?.(answer)
-}
+const answerWrite = (reply: Reply<OutgoingLibraryEvents> | undefined, label: string, write: () => Promise<OutgoingLibraryEvents | void> | OutgoingLibraryEvents | void): Promise<void> =>
+  answerWith<OutgoingLibraryEvents>(reply, async () => (await write()) ?? { type: 'LIBRARY_WRITTEN' }, {
+    failed: error => ({ type: 'LIBRARY_WRITE_FAILED', error: errorMessage(error) || `${label} failed` }),
+    unasked: reportUnasked(label),
+  })
+
+/**
+ * One of a window's reads of what is on disk, answered to whoever asked: with what was read, or why it could not be.
+ * A file can be gone and a folder unreadable while the library still lists them, and a window that asked shows
+ * nothing until it is answered. A read that finds nothing throws, so there is one way for it to fail.
+ */
+const answerRead = (reply: Reply<OutgoingLibraryEvents> | undefined, label: string, read: () => Promise<OutgoingLibraryEvents>): Promise<void> =>
+  answerWith<OutgoingLibraryEvents>(reply, read, {
+    failed: error => ({ type: 'LIBRARY_READ_FAILED', error: errorMessage(error) || `${label} failed` }),
+    unasked: reportUnasked(label),
+  })
 
 /**
  * Tells every window that something on disk under a symlinked folder changed, which no view can see: `folderId`'s
@@ -80,9 +88,9 @@ function resolveHomePath(inputPath: string): string {
 export const librarySystem = setup({
   types: librarySpec.types,
   actions: librarySpec.actions({
-    createDocument: async ({ event, reply }) => {
+    createDocument: ({ event, reply }) => {
       const ev = event as { type: 'CREATE_DOCUMENT'; name: string; content: any[]; tags: string[]; collectionId?: string; documentType?: string }
-      await answerWrite(reply, 'Creating a document', async () => {
+      void answerWrite(reply, 'Creating a document', async () => {
         await libraryService.create({
           name: ev.name,
           content: ev.content,
@@ -93,9 +101,9 @@ export const librarySystem = setup({
         if (ev.collectionId && repository.libraryQueries.isDiskFolder(ev.collectionId)) diskChanged(ev.collectionId)
       })
     },
-    updateDocument: async ({ event, reply }) => {
+    updateDocument: ({ event, reply }) => {
       const ev = event as { type: 'UPDATE_DOCUMENT'; id: string; name: string; content: any[]; tags: string[]; collectionId?: string }
-      await answerWrite(reply, 'Saving a document', async () => {
+      void answerWrite(reply, 'Saving a document', async () => {
         await libraryService.update({
           id: ev.id,
           name: ev.name,
@@ -105,20 +113,21 @@ export const librarySystem = setup({
         if (repository.libraryQueries.isDiskDocument(ev.id)) diskChanged(diskParentOf(ev.id))
       })
     },
-    deleteDocument: async ({ event, reply }) => {
+    deleteDocument: ({ event, reply }) => {
       const ev = event as { type: 'DELETE_DOCUMENT'; id: string }
-      await answerWrite(reply, 'Deleting a document', () => { repository.libraryCommands.deleteDocument(ev.id as EARS.EntityId) })
+      void answerWrite(reply, 'Deleting a document', () => { repository.libraryCommands.deleteDocument(ev.id as EARS.EntityId) })
     },
-    getDocument: async ({ event, reply }) => {
+    getDocument: ({ event, reply }) => {
       const ev = event as { type: 'GET_DOCUMENT'; id: string }
-      const document = await libraryService.find(ev.id as EARS.EntityId)
-      reply?.(document
-        ? { type: 'DOCUMENT_LOADED' as const, data: { document } }
-        : { type: 'LIBRARY_WRITE_FAILED' as const, error: 'Document not found' })
+      void answerRead(reply, 'Reading a document', async () => {
+        const document = await libraryService.find(ev.id as EARS.EntityId)
+        if (!document) throw new Error('Document not found')
+        return { type: 'DOCUMENT_LOADED' as const, data: { document } }
+      })
     },
-    createCollection: async ({ event, reply }) => {
+    createCollection: ({ event, reply }) => {
       const ev = event as { type: 'CREATE_COLLECTION'; name: string; description?: string; parentId?: string }
-      await answerWrite(reply, 'Creating a folder', async () => {
+      void answerWrite(reply, 'Creating a folder', async () => {
         if (ev.parentId && repository.libraryQueries.isDiskFolder(ev.parentId)) {
           await libraryService.createFolder({ name: ev.name, parentId: ev.parentId })
           diskChanged(ev.parentId)
@@ -133,33 +142,37 @@ export const librarySystem = setup({
         return { type: 'COLLECTION_CREATED' as const, data: { collection } }
       })
     },
-    updateCollection: async ({ event, reply }) => {
+    updateCollection: ({ event, reply }) => {
       const ev = event as { type: 'UPDATE_COLLECTION'; id: string; name: string; description?: string }
-      await answerWrite(reply, 'Renaming a folder', () => { repository.libraryCommands.updateCollection(ev.id as EARS.EntityId, ev.name, ev.description) })
+      void answerWrite(reply, 'Renaming a folder', () => { repository.libraryCommands.updateCollection(ev.id as EARS.EntityId, ev.name, ev.description) })
     },
-    deleteCollection: async ({ event, reply }) => {
+    deleteCollection: ({ event, reply }) => {
       const ev = event as { type: 'DELETE_COLLECTION'; id: string }
-      await answerWrite(reply, 'Deleting a folder', () => { repository.libraryCommands.deleteCollection(ev.id as EARS.EntityId) })
+      void answerWrite(reply, 'Deleting a folder', () => { repository.libraryCommands.deleteCollection(ev.id as EARS.EntityId) })
     },
-    moveDocument: async ({ event, reply }) => {
+    moveDocument: ({ event, reply }) => {
       const ev = event as { type: 'MOVE_DOCUMENT'; documentId: string; collectionId?: string }
-      await answerWrite(reply, 'Moving a document', () => {
+      void answerWrite(reply, 'Moving a document', () => {
         repository.libraryCommands.moveDocument(ev.documentId as EARS.EntityId, ev.collectionId ? ev.collectionId as EARS.EntityId : undefined)
       })
     },
     // File browser actions
-    getFolderContents: async ({ event, reply }) => {
+    getFolderContents: ({ event, reply }) => {
       const ev = event as { type: 'GET_FOLDER_CONTENTS'; folderId: string | null }
-      const folderContents = await repository.libraryQueries.getFolderContents(ev.folderId ? ev.folderId as EARS.EntityId : null)
-      reply?.({ type: 'FOLDER_CONTENTS_LOADED' as const, data: folderContents })
+      void answerRead(reply, 'Reading a folder', async () => ({
+        type: 'FOLDER_CONTENTS_LOADED' as const,
+        data: await repository.libraryQueries.getFolderContents(ev.folderId ? ev.folderId as EARS.EntityId : null),
+      }))
     },
-    checkSymlinks: async ({ event, reply }) => {
+    checkSymlinks: ({ event, reply }) => {
       const ev = event as { type: 'CHECK_SYMLINKS'; ids: string[] }
-      reply?.({ type: 'SYMLINKS_CHECKED' as const, ids: ev.ids, broken: await repository.libraryQueries.brokenSymlinks(ev.ids) })
+      void answerRead(reply, 'Checking symlinked folders', async () => ({
+        type: 'SYMLINKS_CHECKED' as const, ids: ev.ids, broken: await repository.libraryQueries.brokenSymlinks(ev.ids),
+      }))
     },
-    renameItem: async ({ event, reply }) => {
+    renameItem: ({ event, reply }) => {
       const ev = event as { type: 'RENAME_ITEM'; id: string; name: string; itemType: 'document' | 'folder' }
-      await answerWrite(reply, 'Renaming', async () => {
+      void answerWrite(reply, 'Renaming', async () => {
         if (symlink.isSymlinkId(ev.id)) {
           // Worked out before the rename, while the path still resolves
           const parent = diskParentOf(ev.id)
@@ -170,16 +183,16 @@ export const librarySystem = setup({
         repository.libraryCommands.renameItem(ev.id as EARS.EntityId, ev.name, ev.itemType)
       })
     },
-    deleteItems: async ({ event, reply }) => {
+    deleteItems: ({ event, reply }) => {
       const ev = event as { type: 'DELETE_ITEMS'; ids: string[] }
-      await answerWrite(reply, 'Deleting', async () => {
+      void answerWrite(reply, 'Deleting', async () => {
         await libraryService.remove(ev.ids)
         if (ev.ids.some(symlink.isSymlinkId)) diskChanged(null)
       })
     },
-    moveItems: async ({ event, reply }) => {
+    moveItems: ({ event, reply }) => {
       const ev = event as { type: 'MOVE_ITEMS'; ids: string[]; targetFolderId: string | null }
-      await answerWrite(reply, 'Moving', async () => {
+      void answerWrite(reply, 'Moving', async () => {
         await libraryService.move(ev.ids, ev.targetFolderId)
         if (ev.ids.some(symlink.isSymlinkId) || repository.libraryQueries.isDiskFolder(ev.targetFolderId)) diskChanged(null)
       })
@@ -230,9 +243,9 @@ export const librarySystem = setup({
     //   broadcastToSurface('library', { type: 'SEARCH_RESULTS', data: { results } })
     // },
     // Symlink actions
-    createSymlinkCollection: async ({ event, reply }) => {
+    createSymlinkCollection: ({ event, reply }) => {
       const ev = event as { type: 'CREATE_SYMLINK_COLLECTION'; name: string; symlinkPath: string; parentId?: string }
-      await answerWrite(reply, 'Linking a folder', () => {
+      void answerWrite(reply, 'Linking a folder', () => {
         const collection = repository.libraryCommands.createSymlinkCollection(
           ev.name,
           resolveHomePath(ev.symlinkPath),
@@ -241,10 +254,10 @@ export const librarySystem = setup({
         return { type: 'COLLECTION_CREATED' as const, data: { collection } }
       })
     },
-    updateSymlinkPath: async ({ event, reply }) => {
+    updateSymlinkPath: ({ event, reply }) => {
       const ev = event as { type: 'UPDATE_SYMLINK_PATH'; collectionId: string; newPath: string }
       const resolvedPath = resolveHomePath(ev.newPath)
-      await answerWrite(reply, 'Relinking a folder', async () => {
+      void answerWrite(reply, 'Relinking a folder', async () => {
         // Validate the new path exists and is a directory
         let isDirectory = false
         try {

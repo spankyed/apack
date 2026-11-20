@@ -4,7 +4,7 @@
   terminal as it was when the tab was made.
 -->
 <template>
-  <TerminalActivityBadge :activity="activity" :kept="kept" />
+  <TerminalActivityBadge :activity="activity" :kept="kept" :status="status" />
 </template>
 
 <script setup lang="ts">
@@ -13,12 +13,15 @@ import { useSelector } from '@xstate/vue'
 import { type CodeState } from '#features/code/fe/state.ts'
 import { panelChild } from '../children.ts'
 import TerminalActivityBadge from './TerminalActivityBadge.vue'
+import { statusToShow } from './status.ts'
 
 const props = defineProps<{ terminalId: string }>()
 
 const codeActor: CodeState = useSurface()
 const terminalActor = panelChild(codeActor, 'terminal')!
 const activity = useSelector(terminalActor, (state) => state.context.activity[props.terminalId])
+const status = useSelector(terminalActor, (state) =>
+  statusToShow(state.context.terminals.find(terminal => terminal.id === props.terminalId)?.statuses))
 const kept = useSelector(terminalActor, (state) =>
   state.context.terminals.find(terminal => terminal.id === props.terminalId)?.kept === true)
 </script>

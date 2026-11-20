@@ -40,6 +40,11 @@ describe('app command arguments', () => {
     expect(pickAppRelease([release('0.4.1-beta.1', true)], 'production')).toBeNull();
     expect(pickAppRelease([{ ...release('0.4.1'), assets: release('0.4.0').assets }], 'production')).toBeNull();
   });
+  it("passes over a newer release that holds no macOS files yet, as another platform's workflow leaves one", () => {
+    const windowsOnly = { tag_name: 'v0.4.1', prerelease: false, assets: [{ name: 'apack-0.4.1-win-x64.exe', browser_download_url: 'https://fixture.test/app.exe' }] };
+    expect(pickAppRelease([windowsOnly, release('0.4.0')], 'production')?.version).toBe('0.4.0');
+    expect(pickAppRelease([windowsOnly, release('0.4.0')], 'production', '0.4.1')).toBeNull();
+  });
 });
 
 describe.skipIf(process.platform !== 'darwin' || process.arch !== 'arm64')('app lifecycle with temporary bundles', () => {

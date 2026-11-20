@@ -195,7 +195,9 @@ condition before proceeding, and record the outcome.
   span type costs one more pass.
 - **D3 — Search matches are capped at 1000 (xterm's `highlightLimit`).** Beyond the cap, the count reads "1000+"
   and navigation still works. *Why:* the cap bounds the paint and the search cost; a user who needs the 1001st
-  match is rare, and "1000+" says so.
+  match is rare, and "1000+" says so. A case-sensitive search reads back at most 20,000 of the matches in either
+  case to find the exact ones, since the core has no rule for case and keeps every match it finds; when it stops
+  there the answer says there may be more, and the count says so however few it holds.
 - **D4 — OSC 8 links open only `http`, `https` and `mailto` by default.** Any other scheme asks for confirmation
   through the main process, except `javascript:`, `data:` and `vbscript:`, which are refused outright. A `file://`
   link is refused, with or without a host. *Why:* ghostty 1.4 shows the crafted-link risk. The three refused schemes
@@ -213,9 +215,14 @@ condition before proceeding, and record the outcome.
   checklist, like the parity goal's VoiceOver checklist (D6 there), is a follow-up whose result is recorded when run.
 - **D7 — Bell: visual flash on by default; system notification off by default, and only when the window is not
   focused.** *Why:* a flash is local and expected; a notification that fires on every bell is noise.
-- **D8 — Cursor blink is three-state: unset (the app's default), on, off, or "program decides"** (ghostty's
-  `null`). Style and blink are per session, and a program's DECSCUSR choice wins over the app's default until the
-  program resets it.
+- **D8 — Cursor blink is three-state: left to programs (the default, ghostty's `null`), on, or off.** Style and
+  blink are per session, and a program's DECSCUSR choice wins over the app's default until the program resets it.
+  With the blink on or off, a program's DEC mode 12 leaves it as it is, which is the rule ghostty documents for a
+  set `cursor-style-blink`: mode 12 is what `cnorm` and `cvvis` carry, so it is a side effect of showing the
+  cursor, where DECSCUSR is a program saying what its cursor is. *Why three and not four:* in ghostty an unset
+  blink is `null`, so "unset" and "program decides" were one state written twice. *Where it is settled:* the core
+  keeps one blink for both sequences, so the broker undoes a mode-12 change where the output is parsed, and a
+  view draws the blink a frame says.
 - **D9 — Drag and drop inserts the quoted path(s), separated by spaces, with no trailing newline.** Quoting is POSIX
   single quotes for bash, zsh and fish; on Windows it is the quoting for the shell the terminal runs, and Phase 5
   names which shells it supports.

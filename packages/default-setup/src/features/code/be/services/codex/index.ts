@@ -7,7 +7,7 @@
  */
 
 import { CodexAppServer } from './app-server.ts'
-import { storeHandle, getHandle, clearHandle } from './handle-store.ts'
+import { storeHandle, getHandle, clearHandle, forgetAllTurns } from './handle-store.ts'
 import * as codexSessions from './sessions.ts'
 import type {
   ServerStatus,
@@ -29,6 +29,17 @@ export type { ServerStatus, ThreadStartParams, ThreadReadParams, ThreadForkParam
 export { storeHandle, getHandle, clearHandle }
 
 const server = new CodexAppServer()
+
+/**
+ * Stops the app server and with it every turn running in it: for the pack's backend stopping. The server is a
+ * process this module started and only this module holds, so code that replaces this module (a reload) would
+ * otherwise leave it running with nobody to talk to it, and start another beside it.
+ */
+export function stopCodex(): void {
+  forgetAllTurns()
+  // Its exit is not waited for: whoever stops the pack does not wait, and the server ends on its input closing
+  void server.stop().catch(() => { /* already gone */ })
+}
 
 export const codexService = {
   // Lifecycle

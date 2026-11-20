@@ -96,9 +96,11 @@ const SEARCH_STATES: Record<PRListState, string> = { open: 'is:open', closed: 'i
 /** A pull request's discussion, newest last, read back from the newest a page at a time (`before`) */
 const COMMENT_NODES = 'pageInfo { hasPreviousPage startCursor } nodes { id body author { login } createdAt url viewerDidAuthor }'
 const COMMENT_FIELDS = `comments(last: ${PAGE}) { ${COMMENT_NODES} }`
+/** A review thread's own comments, newest last, read back from the newest a page at a time as the discussion is */
+const THREAD_COMMENT_NODES = 'pageInfo { hasPreviousPage startCursor } nodes { id databaseId body author { login } createdAt viewerDidAuthor path line startLine originalLine originalStartLine diffHunk }'
 const THREAD_NODES = `pageInfo { hasPreviousPage startCursor } nodes {
   id isResolved isOutdated path line startLine originalLine originalStartLine diffSide startDiffSide subjectType
-  comments(last: ${PAGE}) { nodes { id databaseId body author { login } createdAt viewerDidAuthor path line startLine originalLine originalStartLine diffHunk } } }`
+  comments(last: ${PAGE}) { ${THREAD_COMMENT_NODES} } }`
 
 type Json = Record<string, any>
 
@@ -313,6 +315,20 @@ export function createGitHubApi({ endpoints, token, repo, head = repo, pause = p
     return all
   }
 
+  /** Every comment of a review thread, oldest first: `page` as the thread's own ask answered it, and the pages before it */
+  const threadCommentsBackTo = async (thread: string, page: Json | undefined): Promise<Json[]> => {
+    const all: Json[] = [...(page?.nodes as Json[] ?? [])]
+    let info: Json | undefined = page?.pageInfo
+    while (info?.hasPreviousPage && info.startCursor) {
+      const data = await graphql(`query($id: ID!, $before: String!) {
+        node(id: $id) { ... on PullRequestReviewThread { comments(last: ${PAGE}, before: $before) { ${THREAD_COMMENT_NODES} } } } }`, { id: thread, before: info.startCursor })
+      const earlier = data?.node?.comments
+      all.unshift(...(earlier?.nodes as Json[] ?? []))
+      info = earlier?.pageInfo
+    }
+    return all
+  }
+
   const getPRDetails = async (number: number) => {
     const node = await pullRequest(number, `${PR_FIELDS} ${MERGE_FIELDS} ${CHECK_FIELDS} ${COMMIT_FIELDS} ${COMMENT_FIELDS}`)
     const { id: _id, ...rest } = node
@@ -469,8 +485,9 @@ export function createGitHubApi({ endpoints, token, repo, head = repo, pause = p
 
     async getReviewThreads(number) {
       const node = await pullRequest(number, `reviewThreads(last: ${PAGE}) { ${THREAD_NODES} }`)
-      return (await backTo(number, 'reviewThreads', THREAD_NODES, node.reviewThreads)).map(thread => {
-        const comments = (thread.comments?.nodes as Json[] ?? []).map(comment => ({
+      const threads = await backTo(number, 'reviewThreads', THREAD_NODES, node.reviewThreads)
+      return Promise.all(threads.map(async thread => {
+        const comments = (await threadCommentsBackTo(thread.id, thread.comments)).map(comment => ({
           id: comment.id,
           databaseId: comment.databaseId,
           body: comment.body,
@@ -499,7 +516,7 @@ export function createGitHubApi({ endpoints, token, repo, head = repo, pause = p
           diffHunk: comments.find(comment => comment.diffHunk)?.diffHunk ?? null,
           comments,
         }
-      })
+      }))
     },
 
     async replyToReviewThread(prNumber, commentId, body) {

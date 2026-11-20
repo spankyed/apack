@@ -31,7 +31,7 @@ afterEach(async () => {
   roots.splice(0).forEach(root => fs.rmSync(root, { recursive: true, force: true }));
 });
 
-function fixture() {
+function fixture({ frontendInputCheckIdleMs }: { frontendInputCheckIdleMs?: number } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-builder-'));
   roots.push(root);
   const compiler = path.join(root, 'compiler'), pack = path.join(root, 'pack');
@@ -102,7 +102,7 @@ function fixture() {
   vi.spyOn(checkout, 'ensureCheckoutPackages').mockImplementation(() => {});
   // Moves on every read, so each build here refreshes; what an unmoved state skips has its own case
   let packagesMoved = 0;
-  const builder = createPackBuilder(pack, { packagesState: () => String(packagesMoved++) });
+  const builder = createPackBuilder(pack, { packagesState: () => String(packagesMoved++), frontendInputCheckIdleMs });
   builders.push(builder);
   const report = () => JSON.parse(fs.readFileSync(path.join(pack, '.apack/built.json'), 'utf8')) as { pid: number; bin: string; label: string };
   return { compiler, pack, builder, report };
@@ -188,7 +188,8 @@ it('cancels a frontend input check before retiring its compiler and workspace', 
 });
 
 it('refuses an unresponsive frontend freshness check and allows its later recovery', async () => {
-  const { pack, builder } = fixture();
+  // Shorter than the watchdog around the run, which would otherwise end it while the blocked check is still waiting
+  const { pack, builder } = fixture({ frontendInputCheckIdleMs: 10_000 });
   await builder.build();
   fs.mkdirSync(path.join(pack, 'src'));
   fs.writeFileSync(path.join(pack, 'src/pack-entry-fe.ts'), 'export {};');

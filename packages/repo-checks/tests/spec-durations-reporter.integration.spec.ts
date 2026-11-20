@@ -264,8 +264,8 @@ it('records a test that spent more CPU than its budget, against its own where it
   linkVitest(root);
   // A CPU deadline of 400ms is a budget of 200ms: 'costly' spends past it, 'declared' spends the same inside its own
   // 1s deadline, and 'waits' takes longer than either on the clock while spending nothing — the case a duration
-  // would have named
-  const burn = 'const end = Date.now() + 300; while (Date.now() < end) {}';
+  // would have named. The burn counts CPU, not the clock: 300ms of clock on a busy machine buys less than 200ms of CPU
+  const burn = 'const from = process.cpuUsage(); const spent = () => { const { user, system } = process.cpuUsage(from); return user + system; }; while (spent() < 300_000) {}';
   fs.writeFileSync(path.join(root, 'timing.spec.ts'), `import { it } from 'vitest';
     it('costly', () => { ${burn} });
     it('declared', { meta: { cpuBudgetMs: 1_000 } }, () => { ${burn} });

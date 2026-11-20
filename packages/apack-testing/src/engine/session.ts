@@ -450,7 +450,7 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
     win.${BRIDGE_FLAG} = true;
     const emit = (payload) => {
       try {
-        Promise.resolve(win.${BRIDGE_FUNCTION}?.(payload)).catch(() => {});
+        win.${BRIDGE_FUNCTION}?.(payload)?.catch?.(() => {});
       } catch {
         // The function is absent, or threw before answering: the same event nobody is listening for
       }

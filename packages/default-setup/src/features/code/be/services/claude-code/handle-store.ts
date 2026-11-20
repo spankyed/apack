@@ -98,7 +98,10 @@ function stop(key: string): void {
   terminalResumes.delete(key)
   starting.delete(key)
   terminalTransitions.get(key)?.abort(); terminalTransitions.delete(key)
-  const terminal = terminals.get(key); terminals.delete(key); terminal?.kill()
+  const terminal = terminals.get(key); terminals.delete(key)
+  // Guarded as the turn's kill below is: `killAllHandles` ends every key in one pass, and one that cannot be ended
+  // must not leave the rest running
+  try { terminal?.kill() } catch { /* already gone */ }
   const owner = conversations.get(key)?.owner
   conversations.delete(key)
   const done = terminal?.done ?? owner?.done

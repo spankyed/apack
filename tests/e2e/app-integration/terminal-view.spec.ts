@@ -8,12 +8,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Page } from '@playwright/test';
+import { createRequire } from 'node:module';
 import { test, expect } from '@apackdev/testing';
 
 const CODE = 'default-setup/code';
 
 type DrivenWindow = {
-  __sendToSystem: (systemId: string, event: Record<string, unknown>) => void;
   applicationState: { send(event: Record<string, unknown>): void };
 };
 
@@ -50,13 +50,11 @@ test.afterEach(() => {
   workDir = undefined;
 });
 
-test.beforeEach(async ({ app, appPage }) => {
+test.beforeEach(async ({ app }) => {
   workDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-terminal-view-')));
   await app.waitForSurface(CODE);
   await app.navigate(CODE);
-  await appPage.evaluate(({ code, dir }) => {
-    (window as unknown as DrivenWindow).__sendToSystem(code, { type: 'SET_BASE_DIRECTORY', path: dir, fromUserNavigation: false });
-  }, { code: CODE, dir: workDir });
+  await app.send(CODE, { type: 'SET_BASE_DIRECTORY', path: workDir, fromUserNavigation: false });
 });
 
 test('a shell is drawn, and what is typed into it runs', async ({ appPage }) => {
@@ -238,8 +236,8 @@ test('a double click selects the word under it, and copying puts it on the clipb
  * the transport — and the window draws its terminal from the socket the app puts in front of that command.
  */
 test('a terminal on a target is drawn and typed at like any other', async ({ app, appPage }) => {
-  const broker = path.resolve('vendor/apack-terminal/node/apack-terminal');
-  test.skip(!fs.existsSync(broker) || process.platform === 'win32', 'needs the staged broker binary');
+  const broker = (createRequire(import.meta.url)('@app/terminal-broker') as { brokerBinary(): string | undefined }).brokerBinary();
+  test.skip(broker === undefined || process.platform === 'win32', 'needs the pinned broker installed');
   const far = path.join(workDir!, 'far.sock');
   // Named where a person names one: in the code feature's settings
   await app.navigate('host/settings');

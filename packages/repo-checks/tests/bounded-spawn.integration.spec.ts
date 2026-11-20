@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { describe, expect, it } from 'vitest';
 import { settles } from '@apackdev/sdk/testing/waiting';
+import { LOOSE_CEILING_FACTOR } from '@apackdev/sdk/progress';
 import { boundedSpawn } from '../../../scripts/lib/bounded-spawn.ts';
 
 /** Signal delivery precedes kernel reaping; require disappearance rather than a single immediate probe. */
@@ -110,11 +111,20 @@ while [ ! -s ${JSON.stringify(pidFile)} ]; do sleep 0.05; done`],
     expect(result.left).toBeUndefined();
   });
 
+  // What it left runs until it is killed, since how long the look for it takes is the machine's: each look is a `ps`,
+  // which a busy machine takes seconds over, and a process with an end of its own can be gone before the last one
   it('keeps the code of a command that failed by itself, and still says what it left', async () => {
-    const result = await boundedSpawn('sh', ['-c', 'sleep 30 >/dev/null 2>&1 & exit 3'], 30_000);
+    const pidFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'bounded-spawn-')), 'grandchild.pid');
+    const result = await boundedSpawn('sh',
+      ['-c', `${process.execPath} -e 'require("fs").writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); setInterval(()=>{},1000)' >/dev/null 2>&1 &
+while [ ! -s ${JSON.stringify(pidFile)} ]; do sleep 0.05; done; exit 3`],
+      30_000);
+    const grandchild = Number(fs.readFileSync(pidFile, 'utf-8'));
+    expect(grandchild, 'nothing is proven if the grandchild never started').toBeGreaterThan(0);
 
     expect(result.code).toBe(3);
-    expect(result.left?.map(left => left.command)).toEqual(['sleep 30']);
+    expect(result.left?.map(left => left.pid)).toEqual([grandchild]);
+    await expectGone(grandchild);
   });
 });
 
@@ -125,16 +135,15 @@ while [ ! -s ${JSON.stringify(pidFile)} ]; do sleep 0.05; done`],
  */
 describe('a bounded spawn that stops making progress', () => {
   const node = (code: string) => [process.execPath, ['-e', code]] as const;
-  const burn = (ms: number) => `const end = Date.now() + ${ms}; while (Date.now() < end) {}`;
-  // For the cases that need CPU: wide enough that a tree starved to an eighth of a core still clears a second
-  // of CPU in it, since these run beside the rest of the integration pool
-  const CPU_IDLE = 8_000;
 
   it('ends a silent tree that only ticks a timer as stalled, long before its budget', async () => {
     const [command, args] = node('setInterval(() => {}, 5)');
-    const result = await boundedSpawn(command, args, 30_000, { idleMs: 2_000 });
+    const budget = 30_000;
+    const result = await boundedSpawn(command, args, budget, { idleMs: 2_000 });
     expect(result).toMatchObject({ code: 124, timedOut: true, stalled: true });
-    expect(result.ms).toBeLessThan(15_000);
+    // Long before its budget in CPU, the measure that counts: on the clock a busy machine stretches how soon a
+    // stall is found, since each reading is a `ps` it takes seconds over
+    expect(result.cpuMs).toBeLessThan(budget / 10);
   });
 
   // Unix alone: Windows has no listing that says what state a process is in
@@ -142,8 +151,10 @@ describe('a bounded spawn that stops making progress', () => {
     const [command, args] = node('setInterval(() => {}, 5) // the-one-that-waits');
     const result = await boundedSpawn(command, args, 30_000, { idleMs: 2_000 });
     expect(result.stalled).toBe(true);
-    // The process it started, asleep on an event rather than waiting on a disk, and what it was running
-    expect(result.output).toMatch(/Its process tree when it was found doing nothing[^\n]*\n {2}pid \d+ \(parent \d+\) S\S*, \S+ CPU in \S+[^\n]*the-one-that-waits/);
+    // The process it started, asleep on an event or queued for the CPU to run a tick rather than waiting on a disk, and
+    // what it was running. Which of the two it is depends on the load: on a busy machine a tick waits its turn often
+    // enough that the listing finds it runnable about half the time
+    expect(result.output).toMatch(/Its process tree when it was found doing nothing[^\n]*\n {2}pid \d+ \(parent \d+\) [SR]\S*, \S+ CPU in \S+[^\n]*the-one-that-waits/);
   });
 
   it('counts output as progress for a tree that is only waiting', async () => {
@@ -163,19 +174,39 @@ describe('a bounded spawn that stops making progress', () => {
     }
   });
 
+  // The cases that spend CPU spin until a ceiling ends them and leave the stall window at its default. A tree counts as working when it adds a second of
+  // CPU within the window, so a window of W seconds reads a tree starved below 1/W of a core as stalled while it
+  // spins: eight seconds would need an eighth of a core, which a load of 150 on ten cores does not give. The default
+  // needs a hundred-and-twentieth, is what every step runs with, and these cases are about the CPU a tree is read to
+  // spend rather than about a stall, which the cases above cover
   it('counts the CPU of a descendant in a process group of its own', async () => {
-    // Playwright's shape: the runner waits while Electron, started in its own group, does the work
+    // Playwright's shape: the runner waits while Electron, started in its own group, does the work. The runner spends
+    // next to nothing, so only the descendant's CPU can bring the tree to its budget
     const [command, args] = node(`const { spawn } = require('child_process');
-spawn(process.execPath, ['-e', ${JSON.stringify(burn(CPU_IDLE + 2_000))}], { detached: true, stdio: 'ignore' }).on('exit', () => process.exit(0));`);
-    const result = await boundedSpawn(command, args, 60_000, { idleMs: CPU_IDLE });
-    expect(result).toMatchObject({ code: 0 });
+console.log(spawn(process.execPath, ['-e', 'for (;;) {}'], { detached: true, stdio: 'ignore' }).pid);`);
+    const budget = 3_000;
+    const running = boundedSpawn(command, args, budget);
+    let result: Awaited<typeof running> | undefined;
+    try {
+      result = await running;
+    } finally {
+      // Outside the group the kill reaches, so ended here, by the pid it was started with
+      const descendant = Number((result?.output ?? '').split('\n')[0]);
+      if (descendant > 0) {
+        try { process.kill(descendant, 'SIGKILL'); } catch { /* exited */ }
+        await expectGone(descendant);
+      }
+    }
+    expect(result).toMatchObject({ code: 124, timedOut: true });
+    expect(result?.stalled).toBeUndefined();
+    expect(result?.cpuMs).toBeGreaterThanOrEqual(budget);
   });
 
   it('leaves a tree that spins to its CPU budget, which reports a timeout and not a stall', async () => {
     // For ever, so the case rests on the CPU it spends and not on how soon a starved machine gets through a burn
     const [command, args] = node('for (;;) {}');
     const budget = 4_000;
-    const result = await boundedSpawn(command, args, budget, { idleMs: CPU_IDLE });
+    const result = await boundedSpawn(command, args, budget);
     expect(result).toMatchObject({ code: 124, timedOut: true });
     expect(result.stalled).toBeUndefined();
     expect(result.cpuMs).toBeGreaterThanOrEqual(budget);
@@ -193,12 +224,16 @@ spawn(process.execPath, ['-e', ${JSON.stringify(burn(CPU_IDLE + 2_000))}], { det
 
   it('holds a tree to ten times its CPU budget under APACK_CEILING=loose, with the watchdog still on', async () => {
     // The container's case: CPU there is the host's load too, so the ceiling is held loosely rather than to its size
-    const [command, args] = node(burn(3_000));
+    // For ever, so it is the loosened ceiling that ends it, at whatever pace a starved machine lets it get there
+    const [command, args] = node('for (;;) {}');
+    const budget = 1_000;
     process.env.APACK_CEILING = 'loose';
     try {
-      const result = await boundedSpawn(command, args, 1_000, { idleMs: CPU_IDLE });
-      expect(result).toMatchObject({ code: 0 });
-      expect(result.cpuMs, 'nothing is proven unless it spent past its budget').toBeGreaterThan(1_000);
+      const result = await boundedSpawn(command, args, budget);
+      expect(result).toMatchObject({ code: 124, timedOut: true });
+      expect(result.stalled).toBeUndefined();
+      expect(result.cpuMs).toBeGreaterThanOrEqual(LOOSE_CEILING_FACTOR * budget);
+      expect(result.output).toContain(`spent its ${LOOSE_CEILING_FACTOR * budget / 1000}s CPU budget`);
     } finally {
       delete process.env.APACK_CEILING;
     }

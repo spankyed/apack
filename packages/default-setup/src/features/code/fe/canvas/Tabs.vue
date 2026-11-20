@@ -153,6 +153,7 @@
                 class="w-24 px-1 text-sm bg-neutral-800 border border-blue-500 rounded outline-none text-neutral-100"
               />
               <span v-else class="max-w-[150px] truncate" :class="tab.isPreview ? 'italic' : ''">{{ getTabLabel(tab) }}</span>
+              <TerminalTabBadge v-if="isTerminal(tab)" :terminal-id="(tab as TerminalTab).terminalInfo.id" />
               <Pin
                 v-if="tab.isPinned"
                 class="w-3 h-3 ml-1 text-neutral-400 cursor-pointer hover:text-neutral-200 transition-colors"
@@ -261,6 +262,7 @@
               >
                 <component :is="getTabIcon(tab)" class="flex-shrink-0 w-4 h-4" />
                 <span class="max-w-[150px] truncate" :class="tab.isPreview ? 'italic' : ''">{{ getTabLabel(tab) }}</span>
+                <TerminalTabBadge v-if="isTerminal(tab)" :terminal-id="(tab as TerminalTab).terminalInfo.id" />
                 <span v-if="!isTerminal(tab) && !tab.isDiff && tab.pendingSaveConflict" class="w-2 h-2 bg-orange-500 rounded-full"></span>
                 <span v-else-if="!isTerminal(tab) && !tab.isDiff && tab.modified" class="w-2 h-2 bg-blue-500 rounded-full"></span>
               </button>
@@ -331,6 +333,7 @@
               class="w-24 px-1 text-sm bg-neutral-800 border border-blue-500 rounded outline-none text-neutral-100"
             />
             <span v-else class="max-w-[150px] truncate" :class="tab.isPreview ? 'italic' : ''">{{ getTabLabel(tab) }}</span>
+            <TerminalTabBadge v-if="isTerminal(tab)" :terminal-id="(tab as TerminalTab).terminalInfo.id" />
             <span v-if="!isTerminal(tab) && !tab.isDiff && tab.pendingSaveConflict" class="w-2 h-2 bg-orange-500 rounded-full"></span>
             <span v-else-if="!isTerminal(tab) && !tab.isDiff && tab.modified" class="w-2 h-2 bg-blue-500 rounded-full"></span>
           </button>

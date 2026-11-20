@@ -41,16 +41,19 @@ it('defers quit until API exit and lets the resumed quit proceed', async () => {
   expect(stop).toHaveBeenCalledTimes(1);
 });
 
-it('keeps quit cancelled on shutdown failure and allows a fresh attempt', async () => {
-  const stop = vi.spyOn(ProcessManager.prototype, 'stop').mockRejectedValueOnce(new Error('API still alive'))
-    .mockResolvedValue(undefined);
+/**
+ * A quit that was asked for finishes. Its cancellation is a wait for the API, and a wait that fails must not
+ * become a refusal: nothing asks again — not a test harness, which asks once, and not a quit the OS sent — so the
+ * app would stay up, idle, with no window to quit it from. An API left running is ended by the next launch,
+ * which kills an orphaned one before it starts its own.
+ */
+it('finishes the quit, saying so, when stopping the API fails', async () => {
+  const stop = vi.spyOn(ProcessManager.prototype, 'stop').mockRejectedValue(new Error('API still alive'));
   const { app, attempts } = application();
   app.quit();
-  await vi.waitFor(() => expect(logError).toHaveBeenCalledWith('[MAIN] API shutdown failed:', expect.any(Error)));
-  expect(app.quit).toHaveBeenCalledTimes(1);
+  await vi.waitFor(() => expect(app.quit).toHaveBeenCalledTimes(2));
+  expect(logError).toHaveBeenCalledWith('[MAIN] API shutdown failed; quitting without it:', expect.any(Error));
   expect(attempts[0]!.preventDefault).toHaveBeenCalledOnce();
-  app.quit();
-  await vi.waitFor(() => expect(app.quit).toHaveBeenCalledTimes(3));
-  expect(stop).toHaveBeenCalledTimes(2);
-  expect(attempts[2]!.preventDefault).not.toHaveBeenCalled();
+  expect(attempts[1]!.preventDefault).not.toHaveBeenCalled();
+  expect(stop).toHaveBeenCalledTimes(1);
 });

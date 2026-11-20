@@ -261,7 +261,7 @@ const GREETING_BYTES = 4096;
  */
 const terminal = {
   views: (target?: string): TerminalViewStream => {
-    const endpoint = ipcRenderer.sendSync('terminal:view-endpoint', target) as {socket: string; greeting: string} | null;
+    const endpoint = ipcRenderer.sendSync('terminal:view-endpoint', target) as {socket: string; greeting: string; proof: string | null} | null;
     const data = new Set<(chunk: Uint8Array) => void>();
     const closed = new Set<() => void>();
     let over = false;
@@ -299,6 +299,10 @@ const terminal = {
       }
       // A broker that refuses the greeting answers `failed`: there is nothing to draw from it
       if ((answered as {kind?: unknown} | null)?.kind !== 'hello') return end();
+      // **And one that cannot prove it is the app's own is not drawn from or typed at.** The address is a name,
+      // and on Windows another account can hold that name; main asked the broker a question only the app's
+      // own can answer, and said what the answer has to be
+      if (endpoint!.proof !== null && (answered as {proof?: unknown}).proof !== endpoint!.proof) return end();
       greeted = true;
       for (const bytes of held.splice(0)) socket.write(bytes);
       hand(greeting.subarray(line + 1));

@@ -56,6 +56,6 @@ export async function facadeReport(args: string[]): Promise<void> {
     }
     throw new Error(`\n${comparison.problem}`);
   } finally {
-    fs.rmSync(scratch, { recursive: true, force: true });
+    fs.rmSync(scratch, { recursive: true, force: true, maxRetries: 5 });
   }
 }

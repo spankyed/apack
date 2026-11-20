@@ -44,9 +44,9 @@ const CONFIGS: Record<string, BundleConfig> = {
     manifest: { bin: { apack: 'bin/apack.mjs' } },
   },
   '@apackdev/testing': {
-    // vitest-exit-with-parent, vitest-progress-guard, vitest-worker and vitest-teardown are loaded by path from
+    // vitest-exit-with-parent, vitest-progress-guard, vitest-git-config, vitest-worker and vitest-teardown are loaded by path from
     // dist/vitest.js's isolatedDataDir()
-    entries: { index: 'src/index.ts', performance: 'src/performance.ts', playwright: 'src/playwright.ts', vitest: 'src/vitest.ts', 'vitest-worker': 'src/vitest-worker.ts', 'vitest-exit-with-parent': 'src/vitest-exit-with-parent.ts', 'vitest-progress-guard': 'src/vitest-progress-guard.ts', 'vitest-teardown': 'src/vitest-teardown.ts' },
+    entries: { index: 'src/index.ts', performance: 'src/performance.ts', playwright: 'src/playwright.ts', vitest: 'src/vitest.ts', 'vitest-worker': 'src/vitest-worker.ts', 'vitest-exit-with-parent': 'src/vitest-exit-with-parent.ts', 'vitest-progress-guard': 'src/vitest-progress-guard.ts', 'vitest-git-config': 'src/vitest-git-config.ts', 'vitest-teardown': 'src/vitest-teardown.ts' },
     sharedExternalEntries: { harness: 'src/harness.ts' },
     declarations: true,
     manifest: { exports: {
@@ -302,6 +302,9 @@ async function main(): Promise<void> {
     publishConfig: { access: 'public', provenance: true },
   };
   fs.writeFileSync(path.join(stagedDir, 'package.json'), JSON.stringify(manifest, null, 2) + '\n');
+  // The license the manifest names, as a file: npm publishes a package's LICENSE whatever its `files` say, and MIT
+  // asks a copy to carry its text. The repository's, whose license the published package is under
+  fs.copyFileSync(path.join(repoRoot, 'LICENSE'), path.join(stagedDir, 'LICENSE'));
   assertPublishedPathsExist(config, pkgDir, stagedDir, pkg.name);
 
   // The declarations must name only packages a consumer installs. `tsc --emitDeclarationOnly` copies a bare

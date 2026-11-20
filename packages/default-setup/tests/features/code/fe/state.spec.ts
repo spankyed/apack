@@ -348,11 +348,12 @@ describe("the feature's settings reaching the terminals", () => {
     const actor = started()
     vi.mocked(terminalPool.setViewSettings).mockClear()
 
-    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work', settings: { cursorInactiveStyle: 'underline', cursorBlink: 'off', linkPreview: 'all' } } } as never)
-    expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'underline', cursorBlink: 'off', linkPreview: 'all' })
+    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work', settings: { cursorInactiveStyle: 'underline', linkPreview: 'all' } } } as never)
+    expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'underline', linkPreview: 'all' })
 
-    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { cursorBlink: 'program' } } as never)
-    expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'hollow', cursorBlink: 'program', linkPreview: 'osc8' })
+    // The blink is not a view's setting: one changed leaves the view's as they were, at their defaults here
+    actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { cursorBlink: 'off' } } as never)
+    expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'hollow', linkPreview: 'osc8' })
   })
 })
 

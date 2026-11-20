@@ -402,12 +402,16 @@ describe('a party that held its watcher off while it worked', () => {
     expect(refused).toBeUndefined();
   });
 
-  it('is still refused when that first reading says it did nothing', async () => {
+  it('is still refused when that first reading says it did nothing, and so do the ones after it', async () => {
     const { clock, move, read } = held();
     let refused: Refusal | undefined;
     watchWork({ work: async () => 0, idleMs: IDLE, countsFromWatch: true, clock, onRefused: (refusal) => { refused = refusal; } });
     move(180_000);
     await read();
+    for (let reading = 0; reading < 3; reading += 1) {
+      move(IDLE / 4);
+      await read();
+    }
     expect(refused).toMatchObject({ kind: 'stalled' });
   });
 
@@ -416,7 +420,48 @@ describe('a party that held its watcher off while it worked', () => {
     let refused: Refusal | undefined;
     // A process that had spent an hour before anyone watched it, and nothing since
     watchWork({ work: async () => 3_600_000, idleMs: IDLE, clock, onRefused: (refusal) => { refused = refusal; } });
-    move(IDLE + 1);
+    for (let reading = 0; reading < 4; reading += 1) {
+      move(IDLE / 4);
+      await read();
+    }
+    expect(refused).toMatchObject({ kind: 'stalled' });
+  });
+
+  /**
+   * What the machine does to a watch, rather than the party: the listing of processes waits minutes on a process
+   * the kernel holds, a virtual machine is paused under its host, a laptop sleeps. The party did nothing in that
+   * time because nothing could.
+   */
+  it('is not refused for the minutes one reading took to arrive, and carries on when it works again', async () => {
+    const { clock, move, read } = held();
+    let refused: Refusal | undefined;
+    let total = 5_000;
+    watchWork({ work: async () => total, idleMs: IDLE, clock, onRefused: (refusal) => { refused = refusal; } });
+    move(IDLE / 4);
+    await read();
+    move(3 * IDLE);
+    await read();
+    expect(refused, 'one late reading that found nothing').toBeUndefined();
+    for (let reading = 0; reading < 8; reading += 1) {
+      move(IDLE / 4);
+      total += 2_000;
+      await read();
+    }
+    expect(refused, 'working again after it').toBeUndefined();
+  });
+
+  it('is refused after such a reading once a window of readings on time has found nothing either', async () => {
+    const { clock, move, read } = held();
+    let refused: Refusal | undefined;
+    watchWork({ work: async () => 5_000, idleMs: IDLE, clock, onRefused: (refusal) => { refused = refusal; } });
+    move(IDLE / 4);
+    await read();
+    move(3 * IDLE);
+    await read();
+    move(IDLE / 4);
+    await read();
+    expect(refused, 'three quarters of a window seen quiet').toBeUndefined();
+    move(IDLE / 4);
     await read();
     expect(refused).toMatchObject({ kind: 'stalled' });
   });

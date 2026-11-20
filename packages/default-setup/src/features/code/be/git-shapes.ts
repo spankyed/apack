@@ -24,7 +24,8 @@ export const SHAPES_AGREE: {
   discardKept: Same<Engine.DiscardKept, Contract.DiscardKept>
   discardRestored: Same<Engine.DiscardRestored, Contract.DiscardRestored>
   trustAsk: Same<Engine.TrustAsk, Contract.TrustAsk>
+  trailer: Same<Engine.Trailer, Contract.CommitTrailer>
 } = {
   statusFile: true, conflict: true, operation: true, move: true, part: true, change: true, progress: true, hunk: true,
-  stash: true, worktree: true, commit: true, errorCode: true, discardKept: true, discardRestored: true, trustAsk: true,
+  stash: true, worktree: true, commit: true, errorCode: true, discardKept: true, discardRestored: true, trustAsk: true, trailer: true,
 }

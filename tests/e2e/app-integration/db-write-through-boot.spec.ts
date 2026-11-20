@@ -4,37 +4,31 @@ import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
 import { promisify } from 'node:util';
-import { test, expect, type ElectronApplication } from '@playwright/test';
-import { waitForAppReady } from '@apackdev/testing';
-import { appLaunchEnv } from '../../../packages/apack-testing/src/launch-env.ts';
+import { test, expect } from '@playwright/test';
+import { launchApp, waitForAppReady, type LaunchedApp } from '@apackdev/testing';
 
 const root = path.resolve(import.meta.dirname, '../../..');
 const CLI = path.join(root, 'packages/apack-cli/bin/apack.mjs');
 
-test('an app starts while a script writes rows, and both come through', async ({ playwright }, testInfo) => {
-  test.setTimeout(180_000);
+test('an app starts while a script writes rows, and both come through', async () => {
+  const testInfo = test.info();
+  // Each close is bounded by the app's work rather than this clock (`launchApp`'s, which is `closeApp`). None keeps
+  // Chromium's profile: every launch after one reads what the backend stored
+  test.setTimeout(0);
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-write-through-boot-'));
   const stop = path.join(userDataDir, 'stop');
   const script = path.join(userDataDir, 'writes.mjs');
-  let app: ElectronApplication | undefined;
+  let app: LaunchedApp | undefined;
   const launch = async () => {
-    app = await playwright._electron.launch({ executablePath: createRequire(import.meta.url)('electron'), args: [root], cwd: root,
-      env: appLaunchEnv(process.env, userDataDir) });
-    const log = fs.createWriteStream(testInfo.outputPath(`app-${Date.now()}.log`));
-    app.process().stderr?.pipe(log, { end: false });
-    app.once('close', () => log.end());
-    await expect.poll(() => app!.windows().some(page => page.url().includes('/renderer/dist/index.html')),
-      { timeout: 60_000, message: 'main renderer, rather than the splash window' }).toBe(true);
-    const page = app.windows().find(window => window.url().includes('/renderer/dist/index.html'))!;
-    await waitForAppReady(page);
-    return page;
+    app = await launchApp({ userDataDir, logFile: testInfo.outputPath(`app-${Date.now()}.log`) });
+    await waitForAppReady(app.page);
+    return app.page;
   };
   try {
     // Once, so the data dir holds a schema a tool can be held to
     await launch();
-    await app!.close();
+    await app!.close({ keepProfile: false });
     app = undefined;
 
     // A note written with no app running gets its references when one next starts
@@ -50,7 +44,7 @@ test('an app starts while a script writes rows, and both come through', async ({
     expect(await countReferences(), 'no pack code ran in the tool').toBe('0');
     await launch();
     expect(await countReferences()).toBe('1');
-    await app!.close();
+    await app!.close({ keepProfile: false });
     app = undefined;
 
     fs.writeFileSync(script, `import fs from 'node:fs';
@@ -93,7 +87,7 @@ test('an app starts while a script writes rows, and both come through', async ({
     expect(Number(counted.trim().split('\n').at(-1)), 'every commit landed').toBe(written);
   } finally {
     fs.writeFileSync(stop, '');
-    await app?.close();
+    await app?.close({ keepProfile: false });
     fs.rmSync(userDataDir, { recursive: true, force: true });
   }
 });

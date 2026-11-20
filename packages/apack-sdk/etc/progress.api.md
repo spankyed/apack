@@ -66,6 +66,56 @@ export function pollWhileWorking<T>(probe: () => T | undefined, input: {
 }): Promise<T>;
 
 // @public
+export type ProcessFailure =
+/** It never ran: the file is missing or not executable (`error.code` is `ENOENT` or `EACCES`), or the system refused the spawn */
+    {
+    readonly kind: 'not-started';
+    readonly error: NodeJS.ErrnoException;
+}
+/** It ran and ended by itself, with another exit code or on a signal nobody here sent */
+| {
+    readonly kind: 'exited';
+    readonly exitCode: number | null;
+    readonly signal: NodeJS.Signals | null;
+    readonly stdout: string;
+    readonly stderr: string;
+}
+/** The caller's signal aborted, with that signal's reason: an `AbortSignal.timeout` aborts with a `TimeoutError` */
+| {
+    readonly kind: 'aborted';
+    readonly reason: unknown;
+    readonly stdout: string;
+    readonly stderr: string;
+}
+/** The watch gave up on it (`watchWork`): it stopped working, or spent its CPU */
+| {
+    readonly kind: 'refused';
+    readonly refusal: Refusal;
+    readonly stdout: string;
+    readonly stderr: string;
+}
+/**
+* Its `input` could not be written, because it closed its stdin or exited without reading it: whatever it then
+* wrote answers something other than what it was given. A child still running is stopped as an abort stops it
+*/
+| {
+    readonly kind: 'input';
+    readonly error: Error;
+    readonly stdout: string;
+    readonly stderr: string;
+};
+
+// @public
+export type ProcessOutcome = {
+    readonly ok: true;
+    readonly stdout: string;
+    readonly stderr: string;
+} | {
+    readonly ok: false;
+    readonly failure: ProcessFailure;
+};
+
+// @public
 export interface ProcessRow {
     readonly createdAt?: number;
     // (undocumented)
@@ -108,7 +158,25 @@ export type Refusal = {
 };
 
 // @public
+export function runProcess(file: string, args: readonly string[], options?: RunProcessOptions): Promise<ProcessOutcome>;
+
+// @public
+export interface RunProcessOptions {
+    readonly cpuMs?: number;
+    // (undocumented)
+    readonly cwd?: string;
+    readonly env?: NodeJS.ProcessEnv;
+    readonly idleMs?: number;
+    readonly input?: string;
+    readonly signal?: AbortSignal;
+    readonly stopIdleMs?: number;
+}
+
+// @public
 export function sleepsInStorage(place: string, filesystems: readonly string[]): boolean;
+
+// @public
+export const STOP_IDLE_MS = 5000;
 
 // @public
 export const STORAGE_ALLOWANCE_FACTOR = 10;
@@ -157,6 +225,9 @@ export function treeProcessRows(listing: string): Array<TreeProcess & {
 
 // @public
 export function unmetWaits(now?: number): string[];
+
+// @public
+export const UNSEEN_SHARE: number;
 
 // @public
 export interface Watch {

@@ -2,15 +2,21 @@
 // leave the pack as a boot would: its runtime pointed at the compiled content, and content a rebuild changed
 // imported. This drives the real endpoint against the running app, and the library's tree is what shows it:
 // the document it renames is one of default-setup's command documents, compiled under its `commands` key.
+//
+// The rebuild is modelled on the app's installed copy of the pack, in this worker's own data dir, never on the
+// checkout's `packages/default-setup/dist`: that tree is the shipped source other chain steps install and build
+// against, and rewriting it in place hands whichever runs beside this one a half-written build. The installed
+// copy is app-owned and its shipped source is unchanged, so the reload's refresh leaves it as edited and the
+// reload loads it from there.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
+import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { test, expect } from '@apackdev/testing';
 import { PACK_LAYOUT, readPackBuild, sealPackBuild } from '@apackdev/host/packs';
 import { libraryDocuments } from './library-documents.ts';
 
-const DIST = path.resolve(import.meta.dirname, '../../../packages/default-setup/dist');
-const CONTENT_FILE = path.join(DIST, 'runtime/content/commands.content.json');
+const PACK_ID = 'default-setup';
 const WRITTEN_DOCUMENT = 'Codex commands';
 const REBUILT_DOCUMENT = 'Codex commands after a rebuild';
 
@@ -29,17 +35,36 @@ function renameWrittenDocument(records: LibraryRecord[], from: string, to: strin
 }
 
 /**
- * The test edits a compiled content file in the checkout, so the restore can't live in the test body: a
- * Playwright timeout rejects the test without unwinding it, and a `finally` left unrun would leave the
- * renamed document on disk, failing every later run on its first assertion. A hook runs either way.
+ * The test edits the worker's installed build, which later spec files on this worker's app share, so the restore
+ * can't live in the test body: a Playwright timeout rejects the test without unwinding it, and a `finally` left
+ * unrun would leave the renamed document in that build. A hook runs either way.
+ *
+ * **Restoring the files is half of it: the app has to be reloaded onto them.** The window loads a pack's frontend
+ * from `pack://<id>/builds/<revision>/`, and the protocol serves a file only while the installed build still has
+ * that revision. Put back without a reload, the window keeps the edited build's revision, and every chunk it has not
+ * loaded yet is refused: the next spec on this worker to open the code surface found its canvas missing.
  */
 const originalFiles = new Map<string, Buffer>();
-test.afterEach(() => {
+let reloadedFrom: { apiPort: number; apiToken: string; revision: string } | undefined;
+test.afterEach(async ({ appPage }) => {
   for (const [file, bytes] of originalFiles) fs.writeFileSync(file, bytes);
   originalFiles.clear();
+  if (!reloadedFrom) return;
+  const { apiPort, apiToken, revision } = reloadedFrom;
+  reloadedFrom = undefined;
+  const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: apiToken },
+    body: JSON.stringify({ packId: PACK_ID }),
+  });
+  expect(response.status, await response.text()).toBe(200);
+  // A reloaded frontend's stylesheet is linked from the build the window accepted, so this is the window on the
+  // restored build rather than the API alone
+  await expect.poll(() => appPage.evaluate((base) => document.querySelector(`link[href^="${base}"]`) !== null,
+    `pack://${PACK_ID}/builds/${revision}/`), `the window loads ${PACK_ID} from its restored build`).toBe(true);
 });
 
-test('a rebuilt built-in pack reloads with the content the rebuild changed', async ({ app, appPage }) => {
+test('a rebuilt built-in pack reloads with the content the rebuild changed', async ({ app, appPage, electronApp }) => {
   const { apiPort, apiToken } = await appPage.evaluate(() => {
     const api = (window as { electronAPI?: { apiPort?: number; apiToken?: string } }).electronAPI;
     return { apiPort: api?.apiPort, apiToken: api?.apiToken ?? '' };
@@ -51,22 +76,29 @@ test('a rebuilt built-in pack reloads with the content the rebuild changed', asy
   await app.navigate('default-setup/library');
   await expect.poll(() => libraryDocuments(appPage)).toContain(WRITTEN_DOCUMENT);
 
-  const build = readPackBuild(DIST);
-  for (const file of [CONTENT_FILE, path.join(DIST, PACK_LAYOUT.integrity), path.join(DIST, PACK_LAYOUT.manifest)]) {
+  // The data dir the fixture made for this worker alone, which main hands the API
+  const userDataDir = await electronApp.evaluate(() => process.env.APACK_USER_DATA_DIR);
+  expect(userDataDir, 'the app knows its data dir').toBeTruthy();
+  const installed = path.join(resolveAppEnvironment({ env: 'test', userDataDir }).packsDir, PACK_ID);
+  const contentFile = path.join(installed, 'runtime/content/commands.content.json');
+
+  const build = readPackBuild(installed);
+  for (const file of [contentFile, path.join(installed, PACK_LAYOUT.integrity), path.join(installed, PACK_LAYOUT.manifest)]) {
     originalFiles.set(file, fs.readFileSync(file));
   }
-  const content = JSON.parse(originalFiles.get(CONTENT_FILE)!.toString()) as { records: LibraryRecord[] };
-  expect(renameWrittenDocument(content.records, WRITTEN_DOCUMENT, REBUILT_DOCUMENT), `${CONTENT_FILE} holds "${WRITTEN_DOCUMENT}"`).toBe(true);
-  fs.writeFileSync(CONTENT_FILE, JSON.stringify(content, null, 2));
+  const content = JSON.parse(originalFiles.get(contentFile)!.toString()) as { records: LibraryRecord[] };
+  expect(renameWrittenDocument(content.records, WRITTEN_DOCUMENT, REBUILT_DOCUMENT), `${contentFile} holds "${WRITTEN_DOCUMENT}"`).toBe(true);
+  fs.writeFileSync(contentFile, JSON.stringify(content, null, 2));
   // Model completed output: a real build seals its changed content before reload can admit it.
   // Preserve the authored declaration and its key order; the parsed snapshot is normalized.
-  const manifest = JSON.parse(originalFiles.get(path.join(DIST, PACK_LAYOUT.manifest))!.toString());
-  sealPackBuild(DIST, manifest, build.integrity.sdkVersion);
+  const manifest = JSON.parse(originalFiles.get(path.join(installed, PACK_LAYOUT.manifest))!.toString());
+  sealPackBuild(installed, manifest, build.integrity.sdkVersion);
 
+  reloadedFrom = { apiPort: apiPort!, apiToken, revision: build.revision };
   const response = await fetch(`http://127.0.0.1:${apiPort}/dev/reload`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', [API_TOKEN_HEADER]: apiToken },
-    body: JSON.stringify({ packId: 'default-setup' }),
+    body: JSON.stringify({ packId: PACK_ID }),
   });
   expect(response.status, await response.text()).toBe(200);
 

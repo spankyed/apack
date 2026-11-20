@@ -94,6 +94,14 @@ const LAYOUT_CHECKS: Record<string, string> = {
     + 'ProseMirror and bundler plugins — a property of every tracked file, read from git, with no scripts/ module '
     + 'behind it. Here for the same reason as identity-guard: a suite whose project does not declare the repo '
     + 'is not re-run when the thing it checks moves',
+  'tests/electron-launch.spec.ts': 'that only @apackdev/testing starts an app under test through Playwright\'s '
+    + '_electron — a property of every tracked file, the repo\'s specs and its packs\' alike, read from git, with no '
+    + 'scripts/ module behind it. Here for the same reason as e2e-door: @apackdev/testing\'s suite would not be '
+    + 're-run when a spec elsewhere starts launching',
+  'tests/e2e-door.spec.ts': 'that only the fixture calls the renderer\'s E2E door to the backend systems — a '
+    + 'property of every tracked file, the repo\'s specs and its packs\' alike, read from git, with no scripts/ '
+    + 'module behind it. Here for the same reason as identity-guard: the renderer\'s or @apackdev/testing\'s '
+    + 'suite would not be re-run when a spec elsewhere starts calling the door',
   'tests/repo-files.spec.ts': 'what "the files this repo has" means for the checks above — the working tree '
     + 'rather than the index, which is a property of the repo read from git, and the one the six populations '
     + 'here are built from',

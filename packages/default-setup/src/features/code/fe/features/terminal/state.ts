@@ -4,7 +4,9 @@ import { newCall, recordCall, settleCall } from '@apackdev/sdk/events';
 import { terminalPool } from '#extensions/terminal/pool.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, nextActiveFromHistory } from '../../utils/tab-management.ts';
-import type { TerminalInfo } from '../../../be/types.ts'
+import type { TerminalInfo, TerminalStatus } from '../../../be/types.ts'
+import { lookedAt, needsLooking, newlyWanting, statusNotification } from './status.ts'
+import { terminalNameFor } from '../../utils/terminal-name.ts'
 
 /**
  * **The type the system publishes, not a window's copy of it**, which is why it is imported and re-exported
@@ -110,6 +112,11 @@ export interface CodeTerminalContext {
    * a timer its notification started, so an entry never outlives its window.
    */
   notifying: Record<string, true>
+  /**
+   * The terminals a status notification was raised for and the person has not looked at since. One is raised
+   * for a terminal and then none until they look, so a program going back and forth tells them once.
+   */
+  statusNotified: Record<string, true>
 }
 
 export type Event =
@@ -137,6 +144,8 @@ export type Event =
   | { type: 'terminal.NOTIFIED'; data: { terminalId: string; title: string; body: string } }
   | { type: 'terminal.PROGRESS'; data: { terminalId: string; state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; percent: number | null } }
   | { type: 'terminal.TITLED'; data: { terminalId: string; title: string } }
+  /** What a terminal's programs say they are doing, every record as it stands, and what of it has been seen */
+  | { type: 'terminal.STATUS'; data: { terminalId: string; statuses: TerminalStatus[] } }
   /** The person is looking at that terminal: what was waiting for them to is no longer */
   | { type: 'terminal.SEEN'; terminalId: string }
   /** The machine's own timers: a bell's flash ends, and its window closes. Not sent by anything else. */
@@ -161,6 +170,15 @@ export type Event =
  */
 export function showBellNotification(bellId: string): void {
   void window.electronAPI?.notify?.show('Terminal', 'Rang the bell', bellId).catch(() => {})
+}
+
+/**
+ * Asks the main process to tell the person a terminal's program wants them. Through the bridge, as a bell's
+ * is, and under a tag so that every window that was not in front raises one between them.
+ */
+export function showStatusNotification(terminalId: string, terminal: string, record: TerminalStatus): void {
+  const { title, body } = statusNotification(terminal, record)
+  void window.electronAPI?.notify?.show(title, body, `terminal-status:${terminalId}:${record.id}:${record.changed}`).catch(() => {})
 }
 
 export const terminalState = setup({
@@ -540,6 +558,53 @@ export const terminalState = setup({
       return { activity: { ...context.activity, [id]: after } }
     }),
 
+    /**
+     * Tells the person a terminal's program wants them, where they are not looking: it is waiting on them, or
+     * finished or failed. **Once for a terminal until they look at it**, however often its program changes its
+     * mind. Read before the records are taken, since it is the difference from what was held that says so.
+     */
+    notifyStatus: enqueueActions(({ context, event, self, enqueue }) => {
+      const ev = event as Extract<Event, { type: 'terminal.STATUS' }>
+      const id = ev.data.terminalId
+      const terminal = context.terminals.find(one => one.id === id)
+      if (!terminal) return
+      // Looked at in another window, which every window is told as the same records, seen
+      if (lookedAt(terminal.statuses, ev.data.statuses)) {
+        const { [id]: _looked, ...rest } = context.statusNotified
+        enqueue.assign({ statusNotified: rest })
+        return
+      }
+      const wanting = newlyWanting(terminal.statuses, ev.data.statuses)
+      if (!wanting || context.statusNotified[id] !== undefined || document.hasFocus()) return
+      if (getParentContext(self)?.settings?.terminalStatusNotification === false) return
+      enqueue.assign({ statusNotified: { ...context.statusNotified, [id]: true } })
+      showStatusNotification(id, terminal.customTitle || terminalNameFor(terminal.cwd) || terminal.title, wanting)
+    }),
+
+    /** What a terminal's programs say they are doing, replaced whole: there is nothing to merge */
+    takeStatuses: assign(({ context, event }) => {
+      const ev = event as Extract<Event, { type: 'terminal.STATUS' }>
+      return {
+        terminals: context.terminals.map(terminal => {
+          if (terminal.id !== ev.data.terminalId) return terminal
+          const { statuses: _were, ...rest } = terminal
+          return ev.data.statuses.length ? { ...rest, statuses: ev.data.statuses } : rest
+        }),
+      }
+    }),
+
+    /** The person looked, so what its programs wanted them for is seen — in every window, which the system tells */
+    tellStatusSeen: enqueueActions(({ context, event, enqueue }) => {
+      const id = (event as { type: 'terminal.SEEN'; terminalId: string }).terminalId
+      if (context.statusNotified[id] !== undefined) {
+        const { [id]: _looked, ...rest } = context.statusNotified
+        enqueue.assign({ statusNotified: rest })
+      }
+      if (needsLooking(context.terminals.find(terminal => terminal.id === id)?.statuses)) {
+        sendToSystem('code', { type: 'terminal.STATUS_SEEN', terminalId: id })
+      }
+    }),
+
     /** The person looked: the bell and the notification were for them, and have been seen */
     markSeen: assign(({ context, event }) => {
       const ev = event as { type: 'terminal.SEEN'; terminalId: string }
@@ -749,7 +814,8 @@ export const terminalState = setup({
     rewind: null,
     pendingOpens: {},
     bells: {},
-    notifying: {}
+    notifying: {},
+    statusNotified: {}
   },
   on: {
     'terminal.CREATE': {
@@ -819,7 +885,8 @@ export const terminalState = setup({
     'terminal.NOTIFIED': { actions: ['noteActivity', 'notifySystem'] },
     'terminal.PROGRESS': { actions: 'noteActivity' },
     'terminal.TITLED': { actions: 'noteActivity' },
-    'terminal.SEEN': { actions: 'markSeen' },
+    'terminal.STATUS': { actions: ['notifyStatus', 'takeStatuses'] },
+    'terminal.SEEN': { actions: ['markSeen', 'tellStatusSeen'] },
     'terminal.KEEP': { actions: 'keepTerminal' },
     'terminal.KEPT': { actions: ['markKept', 'describeTerminal'] },
     'terminal.REWIND': { actions: 'askForRewind' },

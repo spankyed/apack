@@ -85,15 +85,15 @@ the pin `3a2140c`. Nothing is pushed or merged; the app pin still names `3a2140c
 - A rerun on `a91ea40` in this session: 429 passed, 1 failed. The failure is
   `keeping::a_session_begins_with_the_screen_its_recording_holds`.
 - That test is flaky, and it is flaky at the pin too: `3a2140c` failed 1 of 4 runs, and `a91ea40` failed 1 of 4 in a
-  separate sample. It is not caused by Phase 1. It is recorded as a pre-existing flake and is not fixed here.
+  separate sample. It is not caused by Phase 1, and Phase 1 left it unfixed. Its cause and fix are under
+  [The flaky case](#the-flaky-case) (spankyed/apack-terminal#46).
 - Mutation check: disabling the shown-rows branch in `fetch` makes
   `lines_fetched_while_the_program_is_holding_the_screen_are_those_from_before_the_hold` fail; restored, it passes.
 
 ### Hold timeout measurement (2026-11-12)
 
-Commit `fad909e` on `session/next-features-measure` (from `origin/master`, `3b8ef5c`, where the broker work is merged
-as #24 and #25) adds `benches/hold.rs`. Command: `cargo bench --bench hold` in the `next-features-measure` worktree.
-It reports and never fails.
+`benches/hold.rs` in apack-terminal (spankyed/apack-terminal#50). Command: `cargo bench --bench hold`. It reports
+and never fails. The figures below were taken at `3b8ef5c`, where the broker work is merged as #24 and #25.
 
 - **Machine:** `uname -m` arm64; 10 cores; **loaded**. Load average was 44.2 at the start of the session and 33 to
   36 during the runs (`uptime`), so the cost figures are upper bounds on an idle machine.
@@ -783,3 +783,125 @@ Nothing is pushed or merged, no PR is open, and `vendor/apack-terminal.rev` is n
 - **Not seen in a real window.** The cursor's look and the link title's timing are checked in jsdom only.
 
 **App switched to the live setters.** The code surface's pool (`packages/default-setup/src/features/code/fe/utils/terminal-pool.ts`, `setViewSettings`) no longer makes a drawn view again when the cursor-inactive, cursor-blink or link-preview setting changes. Each changed setting calls its setter on every drawn view (`setCursorInactive`, `setCursorBlink`, `setLinkPreview`, pinned at `vendor/apack-terminal` 4ba0b01294), so the element, selection and scroll position are kept. A view made later takes the current values from its constructor. Only a change of the session still makes a view again, through the existing shell-replacement path. Copy-on-select is unchanged. The pool spec asserts each setter call with the element's identity, and that an unchanged setting calls nothing. A mutant that remade the view on a cursor change failed the identity assertion.
+
+## Follow-ups: reads during a hold, the search's cost, the blink rule, a flaky case (2026-11-16)
+
+Broker and view: branch `fix/terminal-followups`, spankyed/apack-terminal#47, commits `bb7cf26`, `24a7fde`, `a765e37`,
+`4c1590b`, `42ff307`. App: branch `fix/terminal-followups-app`, commit `5be4639504`. Measured on an arm64 Mac with
+10 cores at a load average between 30 and 120 throughout, which is why costs are given in instructions where they
+are compared.
+
+### Reads during a hold
+
+- **Was.** The word at a cell, the line it is on, the text of a span and a search were answered from the live
+  terminal while a program held the screen (mode 2026). A copy or a double-click that landed inside a redraw named
+  text the view was never sent. This was the gap Phase 1 left open.
+- **Is.** Each waits for the hold to end, by the program letting go or by the broker's one-second limit, and is
+  answered after the frame the view is sent (`Screen::once_whole`). A hold keeps at most 64 waiting; one past that is
+  answered from the screen as it stands. Lines fetched by number still answer at once with the rows last sent.
+- **Tests.** Five in `tests/view_frames.rs` on the screen, and one in `tests/view_broker.rs` through the broker with
+  a real program that takes the screen and waits to be told to finish its frame.
+- **Mutation.** Never waiting, answering before the frame, a hold that runs out answering nothing, and no cap: each
+  fails the case written for it. The session answering at once fails the case through the broker.
+
+### The cost of a case-sensitive search
+
+- **Was.** The gap closed on 2026-11-12 made a case-sensitive search run to the end of the history. The core has no
+  rule for case and keeps every match it finds, so that was unbounded. `benches/search.rs`, over 100,000 lines of 80
+  columns: a search for `a` in a history of `A` took 10.8 s and 12.0 s in two runs with the session's lock held,
+  and the process peaked at 4.0 GB. A log whose every line has the word twice in another case took 430 ms.
+- **Is.** It reads back 20,000 candidates, ten times what a search answers with, and stops. The same two cases
+  measure 82 ms and 52 ms, the process peaks at 108 MB, and a word that is not in the history at all, which every
+  search has always cost, measures 85 ms.
+- **What it gives up, and says.** An exact match older than those candidates is not found. The answer carries
+  `more`, true when there are or may be older matches than the ones listed, so a find bar's count says so however
+  few it holds, and a search that found nothing without looking through everything says "None in the newest
+  output". Both halves of the view's wire moved, with the vectors re-recorded.
+- **Mutation.** No candidate limit, never saying more, saying more only when stopped short, saying more only past
+  the cap: each fails a case in `tests/view_reads.rs`. The view ignoring the flag and the broker source dropping it
+  each fail a view case.
+
+### The blink rule (D8)
+
+- **Was.** With the blink set on or off a view drew that over whatever a program asked for, which D8 does not say:
+  a program's DECSCUSR choice is meant to win.
+- **Is.** Ghostty's rule for a set `cursor-style-blink`: DEC mode 12 is ignored, and a program asking for a cursor
+  is given its blink. The core keeps one blink for both sequences and has no such option, so the broker settles it
+  where the output is parsed (`vt::Terminal::watched`): a sequence that begins `CSI ?` and may name mode 12 is parsed
+  up to where the core says it is between sequences, and mode 12 is put back if the blink changed. A view draws the
+  blink a frame says; its `cursorBlink` option and `setCursorBlink` are gone. The app's setting has three values,
+  not four: the default and "program decides" were one state.
+- **Cost.** `benches/blink.rs`, 32 MiB of output, in instructions retired with nobody having chosen a blink and with
+  one chosen: plain text 1.55 G and 1.57 G; text coloured a word at a time 4.03 G and 4.06 G; a redraw that sets
+  mode 12 twice every 70 bytes 3.89 G and 5.88 G, which is about two thousand instructions for each sequence that
+  names mode 12.
+- **Mutation.** The first push's mutants job found 23 survivors, all in the watch. Eight changed only how many
+  sequences are watched, which no answer shows, so that is counted now (`Terminal::sequences_watched`) and held by
+  a case. Seven were in a path no case took, a terminal parsed with nothing to stop at, where a parse that stops
+  early drops the rest; the cases now run there too. Five were conditions that could not change an outcome, and
+  are deleted. One, the floor on what the core says it parsed, is excluded with its reason in `.cargo/mutants.toml`.
+  Fifty-four hand-written mutants of the reworked code: 43 fail a case, 10 hang, which a mutants run counts as
+  caught at its deadline, and that one is excluded.
+
+### The flaky case
+
+- **What it was.** `keeping::a_session_begins_with_the_screen_its_recording_holds` failed about one run in four on
+  2026-11-12, each time after fifteen seconds. It asked for the history and waited for the rows, dropping whatever
+  else arrived. A dropped frame is an unacknowledged one, and a view is sent no more until it acknowledges its
+  last, so when the new shell's prompt arrived inside that wait the rest of the case waited for output never sent.
+- **How it was found.** It did not reproduce: 30 runs at the old pin and 24 on current master all passed, under
+  more load than when it failed. Typing a space just before the fetch, so a frame is certain to arrive inside the
+  wait, failed it every time at 15.79 s with the same message; with the frames taken as a view takes them the same
+  forced case passes every time.
+- **A theory ruled out.** That a line typed before the new shell is reading is lost: a shell started two seconds
+  late still ran what was typed before it began, six times of six.
+
+### Not verified
+
+- Nothing here was seen in a real window: the cursor's blink under an editor, the find bar's wording, a copy made
+  during a redraw.
+- A real program's hold, and a real history of the worst shape for a search, were not used; the cases write the
+  sequences and the text themselves.
+- The app was moved to the merged broker (`b17ecde`) in spankyed/apack#511.
+
+## What the review of #47 left open (2026-11-17)
+
+Broker and view: spankyed/apack-terminal#50, merged. App: spankyed/apack#527, which moved the pin past it and
+wired the find bar. Measured on the same Mac at a load average of 45 to 60.
+
+- **The hold bench is in the broker's tree.** Run again there: release p50 465 us, p95 581 us, max 1233 us; view
+  fetch p50 385 us, p95 434 us; a hold never released ended at p50 1003 ms.
+- **The blink watch's cost, as merged.** `benches/blink.rs`, 32 MiB, instructions retired with the blink left to
+  programs and with one chosen: plain text 1.57 G and 1.59 G; a colour a word 4.04 G and 4.08 G; a link a word
+  5.72 G and 6.39 G; a redraw that sets mode 12 twice every 70 bytes 3.89 G and 6.05 G. These replace the figures
+  under "The blink rule" above, which were taken before the review's fixes and had no case for links.
+- **An answer follows the frame it is about.** A view that had yet to draw a frame was answered at once, about a
+  screen it was not sent until it drew. Its questions now wait with it and are answered as it acknowledges, behind
+  the frame that is then sent; a view whose undrawn frame is still the screen, and every other view, is answered
+  at once. Three cases in `tests/view_frames.rs`.
+- **The find bar counts again when output changes what a search finds.** The view refreshed its matches under a
+  search and told nobody, so the count stood as of the last search or step. It has `onFound`, which the pool says
+  the count from.
+- **What waits for a hold is bounded in bytes**, 1 MiB, as well as at 64 questions: a search waits with its needle.
+- **A recording's keyframe is the core's own snapshot of its terminal** (spankyed/apack-terminal#53, pinned at
+  `60bf75c`), where it was the sequences that redraw one screen. Those left out the cursor's shape, a steady
+  cursor, a saved cursor, so that a replay printed over the wrong cells, and the shell's screen under a
+  full-screen program. A replay now puts the terminal back whole, under the settings of the session replaying
+  it, with its images where their pixels fit. A keyframe of a screen and a thousand lines is about 390 KB where
+  a redraw was about 105 KB, 0.75 ms to write out and 0.5 ms to put back (`benches/keyframe.rs`, load average
+  about 140).
+- **Held by a property, not by reading.** Over generated output a terminal put back reads as the one written out
+  and still does after whatever is written next; 300,000 cases each. It found two defects of the change itself
+  and what the core's snapshot does not hold inside left and right margins: a wrap pending at a right margin,
+  and which rows keep a prompt mark across a scroll. Both are pinned by cases that fail when the core holds them.
+- **`cargo xtask check-exclusions` could not fail.** cargo-mutants 27.1 lists its `delete field` mutants whatever
+  pattern it is given, so every exclusion counted at least fifteen. With those left out the check named five
+  exclusions that excluded nothing; four are repointed and one, for a line that is gone, removed.
+
+### Not done
+
+- A keyframe is read by the core that wrote it, and upstream says its snapshot format will change: a recording
+  made under another core is refused when looked back through, and a session restored from one starts fresh.
+- The two gaps in the core's snapshot are not reported upstream yet.
+- Nothing here was seen in a real window, as above.
+

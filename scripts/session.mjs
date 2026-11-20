@@ -1,11 +1,12 @@
 import { execFileSync } from 'node:child_process';
-import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { tsImport } from 'tsx/esm/api';
-import { linkElmdb } from './link-elmdb.mjs';
-import { linkApackTerminal } from './link-apack-terminal.mjs';
-import { linkApackGit } from './link-apack-git.mjs';
+import { elmdbCheckout, linkElmdb } from './link-elmdb.mjs';
+import { apackTerminalCheckout, linkApackTerminal } from './link-apack-terminal.mjs';
+import { apackGitCheckout, linkApackGit } from './link-apack-git.mjs';
+import { checkoutAtPin } from './lib/pinned-checkout.mjs';
 import { primaryWorktree } from './lib/worktrees.mjs';
 
 /** @param {string} root @param {string[]} args */
@@ -108,6 +109,23 @@ async function npm(dir, args) {
   }
 }
 
+/**
+ * The checkout a vendored dependency of `dir` is linked to: the one its variable names, else the default when its
+ * HEAD is the pin, else a worktree of the default at the pin. A default that cannot be asked — not cloned, or no pin
+ * declared — is handed on as it is, for its linker to say what is wrong in its own words.
+ * @param {string} dir @param {string} name @param {string} variable @param {string} fallback
+ */
+function vendoredCheckout(dir, name, variable, fallback) {
+  if (process.env[variable]) return fallback;
+  const revFile = path.join(dir, 'vendor', `${name}.rev`);
+  if (!existsSync(revFile) || !existsSync(path.join(fallback, '.git'))) return fallback;
+  const { dir: checkout, made } = checkoutAtPin({ checkout: fallback, rev: readFileSync(revFile, 'utf8').trim() });
+  if (checkout !== fallback) {
+    console.log(`${name}: ${fallback} is not at its pin, so linking ${made ? 'a worktree made at it' : 'the worktree at it'}, ${checkout}`);
+  }
+  return checkout;
+}
+
 /** A cold checkout needs API declarations and pack codegen before typechecks or a built app launch. @param {string} dir */
 async function setup(dir) {
   // **Every vendored checkout, because `npm ci` will not say one is missing.** A `file:` dependency whose
@@ -117,10 +135,26 @@ async function setup(dir) {
   // strict chain `session:check` runs, on every branch. The view the built-in pack draws a terminal with is
   // a package of that same checkout, which its linker builds; without it the pack does not build. The pack's
   // git engine is the third, and its linker builds it for the same reason.
+  //
+  // **Each at its pin, without moving the checkout someone works in** (`lib/pinned-checkout.mjs`). A checkout its
+  // variable names is linked as named: whoever set it chose it, and what its linker says of it — that it is past
+  // its pin, or that the pin is not pushed — is said here, since the session is then not the code CI tests.
   try {
-    linkElmdb(dir);
-    linkApackTerminal(dir);
-    linkApackGit(dir);
+    const elmdb = vendoredCheckout(dir, 'elmdb', 'ELMDB_DIR', elmdbCheckout());
+    // The one linker that builds nothing: a binding is a release Rust build, minutes rather than seconds, so it
+    // refuses one that is missing. A worktree made at the pin has none yet, and this command is the one making it
+    const binding = path.join(elmdb, 'crates', 'elmdb-node');
+    if (existsSync(binding) && !readdirSync(binding).some((file) => file.endsWith('.node'))) {
+      console.log(`Building elmdb's binding in ${elmdb}`);
+      await npm(elmdb, ['ci', '--no-audit', '--no-fund']);
+      await npm(elmdb, ['run', 'build']);
+    }
+    const linked = [
+      linkElmdb(dir, elmdb),
+      linkApackTerminal(dir, vendoredCheckout(dir, 'apack-terminal', 'APACK_TERMINAL_DIR', apackTerminalCheckout())),
+      linkApackGit(dir, vendoredCheckout(dir, 'apack-git', 'APACK_GIT_DIR', apackGitCheckout())),
+    ];
+    for (const warning of linked.flatMap(({ warnings }) => warnings)) console.warn(`\n! ${warning}`);
   } catch (error) {
     throw new Error(`${error instanceof Error ? error.message : error}. Checkout retained at ${dir}.`, { cause: error });
   }

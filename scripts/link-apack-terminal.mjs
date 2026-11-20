@@ -9,10 +9,9 @@
 // window draws a terminal with. One checkout and one pin hold both, because they are the two halves of one
 // protocol.
 //
-// Unlike elmdb's, this does not refuse a checkout whose broker has not been built — that package's
-// `package.json` is tracked, so `npm ci` resolves whether or not a binary has been staged into it, and a
-// missing binary is a legible refusal from `brokerBinary()` at the moment a terminal is asked for rather
-// than a failure during an install. `cargo xtask package` in the checkout is what stages one.
+// Unlike elmdb's, this builds nothing native: the broker binary the app runs is not this checkout's build but
+// the release apack-terminal publishes for the pinned commit, which the install downloads and verifies
+// (`packages/terminal-broker`, `scripts/fetch-terminal-broker.mjs`).
 //
 // **What the view's entry names is built, so this builds it.** The view is TypeScript and what a consumer
 // bundles is its `dist/`, which is not tracked — a pack build resolving a link to a checkout whose view

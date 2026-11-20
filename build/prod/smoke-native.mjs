@@ -10,7 +10,8 @@
 //   elmdb             opens a database in a temp dir, writes its schema, closes, opens it again and reads it back
 //   @napi-rs/keyring  loads its binding, without touching the credential store
 //
-//   apack-terminal    runs the broker binary the package ships, and sees it bind a socket
+//   apack-terminal    runs the pinned broker `@app/terminal-broker` installed, every file the pin names for this
+//                     platform being there (on Windows, the ConPTY beside the binary)
 //
 // **The broker is a binary rather than a module, so its probe is a spawn.** A pty belongs to the
 // `apack-terminal` broker, which the app starts as a child process; what can be wrong with it is what can
@@ -45,7 +46,8 @@ function findExecutable() {
     const { productName } = JSON.parse(fs.readFileSync(path.join(appDir, 'build-manifest.json'), 'utf-8'));
     return path.join(unpacked, `${productName}.exe`);
   }
-  // Linux names the executable after the package by default, so take the one file there that is the app
+  // Linux names the executable per channel (electron-builder.mjs, `linuxExecutable`), so take the one file there that
+  // is the app rather than spell the name twice
   const candidates = fs.readdirSync(unpacked, { withFileTypes: true })
     .filter((entry) => entry.isFile() && !ELECTRON_OWN.test(entry.name))
     .filter((entry) => (fs.statSync(path.join(unpacked, entry.name)).mode & 0o111) !== 0)
@@ -83,8 +85,8 @@ async function main() {
   // be wrong in a release: a binary built for another architecture never reaches its own argument check,
   // and one the package did not carry is not there to run. Asked of the package, not of a path, because
   // the name carries .exe on Windows and the package is what knows that.
-  const broker = load('apack-terminal').brokerBinary();
-  if (!broker) throw new Error('the apack-terminal package carries no binary for this platform');
+  const broker = load('@app/terminal-broker').brokerBinary();
+  if (!broker) throw new Error('@app/terminal-broker holds no broker for this platform, or not every file its pin names');
   const ran = require('node:child_process').spawnSync(broker, [], { encoding: 'utf8' });
   if (ran.error) throw new Error('apack-terminal did not run: ' + ran.error.message);
   if (ran.status !== 2 || !/usage: apack-terminal/.test(ran.stderr || '')) {

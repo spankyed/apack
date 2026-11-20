@@ -13,6 +13,13 @@ suffix keeps Spotlight from indexing each fresh `node_modules`, which on macOS s
 and held Electron's shutdown past Playwright's teardown deadline. An optional second argument
 selects another base ref. Continue the agent or terminal session **in the printed directory**.
 The command does not transfer uncommitted changes from the original checkout.
+It links each vendored checkout (`elmdb`, `apack-terminal`, `apack-git`) at the commit `vendor/<name>.rev` pins:
+the one `ELMDB_DIR`, `APACK_TERMINAL_DIR` or `APACK_GIT_DIR` names if set; else the sibling checkout when its HEAD
+is the pin; else a worktree of it at the pin, one already there or one made as
+`<checkout>-worktrees.noindex/for-apack-<rev>`, building elmdb's binding in it when it has none. The checkout you
+work in is never moved, so a session starts whatever commit it is on. A sibling that has moved past its pin is not
+linked: it holds the pin and is other code than CI clones. A checkout you name is linked as named, and the command
+says how far from its pin it is.
 If setup fails, the new checkout is retained. Retry the failed command there.
 Setup commands have a five-minute deadline; combined validation has a fifteen-minute deadline.
 Interrupting the command stops its child process groups and retains the checkout for inspection.

@@ -3,10 +3,10 @@
 // and one `Contract` per feature would collide there. Codegen reads this without running anything.
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import type {
-  CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
-  PRBranchCheckout, GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, OperationMove, QuickOpenResult, RepositoryChange,
+  CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CommitTrailer, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
+  PRBranchCheckout, GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, ProgressDuring, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
-  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
+  SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, TerminalStatus, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
 } from './types.ts';
 import type { GitHubApiFailure, PRListState } from './services/github-api.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
@@ -104,6 +104,8 @@ export type IncomingCommitEvents =
   | { type: 'commit.GET_STASH_CHANGES'; index: number }
   /** Who last changed each line of a file, from the top of the folder, for the editor's gutter */
   | { type: 'commit.GET_BLAME'; path: string }
+  /** Bring a submodule to the commit the repository records for it, setting it up first if it is not */
+  | { type: 'commit.UPDATE_SUBMODULE'; path: string }
   /** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
   | { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
   | { type: 'commit.WORKTREE_LIST' }
@@ -121,6 +123,10 @@ export type IncomingCommitEvents =
   | { type: 'commit.AMEND'; message?: string; evenIfPublished?: boolean }
   /** A commit's whole message, for rewording it */
   | { type: 'commit.GET_COMMIT_MESSAGE'; hash: string }
+  /** The trailers git reads at the end of the message being written */
+  | { type: 'commit.READ_TRAILERS'; message: string }
+  /** The message being written without one of its trailers, each line of it */
+  | { type: 'commit.REMOVE_TRAILER'; message: string; trailer: CommitTrailer }
   /** Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it */
   | { type: 'commit.REWRITE_COMMIT'; hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }
   /** What merging a branch in would do, before it is done */
@@ -152,6 +158,10 @@ export type OutgoingCommitEvents =
   | { type: 'commit.MERGE_PREVIEWED'; data: { target: string; preview: MergePreview } }
   | { type: 'commit.AMENDED' }
   | { type: 'commit.COMMIT_MESSAGE_RECEIVED'; data: { hash: string; message: string } }
+  /** The trailers of the message asked about, which the answer names */
+  | { type: 'commit.TRAILERS_READ'; data: { message: string; trailers: CommitTrailer[] } }
+  /** The message asked about without the trailer asked to remove: `without` is `message` when it had no such trailer */
+  | { type: 'commit.TRAILER_REMOVED'; data: { message: string; without: string } }
   | { type: 'commit.COMMIT_REWRITTEN'; data: { hash: string; action: RewriteAction } }
   /** A remote branch already holds commits the amend or rewrite would change: done only once the user says to go on */
   | { type: 'commit.REWRITE_NEEDS_CONFIRMATION'; data: { message: string } }
@@ -169,8 +179,8 @@ export type OutgoingCommitEvents =
   | { type: 'commit.PUSH_STOPPED' }
   | { type: 'commit.ERROR_RECEIVED'; data: CommitFailure }
   | { type: 'commit.HUNK_APPLIED'; data: { path: string; staged: boolean; hunk: string } }
-  /** How far along a push, a pull or a checkout is, for the window that asked for it */
-  | { type: 'commit.PROGRESS'; data: { during: 'push' | 'pull' | 'checkout' } & GitProgress }
+  /** How far along a push, a pull, a checkout or a submodule update is, for the window that asked for it */
+  | { type: 'commit.PROGRESS'; data: { during: ProgressDuring } & GitProgress }
   | { type: 'commit.UNTRACKED_LISTED'; data: { path: string; files: string[]; truncated: boolean } }
   /** Git signs in to this host with the app's GitHub sign-in now */
   | { type: 'commit.SIGN_IN_SET_UP'; data: { host: string; during?: 'push' | 'pull' } }
@@ -198,6 +208,8 @@ export type OutgoingCommitEvents =
   /** The files a stash holds, read without applying it, for the window that asked */
   | { type: 'commit.STASH_CHANGES_RECEIVED'; data: { index: number; files: ChangedFile[] } }
   | { type: 'commit.BLAME_RECEIVED'; data: { path: string; lines: BlameLine[] } }
+  /** The submodule is at the commit the repository records for it */
+  | { type: 'commit.SUBMODULE_UPDATED'; data: { path: string } }
   | { type: 'commit.STASH_SUCCESS'; data: { message: string } }
   /** A stash was applied, or with `popped` applied and dropped, without a conflict */
   | { type: 'commit.STASH_APPLIED'; data: { index: number; popped: boolean } }
@@ -316,6 +328,8 @@ export type IncomingTerminalEvents =
   | { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
   /** Whether that terminal's shell goes on running when the app is not, to be taken up again at the next start */
   | { type: 'terminal.KEEP_TERMINAL'; terminalId: string; kept: boolean }
+  /** The person is looking at that terminal: what its programs have said they finished or failed at is seen */
+  | { type: 'terminal.STATUS_SEEN'; terminalId: string }
   /** Open that terminal's recording to look back through, drawn at this size. Answered with `terminal.REWOUND` */
   | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
   /** Show an open recording as it was at `at`, in milliseconds since the Unix epoch */
@@ -380,6 +394,11 @@ export type OutgoingTerminalEvents =
   | { type: 'terminal.TERMINAL_TAB_OPENED'; data: TerminalInfo }
   /** Whether a terminal's shell outlives the app changed: news for every window, which each draws on its tab */
   | { type: 'terminal.KEPT'; data: { terminalId: string; kept: boolean } }
+  /**
+   * What a terminal's programs say they are doing changed, or what of it the person has seen did: news for
+   * every window. **Every record, as it stands** — a window replaces what it held. Empty when there is none
+   */
+  | { type: 'terminal.STATUS'; data: { terminalId: string; statuses: TerminalStatus[] } }
   /**
    * A recording is open, for the window that asked: `session` is what its view is drawn from, and it runs
    * between `first` and `last`, in milliseconds since the Unix epoch.

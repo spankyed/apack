@@ -33,7 +33,7 @@ test('prepare a populated startup profile outside measurement', async ({ app, ap
       const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context;
       return Object.values(context.messageContents).some(message => message.text?.startsWith("You're all setup!"));
     })).toBe(true);
-    await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
+    await app.send('default-setup/threads', { type: 'IMPORT_THREADS', directory });
     await expect.poll(() => appPage.evaluate(() => {
       const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
       return Object.keys(context.threadMap).filter(id => id.startsWith('Thread-search-')).length;

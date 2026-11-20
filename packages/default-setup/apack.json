@@ -641,10 +641,9 @@
             "cursorBlink": {
               "type": "string",
               "enum": [
-                "default",
+                "program",
                 "on",
-                "off",
-                "program"
+                "off"
               ]
             },
             "linkPreview": {
@@ -659,6 +658,9 @@
               "type": "boolean"
             },
             "bellNotification": {
+              "type": "boolean"
+            },
+            "terminalStatusNotification": {
               "type": "boolean"
             },
             "defaultBaseDirectory": {
@@ -763,6 +765,12 @@
             "showWorktrees": {
               "type": "boolean"
             },
+            "trailersRemovedOnCommit": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
             "cliPaths": {
               "type": "object",
               "additionalProperties": {
@@ -781,6 +789,7 @@
             "copyOnSelect",
             "bellFlash",
             "bellNotification",
+            "terminalStatusNotification",
             "defaultBaseDirectory",
             "baseDirectory",
             "enableShellIntegration",
@@ -798,6 +807,7 @@
             "showStashes",
             "showCommits",
             "showWorktrees",
+            "trailersRemovedOnCommit",
             "cliPaths",
             "claudeProfile"
           ],
@@ -864,10 +874,11 @@
           "copyOnSelect": false,
           "cursorStyle": "bar",
           "cursorInactiveStyle": "hollow",
-          "cursorBlink": "default",
+          "cursorBlink": "program",
           "linkPreview": "osc8",
           "bellFlash": true,
           "bellNotification": false,
+          "terminalStatusNotification": true,
           "defaultBaseDirectory": null,
           "baseDirectory": null,
           "enableShellIntegration": true,
@@ -901,6 +912,7 @@
           "showStashes": true,
           "showCommits": true,
           "showWorktrees": false,
+          "trailersRemovedOnCommit": ["Co-authored-by"],
           "cliPaths": {},
           "claudeProfile": "shared"
         },

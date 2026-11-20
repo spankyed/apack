@@ -5,10 +5,6 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version override (e.g. 0.1.0). Leave empty to use package.json version.'
-        required: false
-        type: string
       channel:
         description: 'Build channel (production or beta)'
         required: false
@@ -22,18 +18,26 @@ concurrency:
   group: release-win-${{ github.ref }}
   cancel-in-progress: true
 
+# What builds reads the repository and nothing more. The one job whose token writes is the release job, which runs
+# gh over the files the build job kept and no code from the checkout or its dependencies
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-win:
     runs-on: windows-latest
     timeout-minutes: 30
+    outputs:
+      is_beta: ${{ steps.channel.outputs.is_beta }}
+      product_name: ${{ steps.channel.outputs.product_name }}
+      release_prefix: ${{ steps.channel.outputs.release_prefix }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24.22.2
           cache: npm
@@ -42,21 +46,25 @@ jobs:
 
       - uses: ./.github/actions/elmdb
       - uses: ./.github/actions/apack-terminal
-        with:
-          build: 'true'
       - uses: ./.github/actions/apack-git
 
+      # A tag names its channel, and the `channel` input is read for a branch alone: a tag's files go into its
+      # release, where a beta build dispatched on a production tag would put apack Beta's files
       - name: Detect channel
         id: channel
         shell: bash
+        env:
+          CHANNEL: ${{ inputs.channel }}
         run: |
           TAG_VERSION="${GITHUB_REF_NAME#v}"
-          if [[ "$TAG_VERSION" == *-beta* ]] || [[ "${{ inputs.channel }}" == "beta" ]]; then
-            echo "is_beta=true" >> "$GITHUB_OUTPUT"
-            echo "product_name=apack Beta" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            CHANNEL=production
+            if [[ "$TAG_VERSION" == *-beta* ]]; then CHANNEL=beta; fi
+          fi
+          if [ "$CHANNEL" = beta ]; then
+            printf '%s\n' is_beta=true 'product_name=apack Beta' release_prefix=apack-Beta >> "$GITHUB_OUTPUT"
           else
-            echo "is_beta=false" >> "$GITHUB_OUTPUT"
-            echo "product_name=apack" >> "$GITHUB_OUTPUT"
+            printf '%s\n' is_beta=false product_name=apack release_prefix=apack >> "$GITHUB_OUTPUT"
           fi
           echo "tag_version=${TAG_VERSION}" >> "$GITHUB_OUTPUT"
 
@@ -68,51 +76,101 @@ jobs:
           PKG_VERSION=$(node -p "require('./package.json').version")
           echo "Tag version: $TAG_VERSION"
           echo "Package version: $PKG_VERSION"
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+          # release.sh tags v<version>-beta.0 on a production release that had no beta
+          # (beta-before-production rule); that tag builds the same version as apack Beta
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ] && [ "$TAG_VERSION" != "${PKG_VERSION}-beta.0" ]; then
             echo "::error::Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION)"
             exit 1
           fi
 
+      # The install runs every dependency's install script, so it is a step of its own that holds no signing secret.
+      # @vscode/ripgrep's postinstall reads the GitHub API, where a shared runner address without a token is over the
+      # rate limit; this job's token reads this repository and writes nothing
+      - name: Install dependencies
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci
+
       - name: Build and package
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          APACK_DEPENDENCIES_INSTALLED: '1'
         run: |
-          BETA_FLAG=""
+          args=()
           if [ "${{ steps.channel.outputs.is_beta }}" = "true" ]; then
-            BETA_FLAG="-- --beta"
+            args=(-- --beta)
           fi
-          npm run build:production $BETA_FLAG
+          npm run build:production "${args[@]}"
+
+      # One `<file>.sha256` beside each download, in the form `shasum` writes and the CLI's `downloadVerified` reads
+      - name: Checksums
+        shell: bash
+        working-directory: dist
+        run: |
+          for file in "${{ steps.channel.outputs.release_prefix }}"-*.exe; do
+            printf '%s  %s\n' "$(sha256sum "$file" | cut -d ' ' -f 1)" "$file" > "$file.sha256"
+          done
+
+      # What the release job uploads on a tag, and what a dispatch leaves for whoever dispatched it
+      - name: Keep the release files
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-${{ steps.channel.outputs.release_prefix }}
+          path: |
+            dist/${{ steps.channel.outputs.release_prefix }}-*.exe
+            dist/${{ steps.channel.outputs.release_prefix }}-*.sha256
+            dist/${{ steps.channel.outputs.release_prefix }}-*.cdx.json
+          if-no-files-found: error
+          compression-level: 0
+
+  # The one job whose token writes. It runs for a dispatch from a branch too, where it stops after reading the files
+  # the build kept, so the hand-over between the two jobs is exercised without a tag
+  release:
+    needs: build-win
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      APP_NAME: ${{ needs.build-win.outputs.product_name }}
+      PREFIX: ${{ needs.build-win.outputs.release_prefix }}
+      IS_BETA: ${{ needs.build-win.outputs.is_beta }}
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: windows-${{ needs.build-win.outputs.release_prefix }}
+          path: dist
+
+      - name: The files to release
+        run: |
+          ls -l dist
+          cd dist
+          shasum -a 256 -c "${PREFIX}"-*.sha256
 
       - name: Upload release files to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
-          APP_NAME="${{ steps.channel.outputs.product_name }}"
-          PRERELEASE_FLAG=""
-          if [ "${{ steps.channel.outputs.is_beta }}" = "true" ]; then
-            PRERELEASE_FLAG="--prerelease"
-          fi
-          # Wait briefly for the macOS workflow to create the release
-          sleep 30
-          assets=(dist/${APP_NAME}-*.exe)
+          # The release prefix, which names the files (electron-builder.mjs), not the product name, which has a space
+          assets=(dist/"${PREFIX}"-*.exe dist/"${PREFIX}"-*.sha256 dist/"${PREFIX}"-*.cdx.json)
 
-          # Upload to existing release, or create if mac workflow hasn't yet
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" \
-              --generate-notes \
-              --title "${APP_NAME} $GITHUB_REF_NAME" \
-              $PRERELEASE_FLAG \
-              "${assets[@]}" || {
-                status=$?
-                if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-                  gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
-                else
-                  exit "$status"
-                fi
-              }
+          # A release that can't be read is not one that isn't there: only gh's `release not found` counts as none
+          release_exists() {
+            if gh release view "$GITHUB_REF_NAME" > /dev/null 2> view.err; then return 0; fi
+            if grep -q 'release not found' view.err; then return 1; fi
+            cat view.err
+            exit 1
+          }
+          # build-mac.yml's `draft` job makes the tag's release when the tag is pushed, long before this build ends, and
+          # nothing else makes one: this waits for it, and fails when there is none to upload to
+          for _ in $(seq 30); do
+            if release_exists; then break; fi
+            sleep 20
+          done
+          if ! release_exists; then
+            echo "::error::$GITHUB_REF_NAME has no release to upload to: build-mac.yml's draft job makes it"
+            exit 1
           fi
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber

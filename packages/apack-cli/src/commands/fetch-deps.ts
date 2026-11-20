@@ -268,7 +268,7 @@ async function downloadAndExtract(
     // The temp dir is removed below; persist into the cache first
     return cacheDep(root, depId, spec, { ...files, origin });
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5 });
   }
 }
 

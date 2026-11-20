@@ -45,3 +45,19 @@ it("takes the brain's state from an answer without asking again", () => {
   expect(asks()).toHaveLength(1);
   actor.stop();
 });
+
+// Inspect mode is the feature's, not a run's: the surface passes a toggle on, and takes what it became, before its
+// first tree as after it. A panel beside another surface shows by it (`fallback-panel.ts`), whether or not the Brain
+// surface has been opened and loaded
+it('passes an inspect toggle on, and takes what it became, before its first tree', () => {
+  const actor = createActor(brainState).start();
+  actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: false });
+  actor.send({ type: 'TOGGLE_INSPECT' });
+  expect(sendToSystem.mock.calls.map(([, event]) => event.type), 'passed on while loading').toContain('TOGGLE_INSPECT');
+
+  actor.send({ type: 'INSPECT_TOGGLED', enabled: true });
+  expect(actor.getSnapshot().context.inspectEnabled).toBe(true);
+  actor.send({ type: 'INSPECT_TOGGLED', enabled: false });
+  expect(actor.getSnapshot().context.inspectEnabled).toBe(false);
+  actor.stop();
+});

@@ -15,6 +15,9 @@ import { appVersion } from './app-version.ts';
 import { appLaunchEnv, pinsViewport } from './launch-env.ts';
 import { assertCheckoutPackagesFresh } from './checkout-freshness.ts';
 import { assertPrebuiltPackCurrent, packArchiveAcceptance } from './prebuilt-pack.ts';
+import { connectToApp, type AppConnection } from './connection.ts';
+import { describeQuitStage, type QuitProgress } from './quit-stage.ts';
+export type { AppConnection, BusMessage, PackRuntime } from './connection.ts';
 
 export interface AppDriver {
   sendEvent: (event: Record<string, unknown>) => Promise<void>;
@@ -34,7 +37,39 @@ export interface AppDriver {
   navigate: (surfaceId: string) => Promise<void>;
   waitForState: (check: string, timeout?: number) => Promise<void>;
   waitForSurface: (surfaceId: string, timeout?: number) => Promise<void>;
+  /**
+   * Sends a backend system an event as a surface in this window does, the system named as the pack under test's
+   * code names one (its own by feature id, any other as `<packId>/<featureId>`).
+   *
+   * Over the window's own connection, so a handler that answers the window it was asked from answers this one.
+   * Resolves once the API accepted the send, and rejects with its refusal: a system nothing provides, or an event
+   * the system does not take, fails the spec there rather than as a wait for something that never happens.
+   *
+   * It names no return address, so a system's `reply` to it has nowhere to go. Use `ask` for an answer.
+   */
+  send: (system: string, event: SystemEvent) => Promise<void>;
+  /**
+   * Sends as `send` does, and resolves with the event the system's `reply` answers it with, matched by the call
+   * the ask was sent under: another ask in flight, or a broadcast of the same type, is never taken for it.
+   *
+   * A refusal the system *answers* with (an `…_ERROR` event) is an answer, resolved like any other; the spec
+   * asserts on its type. The wait lasts as long as the app is working, not for a fixed time, so a loaded machine
+   * makes an answer late and never fails it; an app that has stopped working without answering fails it, saying so.
+   */
+  ask: (system: string, event: SystemEvent) => Promise<SystemEvent>;
 }
+
+/** An event to or from a backend system */
+export type SystemEvent = { type: string; [key: string]: unknown };
+
+/** What the fixture calls of the renderer's door to the backend's systems (`packages/renderer/src/transport/e2e-door.ts`) */
+type E2eWindow = {
+  __e2eSystems?: { send(to: string, event: SystemEvent): Promise<void>; ask(to: string, event: SystemEvent): Promise<SystemEvent> };
+};
+
+/** The door, or a failure naming why there is none: an app built before it existed */
+const E2E_DOOR_MISSING = 'This app has no window.__e2eSystems, the door app.send and app.ask reach its systems through; '
+  + 'it was built before the door existed. Rebuild the renderer (npm run build -w @app/renderer), or test a newer app.';
 
 export interface CreateTestOptions extends TestHostOptions {
   screenshotDir?: string;
@@ -180,10 +215,14 @@ const WILL_QUIT_MARKER = '[e2e] will-quit';
  * What Electron does after that is Chromium's shutdown, flushing the profile — slow under load, and the
  * fixture's to skip for a profile it deletes (the teardown below).
  */
-async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Promise<void> }> {
+type QuitSequence = { done: Promise<void>; progress(): QuitProgress };
+const quitSequences = new WeakMap<ElectronApplication, QuitSequence>();
+
+async function watchQuitSequence(app: ElectronApplication): Promise<QuitSequence> {
   const child = app.process();
+  let willQuit = false;
   const done = new Promise<void>(resolve => {
-    const onData = (data: Buffer) => { if (data.toString().includes(WILL_QUIT_MARKER)) resolve(); };
+    const onData = (data: Buffer) => { if (data.toString().includes(WILL_QUIT_MARKER)) { willQuit = true; resolve(); } };
     child.stdout?.on('data', onData);
     child.once('exit', () => resolve());
   });
@@ -191,7 +230,166 @@ async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Prom
     app.once('will-quit', () => { process.stdout.write(`${marker}\n`); });
   }, WILL_QUIT_MARKER);
   // Wrapped, since an async function returning a promise would hand back its settlement instead
-  return { done };
+  const sequence = { done, progress: () => ({ willQuit, exitCode: child.exitCode, signalCode: child.signalCode }) };
+  quitSequences.set(app, sequence);
+  return sequence;
+}
+
+/** How `launchApp` starts an app */
+export interface LaunchAppOptions {
+  /** The data dir it runs on, which the caller made and removes */
+  readonly userDataDir: string;
+  /**
+   * The environment the app resolves: `test`, as the fixture launches it, or `development`, for what only a
+   * development app has, such as its debug port. `test` when not given
+   */
+  readonly environment?: 'test' | 'development';
+  /** Arguments after the app's own, such as `--remote-debugging-port=0` */
+  readonly args?: readonly string[];
+  /** A file its output is appended to, which a failed close names */
+  readonly logFile?: string;
+}
+
+/** An app `launchApp` started, and the window its shell runs in */
+export interface LaunchedApp {
+  /** The app, for what only it answers: its windows, and `evaluate` in its main process */
+  readonly app: ElectronApplication;
+  /** The window the app's shell runs in, found as the fixture finds its own: the one that has `applicationState` */
+  readonly page: Page;
+  /**
+   * `closeApp` on this app's data dir. `keepProfile` says whether a later launch reads what Chromium was writing:
+   * one that reads only what the app's backend stored does not, and waiting for the profile is a wait on Chromium
+   */
+  close(options: { readonly keepProfile: boolean }): Promise<void>;
+}
+
+/** How to start the app under test: a checkout's sources with its own Electron, or a packaged app's executable */
+function electronLaunch(host: AppLaunch): { executablePath: string; args: string[]; cwd?: string } {
+  return host.kind === 'source'
+    ? {
+      executablePath: createRequire(path.join(host.root, 'package.json'))('electron') as unknown as string,
+      args: [path.join(host.root, '.')],
+      cwd: host.root,
+    }
+    : { executablePath: host.executable, args: [] };
+}
+
+/**
+ * Starts the app under test for a spec that needs one of its own, rather than the worker's the fixture gives: one it
+ * relaunches on the same data dir, or one in another environment. Started and closed as the fixture starts and closes
+ * its own, its output captured and its quit watched, so a spec that owns an app writes none of that lifecycle itself.
+ *
+ * **The one way a spec here starts Electron**: `check:specifiers` refuses `_electron.launch` anywhere else. Each spec
+ * that once started its own copied the launch and closed it with Playwright's `close()`, which waits on Chromium
+ * writing its profile, and each failed under load one at a time after the fixture's close had been fixed.
+ */
+export async function launchApp({ userDataDir, environment = 'test', args = [], logFile }: LaunchAppOptions): Promise<LaunchedApp> {
+  const launch = electronLaunch(resolveTestHost({}));
+  const env = appLaunchEnv(process.env, userDataDir);
+  if (environment === 'development') {
+    // Playwright's own marker makes the app resolve `test`, which has no debug port
+    delete env.PLAYWRIGHT_TEST;
+    env.APACK_ENV = 'development';
+    env.PLAYWRIGHT_VISIBLE = '';
+  }
+  const app = await _electron.launch({ ...launch, args: [...launch.args, ...args], env });
+  userDataDirs.set(app, userDataDir);
+  captureOutput(app, logFile);
+  // From the launch, as the fixture's: a quit the app starts itself is seen too
+  await watchQuitSequence(app);
+  let page: Page;
+  try { page = await findMainWindow(app); }
+  catch (error) {
+    await closeApp(app, { userDataDir, keepProfile: false }).catch(() => {});
+    throw error;
+  }
+  return { app, page, close: ({ keepProfile }) => closeApp(app, { userDataDir, keepProfile }) };
+}
+
+/** How `closeApp` ends an app */
+export interface CloseAppOptions {
+  /** The data dir the app runs on, which names the API it started */
+  readonly userDataDir: string;
+  /**
+   * Whether Chromium's profile writes are waited for. A dir the caller deletes next is work nobody reads, so the app
+   * is ended once its own quit is done; a dir that is launched on again keeps them
+   */
+  readonly keepProfile: boolean;
+}
+
+/**
+ * Closes an app launched with `_electron.launch`, as the `electronApp` fixture closes its own: waited for while the
+ * app works and never on a clock, since a busy machine stretches a quit — a kept profile took over a minute to write
+ * at a load of a hundred. A caller with a clock around it (a Playwright hook) turns that clock off.
+ *
+ * Fails when the app stops working without closing, naming where its quit had stopped, and when its API outlives it,
+ * since deleting the data dir would then race the API's last writes. Either way nothing of the app is left running.
+ */
+export async function closeApp(app: ElectronApplication, { userDataDir, keepProfile }: CloseAppOptions): Promise<void> {
+  const quitSequence = quitSequences.get(app) ?? await watchQuitSequence(app);
+  const apiPid = apiPidIn(userDataDir);
+  const closing = app.close();
+  const pid = app.process().pid;
+  // Its output closing, and not its exit: Chromium's helper processes hold the output and are still
+  // writing the profile for a moment after the process that started them has gone
+  const gone = new Promise<void>((resolve) => { app.process().once('close', () => resolve()); });
+  const closed = (async () => {
+    if (!keepProfile) {
+      await quitSequence.done;
+      if (app.process().exitCode === null && app.process().signalCode === null) {
+        console.log('[e2e] quit sequence finished; ending Electron without its profile writes');
+        app.process().kill('SIGKILL');
+      }
+    }
+    // Playwright's close answers once the app and its helpers have gone, so their going is what is waited
+    // for: seen here, and not only through an answer nothing bounds once the app is no longer working
+    await Promise.race([closing, gone]);
+    closing.catch(() => {});
+  })();
+  // Waited for while the app works: its quit stops the API, and a kept profile takes Chromium as long to write as the
+  // machine lets it. An app that has stopped working without closing is ended with its API, and the close fails saying so
+  try {
+    await (pid === undefined ? closed : answerWhileWorking(closed, { work: fromNow(processWork(pid)), what: 'Electron, asked to close,' }));
+  } catch (error) {
+    // It settles when the kills below end the app, and nothing waits for it any more
+    closed.catch(() => {});
+    // Read before the kills, which would make every quit read as one that exited
+    const stage = describeQuitStage(quitSequence.progress());
+    const log = appLogs.get(app);
+    const running = app.process().exitCode === null && app.process().signalCode === null;
+    // Taken before the kill, which leaves nothing to say where the process was stuck
+    const sample = running && pid !== undefined ? await sampleStuckApp(pid, log) : undefined;
+    if (running) app.process().kill('SIGKILL');
+    if (apiPid !== undefined) { try { process.kill(apiPid, 'SIGKILL'); } catch { /* it had exited */ } }
+    throw new Error(`${error instanceof Error ? error.message : String(error)}: ${stage}.`
+      + (log ? ` Full Electron and API output: ${log}` : '')
+      + (sample ? ` Where its main process was stuck: ${sample}` : ''), { cause: error });
+  }
+  // Electron close must include its API child; otherwise deleting storage races the final writes
+  if (apiPid !== undefined) {
+    let alive = true;
+    try {
+      process.kill(apiPid, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+      alive = false;
+    }
+    if (alive) throw new Error(`Electron closed while API process ${apiPid} was still alive`);
+  }
+}
+
+/**
+ * Where an app that stopped working without closing was stuck: a macOS `sample` of its main process, written beside its
+ * log. A hang there is rare and idle, so the stack at the moment it is found is the one piece of evidence, and the kill
+ * that follows destroys it. Undefined off macOS, where there is no `sample`, and when the sample fails.
+ */
+function sampleStuckApp(pid: number, log: string | undefined): Promise<string | undefined> {
+  if (process.platform !== 'darwin') return Promise.resolve(undefined);
+  const output = `${log ?? path.join(os.tmpdir(), `apack-e2e-${pid}`)}.close.sample.txt`;
+  return new Promise(resolve => {
+    // `sample` runs the 2s it is asked for; the clock bounds only a `sample` that hangs itself
+    execFile('/usr/bin/sample', [String(pid), '2', '-file', output], { timeout: 10_000 }, error => resolve(error ? undefined : output));
+  });
 }
 
 /**
@@ -203,10 +401,10 @@ async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Prom
  * its whole suite while dead, because every test it runs asks the app about something else.
  */
 /**
- * The ref a spec's surface name is, as the pack under test's own code names surfaces: its features by id, any
- * other (the host's too) as `<packId>/<featureId>`.
+ * The ref a spec's surface or system name is, as the pack under test's own code names them: its features by id,
+ * any other (the host's too) as `<packId>/<featureId>`.
  */
-function resolveSurface(name: string): string {
+function resolveFeature(name: string): string {
   return resolveName(name, getPackManifest()?.id);
 }
 
@@ -226,7 +424,11 @@ async function waitForPackBackend(app: ElectronApplication, packId: string, time
 /** The pid of the API serving this app, from the `{ port, pid }` file the API writes about itself as it starts */
 function apiPidOf(app: ElectronApplication): number | undefined {
   const userDataDir = userDataDirs.get(app);
-  if (!userDataDir) return undefined;
+  return userDataDir === undefined ? undefined : apiPidIn(userDataDir);
+}
+
+/** The same, read from the data dir an app runs on; where that file sits does not depend on the environment */
+function apiPidIn(userDataDir: string): number | undefined {
   const endpointFile = resolveAppEnvironment({ env: 'test', userDataDir }).apiPortFile;
   try { return (JSON.parse(fs.readFileSync(endpointFile, 'utf8')) as { pid?: number }).pid; }
   catch (error) {
@@ -359,8 +561,11 @@ export function waitForAppReady(page: Page, { state = APP_READY_STATE, timeout =
  *
  * `screenshotDir` is the one thing it closes over; the report directory is resolved per call, since a run
  * that reports nothing should leave no directory behind.
+ *
+ * `appPid` is the app's process, which `ask` waits on while it works. A page reached over CDP has no process this
+ * knows, and its asks are then bounded by the test's own timeout.
  */
-export function createAppDriver(page: Page, screenshotDir: string): AppDriver {
+export function createAppDriver(page: Page, screenshotDir: string, appPid?: number): AppDriver {
   const app: AppDriver = {
     sendEvent: async (event) => {
       await page.evaluate((e) => {
@@ -403,7 +608,7 @@ export function createAppDriver(page: Page, screenshotDir: string): AppDriver {
     },
   
     navigate: async (surfaceId) => {
-      const id0 = resolveSurface(surfaceId);
+      const id0 = resolveFeature(surfaceId);
       await page.evaluate((id) => {
         (window as any).applicationState.send({ type: 'SELECT_SURFACE', surface: id });
       }, id0);
@@ -414,14 +619,34 @@ export function createAppDriver(page: Page, screenshotDir: string): AppDriver {
         // test that clicks or screenshots straight after a navigate needs that flush to have happened.
         // data-active-surface (WebApp.vue) is written in the flush that swaps the canvas.
         return document.querySelector(`[data-active-surface="${id}"]`) !== null;
-      }, id0, { timeout: 10_000 });
+      // The suite's assertion backstop (`definePackE2EConfig`'s `expect`): a busy machine swaps a canvas late, not never
+      }, id0, { timeout: 30_000 });
     },
   
     waitForSurface: async (surfaceId, timeout = 30_000) =>
-      awaitShell(page, { kind: 'surface', ref: resolveSurface(surfaceId) }, timeout),
+      awaitShell(page, { kind: 'surface', ref: resolveFeature(surfaceId) }, timeout),
 
-    waitForState: async (check, timeout = 10_000) =>
+    waitForState: async (check, timeout = 30_000) =>
       awaitShell(page, { kind: 'state', path: check }, timeout),
+
+    send: async (system, event) => {
+      await page.evaluate(async ({ to, event, missing }) => {
+        const door = (window as unknown as E2eWindow).__e2eSystems;
+        if (!door) throw new Error(missing);
+        await door.send(to, event);
+      }, { to: resolveFeature(system), event, missing: E2E_DOOR_MISSING });
+    },
+
+    ask: async (system, event) => {
+      const to = resolveFeature(system);
+      const answer = page.evaluate(({ to, event, missing }) => {
+        const door = (window as unknown as E2eWindow).__e2eSystems;
+        if (!door) throw new Error(missing);
+        return door.ask(to, event);
+      }, { to, event, missing: E2E_DOOR_MISSING });
+      if (appPid === undefined) return answer;
+      return answerWhileWorking(answer, { work: fromNow(processWork(appPid)), what: `${to}, asked ${event.type},` });
+    },
   };
   return app;
 }
@@ -430,7 +655,7 @@ export function createTest(options: CreateTestOptions = {}) {
   const screenshotDir = resolveScreenshotDir(options.screenshotDir);
 
   const test = base.extend<
-    { appPage: Page; app: AppDriver },
+    { appPage: Page; app: AppDriver; connection: AppConnection },
     { electronApp: ElectronApplication }
   >({
     // Playwright's signature for a fixture that depends on no other fixture. It always passes an object, and
@@ -493,13 +718,7 @@ export function createTest(options: CreateTestOptions = {}) {
         }
 
         // A checkout runs its sources with its own electron, so packs don't need electron installed
-        const launch = appLaunch.kind === 'source'
-          ? {
-            executablePath: createRequire(path.join(appLaunch.root, 'package.json'))('electron') as unknown as string,
-            args: [path.join(appLaunch.root, '.')],
-            cwd: appLaunch.root,
-          }
-          : { executablePath: appLaunch.executable, args: [] };
+        const launch = electronLaunch(appLaunch);
 
         const monotonicStart = performance.now();
         reportLaunchPhase('requested', monotonicStart);
@@ -512,7 +731,8 @@ export function createTest(options: CreateTestOptions = {}) {
         reportLaunchPhase('process-attached', monotonicStart, app.process().pid);
         userDataDirs.set(app, userDataDir);
         captureOutput(app, appLogPath(workerInfo));
-        const quitSequence = await watchQuitSequence(app);
+        // From the launch rather than the close, so a quit the app starts itself is seen too; `closeApp` reads it
+        await watchQuitSequence(app);
         if (process.env.DEBUG_E2E) {
           app.process().once('exit', (code, signal) => console.log('[e2e shutdown] process exited', { code, signal }));
           app.once('close', () => console.log('[e2e shutdown] Playwright application closed'));
@@ -539,7 +759,6 @@ export function createTest(options: CreateTestOptions = {}) {
         }
 
         await use(app);
-        const apiPid = apiPidOf(app);
         if (process.env.DEBUG_E2E) console.log('[e2e shutdown] calling close');
         const inspectShutdown = process.env.DEBUG_E2E ? setTimeout(() => {
           console.log('[e2e shutdown] still waiting', {
@@ -559,50 +778,10 @@ export function createTest(options: CreateTestOptions = {}) {
           }
         }, 5000) : undefined;
         try {
-          const closing = app.close();
-          const pid = app.process().pid;
-          // Its output closing, and not its exit: Chromium's helper processes hold the output and are still
-          // writing the profile for a moment after the process that started them has gone
-          const gone = new Promise<void>((resolve) => { app.process().once('close', () => resolve()); });
-          const closed = (async () => {
-            // A data dir this fixture made is deleted below, so Chromium writing its profile is work nobody
-            // reads; a dir the caller gave is relaunched on, so its profile is waited for
-            if (givenDataDir === undefined) {
-              await quitSequence.done;
-              if (app.process().exitCode === null && app.process().signalCode === null) {
-                console.log('[e2e] quit sequence finished; ending Electron without its profile writes');
-                app.process().kill('SIGKILL');
-              }
-            }
-            // Playwright's close answers once the app and its helpers have gone, so their going is what is waited
-            // for: seen here, and not only through an answer nothing bounds once the app is no longer working
-            await Promise.race([closing, gone]);
-            closing.catch(() => {});
-          })();
-          // Waited for while the app works, and not on a clock: its quit stops the API, and a profile that is kept
-          // takes Chromium as long to write as the machine lets it, over a minute at a load of a hundred. An app
-          // that has stopped working without closing is ended with its API, and the worker fails saying so
-          try {
-            await (pid === undefined ? closed : answerWhileWorking(closed, { work: fromNow(processWork(pid)), what: 'Electron, asked to close,' }));
-          } catch (error) {
-            // It settles when the kills below end the app, and nothing waits for it any more
-            closed.catch(() => {});
-            if (app.process().exitCode === null && app.process().signalCode === null) app.process().kill('SIGKILL');
-            if (apiPid !== undefined) { try { process.kill(apiPid, 'SIGKILL'); } catch { /* it had exited */ } }
-            throw error;
-          }
+          // A data dir this fixture made is deleted below, so Chromium writing its profile is work nobody
+          // reads; a dir the caller gave is relaunched on, so its profile is waited for
+          await closeApp(app, { userDataDir, keepProfile: givenDataDir !== undefined });
         } finally { clearTimeout(inspectShutdown); }
-        // Electron close must include its API child; otherwise deleting storage races the final writes.
-        if (apiPid !== undefined) {
-          let alive = true;
-          try {
-            process.kill(apiPid, 0);
-          } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-            alive = false;
-          }
-          if (alive) throw new Error(`Electron closed while API process ${apiPid} was still alive`);
-        }
         if (process.env.DEBUG_E2E) console.log('[e2e shutdown] close resolved');
       } finally {
         // A dir the caller gave is the caller's to remove; this owns only the one it made
@@ -738,8 +917,18 @@ export function createTest(options: CreateTestOptions = {}) {
       }
     },
 
-    app: async ({ appPage: page }, use) => {
-      await use(createAppDriver(page, screenshotDir));
+    app: async ({ appPage: page, electronApp }, use) => {
+      await use(createAppDriver(page, screenshotDir, electronApp.process().pid));
+    },
+
+    // Opened only for a test that names it, and closed after it, so its claim on `HOST.e2eConnection` ends with it
+    connection: async ({ appPage: page, electronApp }, use) => {
+      const connection = await connectToApp(page, { resolve: resolveFeature, appPid: electronApp.process().pid });
+      try {
+        await use(connection);
+      } finally {
+        await connection.close();
+      }
     },
   });
 

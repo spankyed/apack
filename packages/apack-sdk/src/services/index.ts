@@ -16,14 +16,14 @@ import { _settingsHandle } from './settings-handle.ts';
 
 export type { AppDataService, BackupDatabase, BackupSummary } from './app-data.ts';
 export type { OnboardingService } from './onboarding.ts';
-export { UnknownBackupDatabasesError } from './app-data.ts';
+export { AppDataBusyError, UnknownBackupDatabasesError } from './app-data.ts';
 export {
   _createRunHistory, _RUN_HISTORY_SCHEMA, type RunHistory, type RunPage, type RunStatus, type RunTree,
   type RunNode, type RunNodeBase, type FlowRunNode, type EventRunNode, type StepRunNode, type RunNodeId, type RunNodeStart, type RunNodePatch,
 } from './run-history.ts';
 export { _createInferenceService, type _InferenceModels, type InferenceService, type OutputSchema, type OutputSpec, type _ResolveModel } from './inference.ts';
 export type { FileEntry, FileStat, FilesystemService } from './filesystem.ts';
-export type { TerminalService, TerminalSession, TerminalListeners, TerminalEvent, TerminalFacts, TerminalSignal, TerminalSignalScope, TerminalColor, TerminalColors, TerminalCellSize, TerminalCursorStyle, TerminalCursorBlink, TerminalCommand, TerminalSessionSummary, TerminalRewind, TerminalTarget, CommandOutcome }
+export type { TerminalService, TerminalSession, TerminalListeners, TerminalEvent, TerminalFacts, TerminalSignal, TerminalSignalScope, TerminalColor, TerminalColors, TerminalCellSize, TerminalCursorStyle, TerminalCursorBlink, TerminalCommand, TerminalSessionSummary, TerminalRewind, TerminalTarget, CommandOutcome, ProgramStatusRecord }
   from './terminal.ts';
 export { commandSucceeded } from './terminal.ts';
 export type { SettingsChange, SettingsService, SettingsAdmin } from './settings.ts';

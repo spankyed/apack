@@ -225,28 +225,28 @@ describe('whether a selection is copied as the pointer is let go', () => {
 })
 
 describe('the cursor and link settings a view is made with', () => {
-  it('are the defaults until a setting says otherwise: a hollow inactive cursor, the program decides the blink, and declared links', () => {
+  it('are the defaults until a setting says otherwise: a hollow inactive cursor and declared links, and no blink of the view\'s own', () => {
     const info = terminal()
     terminalPool.ensure(info)
     expect(lastView().options.cursorInactive).toBe('hollow')
-    expect(lastView().options.cursorBlink).toBe('program')
+    expect(lastView().options, 'a view draws the blink its session says').not.toHaveProperty('cursorBlink')
     expect(lastView().options.linkPreview, 'the link preview a view is made with, unset').toBe('osc8')
   })
 
   it('come from the code settings, and an unknown value is the default', () => {
-    expect(viewSettingsOf({ cursorInactiveStyle: 'underline', cursorBlink: 'on', linkPreview: 'all' }))
-      .toEqual({ cursorInactive: 'underline', cursorBlink: 'on', linkPreview: 'all' })
-    expect(viewSettingsOf({ cursorInactiveStyle: 'sparkle', cursorBlink: 'default', linkPreview: 'everything' } as never))
-      .toEqual({ cursorInactive: 'hollow', cursorBlink: 'program', linkPreview: 'osc8' })
-    expect(viewSettingsOf(undefined)).toEqual({ cursorInactive: 'hollow', cursorBlink: 'program', linkPreview: 'osc8' })
+    expect(viewSettingsOf({ cursorInactiveStyle: 'underline', cursorBlink: 'on', linkPreview: 'all' } as never))
+      .toEqual({ cursorInactive: 'underline', linkPreview: 'all' })
+    expect(viewSettingsOf({ cursorInactiveStyle: 'sparkle', linkPreview: 'everything' } as never))
+      .toEqual({ cursorInactive: 'hollow', linkPreview: 'osc8' })
+    expect(viewSettingsOf(undefined)).toEqual({ cursorInactive: 'hollow', linkPreview: 'osc8' })
   })
 
   it('reach a view made after they are set, from the constructor', () => {
     try {
-      terminalPool.setViewSettings({ cursorInactive: 'bar', cursorBlink: 'off', linkPreview: 'all' })
+      terminalPool.setViewSettings({ cursorInactive: 'bar', linkPreview: 'all' })
       const info = terminal()
       terminalPool.ensure(info)
-      expect(lastView().options).toMatchObject({ cursorInactive: 'bar', cursorBlink: 'off', linkPreview: 'all' })
+      expect(lastView().options).toMatchObject({ cursorInactive: 'bar', linkPreview: 'all' })
     } finally {
       terminalPool.setViewSettings(viewSettingsOf(undefined))
     }
@@ -258,7 +258,6 @@ describe('the cursor and link settings a view is made with', () => {
    */
   it.each([
     ['cursorInactive', { cursorInactive: 'bar' as const }, 'setCursorInactive', 'bar'],
-    ['cursorBlink', { cursorBlink: 'off' as const }, 'setCursorBlink', 'off'],
     ['linkPreview', { linkPreview: 'all' as const }, 'setLinkPreview', 'all'],
   ])('changing %s calls its setter on a drawn view and keeps that view', (_name, change, setter, value) => {
     const info = terminal()
@@ -431,6 +430,55 @@ describe('finding text in a terminal', () => {
     expect(count.textContent).toBe('1000 of 1000+')
     press(input, 'Enter')
     expect(count.textContent).toBe('1 of 1000+')
+  })
+
+  it('says a search that stopped short found none in the newest output, and counts what it did find as not all there may be', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const mountedIn = host()
+    const attachment = terminalPool.attach(info.id, mountedIn)!
+    const view = lastView()
+    attachment.find()
+    const input = bar(mountedIn)!.querySelector('input')!
+    const count = bar(mountedIn)!.querySelector<HTMLElement>('[data-terminal-find-count]')!
+
+    // Nothing found by a search that did not look through everything is not nothing there
+    view.matches = 0
+    view.stoppedShort = true
+    typeInto(input, 'Error')
+    await vi.waitFor(() => { expect(count.textContent).toBe('None in the newest output') })
+
+    view.matches = 2
+    typeInto(input, 'Errors')
+    await vi.waitFor(() => { expect(count.textContent).toBe('1 of 2+') })
+
+    // And one that looked through everything says there are none
+    view.matches = 0
+    view.stoppedShort = false
+    typeInto(input, 'Errorz')
+    await vi.waitFor(() => { expect(count.textContent).toBe('No results') })
+  })
+
+  it('counts again when output changes what was found, while the bar is open', async () => {
+    const info = terminal()
+    terminalPool.ensure(info)
+    const mountedIn = host()
+    const attachment = terminalPool.attach(info.id, mountedIn)!
+    const view = lastView()
+    view.matches = 1
+    attachment.find()
+    const input = bar(mountedIn)!.querySelector('input')!
+    const count = bar(mountedIn)!.querySelector<HTMLElement>('[data-terminal-find-count]')!
+    typeInto(input, 'error')
+    await vi.waitFor(() => { expect(count.textContent).toBe('1 of 1') })
+
+    view.reportFound(4)
+    expect(count.textContent, 'the count stayed as the last search left it').toBe('1 of 4')
+
+    press(input, 'Escape')
+    // A bar that is gone says nothing, and a change after it closed throws nothing
+    view.reportFound(6)
+    expect(bar(mountedIn)).toBeNull()
   })
 
   it('closes on Escape, with nothing left marked and the terminal typed at again', async () => {

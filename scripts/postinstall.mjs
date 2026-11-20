@@ -75,3 +75,12 @@ if (installed) {
     }
   }
 }
+
+/**
+ * The terminal broker the app runs: the release build `packages/terminal-broker/src/pin.json` pins, downloaded and
+ * verified for this platform (`fetch-terminal-broker.mjs`). Not retried around here, since the fetch asks again
+ * itself, and a failure fails the install: an app whose broker is missing or is not the pinned bytes is the
+ * state the pin exists to rule out.
+ */
+const { fetchTerminalBroker } = await import('./fetch-terminal-broker.mjs')
+await fetchTerminalBroker()

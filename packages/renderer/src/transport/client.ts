@@ -1,13 +1,16 @@
 import { _withPerformanceCarrier } from '@apackdev/sdk/runtime';
 import { createViewTransportObservation } from '@/runtime/performance-transport';
 // The window's client to the API: the SDK's sends and the shell's subscription, over tRPC and the Electron main
-// process's report of the API's status. Nothing else in the renderer calls the bus or reads the loaded packs.
+// process's report of the API's status. Nothing else in the renderer reads the loaded packs, and only two other
+// modules call the bus: the window's settings (`runtime/settings.ts`), which send with host-issued access, and the
+// E2E suite's door (`e2e-door.ts`).
 import type { ShellClient, ShellFailure } from '@apackdev/host/fe';
 import type { ViewUpdate } from '@apackdev/sdk/fe';
 import { trpc, reconnectApiClient } from '@/transport';
 import { globalToast } from '@/adapters/toast';
 import { windowSettings, connectWindowSettings, disconnectWindowSettings } from '@/runtime/settings';
 import { windowCatalog } from '@/runtime/catalog';
+import { receiveE2eAnswer } from '@/transport/e2e-door';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 /** What the Electron main process reports about the API process */
@@ -83,7 +86,9 @@ export const feClient: ShellClient = {
         },
         onData: (message) => {
           if (!current()) return;
-          _withPerformanceCarrier(message.diagnostics, () => { if (!windowSettings.receive(message)) connection.onMessage(message); });
+          _withPerformanceCarrier(message.diagnostics, () => {
+            if (!receiveE2eAnswer(message) && !windowSettings.receive(message)) connection.onMessage(message);
+          });
         },
       });
     };

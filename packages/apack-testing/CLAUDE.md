@@ -93,6 +93,12 @@ its children's from `ps`, the reading `boundedSpawn` takes, and holds the budget
 which this package does not depend on. `@app/repo-checks`' `progress-guard.integration.spec.ts` is the guard over
 a real run.
 
+**Git in a test reads none of the machine's config** (`src/vitest-git-config.ts`, in `isolatedDataDir`'s setup files
+and every host config's): `GIT_CONFIG_GLOBAL` is the null device, `GIT_CONFIG_NOSYSTEM=1`, and an inherited
+`GIT_CONFIG_PARAMETERS`/`GIT_CONFIG_COUNT` is dropped. A spec needing an identity, a branch name or a setting gives it
+to its own repository or command; one testing what git does with a user's config writes that file and points
+`GIT_CONFIG_GLOBAL` at it, which outranks `HOME`. A new vitest config lists it beside the progress guard.
+
 **A file fails when it ends with a process it started running on out of its worker's reach**
 (`src/leftover-processes.ts`, read by the guard from one `ps` listing as each file ends). Two shapes: a descendant
 of the worker in a process group of its own (a broker started detached), and a process in the worker's group whose
@@ -472,9 +478,21 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
   `timeout: 0` and bounds the whole close, the quit sequence included, with `answerWhileWorking` over the
   app's process tree. A kept profile took over a minute to write at a load of a hundred, which failed the
   worker on the 60s it inherited from the test after its test had passed. An app that stops working without
-  closing is ended with its API, and the worker fails naming that. The app's output closing is what ends the
+  closing is ended with its API, and the worker fails naming that and where its quit had stopped
+  (`quit-stage.ts`): still held in `before-quit` (the app's code), past `will-quit` and not exited (Chromium's
+  shutdown, the kept profile's writes among it), or exited with a process it started holding its output. The
+  failure names the app's output log too. The app's output closing is what ends the
   wait, seen on its process: that is when Chromium's helpers have gone too, which its exit alone is not, and
-  Playwright's own `close()` is not waited for past it.
+  Playwright's own `close()` is not waited for past it. That close is the exported `closeApp(app, { userDataDir,
+  keepProfile })`.
+- **A spec that needs an app of its own starts it with `launchApp({ userDataDir, environment?, args?, logFile? })`**,
+  never with Playwright's `_electron` (the `electron-launch` repo check refuses that). It starts the app as the
+  fixture does, captures its output and watches its quit, and hands back the app, its shell's window and a
+  `close({ keepProfile })` that is `closeApp`. `keepProfile` is whether a later launch reads what Chromium writes:
+  one that reads only what the backend stored does not, and waiting for the profile under load is a wait of minutes
+  on Chromium, which is how each spec that once launched its own came to fail. A test or hook that closes one turns
+  its clock off (`test.setTimeout(0)`), the close being bounded by the app's work. `environment: 'development'` is
+  for what only a development app has, the debug port among it (`attach-parity.spec.ts`).
 
 ## API reference
 
@@ -485,6 +503,7 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 | `electronApp` | worker | Launched Electron app (shared across tests in a worker) |
 | `appPage`     | test   | Main renderer Page (waits for `running.connected`, bypasses onboarding) |
 | `app`         | test   | `AppDriver` — high-level API |
+| `connection`  | test   | `AppConnection` — the spec's own client to the API, apart from the window: `send`, `ask` and `next(match)` over it, `messages` it was delivered, `loadedPacks()` and `openPackSettings(runtime)`. Claims `host/e2eConnection`; opened only for a test that names it, closed after |
 
 ### AppDriver methods
 
@@ -496,8 +515,10 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 | `getContext()` | Returns `{ activeSurfaceId, surfaceIds }` |
 | `sendEvent(event)` | Send any event object to `applicationState` |
 | `report(name, value)` | Write `.apack/drive/results/{name}.json` and print one `[drive:report] {name} {json}` line, for a driving run whose answer is meant to be read by a program rather than watched. Returns the path |
-| `waitForState(check, ms?)` | Wait for dot-separated state path (e.g. `'running.connected'`), default 10s |
+| `waitForState(check, ms?)` | Wait for dot-separated state path (e.g. `'running.connected'`), default 30s, the suite's assertion backstop |
 | `waitForSurface(surfaceId, ms?)` | Wait for a surface to appear in the surface list, default 30s |
+| `send(system, event)` | Send a backend system an event as this window does, the system named as the pack's code names one. Resolves once the API accepted it and rejects with its refusal. Names no return address, so a `reply` to it goes nowhere |
+| `ask(system, event)` | Send as `send` does and resolve with the event the system's `reply` answers it with, matched by the call it was sent under. Waits while the app works, not for a fixed time |
 
 ### `createTest(options?)`
 

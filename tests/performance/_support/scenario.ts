@@ -49,7 +49,7 @@ export async function createWarmScenario<F extends { identity: PerformanceManife
       writeFileSync(path.join(directory, 'exported-threads.json'), JSON.stringify(fixture.data));
       await app.waitForSurface('default-setup/threads');
       await app.navigate('default-setup/threads');
-      await appPage.evaluate(directory => (window as unknown as PerformanceWindow).__sendToSystem('default-setup/threads', { type: 'IMPORT_THREADS', directory }), directory);
+      await app.send('default-setup/threads', { type: 'IMPORT_THREADS', directory });
       await appPage.waitForFunction(lastId => {
         const context = (window as unknown as PerformanceWindow).applicationState.system.get('default-setup/threads').getSnapshot().context as unknown as { threadMap: Record<string, unknown> };
         return !!context.threadMap[lastId];

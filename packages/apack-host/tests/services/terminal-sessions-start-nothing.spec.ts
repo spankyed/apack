@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { createTerminalService, findBrokerBinary, socketPath } from '../../src/services/terminal.ts';
+import { brokerKey, createTerminalService, findBrokerBinary, socketPath } from '../../src/services/terminal.ts';
 import { startBrokerProcess, type StartedBroker } from '../_support/broker-process.ts';
 
 const BINARY = findBrokerBinary() ?? '';
@@ -48,7 +48,7 @@ describe.skipIf(!BINARY)('asking what sessions are running', () => {
   });
 
   it('asks the broker that is running, and goes on using it', async () => {
-    started = await startBrokerProcess(BINARY, socketPath());
+    started = await startBrokerProcess(BINARY, socketPath(), brokerKey());
     service = createTerminalService();
     expect(await service.sessions()).toEqual([]);
 

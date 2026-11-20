@@ -1,5 +1,6 @@
 // What the commit machine holds while a commit, an amend, a tag or a reset is asked for, and what each answer
-// leaves: one commit at a time, a stopped push said as stopped, and a message with nothing to commit said as that.
+// leaves: one commit at a time, a stopped push said as stopped, and the trailers the message ends with followed as it
+// is written and taken out of it when asked.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import { answerTo } from '@apackdev/sdk/testing';
@@ -64,14 +65,65 @@ it('holds an amend as a commit until it is answered, by its amend or by the ques
   expect(actor.getSnapshot().context.isCommitting).toBe(false);
 });
 
-it('says a message of only co-author lines has nothing to commit, rather than sending nothing', () => {
+it('asks for a commit of the message as written, its trailers included, which the system leaves out as the settings say', () => {
   const actor = createActor(commitState).start();
-  actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'Co-Authored-By: Someone <someone@example.com>' });
+  actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat: a thing\n\nCo-Authored-By: Someone <someone@example.com>\n' });
 
   actor.send({ type: 'commit.COMMIT' });
 
-  expect(sent('commit.COMMIT')).toHaveLength(0);
-  expect(actor.getSnapshot().context).toMatchObject({ isCommitting: false, gitError: expect.stringContaining('only Co-Authored-By lines') });
+  expect(sent('commit.COMMIT').map(([, event]) => event.message)).toEqual(['feat: a thing\n\nCo-Authored-By: Someone <someone@example.com>']);
+});
+
+it("asks for a message's trailers once its last paragraph changes, and never for a message of one paragraph", () => {
+  const actor = createActor(commitState).start();
+  const asked = () => sent('commit.READ_TRAILERS').map(([, event]) => event.message);
+
+  for (const message of ['f', 'fe', 'feat', 'feat\n', 'feat\n\n']) actor.send({ type: 'commit.UPDATE_MESSAGE', message });
+  expect(asked(), 'a subject has no trailers').toEqual([]);
+
+  actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat\n\nCo-authored-by: A' });
+  actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat: a thing\n\nCo-authored-by: A' });
+  expect(asked(), 'typing in the subject asks nothing again').toEqual(['feat\n\nCo-authored-by: A']);
+
+  actor.send({ type: 'commit.TRAILERS_READ', data: { message: 'feat\n\nCo-authored-by: A', trailers: [{ key: 'Co-authored-by', value: 'A' }] } });
+  expect(actor.getSnapshot().context.trailers).toEqual([{ key: 'Co-authored-by', value: 'A' }]);
+
+  actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat: a thing' });
+  expect(actor.getSnapshot().context.trailers, 'one paragraph left has none').toEqual([]);
+});
+
+it('takes trailers read of a paragraph the message no longer ends with for none', () => {
+  const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat\n\nCo-authored-by: A' });
+  actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat\n\nCo-authored-by: AB' });
+
+  actor.send({ type: 'commit.TRAILERS_READ', data: { message: 'feat\n\nCo-authored-by: A', trailers: [{ key: 'Co-authored-by', value: 'A' }] } });
+
+  expect(actor.getSnapshot().context.trailers).toEqual([]);
+});
+
+it('takes a trailer out of the message as it still is, and asks again what it ends with', () => {
+  const actor = createActor(commitState).start();
+  const message = 'feat\n\nCo-authored-by: A\nSigned-off-by: B';
+  actor.send({ type: 'commit.UPDATE_MESSAGE', message });
+
+  actor.send({ type: 'commit.REMOVE_TRAILER', trailer: { key: 'Co-authored-by', value: 'A' } });
+  expect(sent('commit.REMOVE_TRAILER').map(([, event]) => event)).toEqual([{ type: 'commit.REMOVE_TRAILER', message, trailer: { key: 'Co-authored-by', value: 'A' } }]);
+
+  actor.send({ type: 'commit.TRAILER_REMOVED', data: { message, without: 'feat\n\nSigned-off-by: B' } });
+  expect(actor.getSnapshot().context.commitMessage).toBe('feat\n\nSigned-off-by: B');
+  expect(sent('commit.READ_TRAILERS').map(([, event]) => event.message).at(-1)).toBe('feat\n\nSigned-off-by: B');
+});
+
+it('leaves a message changed since a trailer was asked to be taken out of it as it was changed', () => {
+  const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat\n\nCo-authored-by: A' });
+  actor.send({ type: 'commit.REMOVE_TRAILER', trailer: { key: 'Co-authored-by', value: 'A' } });
+  actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat: more\n\nCo-authored-by: A' });
+
+  actor.send({ type: 'commit.TRAILER_REMOVED', data: { message: 'feat\n\nCo-authored-by: A', without: 'feat' } });
+
+  expect(actor.getSnapshot().context.commitMessage).toBe('feat: more\n\nCo-authored-by: A');
 });
 
 it('holds a tag pushed or deleted busy until its own answer, and keeps the tag last pushed', () => {

@@ -224,6 +224,49 @@
             class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
           />
         </div>
+
+        <div data-trailers-removed-on-commit>
+          <label for="new-removed-trailer" class="text-sm font-medium text-neutral-200">
+            Trailers removed on commit
+          </label>
+          <p class="mt-1 text-xs text-neutral-600">
+            Lines at the end of a commit message with one of these keys, such as
+            <code class="text-neutral-400">Co-authored-by:</code>, are left out of what the panel commits or amends.
+            The panel lists them under the message.
+          </p>
+          <div class="mt-2 flex flex-wrap items-center gap-1.5">
+            <span
+              v-for="(key, index) in trailersRemovedOnCommit"
+              :key="key"
+              class="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs rounded bg-neutral-800 border border-neutral-700 text-neutral-300 font-mono"
+            >
+              {{ key }}
+              <button
+                @click="removeRemovedTrailer(index)"
+                class="p-0.5 text-neutral-500 hover:text-red-400 transition-colors"
+                :title="`Keep ${key} trailers`"
+              >
+                <X :size="12" />
+              </button>
+            </span>
+            <input
+              id="new-removed-trailer"
+              v-model="newRemovedTrailer"
+              placeholder="Signed-off-by"
+              @keydown.enter="addRemovedTrailer"
+              class="w-36 px-2 py-0.5 text-xs bg-neutral-800 border border-neutral-700 rounded text-neutral-200 placeholder-neutral-600 font-mono focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+            />
+            <button
+              @click="addRemovedTrailer"
+              :disabled="!newRemovedTrailerKey"
+              class="p-1 transition-colors"
+              :class="newRemovedTrailerKey ? 'text-neutral-400 hover:text-white' : 'text-neutral-700 cursor-not-allowed'"
+              title="Remove trailers with this key on commit"
+            >
+              <Plus :size="14" />
+            </button>
+          </div>
+        </div>
       </div>
     </CollapsibleSection>
     </div>
@@ -342,8 +385,9 @@
               Blink the cursor
             </label>
             <p class="mt-1 text-xs text-neutral-600">
-              Default blinks, unless a program has chosen otherwise. On or off holds for every program; Program decides
-              follows what the program asked for
+              Left to programs, the cursor blinks until one says otherwise. Blinking or steady is yours to say: a
+              program that only shows the cursor again no longer changes it, and one that asks for a cursor of its
+              own is still given it
             </p>
           </div>
           <select
@@ -352,10 +396,9 @@
             @change="emit('update-setting', { path: ['cursorBlink'], value: cursorBlink })"
             class="bg-neutral-800 border border-neutral-600 rounded px-2 py-1 text-sm text-neutral-200 focus:outline-none focus:border-blue-600"
           >
-            <option value="default">Default (blinks)</option>
-            <option value="on">On</option>
-            <option value="off">Off</option>
-            <option value="program">Program decides</option>
+            <option value="program">Left to programs</option>
+            <option value="on">Blinking</option>
+            <option value="off">Steady</option>
           </select>
         </div>
 
@@ -414,6 +457,24 @@
             v-model="bellNotification"
             type="checkbox"
             @change="emit('update-setting', { path: ['bellNotification'], value: bellNotification })"
+            class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
+          />
+        </div>
+
+        <div class="flex items-center justify-between">
+          <div class="flex-1">
+            <label for="terminal-status-notification" class="text-sm font-medium text-neutral-200">
+              Notify me when a program in a terminal needs me while the app is in the background
+            </label>
+            <p class="mt-1 text-xs text-neutral-600">
+              Sends a system notification when a program such as Codex or Claude Code says it is waiting on you, has finished or has failed. Once for a terminal until you look at it
+            </p>
+          </div>
+          <input
+            id="terminal-status-notification"
+            v-model="terminalStatusNotification"
+            type="checkbox"
+            @change="emit('update-setting', { path: ['terminalStatusNotification'], value: terminalStatusNotification })"
             class="w-4 h-4 text-blue-600 bg-neutral-800 border-neutral-600 rounded focus:ring-blue-500 focus:ring-2"
           />
         </div>
@@ -765,10 +826,11 @@ const terminalClipboardWrite = useSettingsDraft(() => props.settings?.terminalCl
 const copyOnSelect = useSettingsDraft(() => props.settings?.copyOnSelect ?? false)
 const cursorStyle = useSettingsDraft(() => props.settings?.cursorStyle ?? 'bar')
 const cursorInactiveStyle = useSettingsDraft(() => props.settings?.cursorInactiveStyle ?? 'hollow')
-const cursorBlink = useSettingsDraft(() => props.settings?.cursorBlink ?? 'default')
+const cursorBlink = useSettingsDraft(() => props.settings?.cursorBlink ?? 'program')
 const linkPreview = useSettingsDraft(() => props.settings?.linkPreview ?? 'osc8')
 const bellFlash = useSettingsDraft(() => props.settings?.bellFlash ?? true)
 const bellNotification = useSettingsDraft(() => props.settings?.bellNotification ?? false)
+const terminalStatusNotification = useSettingsDraft(() => props.settings?.terminalStatusNotification ?? true)
 const enableShellIntegration = useSettingsDraft(() => props.settings?.enableShellIntegration ?? false)
 const confirmTerminalClose = useSettingsDraft(() => props.settings?.confirmTerminalClose ?? true)
 const closeTerminalOnTabClose = useSettingsDraft(() => props.settings?.closeTerminalOnTabClose ?? true)
@@ -782,6 +844,13 @@ const autoFetchIntervalSeconds = useSettingsDraft(() => props.settings?.autoFetc
 const showStashes = useSettingsDraft(() => props.settings?.showStashes ?? true)
 const showCommits = useSettingsDraft(() => props.settings?.showCommits ?? true)
 const showWorktrees = useSettingsDraft(() => props.settings?.showWorktrees ?? false)
+const trailersRemovedOnCommit = useSettingsDraft(() => props.settings?.trailersRemovedOnCommit ?? [])
+const newRemovedTrailer = ref('')
+/** A key typed for a trailer to remove, without the colon a trailer is written with, when it is one git can read */
+const newRemovedTrailerKey = computed(() => {
+  const key = newRemovedTrailer.value.trim().replace(/:$/, '')
+  return /^[A-Za-z0-9-]+$/.test(key) ? key : ''
+})
 
 // Terminal scripts
 const localScripts = useSettingsDraft(() => props.settings?.terminalScripts ?? [])
@@ -909,6 +978,28 @@ const saveShowWorktreesSetting = () => {
     path: ['showWorktrees'],
     value: showWorktrees.value
   })
+}
+
+const saveTrailersRemovedOnCommit = () => {
+  emit('update-setting', {
+    path: ['trailersRemovedOnCommit'],
+    value: [...trailersRemovedOnCommit.value]
+  })
+}
+
+/** Keys are matched whatever their case, as git reads them, so one already listed in another case is not added again */
+const addRemovedTrailer = () => {
+  const key = newRemovedTrailerKey.value
+  if (!key) return
+  newRemovedTrailer.value = ''
+  if (trailersRemovedOnCommit.value.some(listed => listed.toLowerCase() === key.toLowerCase())) return
+  trailersRemovedOnCommit.value.push(key)
+  saveTrailersRemovedOnCommit()
+}
+
+const removeRemovedTrailer = (index: number) => {
+  trailersRemovedOnCommit.value.splice(index, 1)
+  saveTrailersRemovedOnCommit()
 }
 
 const saveDefaultDirectory = () => {

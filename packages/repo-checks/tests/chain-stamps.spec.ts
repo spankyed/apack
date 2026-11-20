@@ -63,11 +63,15 @@ const stampedUnknown = (records: readonly string[]): string[] => {
 /**
  * The store, or the reason there is none — evaluated once, so a refusal names its cause once rather than
  * per case, and the cases below read a decision rather than each making it.
+ *
+ * Ten records at least, the bar these gates already read a full run against, which an `--only` run of a few steps does
+ * not: fewer are a partial run's, and the gates below over them would pass for having read too little.
  */
 const STORE = evidenceOrRefuse({
   what: 'stamp store at node_modules/.cache/apack-chain',
   from: 'npm run chain',
-  present: stamps().length > 0,
+  found: stamps().length,
+  atLeast: 10,
 });
 
 describe('the chain stamps exactly the steps it caches', () => {
@@ -102,11 +106,6 @@ describe('the chain stamps exactly the steps it caches', () => {
     const collapsed = new Set(['a:b', 'a/b', 'a-b'].map((name) => path.basename(stampFor(name))));
     expect(collapsed.size, 'the flattening has become injective, so the case above now guards nothing '
       + 'reachable — say so there rather than leaving it reading as a gate').toBe(1);
-  });
-
-  it('reads a store with records in it, or says which run would have left them', (ctx) => {
-    STORE.orSkip(ctx);
-    population('chain stamps', stamps(), { atLeast: 10 });
   });
 
   it('holds no stamp for a step that declares it is never cached', (ctx) => {
@@ -170,7 +169,11 @@ describe('a store with the wrong records in it', () => {
  */
 describe('a check with no evidence to read', () => {
   const absent = (holder: string | null) => evidenceOrRefuse({
-    what: 'stamp store at node_modules/.cache/apack-chain', from: 'npm run chain', present: false, holder,
+    what: 'stamp store at node_modules/.cache/apack-chain', from: 'npm run chain', found: 0, holder,
+  });
+  /** What a chain run `--only` a few steps leaves: some records, short of what a full run does */
+  const partial = (holder: string | null) => evidenceOrRefuse({
+    what: 'stamp store at node_modules/.cache/apack-chain', from: 'npm run chain', found: 4, atLeast: 10, holder,
   });
 
   it('skips outside a chain run, naming what is missing and what produces it', () => {
@@ -192,10 +195,27 @@ describe('a check with no evidence to read', () => {
       .toThrow(/Refused rather than skipped: npm run chain --all \(pid 123\) is running/);
   });
 
-  it('skips nothing when the evidence is there', () => {
+  /**
+   * A worktree that ran part of the chain has a store, and the steps it left out are no defect of the
+   * contributor's: read as evidence, they would be. So too few records are answered as none are.
+   */
+  it('answers a partial run\'s few records as absence, saying how many there were of how many', () => {
+    const notes: (string | undefined)[] = [];
+
+    partial(null).orSkip({ skip: (note) => notes.push(note) });
+
+    expect(notes, 'a partial run was read as evidence, so every step it left out reads as a defect')
+      .toEqual([expect.stringMatching(/found 4, fewer than the 10 a full `npm run chain` leaves/)]);
+    expect(() => partial('npm run chain --all (pid 123)'), 'inside the gate it must refuse, as for none')
+      .toThrow(/Refused rather than skipped/);
+  });
+
+  it('skips nothing when the evidence is there, the least a full run leaves included', () => {
     const skipped: string[] = [];
 
-    evidenceOrRefuse({ what: 'stamp store', from: 'npm run chain', present: true, holder: null })
+    evidenceOrRefuse({ what: 'stamp store', from: 'npm run chain', found: 10, atLeast: 10, holder: null })
+      .orSkip({ skip: () => skipped.push('skipped') });
+    evidenceOrRefuse({ what: 'stamp store', from: 'npm run chain', found: 1, holder: null })
       .orSkip({ skip: () => skipped.push('skipped') });
 
     expect(skipped, 'the evidence was there and the case was passed over anyway').toEqual([]);

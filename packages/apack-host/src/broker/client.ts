@@ -7,6 +7,7 @@
 // Phase S exists partly to meet that in real call sites rather than in a plan, and this is the file where it
 // starts.
 import { spawn, type ChildProcess } from 'node:child_process';
+import { createHmac, randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import * as net from 'node:net';
 import * as os from 'node:os';
@@ -16,7 +17,7 @@ import { holdExclusiveLockWaiting, type ExclusiveLock } from '../exclusive-lock.
 // The protocol's types, generated from the broker's Rust and shipped by its package — not a copy of them.
 // There was a copy here, with a script that re-derived and compared it; a package with the file in it
 // leaves nothing to carry (`apack-terminal/node/protocol.ts`, `cargo xtask check-generated` there).
-import type { CommandOutcome, ErrorCode, Event, Request } from 'apack-terminal';
+import type { CommandOutcome, ErrorCode, Event, Request, StatusRecord } from 'apack-terminal';
 
 /**
  * The protocol this client speaks. The broker refuses a connection that does not match.
@@ -87,6 +88,31 @@ export interface BrokerFacts {
    * foreground process group at all.
    */
   readonly foreground: BrokerForeground | null;
+  /** What the session's programs say they are doing (OSC 7501), every record as it stands. Claims */
+  readonly statuses: readonly BrokerStatusRecord[];
+}
+
+/**
+ * One thing a program says it is doing, as the broker keeps it (`apack-terminal`'s `src/status.rs`, which is
+ * the only place the rules for keeping one are written). The SDK's `ProgramStatusRecord`, which this shape is.
+ */
+export interface BrokerStatusRecord {
+  readonly id: string;
+  readonly state: 'idle' | 'working' | 'blocked' | 'done' | 'error';
+  readonly kind: 'permission' | 'question' | 'auth' | null;
+  readonly progress: number | null;
+  readonly app: string | null;
+  readonly title: string | null;
+  readonly message: string | null;
+  readonly changed: number;
+  readonly sinceMs: number;
+  readonly confirmed: 'matched' | 'mismatched' | 'unknown';
+}
+
+/** A record as the broker sends it, in the shape a holder is told it */
+function statusRecord(record: StatusRecord): BrokerStatusRecord {
+  const { since_ms: sinceMs, ...rest } = record;
+  return { ...rest, sinceMs };
 }
 
 /** The process group reading a session's pty, as the OS reports it */
@@ -118,7 +144,12 @@ export type BrokerWaitUntil =
   /** `text` appears in the screen or its history — the fallback for a program that reports nothing */
   | { readonly kind: 'text'; readonly text: string }
   /** The process ended */
-  | { readonly kind: 'exit' };
+  | { readonly kind: 'exit' }
+  /**
+   * The session's program says it is in one of `states` (OSC 7501): what it reports of itself, not of
+   * anything it reports on. Never met by a program that reports nothing
+   */
+  | { readonly kind: 'status'; readonly states: readonly BrokerStatusRecord['state'][] };
 
 /** How a wait ended */
 export type BrokerWaitOutcome =
@@ -274,6 +305,7 @@ export interface BrokerSessionSummary {
   readonly cwd: string | null;
   readonly command: string | null;
   readonly running: boolean;
+  readonly statuses: readonly BrokerStatusRecord[];
 }
 
 /** A recording opened to be looked back through: a session with no process, which a view attaches to */
@@ -297,7 +329,8 @@ export type BrokerSessionEvent =
   | { readonly kind: 'progress'; readonly state: 'none' | 'running' | 'error' | 'indeterminate' | 'paused'; readonly percent: number | null }
   | { readonly kind: 'commandStarted'; readonly command: string | null }
   | { readonly kind: 'commandFinished'; readonly outcome: CommandOutcome }
-  | { readonly kind: 'cwdChanged'; readonly cwd: string };
+  | { readonly kind: 'cwdChanged'; readonly cwd: string }
+  | { readonly kind: 'programStatus'; readonly statuses: readonly BrokerStatusRecord[] };
 
 /**
  * A broker event that is news about a session's program, in the shape a holder hears it, or `undefined`
@@ -313,6 +346,7 @@ function sessionEvent(event: Event): BrokerSessionEvent | undefined {
     case 'command_started': return { kind: 'commandStarted', command: event.command };
     case 'command_finished': return { kind: 'commandFinished', outcome: event.outcome };
     case 'cwd_changed': return { kind: 'cwdChanged', cwd: event.cwd };
+    case 'program_status': return { kind: 'programStatus', statuses: event.statuses.map(statusRecord) };
     default: return undefined;
   }
 }
@@ -484,6 +518,39 @@ interface Connection {
  * listening before its first accept, so a parent knows when to connect; retrying would turn a broker that
  * failed to start into a timeout rather than an error.
  */
+/** The variable a broker is given its key in (the broker's `protocol::BROKER_KEY_ENV`) */
+const BROKER_KEY_ENV = 'APACK_TERMINAL_KEY';
+
+/** The answer a broker started with `key` gives to `challenge`: HMAC-SHA256, as lowercase hexadecimal */
+export function brokerProof(key: string, challenge: string): string {
+  return createHmac('sha256', key).update(challenge).digest('hex');
+}
+
+/** A fresh challenge for a greeting, or `null` when there is no key to check the answer against */
+function challengeFor(options: BrokerOptions): string | null {
+  return options.key === undefined ? null : randomBytes(16).toString('hex');
+}
+
+/**
+ * Refuses a broker that cannot prove it is this app's, before anything past the greeting is said to it.
+ *
+ * **An address says where a connection went, not to whom.** On Windows the broker's is a pipe name, and any
+ * account on the machine may create a pipe under a name nobody holds yet: the broker this app starts then finds
+ * the name taken and exits as if a broker were already there (`BROKER_HELD_EXIT`), and the app connects to
+ * whatever another user left listening — which would be sent every key typed. The broker was started with a key
+ * only this user can read (`brokerKey`), so only it can answer the greeting's challenge.
+ */
+function proveOwnBroker(greeting: Event, options: BrokerOptions, challenge: string | null): void {
+  if (options.key === undefined || challenge === null) return;
+  const proof = greeting.kind === 'hello' ? greeting.proof : null;
+  if (proof === brokerProof(options.key, challenge)) return;
+  throw new BrokerError(
+    'HANDSHAKE',
+    `what answered at ${options.socket} could not prove it is this app's terminal broker: another account may be `
+    + 'holding its address, or a broker started without this app\'s key is still running there',
+  );
+}
+
 /** How to reach the broker: where it listens, and the binary to start if nothing is there yet */
 export interface BrokerOptions {
   /**
@@ -493,6 +560,12 @@ export interface BrokerOptions {
   binary?: string;
   socket: string;
   env?: NodeJS.ProcessEnv;
+  /**
+   * **What proves the broker that answers is this app's own** (`proveOwnBroker`): a broker this process starts
+   * is given it, and every greeting asks for its proof. Left out for a broker behind a target's command, which
+   * was started by another machine's app and holds none of this one's keys.
+   */
+  key?: string;
   /**
    * How long the broker has to say where it is listening, and a connection to be accepted.
    *
@@ -660,7 +733,8 @@ async function start(options: StartableBroker): Promise<void> {
   // the shell's Ctrl-C would reach it, and this process must not be kept alive waiting for it.
   const process_ = spawn(options.binary, [options.socket], {
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: options.env,
+    // The key goes to the broker alone, which takes it out of its own environment before any shell starts
+    env: options.key === undefined ? options.env : { ...(options.env ?? process.env), [BROKER_KEY_ENV]: options.key },
     detached: true,
   });
   const stderr: string[] = [];
@@ -768,13 +842,15 @@ export async function holdBrokerSessions(options: BrokerOptions): Promise<{ clos
   // this function exists to prevent. After the greeting nothing more is read: an owner receives no events,
   // and a socket with no reader would fill.
   const greeted = frames(socket, new Map());
-  greeted.send({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'lifetime' });
+  const challenge = challengeFor(options);
+  greeted.send({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'lifetime', challenge });
   // **Torn down on every way out, not only on a version mismatch.** A broker speaking another protocol
   // answers `failed` rather than `hello`, which rejects this await instead of reaching the check below — so
   // a `destroy` on that branch alone leaves the commonest refusal holding a connection open for ever
   let greeting: Event;
   try {
     greeting = await greetingWithin(greeted, options.startMs);
+    proveOwnBroker(greeting, options, challenge);
   } catch (error) {
     greeted.destroy();
     throw error;
@@ -797,7 +873,8 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
   const gone = new Set<() => void>();
   const connection = frames(socket, listeners, () => { for (const listener of gone) listener(); });
 
-  connection.send({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'client' });
+  const challenge = challengeFor(options);
+  connection.send({ kind: 'hello', protocol: PROTOCOL_VERSION, role: 'client', challenge });
   // As in `holdBrokerSessions`: a refusal rejects the await rather than arriving as a `hello`, and either
   // way this connection is unusable and must not be left counted
   let greeting: Event;
@@ -806,6 +883,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
     if (greeting.kind === 'hello' && greeting.protocol !== PROTOCOL_VERSION) {
       throw new BrokerError('HANDSHAKE', `the broker speaks protocol ${greeting.protocol}; this app speaks ${PROTOCOL_VERSION}`);
     }
+    proveOwnBroker(greeting, options, challenge);
   } catch (error) {
     connection.destroy();
     throw error;
@@ -874,6 +952,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
           vouched: answer.vouched,
           refused: answer.refused,
           foreground: answer.foreground ?? null,
+          statuses: answer.statuses.map(statusRecord),
         };
       },
       async search(text, history = 0) {
@@ -883,7 +962,12 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
         return answer.matches;
       },
       async wait(until, timeoutMs) {
-        connection.send({ kind: 'wait', session: id, until, timeout_ms: timeoutMs });
+        connection.send({
+          kind: 'wait',
+          session: id,
+          until: until.kind === 'status' ? { kind: 'status', states: [...until.states] } : until,
+          timeout_ms: timeoutMs,
+        });
         // **The deadline is the broker's**, so this waits for its answer rather than racing a timer of its
         // own: two deadlines would disagree, and the one that matters is the one holding the waiter
         const answer = await connection.next(event => event.kind === 'waited' && event.session === id, { session: id });
@@ -1000,6 +1084,7 @@ export async function startBroker(options: BrokerOptions): Promise<Broker> {
       return answer.sessions.map(one => ({
         id: one.session, pid: one.pid, cols: one.cols, rows: one.rows, kept: one.kept, recorded: one.recorded,
         title: one.title, cwd: one.cwd, command: one.command, running: one.running,
+        statuses: one.statuses.map(statusRecord),
       }));
     },
     async rewind(recording, size) {

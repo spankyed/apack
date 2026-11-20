@@ -1030,13 +1030,22 @@ describe('waiting for a build in flight', () => {
     expect(waitForPackageBuild({ file, idleMs: 10_000 })?.ended, 'it waited out the stall window rather than the release').toBe('released');
   });
 
-  /** The firing case for following the holder: one that hands the lock on is no stall, and its successor works */
+  /**
+   * The firing case for following the holder: one that hands the lock on is no stall, and its successor works.
+   *
+   * The successor's work is read from a stand-in rather than spent: whether a real busy process gets the CPU to read
+   * as working within a short window is the machine's load, and under forty busy loops it did not, in seven runs of
+   * eight. What is asked here is which holder the wait reads, and the stand-in answers per pid, so a wait still
+   * reading the idle predecessor gives up as before
+   */
   it('follows a holder that hands the lock to a busy successor', () => {
     const file = lockFile();
-    const busy = holder("const end = Date.now() + 6000; while (Date.now() < end) {} require('node:fs').rmSync(process.argv[1])", file);
+    const busy = holder("setTimeout(() => require('node:fs').rmSync(process.argv[1]), 6000)", file);
     hold(file, holder(`setTimeout(() => require('node:fs').writeFileSync(process.argv[1], JSON.stringify({ pid: ${busy}, label: 'next', startedAt: new Date().toISOString() })), 1000)`, file));
+    let spent = 0;
+    const readTreeCpu = (pid: number) => pid === busy ? new Map([[pid, spent += 1_000]]) : new Map([[pid, 0]]);
     const started = Date.now();
-    const wait = waitForPackageBuild({ file, idleMs: 4_000 });
+    const wait = waitForPackageBuild({ file, idleMs: 4_000, readTreeCpu });
     expect(wait?.ended, 'the successor was given up on rather than followed').toBe('released');
     expect(Date.now() - started, 'the busy successor was charged its idle predecessor\'s silence').toBeGreaterThanOrEqual(5_000);
   });
@@ -1342,12 +1351,12 @@ describe('ensurePackagesBuilt, where the caller says the packages are already bu
 });
 
 
-it.each(['bin/compiler-windows.ps1', 'templates/pack.json'])('refuses deleted or changed copied CLI output: %s', target => {
+it.each(['bin/compiler-windows.ps1', 'templates/pack.json', 'LICENSE'])('refuses deleted or changed copied CLI output: %s', target => {
   const f = fixture();
   const cliRoot = path.join(REPO_ROOT, 'packages/apack-cli');
   const output = path.join(f.root, 'dist/package');
   const unit: BuildUnit = { inputs: [f.src], outputs: BUILD_UNITS['@apackdev/cli'].outputs.map(file => path.join(f.root, path.relative(cliRoot, file))) };
-  for (const [file, bytes] of [['package.json', '{}'], ['dist/cli.js', 'export {};'], ['bin/compiler-windows.ps1', 'launcher'], ['templates/pack.json', '{}']]) {
+  for (const [file, bytes] of [['package.json', '{}'], ['dist/cli.js', 'export {};'], ['bin/compiler-windows.ps1', 'launcher'], ['templates/pack.json', '{}'], ['LICENSE', 'MIT License']]) {
     const destination = path.join(output, file);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.writeFileSync(destination, bytes);
@@ -1357,7 +1366,8 @@ it.each(['bin/compiler-windows.ps1', 'templates/pack.json'])('refuses deleted or
   const file = path.join(output, target);
   const original = fs.readFileSync(file);
   fs.rmSync(file);
-  expect(unitStaleReason(unit, stamp)).toMatch(/outputs changed/);
+  // A file declared as an output itself, as LICENSE is, reads as not built when it is gone
+  expect(unitStaleReason(unit, stamp)).toMatch(/outputs changed|not built/);
   fs.writeFileSync(file, original);
   expect(unitStaleReason(unit, stamp)).toBeNull();
   fs.writeFileSync(file, 'changed');

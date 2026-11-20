@@ -11,14 +11,15 @@ permissions:
 
 jobs:
   release:
-    # apack Beta builds are macOS arm64; the build reads built-in packs (e.g. default-setup) from one
-    runs-on: macos-14
+    # apack Beta builds are macOS arm64; the build reads built-in packs (e.g. default-setup) from one.
+    # macos-latest is Apple silicon, and a label that moves rather than one GitHub retires under this repo
+    runs-on: macos-latest
     env:
       APACK_HOST: beta
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24.22.2
           cache: npm

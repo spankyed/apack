@@ -1,11 +1,12 @@
 /**
  * Low-level one-shot process primitive for the Codex CLI.
  *
- * Mirrors `claude-code/runner.ts:execOnce` but resolves the `codex` binary
- * and uses Codex-appropriate env scrubbing.
+ * Runs the child with `runProcess` (`@apackdev/sdk/progress`), which owns its
+ * whole life, as `claude-code/runner.ts:execOnce` does, with the `codex`
+ * binary and Codex-appropriate env scrubbing.
  */
 
-import { spawn, type ChildProcess } from 'child_process'
+import { describeRefusal, runProcess } from '@apackdev/sdk/progress'
 import { resolveForService } from '../../utils/resolve-cli.ts'
 import { agentChildEnvironment } from '../shell-environment.ts'
 
@@ -79,7 +80,7 @@ export function buildCodexEnv(override?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function wrapSpawnError(err: unknown, cliPath: string): Error {
-  if (err instanceof Error && 'code' in err && (err as any).code === 'ENOENT') {
+  if (err instanceof Error && (err as NodeJS.ErrnoException).code === 'ENOENT') {
     return new CodexCliNotFoundError(cliPath, err)
   }
   return err instanceof Error ? err : new Error(String(err))
@@ -99,69 +100,26 @@ export async function codexExec(
 ): Promise<CodexExecResult> {
   const cliPath = opts.cliPath ?? await resolveForService('codex')
   const timeoutMs = opts.timeoutMs ?? 30_000
-
-  return new Promise<CodexExecResult>((resolve, reject) => {
-    const chunksOut: Buffer[] = []
-    const chunksErr: Buffer[] = []
-    let settled = false
-
-    const settle = (fn: () => void) => {
-      if (settled) return
-      settled = true
-      clearTimeout(timer)
-      opts.signal?.removeEventListener('abort', onAbort)
-      fn()
-    }
-
-    const timer = setTimeout(() => {
-      child?.kill('SIGKILL')
-      settle(() => reject(new CodexTimeoutError(timeoutMs, args)))
-    }, timeoutMs)
-
-    let child: ChildProcess
-    try {
-      child = spawn(cliPath, args as string[], {
-        cwd: opts.cwd,
-        env: buildCodexEnv(opts.env),
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
-    } catch (err) {
-      clearTimeout(timer)
-      reject(wrapSpawnError(err, cliPath))
-      return
-    }
-
-    const onAbort = () => {
-      child.kill('SIGTERM')
-      settle(() => reject(new Error('Codex operation was aborted')))
-    }
-    if (opts.signal) {
-      if (opts.signal.aborted) {
-        onAbort()
-        return
-      }
-      opts.signal.addEventListener('abort', onAbort, { once: true })
-    }
-
-    child.stdout?.on('data', c => chunksOut.push(c))
-    child.stderr?.on('data', c => chunksErr.push(c))
-
-    child.on('error', err => settle(() => reject(wrapSpawnError(err, cliPath))))
-
-    child.on('close', (code, signal) => {
-      const stdout = Buffer.concat(chunksOut).toString('utf8')
-      const stderr = Buffer.concat(chunksErr).toString('utf8')
-      if (code === 0) {
-        settle(() => resolve({ stdout, stderr, exitCode: 0 }))
-      } else {
-        settle(() => reject(new CodexExitError(code, signal, stderr, args)))
-      }
-    })
-
-    if (opts.input !== undefined && child.stdin) {
-      child.stdin.end(opts.input)
-    } else {
-      child.stdin?.end()
-    }
+  // The one clock here, and the caller's: a task that asks a model waits on the network, which no reading of the
+  // child's CPU describes. Everything else about the child's life is `runProcess`'s
+  const deadline = AbortSignal.timeout(timeoutMs)
+  const outcome = await runProcess(cliPath, args, {
+    cwd: opts.cwd,
+    env: buildCodexEnv(opts.env),
+    input: opts.input,
+    signal: opts.signal === undefined ? deadline : AbortSignal.any([opts.signal, deadline]),
   })
+  if (outcome.ok) return { stdout: outcome.stdout, stderr: outcome.stderr, exitCode: 0 }
+
+  const { failure } = outcome
+  switch (failure.kind) {
+    case 'not-started': throw wrapSpawnError(failure.error, cliPath)
+    case 'exited': throw new CodexExitError(failure.exitCode, failure.signal, failure.stderr, args)
+    // Whichever signal aborted first is the reason the run was stopped for
+    case 'aborted': throw failure.reason === deadline.reason
+      ? new CodexTimeoutError(timeoutMs, args)
+      : new Error('Codex operation was aborted', { cause: failure.reason })
+    case 'refused': throw new Error(`codex ${args.join(' ')} was ended: it ${describeRefusal(failure.refusal)}`)
+    case 'input': throw new Error(`codex ${args.join(' ')} did not read the input it was given`, { cause: failure.error })
+  }
 }

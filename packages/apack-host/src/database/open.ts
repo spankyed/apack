@@ -2,7 +2,7 @@
 // (apack db) share, so both open a data dir the same way
 import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears } from '@apackdev/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
-import { openDatabase } from '@apackdev/ears/lmdb';
+import { openDatabase as openElmdb, type DatabaseOptions } from '@apackdev/ears/lmdb';
 import { _RUN_HISTORY_SCHEMA } from '@apackdev/sdk/services';
 import { resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import type { _AppDataPaths } from '@apackdev/sdk/utils';
@@ -14,6 +14,30 @@ import { createLogger } from '@apackdev/sdk/logger';
 import * as fs from 'node:fs';
 
 const logger = createLogger('run-history');
+const databaseLogger = createLogger('database');
+
+/**
+ * Opens the elmdb database `options` name, as every open here does, saying what the open found: that a power loss or a
+ * failed sync took it back to its last synced commit, the commits after it gone, and that the record of its last sync
+ * named another file than the one opened. elmdb reports a restore at every open until it is acknowledged, which a
+ * writable open does once it has said so; a read-only open can't, and says so each time until the app opens it to write
+ */
+function openDatabase(options: DatabaseOptions): EarsDatabase {
+  const database = openElmdb(options);
+  const { restored, notBorneOut } = database.openReport;
+  if (restored) {
+    const at = restored.sequence === null ? 'its last synced commit' : `its last synced commit, sequence ${restored.sequence}`;
+    databaseLogger.warn(`The database at ${options.path} was taken back to ${at}: a power loss or a failed sync lost the commits made after it`);
+    // A notice that couldn't be cleared is said again at the next open, which costs less than refusing this one
+    if (!options.readOnly) {
+      try { database.acknowledgeRestore(); } catch (error) { databaseLogger.warn(`The restore of ${options.path} couldn't be marked read (${errorMessage(error)}): the next open says it again`); }
+    }
+  }
+  if (notBorneOut) {
+    databaseLogger.warn(`The database at ${options.path} isn't the file its record of the last sync names, as when one database's file is copied over another's: it was opened as it is`);
+  }
+  return database;
+}
 
 export interface DatabaseStoreOptions {
   /** Told when a query does something its data will make slow (the engine's `warn`); the app passes one in development */

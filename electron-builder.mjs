@@ -1,7 +1,11 @@
 import pkg from './package.json' with {type: 'json'};
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
-import {APP_WORKSPACES, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
+import {Arch} from 'electron-builder';
+import {createRequire} from 'node:module';
+import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
+import {electronNoticesPointer, electronSbomComponent, ffmpegSource, shipElectronNotices} from './scripts/lib/electron-notices.ts';
+import {brokerNoticesFile, brokerSbomComponent, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
 
 /**
  * Electron Builder Configuration
@@ -18,27 +22,105 @@ const metadata = readBuildManifest(buildRoot);
 const isBeta = metadata.channel === 'beta';
 const isPreview = metadata.channel === 'preview';
 const {appId, productName, urlScheme} = metadata;
+/**
+ * The newest glibc any binary the Linux app ships needs: 2.28, which the terminal broker apack-terminal publishes and
+ * elmdb's binding are each built against (manylinux_2_28), and which Electron's own Linux build needs. It is the deb's
+ * `libc6` floor, and build-linux.yml fails when it isn't exactly the newest need, so it can't drift from the binaries
+ */
+const LINUX_GLIBC_FLOOR = '2.28';
+
+/** electron-builder's own deb dependencies, which a set `depends` replaces: read from its FpmTarget, as it reads them */
+function debDefaultDepends() {
+  const {default: FpmTarget} = createRequire(import.meta.url)('app-builder-lib/out/targets/FpmTarget.js');
+  return FpmTarget.prototype.getDefaultDepends('deb');
+}
+
 // File names without spaces: GitHub rewrites spaces in release asset names, and
 // `apack pack test --channel beta` looks for apack-Beta-<version>-mac-arm64.zip
 export const releasePrefix = productName.replace(/ /g, '-');
 
-// Only include speech helpers for the target platform
-const speechResources = process.platform === 'win32'
-  ? [{ from: 'native/speech/windows/SpeechHelper.ps1', to: 'native/speech/SpeechHelper.ps1', filter: ['**/*'] }]
-  : [{ from: 'native/speech/macos/SpeechHelper', to: 'native/speech/SpeechHelper', filter: ['**/*'] }];
+// Only include speech helpers for the target platform; Linux has none
+const speechResources = {
+  win32: [{ from: 'native/speech/windows/SpeechHelper.ps1', to: 'native/speech/SpeechHelper.ps1', filter: ['**/*'] }],
+  darwin: [{ from: 'native/speech/macos/SpeechHelper', to: 'native/speech/SpeechHelper', filter: ['**/*'] }],
+}[process.platform] ?? [];
+
+/**
+ * **A Linux install is named for its channel**, as a Mac's `.app` and Windows' install directory are by `productName`:
+ * electron-builder names the deb's package after package.json's `name` and the executable it links into `/usr/bin`
+ * after the package, both `apack` on every channel, so a Beta deb replaced production and `/usr/bin/apack` took the
+ * name of the `apack` command line tool. The package is the channel's URL scheme (`apack`, `apack-beta`,
+ * `apack-preview`) and the executable that with `-desktop`, and the `.desktop` file is named after the executable, as
+ * Electron's window class is (package.json's `desktopName`), so the dock groups the app's windows under its entry
+ */
+const linuxExecutable = `${urlScheme}-desktop`;
 
 export default /** @type import('electron-builder').Configuration */
 ({
   // Basic configuration
   appId,
   productName,
-  extraMetadata: {version: metadata.version},
+  extraMetadata: {version: metadata.version, desktopName: `${linuxExecutable}.desktop`},
   afterPack: async (context) => {
     const appDir = context.electronPlatformName === 'darwin'
       ? path.join(context.appOutDir, `${productName}.app`, 'Contents/Resources/app')
       : path.join(context.appOutDir, 'resources/app');
     verifyPackagedBuild(appDir, buildRoot);
     execFileSync(process.execPath, ['build/prod/verify-node-modules.mjs', appDir], {stdio: 'inherit'});
+    // Electron's own notices, which electron-builder deletes on macOS, and there the licenses of the frameworks they
+    // don't name (scripts/lib/electron-notices.ts)
+    shipElectronNotices({
+      platform: context.electronPlatformName,
+      appOutDir: context.appOutDir,
+      resources: path.join(context.appOutDir, `${productName}.app`, 'Contents/Resources'),
+      electronDist: path.join(context.packager.info.projectDir, 'node_modules', 'electron', 'dist'),
+      packagedVersion: context.packager.info.framework.version,
+      licensesDir: path.join(context.packager.info.projectDir, 'build', 'licenses'),
+    });
+    // THIRD-PARTY-NOTICES.txt at the app's root: what it carries and inlines (scripts/lib/third-party-notices.ts). A
+    // problem fails a production or beta build there, and is reported here on a preview
+    const projectDir = context.packager.info.projectDir;
+    // The broker built for this platform and arch, named as Node names them, which electron-builder's Arch does for
+    // the x64 and arm64 the app is built for
+    const brokerPlatform = `${context.electronPlatformName}-${Arch[context.arch]}`;
+    const broker = brokerNoticesFile(appDir, brokerPlatform);
+    const electronVersion = context.packager.info.framework.version;
+    // The pin the broker's install downloads and checks its files against, for the SBOM's commit and hashes
+    const brokerPin = path.join(projectDir, 'packages', 'terminal-broker', 'src', 'pin.json');
+    const elmdb = path.join(appDir, 'node_modules', 'elmdb');
+    const os = {darwin: 'mac', win32: 'win', linux: 'linux'}[context.electronPlatformName];
+    const problems = writeAppNotices({
+      appDir,
+      buildRoot,
+      bundleRecords: APP_WORKSPACES.map(workspace => bundledPackagesFile(buildRoot, workspace)),
+      // The built-in pack, whose dist the app ships from the repository
+      packDirs: [path.join(projectDir, 'packages', 'default-setup')],
+      licensesDir: path.join(projectDir, 'build', 'licenses'),
+      channel: metadata.channel,
+      platform: context.electronPlatformName,
+      native: [
+        {pointer: electronNoticesPointer(context.electronPlatformName)},
+        // Where FFmpeg's source is, which its LGPL asks for, read for one Electron and a problem for another
+        ffmpegSource(electronVersion),
+        {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", files: ['THIRD-PARTY-NOTICES', 'COPYRIGHT-rust-library.html'].map(name => path.join(elmdb, name))},
+        {
+          pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin",
+          files: broker ? [broker, path.join(path.dirname(broker), 'COPYRIGHT-rust-library.html')] : null,
+        },
+      ],
+      // The release's CycloneDX SBOM, beside its installers, which the release workflows upload by the `*.cdx.json` they
+      // match. Its arch is electron-builder's name for it (x64, arm64), which the macOS and Windows installers share
+      // and the Linux ones don't: the AppImage names x64 x86_64 and the deb amd64 (builder-util's getArtifactArchName)
+      sbom: {
+        file: path.join(context.outDir, `${releasePrefix}-${metadata.version}-${os}-${Arch[context.arch]}.cdx.json`),
+        app: {name: productName, version: metadata.version},
+        // The vendored checkouts' packages, by the repository each is pinned from, which no registry publishes
+        identity: sbomIdentity(projectDir, {elmdb: 'elmdb#crates/elmdb-node', 'apack-git': 'apack-git', 'apack-terminal': 'apack-terminal#node', 'apack-terminal-view': 'apack-terminal#view'}),
+        // The runtime the app ships, with the Chromium and FFmpeg inside it, and the broker with its release's files
+        others: [electronSbomComponent(electronVersion), ...(broker ? [brokerSbomComponent(brokerPin, brokerPlatform)] : [])].filter(Boolean),
+      },
+    });
+    for (const problem of problems) console.warn(`  • third-party notices: ${problem}`);
   },
   directories: {
     output: isPreview ? 'dist/preview' : 'dist',
@@ -106,7 +188,16 @@ export default /** @type import('electron-builder').Configuration */
     ]
   },
   
+  // The deb states its glibc floor to apt, on top of electron-builder's own dependencies, which a set `depends` would
+  // otherwise replace (FpmTarget's defaults, kept): build-linux.yml reads the floor back from the built deb and holds
+  // every binary in the app to it (build/prod/glibc-floor.sh)
+  deb: {packageName: urlScheme, depends: [...debDefaultDepends(), `libc6 (>= ${LINUX_GLIBC_FLOOR})`]},
+
   linux: {
+    executableName: linuxExecutable,
+    syncDesktopName: true,
+    // The app's links (`apack://…`), which the `.desktop` entry hands it
+    mimeTypes: [`x-scheme-handler/${urlScheme}`],
     target: [
       {
         target: 'AppImage',
@@ -131,8 +222,12 @@ export default /** @type import('electron-builder').Configuration */
     'packages/**/*',
     'node_modules/**/*',
     '!**/test/**',
-    '!**/*.md',
-    '!**/LICENSE*',
+    // **Every license and notice file ships**, the root's and each dependency's, which their licenses ask a
+    // redistribution to carry. Nothing excludes `LICENSE*`, and since matching is case-sensitive, the Markdown
+    // exclusion spares license, licence, notice and copying files in any case: some packages have their license
+    // only as Markdown, esbuild's `LICENSE.md` and `@tiptap/pm`'s `THIRD_PARTY_LICENSES.md` among them
+    // (packaged-app-files.spec.ts)
+    '!**/!(*[Ll][Ii][Cc][Ee][Nn][CcSs][Ee]*|*[Nn][Oo][Tt][Ii][Cc][Ee]*|*[Cc][Oo][Pp][Yy][Ii][Nn][Gg]*).md',
     '!**/.git',
     '!**/*.map',
     '!**/*.d.ts.map',
@@ -164,6 +259,11 @@ export default /** @type import('electron-builder').Configuration */
     // @apackdev/host/build/pack-workdir), none of which the app loads — and `packages/**/*` above took all of
     // it, dotted directories and all, because electron-builder reads no .gitignore either.
     '!packages/*/.apack/**',
+    // ...nor the terminal broker's build a second time. `@app/terminal-broker` is a workspace, so the app carries it
+    // under node_modules as it carries any dependency, and resolves it there: the resolver in its `src/` answers the
+    // `bin/` beside it, and `packages/terminal-broker` in the app has no resolver, its `src/` being excluded above.
+    // The notices beside the binary ship in the copy the app runs (packaged-app-files.spec.ts)
+    '!packages/terminal-broker/bin/**',
     // The CLI's scaffold templates, which are .ts and .vue files it reads at run time rather than code the
     // app loads — so the exclusions above would strip every one of them and `apack pack init` from the CLI this
     // app installs (bin/app-launcher.sh) would scaffold nothing. Last match wins, so this comes after them.

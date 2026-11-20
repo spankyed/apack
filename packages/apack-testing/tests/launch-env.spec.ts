@@ -4,6 +4,7 @@
 // imported this from here to cover the two together. `appLaunchEnv` is this package's, and a pure function,
 // so it is checked here and the CLI's spec keeps only what is the CLI's.
 import { describe, expect, it } from 'vitest';
+import * as path from 'node:path';
 import { appLaunchEnv, pinsViewport } from '../src/launch-env.ts';
 
 describe('appLaunchEnv', () => {
@@ -12,7 +13,13 @@ describe('appLaunchEnv', () => {
       HOME: '/home',
       PLAYWRIGHT_TEST: 'true',
       APACK_USER_DATA_DIR: '/tmp/data',
+      ZDOTDIR: path.join('/tmp/data', 'zsh-config'),
+      APACK_BASHRC: path.join('/tmp/data', 'bash-config', '.bashrc'),
     });
+  });
+
+  it("points the app's zsh away from the developer's configuration, whatever ZDOTDIR the runner had", () => {
+    expect(appLaunchEnv({ ZDOTDIR: '/Users/someone/.config/zsh' }, '/tmp/data').ZDOTDIR).toBe(path.join('/tmp/data', 'zsh-config'));
   });
 
   it("doesn't pass the runner's @apackdev/source condition to the app", () => {

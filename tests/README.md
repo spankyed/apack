@@ -24,7 +24,7 @@ Keep helpers with their suite unless there is a real second consumer. Shared dat
 browser lifecycle, recording or application dependencies. Performance helpers stay in
 `performance/_support/`; reusable testing APIs stay in `@apackdev/testing`.
 
-The smoke and acceptance steps run through the chain. Other E2E specs are opt-in (`--e2e`); performance
+The smoke, E2E and acceptance steps run through the chain; performance
 measurements are manual. These execution policies are unchanged by directory placement. Run one
 affected spec during development and the required chain at a stable checkpoint; see
 [repository validation](../CLAUDE.md#what-to-run-after-a-change).

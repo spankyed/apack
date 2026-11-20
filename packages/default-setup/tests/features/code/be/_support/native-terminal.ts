@@ -46,7 +46,7 @@ export function nativeSession(listeners: NativeTerminalListeners, parts: NativeS
     resize: vi.fn(async () => {}),
     setCursorDefaults: vi.fn(async () => {}),
     // Nothing here drives shell integration: the CLI is what is running, and it reports none
-    facts: vi.fn(async () => ({ cwd: null, command: null, running: false, outcome: null, finished: 0, vouched: false, refused: 0 })),
+    facts: vi.fn(async () => ({ cwd: null, command: null, running: false, outcome: null, finished: 0, vouched: false, refused: 0, statuses: [] })),
     // Its own process is inside its tree; nothing here starts anything else
     owns: vi.fn(async (pid: number) => pid === (parts.pid ?? 0)),
     pause: parts.pause ?? vi.fn(async () => {}),

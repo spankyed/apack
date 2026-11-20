@@ -1,8 +1,11 @@
+// The pack's backend stopping is not the process ending: a reload replaces the pack's code in a process that
+// goes on, and whatever the old code had started is then held by nothing. What it started is ended here, each
+// cleanup attempted whatever the others do.
 import { beforeEach, expect, it, vi } from 'vitest';
 const cleanup = vi.hoisted(() => {
   vi.resetModules();
   return {
-    history: vi.fn(), sizing: vi.fn(), views: vi.fn(), handles: vi.fn(), schedules: vi.fn(),
+    history: vi.fn(), sizing: vi.fn(), reads: vi.fn(), views: vi.fn(), handles: vi.fn(), schedules: vi.fn(),
     listeners: vi.fn(), actors: vi.fn(), unavailable: undefined as Error | undefined,
   };
 });
@@ -15,6 +18,9 @@ vi.mock('#generated/services.ts', () => ({ services: {
 } }));
 vi.mock('#features/code/be/features/terminal.ts', async (original) => ({
   ...await original<typeof import('#features/code/be/features/terminal.ts')>(), startTerminalSizing: () => cleanup.sizing,
+}));
+vi.mock('#features/code/be/services/window-reads.ts', async (original) => ({
+  ...await original<typeof import('#features/code/be/services/window-reads.ts')>(), startStoppingWindowReads: () => cleanup.reads,
 }));
 vi.mock('#features/threads/be/claude-ui.ts', async (original) => ({
   ...await original<typeof import('#features/threads/be/claude-ui.ts')>(), clearClaudeUiViews: cleanup.views,
@@ -32,6 +38,9 @@ vi.mock('#features/brain/be/flow-system.ts', async (original) => ({
   ...await original<typeof import('#features/brain/be/flow-system.ts')>(), clearFlowActorRegistry: cleanup.actors,
 }));
 import { onInit, onShutdown } from '#features/hooks.ts';
+import { CodexAppServer } from '#features/code/be/services/codex/app-server.ts';
+import { getHandle as codexTurn, storeHandle as storeCodexTurn } from '#features/code/be/services/codex/handle-store.ts';
+import type { QueryHandle } from '#features/code/be/services/claude-code/query.ts';
 beforeEach(() => {
   cleanup.unavailable = undefined;
   for (const value of Object.values(cleanup)) if (typeof value === 'function') value.mockReset();
@@ -64,6 +73,12 @@ it('releases its sizing subscription once even if that disposer throws', () => {
   expect(cleanup.sizing).toHaveBeenCalledOnce();
   expect(cleanup.handles).toHaveBeenCalledTimes(2);
 });
+it('releases the window-reads subscription it started, once', () => {
+  onInit();
+  onShutdown();
+  onShutdown();
+  expect(cleanup.reads).toHaveBeenCalledOnce();
+});
 
 it('retires a stored Claude handle even when the runtime service binding is unavailable', async () => {
   const handles = await vi.importActual<typeof import('#features/code/be/services/claude-code/handle-store.ts')>('#features/code/be/services/claude-code/handle-store.ts');
@@ -79,4 +94,42 @@ it('retires a stored Claude handle even when the runtime service binding is unav
   } finally {
     handles.killAllHandles();
   }
+});
+
+/** The real store's kill, which the cases below are about: the mock above stands in for it everywhere else */
+const realHandles = () => vi.importActual<typeof import('#features/code/be/services/claude-code/handle-store.ts')>('#features/code/be/services/claude-code/handle-store.ts');
+
+it('ends every Claude turn under way, and no longer holds it', async () => {
+  const handles = await realHandles();
+  cleanup.handles.mockImplementation(handles.killAllHandles);
+  const kills = { first: vi.fn(), second: vi.fn() };
+  handles.storeHandle('thread-1', { kill: kills.first } as unknown as QueryHandle);
+  handles.storeHandle('thread-2', { kill: kills.second } as unknown as QueryHandle);
+
+  onShutdown();
+
+  expect([kills.first.mock.calls.length, kills.second.mock.calls.length]).toEqual([1, 1]);
+  expect([handles.getHandle('thread-1'), handles.getHandle('thread-2')]).toEqual([undefined, undefined]);
+});
+
+it('ends the other turns when one of them cannot be ended', async () => {
+  const handles = await realHandles();
+  cleanup.handles.mockImplementation(handles.killAllHandles);
+  const kill = vi.fn();
+  handles.storeHandle('thread-1', { kill: () => { throw new Error('already gone'); } } as unknown as QueryHandle);
+  handles.storeHandle('thread-2', { kill } as unknown as QueryHandle);
+
+  onShutdown();
+
+  expect(kill).toHaveBeenCalledOnce();
+});
+
+it('stops the Codex app server, which every Codex turn runs in, and holds none of its turns', () => {
+  const stop = vi.spyOn(CodexAppServer.prototype, 'stop').mockResolvedValue();
+  storeCodexTurn('thread-1', { codexThreadId: 'c-1', turnId: 't-1', abort: async () => {} });
+  try {
+    onShutdown();
+    expect(stop).toHaveBeenCalledOnce();
+    expect(codexTurn('thread-1')).toBeUndefined();
+  } finally { stop.mockRestore(); }
 });

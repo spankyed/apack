@@ -84,13 +84,15 @@ concurrency:
 jobs:
   check:
     if: ${{ !inputs.app_acceptance && !inputs.claude_research && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
-    runs-on: macos-14
-    timeout-minutes: 25
+    runs-on: macos-26
+    # Measured 2026-11-17: 25 minutes reached the CLI integration tests with four steps to go, every finished
+    # step passing; building elmdb from source alone takes about five. A budget for a stuck job, not a target
+    timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24.22.2
           cache: npm
@@ -99,8 +101,6 @@ jobs:
 
       - uses: ./.github/actions/elmdb
       - uses: ./.github/actions/apack-terminal
-        with:
-          build: 'true'
       - uses: ./.github/actions/apack-git
 
       - name: Install dependencies
@@ -119,6 +119,9 @@ jobs:
 
       - name: Release beta-before-production rule
         run: packages/repo-checks/tests/release-beta-rule.test.sh
+
+      - name: Release and unrelease, against a scratch origin
+        run: packages/repo-checks/tests/release-scripts.test.sh
 
       - name: Schema drift check
         run: npm run schema:check --workspace @apackdev/sdk
@@ -197,13 +200,15 @@ jobs:
   # suite from the pack dir against the built app — the third-party pack path.
   external-pack-e2e:
     if: ${{ !inputs.app_acceptance && !inputs.claude_research && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
-    runs-on: macos-14
-    timeout-minutes: 30
+    runs-on: macos-26
+    # Measured 2026-11-17: 30 minutes reached the packaged pack authoring E2E, its last step, with every
+    # earlier step passing. A budget for a stuck job, not a target
+    timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 24.22.2
           cache: npm
@@ -219,7 +224,7 @@ jobs:
       # repo's code ran. The retry there is what makes a refusal survivable; this is what makes it rare. Keyed
       # on the runner and the locked version, so a bump fetches once and every later job restores it.
       - name: Cache Electron's binary
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/Library/Caches/electron
           key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
@@ -242,7 +247,7 @@ jobs:
 
       - name: Upload test output
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: external-pack-e2e
           include-hidden-files: true

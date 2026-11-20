@@ -99,18 +99,6 @@ export interface ChainStep {
    */
   readonly neverCachedBecause?: string;
   /**
-   * Run only when asked for, and why — a step the chain knows about but does not gate on.
-   *
-   * A gate earns its place by catching regressions. A step that exists to be *driven* — to watch the app
-   * while writing a feature, or to let an agent see what it built — is a different tool wearing the same
-   * shape, and putting it in the chain taxes every merge for a job it was never doing.
-   *
-   * It stays declared rather than deleted, because its `inputs` are what tell `chain-inputs` that the tree
-   * it reads is covered, and `--<flag>` puts it back. Nothing may `need` one: the default chain would then
-   * be missing a dependency, which `chainSteps` refuses.
-   */
-  readonly optInBecause?: string;
-  /**
    * What to pass the step so it ignores a cache of its own, appended by `chain.ts` under `--all`.
    *
    * **A step that keeps its own cache needs this, or `--all` lies about it.** The chain's `--all` overrides
@@ -157,28 +145,6 @@ const BY_NAME = new Map<string, ChainStep>();
  * dependency or a cycle, before
  * anything runs: a graph that is wrong should not be discovered halfway through a six-minute chain.
  */
-/**
- * The steps a run gates on: every step, minus the opt-in ones unless they were asked for.
- *
- * Refuses a graph where something needs an opt-in step, since the default run would then be missing a
- * dependency and the failure would arrive halfway through rather than here.
- */
-export function chainSteps(include: readonly string[] = [], all: readonly ChainStep[] = CHAIN_STEPS): readonly ChainStep[] {
-  const optIn = new Set(all.filter((s) => s.optInBecause !== undefined).map((s) => s.name));
-  const kept = all.filter((s) => !optIn.has(s.name) || include.includes(s.name));
-  const present = new Set(kept.map((s) => s.name));
-  for (const step of kept) {
-    // Against the whole table, not against what was kept: an edge to an opt-in step is the thing to refuse,
-    // and deriving within `kept` would simply not find it.
-    for (const need of dependsOn(step, all)) {
-      if (!present.has(need)) {
-        throw new Error(`Chain step ${step.name} depends on ${need}, which is opt-in — nothing may depend on one`);
-      }
-    }
-  }
-  return kept;
-}
-
 /** `child` is `parent` or sits under it */
 const inside = (child: string, parent: string): boolean => child === parent || child.startsWith(`${parent}/`);
 
@@ -395,6 +361,22 @@ const VENDOR_PINS = fs.existsSync(path.join(REPO_ROOT, 'vendor'))
 const ROOT = ['package-lock.json', ...VENDOR_PINS];
 
 /**
+ * The terminal broker the app runs: `@app/terminal-broker`'s resolver and the pin naming the release build its
+ * install fetched. **An input of every step that starts the broker** — the host pool's terminal suites and every
+ * step that launches the app — since the host loads it at run time rather than importing it, which leaves it out
+ * of the dependency edges the rest of a key is derived from (`RUNTIME_ONLY_DEPS`). The fetched build itself is
+ * not an input: its path carries the pinned commit and its bytes were checked against the pin's hashes, so the
+ * pin stands for it as the lockfile stands for `node_modules`.
+ */
+const TERMINAL_BROKER = ['packages/terminal-broker/package.json', 'packages/terminal-broker/src'];
+
+/**
+ * Where the install puts that build. A step reading every source tree reads around it, for the reason above: the
+ * pin in `TERMINAL_BROKER` stands for it, and the install, not any chain step, writes it.
+ */
+const TERMINAL_BROKER_INSTALL = 'packages/terminal-broker/bin';
+
+/**
  * The root vitest config a run of one half uses — which projects it pools is an input to every suite in it.
  *
  * `CONFIG_BY_HALF` is the one record of which file runs which half, and the one `hasHalf` and so
@@ -584,6 +566,7 @@ const APP_RUNNER = ['scripts/build-runtime.ts', 'scripts/lib/runtime-build-legs.
  */
 export const SUITE_SETUP_FILES = ['packages/apack-testing/src/vitest-exit-with-parent.ts',
   'packages/apack-testing/src/vitest-progress-guard.ts',
+  'packages/apack-testing/src/vitest-git-config.ts',
   // Not a setup file itself: the guard's module for what a file left running, which fails files as the guard does
   'packages/apack-testing/src/leftover-processes.ts'];
 
@@ -705,7 +688,8 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   'apack-testing': { packages: true },
   // `@apackdev/testing`'s bundle; and `sdk-bridge-drift.spec.ts` reads `dist/runtime/index.cjs` when it is
   // there and skips when it is not, so the tree decides whether that check checks anything
-  'apack-host': { packages: true, pack: true },
+  // and its terminal suites start the broker it loads at run time (`TERMINAL_BROKER`)
+  'apack-host': { packages: true, pack: true, inputs: TERMINAL_BROKER },
   // Boots the app runtime, which loads the built-in pack: `dist/runtime/index.cjs` and `settings.content.json`.
   // The runtime also imports root package metadata for the app version.
   api: { pack: true, inputs: ['package.json'] },
@@ -814,7 +798,7 @@ function inputsForSuites(suites: readonly UnitSuite[], half: Half): Pick<ChainSt
   return {
     inputs: [...new Set(suites.flatMap((suite) => suiteInputs(suite, half)))].sort(),
     ...(suites.some((suite) => SUITE_READS[suite.dir]?.repo)
-      ? { excludes: [...(half !== 'fast' ? [] : FIXTURE_OUTPUTS), ...FIXTURE_TEST_OUTPUT] }
+      ? { excludes: [...(half !== 'fast' ? [] : FIXTURE_OUTPUTS), ...FIXTURE_TEST_OUTPUT, TERMINAL_BROKER_INSTALL] }
       : {}),
   };
 }
@@ -885,8 +869,9 @@ const TYPECHECK_STEPS: readonly ChainStep[] = TYPECHECK_LEGS
     inputs: legInputs(leg),
     // A leg reading every source tree reads around the fixture packs' build output for the same reason
     // the single step did: `tsc -p tests` compiles `e2e/**` only and `check:specifiers` filters
-    // `__generated__` itself, so hashing it would tie the leg to a build it does not depend on.
-    ...(scopeOf(leg) === 'repo' ? { excludes: [...FIXTURE_OUTPUTS, ...FIXTURE_TEST_OUTPUT] } : {}),
+    // `__generated__` itself, so hashing it would tie the leg to a build it does not depend on. The installed
+    // terminal broker likewise (`TERMINAL_BROKER_INSTALL`).
+    ...(scopeOf(leg) === 'repo' ? { excludes: [...FIXTURE_OUTPUTS, ...FIXTURE_TEST_OUTPUT, TERMINAL_BROKER_INSTALL] } : {}),
   }));
 
 /**
@@ -1067,7 +1052,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // built bundle, which launches Electron, finds the window and bypasses onboarding. Reached by package
     // name rather than by path, so nothing that reads a step's text can see the edge
     keepsOnFailure: FIXTURE_TEST_OUTPUT,
-    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-app.sh',
+    inputs: [...ROOT, ...BOUNDED_RUNNER, ...TERMINAL_BROKER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-app.sh',
       'tests/acceptance/external-pack/test-default-pack-fork.ts', 'tests/acceptance/external-pack/prepare-default-pack-fork.ts', DEFAULT_FORK_OUTPUT, 'tests/acceptance/external-pack/support.sh', 'playwright.config.ts', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   // Never cached: it drives real Electron with real timing and is the likeliest step to be flaky, and a
   // flaky pass cached green hides an intermittent failure indefinitely. 28s is cheap enough to always pay.
@@ -1096,23 +1081,19 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // account of why an app did not start or did not close. Playwright clears the directory on the way in,
     // so the next run would take it
     evidence: ['.apack/tests/results'],
-    inputs: [...ROOT, 'tests/e2e/smoke', 'playwright.config.ts',
+    inputs: [...ROOT, ...TERMINAL_BROKER, 'tests/e2e/smoke', 'playwright.config.ts',
       ...SOURCE_RUNNER, ...APP_ENTRY, ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
-  // The rest of the E2E suite. **Opt-in, not a gate** — `npm run chain -- --e2e`.
-  //
-  // It was built to be driven: to watch the app while writing a feature, and to let an agent see what it
-  // built. It became a chain step, and then the reasoning about it became about caching a flaky pass —
-  // which is a question you only ask of a regression gate. It has not caught one. Off the chain it costs
-  // nothing and is still there when you want it, which is what it was for.
+  // The rest of the E2E suite, a gate like the others. A spec nothing runs breaks unseen when the app changes under
+  // it, and a broken one is a broken promise about the app whether or not it was written to drive it; about 1.5
+  // minutes of the chain, after `test:smoke`. Never cached, so a flaky pass is never what a later run reads.
   { name: 'test:e2e', budget: 'suite',
-    optInBecause: 'it is a harness for driving the app, not a regression gate; nothing has needed it to fail',
     neverCachedBecause: 'it drives real Electron, and a flaky pass cached green hides an intermittent failure',
     evidence: ['.apack/tests/results'],
     // The published trees, because the fixture every spec imports resolves `@apackdev/testing`'s built bundle
     // from one of them — and `packages:check` packs a tarball inside those trees and recreates them, which a
     // reader must not observe. Declaring them is what makes that a mutex instead of a scheduling accident;
     // the step is never cached, so it buys the ordering and costs no precision
-    inputs: [...ROOT, 'tests/e2e', 'tests/_support', 'playwright.config.ts', ...SOURCE_RUNNER, ...APP_ENTRY,
+    inputs: [...ROOT, ...TERMINAL_BROKER, 'tests/e2e', 'tests/_support', 'playwright.config.ts', ...SOURCE_RUNNER, ...APP_ENTRY,
       ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   /**
    * Two steps, split at the app boundary: only the last of the check's nine phases launches one.
@@ -1131,6 +1112,6 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh',
       'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   { name: 'test:packaged-authoring:app', budget: 'suite', expensive: true,
-    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
+    inputs: [...ROOT, ...BOUNDED_RUNNER, ...TERMINAL_BROKER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
       'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
 ];

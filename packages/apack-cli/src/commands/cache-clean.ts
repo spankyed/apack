@@ -37,13 +37,13 @@ export function cleanApps(all: boolean, dirs: CliDirs = cliDirs()): void {
     const bytes = dirBytes(dir);
     console.log(`  ${go ? 'removing' : '  keeping'}  ${tag.padEnd(24)} ${size(bytes).padStart(6)}${go ? '' : '  newest'}`);
     if (!go) return;
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
     removed++;
     reclaimed += bytes;
   });
   for (const dir of leftovers) {
     reclaimed += dirBytes(dir);
-    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
     removed++;
     console.log(`  removing  ${path.basename(dir).padEnd(24)}         an interrupted download`);
   }

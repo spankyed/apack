@@ -4,13 +4,15 @@
 // without saying so. Both derive their subject now, and each case here mutates that subject rather than
 // describing it.
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
+import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { CHAIN_STEPS } from '../../../scripts/lib/chain-steps.ts';
 import { readsOf } from '../../../scripts/lib/dep-files.ts';
 import {
-  type PinnedToolchain, type VendoredCheckout, oneRustToolchain, rustCheckoutsIn,
+  type PinnedToolchain, type VendoredCheckout, oneRustToolchain, rustCheckoutsIn, vendoredStates,
 } from '../../../scripts/lib/vendored-checkouts.ts';
 
 /**
@@ -21,6 +23,49 @@ import {
  * native source it had been given was present: the documented frozen-checkout qualification names that source
  * in `APACK_LINUX_ELMDB_ROOT` and needs no link at all, and the run exited 1 saying to run `link:elmdb`.
  */
+describe('what a vendored checkout is at', () => {
+  /** A repository with `vendor/<name>` linked to `target`, and a `.rev` pinning `pin` */
+  const repository = async (root: string, name: string, target: string, pin: string) => {
+    const repo = path.join(root, 'repo');
+    fs.mkdirSync(path.join(repo, 'vendor'), { recursive: true });
+    await git(repo, 'init', '-q', '-b', 'main');
+    fs.writeFileSync(path.join(repo, 'vendor', `${name}.rev`), `${pin}\n`);
+    fs.symlinkSync(target, path.join(repo, 'vendor', name), 'dir');
+    await git(repo, 'add', 'vendor');
+    await git(repo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'base');
+    return repo;
+  };
+  const git = async (dir: string, ...args: string[]) => (await execFileWhileWorking('git', ['-C', dir, ...args])).stdout.trim();
+
+  it('is the commit of a checkout of its own', async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'vendored-state-')));
+    try {
+      const checkout = path.join(root, 'engine');
+      fs.mkdirSync(checkout);
+      await git(checkout, 'init', '-q', '-b', 'main');
+      await git(checkout, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'pinned');
+      const pin = await git(checkout, 'rev-parse', 'HEAD');
+      const repo = await repository(root, 'engine', checkout, pin);
+      expect(vendoredStates(repo)).toEqual([{ name: 'engine', pinned: pin, head: pin, dirty: false }]);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+
+  /**
+   * What the Linux test container has: the checkout's files copied, without its `.git`, into the repository's own
+   * tree. git answers for such a directory from the repository around it, which named the repository's commit
+   * as the checkout's on every container run.
+   */
+  it('is nothing for a plain directory inside another repository, rather than that repository\'s commit', async () => {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'vendored-state-')));
+    try {
+      const repo = await repository(root, 'engine', path.join(root, 'repo', 'copied'), 'a'.repeat(40));
+      fs.mkdirSync(path.join(repo, 'copied'));
+      fs.writeFileSync(path.join(repo, 'copied', 'package.json'), '{}');
+      expect(vendoredStates(repo)).toEqual([{ name: 'engine', pinned: 'a'.repeat(40), head: undefined, dirty: false }]);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  });
+});
+
 describe('rustCheckoutsIn', () => {
   const linked = (name: string, isRustCheckout = true): VendoredCheckout =>
     ({ name, path: `/checkouts/${name}`, isRustCheckout });

@@ -35,10 +35,13 @@ a terminal with, and `vendor/apack-git` (`npm run link:apack-git`) is the git en
 git with ([the git engine](docs/references/git-engine.md)). The link is machine-specific, so it is ignored and the `.rev` is the shared fact; both
 linkers refuse a checkout that isn't one and a checkout that doesn't hold the pin. **A vendored checkout
 that the app consumes ships an npm package, and the package is what knows its own build** — elmdb's
-`crates/elmdb-node` its napi binding, apack-terminal's `node/` the broker binary and the protocol's
-generated types, its `view/` (`apack-terminal-view`) the compiled `dist` a window draws with, and apack-git's
-the compiled `dist` of the engine — so the app resolves each the way it resolves any dependency, and a
-packaged app collects them with every other. **apack-git is the one a pack depends on, where the others are
+`crates/elmdb-node` its napi binding, apack-terminal's `node/` the protocol's generated types, its `view/`
+(`apack-terminal-view`) the compiled `dist` a window draws with, and apack-git's the compiled `dist` of the
+engine — so the app resolves each the way it resolves any dependency, and a packaged app collects them with
+every other. **The broker binary is the exception, and is not built here at all**: it is the release build
+apack-terminal publishes for the pinned commit, which `packages/terminal-broker/src/pin.json` pins by hash per
+platform and the install downloads and verifies (`npm run pin:apack-terminal -- <commit>` moves both pins;
+`APACK_TERMINAL_BINARY` runs a build of your own). **apack-git is the one a pack depends on, where the others are
 the host's**: it is TypeScript with nothing native, so the pack bundles it into its own runtime and leaves
 nothing for the host to resolve. None is published to a registry; CI clones each at its pin
 (`.github/actions/{elmdb,apack-terminal,apack-git}`).
@@ -106,6 +109,27 @@ third-party API names such as electron-builder’s `artifactName` and GitHub’s
 ## Release metadata
 
 Do not edit release/version metadata unless the user explicitly asks for a release or version bump. This includes `package.json` version fields, `package-lock.json` root package versions, app version constants, release notes, changelogs, and generated release files. The release process owns those changes.
+
+## Third-party notices
+
+The packaged app carries every notice its dependencies' licenses ask a redistribution to carry: never exclude a
+license, notice or copying file in `electron-builder.mjs`, have every bundler of an app workspace record what it inlined
+(`recordBundledPackages`), and keep a built-in pack's bundles saying what they inlined, in source maps or esbuild's
+module comments, which the notices read back. `afterPack` writes `THIRD-PARTY-NOTICES.txt` from what the app carries and those
+records, and fails a production or beta build on what it reports, which a preview build only prints: a package with no
+text or a license outside `ACCEPTED` (add the package's text to `OVERRIDES` with why, or its `license` there when the
+manifest declares none that reads as SPDX, never widen `ACCEPTED` without reading the license), a native binary whose notices are missing (bump its pin to a release that ships them) or that is
+missing itself, a binary a package's install downloads that is another release than its `EXTRAS` texts were read for
+(read them again at that release), another Electron than the one FFmpeg's source pointer was read for
+(`READ_FOR_ELECTRON`, `scripts/lib/electron-notices.ts`), a missing bundle record, a built-in pack with no bundle or one whose packages can't be told, an `OVERRIDES`
+entry no longer needed (one naming a platform is asked of that platform's build alone), or no third-party package at all
+(`scripts/lib/third-party-notices.ts`). **Code adapted from a third party into the app's own files** is credited there
+too: name the file in `ADAPTED` with its upstream's license texts under `build/licenses/`, which a shipped source saying
+it was adapted, ported or copied from elsewhere has to be (`third-party-notices.spec.ts`). Beside the release files it
+writes a CycloneDX SBOM,
+`<releasePrefix>-<version>-<os>-<arch>.cdx.json`, which the release workflows upload by that name: rename a release file
+and their `*.cdx.json` globs with it. What neither covers yet, the Rust crates in npm packages' prebuilt binaries
+first, is in [the deferred plan](docs/plans/deferred/third-party-notices-gaps.md).
 
 ## Backward compatibility
 
@@ -427,7 +451,7 @@ npm run chain                    # Before a merge: every check in dependency ord
                                  # `npm run chain -- --help` lists its flags
 
 npm test                         # Fresh builds and every suite, without test-result caches
-npm run test:e2e                 # Playwright E2E — a harness, not a gate (see below)
+npm run test:e2e                 # Playwright E2E, which the chain gates on as test:e2e (see below)
 npm run test:unit                # The host pool and the pack pool (scripts/lib/unit-suites.ts)
 npm run test:unit:host           # One pool, only the projects whose inputs changed
 npm run test:unit:pack           # The pack pool, resolving the published dist
@@ -493,10 +517,10 @@ never ends, and the app is up the whole time.
 **`tests/e2e/smoke/` is a gate**, as its own chain step (`test:smoke`): the app launches, reaches
 `connected`, has its surfaces, and runs in its own data dir.
 
-**The rest of the suite is not a gate.** A spec earns a place there when it asserts something a future change
-could break **and** needs the real process boundary (`app-integration/dev-reload.spec.ts` is the example);
-anything else is a harness test or a driving script. `npm run chain -- --e2e` runs the suite after
-`test:smoke`; `npm run test:e2e` runs it alone.
+**The rest of the suite is a gate too**, as the chain's `test:e2e` step after `test:smoke`, never cached: a spec
+nothing runs breaks unseen when the app moves under it. A spec earns a place there when it asserts something a
+future change could break **and** needs the real process boundary (`app-integration/dev-reload.spec.ts` is the
+example); anything else is a driving script, kept out of `tests/e2e`. `npm run test:e2e` runs the suite alone.
 
 Playwright tests launch the full Electron app and interact via `window.applicationState` (the XState actor). Use to visually verify UI changes.
 
@@ -588,7 +612,7 @@ What crosses to the app follows one rule, **bind resources, derive behaviour**. 
 - `@apackdev/host/fe` — host-only: `createFePackRegistry()`, the renderer's registered pack frontends (`registerPackFE`, `getRegisteredSurfaces`, app extensions); `createShellMachine`, the app shell over the I/O it's given (`ShellClient`, pack frontends, storage, notify, the event target), which the renderer composes with the window's and a test with fakes; and the `host/packs` feature's frontend (`fe/packs/`), beside the system that answers it — the Packs surface's machine, pack-frontend loading over `PackFrontendIO` (the window's `import()` and stylesheets), the install a deep link asks for, and `runWindowStorageMigrations`, the window-storage counterpart of the app's migrations. It re-exports the `host/settings` feature's frontend too (`features/settings/fe/machine.ts`: `createSettingsMachine(io)`, over the restart and report the renderer gives it). `src/fe/index.ts` is where all three features' frontends are named — the package's export surface, which is why naming them there isn't the cross-feature import `check:specifiers` refuses; a port both the shell and the packs feature need (`ShellPackFrontends`) lives at the seam in `src/fe/` rather than in either.
 - `@apackdev/host/settings` — host-owned app, pack-group and feature preferences: `createSettingsStore({ ears, catalog, onCatalogChanged })` owns the current overrides and their common validated writer. `createSettingsService(store)` supplies administration to host composition and caller-bound access to packs. Installed declarations remain available when executable pack code is disabled; default-setup supplies no app defaults or whole-document assembly. The per-window runtime precedes the shell, and the Settings view is a subscriber and editor. The backend system and view machine live in `features/settings/{be,fe}`; Vue forms live in `packages/renderer/src/views/settings/`.
 - `@apackdev/host/views` — the views windows are subscribed to: `createViewHost({ ears, packs })` resolves each request (a feature's ref, a view's name, its arguments) to that feature's view in the registered pack (`PackFeature.views`, from `defineViews` in `@apackdev/sdk/framework` and `apack.json` `features.<id>.views`) and runs it as one engine watch per distinct request, however many windows share it. A pack's registration changing (`PackRegistry.onRegistrationChanged`) restarts its watches on the new code. The API serves it as `views.watch`, one tRPC subscription per `useView`, so a socket closing ends its window's; the harness's `app.watchView` and shell subscribe to the test file's.
-- `@apackdev/host/packs`, `/packs/runtime`, `/packs/dev-server`, `/backup`, `/build/discover`, `/build/shared-deps`, `/build/source-resolution` — pack registration (`createPackRegistry()`: the registered packs as an instance, with their shutdown hooks), discovery, registry, installer, updater, pack layout and module bridge (the CLI imports this barrel, which never imports `/packs/runtime`); the pack runtime the app runs, on the registry it's given (loader, SDK bridge, lifecycle, reload, writing, the host `packs` system); the `apack pack dev` server marker the `pack://` handler proxies to; backups of both databases (elmdb's compacted copy); build-time pack discovery and host-shared dependency lists; the `@apackdev/source` condition helpers and the check that a process resolves workspace source, not `dist`.
+- `@apackdev/host/packs`, `/packs/runtime`, `/packs/dev-server`, `/backup`, `/build/discover`, `/build/shared-deps`, `/build/source-resolution`, `/build/bundled-packages` — pack registration (`createPackRegistry()`: the registered packs as an instance, with their shutdown hooks), discovery, registry, installer, updater, pack layout and module bridge (the CLI imports this barrel, which never imports `/packs/runtime`); the pack runtime the app runs, on the registry it's given (loader, SDK bridge, lifecycle, reload, writing, the host `packs` system); the `apack pack dev` server marker the `pack://` handler proxies to; backups of both databases (elmdb's compacted copy); build-time pack discovery and host-shared dependency lists; the `@apackdev/source` condition helpers and the check that a process resolves workspace source, not `dist`; and what a bundle inlined, for the third-party notices.
 - `@apackdev/host/exclusive-lock` — one writer at a time for a file two processes would otherwise interleave on: `holdExclusiveLock({ file, what, refuse })`, `findLockHolder`, `readLock`, `INTERRUPTS`. The mechanism only — the lock file's name and the refusal's wording belong to whoever takes it, which `database/write-lock.ts` (a tool changing a data dir), the CLI's code generation and the chain's `holdChainLock` each do. `wx` is the acquisition, so two arriving together cannot both win; a lock whose holder has exited is taken over, and one that cannot be read or names another machine counts as held.
 - `@apackdev/host/process-liveness` — what a running process left on disk and whether it is still there: `lockIsHeld`, `recordIsStale`, and `readApiEndpoint` for the port file a running API publishes.
 - `@apackdev/host/private-file` — `writePrivateFile`: a 0600 atomic write (unique temporary, fsync, directory sync, a Windows rename retry), for a file only the user should read. Neutral rather than under `/secrets`, because the secrets store is one caller and neither the API's port and token files nor a session file is a secret. The app's own plumbing, so packs never reach it.

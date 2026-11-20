@@ -14,7 +14,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
-import { createTerminalService, findBrokerBinary, socketPath } from '../../src/services/terminal.ts';
+import { brokerKey, createTerminalService, findBrokerBinary, socketPath } from '../../src/services/terminal.ts';
 import { startBrokerProcess } from '../_support/broker-process.ts';
 
 const BINARY = findBrokerBinary() ?? '';
@@ -38,7 +38,7 @@ afterEach(async () => {
 describe.skipIf(!BINARY)('after the broker it was holding died', () => {
   it('starts a fresh one for the next session', async () => {
     const at = socketPath();
-    const broker = await startBrokerProcess(BINARY, at);
+    const broker = await startBrokerProcess(BINARY, at, brokerKey());
     const started = createTerminalService();
     service = started;
 

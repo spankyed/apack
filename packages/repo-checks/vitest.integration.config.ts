@@ -16,7 +16,7 @@ export default defineConfig({
     // test that spends the CPU budget above (`vitest-progress-guard.ts`, `@apackdev/testing`)
     testTimeout: 0,
     hookTimeout: 0,
-    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', '../apack-testing/src/vitest-progress-guard.ts', './tests/_support/turn-event-loop.ts'],
+    setupFiles: ['../apack-testing/src/vitest-exit-with-parent.ts', '../apack-testing/src/vitest-progress-guard.ts', '../apack-testing/src/vitest-git-config.ts', './tests/_support/turn-event-loop.ts'],
     include: ['tests/**/*.integration.spec.ts'],
     exclude: ['**/node_modules/**'],
     // No worker cap here, and none in any other package either: the repo's only cap is the root

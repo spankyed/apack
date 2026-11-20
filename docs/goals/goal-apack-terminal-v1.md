@@ -1,6 +1,6 @@
 # Goal: apack-terminal v1 (apack-only, near-complete on Windows)
 
-**Status: planned, ready to start.** Owners: the broker (`spankyed/apack-terminal`, including its `view/`
+**Status: done (2026-11-15).** Every requirement is met; R6 and R9 by the owner's decisions below. Owners: the broker (`spankyed/apack-terminal`, including its `view/`
 package) and the app's pin and docs (`spankyed/apack`). The detailed tasks are in
 [the v1 plan](../plans/apack-terminal-v1.md); this document holds scope, decisions, phases and completion.
 Deferred work is in [the public release plan](../plans/deferred/apack-terminal-public-release.md) and
@@ -86,23 +86,31 @@ machine, one heavy job at a time. P2 is measured against P1's baseline, so P1 co
 
 ## Current handoff
 
-- **Broker source:** `origin/master` 54c1f1d. #10 to #14 are merged, including the proxy `done` request, the
-  recording-list pruning, the deadline heap and the blink fixes.
-- **App source:** `origin/master` 7265731c6b, which includes the plan documents. The app pins the broker at
-  `efe5d84`, behind `54c1f1d`. Moving the pin is part of acceptance (below), with the app chain.
-- **Green on the broker's `master` at `f385161`.** That is #15, which fixed the red baseline left by #14: a
-  test that killed sessions it had not waited for, rewritten to let them end on their own. The broker's CI and
-  mutation jobs pass on `f385161`. One earlier mutation-baseline timeout, in
-  `keeping::a_session_begins_with_the_screen_its_recording_holds`, was not reproduced in three local runs. If it
-  recurs, read its log before changing anything.
-- **Proven:** the broker suite passes on macOS (440 cases, local, including the fix) and on Windows (the
-  affected suites on the VM, 46 cases, after #14). The PowerShell hook was driven through the broker on the VM in
-  2026-11-12 (`docs/goals/evidence/terminal-view.md`, "On Windows, and a picture in the real app").
-- **Not proven:** the app's own code path on Windows (W2); the kept-session suite on Windows (W3); test
-  cleanup of proxy-started brokers on Windows (W4); ConPTY marks under load (W1); the desktop check (W6).
-- **2026-11-14:** broker PR #28 (`fix/windows-hang-up`) is open and not merged. It carries the named-pipe hang-up, the Windows kill fix (through the wezterm git commit `8afe0ad307`, with an upstream issue asking for a release), the ported keeping, proxy and view suites, and the design doc's Windows limits. Its CI fails in three places: `cargo fmt` (fixed in `cdb2cbd`), a Windows timing failure in one keeping case (fixed in `cdb2cbd`), and a Linux mutant in the Windows-only arm of `hang_up`. The Linux mutation job cannot kill that mutant, because it is compiled out on Linux, and the workflow answers mixed files with a Windows dispatch. Choosing how to gate it is open. The app pin is not moved.
-- **Next:** T1, T2 and W1 can start at once, on different machines.
-- **Evidence file:** `docs/references/evidence/apack-terminal-v1.md`, to be created with the first checkpoint.
+- **Broker:** the v1 commit is `683c84a` on `master`. It is `50080ee` plus apack-terminal PR #38, which runs Windows
+  sessions on the ConPTY the broker carries and ports eleven more cases (R8), and PR #39, with which a greeting can
+  ask the broker to prove it is the caller's own. CI on all three platforms and the mutation jobs pass on both (R13).
+- **App:** the pin is `683c84a`, with the app's half of that proof: it starts its broker with a key only its user
+  can read and refuses, before anything past the greeting, a broker that cannot prove it holds it. On Windows a
+  pipe name can be taken by another account first; that refusal was seen on the VM against a second account's
+  pipe, which received the greeting and nothing more. The chain is green on it (R14).
+- **Proven:** every requirement below, each row with its evidence. The plan's tasks T1 to T3, W1 to W5, P1, P2
+  and F1 have their results recorded in the plan; W6 is waived.
+- **Left:** nothing.
+- **The VM** is idle; its daily shutdown at 07:00 UTC deallocates it, and deallocating sooner is the owner's
+  (`az vm deallocate`, `windows-development-vm.md`).
+
+## Owner decisions
+
+The decisions the agent could not make, and what the owner decided.
+
+1. **R6: accepted (2026-11-15).** The two kept-session cases stay POSIX-only: the ignore-hangup case (a Windows
+   console has no hangup signal a program can ignore) and the half-close case (a named pipe cannot close one
+   direction).
+2. **R8: not accepted as it stood (2026-11-15), and redone.** Asked whether the 18 gated cases were the best that
+   could be done, eleven turned out portable, four of them by replacing the ConPTY; the seven left test what a
+   Windows pipe or console does not have. R8's row has the result.
+3. **R9: waived (2026-11-15).** The desktop check (plan W6) is not part of v1, and nothing is written about it as
+   a limit.
 
 ## Acceptance
 
@@ -112,16 +120,16 @@ machine, one heavy job at a time. P2 is measured against P1's baseline, so P1 co
 | R2 Recording format versioned | Met: a recording begins with the magic `APKREC` and format 1; a file without the header, or of another format, is refused and says why (`be263dc`). The golden file `tests/fixtures/recording-format-1.apkrec` reads back | Recording suite on the Mac, 34 passed, 2026-11-14; CI's tests on macOS, Linux and Windows pass on `master` | none |
 | R3 `unsafe` blocks accounted for | Met: every `unsafe` site has a `SAFETY` comment, and `cargo xtask check-safety` fails on one without and on finding none; it passes on `master`. The suite runs clean under AddressSanitizer on x86_64 Linux (`asan.yml`) | `check-safety` on the Mac, 2026-11-14; ASan run 43601063124 on `436a8ae`, 2026-11-14, success (and on `63d78cd`, 2026-11-12) | none |
 | R4 Command marks correct under ConPTY load | Met: one PowerShell session with the app's shell integration ran 10,000 typed commands through the broker on the VM; the listener saw 10,000 starts and 10,000 finishes, all in order, none missing or duplicated, every outcome `exited` 0, and the 256 the broker keeps match the last 256 written | 2026-11-13 VM run (`.apack/w1-order.ts`, `C:\apack-setup\w1-result.json`); plan W1 | none |
-| R5 App code path works on Windows | Partly: the app's terminal service opens PowerShell through the broker on the VM, and typed input reaches the shell. The recorded commands with statuses are not read back on Windows | 2026-11-12 VM run (headless API, marker file) | W2 |
-| R6 Kept-session suite on Windows, or beta with evidence | Met with two justified exceptions: 13 of the 15 `keeping` cases pass on the VM (`keeping::`, 2026-11-14), including the job-group case ported this round. The other two are POSIX-only and gated with their reasons: the ignore-hangup case (a Windows console has no hangup a program can ignore) and the half-close case (a named pipe cannot close one direction) | 2026-11-14 VM run; PR #32 | none; the two exceptions need the owner's acceptance |
+| R5 App code path works on Windows | Met: the headless API on the VM opened a PowerShell terminal through the app's terminal service (`terminal.CREATE_TERMINAL`), three lines were typed through `terminal.TERMINAL_INPUT`, and the broker's record of that session lists the three commands in order, each `exited` with the status the app's own shell integration reported: `Write-Output "w2-one"` 0, `Get-Item C:\w2-does-not-exist` 1, `Write-Output "w2-three"` 0. The app keeps no command list of its own; a status is `exited` only when a mark carrying the app's key said so | 2026-11-15 VM run (`.apack/w2-readback.ts`, `C:\apack-setup\w2-readback.json`), app at `3d5f18867`, broker at `6e9c953`; plan W2 | none |
+| R6 Kept-session suite on Windows, or beta with evidence | Met with two exceptions the owner accepted: 13 of the 15 `keeping` cases pass on the VM (`keeping::`, 2026-11-14), including the job-group case ported this round. The other two are POSIX-only and gated with their reasons: the ignore-hangup case (a Windows console has no hangup a program can ignore) and the half-close case (a named pipe cannot close one direction) | 2026-11-14 VM run; PR #32 | none (owner accepted, 2026-11-15) |
 | R7 Killed test leaves no broker on Windows | Met: the proxy-ending case passes on the VM and the broker process count is 0 once the run ends | 2026-11-14 VM run (`proxy::a_broker_a_proxy_started`) | none |
-| R8 POSIX-only cases ported or justified | Met with justifications. The view and proxy suites run 402 cases on the VM, with no failures. 18 POSIX-only cases stay gated, each with its reason on the case: ConPTY does not pass graphics APC or the mouse-mode request (probed 2026-11-14), POSIX tty mode (`stty`, `od`), one direction of a connection, and POSIX socket files, paths and permission bits. The title, clipboard and unread-answer cases are now ported, and the disconnect fix (PR #33) is what made the last one pass | 2026-11-14 VM run (full suite, 402 passed); PR #33 | none; the justifications need the owner's acceptance |
-| R9 Desktop check of the app's window on Windows | Not done; needs owner | none | W6 (owner) |
+| R8 POSIX-only cases ported or justified | Met: the suite runs 417 cases on the VM, none failing, and seven stay gated, each a socket file, a directory, mode bits or a connection closed one way, which a Windows pipe does not have. Windows sessions run on Microsoft's own ConPTY, which the broker carries (`windows/conpty/`); the system's drops the image APC, the mouse-mode request and the OSC 52 question, so images and mouse reporting did not work on Windows before. A proxy on Windows refuses a pipe another account owns. Plan W5 has the detail | 2026-11-15 VM runs: full suite (417 passed), raw-output probe of both ConPTYs, `cargo xtask package` staging both files, W1's 10,000 commands again through the packaged build (all in order, 172 s), a throwaway second account refused the broker's pipe and its squatted pipe received 0 bytes; apack-terminal PR #38 | none |
+| R9 Desktop check of the app's window on Windows | Waived by the owner (2026-11-15) | none | none |
 | R10 Native benchmarks with a recorded baseline | Met: the broker's native baseline is recorded in `docs/architecture/testing.md` ("Native numbers: the baseline"), from `cargo bench --bench broker` on the Mac, 2026-11-12, load about 8 during the run | `docs/architecture/testing.md`, 2026-11-12 | none required; a quiet-machine re-run would tighten the figures |
-| R11 Quiet-gap flush | Not started; echo median 19.8 ms | 2026-11-12 measurement | P2 |
+| R11 Quiet-gap flush | Met: held output is sent after a 1 ms quiet gap (`e2069c7`), and a case states it. Back-to-back echo median 1.17 ms on a Linux runner and 1.97 ms on the developer's Mac (16.1 and 18.1 ms before); `seq 1 1000000` throughput ×1.02 on Linux and ×1.25 on macOS against the commit before the change on the same machine | Bench run 43714875496 (7e570e3 against 50080ee, alternated eight times on ubuntu-24.04 and macos-15), 2026-11-15; six alternated rounds on the Mac, 2026-11-15; plan P2 | none |
 | R12 v1 scope in README and design doc | Met: the README status table states the v1 scope, platforms, Windows status and crash behaviour, and design.md has a v1 scope section and its known limits (PR #31, merged as `39fb58c`) | PR #31; `docs/architecture/design.md`, README | none |
-| R13 Broker suite green on macOS, Linux, Windows | Green on `master` at `f385161` (CI and mutation jobs) | Broker runs on `f385161`, checked 2026-11-12 | Re-confirm after each phase |
-| R14 App chain green with the pin at the v1 commit | Pin at `6e9c953` (PR #482, merged); the broker's `master` has moved past it (`05749ca`), so the v1 commit is not chosen yet | none | Pin move and `npm run chain -- --no-native`, after R13 |
+| R13 Broker suite green on macOS, Linux, Windows | Met at the v1 commit `683c84a`: CI (the suite on all three platforms, the checks, the view) and the mutation jobs, the Windows-only one included, pass on PRs #38 and #39, each up to date with `master` when merged; the fuzz jobs pass nightly | PR #38 and #39 checks, 2026-11-15, 17 of 17 each; earlier, `50080ee`'s CI 43647602884 | none |
+| R14 App chain green with the pin at the v1 commit | Met: the pin is `683c84a`, and `npm run chain -- --no-native` is green on the tree that moved it there | The chain result recorded on the pin's PR, 2026-11-15; before it, `50080ee`'s on PR #493 | none |
 
 ## Constraints
 
@@ -135,5 +143,5 @@ machine, one heavy job at a time. P2 is measured against P1's baseline, so P1 co
 
 ## Outcome
 
-Not yet. Closure is recorded here, with the phases' results, the acceptance table and the evidence, when every
-requirement is done or labelled beta under the rule.
+Done (2026-11-15). Every requirement is met, R6 by the owner's acceptance and R9 by the owner's waiver. No Windows
+feature is labelled beta: each Windows gap is ported or gated with a reason, and none was a failed attempt.

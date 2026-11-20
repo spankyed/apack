@@ -21,9 +21,13 @@ export interface StartedBroker {
   kill(): Promise<void>;
 }
 
-/** Starts `binary` listening on `socket`, resolving once it says it is listening */
-export async function startBrokerProcess(binary: string, socket: string): Promise<StartedBroker> {
-  const child = spawn(binary, [socket], { stdio: ['ignore', 'pipe', 'pipe'] });
+/**
+ * Starts `binary` listening on `socket`, resolving once it says it is listening. `key` is the one the app would
+ * start it with (`brokerKey`), for a case whose client asks the broker to prove it is the app's own.
+ */
+export async function startBrokerProcess(binary: string, socket: string, key?: string): Promise<StartedBroker> {
+  const env = key === undefined ? process.env : { ...process.env, APACK_TERMINAL_KEY: key };
+  const child = spawn(binary, [socket], { stdio: ['ignore', 'pipe', 'pipe'], env });
   const said: string[] = [];
   child.stderr?.on('data', chunk => { said.push(String(chunk)); });
   const exited = new Promise<void>((resolve) => { child.once('exit', () => resolve()); });

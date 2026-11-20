@@ -5,9 +5,12 @@ import { removeAllListeners as removeAllAdHocListeners } from './brain/be/servic
 import { clearFlowActorRegistry } from './brain/be/flow-system.ts';
 import { services } from '#generated/services.ts';
 import { startTerminalSizing } from './code/be/features/terminal.ts';
+import { startStoppingWindowReads } from './code/be/services/window-reads.ts';
+import { stopCodex } from './code/be/services/codex/index.ts';
 
 /** What the pack's backend follows for as long as it runs */
 let stopTerminalSizing: (() => void) | undefined;
+let stopStoppingWindowReads: (() => void) | undefined;
 
 /**
  * The pack's backend started.
@@ -24,6 +27,8 @@ let stopTerminalSizing: (() => void) | undefined;
 export const onInit = () => {
   // A terminal's grid is the smallest fit of the windows showing it, so it has to hear when one goes
   stopTerminalSizing = startTerminalSizing();
+  // A blame or a history a window asked for is stopped when the window goes
+  stopStoppingWindowReads = startStoppingWindowReads();
   const folded = services.repository.chatCommands.foldStrandedMessageText();
   if (folded > 0) services.logger.info('folded the text of messages a turn left unfinished', { messages: folded });
 };
@@ -51,11 +56,18 @@ export const onShutdown = () => {
   const stopSizing = stopTerminalSizing;
   stopTerminalSizing = undefined;
   if (stopSizing) dispose(stopSizing);
+  const stopReads = stopStoppingWindowReads;
+  stopStoppingWindowReads = undefined;
+  if (stopReads) dispose(stopReads);
   //
-  // The Claude Code integration's own children are a different matter: a handle is this process's, so a
-  // handle left running is leaked rather than persisted, and the views it fed have nobody to reach.
+  // **An agent's processes are the opposite case, and are ended.** A terminal is the user's and is held by the
+  // broker, outside this process; a `claude` turn and the Codex app server are this pack's own children, held
+  // only by its modules. The pack stopping is not always the process ending: a reload replaces those modules in
+  // a process that goes on, where a child they started would run on with nothing left to end it, and the views
+  // a handle fed would have nobody to reach. Stopping the app server ends every Codex turn with it.
   dispose(clearClaudeUiViews);
   dispose(killAllHandles);
+  dispose(stopCodex);
   dispose(clearAllSchedules);
   dispose(removeAllAdHocListeners);
   dispose(clearFlowActorRegistry);

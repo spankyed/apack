@@ -20,7 +20,12 @@ export interface AppRelease {
   checksum: Release['assets'][number];
 }
 
-/** Select the requested tag or newest channel release. Its ZIP and checksum must both be present. */
+/**
+ * Select the requested tag, or the newest channel release whose ZIP and checksum are both present. A newer release
+ * without them is passed over rather than ending the search: each platform's workflow uploads to the tag's release
+ * separately, so a release can hold another platform's files before the macOS ones arrive. A requested version is
+ * never substituted.
+ */
 export function pickAppRelease(releases: Release[], channel: PublishedAppChannel, version?: string): AppRelease | null {
   const prefix = PRODUCT_NAMES[channel].replace(/ /g, '-');
   const zipPattern = new RegExp(`^${prefix}-(.+)-mac-arm64\\.zip$`);
@@ -32,17 +37,17 @@ export function pickAppRelease(releases: Release[], channel: PublishedAppChannel
     .filter(c => channel === 'beta' || semver.prerelease(c.version) === null)
     .sort((a, b) => semver.rcompare(a.version, b.version));
 
-  const release = candidates[0]?.release;
-  if (!release) return null;
-  // Parsing the captured version keeps production's prefix from matching the Beta product name.
-  const zip = release.assets.find(asset => {
-    const assetVersion = semver.valid(asset.name.match(zipPattern)?.[1] ?? '');
-    return assetVersion !== null && (channel === 'beta' || assetVersion === release.tag_name.replace(/^v/, ''));
-  });
-  const checksum = zip && release.assets.find(asset => asset.name === `${zip.name}.sha256`);
-  if (!zip || !checksum) return null;
-  // A beta promoted from a production build carries that build's version, rather than its beta tag.
-  return { version: semver.valid(zip.name.match(zipPattern)![1])!, zip, checksum };
+  for (const { release } of candidates) {
+    // Parsing the captured version keeps production's prefix from matching the Beta product name.
+    const zip = release.assets.find(asset => {
+      const assetVersion = semver.valid(asset.name.match(zipPattern)?.[1] ?? '');
+      return assetVersion !== null && (channel === 'beta' || assetVersion === release.tag_name.replace(/^v/, ''));
+    });
+    const checksum = zip && release.assets.find(asset => asset.name === `${zip.name}.sha256`);
+    // A beta promoted from a production build carries that build's version, rather than its beta tag.
+    if (zip && checksum) return { version: semver.valid(zip.name.match(zipPattern)![1])!, zip, checksum };
+  }
+  return null;
 }
 
 /** What is installed at `appPath` now, or nothing when it is not there or says no version */
@@ -139,7 +144,7 @@ export function validateAppBundle(incoming: string, channel: AppChannel, expecte
 /** Download and validate first; preserve the existing bundle until a staged replacement is ready. */
 export async function manageInstalledApp(options: AppCommandOptions, deps: AppCommandDependencies = {}): Promise<void> {
   if (process.platform !== 'darwin' || process.arch !== 'arm64') {
-    throw new Error(`apack is published for macOS on Apple Silicon only (current platform: ${process.platform}/${process.arch}).`);
+    throw new Error(`apack install and upgrade manage the macOS app on Apple Silicon only (current platform: ${process.platform}/${process.arch}); the Windows and Linux builds are on the release page, https://github.com/spankyed/apack/releases.`);
   }
   const { action, channel } = options;
   const product = PRODUCT_NAMES[channel];
@@ -164,7 +169,7 @@ export async function manageInstalledApp(options: AppCommandOptions, deps: AppCo
     if (action === 'uninstall') {
       if (!exists) { log(`${product} is not installed.`); return; }
       await quit(product, log, appPath);
-      fs.rmSync(appPath, { recursive: true });
+      fs.rmSync(appPath, { recursive: true, maxRetries: 5 });
       log(`Uninstalled ${product}. Your data and settings were kept.`);
       return;
     }
@@ -200,8 +205,8 @@ export async function manageInstalledApp(options: AppCommandOptions, deps: AppCo
     if (options.relaunch) await run('open', [appPath]);
   } finally {
     try {
-      if (staged) fs.rmSync(staged, { recursive: true, force: true });
-      if (staging) fs.rmSync(staging, { recursive: true, force: true });
+      if (staged) fs.rmSync(staged, { recursive: true, force: true, maxRetries: 5 });
+      if (staging) fs.rmSync(staging, { recursive: true, force: true, maxRetries: 5 });
     } finally {
       lock.release();
     }

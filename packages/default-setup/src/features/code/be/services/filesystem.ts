@@ -4,6 +4,7 @@ import { spawn, execFile } from 'child_process'
 import { rgPath } from '@vscode/ripgrep'
 import type { FileInfo, DirectoryContent, FileContent, CodeSystemError, SearchOptions, SearchResult, QuickOpenResult } from '../types.ts'
 import { createLogger } from '@apackdev/sdk/logger'
+import { decodeNdjson } from './claude-code/ndjson.ts'
 
 const logger = createLogger('filesystem')
 
@@ -344,7 +345,9 @@ export class FileSystemRepository {
   async searchFiles(
     options: SearchOptions,
     onProgress?: (filesSearched: number, totalFiles: number, currentFile?: string) => void,
-    onResult?: (result: SearchResult) => void
+    onResult?: (result: SearchResult) => void,
+    /** Ends the search when it aborts: ripgrep is stopped, and the search rejects with the signal's reason */
+    signal?: AbortSignal
   ): Promise<SearchResult[]> {
     try {
       const validPath = this.validatePath(options.path)
@@ -395,59 +398,62 @@ export class FileSystemRepository {
       args.push(validPath)
       
       return new Promise((resolve, reject) => {
-        const rg = spawn(rgPath, args)
+        const rg = spawn(rgPath, args, { signal })
         
         let currentResult: SearchResult | null = null
         let filesSearched = 0
         let errorOutput = ''
         
-        rg.stdout.on('data', (data) => {
-          const lines = data.toString().split('\n').filter(Boolean)
-          
-          for (const line of lines) {
-            try {
-              const json = JSON.parse(line)
-              
-              if (json.type === 'match') {
-                const filePath = json.data.path.text
-                const lineNum = json.data.line_number
-                const lineText = json.data.lines.text.trimEnd()
-                const match = json.data.submatches[0]
-                
-                if (!currentResult || currentResult.path !== filePath) {
-                  if (currentResult) {
-                    results.push(currentResult)
-                    onResult?.(currentResult)
-                  }
-                  
-                  currentResult = {
-                    path: filePath,
-                    matches: []
-                  }
-                  
-                  filesSearched++
-                  onProgress?.(filesSearched, -1, filePath)
-                }
-                
-                currentResult.matches.push({
-                  line: lineNum,
-                  column: match.start + 1,
-                  lineText: lineText,
-                  matchStart: match.start,
-                  matchEnd: match.end
-                })
+        // One JSON value a line, read as lines: a read ends wherever the pipe did, in the middle of a line and
+        // of a character as often as not, so what is parsed is what the decoder has put back together
+        const read = (async () => {
+          for await (const line of decodeNdjson(rg.stdout)) {
+            if (!line.ok) continue
+            const json = line.value as { type?: string; data?: any }
+            if (json.type !== 'match') continue
+
+            const filePath = json.data.path.text
+            const lineNum = json.data.line_number
+            const lineText = json.data.lines.text.trimEnd()
+            const match = json.data.submatches[0]
+
+            if (!currentResult || currentResult.path !== filePath) {
+              if (currentResult) {
+                results.push(currentResult)
+                onResult?.(currentResult)
               }
-            } catch {
-              // Ignore JSON parse errors
+
+              currentResult = {
+                path: filePath,
+                matches: []
+              }
+
+              filesSearched++
+              onProgress?.(filesSearched, -1, filePath)
             }
+
+            currentResult.matches.push({
+              line: lineNum,
+              column: match.start + 1,
+              lineText: lineText,
+              matchStart: match.start,
+              matchEnd: match.end
+            })
           }
-        })
-        
+        })()
+
         rg.stderr.on('data', (data) => {
           errorOutput += data.toString()
         })
         
-        rg.on('close', (code) => {
+        rg.on('close', async (code) => {
+          // The process is gone, and what it wrote may still be on its way through the decoder
+          // Stopped by its caller: whatever it had found is not an answer to anything still asked
+          if (signal?.aborted) { reject(signal.reason); return }
+          try { await read } catch (error) {
+            reject(this.createError('SEARCH_ERROR', `Search output could not be read: ${(error as Error).message}`))
+            return
+          }
           if (currentResult) {
             results.push(currentResult)
             onResult?.(currentResult)
@@ -467,6 +473,8 @@ export class FileSystemRepository {
         })
         
         rg.on('error', (err) => {
+          // The abort itself, which the exit that follows it answers
+          if (signal?.aborted) return
           if (err.message.includes('ENOENT')) {
             reject(this.createError('SEARCH_ERROR', 'ripgrep (rg) is not installed. Please install it to use search functionality.'))
           } else {
@@ -475,7 +483,7 @@ export class FileSystemRepository {
         })
       })
     } catch (error: any) {
-      if (error.code === 'SEARCH_ERROR') {
+      if (error.code === 'SEARCH_ERROR' || signal?.aborted) {
         throw error
       }
       throw this.createError('SEARCH_ERROR', error.message)

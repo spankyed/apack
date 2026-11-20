@@ -15,7 +15,7 @@ import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
 import { FlowEdge } from '@apackdev/sdk/repositories';
-import { HostServices } from '@apackdev/sdk/services';
+import { HostServices, ProgramStatusRecord } from '@apackdev/sdk/services';
 import { ExecutionContext, FieldMapping, RunNode, RunNodeId, RunStatus, RunTree, StepInput, StepRuntimeError } from '@apackdev/sdk/steps';
 import { BinaryOperator } from '@apackdev/sdk/utils';
 import { z } from 'zod';
@@ -4369,8 +4369,9 @@ interface CodeSystemError {
 /**
  * Low-level one-shot process primitive for the Codex CLI.
  *
- * Mirrors `claude-code/runner.ts:execOnce` but resolves the `codex` binary
- * and uses Codex-appropriate env scrubbing.
+ * Runs the child with `runProcess` (`@apackdev/sdk/progress`), which owns its
+ * whole life, as `claude-code/runner.ts:execOnce` does, with the `codex`
+ * binary and Codex-appropriate env scrubbing.
  */
 interface CodexExecOptions {
     cwd?: string;
@@ -4462,6 +4463,15 @@ interface CommitFailure {
         exitCode: number;
         output: string;
     };
+}
+
+/**
+ * One trailer at the end of a commit message — `Co-authored-by: A <a@example.com>` — as git reads it: its key as
+ * written, and its value with any lines that continue it unfolded into one
+ */
+interface CommitTrailer {
+    key: string;
+    value: string;
 }
 
 type Condition = {
@@ -5034,8 +5044,9 @@ interface EventListenerEntity {
  * Two flavours, because the CLI has two very different execution modes:
  *
  * 1. `execOnce` — one-shot subcommands (`claude mcp list`, `claude auth status`,
- *    …). Resolves when the child exits. Uses a bounded timeout. Translates
- *    spawn/exit errors into typed `ClaudeCodeError` subclasses.
+ *    …). Runs the child with `runProcess` (`@apackdev/sdk/progress`), which
+ *    owns its whole life, and translates each way it can fail into a typed
+ *    `ClaudeCodeError` subclass. Settles once the child is gone.
  *
  * 2. `spawnStream` — long-lived `claude -p --input-format stream-json
  *    --output-format stream-json` for interactive conversations. Returns a
@@ -5056,7 +5067,7 @@ interface ExecOnceOptions {
     env?: NodeJS.ProcessEnv;
     /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
     input?: string;
-    /** Milliseconds until the child is SIGKILL'd and a ClaudeTimeoutError thrown. */
+    /** Milliseconds on the clock until the child is stopped and a ClaudeTimeoutError thrown. */
     timeoutMs?: number;
     signal?: AbortSignal;
     /** Override the resolved CLI path (primarily for testing). */
@@ -5686,6 +5697,11 @@ type IncomingCommitEvents = {
     type: 'commit.GET_BLAME';
     path: string;
 }
+/** Bring a submodule to the commit the repository records for it, setting it up first if it is not */
+ | {
+    type: 'commit.UPDATE_SUBMODULE';
+    path: string;
+}
 /** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
  | {
     type: 'commit.UNDO_LAST';
@@ -5736,6 +5752,17 @@ type IncomingCommitEvents = {
  | {
     type: 'commit.GET_COMMIT_MESSAGE';
     hash: string;
+}
+/** The trailers git reads at the end of the message being written */
+ | {
+    type: 'commit.READ_TRAILERS';
+    message: string;
+}
+/** The message being written without one of its trailers, each line of it */
+ | {
+    type: 'commit.REMOVE_TRAILER';
+    message: string;
+    trailer: CommitTrailer;
 }
 /** Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it */
  | {
@@ -6300,6 +6327,11 @@ type IncomingTerminalEvents =
     type: 'terminal.KEEP_TERMINAL';
     terminalId: string;
     kept: boolean;
+}
+/** The person is looking at that terminal: what its programs have said they finished or failed at is seen */
+ | {
+    type: 'terminal.STATUS_SEEN';
+    terminalId: string;
 }
 /** Open that terminal's recording to look back through, drawn at this size. Answered with `terminal.REWOUND` */
  | {
@@ -7131,6 +7163,22 @@ type OutgoingCommitEvents =
         hash: string;
         message: string;
     };
+}
+/** The trailers of the message asked about, which the answer names */
+ | {
+    type: 'commit.TRAILERS_READ';
+    data: {
+        message: string;
+        trailers: CommitTrailer[];
+    };
+}
+/** The message asked about without the trailer asked to remove: `without` is `message` when it had no such trailer */
+ | {
+    type: 'commit.TRAILER_REMOVED';
+    data: {
+        message: string;
+        without: string;
+    };
 } | {
     type: 'commit.COMMIT_REWRITTEN';
     data: {
@@ -7210,11 +7258,11 @@ type OutgoingCommitEvents =
         hunk: string;
     };
 }
-/** How far along a push, a pull or a checkout is, for the window that asked for it */
+/** How far along a push, a pull, a checkout or a submodule update is, for the window that asked for it */
  | {
     type: 'commit.PROGRESS';
     data: {
-        during: 'checkout' | 'pull' | 'push';
+        during: ProgressDuring;
     } & GitProgress;
 } | {
     type: 'commit.UNTRACKED_LISTED';
@@ -7326,6 +7374,13 @@ type OutgoingCommitEvents =
     data: {
         path: string;
         lines: BlameLine[];
+    };
+}
+/** The submodule is at the commit the repository records for it */
+ | {
+    type: 'commit.SUBMODULE_UPDATED';
+    data: {
+        path: string;
     };
 } | {
     type: 'commit.STASH_SUCCESS';
@@ -7679,9 +7734,14 @@ type OutgoingLibraryEvents =
  | {
     type: 'LIBRARY_WRITTEN';
 }
-/** A write or a fetch was refused, and why */
+/** A write was refused, and why */
  | {
     type: 'LIBRARY_WRITE_FAILED';
+    error: string;
+}
+/** A fetch of what is on disk could not be made, and why */
+ | {
+    type: 'LIBRARY_READ_FAILED';
     error: string;
 }
 /** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
@@ -8147,6 +8207,17 @@ type OutgoingTerminalEvents =
     };
 }
 /**
+ * What a terminal's programs say they are doing changed, or what of it the person has seen did: news for
+ * every window. **Every record, as it stands** — a window replaces what it held. Empty when there is none
+ */
+ | {
+    type: 'terminal.STATUS';
+    data: {
+        terminalId: string;
+        statuses: TerminalStatus[];
+    };
+}
+/**
  * A recording is open, for the window that asked: `session` is what its view is drawn from, and it runs
  * between `first` and `last`, in milliseconds since the Unix epoch.
  */
@@ -8552,6 +8623,9 @@ type Predicate = {
     operator: BinaryOperator;
     value?: any;
 } | ((context: any) => boolean);
+
+/** The commands whose progress the window that asked for one is told: a push, a pull, a checkout, a submodule update */
+type ProgressDuring = 'checkout' | 'pull' | 'push' | 'submodule';
 
 declare class PromptService {
     findByLabel(label: string): _apackdev_sdk.PromptEntity | undefined;
@@ -9293,6 +9367,14 @@ interface TerminalEntity {
      * names nothing, and the terminal is then one that cannot be brought back.
      */
     target?: string;
+    /**
+     * How far into what its programs say they are doing the person has looked: the session the mark is for,
+     * and the count the latest record had when they looked (`ProgramStatusRecord.changed`). A record of that
+     * session past the count is one they have not seen. A mark for a session the terminal no longer has says
+     * nothing, since a count starts again with each session.
+     */
+    statusSeenSession?: string;
+    statusSeenChanged?: number;
     createdAt: number;
     updatedAt: number;
 }
@@ -9359,6 +9441,14 @@ interface TerminalInfo {
         unreached?: true;
     };
     /**
+     * What its programs say they are doing (OSC 7501), every record as it stands. Absent when there is none.
+     *
+     * **Claims, drawn and never acted on**: any program in the terminal can write one, and `confirmed` says
+     * whether the program in front was the one a record names. A terminal whose shell has gone keeps what
+     * its programs finished or failed at until it is closed or started again.
+     */
+    statuses?: TerminalStatus[];
+    /**
      * The session's size **when this was published**, which is a starting point and not a live reading.
      *
      * **A pty has one size and it is whatever a window last fitted**, so the live value lives where the
@@ -9380,6 +9470,14 @@ interface TerminalInfo {
      * command sits on screen looking typed, and nothing happens. Measured on Windows rather than assumed.
      */
     submit: string;
+}
+
+/**
+ * One thing a terminal's program says it is doing, as a window is told it: the host's record with its text made
+ * plain, and `seen` — whether the person has looked at the terminal since the record last changed
+ */
+interface TerminalStatus extends ProgramStatusRecord {
+    seen: boolean;
 }
 
 interface TerminalTab extends OpenFile {
@@ -9994,10 +10092,11 @@ declare namespace __FeatureSettings_Code {
         copyOnSelect: boolean;
         cursorStyle?: "bar" | "block" | "underline";
         cursorInactiveStyle?: "bar" | "block" | "hollow" | "underline";
-        cursorBlink?: "default" | "off" | "on" | "program";
+        cursorBlink?: "off" | "on" | "program";
         linkPreview?: "all" | "off" | "osc8";
         bellFlash: boolean;
         bellNotification: boolean;
+        terminalStatusNotification: boolean;
         defaultBaseDirectory: string | null;
         baseDirectory: string | null;
         enableShellIntegration: boolean;
@@ -10023,6 +10122,7 @@ declare namespace __FeatureSettings_Code {
         showStashes: boolean;
         showCommits: boolean;
         showWorktrees: boolean;
+        trailersRemovedOnCommit: string[];
         cliPaths: {
             [k: string]: string;
         };
@@ -12863,6 +12963,8 @@ declare const terminalCommands: {
      */
     recordSession: (id: EARS.EntityId, session: string) => void;
     rename: (id: EARS.EntityId, customTitle: string) => void;
+    /** Records how far into `session`'s status records the person has looked */
+    recordStatusSeen: (id: EARS.EntityId, session: string, changed: number) => void;
     updateCwd: (id: EARS.EntityId, cwd: string, title?: string) => void;
     /**
      * The terminal is gone, so its row goes to the trash — **the one way a Terminal row ends** (L3).
