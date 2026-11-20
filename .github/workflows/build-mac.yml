@@ -149,13 +149,12 @@ jobs:
           xcrun stapler validate "dist/mac-arm64/${APP_NAME}.app"
           spctl --assess --type exec --verbose "dist/mac-arm64/${APP_NAME}.app"
 
-      # `apack pack test --channel beta` verifies downloads against these
+      # One `<file>.sha256` beside each download, in the form `shasum` writes and the CLI's `downloadVerified` reads
       - name: Checksums
         working-directory: dist
         run: |
-          # electron-builder.mjs artifactName: the product name without spaces
           for file in "${{ steps.channel.outputs.release_prefix }}"-*.dmg "${{ steps.channel.outputs.release_prefix }}"-*.zip; do
-            shasum -a 256 "$file" > "$file.sha256"
+            printf '%s  %s\n' "$(shasum -a 256 "$file" | cut -d ' ' -f 1)" "$file" > "$file.sha256"
           done
 
       # What the release job uploads on a tag, and what a dispatch leaves for whoever dispatched it
