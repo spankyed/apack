@@ -487,6 +487,10 @@ describe('findElmdbImports', () => {
   const allowed = () => {
     write('packages/apack-ears/src/lmdb/database.ts', "import { Database } from 'elmdb';\nimport type { EarsDatabase } from '../database.ts';\n");
     write('packages/apack-ears/src/index.ts', "export { untypedWrite } from './write.ts';\n");
+    // Types from elmdb's generated protocol, which erase: by declaration, re-exported, and as an import() type
+    write('packages/apack-ears/src/database.ts', "import type { Op } from 'elmdb/protocol/Op.js';\n"
+      + "export type { Schema } from 'elmdb/protocol/Schema.js';\n"
+      + "export type Batch = import('elmdb/protocol/Batch.js').Batch;\n");
     write('packages/apack-host/src/services/app-data.ts', "import type { DatabaseOptions } from '@apackdev/ears/lmdb';\n");
     write('packages/api/src/setup/backend.ts', "import { openDatabase } from '@apackdev/ears/lmdb';\n");
     write('packages/default-setup/src/features/notes/be/system.ts', "import { untypedWrite } from '@apackdev/sdk/ears';\n");
@@ -505,6 +509,11 @@ describe('findElmdbImports', () => {
     ['packages/apack-ears/src/index.ts', "export { openDatabase } from './lmdb/index.ts';"],
     ['packages/apack-ears/src/engine.ts', "import type { DatabaseOptions } from './lmdb/database.ts';"],
     ['packages/apack-ears/src/query.ts', "import { Database } from 'elmdb';"],
+    // A type from elmdb's root rather than its protocol, and a protocol type whose declaration stays and loads it
+    ['packages/apack-ears/src/write.ts', "import type { Database } from 'elmdb';"],
+    ['packages/apack-ears/src/write.ts', "import { type Op } from 'elmdb/protocol/Op.js';"],
+    ['packages/apack-ears/src/schema.ts', "import * as fs from 'node:fs';"],
+    ['packages/apack-ears/src/schema.ts', "import { EventEmitter } from 'events';"],
     ['packages/default-setup/src/features/notes/be/system.ts', "import { openDatabase } from '@apackdev/ears/lmdb';"],
     ['tests/packs/external-pack/tests/unit/memos.spec.ts', "vi.mock('elmdb');"],
   ])('flags %s', (file, code) => {

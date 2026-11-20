@@ -448,31 +448,62 @@ export function findUnimportedDependencies(root = repoRoot, runtimeOnly = RUNTIM
   return problems;
 }
 
+/** A Node module: `node:` and each bare name Node resolves to its own */
+const NODE_MODULE = new RegExp(`^(?:node:|(?:${builtinModules.join('|')})(?:/|$))`);
+
 /**
  * Who may load the database (docs/goals/goal-package-boundaries.md, Decision 3): only `@apackdev/ears/lmdb` imports
- * `elmdb`. `dirs` may not import what `forbidden` matches; `except` is a directory inside them that may.
+ * `elmdb`. `dirs` may not import what `forbidden` matches; `except` is a directory inside them that may; `typesFrom`
+ * is what they may import types from all the same, by an `import type` or `export type` declaration or an `import()`
+ * type, which erase and load nothing.
  */
-export const ELMDB_RULES: { dirs: string[]; except?: string; forbidden?: RegExp; rule?: PackRuleKey }[] = [
+export const ELMDB_RULES: { dirs: string[]; except?: string; forbidden?: RegExp; typesFrom?: RegExp; rule?: PackRuleKey }[] = [
   // The host and the API open the database through @apackdev/ears/lmdb
   {
     dirs: ['packages/apack-host/src', 'packages/apack-host/tests', 'packages/apack-host/scripts', 'packages/api/src', 'packages/api/tests', 'packages/api/scripts'],
     forbidden: /^elmdb(?:\/|$)/,
   },
-  // The engine's root never loads the database: its port to one is structural (`database.ts`)
-  { dirs: ['packages/apack-ears/src'], except: 'packages/apack-ears/src/lmdb', forbidden: /^(?:elmdb(?:\/|$)|(?:\.\.?\/)+(?:[\w.-]+\/)*lmdb(?:\/|$))/ },
+  // The engine's root loads no database and no Node module, so a browser bundle can hold its constants and helpers:
+  // its port to a database is structural (`database.ts`), and what crosses is typed by elmdb's generated protocol,
+  // whose types it imports and nothing else of `elmdb`
+  {
+    dirs: ['packages/apack-ears/src'],
+    except: 'packages/apack-ears/src/lmdb',
+    forbidden: new RegExp(`${/^(?:elmdb(?:\/|$)|(?:\.\.?\/)+(?:[\w.-]+\/)*lmdb(?:\/|$))/.source}|${NODE_MODULE.source}`),
+    typesFrom: /^elmdb\/protocol\//,
+  },
   // Packs and their tests don't use the app's database. Named rather than spelled: this population is a pack's, so
   // the rule is `@apackdev/cli`'s, the one `apack pack build` already runs for every pack. The two above are the host's
   // and the engine's own trees, which no pack rule can have, so they keep a pattern here.
   { dirs: PACK_CODE_DIRS, rule: 'elmdb-imports' },
 ];
 
-/** `file:line: specifier` for each import of elmdb or `@apackdev/ears/lmdb` where `rules` forbid it */
+/**
+ * The spans of a file's type-only imports and exports: an `import type` or `export type` declaration, whose import
+ * `verbatimModuleSyntax` erases whole, and an `import()` type. An `import { type X }` is not one: its declaration stays,
+ * loading the module
+ */
+function typeOnlySpans(file: string): { start: number; end: number }[] {
+  return readSource(file).visit((node) => (
+    (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly)
+      || (ts.isExportDeclaration(node) && node.isTypeOnly && node.moduleSpecifier !== undefined)
+      || ts.isImportTypeNode(node)
+      ? ['type'] : undefined));
+}
+
+/** `file:line: specifier` for each import of elmdb or `@apackdev/ears/lmdb`, or of what else `rules` forbid, where they forbid it */
 export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[] {
-  return rules.flatMap(({ dirs, except, forbidden, rule }) => {
+  return rules.flatMap(({ dirs, except, forbidden, typesFrom, rule }) => {
     if (rule) return packRule(rule, dirs, root);
     const allowed = except && path.join(root, except) + path.sep;
     const files = filesUnder(dirs, root).filter((file) => !allowed || !file.startsWith(allowed));
-    return findSpecifiers(files, root, (text) => forbidden!.test(text));
+    return files.flatMap((file) => {
+      const types = typesFrom ? typeOnlySpans(file) : [];
+      return readSource(file).specifiers
+        .filter(({ text, start, end }) => forbidden!.test(text)
+          && !(typesFrom?.test(text) && types.some((span) => span.start <= start && end <= span.end)))
+        .map(({ text, line }) => `${path.relative(root, file)}:${line}: ${text}`);
+    });
   });
 }
 
@@ -1015,7 +1046,7 @@ const RULE_LIST = [
     id: 'findElmdbImports',
     repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API, the host and the engine's own root" },
     find: findElmdbImports,
-    rule: "Only @apackdev/ears/lmdb loads elmdb: the host and the API open the database through it, the engine's root and packs never load it",
+    rule: "Only @apackdev/ears/lmdb loads elmdb: the host and the API open the database through it, packs never load it, and the engine's root loads neither it nor a Node module, importing only types from elmdb's generated protocol",
   },
   {
     id: 'findNodePtyImports',
