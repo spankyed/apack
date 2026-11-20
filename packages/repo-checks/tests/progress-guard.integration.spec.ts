@@ -153,8 +153,9 @@ describe('with the CPU ceiling on', () => {
   // Unix alone: Windows has no listing that says what state a process is in
   it.skipIf(process.platform === 'win32')('says what each process the stalled test started was doing', () => {
     const said = outcome(report, 'child.spec.ts', 'waits on a child that sleeps')!.failureMessages.join('\n');
-    // The child the test is waiting on, asleep rather than waiting on a disk, with the command it was started as
-    expect(said).toMatch(/pid \d+ \(parent \d+\) S\S*, \S+ CPU in \S+.*: .*setInterval/);
+    // The child the test is waiting on, asleep rather than waiting on a disk, with the command it was started as. On a
+    // busy machine its timer can have woken it and left it waiting for a core, which `ps` reads as R
+    expect(said).toMatch(/pid \d+ \(parent \d+\) [SR]\S*, \S+ CPU in \S+.*: .*setInterval/);
   });
 
   it('says what a stalled test was still waiting for, in the words the test gave it', () => {
