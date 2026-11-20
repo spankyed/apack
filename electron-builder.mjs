@@ -259,6 +259,11 @@ export default /** @type import('electron-builder').Configuration */
     // @apackdev/host/build/pack-workdir), none of which the app loads — and `packages/**/*` above took all of
     // it, dotted directories and all, because electron-builder reads no .gitignore either.
     '!packages/*/.apack/**',
+    // ...nor the terminal broker's build a second time. `@app/terminal-broker` is a workspace, so the app carries it
+    // under node_modules as it carries any dependency, and resolves it there: the resolver in its `src/` answers the
+    // `bin/` beside it, and `packages/terminal-broker` in the app has no resolver, its `src/` being excluded above.
+    // The notices beside the binary ship in the copy the app runs (packaged-app-files.spec.ts)
+    '!packages/terminal-broker/bin/**',
     // The CLI's scaffold templates, which are .ts and .vue files it reads at run time rather than code the
     // app loads — so the exclusions above would strip every one of them and `apack pack init` from the CLI this
     // app installs (bin/app-launcher.sh) would scaffold nothing. Last match wins, so this comes after them.
