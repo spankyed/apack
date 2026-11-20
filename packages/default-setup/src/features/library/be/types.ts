@@ -165,8 +165,10 @@ export type OutgoingLibraryEvents =
   | { type: 'COLLECTION_CREATED'; data: { collection: CollectionDTO } }
   /** Any other write landed */
   | { type: 'LIBRARY_WRITTEN' }
-  /** A write or a fetch was refused, and why */
+  /** A write was refused, and why */
   | { type: 'LIBRARY_WRITE_FAILED'; error: string }
+  /** A fetch of what is on disk could not be made, and why */
+  | { type: 'LIBRARY_READ_FAILED'; error: string }
   /** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
   | { type: 'FOLDER_CONTENTS_LOADED'; data: FolderContents }
   /** A document on disk, as `GET_DOCUMENT` asked */
