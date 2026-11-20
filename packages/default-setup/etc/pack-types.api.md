@@ -4116,9 +4116,14 @@ type OutgoingLibraryEvents =
  | {
     type: 'LIBRARY_WRITTEN';
 }
-/** A write or a fetch was refused, and why */
+/** A write was refused, and why */
  | {
     type: 'LIBRARY_WRITE_FAILED';
+    error: string;
+}
+/** A fetch of what is on disk could not be made, and why */
+ | {
+    type: 'LIBRARY_READ_FAILED';
     error: string;
 }
 /** A folder on disk, as `GET_FOLDER_CONTENTS` asked */

@@ -11,6 +11,19 @@ export const answersCall: (event: {
     [key: string]: unknown;
 }, outstanding: string | null | undefined) => boolean;
 
+// @public
+export function answerWith<E extends {
+    type: string;
+}>(reply: Reply<E> | undefined, work: () => E | PromiseLike<E>, options: AnswerWithOptions<E>): Promise<void>;
+
+// @public
+export interface AnswerWithOptions<E extends {
+    type: string;
+}> {
+    readonly failed: (error: unknown) => E;
+    readonly unasked?: (error: unknown) => void;
+}
+
 // @internal
 export type _Asker =
 /** Over the backend bus, which is where a system is */

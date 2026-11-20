@@ -426,7 +426,7 @@ export const librarySystem = setup({
     clearEditingDocument: assign({
       editingDocument: undefined,
     }),
-    takeWriteError: assign(({ event }) => (event.type === 'LIBRARY_WRITE_FAILED' ? { writeError: event.error } : {})),
+    takeWriteError: assign(({ event }) => (event.type === 'LIBRARY_WRITE_FAILED' || event.type === 'LIBRARY_READ_FAILED' ? { writeError: event.error } : {})),
     sendDeleteDocument: ({ event }) => {
       const ev = event as { type: 'DELETE_DOCUMENT'; documentId: string };
       sendToSystem(id, {
@@ -877,6 +877,10 @@ export const librarySystem = setup({
       actions: assign(({ event }) => ({ itemToEdit: event.data.collection.id, newItemId: event.data.collection.id })),
     },
     LIBRARY_WRITE_FAILED: {
+      actions: 'takeWriteError',
+    },
+    // Shown where a refused write is: either is something this window asked for and did not get
+    LIBRARY_READ_FAILED: {
       actions: 'takeWriteError',
     },
     CLEAR_WRITE_ERROR: {
