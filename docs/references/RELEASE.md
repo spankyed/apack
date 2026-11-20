@@ -87,8 +87,10 @@ rejects the push, takes the commit and its tags back and leaves the checkout as 
 
 A production release with no beta before it is two tags on the release commit: `v<version>`, and the companion
 `v<version>-beta.0` (`build/release/beta-tag.sh`), which CI builds as apack Beta and publishes as a prerelease.
-`npm run unrelease` (`build/release/unrelease.sh`) undoes the two together, whichever is named: it deletes both GitHub
-releases and both tags, reverts the release commit and pushes the revert. With no version it undoes the newest release
+`npm run unrelease` (`build/release/unrelease.sh`) undoes the two together, whichever is named, from `master` at
+origin's commit, as a release is cut: it reverts the release commit, pushes the revert and both tags' deletion to
+origin together, then deletes both GitHub releases and the local tags. A revert that conflicts, a push origin rejects,
+or tags or releases it can't read stop it with the release as it was. With no version it undoes the newest release
 commit in the branch's history that still has its tag. A `v<version>-beta.0` on another commit is an earlier beta
 release and is left alone. `packages/repo-checks/tests/release-scripts.test.sh` runs both scripts against a scratch
 repository and origin.

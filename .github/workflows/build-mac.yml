@@ -109,7 +109,8 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: npm ci
 
-      # The signing secrets reach this step alone, as environment variables, never as script text. electron-builder
+      # The signing secrets reach this step, and on a tag the check before the install that they are set, as
+      # environment variables, never as script text. electron-builder
       # fails on a signing variable that is set and empty, so each is exported only when its secret is configured
       - name: Build, package, sign
         env:

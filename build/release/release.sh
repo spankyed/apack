@@ -91,6 +91,15 @@ echo ""
 
 # Step 3: Bump version
 echo -e "${BLUE}[3/5]${NC} Bumping version..."
+# From here the script edits the three files the release commit holds. Any exit before the release is pushed that
+# leaves them edited with no commit made, an interrupt among them, puts them back
+RELEASE_PUSHED=false
+restore_on_exit() {
+  if [ "$RELEASE_PUSHED" != true ] && [ "$(git rev-parse HEAD)" = "$START_COMMIT" ]; then
+    git restore --source="$START_COMMIT" --staged --worktree -- package.json package-lock.json CHANGELOG.md 2> /dev/null || true
+  fi
+}
+trap restore_on_exit EXIT
 
 if [ "$IS_BETA" = true ]; then
   if [ "$CURRENT_IS_PRERELEASE" = true ]; then
@@ -231,6 +240,7 @@ if ! git push --atomic origin "HEAD:refs/heads/${RELEASE_BRANCH}" "refs/tags/${T
   exit 1
 fi
 
+RELEASE_PUSHED=true
 echo -e "${GREEN}✓${NC} Release ${TAG_NAME} pushed"
 echo ""
 

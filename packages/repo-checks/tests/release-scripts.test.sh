@@ -145,8 +145,15 @@ expect "  and the entry that was there, after the new one" "## v0.4.1 ## v0.4.0 
 touch "$RELEASES/v0.4.1" "$RELEASES/v0.4.1-beta.0"
 
 expect "undoing with no version, as a dry run, succeeds" "0" "$(unrelease --dry-run)"
-expect "  and names the release by its commit, with both tags" "  2. Delete remote tag: v0.4.1 v0.4.1-beta.0" "$(grep 'Delete remote tag' "$SCRATCH/last.log")"
+expect "  and names the release by its commit, with both tags" "  2. Push the revert, and delete remote tag: v0.4.1 v0.4.1-beta.0" "$(grep 'delete remote tag' "$SCRATCH/last.log")"
 expect "  and changes nothing" "v0.4.1 v0.4.1-beta.0 " "$(origin_tags)"
+
+git checkout --quiet -b side
+expect "undoing from another branch is refused" "1" "$(unrelease v0.4.1)"
+expect "  with the release's tags still on origin" "v0.4.1 v0.4.1-beta.0 " "$(origin_tags)"
+expect "  and its GitHub releases" "v0.4.1 v0.4.1-beta.0" "$(ls "$RELEASES" | tr '\n' ' ' | sed 's/ $//')"
+git checkout --quiet master
+git branch --quiet -D side
 
 expect "undoing the companion beta tag succeeds" "0" "$(unrelease v0.4.1-beta.0)"
 expect "  and no tag of the release is left on origin" "" "$(origin_tags)"

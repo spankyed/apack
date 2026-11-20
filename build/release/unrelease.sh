@@ -3,11 +3,15 @@
 # Undo a release for apack
 # Usage: npm run unrelease [version] [--dry-run]
 #
-# Reverses what release.sh does:
-# 1. Deletes the GitHub release (if it exists)
-# 2. Deletes the remote and local git tag
-# 3. Reverts the release commit
-# 4. Pushes the revert to origin
+# Reverses what release.sh does, from master at origin's commit, as a release is cut:
+# 1. Reverts the release commit
+# 2. Pushes the revert and the tags' deletion to origin together, so origin takes both or neither
+# 3. Deletes the GitHub release (if it exists)
+# 4. Deletes the local git tag
+#
+# Nothing on origin or GitHub changes before the revert is made and pushed: a revert that conflicts, or a push origin
+# rejects, leaves the release as it was. What can't be read (origin's tags, GitHub's releases) stops it, rather than
+# counting as not there.
 #
 # A production release that had no beta is two tags on one commit: v<version>, and the companion v<version>-beta.0
 # that release.sh adds for the beta-before-production rule (beta-tag.sh), each with a GitHub release of its own. They
@@ -46,6 +50,19 @@ release_commit_for() {
     { hash = $1; sub(/^[^ ]+ /, "") }
     $0 == subject { print hash; exit }'
 }
+
+RELEASE_BRANCH="master"
+BRANCH="$(git symbolic-ref --quiet --short HEAD || true)"
+if [ "$BRANCH" != "$RELEASE_BRANCH" ]; then
+  echo -e "${RED}✗ A release is undone from ${RELEASE_BRANCH}, and this checkout is on ${BRANCH:-a detached HEAD}.${NC}"
+  exit 1
+fi
+# The newest release and its tags are read from origin's, not from what this checkout last fetched
+git fetch --tags --quiet origin
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse --quiet --verify "refs/remotes/origin/${RELEASE_BRANCH}")" ]; then
+  echo -e "${RED}✗ ${RELEASE_BRANCH} is not at origin/${RELEASE_BRANCH}. Pull what origin has, and push or drop what it doesn't.${NC}"
+  exit 1
+fi
 
 if [ -z "$VERSION" ]; then
   while read -r candidate; do
@@ -89,10 +106,26 @@ fi
 
 RELEASE_COMMIT_SHORT=$(echo "$RELEASE_COMMIT" | cut -c1-8)
 
-# What a tag names on origin, or nothing
+# What a tag names on origin, or nothing. A listing origin doesn't answer ends the script
 remote_tag_commit() {
-  git ls-remote --tags origin "refs/tags/$1" 2>/dev/null | head -1 | cut -f1
+  local listed
+  listed="$(git ls-remote --tags origin "refs/tags/$1")" || { echo -e "${RED}✗ origin's tags couldn't be read.${NC}" >&2; exit 1; }
+  echo "$listed" | head -1 | cut -f1
 }
+
+# Whether GitHub has a release for a tag. Only gh's `release not found` is none: any other failure ends the script
+gh_release_exists() {
+  local err
+  if err="$(gh release view "$1" --json tagName --jq '.tagName' 2>&1 > /dev/null)"; then return 0; fi
+  if [[ "$err" == *"release not found"* ]]; then return 1; fi
+  echo -e "${RED}✗ GitHub's release for $1 couldn't be read: ${err}${NC}" >&2
+  exit 1
+}
+
+if ! command -v gh &> /dev/null; then
+  echo -e "${RED}✗ gh is not installed, so the GitHub release can't be read or deleted.${NC}"
+  exit 1
+fi
 
 # The release's tags: its own, and the companion beta tag when one sits on the same commit. A v<version>-beta.0 on
 # another commit is an earlier beta release, which this one didn't make and doesn't undo
@@ -110,19 +143,17 @@ REMOTE_TAGS=()
 GH_RELEASES=()
 for tag in "${TAGS[@]}"; do
   if [ -n "$(git tag -l "$tag")" ]; then LOCAL_TAGS+=("$tag"); fi
-  if [ -n "$(remote_tag_commit "$tag")" ]; then REMOTE_TAGS+=("$tag"); fi
-  if command -v gh &> /dev/null && [ -n "$(gh release view "$tag" --json tagName --jq '.tagName' 2>/dev/null || true)" ]; then
-    GH_RELEASES+=("$tag")
-  fi
+  remote_commit="$(remote_tag_commit "$tag")"
+  if [ -n "$remote_commit" ]; then REMOTE_TAGS+=("$tag"); fi
+  if gh_release_exists "$tag"; then GH_RELEASES+=("$tag"); fi
 done
 
 # Show what will happen
 echo -e "${BLUE}Actions:${NC}"
-echo "  1. Delete GitHub release: ${GH_RELEASES[*]:-(not found, skipping)}"
-echo "  2. Delete remote tag: ${REMOTE_TAGS[*]:-(not found, skipping)}"
-echo "  3. Delete local tag: ${LOCAL_TAGS[*]:-(not found, skipping)}"
-echo "  4. Revert commit: $RELEASE_COMMIT_SHORT (chore(release): $VERSION)"
-echo "  5. Push revert to origin"
+echo "  1. Revert commit: $RELEASE_COMMIT_SHORT (chore(release): $VERSION)"
+echo "  2. Push the revert, and delete remote tag: ${REMOTE_TAGS[*]:-(not found, skipping)}"
+echo "  3. Delete GitHub release: ${GH_RELEASES[*]:-(not found, skipping)}"
+echo "  4. Delete local tag: ${LOCAL_TAGS[*]:-(not found, skipping)}"
 echo ""
 
 if [ "$DRY_RUN" = true ]; then
@@ -139,44 +170,45 @@ if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
 fi
 echo ""
 
-# Step 1: Delete GitHub release
+# Step 1: Revert the release commit
+echo -e "${BLUE}[1/4]${NC} Reverting release commit..."
+if ! git revert "$RELEASE_COMMIT" --no-edit; then
+  git revert --abort > /dev/null 2>&1 || true
+  echo -e "${RED}✗ The release commit doesn't revert cleanly. Nothing was undone.${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✓${NC} Release commit reverted"
+
+# Step 2: Push the revert and the tags' deletion together
+echo -e "${BLUE}[2/4]${NC} Pushing the revert and deleting remote tag..."
+DELETIONS=()
+for tag in "${REMOTE_TAGS[@]+"${REMOTE_TAGS[@]}"}"; do DELETIONS+=(":refs/tags/${tag}"); done
+if ! git push --atomic origin "HEAD:refs/heads/${RELEASE_BRANCH}" "${DELETIONS[@]+"${DELETIONS[@]}"}"; then
+  git reset --quiet --hard "HEAD~1"
+  echo -e "${RED}✗ origin rejected the push, so nothing was undone: the revert is taken back.${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✓${NC} Pushed; remote tag deleted: ${REMOTE_TAGS[*]:-(none)}"
+
+# Step 3: Delete GitHub release
 if [ "${#GH_RELEASES[@]}" -gt 0 ]; then
-  echo -e "${BLUE}[1/5]${NC} Deleting GitHub release..."
+  echo -e "${BLUE}[3/4]${NC} Deleting GitHub release..."
   for tag in "${GH_RELEASES[@]}"; do
     gh release delete "$tag" --yes
   done
   echo -e "${GREEN}✓${NC} GitHub release deleted: ${GH_RELEASES[*]}"
 else
-  echo -e "${BLUE}[1/5]${NC} GitHub release not found, skipping"
+  echo -e "${BLUE}[3/4]${NC} GitHub release not found, skipping"
 fi
 
-# Step 2: Delete remote tag
-if [ "${#REMOTE_TAGS[@]}" -gt 0 ]; then
-  echo -e "${BLUE}[2/5]${NC} Deleting remote tag..."
-  git push --atomic --delete origin "${REMOTE_TAGS[@]}"
-  echo -e "${GREEN}✓${NC} Remote tag deleted: ${REMOTE_TAGS[*]}"
-else
-  echo -e "${BLUE}[2/5]${NC} Remote tag not found, skipping"
-fi
-
-# Step 3: Delete local tag
+# Step 4: Delete local tag
 if [ "${#LOCAL_TAGS[@]}" -gt 0 ]; then
-  echo -e "${BLUE}[3/5]${NC} Deleting local tag..."
+  echo -e "${BLUE}[4/4]${NC} Deleting local tag..."
   git tag -d "${LOCAL_TAGS[@]}"
   echo -e "${GREEN}✓${NC} Local tag deleted: ${LOCAL_TAGS[*]}"
 else
-  echo -e "${BLUE}[3/5]${NC} Local tag not found, skipping"
+  echo -e "${BLUE}[4/4]${NC} Local tag not found, skipping"
 fi
-
-# Step 4: Revert release commit
-echo -e "${BLUE}[4/5]${NC} Reverting release commit..."
-git revert "$RELEASE_COMMIT" --no-edit
-echo -e "${GREEN}✓${NC} Release commit reverted"
-
-# Step 5: Push
-echo -e "${BLUE}[5/5]${NC} Pushing to origin..."
-git push origin HEAD
-echo -e "${GREEN}✓${NC} Pushed"
 
 echo ""
 echo "=========================================="
