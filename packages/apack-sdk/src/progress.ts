@@ -522,6 +522,13 @@ export const LOOSE_CEILING_FACTOR = 10;
  */
 export const STORAGE_ALLOWANCE_FACTOR = 10;
 
+/**
+ * The most of a stall window one reading may account for, however late it arrives (`watchWork`). A declared class:
+ * a stall is then at least four readings that found no work, where the watch takes twenty-four in a window that
+ * nothing delays.
+ */
+export const UNSEEN_SHARE = 1 / 4;
+
 /** What every ceiling is multiplied by here. Read where every bound is built, so a caller passing a ceiling cannot forget it */
 const ceilingFactor = (): number => (process.env.APACK_CEILING === 'loose' ? LOOSE_CEILING_FACTOR : 1);
 
@@ -541,6 +548,14 @@ const ceilingFactor = (): number => (process.env.APACK_CEILING === 'loose' ? LOO
  * it is asked after every reading that found no work, and a party found held has its window start again. Up to
  * `STORAGE_ALLOWANCE_FACTOR` windows between one piece of work and the next; past that it is refused as stalled,
  * and the refusal says how long it was allowed for and what held it.
+ *
+ * **Nor is time the watch could not see the party in.** A reading says what the party did up to the moment it was
+ * taken, and a quiet one is evidence only for about as long as readings are apart. One that arrives minutes late
+ * was held by the machine and not by the party: the listing of processes waits on a process the kernel holds, a
+ * virtual machine is paused under its host, a laptop sleeps. So one reading adds at most `UNSEEN_SHARE` of the
+ * window to the quiet (`seenBy`), and a stall is always several readings that found nothing. A party that has
+ * stalled is refused as before; one whose every reading is also late is refused that much later, never unbounded,
+ * since a listing that does nothing is itself ended after `IDLE_MS`.
  */
 export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingMs, fallbackMs, onRefused, watchesOutput = false, countsFromWatch = false, clock = processClock }: {
   readonly work: WorkReading; readonly idleMs?: number; readonly ceilingMs?: number; readonly fallbackMs?: number;
@@ -574,6 +589,10 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
   let held: { ms: number; by: string } | undefined;
   let heldInAll = 0;
   let readAt = startedAt;
+  /** How much of the clock since the watch began passed with no reading taken that could have seen the party */
+  let unseenMs = 0;
+  /** A moment on the clock as the stall decision counts it: without the time nothing could be seen in */
+  const seenBy = (at: number) => at - unseenMs;
   const spentMs = () => lastTotal ?? 0;
   const stop = () => { done = true; clock.stopEvery(timer); };
   const refuse = (refusal: Refusal) => { stop(); onRefused(refusal); };
@@ -585,17 +604,18 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
       const at = clock.now();
       const sinceLast = at - readAt;
       readAt = at;
+      unseenMs += Math.max(0, sinceLast - idleMs * UNSEEN_SHARE);
       if (total === undefined) unreadableSince ??= at;
       lastTotal = total ?? lastTotal;
-      let stalled = tracker.reading(new Map([[0, lastTotal ?? 0]]), at);
-      if (tracker.quietFor(at) === 0) held = undefined;
+      let stalled = tracker.reading(new Map([[0, lastTotal ?? 0]]), seenBy(at));
+      if (tracker.quietFor(seenBy(at)) <= 0) held = undefined;
       // Quiet, and not yet past what storage is allowed: asked what holds it before the quiet is counted
       else if (work.held !== undefined && (held?.ms ?? 0) < idleMs * STORAGE_ALLOWANCE_FACTOR) {
         const by = await work.held().catch(() => undefined);
         if (by !== undefined) {
           held = { ms: (held?.ms ?? 0) + sinceLast, by };
           heldInAll += sinceLast;
-          tracker.output(at);
+          tracker.output(seenBy(at));
           stalled = false;
         }
       }
@@ -612,7 +632,7 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
   (timer as { unref?: () => void }).unref?.();
   return {
     stop,
-    output: () => { outputAt = clock.now(); tracker.output(outputAt); },
+    output: () => { outputAt = clock.now(); tracker.output(seenBy(outputAt)); },
     spentMs,
     heldMs: () => heldInAll,
   };

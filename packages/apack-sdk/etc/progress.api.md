@@ -159,6 +159,9 @@ export function treeProcessRows(listing: string): Array<TreeProcess & {
 export function unmetWaits(now?: number): string[];
 
 // @public
+export const UNSEEN_SHARE: number;
+
+// @public
 export interface Watch {
     heldMs(): number;
     // (undocumented)
