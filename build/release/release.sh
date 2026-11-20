@@ -128,8 +128,9 @@ if [ -n "$BETA_TAG_NAME" ]; then
 fi
 
 if [ "$DRY_RUN" = true ]; then
-  # Revert the version bump
-  npm version "$CURRENT_VERSION" --no-git-tag-version --allow-same-version > /dev/null 2>&1
+  # Take the version bump back from the commit, which the clean tree above makes safe: `npm version` back to the old
+  # version would keep its own rewriting of package.json, such as a \u escape written out as its character
+  git checkout --quiet -- package.json package-lock.json
   echo ""
   echo -e "${YELLOW}[DRY RUN] Would create:${NC}"
   echo "  - Version bump: $CURRENT_VERSION → $NEW_VERSION"

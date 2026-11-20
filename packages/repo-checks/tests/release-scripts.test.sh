@@ -49,7 +49,7 @@ cat > package.json <<'JSON'
 {
   "name": "scratch",
   "version": "0.4.0",
-  "scripts": { "typecheck": "true" }
+  "scripts": { "typecheck": "true", "done": "echo '\u2705'" }
 }
 JSON
 cat > package-lock.json <<'JSON'
@@ -119,6 +119,10 @@ git tag v0.4.1
 expect "a release whose tag exists is refused" "1" "$(release)"
 git tag -d v0.4.1 > /dev/null
 expect "  before anything is committed" "$PRISTINE" "$(untouched)"
+
+expect "a dry run succeeds" "0" "$(release --dry-run)"
+expect "  and names the tags it would push" "  - Tag: v0.4.1   - Tag: v0.4.1-beta.0 " "$(grep -o '  - Tag: v[^ ]*' "$SCRATCH/last.log" | tr '\n' ' ')"
+expect "  and leaves the checkout as it was" "$PRISTINE" "$(untouched)"
 
 # --- The push is all or nothing
 
