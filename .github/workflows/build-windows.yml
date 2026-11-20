@@ -173,7 +173,7 @@ jobs:
           if release_exists; then
             gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" \
+            gh release create "$GITHUB_REF_NAME" --verify-tag \
               --draft \
               --generate-notes \
               --title "${APP_NAME} $GITHUB_REF_NAME" \
