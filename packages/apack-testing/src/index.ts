@@ -215,7 +215,10 @@ const WILL_QUIT_MARKER = '[e2e] will-quit';
  * What Electron does after that is Chromium's shutdown, flushing the profile — slow under load, and the
  * fixture's to skip for a profile it deletes (the teardown below).
  */
-async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Promise<void>; progress(): QuitProgress }> {
+type QuitSequence = { done: Promise<void>; progress(): QuitProgress };
+const quitSequences = new WeakMap<ElectronApplication, QuitSequence>();
+
+async function watchQuitSequence(app: ElectronApplication): Promise<QuitSequence> {
   const child = app.process();
   let willQuit = false;
   const done = new Promise<void>(resolve => {
@@ -227,7 +230,77 @@ async function watchQuitSequence(app: ElectronApplication): Promise<{ done: Prom
     app.once('will-quit', () => { process.stdout.write(`${marker}\n`); });
   }, WILL_QUIT_MARKER);
   // Wrapped, since an async function returning a promise would hand back its settlement instead
-  return { done, progress: () => ({ willQuit, exitCode: child.exitCode, signalCode: child.signalCode }) };
+  const sequence = { done, progress: () => ({ willQuit, exitCode: child.exitCode, signalCode: child.signalCode }) };
+  quitSequences.set(app, sequence);
+  return sequence;
+}
+
+/** How `closeApp` ends an app */
+export interface CloseAppOptions {
+  /** The data dir the app runs on, which names the API it started */
+  readonly userDataDir: string;
+  /**
+   * Whether Chromium's profile writes are waited for. A dir the caller deletes next is work nobody reads, so the app
+   * is ended once its own quit is done; a dir that is launched on again keeps them
+   */
+  readonly keepProfile: boolean;
+}
+
+/**
+ * Closes an app launched with `_electron.launch`, as the `electronApp` fixture closes its own: waited for while the
+ * app works and never on a clock, since a busy machine stretches a quit — a kept profile took over a minute to write
+ * at a load of a hundred. A caller with a clock around it (a Playwright hook) turns that clock off.
+ *
+ * Fails when the app stops working without closing, naming where its quit had stopped, and when its API outlives it,
+ * since deleting the data dir would then race the API's last writes. Either way nothing of the app is left running.
+ */
+export async function closeApp(app: ElectronApplication, { userDataDir, keepProfile }: CloseAppOptions): Promise<void> {
+  const quitSequence = quitSequences.get(app) ?? await watchQuitSequence(app);
+  const apiPid = apiPidIn(userDataDir);
+  const closing = app.close();
+  const pid = app.process().pid;
+  // Its output closing, and not its exit: Chromium's helper processes hold the output and are still
+  // writing the profile for a moment after the process that started them has gone
+  const gone = new Promise<void>((resolve) => { app.process().once('close', () => resolve()); });
+  const closed = (async () => {
+    if (!keepProfile) {
+      await quitSequence.done;
+      if (app.process().exitCode === null && app.process().signalCode === null) {
+        console.log('[e2e] quit sequence finished; ending Electron without its profile writes');
+        app.process().kill('SIGKILL');
+      }
+    }
+    // Playwright's close answers once the app and its helpers have gone, so their going is what is waited
+    // for: seen here, and not only through an answer nothing bounds once the app is no longer working
+    await Promise.race([closing, gone]);
+    closing.catch(() => {});
+  })();
+  // Waited for while the app works: its quit stops the API, and a kept profile takes Chromium as long to write as the
+  // machine lets it. An app that has stopped working without closing is ended with its API, and the close fails saying so
+  try {
+    await (pid === undefined ? closed : answerWhileWorking(closed, { work: fromNow(processWork(pid)), what: 'Electron, asked to close,' }));
+  } catch (error) {
+    // It settles when the kills below end the app, and nothing waits for it any more
+    closed.catch(() => {});
+    // Read before the kills, which would make every quit read as one that exited
+    const stage = describeQuitStage(quitSequence.progress());
+    if (app.process().exitCode === null && app.process().signalCode === null) app.process().kill('SIGKILL');
+    if (apiPid !== undefined) { try { process.kill(apiPid, 'SIGKILL'); } catch { /* it had exited */ } }
+    const log = appLogs.get(app);
+    throw new Error(`${error instanceof Error ? error.message : String(error)}: ${stage}.`
+      + (log ? ` Full Electron and API output: ${log}` : ''), { cause: error });
+  }
+  // Electron close must include its API child; otherwise deleting storage races the final writes
+  if (apiPid !== undefined) {
+    let alive = true;
+    try {
+      process.kill(apiPid, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+      alive = false;
+    }
+    if (alive) throw new Error(`Electron closed while API process ${apiPid} was still alive`);
+  }
 }
 
 /**
@@ -262,7 +335,11 @@ async function waitForPackBackend(app: ElectronApplication, packId: string, time
 /** The pid of the API serving this app, from the `{ port, pid }` file the API writes about itself as it starts */
 function apiPidOf(app: ElectronApplication): number | undefined {
   const userDataDir = userDataDirs.get(app);
-  if (!userDataDir) return undefined;
+  return userDataDir === undefined ? undefined : apiPidIn(userDataDir);
+}
+
+/** The same, read from the data dir an app runs on; where that file sits does not depend on the environment */
+function apiPidIn(userDataDir: string): number | undefined {
   const endpointFile = resolveAppEnvironment({ env: 'test', userDataDir }).apiPortFile;
   try { return (JSON.parse(fs.readFileSync(endpointFile, 'utf8')) as { pid?: number }).pid; }
   catch (error) {
@@ -570,7 +647,8 @@ export function createTest(options: CreateTestOptions = {}) {
         reportLaunchPhase('process-attached', monotonicStart, app.process().pid);
         userDataDirs.set(app, userDataDir);
         captureOutput(app, appLogPath(workerInfo));
-        const quitSequence = await watchQuitSequence(app);
+        // From the launch rather than the close, so a quit the app starts itself is seen too; `closeApp` reads it
+        await watchQuitSequence(app);
         if (process.env.DEBUG_E2E) {
           app.process().once('exit', (code, signal) => console.log('[e2e shutdown] process exited', { code, signal }));
           app.once('close', () => console.log('[e2e shutdown] Playwright application closed'));
@@ -597,7 +675,6 @@ export function createTest(options: CreateTestOptions = {}) {
         }
 
         await use(app);
-        const apiPid = apiPidOf(app);
         if (process.env.DEBUG_E2E) console.log('[e2e shutdown] calling close');
         const inspectShutdown = process.env.DEBUG_E2E ? setTimeout(() => {
           console.log('[e2e shutdown] still waiting', {
@@ -617,54 +694,10 @@ export function createTest(options: CreateTestOptions = {}) {
           }
         }, 5000) : undefined;
         try {
-          const closing = app.close();
-          const pid = app.process().pid;
-          // Its output closing, and not its exit: Chromium's helper processes hold the output and are still
-          // writing the profile for a moment after the process that started them has gone
-          const gone = new Promise<void>((resolve) => { app.process().once('close', () => resolve()); });
-          const closed = (async () => {
-            // A data dir this fixture made is deleted below, so Chromium writing its profile is work nobody
-            // reads; a dir the caller gave is relaunched on, so its profile is waited for
-            if (givenDataDir === undefined) {
-              await quitSequence.done;
-              if (app.process().exitCode === null && app.process().signalCode === null) {
-                console.log('[e2e] quit sequence finished; ending Electron without its profile writes');
-                app.process().kill('SIGKILL');
-              }
-            }
-            // Playwright's close answers once the app and its helpers have gone, so their going is what is waited
-            // for: seen here, and not only through an answer nothing bounds once the app is no longer working
-            await Promise.race([closing, gone]);
-            closing.catch(() => {});
-          })();
-          // Waited for while the app works, and not on a clock: its quit stops the API, and a profile that is kept
-          // takes Chromium as long to write as the machine lets it, over a minute at a load of a hundred. An app
-          // that has stopped working without closing is ended with its API, and the worker fails saying so
-          try {
-            await (pid === undefined ? closed : answerWhileWorking(closed, { work: fromNow(processWork(pid)), what: 'Electron, asked to close,' }));
-          } catch (error) {
-            // It settles when the kills below end the app, and nothing waits for it any more
-            closed.catch(() => {});
-            // Read before the kills, which would make every quit read as one that exited
-            const stage = describeQuitStage(quitSequence.progress());
-            if (app.process().exitCode === null && app.process().signalCode === null) app.process().kill('SIGKILL');
-            if (apiPid !== undefined) { try { process.kill(apiPid, 'SIGKILL'); } catch { /* it had exited */ } }
-            const log = appLogs.get(app);
-            throw new Error(`${error instanceof Error ? error.message : String(error)}: ${stage}.`
-              + (log ? ` Full Electron and API output: ${log}` : ''), { cause: error });
-          }
+          // A data dir this fixture made is deleted below, so Chromium writing its profile is work nobody
+          // reads; a dir the caller gave is relaunched on, so its profile is waited for
+          await closeApp(app, { userDataDir, keepProfile: givenDataDir !== undefined });
         } finally { clearTimeout(inspectShutdown); }
-        // Electron close must include its API child; otherwise deleting storage races the final writes.
-        if (apiPid !== undefined) {
-          let alive = true;
-          try {
-            process.kill(apiPid, 0);
-          } catch (error) {
-            if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
-            alive = false;
-          }
-          if (alive) throw new Error(`Electron closed while API process ${apiPid} was still alive`);
-        }
         if (process.env.DEBUG_E2E) console.log('[e2e shutdown] close resolved');
       } finally {
         // A dir the caller gave is the caller's to remove; this owns only the one it made

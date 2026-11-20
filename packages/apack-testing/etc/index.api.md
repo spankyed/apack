@@ -134,6 +134,15 @@ export interface BusMessage {
 }
 
 // @public
+export function closeApp(app: ElectronApplication, input: CloseAppOptions): Promise<void>;
+
+// @public
+export interface CloseAppOptions {
+    readonly keepProfile: boolean;
+    readonly userDataDir: string;
+}
+
+// @public
 export function createAppDriver(page: Page, screenshotDir: string, appPid?: number): AppDriver;
 
 // @public (undocumented)

@@ -19,7 +19,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { _electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { createAppDriver, attachToApp, waitForAppReady, type AttachedApp } from '@apackdev/testing';
+import { closeApp, createAppDriver, attachToApp, waitForAppReady, type AttachedApp } from '@apackdev/testing';
 
 const APP_ROOT = path.resolve(import.meta.dirname, '../../..');
 
@@ -81,8 +81,11 @@ test.describe('a connected page and a launched one', () => {
   });
 
   test.afterAll(async () => {
+    // The fixture's close, bounded by the app's work: under load a bare `close()` waited on Chromium writing a profile
+    // this hook deletes next, and ran past the hook's clock after every test had passed
+    test.setTimeout(0);
     await attached?.detach();
-    await app?.close();
+    if (app) await closeApp(app, { userDataDir: dataDir, keepProfile: false });
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 

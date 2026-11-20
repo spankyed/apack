@@ -483,7 +483,9 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
   shutdown, the kept profile's writes among it), or exited with a process it started holding its output. The
   failure names the app's output log too. The app's output closing is what ends the
   wait, seen on its process: that is when Chromium's helpers have gone too, which its exit alone is not, and
-  Playwright's own `close()` is not waited for past it.
+  Playwright's own `close()` is not waited for past it. That close is the exported `closeApp(app, { userDataDir,
+  keepProfile })`, so a spec that launches its own app (`attach-parity.spec.ts`) ends it the same way, from a hook
+  whose clock it turns off (`test.setTimeout(0)`).
 
 ## API reference
 
