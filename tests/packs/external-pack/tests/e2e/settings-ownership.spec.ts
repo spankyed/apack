@@ -62,9 +62,11 @@ test('backup import restores all settings owners and updates an open window', as
     await toggleCompanion();
     await app.navigate('default-setup/database');
     await appPage.evaluate(targetPath => {
-      const actor = (window as any).applicationState.system.get('default-setup/database');
-      actor.send({ type: 'VIEW_BACKUP' });
-      actor.send({ type: 'BACKUP.EXPORT', path: targetPath, name: 'settings', databases: ['lmdb'] });
+      // Through the shell's door, as a click is: a delivery names the surface, so the export it asks for is answered to it
+      (window as any).applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/database', events: [
+        { type: 'VIEW_BACKUP' },
+        { type: 'BACKUP.EXPORT', path: targetPath, name: 'settings', databases: ['lmdb'] },
+      ] });
     }, backups);
     try {
       await expect.poll(backupResult).toEqual({ operation: 'export' });
@@ -103,9 +105,10 @@ test('backup import restores all settings owners and updates an open window', as
     await expect(other).toHaveValue('Changed Memos');
     await app.navigate('default-setup/database');
     await appPage.evaluate(backupPath => {
-      const actor = (window as any).applicationState.system.get('default-setup/database');
-      actor.send({ type: 'VIEW_BACKUP' });
-      actor.send({ type: 'BACKUP.IMPORT', path: backupPath });
+      (window as any).applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/database', events: [
+        { type: 'VIEW_BACKUP' },
+        { type: 'BACKUP.IMPORT', path: backupPath },
+      ] });
     }, backup);
     await expect.poll(backupResult).toMatchObject({ operation: 'import', error: undefined,
       message: expect.stringContaining('restart the brain manually') });
