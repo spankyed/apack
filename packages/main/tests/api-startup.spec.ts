@@ -65,3 +65,57 @@ it("resolves the window's wait when a launch after a crash becomes ready", async
   expect(await outcome).toBe('ready');
 });
 
+
+/**
+ * An API server whose launches are counted as launches: each schedules the forgiveness a real one does, and the
+ * process is running from its launch until the spec says it exited
+ */
+function supervised() {
+  const running = vi.spyOn(ProcessManager.prototype, 'isRunning').mockReturnValue(false);
+  const api = server() as ReturnType<typeof server> & {
+    scheduleRestartResetTimeout(): void;
+    /** The crashes counted against the restarts: read as the class holds it, since its status also reads the log */
+    restartAttempts: number;
+  };
+  api.launchApiServer = vi.fn(async () => { running.mockReturnValue(true); api.scheduleRestartResetTimeout(); });
+  const crash = () => { running.mockReturnValue(false); api.handleProcessExit(1, null); };
+  return { api, crash };
+}
+
+it('forgives the crashes before a launch that has stayed up', async () => {
+  vi.spyOn(ProcessManager.prototype, 'getFatalErrors').mockReturnValue([{ message: 'crashed once' }]);
+  const { api, crash } = supervised();
+  await api.startApiServer();
+  crash();
+  await vi.advanceTimersByTimeAsync(API_CONFIG.RESTART_DELAY);
+  expect(api.restartAttempts).toBe(1);
+  await vi.advanceTimersByTimeAsync(API_CONFIG.SUCCESS_CHECK_DELAY);
+  expect(api.restartAttempts).toBe(0);
+});
+
+it('does not forgive a crash because the launch after it is running when the crashed one would have been forgiven', async () => {
+  vi.spyOn(ProcessManager.prototype, 'getFatalErrors').mockReturnValue([{ message: REFUSAL }]);
+  const { api, crash } = supervised();
+  await api.startApiServer();
+  // Up for less than it takes to be forgiven, then relaunched: the first launch's moment arrives with the second running
+  const lived = API_CONFIG.SUCCESS_CHECK_DELAY - API_CONFIG.RESTART_DELAY - 500;
+  await vi.advanceTimersByTimeAsync(lived);
+  crash();
+  await vi.advanceTimersByTimeAsync(API_CONFIG.RESTART_DELAY);
+  await vi.advanceTimersByTimeAsync(API_CONFIG.SUCCESS_CHECK_DELAY - lived - API_CONFIG.RESTART_DELAY + 100);
+  expect(api.restartAttempts).toBe(1);
+});
+
+it('runs out of restarts for an API that dies soon after each launch', async () => {
+  vi.spyOn(ProcessManager.prototype, 'getFatalErrors').mockReturnValue([{ message: REFUSAL }]);
+  const { api, crash } = supervised();
+  const outcome = api.waitForReady().then(() => 'ready', (error: Error) => error.message);
+  await api.startApiServer();
+  const lived = API_CONFIG.SUCCESS_CHECK_DELAY - API_CONFIG.RESTART_DELAY - 500;
+  for (let launch = 0; launch <= API_CONFIG.MAX_RESTART_ATTEMPTS; launch++) {
+    await vi.advanceTimersByTimeAsync(lived);
+    crash();
+    await vi.advanceTimersByTimeAsync(API_CONFIG.RESTART_DELAY);
+  }
+  expect(await outcome).toBe(REFUSAL);
+});

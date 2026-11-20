@@ -27,6 +27,8 @@ export class ApiServer implements AppModule {
   private shutdownComplete = false;
   private shutdown?: Promise<void>;
   private restartAttempts = 0;
+  /** The current launch's forgiveness, pending: a launch that exits takes its own with it */
+  private restartReset?: ReturnType<typeof setTimeout>;
   /**
    * The current startup's readiness, which `waitForReady` hands out. A crash before the API is ready restarts it
    * within the same startup, so the promise is renewed only once it has settled: the launch that becomes ready
@@ -271,6 +273,8 @@ export class ApiServer implements AppModule {
 
   private handleProcessExit(code: number | null, signal: NodeJS.Signals | null): void {
     logError(`[MAIN] API server exited with code ${code} and signal ${signal}`);
+    // This launch did not stay up, so it forgives nothing
+    clearTimeout(this.restartReset);
     const errors = this.processManager.getFatalErrors();
     const stderr = this.processManager.getLastStderr();
     if (errors.length > 0) {
@@ -315,8 +319,18 @@ export class ApiServer implements AppModule {
     broadcastEvent(API_EVENTS.ERROR, { error: error.message });
   }
 
+  /**
+   * Forgives earlier crashes once the launch just made has stayed up for `SUCCESS_CHECK_DELAY`.
+   *
+   * **One per launch, and a launch's own.** Whether "the process is running" is asked when the timer fires, and by
+   * then the process may be a later launch: an API that dies a couple of seconds after each start was running, as
+   * its successor, at every earlier launch's moment, so each crash was forgiven and the restarts never ran out.
+   * A launch that exits cancels its own (`handleProcessExit`), and one replaced without exiting through there (a
+   * reload) is cancelled by the launch that replaces it.
+   */
   private scheduleRestartResetTimeout(): void {
-    setTimeout(() => {
+    clearTimeout(this.restartReset);
+    this.restartReset = setTimeout(() => {
       if (this.processManager.isRunning()) {
         this.restartAttempts = 0;
       }

@@ -54,6 +54,14 @@ async function answerWrite(reply: Reply<OutgoingLibraryEvents> | undefined, labe
 }
 
 /**
+ * One of a window's reads of what is on disk, answered to whoever asked: with what was read, or why it could not be.
+ * A file can be gone and a folder unreadable while the library still lists them, and a window that asked shows
+ * nothing until it is answered, so a read that fails is answered as a write that fails is.
+ */
+const answerRead = (reply: Reply<OutgoingLibraryEvents> | undefined, label: string, read: () => Promise<OutgoingLibraryEvents>): Promise<void> =>
+  answerWrite(reply, label, read)
+
+/**
  * Tells every window that something on disk under a symlinked folder changed, which no view can see: `folderId`'s
  * contents, or with `null`, a symlinked folder's not known. A notification — whoever is showing one fetches it again.
  */
@@ -111,10 +119,12 @@ export const librarySystem = setup({
     },
     getDocument: async ({ event, reply }) => {
       const ev = event as { type: 'GET_DOCUMENT'; id: string }
-      const document = await libraryService.find(ev.id as EARS.EntityId)
-      reply?.(document
-        ? { type: 'DOCUMENT_LOADED' as const, data: { document } }
-        : { type: 'LIBRARY_WRITE_FAILED' as const, error: 'Document not found' })
+      await answerRead(reply, 'Reading a document', async () => {
+        const document = await libraryService.find(ev.id as EARS.EntityId)
+        return document
+          ? { type: 'DOCUMENT_LOADED' as const, data: { document } }
+          : { type: 'LIBRARY_WRITE_FAILED' as const, error: 'Document not found' }
+      })
     },
     createCollection: async ({ event, reply }) => {
       const ev = event as { type: 'CREATE_COLLECTION'; name: string; description?: string; parentId?: string }
@@ -150,12 +160,16 @@ export const librarySystem = setup({
     // File browser actions
     getFolderContents: async ({ event, reply }) => {
       const ev = event as { type: 'GET_FOLDER_CONTENTS'; folderId: string | null }
-      const folderContents = await repository.libraryQueries.getFolderContents(ev.folderId ? ev.folderId as EARS.EntityId : null)
-      reply?.({ type: 'FOLDER_CONTENTS_LOADED' as const, data: folderContents })
+      await answerRead(reply, 'Reading a folder', async () => ({
+        type: 'FOLDER_CONTENTS_LOADED' as const,
+        data: await repository.libraryQueries.getFolderContents(ev.folderId ? ev.folderId as EARS.EntityId : null),
+      }))
     },
     checkSymlinks: async ({ event, reply }) => {
       const ev = event as { type: 'CHECK_SYMLINKS'; ids: string[] }
-      reply?.({ type: 'SYMLINKS_CHECKED' as const, ids: ev.ids, broken: await repository.libraryQueries.brokenSymlinks(ev.ids) })
+      await answerRead(reply, 'Checking symlinked folders', async () => ({
+        type: 'SYMLINKS_CHECKED' as const, ids: ev.ids, broken: await repository.libraryQueries.brokenSymlinks(ev.ids),
+      }))
     },
     renameItem: async ({ event, reply }) => {
       const ev = event as { type: 'RENAME_ITEM'; id: string; name: string; itemType: 'document' | 'folder' }
