@@ -1102,7 +1102,11 @@ function sleepSync(ms: number): void {
  * same stall decision over the same tree readings, taken every few seconds between short polls of `holder`. A new
  * holder is watched from its own start, so a waiter never charges one holder's silence to the next.
  */
-function waitWhileHolderWorks(holder: () => number | undefined, idleMs: number, pollMs = LOCK_POLL_MS): 'released' | string {
+/** What a holder's process tree has spent, per process: the wait's one reading of whether it works */
+type ReadTreeCpu = (pid: number) => ReadonlyMap<number, number> | undefined;
+
+function waitWhileHolderWorks(holder: () => number | undefined, idleMs: number, pollMs = LOCK_POLL_MS,
+  readTreeCpu: ReadTreeCpu = readTreeCpuMsSync): 'released' | string {
   let watching: { pid: number; tracker: ReturnType<typeof createStallTracker>; readAt: number } | undefined;
   for (let pid = holder(); pid !== undefined; pid = holder()) {
     const now = Date.now();
@@ -1110,7 +1114,7 @@ function waitWhileHolderWorks(holder: () => number | undefined, idleMs: number, 
     if (now - watching.readAt >= Math.min(HOLDER_READ_MS, idleMs / 4)) {
       watching.readAt = now;
       // A tree that cannot be read adds no work, so a holder nothing can read is bounded by its silence
-      if (watching.tracker.reading(readTreeCpuMsSync(pid) ?? new Map(), now)) return describeRefusal({ kind: 'stalled', idleMs });
+      if (watching.tracker.reading(readTreeCpu(pid) ?? new Map(), now)) return describeRefusal({ kind: 'stalled', idleMs });
     }
     sleepSync(pollMs);
   }
@@ -1135,12 +1139,19 @@ export interface PackageBuildWait {
  * schedule: it returns as soon as the holder is gone, and a holder that outlives it leaves the caller to
  * report staleness as before, which is the pre-existing behaviour rather than a hang.
  */
-export function waitForPackageBuild({ idleMs = HOLDER_IDLE_MS, pollMs = LOCK_POLL_MS, file = LOCK_FILE }:
-{ idleMs?: number; pollMs?: number; file?: string } = {}): PackageBuildWait | undefined {
+export function waitForPackageBuild({ idleMs = HOLDER_IDLE_MS, pollMs = LOCK_POLL_MS, file = LOCK_FILE, readTreeCpu }:
+{
+  idleMs?: number; pollMs?: number; file?: string;
+  /**
+   * Stands in for reading the holder's process tree, for a spec about which holder is followed: whether a real
+   * process gets the CPU to read as working is a question of the machine's load, which that spec is not about
+   */
+  readTreeCpu?: ReadTreeCpu;
+} = {}): PackageBuildWait | undefined {
   const holder = runningPackageBuild(file);
   if (!holder) return undefined;
   // Whoever holds it now: a build that hands the lock to another is followed, not mistaken for a stall
-  const outcome = waitWhileHolderWorks(() => runningPackageBuild(file)?.pid, idleMs, pollMs);
+  const outcome = waitWhileHolderWorks(() => runningPackageBuild(file)?.pid, idleMs, pollMs, readTreeCpu);
   return { holder, ended: outcome === 'released' ? 'released' : 'stalled' };
 }
 
