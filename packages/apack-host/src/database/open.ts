@@ -41,8 +41,8 @@ function openDatabase(options: DatabaseOptions): EarsDatabase {
 
 export interface DatabaseStoreOptions {
   /**
-   * Told when a query does something its data will make slow (the engine's `warn`, `packDeclarationWarning`'s
-   * message); the app passes one in development
+   * Told when a query does something its data will make slow (the engine's `warn`, with the `apack.json` entry that
+   * declares an index's fix); the app passes one in development
    */
   warn?: (message: string) => void;
   /** The database directory */
@@ -53,15 +53,6 @@ export interface DatabaseStoreOptions {
 }
 
 /**
- * The engine's warning, saying where a pack declares its fix: a value index the engine names in a type's row rules is
- * the `indexes` of that type's entry in the pack's `apack.json`, which codegen writes the rules from
- */
-export function packDeclarationWarning(message: string, warning: EarsWarning): string {
-  if (warning.kind !== 'unindexedWalk') return message;
-  return `${message}, which a pack declares in the ${warning.types.join('/')} entry of its apack.json`;
-}
-
-/**
  * The elmdb database at `path` and a new engine reading and writing it. The database keeps the schema it was last
  * held to; opened to write, it is held to what `schema` names too (`admin.declare`), and again each time those names
  * change (`onRegistrationChanged`: the app's registry, as packs register), so a declaration another pack made stays
@@ -69,7 +60,14 @@ export function packDeclarationWarning(message: string, warning: EarsWarning): s
  */
 export function openDatabaseStore({ path, schema, readOnly, warn }: DatabaseStoreOptions): { database: EarsDatabase; engine: EarsEngine } {
   const database = openDatabase({ path, readOnly });
-  const engine = createEarsEngine({ database, callSites: _EARS_CALL_SITES, ...(warn && { warn: (message: string, warning: EarsWarning) => warn(packDeclarationWarning(message, warning)) }) });
+  const engine = createEarsEngine({
+    database,
+    callSites: _EARS_CALL_SITES,
+    // A value index the engine names in a type's row rules is the `indexes` of that type's entry in a pack's apack.json
+    warn: warn && ((message: string, warning: EarsWarning) => warn(warning.kind === 'unindexedWalk'
+      ? `${message}, which a pack declares in the ${warning.types.join('/')} entry of its apack.json`
+      : message)),
+  });
   if (!readOnly) {
     try {
       engine.admin.declare(engineSchemaOf(schema));
