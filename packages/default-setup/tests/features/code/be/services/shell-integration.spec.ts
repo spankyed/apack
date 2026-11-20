@@ -23,7 +23,7 @@ describe('starting a shell so that it reports itself', () => {
     expect(arranged.args).toEqual(['--init-file', `${DIR}/apack.bash`])
     const file = arranged.files.find(one => one.at === 'apack.bash')!
     // `--init-file` replaces `.bashrc` rather than adding to it
-    expect(file.contents).toContain('. "$HOME/.bashrc"')
+    expect(file.contents).toContain('. "${APACK_BASHRC:-$HOME/.bashrc}"')
     expect(file.contents).toContain('\\033]7;file://')
   })
 

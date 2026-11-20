@@ -38,6 +38,11 @@ export interface ActionSender {
 }
 
 // @public
+export class AppDataBusyError extends Error {
+    constructor(message: string);
+}
+
+// @public
 export interface AppDataService {
     exportBackup(targetPath: string, name?: string, databases?: BackupDatabase[]): Promise<string>;
     importBackup(backupPath: string, options?: {

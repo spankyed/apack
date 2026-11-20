@@ -12,7 +12,14 @@ beta_tag_for_release() {
   if [[ "$version" == *-* ]]; then
     return 0
   fi
-  if [ -n "$(git tag -l "v${version}-beta.*")" ]; then
+  # Origin's tags where there is an origin: a beta tag left only in this checkout is no beta anyone can install
+  local betas
+  if git remote get-url origin > /dev/null 2>&1; then
+    betas="$(git ls-remote --tags origin "refs/tags/v${version}-beta.*")" || return 1
+  else
+    betas="$(git tag -l "v${version}-beta.*")"
+  fi
+  if [ -n "$betas" ]; then
     return 0
   fi
   echo "v${version}-beta.0"

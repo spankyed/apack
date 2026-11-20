@@ -15,7 +15,14 @@ import { SIZE_MS } from '../../../scripts/lib/unit-suites.ts';
 
 const IDLE_MS = 15_000;
 const GUARD = path.join(REPO_ROOT, 'packages/apack-testing/src/vitest-progress-guard.ts');
-const burn = (ms: number) => `const end = Date.now() + ${ms}; while (Date.now() < end) {}`;
+// Every fixture that burns means work done, so the burn counts the process's CPU, never the clock: on a busy machine
+// a stretch of clock buys a fraction of the CPU, and a test meant to spend past a budget, or to keep its tree
+// working, would then pass without having done either. The work is a plain loop between readings, so a profile
+// charges it to the function the burn is written into rather than to `process.cpuUsage`, which `churns` reads
+const burn = (ms: number) =>
+  `{ const from = process.cpuUsage(); let spun = 0;
+    for (;;) { const { user, system } = process.cpuUsage(from); if (user + system >= ${ms * 1000}) break; for (let i = 0; i < 100_000; i++) spun ^= i; }
+    if (spun === -1) throw new Error('unreachable'); }`;
 
 const FIXTURES: Record<string, string> = {
   'awaits.spec.ts': `import { it } from 'vitest';
@@ -146,8 +153,9 @@ describe('with the CPU ceiling on', () => {
   // Unix alone: Windows has no listing that says what state a process is in
   it.skipIf(process.platform === 'win32')('says what each process the stalled test started was doing', () => {
     const said = outcome(report, 'child.spec.ts', 'waits on a child that sleeps')!.failureMessages.join('\n');
-    // The child the test is waiting on, asleep rather than waiting on a disk, with the command it was started as
-    expect(said).toMatch(/pid \d+ \(parent \d+\) S\S*, \S+ CPU in \S+.*: .*setInterval/);
+    // The child the test is waiting on, asleep rather than waiting on a disk, with the command it was started as. On a
+    // busy machine its timer can have woken it and left it waiting for a core, which `ps` reads as R
+    expect(said).toMatch(/pid \d+ \(parent \d+\) [SR]\S*, \S+ CPU in \S+.*: .*setInterval/);
   });
 
   it('says what a stalled test was still waiting for, in the words the test gave it', () => {

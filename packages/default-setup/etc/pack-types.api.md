@@ -794,8 +794,9 @@ interface CodeSystemError {
 /**
  * Low-level one-shot process primitive for the Codex CLI.
  *
- * Mirrors `claude-code/runner.ts:execOnce` but resolves the `codex` binary
- * and uses Codex-appropriate env scrubbing.
+ * Runs the child with `runProcess` (`@apackdev/sdk/progress`), which owns its
+ * whole life, as `claude-code/runner.ts:execOnce` does, with the `codex`
+ * binary and Codex-appropriate env scrubbing.
  */
 interface CodexExecOptions {
     cwd?: string;
@@ -1441,8 +1442,9 @@ interface EventListenerEntity {
  * Two flavours, because the CLI has two very different execution modes:
  *
  * 1. `execOnce` — one-shot subcommands (`claude mcp list`, `claude auth status`,
- *    …). Resolves when the child exits. Uses a bounded timeout. Translates
- *    spawn/exit errors into typed `ClaudeCodeError` subclasses.
+ *    …). Runs the child with `runProcess` (`@apackdev/sdk/progress`), which
+ *    owns its whole life, and translates each way it can fail into a typed
+ *    `ClaudeCodeError` subclass. Settles once the child is gone.
  *
  * 2. `spawnStream` — long-lived `claude -p --input-format stream-json
  *    --output-format stream-json` for interactive conversations. Returns a
@@ -1465,7 +1467,7 @@ interface ExecOnceOptions {
     env?: NodeJS.ProcessEnv;
     /** Bytes piped to stdin. Pass `undefined` to leave stdin closed. */
     input?: string;
-    /** Milliseconds until the child is SIGKILL'd and a ClaudeTimeoutError thrown. */
+    /** Milliseconds on the clock until the child is stopped and a ClaudeTimeoutError thrown. */
     timeoutMs?: number;
     signal?: AbortSignal;
     /** Override the resolved CLI path (primarily for testing). */

@@ -117,8 +117,8 @@ license, notice or copying file in `electron-builder.mjs`, have every bundler of
 (`recordBundledPackages`), and keep a built-in pack's bundles saying what they inlined, in source maps or esbuild's
 module comments, which the notices read back. `afterPack` writes `THIRD-PARTY-NOTICES.txt` from what the app carries and those
 records, and fails a production or beta build on what it reports, which a preview build only prints: a package with no
-text or a license outside `ACCEPTED` (add the package's text to `OVERRIDES` with why, never widen `ACCEPTED` without
-reading the license), a native binary whose notices are missing (bump its pin to a release that ships them) or that is
+text or a license outside `ACCEPTED` (add the package's text to `OVERRIDES` with why, or its `license` there when the
+manifest declares none that reads as SPDX, never widen `ACCEPTED` without reading the license), a native binary whose notices are missing (bump its pin to a release that ships them) or that is
 missing itself, a binary a package's install downloads that is another release than its `EXTRAS` texts were read for
 (read them again at that release), another Electron than the one FFmpeg's source pointer was read for
 (`READ_FOR_ELECTRON`, `scripts/lib/electron-notices.ts`), a missing bundle record, a built-in pack with no bundle or one whose packages can't be told, an `OVERRIDES`
@@ -128,7 +128,8 @@ too: name the file in `ADAPTED` with its upstream's license texts under `build/l
 it was adapted, ported or copied from elsewhere has to be (`third-party-notices.spec.ts`). Beside the release files it
 writes a CycloneDX SBOM,
 `<releasePrefix>-<version>-<os>-<arch>.cdx.json`, which the release workflows upload by that name: rename a release file
-and their `*.cdx.json` globs with it.
+and their `*.cdx.json` globs with it. What neither covers yet, the Rust crates in npm packages' prebuilt binaries
+first, is in [the deferred plan](docs/plans/deferred/third-party-notices-gaps.md).
 
 ## Backward compatibility
 

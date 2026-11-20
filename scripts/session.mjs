@@ -110,8 +110,8 @@ async function npm(dir, args) {
 }
 
 /**
- * The checkout a vendored dependency of `dir` is linked to: the one its variable names, else the default when it
- * holds the pin, else a worktree of the default at the pin. A default that cannot be asked — not cloned, or no pin
+ * The checkout a vendored dependency of `dir` is linked to: the one its variable names, else the default when its
+ * HEAD is the pin, else a worktree of the default at the pin. A default that cannot be asked — not cloned, or no pin
  * declared — is handed on as it is, for its linker to say what is wrong in its own words.
  * @param {string} dir @param {string} name @param {string} variable @param {string} fallback
  */
@@ -137,7 +137,8 @@ async function setup(dir) {
   // git engine is the third, and its linker builds it for the same reason.
   //
   // **Each at its pin, without moving the checkout someone works in** (`lib/pinned-checkout.mjs`). A checkout its
-  // variable names is linked as named: whoever set it chose it.
+  // variable names is linked as named: whoever set it chose it, and what its linker says of it — that it is past
+  // its pin, or that the pin is not pushed — is said here, since the session is then not the code CI tests.
   try {
     const elmdb = vendoredCheckout(dir, 'elmdb', 'ELMDB_DIR', elmdbCheckout());
     // The one linker that builds nothing: a binding is a release Rust build, minutes rather than seconds, so it
@@ -148,9 +149,12 @@ async function setup(dir) {
       await npm(elmdb, ['ci', '--no-audit', '--no-fund']);
       await npm(elmdb, ['run', 'build']);
     }
-    linkElmdb(dir, elmdb);
-    linkApackTerminal(dir, vendoredCheckout(dir, 'apack-terminal', 'APACK_TERMINAL_DIR', apackTerminalCheckout()));
-    linkApackGit(dir, vendoredCheckout(dir, 'apack-git', 'APACK_GIT_DIR', apackGitCheckout()));
+    const linked = [
+      linkElmdb(dir, elmdb),
+      linkApackTerminal(dir, vendoredCheckout(dir, 'apack-terminal', 'APACK_TERMINAL_DIR', apackTerminalCheckout())),
+      linkApackGit(dir, vendoredCheckout(dir, 'apack-git', 'APACK_GIT_DIR', apackGitCheckout())),
+    ];
+    for (const warning of linked.flatMap(({ warnings }) => warnings)) console.warn(`\n! ${warning}`);
   } catch (error) {
     throw new Error(`${error instanceof Error ? error.message : error}. Checkout retained at ${dir}.`, { cause: error });
   }

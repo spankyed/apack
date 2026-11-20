@@ -5,7 +5,7 @@
 //
 // Node-only: it lists processes with `ps`, or PowerShell on Windows. The chain's own runner imports this file by path,
 // since it runs before any package is built and `@apackdev/sdk` resolves to `dist` outside a host build.
-import { execFile, execFileSync, type ChildProcess, type ExecFileOptions } from 'node:child_process';
+import { execFile, execFileSync, spawn, type ChildProcess, type ExecFileOptions } from 'node:child_process';
 import * as fs from 'node:fs';
 
 /**
@@ -522,6 +522,13 @@ export const LOOSE_CEILING_FACTOR = 10;
  */
 export const STORAGE_ALLOWANCE_FACTOR = 10;
 
+/**
+ * The most of a stall window one reading may account for, however late it arrives (`watchWork`). A declared class:
+ * a stall is then at least four readings that found no work, where the watch takes twenty-four in a window that
+ * nothing delays.
+ */
+export const UNSEEN_SHARE = 1 / 4;
+
 /** What every ceiling is multiplied by here. Read where every bound is built, so a caller passing a ceiling cannot forget it */
 const ceilingFactor = (): number => (process.env.APACK_CEILING === 'loose' ? LOOSE_CEILING_FACTOR : 1);
 
@@ -541,6 +548,14 @@ const ceilingFactor = (): number => (process.env.APACK_CEILING === 'loose' ? LOO
  * it is asked after every reading that found no work, and a party found held has its window start again. Up to
  * `STORAGE_ALLOWANCE_FACTOR` windows between one piece of work and the next; past that it is refused as stalled,
  * and the refusal says how long it was allowed for and what held it.
+ *
+ * **Nor is time the watch could not see the party in.** A reading says what the party did up to the moment it was
+ * taken, and a quiet one is evidence only for about as long as readings are apart. One that arrives minutes late
+ * was held by the machine and not by the party: the listing of processes waits on a process the kernel holds, a
+ * virtual machine is paused under its host, a laptop sleeps. So one reading adds at most `UNSEEN_SHARE` of the
+ * window to the quiet (`seenBy`), and a stall is always several readings that found nothing. A party that has
+ * stalled is refused as before; one whose every reading is also late is refused that much later, never unbounded,
+ * since a listing that does nothing is itself ended after `IDLE_MS`.
  */
 export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingMs, fallbackMs, onRefused, watchesOutput = false, countsFromWatch = false, clock = processClock }: {
   readonly work: WorkReading; readonly idleMs?: number; readonly ceilingMs?: number; readonly fallbackMs?: number;
@@ -574,6 +589,10 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
   let held: { ms: number; by: string } | undefined;
   let heldInAll = 0;
   let readAt = startedAt;
+  /** How much of the clock since the watch began passed with no reading taken that could have seen the party */
+  let unseenMs = 0;
+  /** A moment on the clock as the stall decision counts it: without the time nothing could be seen in */
+  const seenBy = (at: number) => at - unseenMs;
   const spentMs = () => lastTotal ?? 0;
   const stop = () => { done = true; clock.stopEvery(timer); };
   const refuse = (refusal: Refusal) => { stop(); onRefused(refusal); };
@@ -585,17 +604,18 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
       const at = clock.now();
       const sinceLast = at - readAt;
       readAt = at;
+      unseenMs += Math.max(0, sinceLast - idleMs * UNSEEN_SHARE);
       if (total === undefined) unreadableSince ??= at;
       lastTotal = total ?? lastTotal;
-      let stalled = tracker.reading(new Map([[0, lastTotal ?? 0]]), at);
-      if (tracker.quietFor(at) === 0) held = undefined;
+      let stalled = tracker.reading(new Map([[0, lastTotal ?? 0]]), seenBy(at));
+      if (tracker.quietFor(seenBy(at)) <= 0) held = undefined;
       // Quiet, and not yet past what storage is allowed: asked what holds it before the quiet is counted
       else if (work.held !== undefined && (held?.ms ?? 0) < idleMs * STORAGE_ALLOWANCE_FACTOR) {
         const by = await work.held().catch(() => undefined);
         if (by !== undefined) {
           held = { ms: (held?.ms ?? 0) + sinceLast, by };
           heldInAll += sinceLast;
-          tracker.output(at);
+          tracker.output(seenBy(at));
           stalled = false;
         }
       }
@@ -612,7 +632,7 @@ export function watchWork({ work, idleMs = IDLE_MS, ceilingMs: requestedCeilingM
   (timer as { unref?: () => void }).unref?.();
   return {
     stop,
-    output: () => { outputAt = clock.now(); tracker.output(outputAt); },
+    output: () => { outputAt = clock.now(); tracker.output(seenBy(outputAt)); },
     spentMs,
     heldMs: () => heldInAll,
   };
@@ -709,3 +729,130 @@ export function execFileWhileWorking(file: string, args: readonly string[], opti
   return Object.assign(done, { child });
 }
 
+/** Why a process `runProcess` ran did not end with exit code 0. Each carries what the process wrote before it ended */
+export type ProcessFailure =
+  /** It never ran: the file is missing or not executable (`error.code` is `ENOENT` or `EACCES`), or the system refused the spawn */
+  | { readonly kind: 'not-started'; readonly error: NodeJS.ErrnoException }
+  /** It ran and ended by itself, with another exit code or on a signal nobody here sent */
+  | { readonly kind: 'exited'; readonly exitCode: number | null; readonly signal: NodeJS.Signals | null; readonly stdout: string; readonly stderr: string }
+  /** The caller's signal aborted, with that signal's reason: an `AbortSignal.timeout` aborts with a `TimeoutError` */
+  | { readonly kind: 'aborted'; readonly reason: unknown; readonly stdout: string; readonly stderr: string }
+  /** The watch gave up on it (`watchWork`): it stopped working, or spent its CPU */
+  | { readonly kind: 'refused'; readonly refusal: Refusal; readonly stdout: string; readonly stderr: string };
+
+/** How a process `runProcess` ran ended: its output, or the one reason it has none to trust */
+export type ProcessOutcome =
+  | { readonly ok: true; readonly stdout: string; readonly stderr: string }
+  | { readonly ok: false; readonly failure: ProcessFailure };
+
+/** What `runProcess` takes */
+export interface RunProcessOptions {
+  readonly cwd?: string;
+  /** The child's whole environment. This process's own when left out */
+  readonly env?: NodeJS.ProcessEnv;
+  /** Written to the child's stdin, which is then closed. Left out, stdin is closed empty */
+  readonly input?: string;
+  /**
+   * Ends the run when it aborts. The one place a clock comes in, and only when the caller brings one
+   * (`AbortSignal.timeout`): for a child whose work is a wait on a network, which no reading of its CPU describes
+   */
+  readonly signal?: AbortSignal;
+  /** The CPU the process tree may spend, which only a spin reaches. No ceiling when left out */
+  readonly cpuMs?: number;
+  /** How long the tree may go without CPU or output before it is ended as stalled. `IDLE_MS` when left out */
+  readonly idleMs?: number;
+  /** How long a child told to stop may do nothing before it is killed. `STOP_IDLE_MS` when left out */
+  readonly stopIdleMs?: number;
+}
+
+/**
+ * How long a child that was asked to stop may go without working before it is killed. A child that is cleaning up
+ * is working and is waited for; one that ignores the request does nothing, and this is how long that is believed.
+ */
+export const STOP_IDLE_MS = 5_000;
+
+/** The CPU a child that was asked to stop may spend on stopping: the bound on one that ignores the request and spins */
+const STOP_CPU_MS = 10_000;
+
+/**
+ * Runs one process to its end and says how it ended, as a value: the caller branches on `ok` and then on
+ * `failure.kind`, and nothing is thrown for a process that failed. It is supervised for its whole life:
+ *
+ * - bounded by its progress (`watchWork`): killed when its tree does no work and writes nothing for `idleMs`, or
+ *   spends `cpuMs` of CPU, and never for being slow on a busy machine;
+ * - stopped by the caller's `signal`: asked to end (`SIGTERM`), and killed if it then does nothing for `stopIdleMs`;
+ * - **gone when the promise settles.** The outcome is reported from the child's exit, never from the moment it was
+ *   told to stop, so no caller is answered while the process it started is still running.
+ *
+ * The child itself is what is signalled, by the handle it was started with. A process the child started and left
+ * running is not followed: its pipes are let go once the child has been ended, so it cannot hold the answer back.
+ */
+export function runProcess(file: string, args: readonly string[], options: RunProcessOptions = {}): Promise<ProcessOutcome> {
+  const { cwd, env, input, signal, cpuMs, idleMs, stopIdleMs = STOP_IDLE_MS } = options;
+  if (signal?.aborted) {
+    return Promise.resolve({ ok: false, failure: { kind: 'aborted', reason: signal.reason as unknown, stdout: '', stderr: '' } });
+  }
+  return new Promise<ProcessOutcome>((resolve) => {
+    let child: ChildProcess;
+    try {
+      child = spawn(file, [...args], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    } catch (error) {
+      resolve({ ok: false, failure: { kind: 'not-started', error: error as NodeJS.ErrnoException } });
+      return;
+    }
+    const out: Buffer[] = [];
+    const err: Buffer[] = [];
+    /** Why this function ended the child, once it has: what the exit that follows is reported as */
+    let ended: { readonly kind: 'aborted'; readonly reason: unknown } | { readonly kind: 'refused'; readonly refusal: Refusal } | undefined;
+    let watch: Watch | undefined;
+    let settled = false;
+    const settle = (outcome: ProcessOutcome) => {
+      if (settled) return;
+      settled = true;
+      watch?.stop();
+      signal?.removeEventListener('abort', stop);
+      resolve(outcome);
+    };
+    const watching = (bounds: { idleMs?: number; ceilingMs?: number; fallbackMs?: number }, onRefused: (refusal: Refusal) => void): Watch | undefined =>
+      (child.pid === undefined ? undefined : watchWork({ work: processWork(child.pid), watchesOutput: true, ...bounds, onRefused }));
+    const stop = () => {
+      if (ended !== undefined || settled) return;
+      ended = { kind: 'aborted', reason: signal?.reason as unknown };
+      child.kill('SIGTERM');
+      // Watched afresh for the stopping: a child that cleans up is waited for, one that does nothing is not
+      watch?.stop();
+      watch = watching({ idleMs: stopIdleMs, ceilingMs: STOP_CPU_MS, fallbackMs: stopIdleMs }, () => child.kill('SIGKILL'));
+    };
+
+    child.stdout?.on('data', (chunk: Buffer) => { out.push(chunk); watch?.output(); });
+    child.stderr?.on('data', (chunk: Buffer) => { err.push(chunk); watch?.output(); });
+    // A child that exits without reading its input fails the write, and an error event nobody listens for ends this process
+    child.stdin?.on('error', () => undefined);
+    // A spawn that failed says so here and has no pid. An error from a child that did start is a signal that
+    // could not be delivered, and its exit is still what is waited for
+    child.on('error', (error: NodeJS.ErrnoException) => {
+      if (child.pid === undefined) settle({ ok: false, failure: { kind: 'not-started', error } });
+    });
+    // `close` waits for the pipes, which a process the child left running holds open. Once the child was ended
+    // from here there is nothing more to read that anyone asked for
+    child.on('exit', () => {
+      if (ended === undefined) return;
+      child.stdout?.destroy();
+      child.stderr?.destroy();
+    });
+    child.on('close', (exitCode, exitSignal) => {
+      const stdout = Buffer.concat(out).toString('utf8');
+      const stderr = Buffer.concat(err).toString('utf8');
+      if (ended !== undefined) settle({ ok: false, failure: { ...ended, stdout, stderr } });
+      else if (exitCode === 0) settle({ ok: true, stdout, stderr });
+      else settle({ ok: false, failure: { kind: 'exited', exitCode, signal: exitSignal, stdout, stderr } });
+    });
+
+    watch = watching({ idleMs, ceilingMs: cpuMs, fallbackMs: cpuMs }, (refusal) => {
+      ended ??= { kind: 'refused', refusal };
+      child.kill('SIGKILL');
+    });
+    signal?.addEventListener('abort', stop, { once: true });
+    child.stdin?.end(input);
+  });
+}

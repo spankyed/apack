@@ -361,13 +361,15 @@ export function integrationFor(
     const file = path.join(directory, 'apack.bash')
     return {
       // `--init-file` *replaces* the user's own startup file rather than adding to it, which is why ours
-      // sources theirs first: without that line an integrated shell is one with no configuration
+      // sources theirs first: without that line an integrated shell is one with no configuration. Theirs is
+      // `APACK_BASHRC` where that is set, as `ZDOTDIR` names zsh's: what a test of the app points at a file that
+      // is not there, so a terminal case times the app and not the developer's dotfiles (`appLaunchEnv`)
       args: ['--init-file', file],
       env: {},
       files: [{
         at: 'apack.bash',
         contents: `# Written by apack. Sources your own configuration first, then reports where it is and what it runs.\n`
-          + `${TAKE_KEY}\n[ -f "$HOME/.bashrc" ] && . "$HOME/.bashrc"\n${MARKS.bash}\n`,
+          + `${TAKE_KEY}\n[ -f "\${APACK_BASHRC:-$HOME/.bashrc}" ] && . "\${APACK_BASHRC:-$HOME/.bashrc}"\n${MARKS.bash}\n`,
       }],
       keyed: true,
     }

@@ -44,9 +44,12 @@ describe('pickAppRelease', () => {
     expect(pickAppRelease(onlyBeta, 'production')).toBeNull();
   });
 
-  it('refuses an incomplete latest release instead of substituting an older one', () => {
-    const picked = pickAppRelease([release('0.4.2', { checksum: false }), release('0.4.1')], 'production');
-    expect(picked).toBeNull();
+  // Each platform's workflow uploads separately, so the newest release can lack its checksum while it is published
+  it('passes over a newer release without its checksum, but never substitutes for a requested version', () => {
+    const published = [release('0.4.2', { checksum: false }), release('0.4.1')];
+
+    expect(pickAppRelease(published, 'production')?.version).toBe('0.4.1');
+    expect(pickAppRelease(published, 'production', '0.4.2')).toBeNull();
   });
 
   it('ignores a draft', () => {

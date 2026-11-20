@@ -1,10 +1,11 @@
 import type { Contract } from './contract.ts';
 import type { ApplicationHotkeys } from '@apackdev/sdk/types';
 import { broadcastToSurface, sendToSystem } from '../../../events.ts';
-import { assign, setup, fromCallback, fromPromise, type ErrorActorEvent } from 'xstate';
+import { assign, setup, fromCallback } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
 import { detectAllArrayChanges, errorMessage } from '@apackdev/sdk/utils/pure';
-import { _captureHostServices, _settingsAdmin as preferences } from '@apackdev/sdk/services';
+import { done, failed, fromOutcome, onOutcome, outcomeOf, type FailureOf, type Outcome } from '@apackdev/sdk/helpers';
+import { AppDataBusyError, _captureHostServices, _settingsAdmin as preferences } from '@apackdev/sdk/services';
 import type { HostRuntimeServices } from '@apackdev/sdk/runtime';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { splitRef, type FeatureRef } from '@apackdev/sdk/ids';
@@ -22,6 +23,21 @@ const appHotkeys = (document: SettingsDocument): ApplicationHotkeys =>
   (document.app as Partial<import('@apackdev/sdk/types').AppSettings> | undefined)?.hotkeys ?? {};
 
 const logger = createLogger('settings');
+
+/**
+ * How a reset of the app ended. The two failures are different facts about the user's data: `busy` is a reset
+ * that never began, and `partial` one that began and stopped, with some of the data and settings already gone.
+ */
+type ResetOutcome = Outcome<void,
+  | { readonly kind: 'busy'; readonly reason: string }
+  | { readonly kind: 'partial'; readonly error: unknown }>;
+
+/** The failure a reset's done event carries, of the kind the action reading it is wired to */
+function resetFailure<K extends FailureOf<ResetOutcome>['kind']>(event: { readonly type: string }, kind: K): Extract<FailureOf<ResetOutcome>, { kind: K }> {
+  const outcome = outcomeOf<ResetOutcome>(event);
+  if (outcome.ok || outcome.failure.kind !== kind) throw new Error(`Expected a reset that failed as ${kind}`);
+  return outcome.failure as Extract<FailureOf<ResetOutcome>, { kind: K }>;
+}
 
 /**
  * What a refusal answers with: the store's own reasons, which are the user's to fix rather than a system error,
@@ -89,7 +105,15 @@ export const settingsSystem = setup({
       return preferences().onChange(tell);
     }),
     // The host resets the whole app: stores, each pack's onInit and boot apply, migrations
-    resetAppActor: fromPromise(() => hostService('appData').reset()),
+    // Every way it ends is an outcome, so the machine leaves `resetting` by `onDone` whatever happened
+    resetAppActor: fromOutcome(async (): Promise<ResetOutcome> => {
+      try {
+        await hostService('appData').reset();
+        return done(undefined);
+      } catch (error) {
+        return failed(error instanceof AppDataBusyError ? { kind: 'busy', reason: error.message } : { kind: 'partial', error });
+      }
+    }),
   },
   guards: {
     canResetApp: ({ event }) => {
@@ -253,11 +277,16 @@ export const settingsSystem = setup({
       broadcastToSurface('settings', { type: 'APP_RESET_COMPLETE' });
     },
 
+    /** A reset that never began: the user is told why, and nothing is logged as having gone wrong */
+    refuseBusyReset: ({ event }) => {
+      const { reason } = resetFailure(event, 'busy');
+      broadcastToSurface('settings', { type: 'APP_RESET_FAILED', error: reason });
+    },
+
     onResetFailed: ({ event }) => {
-      const err = (event as unknown as ErrorActorEvent).error;
-      const message = errorMessage(err);
-      logger.error('Reset app failed', { error: err });
-      broadcastToSurface('settings', { type: 'APP_RESET_FAILED', error: message });
+      const { error } = resetFailure(event, 'partial');
+      logger.error('Reset app failed', { error });
+      broadcastToSurface('settings', { type: 'APP_RESET_FAILED', error: errorMessage(error) });
     },
 
   }),
@@ -322,16 +351,16 @@ export const settingsSystem = setup({
       on: whileBusy('The app is being reset. Change the settings once it has finished.'),
       invoke: {
         src: 'resetAppActor',
-        // Writes and pack changes made by the reset aren't told as changes: tellEveryFeature re-baselines once it ends,
-        // however it ends, since a reset that failed partway changed some of the data and settings already
-        onDone: {
-          target: 'idle',
-          actions: ['sendSettingsUpdate', 'tellEveryFeature', 'onResetComplete'],
-        },
-        onError: {
-          target: 'idle',
-          actions: ['sendSettingsUpdate', 'tellEveryFeature', 'onResetFailed'],
-        },
+        // Writes and pack changes made by the reset aren't told as changes: tellEveryFeature re-baselines once it has
+        // run, whether it finished or not, since a reset that failed partway changed some of the data and settings
+        // already. One that never began changed nothing, and has nothing to re-baseline
+        onDone: onOutcome<ResetOutcome>()({
+          done: { target: 'idle', actions: ['sendSettingsUpdate', 'tellEveryFeature', 'onResetComplete'] },
+          failed: {
+            busy: { target: 'idle', actions: 'refuseBusyReset' },
+            partial: { target: 'idle', actions: ['sendSettingsUpdate', 'tellEveryFeature', 'onResetFailed'] },
+          },
+        }),
       },
     },
   },

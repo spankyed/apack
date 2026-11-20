@@ -1,5 +1,6 @@
 /**
- * Tests for the child-env scrubber used by `execOnce` and `spawnStream`.
+ * Tests for the child-env scrubber used by `execOnce` and `spawnStream`, and for how
+ * `execOnce` reports each way its child can fail.
  *
  * The scrub prevents an `ANTHROPIC_API_KEY` in the API server's environment
  * (loaded from `.env` by dotenv) from leaking into the Claude CLI subprocess,
@@ -7,7 +8,8 @@
  * and fail with "Invalid API key · Fix external API key".
  */
 
-import { buildChildEnv } from '#features/code/be/services/claude-code/runner.ts'
+import { ClaudeExitError, ClaudeTimeoutError } from '#features/code/be/services/claude-code/errors.ts'
+import { buildChildEnv, execOnce } from '#features/code/be/services/claude-code/runner.ts'
 
 describe('buildChildEnv', () => {
   const originalKey = process.env.ANTHROPIC_API_KEY
@@ -60,5 +62,41 @@ describe('buildChildEnv', () => {
     const env = buildChildEnv(override)
     expect(env.FOO).toBe('bar')
     expect(env.ENABLE_TOOL_SEARCH).toBe('0')
+  })
+})
+
+describe('execOnce', () => {
+  /** Node stands in for the CLI: what is under test is how each way a child can fail reaches the caller */
+  const cli = { cliPath: process.execPath }
+
+  it('answers with what the child wrote', async () => {
+    const result = await execOnce(['-e', "process.stdout.write('1.2.3')"], cli)
+    expect(result).toEqual({ stdout: '1.2.3', stderr: '', exitCode: 0 })
+  })
+
+  it('throws a ClaudeExitError carrying the exit code and stderr', async () => {
+    const failed = execOnce(['-e', "process.stderr.write('not signed in'); process.exitCode = 2"], cli)
+    await expect(failed).rejects.toMatchObject({ code: 'EXIT_NONZERO', exitCode: 2, stderr: 'not signed in' })
+    await expect(failed).rejects.toBeInstanceOf(ClaudeExitError)
+  })
+
+  it('throws a ClaudeCliNotFoundError naming the path it tried', async () => {
+    await expect(execOnce(['--version'], { cliPath: '/no/such/claude' }))
+      .rejects.toMatchObject({ code: 'CLI_NOT_FOUND', attemptedPath: '/no/such/claude' })
+  })
+
+  // Each waiting child ends itself, so one that was not stopped is gone soon after its case
+  const waits = ['-e', 'setTimeout(() => {}, 60_000)']
+
+  it('throws a ClaudeTimeoutError when the child outlives its timeout', async () => {
+    await expect(execOnce(waits, { ...cli, timeoutMs: 200 })).rejects.toBeInstanceOf(ClaudeTimeoutError)
+  })
+
+  it("throws a ClaudeAbortError carrying the caller's reason when the caller stops it", async () => {
+    const stopping = new AbortController()
+    const run = execOnce(waits, { ...cli, signal: stopping.signal })
+    const reason = new Error('the user closed the panel')
+    stopping.abort(reason)
+    await expect(run).rejects.toMatchObject({ code: 'ABORTED', cause: reason })
   })
 })

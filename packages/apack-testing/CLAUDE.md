@@ -483,7 +483,16 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
   shutdown, the kept profile's writes among it), or exited with a process it started holding its output. The
   failure names the app's output log too. The app's output closing is what ends the
   wait, seen on its process: that is when Chromium's helpers have gone too, which its exit alone is not, and
-  Playwright's own `close()` is not waited for past it.
+  Playwright's own `close()` is not waited for past it. That close is the exported `closeApp(app, { userDataDir,
+  keepProfile })`.
+- **A spec that needs an app of its own starts it with `launchApp({ userDataDir, environment?, args?, logFile? })`**,
+  never with Playwright's `_electron` (the `electron-launch` repo check refuses that). It starts the app as the
+  fixture does, captures its output and watches its quit, and hands back the app, its shell's window and a
+  `close({ keepProfile })` that is `closeApp`. `keepProfile` is whether a later launch reads what Chromium writes:
+  one that reads only what the backend stored does not, and waiting for the profile under load is a wait of minutes
+  on Chromium, which is how each spec that once launched its own came to fail. A test or hook that closes one turns
+  its clock off (`test.setTimeout(0)`), the close being bounded by the app's work. `environment: 'development'` is
+  for what only a development app has, the debug port among it (`attach-parity.spec.ts`).
 
 ## API reference
 
@@ -506,7 +515,7 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 | `getContext()` | Returns `{ activeSurfaceId, surfaceIds }` |
 | `sendEvent(event)` | Send any event object to `applicationState` |
 | `report(name, value)` | Write `.apack/drive/results/{name}.json` and print one `[drive:report] {name} {json}` line, for a driving run whose answer is meant to be read by a program rather than watched. Returns the path |
-| `waitForState(check, ms?)` | Wait for dot-separated state path (e.g. `'running.connected'`), default 10s |
+| `waitForState(check, ms?)` | Wait for dot-separated state path (e.g. `'running.connected'`), default 30s, the suite's assertion backstop |
 | `waitForSurface(surfaceId, ms?)` | Wait for a surface to appear in the surface list, default 30s |
 | `send(system, event)` | Send a backend system an event as this window does, the system named as the pack's code names one. Resolves once the API accepted it and rejects with its refusal. Names no return address, so a `reply` to it goes nowhere |
 | `ask(system, event)` | Send as `send` does and resolve with the event the system's `reply` answers it with, matched by the call it was sent under. Waits while the app works, not for a fixed time |

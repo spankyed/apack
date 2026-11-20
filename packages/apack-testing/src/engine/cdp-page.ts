@@ -116,6 +116,18 @@ export async function findWindow<T extends AttachTargets>(browser: T, timeoutMs:
 }
 
 /**
+ * What a failed connect says. Only a refused connection is "no app answered": that is the ordinary miss, a session
+ * file outliving the app that wrote it. Anything else happened to an app that did answer — a page closing while
+ * Playwright set it up, among them — and saying nobody answered sends whoever reads it to the wrong place.
+ */
+export function attachFailureMessage(debugPort: number, error: unknown): string {
+  const reason = error instanceof Error ? error.message : String(error);
+  return /ECONNREFUSED/.test(reason)
+    ? `No app answered the debug port ${debugPort}: ${reason}`
+    : `Attaching over the debug port ${debugPort} failed: ${reason}`;
+}
+
+/**
  * Attaches to an app on `debugPort` and returns its main window.
  *
  * A connection refused is the ordinary case rather than a fault — a session file outlives the app that
@@ -127,7 +139,7 @@ export async function attachToApp({ debugPort, timeoutMs = 15_000 }: AttachOptio
   try {
     browser = await connect.connectOverCDP(`http://127.0.0.1:${debugPort}`);
   } catch (error) {
-    throw new Error(`No app answered the debug port ${debugPort}: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(attachFailureMessage(debugPort, error));
   }
   try {
     const page = await findWindow(browser, timeoutMs);

@@ -134,6 +134,15 @@ export interface BusMessage {
 }
 
 // @public
+export function closeApp(app: ElectronApplication, input: CloseAppOptions): Promise<void>;
+
+// @public
+export interface CloseAppOptions {
+    readonly keepProfile: boolean;
+    readonly userDataDir: string;
+}
+
+// @public
 export function createAppDriver(page: Page, screenshotDir: string, appPid?: number): AppDriver;
 
 // @public (undocumented)
@@ -175,6 +184,26 @@ export { expect }
 
 // @public
 export function findWindow<T extends AttachTargets>(browser: T, timeoutMs: number): Promise<Page>;
+
+// @public
+export function launchApp(input: LaunchAppOptions): Promise<LaunchedApp>;
+
+// @public
+export interface LaunchAppOptions {
+    readonly args?: readonly string[];
+    readonly environment?: 'test' | 'development';
+    readonly logFile?: string;
+    readonly userDataDir: string;
+}
+
+// @public
+export interface LaunchedApp {
+    readonly app: ElectronApplication;
+    close(options: {
+        readonly keepProfile: boolean;
+    }): Promise<void>;
+    readonly page: Page;
+}
 
 // @public
 export interface PackRuntime {
