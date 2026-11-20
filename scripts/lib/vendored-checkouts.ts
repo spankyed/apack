@@ -95,13 +95,22 @@ export function vendoredStates(repoRoot: string): VendoredState[] {
   });
 }
 
-/** A checkout's HEAD and whether it is dirty, or absences when it is not a git checkout */
+/**
+ * A checkout's HEAD and whether it is dirty, or absences when it is not a git checkout of its own.
+ *
+ * **Of its own: git answers for a plain directory from whatever repository holds it.** The Linux test container
+ * copies a vendored checkout's files without its `.git` into the repository's own tree, where `git rev-parse HEAD`
+ * walked up and answered the repository's commit: every run there said each such checkout was off its pin, at
+ * whatever commit was being tested, and keyed its steps on that.
+ */
 function gitStateOf(checkout: string): { head: string | undefined; dirty: boolean; changes?: string } {
   const git = (args: readonly string[]): string | undefined => {
     try {
       return execFileSync('git', ['-C', checkout, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     } catch { return undefined; }
   };
+  const top = git(['rev-parse', '--show-toplevel']);
+  if (top === undefined || fs.realpathSync(top) !== fs.realpathSync(checkout)) return { head: undefined, dirty: false };
   const head = git(['rev-parse', 'HEAD']);
   if (head === undefined) return { head: undefined, dirty: false };
   // Every untracked file by name, where the default lists a new directory as one row
