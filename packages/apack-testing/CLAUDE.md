@@ -484,8 +484,15 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
   failure names the app's output log too. The app's output closing is what ends the
   wait, seen on its process: that is when Chromium's helpers have gone too, which its exit alone is not, and
   Playwright's own `close()` is not waited for past it. That close is the exported `closeApp(app, { userDataDir,
-  keepProfile })`, so a spec that launches its own app (`attach-parity.spec.ts`) ends it the same way, from a hook
-  whose clock it turns off (`test.setTimeout(0)`).
+  keepProfile })`.
+- **A spec that needs an app of its own starts it with `launchApp({ userDataDir, environment?, args?, logFile? })`**,
+  never with Playwright's `_electron` (the `electron-launch` repo check refuses that). It starts the app as the
+  fixture does, captures its output and watches its quit, and hands back the app, its shell's window and a
+  `close({ keepProfile })` that is `closeApp`. `keepProfile` is whether a later launch reads what Chromium writes:
+  one that reads only what the backend stored does not, and waiting for the profile under load is a wait of minutes
+  on Chromium, which is how each spec that once launched its own came to fail. A test or hook that closes one turns
+  its clock off (`test.setTimeout(0)`), the close being bounded by the app's work. `environment: 'development'` is
+  for what only a development app has, the debug port among it (`attach-parity.spec.ts`).
 
 ## API reference
 

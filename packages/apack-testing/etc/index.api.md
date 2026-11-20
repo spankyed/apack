@@ -186,6 +186,26 @@ export { expect }
 export function findWindow<T extends AttachTargets>(browser: T, timeoutMs: number): Promise<Page>;
 
 // @public
+export function launchApp(input: LaunchAppOptions): Promise<LaunchedApp>;
+
+// @public
+export interface LaunchAppOptions {
+    readonly args?: readonly string[];
+    readonly environment?: 'test' | 'development';
+    readonly logFile?: string;
+    readonly userDataDir: string;
+}
+
+// @public
+export interface LaunchedApp {
+    readonly app: ElectronApplication;
+    close(options: {
+        readonly keepProfile: boolean;
+    }): Promise<void>;
+    readonly page: Page;
+}
+
+// @public
 export interface PackRuntime {
     // (undocumented)
     readonly buildRevision: string;

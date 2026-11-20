@@ -1,10 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createRequire } from 'node:module';
-import { test, expect, type ElectronApplication } from '@playwright/test';
-import { waitForAppReady } from '@apackdev/testing';
-import { appLaunchEnv } from '../../../packages/apack-testing/src/launch-env.ts';
+import { test, expect } from '@playwright/test';
+import { launchApp, waitForAppReady, type LaunchedApp } from '@apackdev/testing';
 import { readSettingsOverrides } from '@apackdev/host/database';
 import { installPackFromLocal } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -14,20 +12,16 @@ import { writeData } from '../../../packages/apack-host/tests/database/fixtures.
 
 const root = path.resolve(import.meta.dirname, '../../..');
 
-test('repairs invalid persisted settings in the app and starts packs only after reopening', async ({ playwright }, testInfo) => {
+test('repairs invalid persisted settings in the app and starts packs only after reopening', async () => {
+  const testInfo = test.info();
+  // Each close is bounded by the app's work rather than this clock (`launchApp`'s, which is `closeApp`)
+  test.setTimeout(0);
   const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-recovery-app-'));
   const unavailable = { 'unavailable/notes': { keep: true } };
-  let app: ElectronApplication | undefined;
+  let app: LaunchedApp | undefined;
   const launch = async () => {
-    app = await playwright._electron.launch({ executablePath: createRequire(import.meta.url)('electron'), args: [root], cwd: root,
-      env: appLaunchEnv(process.env, userDataDir) });
-    const log = fs.createWriteStream(testInfo.outputPath(`app-${Date.now()}.log`));
-    app.process().stdout?.pipe(log, { end: false });
-    app.process().stderr?.pipe(log, { end: false });
-    app.once('close', () => log.end());
-    await expect.poll(() => app!.windows().some(page => page.url().includes('/renderer/dist/index.html')),
-      { message: 'main renderer, rather than the splash window' }).toBe(true);
-    return app.windows().find(page => page.url().includes('/renderer/dist/index.html'))!;
+    app = await launchApp({ userDataDir, logFile: testInfo.outputPath(`app-${Date.now()}.log`) });
+    return app.page;
   };
   try {
     // Model an existing profile: its installed declaration must be discoverable even when saved
@@ -49,7 +43,8 @@ test('repairs invalid persisted settings in the app and starts packs only after 
     // A fresh window runtime must retain the restart requirement, rather than try to run a host-only shell.
     await page.reload();
     await expect(page.getByRole('heading', { name: 'Settings repaired' })).toBeVisible();
-    await app!.close();
+    // The next launch reads what the backend stored, not Chromium's profile
+    await app!.close({ keepProfile: false });
     app = undefined;
     expect(readSettingsOverrides(userDataDir)).toEqual({ features: unavailable });
 
@@ -59,7 +54,7 @@ test('repairs invalid persisted settings in the app and starts packs only after 
     await expect.poll(() => restarted.evaluate(() => (window as any).applicationState
       .getSnapshot().context.acceptedPackRuntimes['default-setup'])).toBeTruthy();
   } finally {
-    await app?.close();
+    await app?.close({ keepProfile: false });
     fs.rmSync(userDataDir, { recursive: true, force: true });
   }
 });

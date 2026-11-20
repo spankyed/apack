@@ -11,17 +11,14 @@
 // measured, by doing that. The choice among targets is held by `apack-testing`'s `cdp-page.spec.ts`
 // against a fake that presents several on purpose.
 //
-// **It launches its own app rather than using the fixture, and must.** `appLaunchEnv` sets
-// `PLAYWRIGHT_TEST=true`, so a fixture-launched app resolves the `test` environment, and the debug port is
-// `development` only. So this is the one spec here that drives `_electron.launch` directly, with its own
-// temp data dir.
+// **It launches its own app rather than using the fixture, and must.** A fixture-launched app resolves the `test`
+// environment, and the debug port is `development` only, so it asks `launchApp` for a development app on a temp data
+// dir of its own.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { _electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { closeApp, createAppDriver, attachToApp, waitForAppReady, type AttachedApp } from '@apackdev/testing';
-
-const APP_ROOT = path.resolve(import.meta.dirname, '../../..');
+import { expect, test, type Page } from '@playwright/test';
+import { createAppDriver, attachToApp, launchApp, waitForAppReady, type AttachedApp, type LaunchedApp } from '@apackdev/testing';
 
 /**
  * The port Chromium picked, read here rather than imported.
@@ -43,42 +40,23 @@ async function devToolsPort(dataDir: string, timeoutMs = 15_000): Promise<number
   throw new Error(`No debug port appeared in ${dataDir} within ${timeoutMs}ms`);
 }
 
-/** The main window among the app's targets, by the same predicate the fixture and the attach path use. */
-async function mainWindow(app: ElectronApplication): Promise<Page> {
-  const deadline = Date.now() + 45_000;
-  while (Date.now() < deadline) {
-    for (const candidate of app.windows()) {
-      const has = await candidate.evaluate(() => !!(window as { applicationState?: unknown }).applicationState).catch(() => false);
-      if (has) return candidate;
-    }
-    await app.waitForEvent('window', { timeout: 2_000 }).catch(() => {});
-  }
-  throw new Error('No window with applicationState appeared');
-}
-
 test.describe('a connected page and a launched one', () => {
-  let app: ElectronApplication;
+  let app: LaunchedApp | undefined;
   let launched: Page;
   let attached: AttachedApp;
   let dataDir: string;
 
   test.beforeAll(async () => {
     dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-attach-'));
-    app = await _electron.launch({
-      executablePath: path.join(APP_ROOT, 'node_modules', 'electron', 'dist', 'Electron.app', 'Contents', 'MacOS', 'Electron'),
-      args: [APP_ROOT, '--remote-debugging-port=0'],
-      cwd: APP_ROOT,
-      // `development`, which is what the debug port is for, and a data dir of this spec's own. Playwright's
-      // own `PLAYWRIGHT_TEST` is deliberately not set: it would make the app resolve `test` instead.
-      env: { ...process.env, APACK_ENV: 'development', APACK_USER_DATA_DIR: dataDir, PLAYWRIGHT_VISIBLE: '' },
-    });
-    launched = await mainWindow(app);
+    // `development`, which is what the debug port is for
+    app = await launchApp({ userDataDir: dataDir, environment: 'development', args: ['--remote-debugging-port=0'] });
+    launched = app.page;
     await waitForAppReady(launched);
     // Attached once the splash has gone. The app closes it after the main window shows, and a connection made while
     // it is being destroyed fails: Playwright's runner sets up every page of a new CDP context, and that one closes
     // under it ("Target page, context or browser has been closed"), which a busy machine makes likely. Only a launch
     // under Playwright hides the splash, and this app is launched as development, so it is shown
-    await Promise.all(app.windows().filter((window) => window !== launched)
+    await Promise.all(app.app.windows().filter((window) => window !== launched)
       .map((window) => window.isClosed() ? undefined : window.waitForEvent('close', { timeout: 0 })));
 
     // Read rather than assumed: `--remote-debugging-port=0` means Chromium picks one, and the number it
@@ -91,7 +69,7 @@ test.describe('a connected page and a launched one', () => {
     // this hook deletes next, and ran past the hook's clock after every test had passed
     test.setTimeout(0);
     await attached?.detach();
-    if (app) await closeApp(app, { userDataDir: dataDir, keepProfile: false });
+    await app?.close({ keepProfile: false });
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 
