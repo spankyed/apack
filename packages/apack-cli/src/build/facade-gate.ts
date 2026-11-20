@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import { packageName } from '@apackdev/host/build/specifiers';
 import { SOURCE_CONDITION } from '@apackdev/host/build/source-resolution';
+import { SHARED_INSTANCE_PACKAGES } from '@apackdev/host/build/shared-deps';
 import { createRequire, isBuiltin } from 'node:module';
 import * as path from 'node:path';
 import ts from 'typescript';
@@ -12,7 +13,8 @@ const DECLARATION_EXTENSIONS: readonly string[] = [ts.Extension.Dts, ts.Extensio
 
 
 /**
- * Packages a facade may import: every dependent has them. @apackdev/* packages, @apackdev/sdk's peer
+ * Packages a facade may import: every dependent has them. @apackdev/* packages, the shared-instance packages
+ * (`@elmdb/ears`, which the SDK brings and whose types the SDK's are made of), @apackdev/sdk's peer
  * dependencies (as the pack resolves the SDK) and Node's built-in modules.
  *
  * **"Every dependent has them" is checked, not assumed**, which is worth knowing before deriving it again: a
@@ -25,13 +27,16 @@ const DECLARATION_EXTENSIONS: readonly string[] = [ts.Extension.Dts, ts.Extensio
  * installs them for a pack that never names one; `xstate` would travel the identical route if a contract derived
  * its state from a machine, which is what `contract-leaves` is there to stop.
  */
+const SHARED = new Set<string>(SHARED_INSTANCE_PACKAGES);
+
 function allowedPackages(packDir: string): { allows: (name: string) => boolean; description: string } {
   const manifest = createRequire(path.join(packDir, 'package.json')).resolve('@apackdev/sdk/package.json');
   const { peerDependencies = {} } = JSON.parse(fs.readFileSync(manifest, 'utf-8')) as { peerDependencies?: Record<string, string> };
   const peers = Object.keys(peerDependencies);
   return {
-    allows: (name) => name.startsWith('@apackdev/') || peers.includes(name) || isBuiltin(name),
-    description: `@apackdev/* packages, @apackdev/sdk's peer dependencies (${peers.join(', ')}) and Node built-ins`,
+    allows: (name) => name.startsWith('@apackdev/') || SHARED.has(name) || peers.includes(name) || isBuiltin(name),
+    description: `@apackdev/* packages, ${[...SHARED].filter((pkg) => !pkg.startsWith('@apackdev/')).join(', ')}, `
+      + `@apackdev/sdk's peer dependencies (${peers.join(', ')}) and Node built-ins`,
   };
 }
 

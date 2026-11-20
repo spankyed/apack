@@ -66,7 +66,7 @@ describe('facade gate', () => {
       'src/__generated__/pack-types.ts': "import type { browserService } from '../browser.ts';\nexport type Services = { browser: typeof browserService };\n",
     });
     expect(problems).toEqual([
-      expect.stringMatching(/^dist\/types\/pack-types\.d\.ts:1:1 imports "playwright", which dependents don't have: facades may import only @apackdev\/\* packages, @apackdev\/sdk's peer dependencies \([^)]*\bxstate\b[^)]*\) and Node built-ins \(reached from: Services\)$/),
+      expect.stringMatching(/^dist\/types\/pack-types\.d\.ts:1:1 imports "playwright", which dependents don't have: facades may import only @apackdev\/\* packages, @elmdb\/ears, @apackdev\/sdk's peer dependencies \([^)]*\bxstate\b[^)]*\) and Node built-ins \(reached from: Services\)$/),
     ]);
   });
 
