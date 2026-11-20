@@ -20,6 +20,39 @@ import { ExecutionContext, FieldMapping, RunNode, RunNodeId, RunStatus, RunTree,
 import { BinaryOperator } from '@apackdev/sdk/utils';
 import { z } from 'zod';
 
+/**
+ * A window's writes to its actions, each answered once: that it landed, or why it was refused. What a write changed
+ * reaches every window through the views.
+ */
+type ActionAsks = {
+    CREATE_ACTION: {
+        ask: {
+            label: string;
+            input: Record<string, any>;
+            actionFn: string;
+            output?: any;
+            description?: string;
+            category?: string;
+        };
+    };
+    UPDATE_ACTION: {
+        ask: {
+            actionId: string;
+            label?: string;
+            input?: Record<string, any>;
+            actionFn?: string;
+            output?: any;
+            description?: string;
+            category?: string;
+        };
+    };
+    DELETE_ACTION: {
+        ask: {
+            actionId: string;
+        };
+    };
+};
+
 interface ActionNode extends NodeBase {
     nodeType: 'action';
     mode?: 'code' | 'template';
@@ -63,6 +96,8 @@ interface ActionsContext {
     /** How many actions the list shows: a page more each time the user scrolls to its end */
     listLimit: number;
     selectedCategories: string[];
+    /** Why the last of this window's writes was refused, until the user dismisses it */
+    writeError: string | null;
     actionsImport: {
         status: 'error' | 'idle' | 'importing' | 'success';
         errors: string[];
@@ -1031,16 +1066,19 @@ type Contract$d = {
 type Contract$e = {
     incoming: IncomingPromptEvents;
     outgoing: OutgoingPromptEvents;
+    asks: PromptAsks;
 };
 
 type Contract$f = {
     incoming: IncomingActionEvents;
     outgoing: OutgoingActionEvents;
+    asks: ActionAsks;
 };
 
 type Contract$g = {
     incoming: IncomingFlowsEvents;
     outgoing: OutgoingFlowsEvents;
+    asks: FlowsAsks;
 };
 
 type Contract$h = {
@@ -1059,6 +1097,7 @@ type Contract$i = {
 type Contract$j = {
     incoming: IncomingNoteEvents;
     outgoing: OutgoingNotesEvents;
+    asks: NoteAsks;
 };
 
 type Contract$k = {
@@ -1543,6 +1582,109 @@ interface FlowRunNodeData {
     }>;
 }
 
+/**
+ * What a window asks the flows system, each answered once: the editor applies its own edits at once and holds the
+ * flow's view behind its unanswered writes, so every write is an ask. A create answers with what it made, for the
+ * window that asked to open or to put in place of the one it drew; the model catalog is asked as the surface starts.
+ */
+type FlowsAsks = {
+    /** The models the editor offers */
+    GET_MODEL_CATALOG: {
+        answer: ModelCatalog;
+    };
+    /** Answered with the flow made, which only the window that asked opens; its id is minted by the create */
+    CREATE_FLOW: {
+        answer: {
+            flowId: EARS.EntityId;
+        };
+    };
+    DELETE_FLOW: {
+        ask: {
+            flowId: string;
+        };
+    };
+    UPDATE_FLOW_LABEL: {
+        ask: {
+            flowId: string;
+            label: string;
+        };
+    };
+    /** Answered with the node made, for the editor to put in place of the one it added under `tempId` */
+    CREATE_NODE: {
+        ask: {
+            flowId: string;
+            tempId: string;
+            nodeData: any;
+        };
+        answer: {
+            tempId: string;
+            nodeId: EARS.EntityId;
+            node: NodeEntity;
+        };
+    };
+    UPDATE_NODE: {
+        ask: {
+            flowId: string;
+            nodeId: string;
+            nodeData: any;
+        };
+    };
+    DELETE_NODE: {
+        ask: {
+            flowId: string;
+            nodeId: string;
+        };
+    };
+    /** Answered with the relation made, for the editor to give the edge it drew */
+    CREATE_EDGE: {
+        ask: {
+            flowId: string;
+            sourceId: string;
+            targetId: string;
+            sourceHandle?: string;
+            targetHandle?: string;
+        };
+        answer: {
+            sourceId: EARS.EntityId;
+            targetId: EARS.EntityId;
+            relId: EARS.RelationId;
+            sourceHandle?: string;
+            targetHandle?: string;
+        };
+    };
+    DELETE_EDGE: {
+        ask: {
+            flowId: string;
+            edgeId: string;
+        };
+    };
+    UPDATE_EDGE: {
+        ask: {
+            flowId: string;
+            edgeId: string;
+            source: string;
+            target: string;
+            sourceHandle?: string;
+            targetHandle?: string;
+        };
+    };
+    REINDEX_HANDLES: {
+        ask: {
+            flowId: string;
+            nodeId: string;
+            prefix: string;
+            index: number;
+            direction: -1 | 1;
+        };
+    };
+    /** Makes a flow the root flow the brain runs (its root role), or, with null, leaves no flow the root */
+    SET_ROOT_FLOW: {
+        ask: {
+            flowId: string | null;
+        };
+    };
+};
+
 interface FlowsContext {
     /** A flow the user asked to open, until its graph's view reads it; what the user does next cancels it */
     pendingFlow?: {
@@ -1855,26 +1997,6 @@ interface ImageReference {
 }
 
 type IncomingActionEvents = {
-    type: 'CREATE_ACTION';
-    label: string;
-    input: Record<string, any>;
-    actionFn: string;
-    output?: any;
-    description?: string;
-    category?: string;
-} | {
-    type: 'UPDATE_ACTION';
-    actionId: string;
-    label?: string;
-    input?: Record<string, any>;
-    actionFn?: string;
-    output?: any;
-    description?: string;
-    category?: string;
-} | {
-    type: 'DELETE_ACTION';
-    actionId: string;
-} | {
     type: 'IMPORT_ACTIONS';
     actions: any;
 } | {
@@ -2286,71 +2408,14 @@ type IncomingExplorerEvents = {
     targetDir: string;
 };
 
-type IncomingFlowsEvents = 
-/** The models the editor offers: answered with \`MODEL_CATALOG_READ\` */
-{
-    type: 'GET_MODEL_CATALOG';
-} | {
-    type: 'CREATE_FLOW';
-} | {
-    type: 'DELETE_FLOW';
-    flowId: string;
-} | {
-    type: 'UPDATE_FLOW_LABEL';
-    flowId: string;
-    label: string;
-} | {
-    type: 'CREATE_NODE';
-    flowId: string;
-    tempId: string;
-    nodeData: any;
-} | {
-    type: 'UPDATE_NODE';
-    flowId: string;
-    nodeId: string;
-    nodeData: any;
-} | {
-    type: 'DELETE_NODE';
-    flowId: string;
-    nodeId: string;
-} | {
-    type: 'CREATE_EDGE';
-    flowId: string;
-    sourceId: string;
-    targetId: string;
-    sourceHandle?: string;
-    targetHandle?: string;
-} | {
-    type: 'DELETE_EDGE';
-    flowId: string;
-    edgeId: string;
-} | {
-    type: 'UPDATE_EDGE';
-    flowId: string;
-    edgeId: string;
-    source: string;
-    target: string;
-    sourceHandle?: string;
-    targetHandle?: string;
-} | {
+/** What a window sends the flows system and is answered for by an outcome every window hears of when nobody asked */
+type IncomingFlowsEvents = {
     type: 'IMPORT_DSL';
     dsl: any;
 } | {
     type: 'EXPORT_DSL';
     directory: string;
     flowId?: string;
-} | {
-    type: 'REINDEX_HANDLES';
-    flowId: string;
-    nodeId: string;
-    prefix: string;
-    index: number;
-    direction: -1 | 1;
-}
-/** Makes a flow the root flow the brain runs (its root role), or, with null, leaves no flow the root */
- | {
-    type: 'SET_ROOT_FLOW';
-    flowId: string | null;
 };
 
 type IncomingGitHubEvents = 
@@ -2394,51 +2459,10 @@ type IncomingLogEvents = {
     type: 'GET_LOGS';
 };
 
+/** What a window tells the notes system and is not answered for, and the import and export every window hears of */
 type IncomingNoteEvents = {
-    type: 'CREATE_NOTE';
-    title: string;
-    content?: string;
-    icon?: string | null;
-    parentId?: string;
-    skipContentSync?: boolean;
-    noteType?: 'document' | 'task' | 'tasklist';
-    completed?: boolean;
-    displayOrder?: number;
-} | {
-    type: 'UPDATE_NOTE';
-    id: string;
-    title?: string;
-    content?: string;
-    icon?: string | null;
-    completed?: boolean;
-    hideCompletedChildren?: boolean;
-    favorite?: boolean;
-} | {
-    type: 'DELETE_NOTE';
-    id: string;
-} | {
-    type: 'SOFT_DELETE_NOTE';
-    id: string;
-} | {
-    type: 'RESTORE_NOTE';
-    id: string;
-} | {
-    type: 'MOVE_NOTE';
-    ids: string[];
-    newParentId: string | null;
-} | {
-    type: 'REORDER_NOTE';
-    id: string;
-    newParentId: string | null;
-    newIndex: number;
-} | {
     type: 'VIEW_NOTE';
     id: string;
-} | {
-    type: 'PERMANENTLY_DELETE_NOTE';
-    id: string;
-} | {
-    type: 'EMPTY_TRASH';
 } | {
     type: 'IMPORT_NOTES';
     directory: string;
@@ -2449,26 +2473,6 @@ type IncomingNoteEvents = {
 };
 
 type IncomingPromptEvents = {
-    type: 'CREATE_PROMPT';
-    label: string;
-    inputs: Record<string, any>;
-    templateFn: string;
-    outputSchema?: any;
-    description?: string;
-    category?: string;
-} | {
-    type: 'UPDATE_PROMPT';
-    promptId: string;
-    label?: string;
-    inputs?: Record<string, any>;
-    templateFn?: string;
-    outputSchema?: any;
-    description?: string;
-    category?: string;
-} | {
-    type: 'DELETE_PROMPT';
-    promptId: string;
-} | {
     type: 'IMPORT_PROMPTS';
     prompts: any;
 } | {
@@ -3287,6 +3291,74 @@ interface NormalizedRunNodeTree {
     childrenById: Record<string, string[]>;
 }
 
+/**
+ * A window's writes to its notes, each answered once: the surface applies its own edits at once and holds the notes'
+ * views while any of its writes is unanswered (`ViewWrites`), so every write is an ask. Creating one answers with the
+ * note it made, for the window that asked to open.
+ */
+type NoteAsks = {
+    CREATE_NOTE: {
+        ask: {
+            title: string;
+            content?: string;
+            icon?: string | null;
+            parentId?: string;
+            skipContentSync?: boolean;
+            noteType?: 'document' | 'task' | 'tasklist';
+            completed?: boolean;
+            displayOrder?: number;
+        };
+        answer: {
+            note?: NoteSummary;
+        };
+    };
+    UPDATE_NOTE: {
+        ask: {
+            id: string;
+            title?: string;
+            content?: string;
+            icon?: string | null;
+            completed?: boolean;
+            hideCompletedChildren?: boolean;
+            favorite?: boolean;
+        };
+    };
+    DELETE_NOTE: {
+        ask: {
+            id: string;
+        };
+    };
+    SOFT_DELETE_NOTE: {
+        ask: {
+            id: string;
+        };
+    };
+    RESTORE_NOTE: {
+        ask: {
+            id: string;
+        };
+    };
+    MOVE_NOTE: {
+        ask: {
+            ids: string[];
+            newParentId: string | null;
+        };
+    };
+    REORDER_NOTE: {
+        ask: {
+            id: string;
+            newParentId: string | null;
+            newIndex: number;
+        };
+    };
+    PERMANENTLY_DELETE_NOTE: {
+        ask: {
+            id: string;
+        };
+    };
+    EMPTY_TRASH: {};
+};
+
 interface NoteDTO {
     id: string;
     title: string;
@@ -4094,49 +4166,8 @@ type OutgoingExplorerEvents = {
     };
 };
 
-/**
- * What the flows system sends: the model catalog when asked to publish, and the answers to a window's writes. The
- * flows themselves are its views.
- */
-type OutgoingFlowsEvents = 
-/** The models the editor offers, answered to the window that asked as its surface starts */
-{
-    type: 'MODEL_CATALOG_READ';
-    data: ModelCatalog;
-}
-/**
- * The flow *you* asked to create, answered to the window that asked, which then opens it. Its id is minted by the
- * create, so nothing the asker sent could identify it.
- */
- | {
-    type: 'FLOW_OPENED';
-    flowId: EARS.EntityId;
-}
-/** The node a `CREATE_NODE` made, for the editor to put in place of the one it added under `tempId` */
- | {
-    type: 'NODE_CREATED';
-    tempId: string;
-    nodeId: EARS.EntityId;
-    node: NodeEntity;
-}
-/** The relation a `CREATE_EDGE` made, for the editor to give the edge it drew */
- | {
-    type: 'EDGE_CREATED';
-    sourceId: EARS.EntityId;
-    targetId: EARS.EntityId;
-    relId: EARS.RelationId;
-    sourceHandle?: string;
-    targetHandle?: string;
-}
-/** Any other write landed */
- | {
-    type: 'FLOW_WRITTEN';
-}
-/** A write was refused, and why: the editor puts back the flow as stored */
- | {
-    type: 'FLOW_WRITE_FAILED';
-    error: string;
-} | {
+/** What the flows system sends beside its answers: an import's or an export's outcome. The flows themselves are its views */
+type OutgoingFlowsEvents = {
     type: 'DSL_IMPORTED';
     flowIds: EARS.EntityId[];
     errors?: string[];
@@ -4217,25 +4248,8 @@ type OutgoingLogsEvents = {
     type: 'LOGS_CLEARED';
 };
 
-/**
- * What the notes system sends: the answers to a window's writes, and an import's or an export's outcome. The notes
- * themselves are its views.
- */
-type OutgoingNotesEvents = 
-/** The note a `CREATE_NOTE` made, for the window that asked to open */
-{
-    type: 'NOTE_CREATED';
-    note: NoteSummary;
-}
-/** Any other write landed */
- | {
-    type: 'NOTE_WRITTEN';
-}
-/** A write was refused, and why: the window puts back the notes as stored */
- | {
-    type: 'NOTE_WRITE_FAILED';
-    error: string;
-} | {
+/** What the notes system sends beside its answers: an import's or an export's outcome. The notes themselves are its views */
+type OutgoingNotesEvents = {
     type: 'NOTES_IMPORTED';
     count: number;
     errors?: string[];
@@ -5025,6 +5039,39 @@ type Predicate = {
 /** The commands whose progress the window that asked for one is told: a push, a pull, a checkout, a submodule update */
 type ProgressDuring = 'checkout' | 'pull' | 'push' | 'submodule';
 
+/**
+ * A window's writes to its prompts, each answered once: that it landed, or why it was refused. What a write changed
+ * reaches every window through the views.
+ */
+type PromptAsks = {
+    CREATE_PROMPT: {
+        ask: {
+            label: string;
+            inputs: Record<string, any>;
+            templateFn: string;
+            outputSchema?: any;
+            description?: string;
+            category?: string;
+        };
+    };
+    UPDATE_PROMPT: {
+        ask: {
+            promptId: string;
+            label?: string;
+            inputs?: Record<string, any>;
+            templateFn?: string;
+            outputSchema?: any;
+            description?: string;
+            category?: string;
+        };
+    };
+    DELETE_PROMPT: {
+        ask: {
+            promptId: string;
+        };
+    };
+};
+
 declare class PromptService {
     findByLabel(label: string): _apackdev_sdk.PromptEntity | undefined;
     /**
@@ -5066,6 +5113,8 @@ interface PromptsContext {
     /** How many prompts the list shows: a page more each time the user scrolls to its end */
     listLimit: number;
     selectedCategories: string[];
+    /** Why the last of this window's writes was refused, until the user dismisses it */
+    writeError: string | null;
     promptsImport: {
         status: 'error' | 'idle' | 'importing' | 'success';
         errors: string[];

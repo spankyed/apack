@@ -10,6 +10,8 @@ import {
 } from '@apackdev/sdk/fe'
 import type { Contract, ActionsContext, ActionsInboxEvent } from './contract.ts'
 import type { OutgoingActionEvents } from '#features/actions/be/types.ts'
+import type { Contract as ActionsSystemContract } from '#features/actions/be/contract.ts'
+import type { AnswersOf } from '@apackdev/sdk/events'
 import type { ActionEntity, ActionParameter } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
 import { sendToSystem } from '#generated/events.ts'
@@ -26,6 +28,7 @@ export type ActionsState = ActorRefFrom<typeof actionsState>
 export const ACTIONS_PAGE_SIZE = 20
 
 type UIEvent =
+  | { type: 'CLEAR_WRITE_ERROR' }
   | ActionsInboxEvent
   | { type: 'ACTION.SAVE' }
   /**
@@ -52,7 +55,7 @@ type UIEvent =
   | { type: 'ACTIONS.EXPORT'; directory: string }
   | { type: 'ACTIONS.RESET_EXPORT_STATUS' }
 
-export type ActionsEvents = OpenEntity | UIEvent | OutgoingActionEvents | TrailClickEvent
+export type ActionsEvents = OpenEntity | UIEvent | OutgoingActionEvents | TrailClickEvent | AnswersOf<ActionsSystemContract>
 const typeOf = safeEvents<ActionsEvents>()
 
 const actionsState = setup({
@@ -373,6 +376,7 @@ const actionsState = setup({
     selectedLabel: undefined,
     formFor: undefined,
     listLimit: ACTIONS_PAGE_SIZE,
+    writeError: null,
     selectedCategories: [], // Filter state
     actionsImport: {
       status: 'idle',
@@ -395,6 +399,10 @@ const actionsState = setup({
     },
   },
   on: {
+    // A write this window asked for and did not get: shown until dismissed. What a write changed reaches every window
+    // through the views, so a landed one needs nothing here
+    ASK_FAILED: { actions: assign(({ event }) => ({ writeError: event.failure.message })) },
+    CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Action' } }, target: '.detail', actions: 'selectAction' },
     'ACTION.SELECT': { target: '.detail', actions: 'selectAction' },
     'VIEW_LIST': {

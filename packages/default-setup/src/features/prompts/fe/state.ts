@@ -10,6 +10,8 @@ import {
 } from '@apackdev/sdk/fe'
 import type { Contract, PromptsContext, PromptsInboxEvent } from './contract.ts'
 import type { OutgoingPromptEvents } from '#features/prompts/be/types.ts'
+import type { Contract as PromptsSystemContract } from '#features/prompts/be/contract.ts'
+import type { AnswersOf } from '@apackdev/sdk/events'
 import type { PromptEntity, TemplateInput } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
 import { sendToSystem } from '#generated/events.ts'
@@ -26,6 +28,7 @@ export type PromptsState = ActorRefFrom<typeof promptsState>
 export const PROMPTS_PAGE_SIZE = 20
 
 type UIEvent =
+  | { type: 'CLEAR_WRITE_ERROR' }
   | PromptsInboxEvent
   | { type: 'PROMPT.CREATE' }
   | { type: 'PROMPT.SAVE' }
@@ -53,7 +56,7 @@ type UIEvent =
   | { type: 'PROMPTS.EXPORT'; directory: string }
   | { type: 'PROMPTS.RESET_EXPORT_STATUS' }
 
-export type PromptsEvents = OpenEntity | UIEvent | OutgoingPromptEvents | TrailClickEvent
+export type PromptsEvents = OpenEntity | UIEvent | OutgoingPromptEvents | TrailClickEvent | AnswersOf<PromptsSystemContract>
 const typeOf = safeEvents<PromptsEvents>()
 
 const promptsState = setup({
@@ -374,6 +377,7 @@ const promptsState = setup({
     selectedLabel: undefined,
     formFor: undefined,
     listLimit: PROMPTS_PAGE_SIZE,
+    writeError: null,
     selectedCategories: [], // Filter state
     promptsImport: {
       status: 'idle',
@@ -396,6 +400,10 @@ const promptsState = setup({
     },
   },
   on: {
+    // A write this window asked for and did not get: shown until dismissed. What a write changed reaches every window
+    // through the views, so a landed one needs nothing here
+    ASK_FAILED: { actions: assign(({ event }) => ({ writeError: event.failure.message })) },
+    CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Prompt' } }, target: '.detail', actions: 'selectPrompt' },
     'PROMPT.SELECT': { target: '.detail', actions: 'selectPrompt' },
     'VIEW_LIST': {

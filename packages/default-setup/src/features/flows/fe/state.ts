@@ -1,5 +1,5 @@
 import { entityIs, viewRead, viewWrites, writeAnswered, writeSent, writing } from '@apackdev/sdk/fe'
-import type { OpenEntity } from '@apackdev/sdk/events'
+import { answerOf, isAnswered, type AnswersOf, type OpenEntity } from '@apackdev/sdk/events'
 import { and, assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
 import { contextMenuFn } from '@apackdev/sdk/fe'
@@ -16,6 +16,7 @@ import type {
 } from '#generated/types.ts'
 import type { Contract, FlowsContext, FlowsInboxEvent } from './contract.ts'
 import type { FlowExtendedData, OutgoingFlowsEvents } from '#features/flows/be/types.ts'
+import type { Contract as FlowsSystemContract } from '#features/flows/be/contract.ts'
 import { sendToSystem } from '#generated/events.ts'
 import { getNodeConfig, isTriggerNode } from '@apackdev/ui/components/node-styles'
 import { getStepDeclaration } from '@apackdev/sdk/fe'
@@ -99,7 +100,7 @@ export const flowsId = 'flows' as const
 export const id = flowsId
 export type FlowsState = ActorRefFrom<typeof flowsState>
 
-type SystemEvent = OutgoingFlowsEvents
+type SystemEvent = OutgoingFlowsEvents | AnswersOf<FlowsSystemContract>
   | FlowsInboxEvent
   // DSL Import backend responses
   | { type: 'DSL_IMPORTED'; flowIds: string[] }
@@ -177,7 +178,7 @@ const flowsState = setup({
   },
   actions: {
     /* ── bootstrap ─────────────────────────────────────── */
-    setModelCatalog: assign(({ event }) => ({ models: typeOf('MODEL_CATALOG_READ', event).data.models })),
+    setModelCatalog: assign(({ event }) => ({ models: answerOf(event, 'GET_MODEL_CATALOG').models })),
 
     takeFlowsRead: assign(({ event }) => {
       const { labels, rootFlowId } = typeOf('FLOWS.READ', event);
@@ -262,9 +263,9 @@ const flowsState = setup({
     }),
 
     /** One of the editor's writes answered: once the last is, the graph is read again if a result was held or one was refused */
-    settleWrite: assign(({ context, event }) => ({ writes: writeAnswered(context.writes, event, event.type === 'FLOW_WRITE_FAILED') })),
+    settleWrite: assign(({ context, event }) => ({ writes: writeAnswered(context.writes, event, event.type === 'ASK_FAILED') })),
 
-    surfaceWriteError: assign(({ event }) => ({ canvasError: typeOf('FLOW_WRITE_FAILED', event).error })),
+    surfaceWriteError: assign(({ event }) => ({ canvasError: typeOf('ASK_FAILED', event).failure.message })),
 
     sendCreateFlow: ({ event }) => {
       typeOf('FLOW.CREATE', event);
@@ -282,7 +283,7 @@ const flowsState = setup({
 
     /** The flow *this* window asked to create, which this window opens; every window's list has it from its view */
     openCreatedFlow: assign(({ event }) => ({
-      pendingFlow: { flowId: typeOf('FLOW_OPENED', event).flowId, recordHistory: true },
+      pendingFlow: { flowId: answerOf(event, 'CREATE_FLOW').flowId, recordHistory: true },
       selectedNodeId: undefined,
       editingNodeId: undefined,
     })),
@@ -839,7 +840,7 @@ const flowsState = setup({
 
     /* ── ID reconciliation actions ────────────────────────── */
     reconcileNodeId: assign(({ context, event }) => {
-      const ev = typeOf('NODE_CREATED', event);
+      const ev = answerOf(event, 'CREATE_NODE');
       const { tempId, nodeId: permanentId, node } = ev;
       
       // The node from backend already has the permanent ID, just replace the temp node. A refresh may already
@@ -912,7 +913,7 @@ const flowsState = setup({
     
     /* ── Edge ID reconciliation ────────────────────────────── */
     reconcileEdgeId: assign(({ context, event }) => {
-      const ev = typeOf('EDGE_CREATED', event);
+      const ev = answerOf(event, 'CREATE_EDGE');
       const { sourceId, targetId, relId, sourceHandle, targetHandle } = ev;
 
       // Find the edge with matching source, target, and handles
@@ -1091,7 +1092,6 @@ const flowsState = setup({
     SURFACE_DEACTIVATED: { actions: 'cancelFlowSelection' },
     // The models the editor offers, asked as the shell starts the surface, in a delivery naming it
     SURFACE_STARTED: { actions: () => { sendToSystem(id, { type: 'GET_MODEL_CATALOG' }); } },
-    MODEL_CATALOG_READ: { actions: 'setModelCatalog' },
     'FLOWS.READ': { actions: 'takeFlowsRead' },
     'ROOT_FLOW.SET': {
       actions: ({ event }) => sendToSystem(id, { type: 'SET_ROOT_FLOW', flowId: typeOf('ROOT_FLOW.SET', event).flowId }),
@@ -1118,17 +1118,17 @@ const flowsState = setup({
         }
       }),
     },
-    // The answer, which only the window that asked is sent — so only it navigates
-    FLOW_OPENED: {
-      actions: 'openCreatedFlow',
-      target: '.view'
-    },
-    // The answers to the editor's writes
-    NODE_CREATED: { actions: ['reconcileNodeId', 'settleWrite'] },
-    EDGE_CREATED: { actions: ['reconcileEdgeId', 'settleWrite'] },
-    FLOW_WRITTEN: { actions: 'settleWrite' },
+    ASK_ANSWERED: [
+      { guard: ({ event }) => isAnswered(event, 'GET_MODEL_CATALOG'), actions: 'setModelCatalog' },
+      // The flow this window asked to create, which only the window that asked is answered with — so only it navigates
+      { guard: ({ event }) => isAnswered(event, 'CREATE_FLOW'), actions: 'openCreatedFlow', target: '.view' },
+      // The answers to the editor's writes
+      { guard: ({ event }) => isAnswered(event, 'CREATE_NODE'), actions: ['reconcileNodeId', 'settleWrite'] },
+      { guard: ({ event }) => isAnswered(event, 'CREATE_EDGE'), actions: ['reconcileEdgeId', 'settleWrite'] },
+      { actions: 'settleWrite' },
+    ],
     // A refused write: its reason, and the flow as stored read again once nothing else is unanswered
-    FLOW_WRITE_FAILED: { actions: ['surfaceWriteError', 'settleWrite'] },
+    ASK_FAILED: { actions: ['surfaceWriteError', 'settleWrite'] },
     'CANVAS.CLEAR_ERROR': {
       actions: 'clearCanvasError',
     },

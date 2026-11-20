@@ -34,37 +34,38 @@ export const promptsSpec = defineSystem<Contract>();
  * The prompts system writes prompts. What a window shows of them is the feature's views (`views.ts`), which run
  * again after each of these writes, so nothing here says who is looking.
  */
+/** A window's writes to its prompts, each answered to whoever asked: that it landed, or why it was refused */
+export const answers = promptsSpec.answers({
+  CREATE_PROMPT: ({ ask }) => {
+    repository.promptCommands.create({
+      label: ask.label,
+      inputs: ask.inputs,
+      templateFn: ask.templateFn,
+      outputSchema: ask.outputSchema,
+      description: ask.description,
+      category: ask.category
+    });
+  },
+  UPDATE_PROMPT: ({ ask }) => {
+    const updates: Record<string, any> = {};
+
+    if (ask.label !== undefined) updates.label = ask.label;
+    if (ask.inputs !== undefined) updates.inputs = ask.inputs;
+    if (ask.templateFn !== undefined) updates.templateFn = ask.templateFn;
+    if (ask.outputSchema !== undefined) updates.outputSchema = ask.outputSchema;
+    if (ask.description !== undefined) updates.description = ask.description;
+    if (ask.category !== undefined) updates.category = ask.category;
+
+    repository.promptCommands.update(ask.promptId as EARS.EntityId, updates);
+  },
+  DELETE_PROMPT: ({ ask }) => {
+    repository.promptCommands.delete(ask.promptId as EARS.EntityId);
+  },
+})
+
 export const promptsSystem = setup({
   types: promptsSpec.types,
-  actions: promptsSpec.actions({
-    createPrompt: ({ event }) => {
-      const ev = promptsSpec.typeOf('CREATE_PROMPT', event);
-      repository.promptCommands.create({
-        label: ev.label,
-        inputs: ev.inputs,
-        templateFn: ev.templateFn,
-        outputSchema: ev.outputSchema,
-        description: ev.description,
-        category: ev.category
-      });
-    },
-    updatePrompt: ({ event }) => {
-      const ev = promptsSpec.typeOf('UPDATE_PROMPT', event);
-      const updates: Record<string, any> = {};
-
-      if (ev.label !== undefined) updates.label = ev.label;
-      if (ev.inputs !== undefined) updates.inputs = ev.inputs;
-      if (ev.templateFn !== undefined) updates.templateFn = ev.templateFn;
-      if (ev.outputSchema !== undefined) updates.outputSchema = ev.outputSchema;
-      if (ev.description !== undefined) updates.description = ev.description;
-      if (ev.category !== undefined) updates.category = ev.category;
-
-      repository.promptCommands.update(ev.promptId as EARS.EntityId, updates);
-    },
-    deletePrompt: ({ event }) => {
-      const ev = promptsSpec.typeOf('DELETE_PROMPT', event);
-      repository.promptCommands.delete(ev.promptId as EARS.EntityId);
-    },
+  actions: { ...answers.actions, ...promptsSpec.actions({
     importPrompts: ({ event, reply }) => {
       const { prompts: importData } = promptsSpec.typeOf('IMPORT_PROMPTS', event);
 
@@ -167,22 +168,14 @@ export const promptsSystem = setup({
         if (nextCategory !== p.category) repository.promptCommands.update(p.id, { category: nextCategory });
       }
     },
-  }),
+  }) },
 }).createMachine(
   {
     id: 'prompts',
     initial: 'idle',
     context: () => ({}),
     on: {
-      CREATE_PROMPT: {
-        actions: 'createPrompt',
-      },
-      UPDATE_PROMPT: {
-        actions: 'updatePrompt',
-      },
-      DELETE_PROMPT: {
-        actions: 'deletePrompt',
-      },
+      ...answers.on,
       FEATURE_SETTINGS_UPDATED: {
         actions: 'handleSettingsUpdate',
       },

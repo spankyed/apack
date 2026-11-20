@@ -110,3 +110,12 @@ it('opens its entity from the create view and refuses unrelated entity types', (
   expect(actor.getSnapshot().matches('detail')).toBe(true);
   expect(actor.getSnapshot().context.selectedPromptId).toBe('Prompt-p1');
 });
+
+it('shows a write it asked for that was refused, until the user dismisses it', async () => {
+  const { askFailed } = await import('@apackdev/sdk/testing');
+  const actor = start();
+  actor.send(askFailed('c-1', 'UPDATE_PROMPT', { kind: 'failed', message: 'No such prompt' }));
+  expect(actor.getSnapshot().context.writeError).toBe('No such prompt');
+  actor.send({ type: 'CLEAR_WRITE_ERROR' });
+  expect(actor.getSnapshot().context.writeError).toBeNull();
+});

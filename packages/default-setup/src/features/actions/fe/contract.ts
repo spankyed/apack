@@ -21,6 +21,8 @@ export interface ActionsContext {
   /** How many actions the list shows: a page more each time the user scrolls to its end */
   listLimit: number;
   selectedCategories: string[]; // Filter state
+  /** Why the last of this window's writes was refused, until the user dismisses it */
+  writeError: string | null;
 
   // Import/Export state
   actionsImport: {

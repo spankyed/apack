@@ -4,7 +4,7 @@
 // asking the canvas to read the view again (`writes.refreshes`) once the last is answered.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo, startFeTestRuntime } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed, startFeTestRuntime } from '@apackdev/sdk/testing';
 import type { NodeEntity } from '#generated/types.ts';
 import type { EARS } from '#generated/ears.ts';
 
@@ -105,7 +105,7 @@ it('holds a read behind an unanswered write, and reads the view again once the w
   expect(labels(actor)).toEqual(['typed']);
 
   const before = context(actor).writes.refreshes;
-  actor.send(answerTo(write, { type: 'FLOW_WRITTEN' }));
+  actor.send(askAnswered(write, 'UPDATE_NODE', undefined));
   expect(context(actor).writes.refreshes, 'the held read may predate the write: read again').toBe(before + 1);
   actor.send(read('Flow-first', node('Node-first', 'typed')));
   expect(labels(actor)).toEqual(['typed']);
@@ -115,7 +115,7 @@ it('takes the next read as it comes when nothing was held behind an answered wri
   const actor = open('Flow-first', node('Node-first', 'stored'));
   actor.send({ type: 'NODE.UPDATE', nodeId: 'Node-first' as EARS.EntityId, updates: { label: 'typed' } });
   const before = context(actor).writes.refreshes;
-  actor.send(answerTo(callOf('UPDATE_NODE'), { type: 'FLOW_WRITTEN' }));
+  actor.send(askAnswered(callOf('UPDATE_NODE'), 'UPDATE_NODE', undefined));
   expect(context(actor).writes.refreshes, 'nothing held, so nothing to read again').toBe(before);
   actor.send(read('Flow-first', node('Node-first', 'typed')));
   expect(context(actor).writes.pending).toEqual({});
@@ -125,12 +125,12 @@ it('waits for every write to be answered before applying anything', () => {
   const actor = open('Flow-first', node('Node-first', 'stored'));
   actor.send({ type: 'NODE.UPDATE', nodeId: 'Node-first' as EARS.EntityId, updates: { label: 'ty' } });
   actor.send({ type: 'NODE.UPDATE', nodeId: 'Node-first' as EARS.EntityId, updates: { label: 'typed' } });
-  actor.send(answerTo(callOf('UPDATE_NODE', 0), { type: 'FLOW_WRITTEN' }));
+  actor.send(askAnswered(callOf('UPDATE_NODE', 0), 'UPDATE_NODE', undefined));
   // The first write's result, arriving while the second is still unanswered
   actor.send(read('Flow-first', node('Node-first', 'ty')));
   expect(labels(actor)).toEqual(['typed']);
   const before = context(actor).writes.refreshes;
-  actor.send(answerTo(callOf('UPDATE_NODE', 1), { type: 'FLOW_WRITTEN' }));
+  actor.send(askAnswered(callOf('UPDATE_NODE', 1), 'UPDATE_NODE', undefined));
   expect(context(actor).writes.refreshes).toBe(before + 1);
 });
 
@@ -138,7 +138,7 @@ it('shows a refused write\'s reason and reads the flow as stored again', () => {
   const actor = open();
   actor.send({ type: 'EDGE.DISCONNECT', edgeId: 'Edge-1' });
   const before = context(actor).writes.refreshes;
-  actor.send(answerTo(callOf('DELETE_EDGE'), { type: 'FLOW_WRITE_FAILED', error: 'No such edge' }));
+  actor.send(askFailed(callOf('DELETE_EDGE'), 'DELETE_EDGE', { kind: 'failed', message: 'No such edge' }));
   expect(context(actor).canvasError).toBe('No such edge');
   expect(context(actor).writes.refreshes, 'the edit on screen is not what is stored').toBe(before + 1);
 });
@@ -146,7 +146,7 @@ it('shows a refused write\'s reason and reads the flow as stored again', () => {
 it('ignores an answer to a write it did not make', () => {
   const actor = open();
   actor.send({ type: 'NODE.UPDATE', nodeId: 'Node-first' as EARS.EntityId, updates: { label: 'typed' } });
-  actor.send(answerTo('c-another-window', { type: 'FLOW_WRITTEN' }));
+  actor.send(askAnswered('c-another-window', 'UPDATE_NODE', undefined));
   expect(Object.keys(context(actor).writes.pending)).toHaveLength(1);
 });
 
@@ -161,7 +161,7 @@ it('puts the node the backend made in place of the one drawn, and reads the view
     actor.send(read('Flow-first', node('Node-first')));
     expect(context(actor).graph.nodes.map(each => each.id), 'the drawn node stays while its write is unanswered').toContain(tempId);
 
-    actor.send(answerTo(callOf('CREATE_NODE'), { type: 'NODE_CREATED', tempId, nodeId: 'Node-new' as EARS.EntityId, node: { ...node('Node-new'), nodeType: 'transform' } as NodeEntity }));
+    actor.send(askAnswered(callOf('CREATE_NODE'), 'CREATE_NODE', { tempId, nodeId: 'Node-new' as EARS.EntityId, node: { ...node('Node-new'), nodeType: 'transform' } as NodeEntity }));
     expect(context(actor).graph.nodes.map(each => each.id)).toEqual(['Node-first', 'Node-new']);
     expect(context(actor).selectedNodeId).toBe('Node-new');
   } finally { stopFe(); }
@@ -182,7 +182,7 @@ it('leaves the shown flow when its view reads it gone, and gives up opening one 
 it('opens the flow it asked the backend to create, by the answer', () => {
   const actor = start();
   actor.send({ type: 'FLOW.CREATE' });
-  actor.send(answerTo(callOf('CREATE_FLOW'), { type: 'FLOW_OPENED', flowId: 'Flow-new' as EARS.EntityId }));
+  actor.send(askAnswered(callOf('CREATE_FLOW'), 'CREATE_FLOW', { flowId: 'Flow-new' as EARS.EntityId }));
   expect(actor.getSnapshot().matches('view')).toBe(true);
   expect(context(actor).pendingFlow?.flowId).toBe('Flow-new');
   actor.send(read('Flow-new', node('Node-entry')));
@@ -199,7 +199,7 @@ it('asks for the model catalog as it starts, and takes what it is answered', () 
   const actor = start();
   actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
   expect(sendToSystem).toHaveBeenCalledWith('flows', { type: 'GET_MODEL_CATALOG' });
-  actor.send({ type: 'MODEL_CATALOG_READ', data: { models: [{ id: 'anthropic:claude' }] } } as never);
+  actor.send(askAnswered('c-catalog', 'GET_MODEL_CATALOG', { models: [{ id: 'anthropic:claude' }] }) as never);
   expect(context(actor).models).toEqual([{ id: 'anthropic:claude' }]);
 });
 

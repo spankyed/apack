@@ -9,7 +9,9 @@ import {
 } from '@apackdev/sdk/fe'
 import type { NoteDTO, NoteSummary } from '#generated/types.ts'
 import type { Contract, NotesContext, NotesInboxEvent } from './contract.ts'
-import type { OutgoingNotesEvents } from '#features/notes/be/types.ts'
+import type { NoteSummary as CreatedNote, OutgoingNotesEvents } from '#features/notes/be/types.ts'
+import type { Contract as NotesSystemContract } from '#features/notes/be/contract.ts'
+import type { AnswersOf } from '@apackdev/sdk/events'
 import { sendToSystem } from '#generated/events.ts'
 import { Trash2 } from 'lucide-vue-next'
 import { contextMenuFn } from '@apackdev/sdk/fe'
@@ -18,7 +20,7 @@ import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoFo
 export const id = 'notes' as const;
 export type NotesState = ActorRefFrom<typeof notesState>
 
-type SystemEvent = OutgoingNotesEvents
+type SystemEvent = OutgoingNotesEvents | AnswersOf<NotesSystemContract>
   | { type: 'NOTES_IMPORTED'; count: number; errors?: string[] }
   | { type: 'NOTES_IMPORT_FAILED'; errors: string[] }
   | { type: 'NOTES_EXPORTED'; filePath: string; itemCount: number }
@@ -104,6 +106,18 @@ function getAncestorChain(notes: NoteSummary[], noteId: string): NoteSummary[] {
   return chain
 }
 
+/** Whether an event is the answer to a CREATE_NOTE this window asked for, carrying the note it made */
+const isNoteCreated = (event: NotesEvents): boolean =>
+  event.type === 'ASK_ANSWERED' && event.asked === 'CREATE_NOTE' && event.answer.note !== undefined
+
+/** The note an answered CREATE_NOTE made, for an action wired to the transitions `isNoteCreated` guards */
+function created(event: NotesEvents): { note: CreatedNote } {
+  if (event.type !== 'ASK_ANSWERED' || event.asked !== 'CREATE_NOTE' || !event.answer.note) {
+    throw new Error(`Expected the answer to a CREATE_NOTE that made a note, got ${event.type}`)
+  }
+  return { note: event.answer.note }
+}
+
 /** A write, sent where the edit is made: its call recorded in the same assignment, for its answer to settle */
 const withWrite = (writes: NotesContext['writes'], call: string): { writes: NotesContext['writes'] } =>
   ({ writes: writeSent(writes, call) })
@@ -144,7 +158,7 @@ const notesState = setup({
     holdView: assign(({ context }) => ({ writes: viewRead(context.writes).writes })),
 
     /** One of this window's writes answered: once the last is, the views are read again if a result was held or one was refused */
-    settleWrite: assign(({ context, event }) => ({ writes: writeAnswered(context.writes, event, event.type === 'NOTE_WRITE_FAILED') })),
+    settleWrite: assign(({ context, event }) => ({ writes: writeAnswered(context.writes, event, event.type === 'ASK_FAILED') })),
 
     selectNote: assign(({ event, context }) => {
       const noteId = typeOf(['NOTE.SELECT', 'NOTE.LINK_CLICKED'], event).noteId
@@ -347,7 +361,7 @@ const notesState = setup({
 
     /** The note this window asked to create, which this window opens; every window's tree has it from its view */
     addCreatedNote: assign(({ context, event }) => {
-      const ev = typeOf('NOTE_CREATED', event)
+      const ev = created(event)
       const updatedNotes = withNote(context.notes, ev.note)
       const ancestorIds = getAncestorChain(updatedNotes, ev.note.id).map(n => n.id)
       return {
@@ -363,7 +377,7 @@ const notesState = setup({
     }),
 
     handleSubDocumentInsertCreated: assign(({ context, event }) => {
-      const ev = typeOf('NOTE_CREATED', event)
+      const ev = created(event)
       // Only handle if there's a pending sub-document insert and the new note has a parent
       if (!context.pendingSubDocumentInsert || !ev.note.parentId) return {}
       const validParentId = context.selectedTaskId ?? context.currentNoteId
@@ -742,8 +756,8 @@ const notesState = setup({
       { actions: 'takeNote' },
     ],
     // The answers to this window's writes; a refusal reads the notes as stored again
-    NOTE_WRITTEN: { actions: 'settleWrite' },
-    NOTE_WRITE_FAILED: { actions: 'settleWrite' },
+    ASK_ANSWERED: { actions: 'settleWrite' },
+    ASK_FAILED: { actions: 'settleWrite' },
     'NOTE.SOFT_DELETE': { actions: 'sendSoftDeleteNote' },
     'NOTE.RESTORE': { actions: 'sendRestoreNote' },
     'NOTE.TOGGLE_EXPAND': { actions: 'toggleExpand' },
@@ -902,16 +916,18 @@ const notesState = setup({
         'TASK.CREATE': {
           actions: 'sendCreateTask',
         },
-        NOTE_CREATED: [
+        // The note a CREATE_NOTE this window asked for made
+        ASK_ANSWERED: [
           {
             guard: ({ event, context }) => {
-              const ev = typeOf('NOTE_CREATED', event)
+              if (!isNoteCreated(event)) return false
+              const ev = created(event)
               const updatedNotes = withNote(context.notes, ev.note)
               return findNearestTaskList(updatedNotes, ev.note.id) !== null
             },
             actions: [
               assign(({ context, event }) => {
-                const ev = typeOf('NOTE_CREATED', event)
+                const ev = created(event)
                 const taskList = findNearestTaskList(withNote(context.notes, ev.note), ev.note.id)
                 if (!taskList) return { notes: withNote(context.notes, ev.note) }
                 const ancestorIds = getAncestorChain(withNote(context.notes, ev.note), taskList.id).map(n => n.id)
@@ -932,6 +948,7 @@ const notesState = setup({
             target: 'editor',
           },
           {
+            guard: ({ event }) => isNoteCreated(event),
             actions: ['addCreatedNote', 'settleWrite'],
             target: 'editor',
           },
@@ -1008,21 +1025,23 @@ const notesState = setup({
         'TASK.CREATE': {
           actions: 'sendCreateTask',
         },
-        NOTE_CREATED: [
+        // The note a CREATE_NOTE this window asked for made
+        ASK_ANSWERED: [
           {
-            guard: ({ context }) => context.pendingSubDocumentInsert !== null,
+            guard: ({ context, event }) => isNoteCreated(event) && context.pendingSubDocumentInsert !== null,
             actions: ['handleSubDocumentInsertCreated', 'settleWrite'],
           },
           {
             // If the new note's parent is the current tasklist, add to list but don't navigate
             guard: ({ context, event }) => {
-              const ev = typeOf('NOTE_CREATED', event)
+              if (!isNoteCreated(event)) return false
+              const ev = created(event)
               const updatedNotes = withNote(context.notes, ev.note)
               return context.currentNote?.noteType === 'tasklist'
                 && findNearestTaskList(updatedNotes, ev.note.id)?.id === context.currentNoteId
             },
             actions: [assign(({ context, event }) => {
-              const ev = typeOf('NOTE_CREATED', event)
+              const ev = created(event)
               const updatedNotes = withNote(context.notes, ev.note)
               const taskAncestors = getAncestorChain(updatedNotes, ev.note.id)
               const taskListIndex = taskAncestors.findIndex(a => a.id === context.currentNoteId)
@@ -1039,13 +1058,14 @@ const notesState = setup({
           {
             // Note created for a tasklist that isn't currently viewed — navigate to it
             guard: ({ context, event }) => {
-              const ev = typeOf('NOTE_CREATED', event)
+              if (!isNoteCreated(event)) return false
+              const ev = created(event)
               const updatedNotes = withNote(context.notes, ev.note)
               return findNearestTaskList(updatedNotes, ev.note.id) !== null
             },
             actions: [
               assign(({ context, event }) => {
-                const ev = typeOf('NOTE_CREATED', event)
+                const ev = created(event)
                 const updatedNotes = withNote(context.notes, ev.note)
                 const taskList = findNearestTaskList(updatedNotes, ev.note.id)
                 if (!taskList) return { notes: updatedNotes }
@@ -1069,6 +1089,7 @@ const notesState = setup({
             ],
           },
           {
+            guard: ({ event }) => isNoteCreated(event),
             actions: ['addCreatedNote', 'settleWrite'],
           },
         ],

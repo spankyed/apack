@@ -7,7 +7,7 @@ import { defineSystem } from '@apackdev/sdk/framework';
 import { EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { Contract } from './contract.ts';
-import { createLogger, reportError } from '@apackdev/sdk/logger';
+import { createLogger } from '@apackdev/sdk/logger';
 import { availableModels } from '@apackdev/sdk/models';
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
 import { compileFlowDSL, validateFlowDSL, exportFlowsToDSL, type FlowDSL, type ValidationError } from '@apackdev/sdk/build';
@@ -75,119 +75,65 @@ function formatValidationErrors(
 
 export const flowsSpec = defineSystem<Contract>();
 
-/**
- * One of the graph's writes, answered to whoever asked: with what it made (a node's or an edge's id), or that it
- * landed, or why it was refused. The editor applies its own edits at once and holds the flow's view while any of its
- * writes is unanswered, so every write is answered, a refusal included — an unanswered one would hold the view for
- * good. A refusal nobody asked for (an applier's write, a migration's) is reported, since no window shows it. What the
- * write changed reaches every window through the `graph` view.
- */
-function answerWrite(reply: Reply<OutgoingFlowsEvents> | undefined, label: string, write: () => OutgoingFlowsEvents | void): void {
-  let answer: OutgoingFlowsEvents;
-  try {
-    // Run before answering: a write nobody asked for (an applier's, a migration's) has no `reply` and still writes
-    answer = write() ?? { type: 'FLOW_WRITTEN' };
-  } catch (error) {
-    if (reply) {
-      logger.warn(`${label} failed`, { error: errorMessage(error) });
-      reply({ type: 'FLOW_WRITE_FAILED', error: errorMessage(error) || `${label} failed` });
-    } else {
-      reportError({ error, title: `${label} failed`, source: 'flows' });
-    }
-    return;
-  }
-  reply?.(answer);
-}
 
 /**
  * The flows system writes flows: their nodes and edges, their labels, which one is the root. What a window shows of
  * them is the feature's views (`views.ts`) — the list, and the open flow's graph — which run again after each write,
  * so it sends a window only answers: to its writes, and the model catalog it asks for as it starts.
  */
+/**
+ * A window's asks of the flows system, each answered to whoever asked: with what a create made, or that a write landed,
+ * or why it was refused. The editor applies its own edits at once and holds the flow's view while any of its writes is
+ * unanswered, which the table holds whichever way a handler ends — an unanswered one would hold the view for good.
+ * What the write changed reaches every window through the \`graph\` view.
+ */
+export const answers = flowsSpec.answers({
+  GET_MODEL_CATALOG: () => ({ models: availableModels }),
+  CREATE_FLOW: () => {
+    const { flow } = repository.flowsCommands.createFlowWithEntryNode();
+    logger.info('Created a flow', { flowId: flow.id });
+    // Only the window that asked opens it; every window's list has it through the list view
+    return { flowId: flow.id };
+  },
+  UPDATE_FLOW_LABEL: ({ ask }) => { repository.flowsCommands.updateFlowLabel(ask.flowId as EARS.EntityId, ask.label); },
+  DELETE_FLOW: ({ ask }) => {
+    repository.flowsCommands.deleteFlow(ask.flowId as EARS.EntityId);
+    logger.info('Deleted a flow', { flowId: ask.flowId });
+  },
+  CREATE_NODE: ({ ask }) => {
+    const node = repository.flowsCommands.createNode(ask.flowId as EARS.EntityId, ask.nodeData);
+    return { tempId: ask.tempId, nodeId: node.id, node };
+  },
+  UPDATE_NODE: ({ ask }) => { repository.flowsCommands.updateNode(ask.nodeId as EARS.EntityId, ask.nodeData); },
+  DELETE_NODE: ({ ask }) => { repository.flowsCommands.deleteNode(ask.nodeId as EARS.EntityId); },
+  CREATE_EDGE: ({ ask }) => {
+    const { sourceId, targetId, sourceHandle, targetHandle } = ask;
+    const { relId } = repository.flowsCommands.createEdge(sourceId as EARS.EntityId, targetId as EARS.EntityId, { sourceHandle, targetHandle });
+    return { sourceId: sourceId as EARS.EntityId, targetId: targetId as EARS.EntityId, relId, sourceHandle, targetHandle };
+  },
+  DELETE_EDGE: ({ ask }) => { repository.flowsCommands.deleteEdge(ask.edgeId as EARS.RelationId); },
+  UPDATE_EDGE: ({ ask }) => {
+    repository.flowsCommands.updateEdge(ask.edgeId as EARS.RelationId, {
+      source: ask.source as EARS.EntityId,
+      target: ask.target as EARS.EntityId,
+      sourceHandle: ask.sourceHandle,
+      targetHandle: ask.targetHandle,
+    });
+  },
+  REINDEX_HANDLES: ({ ask }) => { repository.flowsCommands.reindexHandles(ask.nodeId as EARS.EntityId, ask.prefix, ask.index, ask.direction); },
+  SET_ROOT_FLOW: ({ ask }) => {
+    const previous = repository.flowsQueries.rootFlow();
+    if ((ask.flowId ?? undefined) === previous) return;
+    logger.info('Changing the root flow', { previousRootFlowId: previous, rootFlowId: ask.flowId });
+    if (ask.flowId) repository.flowsCommands.grantRootFlowRole(ask.flowId as EARS.EntityId);
+    else if (previous) repository.flowsCommands.revokeRootFlowRole(previous);
+  },
+});
+
 export const flowsSystem = setup({
   types: flowsSpec.types,
   actors: {},
-  actions: flowsSpec.actions({
-    sendModelCatalog: ({ reply }) => {
-      reply?.({ type: 'MODEL_CATALOG_READ', data: { models: availableModels } });
-    },
-
-    createFlow: ({ reply }) => {
-      answerWrite(reply, 'Creating a flow', () => {
-        const { flow } = repository.flowsCommands.createFlowWithEntryNode();
-        logger.info('Created a flow', { flowId: flow.id });
-        // Only the window that asked opens it; every window's list has it through the list view
-        return { type: 'FLOW_OPENED', flowId: flow.id };
-      });
-    },
-
-    updateFlowLabel: ({ event, reply }) => {
-      const { flowId, label } = flowsSpec.typeOf('UPDATE_FLOW_LABEL', event);
-      answerWrite(reply, 'Renaming a flow', () => { repository.flowsCommands.updateFlowLabel(flowId as EARS.EntityId, label); });
-    },
-
-    deleteFlow: ({ event, reply }) => {
-      const { flowId } = flowsSpec.typeOf('DELETE_FLOW', event);
-      answerWrite(reply, 'Deleting a flow', () => {
-        repository.flowsCommands.deleteFlow(flowId as EARS.EntityId);
-        logger.info('Deleted a flow', { flowId });
-      });
-    },
-
-    createNode: ({ event, reply }) => {
-      const { flowId, tempId, nodeData } = flowsSpec.typeOf('CREATE_NODE', event);
-      answerWrite(reply, 'Creating a node', () => {
-        const node = repository.flowsCommands.createNode(flowId as EARS.EntityId, nodeData);
-        return { type: 'NODE_CREATED', tempId, nodeId: node.id, node };
-      });
-    },
-
-    updateNode: ({ event, reply }) => {
-      const { nodeId, nodeData } = flowsSpec.typeOf('UPDATE_NODE', event);
-      answerWrite(reply, 'Updating a node', () => { repository.flowsCommands.updateNode(nodeId as EARS.EntityId, nodeData); });
-    },
-
-    deleteNode: ({ event, reply }) => {
-      const { nodeId } = flowsSpec.typeOf('DELETE_NODE', event);
-      answerWrite(reply, 'Deleting a node', () => { repository.flowsCommands.deleteNode(nodeId as EARS.EntityId); });
-    },
-
-    createEdge: ({ event, reply }) => {
-      const { sourceId, targetId, sourceHandle, targetHandle } = flowsSpec.typeOf('CREATE_EDGE', event);
-      answerWrite(reply, 'Connecting two nodes', () => {
-        const { relId } = repository.flowsCommands.createEdge(sourceId as EARS.EntityId, targetId as EARS.EntityId, { sourceHandle, targetHandle });
-        return { type: 'EDGE_CREATED', sourceId: sourceId as EARS.EntityId, targetId: targetId as EARS.EntityId, relId, sourceHandle, targetHandle };
-      });
-    },
-
-    deleteEdge: ({ event, reply }) => {
-      const { edgeId } = flowsSpec.typeOf('DELETE_EDGE', event);
-      answerWrite(reply, 'Disconnecting two nodes', () => { repository.flowsCommands.deleteEdge(edgeId as EARS.RelationId); });
-    },
-
-    updateEdge: ({ event, reply }) => {
-      const { edgeId, source, target, sourceHandle, targetHandle } = flowsSpec.typeOf('UPDATE_EDGE', event);
-      answerWrite(reply, 'Moving an edge', () => {
-        repository.flowsCommands.updateEdge(edgeId as EARS.RelationId, {
-          source: source as EARS.EntityId,
-          target: target as EARS.EntityId,
-          sourceHandle,
-          targetHandle,
-        });
-      });
-    },
-
-    setRootFlow: ({ event, reply }) => {
-      const { flowId } = flowsSpec.typeOf('SET_ROOT_FLOW', event);
-      answerWrite(reply, 'Changing the root flow', () => {
-        const previous = repository.flowsQueries.rootFlow();
-        if ((flowId ?? undefined) === previous) return;
-        logger.info('Changing the root flow', { previousRootFlowId: previous, rootFlowId: flowId });
-        if (flowId) repository.flowsCommands.grantRootFlowRole(flowId as EARS.EntityId);
-        else if (previous) repository.flowsCommands.revokeRootFlowRole(previous);
-      });
-    },
-
+  actions: { ...answers.actions, ...flowsSpec.actions({
     importDSL: ({ event, reply }) => {
       const { dsl } = flowsSpec.typeOf('IMPORT_DSL', event);
 
@@ -238,11 +184,6 @@ export const flowsSystem = setup({
       logger.info('DSL import complete', { flowIds });
     },
 
-    reindexHandles: ({ event, reply }) => {
-      const { nodeId, prefix, index, direction } = flowsSpec.typeOf('REINDEX_HANDLES', event);
-      answerWrite(reply, 'Renumbering handles', () => { repository.flowsCommands.reindexHandles(nodeId as EARS.EntityId, prefix, index, direction); });
-    },
-
     exportDSL: ({ event, reply }) => {
       const { directory, flowId } = flowsSpec.typeOf('EXPORT_DSL', event);
 
@@ -272,7 +213,7 @@ export const flowsSystem = setup({
         });
       }
     },
-  }),
+  }) },
   guards: {},
   delays: {}
 }).createMachine({
@@ -282,42 +223,7 @@ export const flowsSystem = setup({
   states: {
     idle: {
       on: {
-        GET_MODEL_CATALOG: {
-          actions: 'sendModelCatalog',
-        },
-        CREATE_FLOW: {
-          actions: 'createFlow',
-        },
-        DELETE_FLOW: {
-          actions: 'deleteFlow',
-        },
-        UPDATE_FLOW_LABEL: {
-          actions: 'updateFlowLabel',
-        },
-        CREATE_NODE: {
-          actions: 'createNode',
-        },
-        UPDATE_NODE: {
-          actions: 'updateNode',
-        },
-        DELETE_NODE: {
-          actions: 'deleteNode',
-        },
-        CREATE_EDGE: {
-          actions: 'createEdge',
-        },
-        DELETE_EDGE: {
-          actions: 'deleteEdge',
-        },
-        UPDATE_EDGE: {
-          actions: 'updateEdge',
-        },
-        REINDEX_HANDLES: {
-          actions: 'reindexHandles',
-        },
-        SET_ROOT_FLOW: {
-          actions: 'setRootFlow',
-        },
+        ...answers.on,
         IMPORT_DSL: {
           actions: 'importDSL',
         },

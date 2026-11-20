@@ -37,35 +37,36 @@ export const actionsSpec = defineSystem<Contract>();
  * surface's list and open action, and the flows editor's palette — which run again after each of these writes, so
  * nothing here says who is looking.
  */
+/** A window's writes to its actions, each answered to whoever asked: that it landed, or why it was refused */
+export const answers = actionsSpec.answers({
+  CREATE_ACTION: ({ ask }) => {
+    repository.actionCommands.create({
+      label: ask.label,
+      input: ask.input,
+      actionFn: ask.actionFn,
+      output: ask.output,
+      description: ask.description,
+      category: ask.category
+    });
+  },
+  UPDATE_ACTION: ({ ask }) => {
+    repository.actionCommands.update(ask.actionId as EARS.EntityId, {
+      label: ask.label,
+      input: ask.input,
+      actionFn: ask.actionFn,
+      output: ask.output,
+      description: ask.description,
+      category: ask.category
+    });
+  },
+  DELETE_ACTION: ({ ask }) => {
+    repository.actionCommands.delete(ask.actionId as EARS.EntityId);
+  },
+})
+
 export const actionsSystem = setup({
   types: actionsSpec.types,
-  actions: actionsSpec.actions({
-    createAction: ({ event }) => {
-      const ev = actionsSpec.typeOf('CREATE_ACTION', event);
-      repository.actionCommands.create({
-        label: ev.label,
-        input: ev.input,
-        actionFn: ev.actionFn,
-        output: ev.output,
-        description: ev.description,
-        category: ev.category
-      });
-    },
-    updateAction: ({ event }) => {
-      const ev = actionsSpec.typeOf('UPDATE_ACTION', event);
-      repository.actionCommands.update(ev.actionId as EARS.EntityId, {
-        label: ev.label,
-        input: ev.input,
-        actionFn: ev.actionFn,
-        output: ev.output,
-        description: ev.description,
-        category: ev.category
-      });
-    },
-    deleteAction: ({ event }) => {
-      const ev = actionsSpec.typeOf('DELETE_ACTION', event);
-      repository.actionCommands.delete(ev.actionId as EARS.EntityId);
-    },
+  actions: { ...answers.actions, ...actionsSpec.actions({
     importActions: ({ event, reply }) => {
       const { actions: importData } = actionsSpec.typeOf('IMPORT_ACTIONS', event);
 
@@ -170,22 +171,14 @@ export const actionsSystem = setup({
         if (nextCategory !== a.category) repository.actionCommands.update(a.id, { category: nextCategory });
       }
     },
-  }),
+  }) },
 }).createMachine(
   {
     id: 'actions',
     initial: 'idle',
     context: () => ({}),
     on: {
-      CREATE_ACTION: {
-        actions: 'createAction',
-      },
-      UPDATE_ACTION: {
-        actions: 'updateAction',
-      },
-      DELETE_ACTION: {
-        actions: 'deleteAction',
-      },
+      ...answers.on,
       FEATURE_SETTINGS_UPDATED: {
         actions: 'handleSettingsUpdate',
       },

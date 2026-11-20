@@ -1,5 +1,9 @@
 <template>
   <div class="flex flex-col justify-center h-full">
+    <div v-if="state.context.writeError" class="flex items-center justify-between gap-2 px-3 py-2 text-sm text-red-400 bg-red-500/10 border-b border-red-500/20">
+      <span>{{ state.context.writeError }}</span>
+      <button type="button" class="text-xs opacity-70 hover:opacity-100" @click="actor.send({ type: 'CLEAR_WRITE_ERROR' })">Dismiss</button>
+    </div>
     <!-- List View -->
     <ActionsList
       v-if="state.hasTag('list-actions')"

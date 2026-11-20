@@ -4,7 +4,7 @@
 // is answered. The note this window creates opens here and nowhere else.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { askAnswered, askFailed } from '@apackdev/sdk/testing';
 import type { NoteDTO, NoteSummary } from '#generated/types.ts';
 
 let minted = 0;
@@ -56,7 +56,7 @@ it('holds a read behind an unanswered write, and reads again once the write is a
   expect(context(actor).contents['Note-a']).toBe('typed');
 
   const before = context(actor).writes.refreshes;
-  actor.send(answerTo(callOf('UPDATE_NOTE'), { type: 'NOTE_WRITTEN' }));
+  actor.send(askAnswered(callOf('UPDATE_NOTE'), 'UPDATE_NOTE', undefined));
   expect(context(actor).writes.refreshes).toBe(before + 1);
   actor.send({ type: 'NOTE.READ', noteId: 'Note-a', note: full('Note-a', 'typed') });
   expect(context(actor).contents['Note-a']).toBe('typed');
@@ -76,7 +76,7 @@ it('opens the note this window created, by the answer, once, and marks it new', 
   const actor = start();
   actor.send({ type: 'NOTES.READ', notes: [] });
   actor.send({ type: 'NOTE.CREATE' });
-  actor.send(answerTo(callOf('CREATE_NOTE'), { type: 'NOTE_CREATED', note: summary('Note-new', 'Untitled') }));
+  actor.send(askAnswered(callOf('CREATE_NOTE'), 'CREATE_NOTE', { note: summary('Note-new', 'Untitled') }));
   expect(actor.getSnapshot().hasTag('editor')).toBe(true);
   expect(context(actor)).toMatchObject({ currentNoteId: 'Note-new', createdNoteId: 'Note-new' });
 
@@ -88,6 +88,6 @@ it('reads again after a refused write, which left an edit on screen that is not 
   const actor = open();
   actor.send({ type: 'NOTE.UPDATE_TITLE', noteId: 'Note-a', title: 'refused' });
   const before = context(actor).writes.refreshes;
-  actor.send(answerTo(callOf('UPDATE_NOTE'), { type: 'NOTE_WRITE_FAILED', error: 'No note' }));
+  actor.send(askFailed(callOf('UPDATE_NOTE'), 'UPDATE_NOTE', { kind: 'failed', message: 'No note' }));
   expect(context(actor).writes.refreshes).toBe(before + 1);
 });
