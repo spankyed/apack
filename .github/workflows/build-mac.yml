@@ -101,6 +101,33 @@ jobs:
             exit 1
           fi
 
+      # Apple refuses every notary request while the developer account has an agreement to accept, which it does
+      # again each time it revises one. Asking the notary service for this team's history costs seconds and gets that
+      # refusal before the build, where notarizing would get it after twenty minutes of building
+      - name: Apple accepts this team's notary requests
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          API_KEY: ${{ secrets.APPLE_API_KEY }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          if [ -z "$TEAM_ID" ]; then
+            echo "Notarization isn't configured, so there is no notary account to ask"
+            exit 0
+          fi
+          key="$RUNNER_TEMP/notary-check.p8"
+          trap 'rm -f "$key"' EXIT
+          (umask 077 && printf '%s\n' "$API_KEY" > "$key")
+          if ! xcrun notarytool history --key "$key" --key-id "$API_KEY_ID" --issuer "$API_ISSUER" > /dev/null 2> "$RUNNER_TEMP/notary.err"; then
+            cat "$RUNNER_TEMP/notary.err"
+            if grep -q agreement "$RUNNER_TEMP/notary.err"; then
+              echo "::error::Apple refuses notarization until the account holder accepts the pending agreement: developer.apple.com/account, then App Store Connect > Business"
+            else
+              echo "::error::The notary service refused this team's credentials; see the output above"
+            fi
+            exit 1
+          fi
+
       # The install runs every dependency's install script, so it is a step of its own that holds no signing secret.
       # @vscode/ripgrep's postinstall reads the GitHub API, where a shared runner address without a token is over the
       # rate limit; this job's token reads this repository and writes nothing
