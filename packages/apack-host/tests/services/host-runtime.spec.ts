@@ -1,6 +1,7 @@
 import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // createHostRuntime assembles the app the SDK binds: the given bus and version, the engine, the registered packs,
 // and the host's services over the store. A reset leaves the app as a fresh boot does.
+import { AppDataBusyError } from '@apackdev/sdk/services';
 import { secretRedaction } from '../../src/secrets/redaction.ts';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -201,6 +202,8 @@ describe('createHostRuntime', () => {
     try {
       await expect(second).rejects.toThrow('already being replaced');
       await expect(importing).rejects.toThrow('already being replaced');
+      // Refused as busy, which is what tells a caller nothing was touched
+      await expect(second).rejects.toBeInstanceOf(AppDataBusyError);
     } finally { finish(); await first; }
     expect(reset).toHaveBeenCalledOnce();
     expect(clear).toHaveBeenCalledOnce();
@@ -223,7 +226,9 @@ describe('createHostRuntime', () => {
     } finally { finish(); await resetting; }
     expect(packs.claimPackOperation('any-pack')).toBe(true);
     try {
-      await expect(runtime.services.appData.reset()).rejects.toThrow('A pack is being installed or changed');
+      const refused = runtime.services.appData.reset();
+      await expect(refused).rejects.toThrow('A pack is being installed or changed');
+      await expect(refused).rejects.toBeInstanceOf(AppDataBusyError);
       expect(clear).toHaveBeenCalledOnce();
     } finally { packs.releasePackOperation('any-pack'); }
     order.length = 0;

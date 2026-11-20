@@ -16,7 +16,7 @@ import { _settingsHandle } from './settings-handle.ts';
 
 export type { AppDataService, BackupDatabase, BackupSummary } from './app-data.ts';
 export type { OnboardingService } from './onboarding.ts';
-export { UnknownBackupDatabasesError } from './app-data.ts';
+export { AppDataBusyError, UnknownBackupDatabasesError } from './app-data.ts';
 export {
   _createRunHistory, _RUN_HISTORY_SCHEMA, type RunHistory, type RunPage, type RunStatus, type RunTree,
   type RunNode, type RunNodeBase, type FlowRunNode, type EventRunNode, type StepRunNode, type RunNodeId, type RunNodeStart, type RunNodePatch,

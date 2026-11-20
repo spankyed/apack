@@ -1,6 +1,6 @@
 // services.appData: reset, back up and restore the app's stored data
 import type { ProjectionRunner } from '@apackdev/sdk/runtime';
-import type { AppDataService, BackupDatabase, RunHistory, SettingsAdmin } from '@apackdev/sdk/services';
+import { AppDataBusyError, type AppDataService, type BackupDatabase, type RunHistory, type SettingsAdmin } from '@apackdev/sdk/services';
 import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
 import { databaseBackupStore, exportDatabase, readBackupSummary, importDatabase, type BackupStores } from '../backup/index.ts';
 import { secretsStore } from '../secrets/index.ts';
@@ -30,8 +30,8 @@ export function createAppData({ database, engine, history, registry, settings, o
   let replacing = false;
   /** One replacement at a time, and none while a pack is being installed or changed: both write the same data */
   async function exclusive<T>(operation: () => Promise<T>): Promise<T> {
-    if (replacing) throw new Error('App data is already being replaced. Wait for it to finish.');
-    if (!registry.claimAllPackOperations()) throw new Error('A pack is being installed or changed. Try again once it finishes.');
+    if (replacing) throw new AppDataBusyError('App data is already being replaced. Wait for it to finish.');
+    if (!registry.claimAllPackOperations()) throw new AppDataBusyError('A pack is being installed or changed. Try again once it finishes.');
     replacing = true;
     try { return await operation(); }
     finally {
