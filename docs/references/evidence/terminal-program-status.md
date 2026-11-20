@@ -84,7 +84,8 @@ README. They hold OSC 7501 sequences only.
 
 ### What the probe left behind
 
-- `.apack/probe-7501/` in the main checkout: the script, its JSON output and an empty `work` directory.
+- `.apack/probe-7501/` in the main checkout: the script, its JSON output and an empty `work` directory. Removed on
+  2026-11-19; the fixtures under the broker's `tests/fixtures/program-status/` are what was kept of it.
 - Three Codex sessions and four Claude Code starts recorded in each agent's own history for that
   directory.
 
