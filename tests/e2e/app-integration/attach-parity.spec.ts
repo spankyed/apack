@@ -19,7 +19,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { _electron, expect, test, type ElectronApplication, type Page } from '@playwright/test';
-import { createAppDriver, attachToApp, waitForAppReady, type AttachedApp } from '@apackdev/testing';
+import { closeApp, createAppDriver, attachToApp, waitForAppReady, type AttachedApp } from '@apackdev/testing';
 
 const APP_ROOT = path.resolve(import.meta.dirname, '../../..');
 
@@ -74,6 +74,12 @@ test.describe('a connected page and a launched one', () => {
     });
     launched = await mainWindow(app);
     await waitForAppReady(launched);
+    // Attached once the splash has gone. The app closes it after the main window shows, and a connection made while
+    // it is being destroyed fails: Playwright's runner sets up every page of a new CDP context, and that one closes
+    // under it ("Target page, context or browser has been closed"), which a busy machine makes likely. Only a launch
+    // under Playwright hides the splash, and this app is launched as development, so it is shown
+    await Promise.all(app.windows().filter((window) => window !== launched)
+      .map((window) => window.isClosed() ? undefined : window.waitForEvent('close', { timeout: 0 })));
 
     // Read rather than assumed: `--remote-debugging-port=0` means Chromium picks one, and the number it
     // picked is the only thing that can say which
@@ -81,8 +87,11 @@ test.describe('a connected page and a launched one', () => {
   });
 
   test.afterAll(async () => {
+    // The fixture's close, bounded by the app's work: under load a bare `close()` waited on Chromium writing a profile
+    // this hook deletes next, and ran past the hook's clock after every test had passed
+    test.setTimeout(0);
     await attached?.detach();
-    await app?.close();
+    if (app) await closeApp(app, { userDataDir: dataDir, keepProfile: false });
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 

@@ -189,6 +189,16 @@ describe('isolated editing sessions', () => {
     expect(await git(repo, 'status', '--porcelain')).toBe('');
   });
 
+  it('says how far past its pin a checkout named for a new session is, and links it as named', async () => {
+    fs.writeFileSync(path.join(elmdb, 'next'), 'the next bump, being prepared');
+    await git(elmdb, 'add', '.');
+    await git(elmdb, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'next');
+    const result = await check('', ['new', 'review']);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stderr).toMatch(/elmdb is at \w+, 1 commit past the pinned \w+ \(vendor\/elmdb\.rev\)/);
+    expect(fs.realpathSync(path.join(dir, 'repo-worktrees.noindex', 'review', 'vendor', 'elmdb'))).toBe(fs.realpathSync(elmdb));
+  });
+
   it('retains a new session whose elmdb checkout does not hold the pinned commit, before installing anything', async () => {
     fs.writeFileSync(path.join(repo, 'vendor', 'elmdb.rev'), `${'0'.repeat(40)}\n`);
     await git(repo, 'commit', '-am', 'Pin a commit elmdb lacks');
