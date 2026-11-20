@@ -574,7 +574,10 @@ export function registerApackNativePlugin(on: ClaudeHookRegistrar, configuration
     return next(event);
   });
   on('turn.complete', async ($, event: ClaudeTurnEvent, next) => {
+    const ownGeneration = generation;
     const result = await next(event);
+    // Completion belongs to the turn that entered the chain, even if another session starts meanwhile.
+    if (ownGeneration !== generation) return result;
     if (!event.agentId) {
       const startExchange = await begin($);
       await notify($, 'turn', { running: false, turnId: event.turnId, reason: event.reason });

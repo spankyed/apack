@@ -91,7 +91,7 @@ function mainSessionFixture(){
  const hooks=new Map<string,(...args:any[])=>Promise<any>>(),requests:{path:string;body:any}[]=[],ticks:(()=>void)[]=[]
  const api={session:{id:async()=>sessionId,cwd:async()=>'/'+sessionId,model:async()=>sessionId,turns:async()=>turns,usage:async()=>({startedAt:1})},agent:{list:async()=>[]},settings:{read:vi.fn(async()=>({}))},env:{get:vi.fn(async():Promise<string|undefined>=>undefined)},prompt:{read:vi.fn(async()=>({text:''})),fill:vi.fn(async()=>({isFilled:true}))},clock:{every:vi.fn((_ms:number,tick:()=>void)=>{ticks.push(tick);return{cancel:vi.fn()}})},http:{fetch:vi.fn(async(url:string,init:any)=>{const path=new URL(url).pathname;requests.push({path,body:JSON.parse(init.body)});return{ok:true,text:'{}'}})}}
  createPluginFixture(CONFIG)(((event:string,...args:any[])=>hooks.set(event,args.at(-1))) as unknown as ClaudeHookRegistrar)
- const fire=(event:string,next=async()=>({}))=>hooks.get(event)!(api,{},next)
+ const fire=(event:string,next=async()=>({}),body:Record<string,unknown>={})=>hooks.get(event)!(api,body,next)
  return{api,requests,fire,tick:()=>ticks.at(-1)!(),setTurns:(value:number)=>{turns=value},async start(id=sessionId){sessionId=id;await fire('session.start')}}
 }
 
@@ -155,4 +155,17 @@ it('fences the old prompt before waiting on fresh-session readiness delivery',as
  expect(f.requests.filter(row=>row.path==='/poll'&&row.body.sessionId===fresh)).toHaveLength(0)
  expect(f.api.clock.every).toHaveBeenCalledTimes(2)
  ready.resolve({ok:true,text:'{}'});await starting
+})
+
+
+it('does not report a retired turn completion as the fresh session becoming idle',async()=>{
+ const f=mainSessionFixture(),completion=held<{completed:boolean}>(),fresh='77777777-7777-4777-8777-777777777777'
+ await f.start()
+ const completing=f.fire('turn.complete',()=>completion.promise,{turnId:'retired-turn',reason:'answer'})
+ await f.start(fresh);await f.fire('turn.start')
+ completion.resolve({completed:true})
+ expect(await completing).toEqual({completed:true})
+ expect(f.requests.filter(row=>row.path==='/turn').map(row=>row.body)).toEqual([expect.objectContaining({sessionId:fresh,running:true})])
+ await f.fire('turn.complete',async()=>({}),{turnId:'fresh-turn',reason:'answer'})
+ expect(f.requests.filter(row=>row.path==='/turn').map(row=>row.body)).toEqual([expect.objectContaining({sessionId:fresh,running:true}),expect.objectContaining({sessionId:fresh,running:false,turnId:'fresh-turn',reason:'answer'})])
 })
