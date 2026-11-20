@@ -200,8 +200,41 @@ jobs:
 
   # The one job whose token writes. It runs for a dispatch from a branch too, where it stops after reading the files
   # the build kept, so the hand-over between the two jobs is exercised without a tag
+  # **The tag's release is made here and nowhere else**, as a draft, before anything is built. Each platform's
+  # release job uploads to it, and this workflow's publishes it. Were each to make it when it found none, two that
+  # looked at once would each make a draft, which a tag may have several of, and one platform's files would stay in a
+  # draft nobody publishes. A tag whose build fails leaves the draft, as it leaves no release
+  draft:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Draft the tag's release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # A release that can't be read is not one that isn't there: only gh's `release not found` counts as none
+          release_exists() {
+            if gh release view "$GITHUB_REF_NAME" > /dev/null 2> view.err; then return 0; fi
+            if grep -q 'release not found' view.err; then return 1; fi
+            cat view.err
+            exit 1
+          }
+          if release_exists; then exit 0; fi
+          # A beta tag names its channel, as each build reads it
+          if [[ "${GITHUB_REF_NAME#v}" == *-beta* ]]; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --generate-notes --prerelease --title "apack Beta $GITHUB_REF_NAME"
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --generate-notes --title "apack $GITHUB_REF_NAME"
+          fi
+
   release:
-    needs: build-mac
+    needs: [build-mac, draft]
+    # A dispatch from a branch has no draft job to wait on, and still lists the files it built
+    if: ${{ !cancelled() && needs.build-mac.result == 'success' && (needs.draft.result == 'success' || needs.draft.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -228,37 +261,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          PRERELEASE_FLAG=""
-          if [ "$IS_BETA" = "true" ]; then
-            PRERELEASE_FLAG="--prerelease"
-          fi
           assets=(dist/"${PREFIX}"-*.dmg dist/"${PREFIX}"-*.zip dist/"${PREFIX}"-*.sha256 dist/"${PREFIX}"-*.cdx.json)
-
-          # A release that can't be read is not one that isn't there: only gh's `release not found` counts as none, since
-          # creating one beside a release that exists would make a second draft for the tag, holding this platform's files
-          release_exists() {
-            if gh release view "$GITHUB_REF_NAME" > /dev/null 2> view.err; then return 0; fi
-            if grep -q 'release not found' view.err; then return 1; fi
-            cat view.err
-            exit 1
-          }
-          # The Windows and Linux workflows create the tag's release as a draft when they finish first; it is published
-          # here, once the files `apack install` and `upgrade` read are on it
-          if release_exists; then
-            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
-            gh release edit "$GITHUB_REF_NAME" --draft=false
-          else
-            gh release create "$GITHUB_REF_NAME" --verify-tag \
-              --generate-notes \
-              --title "${APP_NAME} $GITHUB_REF_NAME" \
-              $PRERELEASE_FLAG \
-              "${assets[@]}" || {
-                status=$?
-                if release_exists; then
-                  gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
-                  gh release edit "$GITHUB_REF_NAME" --draft=false
-                else
-                  exit "$status"
-                fi
-              }
-          fi
+          # The `draft` job made the tag's release; it is published here, once the files `apack install` and `upgrade`
+          # read are on it
+          gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          gh release edit "$GITHUB_REF_NAME" --draft=false

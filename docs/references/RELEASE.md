@@ -251,8 +251,9 @@ only its build step, as environment variables. It keeps the release files as the
 the one whose token writes: it downloads that artifact and runs `gh`, and no code from the checkout or its dependencies.
 
 `.github/workflows/build-windows.yml` (`windows-latest`) and `.github/workflows/build-linux.yml` (`ubuntu-24.04`) run
-the same pipeline on the same triggers, unsigned, and upload their release files to the tag's release. One that finishes
-before macOS creates it as a draft, and build-mac.yml publishes it once the macOS files are on it, so a published
+the same pipeline on the same triggers, unsigned, and upload their release files to the tag's release. build-mac.yml's
+`draft` job makes that release, as a draft, when the tag is pushed, and nothing else makes one: the Windows and Linux
+release jobs wait for it and upload, and build-mac.yml publishes it once the macOS files are on it, so a published
 release always holds the files `apack install` and `upgrade` read. A tag whose macOS build fails leaves its release a
 draft. A dispatch from a branch builds without publishing (one on a tag uploads, as the tag's
 run would): its `release` job reads the files the build kept and stops. Every run keeps what it built as the run's
