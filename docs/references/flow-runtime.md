@@ -201,12 +201,14 @@ Brain kill and restart clear the event queue, pending runtime actors, schedules,
 
 ## Run Data
 
-The runtime tells the frontend about run nodes:
+The runtime tells every window about run nodes as a feed:
 
 - `RUN_NODE_SPAWNED` when flow, event, or step run nodes are created in the run history.
 - `RUN_NODE_UPDATED` when RunNodes complete or fail.
-- `RUN_NODE_OPENED` and `RECEIVE_SURFACE_DATA` when the UI requests a flow run's data.
-- `RUN_NODE_DETAILS` for details-panel data.
+
+A window asks for the rest, and the brain answers it alone (the brain's `asks`): `REQUEST_SURFACE_DATA` for a run's
+tree with the brain's state, `OPEN_RUN_NODE` and `GO_BACK_RUN_NODE` for a flow run's, and `GET_RUN_NODE_DETAILS` for
+the details panel.
 
 Run hierarchy:
 

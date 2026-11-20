@@ -9,7 +9,7 @@ import type { Page } from '@playwright/test';
 import { API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
 import { test, expect } from '@apackdev/testing';
 
-interface Received { surface: string; type: string; data?: unknown; savedBookmarks?: Array<{ url: string }> }
+interface Received { surface: string; type: string; data?: unknown; asked?: string; answer?: { savedBookmarks?: Array<{ url: string }> } }
 
 type RecordingWindow = {
   __received?: Received[];
@@ -111,8 +111,9 @@ test("a reloaded pack's browser surface restores what its system saved, asking a
     });
     expect(response.status, await response.text()).toBe(200);
 
-    await expect.poll(async () => (await received(appPage, 'browser', 'SAVED_SESSION_READ'))
-      .some((event) => (event.savedBookmarks ?? []).some((bookmark) => bookmark.url === url))).toBe(true);
+    await expect.poll(async () => (await received(appPage, 'browser', 'ASK_ANSWERED'))
+      .filter((event) => event.asked === 'GET_SAVED_SESSION')
+      .some((event) => (event.answer?.savedBookmarks ?? []).some((bookmark) => bookmark.url === url))).toBe(true);
   } finally {
     await app.send(builtIn('browser'), { type: 'SYNC_BOOKMARKS', bookmarks: [] });
   }

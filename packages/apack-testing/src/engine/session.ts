@@ -199,6 +199,8 @@ const channelGone = (requestId: string, reason: string): Error =>
  * so they are read here rather than at each call site.
  */
 const refusalText = (event: Record<string, unknown>): string => {
+  const failure = event.failure as { message?: unknown } | undefined;
+  if (failure !== undefined) return String(failure.message);
   if (Array.isArray(event.problems)) return event.problems.join('; ');
   return String(event.error ?? 'the system reported an error');
 };
@@ -425,11 +427,10 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
     return answer;
   };
 
-  /** What the database answers with, which is the one round-trip shape used twice */
-  const runCode = (kind: 'query' | 'transact', type: string, code: string): Promise<unknown> =>
-    roundTrip(DATABASE_SYSTEM, { type, code },
-      kind === 'query' ? 'QUERY_RESULT' : 'TRANSACTION_RESULT',
-      kind === 'query' ? 'QUERY_ERROR' : 'TRANSACTION_ERROR');
+  /** What the database answers a query or a transaction with: its answer's result, or why it failed */
+  const runCode = (type: 'EXECUTE_QUERY' | 'EXECUTE_TRANSACTION', code: string): Promise<unknown> =>
+    roundTrip(DATABASE_SYSTEM, { type, code }, 'ASK_ANSWERED', 'ASK_FAILED', 'answer')
+      .then((answer) => (answer as { result?: unknown } | undefined)?.result);
 
   /**
    * Hooks the app's actor inspection up to `BRIDGE_FUNCTION`, which is a callback into this process rather
@@ -554,8 +555,8 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
     // match one against. A system that replies to it answers a call nobody is holding, which the bus drops
     system: (to, event) => attempt('system', () => sendToSystem(to, event)),
 
-    query: (code) => attempt('query', () => runCode('query', 'EXECUTE_QUERY', code)),
-    transact: (code) => attempt('transact', () => runCode('transact', 'EXECUTE_TRANSACTION', code)),
+    query: (code) => attempt('query', () => runCode('EXECUTE_QUERY', code)),
+    transact: (code) => attempt('transact', () => runCode('EXECUTE_TRANSACTION', code)),
 
     state: () => attempt('state', () => page.evaluateExpression(`(() => {
       const snap = window.applicationState?.getSnapshot();

@@ -536,8 +536,8 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
     nextEmit: (surface, type, { timeoutMs, answering } = {}) => call(async () => {
       const id = resolveSurfaceId(surface);
       const wanted = answering === undefined ? '' : ` answering ${answering}`;
-      // Named per send, since "a QUERY_RESULT arrived but answered something else" is the failure this option
-      // exists to tell apart from "no QUERY_RESULT arrived", and only the envelope says which
+      // Named per send, since "an answer arrived but answered something else" is the failure this option
+      // exists to tell apart from "no answer arrived", and only the envelope says which
       const describeSend = (m: Message) => `${m.to}:${m.event.type}${m.answering === undefined ? '' : ` answering ${m.answering}`}`;
       return waitForEmitted(() => {
         const index = emitted.findIndex((message, i) => !taken.has(i) && message.to === id && message.event.type === type
