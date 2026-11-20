@@ -215,8 +215,8 @@ export namespace EARS {
 ${entityValue}${prototypeExport('Entity', registry.entities)}
   export type Entity = ${entityUnion};
 
-  export type EntityId<E extends string = string> = import('@apackdev/ears').EARS.EntityId<E>;
-  export type RelationId = import('@apackdev/ears').EARS.RelationId;
+  export type EntityId<E extends string = string> = import('@apackdev/sdk').EARS.EntityId<E>;
+  export type RelationId = import('@apackdev/sdk').EARS.RelationId;
 
   export namespace RelKind {
 ${relKindMembers.join('\n')}
@@ -248,15 +248,15 @@ ${roleMembers.join('\n')}
     export type Role = typeof Role;
     export const Custom = <T extends string>(k: T) => k as T & AttrKind;
   }
-  export type AttrKind = import('@apackdev/ears').EARS.AttrKind;
+  export type AttrKind = import('@apackdev/sdk').EARS.AttrKind;
 
-  export type AttributePayloads = import('@apackdev/ears').EARS.AttributePayloads;
-  export type AttributeValue<K extends AttrKind = AttrKind> = import('@apackdev/ears').EARS.AttributeValue<K>;
-  export type AttributeTypeMap = import('@apackdev/ears').EARS.AttributeTypeMap;
-  export type AttributeStore = import('@apackdev/ears').EARS.AttributeStore;
+  export type AttributePayloads = import('@apackdev/sdk').EARS.AttributePayloads;
+  export type AttributeValue<K extends AttrKind = AttrKind> = import('@apackdev/sdk').EARS.AttributeValue<K>;
+  export type AttributeTypeMap = import('@apackdev/sdk').EARS.AttributeTypeMap;
+  export type AttributeStore = import('@apackdev/sdk').EARS.AttributeStore;
 }
 
-export type BaseEntity = import('@apackdev/ears').BaseEntity;
+export type BaseEntity = import('@apackdev/sdk/ears').BaseEntity;
 
 export const AllEntities = EARS.Entity;
 export type AllEntities = EARS.Entity;
@@ -1297,8 +1297,7 @@ ${regProps.join('\n')}
 // dependencies'), bound to the app's engine (\`boundEars\`). The call is pure, so bundles that only use the
 // EARS constants above drop it.
 
-import { defineEars, type EarsSchema, type ShapeOf, type ShortCode } from '@apackdev/ears';
-import { boundEars } from '@apackdev/sdk/ears';
+import { boundEars, defineEars, type EarsSchema, type ShapeOf, type ShortCode } from '@apackdev/sdk/ears';
 import type { SdkEntityShapes } from '@apackdev/sdk';
 ${ownNodes ? "import type { NodeEntity } from './types.ts';\n" : ''}${shapeImports.join('\n')}
 
@@ -1845,7 +1844,7 @@ ${nodeEntity}`;
 
     return `${HEADER}
 import type { z } from 'zod';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@apackdev/sdk';
 import type { HostServices, PackServiceAccess } from '@apackdev/sdk/services';
 import { runtimeServices } from './runtime-services.ts';
 import type { TypedSendToSurface, TypedSendToWindow, TypedSendToSystem } from '@apackdev/sdk/events';

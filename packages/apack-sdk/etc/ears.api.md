@@ -4,20 +4,33 @@
 
 ```ts
 
+import { BaseEntity } from '@apackdev/ears';
 import type { CallSiteNaming } from '@apackdev/ears';
 import type { Create } from '@apackdev/ears';
 import { DatabaseCatalog } from '@apackdev/ears';
+import { defineEars } from '@apackdev/ears';
 import { EARS } from '@apackdev/ears';
 import type { Ears } from '@apackdev/ears';
+import { EarsSchema } from '@apackdev/ears';
 import { EntityRow } from '@apackdev/ears';
 import type { Query } from '@apackdev/ears';
+import { QueryBuilder } from '@apackdev/ears';
+import { QueryExplanation } from '@apackdev/ears';
 import { RelationMatch } from '@apackdev/ears';
 import { RelationPatch } from '@apackdev/ears';
 import { RelationRow } from '@apackdev/ears';
+import { RelationStats } from '@apackdev/ears';
+import { RESERVED_ATTRIBUTES } from '@apackdev/ears';
 import { SchemaStats } from '@apackdev/ears';
+import { ShapeOf } from '@apackdev/ears';
+import { ShortCode } from '@apackdev/ears';
 import { UnitOptions } from '@apackdev/ears';
+import { UntypedSchema } from '@apackdev/ears';
 import type { Upsert } from '@apackdev/ears';
 import type { Write } from '@apackdev/ears';
+import { WriteBuilder } from '@apackdev/ears';
+
+export { BaseEntity }
 
 // @internal
 export function _bindEars(engine: Ears | undefined): Ears | undefined;
@@ -28,8 +41,12 @@ export function boundEars(): Ears;
 // @public (undocumented)
 export const catalog: () => DatabaseCatalog;
 
+export { defineEars }
+
 // @internal
 export const _EARS_CALL_SITES: CallSiteNaming;
+
+export { EarsSchema }
 
 // @public (undocumented)
 export const findRelations: (match?: RelationMatch) => RelationRow[];
@@ -55,8 +72,24 @@ export const nextLabel: (type: EARS.Entity, base: string) => string;
 // @public
 export const NO_ENGINE_BOUND: string;
 
+export { QueryBuilder }
+
+export { QueryExplanation }
+
+export { RelationMatch }
+
+export { RelationRow }
+
+export { RelationStats }
+
 // @public (undocumented)
 export const removeRelation: (relId: EARS.RelationId) => void;
+
+export { RESERVED_ATTRIBUTES }
+
+export { ShapeOf }
+
+export { ShortCode }
 
 // @public (undocumented)
 export const transact: <T>(fn: () => T, options?: UnitOptions) => T;
@@ -66,6 +99,8 @@ export const untypedCreate: Create;
 
 // @public
 export const untypedQuery: Query;
+
+export { UntypedSchema }
 
 // @public
 export const untypedUpsert: Upsert;
@@ -78,5 +113,7 @@ export const updateRelation: (relId: EARS.RelationId, patch: RelationPatch) => v
 
 // @public (undocumented)
 export const wouldCreateCycle: (source: EARS.EntityId, target: EARS.EntityId, kinds: readonly EARS.RelKind[]) => boolean;
+
+export { WriteBuilder }
 
 ```

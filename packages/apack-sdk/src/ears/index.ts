@@ -11,6 +11,14 @@
  */
 import type { CallSiteNaming, Create, Ears, Query, Upsert, Write } from '@apackdev/ears';
 
+// What packs and their generated `#generated/ears` use of EARS itself, so that a pack names apack's SDK alone and
+// loads the EARS that SDK was built with
+export { defineEars, RESERVED_ATTRIBUTES } from '@apackdev/ears';
+export type {
+  BaseEntity, EarsSchema, QueryBuilder, QueryExplanation, RelationMatch, RelationRow, RelationStats, ShapeOf, ShortCode,
+  UntypedSchema, WriteBuilder,
+} from '@apackdev/ears';
+
 let bound: Ears | undefined;
 
 /** The error an engine use with none bound throws */
