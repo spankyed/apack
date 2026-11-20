@@ -1,4 +1,5 @@
-// The harness fails early, naming both copies, when a pack's @apackdev/ears isn't the copy its @apackdev/sdk loads
+// The harness fails early, naming both copies, when what a pack resolves as @apackdev/ears isn't the copy its
+// @apackdev/sdk loads
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -34,11 +35,11 @@ describe('assertSharedEars', () => {
 
   it('names both copies when npm nested another @apackdev/ears under @apackdev/sdk', () => {
     expect(() => assertSharedEars(pack({ top: '0.1.0', nested: '0.2.0' })))
-      .toThrow(/are different copies[\s\S]*install matching versions/);
+      .toThrow(/are different copies[\s\S]*remove @apackdev\/ears from the pack's dependencies/);
   });
 
-  it('asks to install @apackdev/ears when the pack has none', () => {
-    expect(() => assertSharedEars(pack({ nested: '0.2.0' }))).toThrow(/@apackdev\/ears isn't installed in[\s\S]*add it to the pack's dependencies/);
+  it('accepts a pack that resolves no @apackdev/ears, its @apackdev/sdk holding the one copy', () => {
+    expect(() => assertSharedEars(pack({ nested: '0.2.0' }))).not.toThrow();
   });
 
   it('accepts the workspace layout the monorepo\'s fixture packs use', () => {

@@ -6,7 +6,7 @@ import { createBuildOutputs } from '../../src/build/build-outputs.ts';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { dslInputsHash, filesUnder, reuseProblem, takeForward, typesInputsHash, readPhaseCache, writeStamps } from '../../src/build/phase-cache';
+import { apackScope, dslInputsHash, filesUnder, reuseProblem, takeForward, typesInputsHash, readPhaseCache, writeStamps } from '../../src/build/phase-cache';
 import { readDependencyBuild, sealPackBuild, PACK_LAYOUT } from '@apackdev/host/packs';
 import { createPackCompilerInputView } from '@apackdev/host/build/compiler-inputs';
 import { writePackBuildInputs } from '@apackdev/host/build/pack-build-inputs';
@@ -232,4 +232,33 @@ it('refuses phase reuse when a previously consumed external input changes withou
   expect(readPhaseCache(root).stamps).toEqual({});
   fs.writeFileSync(file, 'FIRST');
   expect(readPhaseCache(root).stamps).toEqual(stamps);
+});
+
+describe('apackScope', () => {
+  const manifest = (name: string) => JSON.stringify({ name, version: '0.1.0' });
+
+  it("takes @apackdev/ears from the pack's SDK, which a pack that names only the SDK can't resolve itself", () => {
+    // npm nested the SDK's EARS under it: nothing above the pack holds one
+    const pack = tmp({
+      'package.json': manifest('pack'),
+      'node_modules/@apackdev/sdk/package.json': manifest('@apackdev/sdk'),
+      'node_modules/@apackdev/sdk/node_modules/@apackdev/ears/package.json': manifest('@apackdev/ears'),
+      'node_modules/@apackdev/ui/package.json': manifest('@apackdev/ui'),
+    });
+    const real = fs.realpathSync(pack);
+    expect(apackScope(pack)).toEqual({ dirs: [
+      path.join(real, 'node_modules/@apackdev/sdk/node_modules/@apackdev/ears/dist'),
+      path.join(real, 'node_modules/@apackdev/sdk/dist'),
+      path.join(real, 'node_modules/@apackdev/ui/dist'),
+    ] });
+  });
+
+  it('names what it cannot find rather than leave it out of the scope', () => {
+    const pack = tmp({
+      'package.json': manifest('pack'),
+      'node_modules/@apackdev/sdk/package.json': manifest('@apackdev/sdk'),
+      'node_modules/@apackdev/ui/package.json': manifest('@apackdev/ui'),
+    });
+    expect(apackScope(pack)).toEqual({ missing: ['@apackdev/ears'] });
+  });
 });
