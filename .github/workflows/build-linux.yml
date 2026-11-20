@@ -53,6 +53,7 @@ jobs:
         run: npm install -g npm@11.21.1
 
       - uses: ./.github/actions/elmdb
+        with: { glibc: '2.28' }
       - uses: ./.github/actions/apack-terminal
       - uses: ./.github/actions/apack-git
 

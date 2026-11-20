@@ -2,8 +2,18 @@
 # before `npm ci` resolves @apackdev/ears' `file:` dependency through it. Locally vendor/elmdb is a link to a checkout
 # (`npm run link:elmdb`); CI can't reach one, so it fetches the pinned commit. Rust is the version elmdb's
 # rust-toolchain.toml pins, which rustup installs on first use, and Cargo's target directory is cached.
+#
+# The binding is built on the runner and needs the runner's glibc, which suits a job that only runs it there. A Linux
+# job that ships it names the glibc it may need (`glibc: '2.28'`): the binding is then built in that manylinux image
+# (manylinux_2_28 is AlmaLinux 8), as elmdb's own release builds it, where every object, LMDB's C among them, is
+# compiled and linked against that glibc's headers and library.
 name: elmdb
 description: Clone elmdb at the pinned commit into vendor/elmdb and build its binding
+inputs:
+  glibc:
+    description: On Linux, build the binding in this manylinux image so it needs no glibc past it (e.g. 2.28)
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -20,6 +30,8 @@ runs:
     - name: Build the binding
       shell: bash
       working-directory: vendor/elmdb
+      env:
+        GLIBC: ${{ inputs.glibc }}
       run: |
         rustup show active-toolchain
         npm ci --no-audit --no-fund
@@ -28,6 +40,36 @@ runs:
         if [ "$RUNNER_OS" = Windows ]; then
           cargo build -p elmdb-node --release
           cp target/release/elmdb_node.dll crates/elmdb-node/elmdb.win32-x64-msvc.node
+        elif [ -n "$GLIBC" ]; then
+          # cargo builds the binding in the container, which has no Node, and it is named as napi's loader expects. It
+          # builds into a target directory of its own, so no object a build on a runner left in the cache is linked.
+          # The check after reads its undefined symbols: one versioned past the glibc named wouldn't load on a system
+          # at it, and one with no version at all, other than Node's own `napi_` functions, is a symbol the C library
+          # it was linked against doesn't have, which a binary built against newer headers than its library leaves
+          case "$(uname -m)" in x86_64) arch=x64 ;; aarch64) arch=arm64 ;; esac
+          docker run --rm -v "$PWD:/w" -w /w -e CARGO_TERM_COLOR -e CARGO_INCREMENTAL=0 -e CARGO_TARGET_DIR=target/manylinux \
+            "quay.io/pypa/manylinux_${GLIBC/./_}_$(uname -m)" bash -euc '
+            curl --proto "=https" --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+            export PATH="$HOME/.cargo/bin:$PATH"
+            git config --global --add safe.directory /w
+            rustup toolchain install
+            rustup show active-toolchain
+            cargo build -p elmdb-node --release --locked
+          '
+          sudo chown -R "$(id -u):$(id -g)" .
+          binary=crates/elmdb-node/elmdb.linux-$arch-gnu.node
+          cp target/manylinux/release/libelmdb_node.so "$binary"
+          newest=$(nm -D --undefined-only "$binary" | grep -o '@GLIBC_[0-9.]*' | sed 's/@GLIBC_//' | sort -uV | tail -1)
+          unversioned=$(nm -D --undefined-only "$binary" | awk '$1 == "U" && $2 !~ /@/ && $2 !~ /^(napi_|node_api_)/ { print $2 }')
+          echo "$binary needs glibc ${newest:-(none read)}; it may need $GLIBC"
+          if [ -z "$newest" ] || [ "$(printf '%s\n' "$newest" "$GLIBC" | sort -V | tail -1)" != "$GLIBC" ]; then
+            echo "::error::$binary needs glibc ${newest:-(none read)}, and it is to need none past $GLIBC"
+            exit 1
+          fi
+          if [ -n "$unversioned" ]; then
+            echo "::error::$binary leaves symbols no C library it was linked against defines: $unversioned"
+            exit 1
+          fi
         else
           npm run build
         fi
