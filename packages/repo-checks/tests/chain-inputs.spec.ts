@@ -404,6 +404,15 @@ describe('a step declares the modules its script imports', () => {
     .map((file) => repoRelative(file)));
   const decidesWhether = (file: string): boolean => NOT_A_BUILD_INPUT[file] !== undefined;
   const excused = (file: string): boolean => table.has(file) || decidesWhether(file);
+  /**
+   * A vendored checkout's file is declared by its pin, `vendor/<name>.rev`, which stands for what it names as the
+   * lockfile stands for `node_modules` (`VENDOR_PINS`, `scripts/lib/chain-steps.ts`): EARS' imports reach the
+   * binding's protocol types through `vendor/elmdb`, which no step lists file by file
+   */
+  const pinned = (file: string, covered: Set<string>): boolean => {
+    const vendored = /^vendor\/([^/]+)\//.exec(file);
+    return vendored !== null && covered.has(`vendor/${vendored[1]}.rev`);
+  };
 
   /** The `.ts` entries a step's script names, which is where the text-level case above already ends */
   const entriesOf = (step: ChainStep, all: ReturnType<typeof rootScripts>): string[] =>
@@ -420,7 +429,7 @@ describe('a step declares the modules its script imports', () => {
       if (entriesOf(step, all).length === 0) return [];
       const covered = coveredBy([step]);
       return walked(step, all)
-        .filter((file) => !excused(file) && !covered.has(file))
+        .filter((file) => !excused(file) && !covered.has(file) && !pinned(file, covered))
         .map((file) => `${step.name} imports ${file} and does not declare it`);
     });
     expect(missing,
