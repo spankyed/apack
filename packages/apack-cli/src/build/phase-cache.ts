@@ -109,7 +109,9 @@ export function takeForward(distDir: string, stagedDir: string, files: readonly 
 
 /**
  * The `@apackdev` packages a pack's frontend compiles against, as the pack itself resolves them — workspace
- * source in a checkout, `node_modules` in an installed pack, which is the one layout a pack author has.
+ * source in a checkout, `node_modules` in an installed pack, which is the one layout a pack author has. The pack
+ * names `@apackdev/sdk` and `@apackdev/ui`; `@apackdev/ears` is the SDK's dependency, so it is the copy the SDK
+ * resolves, wherever npm put it.
  *
  * **A package it cannot find is a refusal, not an omission.** Leaving one out of the scope would mean an
  * upgrade to it did not invalidate anything, and the build would take a bundle forward that was compiled
@@ -117,16 +119,21 @@ export function takeForward(distDir: string, stagedDir: string, files: readonly 
  * so rather than answer from what is left.
  */
 export function apackScope(packDir: string): { readonly dirs: readonly string[] } | { readonly missing: readonly string[] } {
-  const require = createRequire(path.join(packDir, 'noop.js'));
+  const fromPack = path.join(packDir, 'noop.js');
   const dirs: string[] = [];
   const missing: string[] = [];
-  for (const pkg of ['@apackdev/ears', '@apackdev/sdk', '@apackdev/ui']) {
+  const resolveDir = (pkg: string, from: string): string | undefined => {
     try {
-      dirs.push(path.join(path.dirname(require.resolve(`${pkg}/package.json`)), 'dist'));
+      return path.dirname(fs.realpathSync(createRequire(from).resolve(`${pkg}/package.json`)));
     } catch {
       missing.push(pkg);
+      return undefined;
     }
-  }
+  };
+  const sdk = resolveDir('@apackdev/sdk', fromPack);
+  const ears = sdk === undefined ? undefined : resolveDir('@apackdev/ears', path.join(sdk, 'package.json'));
+  const ui = resolveDir('@apackdev/ui', fromPack);
+  for (const dir of [ears, sdk, ui]) if (dir !== undefined) dirs.push(path.join(dir, 'dist'));
   return missing.length > 0 ? { missing } : { dirs };
 }
 

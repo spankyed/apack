@@ -40,7 +40,7 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
 - This form is what gives editors field-name completions and makes a typo's error list the valid fields.
 - `pickOne()` with no fields is the first whole row, `ShapeOf<S, E> | null`, as a write builder's `row()` is its entity's. The no-field overload is declared after the fields one, so `pickOne(['|'])` keeps its completions; `query.ids(id).pickOne()` is the row with an id, typed by a branded id or by `.ofType(type)`, which checks the entity rather than asserting a shape.
 - For a union shape, such as `Node` rows, only the fields every member has are accepted.
-- A query whose fields vary by member, or are only known at runtime, uses `untypedQuery` from `@apackdev/ears` on purpose. The brain trigger queries in default-setup are the example. (It's the same untyped `query` an engine has, `createEarsEngine(...).query`.)
+- A query whose fields vary by member, or are only known at runtime, uses `untypedQuery` from `@apackdev/sdk/ears` on purpose. The brain trigger queries in default-setup are the example. (It's the same untyped `query` an engine has, `createEarsEngine(...).query`.)
 
 **Entity names.**
 - A literal entity name must be one the pack, its dependencies or the SDK declares (`EntityName`). A name typed `string` passes unchecked (`EntityNameArg`).
@@ -160,7 +160,7 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
 - **Union field typing (2026-09-14).**
   - What happened: to make brain's trigger queries compile against the new `Node` union, the field parameters were rewritten as conditional and mapped types (`FieldArg`, `FieldsArg`, `PickedOf`). That added runtime field names and union-member fields to every field-keyed API.
   - Why tests missed it: everything compiled and every type test passed. But field completions disappeared from `pick`, `pickOne`, `linksPick`, `getAttr` and `findWithFields`, and typo errors became "not assignable to type 'never'".
-  - Resolution: reverted, and the two queries use the untyped `untypedQuery` (`@apackdev/ears`). The completions test in `facade-typing.integration.spec.ts` now guards these positions.
+  - Resolution: reverted, and the two queries use the untyped `untypedQuery` (`@apackdev/sdk/ears`). The completions test in `facade-typing.integration.spec.ts` now guards these positions.
 - **`query('user-note')` compiled: the dash heuristic (investigated 2026-09-18; resolved by the split below).**
   - What it was: `EntityId<E>` is `` `${string}-${string}` `` with an *optional* `__entity` brand. The query and
     write entry points each took a name *or* an id, and the dash was the only thing telling those apart. So a misspelled

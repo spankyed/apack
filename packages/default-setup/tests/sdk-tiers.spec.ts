@@ -1,5 +1,5 @@
 /**
- * Tests verifying that default-setup imports from @apackdev/sdk and @apackdev/ears resolve to the
+ * Tests verifying that default-setup imports from @apackdev/sdk resolve to the
  * runtime the harness binds.
  */
 import { untypedCreate } from '@apackdev/sdk/ears';
