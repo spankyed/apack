@@ -61,5 +61,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5.8.3",
     "vitest": "^4.1.12"
+  },
+  "optionalDependencies": {
+    "msgpackr-extract": "^3.0.6"
   }
 }
