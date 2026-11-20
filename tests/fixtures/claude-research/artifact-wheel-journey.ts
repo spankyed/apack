@@ -9,9 +9,8 @@ export async function verifyArtifactWheel({app,appPage,testInfo}:{app:AppDriver;
   const directory = await mkdtemp(join(tmpdir(), 'apack-artifact-wheel-'))
   const threadId = `Thread-artifact-wheel-${randomUUID()}`
   let imported = false
-  const send = async (event: Record<string, unknown>) => appPage.evaluate(event => {
-    (window as any).__sendToSystem('default-setup/threads', event)
-  }, event)
+  let originalCanvasHeight: number | undefined
+  const send = (event: { type: string; [key: string]: unknown }) => app.send('default-setup/threads', event)
   try {
     await app.waitForSurface('default-setup/threads')
     await app.navigate('default-setup/threads')
@@ -38,6 +37,10 @@ export async function verifyArtifactWheel({app,appPage,testInfo}:{app:AppDriver;
     const lastTitle = await last.getAttribute('title')
     const lastNumber = Number(lastTitle?.match(/(\d+)$/)?.[1])
     expect(lastNumber).toBeGreaterThan(0)
+    // Read the notes in the existing maximized workspace; this check targets wheel navigation.
+    originalCanvasHeight = await appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.panelSizes.canvasHeight)
+    if (originalCanvasHeight! < 93) await appPage.locator('.cursor-row-resize').first().click()
+    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.getSnapshot().context.panelSizes.canvasHeight)).toBeGreaterThanOrEqual(93)
     const readings = []
     for (const viewport of [{ width: 1100, height: 900 }, { width: 680, height: 600 }]) {
       await appPage.setViewportSize(viewport)
@@ -64,6 +67,7 @@ export async function verifyArtifactWheel({app,appPage,testInfo}:{app:AppDriver;
     await writeFile(testInfo.outputPath('artifact-wheel-failure.json'), JSON.stringify(state, null, 2))
     throw error
   } finally {
+    if (originalCanvasHeight !== undefined) await appPage.evaluate(size => (window as any).applicationState.send({ type: 'RESIZE_PANEL', panel: 'canvas', size }), originalCanvasHeight)
     if (imported) await send({ type: 'DELETE_THREAD', threadId })
     await rm(directory, { recursive: true, force: true })
   }
