@@ -37,6 +37,11 @@ describe('dependencyClosure', () => {
     expect(closure[1]!.manifest.version).toBe('2.0.0');
   });
 
+  it('finds a package named like a built-in module, which a lookup for the bare name would take for the built-in', () => {
+    const root = tmp({ 'node_modules/a/package.json': pkg('a', { dependencies: { punycode: '*' } }), 'node_modules/punycode/package.json': pkg('punycode') });
+    expect(dependencyClosure('a', root).map((p) => p.name)).toEqual(['a', 'punycode']);
+  });
+
   it('takes two links to one directory as one package', () => {
     const root = tmp({ 'store/c/package.json': pkg('c'), 'node_modules/a/package.json': pkg('a', { dependencies: { c: '*' } }) });
     fs.mkdirSync(path.join(root, 'node_modules/a/node_modules'), { recursive: true });

@@ -11,7 +11,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { Minimatch } from 'minimatch';
-import { findPackageDirectory } from './package-inputs.ts';
+import { createRequire } from 'node:module';
 
 export interface PackageManifest {
   readonly name: string;
@@ -37,6 +37,22 @@ export interface ClosurePackage {
 
 export function readPackageManifest(directory: string): PackageManifest {
   return JSON.parse(fs.readFileSync(path.join(directory, 'package.json'), 'utf8')) as PackageManifest;
+}
+
+/**
+ * The directory of the package `name` as Node finds it from `owner`'s `node_modules` lookup, or undefined. A package
+ * named like a built-in module (`punycode`, `events`) is looked up the same way: `require.resolve.paths` answers null
+ * for a built-in's name, so the lookup asks for `name/`, which is how such a package's own dependents require it.
+ */
+function findInstalledPackage(owner: string, name: string): string | undefined {
+  if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9._-]+$/i.test(name) || name.split('/').some((part) => part === '.' || part === '..')) {
+    throw new Error(`Invalid npm dependency name: ${name}`);
+  }
+  for (const directory of createRequire(path.join(owner, 'package.json')).resolve.paths(`${name}/`) ?? []) {
+    const candidate = path.join(directory, name);
+    if (fs.statSync(path.join(candidate, 'package.json'), { throwIfNoEntry: false })?.isFile()) return fs.realpathSync.native(candidate);
+  }
+  return undefined;
 }
 
 /** One or more declared packages that don't resolve, each naming the package that declared it */
@@ -66,7 +82,7 @@ export function dependencyClosure(name: string, fromDir: string): ClosurePackage
   const found = new Map<string, ClosurePackage>();
   const unresolved: string[] = [];
   const visit = (dependency: string, owner: string, declaredBy: string): void => {
-    const directory = findPackageDirectory(owner, dependency)?.directory;
+    const directory = findInstalledPackage(owner, dependency);
     if (directory === undefined) {
       unresolved.push(`${dependency}, declared by ${declaredBy}, doesn't resolve from ${owner}`);
       return;
@@ -77,7 +93,7 @@ export function dependencyClosure(name: string, fromDir: string): ClosurePackage
     const optional = (dep: string) => Object.hasOwn(manifest.optionalDependencies ?? {}, dep)
       || (manifest.peerDependenciesMeta?.[dep]?.optional === true && !Object.hasOwn(manifest.dependencies ?? {}, dep));
     for (const dep of new Set(Object.keys({ ...manifest.dependencies, ...manifest.optionalDependencies, ...manifest.peerDependencies }))) {
-      if (optional(dep) && findPackageDirectory(directory, dep) === undefined) continue;
+      if (optional(dep) && findInstalledPackage(directory, dep) === undefined) continue;
       visit(dep, directory, manifest.name);
     }
   };
