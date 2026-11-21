@@ -608,14 +608,18 @@ Three things follow.
 - **Only 27 writes sit next to something outside**, a file, a session, a model, since those are what a function
   waits for. That is the part no database transaction can cover, and it is a seventh of the writes.
 
-**So a step is a transaction.** The kernel runs a step inside one `transact` of the app's database, opened at the
-step's first write and not before. It needs nothing new from elmdb: a step runs to its end without waiting, which
-is what `transact(fn)` takes, a throw undoes it, and one inside another joins it, which the app relies on today.
+**So a step is a transaction.** The kernel is given a store and opens one unit of it for each step: everything the
+step writes is kept when the step commits, at once, or none of it is. The store takes its writer at the step's first
+write and not before. elmdb has what this needs. A step runs to its end without waiting, which is what its unit
+takes, and inside a unit it has savepoints (`savepoint`, `rollbackTo`, `release`), which the second rule below uses.
 
 - **A handler writes as it does now**, with its repository's commands, and reads its own writes back. The 184
   calls to a command stay as they are.
-- **A step that is refused writes nothing.** A throw, a `refuse`, a change the kernel will not make: the rows go
-  with the data. The 24 torn handlers are whole without being touched.
+- **A handler that changes nothing has written nothing.** A step is not refused whole and never was: one handler
+  in it can throw while the others stand, and each already leaves its state's data as it was. Rows now go the same
+  way. The kernel marks the store before each thing it handles and goes back to the mark when the handler threw,
+  refused, or returned a change that could not be made, so that handler's rows are taken back and the rows of
+  everything else in the step are kept. The 24 torn handlers are whole without being touched.
 - **Nothing leaves before the rows are in.** An answer, a broadcast, progress and word to a subscriber are released
   after the transaction commits, which is the order they already keep with a state's data. A view runs again after
   the same commit, so a window is never told of a row it cannot yet read. This is a Durable Object's output gate
@@ -625,16 +629,26 @@ is what `transact(fn)` takes, a throw undoes it, and one inside another joins it
   change, a change is made in a step, and a change's function may write as well as edit the draft:
 
   ```ts
-  run: async ({ data, use }) => {
-    const session = await use('sessions').read(data.path)   // outside: a file
-    return (draft, { repository }) => {                     // a step: rows and data together
-      const { id } = repository.threadCommands.create({ topic: session.topic })
-      draft.imported = id
+  run: async ({ data }) => {
+    const session = await readSession(data.path)            // outside: a file
+    return {
+      data: (draft) => {                                    // a step: rows and data together
+        const { id } = repository.threadCommands.create({ topic: session.topic })
+        draft.imported = id
+      },
     }
   }
   ```
 
-  The 27 writes after an `await` move into what is returned, and are the only ones that move.
+  The 27 writes after an `await` move into what is returned, and are the only ones that move. An answer is worked
+  out before its change is made, so an answer that names a row its change creates takes the id first (`newId`) and
+  creates the row with it.
+- **What a handler wrote before it waited is kept.** An ask that writes a row, waits, and is then refused has
+  kept the row: the write was in the step that took the ask, which committed. This is what progress it sent does
+  too. A row that should not outlive a refusal is written in the change that comes with the answer.
+- **Rows that cannot be kept stop the system.** If the commit fails (a full disk), nothing has left yet: whoever
+  asked in that step is told it failed, nobody is told of a change, and the system takes no more steps, since its
+  states are then ahead of its rows. The app restarts from the rows.
 
 **What it does not cover, said so that nobody takes it for more:**
 
@@ -718,7 +732,7 @@ first, and nothing above needs it.
 | A component reads and sends, and cannot ask | Giving `useState` an `ask`. An ask made from a component has no owner to stop it or to say where the state goes if it fails, which is what `run` and `failed` are for |
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
-| A step is one database transaction: rows, data and what is sent change together. A handler writes with its repository as now; after an `await` it returns the writes. | Writes made as the handler runs, outside the step: a refused ask had written, and 24 of 25 handlers with several writes could leave part of them. A handler returning every write as a description, dropped: a command's result (a new id) is read by the next line in most of them, and 165 of 192 writes already sit where a step is open. |
+| A step is one unit of the store: rows, data and what is sent are kept together, and a handler that changes nothing has written nothing. A handler writes with its repository as now; after an `await` it returns the writes. | Writes made as the handler runs, outside the step: a refused ask had written, and 24 of 25 handlers with several writes could leave part of them. A handler returning every write as a description, dropped: a command's result (a new id) is read by the next line in most of them, and 165 of 192 writes already sit where a step is open. |
 
 ## What the prototype proves
 
@@ -786,7 +800,18 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 
   Thirteen mistakes do not compile across the two. The graph lists each read with what it depends on, each write,
   and which handler says to make which.
-- **A check that fails says so, and does not hang** (`checks.mts`). All fourteen check files run their checks
+- **A step is one unit of the store** (`store.mts`, `rows-check.mts`, 16 checks, against rows in memory). A row and
+  the data that counts it are kept together, and a subscriber told of the step can read the row. A step that writes
+  nothing never takes the writer. A handler that throws after two writes leaves neither, and in the same step the
+  handler beside it keeps its own, in one commit. An ask refused after it wrote has written nothing. A change that
+  refuses, and a change the kernel will not make, take back their own rows and the handler's. Work that throws at
+  once has written nothing. A write after an `await` throws on its line, saying what to do, and the same write
+  returned in the change is kept with the data. Work left before it returned writes nothing. What an ask wrote
+  before it waited is kept when it is refused after. Rows that cannot be kept: the asker is told it failed, no
+  subscriber hears, and no more steps are taken. And under all 420 orderings of two imports, a create, a note and a
+  handler that throws, the count a state holds is the number of rows kept. Eleven changes to a copy of the kernel,
+  each taking out one part of this, each fail a check.
+- **A check that fails says so, and does not hang** (`checks.mts`). All fifteen check files run their checks
   through one runner. Every system a check makes is stopped when the check ends, however it ends, so one that fails
   part-way leaves nothing running to keep the process alive. A system in a check is given a limit on how many steps
   it will take, and says so when it reaches it; the app gives none, since an agent's loop is one thing leading to the
@@ -1235,10 +1260,14 @@ projects. Each would loosen the fit to this app.
 - **Saving a state to disk** is not wanted. A saved state is a stored format that would then have to be kept stable.
   And restoring starts a state's work again, which is right for a search a moment after a reload and wrong for a
   message that was being sent a day ago.
-- **A step as a transaction** ([Rows](#rows)) is decided and not in the prototype, which has no database. It is
-  built with the kernel: a store the kernel opens a unit on, with the app's engine behind it and one in memory for
-  the checks, and checks that a refused step leaves no row, that nothing is sent before the commit, and that a write
-  outside a step throws.
+- **The app's engine as the store** ([Rows](#rows)). The rule is proven against rows in memory. Three things are
+  left for the store that goes over elmdb, built with the kernel:
+  - a savepoint opened only when something is written after a mark, so that marking each thing handled costs
+    nothing in a step that writes nothing;
+  - the engine a pack is handed refusing a write outside a step, where the prototype's store does it;
+  - elmdb's checks at commit. A row that fails one fails the whole step and stops the system, where it should fail
+    the handler that wrote it. Which checks elmdb leaves until commit, and whether they can be run when a savepoint
+    is released, is to read in elmdb.
 - **Delayed transitions and history states** are absent. The app uses one delayed transition and no history states.
   A delay, when there is one, goes through the kernel's `later` so that a schedule can choose when it fires.
 - **The kernel's own rough edge.** Reading a state that has ended throws.
