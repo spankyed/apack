@@ -323,6 +323,36 @@ const thread = mirror(system, system.child(handle, 'thread', threadId))
 thread.value?.data.messages                   // nothing until that thread runs
 ```
 
+A component does not call `mirror`. It calls `useState`:
+
+```ts
+const threads = useState('threads')                               // a state the window runs, by name
+threads.state.value.data.titles[id]                               // renders again when that title changes
+threads.send({ type: 'OPEN_THREAD', threadId })
+
+const thread = useState(() => threads.child('thread', props.threadId))   // one of many, following the prop
+thread.state.value?.data.messages
+```
+
+What it is built to get right is where bindings to a renderer usually go wrong:
+
+- **A state is mirrored once, however many components read it**, from the first reader to the last, and a state
+  nobody reads is not mirrored at all. The system is listened to once. So a step costs a lookup for each state it
+  changed and a write for each place that changed, and nothing for each component.
+- **No component sees one state ahead of another.** A step tells its subscribers once, when it has committed, and
+  every mirror is written then, before Vue renders anything. A component reading two states renders once for a step
+  that changed both, with both as that step left them.
+- **A component whose state has gone does not render with nothing.** A list renders from its starter's field, and
+  Vue renders a parent before its children, so a card that was removed is taken off the page by the list and its own
+  component is not run again. One that can be shown alone has to say what it shows when its state is not running:
+  the type of what it reads includes nothing.
+- **A handle may follow a prop.** Given as a function, it is read again when what it reads changes, and the mirror
+  is swapped before anything reads through it, the new one taken before the old one is let go.
+- **Nothing is left behind.** A component that goes takes its reading with it, and the last reader of a state takes
+  the mirror.
+- **A component reads and sends, and does not ask.** An ask is work, and work has an owner (rule 9), which a
+  component is not. What a component needs done it sends to a state, whose `run` does it.
+
 There is no selector to write and nothing to compare, which is what the 439 `useSelector` sites do today. The copy is
 the mirror's own: a reactive object is written to in place, and the kernel's values are shared and never mutated.
 
@@ -392,6 +422,8 @@ batch, and this repo's own `transact` followed by `watch`.
 | Progress is heard as a list, once a frame | One call per update. It made a change, a notice and a copy of the growing list per item: fine at 10,000, unusable at 100,000. A persistent vector would make appends cheap, but its values are not plain arrays, which the snapshot, the wire and the templates all assume. Chunked lists stay plain but push the chunking onto every reader |
 | A nested change is an edit to a draft, built here | Spreads at every level (`{ ...data.titles, [id]: title }`), which get worse with depth. Immer and Mutative were considered; a state's data is plain by rule, so most of what they handle cannot occur, the kernel wants the changed fields in its own shape, and the kernel is meant to have no dependencies. To revisit, in favour of Mutative, if the draft grows special cases |
 | A change that cannot be made is refused whole, by one rule, where it is tried | Three rules, which is what there was. A stray field in an edit was found after the edit had run, and reported without the line that wrote it. The same stray field given as a field was dropped without a word and the rest taken. And a move to a state that does not exist, or without what the state needs, was made anyway and reported after. Each was a half-made change, and two of the three said nothing |
+| A state is mirrored once for all its readers, and the system is listened to once | A mirror for each component, which is what `mirror` was: each made its own copy of the state and listened to every step to see whether it was its own. A hundred components reading one state copied it a hundred times, and every step asked all of them. And nothing ended a subscription, so each one stayed for good |
+| A component reads and sends, and cannot ask | Giving `useState` an `ask`. An ask made from a component has no owner to stop it or to say where the state goes if it fails, which is what `run` and `failed` are for |
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
 
@@ -496,6 +528,17 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   something the user does while progress waits is handled after it; another ask's answer is not ahead of progress
   sent before it; a frame hands over what waits when nothing else arrives first; and stopping a window mid-ask leaves
   nothing unhandled.
+- **Components render only for what they read** (`vue.mts`, `vue-check.mts`, 11 checks). These are Vue components
+  mounted with Vue's own runtime, into a tree of plain objects in place of a page, and what is counted is how often
+  each rendered. A change renders only the components that read that place; a change in one of many renders that
+  one and neither the others nor the list; one added renders the list and the new one; one removed is gone without
+  its component rendering with nothing to show; fifty changes before Vue renders are one render; a component reading
+  two states never sees one ahead of the other, and renders once for a step that changed both; a handle that follows
+  a prop reads the other state when the prop changes, and the one it left is no longer mirrored; one that is not
+  running renders as nothing and renders again when it starts. With three hundred cards a change in one still
+  renders one, and there is one mirror for each state however many components read it, and none once nothing does.
+  Five mistakes do not compile: a state the window does not run, an event it does not take, one of many without its
+  key, reading one that may not be running without saying what if it is not, and asking.
 - **A reader runs again only for the place it read** (`mirror.mts`, `binding-check.mts`, 12 checks, with
   `@vue/reactivity`'s `effect` standing for a component's render): a message in one thread runs only that thread's
   reader, a rename only that title's, a move only the reader of where the state is; removing from a list and deleting
@@ -617,18 +660,11 @@ components; machines defined through the SDK with a pack rule against `xstate`. 
 
 The design is the smaller half of the value. In the order they would pay:
 
-1. **The Vue binding.** The largest unknown, and what the 439 `useSelector` sites become. A component should read a
-   state by name and re-render only for the fields it read:
-
-   ```ts
-   const thread = useState('threads')
-   thread.at                                  // reactive
-   if (within(thread, 'thread')) thread.data.threadId
-   ```
-
-   `within` exists, and so does what the reading rests on: `mirror`, under What a component reads. What is left is
-   `useState` itself, a composable that finds the state by name, mirrors it for the component's lifetime and stops with
-   it, and the port of real components onto it.
+1. **The Vue binding, on the app's own components.** `useState` exists and is checked by rendering (What a component
+   reads). What is left is what a check cannot say: the 439 `useSelector` sites moved onto it, in components written
+   as the app writes them, with templates, in a window. That is where it will show whether reading through
+   `.state.value` is what a template wants, whether `within` narrows well enough there, and what the first paint of
+   a large state costs, since a mirror copies a state once when its first reader arrives.
 2. **Tests that replay interleavings.** The risk in this design is ordering: a result that arrives after its state was
    left. The prototype has this: `schedule.mts`, under What the prototype proves. What is left is its place in the
    harness, so that a pack's spec runs a scenario under every ordering the way it runs a case today, and a reduction
@@ -681,15 +717,15 @@ projects. Each would loosen the fit to this app.
 
 ## Not built
 
-- **The Vue binding's last step.** `mirror` and `within` exist; `useState`, the composable a component calls, does not,
-  and nothing renders. 439 `useSelector` sites depend on it.
+- **The Vue binding in the app.** `useState` is built and renders, in a check. No component of the app uses it, no
+  template has been written against it, and nothing has been measured in a window. 439 `useSelector` sites wait on
+  it.
 - **Roles**: `tell({ role: 'brain' }, …)`.
 - **A write nobody waits for**, which appliers and migrations make today.
 - **Window-to-window sends**, the app's `sendToSurface`.
 - **What is left of what a state starts and follows.** Rule 10 is built and checked on two examples. Not built: the
   brain, the bus and the shell on it, which are the app's own cases: a flow per run, a surface per pack, a system per
-  registration. And `useState`, the composable that would call `system.child` and `mirror` for a component: what it
-  rests on exists and is checked, and nothing renders.
+  registration.
 - **Events only the state itself may send.** A state has one union of events, so anything that can reach it can tell
   it `FOUND` or `PIECES`, which only its own work should. The app's contracts already keep `incoming` apart from
   `internal`, and the prototype lost that: `send` should take both, and `tell` and `broadcast` only what is
@@ -747,8 +783,8 @@ Step 1 is under way; no later step is started. Each is a decision point.
    spankyed/apack#591 did the vocabulary and the asking side, which removes the event path for answers.
    [What #591 delivered](#what-591-delivered) lists the seams still to do, which are what leave pack code that does not
    name XState.
-2. **Settle the open design** that the first real ports will hit: the Vue binding, a write nobody waits for, and
-   events only the state itself may send.
+2. **Settle the open design** that the first real ports will hit: a write nobody waits for, and events only the
+   state itself may send.
 3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The
    prototype's kernel takes a schedule and its checks run every ordering; the kernel in the tree keeps both.
 4. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is

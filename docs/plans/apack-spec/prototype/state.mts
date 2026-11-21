@@ -95,8 +95,8 @@ type ReportsOf<S> = S extends { reports: infer P extends AnyEvent } ? P : never
 type KeysField<D> = { [K in keyof D & string]: D[K] extends readonly string[] | Readonly<Record<string, unknown>> ? K : never }[keyof D & string]
 type UnionToIntersection<U> = (U extends unknown ? (of: U) => void : never) extends (of: infer I) => void ? I : never
 /** Everything a state starts, whichever of its states declares it: what can be reached from outside it. */
-type AllStarts<S> = StartsOf<S> & ([Names<S>] extends [never] ? {} : UnionToIntersection<{ [K in Names<S>]: AllStarts<StatesOf<S>[K]> }[Names<S>]>)
-type HandleOf<T> = T extends Each<infer X> ? HandleOf<X> : T extends State<infer S2, infer E2, infer A2, any> ? Started<Value<S2>, E2, A2, AllStarts<S2>> : never
+export type AllStarts<S> = StartsOf<S> & ([Names<S>] extends [never] ? {} : UnionToIntersection<{ [K in Names<S>]: AllStarts<StatesOf<S>[K]> }[Names<S>]>)
+export type HandleOf<T> = T extends Each<infer X> ? HandleOf<X> : T extends State<infer S2, infer E2, infer A2, any> ? Started<Value<S2>, E2, A2, AllStarts<S2>> : never
 type Join<H extends string, K extends string> = H extends '' ? K : `${H}.${K}`
 
 type Paths<S> = [Names<S>] extends [never] ? never : { [K in Names<S>]: K | `${K}.${Paths<StatesOf<S>[K]>}` }[Names<S>]
@@ -435,8 +435,8 @@ export interface System {
   read<V>(of: Handle<V, never, Asks>): V
   /** Every running state here, as of the last commit. */
   snapshot(): Record<string, unknown>
-  /** Called once per step that changed anything, after it has committed. */
-  subscribe(listener: (changed: readonly string[], fields: Readonly<Record<string, readonly string[]>>, changes: Readonly<Record<string, Changes>>) => void): void
+  /** Called once per step that changed anything, after it has committed, until what it returns is called. */
+  subscribe(listener: (changed: readonly string[], fields: Readonly<Record<string, readonly string[]>>, changes: Readonly<Record<string, Changes>>) => void): () => void
   /** From a window: joins it to its backend. Closing the link is the window going away. */
   connect(backend: System): { close(): void }
   stop(): void
@@ -1030,7 +1030,10 @@ export function system(host: {
     ask: (of, name, args, hears) => ask(of, name, args, undefined, hears as ((updates: unknown[]) => void) | undefined),
     read: (of) => committed[of.ref] as never,
     snapshot: () => committed,
-    subscribe: (listener) => { listeners.push(listener) },
+    subscribe: (listener) => {
+      listeners.push(listener)
+      return () => { const index = listeners.indexOf(listener); if (index >= 0) listeners.splice(index, 1) }
+    },
     connect: (backend) => {
       const link: Link = { open: true, up: { label: `${called} to its backend` }, down: { label: `the backend to ${called}` } }
       const theirs = backend as unknown as { [PORT]: Port; attach(window: { link: Link; port: Port }): () => void }
