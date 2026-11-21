@@ -672,6 +672,8 @@ export function system(host: {
       if (error instanceof Left) return refusal('abandoned', error.message)
       // Whoever asked is told it failed. Where it failed is said here, since the asker may be in another process.
       const message = error instanceof Error ? error.message : String(error)
+      // Work that was passed `signal` throws when it aborts. That is the handler stopping as it was asked to.
+      if (signal.aborted) { trace(`${item.ref} stopped answering ${name}, as whoever asked had gone: ${message}`); return refusal('abandoned', message) }
       trace(`${item.ref} failed answering ${name}: ${message}`)
       return refusal('failed', message)
     }

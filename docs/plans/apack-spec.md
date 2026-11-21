@@ -153,6 +153,20 @@ points at.
 8. **A refusal is a kind, a message, and the data that kind declares.** `refuses` names kinds alone
    (`'not-found' | 'no-access'`) or each kind with what it carries (`{ 'name-taken': { existingId: string } }`). The
    handler has to give that data to `refuse`, and an asker reads it once it has checked the kind.
+9. **Work has one owner, and stops when its owner does.** A state's `run` is the state's, and stops when the state is
+   left. An ask's handler is the ask's, and stops when whoever asked has gone, or when the state answering is left.
+   So where work is put says how long it lasts. What is done for whoever asked, a search or checking what they sent,
+   goes in the ask's handler: nobody wants it once they have gone. What has to be finished whoever is still there, a
+   reply to a message that was accepted, is not the ask's: the ask starts it in a state on the answering side, and
+   answers at once. There is no way to shield a handler from stopping, since that would be a second answer to the same
+   question.
+
+   **Stopping is asked for, not done.** JavaScript cannot interrupt running code. When the owner goes, the work's
+   `signal` aborts, its next `ask` throws `Left`, and what it sends through the kernel goes nowhere. Code that awaits
+   no ask and passes `signal` to nothing runs to its end. Data is changed only by what a handler returns, at its end,
+   so work that stopped part-way has changed nothing; and a handler that does reach its end has its change made even
+   if whoever asked has gone, because the work was done and the data should say so. A handler that throws because its
+   `signal` aborted has stopped, and is reported as that and not as a failure.
 
 ### Communication
 
@@ -266,6 +280,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
 | An ask changes data only together with its answer, as `answered(answer, next)` | An ask that could not change data at all, which was the first decision: to change data it sent its own state an event and returned the answer separately. The answer could then say "created" before the event that did the creating was handled, and still say it if that event's handler threw. The handler could not see the result of its own change. And each such ask needed an event that existed only for it, which anything could tell the state. Every system this was checked against joins the two: Erlang's `gen_statem` replies and moves in one handler, Effect's `Machine` handlers return `[reply, newState]`, and Temporal added Updates beside its read-only queries. They are safe because their handlers do not interleave; these do, at each `await`, which is why a change after one must be a draft edit. The graph stays complete: the extractor reads `next` as it reads any handler's return |
 | Handlers that wait let others through, and the change checks what must hold | One handler at a time, as Effect's `Machine` and Erlang's `gen_server` run them. A handler then sees the same data throughout, and a reply that streams for half a minute keeps every other window out of that system until it ends. Each of those systems has a way round it (`fork` and reply later; a worker that replies), which is interleaving again with less around it; a caller that leaves cannot stop a handler already running; and a cycle of asks is a deadlock. Here every write was already one step. What could go wrong was a decision: check, wait, then act on a check no longer true. That is a long transaction, and the answer where work is long and conflicts are rare is to hold nothing and validate at the write. Locks, which Temporal suggests for this, bring the blocking back. A declared policy per ask, one at a time under a key, is left until a port needs it |
+| Where work is put says who owns it, and so when it stops | One rule for every handler. Stopping an ask's work when its asker goes is right for a search and wrong for a message being answered, and never stopping it, as Effect's `Machine` does once a handler is running, wastes the search. A flag on the ask saying it survives its asker, or a shield around part of a handler as Trio and Kotlin have, would each be a second way to say what a state's `run` already says: this work is the answerer's. The threads example had it wrong: a window that closed mid-reply aborted the reply, and the message it had sent was never stored |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
 | What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
 | An ask whose asker has gone throws `Left` where it is awaited | Never settling it, which was tried first. A promise that never settles skips every `finally` after it, so a lock or a handle taken before the ask is held for good, and `Promise.all` over it hangs. Rejection is what `AbortSignal`, `fetch` and structured concurrency do, and code written for them is already correct here |
@@ -288,11 +303,16 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   search aborts the first on the backend, and cancel works. About 167 and 192 non-blank lines become about 39 and 77.
   The library system (`library.mts`) is ported handler for handler and typechecks against stand-ins for its imports; it
   is not run. Its machine goes from 271 lines to 120, and four answer helpers and every result event go away.
-- **A backend with three systems and two windows runs** (`threads.mts`): an ask that streams to its asker only, a
-  broadcast both windows hear, a typed refusal that came from a second system, and a window that disconnects
-  mid-stream, which ends its ask as `disconnected` and aborts the work on the backend. Its threads system takes no
-  events at all: the two it had existed so that two asks could change data, and both went when those asks returned
-  `answered`.
+- **A backend with three systems and two windows runs, and work stops with its owner** (`threads.mts`, 16
+  comparisons). Each thread is a state of its own that the threads system starts, at `idle` or `writing`. Checking a
+  message, which asks the library for an attachment, is the ask's work: a window whose connection closes while the
+  library is looking is told `disconnected`, the check stops, and nothing is written. Writing the reply is the
+  thread's work: the ask is answered when the thread accepts the message, the reply is broadcast as it is written to
+  every window showing that thread, and a window that sends and goes back to its list still has its message answered
+  and stored. No reply is cut short by a window going. A second message while one is being answered is refused as
+  busy by the thread itself, whose `writing` state answers the same ask its `idle` state accepts; accepting and
+  starting to write are one step. The threads system takes no events: the two it had existed so that two asks could
+  change data, and went when those asks returned `answered`.
 - **An answer and its change cannot disagree** (`answer-check.mts`, 12 checks): an ask that only answers changes
   nothing; one that answers with a change has made it by the time the answer is had, and subscribers hear of it in
   that step, once; an answer can come with a move that gives the entered state its data; a change that is refused
@@ -306,7 +326,8 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   Both outcomes were run. The same put checking only before its work passes under the first ordering and is answered
   for nothing stored under the second, which exploring finds. `threads.mts` had that fault: it checked the thread
   existed, wrote the reply for a while, then stored with `messages[threadId]?.push`, so a thread removed meanwhile
-  lost the message and the asker was told it was sent. It now refuses `no-such-thread` where it stores.
+  lost the message and the asker was told it was sent. It refused `no-such-thread` where it stored, until
+  the reply became the thread's own work: a thread now stores what it wrote in its own data.
 - **The graph can be derived without running anything** (`graph.mts`): states, moves, what each state answers, and
   which other states it reaches, read from handler return types by the TypeScript checker. An earlier version of it
   caught a handler dropped during a port.
@@ -342,10 +363,11 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   a state that tells itself without end is cut short after ten thousand things, reported, and takes events
   afterwards; and an async `run` without `failed` does not compile. Before this a `run` or a handler that threw at once escaped the step
   and left the kernel refusing everything after it.
-- **Leaving mid-ask unwinds, and nothing hangs or crashes** (`leaving-check.mts`, 7 checks): a `run` awaiting an ask
+- **Leaving mid-ask unwinds, and nothing hangs or crashes** (`leaving-check.mts`, 8 checks): a `run` awaiting an ask
   when its state is left has its `finally` run and its lock released, and nothing after the ask runs; the trace says an
   ask was left and reports no failure; an ask inside `Promise.all` ends too; the answerer's `signal` aborts, and a
-  handler that was itself asking unwinds; an ask started and never awaited leaves no unhandled rejection; an answer
+  handler that was itself asking unwinds; a handler that throws because its `signal` aborted is reported as having
+  stopped, not failed; an ask started and never awaited leaves no unhandled rejection; an answer
   that arrives in time is unaffected; and an event handler asking for `ask` does not compile.
 - **Progress keeps its place** (`progress-check.mts`, 6 checks, a backend and a window with the window's frame held
   by the check): two hundred pieces arrive as one list; a broadcast sent between two pieces is heard between them;
@@ -540,7 +562,12 @@ projects. Each would loosen the fit to this app.
 - **Keyed dynamic children**: a flow per run, a surface per pack, a system per registration. The brain, the bus and the
   shell need them. A keyed set of views is covered by `watch`; a keyed set of states is not. The shape to take is
   Effect's, whose `Machine` forks work under a key with one of two policies: `start` under a key that either replaces
-  what is running there, or does nothing when something is.
+  what is running there, or does nothing when something is. Rule 9 depends on this: work that outlasts its asker
+  needs a state to be in, and for anything there is one of per id that is a state per key. `threads.mts` starts a
+  state per thread with what exists, and shows what is missing. A start is something a handler does, not part of
+  what it returns, so after an `await` checking and starting are not one step; the example starts each thread in a
+  handler that does not wait. Nothing stops a state that was started, short of its starter ending. And the state is
+  given what it starts with by building its definition around it.
 - **Events only the state itself may send.** A state has one union of events, so anything that can reach it can tell
   it `FOUND` or `PIECES`, which only its own work should. The app's contracts already keep `incoming` apart from
   `internal`, and the prototype lost that: `send` should take both, and `tell` and `broadcast` only what is
@@ -593,7 +620,7 @@ Step 1 is under way; no later step is started. Each is a decision point.
    [What #591 delivered](#what-591-delivered) lists the seams still to do, which are what leave pack code that does not
    name XState.
 2. **Settle the open design** that the first real ports will hit: the Vue binding, a write nobody waits for, events
-   and events only the state itself may send.
+   only the state itself may send, and states started under a key.
 3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The
    prototype's kernel takes a schedule and its checks run every ordering; the kernel in the tree keeps both.
 4. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is

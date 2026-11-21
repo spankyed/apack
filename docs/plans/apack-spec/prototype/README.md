@@ -21,7 +21,7 @@ the app: nothing imports it, and no check covers it.
 | `draft-check.mts` | The checks a hand-built draft has to pass. Runs |
 | `search.mts` | The app's code search, backend and surface, ported. Runs, and checks what each step leaves |
 | `library.mts` | The app's library system ported handler for handler. Typechecks against stand-ins for its imports; not run |
-| `threads.mts` | Three backend systems and two windows: asks, tells, a streamed reply, a broadcast, a disconnect, and a refusal that carries data. Runs, and checks what each step leaves |
+| `threads.mts` | Three backend systems, a state per thread, and two windows: asks, tells, a reply the thread writes and broadcasts, windows that leave part-way, and a refusal that carries data. Runs, and checks what each step leaves |
 | `views.mts` | A surface following views, modelled on the threads surface: one always, one while a thread is open, one per tab. Runs, and checks what is followed after each step |
 | `graph.mts` | Derives each state's graph from its types, running nothing |
 | `xstate-survey.mts` | The survey of how the app uses XState that the plan's figures come from |

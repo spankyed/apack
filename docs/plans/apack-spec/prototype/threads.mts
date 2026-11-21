@@ -1,13 +1,18 @@
 // One example covering what the app does: a backend with three systems, two windows each running the threads
-// surface, a request that streams, a notification to every window, and a window that disconnects mid-stream.
+// surface, a reply written on the backend and broadcast as it is written, and windows that leave part-way.
 //
 //   backend   library   answers GET_DOCUMENT
 //             brain     is told TRIGGER_BRAIN_EVENT
-//             threads   answers CREATE_THREAD and USER_MSG; streams; broadcasts
+//             threads   answers CREATE_THREAD and USER_MSG, and starts a state for each thread
+//             a thread  idle | writing: writes its reply, broadcasts it, and holds its messages
 //   window    threads   list → creating → thread { idle | sending }, with a private `draft` it starts
 //
+// Who owns a piece of work decides when it stops. Checking a message before it is sent is for whoever asked, so it is
+// the ask's and stops if they go. Writing the reply is not: a message that was accepted is answered whether or not
+// the window that sent it is still there. So the reply is the thread's own work, and the ask only starts it.
+//
 // Names follow the app's (USER_MSG, TRIGGER_BRAIN_EVENT, THREAD_CREATED, GET_DOCUMENT). Two things are simplified so
-// that this one file runs: threads keeps its rows in its own data where the app uses a repository, and it streams
+// that this one file runs: a thread keeps its messages in its own data where the app uses a repository, and it writes
 // from `inference` directly where the app goes through a brain flow. `findDocument` stands for `libraryService.find`
 // and `inference` for `services.inference`.
 
@@ -32,13 +37,18 @@ type BrainAsks = {
 type ThreadsEvent = never
 type ThreadsAsks = {
   CREATE_THREAD: { args: { title: string }; answer: { threadId: string } }
+  /** Answered once the message is accepted. The reply is written afterwards, and broadcast. */
   USER_MSG: {
     args: { threadId: string; text: string; documentId?: string }
-    progress: { text: string }                                   // each piece of the reply, as it is written
-    answer: { reply: string }
+    answer: { accepted: true }
     // Kinds alone, or a kind with the data its refusal carries
-    refuses: { 'no-such-thread': {}; 'attachment-missing': { documentId: string } }
+    refuses: { 'no-such-thread': {}; 'attachment-missing': { documentId: string }; busy: {} }
   }
+}
+
+/** What a thread answers. Only the threads system, which starts it, can ask. */
+type ThreadAsks = {
+  WRITE: { args: { text: string; attached: string }; answer: 'accepted'; refuses: 'busy' }
 }
 
 type ThreadsSurfaceEvent =
@@ -48,11 +58,10 @@ type ThreadsSurfaceEvent =
   | { type: 'BACK' }
   | { type: 'TYPE'; text: string }
   | { type: 'SEND'; documentId?: string }
-  // from its own work
-  | { type: 'TEXT_APPENDED'; text: string }
   // broadcast by the backend to every window
   | { type: 'THREAD_CREATED'; threadId: string; title: string }
-  | { type: 'THREAD_CHANGED'; threadId: string }
+  | { type: 'REPLY_TEXT'; threadId: string; text: string }       // each piece of a reply, as it is written
+  | { type: 'THREAD_CHANGED'; threadId: string; reply: string }  // a reply is whole
 
 type App = {
   systems: {
@@ -101,27 +110,78 @@ const brain = state<{ data: { fired: string[] } }, BrainEvent, BrainAsks>()({
 })
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-// Backend 3: threads. Asks the library, tells the brain, streams to whoever asked, broadcasts to every window.
+// Backend 3: threads, and a state for each thread. Asks the library, tells the brain, broadcasts to every window.
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 
-type Threads = {
-  data: { titles: Record<string, string>; messages: Record<string, string[]> }
+type Inference = { streamText(prompt: string, signal: AbortSignal): AsyncIterable<string> }
+
+type Thread = {
+  data: { messages: string[] }
+  states: { idle: {}; writing: { data: { text: string; attached: string } } }
 }
 
-function threads(inference: { streamText(prompt: string, signal: AbortSignal): AsyncIterable<string> }) {
-  return state<Threads, ThreadsEvent, ThreadsAsks>()({
-    data: { titles: {}, messages: {} },
+/** One thread. It owns its messages and the writing of its reply, which goes on whoever asked for it. */
+function thread(threadId: string, inference: Inference) {
+  return state<Thread, never, ThreadAsks>()({
+    data: { messages: [] },
+    start: 'idle',
 
-    asks: {
-      // Answers, and changes data, as one thing: nobody is told a thread exists that was not made.
-      CREATE_THREAD: ({ title }, { data, broadcast }) => {
-        const threadId = `THR-${Object.keys(data.titles).length + 1}`
-        // to that surface in every window
-        broadcast('threads', { type: 'THREAD_CREATED', threadId, title })
-        return answered({ threadId }, { data: (d) => { d.titles[threadId] = title; d.messages[threadId] = [] } })
+    states: {
+      idle: {
+        // Accepting and starting to write are one step, so two messages at once cannot both be accepted.
+        asks: { WRITE: ({ text, attached }) => answered('accepted' as const, { at: 'writing', data: { text, attached } }) },
       },
 
-      async USER_MSG({ threadId, text, documentId }, { data, ask, tell, broadcast, progress, refuse, signal }) {
+      writing: {
+        data: { text: given, attached: given },
+
+        // The innermost state that answers an ask wins: while writing, another message is refused.
+        asks: { WRITE: (_, { refuse }) => { throw refuse('busy', `A reply is already being written in ${threadId}.`) } },
+
+        async run({ data, tell, broadcast, signal }) {
+          // tell another backend system, by name
+          tell('brain', { type: 'TRIGGER_BRAIN_EVENT', eventType: 'threads.user_msg', payload: { threadId } })
+
+          // to that surface in every window. `signal` aborts only if this thread stops being written to.
+          let reply = ''
+          for await (const piece of inference.streamText(data.text + data.attached, signal)) {
+            reply += piece
+            broadcast('threads', { type: 'REPLY_TEXT', threadId, text: piece })
+          }
+
+          broadcast('threads', { type: 'THREAD_CHANGED', threadId, reply })
+          return { at: 'idle', data: (d) => { d.messages.push(d.text, reply) } }
+        },
+
+        failed: (error, { broadcast }) => {
+          broadcast('threads', { type: 'THREAD_CHANGED', threadId, reply: `(no reply: ${error instanceof Error ? error.message : String(error)})` })
+          return { at: 'idle' }
+        },
+      },
+    },
+  })
+}
+
+type Threads = {
+  data: { titles: Record<string, string> }
+}
+
+function threads(inference: Inference) {
+  return state<Threads, ThreadsEvent, ThreadsAsks>()({
+    data: { titles: {} },
+
+    asks: {
+      // Answers, changes data and starts the thread, as one step: nobody is told a thread exists that was not made.
+      CREATE_THREAD: ({ title }, { data, broadcast, start }) => {
+        const threadId = `THR-${Object.keys(data.titles).length + 1}`
+        start(threadId, thread(threadId, inference))                 // lives as long as the threads system does
+        // to that surface in every window
+        broadcast('threads', { type: 'THREAD_CREATED', threadId, title })
+        return answered({ threadId }, { data: (d) => { d.titles[threadId] = title } })
+      },
+
+      // Checks the message, for whoever asked: if they go, this stops, and nothing has been started.
+      async USER_MSG({ threadId, text, documentId }, { data, ask, child, refuse }) {
         if (!(threadId in data.titles)) throw refuse('no-such-thread', `There is no thread ${threadId}.`)
 
         // ask another backend system, by name
@@ -132,26 +192,10 @@ function threads(inference: { streamText(prompt: string, signal: AbortSignal): A
           attached = ` [with ${found.value.document.name}]`
         }
 
-        // tell another backend system, by name
-        tell('brain', { type: 'TRIGGER_BRAIN_EVENT', eventType: 'threads.user_msg', payload: { threadId } })
-
-        // stream to whoever asked, and nobody else. `signal` aborts if they go away.
-        let reply = ''
-        for await (const piece of inference.streamText(text + attached, signal)) {
-          reply += piece
-          progress({ text: piece })
-        }
-
-        broadcast('threads', { type: 'THREAD_CHANGED', threadId })
-        // After an await the change is an edit to a draft, made against the data as it is when the answer leaves.
-        // The thread was there when this began. Whether it still is is checked here, where the message is stored.
-        return answered({ reply }, {
-          data: (d) => {
-            const messages = d.messages[threadId]
-            if (!messages) throw refuse('no-such-thread', `Thread ${threadId} was removed while the reply was being written.`)
-            messages.push(text, reply)
-          },
-        })
+        // ask the thread, a state this one started. From here the reply is the thread's, and this ask is done.
+        const accepted = await ask(child(threadId, thread(threadId, inference)), 'WRITE', { text, attached })
+        if (!accepted.ok) throw refuse('busy', accepted.failure.message)
+        return { accepted: true as const }
       },
     },
   })
@@ -182,14 +226,16 @@ type ThreadsSurface = {
     list: {}
     creating: { data: { title: string } }
     thread: {
-      data: { threadId: string; lastReply: string | null }
+      data: { threadId: string; lastReply: string | null; streamed: string }
       states: {
         idle: {}
-        sending: { data: { text: string; documentId: string | null; streamed: string } }
+        sending: { data: { text: string; documentId: string | null } }
       }
     }
   }
 }
+
+const withUnseen = (unseen: string[], threadId: string): string[] => (unseen.includes(threadId) ? unseen : [...unseen, threadId])
 
 function threadsSurface(log: (line: string) => void) {
   return state<ThreadsSurface, ThreadsSurfaceEvent>()({
@@ -203,17 +249,14 @@ function threadsSurface(log: (line: string) => void) {
 
       OPEN_THREAD: ({ threadId }, { data }) => ({
         at: 'thread',
-        data: { threadId, lastReply: null, unseen: data.unseen.filter((id) => id !== threadId) },
+        data: { threadId, lastReply: null, streamed: '', unseen: data.unseen.filter((id) => id !== threadId) },
       }),
 
       // broadcast by the backend
       THREAD_CREATED: ({ threadId, title }, { data }) => ({ data: { titles: { ...data.titles, [threadId]: title } } }),
 
-      THREAD_CHANGED: ({ threadId }, { data, snapshot }) => {
-        const showing = within(snapshot, 'thread') && snapshot.data.threadId === threadId
-        if (showing || data.unseen.includes(threadId)) return
-        return { data: { unseen: [...data.unseen, threadId] } }
-      },
+      // A thread changed while none is showing.
+      THREAD_CHANGED: ({ threadId }, { data }) => ({ data: { unseen: withUnseen(data.unseen, threadId) } }),
     },
 
     states: {
@@ -226,7 +269,7 @@ function threadsSurface(log: (line: string) => void) {
         async run({ data, ask }) {
           const made = await ask('threads', 'CREATE_THREAD', { title: data.title })
           if (!made.ok) return { at: 'list', data: { problem: made.failure.message } }
-          return { at: 'thread', data: { threadId: made.value.threadId, lastReply: null, problem: null } }
+          return { at: 'thread', data: { threadId: made.value.threadId, lastReply: null, streamed: '', problem: null } }
         },
 
         // A refusal is a value and is handled above. This is for what was not expected: a bug in `run` itself.
@@ -235,7 +278,7 @@ function threadsSurface(log: (line: string) => void) {
 
       // ── thread: a state with states inside it ─────────────────────────────────────────────────────────────────────
       thread: {
-        data: { threadId: given, lastReply: given },
+        data: { threadId: given, lastReply: given, streamed: given },
         start: 'idle',
 
         run({ data, start, use }) {
@@ -246,6 +289,14 @@ function threadsSurface(log: (line: string) => void) {
 
         on: {
           TYPE: ({ text }, { tell, child }) => { tell(child('draft', draft), { type: 'DRAFT_CHANGED', text }) },
+
+          // A reply is broadcast as it is written, whoever sent the message it answers: this window shows it for the
+          // thread it has open, and for no other.
+          REPLY_TEXT: ({ threadId, text }, { data }) => (threadId === data.threadId ? { data: { streamed: data.streamed + text } } : undefined),
+
+          THREAD_CHANGED: ({ threadId, reply }, { data }) => (threadId === data.threadId
+            ? { data: { lastReply: reply, streamed: '' } }
+            : { data: { unseen: withUnseen(data.unseen, threadId) } }),
         },
 
         states: {
@@ -254,22 +305,19 @@ function threadsSurface(log: (line: string) => void) {
               SEND: ({ documentId }, { read, child }) => {
                 const text = read(child('draft', draft)).data.text
                 if (!text) return { data: { problem: 'There is nothing to send.' } }
-                return { at: 'thread.sending', data: { text, documentId: documentId ?? null, streamed: '', problem: null } }
+                return { at: 'thread.sending', data: { text, documentId: documentId ?? null, problem: null } }
               },
             },
           },
 
           sending: {
-            data: { text: given, documentId: given, streamed: given },
+            data: { text: given, documentId: given },
 
-            async run({ data, ask, send }) {
-              const sent = await ask(
-                'threads', 'USER_MSG',
-                { threadId: data.threadId, text: data.text, documentId: data.documentId ?? undefined },
-                (updates) => send({ type: 'TEXT_APPENDED', text: updates.map((update) => update.text).join('') }),   // what was written since last heard
-              )
+            // Waits only for the message to be accepted. The reply arrives by broadcast, above.
+            async run({ data, ask }) {
+              const sent = await ask('threads', 'USER_MSG', { threadId: data.threadId, text: data.text, documentId: data.documentId ?? undefined })
 
-              if (sent.ok) return { at: 'thread.idle', data: { lastReply: sent.value.reply } }
+              if (sent.ok) return { at: 'thread.idle' }
               // Checking the kind narrows to what that refusal carries
               if (sent.failure.kind === 'attachment-missing') return { at: 'thread.idle', data: { problem: `Could not attach ${sent.failure.documentId}: ${sent.failure.message}` } }
               if (sent.failure.kind === 'disconnected') return { at: 'thread.idle', data: { problem: 'The connection was lost while sending.' } }
@@ -279,7 +327,6 @@ function threadsSurface(log: (line: string) => void) {
             failed: (error) => ({ at: 'thread.idle', data: { problem: error instanceof Error ? error.message : String(error) } }),
 
             on: {
-              TEXT_APPENDED: ({ text }, { data }) => ({ data: { streamed: data.streamed + text } }),
               // While sending, typing is ignored: the innermost state that takes an event wins.
               TYPE: () => {},
             },
@@ -298,7 +345,7 @@ function threadsSurface(log: (line: string) => void) {
 function mustNotCompile(): void {
 
   state<Threads, ThreadsEvent, ThreadsAsks>()({
-    data: { titles: {}, messages: {} },
+    data: { titles: {} },
     asks: {
       CREATE_THREAD: () => ({ threadId: 'THR-1' }),
       // @ts-expect-error `attachment-missing` carries the document's id, so it cannot be refused without one
@@ -307,7 +354,7 @@ function mustNotCompile(): void {
   })
 
   state<Threads, ThreadsEvent, ThreadsAsks>()({
-    data: { titles: {}, messages: {} },
+    data: { titles: {} },
     asks: {
       CREATE_THREAD: () => ({ threadId: 'THR-1' }),
       // @ts-expect-error `no-such-thread` carries nothing, so it takes no document id
@@ -338,18 +385,20 @@ if (process.argv[1]?.endsWith('threads.mts')) {
   }
 
   const documents = new Map([['DOC-1', { id: 'DOC-1', name: 'Launch plan' }]])
+  let aborted = 0
   const inference = {
     async *streamText(prompt: string, signal: AbortSignal): AsyncIterable<string> {
       for (const piece of ['You said: ', prompt, '.']) {
         await turns(3)
-        if (signal.aborted) { say('      backend    (inference aborted: whoever asked has gone)'); throw signal.reason }
+        if (signal.aborted) { aborted++; throw signal.reason }
         yield piece
       }
     },
   }
 
   const backend = system({ side: 'backend' })
-  backend.start('library', library(async (id) => documents.get(id)))
+  // Finding a document takes a while, so that a window can go while it is being found.
+  backend.start('library', library(async (id) => { await turns(4); return documents.get(id) }))
   const theBrain = backend.start('brain', brain)
   backend.start('threads', threads(inference))
 
@@ -361,7 +410,7 @@ if (process.argv[1]?.endsWith('threads.mts')) {
       const now = window.read(surface)
       if (!now) return
       const d = now.data as Record<string, unknown>
-      const shown = [`at ${now.at}`, 'threadId' in d && d.threadId, 'streamed' in d && `streamed "${d.streamed}"`, d.lastReply && `lastReply "${d.lastReply}"`,
+      const shown = [`at ${now.at}`, 'threadId' in d && d.threadId, d.streamed && `streamed "${d.streamed}"`, d.lastReply && `lastReply "${d.lastReply}"`,
         now.data.unseen.length && `unseen ${now.data.unseen.join(',')}`, now.data.problem && `problem "${now.data.problem}"`].filter(Boolean).join(' | ')
       say(`      ${name}   ${shown}`)
     })
@@ -369,47 +418,64 @@ if (process.argv[1]?.endsWith('threads.mts')) {
   }
   const a = open('window A')
   const b = open('window B')
-  /** What a window shows, without the fields that are only there in some states left out. */
+  /** What a window shows, with the fields that are only there in some states as null where they are not. */
   const shows = (of: typeof a) => {
     const now = of.window.read(of.surface)
-    const d = now.data as { threadId?: string; lastReply?: string | null; unseen: string[]; problem: string | null }
-    return { at: now.at, threadId: d.threadId ?? null, lastReply: d.lastReply ?? null, unseen: d.unseen, problem: d.problem }
+    const d = now.data as { threadId?: string; lastReply?: string | null; streamed?: string; unseen: string[]; problem: string | null }
+    return { at: now.at, threadId: d.threadId ?? null, streamed: d.streamed ?? null, lastReply: d.lastReply ?? null, unseen: d.unseen, problem: d.problem }
   }
+  const stored = (): string[] => (backend.snapshot()['threads/THR-1'] as { data: Thread['data'] }).data.messages
 
   say('A creates a thread: both windows hear THREAD_CREATED, only A opens it')
   a.window.send(a.surface, { type: 'NEW_THREAD', title: 'Plan' });                 await turns(8)
-  holds('A is in the thread it made', shows(a), { at: 'thread.idle', threadId: 'THR-1', lastReply: null, unseen: [], problem: null })
-  holds('B is still at its list', shows(b), { at: 'list', threadId: null, lastReply: null, unseen: [], problem: null })
+  holds('A is in the thread it made', shows(a), { at: 'thread.idle', threadId: 'THR-1', streamed: '', lastReply: null, unseen: [], problem: null })
+  holds('B is still at its list', shows(b), { at: 'list', threadId: null, streamed: null, lastReply: null, unseen: [], problem: null })
 
-  say('A types and sends: the reply streams to A only; B is told the thread changed')
+  say('A types and sends: the message is accepted at once, and the reply is written by the thread and broadcast')
   a.window.send(a.surface, { type: 'TYPE', text: 'hello' })
-  a.window.send(a.surface, { type: 'SEND' });                                      await turns(20)
-  holds('A has the whole reply', shows(a), { at: 'thread.idle', threadId: 'THR-1', lastReply: 'You said: hello.', unseen: [], problem: null })
-  holds('B was told the thread changed, and heard none of the reply', shows(b), { at: 'list', threadId: null, lastReply: null, unseen: ['THR-1'], problem: null })
+  a.window.send(a.surface, { type: 'SEND' });                                      await turns(6)
+  holds('A is no longer sending, and sees the reply as far as it has been written', shows(a), { at: 'thread.idle', threadId: 'THR-1', streamed: 'You said: ', lastReply: null, unseen: [], problem: null })
+
+  say('A sends again while the reply is being written: the thread refuses it')
+  a.window.send(a.surface, { type: 'SEND' });                                      await turns(3)
+  holds('the second message is refused as busy', shows(a).problem, 'A reply is already being written in THR-1.')
+  await turns(14)
+  holds('A has the whole reply', shows(a), { at: 'thread.idle', threadId: 'THR-1', streamed: '', lastReply: 'You said: hello.', unseen: [], problem: 'A reply is already being written in THR-1.' })
+  holds('B was told the thread changed, and shows none of the reply', shows(b), { at: 'list', threadId: null, streamed: null, lastReply: null, unseen: ['THR-1'], problem: null })
 
   say('A sends with an attachment the library does not have: a typed refusal')
-  a.window.send(a.surface, { type: 'SEND', documentId: 'DOC-404' });               await turns(12)
-  holds('the refusal carries the document it could not attach', shows(a), { at: 'thread.idle', threadId: 'THR-1', lastReply: 'You said: hello.', unseen: [], problem: 'Could not attach DOC-404: Document not found' })
+  a.window.send(a.surface, { type: 'SEND', documentId: 'DOC-404' });               await turns(14)
+  holds('the refusal carries the document it could not attach', shows(a), { at: 'thread.idle', threadId: 'THR-1', streamed: '', lastReply: 'You said: hello.', unseen: [], problem: 'Could not attach DOC-404: Document not found' })
 
-  say('A sends with one it does have: threads asks the library, then streams')
-  a.window.send(a.surface, { type: 'SEND', documentId: 'DOC-1' });                 await turns(20)
-  holds('the reply names the document the library gave', shows(a), { at: 'thread.idle', threadId: 'THR-1', lastReply: 'You said: hello [with Launch plan].', unseen: [], problem: null })
+  say('A sends with one it does have: threads asks the library, then the thread writes')
+  a.window.send(a.surface, { type: 'SEND', documentId: 'DOC-1' });                 await turns(26)
+  holds('the reply names the document the library gave', shows(a), { at: 'thread.idle', threadId: 'THR-1', streamed: '', lastReply: 'You said: hello [with Launch plan].', unseen: [], problem: null })
 
-  say('B opens the thread, sends, and its connection closes mid-stream')
+  say('B opens the thread, sends, and goes back to its list while the reply is being written')
   b.window.send(b.surface, { type: 'OPEN_THREAD', threadId: 'THR-1' })
   b.window.send(b.surface, { type: 'TYPE', text: 'anyone there' })
-  b.window.send(b.surface, { type: 'SEND' });                                      await turns(5)
-  b.link.close();                                                                  await turns(12)
-  holds('B is told the connection was lost', shows(b), { at: 'thread.idle', threadId: 'THR-1', lastReply: null, unseen: [], problem: 'The connection was lost while sending.' })
-  holds('and the backend stopped generating for it', lines.filter((line) => line.includes('inference aborted')).length, 1)
+  b.window.send(b.surface, { type: 'SEND' });                                      await turns(6)
+  b.window.send(b.surface, { type: 'BACK' });                                      await turns(16)
+  holds('the reply was written all the same: A, which has the thread open, shows it', shows(a).lastReply, 'You said: anyone there.')
+  holds('B, at its list, is told the thread changed', shows(b), { at: 'list', threadId: null, streamed: null, lastReply: null, unseen: ['THR-1'], problem: null })
+  holds('and the thread holds the message and its reply', stored().slice(-2), ['anyone there', 'You said: anyone there.'])
+
+  say('B opens it again, sends with an attachment, and its connection closes while the library is still looking')
+  b.window.send(b.surface, { type: 'OPEN_THREAD', threadId: 'THR-1' })
+  b.window.send(b.surface, { type: 'TYPE', text: 'one more' })
+  b.window.send(b.surface, { type: 'SEND', documentId: 'DOC-1' });                 await turns(2)
+  const before = stored().length
+  b.link.close();                                                                  await turns(20)
+  holds('B is told the connection was lost', shows(b), { at: 'thread.idle', threadId: 'THR-1', streamed: '', lastReply: null, unseen: [], problem: 'The connection was lost while sending.' })
+  holds('checking the message was for B, so it stopped with B: nothing was written', stored().length, before)
 
   say('from outside: ask the brain how many events it was told')
   const fired = await backend.ask(theBrain, 'COUNT_FIRED', {})
-  const messages = (backend.snapshot().threads as { data: Threads['data'] }).data.messages
   say(`      backend    COUNT_FIRED → ${JSON.stringify(fired)}`)
-  say(`      backend    threads holds ${JSON.stringify(messages)}`)
-  holds('the brain was told of each message sent', fired, { ok: true, value: 3 })
-  holds('the thread holds what was said and answered, and nothing of the reply that was cut off', messages, { 'THR-1': ['hello', 'You said: hello.', 'hello', 'You said: hello [with Launch plan].'] })
+  say(`      backend    THR-1 holds ${JSON.stringify(stored())}`)
+  holds('the brain was told of each message that was accepted, and of no other', fired, { ok: true, value: 3 })
+  holds('the thread holds what was said and answered', stored(), ['hello', 'You said: hello.', 'hello', 'You said: hello [with Launch plan].', 'anyone there', 'You said: anyone there.'])
+  holds('no reply was cut short by a window going', aborted, 0)
 
   console.log(lines.join('\n'))
   console.log(`\n${held} things held`)
@@ -422,10 +488,10 @@ function withinMustNotCompile(value: import('./state.mts').Value<ThreadsSurface>
   // @ts-expect-error a thread's id exists only somewhere inside `thread`
   void value.data.threadId
   if (within(value, 'thread')) void value.data.threadId
-  if (within(value, 'thread.sending')) void value.data.streamed
+  if (within(value, 'thread.sending')) void value.data.documentId
   // @ts-expect-error there is no such state to be inside
   within(value, 'board')
   // @ts-expect-error inside `thread` is not enough to know it is sending
-  if (within(value, 'thread')) void value.data.streamed
+  if (within(value, 'thread')) void value.data.documentId
 }
 void withinMustNotCompile

@@ -7,6 +7,8 @@ import { given, Left, reaching, system } from './state.mts'
 
 type SlowAsks = {
   WAIT: { args: { turns: number }; answer: string }
+  /** Work that is passed `signal`, and throws what it aborted with, as `fetch` and a stream do. */
+  FETCH: { args: { turns: number }; answer: string }
   RELAY: { args: { turns: number }; answer: string }
 }
 type App = { systems: { slow: { events: never; asks: SlowAsks } }; surfaces: {}; views: {} }
@@ -23,6 +25,10 @@ const slow = state<{}, never, SlowAsks>()({
       await turns(count)
       return 'done'
     },
+    FETCH: async ({ turns: count }, { signal }) => {
+      for (let turn = 0; turn < count; turn++) { await turns(1); signal.throwIfAborted() }
+      return 'done'
+    },
     // A handler that itself asks. When whoever asked it goes, the ask it made goes with them.
     RELAY: async ({ turns: count }, { ask }) => {
       try { const inner = await ask('slow', 'WAIT', { turns: count }); return inner.ok ? inner.value : 'failed' }
@@ -31,8 +37,9 @@ const slow = state<{}, never, SlowAsks>()({
   },
 })
 
-type PanelEvent = { type: 'START'; how: 'await' | 'all' | 'floating' | 'relay' } | { type: 'LEAVE' }
-type Panel = { states: { idle: {}; working: { data: { how: 'await' | 'all' | 'floating' | 'relay' } } } }
+type How = 'await' | 'all' | 'floating' | 'relay' | 'fetch'
+type PanelEvent = { type: 'START'; how: How } | { type: 'LEAVE' }
+type Panel = { states: { idle: {}; working: { data: { how: How } } } }
 
 const panel = (saw: string[], lock: { held: boolean }) => state<Panel, PanelEvent>()({
   start: 'idle',
@@ -49,6 +56,7 @@ const panel = (saw: string[], lock: { held: boolean }) => state<Panel, PanelEven
         try {
           if (data.how === 'await') await ask('slow', 'WAIT', { turns: 30 })
           if (data.how === 'relay') await ask('slow', 'RELAY', { turns: 30 })
+          if (data.how === 'fetch') await ask('slow', 'FETCH', { turns: 30 })
           if (data.how === 'all') await Promise.all([ask('slow', 'WAIT', { turns: 30 }), turns(2)])
           if (data.how === 'floating') { void ask('slow', 'WAIT', { turns: 30 }); await turns(40) }
           saw.push('ran on after the ask')
@@ -72,12 +80,13 @@ const wired = () => {
   const lock = { held: false }
   const traced: string[] = []
   backendSaw.length = 0
-  const backend = system({ side: 'backend' })
+  const backendTraced: string[] = []
+  const backend = system({ side: 'backend', trace: (line) => { if (/answering/.test(line)) backendTraced.push(line) } })
   backend.start('slow', slow)
   const window = system({ side: 'window', trace: (line) => { if (/left unanswered|failed/.test(line)) traced.push(line) } })
   window.connect(backend)
   const handle = window.start('panel', panel(saw, lock))
-  return { saw, lock, traced, send: (event: PanelEvent): void => window.send(handle, event), at: (): string => window.read(handle).at, stop: (): void => { window.stop(); backend.stop() } }
+  return { saw, lock, traced, backendTraced, send: (event: PanelEvent): void => window.send(handle, event), at: (): string => window.read(handle).at, stop: (): void => { window.stop(); backend.stop() } }
 }
 
 const checks: Array<[string, () => Promise<void>]> = [
@@ -120,6 +129,16 @@ const checks: Array<[string, () => Promise<void>]> = [
     await turns(10)
     ok(backendSaw.includes('RELAY unwound'))
     ok(backendSaw.includes('WAIT told its asker had gone'))
+    it.stop()
+  }],
+  ['a handler that stops because its `signal` aborted has stopped, and is not reported as having failed', async () => {
+    const it = wired()
+    it.send({ type: 'START', how: 'fetch' })
+    await turns(8)
+    it.send({ type: 'LEAVE' })
+    await turns(10)
+    strictEqual(it.backendTraced.length, 1)
+    ok(it.backendTraced[0]!.startsWith('slow stopped answering FETCH'))
     it.stop()
   }],
   ['an ask that was started and never awaited does not take the process down', async () => {
