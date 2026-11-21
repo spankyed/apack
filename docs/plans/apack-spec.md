@@ -609,7 +609,7 @@ per ask, a handler that returns its answer and throws its refusal, and `failed` 
 
 | In #583 | Why not here |
 |---|---|
-| `ASK_ANSWERED` and `ASK_FAILED` as events, with `isAnswered`, `answerOf` and `AnswersOf` | A second way to receive an answer. Every transition then needs a guard naming its ask. An asker awaits `ask`, in a component or in a state's `run` |
+| `ASK_ANSWERED` and `ASK_FAILED` as events, with `isAnswered`, `answerOf` and `AnswersOf` | A second way to receive an answer. Every transition then needs a guard naming its ask. An asker awaits `ask` in a state's `run`, or in the handler of an ask it is answering |
 | Answers wired through the machine (`answers.actions`, `answers.on`) | `asks` is a table of the state. A system with no states inside is that table and nothing else |
 | `waiting`, read by a handler to learn whether anyone asked | A handler does not branch on transport. What every window should hear is a `broadcast`, whoever asked. A write nobody waits for is still open (Not built) |
 | A feed beside the answer (`sendToWindow(client, …)`) | `progress`, declared on the ask and heard only by its asker |
@@ -638,12 +638,22 @@ than renaming again here.
 
 - **Handlers are plain functions in tables beside the machine**: asks, and events keyed by name with each handler given
   its own event. A single-state system is then two tables and a trivial machine.
-- **A component reads state through the SDK**, handed `{ at, data }` computed from the XState snapshot, and never
-  calls `useSelector` on an actor. There are 439 such calls.
-- **A machine is defined through the SDK**, which may only re-export XState's `setup` and `assign` at first. A pack rule
-  then refuses a direct `xstate` import in pack sources.
+- **A component reads state with `useState`, in the shape it is to keep** ([What a component reads](#what-a-component-reads)):
+  `const { state, send } = useState(…)`, with `state` holding `{ at, data }`. On XState it is computed from the
+  actor's snapshot. It does not depend on which kernel runs underneath, so a component moves to it once, and the
+  move to this design does not touch the component again. A component never calls `useSelector` on an actor, and
+  never names the actor.
+- **A component reads and sends, and does not ask.** What it needs done it sends to a state, whose work asks. An ask
+  made from a component has no owner to stop it or to say where the state goes if it fails.
 - **A loading flag is a state that invokes the ask**, and an independent concern is an actor of its own, never a
-  parallel state.
+  parallel state. Whether something is under way is where a state is. It is not an id in a list the machine keeps,
+  and a component does not import the id of an ask to find out.
+
+One seam that was here is taken out: **a machine defined through the SDK**, re-exporting XState's `setup` and
+`assign` at first, with a pack rule against importing `xstate`. It would put XState's way of writing a machine, a
+config of fixed targets and named actions, under this design's name, and every machine written through it would be
+written in the shape the move is away from. A machine stays XState's, named as XState's, until its feature is ported
+whole.
 - **A spec drives a feature at its boundary**: events in, `ask`, state read through the SDK. 132 spec files import
   XState, and one that reads an actor's context is rewritten by the move.
 
@@ -658,24 +668,47 @@ followed are `docs/plans/asks-shape.md` on that branch. Read against the tables 
 | Shared item | State after #591 |
 |---|---|
 | `{ args, answer, refuses, progress }`, `refuse(...)`, `progress(...)`, the handler's `signal` | Done, in the SDK and every contract |
-| An asker awaits: no `ASK_ANSWERED` or `ASK_FAILED` handled by a surface | Done. A state invokes `fromAsk`, an ask is spawned and handled where it ends, or a component awaits `ask`/`useAsk` |
+| An asker awaits: no `ASK_ANSWERED` or `ASK_FAILED` handled by a surface | Done, in three forms. A state invokes `fromAsk`, which is this design's `run` and is the one to keep. An ask is spawned under an id and handled where it ends, and a component awaits `ask`/`useAsk`: neither carries over (below) |
 | A feed beside the answer | Gone: the search and the git transfers say `progress` |
 | Leaving the asker's state aborts the handler | Done: the asker's abort reaches the handler's `signal`, and a stopped ask is not answered |
 | `waiting` | Gone from a handler's arguments |
 | A loading flag is a state that invokes the ask | Done where an ask was touched |
 | `tell` and `broadcast` | Not done: still `sendToSystem` and `broadcastToSurface` |
 | Handlers as tables beside the machine | Not done, on purpose: an ask is taken by the state that lists it (`answers.on`), which is this design's `asks` per state. A child machine answers its own asks |
-| A component reads state through the SDK | Not done: `useSelector` on an actor stands |
-| A machine is defined through the SDK; no `xstate` import in a pack | Not done |
+| A component reads state with `useState` | Not done: `useSelector` on an actor stands |
+| A component does not ask | Not done: `useAsk` is in the SDK and components call it |
+| A machine is defined through the SDK; no `xstate` import in a pack | Taken out of the seams (above) |
 | A spec drives a feature at its boundary | Partly: specs of asks ask, and many still read an actor's context |
 
 spankyed/apack#593, stacked on #591, finished what #591 listed as open: no surface machine is `type: 'parallel'`, and
-an ask that can be under way beside others is spawned under an id, with `askUnderWay(snapshot, id)` reading whether it
-is. That is XState's shape for "several asks at once"; here each is an awaited `ask` in a handler, and
-[collections that grow](#collections-that-grow) replaces finding an ask again by its id.
+an ask that can be under way beside others is spawned under an id, with the ids under way kept in the machine's
+context.
 
-**Where the next work starts.** The remaining seams of step 1, each its own PR on `master` once #591 and #593 are merged: rename to `tell` and `broadcast`; state read through the SDK in
-components; machines defined through the SDK with a pack rule against `xstate`. Then step 2.
+**What of this is not to be built on.** A flat XState machine has nowhere to say that a push is under way while a
+file is being staged, so #593 gave it a list: `asking` in the context, written by `enqueueAsks` in place of XState's
+`enqueueActions`, an id for each ask from `askId`, how one ended arriving as `xstate.done.actor.<id>` and matched by
+its prefix, and `endedAsk` to find which. It works, and it is the part of the asks work this design replaces. On
+`1226110b42`, 2026-11-21, by text search outside specs: 154 calls of `askId`, 161 of `enqueueAsks`, 180 transitions
+on `xstate.done.actor`, 407 of `useSelector`, and 8 of `useAsk`. The commit surface's machine is 1,778 lines with 183
+uses of the three; its panel has 63 `useSelector` lines and imports the ids of asks to show a spinner.
+
+Here each concern that can be under way beside others is a state of its own that the surface starts
+([rule 10](#rules)), and whether it is under way is where that state is: no id, no list, and no event for how an ask
+ended. So this record is not extended to new code, and nothing new is built on `asking`, `askId` or `endedAsk`. It
+goes when its surface is ported.
+
+**Where the next work starts.** What can be done on XState now, each its own PR on `master`:
+
+1. Rename to `tell` and `broadcast`.
+2. `useState` over the XState snapshot, in the shape it is to keep, and the 407 `useSelector` sites onto it. A
+   component then names neither an actor nor an ask's id: what it showed by `askUnderWay(context.asking, id)` the
+   machine gives as data.
+3. The 8 `useAsk` sites into the states of the surfaces they belong to, and `useAsk` out of the SDK.
+
+Not now: taking apart the commit and pull-request machines by concern. That carries over one for one, a state for
+each concern, and done on XState first it is done twice. They are split as they are ported.
+
+Then step 2.
 
 ## What to build around it
 
@@ -750,6 +783,11 @@ projects. Each would loosen the fit to this app.
     the step log (What to build around it), and is worth doing only against the components people will inspect.
 - **Roles**: `tell({ role: 'brain' }, …)`.
 - **A write nobody waits for**, which appliers and migrations make today.
+- **Several asks under way at once from one surface**, on a real surface. The design has an answer: a state for each,
+  started for each key of a field (rule 10), so that staging a file is adding its path to a field, the write runs
+  in a state of its own, and whether it is under way is whether its path is there. It is checked on a board of cards
+  and has not been written against the commit surface, which has some thirty kinds of ask and is where it will show
+  whether a state for each write is too much to write for a write that only has to be made.
 - **Window-to-window sends**, the app's `sendToSurface`.
 - **What is left of what a state starts and follows.** Rule 10 is built and checked on two examples. Not built: the
   brain, the bus and the shell on it, which are the app's own cases: a flow per run, a surface per pack, a system per
@@ -809,10 +847,10 @@ Step 1 is under way; no later step is started. Each is a decision point.
 
 1. **Bring the XState code to the shared vocabulary and seams** ([Alongside results-are-asks](#alongside-results-are-asks)).
    spankyed/apack#591 did the vocabulary and the asking side, which removes the event path for answers.
-   [What #591 delivered](#what-591-delivered) lists the seams still to do, which are what leave pack code that does not
-   name XState.
-2. **Settle the open design** that the first real ports will hit: a write nobody waits for, and events only the
-   state itself may send.
+   [What #591 delivered](#what-591-delivered) lists what is still to do on XState, which is what leaves a component
+   that names neither XState nor an actor. A machine goes on naming XState until its feature is ported.
+2. **Settle the open design** that the first real ports will hit: a write nobody waits for, events only the state
+   itself may send, and several asks under way at once from one surface.
 3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The
    prototype's kernel takes a schedule and its checks run every ordering; the kernel in the tree keeps both.
 4. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is
@@ -822,7 +860,8 @@ Step 1 is under way; no later step is started. Each is a decision point.
 6. **Port one feature end to end as the go or no-go**: the code search, both halves, with its specs. Judge it on line
    count, whether its specs pass unchanged in what they assert, and typecheck time.
 7. **Port in order of risk**: the 20 single-state backend systems, the 13 single-state surfaces, surfaces with states,
-   the brain, then the bus and the shell.
+   the brain, then the bus and the shell. The commit and pull-request surfaces are taken apart by concern as they
+   are ported, each concern a state the surface starts.
 8. **Remove XState and the bridge**, and regenerate the recorded API reports.
 
 ## The name
