@@ -42,10 +42,10 @@ it('has git move it on, and is busy with that until git answers', async () => {
 
   actor.send({ type: 'commit.MOVE_OPERATION', move: 'continue' });
   expect(latestAsk('commit.MOVE_OPERATION').event).toEqual({ type: 'commit.MOVE_OPERATION', move: 'continue' });
-  expect(askUnderWay(actor.getSnapshot(), MOVE_OPERATION)).toBe(true);
+  expect(askUnderWay(actor.getSnapshot().context.asking, MOVE_OPERATION)).toBe(true);
 
   await latestAsk('commit.MOVE_OPERATION').answer({ move: 'continue' });
-  expect(askUnderWay(actor.getSnapshot(), MOVE_OPERATION)).toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, MOVE_OPERATION)).toBe(false);
 });
 
 it('says why when git could not, and is no longer busy', async () => {
@@ -54,6 +54,6 @@ it('says why when git could not, and is no longer busy', async () => {
 
   await latestAsk('commit.MOVE_OPERATION').refuse('you have unmerged files', { kind: 'git' });
 
-  expect(askUnderWay(actor.getSnapshot(), MOVE_OPERATION)).toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, MOVE_OPERATION)).toBe(false);
   expect(actor.getSnapshot().context).toMatchObject({ gitError: 'you have unmerged files', operation: MERGE });
 });

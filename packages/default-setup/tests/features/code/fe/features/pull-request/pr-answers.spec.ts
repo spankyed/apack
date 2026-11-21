@@ -125,7 +125,7 @@ describe('an error ends the ask or write it answers, and no other', () => {
     await refuse('pr.MERGE_PR', 'not mergeable');
 
     expect(context(actor).isMerging).toBe(false);
-    expect(askUnderWay(actor.getSnapshot(), DETAILS)).toBe(true);
+    expect(askUnderWay(actor.getSnapshot().context.asking, DETAILS)).toBe(true);
   });
 });
 
@@ -256,7 +256,7 @@ describe('another folder', () => {
       inflightMutations: 0,
       writes: {},
     });
-    expect(askUnderWay(actor.getSnapshot(), DETAILS), 'and its details are no longer waited on').toBe(false);
+    expect(askUnderWay(actor.getSnapshot().context.asking, DETAILS), 'and its details are no longer waited on').toBe(false);
 
     await onBranchPR(actor, pr(11));
     expect(context(actor).selectedPR?.number).toBe(11);

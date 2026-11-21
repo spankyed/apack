@@ -24,10 +24,10 @@ it('has git stage the piece, and is busy with it until git says it is done', asy
   actor.send(PIECE);
 
   expect(latestAsk('commit.APPLY_HUNK').event).toEqual(PIECE);
-  expect(askUnderWay(actor.getSnapshot(), HUNK)).toBe(true);
+  expect(askUnderWay(actor.getSnapshot().context.asking, HUNK)).toBe(true);
 
   await latestAsk('commit.APPLY_HUNK').answer({ path: 'a.txt', staged: false, hunk: 'a piece' });
-  expect(askUnderWay(actor.getSnapshot(), HUNK)).toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, HUNK)).toBe(false);
 });
 
 it('is no longer busy, and says why, when git refuses the piece', async () => {
@@ -36,7 +36,7 @@ it('is no longer busy, and says why, when git refuses the piece', async () => {
 
   await latestAsk('commit.APPLY_HUNK').refuse('The file has changed since this change was read.', { kind: 'git' });
 
-  expect(askUnderWay(actor.getSnapshot(), HUNK)).toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, HUNK)).toBe(false);
   expect(actor.getSnapshot().context.gitError).toBe('The file has changed since this change was read.');
 });
 

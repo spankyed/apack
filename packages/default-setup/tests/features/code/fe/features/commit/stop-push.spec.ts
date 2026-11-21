@@ -32,11 +32,11 @@ it('stops the push running by no longer waiting on it, and stops nothing when no
 it('leaves pushing once the push is stopped, with no error to show', () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.PUSH_BRANCH' });
-  expect(askUnderWay(actor.getSnapshot(), PUSH)).toBe(true);
+  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(true);
   latestAsk('commit.PUBLISH_BRANCH').tell({ during: 'push', stage: 'Writing objects', percent: 42 });
 
   actor.send({ type: 'commit.STOP_PUSH' });
 
-  expect(askUnderWay(actor.getSnapshot(), PUSH)).toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(false);
   expect(actor.getSnapshot().context).toMatchObject({ pushStopped: true, gitError: null, progress: null });
 });

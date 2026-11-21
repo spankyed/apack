@@ -30,5 +30,5 @@ it.each([
 
   await end(latestAsk('commit.PUBLISH_BRANCH'));
   expect(actor.getSnapshot().context.progress).toBeNull();
-  expect(askUnderWay(actor.getSnapshot(), PUSH)).toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(false);
 });

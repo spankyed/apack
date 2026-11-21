@@ -24,17 +24,17 @@ it('shows the branch a checkout found nowhere, and makes it only when asked to',
   actor.send({ type: 'commit.CHECKOUT_BRANCH' });
 
   await latestAsk('commit.CHECKOUT_BRANCH').refuse('There is no branch named topic, here or on a remote.', { kind: 'git', code: 'unknown-ref', missingBranch: 'topic' });
-  expect(checkoutUnderWay(actor.getSnapshot())).toBe(false);
+  expect(checkoutUnderWay(actor.getSnapshot().context.asking)).toBe(false);
   expect(actor.getSnapshot().context).toMatchObject({ gitFailure: { missingBranch: 'topic' } });
   expect(asksOf('commit.CREATE_BRANCH'), 'nothing made by itself').toEqual([]);
 
   actor.send({ type: 'commit.CREATE_BRANCH', branchName: 'topic' });
 
   expect(latestAsk('commit.CREATE_BRANCH').event).toEqual({ type: 'commit.CREATE_BRANCH', branchName: 'topic' });
-  expect(askUnderWay(actor.getSnapshot(), CREATE_BRANCH)).toBe(true);
+  expect(askUnderWay(actor.getSnapshot().context.asking, CREATE_BRANCH)).toBe(true);
   expect(actor.getSnapshot().context, 'the refusal it answers goes').toMatchObject({ gitError: null, gitFailure: null });
   await latestAsk('commit.CREATE_BRANCH').answer({ branchName: 'topic' });
-  expect(checkoutUnderWay(actor.getSnapshot())).toBe(false);
+  expect(checkoutUnderWay(actor.getSnapshot().context.asking)).toBe(false);
 });
 
 it('keeps the commit message typed through a stash of one file, and gives it to a stash named with it', async () => {
@@ -43,7 +43,7 @@ it('keeps the commit message typed through a stash of one file, and gives it to 
 
   actor.send({ type: 'commit.STASH_PUSH', message: 'src/a.ts', paths: ['src/a.ts'] });
   await latestAsk('commit.STASH_PUSH').answer({ message: 'Saved' });
-  expect(askUnderWay(actor.getSnapshot(), STASH)).toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, STASH)).toBe(false);
   expect(actor.getSnapshot().context.commitMessage).toBe('Fix the thing');
 
   actor.send({ type: 'commit.STASH_PUSH', message: 'Fix the thing', stagedOnly: false });

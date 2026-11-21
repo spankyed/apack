@@ -1,5 +1,5 @@
 import type { GitHubApiFailure, PRListState } from '#features/code/be/services/github-api.ts'
-import { setup, assign, spawnChild, stopChild, type ActorRefFrom, type DoneActorEvent } from 'xstate';
+import { setup, assign, type ActorRefFrom, type DoneActorEvent } from 'xstate';
 import type { AskOutcome } from '@apackdev/sdk/events';
 import { safeEvents } from '@apackdev/sdk/helpers';
 import type { Contract as CodeSystemContract, PRDetails, PRFileDiffWhere, PullRequestAsks } from '#features/code/be/contract.ts';
@@ -7,7 +7,7 @@ import { fromAsk } from '#generated/events.ts';
 import type { GitStatusFile, GitDiff } from '../commit/state.ts';
 import type { GhPullRequest, GhPRComment, GhReviewThread, PRBranchCheckout } from '#generated/types.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
-import { askUnderWay, untypedOpenSurface } from '@apackdev/sdk/fe'
+import { askUnderWay, enqueueAsks, noAsks, stopAsks, untypedOpenSurface, type AsksUnderWay } from '@apackdev/sdk/fe'
 import { resolveName } from '@apackdev/sdk/ids'
 
 const HOST_SETTINGS = resolveName('settings', 'host');
@@ -177,7 +177,7 @@ const selecting = (context: CodePullRequestContext, next: GhPullRequest | null):
 const panelShown = (self: unknown): boolean => getParentContext(self)?.selectedPanel === 'pr'
 
 /** Everything that belongs to the folder open, as it is before anything is known of it */
-const folderStart = (): Omit<CodePullRequestContext, 'commentTab'> => ({
+const folderStart = (): Omit<CodePullRequestContext, 'commentTab' | 'asking'> => ({
   diffsByRef: {},
   diffAsks: {},
   fileDiffAsks: {},
@@ -256,6 +256,8 @@ export const branchDeletable = (pr: GhPullRequest | null): boolean =>
   !!pr && pr.state !== 'OPEN' && pr.headInRemote === true && (pr.openFromSameHead ?? []).length === 0
 
 export interface CodePullRequestContext {
+  /** The ids of the asks this machine spawned that are under way, kept by `enqueueAsks` and `stopAsks` */
+  asking: AsksUnderWay
   // Branch comparison
   /**
    * The files each comparison holds, keyed by `refKey` — the answer's own slot rather than one shared
@@ -620,12 +622,11 @@ const machine = setup({
     deleteReviewComment: fromAsk('code', 'pr.DELETE_REVIEW_COMMENT'),
   },
 })
-const { enqueueActions } = machine
 
 export const pullRequestState = machine.extend({
   actions: {
     /** Asks GitHub for what the top row shows, where a folder is open */
-    refreshStatus: enqueueActions(({ enqueue, context, self }) => {
+    refreshStatus: enqueueAsks(({ enqueue, context, self }) => {
       if (!getParentContext(self)?.baseDirectory) return
       enqueue.assign({
         isPrLoading: !context.diffsByRef[refKey(context.prBaseBranch, context.selectedPR?.headRefName)],
@@ -640,7 +641,7 @@ export const pullRequestState = machine.extend({
      * The repository moved: what was read of it is stale. GitHub is asked again only while the panel is
      * shown; a hidden panel is asked when it is shown again (`pr.REFRESH_STATUS`, sent on selecting it).
      */
-    followRepositoryChange: enqueueActions(({ enqueue, self }) => {
+    followRepositoryChange: enqueueAsks(({ enqueue, self }) => {
       enqueue.assign({ diffStale: true, prCheckCompleted: false })
       if (!panelShown(self) || !getParentContext(self)?.baseDirectory) return
       enqueue.assign({ isCheckingBranchPR: true })
@@ -653,14 +654,14 @@ export const pullRequestState = machine.extend({
     }),
 
     /** Asks for a branch diff, recording the comparison its answer is written under */
-    askDiff: enqueueActions(({ enqueue, event }) => {
+    askDiff: enqueueAsks(({ enqueue, event }) => {
       const { baseBranch, headBranch, prNumber } = typeOf('pr.ask.DIFF', event)
       const id = askId('diff')
       enqueue.assign(({ context }) => ({ diffAsks: { ...context.diffAsks, [id]: refKey(baseBranch, headBranch) } }))
       enqueue.spawnChild('readDiff', { id, input: { baseBranch, ...(headBranch && { headBranch }), ...(prNumber && { prNumber }) } })
     }),
 
-    viewPrDiff: enqueueActions(({ enqueue, event, context }) => {
+    viewPrDiff: enqueueAsks(({ enqueue, event, context }) => {
       enqueue.raise({
         type: 'pr.ask.FILE_DIFF',
         path: typeOf('pr.VIEW_DIFF', event).path,
@@ -671,7 +672,7 @@ export const pullRequestState = machine.extend({
     }),
 
     /** Asks for the same diff again, allowed to download what it lacks */
-    fetchMissingDiff: enqueueActions(({ enqueue, context }) => {
+    fetchMissingDiff: enqueueAsks(({ enqueue, context }) => {
       const missing = context.missingFileDiff
       if (!missing) return
       enqueue.assign({ missingFileDiff: null })
@@ -679,7 +680,7 @@ export const pullRequestState = machine.extend({
     }),
 
     /** Asks for a file's diff, recording it so its answer opens one tab */
-    askFileDiff: enqueueActions(({ enqueue, event }) => {
+    askFileDiff: enqueueAsks(({ enqueue, event }) => {
       const { type: _type, ...which } = typeOf('pr.ask.FILE_DIFF', event)
       const id = askId('fileDiff')
       enqueue.assign(({ context }) => ({ fileDiffAsks: { ...context.fileDiffAsks, [id]: fileKey(which.baseBranch, which.headBranch, which.path) } }))
@@ -695,7 +696,7 @@ export const pullRequestState = machine.extend({
      * `isPrLoading` and `diffStale` are the view's, not the comparison's, so a late answer still clears
      * them; there is nothing stale about "no longer loading".
      */
-    takeDiff: enqueueActions(({ enqueue, context, event }) => {
+    takeDiff: enqueueAsks(({ enqueue, context, event }) => {
       const { actorId, output } = doneOf('diff', event)
       enqueue.stopChild(actorId)
       const { recorded, pending } = settled(context.diffAsks, actorId)
@@ -717,7 +718,7 @@ export const pullRequestState = machine.extend({
      * `selectedPrFile` is what the tab is built from, so an answer for a file the user has since moved off opens
      * nothing. One that needs content the clone lacks is shown as the offer to download it
      */
-    takeFileDiff: enqueueActions(({ enqueue, self, context, event }) => {
+    takeFileDiff: enqueueAsks(({ enqueue, self, context, event }) => {
       const { actorId, output } = doneOf('fileDiff', event)
       enqueue.stopChild(actorId)
       const { recorded, pending } = settled(context.fileDiffAsks, actorId)
@@ -765,7 +766,7 @@ export const pullRequestState = machine.extend({
     },
 
     /** A folder opened: nothing of the one before is kept or waited on, and GitHub is asked about this one while the panel is shown */
-    startFolder: enqueueActions(({ enqueue, self }) => {
+    startFolder: enqueueAsks(({ enqueue, self }) => {
       enqueue.assign(folderStart())
       enqueue.raise({ type: 'pr.READS_LEFT' })
       if (!getParentContext(self)?.baseDirectory) return
@@ -778,47 +779,46 @@ export const pullRequestState = machine.extend({
     },
 
     /** Reads a pull request's details in place of the read under way; the pull request's page asks only where none is */
-    askDetails: enqueueActions(({ enqueue, event, self }) => {
+    askDetails: enqueueAsks(({ enqueue, event, context }) => {
       const ask = typeOf(['pr.read.DETAILS', 'pr.REFRESH_PR'], event)
-      if (ask.type === 'pr.read.DETAILS' && ask.unlessAsking && askUnderWay(self.getSnapshot(), DETAILS)) return
+      if (ask.type === 'pr.read.DETAILS' && ask.unlessAsking && askUnderWay(context.asking, DETAILS)) return
       enqueue.stopChild(DETAILS)
       enqueue.spawnChild('readDetails', { id: DETAILS, input: { number: ask.number } })
     }),
 
     /** Reads a pull request's discussion in place of the read under way */
-    askComments: enqueueActions(({ enqueue, event }) => {
+    askComments: enqueueAsks(({ enqueue, event }) => {
       enqueue.stopChild(COMMENTS)
       enqueue.spawnChild('readComments', { id: COMMENTS, input: { number: typeOf('pr.read.COMMENTS', event).number } })
     }),
 
     /** Reads a pull request's review threads in place of the read under way */
-    askThreads: enqueueActions(({ enqueue, event }) => {
+    askThreads: enqueueAsks(({ enqueue, event }) => {
       enqueue.stopChild(THREADS)
       enqueue.spawnChild('readThreads', { id: THREADS, input: { number: typeOf('pr.read.THREADS', event).number } })
     }),
 
     /** Reads the list's first page for the filter and search shown, in place of any page being read */
-    askList: enqueueActions(({ enqueue, context: { prList } }) => {
+    askList: enqueueAsks(({ enqueue, context: { prList } }) => {
       enqueue.stopChild(LIST)
       enqueue.stopChild(LIST_MORE)
       enqueue.spawnChild('readList', { id: LIST, input: { state: prList.state, ...(prList.query.trim() && { query: prList.query.trim() }) } })
     }),
 
     /** Reads the page after those read, where there is one and no page is being read */
-    askListMore: enqueueActions(({ enqueue, context: { prList }, self }) => {
-      const snapshot = self.getSnapshot()
-      if (prList.next === null || askUnderWay(snapshot, LIST) || askUnderWay(snapshot, LIST_MORE)) return
+    askListMore: enqueueAsks(({ enqueue, context: { prList, asking } }) => {
+      if (prList.next === null || askUnderWay(asking, LIST, LIST_MORE)) return
       enqueue.spawnChild('readList', { id: LIST_MORE, input: { state: prList.state, ...(prList.query.trim() && { query: prList.query.trim() }), after: prList.next } })
     }),
 
     /** The details asked for, shown; or why they could not be read */
-    takeDetailsRead: enqueueActions(({ enqueue, context, event }) => {
+    takeDetailsRead: enqueueAsks(({ enqueue, context, event }) => {
       const outcome = typeOf('xstate.done.actor.details', event).output
       if (outcome.ok) takeDetails(enqueue, context, outcome.value)
       else enqueue.assign({ ...failureShown(outcome.failure), isPrLoading: false })
     }),
 
-    takeBranchPR: enqueueActions(({ enqueue, context, event }) => {
+    takeBranchPR: enqueueAsks(({ enqueue, context, event }) => {
       const outcome = typeOf('xstate.done.actor.branchPR', event).output
       if (!outcome.ok) {
         enqueue.assign({ ...failureShown(outcome.failure), isCheckingBranchPR: false, branchPRCheckFailed: !context.selectedPR, isPrLoading: false })
@@ -852,7 +852,7 @@ export const pullRequestState = machine.extend({
       }
     }),
 
-    takeSmartBase: enqueueActions(({ enqueue, context, event }) => {
+    takeSmartBase: enqueueAsks(({ enqueue, context, event }) => {
       const outcome = typeOf('xstate.done.actor.smartBase', event).output
       if (!outcome.ok) {
         enqueue.assign({ ...failureShown(outcome.failure), isPrLoading: false })
@@ -876,7 +876,7 @@ export const pullRequestState = machine.extend({
 
     // --- The writes: each is shown as unanswered until its ask ends ---
 
-    takeCreated: enqueueActions(({ enqueue, context, event }) => {
+    takeCreated: enqueueAsks(({ enqueue, context, event }) => {
       const { actorId, output } = doneOf('createPR', event)
       enqueue.stopChild(actorId)
       if (!endWrite(enqueue, context, actorId, output) || !output.ok) return
@@ -895,7 +895,7 @@ export const pullRequestState = machine.extend({
     }),
 
     /** A merge or a close that was done; a refused merge brings the pull request read again, shown with the refusal */
-    takeMergedOrClosed: enqueueActions(({ enqueue, context, event }) => {
+    takeMergedOrClosed: enqueueAsks(({ enqueue, context, event }) => {
       const merge = event.type.startsWith('xstate.done.actor.merge.')
       const { actorId, output } = merge ? doneOf('merge', event) : doneOf('close', event)
       enqueue.stopChild(actorId)
@@ -915,7 +915,7 @@ export const pullRequestState = machine.extend({
     }),
 
     /** The write is the pull request's before the details it read again are taken over it */
-    takeDraftToggled: enqueueActions(({ enqueue, context, event }) => {
+    takeDraftToggled: enqueueAsks(({ enqueue, context, event }) => {
       const { actorId, output } = doneOf('toggleDraft', event)
       enqueue.stopChild(actorId)
       const refreshed = output.ok && refreshes(context, actorId, output.value.details)
@@ -927,7 +927,7 @@ export const pullRequestState = machine.extend({
       if (refreshed && details) takeDetails(enqueue, context, details)
     }),
 
-    takeBranchDeleted: enqueueActions(({ enqueue, context, event }) => {
+    takeBranchDeleted: enqueueAsks(({ enqueue, context, event }) => {
       const { actorId, output } = doneOf('deleteBranch', event)
       enqueue.stopChild(actorId)
       if (!endWrite(enqueue, context, actorId, output) || !output.ok) return
@@ -939,7 +939,7 @@ export const pullRequestState = machine.extend({
      * The pull request stays shown, picked or not: a fork's is checked out as `pr/<n>`, which is no branch
      * GitHub has a pull request from, and the checkout's announcement asks for the branch's own
      */
-    takeCheckedOut: enqueueActions(({ enqueue, context, event }) => {
+    takeCheckedOut: enqueueAsks(({ enqueue, context, event }) => {
       const { actorId, output } = doneOf('checkout', event)
       enqueue.stopChild(actorId)
       if (!endWrite(enqueue, context, actorId, output) || !output.ok) return
@@ -947,7 +947,7 @@ export const pullRequestState = machine.extend({
     }),
 
     /** The write is the pull request's before the details it read again are taken over it */
-    takeUpdated: enqueueActions(({ enqueue, context, event, self }) => {
+    takeUpdated: enqueueAsks(({ enqueue, context, event, self }) => {
       const { actorId, output } = doneOf('updatePR', event)
       enqueue.stopChild(actorId)
       const refreshed = output.ok && refreshes(context, actorId, output.value.details)
@@ -968,20 +968,20 @@ export const pullRequestState = machine.extend({
       if (refreshed && details) takeDetails(enqueue, context, details)
     }),
 
-    takeCommentWritten: enqueueActions(({ enqueue, context, event }) => {
+    takeCommentWritten: enqueueAsks(({ enqueue, context, event }) => {
       const { actorId, output } = doneOf('comment', event)
       enqueue.stopChild(actorId)
       endWrite(enqueue, context, actorId, output)
     }),
 
-    takeThreadWritten: enqueueActions(({ enqueue, context, event }) => {
+    takeThreadWritten: enqueueAsks(({ enqueue, context, event }) => {
       const { actorId, output } = doneOf('thread', event)
       enqueue.stopChild(actorId)
       endWrite(enqueue, context, actorId, output)
     }),
 
     /** Deletes the pull request's branch, where the panel offers it (`branchDeletable`); the view has asked first */
-    requestDeleteBranch: enqueueActions(({ enqueue, context }) => {
+    requestDeleteBranch: enqueueAsks(({ enqueue, context }) => {
       const pr = context.selectedPR
       if (!pr || !branchDeletable(pr)) return
       const id = askId('deleteBranch')
@@ -990,7 +990,7 @@ export const pullRequestState = machine.extend({
     }),
 
     /** Checks out the open pull request shown as a branch here, once at a time */
-    requestCheckout: enqueueActions(({ enqueue, context }) => {
+    requestCheckout: enqueueAsks(({ enqueue, context }) => {
       const pr = context.selectedPR
       if (!pr || pr.state !== 'OPEN' || context.isCheckingOut) return
       enqueue.assign({ lastCheckout: null })
@@ -1000,15 +1000,15 @@ export const pullRequestState = machine.extend({
     }),
 
     /** "Checkout & Pull Base", once at a time: the pull is asked for, a checkout pulling nothing by itself */
-    checkoutBase: enqueueActions(({ enqueue, context, self }) => {
+    checkoutBase: enqueueAsks(({ enqueue, context }) => {
       const branchName = context.selectedPR?.baseRefName
-      if (!branchName || askUnderWay(self.getSnapshot(), CHECKOUT_BASE)) return
+      if (!branchName || askUnderWay(context.asking, CHECKOUT_BASE)) return
       enqueue.assign({ prError: null })
       enqueue.spawnChild('checkoutBranch', { id: CHECKOUT_BASE, input: { branchName, pull: true } })
     }),
 
     /** The base checked out is shown in the commit panel; a refusal is shown here, where it was asked for */
-    takeBaseCheckedOut: enqueueActions(({ enqueue, event, self }) => {
+    takeBaseCheckedOut: enqueueAsks(({ enqueue, event, self }) => {
       const { output } = typeOf('xstate.done.actor.checkoutBase', event)
       enqueue.stopChild(CHECKOUT_BASE)
       if (output.ok) enqueue(() => updateParentState(self, { selectedPanel: 'commit' }))
@@ -1016,7 +1016,7 @@ export const pullRequestState = machine.extend({
     }),
 
     /** Shows the files or the pull request; the pull request's discussion is read when the one held is another's */
-    setViewMode: enqueueActions(({ enqueue, event, context }) => {
+    setViewMode: enqueueAsks(({ enqueue, event, context }) => {
       const { mode } = typeOf('pr.SET_VIEW_MODE', event)
       enqueue.assign({ viewMode: mode, prError: null })
       const pr = context.selectedPR
@@ -1024,7 +1024,7 @@ export const pullRequestState = machine.extend({
       enqueue.raise({ type: 'pr.read.DETAILS', number: pr.number, unlessAsking: true })
     }),
 
-    newPR: enqueueActions(({ enqueue, context }) => {
+    newPR: enqueueAsks(({ enqueue, context }) => {
       leaveDiscussion(enqueue, context, null)
       enqueue.assign({
         ...selecting(context, null),
@@ -1048,7 +1048,7 @@ export const pullRequestState = machine.extend({
       }
     }),
 
-    submitCreate: enqueueActions(({ enqueue, event, context }) => {
+    submitCreate: enqueueAsks(({ enqueue, event, context }) => {
       const id = askId('createPR')
       recordWrite(enqueue, id, { write: 'create-pr' })
       enqueue.spawnChild('createPR', { id, input: {
@@ -1059,7 +1059,7 @@ export const pullRequestState = machine.extend({
       } })
     }),
 
-    requestMerge: enqueueActions(({ enqueue, event, context }) => {
+    requestMerge: enqueueAsks(({ enqueue, event, context }) => {
       if (!context.selectedPR) return
       const { method } = typeOf('pr.MERGE', event)
       const { number, headRefOid: sha } = context.selectedPR
@@ -1070,7 +1070,7 @@ export const pullRequestState = machine.extend({
       enqueue.spawnChild('mergePR', { id, input: { number, method: method || 'merge', ...(sha && { sha }) } })
     }),
 
-    requestClose: enqueueActions(({ enqueue, context }) => {
+    requestClose: enqueueAsks(({ enqueue, context }) => {
       if (!context.selectedPR) return
       const number = context.selectedPR.number
       const id = askId('close')
@@ -1078,7 +1078,7 @@ export const pullRequestState = machine.extend({
       enqueue.spawnChild('closePR', { id, input: { number } })
     }),
 
-    requestToggleDraft: enqueueActions(({ enqueue, context }) => {
+    requestToggleDraft: enqueueAsks(({ enqueue, context }) => {
       if (!context.selectedPR) return
       const { number, isDraft } = context.selectedPR
       const id = askId('toggleDraft')
@@ -1086,14 +1086,14 @@ export const pullRequestState = machine.extend({
       enqueue.spawnChild('toggleDraft', { id, input: { number, isDraft } })
     }),
 
-    requestUpdatePR: enqueueActions(({ enqueue, event }) => {
+    requestUpdatePR: enqueueAsks(({ enqueue, event }) => {
       const { number, title, body, base } = typeOf('pr.UPDATE_PR', event)
       const id = askId('updatePR')
       recordWrite(enqueue, id, { write: 'update-pr', number }, number)
       enqueue.spawnChild('updatePR', { id, input: { number, title, body, base } })
     }),
 
-    selectPRAndLoadDiff: enqueueActions(({ enqueue, event }) => {
+    selectPRAndLoadDiff: enqueueAsks(({ enqueue, event }) => {
       enqueue.assign({
         isPrLoading: true,
         viewMode: 'files' as const,
@@ -1102,7 +1102,7 @@ export const pullRequestState = machine.extend({
       enqueue.raise({ type: 'pr.read.DETAILS', number: typeOf('pr.SELECT_PR_BY_NUMBER', event).number })
     }),
 
-    backToBranch: enqueueActions(({ enqueue, context }) => {
+    backToBranch: enqueueAsks(({ enqueue, context }) => {
       enqueue.assign({
         ...selecting(context, null),
         isManualPRSelection: false,
@@ -1118,7 +1118,7 @@ export const pullRequestState = machine.extend({
 
     // --- Comment and thread writes, shown before they are answered ---
 
-    createComment: enqueueActions(({ enqueue, event }) => {
+    createComment: enqueueAsks(({ enqueue, event }) => {
       const { number, body } = typeOf('pr.CREATE_COMMENT', event)
       const pid = placeholderIdCounter--
       const placeholder: GhPRComment = {
@@ -1134,21 +1134,21 @@ export const pullRequestState = machine.extend({
       enqueue.spawnChild('createComment', { id, input: { number, body } })
     }),
 
-    editComment: enqueueActions(({ enqueue, event, context }) => {
+    editComment: enqueueAsks(({ enqueue, event, context }) => {
       const { commentId, body } = typeOf('pr.EDIT_COMMENT', event)
       const id = askId('comment')
       recordWrite(enqueue, id, { write: 'edit-comment', number: context.selectedPR?.number ?? 0, comment: { change: 'edit', commentId, body } })
       enqueue.spawnChild('editComment', { id, input: { commentId, body } })
     }),
 
-    deleteComment: enqueueActions(({ enqueue, event, context }) => {
+    deleteComment: enqueueAsks(({ enqueue, event, context }) => {
       const { commentId } = typeOf('pr.DELETE_COMMENT', event)
       const id = askId('comment')
       recordWrite(enqueue, id, { write: 'delete-comment', number: context.selectedPR?.number ?? 0, comment: { change: 'delete', commentId } })
       enqueue.spawnChild('deleteComment', { id, input: { commentId } })
     }),
 
-    replyToThread: enqueueActions(({ enqueue, event }) => {
+    replyToThread: enqueueAsks(({ enqueue, event }) => {
       const { prNumber, commentId, body } = typeOf('pr.REPLY_TO_THREAD', event)
       const pid = placeholderIdCounter--
       const placeholder = {
@@ -1164,7 +1164,7 @@ export const pullRequestState = machine.extend({
       enqueue.spawnChild('replyToThread', { id, input: { prNumber, commentId, body } })
     }),
 
-    resolveThread: enqueueActions(({ enqueue, event, context }) => {
+    resolveThread: enqueueAsks(({ enqueue, event, context }) => {
       const { type, threadId } = typeOf(['pr.RESOLVE_THREAD', 'pr.UNRESOLVE_THREAD'], event)
       const resolved = type === 'pr.RESOLVE_THREAD'
       const id = askId('thread')
@@ -1172,14 +1172,14 @@ export const pullRequestState = machine.extend({
       enqueue.spawnChild(resolved ? 'resolveThread' : 'unresolveThread', { id, input: { threadId } })
     }),
 
-    editReviewComment: enqueueActions(({ enqueue, event, context }) => {
+    editReviewComment: enqueueAsks(({ enqueue, event, context }) => {
       const { commentId, body } = typeOf('pr.EDIT_REVIEW_COMMENT', event)
       const id = askId('thread')
       recordWrite(enqueue, id, { write: 'edit-review-comment', number: context.selectedPR?.number ?? 0, thread: { change: 'edit', commentId, body } })
       enqueue.spawnChild('editReviewComment', { id, input: { commentId, body } })
     }),
 
-    deleteReviewComment: enqueueActions(({ enqueue, event, context }) => {
+    deleteReviewComment: enqueueAsks(({ enqueue, event, context }) => {
       const { commentId } = typeOf('pr.DELETE_REVIEW_COMMENT', event)
       const id = askId('thread')
       recordWrite(enqueue, id, { write: 'delete-review-comment', number: context.selectedPR?.number ?? 0, thread: { change: 'delete', commentId } })
@@ -1188,7 +1188,7 @@ export const pullRequestState = machine.extend({
   }
 }).createMachine({
   id: 'pr',
-  context: { ...folderStart(), commentTab: 'discussion' },
+  context: { ...folderStart(), commentTab: 'discussion', asking: noAsks() },
   on: {
     'pr.REFRESH_STATUS': { actions: 'refreshStatus' },
     'pr.SELECT_FILE': { actions: 'selectPrFile' },
@@ -1245,11 +1245,11 @@ export const pullRequestState = machine.extend({
     // The reads, one of each at a time: asking one again stops the one before, and its end is taken here
     'pr.read.DETAILS': { actions: 'askDetails' },
     'pr.REFRESH_PR': { actions: 'askDetails' },
-    [`xstate.done.actor.${DETAILS}`]: { actions: [stopChild(DETAILS), 'takeDetailsRead'] },
+    [`xstate.done.actor.${DETAILS}`]: { actions: [stopAsks(DETAILS), 'takeDetailsRead'] },
     'pr.read.COMMENTS': { actions: 'askComments' },
     [`xstate.done.actor.${COMMENTS}`]: {
       actions: [
-        stopChild(COMMENTS),
+        stopAsks(COMMENTS),
         // The discussion read again after a write that landed: shown with the comment writes still unanswered
         // laid over it. A read that failed is no error of the write's to show
         assign(({ context, event }) => event.output.ok
@@ -1260,30 +1260,30 @@ export const pullRequestState = machine.extend({
     'pr.read.THREADS': { actions: 'askThreads' },
     [`xstate.done.actor.${THREADS}`]: {
       actions: [
-        stopChild(THREADS),
+        stopAsks(THREADS),
         // The review threads read again: shown with the thread writes still unanswered laid over them
         assign(({ context, event }) => event.output.ok
           ? withWrites(context, context.writes, { threads: event.output.value.threads })
           : failureShown(event.output.failure)),
       ],
     },
-    'pr.read.BRANCH_PR': { actions: [stopChild(BRANCH_PR), spawnChild('readBranchPR', { id: BRANCH_PR, input: {} })] },
-    [`xstate.done.actor.${BRANCH_PR}`]: { actions: [stopChild(BRANCH_PR), 'takeBranchPR'] },
-    'pr.read.SMART_BASE': { actions: [stopChild(SMART_BASE), spawnChild('readSmartBase', { id: SMART_BASE, input: {} })] },
-    [`xstate.done.actor.${SMART_BASE}`]: { actions: [stopChild(SMART_BASE), 'takeSmartBase'] },
-    'pr.CHECK_GITHUB_ACCESS': { actions: [stopChild(ACCESS), spawnChild('readAccess', { id: ACCESS, input: {} })] },
+    'pr.read.BRANCH_PR': { actions: enqueueAsks(({ enqueue }) => { enqueue.stopChild(BRANCH_PR); enqueue.spawnChild('readBranchPR', { id: BRANCH_PR, input: {} }) }) },
+    [`xstate.done.actor.${BRANCH_PR}`]: { actions: [stopAsks(BRANCH_PR), 'takeBranchPR'] },
+    'pr.read.SMART_BASE': { actions: enqueueAsks(({ enqueue }) => { enqueue.stopChild(SMART_BASE); enqueue.spawnChild('readSmartBase', { id: SMART_BASE, input: {} }) }) },
+    [`xstate.done.actor.${SMART_BASE}`]: { actions: [stopAsks(SMART_BASE), 'takeSmartBase'] },
+    'pr.CHECK_GITHUB_ACCESS': { actions: enqueueAsks(({ enqueue }) => { enqueue.stopChild(ACCESS); enqueue.spawnChild('readAccess', { id: ACCESS, input: {} }) }) },
     [`xstate.done.actor.${ACCESS}`]: {
       actions: [
-        stopChild(ACCESS),
+        stopAsks(ACCESS),
         assign(({ event }) => event.output.ok
           ? { githubAccess: event.output.value.access, githubAccessMessage: event.output.value.message ?? null }
           : failureShown(event.output.failure)),
       ],
     },
-    'pr.read.AUTOFILL': { actions: [stopChild(AUTOFILL), spawnChild('readAutofill', { id: AUTOFILL, input: {} })] },
+    'pr.read.AUTOFILL': { actions: enqueueAsks(({ enqueue }) => { enqueue.stopChild(AUTOFILL); enqueue.spawnChild('readAutofill', { id: AUTOFILL, input: {} }) }) },
     [`xstate.done.actor.${AUTOFILL}`]: {
       actions: [
-        stopChild(AUTOFILL),
+        stopAsks(AUTOFILL),
         // What the user has typed meanwhile is kept
         assign(({ context, event }) => event.output.ok
           ? { createTitle: context.createTitle || event.output.value.title, createBody: context.createBody || event.output.value.body }
@@ -1309,14 +1309,14 @@ export const pullRequestState = machine.extend({
       ],
     },
     'pr.LOAD_MORE_PRS': { actions: 'askListMore' },
-    [`xstate.done.actor.${LIST}`]: { actions: [stopChild(LIST), 'takeListPage'] },
-    [`xstate.done.actor.${LIST_MORE}`]: { actions: [stopChild(LIST_MORE), 'takeListPage'] },
+    [`xstate.done.actor.${LIST}`]: { actions: [stopAsks(LIST), 'takeListPage'] },
+    [`xstate.done.actor.${LIST_MORE}`]: { actions: [stopAsks(LIST_MORE), 'takeListPage'] },
 
     // Reads stopped: their answers are no longer waited on
-    'pr.DETAILS_LEFT': { actions: stopChild(DETAILS) },
-    'pr.DISCUSSION_LEFT': { actions: [stopChild(COMMENTS), stopChild(THREADS)] },
+    'pr.DETAILS_LEFT': { actions: stopAsks(DETAILS) },
+    'pr.DISCUSSION_LEFT': { actions: stopAsks(COMMENTS, THREADS) },
     // A folder opening leaves every read, and the checkout asked of the folder before
-    'pr.READS_LEFT': { actions: [...READS.map(id => stopChild(id)), stopChild(CHECKOUT_BASE)] },
+    'pr.READS_LEFT': { actions: [stopAsks(...READS, CHECKOUT_BASE)] },
   },
 });
 

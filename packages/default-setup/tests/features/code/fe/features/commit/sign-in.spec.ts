@@ -43,10 +43,10 @@ it('asks for the sign-in to be set up for the host, and is busy with it until it
   actor.send({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com' });
 
   expect(latestAsk('commit.SET_UP_SIGN_IN').event, 'with the push that was refused, which the answer brings back').toEqual({ type: 'commit.SET_UP_SIGN_IN', host: 'github.com', during: 'push' });
-  expect(askUnderWay(actor.getSnapshot(), SIGN_IN)).toBe(true);
+  expect(askUnderWay(actor.getSnapshot().context.asking, SIGN_IN)).toBe(true);
 
   await latestAsk('commit.SET_UP_SIGN_IN').refuse('Sign in to GitHub to give git a sign-in for github.com.', { kind: 'git', code: 'authentication', signIn: GITHUB });
-  expect(askUnderWay(actor.getSnapshot(), SIGN_IN), 'a setup that failed is answered too').toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, SIGN_IN), 'a setup that failed is answered too').toBe(false);
   expect(actor.getSnapshot().context.gitError).toBe('Sign in to GitHub to give git a sign-in for github.com.');
 });
 
@@ -59,8 +59,8 @@ it.each([['push', 'commit.PUBLISH_BRANCH', PUSH], ['pull', 'commit.PULL_BRANCH',
 
     expect(sent()).toEqual(['commit.SET_UP_SIGN_IN', command]);
     expect(actor.getSnapshot().context).toMatchObject({ gitError: null, gitFailure: null });
-    expect(askUnderWay(actor.getSnapshot(), SIGN_IN)).toBe(false);
-    expect(askUnderWay(actor.getSnapshot(), busy)).toBe(true);
+    expect(askUnderWay(actor.getSnapshot().context.asking, SIGN_IN)).toBe(false);
+    expect(askUnderWay(actor.getSnapshot().context.asking, busy)).toBe(true);
   });
 
 // Taken from the notice that fetching stopped: there is no command of the user's to run again

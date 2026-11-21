@@ -29,13 +29,13 @@ it('ends a running push only on its own failure, not on a failed blame', async (
 
   await latestAsk('commit.GET_BLAME').refuse('no such path in HEAD', { kind: 'git' });
 
-  expect(askUnderWay(actor.getSnapshot(), PUSH), 'the push goes on').toBe(true);
+  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH), 'the push goes on').toBe(true);
   expect(actor.getSnapshot().context, 'the blame is let go of').toMatchObject({
     blame: null, progress: { during: 'push' }, gitError: 'no such path in HEAD',
   });
 
   await latestAsk('commit.PUBLISH_BRANCH').refuse('Failed to push', { kind: 'git' });
-  expect(askUnderWay(actor.getSnapshot(), PUSH)).toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(false);
   expect(actor.getSnapshot().context).toMatchObject({ progress: null, gitError: 'Failed to push' });
 });
 
@@ -46,7 +46,7 @@ it('shows a failure of another ask, and ends nothing else with it', async () => 
 
   await latestAsk('commit.STASH_DROP').refuse('something else failed', { kind: 'git' });
 
-  expect(askUnderWay(actor.getSnapshot(), PUSH)).toBe(true);
+  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(true);
   expect(actor.getSnapshot().context.gitError).toBe('something else failed');
 });
 
@@ -60,11 +60,11 @@ it.each([
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.UPDATE_BRANCH_INPUT', input: 'two' });
   actor.send(ask);
-  expect(askUnderWay(actor.getSnapshot(), busy)).toBe(true);
+  expect(askUnderWay(actor.getSnapshot().context.asking, busy)).toBe(true);
 
   await latestAsk(sent).refuse('git refused', { kind: 'git' });
 
-  expect(askUnderWay(actor.getSnapshot(), busy)).toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, busy)).toBe(false);
   expect(actor.getSnapshot().context.gitError).toBe('git refused');
 });
 
@@ -83,7 +83,7 @@ it('is no longer busy with a worktree switch once the backend says it switched',
 
   await latestAsk('commit.WORKTREE_SWITCH').answer({ path: '/work/two' });
 
-  expect(worktreeChangeUnderWay(actor.getSnapshot())).toBe(false);
+  expect(worktreeChangeUnderWay(actor.getSnapshot().context.asking)).toBe(false);
 });
 
 /** Asks for the status, and hands back the ask to end */
@@ -107,7 +107,7 @@ it('clears the status read\'s own failure once a status is read', async () => {
   const actor = createActor(commitState).start();
   await statusAsked(actor).refuse('Not a git repository', { kind: 'git' });
   expect(actor.getSnapshot().context.gitError).toBe('Not a git repository');
-  expect(askUnderWay(actor.getSnapshot(), STATUS_SHOWN), 'no longer shown as loading').toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, STATUS_SHOWN), 'no longer shown as loading').toBe(false);
 
   await statusAsked(actor).answer(STATUS);
 

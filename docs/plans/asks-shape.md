@@ -101,13 +101,15 @@ resolves the invoked ask. A spec's mock of `#generated/events` that a machine's 
 ## Left open
 
 Nothing from this list of packages. No machine in the pack is `type: 'parallel'`: an ask that can be under way beside
-others is spawned under an id and handled where it ends, and whether it is under way is read off the snapshot with
-`askUnderWay` (`@apackdev/sdk/fe`).
+others is spawned under an id and handled where it ends.
+
+Whether one is under way is a record in the machine's context (`asking`), which `enqueueAsks` and `stopAsks`
+(`@apackdev/sdk/fe`) keep as they spawn and stop, and `askUnderWay(context.asking, id)` reads: in a guard, in a later
+action of the same step and in a component. The commit and pull-request surfaces keep it. `askUnderWay` takes that
+record and not a snapshot, since a machine's children read from inside an action are those from before the event.
 
 - Not checked by hand in the running app: verified by the type check, the unit pools and `npm run chain -- --no-native`,
   which runs the e2e suites.
-- A guard that reads `askUnderWay(self.getSnapshot(), …)` sees the children from before the event being handled. No
-  event today is raised in the step that spawns or stops the ask it asks about.
 
 ## When it lands
 

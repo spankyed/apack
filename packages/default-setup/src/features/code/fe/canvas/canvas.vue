@@ -134,7 +134,7 @@ const openFiles = useSelector(actor, (state) => state.context.openFiles)
 const activeFilePath = useSelector(actor, (state) => state.context.activeFilePath)
 const baseDirectory = useSelector(actor, (state) => state.context.baseDirectory)
 const tabGroups = useSelector(actor, (state) => state.context.tabGroups)
-const isApplyingHunk = useSelector(commitActor, (state) => state !== undefined && askUnderWay(state, HUNK))
+const isApplyingHunk = useSelector(commitActor, (state) => state !== undefined && askUnderWay(state.context.asking, HUNK))
 // The pieces staged from the diff on screen: the commit panel keeps them per diff tab
 const appliedHunksByTab = useSelector(commitActor, (state) => state?.context.appliedHunks ?? {})
 const appliedHunks = computed(() => appliedHunksByTab.value[activeFilePath.value ?? ''] ?? [])
