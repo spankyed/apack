@@ -824,7 +824,10 @@ export interface Surface {
     chat?: Component;
     fallbackPanel?: {
         label: string;
-        isShown: (snapshot: SnapshotFrom<AnyStateMachine>) => boolean;
+        isShown: (state: {
+            readonly at: string;
+            readonly data: unknown;
+        }) => boolean;
         toggle: {
             type: string;
         };

@@ -507,6 +507,29 @@ export function findNodePtyImports(dirs: readonly string[] = PACK_CODE_DIRS, roo
   return findInFiles(filesUnder(dirs, root), root, rule).sort();
 }
 
+/** The app's own frontend code: what draws a window, and what a pack's components are built from */
+const APP_FRONTEND_DIRS = ['packages/renderer/src', 'packages/apack-host/src', 'packages/apack-ui/src', 'packages/apack-sdk/src'];
+
+/**
+ * `file:line: @xstate/vue` for each of the app's own frontend modules that imports the machine library's Vue
+ * binding.
+ *
+ * A component reads a machine with `useState` (`@apackdev/sdk/fe`), which follows it once for every component
+ * reading it and hands over `{ at, data }`. The `machine-selectors` pack rule refuses the binding in a pack; this is
+ * the same line for the code a pack runs inside, which no pack rule reads. An import only: the package is still
+ * named where the app shares its copy with packs (the import map, the shared-dependency list).
+ */
+export function findMachineLibraryVueImports(dirs: readonly string[] = APP_FRONTEND_DIRS, root = repoRoot): string[] {
+  const rule: Rule = (node) => {
+    if (!ts.isStringLiteralLike(node) || node.text !== '@xstate/vue') return undefined;
+    const parent = node.parent;
+    const imported = ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent)
+      || (ts.isCallExpression(parent) && parent.expression.kind === ts.SyntaxKind.ImportKeyword);
+    return imported ? [node.text] : undefined;
+  };
+  return findInFiles(filesUnder(dirs, root), root, rule).sort();
+}
+
 /** The one module that asks git what files this repo has; every other caller goes through it */
 const REPO_FILES_READER = 'packages/repo-checks/tests/_support/repo-files.ts';
 
@@ -1030,6 +1053,13 @@ const RULE_LIST = [
     repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API, the host and the engine's own root" },
     find: findElmdbImports,
     rule: "Only @apackdev/ears/lmdb loads elmdb: the host and the API open the database through it, the engine's root and packs never load it",
+  },
+  {
+    id: 'findMachineLibraryVueImports',
+    over: APP_FRONTEND_DIRS,
+    repoOnly: { kind: 'covered', by: 'machine-selectors', note: "What is left here is the app's own frontend, which no pack rule reads" },
+    find: findMachineLibraryVueImports,
+    rule: "The app's own components read a machine with useState from @apackdev/sdk/fe, as a pack's do: @xstate/vue's useSelector is a subscription of its own per call, and hands a component the machine library's snapshot",
   },
   {
     id: 'findNodePtyImports',

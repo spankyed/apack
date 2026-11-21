@@ -83,7 +83,6 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useSelector } from '@xstate/vue'
 import type { ActorRefFrom, AnyStateMachine } from 'xstate'
 import { CircleHelp, Settings as SettingsIcon, ExternalLink, PanelRight, PanelTop, Terminal } from 'lucide-vue-next'
 import Toolbar from '@/views/layout/Toolbar.vue'
@@ -116,8 +115,8 @@ const isOnboarding = computed(() => shell.value.at === 'onboarding' || shell.val
 /** The surface offering its panel for surfaces without one (`fallbackPanel`), which says itself when it shows */
 const fallbackSurface = computed(() => shell.value.data.surfaces.find((p) => p.fallbackPanel && p.panel))
 const fallbackActor = computed(() => fallbackSurface.value && applicationState.system.get(fallbackSurface.value.id) as ActorRefFrom<AnyStateMachine> | undefined)
-const fallbackShown = useSelector(fallbackActor, (snapshot) =>
-  !!snapshot && !!fallbackSurface.value?.fallbackPanel?.isShown(snapshot))
+const { state: fallback } = useState(() => fallbackActor.value)
+const fallbackShown = computed(() => !!fallback.value && !!fallbackSurface.value?.fallbackPanel?.isShown(fallback.value))
 
 // The default pack's canvas when the default toggle is on, and the open surface's otherwise. `defaultSurface`
 // is null until a pack claims it, which is every window's first moment, so the open surface is the fallback
