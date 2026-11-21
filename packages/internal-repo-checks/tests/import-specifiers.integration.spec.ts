@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findNodePtyImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findHandWrittenAnswers, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable, findClockedDeadlinesInSource, findSyncSpawnsInSpecs } from '../../../scripts/check-import-specifiers.ts';
+import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findNodePtyImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findPackMachineSelectors, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findSwallowedAskEnds, findHandKeptAskEnds, findHandWrittenAnswers, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable, findClockedDeadlinesInSource, findSyncSpawnsInSpecs, findMachineLibraryVueImports } from '../../../scripts/check-import-specifiers.ts';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packFixture as buildPackFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
@@ -117,11 +117,11 @@ describe('findJsSpecifiers', () => {
 
 /** Code none of the pack rules flag: comments, string text and the allowed imports */
 const ALLOWED = [
-  "// import { untypedBroadcastToSurface } from '@apackdev/sdk/events'; _rootEvents; trpc.bus; console.log('x')",
+  "// import { untypedBroadcast } from '@apackdev/sdk/events'; _rootEvents; trpc.bus; console.log('x')",
   "/* import * as events from '@apackdev/sdk/events'; console.log('x') */",
   "const url = 'https://console.anthropic.com/settings/keys';",
   "const prompt = `_rootEvents.emitOutgoing(event); console.log(ev.type)`;",
-  "import { untypedBroadcastToSurface, untypedSendToSystem } from '#generated/events';",
+  "import { untypedBroadcast, untypedTell } from '#generated/events';",
   "import { onConnected, onIncoming } from '@apackdev/sdk/events';",
   "import { emit as emitEvent } from 'xstate';",
   "import * as ears from '@elmdb/ears';",
@@ -164,10 +164,10 @@ describe('findInternalPackageImports', () => {
 
 describe('findRawPackHelpers', () => {
   it.each([
-    ["import { untypedBroadcastToSurface as toSurface } from '@apackdev/sdk/events';", 'untypedBroadcastToSurface from @apackdev/sdk/events'],
-    ["import onConnected, { untypedSendToSystem } from '@apackdev/sdk/events';", 'untypedSendToSystem from @apackdev/sdk/events'],
-    ["import { untypedBroadcastToSurface, createActionEmitter } from '@apackdev/sdk/services';", 'untypedBroadcastToSurface from @apackdev/sdk/services'],
-    ["export type { untypedBroadcastToSurface } from '@apackdev/sdk/events';", 'untypedBroadcastToSurface from @apackdev/sdk/events'],
+    ["import { untypedBroadcast as toSurface } from '@apackdev/sdk/events';", 'untypedBroadcast from @apackdev/sdk/events'],
+    ["import onConnected, { untypedTell } from '@apackdev/sdk/events';", 'untypedTell from @apackdev/sdk/events'],
+    ["import { untypedBroadcast, createActionEmitter } from '@apackdev/sdk/services';", 'untypedBroadcast from @apackdev/sdk/services'],
+    ["export type { untypedBroadcast } from '@apackdev/sdk/events';", 'untypedBroadcast from @apackdev/sdk/events'],
     ["import * as events from '@apackdev/sdk/events';", '* from @apackdev/sdk/events (import the names)'],
     ["export * from '@apackdev/sdk/events';", '* from @apackdev/sdk/events (import the names)'],
   ])('flags %s', (code, problem) => {
@@ -177,13 +177,13 @@ describe('findRawPackHelpers', () => {
 
   it('allows comments, strings and the generated facades, and exempts generated files', () => {
     write('pack/feature.ts', ALLOWED);
-    write('pack/__generated__/events.ts', "import { untypedSendToSystem } from '@apackdev/sdk/events';\n");
+    write('pack/__generated__/events.ts', "import { untypedTell } from '@apackdev/sdk/events';\n");
     expect(findRawPackHelpers(['src/pack'], root)).toEqual([]);
   });
 
   it('checks .vue script blocks with their line numbers', () => {
-    write('pack/Widget.vue', "<template><pre>import { untypedBroadcastToSurface } from '@apackdev/sdk/events'</pre></template>\n<script setup lang=\"ts\">\n\nimport { untypedBroadcastToSurface } from '@apackdev/sdk/events';\n</script>\n");
-    expect(findRawPackHelpers(['src/pack'], root)).toEqual(['src/pack/Widget.vue:4: untypedBroadcastToSurface from @apackdev/sdk/events']);
+    write('pack/Widget.vue', "<template><pre>import { untypedBroadcast } from '@apackdev/sdk/events'</pre></template>\n<script setup lang=\"ts\">\n\nimport { untypedBroadcast } from '@apackdev/sdk/events';\n</script>\n");
+    expect(findRawPackHelpers(['src/pack'], root)).toEqual(['src/pack/Widget.vue:4: untypedBroadcast from @apackdev/sdk/events']);
   });
 });
 
@@ -613,7 +613,7 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     return findJsSpecifiers(['src'], root);
   },
   findRawPackHelpers: () => {
-    packFixture({ 'src/f.ts': "import { untypedSendToSystem } from '@apackdev/sdk/events';" });
+    packFixture({ 'src/f.ts': "import { untypedTell } from '@apackdev/sdk/events';" });
     return findRawPackHelpers(PACK_SRC, root);
   },
   findInternalPackageImports: () => {
@@ -635,6 +635,14 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     packFixture({ 'src/f.ts': "export const done = { type: 'ASK_ANSWERED', asked: 'SAVE', answer: 1 };" });
     return findHandWrittenAnswers(PACK_SRC, root);
   },
+  findHandKeptAskEnds: () => {
+    packFixture({ 'src/features/memos/fe/state.ts': "export const on = { 'xstate.done.actor.push': { actions: 'pushed' } };" });
+    return findHandKeptAskEnds(PACK_SRC, root);
+  },
+  findSwallowedAskEnds: () => {
+    packFixture({ 'src/features/memos/fe/state.ts': "import { makes } from '@apackdev/sdk/fe';\nexport const on = { '*': { actions: 'route' } };" });
+    return findSwallowedAskEnds(PACK_SRC, root);
+  },
   findReservedEventKeys: () => {
     // The key a delivery door writes, written by the pack instead — where it is overwritten on the way in
     packFixture({ 'src/f.ts': "export const answer = { type: 'DONE', _call: mine };" });
@@ -648,6 +656,10 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     packFixture({ 'src/features/memos/fe/state.ts': "const raw = localStorage.getItem('open-tabs');" });
     return findPackWindowStorage(PACK_SRC, root);
   },
+  findPackMachineSelectors: () => {
+    packFixture({ 'src/features/memos/fe/canvas.ts': "import { useSelector } from '@xstate/vue';" });
+    return findPackMachineSelectors(PACK_SRC, root);
+  },
   findHostImports: () => {
     packFixture({ 'src/f.ts': "import { edgeStore } from '@apackdev/host/ears';" });
     return findHostImports(PACK_SRC, root);
@@ -659,7 +671,7 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
   findExtensionlessOwnModules: () => {
     // Both forms this rule owns. The `#` one alone left its relative branch with no repo-side example at all,
     // which is how that branch stayed broken here while a pack author's own build reported it
-    packFixture({ 'src/f.ts': "import { sendToSystem } from '#generated/events';\nimport { sibling } from './sibling.js';" });
+    packFixture({ 'src/f.ts': "import { tell } from '#generated/events';\nimport { sibling } from './sibling.js';" });
     return findExtensionlessOwnModules(PACK_SRC, root);
   },
   findAppImportsInPackTests: () => {
@@ -687,6 +699,10 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     const rules = ELMDB_RULES.map((rule) => ({ ...rule, dirs: rule.dirs.map((dir) => `src/${dir}`) }));
     write('packages/apack-host/src/services/run-history.ts', "import { Database } from 'elmdb';");
     return findElmdbImports(rules, root);
+  },
+  findMachineLibraryVueImports: () => {
+    writeAt('packages/renderer/src/views/Panel.vue', "<script setup lang=\"ts\">\nimport { useSelector } from '@xstate/vue';\n</script>\n");
+    return findMachineLibraryVueImports(['packages/renderer/src'], root);
   },
   findNodePtyImports: () => {
     packFixture({ 'src/f.ts': "import { spawn } from 'node-pty';" });
@@ -817,6 +833,10 @@ const COVERED_BY: Record<CoveredRuleId, { files: Record<string, string>; finding
   findElmdbImports: {
     files: { 'src/f.ts': "import { Database } from 'elmdb';\n" },
     finding: 'packages/demo-pack/src/f.ts:1: elmdb',
+  },
+  findMachineLibraryVueImports: {
+    files: { 'src/f.ts': "import { useSelector } from '@xstate/vue';\n" },
+    finding: 'packages/demo-pack/src/f.ts:1: @xstate/vue',
   },
   // Its config route, which reads the pack root's own listing — so the config goes there, not under a subdirectory
   findMissingSourceConditions: {
@@ -1174,11 +1194,11 @@ describe('CHECKS', () => {
     'elmdb-imports': "import { Database } from 'elmdb';",
     'ears-imports': "import { defineEars } from '@elmdb/ears';",
     'internal-package-imports': "import { _getMediaPath } from '@apackdev/sdk/utils';",
-    'untyped-sends': "import { untypedSendToSystem } from '@apackdev/sdk/events';",
+    'untyped-sends': "import { untypedTell } from '@apackdev/sdk/events';",
     'raw-transport': '_rootEvents.emitOutgoing(event);',
     'backend-console': "console.log('written');",
     'pack-own-aliases': "import { x } from '@/features/memos/be/x.ts';",
-    'own-modules': "import { sendToSystem } from '#generated/events';",
+    'own-modules': "import { tell } from '#generated/events';",
     'repository-casts': 'const notes = repository as unknown as Repositories;',
     'cross-feature-imports': "import { t } from '#features/calendar/fe/state.ts';",
     'contract-leaves': "import type { P } from '#features/memos/fe/surface.ts';",
@@ -1346,7 +1366,7 @@ describe('CHECKS', () => {
     ['a @/ alias', "import { openAppStore } from '@/setup/backend';", 'findPackOwnAliases'],
     ['an @internal export', "import { _getMediaPath } from '@apackdev/sdk/utils';", 'findInternalPackageImports'],
     ['the app by relative path', "import { hydrate } from '../../../apack-host/src/database/store';", 'findAppImportsInPackTests'],
-    ['an extensionless own module', "import { sendToSystem } from '#generated/events';", 'findExtensionlessOwnModules'],
+    ['an extensionless own module', "import { tell } from '#generated/events';", 'findExtensionlessOwnModules'],
   ])("in a pack's tests, %s is claimed by exactly one rule", (_shape, code, owner) => {
     packFixture({ 'tests/unit/feature.spec.ts': code });
     const claimed = [...sweepers('tests')].filter((rule) => rule.overPaths!(PACK_TESTS, root).length > 0).map((rule) => rule.id);
@@ -1363,7 +1383,7 @@ describe('findExtensionlessOwnModules', () => {
   /** A pack with an `imports` map, which is what makes a `#` string a specifier rather than a colour */
   function pack(files: Record<string, string>): void {
     writeAt('pack/package.json', JSON.stringify({ name: 'p', type: 'module', imports: { '#generated/*': './src/__generated__/*' } }));
-    writeAt('pack/src/__generated__/events.ts', 'export const sendToSystem = 1;');
+    writeAt('pack/src/__generated__/events.ts', 'export const tell = 1;');
     for (const [file, content] of Object.entries(files)) writeAt(`pack/${file}`, content);
   }
   const problems = () => findExtensionlessOwnModules(['pack/src', 'pack/tests'], root);
@@ -1372,14 +1392,14 @@ describe('findExtensionlessOwnModules', () => {
     ['extensionless', '#generated/events'],
     ['the emitted extension of a TypeScript module', '#generated/events.js'],
   ])('flags a specifier naming no file: %s', (_form, specifier) => {
-    pack({ 'src/f.ts': `import { sendToSystem } from '${specifier}';` });
+    pack({ 'src/f.ts': `import { tell } from '${specifier}';` });
     expect(problems()).toEqual([`pack/src/f.ts:1: '${specifier}' names no file — write '#generated/events.ts'`]);
   });
 
   it('passes the form that names the file, in the pack and in its tests', () => {
     pack({
-      'src/f.ts': "import { sendToSystem } from '#generated/events.ts';",
-      'tests/f.spec.ts': "import { sendToSystem } from '#generated/events.ts';",
+      'src/f.ts': "import { tell } from '#generated/events.ts';",
+      'tests/f.spec.ts': "import { tell } from '#generated/events.ts';",
     });
     expect(problems()).toEqual([]);
   });
@@ -1415,8 +1435,8 @@ describe('the repairs the rules compute', () => {
   /** A pack whose one offending specifier sits deep enough that the pack is not the parent of what is named */
   function offendingPack(): void {
     writeAt('pack/package.json', JSON.stringify({ name: 'p', type: 'module', imports: { '#generated/*': './src/__generated__/*' } }));
-    writeAt('pack/src/__generated__/events.ts', 'export const sendToSystem = 1;');
-    writeAt('pack/src/features/memos/f.ts', "import { sendToSystem } from '#generated/events';");
+    writeAt('pack/src/__generated__/events.ts', 'export const tell = 1;');
+    writeAt('pack/src/features/memos/f.ts', "import { tell } from '#generated/events';");
   }
 
   /** What the file actually holds where a fix says to splice, which is what `applyFixes` writes over */
@@ -1655,7 +1675,7 @@ describe('findContractLeafImports', () => {
       'features/memos/fe/contract.ts': "import type { Ctx } from './state';",
       'features/memos/fe/state.ts': "import { sendToSurface } from '#generated/events.ts';",
       'features/memos/be/contract.ts': "import type { Ev } from './system';",
-      'features/memos/be/system.ts': "import { untypedBroadcastToSurface } from '#generated/events.ts';",
+      'features/memos/be/system.ts': "import { untypedBroadcast } from '#generated/events.ts';",
     });
     expect(findContractLeafImports([src], root).sort()).toEqual([
       `${src}/features/memos/be/contract.ts:1: ./system`,
@@ -1675,7 +1695,7 @@ describe('findContractLeafImports', () => {
   it('flags a generated module that is not a leaf itself', () => {
     pack({
       'features/memos/fe/contract.ts': "import type { P } from '#generated/fe.ts';",
-      'features/memos/be/contract.ts': "import { untypedBroadcastToSurface } from '#generated/events.ts';",
+      'features/memos/be/contract.ts': "import { untypedBroadcast } from '#generated/events.ts';",
     });
     expect(findContractLeafImports([src], root).sort()).toEqual([
       `${src}/features/memos/be/contract.ts:1: #generated/events.ts`,
@@ -1686,12 +1706,12 @@ describe('findContractLeafImports', () => {
   /**
    * The rule that matters, and the one a check of the leaf's own imports would miss: the cycle returns just as
    * surely through two hops. This is the shape that was live in default-setup's code feature — its contract
-   * imported its child modules, and those import `#generated/events` for `untypedBroadcastToSurface`.
+   * imported its child modules, and those import `#generated/events` for `untypedBroadcast`.
    */
   it('flags #generated/events reached through the closure, naming the leaf it came from', () => {
     pack({
       'features/memos/be/contract.ts': "import type { Ev } from './children/list';",
-      'features/memos/be/children/list.ts': "import { untypedBroadcastToSurface } from '#generated/events.ts';",
+      'features/memos/be/children/list.ts': "import { untypedBroadcast } from '#generated/events.ts';",
       'features/memos/fe/contract.ts': 'export type Contract = { state: {} };',
     });
     expect(findContractLeafImports([src], root)).toEqual([
@@ -1746,7 +1766,7 @@ describe('findContractLeafImports', () => {
     pack({
       'features/memos/be/contract.ts': "import type { Ev } from './types.ts';",
       'features/memos/be/types.ts': "import type { H } from '#features/calendar/be/helper.ts';\nexport type Ev = H;",
-      'features/calendar/be/helper.ts': "import { untypedBroadcastToSurface } from '#generated/events.ts';\nexport type H = typeof untypedBroadcastToSurface;",
+      'features/calendar/be/helper.ts': "import { untypedBroadcast } from '#generated/events.ts';\nexport type H = typeof untypedBroadcast;",
       'features/memos/fe/contract.ts': 'export type Contract = { state: {} };',
     });
     expect(findContractLeafImports([src], root)).toEqual([

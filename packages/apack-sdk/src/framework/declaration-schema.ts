@@ -675,7 +675,7 @@ const SurfaceSchema: z.ZodType<SurfaceDeclaration> = z.object({
     label: z.string().min(1).describe('Shell menu label for toggling this shared context panel.'),
     toggle: z.object({ type: z.string().min(1).describe('Event type sent to this surface machine to toggle its panel.') }).strict()
       .describe('Toggle event delivered to the panel-owning surface.'),
-    isShown: ExportTargetSchema.describe('Named predicate export that reads this surface snapshot to decide whether its fallback panel is shown.'),
+    isShown: ExportTargetSchema.describe('Named predicate export that reads where the machine of this surface is and what it holds, `{ at, data }`, to decide whether its fallback panel is shown.'),
   }).strict().describe('Offer this surface panel to surfaces without their own panel, with a toggle event and visibility predicate.').optional(),
   defaultVisible: z.boolean().describe('Default navigation visibility, independent of settings values and the startup default claim.').optional(),
   contract: ExportTargetSchema.describe('"path#exportName" of this surface\'s contract: a declared type holding the state it publishes and the inbox other surfaces may send to (SurfaceInbox, @apackdev/sdk/fe). It lives in a leaf module of its own (fe/contract.ts), which the surface\'s machine does not import, so codegen can read it without resolving the machine. Omit it for a surface that publishes nothing: it still receives its own feature\'s system events.').optional(),

@@ -266,7 +266,7 @@ describe('accepted service bindings', () => {
     expect(Object.keys(action)).toEqual(Object.keys(generated.services));
     expect(() => action.appData).toThrow(/consumer.*appData.*consumes.services/);
     const log = (action.logger as { info(message: string): void }).info;
-    const send = (action.emitter as { sendToSystem(to: { role: string }, event: { type: string }): void }).sendToSystem;
+    const send = (action.emitter as { tell(to: { role: string }, event: { type: string }): void }).tell;
     const messages: unknown[] = [];
     const logs: unknown[] = [];
     const stops = [testRootEvents.onIncoming(message => messages.push(message)), testRootEvents.onLog(event => logs.push(event))];
@@ -338,7 +338,7 @@ it('gives a contributed step its own service selection, sender identity and reti
   try {
     (services.logger as { info(message: string): void }).info('Step ran');
     expect(logs).toContainEqual(expect.objectContaining({ source: 'action:Foreign step', message: 'Step ran' }));
-    (services.emitter as { sendToSystem(to: { role: string }, event: { type: string }): void }).sendToSystem({ role: 'brain' }, { type: 'STEP' });
+    (services.emitter as { tell(to: { role: string }, event: { type: string }): void }).tell({ role: 'brain' }, { type: 'STEP' });
     expect(messages).toContainEqual(expect.objectContaining({ from: 'step-owner', via: 'action:Foreign step', event: { type: 'STEP' } }));
     packs.unregisterPack('step-owner');
     expect(() => factory('Late')).toThrow('revoked');

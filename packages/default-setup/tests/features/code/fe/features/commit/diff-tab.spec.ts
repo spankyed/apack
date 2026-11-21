@@ -15,7 +15,7 @@ const addTabToParent = vi.hoisted(() => vi.fn());
 const updateParentState = vi.hoisted(() => vi.fn());
 const sendEventToParent = vi.hoisted(() => vi.fn());
 const getParentContext = vi.hoisted(() => vi.fn((): { openFiles?: unknown[] } => ({})));
-vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({ addTabToParent, updateParentState, sendEventToParent, getParentContext }));
 
 const { commitState } = await import('#features/code/fe/features/commit/state.ts');

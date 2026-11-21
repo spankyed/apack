@@ -2,10 +2,9 @@
 // the status it is sent, and has git carry on with it, skip a commit or give it up.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { askUnderWay } from '@apackdev/sdk/fe';
 import { latestAsk, resetAsks } from '../../_support/asks.ts';
 
-vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -13,7 +12,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   getParentContext: vi.fn(() => ({})),
 }));
 
-const { commitState, MOVE_OPERATION } = await import('#features/code/fe/features/commit/state.ts');
+const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 type RepositoryOperation = import('#features/code/be/types.ts').RepositoryOperation;
 
 beforeEach(resetAsks);
@@ -42,10 +41,10 @@ it('has git move it on, and is busy with that until git answers', async () => {
 
   actor.send({ type: 'commit.MOVE_OPERATION', move: 'continue' });
   expect(latestAsk('commit.MOVE_OPERATION').event).toEqual({ type: 'commit.MOVE_OPERATION', move: 'continue' });
-  expect(askUnderWay(actor.getSnapshot().context.asking, MOVE_OPERATION)).toBe(true);
+  expect(actor.getSnapshot().context.making.moveOperation).toBe(true);
 
   await latestAsk('commit.MOVE_OPERATION').answer({ move: 'continue' });
-  expect(askUnderWay(actor.getSnapshot().context.asking, MOVE_OPERATION)).toBe(false);
+  expect(actor.getSnapshot().context.making.moveOperation).toBe(false);
 });
 
 it('says why when git could not, and is no longer busy', async () => {
@@ -54,6 +53,6 @@ it('says why when git could not, and is no longer busy', async () => {
 
   await latestAsk('commit.MOVE_OPERATION').refuse('you have unmerged files', { kind: 'git' });
 
-  expect(askUnderWay(actor.getSnapshot().context.asking, MOVE_OPERATION)).toBe(false);
+  expect(actor.getSnapshot().context.making.moveOperation).toBe(false);
   expect(actor.getSnapshot().context).toMatchObject({ gitError: 'you have unmerged files', operation: MERGE });
 });

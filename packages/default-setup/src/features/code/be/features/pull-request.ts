@@ -1,5 +1,5 @@
 import type { PRDetails, PullRequestAsks } from '../contract.ts'
-import { broadcastToSurface } from '#generated/events.ts';
+import { broadcast } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework'
 import type { AsksEvents } from '@apackdev/sdk/events'
 import { safeEvents } from '@apackdev/sdk/helpers'
@@ -469,7 +469,7 @@ export const pullRequestSystem = setup({
     ...answers.actions,
     // News for every window: the repository's commits or branches moved under them
     handleGitStatusChanged: () => {
-      broadcastToSurface(surfaceId, { type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } })
+      broadcast(surfaceId, { type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } })
     },
     // The folder moved: its repository is the one asked from here on, and nothing compared in the last one is kept
     takeRepository: assign(({ event }) => ({ gitRepository: typeOf('pr.UPDATE_BASE_DIRECTORY', event).gitRepository, comparisons: new Map() })),

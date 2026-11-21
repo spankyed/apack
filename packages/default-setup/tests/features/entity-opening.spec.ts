@@ -5,11 +5,11 @@ import type { OpenEntity } from '@apackdev/sdk/events';
 import type { NoteSummary } from '#generated/types.ts';
 
 vi.hoisted(() => { (globalThis as { addEventListener?: unknown }).addEventListener ??= () => {}; });
-const sendToSystem = vi.hoisted(() => vi.fn());
+const tell = vi.hoisted(() => vi.fn());
 // A fetch a surface invokes is the system's to answer, which no case here reaches
 vi.mock('#generated/events.ts', async () => {
   const { fromPromise } = await import('xstate');
-  return { sendToSystem, fromAsk: () => fromPromise(() => new Promise(() => {})) };
+  return { tell, fromAsk: () => fromPromise(() => new Promise(() => {})) };
 });
 const { default: actions } = await import('#features/actions/fe/state.ts');
 const { default: prompts } = await import('#features/prompts/fe/state.ts');
@@ -39,11 +39,11 @@ it.each(destinations)('%s ignores an entity it does not declare as a destination
   const actor = start();
   try {
     const before = actor.getSnapshot();
-    sendToSystem.mockClear();
+    tell.mockClear();
     actor.send({ type: 'OPEN_ENTITY', id: 'Artifact-unrelated' });
     expect(actor.getSnapshot().value).toEqual(before.value);
     expect(actor.getSnapshot().context).toEqual(before.context);
-    expect(sendToSystem).not.toHaveBeenCalled();
+    expect(tell).not.toHaveBeenCalled();
   } finally { actor.stop(); }
 });
 
@@ -61,7 +61,7 @@ it('opens a nested note by canonical identity from welcome and another editor', 
     expect(actor.getSnapshot().hasTag('editor')).toBe(true);
     expect(actor.getSnapshot().context.currentNote?.id).toBe('Note-child');
     expect(actor.getSnapshot().context.expandedNodeIds).toContain('Note-parent');
-    expect(sendToSystem).toHaveBeenLastCalledWith('notes', { type: 'VIEW_NOTE', id: 'Note-child' });
+    expect(tell).toHaveBeenLastCalledWith('notes', { type: 'VIEW_NOTE', id: 'Note-child' });
     actor.send({ type: 'OPEN_ENTITY', id: 'Note-parent' });
     expect(actor.getSnapshot().context.currentNote?.id).toBe('Note-parent');
   } finally { actor.stop(); }
@@ -74,7 +74,7 @@ it('opens a note selected in the tree and one reached through a link', () => {
     actor.send({ type: 'NOTE.SELECT', noteId: 'Note-child' });
     expect(actor.getSnapshot().hasTag('editor')).toBe(true);
     expect(actor.getSnapshot().context.currentNote?.id).toBe('Note-child');
-    expect(sendToSystem).toHaveBeenLastCalledWith('notes', { type: 'VIEW_NOTE', id: 'Note-child' });
+    expect(tell).toHaveBeenLastCalledWith('notes', { type: 'VIEW_NOTE', id: 'Note-child' });
     actor.send({ type: 'NOTE.LINK_CLICKED', noteId: 'Note-parent' });
     expect(actor.getSnapshot().context.currentNote?.id).toBe('Note-parent');
   } finally { actor.stop(); }
@@ -85,7 +85,7 @@ it('opens an unlisted thread and fills only the current target without replaying
   try {
     actor.send({ type: 'SHOW_CREATE_FORM' });
     actor.send({ type: 'OPEN_ENTITY', id: 'Thread-first' });
-    expect(sendToSystem).toHaveBeenLastCalledWith('threads', { type: 'VIEW_THREAD', threadId: 'Thread-first' });
+    expect(tell).toHaveBeenLastCalledWith('threads', { type: 'VIEW_THREAD', threadId: 'Thread-first' });
     actor.send({ type: 'OPEN_ENTITY', id: 'Thread-second' });
     const detail = (id: string, topic: string) => ({ type: 'DETAIL.READ' as const, id, detail: { id: id as never, topic, messageIds: [] } });
     actor.send(detail('Thread-first', 'Abandoned'));

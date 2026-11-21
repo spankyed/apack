@@ -95,7 +95,7 @@ export const systemBusRouter = router({
    * subscription reconnected: the pack's systems get CLIENT_CONNECTED, which the connection's broadcast and
    * the activation skip for external packs with frontend code. Their replies still reach every client rather
    * than this one — not because an outgoing message cannot name a connection, which it can, but because a
-   * system answering CLIENT_CONNECTED sends its startup data with `broadcastToSurface`, which names none. That
+   * system answering CLIENT_CONNECTED sends its startup data with `broadcast`, which names none. That
    * is the right reach for it: the data is for every window showing the surface, not for whoever connected.
    */
   packClientReady: procedure
@@ -109,7 +109,7 @@ export const systemBusRouter = router({
     }),
   /**
    * Takes a name on this connection, so something that is not a pack's feature can be sent to: an agent driving
-   * the app claims `host/drive`, and from then on `sendToSystem('host/drive', …)` and a system's `reply` reach
+   * the app claims `host/drive`, and from then on `tell('host/drive', …)` and a system's `reply` reach
    * it. The claim dies with the connection, so nothing has to give it back.
    *
    * A name another live connection holds is refused rather than taken over. Since a claim cannot outlive its

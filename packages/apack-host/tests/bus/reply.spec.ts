@@ -13,7 +13,7 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createActor, fromPromise, setup, type AnyActorRef, type AnyEventObject, type MachineContext } from 'xstate';
 import { startTestRuntime, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
-import { _currentDelivery, _replyTo, _runDelivery, untypedBroadcastToSurface, untypedSendToSystem, type Message, type Reply } from '@apackdev/sdk/events';
+import { _currentDelivery, _replyTo, _runDelivery, untypedBroadcast, untypedTell, type Message, type Reply } from '@apackdev/sdk/events';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
 import { createAppBus } from '../../src/bus/index.ts';
@@ -61,7 +61,7 @@ const answering = setup({
     // Names its target rather than answering, which is what every system did before `reply` existed. The
     // envelope should still say who sent it, and that stamp is `createSends`' rather than `reply`'s.
     ANNOUNCE: {
-      actions: () => { untypedBroadcastToSurface('memo-pack/memos', { type: 'MEMOS_CONNECTED' }); },
+      actions: () => { untypedBroadcast('memo-pack/memos', { type: 'MEMOS_CONNECTED' }); },
     },
   },
 });
@@ -108,7 +108,7 @@ const invoking = setup({
 const answered: string[] = [];
 const asking = setup({}).createMachine({
   on: {
-    GO: { actions: () => { untypedSendToSystem('memo-pack/memos', { type: 'PING', tag: 'from-a-system' }); } },
+    GO: { actions: () => { untypedTell('memo-pack/memos', { type: 'PING', tag: 'from-a-system' }); } },
     MEMO_ADDED: { actions: ({ event }) => { answered.push(String((event as { tag?: string }).tag ?? '')); } },
   },
 });
@@ -315,7 +315,7 @@ describe('an answer names the call it answers', () => {
 describe('a send made while handling says where an answer would go', () => {
   /**
    * `reply` sets `sender` itself, so it would pass with no stamping anywhere. This covers the other half: an
-   * ordinary `broadcastToSurface` made during a delivery carries the handler's own ref, which is what lets the
+   * ordinary `broadcast` made during a delivery carries the handler's own ref, which is what lets the
    * receiver answer *it* rather than having to be told. The stamp comes from the delivery because a pack's
    * generated sends know their pack and not which of its features called them.
    */
@@ -330,7 +330,7 @@ describe('a send made while handling says where an answer would go', () => {
 
   // Outside a delivery there is nobody to answer, so the field is absent rather than guessed at
   it('stamps nothing on a send made outside any delivery', async () => {
-    untypedBroadcastToSurface('memo-pack/memos', { type: 'MEMOS_CONNECTED' });
+    untypedBroadcast('memo-pack/memos', { type: 'MEMOS_CONNECTED' });
     await untilBus(() => outgoing.some(({ event }) => event.type === 'MEMOS_CONNECTED'), 'the announcement');
 
     const announced = outgoing.filter(({ event }) => event.type === 'MEMOS_CONNECTED');

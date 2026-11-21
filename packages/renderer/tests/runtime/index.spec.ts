@@ -18,7 +18,7 @@ const { bindRendererHost } = await import('@/runtime');
 const { fePacks } = await import('@/runtime/packs');
 const { resolveName } = await import('@apackdev/sdk/ids');
 const { secretsClient, untypedOpenSurface, getStepFrontendBindings, getDesignated, textEditorExtensionsRegistry } = await import('@apackdev/sdk/fe');
-const { untypedSendToSystem } = await import('@apackdev/sdk/events');
+const { untypedTell } = await import('@apackdev/sdk/events');
 const { unbindFeHost } = await import('@apackdev/sdk/runtime/internals');
 
 const application = {
@@ -95,7 +95,7 @@ it("sends to systems over the API client, reporting a rejected send to the conso
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
   mutate.mockRejectedValue(new Error('socket closed'));
 
-  untypedSendToSystem('notes', { type: 'SAVE_NOTE', body: 'secret text' });
+  untypedTell('notes', { type: 'SAVE_NOTE', body: 'secret text' });
   await new Promise(resolve => setTimeout(resolve, 0));
 
   expect(mutate).toHaveBeenCalledWith({ to: 'notes', call: expect.any(String), event: { type: 'SAVE_NOTE', body: 'secret text' } });

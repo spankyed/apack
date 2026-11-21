@@ -1,20 +1,19 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { useSelector } from '@xstate/vue';
-import { useSurface } from '@apackdev/sdk/fe';
+import { useState, useSurface } from '@apackdev/sdk/fe';
 // Comes from the host app at runtime, not bundled into the pack
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor';
 import { id, type MemosState } from '../state.ts';
 
 const actor: MemosState = useSurface();
-const memos = useSelector(actor, (state) => state.context.memos);
+const { state: memos, send } = useState(actor);
 const draft = ref('');
 const referenceDraft = ref('');
 
 function add() {
   const text = draft.value.trim();
   if (!text) return;
-  actor.send({ type: 'MEMOS.ADD', text });
+  send({ type: 'MEMOS.ADD', text });
   draft.value = '';
 }
 </script>
@@ -41,7 +40,7 @@ function add() {
       <TiptapEditor mode="editor" v-model="referenceDraft" :show-gutter="false" />
     </div>
     <ul data-testid="memo-list" class="flex flex-col gap-1">
-      <li v-for="memo in memos" :key="memo.id" class="text-sm">{{ memo.text }}</li>
+      <li v-for="memo in memos.data.memos" :key="memo.id" class="text-sm">{{ memo.text }}</li>
     </ul>
   </div>
 </template>

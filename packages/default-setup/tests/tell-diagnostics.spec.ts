@@ -21,9 +21,9 @@ function diagnosticsFor(source: string): string[] {
     .map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'));
 }
 
-describe('sendToSystem diagnostics', () => {
+describe('tell diagnostics', () => {
   it('names the event a send with a missing field is for', () => {
-    const messages = diagnosticsFor(`import { sendToSystem } from '#generated/events.ts';\nsendToSystem('notes', { type: 'DELETE_NOTE' });\n`);
+    const messages = diagnosticsFor(`import { tell } from '#generated/events.ts';\ntell('notes', { type: 'DELETE_NOTE' });\n`);
     expect(messages).toHaveLength(1);
     expect(messages[0]).toContain('DELETE_NOTE');
     // That one event, not the union of everything the notes system receives
@@ -32,6 +32,6 @@ describe('sendToSystem diagnostics', () => {
   });
 
   it('accepts a complete send', () => {
-    expect(diagnosticsFor(`import { sendToSystem } from '#generated/events.ts';\nsendToSystem('notes', { type: 'DELETE_NOTE', id: 'Note-1' });\n`)).toEqual([]);
+    expect(diagnosticsFor(`import { tell } from '#generated/events.ts';\ntell('notes', { type: 'DELETE_NOTE', id: 'Note-1' });\n`)).toEqual([]);
   });
 });

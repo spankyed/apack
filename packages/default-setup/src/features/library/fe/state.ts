@@ -1,5 +1,5 @@
-import { askId, endedAsk, entityIs } from '@apackdev/sdk/fe'
-import type { OpenEntity, UntypedAskOutcome } from '@apackdev/sdk/events'
+import { entityIs, freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe'
+import type { OpenEntity } from '@apackdev/sdk/events'
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
 import type { DocumentDTO, DocumentView, FolderContents, FolderView, LibraryIndex, LibraryItem, DocumentItem } from '#generated/types.ts'
 import type { Contract, LibraryContext, LibraryInboxEvent } from './contract.ts'
@@ -23,8 +23,8 @@ import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoFo
 // names, so a late answer for a folder left behind writes nothing that is shown.
 //
 // A document is fetched by the state that shows it. Everything else this window asks — a folder's contents, whether
-// its symlinks are broken, each write — is an ask spawned under a name that says which kind it is, so several run at
-// once and each one's done event is handled for what it was.
+// its symlinks are broken, each write — is an ask the machine makes by name (`made`), so several run at once and how
+// each ended is handled for what it was.
 
 // Helper function to convert DocumentItem to DocumentDTO
 function documentItemToDTO(item: DocumentItem): DocumentDTO {
@@ -218,67 +218,64 @@ export type LibraryEvents =
   | { type: 'CLEAR_WRITE_ERROR' }
   | { type: 'NAVIGATE_BACK' }
   | { type: 'NAVIGATE_FORWARD' }
+  // The settings form's import and export, and the result of each no longer shown
+  | { type: 'IMPORT'; directory: string }
+  | { type: 'FORGET_IMPORT' }
+  | { type: 'EXPORT'; directory: string; format: 'markdown' | 'json' }
+  | { type: 'FORGET_EXPORT' }
   | OutgoingLibraryEvents
-  | AskEnded<'contents', Asked<'GET_FOLDER_CONTENTS'>>
-  | AskEnded<'symlinks', Asked<'CHECK_SYMLINKS'>>
-  | AskEnded<'folder', Asked<'CREATE_COLLECTION'> | Asked<'CREATE_SYMLINK_COLLECTION'>>
-  | AskEnded<'write', UntypedAskOutcome>
-
-/** How an ask of the library ended */
-type Asked<K extends 'GET_DOCUMENT' | 'GET_FOLDER_CONTENTS' | 'CHECK_SYMLINKS' | 'CREATE_COLLECTION' | 'CREATE_SYMLINK_COLLECTION'> = Awaited<ReturnType<typeof ask<'library', K>>>
+  | Made
 
 /**
- * The kinds of ask this machine spawns: a fetch of a folder's `contents`, a check of `symlinks`, a write that makes a
- * `folder` this window then names, and every other `write`
+ * The asks this window makes. A fetch of a folder on disk is one per folder, so a second for the same folder replaces
+ * the one under way and its end names the folder it was for. A check of symlinks and each write is asked on its own.
+ * An import and an export are one at a time
  */
-type AskKind = 'contents' | 'symlinks' | 'folder' | 'write'
+const made = makes(({ one, each }) => ({
+  // What is on disk under a symlinked folder, which no view can see
+  contents: each(fromAsk('library', 'GET_FOLDER_CONTENTS')),
+  symlinks: each(fromAsk('library', 'CHECK_SYMLINKS')),
+  // This window's writes. What one changed reaches every window through the views; one refused is shown here
+  createDocument: each(fromAsk('library', 'CREATE_DOCUMENT')),
+  updateDocument: each(fromAsk('library', 'UPDATE_DOCUMENT')),
+  createCollection: each(fromAsk('library', 'CREATE_COLLECTION')),
+  createSymlinkCollection: each(fromAsk('library', 'CREATE_SYMLINK_COLLECTION')),
+  renameItem: each(fromAsk('library', 'RENAME_ITEM')),
+  deleteItems: each(fromAsk('library', 'DELETE_ITEMS')),
+  moveItems: each(fromAsk('library', 'MOVE_ITEMS')),
+  updateSymlinkPath: each(fromAsk('library', 'UPDATE_SYMLINK_PATH')),
+  importLibrary: one(fromAsk('library', 'IMPORT_LIBRARY')),
+  exportLibrary: one(fromAsk('library', 'EXPORT_LIBRARY')),
+}))
 
-/** The done event of an ask spawned as `Kind`: how it ended, and the name it was spawned under */
-type AskEnded<Kind extends AskKind, O> = { type: `xstate.done.actor.${Kind}.${string}`; output: O; actorId: string }
+/** How an ask the machine made ended */
+type Made = MadeEvent<typeof made>
 
-/** The id a fetch of a folder on disk is spawned under: one per folder, so its end names the folder it was for */
-const CONTENTS = 'contents.'
-const contentsAsk = (folderId: EARS.EntityId | null): string => `${CONTENTS}${folderId}`
-
-/** Fetches a folder on disk, in place of a fetch of the same folder under way */
-function fetchContents(
-  enqueue: { stopChild(id: string): void; spawnChild(src: 'getFolderContents', options: { id: string; input: { folderId: EARS.EntityId | null } }): void },
-  folderId: EARS.EntityId | null,
-): void {
-  enqueue.stopChild(contentsAsk(folderId))
-  enqueue.spawnChild('getFolderContents', { id: contentsAsk(folderId), input: { folderId } })
+/** What the machine holds: what the surface publishes, the asks under way, and how the last import and export ended */
+type LibraryMachineContext = LibraryContext & {
+  /** Which of the asks the machine makes (`made`) are under way */
+  making: Making<typeof made>
+  /** How the last import ended, until another folder is picked */
+  imported?: Extract<Made, { type: 'made.importLibrary' }>['outcome']
+  /** How the last export ended, until another is made */
+  exported?: Extract<Made, { type: 'made.exportLibrary' }>['outcome']
 }
 
-/** Whether an event is the done event of an ask spawned as `kind` */
-const isEnded = <Kind extends AskKind>(kind: Kind, event: LibraryEvents): event is Extract<LibraryEvents, { type: `xstate.done.actor.${Kind}.${string}` }> =>
-  event.type.startsWith(`xstate.done.actor.${kind}.`)
-
-/** Every done event of an ask this machine spawned, as a transition names them */
-const ENDED = { contents: 'xstate.done.actor.contents.*', symlinks: 'xstate.done.actor.symlinks.*', folder: 'xstate.done.actor.folder.*', write: 'xstate.done.actor.write.*' } as const
+/** The key a fetch of a folder on disk is made under: its folder */
+const contentsKey = (folderId: EARS.EntityId | null): string => `${folderId}`
 
 /** How a fetch of the document open on disk ended */
-type DocumentFetched = Asked<'GET_DOCUMENT'>
+type DocumentFetched = Awaited<ReturnType<typeof ask<'library', 'GET_DOCUMENT'>>>
 
 export const librarySystem = setup({
   types: {
-    context: {} as LibraryContext,
+    context: {} as LibraryMachineContext,
     events: {} as LibraryEvents,
   },
   actors: {
     // A document on disk is read when it is opened, which no view can do for it
     getDocument: fromAsk('library', 'GET_DOCUMENT'),
-    // What is on disk under a symlinked folder, which no view can see
-    getFolderContents: fromAsk('library', 'GET_FOLDER_CONTENTS'),
-    checkSymlinks: fromAsk('library', 'CHECK_SYMLINKS'),
-    // This window's writes. What one changed reaches every window through the views; one refused is shown here
-    createDocument: fromAsk('library', 'CREATE_DOCUMENT'),
-    updateDocument: fromAsk('library', 'UPDATE_DOCUMENT'),
-    createCollection: fromAsk('library', 'CREATE_COLLECTION'),
-    createSymlinkCollection: fromAsk('library', 'CREATE_SYMLINK_COLLECTION'),
-    renameItem: fromAsk('library', 'RENAME_ITEM'),
-    deleteItems: fromAsk('library', 'DELETE_ITEMS'),
-    moveItems: fromAsk('library', 'MOVE_ITEMS'),
-    updateSymlinkPath: fromAsk('library', 'UPDATE_SYMLINK_PATH'),
+    ...made.actors,
   },
   actions: {
     // File browser actions
@@ -293,37 +290,37 @@ export const librarySystem = setup({
       const { folderId, folder } = event
       if (folder.onDisk) {
         if (!context.diskFolderIds.includes(folderId)) enqueue.assign({ diskFolderIds: [...context.diskFolderIds, folderId] })
-        fetchContents(enqueue, folderId)
+        made.make(enqueue, 'contents', contentsKey(folderId), { folderId: folderId })
         return
       }
       if (context.diskFolderIds.includes(folderId)) enqueue.assign({ diskFolderIds: context.diskFolderIds.filter(each => each !== folderId) })
       enqueue.assign(({ context }) => folderShown(context, folder.contents))
       const symlinks = symlinksIn(folder.contents)
-      if (symlinks.length > 0) enqueue.spawnChild('checkSymlinks', { id: askId('symlinks'), input: { ids: symlinks } })
+      if (symlinks.length > 0) made.make(enqueue, 'symlinks', freshKey(), { ids: symlinks })
     }),
     folderFetched: enqueueActions(({ event, enqueue }) => {
-      if (!isEnded('contents', event)) return
-      if (!event.output.ok) {
-        // A folder that could not be fetched is not being loaded any more; `askEnded` says why
-        const folderId = event.actorId.slice(CONTENTS.length)
+      if (event.type !== 'made.contents') return
+      if (!event.outcome.ok) {
+        // A folder that could not be fetched is not being loaded any more; `showRefusal` says why
+        const folderId = event.key
         enqueue.assign(({ context }) => ({ loadingFolderIds: context.loadingFolderIds.filter(each => each !== folderId) }))
         return
       }
-      const contents = event.output.value
+      const contents = event.outcome.value
       enqueue.assign(({ context }) => folderShown(context, contents))
       const symlinks = symlinksIn(contents)
-      if (symlinks.length > 0) enqueue.spawnChild('checkSymlinks', { id: askId('symlinks'), input: { ids: symlinks } })
+      if (symlinks.length > 0) made.make(enqueue, 'symlinks', freshKey(), { ids: symlinks })
     }),
     fetchChangedFolders: enqueueActions(({ context, event, enqueue }) => {
       if (event.type !== 'FOLDER_CHANGED') return
       for (const folderId of shownFolders(context)) {
         if (!context.diskFolderIds.includes(folderId)) continue
-        if (event.folderId === null || event.folderId === folderId) fetchContents(enqueue, folderId)
+        if (event.folderId === null || event.folderId === folderId) made.make(enqueue, 'contents', contentsKey(folderId), { folderId: folderId })
       }
     }),
     markBrokenSymlinks: assign(({ context, event }) => {
-      if (!isEnded('symlinks', event) || !event.output.ok) return {}
-      const { ids, broken } = event.output.value
+      if (event.type !== 'made.symlinks' || !event.outcome.ok) return {}
+      const { ids, broken } = event.outcome.value
       const mark = (items: LibraryItem[]) => items.map(item => (item.type === 'folder' && ids.includes(item.id)
         ? { ...item, isBroken: broken.includes(item.id) }
         : item))
@@ -343,28 +340,28 @@ export const librarySystem = setup({
     createDocument: enqueueActions(({ context, event, enqueue }) => {
       if (event.type !== 'SAVE_DOCUMENT') return
       if (event.tags?.length) tagStorage.addTags(event.tags)
-      enqueue.spawnChild('createDocument', { id: askId('write'), input: {
+      made.make(enqueue, 'createDocument', freshKey(), {
         name: event.name,
         content: event.content,
         tags: event.tags,
         collectionId: event.collectionId || context.currentFolderId || undefined,
-      } })
+      })
     }),
     // A file made in the folder on disk that is open, which the browser then names in place
     createDocumentOnDisk: enqueueActions(({ context, enqueue }) => {
       if (!context.currentFolderId) return
-      enqueue.spawnChild('createDocument', { id: askId('write'), input: { name: 'New Document.txt', content: [], tags: [], collectionId: context.currentFolderId } })
+      made.make(enqueue, 'createDocument', freshKey(), { name: 'New Document.txt', content: [], tags: [], collectionId: context.currentFolderId })
     }),
     createFolder: enqueueActions(({ context, event, enqueue }) => {
       if (event.type !== 'CREATE_FOLDER') return
-      enqueue.spawnChild('createCollection', { id: askId('folder'), input: { name: event.name, parentId: context.currentFolderId || undefined } })
+      made.make(enqueue, 'createCollection', freshKey(), { name: event.name, parentId: context.currentFolderId || undefined })
     }),
     deleteSelectedItems: enqueueActions(({ context, enqueue }) => {
-      if (context.selectedItems.length > 0) enqueue.spawnChild('deleteItems', { id: askId('write'), input: { ids: context.selectedItems } })
+      if (context.selectedItems.length > 0) made.make(enqueue, 'deleteItems', freshKey(), { ids: context.selectedItems })
     }),
     moveItems: enqueueActions(({ event, enqueue }) => {
       if (event.type !== 'MOVE_ITEMS') return
-      enqueue.spawnChild('moveItems', { id: askId('write'), input: { ids: event.itemIds, targetFolderId: event.targetFolderId } })
+      made.make(enqueue, 'moveItems', freshKey(), { ids: event.itemIds, targetFolderId: event.targetFolderId })
     }),
     // Tree view actions
     expandFolder: assign(({ context, event }) => {
@@ -392,7 +389,7 @@ export const librarySystem = setup({
     renameItem: enqueueActions(({ context, event, enqueue }) => {
       if (event.type !== 'RENAME_ITEM') return
       const itemType = findItemById(context, event.itemId)?.type === 'folder' ? 'folder' : 'document'
-      enqueue.spawnChild('renameItem', { id: askId('write'), input: { id: event.itemId, name: event.name, itemType } })
+      made.make(enqueue, 'renameItem', freshKey(), { id: event.itemId, name: event.name, itemType })
     }),
 
     // State update actions
@@ -446,12 +443,12 @@ export const librarySystem = setup({
       if (removed.length) tagStorage.removeTags(removed)
       if (added.length) tagStorage.addTags(added)
 
-      enqueue.spawnChild('updateDocument', { id: askId('write'), input: {
+      made.make(enqueue, 'updateDocument', freshKey(), {
         id: context.editingDocument.id,
         name: event.name,
         content: event.content,
         tags: event.tags,
-      } })
+      })
     }),
 
     setEditingDocument: assign(({ context, event }) => {
@@ -466,25 +463,24 @@ export const librarySystem = setup({
     clearEditingDocument: assign({
       editingDocument: undefined,
     }),
-    /** An ask this machine spawned ended: one that was not done is shown, whichever it was, and none is kept */
-    askEnded: enqueueActions(({ event, enqueue }) => {
-      const outcome = outcomeOf<UntypedAskOutcome>(event)
-      if (!outcome.ok) enqueue.assign({ writeError: outcome.failure.message })
-      enqueue.stopChild(endedAsk(event))
+    /** An ask this machine made was not done: it is shown, whichever it was */
+    showRefusal: assign(({ event }) => {
+      if (!('outcome' in event) || event.outcome.ok) return {}
+      return { writeError: event.outcome.failure.message }
     }),
     // The folder this window made opens for naming here, and nowhere else; one made on disk is shown by fetching it
     nameCreatedFolder: assign(({ event }) => {
-      if (!isEnded('folder', event) || !event.output.ok) return {}
-      const collection = event.output.value.collection
+      if ((event.type !== 'made.createCollection' && event.type !== 'made.createSymlinkCollection') || !event.outcome.ok) return {}
+      const collection = event.outcome.value.collection
       return collection ? { itemToEdit: collection.id, newItemId: collection.id } : {}
     }),
     sendDeleteDocument: enqueueActions(({ event, enqueue }) => {
       if (event.type !== 'DELETE_DOCUMENT') return
-      enqueue.spawnChild('deleteItems', { id: askId('write'), input: { ids: [event.documentId] } })
+      made.make(enqueue, 'deleteItems', freshKey(), { ids: [event.documentId] })
     }),
     // [SEARCH_INDEX_FF] Search index actions — commented out
     // requestSearchIndices: ({ context }) => {
-    //   sendToSystem(id, {
+    //   tell(id, {
     //     type: 'LIST_SEARCH_INDICES',
     //     folderId: context.currentFolderId,
     //   })
@@ -499,7 +495,7 @@ export const librarySystem = setup({
     // }),
     // saveSearchIndex: ({ context, event }) => {
     //   if (event.type === 'SAVE_SEARCH_INDEX') {
-    //     sendToSystem(id, {
+    //     tell(id, {
     //       type: 'CREATE_SEARCH_INDEX',
     //       config: event.config,
     //       folderId: context.currentFolderId,
@@ -508,7 +504,7 @@ export const librarySystem = setup({
     // },
     // updateSearchIndex: ({ event }) => {
     //   if (event.type === 'UPDATE_SEARCH_INDEX') {
-    //     sendToSystem(id, {
+    //     tell(id, {
     //       type: 'UPDATE_SEARCH_INDEX',
     //       id: event.indexId,
     //       config: event.config,
@@ -517,7 +513,7 @@ export const librarySystem = setup({
     // },
     // deleteSearchIndex: ({ event }) => {
     //   if (event.type === 'DELETE_SEARCH_INDEX') {
-    //     sendToSystem(id, {
+    //     tell(id, {
     //       type: 'DELETE_SEARCH_INDEX',
     //       id: event.indexId,
     //     })
@@ -570,7 +566,7 @@ export const librarySystem = setup({
     // }),
     // executeTestSearch: ({ context }) => {
     //   if (context.testingIndexId && context.testQuery) {
-    //     sendToSystem(id, {
+    //     tell(id, {
     //       type: 'SEARCH_IN_INDEX',
     //       indexId: context.testingIndexId,
     //       query: context.testQuery,
@@ -599,26 +595,38 @@ export const librarySystem = setup({
     // }),
     // A folder on disk, fetched again at the user's ask; a stored one is a view, and already current
     refreshFolder: enqueueActions(({ event, enqueue }) => {
-      if (event.type === 'REFRESH_FOLDER') fetchContents(enqueue, event.folderId)
+      if (event.type === 'REFRESH_FOLDER') made.make(enqueue, 'contents', contentsKey(event.folderId), { folderId: event.folderId })
     }),
 
     // Symlink actions
     createSymlink: enqueueActions(({ context, event, enqueue }) => {
       if (event.type !== 'CREATE_SYMLINK') return
       const pathParts = event.symlinkPath.split(/[/\\]/).filter(Boolean)
-      enqueue.spawnChild('createSymlinkCollection', { id: askId('folder'), input: {
+      made.make(enqueue, 'createSymlinkCollection', freshKey(), {
         name: pathParts[pathParts.length - 1] || 'Symlink',
         symlinkPath: event.symlinkPath,
         parentId: context.currentFolderId || undefined,
-      } })
+      })
     }),
     relinkSymlink: enqueueActions(({ event, enqueue }) => {
       if (event.type !== 'RELINK_SYMLINK') return
-      enqueue.spawnChild('updateSymlinkPath', { id: askId('write'), input: { collectionId: event.collectionId, newPath: event.newPath } })
+      made.make(enqueue, 'updateSymlinkPath', freshKey(), { collectionId: event.collectionId, newPath: event.newPath })
     }),
     removeBrokenSymlink: enqueueActions(({ event, enqueue }) => {
       if (event.type !== 'REMOVE_BROKEN_SYMLINK') return
-      enqueue.spawnChild('deleteItems', { id: askId('write'), input: { ids: [event.collectionId] } })
+      made.make(enqueue, 'deleteItems', freshKey(), { ids: [event.collectionId] })
+    }),
+
+    // Import and export, from the settings form
+    importLibrary: enqueueActions(({ event, enqueue }) => {
+      if (event.type !== 'IMPORT') return
+      enqueue.assign({ imported: undefined })
+      made.make(enqueue, 'importLibrary', { directory: event.directory })
+    }),
+    exportLibrary: enqueueActions(({ event, enqueue }) => {
+      if (event.type !== 'EXPORT') return
+      enqueue.assign({ exported: undefined })
+      made.make(enqueue, 'exportLibrary', { directory: event.directory, format: event.format })
     }),
   },
   guards: { entityIs: entityIs<Contract['opens']>,
@@ -678,6 +686,7 @@ export const librarySystem = setup({
     lastKnownPath: null,
 
     writeError: null,
+    making: made.none(),
 
     navHistory: createNavHistory<EARS.EntityId | null>(null),
   },
@@ -698,10 +707,23 @@ export const librarySystem = setup({
     },
     // What this window asked for ended: a folder on disk fetched, its symlinks checked, a folder made for it to name.
     // One that was not done is shown, whichever it was; what a write changed reaches every window through the views
-    [ENDED.contents]: { actions: ['folderFetched', 'askEnded'] },
-    [ENDED.symlinks]: { actions: ['markBrokenSymlinks', 'askEnded'] },
-    [ENDED.folder]: { actions: ['nameCreatedFolder', 'askEnded'] },
-    [ENDED.write]: { actions: 'askEnded' },
+    [made.done]: { actions: made.settle() },
+    'made.contents': { actions: ['folderFetched', 'showRefusal'] },
+    'made.symlinks': { actions: ['markBrokenSymlinks', 'showRefusal'] },
+    'made.createCollection': { actions: ['nameCreatedFolder', 'showRefusal'] },
+    'made.createSymlinkCollection': { actions: ['nameCreatedFolder', 'showRefusal'] },
+    'made.createDocument': { actions: 'showRefusal' },
+    'made.updateDocument': { actions: 'showRefusal' },
+    'made.renameItem': { actions: 'showRefusal' },
+    'made.deleteItems': { actions: 'showRefusal' },
+    'made.moveItems': { actions: 'showRefusal' },
+    'made.updateSymlinkPath': { actions: 'showRefusal' },
+    IMPORT: { actions: 'importLibrary' },
+    FORGET_IMPORT: { actions: assign({ imported: undefined }) },
+    'made.importLibrary': { actions: assign(({ event }) => ({ imported: event.outcome })) },
+    EXPORT: { actions: 'exportLibrary' },
+    FORGET_EXPORT: { actions: assign({ exported: undefined }) },
+    'made.exportLibrary': { actions: assign(({ event }) => ({ exported: event.outcome })) },
     VIEW_BROWSER: {
       target: '.browser',
     },

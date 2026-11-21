@@ -1,10 +1,9 @@
 // Staging one piece of a file's change from its diff: the panel has git do it, and is busy until git answers
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { askUnderWay } from '@apackdev/sdk/fe';
 import { latestAsk, resetAsks } from '../../_support/asks.ts';
 
-vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -12,7 +11,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   getParentContext: vi.fn(() => ({})),
 }));
 
-const { commitState, HUNK } = await import('#features/code/fe/features/commit/state.ts');
+const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 
 beforeEach(resetAsks);
 
@@ -24,10 +23,10 @@ it('has git stage the piece, and is busy with it until git says it is done', asy
   actor.send(PIECE);
 
   expect(latestAsk('commit.APPLY_HUNK').event).toEqual(PIECE);
-  expect(askUnderWay(actor.getSnapshot().context.asking, HUNK)).toBe(true);
+  expect(actor.getSnapshot().context.making.hunk).toBe(true);
 
   await latestAsk('commit.APPLY_HUNK').answer({ path: 'a.txt', staged: false, hunk: 'a piece' });
-  expect(askUnderWay(actor.getSnapshot().context.asking, HUNK)).toBe(false);
+  expect(actor.getSnapshot().context.making.hunk).toBe(false);
 });
 
 it('is no longer busy, and says why, when git refuses the piece', async () => {
@@ -36,7 +35,7 @@ it('is no longer busy, and says why, when git refuses the piece', async () => {
 
   await latestAsk('commit.APPLY_HUNK').refuse('The file has changed since this change was read.', { kind: 'git' });
 
-  expect(askUnderWay(actor.getSnapshot().context.asking, HUNK)).toBe(false);
+  expect(actor.getSnapshot().context.making.hunk).toBe(false);
   expect(actor.getSnapshot().context.gitError).toBe('The file has changed since this change was read.');
 });
 

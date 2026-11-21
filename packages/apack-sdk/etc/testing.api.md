@@ -31,7 +31,6 @@ import { RelationRules } from '@elmdb/ears';
 import type { rerank } from 'ai';
 import { RowRules } from '@elmdb/ears';
 import type { SearchDeclaration } from '@elmdb/ears';
-import type { SnapshotFrom } from 'xstate';
 import type { streamText } from 'ai';
 import type { ToolLoopAgent } from 'ai';
 import type { ToolLoopAgentSettings } from 'ai';

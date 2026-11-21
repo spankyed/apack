@@ -12,11 +12,11 @@ import { createApp, defineComponent, h, type App as VueApp } from 'vue';
 import { fePacks } from '@/runtime/packs';
 import App from '@/views/App.vue';
 
-// The shell as this window sees it during onboarding: a real actor, so `useSelector` and `hasTag` are the real
-// ones. Built inside the factory because a `vi.mock` factory is hoisted above the module body.
+// The shell as this window sees it during onboarding, at the letter: a real actor, so `useState` is the real
+// one. Built inside the factory because a `vi.mock` factory is hoisted above the module body.
 vi.mock('@/main', async () => {
   const { createActor, createMachine } = await import('xstate');
-  const shell = createActor(createMachine({ id: 'shell', initial: 'onboarding', states: { onboarding: { tags: 'welcome' } } }));
+  const shell = createActor(createMachine({ id: 'shell', initial: 'onboarding', states: { onboarding: { initial: 'letter', states: { letter: {} } } } }));
   shell.start();
   return { applicationState: shell };
 });

@@ -24,6 +24,19 @@ import type { SurfaceRequest, ShellContext, ShellEvent, ShellOptions, ShellParam
 
 const typeOf = safeEvents<ShellEvent>();
 
+/** The title of the page that says the backend has not answered, which is the page a connection takes down */
+const UNREACHABLE = 'Unable to connect';
+
+/** What a connection does, whenever it arrives: a user who has not onboarded starts there, and any other is in */
+const CONNECTED = [
+  {
+    target: '#application.onboarding.letter',
+    guard: ({ event }: { event: ShellEvent }) => typeOf('CLIENT_CONNECTED', event).hasOnboarded === false,
+    actions: 'applyShellState',
+  },
+  { target: '#application.running.connected', actions: 'applyShellState' },
+] as const;
+
 /**
  * Compiles only while the shell accepts every event the SDK's `HostShell` lets frontend code send, and holds the
  * state it lets frontend code read: a change to either side fails the typecheck here, not a pack at runtime.
@@ -737,24 +750,22 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
         states: {
           'connecting': {
             tags: ['connecting'],
-            after: {
-              30000: {
-                target: '#application.error',
-                actions: () => {
-                  client.describeConnection().then((details) => notify.errorPage('Unable to connect', details));
-                },
-              },
+            // Half a minute without a connection is when the user is told, and never when the shell stops waiting
+            // for one: a clock says how long it has been, and cannot say that the backend will not answer
+            after: { 30000: { target: 'unreachable' } },
+            on: { CLIENT_CONNECTED: CONNECTED },
+          },
+          // Still waiting, with the user told. A connection that arrives now takes the page down and carries on:
+          // a backend slow to start on a busy machine, or on a first boot, is not one that failed
+          'unreachable': {
+            entry: ({ self }) => {
+              void client.describeConnection().then((details) => {
+                // Said only while it is still true: the connection may have arrived while this was being read
+                if (self.getSnapshot().matches({ running: 'unreachable' })) notify.errorPage(UNREACHABLE, details);
+              });
             },
-            on: {
-              CLIENT_CONNECTED: [
-                {
-                  target: '#application.onboarding.letter',
-                  guard: ({ event }) => typeOf('CLIENT_CONNECTED', event).hasOnboarded === false,
-                  actions: 'applyShellState',
-                },
-                { target: 'connected', actions: 'applyShellState' },
-              ],
-            },
+            exit: () => notify.clearErrorPage(UNREACHABLE),
+            on: { CLIENT_CONNECTED: CONNECTED },
           },
           'connected': {
             on: {
@@ -768,6 +779,7 @@ export function createShellMachine({ packs, catalog, client, packFrontends, stor
           },
         },
       },
+      // The backend failed for good and said so: nothing but a reload brings the window back from here
       'error': {},
     },
     on: {

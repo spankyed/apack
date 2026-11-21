@@ -97,11 +97,11 @@ describe('generated sends compile', () => {
       depSnapshots: new Map([['base-pack', typedDependency({ foo: 'BASE_FOO_RUN', calendar: 'CALENDAR_RUN' })]]),
     });
     write('src/probe.ts', [
-      "import { sendToSystem } from './__generated__/events.ts';",
-      ...ids.map((id) => `sendToSystem('${id}', { type: '${id.toUpperCase()}_RUN', n: 1 });`),
-      "sendToSystem('base-pack/foo', { type: 'BASE_FOO_RUN', n: 1 });",
+      "import { tell } from './__generated__/events.ts';",
+      ...ids.map((id) => `tell('${id}', { type: '${id.toUpperCase()}_RUN', n: 1 });`),
+      "tell('base-pack/foo', { type: 'BASE_FOO_RUN', n: 1 });",
       '// @ts-expect-error the own foo system receives FOO_RUN',
-      "sendToSystem('foo', { type: 'BASE_FOO_RUN', n: 1 });",
+      "tell('foo', { type: 'BASE_FOO_RUN', n: 1 });",
     ].join('\n'));
     expect(typecheck(files, ['src/probe.ts', 'src/__generated__/pack-entry.ts'], true)).toEqual([]);
   });
@@ -112,12 +112,12 @@ describe('generated sends compile', () => {
       depSnapshots: new Map([['base-pack', typedDependency({ calendar: 'CALENDAR_RUN' })]]),
     });
     write('src/probe.ts', [
-      "import { sendToSystem } from './__generated__/events.ts';",
-      "sendToSystem('base-pack/calendar', { type: 'CALENDAR_RUN', n: 1 });",
+      "import { tell } from './__generated__/events.ts';",
+      "tell('base-pack/calendar', { type: 'CALENDAR_RUN', n: 1 });",
       '// @ts-expect-error CALENDAR_RUN needs its n',
-      "sendToSystem('base-pack/calendar', { type: 'CALENDAR_RUN' });",
+      "tell('base-pack/calendar', { type: 'CALENDAR_RUN' });",
       '// @ts-expect-error the pack has no system of its own',
-      "sendToSystem('sidebar', { type: 'CALENDAR_RUN', n: 1 });",
+      "tell('sidebar', { type: 'CALENDAR_RUN', n: 1 });",
     ].join('\n'));
     expect(typecheck(files, ['src/probe.ts'])).toEqual([]);
   });

@@ -6,7 +6,7 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // wires it once instead of once per cause, and a fact is left for what publishing cannot fix.
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { createActor, setup, type AnyActorRef } from 'xstate';
-import { untypedSendToSystem } from '@apackdev/sdk/events';
+import { untypedTell } from '@apackdev/sdk/events';
 import { startTestRuntime, testRootEvents } from '@apackdev/sdk/testing';
 import { createAppBus } from '../../src/bus/index.ts';
 import { HOST } from '../../src/refs.ts';
@@ -65,7 +65,7 @@ it('tells every system the data was replaced, then asks each to publish', async 
   seen.watcher = [];
   seen.quiet = [];
 
-  untypedSendToSystem(HOST.bus, { type: 'DATA_REPLACED' });
+  untypedTell(HOST.bus, { type: 'DATA_REPLACED' });
   await settle();
 
   // Told before being asked, so work held over rows that are gone is dropped before the system describes itself
@@ -78,7 +78,7 @@ it('tells every system another process changed the data, as that and not as a re
   seen.watcher = [];
   seen.quiet = [];
 
-  untypedSendToSystem(HOST.bus, { type: 'DATA_CHANGED_ELSEWHERE' });
+  untypedTell(HOST.bus, { type: 'DATA_CHANGED_ELSEWHERE' });
   await settle();
 
   expect(seen.watcher).toEqual(['DATA_CHANGED_ELSEWHERE', 'SEND_STATE']);
@@ -86,7 +86,7 @@ it('tells every system another process changed the data, as that and not as a re
 });
 
 it('asks nobody to publish before a client has connected, and catches them up when one does', async () => {
-  untypedSendToSystem(HOST.bus, { type: 'DATA_REPLACED' });
+  untypedTell(HOST.bus, { type: 'DATA_REPLACED' });
   await settle();
 
   // The fact still lands — a system holding work over rows that are gone must drop it whether or not anyone

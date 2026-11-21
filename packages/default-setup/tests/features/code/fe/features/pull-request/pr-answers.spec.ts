@@ -2,13 +2,12 @@
 // before, an error ends only the ask or write it answers, and nothing of one folder or pull request is left on
 // the next.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { askUnderWay } from '@apackdev/sdk/fe';
 import { createActor } from 'xstate';
 import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 import type { GhPullRequest, GhPRComment, GhReviewThread } from '#generated/types.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+const tell = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 const parent = vi.hoisted(() => ({ baseDirectory: '/repo' as string | null, selectedPanel: 'pr' }));
 const updateParentState = vi.hoisted(() => vi.fn());
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
@@ -18,7 +17,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   sendEventToParent: vi.fn(),
 }));
 
-const { pullRequestState, DETAILS } = await import('#features/code/fe/features/pull-request/state.ts');
+const { pullRequestState } = await import('#features/code/fe/features/pull-request/state.ts');
 
 type Actor = ReturnType<typeof started>;
 const started = () => createActor(pullRequestState).start();
@@ -59,7 +58,7 @@ const onBranchPR = async (actor: Actor, which: GhPullRequest | null) => {
 };
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  tell.mockReset();
   updateParentState.mockReset();
   resetAsks();
   parent.baseDirectory = '/repo';
@@ -125,7 +124,7 @@ describe('an error ends the ask or write it answers, and no other', () => {
     await refuse('pr.MERGE_PR', 'not mergeable');
 
     expect(context(actor).isMerging).toBe(false);
-    expect(askUnderWay(actor.getSnapshot().context.asking, DETAILS)).toBe(true);
+    expect(actor.getSnapshot().context.making.details).toBe(true);
   });
 });
 
@@ -256,7 +255,7 @@ describe('another folder', () => {
       inflightMutations: 0,
       writes: {},
     });
-    expect(askUnderWay(actor.getSnapshot().context.asking, DETAILS), 'and its details are no longer waited on').toBe(false);
+    expect(actor.getSnapshot().context.making.details, 'and its details are no longer waited on').toBe(false);
 
     await onBranchPR(actor, pr(11));
     expect(context(actor).selectedPR?.number).toBe(11);

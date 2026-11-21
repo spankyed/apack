@@ -1,6 +1,6 @@
 import { featureSettings } from '#generated/settings.ts';
 
-import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
+import { broadcast, tell } from '#generated/events.ts';
 import { services } from '#generated/services.ts';
 import { setup } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
@@ -93,7 +93,7 @@ export const answers = threadsSpec.answers({
       reportThreadOperationError('status', error, threadId);
     }, () => { repository.threadCommands.update(threadId as EARS.EntityId, { status }); });
     // Notify flows — all logic lives in the flow layer
-    sendToSystem('brain', {
+    tell('brain', {
       type: 'TRIGGER_BRAIN_EVENT',
       eventType: 'thread.status.changed',
       payload: { threadId, status, userInduced: true },
@@ -166,9 +166,9 @@ export const answers = threadsSpec.answers({
         });
 
         // A window that asked opens the thread from its answer. One no window asked for (a flow's) is shown to every window
-        if (started && !client) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId });
+        if (started && !client) broadcast('threads', { type: 'SHOW_THREAD', threadId });
 
-        sendToSystem('brain', {
+        tell('brain', {
           type: 'TRIGGER_BRAIN_EVENT',
           eventType: 'user.message',
           payload: {
@@ -229,9 +229,9 @@ export const answers = threadsSpec.answers({
         ...(mode ? { context: { agent: mode } } : {}),
       });
 
-      if (started && !client) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId });
+      if (started && !client) broadcast('threads', { type: 'SHOW_THREAD', threadId });
 
-      sendToSystem('brain', {
+      tell('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
         eventType: 'user.command',
         payload: {
@@ -295,9 +295,9 @@ export const answers = threadsSpec.answers({
 
         services.chat.visitThread(result.id);
         // A window that asked opens the fork from its answer. One no window asked for is shown to every window
-        if (!client) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId: result.id });
+        if (!client) broadcast('threads', { type: 'SHOW_THREAD', threadId: result.id });
 
-        sendToSystem('brain', {
+        tell('brain', {
           type: 'TRIGGER_BRAIN_EVENT',
           eventType: 'thread.fork',
           payload: {
@@ -410,7 +410,7 @@ export const threadsSystem = setup({
 
       // Unified `thread.revert` brain event — the `kind` discriminator
       // tells the claude-code flow which variant to run.
-      sendToSystem('brain', {
+      tell('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
         eventType: 'thread.revert',
         payload: {
@@ -459,7 +459,7 @@ export const threadsSystem = setup({
         ? deletedMessages.filter((m: any) => m.sender === 'user' && m.context?.agent === 'Codex').length
         : 0;
 
-      sendToSystem('brain', {
+      tell('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
         eventType: 'thread.revert',
         payload: { threadId, messageId, kind: 'summarize', deletedMessageIds: deletion.deletedIds, deletedUserMessageCount, agents, codexDeletedUserMessageCount },
@@ -470,7 +470,7 @@ export const threadsSystem = setup({
     },
     pauseTurn: ({ event }) => {
       const { threadId } = threadsSpec.typeOf('PAUSE_TURN', event);
-      sendToSystem('brain', {
+      tell('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
         eventType: 'user.thread.pause',
         payload: { threadId },
@@ -478,7 +478,7 @@ export const threadsSystem = setup({
     },
     forwardBrainEvent: ({ event }) => {
       const { eventType, payload } = threadsSpec.typeOf('FORWARD_BRAIN_EVENT', event);
-      sendToSystem('brain', { type: 'TRIGGER_BRAIN_EVENT', eventType, payload });
+      tell('brain', { type: 'TRIGGER_BRAIN_EVENT', eventType, payload });
     },
     forwardInteractiveMessageResponse: ({ event }) => {
       try {
@@ -499,7 +499,7 @@ export const threadsSystem = setup({
         write(messageId as EARS.EntityId).set('asideText', asideText);
       }
 
-      sendToSystem('brain', {
+      tell('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
         eventType: 'interactive.message.response',
         payload: { messageId, threadId, response }

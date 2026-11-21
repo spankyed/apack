@@ -25,7 +25,7 @@ const { rootEvents } = await import('../../src/transport/emitter.ts');
 const { bindHost } = await import('@apackdev/sdk/runtime');
 const { createHostRuntime } = await import('@apackdev/host/services');
 const { _createTestEngine } = await import('@apackdev/sdk/testing');
-const { untypedBroadcastToSurface } = await import('@apackdev/sdk/events');
+const { untypedBroadcast } = await import('@apackdev/sdk/events');
 type EarsDatabase = import('@elmdb/ears').EarsDatabase;
 bindHost(createHostRuntime({ runHistory: _openTestRunHistory(), database: {} as EarsDatabase, engine: _createTestEngine(), transport: { rootEvents }, appVersion: '1.0.0', packs: registry }));
 const backendSystem = createAppBus(registry);
@@ -181,8 +181,8 @@ describe('CLIENT_CONNECTED on the bus', () => {
   });
 });
 
-// untypedBroadcastToSurface goes through the bus, as a system's emit does: nothing reaches a client before one connects
-describe('untypedBroadcastToSurface on the bus', () => {
+// untypedBroadcast goes through the bus, as a system's emit does: nothing reaches a client before one connects
+describe('untypedBroadcast on the bus', () => {
   // The surface's own pack declares what it receives, as in the app: a send to a surface no pack owns is
   // dropped, which is the check's job and not what this test is about
   beforeEach(() => {
@@ -196,13 +196,13 @@ describe('untypedBroadcastToSurface on the bus', () => {
     const outgoing: Message[] = [];
     const stop = rootEvents.onOutgoing((message) => { outgoing.push(message); });
     try {
-      untypedBroadcastToSurface('notes-pack/notes', { type: 'BEFORE_CONNECT' });
+      untypedBroadcast('notes-pack/notes', { type: 'BEFORE_CONNECT' });
       await flush();
       expect(outgoing).toEqual([]);
 
       rootEvents.emitConnected();
       await flush();
-      untypedBroadcastToSurface('notes-pack/notes', { type: 'AFTER_CONNECT' });
+      untypedBroadcast('notes-pack/notes', { type: 'AFTER_CONNECT' });
       await flush();
       expect(outgoing.filter(({ event }) => event.type !== 'CLIENT_CONNECTED')).toEqual([{ to: 'notes-pack/notes', call: expect.any(String), event: { type: 'AFTER_CONNECT' } }]);
     } finally {

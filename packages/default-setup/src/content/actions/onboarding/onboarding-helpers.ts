@@ -24,7 +24,7 @@ export function persistOnboardingState(services: Services, threadId: EntityId, s
  */
 export function flashState(services: Services, threadId: EntityId, stateId: string = 'working', nextState: 'paused' | 'idle' = 'paused') {
   services.threads.updateChatState(threadId, nextState);
-  services.emitter.broadcastToSurface('default-setup/threads', {
+  services.emitter.broadcast('default-setup/threads', {
     type: 'FLASH_CHAT_STATE',
     threadId: threadId as string,
     stateId,
@@ -124,10 +124,10 @@ export function finishOnboarding(
     || ((!state.data.cliFound && state.data.codexFound) ? 'Codex' : 'Claude Code');
   // The chat's settings reach every window with the change; the mode is what the chat's input offers now
   services.settings.set({ kind: 'feature', featureRef: 'default-setup/threads' }, ['chat', 'defaultMode'], defaultMode);
-  services.emitter.broadcastToSurface('default-setup/threads', {
+  services.emitter.broadcast('default-setup/threads', {
     type: 'SET_MODE',
     mode: defaultMode,
   });
 
-  services.emitter.broadcastToSurface('host/application', { type: 'ONBOARDING_COMPLETE' });
+  services.emitter.broadcast('host/application', { type: 'ONBOARDING_COMPLETE' });
 }

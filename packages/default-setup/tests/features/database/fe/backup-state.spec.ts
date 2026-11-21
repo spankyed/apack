@@ -21,7 +21,7 @@ vi.mock('#generated/fe.ts', async () => {
   return { fromView: () => fromCallback(() => {}) };
 });
 
-const { default: databaseState, isExporting, isImporting, isRunningCode } = await import('#features/database/fe/state.ts');
+const { default: databaseState, isRunningCode } = await import('#features/database/fe/state.ts');
 
 /** The nth ask of `type` the machine made */
 const asked = (type: string, nth = 0) => {
@@ -47,7 +47,7 @@ function backupView() {
 
 const backup = (actor: ReturnType<typeof backupView>) => {
   const snapshot = actor.getSnapshot();
-  return { exporting: isExporting(snapshot), importing: isImporting(snapshot), backupResult: snapshot.context.backupResult };
+  return { exporting: snapshot.context.making.export, importing: snapshot.context.making.import, backupResult: snapshot.context.backupResult };
 };
 
 beforeEach(() => {
@@ -88,7 +88,7 @@ it.each([
     const abandoned = asked('EXECUTE_QUERY', 1);
     await replace(actor);
     expect(actor.getSnapshot().context).toMatchObject({ currentQuery: 'return "keep this editor"', queryResult: null });
-    expect(isRunningCode(actor.getSnapshot()), 'the query under way was given up').toBe(false);
+    expect(isRunningCode(actor.getSnapshot().context.making), 'the query under way was given up').toBe(false);
     await answer(abandoned, { result: 'late rows', executionTime: 2 });
     expect(actor.getSnapshot().context.queryResult).toBeNull();
     actor.stop();

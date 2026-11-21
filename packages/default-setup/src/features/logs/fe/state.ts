@@ -1,6 +1,6 @@
 import { setup, type ActorRefFrom, assign } from 'xstate';
 import { safeEvents, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import type { LogsSettings } from '#generated/types.ts';
 import type { LogsContext } from './contract.ts';
 import type { OutgoingLogsEvents } from '#features/logs/be/types.ts';
@@ -53,7 +53,7 @@ const logsState = setup({
       logs: () => [],
     }),
     sendClearLogsToBackend: () => {
-      sendToSystem(id, {
+      tell(id, {
         type: 'CLEAR_LOGS',
       });
     },

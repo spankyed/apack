@@ -15,7 +15,7 @@ import type { GitHubAccount } from './services/github.ts';
 // ── The child actors' events ─────────────────────────────────────────────────────────────────────
 // They live here rather than beside each child because this module is the contract leaf: codegen reads it as a
 // declared type, and `#generated/events` imports it — so anything it reaches must not import `#generated/events`
-// back, which every child does for `broadcastToSurface`. Each child imports its own two from here.
+// back, which every child does for `broadcast`. Each child imports its own two from here.
 // ── explorer ─────────────────────────────────────────────────────────
 export type IncomingExplorerEvents =
   /** The editor stopped showing the file: a change to it on disk is no one's to hear of */

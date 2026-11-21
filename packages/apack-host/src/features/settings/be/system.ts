@@ -1,6 +1,6 @@
 import type { Contract } from './contract.ts';
 import type { ApplicationHotkeys } from '@apackdev/sdk/types';
-import { broadcastToSurface, sendToSystem } from '../../../events.ts';
+import { broadcast, tell } from '../../../events.ts';
 import { assign, setup, fromCallback } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
 import { AskError } from '@apackdev/sdk/events';
@@ -101,27 +101,27 @@ export const answers = settingsSpec.answers({
  */
 function broadcastSettings(type: 'SETTINGS_LOADED' | 'SETTINGS_UPDATED' | 'SETTINGS_RESET'): void {
   const recovery = preferences().getRecovery();
-  if (recovery) { broadcastToSurface('settings', { type: 'SETTINGS_RECOVERY', recovery }); return; }
+  if (recovery) { broadcast('settings', { type: 'SETTINGS_RECOVERY', recovery }); return; }
   const snapshot = preferences().getSnapshot();
-  broadcastToSurface('settings', { type, snapshot });
+  broadcast('settings', { type, snapshot });
   const data = snapshot.values;
-  broadcastToSurface('application', { type: 'APPLICATION_HOTKEYS', hotkeys: appHotkeys(data) });
+  broadcast('application', { type: 'APPLICATION_HOTKEYS', hotkeys: appHotkeys(data) });
 }
 
 /** CLI path overrides, in the code surface's settings */
 /** Sends the settings surface the stored API keys (no values) and how they're protected */
 function sendSecrets(): void {
-  broadcastToSurface('settings', { type: 'SECRETS_UPDATED', secrets: hostService('secrets').list(), status: hostService('secrets').status() });
+  broadcast('settings', { type: 'SECRETS_UPDATED', secrets: hostService('secrets').list(), status: hostService('secrets').status() });
 }
 
 export const settingsSystem = setup({
   types: settingsSpec.types,
   actors: {
     settingsWriteListener: fromCallback(({ sendBack }) => {
-      const tell = (change: 'written' | 'replacing' | 'replaced') => sendBack({
+      const announce = (change: 'written' | 'replacing' | 'replaced') => sendBack({
         type: change === 'written' ? 'SETTINGS_WRITTEN' : change === 'replacing' ? 'DATA_REPLACING' : 'DATA_REPLACED',
       });
-      return preferences().onChange(tell);
+      return preferences().onChange(announce);
     }),
     // The host resets the whole app: stores, each pack's onInit and boot apply, migrations
     // Every way it ends is an outcome, so the machine leaves `resetting` by `onDone` whatever happened
@@ -143,7 +143,7 @@ export const settingsSystem = setup({
   actions: {
     ...answers.actions,
     ...settingsSpec.actions({
-    refuseUnauthorizedReset: () => broadcastToSurface('settings', {
+    refuseUnauthorizedReset: () => broadcast('settings', {
       type: 'APP_RESET_FAILED', error: 'Resetting the app requires host-issued settings administration.',
     }),
     sendSettingsStartupData: () => {
@@ -166,8 +166,8 @@ export const settingsSystem = setup({
           // Any pack's feature has settings: its system gets the changes too, and one it doesn't run is nobody's
           const settings = after ?? {};
           const to = feature as FeatureRef;
-          sendToSystem(to, { type: 'FEATURE_SETTINGS_UPDATED', settings, changes: detectAllArrayChanges(before ?? {}, settings) });
-          broadcastToSurface(to, { type: 'FEATURE_SETTINGS_UPDATED', settings });
+          tell(to, { type: 'FEATURE_SETTINGS_UPDATED', settings, changes: detectAllArrayChanges(before ?? {}, settings) });
+          broadcast(to, { type: 'FEATURE_SETTINGS_UPDATED', settings });
         }
         return now;
       },
@@ -184,8 +184,8 @@ export const settingsSystem = setup({
         for (const [feature, settings] of Object.entries(now)) {
           if (!splitRef(feature)) continue;
           const to = feature as FeatureRef;
-          sendToSystem(to, { type: 'FEATURE_SETTINGS_UPDATED', settings: settings ?? {}, changes: null });
-          broadcastToSurface(to, { type: 'FEATURE_SETTINGS_UPDATED', settings: settings ?? {} });
+          tell(to, { type: 'FEATURE_SETTINGS_UPDATED', settings: settings ?? {}, changes: null });
+          broadcast(to, { type: 'FEATURE_SETTINGS_UPDATED', settings: settings ?? {} });
         }
         return now;
       },
@@ -194,7 +194,7 @@ export const settingsSystem = setup({
     // The settings surface's view of all the settings, after a change it didn't make itself
     sendSettingsUpdate: () => broadcastSettings('SETTINGS_UPDATED'),
 
-    refuseResetWhileReplacing: () => broadcastToSurface('settings', {
+    refuseResetWhileReplacing: () => broadcast('settings', {
       type: 'APP_RESET_FAILED',
       error: 'App data is being replaced. Reset the app once it has finished.',
     }),
@@ -205,20 +205,20 @@ export const settingsSystem = setup({
     // The commands aren't told: a reset replaces every row, and the bus follows that fact with `SEND_STATE`,
     // which is what republishes them. Only the brain needs asking, having actors to restart rather than data.
     onResetComplete: () => {
-      sendToSystem({ role: 'brain' }, { type: 'RESTART_BRAIN' });
-      broadcastToSurface('settings', { type: 'APP_RESET_COMPLETE' });
+      tell({ role: 'brain' }, { type: 'RESTART_BRAIN' });
+      broadcast('settings', { type: 'APP_RESET_COMPLETE' });
     },
 
     /** A reset that never began: the user is told why, and nothing is logged as having gone wrong */
     refuseBusyReset: ({ event }) => {
       const { reason } = resetFailure(event, 'busy');
-      broadcastToSurface('settings', { type: 'APP_RESET_FAILED', error: reason });
+      broadcast('settings', { type: 'APP_RESET_FAILED', error: reason });
     },
 
     onResetFailed: ({ event }) => {
       const { error } = resetFailure(event, 'partial');
       logger.error('Reset app failed', { error });
-      broadcastToSurface('settings', { type: 'APP_RESET_FAILED', error: errorMessage(error) });
+      broadcast('settings', { type: 'APP_RESET_FAILED', error: errorMessage(error) });
     },
 
   }),

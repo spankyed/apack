@@ -17,10 +17,10 @@
         </Button>
         <Button
           @click="executeSearch"
-          :disabled="!localQuery || isSearching"
+          :disabled="!localQuery || library.data.isSearching"
           variant="primary"
         >
-          <span v-if="!isSearching">Search</span>
+          <span v-if="!library.data.isSearching">Search</span>
           <span v-else>Searching...</span>
         </Button>
       </div>
@@ -35,7 +35,7 @@
           placeholder="Enter your search query..."
           class="w-full px-3 py-2 bg-neutral-900 border border-neutral-700 rounded-md text-neutral-100 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none overflow-y-auto"
           style="field-sizing: content; max-height: 5lh;"
-          :disabled="isSearching"
+          :disabled="library.data.isSearching"
         />
       </div>
     </div>
@@ -44,21 +44,21 @@
     <div class="flex-1 overflow-y-auto">
       <div class="max-w-4xl mx-auto p-4">
         <!-- Empty State -->
-        <div v-if="testResults.length === 0 && !isSearching" class="text-center py-16 text-neutral-500">
+        <div v-if="library.data.testResults.length === 0 && !library.data.isSearching" class="text-center py-16 text-neutral-500">
           <Search class="w-12 h-12 mx-auto mb-3 opacity-50" />
           <p>Enter a query and click search to test this index</p>
         </div>
 
         <!-- Loading State -->
-        <div v-else-if="isSearching" class="flex items-center justify-center py-16">
+        <div v-else-if="library.data.isSearching" class="flex items-center justify-center py-16">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
         </div>
 
         <!-- Results -->
-        <div v-else-if="testResults.length > 0" class="space-y-4">
+        <div v-else-if="library.data.testResults.length > 0" class="space-y-4">
           <!-- Results Summary -->
           <div class="flex items-center justify-between text-sm text-neutral-400 pb-2 mb-4">
-            <span>Found {{ testResults.length }} {{ testResults.length === 1 ? 'chunk' : 'chunks' }} across {{ uniqueDocumentCount }} {{ uniqueDocumentCount === 1 ? 'document' : 'documents' }}</span>
+            <span>Found {{ library.data.testResults.length }} {{ library.data.testResults.length === 1 ? 'chunk' : 'chunks' }} across {{ uniqueDocumentCount }} {{ uniqueDocumentCount === 1 ? 'document' : 'documents' }}</span>
             <div class="flex items-center gap-2">
               <button
                 @click="expandAll"
@@ -205,23 +205,15 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState } from '@apackdev/sdk/fe'
 
-import { ref, computed, watch, nextTick, type Ref, type ComponentPublicInstance } from 'vue'
-import { useSelector } from '@xstate/vue'
-import { type LibraryEvents } from '../../state.ts'
+import { ref, computed, watch, nextTick, type ComponentPublicInstance } from 'vue'
 import { FileText, Search, Hash, Copy, ChevronRight } from 'lucide-vue-next'
 import Button from '@apackdev/ui/design/button'
 import type { IndexSearchResult } from '#generated/types.ts'
 import type { LibraryActor } from '../../state.ts'
 
-const actor = useSurface<LibraryActor>()
-
-const testQuery = useSelector(actor, (state) => state.context.testQuery) as Ref<string>
-const testResults = useSelector(actor, (state) => state.context.testResults) as Ref<IndexSearchResult[]>
-const isSearching = useSelector(actor, (state) => state.context.isSearching) as Ref<boolean>
-
-const send = (event: LibraryEvents) => actor.send(event)
+const { state: library, send } = useState<LibraryActor>()
 
 const localQuery = ref('')
 const expandedChunks = ref(new Set<string>())
@@ -235,7 +227,7 @@ const groupedResults = computed(() => {
   const grouped = new Map<string, IndexSearchResult[]>()
 
   // Group results by document
-  testResults.value.forEach((result: IndexSearchResult) => {
+  library.value.data.testResults.forEach((result: IndexSearchResult) => {
     const chunks = grouped.get(result.documentId) || []
     chunks.push(result)
     grouped.set(result.documentId, chunks)
@@ -253,7 +245,7 @@ const groupedResults = computed(() => {
 const uniqueDocumentCount = computed(() => groupedResults.value.size)
 
 // Sync with state machine
-watch(testQuery, (newVal) => localQuery.value = newVal)
+watch(() => library.value.data.testQuery, (newVal) => localQuery.value = newVal)
 watch(localQuery, (newVal) => send({ type: 'UPDATE_TEST_QUERY', query: newVal }))
 
 const handleEnterKey = (event: KeyboardEvent) => {
@@ -264,7 +256,7 @@ const handleEnterKey = (event: KeyboardEvent) => {
 }
 
 const executeSearch = () => {
-  if (localQuery.value && !isSearching.value) {
+  if (localQuery.value && !library.value.data.isSearching) {
     expandedChunks.value.clear()
     expandedDocuments.value.clear()
     send({ type: 'EXECUTE_TEST_SEARCH' })
@@ -272,7 +264,7 @@ const executeSearch = () => {
 }
 
 // Auto-expand documents when results come in
-watch(testResults, (newResults) => {
+watch(() => library.value.data.testResults, (newResults) => {
   if (newResults.length > 0) {
     truncatedTexts.value.clear() // Clear truncation tracking for new results
     groupedResults.value.forEach((_, docId) => expandedDocuments.value.add(docId))

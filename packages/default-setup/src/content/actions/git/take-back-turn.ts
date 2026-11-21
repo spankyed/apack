@@ -27,7 +27,7 @@ export async function action(params: Record<string, any>, services: Services) {
     return { success: false, reason: (error as Error)?.message };
   }
   // The windows read the repository again: the files changed with no file event for each
-  services.emitter.sendToSystem('default-setup/code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' });
+  services.emitter.tell('default-setup/code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' });
   if (artifactId) {
     const content = services.artifact.contentOf(artifactId as EntityId) as Record<string, any> | undefined;
     if (content?.turn) services.artifact.update(artifactId as EntityId, { content: { ...content, turn: { ...content.turn, takenBack: true } } });

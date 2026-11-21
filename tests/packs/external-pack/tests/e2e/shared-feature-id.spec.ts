@@ -28,7 +28,7 @@ test('this pack and default-setup each get their own notes surface', async ({ ap
 });
 
 // A spec names surfaces the way the pack it tests names them, so the short name is this pack's own
-// feature even when a dependency has one too — the same rule `emit` and `broadcastToSurface` follow.
+// feature even when a dependency has one too — the same rule `emit` and `broadcast` follow.
 test("the short name is this pack's own surface, not its dependency's", async ({ app, appPage }) => {
   await app.navigate('notes');
   await expect(appPage.getByTestId('fixture-notes-title')).toBeVisible();

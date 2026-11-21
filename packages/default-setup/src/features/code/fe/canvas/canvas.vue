@@ -22,10 +22,10 @@
     <!-- Always use FileEditor which now handles both regular files and diffs -->
     <FileEditor
       ref="fileEditorRef"
-      :open-files="openFiles"
-      :active-file-path="activeFilePath"
-      :base-directory="baseDirectory"
-      :tab-groups="tabGroups"
+      :open-files="code.data.openFiles"
+      :active-file-path="code.data.activeFilePath"
+      :base-directory="code.data.baseDirectory"
+      :tab-groups="code.data.tabGroups"
       :is-applying-hunk="isApplyingHunk"
       :applied-hunks="appliedHunks"
       @apply-hunk="applyHunk"
@@ -61,7 +61,7 @@
     />
 
     <!-- Status Bar -->
-    <div v-if="openFiles.length > 0" class="flex items-center justify-between px-4 py-1 text-xs border-t bg-neutral-800/80 border-neutral-800">
+    <div v-if="code.data.openFiles.length > 0" class="flex items-center justify-between px-4 py-1 text-xs border-t bg-neutral-800/80 border-neutral-800">
       <div class="flex items-center gap-4">
         <span v-if="activeFile" class="flex items-center gap-2 text-neutral-400">
           <component :is="getStatusIcon(activeFile)" class="w-3 h-3" />
@@ -100,10 +100,9 @@
 
 <script setup lang="ts">
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
-import { askUnderWay, useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDrag'
-import { useSelector } from '@xstate/vue'
 import { type CodeState, type OpenFile, setEditorSelectionGetter, isEditableDiff } from '../state.ts'
 import { GitCompare, FileCode, Terminal } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
@@ -111,7 +110,6 @@ import FileEditor from '#features/code/fe/canvas/FileEditor.vue'
 import QuickOpenPalette from '#features/code/fe/canvas/QuickOpenPalette.vue'
 import { reorderTabs } from '../utils/tab-management.ts'
 import { panelChild } from '../features/children.ts';
-import { HUNK } from '../features/commit/state.ts'
 
 const actor: CodeState = useSurface()
 const explorerActor = panelChild(actor, 'explorer')
@@ -122,35 +120,30 @@ const terminalActor = panelChild(actor, 'terminal')
 // Telling and saying so are one step, run once the toast is drawn: the machine drops exactly the failures told, so
 // none is told twice and one noted meanwhile is told by the next run
 const toast = ref<InstanceType<typeof ToastNotification>>()
-const terminalFailures = useSelector(terminalActor, (state) => state?.context.failures ?? [])
+const { state: terminals, send: sendTerminal } = useState(terminalActor)
 watchPostEffect(() => {
-  const told = terminalFailures.value
+  const told = terminals.value?.data.failures ?? []
   if (!toast.value || told.length === 0) return
   for (const failure of told) toast.value.error('Terminal error', failure.message)
-  terminalActor?.send({ type: 'terminal.FAILURES_TOLD', told })
+  sendTerminal({ type: 'terminal.FAILURES_TOLD', told })
 })
 const commitActor = panelChild(actor, 'commit')
 
-// State selectors
-const openFiles = useSelector(actor, (state) => state.context.openFiles)
-const activeFilePath = useSelector(actor, (state) => state.context.activeFilePath)
-const baseDirectory = useSelector(actor, (state) => state.context.baseDirectory)
-const tabGroups = useSelector(actor, (state) => state.context.tabGroups)
-const isApplyingHunk = useSelector(commitActor, (state) => state !== undefined && askUnderWay(state.context.asking, HUNK))
+const { state: code, send } = useState(actor)
+const { state: git, send: sendCommit } = useState(commitActor)
+const isApplyingHunk = computed(() => git.value !== undefined && git.value.data.making.hunk)
 // The pieces staged from the diff on screen: the commit panel keeps them per diff tab
-const appliedHunksByTab = useSelector(commitActor, (state) => state?.context.appliedHunks ?? {})
-const appliedHunks = computed(() => appliedHunksByTab.value[activeFilePath.value ?? ''] ?? [])
-const applyHunk = (path: string, staged: boolean, hunk: string) => commitActor?.send({ type: 'commit.APPLY_HUNK', path, staged, hunk })
-const resolveConflict = (path: string, strategy: 'ours' | 'theirs') => commitActor?.send({ type: 'commit.RESOLVE_CONFLICT', path, strategy })
+const appliedHunks = computed(() => git.value?.data.appliedHunks[code.value.data.activeFilePath ?? ''] ?? [])
+const applyHunk = (path: string, staged: boolean, hunk: string) => sendCommit({ type: 'commit.APPLY_HUNK', path, staged, hunk })
+const resolveConflict = (path: string, strategy: 'ours' | 'theirs') => sendCommit({ type: 'commit.RESOLVE_CONFLICT', path, strategy })
 
 const fileEditorRef = ref<InstanceType<typeof FileEditor>>()
-const pendingRevealLine = useSelector(actor, (state) => state.context.pendingRevealLine)
 
 // Reveal pending line in editor (called from @editor-file-ready, @editor-mount, and watch)
 const tryRevealLine = async () => {
-  const reveal = pendingRevealLine.value
+  const reveal = code.value.data.pendingRevealLine
   if (!reveal) return
-  if (reveal.filePath !== activeFilePath.value) return
+  if (reveal.filePath !== code.value.data.activeFilePath) return
   await nextTick()
 
   const ref = fileEditorRef.value
@@ -166,7 +159,7 @@ const tryRevealLine = async () => {
     monacoEditor.revealLineInCenter(reveal.line)
     monacoEditor.setPosition({ lineNumber: reveal.line, column: reveal.column })
     monacoEditor.focus()
-    actor.send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: null } })
+    send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: null } })
     return
   }
 
@@ -186,18 +179,18 @@ const tryRevealLine = async () => {
         tiptapEditor.chain().setTextSelection(targetPos).focus().scrollIntoView().run()
       }
     }
-    actor.send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: null } })
+    send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: null } })
     return
   }
 }
 
-watch(pendingRevealLine, () => {
+watch(() => code.value.data.pendingRevealLine, () => {
   tryRevealLine()
 })
 
 // Computed
 const activeFile = computed(() =>
-  openFiles.value.find(f => f.path === activeFilePath.value)
+  code.value.data.openFiles.find(f => f.path === code.value.data.activeFilePath)
 )
 const isActiveEditableDiff = computed(() =>
   !!activeFile.value && isEditableDiff(activeFile.value as OpenFile)
@@ -266,7 +259,7 @@ const refreshNotification = ref(false)
 let refreshTimeout: number | undefined
 
 // Watch for external file refreshes
-watch(openFiles, (newFiles, oldFiles) => {
+watch(() => code.value.data.openFiles, (newFiles, oldFiles) => {
   if (!oldFiles || !newFiles) return
 
   // Check if any file was refreshed (externallyModified cleared)
@@ -292,14 +285,14 @@ const showRefreshNotification = () => {
 
 // Event handlers
 const selectFile = (path: string) => {
-  actor.send({
+  send({
     type: 'UPDATE_STATE',
     updates: { activeFilePath: path }
   })
 }
 
-const killTerminal = (path: string) => actor.send({ type: 'KILL_TERMINAL', path })
-const moveToPanel = (path: string) => actor.send({ type: 'MOVE_TERMINAL_TO_PANEL', path })
+const killTerminal = (path: string) => send({ type: 'KILL_TERMINAL', path })
+const moveToPanel = (path: string) => send({ type: 'MOVE_TERMINAL_TO_PANEL', path })
 
 /**
  * Starts a new shell under this terminal, as the panel's menu does.
@@ -312,16 +305,16 @@ const moveToPanel = (path: string) => actor.send({ type: 'MOVE_TERMINAL_TO_PANEL
  * transcript of what came before, and re-opens the shell the terminal already had.
  */
 const restartTerminal = (path: string) => {
-  const file = openFiles.value.find(f => f.path === path) as any
+  const file = code.value.data.openFiles.find(f => f.path === path) as any
   if (!file?.isTerminal) return
-  terminalActor?.send({ type: 'terminal.RESTART', terminalId: file.terminalInfo.id })
+  sendTerminal({ type: 'terminal.RESTART', terminalId: file.terminalInfo.id })
 }
 
-const closeFile = (path: string) => actor.send({ type: 'CLOSE_TAB', path })
-const promotePreview = (path: string) => actor.send({ type: 'PROMOTE_PREVIEW_TAB', path })
+const closeFile = (path: string) => send({ type: 'CLOSE_TAB', path })
+const promotePreview = (path: string) => send({ type: 'PROMOTE_PREVIEW_TAB', path })
 
 const handleContentChange = (path: string, content: string) => {
-  const newOpenFiles = openFiles.value.map(f => {
+  const newOpenFiles = code.value.data.openFiles.map(f => {
     if (f.path !== path) return f
     if (!('originalContent' in f)) return { ...f, content, modified: true }
 
@@ -332,26 +325,26 @@ const handleContentChange = (path: string, content: string) => {
       return { ...f, content, originalContent: content, modified: false, _richTextBaselineSet: true }
     }
 
-    if (f.isPreview && isModified) actor.send({ type: 'PROMOTE_PREVIEW_TAB', path })
+    if (f.isPreview && isModified) send({ type: 'PROMOTE_PREVIEW_TAB', path })
     return { ...f, content, modified: isModified }
   })
 
-  actor.send({
+  send({
     type: 'UPDATE_STATE',
     updates: { openFiles: newOpenFiles }
   })
 }
 
 const handleReorder = (fromIndex: number, toIndex: number) => {
-  const reorderedFiles = reorderTabs(openFiles.value, fromIndex, toIndex)
+  const reorderedFiles = reorderTabs(code.value.data.openFiles, fromIndex, toIndex)
 
-  actor.send({
+  send({
     type: 'UPDATE_STATE',
     updates: { openFiles: reorderedFiles }
   })
 }
 
-const saveFile = () => actor.send({ type: 'SAVE_ACTIVE_FILE' })
+const saveFile = () => send({ type: 'SAVE_ACTIVE_FILE' })
 
 const loadExternalChanges = () => {
   if (activeFile.value && activeFile.value.pendingSaveConflict) {
@@ -405,74 +398,74 @@ const getStatusText = (file: any) => {
 }
 
 const revealInExplorer = (path: string) => {
-  actor.send({ type: 'SELECT_PANEL', panel: 'explorer' })
+  send({ type: 'SELECT_PANEL', panel: 'explorer' })
   explorerActor?.send({ type: 'explorer.REVEAL_IN_TREE', path })
 }
 
 const pinTab = (path: string) => {
-  actor.send({ type: 'PIN_TAB', path })
+  send({ type: 'PIN_TAB', path })
 }
 
 const unpinTab = (path: string) => {
-  actor.send({ type: 'UNPIN_TAB', path })
+  send({ type: 'UNPIN_TAB', path })
 }
 
 const pinTabAt = (path: string, targetPath: string, side: 'left' | 'right') => {
-  actor.send({ type: 'PIN_TAB_AT', path, targetPath, side })
+  send({ type: 'PIN_TAB_AT', path, targetPath, side })
 }
 
 const unpinTabAt = (path: string, targetPath: string, side: 'left' | 'right') => {
-  actor.send({ type: 'UNPIN_TAB_AT', path, targetPath, side })
+  send({ type: 'UNPIN_TAB_AT', path, targetPath, side })
 }
 
 // Tab group handlers
 const createGroup = (name: string, tabPaths: string[]) => {
-  actor.send({ type: 'CREATE_GROUP', name, tabPaths })
+  send({ type: 'CREATE_GROUP', name, tabPaths })
 }
 
 const renameGroup = (groupId: string, name: string) => {
-  actor.send({ type: 'RENAME_GROUP', groupId, name })
+  send({ type: 'RENAME_GROUP', groupId, name })
 }
 
 const renameTerminal = (path: string, customTitle: string) => {
   const terminalId = path.replace('terminal:', '')
-  terminalActor?.send({ type: 'terminal.RENAME', terminalId, customTitle })
+  sendTerminal({ type: 'terminal.RENAME', terminalId, customTitle })
 }
 
 const changeGroupColor = (groupId: string, color: string) => {
-  actor.send({ type: 'CHANGE_GROUP_COLOR', groupId, color: color as any })
+  send({ type: 'CHANGE_GROUP_COLOR', groupId, color: color as any })
 }
 
 const deleteGroup = (groupId: string) => {
-  actor.send({ type: 'DELETE_GROUP', groupId, closeTabsInGroup: false })
+  send({ type: 'DELETE_GROUP', groupId, closeTabsInGroup: false })
 }
 
 const toggleGroupCollapse = (groupId: string) => {
-  actor.send({ type: 'TOGGLE_GROUP_COLLAPSE', groupId })
+  send({ type: 'TOGGLE_GROUP_COLLAPSE', groupId })
 }
 
 const addTabToGroup = (path: string, groupId: string) => {
-  actor.send({ type: 'ADD_TAB_TO_GROUP', path, groupId })
+  send({ type: 'ADD_TAB_TO_GROUP', path, groupId })
 }
 
 const removeTabFromGroup = (path: string) => {
-  actor.send({ type: 'REMOVE_TAB_FROM_GROUP', path })
+  send({ type: 'REMOVE_TAB_FROM_GROUP', path })
 }
 
 const ungroupAll = (groupId: string) => {
-  actor.send({ type: 'DELETE_GROUP', groupId, closeTabsInGroup: false })
+  send({ type: 'DELETE_GROUP', groupId, closeTabsInGroup: false })
 }
 
 const closeAllInGroup = (groupId: string) => {
-  actor.send({ type: 'DELETE_GROUP', groupId, closeTabsInGroup: true })
+  send({ type: 'DELETE_GROUP', groupId, closeTabsInGroup: true })
 }
 
 const pinGroup = (groupId: string) => {
-  actor.send({ type: 'PIN_GROUP', groupId })
+  send({ type: 'PIN_GROUP', groupId })
 }
 
 const unpinGroup = (groupId: string) => {
-  actor.send({ type: 'UNPIN_GROUP', groupId })
+  send({ type: 'UNPIN_GROUP', groupId })
 }
 
 // Register editor selection getter so the state machine can read Monaco selection for search prefill

@@ -108,10 +108,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
-import { useSelector } from '@xstate/vue'
 
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
 import TrackedContextMenuRoot from '@apackdev/ui/design/TrackedContextMenuRoot'
@@ -148,7 +147,8 @@ const codeActor: CodeState = useSurface()
 const terminalActor = panelChild(codeActor, 'terminal')!
 useStatusSeen(terminalActor, () => props.terminalInfo.id)
 // Whether this terminal's bell is flashing now, which the state starts and ends
-const bellFlashing = useSelector(terminalActor, (state) => state.context.bells[props.terminalInfo.id] === 'flashing')
+const { state: terminals, send } = useState(terminalActor)
+const bellFlashing = computed(() => terminals.value.data.bells[props.terminalInfo.id] === 'flashing')
 
 /* --------------------------------------------------------------------------
  * Refs --------------------------------------------------------------------- */
@@ -236,7 +236,7 @@ const onDrop = (event: DragEvent) => {
 const clearTerminal = () => attachment?.clear()
 
 /** The person is looking at this terminal, so what was waiting for them to has been seen */
-const seen = () => terminalActor.send({ type: 'terminal.SEEN', terminalId: props.terminalInfo.id })
+const seen = () => send({ type: 'terminal.SEEN', terminalId: props.terminalInfo.id })
 
 /* --------------------------------------------------------------------------
  * Lifecycle ---------------------------------------------------------------- */
@@ -254,7 +254,7 @@ onMounted(() => {
 
   attachment = terminalPool.attach(props.terminalInfo.id, container.value, {
     onResize: ({ cols, rows, cellWidth, cellHeight }) => {
-      terminalActor.send({ type: 'terminal.RESIZE', terminalId: props.terminalInfo.id, cols, rows, cellWidth, cellHeight })
+      send({ type: 'terminal.RESIZE', terminalId: props.terminalInfo.id, cols, rows, cellWidth, cellHeight })
     },
     onSelectionChange: has => { hasSelection.value = has },
     onFollowingChange: following => { isFollowingOutput.value = following },
@@ -288,7 +288,7 @@ onBeforeUnmount(() => {
   // The backend holds the grid to the smallest fit of the windows showing it, so a window that stops
   // showing one says so. Only when this host is what let go — during a remount the new host has already
   // attached (F1), and this would drop the fit it just recorded.
-  if (letGo && attachment) terminalActor.send({ type: 'terminal.DETACHED', terminalId: attachment.terminalId })
+  if (letGo && attachment) send({ type: 'terminal.DETACHED', terminalId: attachment.terminalId })
   attachment = null
 })
 

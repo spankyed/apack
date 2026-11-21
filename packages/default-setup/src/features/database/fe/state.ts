@@ -1,12 +1,11 @@
-import { assign, setup, type ActorRefFrom, type DoneActorEvent } from 'xstate'
+import { assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb from '@apackdev/sdk/fe'
-import { askUnderWay, contextMenu, enqueueAsks, noAsks, type AsksUnderWay, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
+import { contextMenu, makes, type MadeEvent, type Making, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import { targetIs, TRAIL_CLICK, type TrailClickEvent } from '@apackdev/sdk/fe'
-import type { AskOutcome } from '@apackdev/sdk/events'
 import type { DatabaseSettings } from '#generated/types.ts'
 import type { DatabaseContext, DatabaseInboxEvent } from './contract.ts'
-import type { DatabaseAsks, DatabaseSchemaInfo, OutgoingDatabaseEvents } from '#features/database/be/types.ts'
+import type { DatabaseSchemaInfo, OutgoingDatabaseEvents } from '#features/database/be/types.ts'
 import { fromAsk } from '#generated/events.ts'
 import { fromView } from '#generated/fe.ts'
 import { attributeQueryTemplate, entityQueryTemplate, exampleQuery, relationQueryTemplate } from './constants.ts'
@@ -19,35 +18,34 @@ export const id = 'database' as const;
 export type DatabaseState = ActorRefFrom<typeof databaseState>
 
 /**
- * The asks this window has under way, each a child of the surface under the id here for as long as it is, and
- * recorded in the context's `asking`: an ask of one kind replaces the one before it, and its outcome arrives as
- * `xstate.done.actor.<id>`. They are children rather than states because the shell reads a surface's breadcrumbs off
- * its top-level states, which the explorer and the backup view are, and an ask outlives a move between the two.
+ * The asks this window makes of the database system, recorded in the context's `making` while each is under way: an
+ * ask of one kind replaces the one before it, and its outcome arrives as `made.<name>`. They are children rather
+ * than states because the shell reads a surface's breadcrumbs off its top-level states, which the explorer and the
+ * backup view are, and an ask outlives a move between the two.
  */
-const QUERY = 'query' as const
-const TRANSACTION = 'transaction' as const
-const AI_QUERY = 'aiQuery' as const
-const FLOW_RUNS = 'flowRuns' as const
-const FLOW_EVENTS = 'flowEvents' as const
-const BACKUP_INFO = 'backupInfo' as const
-const EXPORT = 'export' as const
-const IMPORT = 'import' as const
-const RESET = 'reset' as const
-/** A node's details are asked for per node, several at once: each under this prefix and the node's id */
-const NODE_DETAILS = 'nodeDetails' as const
+const made = makes(({ one, each }) => ({
+  query: one(fromAsk('database', 'EXECUTE_QUERY')),
+  transaction: one(fromAsk('database', 'EXECUTE_TRANSACTION')),
+  aiQuery: one(fromAsk('database', 'GENERATE_AI_QUERY')),
+  flowRuns: one(fromAsk('database', 'GET_FLOW_RUNS')),
+  flowEvents: one(fromAsk('database', 'GET_FLOW_EVENTS')),
+  backupInfo: one(fromAsk('database', 'GET_BACKUP_INFO')),
+  export: one(fromAsk('database', 'EXPORT_DATABASE')),
+  import: one(fromAsk('database', 'IMPORT_DATABASE')),
+  reset: one(fromAsk('database', 'RESET_DATABASE')),
+  /** A node's details are asked for per node, several at once: by the node's id */
+  nodeDetails: each(fromAsk('database', 'GET_NODE_DETAILS')),
+}))
 
 /** The asks whose answers name rows: given up when the data is replaced */
-const ROW_ASKS = [QUERY, TRANSACTION, FLOW_RUNS, FLOW_EVENTS] as const
+const ROW_ASKS = ['query', 'transaction', 'flowRuns', 'flowEvents'] as const
 
-/** A surface's snapshot, as far as telling which asks are under way needs it */
-type WithAsks = { context: { asking: AsksUnderWay } }
+type DatabaseMaking = Making<typeof made>
 
 /** Whether a query or a transaction is running */
-export const isRunningCode = ({ context }: WithAsks): boolean => askUnderWay(context.asking, QUERY, TRANSACTION)
+export const isRunningCode = (making: DatabaseMaking): boolean => making.query || making.transaction
 /** Whether the run history is being read: the flow runs, or a page of one's events */
-export const isLoadingRuns = ({ context }: WithAsks): boolean => askUnderWay(context.asking, FLOW_RUNS, FLOW_EVENTS)
-export const isExporting = ({ context }: WithAsks): boolean => askUnderWay(context.asking, EXPORT)
-export const isImporting = ({ context }: WithAsks): boolean => askUnderWay(context.asking, IMPORT)
+export const isLoadingRuns = (making: DatabaseMaking): boolean => making.flowRuns || making.flowEvents
 
 /** Database replacement invalidates row results and outstanding requests, not the query editor or preferences. */
 function emptyDatabaseResults() {
@@ -60,21 +58,6 @@ function emptyDatabaseResults() {
     runPagination: { offset: 0, limit: 50, hasMore: false },
   };
 }
-
-/** How ask `K` ended, as the event its child `Id` is done with */
-type AskDone<K extends keyof DatabaseAsks, Id extends string> = DoneActorEvent<AskOutcome<DatabaseAsks[K]>, Id>
-
-type AskDoneEvent =
-  | AskDone<'EXECUTE_QUERY', typeof QUERY>
-  | AskDone<'EXECUTE_TRANSACTION', typeof TRANSACTION>
-  | AskDone<'GENERATE_AI_QUERY', typeof AI_QUERY>
-  | AskDone<'GET_FLOW_RUNS', typeof FLOW_RUNS>
-  | AskDone<'GET_FLOW_EVENTS', typeof FLOW_EVENTS>
-  | AskDone<'GET_NODE_DETAILS', `${typeof NODE_DETAILS}.${string}`>
-  | AskDone<'GET_BACKUP_INFO', typeof BACKUP_INFO>
-  | AskDone<'EXPORT_DATABASE', typeof EXPORT>
-  | AskDone<'IMPORT_DATABASE', typeof IMPORT>
-  | AskDone<'RESET_DATABASE', typeof RESET>
 
 /**
  * `OutgoingDatabaseEvents` and nothing of its own: a union of a member with its own copy narrows to *both*, so a
@@ -107,10 +90,8 @@ type UIEvent =
   | { type: 'BACKUP.READ_INFO'; path: string }
   | TrailClickEvent
 
-export type DatabaseEvents = UIEvent | SystemEvent | AskDoneEvent
+export type DatabaseEvents = UIEvent | SystemEvent | MadeEvent<typeof made>
 
-const isNodeDetailsDone = (event: DatabaseEvents): event is AskDone<'GET_NODE_DETAILS', `${typeof NODE_DETAILS}.${string}`> =>
-  event.type.startsWith(`xstate.done.actor.${NODE_DETAILS}.`)
 const typeOf = safeEvents<DatabaseEvents>()
 
 const generateQueryForSchemaItem = (type: 'entity' | 'attribute' | 'relation', value: string): string => {
@@ -130,16 +111,7 @@ const databaseState = setup({
   actors: {
     schemaView: fromView('database', 'schema', (update) =>
       (update.ok ? { type: 'SCHEMA.READ' as const, schema: update.value } : { type: 'SCHEMA.FAILED' as const, error: update.error })),
-    executeQuery: fromAsk('database', 'EXECUTE_QUERY'),
-    executeTransaction: fromAsk('database', 'EXECUTE_TRANSACTION'),
-    generateAiQuery: fromAsk('database', 'GENERATE_AI_QUERY'),
-    getFlowRuns: fromAsk('database', 'GET_FLOW_RUNS'),
-    getFlowEvents: fromAsk('database', 'GET_FLOW_EVENTS'),
-    getNodeDetails: fromAsk('database', 'GET_NODE_DETAILS'),
-    getBackupInfo: fromAsk('database', 'GET_BACKUP_INFO'),
-    exportDatabase: fromAsk('database', 'EXPORT_DATABASE'),
-    importDatabase: fromAsk('database', 'IMPORT_DATABASE'),
-    resetDatabase: fromAsk('database', 'RESET_DATABASE'),
+    ...made.actors,
   },
   types: {
     context: {} as DatabaseContext,
@@ -148,29 +120,29 @@ const databaseState = setup({
   guards: {
     targetIs,
     /** An ask that ended with its answer */
-    answered: ({ event }) => 'output' in event && event.output.ok,
+    answered: ({ event }) => 'outcome' in event && event.outcome.ok,
     /** The flow runs were read and there is one to select */
     listedFlowRuns: ({ event }) => {
-      const { output } = typeOf('xstate.done.actor.flowRuns', event);
-      return output.ok && output.value.flows.length > 0;
+      const { outcome } = typeOf('made.flowRuns', event);
+      return outcome.ok && outcome.value.flows.length > 0;
     },
     /** A transaction deleted a row while a query is in the editor to run again */
     deletedRow: ({ context, event }) => {
-      const { output } = typeOf('xstate.done.actor.transaction', event);
-      return output.ok && Boolean(output.value.result?.deleted) && Boolean(context.currentQuery);
+      const { outcome } = typeOf('made.transaction', event);
+      return outcome.ok && Boolean(outcome.value.result?.deleted) && Boolean(context.currentQuery);
     },
   },
   actions: {
     /* ── the schema, followed from the shell's start, in a delivery naming the surface ── */
-    followSchema: enqueueAsks(({ enqueue }) => {
+    followSchema: enqueueActions(({ enqueue }) => {
       enqueue.stopChild(SCHEMA_VIEW);
       enqueue.spawnChild('schemaView', { id: SCHEMA_VIEW });
     }),
     setSchema: assign(({ event }) => ({ schema: typeOf('SCHEMA.READ', event).schema })),
     setSchemaError: assign(({ event }) => ({ error: typeOf('SCHEMA.FAILED', event).error })),
     /** Any window replaced the data: what this one shows names rows that may be gone, and so would what it asked for */
-    dropReplacedResults: enqueueAsks(({ enqueue }) => {
-      for (const ask of ROW_ASKS) enqueue.stopChild(ask);
+    dropReplacedResults: enqueueActions(({ context, enqueue }) => {
+      for (const ask of ROW_ASKS) made.drop(enqueue, context, ask);
       enqueue.assign(emptyDatabaseResults());
     }),
 
@@ -188,21 +160,19 @@ const databaseState = setup({
      * under way, so the result shown is the last one asked for. Deleting a row is a transaction that asks for the
      * current query again once it is done, which is why the two are not one ask.
      */
-    executeQuery: enqueueAsks(({ context, event, enqueue }) => {
+    executeQuery: enqueueActions(({ context, event, enqueue }) => {
       // The query typed, or the current one again after a deletion
       const code = event.type === 'QUERY.EXECUTE' ? event.code : context.currentQuery;
-      enqueue.stopChild(QUERY);
       enqueue.assign({ error: null });
-      enqueue.spawnChild('executeQuery', { id: QUERY, input: { code } });
+      made.make(enqueue, 'query', { code });
     }),
 
-    executeTransaction: enqueueAsks(({ event, enqueue }) => {
+    executeTransaction: enqueueActions(({ event, enqueue }) => {
       const code = event.type === 'ENTITY.DELETE'
         ? `write('${event.entityId}').destroy(); return { deleted: '${event.entityId}' };`
         : typeOf('TRANSACTION.EXECUTE', event).code;
-      enqueue.stopChild(TRANSACTION);
       enqueue.assign({ error: null });
-      enqueue.spawnChild('executeTransaction', { id: TRANSACTION, input: { code } });
+      made.make(enqueue, 'transaction', { code });
     }),
 
     updateQuery: assign(({ event }) => {
@@ -210,22 +180,20 @@ const databaseState = setup({
       return { currentQuery: ev.code };
     }),
 
-    queryDone: enqueueAsks(({ event, enqueue }) => {
-      const { output } = typeOf('xstate.done.actor.query', event);
-      enqueue.stopChild(QUERY);
-      enqueue.assign(output.ok
-        ? { queryResult: output.value.result, executionTime: output.value.executionTime, error: null }
-        : { error: output.failure.message });
+    queryDone: enqueueActions(({ event, enqueue }) => {
+      const { outcome } = typeOf('made.query', event);
+      enqueue.assign(outcome.ok
+        ? { queryResult: outcome.value.result, executionTime: outcome.value.executionTime, error: null }
+        : { error: outcome.failure.message });
     }),
 
-    transactionDone: enqueueAsks(({ event, enqueue }) => {
-      const { output } = typeOf('xstate.done.actor.transaction', event);
-      enqueue.stopChild(TRANSACTION);
-      if (!output.ok) {
-        enqueue.assign({ error: output.failure.message });
+    transactionDone: enqueueActions(({ event, enqueue }) => {
+      const { outcome } = typeOf('made.transaction', event);
+      if (!outcome.ok) {
+        enqueue.assign({ error: outcome.failure.message });
         return;
       }
-      enqueue.assign({ queryResult: output.value.result, executionTime: output.value.executionTime, error: null });
+      enqueue.assign({ queryResult: outcome.value.result, executionTime: outcome.value.executionTime, error: null });
     }),
 
     toggleMode: assign(({ context }) => {
@@ -237,21 +205,19 @@ const databaseState = setup({
 
     /* ── ai query ───────────────────────────────── */
     /** Answered as soon as the flow that writes the query has started: the query arrives later, from that flow */
-    generateAiQuery: enqueueAsks(({ event, enqueue }) => {
+    generateAiQuery: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('AI_QUERY.GENERATE', event);
       if (!ev.prompt?.trim()) {
         console.error('Invalid prompt provided for AI query generation');
         return;
       }
-      enqueue.stopChild(AI_QUERY);
-      enqueue.spawnChild('generateAiQuery', { id: AI_QUERY, input: { prompt: ev.prompt.trim(), mode: ev.mode } });
+      made.make(enqueue, 'aiQuery', { prompt: ev.prompt.trim(), mode: ev.mode });
     }),
 
     /** Generating a query was refused as it was asked: said where a query's error is */
-    aiQueryAsked: enqueueAsks(({ event, enqueue }) => {
-      const { output } = typeOf('xstate.done.actor.aiQuery', event);
-      enqueue.stopChild(AI_QUERY);
-      if (!output.ok) enqueue.assign({ error: output.failure.message, isAiQueryLoading: false });
+    aiQueryAsked: enqueueActions(({ event, enqueue }) => {
+      const { outcome } = typeOf('made.aiQuery', event);
+      if (!outcome.ok) enqueue.assign({ error: outcome.failure.message, isAiQueryLoading: false });
     }),
 
     /** Generating a query failed in the flow it started. It owns `isAiQueryLoading`, which no query's answer touches */
@@ -290,25 +256,25 @@ const databaseState = setup({
     /* ── run history viewer actions ──────────────────────── */
     toggleViewMode: assign(({ context }) => ({ viewMode: context.viewMode === 'database' ? 'runs' as const : 'database' as const })),
 
-    requestFlowRuns: enqueueAsks(({ enqueue }) => {
-      enqueue.stopChild(FLOW_RUNS);
-      enqueue.spawnChild('getFlowRuns', { id: FLOW_RUNS, input: {} });
+    requestFlowRuns: enqueueActions(({ enqueue }) => {
+      made.make(enqueue, 'flowRuns', {});
     }),
 
     /** The page of the current flow's events at the offset the context has reached, in place of any being read */
-    requestFlowEvents: enqueueAsks(({ context, enqueue }) => {
-      enqueue.stopChild(FLOW_EVENTS);
-      if (!context.currentFlowId) return;
+    requestFlowEvents: enqueueActions(({ context, enqueue }) => {
+      if (!context.currentFlowId) {
+        made.drop(enqueue, context, 'flowEvents');
+        return;
+      }
       const { offset, limit } = context.runPagination;
-      enqueue.spawnChild('getFlowEvents', { id: FLOW_EVENTS, input: { flowId: context.currentFlowId, offset, limit } });
+      made.make(enqueue, 'flowEvents', { flowId: context.currentFlowId, offset, limit });
     }),
 
-    flowRunsDone: enqueueAsks(({ context, event, enqueue }) => {
-      const { output } = typeOf('xstate.done.actor.flowRuns', event);
-      enqueue.stopChild(FLOW_RUNS);
-      if (!output.ok) return;
+    flowRunsDone: enqueueActions(({ context, event, enqueue }) => {
+      const { outcome } = typeOf('made.flowRuns', event);
+      if (!outcome.ok) return;
       // Newest first, as the run history lists them
-      const { flows } = output.value;
+      const { flows } = outcome.value;
       enqueue.assign({ flowRuns: flows });
       // The first flow is selected, for its first page to be read
       if (flows.length > 0) enqueue.assign({ currentFlowId: flows[0].id, runPagination: { ...context.runPagination, offset: 0 } });
@@ -321,19 +287,18 @@ const databaseState = setup({
     })),
 
     /** One page at a time: a page asked for while another is coming would move the offset the list is built from */
-    loadMoreEvents: enqueueAsks(({ context, enqueue }) => {
-      if (!context.currentFlowId || !context.runPagination.hasMore || askUnderWay(context.asking, FLOW_EVENTS)) return;
+    loadMoreEvents: enqueueActions(({ context, enqueue }) => {
+      if (!context.currentFlowId || !context.runPagination.hasMore || context.making.flowEvents) return;
       const { limit } = context.runPagination;
       const offset = context.runPagination.offset + limit;
       enqueue.assign({ runPagination: { ...context.runPagination, offset } });
-      enqueue.spawnChild('getFlowEvents', { id: FLOW_EVENTS, input: { flowId: context.currentFlowId, offset, limit } });
+      made.make(enqueue, 'flowEvents', { flowId: context.currentFlowId, offset, limit });
     }),
 
-    flowEventsDone: enqueueAsks(({ context, event, enqueue }) => {
-      const { output } = typeOf('xstate.done.actor.flowEvents', event);
-      enqueue.stopChild(FLOW_EVENTS);
-      if (!output.ok) return;
-      const page = output.value;
+    flowEventsDone: enqueueActions(({ context, event, enqueue }) => {
+      const { outcome } = typeOf('made.flowEvents', event);
+      if (!outcome.ok) return;
+      const page = outcome.value;
       enqueue.assign({
         // The page is placed by the offset it is for: the first replaces the list, a later one adds to it.
         // A later page of a live run repeats what an event arriving since shifted onto it: pages are newest first
@@ -345,7 +310,7 @@ const databaseState = setup({
       });
     }),
 
-    expandNode: enqueueAsks(({ event, context, enqueue }) => {
+    expandNode: enqueueActions(({ event, context, enqueue }) => {
       const ev = typeOf('RUNS.EXPAND_NODE', event);
       const newExpanded = new Set(context.expandedNodes);
 
@@ -354,9 +319,8 @@ const databaseState = setup({
       } else {
         newExpanded.add(ev.nodeId);
         // Its details are asked for unless they are held or already being read
-        const ask = `${NODE_DETAILS}.${ev.nodeId}` as const;
-        if (!context.nodeDetails.has(ev.nodeId) && !askUnderWay(context.asking, ask)) {
-          enqueue.spawnChild('getNodeDetails', { id: ask, input: { nodeId: ev.nodeId } });
+        if (!context.nodeDetails.has(ev.nodeId) && !(ev.nodeId in context.making.nodeDetails)) {
+          made.make(enqueue, 'nodeDetails', ev.nodeId, { nodeId: ev.nodeId });
         }
       }
 
@@ -365,55 +329,47 @@ const databaseState = setup({
       });
     }),
 
-    nodeDetailsDone: enqueueAsks(({ event, context, enqueue }) => {
-      if (!isNodeDetailsDone(event)) return;
-      const { output, actorId } = event;
-      enqueue.stopChild(actorId);
-      if (!output.ok || !output.value.details) return;
+    nodeDetailsDone: enqueueActions(({ event, context, enqueue }) => {
+      const { outcome } = typeOf('made.nodeDetails', event);
+      if (!outcome.ok || !outcome.value.details) return;
       const newDetails = new Map(context.nodeDetails);
-      newDetails.set(output.value.nodeId, output.value.details);
+      newDetails.set(outcome.value.nodeId, outcome.value.details);
       enqueue.assign({ nodeDetails: newDetails });
     }),
 
     /* ── backup actions ─────────────────────────────────── */
-    requestBackupInfo: enqueueAsks(({ event, enqueue }) => {
-      enqueue.stopChild(BACKUP_INFO);
-      enqueue.spawnChild('getBackupInfo', { id: BACKUP_INFO, input: { path: typeOf('BACKUP.READ_INFO', event).path } });
+    requestBackupInfo: enqueueActions(({ event, enqueue }) => {
+      made.make(enqueue, 'backupInfo', { path: typeOf('BACKUP.READ_INFO', event).path });
     }),
 
-    backupInfoDone: enqueueAsks(({ event, enqueue }) => {
-      const { output } = typeOf('xstate.done.actor.backupInfo', event);
-      enqueue.stopChild(BACKUP_INFO);
-      if (output.ok) enqueue.assign({ backupInfo: output.value.info });
+    backupInfoDone: enqueueActions(({ event, enqueue }) => {
+      const { outcome } = typeOf('made.backupInfo', event);
+      if (outcome.ok) enqueue.assign({ backupInfo: outcome.value.info });
     }),
 
-    exportBackup: enqueueAsks(({ event, enqueue }) => {
+    exportBackup: enqueueActions(({ event, enqueue }) => {
       const { path, name, databases } = typeOf('BACKUP.EXPORT', event);
-      enqueue.stopChild(EXPORT);
-      enqueue.spawnChild('exportDatabase', { id: EXPORT, input: { path, name, databases } });
+      made.make(enqueue, 'export', { path, name, databases });
     }),
 
-    importBackup: enqueueAsks(({ event, enqueue }) => {
+    importBackup: enqueueActions(({ event, enqueue }) => {
       const { path, skipUnknownDatabases } = typeOf('BACKUP.IMPORT', event);
-      enqueue.stopChild(IMPORT);
-      enqueue.spawnChild('importDatabase', { id: IMPORT, input: { path, skipUnknownDatabases } });
+      made.make(enqueue, 'import', { path, skipUnknownDatabases });
     }),
 
-    exportDone: enqueueAsks(({ event, enqueue }) => {
-      const { output } = typeOf('xstate.done.actor.export', event);
-      enqueue.stopChild(EXPORT);
-      enqueue.assign({ backupResult: { operation: 'export' as const, error: output.ok ? undefined : output.failure.message } });
+    exportDone: enqueueActions(({ event, enqueue }) => {
+      const { outcome } = typeOf('made.export', event);
+      enqueue.assign({ backupResult: { operation: 'export' as const, error: outcome.ok ? undefined : outcome.failure.message } });
     }),
 
-    importDone: enqueueAsks(({ event, enqueue }) => {
-      const { output } = typeOf('xstate.done.actor.import', event);
-      enqueue.stopChild(IMPORT);
+    importDone: enqueueActions(({ event, enqueue }) => {
+      const { outcome } = typeOf('made.import', event);
       // An import that was done replaced the data, which `dropReplacedResults` has answered before this
-      if (output.ok) {
-        enqueue.assign({ backupResult: { operation: 'import' as const, error: undefined, message: output.value.message } });
+      if (outcome.ok) {
+        enqueue.assign({ backupResult: { operation: 'import' as const, error: undefined, message: outcome.value.message } });
         return;
       }
-      const { failure } = output;
+      const { failure } = outcome;
       enqueue.assign({
         backupResult: {
           operation: 'import' as const,
@@ -424,16 +380,14 @@ const databaseState = setup({
     }),
 
     /* ── reset database actions ─────────────────────────── */
-    resetDatabase: enqueueAsks(({ enqueue }) => {
-      enqueue.stopChild(RESET);
-      enqueue.spawnChild('resetDatabase', { id: RESET, input: {} });
+    resetDatabase: enqueueActions(({ enqueue }) => {
+      made.make(enqueue, 'reset', {});
     }),
 
-    resetDone: enqueueAsks(({ event, enqueue }) => {
-      const { output } = typeOf('xstate.done.actor.reset', event);
-      enqueue.stopChild(RESET);
+    resetDone: enqueueActions(({ event, enqueue }) => {
+      const { outcome } = typeOf('made.reset', event);
       // A reset that was done replaced the data, which `dropReplacedResults` has answered before this
-      if (!output.ok) enqueue.assign({ error: `Reset failed: ${output.failure.message}` });
+      if (!outcome.ok) enqueue.assign({ error: `Reset failed: ${outcome.failure.message}` });
     }),
   },
 }).createMachine({
@@ -441,7 +395,7 @@ const databaseState = setup({
   initial: 'explorer',
   context: () => ({
     ...emptyDatabaseResults(),
-    asking: noAsks(),
+    making: made.none(),
     schema: {
       entities: [],
       attributes: [],
@@ -469,27 +423,28 @@ const databaseState = setup({
 AI_QUERY_LOADING: { actions: 'setAiQueryLoading' },
     AI_QUERY_GENERATED: { actions: 'setAiQueryResult' },
     FEATURE_SETTINGS_UPDATED: { actions: 'setDatabaseSettings' },
+    [made.done]: { actions: made.settle() },
     // How each ask this window made ended, whichever view it has open by then
-    'xstate.done.actor.query': { actions: 'queryDone' },
-    'xstate.done.actor.transaction': [
+    'made.query': { actions: 'queryDone' },
+    'made.transaction': [
       // A row was deleted: the current query is run again, to show what is left
       { guard: 'deletedRow', actions: ['transactionDone', 'executeQuery'] },
       { actions: 'transactionDone' },
     ],
-    'xstate.done.actor.aiQuery': { actions: 'aiQueryAsked' },
-    'xstate.done.actor.flowRuns': [
+    'made.aiQuery': { actions: 'aiQueryAsked' },
+    'made.flowRuns': [
       { guard: 'listedFlowRuns', actions: ['flowRunsDone', 'requestFlowEvents'] },
       { actions: 'flowRunsDone' },
     ],
-    'xstate.done.actor.flowEvents': { actions: 'flowEventsDone' },
-    'xstate.done.actor.nodeDetails.*': { actions: 'nodeDetailsDone' },
-    'xstate.done.actor.backupInfo': { actions: 'backupInfoDone' },
-    'xstate.done.actor.export': { actions: 'exportDone' },
-    'xstate.done.actor.import': [
+    'made.flowEvents': { actions: 'flowEventsDone' },
+    'made.nodeDetails': { actions: 'nodeDetailsDone' },
+    'made.backupInfo': { actions: 'backupInfoDone' },
+    'made.export': { actions: 'exportDone' },
+    'made.import': [
       { guard: 'answered', actions: ['dropReplacedResults', 'importDone'] },
       { actions: 'importDone' },
     ],
-    'xstate.done.actor.reset': [
+    'made.reset': [
       { guard: 'answered', actions: ['dropReplacedResults', 'resetDone'] },
       { actions: 'resetDone' },
     ],

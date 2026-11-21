@@ -1,9 +1,7 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
-import type { AnswerPayload, AskName, AskOutcome } from '@apackdev/sdk/events';
+import { fromAsk, tell } from '#generated/events.ts';
 import { safeEvents } from '@apackdev/sdk/helpers';
-import { askId, endedAsk } from '@apackdev/sdk/fe';
-import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
+import { freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe';
 import { terminalPool } from '../../utils/terminal-pool.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, nextActiveFromHistory } from '../../utils/tab-management.ts';
@@ -82,16 +80,18 @@ export interface TerminalRewindView {
 }
 
 export interface CodeTerminalContext {
+  /** Which of the asks the machine makes (`made`) are under way */
+  making: Making<typeof made>
   terminals: TerminalInfo[]
   /** By terminal, for the ones whose program has said something */
   activity: Record<string, TerminalActivity>
   /** The recording this window is looking back through, when it is */
   rewind: TerminalRewindView | null
   /**
-   * What each outstanding `terminal.CREATE_TERMINAL` meant, by the id its ask was spawned under.
+   * What each outstanding `terminal.CREATE_TERMINAL` meant, by the key its ask was made under.
    *
    * **Keyed by the ask, because nothing about the terminal identifies it.** A fetch keys its answers by what it
-   * asked for; a terminal ask carries nothing that does, since the backend mints the id. The ask's own id is what
+   * asked for; a terminal ask carries nothing that does, since the backend mints the id. The ask's own key is what
    * its ending names, so it is the only key available.
    *
    * **One slot for all of them is the trap**, and it is invisible when it fires: two creates in flight share
@@ -130,36 +130,42 @@ export interface CodeTerminalContext {
 /** An ask of this window's that was not done, as the canvas tells it */
 export interface TerminalAskFailure { message: string }
 
-/** The terminal asks of the code system */
-type TerminalAsks = { [K in Extract<AskName<CodeSystemContract>, `terminal.${string}`>]: CodeSystemContract['asks'][K] }
-
 /**
- * The asks this machine makes several of at once, by the name each is spawned under: a spawned ask's id is
- * `<name>.<n>`, so its ending arrives as `xstate.done.actor.<name>.<n>` and a transition names the kind it is about
+ * The asks this machine makes, each under the name the machine makes it by. The list of running terminals is one at
+ * a time, the one made last being the one heard. Every other is made under a key of its own (`freshKey`), several
+ * at once, so that every one asked for is done
  */
-type SpawnedAsks = {
-  create: 'terminal.CREATE_TERMINAL'
-  close: 'terminal.CLOSE_TERMINAL'
-  restart: 'terminal.RESTART_TERMINAL'
-  resize: 'terminal.RESIZE_TERMINAL'
-  rename: 'terminal.RENAME_TERMINAL'
-  openTab: 'terminal.OPEN_TERMINAL_TAB'
-  keep: 'terminal.KEEP_TERMINAL'
-  rewind: 'terminal.REWIND'
-  seek: 'terminal.REWIND_SEEK'
-}
+const made = makes(({ one, each }) => ({
+  list: one(fromAsk('code', 'terminal.REFRESH_LIST')),
+  create: each(fromAsk('code', 'terminal.CREATE_TERMINAL')),
+  close: each(fromAsk('code', 'terminal.CLOSE_TERMINAL')),
+  restart: each(fromAsk('code', 'terminal.RESTART_TERMINAL')),
+  resize: each(fromAsk('code', 'terminal.RESIZE_TERMINAL')),
+  rename: each(fromAsk('code', 'terminal.RENAME_TERMINAL')),
+  openTab: each(fromAsk('code', 'terminal.OPEN_TERMINAL_TAB')),
+  keep: each(fromAsk('code', 'terminal.KEEP_TERMINAL')),
+  rewind: each(fromAsk('code', 'terminal.REWIND')),
+  seek: each(fromAsk('code', 'terminal.REWIND_SEEK')),
+}))
 
-/** How an ask ended, as the event its actor finishes with: a spawned one, or the list the `listing` state invokes */
-type AskEnded =
-  | { [Name in keyof SpawnedAsks]: { type: `xstate.done.actor.${Name}.${string}`; output: AskOutcome<TerminalAsks[SpawnedAsks[Name]]>; actorId: string } }[keyof SpawnedAsks]
-  | { type: 'xstate.done.actor.list'; output: AskOutcome<TerminalAsks['terminal.REFRESH_LIST']>; actorId: string }
+/** The name an ask is made under */
+type Name = (typeof made.names)[number]
+
+/** How an ask the machine made ended */
+type Made = MadeEvent<typeof made>
+
+/** How the ask made as `N` ended */
+type OutcomeOf<N extends Name> = Extract<Made, { type: `made.${N}` }> extends { outcome: infer Outcome } ? Outcome : never
+
+/** What the ask made as `N` is answered with */
+type AnswerOf<N extends Name> = OutcomeOf<N> extends infer Outcome ? (Outcome extends { ok: true; value: infer Answer } ? Answer : never) : never
 
 /** A grid the pty runs at: broadcast when it moved, or the answer to this window's own fit when that was refused */
 type TerminalGrid = { terminalId: string; cols: number; rows: number }
 
 export type Event =
   /** How each ask this machine made ended */
-  | AskEnded
+  | Made
   /** The surface started over its folder: the panel asks for the running terminals */
   | { type: 'CODE_STARTED' }
   | { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string; on?: string }
@@ -205,19 +211,22 @@ export type Event =
 const typeOf = safeEvents<Event>()
 
 /** How the ask an event ends ended; throws for an event that ends none, which is an action on the wrong transition */
-function outcomeIn(event: Event): AskEnded['output'] {
-  if (!('output' in event)) throw new Error(`Expected the end of an ask, got ${event.type}`)
-  return event.output
+function outcomeIn(event: Event): OutcomeOf<Name> {
+  if (!('outcome' in event)) throw new Error(`Expected the end of an ask, got ${event.type}`)
+  return event.outcome
 }
 
-/** Whether an event is the end of a spawned ask of that kind */
-const ends = (name: keyof SpawnedAsks, event: Event): boolean => event.type.startsWith(`xstate.done.actor.${name}.`)
+/** The key the ask an event ends was made under; throws for an event that ends none made under one */
+function keyIn(event: Event): string {
+  if (!('key' in event)) throw new Error(`Expected the end of an ask made under a key, got ${event.type}`)
+  return event.key
+}
 
-/** The answer a spawned ask ended with, for an action its transition runs only when it was answered (`answered`) */
-function answerIn<Name extends keyof SpawnedAsks>(name: Name, event: Event): AnswerPayload<TerminalAsks[SpawnedAsks[Name]]> {
+/** The answer an ask ended with, for an action its transition runs only when it was answered (`answered`) */
+function answerIn<N extends Name>(name: N, event: Event): AnswerOf<N> {
   const outcome = outcomeIn(event)
-  if (!ends(name, event) || !outcome.ok) throw new Error(`Expected the answer to a ${name} ask, got ${event.type}`)
-  return outcome.value as AnswerPayload<TerminalAsks[SpawnedAsks[Name]]>
+  if (event.type !== `made.${name}` || !outcome.ok) throw new Error(`Expected the answer to a ${name} ask, got ${event.type}`)
+  return outcome.value as AnswerOf<N>
 }
 
 /** The grid an event carries, as `terminal.RESIZED` or as the answer to this window's `terminal.RESIZE_TERMINAL` */
@@ -247,16 +256,7 @@ export const terminalState = setup({
     events: {} as Event
   },
   actors: {
-    list: fromAsk('code', 'terminal.REFRESH_LIST'),
-    create: fromAsk('code', 'terminal.CREATE_TERMINAL'),
-    close: fromAsk('code', 'terminal.CLOSE_TERMINAL'),
-    restart: fromAsk('code', 'terminal.RESTART_TERMINAL'),
-    resize: fromAsk('code', 'terminal.RESIZE_TERMINAL'),
-    rename: fromAsk('code', 'terminal.RENAME_TERMINAL'),
-    openTab: fromAsk('code', 'terminal.OPEN_TERMINAL_TAB'),
-    keep: fromAsk('code', 'terminal.KEEP_TERMINAL'),
-    rewind: fromAsk('code', 'terminal.REWIND'),
-    seek: fromAsk('code', 'terminal.REWIND_SEEK'),
+    ...made.actors,
   },
   guards: {
     /** The ask an event ends was answered, rather than refused */
@@ -264,16 +264,10 @@ export const terminalState = setup({
     /** This window's fit was refused: its answer is the grid the pty runs at instead */
     fitRefused: ({ event }) => {
       const outcome = outcomeIn(event)
-      return ends('resize', event) && outcome.ok && outcome.value !== null
+      return event.type === 'made.resize' && outcome.ok && outcome.value !== null
     },
   },
   actions: {
-    /** An ask that ended stops being this machine's child */
-    forgetAsk: enqueueActions(({ enqueue, event }) => {
-      const id = endedAsk(event)
-      enqueue.stopChild(id)
-    }),
-
     /**
      * An ask of this window's that was not done, kept for the canvas to tell the person. The window that asked is the
      * one that shows it: the system answers a failure to its asker and tells nobody else
@@ -289,59 +283,57 @@ export const terminalState = setup({
       return { failures: context.failures.filter(failure => !told.includes(failure)) }
     }),
 
-    /** The intent is recorded under the id its ask is spawned under, which is what the ask's ending names */
+    /** The intent is recorded under the key its ask is made under, which is what the ask's ending names */
     createTerminal: enqueueActions(({ event, self, enqueue }) => {
       const ev = typeOf('terminal.CREATE', event)
       const parentContext = getParentContext(self)
       const baseDir = parentContext?.baseDirectory
-      const id = askId('create')
+      const key = freshKey()
 
       enqueue.assign(({ context }) => ({
-        pendingOpens: { ...context.pendingOpens, [id]: { target: ev.target ?? null, command: ev.command ?? null } },
+        pendingOpens: { ...context.pendingOpens, [key]: { target: ev.target ?? null, command: ev.command ?? null } },
       }))
-      enqueue.spawnChild('create', {
-        id,
-        input: {
-          title: ev.title,
-          // `on` is one of the settings' targets: somewhere else, where this machine's directory names nothing
-          ...(ev.on === undefined
-            ? { cwd: ev.cwd || (baseDir && baseDir.trim() ? baseDir : undefined) }
-            : { target: ev.on }),
-        },
+      made.make(enqueue, 'create', key, {
+        title: ev.title,
+        // `on` is one of the settings' targets: somewhere else, where this machine's directory names nothing
+        ...(ev.on === undefined
+          ? { cwd: ev.cwd || (baseDir && baseDir.trim() ? baseDir : undefined) }
+          : { target: ev.on }),
       })
     }),
 
+    /** Asks for the running terminals, in place of an ask for them under way */
+    askForList: enqueueActions(({ enqueue }) => made.make(enqueue, 'list', {})),
+
     closeTerminal: enqueueActions(({ event, enqueue }) => {
-      enqueue.spawnChild('close', { id: askId('close'), input: { terminalId: typeOf('terminal.CLOSE', event).terminalId } })
+      made.make(enqueue, 'close', freshKey(), { terminalId: typeOf('terminal.CLOSE', event).terminalId })
     }),
 
     restartTerminal: enqueueActions(({ event, enqueue }) => {
-      enqueue.spawnChild('restart', { id: askId('restart'), input: { terminalId: typeOf('terminal.RESTART', event).terminalId } })
+      made.make(enqueue, 'restart', freshKey(), { terminalId: typeOf('terminal.RESTART', event).terminalId })
     }),
 
     sendTerminalInput: ({ event }) => {
       const ev = typeOf('terminal.INPUT', event)
-      sendToSystem('code', { type: 'terminal.TERMINAL_INPUT', terminalId: ev.terminalId, data: ev.data })
+      tell('code', { type: 'terminal.TERMINAL_INPUT', terminalId: ev.terminalId, data: ev.data })
     },
 
     releaseTerminalFit: ({ event }) => {
-      sendToSystem('code', { type: 'terminal.STOPPED_FITTING', terminalId: typeOf('terminal.DETACHED', event).terminalId })
+      tell('code', { type: 'terminal.STOPPED_FITTING', terminalId: typeOf('terminal.DETACHED', event).terminalId })
     },
 
     resizeTerminal: enqueueActions(({ event, enqueue }) => {
       const { terminalId, cols, rows, cellWidth, cellHeight } = typeOf('terminal.RESIZE', event)
-      enqueue.spawnChild('resize', { id: askId('resize'), input: { terminalId, cols, rows, cellWidth, cellHeight } })
+      made.make(enqueue, 'resize', freshKey(), { terminalId, cols, rows, cellWidth, cellHeight })
     }),
 
     renameTerminal: enqueueActions(({ event, enqueue }) => {
       const { terminalId, customTitle } = typeOf('terminal.RENAME', event)
-      enqueue.spawnChild('rename', { id: askId('rename'), input: { terminalId, customTitle } })
+      made.make(enqueue, 'rename', freshKey(), { terminalId, customTitle })
     }),
 
     assignTerminals: enqueueActions(({ enqueue, self, event }) => {
-      const outcome = outcomeIn(event)
-      if (event.type !== 'xstate.done.actor.list' || !outcome.ok) throw new Error(`Expected the list of terminals, got ${event.type}`)
-      const terminals = outcome.value as TerminalInfo[]
+      const terminals: TerminalInfo[] = answerIn('list', event)
       enqueue(assign({ terminals }))
 
       enqueue(() => {
@@ -445,7 +437,7 @@ export const terminalState = setup({
      * the list does.
      */
     describeTerminal: ({ context, event }) => {
-      const id = event.type === 'terminal.RESIZED' || ends('resize', event) ? gridIn(event)?.terminalId
+      const id = event.type === 'terminal.RESIZED' || event.type === 'made.resize' ? gridIn(event)?.terminalId
         : event.type === 'terminal.RESTARTED' ? event.data.id
         : 'data' in event && typeof event.data === 'object' ? event.data.terminalId
         : undefined
@@ -534,8 +526,7 @@ export const terminalState = setup({
 
     /** A create that ended stops being outstanding, and what it meant goes with it */
     forgetOpen: assign(({ context, event }) => {
-      const id = endedAsk(event)
-      const { [id]: _ended, ...pendingOpens } = context.pendingOpens
+      const { [keyIn(event)]: _ended, ...pendingOpens } = context.pendingOpens
       return { pendingOpens }
     }),
 
@@ -672,7 +663,7 @@ export const terminalState = setup({
         enqueue.assign({ statusNotified: rest })
       }
       if (needsLooking(context.terminals.find(terminal => terminal.id === id)?.statuses)) {
-        sendToSystem('code', { type: 'terminal.STATUS_SEEN', terminalId: id })
+        tell('code', { type: 'terminal.STATUS_SEEN', terminalId: id })
       }
     }),
 
@@ -687,7 +678,7 @@ export const terminalState = setup({
 
     keepTerminal: enqueueActions(({ event, enqueue }) => {
       const { terminalId, kept } = typeOf('terminal.KEEP', event)
-      enqueue.spawnChild('keep', { id: askId('keep'), input: { terminalId, kept } })
+      made.make(enqueue, 'keep', freshKey(), { terminalId, kept })
     }),
 
     markKept: assign(({ context, event }) => {
@@ -701,7 +692,7 @@ export const terminalState = setup({
 
     askForRewind: enqueueActions(({ event, enqueue }) => {
       const { terminalId, cols, rows } = typeOf('terminal.REWIND', event)
-      enqueue.spawnChild('rewind', { id: askId('rewind'), input: { terminalId, cols, rows } })
+      made.make(enqueue, 'rewind', freshKey(), { terminalId, cols, rows })
     }),
 
     /** A recording opened for this window: shown at its end, which is where the terminal is now */
@@ -714,11 +705,11 @@ export const terminalState = setup({
 
     resizeRewind: ({ context, event }) => {
       const ev = typeOf('terminal.REWIND_RESIZE', event)
-      if (context.rewind) sendToSystem('code', { type: 'terminal.REWIND_RESIZE', session: context.rewind.session, cols: ev.cols, rows: ev.rows })
+      if (context.rewind) tell('code', { type: 'terminal.REWIND_RESIZE', session: context.rewind.session, cols: ev.cols, rows: ev.rows })
     },
 
     seekRewind: enqueueActions(({ context, event, enqueue }) => {
-      if (context.rewind) enqueue.spawnChild('seek', { id: askId('seek'), input: { session: context.rewind.session, at: typeOf('terminal.REWIND_SEEK', event).at } })
+      if (context.rewind) made.make(enqueue, 'seek', freshKey(), { session: context.rewind.session, at: typeOf('terminal.REWIND_SEEK', event).at })
     }),
 
     noteRewindSought: assign(({ context, event }) => {
@@ -729,7 +720,7 @@ export const terminalState = setup({
 
     closeRewind: assign(({ context }) => {
       if (context.rewind) {
-        sendToSystem('code', { type: 'terminal.REWIND_CLOSE', session: context.rewind.session })
+        tell('code', { type: 'terminal.REWIND_CLOSE', session: context.rewind.session })
         terminalPool.dispose(rewindViewId(context.rewind.session))
       }
       return { rewind: null }
@@ -755,11 +746,11 @@ export const terminalState = setup({
      * **Two correlations, answering different questions.** Addressing says *which window*: only the asker is
      * answered with the terminal, so hang this off the broadcast `terminal.CREATED` instead and every open
      * window routes a terminal it never asked for into its own panel and runs a command nobody typed there.
-     * The ask's id says *which of that window's asks*, which addressing cannot — see `pendingOpens`.
+     * The ask's key says *which of that window's asks*, which addressing cannot — see `pendingOpens`.
      */
     handleTerminalOpened: enqueueActions(({ enqueue, context, self, event }) => {
       const terminalInfo = answerIn('create', event)
-      const { target, command } = context.pendingOpens[endedAsk(event)] ?? { target: null, command: null }
+      const { target, command } = context.pendingOpens[keyIn(event)] ?? { target: null, command: null }
       enqueue(() => {
         if (target === 'tab') {
           // Explicit tab target — create canvas tab
@@ -773,7 +764,7 @@ export const terminalState = setup({
         // Run pending command if set. **Ended the way this shell ends a line** (X6): a window cannot know
         // which shell is on the other end, so the descriptor carries it
         if (command) {
-          sendToSystem('code', {
+          tell('code', {
             type: 'terminal.TERMINAL_INPUT',
             terminalId: terminalInfo.id,
             // A descriptor from before this field existed, or from a backend mid-reload, must not put the
@@ -839,7 +830,7 @@ export const terminalState = setup({
     /** One ask for each terminal, each answered with the terminal to open */
     openTerminalTabs: enqueueActions(({ event, enqueue }) => {
       typeOf('terminal.OPEN_TABS', event).terminalIds.forEach(terminalId => {
-        enqueue.spawnChild('openTab', { id: askId('openTab'), input: { terminalId } })
+        made.make(enqueue, 'openTab', freshKey(), { terminalId })
       })
     }),
 
@@ -868,6 +859,7 @@ export const terminalState = setup({
   id: 'terminal',
   initial: 'idle',
   context: {
+    making: made.none(),
     terminals: [],
     activity: {},
     rewind: null,
@@ -899,9 +891,9 @@ export const terminalState = setup({
     'terminal.RENAME': {
       actions: 'renameTerminal'
     },
-    // Entering `listing` again stops the ask under way and asks again: the list wanted is the one as it stands now
+    // An ask for the list under way is given up for this one: the list wanted is the one as it stands now
     'terminal.REFRESH_LIST': {
-      target: '.listing', reenter: true
+      actions: 'askForList'
     },
     'terminal.OPEN_TAB': {
       actions: 'openTerminalTab'
@@ -911,12 +903,12 @@ export const terminalState = setup({
     },
     // The surface started over its folder: what is running there
     CODE_STARTED: {
-      target: '.listing', reenter: true
+      actions: 'askForList'
     },
     // News, which every window takes: a terminal exists, in some window. The list is asked for again, which the
     // system answers this window alone, and nothing else happens
     'terminal.CREATED': {
-      target: '.listing', reenter: true
+      actions: 'askForList'
     },
     'terminal.CLOSED': {
       actions: ['removeTerminal', 'cleanupTerminalOutput', 'handleTerminalClosed', 'forgetActivity']
@@ -956,46 +948,39 @@ export const terminalState = setup({
       actions: ['updateTerminalGrid', 'describeTerminal']
     },
     // How each of this window's asks ended: its answer taken, or its failure kept for the canvas to tell
-    'xstate.done.actor.create.*': [
-      { guard: 'answered', actions: ['handleTerminalOpened', 'forgetOpen', 'forgetAsk'] },
-      { actions: ['forgetOpen', 'noteAskFailure', 'forgetAsk'] },
+    [made.done]: { actions: made.settle() },
+    'made.list': [
+      { guard: 'answered', actions: 'assignTerminals' },
+      { actions: 'noteAskFailure' },
     ],
-    'xstate.done.actor.openTab.*': [
-      { guard: 'answered', actions: ['handleTerminalTabOpened', 'forgetAsk'] },
-      { actions: ['noteAskFailure', 'forgetAsk'] },
+    'made.create': [
+      { guard: 'answered', actions: ['handleTerminalOpened', 'forgetOpen'] },
+      { actions: ['forgetOpen', 'noteAskFailure'] },
     ],
-    'xstate.done.actor.rewind.*': [
-      { guard: 'answered', actions: ['openRewind', 'forgetAsk'] },
-      { actions: ['noteAskFailure', 'forgetAsk'] },
+    'made.openTab': [
+      { guard: 'answered', actions: 'handleTerminalTabOpened' },
+      { actions: 'noteAskFailure' },
     ],
-    'xstate.done.actor.seek.*': [
-      { guard: 'answered', actions: ['noteRewindSought', 'forgetAsk'] },
-      { actions: ['noteAskFailure', 'forgetAsk'] },
+    'made.rewind': [
+      { guard: 'answered', actions: 'openRewind' },
+      { actions: 'noteAskFailure' },
     ],
-    'xstate.done.actor.resize.*': [
-      { guard: 'fitRefused', actions: ['updateTerminalGrid', 'describeTerminal', 'forgetAsk'] },
-      { actions: ['noteAskFailure', 'forgetAsk'] },
+    'made.seek': [
+      { guard: 'answered', actions: 'noteRewindSought' },
+      { actions: 'noteAskFailure' },
+    ],
+    'made.resize': [
+      { guard: 'fitRefused', actions: ['updateTerminalGrid', 'describeTerminal'] },
+      { actions: 'noteAskFailure' },
     ],
     // Done is all these answer with, which the news tells every window: only a failure is this window's to show
-    'xstate.done.actor.close.*': { actions: ['noteAskFailure', 'forgetAsk'] },
-    'xstate.done.actor.restart.*': { actions: ['noteAskFailure', 'forgetAsk'] },
-    'xstate.done.actor.rename.*': { actions: ['noteAskFailure', 'forgetAsk'] },
-    'xstate.done.actor.keep.*': { actions: ['noteAskFailure', 'forgetAsk'] },
+    'made.close': { actions: 'noteAskFailure' },
+    'made.restart': { actions: 'noteAskFailure' },
+    'made.rename': { actions: 'noteAskFailure' },
+    'made.keep': { actions: 'noteAskFailure' },
   },
   states: {
     idle: {},
-    // The running terminals are being asked for, for exactly as long as this state is
-    listing: {
-      invoke: {
-        id: 'list',
-        src: 'list',
-        input: {},
-        onDone: [
-          { guard: 'answered', target: 'idle', actions: 'assignTerminals' },
-          { target: 'idle', actions: 'noteAskFailure' },
-        ],
-      },
-    },
   }
 });
 

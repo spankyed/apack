@@ -6,8 +6,8 @@ import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 import type { GhPullRequest } from '#generated/types.ts';
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+const tell = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 const addTabToParent = vi.hoisted(() => vi.fn());
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent,
@@ -36,7 +36,7 @@ const asking = async () => {
 };
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  tell.mockReset();
   resetAsks();
   addTabToParent.mockReset();
 });

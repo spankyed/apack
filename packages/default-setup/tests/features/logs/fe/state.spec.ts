@@ -8,7 +8,7 @@ const reads = vi.hoisted(() => [] as Array<(outcome: unknown) => void>)
 vi.mock('#generated/events.ts', async () => {
   const { fromPromise } = await import('xstate')
   return {
-    sendToSystem: vi.fn(),
+    tell: vi.fn(),
     fromAsk: (_to: string, _type: string) => fromPromise(() => new Promise((resolve) => { reads.push(resolve) })),
   }
 })

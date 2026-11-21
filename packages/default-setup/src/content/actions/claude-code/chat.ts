@@ -483,7 +483,7 @@ export async function action(
       (services.cli as any).claudeCode.clearHandle(threadId);
       setRunning(services, threadId, false);
       updateChatState(services, threadId, 'idle');
-      services.emitter.broadcastToSurface('default-setup/threads', {
+      services.emitter.broadcast('default-setup/threads', {
         type: 'FLASH_CHAT_STATE', threadId, stateId: 'error', durationMs: 3000,
       });
     });
@@ -501,7 +501,7 @@ export async function action(
       // Emit cc.stream.completed so CC: Turn Completed can run bookkeeping
       // (turn counts, cost tracking). Without this, the turn is "lost" from
       // the flow's perspective.
-      services.emitter.sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', 
+      services.emitter.tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', 
         eventType: 'cc.stream.completed',
         payload: { threadId, hadErrors: true, error: message },
       });
@@ -510,7 +510,7 @@ export async function action(
 
     // ─── Generic error ───────────────────────────────────────────────────
     updateChatState(services, threadId, 'idle');
-    services.emitter.broadcastToSurface('default-setup/threads', {
+    services.emitter.broadcast('default-setup/threads', {
       type: 'FLASH_CHAT_STATE', threadId, stateId: 'error', durationMs: 3000,
     });
     writer.finalize(`⚠️ ${message}`);

@@ -1,5 +1,5 @@
 import { watch, nextTick, type Ref } from 'vue'
-import { useSelector } from '@xstate/vue'
+import { useState } from '@apackdev/sdk/fe'
 import type { NotesState } from '../state.ts'
 import type TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 
@@ -8,14 +8,12 @@ export function useNoteFocus(
   titleRef: Ref<HTMLInputElement | null>,
   editorRef: Ref<InstanceType<typeof TiptapEditor> | null>,
 ) {
-  const currentNote = useSelector(actor, (s) => s.context.currentNote)
-  const selectedTask = useSelector(actor, (s) => s.context.selectedTask)
-  // A note this window has just created opens with its title selected, to be named
-  const createdNoteId = useSelector(actor, (s) => s.context.createdNoteId)
+  const { state: notes } = useState(actor)
 
-  watch(currentNote, (note, oldNote) => {
+  watch(() => notes.value.data.currentNote, (note, oldNote) => {
     if (!note || note.id === oldNote?.id) return
-    const isNewNote = note.id === createdNoteId.value
+    // A note this window has just created opens with its title selected, to be named
+    const isNewNote = note.id === notes.value.data.createdNoteId
     nextTick(() => {
       if (isNewNote) {
         titleRef.value?.focus()
@@ -26,9 +24,9 @@ export function useNoteFocus(
     })
   })
 
-  watch(selectedTask, (task, oldTask) => {
+  watch(() => notes.value.data.selectedTask, (task, oldTask) => {
     if (!task || task.id === oldTask?.id) return
-    const isNewTask = task.id === createdNoteId.value
+    const isNewTask = task.id === notes.value.data.createdNoteId
     if (isNewTask) {
       nextTick(() => {
         titleRef.value?.focus()

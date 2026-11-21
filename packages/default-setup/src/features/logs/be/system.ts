@@ -1,6 +1,6 @@
 import { featureSettings } from '#generated/settings.ts';
 
-import { broadcastToSurface } from '#generated/events.ts';
+import { broadcast } from '#generated/events.ts';
 import { assign, setup, fromCallback, spawnChild } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
 
@@ -84,13 +84,13 @@ export const logsSystem = setup({
         return; // Don't broadcast excluded logs
       }
 
-      broadcastToSurface('logs', {
+      broadcast('logs', {
         type: 'LOG_ADDED',
         log: newLog,
       });
     },
     broadcastLogsCleared: () => {
-      broadcastToSurface('logs', {
+      broadcast('logs', {
         type: 'LOGS_CLEARED',
       })
     },

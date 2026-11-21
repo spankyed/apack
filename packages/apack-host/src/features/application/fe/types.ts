@@ -26,6 +26,8 @@ export interface ShellNotify {
   error(title: string, detail?: string): void;
   /** Replaces the window with the error page */
   errorPage(title: string, detail: ShellFailure): void;
+  /** Takes the error page down and shows the window again, if the page shown is the one `title` put up */
+  clearErrorPage(title: string): void;
 }
 
 /** The I/O the shell is given */

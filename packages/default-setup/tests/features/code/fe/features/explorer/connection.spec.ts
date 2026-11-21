@@ -2,15 +2,15 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createActor, type ActorRefFrom } from 'xstate';
 import { asksOf, latestAsk, made, resetAsks } from '../../_support/asks.ts';
 
-const { sendToSystem, updateParentState } = vi.hoisted(() => ({ sendToSystem: vi.fn(), updateParentState: vi.fn() }));
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+const { tell, updateParentState } = vi.hoisted(() => ({ tell: vi.fn(), updateParentState: vi.fn() }));
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   updateParentState, getParentContext: () => ({ baseDirectory: '/work', openFiles: [{ path: '/work/gone' }], activeFilePath: '/work/gone' }), addTabToParent: vi.fn(),
 }));
 const { explorerState } = await import('#features/code/fe/features/explorer/state.ts');
 let actor: ActorRefFrom<typeof explorerState>;
 beforeEach(() => {
-  sendToSystem.mockReset(); updateParentState.mockReset(); resetAsks();
+  tell.mockReset(); updateParentState.mockReset(); resetAsks();
   actor = createActor(explorerState).start();
 });
 afterEach(() => actor.stop());
@@ -27,7 +27,7 @@ it('reads the connected directory without turning restoration into a settings ch
     { type: 'explorer.LIST_FILES', path: '/work' },
     { type: 'explorer.LIST_FILES', path: '/work' },
   ]);
-  expect(sendToSystem, 'and nothing is sent that would change a setting').not.toHaveBeenCalled();
+  expect(tell, 'and nothing is sent that would change a setting').not.toHaveBeenCalled();
 });
 
 it('clears the previous tree when reconnecting without a directory', async () => {
@@ -43,7 +43,7 @@ it('clears the previous tree when reconnecting without a directory', async () =>
 
 it('still sends an explicit directory selection to the backend', () => {
   actor.send({ type: 'explorer.SET_BASE_DIRECTORY', path: '/selected' });
-  expect(sendToSystem).toHaveBeenCalledWith('code', { type: 'SET_BASE_DIRECTORY', path: '/selected' });
+  expect(tell).toHaveBeenCalledWith('code', { type: 'SET_BASE_DIRECTORY', path: '/selected' });
 });
 
 it('takes each listing asked for at once into its own folder, and holds none of the asks once they end', async () => {

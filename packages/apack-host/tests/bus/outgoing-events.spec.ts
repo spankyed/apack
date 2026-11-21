@@ -60,14 +60,14 @@ afterEach(() => {
 /**
  * What a dropped *answer* says, which is a different sentence from a dropped command.
  *
- * One path serves four senders — `untypedBroadcastToSurface`, the generated `broadcastToSurface`, `sendToWindow`
+ * One path serves four senders — `untypedBroadcast`, the generated `broadcast`, `sendToWindow`
  * and `reply` — and a `reply` caller named no id, so address advice sends the next reader to a call site that
  * has none.
  *
  * **`answering` is its own field on the report, not a third `operation` value.** `operation` says which verb,
  * and two readers filter on it to mean *direction*: `undeclared-incoming.spec.ts`'s helper, and
  * `@apackdev/testing`'s fixture, which collects these to fail a test on a dropped send. The first attempt made
- * it `answering ? 'reply' : 'broadcastToSurface'` and shipped a regression — the fixture went on filtering for
+ * it `answering ? 'reply' : 'broadcast'` and shipped a regression — the fixture went on filtering for
  * one value while this sent two, so a dropped answer stopped failing any Playwright test, silently, there
  * being no case over the fixture. The case below that asserts `operation` is unchanged is what holds it.
  */
@@ -87,7 +87,7 @@ describe('a dropped answer', () => {
 
     expect(error?.answering).toBe(true);
     expect(error?.operation, 'the verb this path is, which readers filter on for direction')
-      .toBe('broadcastToSurface');
+      .toBe('broadcast');
   });
 
   it('says why a reply can be undeclared at all, rather than giving address advice', async () => {
@@ -109,7 +109,7 @@ describe('a dropped answer', () => {
   it('leaves a dropped broadcast saying what it always said', async () => {
     await send({ to: 'memo-pack/memos', event: { type: 'NOT_DECLARED' } });
     const [error] = takeSystemErrors();
-    expect(error?.operation).toBe('broadcastToSurface');
+    expect(error?.operation).toBe('broadcast');
     expect(error?.answering, 'absent rather than false, as on the envelope').toBeUndefined();
     expect(error?.message).toContain('add it to that system\'s outgoing events');
   });

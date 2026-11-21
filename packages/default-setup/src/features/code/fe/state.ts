@@ -1,9 +1,9 @@
-import { surfaceStorage } from '@apackdev/sdk/fe'
+import { makes, surfaceStorage, type MadeEvent, type Making } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('code'))
-import { setup, type ActorRefFrom, type AnyActorRef, type DoneActorEvent, type OutputFrom, assign, enqueueActions, fromCallback, stopChild } from 'xstate';
+import { setup, type ActorRefFrom, type AnyActorRef, assign, enqueueActions, fromCallback } from 'xstate';
 
 import breadcrumb from '@apackdev/sdk/fe';
 import { type HotkeyEvent, type HotkeysMap, createHotkeyProcessor } from '@apackdev/sdk/fe';
@@ -20,7 +20,7 @@ export type { OpenFile, TerminalTab, QuickOpenResult, PanelType } from './contra
 export type { CodeContext } from './contract.ts';
 import type { OutgoingCodeEvents } from '#features/code/be/contract.ts';
 import type { CodeConnectedData, GitDiff } from '#features/code/be/types.ts';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import { safeEvents } from '@apackdev/sdk/helpers';
 
 // Import child state machines
@@ -62,15 +62,18 @@ export function isEditableDiff(file: OpenFile | { isDiff?: boolean; isPrDiff?: b
 
 export type { TabGroupColor, TabGroup };
 
-// What the surface starts from, asked of the code system
-const codeStart = fromAsk('code', 'GET_CODE_START');
+/** The asks the surface makes of the code system: what it starts from, one at a time, the one made last being the one heard */
+const made = makes(({ one }) => ({ codeStart: one(fromAsk('code', 'GET_CODE_START')) }));
+
+/** The surface's state as its machine holds it: what it publishes, and which of its asks are under way */
+type MachineContext = CodeContext & { making: Making<typeof made> };
 
 export type Event =
   | OutgoingCodeEvents
   // What the surface starts from, which it hands every panel as it starts over a folder
   | { type: 'CODE_STARTED'; data: CodeConnectedData }
   // How the ask for what the surface starts from ended
-  | DoneActorEvent<OutputFrom<typeof codeStart>, 'codeStart'>
+  | MadeEvent<typeof made>
   // The app's, when the code surface's settings change
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
   // Generic update event for child actors to update parent state
@@ -134,9 +137,9 @@ const typeOf = safeEvents<Event>();
 
 /** What the surface starts from, off the ask for it that ended with an answer */
 function startOf(event: Event): CodeConnectedData {
-  const { output } = typeOf('xstate.done.actor.codeStart', event);
-  if (!output.ok) throw new Error(output.failure.message);
-  return output.value;
+  const { outcome } = typeOf('made.codeStart', event);
+  if (!outcome.ok) throw new Error(outcome.failure.message);
+  return outcome.value;
 }
 
 export type CodeState = ActorRefFrom<typeof codeState>;
@@ -354,7 +357,7 @@ function finalizeRestoreState(context: CodeContext): Partial<CodeContext> {
 
 const codeState = setup({
   types: {
-    context: {} as CodeContext,
+    context: {} as MachineContext,
     events: {} as Event
   },
   actors: {
@@ -366,7 +369,7 @@ const codeState = setup({
     actionsState,
     promptsState,
     githubState,
-    codeStart,
+    ...made.actors,
     /**
      * **The owner of the terminal pool, which is a module singleton and so has no other.**
      *
@@ -390,7 +393,7 @@ const codeState = setup({
      * never delivered is made up for here.
      */
     externalChanges: fromCallback(() => {
-      const check = () => { sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' }) };
+      const check = () => { tell('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' }) };
       window.addEventListener('focus', check);
       return () => window.removeEventListener('focus', check);
     }),
@@ -408,11 +411,8 @@ const codeState = setup({
         enqueue.spawnChild('githubState', { id: 'github' });
     }),
 
-    // Asks for what the surface starts from. An ask still under way is stopped: the one made last is the one heard
-    askForStart: enqueueActions(({ enqueue }) => {
-      enqueue.stopChild('codeStart');
-      enqueue.spawnChild('codeStart', { id: 'codeStart', input: {} });
-    }),
+    // Asks for what the surface starts from. An ask still under way is given up: the one made last is the one heard
+    askForStart: enqueueActions(({ enqueue }) => made.make(enqueue, 'codeStart', {})),
 
     notifyDirectoryChange: ({ event, context, self }) => {
       const ev = typeOf('UPDATE_STATE', event)
@@ -1400,6 +1400,7 @@ const codeState = setup({
   invoke: [{ src: 'poolOwner', id: 'poolOwner' }, { src: 'externalChanges', id: 'externalChanges' }],
   entry: ['spawnFeatureActors', 'restorePersistedTabs'],
   context: {
+    making: made.none(),
     // Until the shell says otherwise, this is the window that keeps the layout: a surface started with no
     // answer is the only window there is
     ownsAppLayout: true,
@@ -1446,13 +1447,12 @@ const codeState = setup({
         },
         // The start, handed to every feature, each of which asks for what its panel shows. The saved settings reach
         // the terminals at start, as they do when they change. A start that could not be read changes nothing
-        'xstate.done.actor.codeStart': [
-          {
-            guard: ({ event }) => event.output.ok,
-            actions: [stopChild('codeStart'), 'handleCodeConnected', 'applyCopyOnSelect', 'applyViewSettings', 'broadcastToAllFeatures'],
-          },
-          { actions: stopChild('codeStart') },
-        ],
+        'made.codeStart': {
+          guard: ({ event }) => event.outcome.ok,
+          actions: ['handleCodeConnected', 'applyCopyOnSelect', 'applyViewSettings', 'broadcastToAllFeatures'],
+        },
+        // How an ask ended. Taken here, beside the route to the children, which would otherwise take it
+        [made.done]: { actions: made.settle() },
         // Handle settings updates
         FEATURE_SETTINGS_UPDATED: {
           actions: ['handleSettingsUpdate', 'applyCopyOnSelect', 'applyViewSettings']

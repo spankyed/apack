@@ -1,15 +1,14 @@
-import { assign, enqueueActions, setup, stopChild, type ActorRefFrom, type DoneActorEvent } from 'xstate';
-import type { AskOutcome } from '@apackdev/sdk/events';
-import { safeEvents } from '@apackdev/sdk/fe';
+import { assign, enqueueActions, setup, type ActorRefFrom } from 'xstate';
+import { makes, safeEvents, type MadeEvent, type Making } from '@apackdev/sdk/fe';
 import type { SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
 import { breadcrumbList } from '@apackdev/sdk/fe';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { Activity, Play, RefreshCw, Power, PlayCircle, Pause } from 'lucide-vue-next';
 import { targetIs, type TrailClickEvent } from '@apackdev/sdk/fe';
 import type { BrainContext } from './contract.ts';
-import type { BrainAsks, BrainStateEvent, OutgoingBrainEvents } from '#features/brain/be/types.ts'
+import type { BrainStateEvent, OutgoingBrainEvents } from '#features/brain/be/types.ts'
 import type { FlowRunNodeData } from '#generated/types.ts';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import type { StepRuntimeError, RunTree } from '@apackdev/sdk/steps';
 import {
   applyRunNodeSpawn,
@@ -49,13 +48,13 @@ type UIEvent =
 
 type SurfaceEvent = SurfaceLifecycleEvent
 
-/** The id the ask for the selected node's details is spawned under: one at a time */
-const DETAILS = 'details'
+/** The asks the machine makes beside the ones a state invokes: the selected node's details, one at a time */
+const made = makes(({ one }) => ({ details: one(fromAsk('brain', 'GET_RUN_NODE_DETAILS')) }))
 
-/** How the ask for a node's details ends */
-type DetailsEnded = DoneActorEvent<AskOutcome<BrainAsks['GET_RUN_NODE_DETAILS']>, typeof DETAILS>
+/** The surface's state as its machine holds it: what it publishes, and which of its asks are under way */
+type MachineContext = BrainContext & { making: Making<typeof made> }
 
-export type BrainEvents = UIEvent | SystemEvent | SurfaceEvent | TrailClickEvent | DetailsEnded
+export type BrainEvents = UIEvent | SystemEvent | SurfaceEvent | TrailClickEvent | MadeEvent<typeof made>
 
 const typeOf = safeEvents<BrainEvents>()
 
@@ -111,7 +110,7 @@ const trailFlow = (target: string): string | undefined => (target.startsWith('fl
 
 const brainState = setup({
   types: {
-    context: {} as BrainContext,
+    context: {} as MachineContext,
     events: {} as BrainEvents,
   },
   actors: {
@@ -119,7 +118,7 @@ const brainState = setup({
     surfaceData: fromAsk('brain', 'REQUEST_SURFACE_DATA'),
     openRun: fromAsk('brain', 'OPEN_RUN_NODE'),
     goBack: fromAsk('brain', 'GO_BACK_RUN_NODE'),
-    runNodeDetails: fromAsk('brain', 'GET_RUN_NODE_DETAILS'),
+    ...made.actors,
   },
   actions: {
     addRunNodeToTree: assign(({ context, event }) => {
@@ -203,18 +202,18 @@ const brainState = setup({
         : firstChildNode(context);
       return nodeId ? { selectedStepNode: { id: nodeId } as any } : {};
     }),
-    /** Stops the ask for details, under way or ended */
-    forgetDetails: stopChild(DETAILS),
+    /** Gives up the ask for details, where one is under way */
+    forgetDetails: enqueueActions(({ context, enqueue }) => made.drop(enqueue, context, 'details')),
     /** Asks for the selected node's details, in place of any ask for them under way */
     askDetails: enqueueActions(({ context, enqueue }) => {
-      enqueue.stopChild(DETAILS)
-      if (context.selectedStepNode) enqueue.spawnChild('runNodeDetails', { id: DETAILS, input: { runNodeId: context.selectedStepNode.id } })
+      if (context.selectedStepNode) made.make(enqueue, 'details', { runNodeId: context.selectedStepNode.id })
+      else made.drop(enqueue, context, 'details')
     }),
     closeDetails: assign({
       selectedStepNode: undefined
     }),
     toggleInspect: () => {
-      sendToSystem(id, {
+      tell(id, {
         type: 'TOGGLE_INSPECT',
       });
     },
@@ -269,21 +268,21 @@ const brainState = setup({
       latestRuntimeError: undefined,
     }),
     pauseBrain: () => {
-      sendToSystem(id, {
+      tell(id, {
         type: 'PAUSE_BRAIN',
       });
     },
     resumeBrain: () => {
-      sendToSystem(id, {
+      tell(id, {
         type: 'RESUME_BRAIN',
       });
     },
     restartBrain: ({ context }) => {
-      if (context.brainIsDead) sendToSystem(id, { type: 'START_BRAIN' });
-      else sendToSystem(id, { type: 'RESTART_BRAIN' });
+      if (context.brainIsDead) tell(id, { type: 'START_BRAIN' });
+      else tell(id, { type: 'RESTART_BRAIN' });
     },
     killBrain: () => {
-      sendToSystem(id, {
+      tell(id, {
         type: 'KILL_BRAIN',
       });
     },
@@ -308,6 +307,7 @@ const brainState = setup({
 }).createMachine({
   id,
   context: {
+    making: made.none(),
     possibleEvents: [],
     flowHierarchy: [],
     showLeftPanel: false,
@@ -321,6 +321,7 @@ const brainState = setup({
   },
   initial: 'loading',
   on: {
+    [made.done]: { actions: made.settle() },
     BRAIN_STATE: { actions: 'setBrainState' },
     // Inspect mode is the feature's rather than a run's, and a panel beside another surface shows by it, so a toggle
     // and what it became are taken before this surface's first tree as after it
@@ -458,9 +459,9 @@ const brainState = setup({
         ],
         CLOSE_DETAILS: { actions: ['forgetDetails', 'closeDetails'] },
         BRAIN_KILLED: { actions: ['forgetDetails', 'setBrainKilled'] },
-        'xstate.done.actor.details': {
+        'made.details': {
           // Details that could not be read leave the node selected by its id
-          actions: ['forgetDetails', assign(({ event }) => (event.output.ok ? { selectedStepNode: event.output.value.details || undefined } : {}))],
+          actions: assign(({ event }) => (event.outcome.ok ? { selectedStepNode: event.outcome.value.details || undefined } : {})),
         },
       },
       states: {

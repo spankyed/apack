@@ -14,7 +14,7 @@
         :installHint="p.installHint"
         :installCmd="p.installCmd"
         placeholder="Path override (auto-detected if empty)"
-        :testResult="cliTestResults?.[p.key]"
+        :testResult="settings.data.cliTestResults?.[p.key]"
         @update:modelValue="debouncedSaveCliPaths()"
         @test="testCliProvider(p.key)"
       />
@@ -24,10 +24,9 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useFeatureSettings, useSurface } from '@apackdev/sdk/fe'
+import { useFeatureSettings, useState, useSurface } from '@apackdev/sdk/fe'
 import { useSettingsSaveStatus } from '@/views/settings/save'
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
-import { useSelector } from '@xstate/vue'
 import CliProviderRow from './CliProviderRow.vue'
 import { resolveName } from '@apackdev/sdk/ids';
 import type { SettingsState } from '@apackdev/host/fe'
@@ -35,7 +34,7 @@ import type { SettingsState } from '@apackdev/host/fe'
 const { updateSettings } = useSettingsSaveStatus()
 
 const settingsActor: SettingsState = useSurface()
-const cliTestResults = useSelector(settingsActor, (state) => state.context.cliTestResults)
+const { state: settings, send } = useState(settingsActor)
 
 const providers = [
   { key: 'copilot', label: 'Copilot CLI', installHint: 'Install via npm', installCmd: 'npm install -g @github/copilot' },
@@ -45,7 +44,7 @@ const providers = [
 ]
 
 const testCliProvider = (provider: string) => {
-  settingsActor.send({ type: 'CLI.TEST', provider })
+  send({ type: 'CLI.TEST', provider })
 }
 
 // CLI path overrides live in the code surface's settings

@@ -76,7 +76,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { sendToSystem } from '#generated/events.ts'
+import { tell } from '#generated/events.ts'
 import { useSurfaceState } from '#generated/fe.ts'
 import { FilePlus2, FileMinus2, FilePenLine, ArrowRightLeft } from 'lucide-vue-next'
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'
@@ -99,7 +99,7 @@ function takeBack() {
   const turn = content.value.turn
   const threadId = currentThread.value?.id
   if (!turn || !threadId) return
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'FORWARD_BRAIN_EVENT',
     eventType: 'user.turn.takeBack',
     payload: { threadId, artifactId: props.artifact.id, checkpoint: turn.checkpoint },

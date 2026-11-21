@@ -22,7 +22,7 @@
       <!-- Header -->
       <div class="px-4 py-3 border-b border-neutral-800 bg-neutral-900">
         <div class="flex items-center justify-between">
-          <div v-if="currentFlowId" class="flex items-center gap-2">
+          <div v-if="database.data.currentFlowId" class="flex items-center gap-2">
             <span class="text-sm text-neutral-400">
               Flow: <span class="font-medium text-neutral-200">{{ currentFlowLabel }}</span>
             </span>
@@ -51,7 +51,7 @@
       
       <!-- Event List or Empty State -->
       <div class="flex-1 overflow-hidden">
-        <RunEventList v-if="currentFlowId" />
+        <RunEventList v-if="database.data.currentFlowId" />
         <div v-else class="flex items-center justify-center h-full">
           <div class="px-6 py-8 text-center">
             <div class="flex items-center justify-center w-12 h-12 mx-auto mb-3 rounded-full bg-neutral-800/50">
@@ -67,10 +67,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, computed } from 'vue'
-import { useSelector } from '@xstate/vue'
 import { isLoadingRuns as readingRuns, type DatabaseState } from '../../state.ts'
 import { RefreshCw, History } from 'lucide-vue-next'
 import RunSelector from './RunSelector.vue'
@@ -79,14 +78,13 @@ import RunEventList from './RunEventList.vue'
 const databaseActor: DatabaseState = useSurface()
 
 // State selectors
-const currentFlowId = useSelector(databaseActor, (state) => state.context.currentFlowId)
-const flowRuns = useSelector(databaseActor, (state) => state.context.flowRuns)
-const isLoadingRuns = useSelector(databaseActor, readingRuns)
+const { state: database, send } = useState(databaseActor)
+const isLoadingRuns = computed(() => readingRuns(database.value.data.making))
 
 // Computed properties
 const currentFlowLabel = computed(() => {
-  if (!currentFlowId.value) return null
-  const flow = flowRuns.value.find(f => f.id === currentFlowId.value)
+  if (!database.value.data.currentFlowId) return null
+  const flow = database.value.data.flowRuns.find(f => f.id === database.value.data.currentFlowId)
   return flow?.label || 'Unknown Flow'
 })
 
@@ -128,6 +126,6 @@ function handleMouseUp() {
 
 // Actions
 function refreshFlows() {
-  databaseActor.send({ type: 'RUNS.REQUEST_FLOWS' })
+  send({ type: 'RUNS.REQUEST_FLOWS' })
 }
 </script>

@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { effectScope, watchSyncEffect, type Ref } from 'vue';
 import type { AnyActorRef } from 'xstate';
-import { _replyTo, _sendToLocalSurface, untypedBroadcastToSurface } from '../../src/events/index.ts';
+import { _replyTo, _sendToLocalSurface, untypedBroadcast } from '../../src/events/index.ts';
 import { _runDelivery } from '../../src/events/delivery.ts';
 import { readUntypedSurfaceState, useUntypedSurfaceState } from '../../src/fe/surface-state.ts';
 import { bindFeHost, unbindFeHost } from '../../src/runtime/fe-host.ts';
@@ -123,7 +123,7 @@ describe('readUntypedSurfaceState', () => {
   });
 });
 
-// The renderer half of sending: straight to this window's actor, with no bus between. A backend `untypedBroadcastToSurface`
+// The renderer half of sending: straight to this window's actor, with no bus between. A backend `untypedBroadcast`
 // reaches every window showing the surface, which is why the two have different names.
 // A read made while another pack's frontend is still loading has nothing to read yet. Resolving the actor once
 // left it `undefined` for the life of the scope, which made the cross-pack read — the reason the value is typed
@@ -216,15 +216,15 @@ describe('_sendToLocalSurface', () => {
     bindHost({ transport: { rootEvents: { emitSurfaceSend() {} } } } as never);
     try {
       expect(() => _sendToLocalSurface('default-setup/notes', { type: 'X' }))
-        .toThrow(/sendToSurface.*is the renderer's.*broadcastToSurface/s);
+        .toThrow(/sendToSurface.*is the renderer's.*broadcast/s);
     } finally {
       unbindHost();
     }
   });
 
-  it("says broadcastToSurface is the backend's when only a window is bound", () => {
-    expect(() => untypedBroadcastToSurface('default-setup/notes', { type: 'X' }))
-      .toThrow(/broadcastToSurface.*is the backend's.*sendToSurface/s);
+  it("says broadcast is the backend's when only a window is bound", () => {
+    expect(() => untypedBroadcast('default-setup/notes', { type: 'X' }))
+      .toThrow(/broadcast.*is the backend's.*sendToSurface/s);
   });
 
   /**

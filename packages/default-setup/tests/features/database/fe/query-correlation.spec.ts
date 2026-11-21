@@ -52,12 +52,12 @@ it('takes the result for the query it is waiting on', async () => {
   const actor = console_();
   actor.send({ type: 'QUERY.EXECUTE', code: 'return 1' });
   expect(asked('EXECUTE_QUERY').input).toEqual({ code: 'return 1' });
-  expect(isRunningCode(actor.getSnapshot()), 'running until it is answered').toBe(true);
+  expect(isRunningCode(actor.getSnapshot().context.making), 'running until it is answered').toBe(true);
 
   await answer(asked('EXECUTE_QUERY'), { result: 'mine', executionTime: 1 });
 
   expect(actor.getSnapshot().context.queryResult).toBe('mine');
-  expect(isRunningCode(actor.getSnapshot())).toBe(false);
+  expect(isRunningCode(actor.getSnapshot().context.making)).toBe(false);
 });
 
 it('gives up a query when another is asked for, and takes the later one', async () => {
@@ -82,10 +82,10 @@ it('keeps a query under way through a transaction', async () => {
   expect(asked('EXECUTE_QUERY').stopped).toBe(false);
 
   await answer(asked('EXECUTE_TRANSACTION'), { result: 'written', executionTime: 1 });
-  expect(isRunningCode(actor.getSnapshot()), 'the query is still running').toBe(true);
+  expect(isRunningCode(actor.getSnapshot().context.making), 'the query is still running').toBe(true);
   await answer(asked('EXECUTE_QUERY'), { result: 'read', executionTime: 1 });
   expect(actor.getSnapshot().context.queryResult).toBe('read');
-  expect(isRunningCode(actor.getSnapshot())).toBe(false);
+  expect(isRunningCode(actor.getSnapshot().context.making)).toBe(false);
 });
 
 it('shows why a query could not run', async () => {
@@ -95,7 +95,7 @@ it('shows why a query could not run', async () => {
   await fail(asked('EXECUTE_QUERY'), { kind: 'failed', message: 'nope is not defined' });
 
   expect(actor.getSnapshot().context.error).toBe('nope is not defined');
-  expect(isRunningCode(actor.getSnapshot())).toBe(false);
+  expect(isRunningCode(actor.getSnapshot().context.making)).toBe(false);
 });
 
 // Deleting a row is a transaction, and the query in the editor is run again once it is done

@@ -1,7 +1,7 @@
 // Says the person is looking at a terminal for as long as a component showing it is mounted: when something
 // its programs finished or failed at arrives while the window has the focus, and when the window gets it.
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
-import { useSelector } from '@xstate/vue'
+import { useState } from '@apackdev/sdk/fe'
 import type { TerminalActor } from './state.ts'
 import { needsLooking } from './status.ts'
 
@@ -13,14 +13,14 @@ import { needsLooking } from './status.ts'
  * already report, are not the only ways someone comes to be looking.
  */
 export function useStatusSeen(actor: TerminalActor, terminalId: () => string | undefined): void {
-  const terminals = useSelector(actor, state => state.context.terminals)
+  const { state: terminal, send } = useState(actor)
   const unseen = computed(() => {
     const id = terminalId()
-    return id !== undefined && needsLooking(terminals.value.find(terminal => terminal.id === id)?.statuses)
+    return id !== undefined && needsLooking(terminal.value.data.terminals.find(terminal => terminal.id === id)?.statuses)
   })
   const look = () => {
     const id = terminalId()
-    if (id !== undefined && unseen.value && document.hasFocus()) actor.send({ type: 'terminal.SEEN', terminalId: id })
+    if (id !== undefined && unseen.value && document.hasFocus()) send({ type: 'terminal.SEEN', terminalId: id })
   }
   watch(unseen, look)
   onMounted(() => window.addEventListener('focus', look))

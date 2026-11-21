@@ -1,6 +1,6 @@
 import { setup, fromCallback } from 'xstate';
 import { defineSystem, getPackHelp, onPackCatalogChanged } from '@apackdev/sdk/framework';
-import { broadcastToSurface } from '../../../events.ts';
+import { broadcast } from '../../../events.ts';
 
 import type { HelpOutgoing } from '../../event-contracts.ts';
 export type Contract = {
@@ -13,7 +13,7 @@ const spec = defineSystem<Contract>();
 export const helpSystem = setup({
   types: spec.types,
   actors: { catalog: fromCallback(({ sendBack }) => onPackCatalogChanged(() => sendBack({ type: 'CATALOG_CHANGED' }))) },
-  actions: { sendCatalog: () => broadcastToSurface('settings', { type: 'HELP_CATALOG', catalog: getPackHelp() }) },
+  actions: { sendCatalog: () => broadcast('settings', { type: 'HELP_CATALOG', catalog: getPackHelp() }) },
 }).createMachine({
   id: 'help', context: {},
   invoke: { src: 'catalog' },

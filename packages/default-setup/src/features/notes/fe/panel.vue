@@ -4,22 +4,22 @@
     <div
       class="relative z-20 flex items-center justify-between h-header px-4 border-b border-neutral-800"
       :class="{ 'panel-drag': !dropdownOpen }"
-      @dragover.prevent="!showTrash && handleRootDragOver($event)"
-      @drop="!showTrash && handleRootDrop($event)"
+      @dragover.prevent="!notesMachine.data.showTrash && handleRootDragOver($event)"
+      @drop="!notesMachine.data.showTrash && handleRootDrop($event)"
     >
       <div class="flex items-center gap-1.5">
         <button
-          v-if="showTrash"
+          v-if="notesMachine.data.showTrash"
           class="flex items-center justify-center w-5 h-5 text-neutral-400 hover:text-neutral-200 transition-colors rounded"
           title="Back to Notes"
           @click="handleHideTrash"
         >
           <ArrowLeft :size="14" />
         </button>
-        <span class="text-sm font-medium text-neutral-300">{{ showTrash ? 'Trash' : 'Notes' }}</span>
+        <span class="text-sm font-medium text-neutral-300">{{ notesMachine.data.showTrash ? 'Trash' : 'Notes' }}</span>
       </div>
       <div class="flex items-center gap-0.5">
-        <template v-if="showTrash">
+        <template v-if="notesMachine.data.showTrash">
           <button
             v-if="trashedNotes.length > 0"
             class="flex items-center justify-center px-2 h-6 text-xs text-red-400 hover:text-red-300 hover:bg-neutral-700/50 transition-colors rounded"
@@ -40,7 +40,7 @@
           </button>
           <button
             class="flex items-center justify-center w-6 h-6 text-neutral-400 hover:text-neutral-200 transition-colors rounded"
-            :class="searchActive && 'text-neutral-200 bg-neutral-700'"
+            :class="notesMachine.data.panelSearchActive && 'text-neutral-200 bg-neutral-700'"
             title="Search notes"
             @click="toggleSearch"
           >
@@ -79,7 +79,7 @@
     </div>
 
     <!-- Trash View -->
-    <template v-if="showTrash">
+    <template v-if="notesMachine.data.showTrash">
       <div class="flex-1 overflow-y-auto p-3 px-2">
         <div v-if="trashedNotes.length === 0" class="px-3 py-4 text-sm text-neutral-500 text-center">
           Trash is empty
@@ -115,7 +115,7 @@
     <!-- Normal View -->
     <template v-else>
       <!-- Search Input -->
-      <div v-if="searchActive" class="px-3 py-2 border-b border-neutral-800">
+      <div v-if="notesMachine.data.panelSearchActive" class="px-3 py-2 border-b border-neutral-800">
         <div class="relative">
           <Search :size="14" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500" />
           <input
@@ -139,7 +139,7 @@
       </div>
 
       <!-- Search Results -->
-      <div v-if="searchActive && searchQuery.trim()" ref="searchResultsRef" class="flex-1 overflow-y-auto overflow-x-hidden p-2">
+      <div v-if="notesMachine.data.panelSearchActive && searchQuery.trim()" ref="searchResultsRef" class="flex-1 overflow-y-auto overflow-x-hidden p-2">
         <div v-if="filteredNotes.length === 0" class="px-3 py-4 text-sm text-neutral-500 text-center">
           No notes found
         </div>
@@ -259,7 +259,6 @@
 import { useView } from '#generated/fe.ts'
 import { useSettings } from '#generated/settings-fe.ts'
 import { computed, ref, nextTick, watch } from 'vue'
-import { useSelector } from '@xstate/vue'
 import { type NotesState } from './state.ts'
 import NoteTreeItem from './components/NoteTreeItem.vue'
 import { Plus, ListChecks, MoreVertical, Star, ChevronRight, Trash2, ArrowLeft, Undo2, Search, X, FileText, CircleCheck } from 'lucide-vue-next'
@@ -272,14 +271,13 @@ import {
 } from 'reka-ui'
 import { useNoteTreeDragDrop } from './composables/useNoteTreeDragDrop.ts'
 import type { MenuItem } from '@apackdev/ui/composables/useContextMenu'
-import { useTrackedMenuOpen, useSurface } from '@apackdev/sdk/fe'
+import { useTrackedMenuOpen, useState } from '@apackdev/sdk/fe'
 
-const actor: NotesState = useSurface()
+const { state: notesMachine, send } = useState<NotesState>()
 
 const dropdownOpen = ref(false)
 const favoritesExpanded = ref(true)
 const showFavorites = ref(true)
-const searchActive = useSelector(actor, (s) => s.context.panelSearchActive)
 const searchQuery = ref('')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const highlightedIndex = ref(0)
@@ -291,13 +289,12 @@ const createMenuItems = computed<MenuItem[]>(() => [
   { label: showFavorites.value ? 'Hide Favorites' : 'Show Favorites', icon: Star, class: 'text-neutral-300', iconClass: 'text-yellow-500/60', action: () => { showFavorites.value = !showFavorites.value } },
   { label: 'Trash', icon: Trash2, class: 'text-neutral-300', action: () => handleShowTrash() },
 ])
-const notes = useSelector(actor, (s) => s.context.notes)
-const currentNoteId = useSelector(actor, (s) => s.context.currentNoteId)
-const expandedNodeIds = useSelector(actor, (s) => s.context.expandedNodeIds)
-const selectedNoteIds = useSelector(actor, (s) => s.context.selectedNoteIds)
+const notes = computed(() => notesMachine.value.data.notes)
+const currentNoteId = computed(() => notesMachine.value.data.currentNoteId)
+const expandedNodeIds = computed(() => notesMachine.value.data.expandedNodeIds)
+const selectedNoteIds = computed(() => notesMachine.value.data.selectedNoteIds)
 const settings = useSettings('notes')
 const showCollapseIcon = computed(() => settings.value.value?.showCollapseIcon ?? false)
-const showTrash = useSelector(actor, (s) => s.context.showTrash)
 // The trash, which the panel's trash button counts whether or not it is open
 const trash = useView('notes', 'trash')
 const trashedNotes = computed(() => trash.data ?? [])
@@ -317,10 +314,10 @@ const filteredNotes = computed(() => {
 })
 
 function toggleSearch() {
-  actor.send({ type: 'NOTE.TOGGLE_PANEL_SEARCH' })
+  send({ type: 'NOTE.TOGGLE_PANEL_SEARCH' })
 }
 
-watch(searchActive, (active) => {
+watch(() => notesMachine.value.data.panelSearchActive, (active) => {
   if (active) {
     nextTick(() => searchInputRef.value?.focus())
   } else {
@@ -342,7 +339,7 @@ watch(highlightedIndex, () => {
 })
 
 function handleToggleFavorite(noteId: string) {
-  actor.send({ type: 'NOTE.TOGGLE_FAVORITE', noteId })
+  send({ type: 'NOTE.TOGGLE_FAVORITE', noteId })
 }
 
 const {
@@ -360,14 +357,14 @@ const {
   currentNoteId,
   expandedNodeIds,
   onMove: (noteIds, newParentId) => {
-    actor.send({ type: 'NOTE.MOVE', noteIds, newParentId })
+    send({ type: 'NOTE.MOVE', noteIds, newParentId })
   },
   onReorder: (noteId, newParentId, newIndex) => {
-    actor.send({ type: 'NOTE.REORDER', noteId, newParentId, newIndex })
+    send({ type: 'NOTE.REORDER', noteId, newParentId, newIndex })
   },
   onFileDrop: (files, parentId, index) => {
     for (const [i, file] of files.entries()) {
-      actor.send({ type: 'NOTE.CREATE', title: file.title, content: file.content, parentId: parentId ?? undefined, displayOrder: index + i })
+      send({ type: 'NOTE.CREATE', title: file.title, content: file.content, parentId: parentId ?? undefined, displayOrder: index + i })
     }
   },
 })
@@ -405,63 +402,63 @@ function handleShiftSelect(noteId: string) {
   const start = Math.min(anchorIdx, targetIdx)
   const end = Math.max(anchorIdx, targetIdx)
   const rangeIds = visible.slice(start, end + 1)
-  actor.send({ type: 'NOTE.RANGE_SELECT', noteIds: rangeIds })
+  send({ type: 'NOTE.RANGE_SELECT', noteIds: rangeIds })
 }
 
 function handleSelectNote(noteId: string) {
-  actor.send({ type: 'NOTE.SELECT', noteId })
+  send({ type: 'NOTE.SELECT', noteId })
 }
 
 function handleOpenNote(noteId: string) {
-  actor.send({ type: 'NOTE.OPEN', noteId })
+  send({ type: 'NOTE.OPEN', noteId })
 }
 
 function handleToggleSelect(noteId: string) {
-  actor.send({ type: 'NOTE.TOGGLE_SELECT', noteId })
+  send({ type: 'NOTE.TOGGLE_SELECT', noteId })
 }
 
 function handleToggleExpand(nodeId: string) {
-  actor.send({ type: 'NOTE.TOGGLE_EXPAND', nodeId })
+  send({ type: 'NOTE.TOGGLE_EXPAND', nodeId })
 }
 
 function handleCreateNote(parentId?: string) {
-  actor.send({ type: 'NOTE.CREATE', parentId })
+  send({ type: 'NOTE.CREATE', parentId })
 }
 
 function handleCreateTaskList(parentId?: string) {
-  actor.send({ type: 'NOTE.CREATE_TASKLIST', parentId })
+  send({ type: 'NOTE.CREATE_TASKLIST', parentId })
 }
 
 function handleCreateTask(parentId: string) {
-  actor.send({ type: 'TASK.CREATE', parentId })
+  send({ type: 'TASK.CREATE', parentId })
 }
 
 function handleDeleteNote(noteId: string) {
-  actor.send({ type: 'NOTE.DELETE', noteId })
+  send({ type: 'NOTE.DELETE', noteId })
 }
 
 function handleUpdateIcon(noteId: string, icon: string | null) {
-  actor.send({ type: 'NOTE.UPDATE_ICON', noteId, icon })
+  send({ type: 'NOTE.UPDATE_ICON', noteId, icon })
 }
 
 function handleShowTrash() {
-  actor.send({ type: 'NOTE.SHOW_TRASH' })
+  send({ type: 'NOTE.SHOW_TRASH' })
 }
 
 function handleHideTrash() {
-  actor.send({ type: 'NOTE.HIDE_TRASH' })
+  send({ type: 'NOTE.HIDE_TRASH' })
 }
 
 function handleRestoreNote(noteId: string) {
-  actor.send({ type: 'NOTE.RESTORE', noteId })
+  send({ type: 'NOTE.RESTORE', noteId })
 }
 
 function handlePermanentlyDelete(noteId: string) {
-  actor.send({ type: 'NOTE.PERMANENTLY_DELETE', noteId })
+  send({ type: 'NOTE.PERMANENTLY_DELETE', noteId })
 }
 
 function handleEmptyTrash() {
-  actor.send({ type: 'NOTE.EMPTY_TRASH' })
+  send({ type: 'NOTE.EMPTY_TRASH' })
 }
 
 function formatDeletedAge(trashedAt?: number): string {
@@ -475,7 +472,7 @@ function formatDeletedAge(trashedAt?: number): string {
 function handleOutsideClick(e: MouseEvent) {
   const target = e.target as HTMLElement
   if (!target.closest('[data-note-tree-item]')) {
-    actor.send({ type: 'NOTE.CLEAR_SELECTION' })
+    send({ type: 'NOTE.CLEAR_SELECTION' })
   }
 }
 

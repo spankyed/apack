@@ -128,7 +128,7 @@ function testEngine(): EarsEngine {
 /**
  * Starts the test runtime: an EARS engine (created and installed) on a database in a temporary directory, removed as the
  * process exits, with the SDK's entity types plus `entityTypes`, relation kinds plus `relationKinds` and roles plus
- * `roles`, and binds a test app (`bindHost`): `testRootEvents` as its bus (so `broadcastToSurface`, `sendToSystem`, `onIncoming` and
+ * `roles`, and binds a test app (`bindHost`): `testRootEvents` as its bus (so `broadcast`, `tell`, `onIncoming` and
  * log events go there; its log events are printed and its SYSTEM_ERROR events recorded for `takeSystemErrors`),
  * `testPacks` over `packs`, `appVersion`, an `appData` that resets the database and keeps onboarding in `onboarding`, a run history in memory
  * over it, `secrets` in memory, and an `inference` that fails until a test mocks it. Safe to call again; entity types

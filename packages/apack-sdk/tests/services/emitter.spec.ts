@@ -30,15 +30,15 @@ function sent(send: () => void): unknown[] {
 describe('services.emitter', () => {
   it('sends to the system a <packId>/<featureId> name resolves to', () => {
     expect(sent(() => {
-      createActionEmitter().sendToSystem('default-setup/notes', { type: 'GET_NOTES' });
-      createActionEmitter().sendToSystem('ext/notes', { type: 'GET_NOTES' });
+      createActionEmitter().tell('default-setup/notes', { type: 'GET_NOTES' });
+      createActionEmitter().tell('ext/notes', { type: 'GET_NOTES' });
     })).toEqual([{ to: 'default-setup/notes', call: expect.any(String), event: { type: 'GET_NOTES' } }, { to: 'ext/notes', call: expect.any(String), event: { type: 'GET_NOTES' } }]);
   });
 
   it("sends to the surface a <packId>/<featureId> name is, the host's included", () => {
     expect(sent(() => {
-      createActionEmitter().broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
-      createActionEmitter().broadcastToSurface('host/application', { type: 'APPLICATION_HOTKEYS', hotkeys: {} });
+      createActionEmitter().broadcast('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
+      createActionEmitter().broadcast('host/application', { type: 'APPLICATION_HOTKEYS', hotkeys: {} });
     })).toEqual([
       { to: 'default-setup/threads', call: expect.any(String), event: { type: 'SET_PHASE', phase: 'Edit' } },
       { to: 'host/application', call: expect.any(String), event: { type: 'APPLICATION_HOTKEYS', hotkeys: {} } },
@@ -47,31 +47,31 @@ describe('services.emitter', () => {
 
   // The host is a pack: its surfaces are named like any other's
   it("throws for a host surface's bare id, naming its ref", () => {
-    expect(() => createActionEmitter().broadcastToSurface('application', { type: 'APPLICATION_HOTKEYS', hotkeys: {} }))
+    expect(() => createActionEmitter().broadcast('application', { type: 'APPLICATION_HOTKEYS', hotkeys: {} }))
       .toThrow('No registered surface is named "application": actions name a surface "<packId>/<featureId>" — did you mean "host/application"?');
   });
 
   // The documented form before surfaces were addressed per pack: an action a user wrote then still says this
   it('throws for a bare feature name, naming the pack it most likely means, and sends nothing', () => {
     expect(sent(() => {
-      expect(() => createActionEmitter().broadcastToSurface('threads', { type: 'SET_PHASE', phase: 'Edit' }))
+      expect(() => createActionEmitter().broadcast('threads', { type: 'SET_PHASE', phase: 'Edit' }))
         .toThrow('No registered surface is named "threads": actions name a surface "<packId>/<featureId>" — did you mean "default-setup/threads"?');
-      expect(() => createActionEmitter().sendToSystem('notes', { type: 'GET_NOTES' }))
+      expect(() => createActionEmitter().tell('notes', { type: 'GET_NOTES' }))
         .toThrow('No registered system is named "notes": actions name a system "<packId>/<featureId>"');
     })).toEqual([]);
   });
 
   it('throws for a name no pack registered', () => {
-    expect(() => createActionEmitter().broadcastToSurface('ext/threads', { type: 'X' })).toThrow('No registered surface is named "ext/threads"');
-    expect(() => createActionEmitter().sendToSystem('other/notes', { type: 'X' })).toThrow('No registered system is named "other/notes"');
+    expect(() => createActionEmitter().broadcast('ext/threads', { type: 'X' })).toThrow('No registered surface is named "ext/threads"');
+    expect(() => createActionEmitter().tell('other/notes', { type: 'X' })).toThrow('No registered system is named "other/notes"');
   });
 
   // `services.emitter` is what pack code reaches through `services`: only the pack that ran an action knows which
   // action it was, so reached this way there is nothing to stamp
   it('stamps nothing when no action is running', () => {
     const [surface, system] = sent(() => {
-      createActionEmitter().broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
-      createActionEmitter().sendToSystem('default-setup/notes', { type: 'GET_NOTES' });
+      createActionEmitter().broadcast('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
+      createActionEmitter().tell('default-setup/notes', { type: 'GET_NOTES' });
     }) as Array<Record<string, unknown>>;
     expect(surface).not.toHaveProperty('from');
     expect(surface).not.toHaveProperty('via');
@@ -88,8 +88,8 @@ describe('createActionEmitter', () => {
 
   it("stamps the pack running the action and the action itself on what it sends", () => {
     expect(sent(() => {
-      emitter.broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
-      emitter.sendToSystem('ext/notes', { type: 'GET_NOTES' });
+      emitter.broadcast('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
+      emitter.tell('ext/notes', { type: 'GET_NOTES' });
     })).toEqual([
       { to: 'default-setup/threads', call: expect.any(String), event: { type: 'SET_PHASE', phase: 'Edit' }, from: 'default-setup', via: 'action:Summarise Thread' },
       { to: 'ext/notes', call: expect.any(String), event: { type: 'GET_NOTES' }, from: 'default-setup', via: 'action:Summarise Thread' },
@@ -98,7 +98,7 @@ describe('createActionEmitter', () => {
 
   it('still refuses a bare feature name, so the stamp buys no new way to name things', () => {
     expect(sent(() => {
-      expect(() => emitter.broadcastToSurface('threads', { type: 'SET_PHASE', phase: 'Edit' }))
+      expect(() => emitter.broadcast('threads', { type: 'SET_PHASE', phase: 'Edit' }))
         .toThrow('No registered surface is named "threads"');
     })).toEqual([]);
   });

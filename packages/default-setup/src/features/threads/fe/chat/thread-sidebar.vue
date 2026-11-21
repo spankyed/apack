@@ -31,11 +31,11 @@
     <!-- Scrollable list -->
     <div class="flex-1 overflow-y-auto py-1" @scroll="onSidebarScroll">
       <!-- Search results -->
-      <template v-if="!showArchive && messageSearch.query">
-        <div v-if="messageSearch.searching" class="py-6 text-center text-xs text-neutral-500">Searching…</div>
-        <div v-else-if="messageSearch.results.length === 0" class="py-6 text-center text-xs text-neutral-500">No messages match</div>
+      <template v-if="!showArchive && threads.data.messageSearch.query">
+        <div v-if="threads.data.messageSearch.searching" class="py-6 text-center text-xs text-neutral-500">Searching…</div>
+        <div v-else-if="threads.data.messageSearch.results.length === 0" class="py-6 text-center text-xs text-neutral-500">No messages match</div>
         <button
-          v-for="result in messageSearch.results" :key="result.messageId"
+          v-for="result in threads.data.messageSearch.results" :key="result.messageId"
           class="block w-full text-left px-3 py-2 hover:bg-neutral-800 transition-colors"
           data-testid="message-search-result"
           @click="emit('open-message', result)"
@@ -53,10 +53,10 @@
 
       <!-- Archive view -->
       <template v-else-if="showArchive">
-        <div v-if="archivedThreads.length === 0" class="py-8 text-center">
+        <div v-if="threads.data.sidebarArchivedThreads.length === 0" class="py-8 text-center">
           <p class="text-sm text-neutral-500">No archived threads</p>
         </div>
-        <ContextMenuRoot v-for="thread in archivedThreads.slice(0, archiveDisplayCount)" :key="thread.id">
+        <ContextMenuRoot v-for="thread in threads.data.sidebarArchivedThreads.slice(0, archiveDisplayCount)" :key="thread.id">
           <ContextMenuTrigger as-child>
             <div
               class="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer transition-colors group hover:bg-neutral-800 text-neutral-300 hover:text-white"
@@ -107,9 +107,9 @@
                 <div v-if="!collapsed.has(pg.group.id)" class="ml-[13px] border-l border-neutral-700/25">
                   <SidebarThreadItem
                     v-for="thread in pg.threads" :key="thread.id"
-                    :thread="thread" :is-active="thread.id === currentThread?.id" :is-pinned="!!thread.pinned"
+                    :thread="thread" :is-active="thread.id === threads.data.currentThread?.id" :is-pinned="!!thread.pinned"
                     :dot-color="getDotColor(thread.id)" :is-busy="getBusy(thread.id)"
-                    :group-id="pg.group.id" :tab-groups="tabGroups"
+                    :group-id="pg.group.id" :tab-groups="threads.data.tabGroups"
                     @select="emit('select-thread', thread.id!)" @rename="handleRename(thread.id!, thread.topic)"
                     @pin="handlePin(thread.id!)" @unpin="handleUnpin(thread.id!)"
                     @archive="handleArchive(thread.id!)" @delete="handleDelete(thread)"
@@ -123,9 +123,9 @@
               <!-- Ungrouped pinned threads -->
               <SidebarThreadItem
                 v-for="thread in ungroupedPinnedThreads" :key="thread.id"
-                :thread="thread" :is-active="thread.id === currentThread?.id" :is-pinned="!!thread.pinned"
+                :thread="thread" :is-active="thread.id === threads.data.currentThread?.id" :is-pinned="!!thread.pinned"
                 :dot-color="getDotColor(thread.id)" :is-busy="getBusy(thread.id)"
-                :group-id="undefined" :tab-groups="tabGroups"
+                :group-id="undefined" :tab-groups="threads.data.tabGroups"
                 @select="emit('select-thread', thread.id!)" @rename="handleRename(thread.id!, thread.topic)"
                 @pin="handlePin(thread.id!)" @unpin="handleUnpin(thread.id!)"
                 @archive="handleArchive(thread.id!)" @delete="handleDelete(thread)"
@@ -149,9 +149,9 @@
             <div v-if="!collapsed.has(ug.group.id)" class="ml-[15px] border-l border-neutral-700/30">
               <SidebarThreadItem
                 v-for="thread in ug.threads" :key="thread.id"
-                :thread="thread" :is-active="thread.id === currentThread?.id" :is-pinned="!!thread.pinned"
+                :thread="thread" :is-active="thread.id === threads.data.currentThread?.id" :is-pinned="!!thread.pinned"
                 :dot-color="getDotColor(thread.id)" :is-busy="getBusy(thread.id)"
-                :group-id="ug.group.id" :tab-groups="tabGroups"
+                :group-id="ug.group.id" :tab-groups="threads.data.tabGroups"
                 @select="emit('select-thread', thread.id!)" @rename="handleRename(thread.id!, thread.topic)"
                 @pin="handlePin(thread.id!)" @unpin="handleUnpin(thread.id!)"
                 @archive="handleArchive(thread.id!)" @delete="handleDelete(thread)"
@@ -175,9 +175,9 @@
             <div v-if="!collapsed.has(tg.label)" class="ml-[15px] border-l border-neutral-700/30">
               <SidebarThreadItem
                 v-for="thread in tg.threads" :key="thread.id"
-                :thread="thread" :is-active="thread.id === currentThread?.id" :is-pinned="!!thread.pinned"
+                :thread="thread" :is-active="thread.id === threads.data.currentThread?.id" :is-pinned="!!thread.pinned"
                 :dot-color="getDotColor(thread.id)" :is-busy="getBusy(thread.id)"
-                :group-id="tabGroupMap.get(thread.id!)" :tab-groups="tabGroups"
+                :group-id="tabGroupMap.get(thread.id!)" :tab-groups="threads.data.tabGroups"
                 @select="emit('select-thread', thread.id!)" @rename="handleRename(thread.id!, thread.topic)"
                 @pin="handlePin(thread.id!)" @unpin="handleUnpin(thread.id!)"
                 @archive="handleArchive(thread.id!)" @delete="handleDelete(thread)"
@@ -206,13 +206,12 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { computed, reactive, ref, watchEffect } from 'vue'
 import { X, ChevronDown, ChevronRight, ChevronLeft, Archive, Search } from 'lucide-vue-next'
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
 import type { MessageSearchResult } from '#generated/types.ts'
-import { useSelector } from '@xstate/vue'
 import type { ThreadsState, ThreadListItem } from '#features/threads/fe/state.ts'
 import { getThreadDotColor, isThreadBusy } from './thread-status.ts'
 import { ContextMenuRoot, ContextMenuTrigger } from 'reka-ui'
@@ -227,24 +226,17 @@ const emit = defineEmits<{
 
 // State from threads actor
 const actor: ThreadsState = useSurface()
-const threadMap = useSelector(actor, (state) => state.context.threadMap)
-const tabs = useSelector(actor, (state) => state.context.tabs)
-const tabGroups = useSelector(actor, (state) => state.context.tabGroups)
-const currentThread = useSelector(actor, (state) => state.context.currentThread)
-const chatStates = useSelector(actor, (state) => state.context.chatStates)
-const chatStateOverrides = useSelector(actor, (state) => state.context.chatStateOverrides)
-const settings = useSelector(actor, (state) => state.context.settings)
-const messageSearch = useSelector(actor, (state) => state.context.messageSearch)
+const { state: threads, send } = useState(actor)
 
 // The message search box: what is typed is sent once typing pauses, and its results are the surface's
-const searchText = ref(messageSearch.value.query)
+const searchText = ref(threads.value.data.messageSearch.query)
 const { debounced: debouncedSearch, cancel: cancelSearch } = useDebounce(() => {
-  actor.send({ type: 'SEARCH_MESSAGES', query: searchText.value })
+  send({ type: 'SEARCH_MESSAGES', query: searchText.value })
 }, 200)
 function clearSearch() {
   cancelSearch()
   searchText.value = ''
-  actor.send({ type: 'SEARCH_MESSAGES', query: '' })
+  send({ type: 'SEARCH_MESSAGES', query: '' })
 }
 
 /** A result's snippet as runs of text, each marked where the search matched it */
@@ -279,12 +271,12 @@ function toggleCollapsed(key: string) {
 // Thread status helpers
 function getDotColor(threadId: string | undefined): string | undefined {
   if (!threadId) return undefined
-  return getThreadDotColor(threadId, chatStates.value, chatStateOverrides.value, settings.value)
+  return getThreadDotColor(threadId, threads.value.data.chatStates, threads.value.data.chatStateOverrides, threads.value.data.settings)
 }
 
 function getBusy(threadId: string | undefined): boolean {
   if (!threadId) return false
-  return isThreadBusy(threadId, chatStates.value, chatStateOverrides.value, settings.value)
+  return isThreadBusy(threadId, threads.value.data.chatStates, threads.value.data.chatStateOverrides, threads.value.data.settings)
 }
 
 // Render limiting
@@ -296,7 +288,7 @@ function onSidebarScroll(e: Event) {
   const el = e.target as HTMLElement
   if (el.scrollHeight - el.scrollTop - el.clientHeight < 100) {
     if (showArchive.value) {
-      archiveDisplayCount.value = Math.min(archiveDisplayCount.value + BATCH_SIZE, archivedThreads.value.length)
+      archiveDisplayCount.value = Math.min(archiveDisplayCount.value + BATCH_SIZE, threads.value.data.sidebarArchivedThreads.length)
     } else {
       displayCount.value += BATCH_SIZE
     }
@@ -317,7 +309,7 @@ function sortTs(t: ThreadListItem): number {
 
 // All threads sorted by recency
 const allThreads = computed(() =>
-  Object.values(threadMap.value)
+  Object.values(threads.value.data.threadMap)
     .filter(t => !t.archived)
     .sort((a, b) => sortTs(b) - sortTs(a))
 )
@@ -328,7 +320,7 @@ const unpinnedThreads = computed(() => allThreads.value.filter(t => !t.pinned))
 // Map threadId -> groupId from open tabs
 const tabGroupMap = computed(() => {
   const map = new Map<string, string>()
-  for (const tab of tabs.value) {
+  for (const tab of threads.value.data.tabs) {
     if (tab.groupId) map.set(tab.id, tab.groupId)
   }
   return map
@@ -336,7 +328,7 @@ const tabGroupMap = computed(() => {
 
 // Pinned groups
 const pinnedGroups = computed(() =>
-  tabGroups.value
+  threads.value.data.tabGroups
     .filter(g => g.isPinned)
     .sort((a, b) => a.order - b.order)
     .map(group => ({
@@ -354,7 +346,7 @@ const ungroupedPinnedThreads = computed(() => {
 
 // Unpinned groups
 const unpinnedGroups = computed(() =>
-  tabGroups.value
+  threads.value.data.tabGroups
     .filter(g => !g.isPinned)
     .sort((a, b) => a.order - b.order)
     .map(group => ({
@@ -412,51 +404,50 @@ watchEffect(() => {
 
 // Actions
 function handlePin(threadId: string) {
-  actor.send({ type: 'PIN_THREAD', threadId })
+  send({ type: 'PIN_THREAD', threadId })
 }
 
 function handleUnpin(threadId: string) {
-  actor.send({ type: 'UNPIN_THREAD', threadId })
+  send({ type: 'UNPIN_THREAD', threadId })
 }
 
 function handleRename(threadId: string, topic: string | undefined) {
   const newName = prompt('Rename thread:', topic || '')
   if (newName?.trim()) {
-    actor.send({ type: 'RENAME_THREAD', threadId, topic: newName.trim() })
+    send({ type: 'RENAME_THREAD', threadId, topic: newName.trim() })
   }
 }
 
 function handleArchive(threadId: string) {
-  if (settings.value?.skipArchiveConfirm || confirm('Archive this thread? It will be hidden from all lists.')) {
-    actor.send({ type: 'ARCHIVE_THREAD', threadId })
+  if (threads.value.data.settings?.skipArchiveConfirm || confirm('Archive this thread? It will be hidden from all lists.')) {
+    send({ type: 'ARCHIVE_THREAD', threadId })
   }
 }
 
 function handleDelete(thread: ThreadListItem) {
   if (confirm(`Permanently delete thread "${thread.topic || 'Untitled'}"? This cannot be undone.`)) {
-    actor.send({ type: 'DELETE_THREAD', threadId: thread.id! })
+    send({ type: 'DELETE_THREAD', threadId: thread.id! })
   }
 }
 
 function handleUnarchive(threadId: string) {
-  actor.send({ type: 'UNARCHIVE_THREAD', threadId })
+  send({ type: 'UNARCHIVE_THREAD', threadId })
 }
 
 function handleAddToGroup(tabId: string, groupId: string) {
-  actor.send({ type: 'ADD_TAB_TO_GROUP', tabId, groupId })
+  send({ type: 'ADD_TAB_TO_GROUP', tabId, groupId })
 }
 
 function handleRemoveFromGroup(tabId: string) {
-  actor.send({ type: 'REMOVE_TAB_FROM_GROUP', tabId })
+  send({ type: 'REMOVE_TAB_FROM_GROUP', tabId })
 }
 
 function handleCreateGroup(tabId: string) {
-  actor.send({ type: 'CREATE_TAB_GROUP', tabIds: [tabId] })
+  send({ type: 'CREATE_TAB_GROUP', tabIds: [tabId] })
 }
 
 // Archive view
 const showArchive = ref(false)
-const archivedThreads = useSelector(actor, (state) => state.context.sidebarArchivedThreads)
 
 function toggleArchive() {
   showArchive.value = !showArchive.value

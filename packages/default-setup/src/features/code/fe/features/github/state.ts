@@ -1,8 +1,9 @@
 // The app's sign-in to GitHub as a window shows it: who it is signed in as, and a sign-in under way with the code
 // to type at github.com. The backend holds the token; a window holds only what it shows.
-import { setup, assign, spawnChild, stopChild, type ActorRefFrom, type DoneActorEvent } from 'xstate'
-import type { AskOutcome, ProgressEventOf } from '@apackdev/sdk/events'
-import { fromAsk, sendToSystem } from '#generated/events.ts'
+import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
+import type { ProgressEventOf } from '@apackdev/sdk/events'
+import { makes, type MadeEvent, type Making } from '@apackdev/sdk/fe'
+import { fromAsk, tell } from '#generated/events.ts'
 import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts'
 import type { GitHubAccount, GitHubSignInFailure } from '#features/code/be/services/github.ts'
 
@@ -13,6 +14,8 @@ export interface GitHubSignInCode {
 }
 
 export interface CodeGitHubContext {
+  /** Which of the asks the machine makes (`made`) are under way */
+  making: Making<typeof made>
   /** Who the app is signed in as, `null` when it is not, and `undefined` until the backend has said */
   account: GitHubAccount | null | undefined
   /** The code of the sign-in this window started, once GitHub has given it; `null` before, and with none under way */
@@ -21,8 +24,8 @@ export interface CodeGitHubContext {
   failure: { reason: GitHubSignInFailure; message: string } | null
 }
 
-/** The id the read of the account is spawned under */
-const ACCOUNT = 'account'
+/** The asks the machine makes: the read of the account, one at a time */
+const made = makes(({ one }) => ({ account: one(fromAsk('code', 'github.GET_ACCOUNT')) }))
 
 export type Event =
   // What a window asks
@@ -33,7 +36,7 @@ export type Event =
   // What the sign-in under way says before it ends: the code to type at GitHub
   | ProgressEventOf<CodeSystemContract, 'github.SIGN_IN'>
   // How this window's read of the account ended
-  | DoneActorEvent<AskOutcome<CodeSystemContract['asks']['github.GET_ACCOUNT']>, typeof ACCOUNT>
+  | MadeEvent<typeof made>
   // The backend's news
   | { type: 'github.ACCOUNT_CHANGED'; account: GitHubAccount | null }
 
@@ -46,7 +49,7 @@ export const githubState = setup({
     events: {} as Event,
   },
   actors: {
-    readAccount: fromAsk('code', 'github.GET_ACCOUNT'),
+    ...made.actors,
     signIn: fromAsk('code', 'github.SIGN_IN'),
   },
   actions: {
@@ -63,14 +66,13 @@ export const githubState = setup({
 }).createMachine({
   id: 'github',
   initial: 'idle',
-  context: { account: undefined, code: null, failure: null },
+  context: { making: made.none(), account: undefined, code: null, failure: null },
   on: {
-    'github.SIGN_OUT': { actions: () => { sendToSystem('code', { type: 'github.SIGN_OUT' }) } },
+    'github.SIGN_OUT': { actions: () => { tell('code', { type: 'github.SIGN_OUT' }) } },
     // Who the app is signed in as, read when a view of it asks: a read under way is replaced by the newer one
-    'github.GET_ACCOUNT': { actions: [stopChild(ACCOUNT), spawnChild('readAccount', { id: ACCOUNT, input: {} })] },
-    [`xstate.done.actor.${ACCOUNT}`]: {
-      actions: [stopChild(ACCOUNT), assign({ account: ({ context, event }) => event.output.ok ? event.output.value : context.account })],
-    },
+    'github.GET_ACCOUNT': { actions: enqueueActions(({ enqueue }) => made.make(enqueue, 'account', {})) },
+    [made.done]: { actions: made.settle() },
+    'made.account': { actions: assign({ account: ({ context, event }) => event.outcome.ok ? event.outcome.value : context.account }) },
     // Entering `signingIn` again ends the sign-in under way and starts this one
     'github.SIGN_IN': { target: '.signingIn', reenter: true, actions: assign({ failure: null }) },
     'github.CANCEL_SIGN_IN': { target: '.idle' },

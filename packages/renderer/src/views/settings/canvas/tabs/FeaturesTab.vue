@@ -33,8 +33,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onMounted } from 'vue';
-import { useSelector } from '@xstate/vue';
-import { useSurface, useShell, untypedOpenSurface } from '@apackdev/sdk/fe';
+import { useState, useSurface, useShell, untypedOpenSurface } from '@apackdev/sdk/fe';
 import { resolveName, type FeatureRef } from '@apackdev/sdk/ids';
 import type { SettingsState } from '@apackdev/host/fe';
 import { Eye, EyeOff, ExternalLink } from 'lucide-vue-next';
@@ -47,7 +46,7 @@ const actor: SettingsState = useSurface();
 const shell = useShell();
 const snapshot = useWindowSettingsSnapshot();
 const settingsForm = useSettingsFormLookup();
-const selectedId = useSelector(actor, state => state.context.selectedFeatureId);
+const { state: settings, send } = useState(actor);
 const { hasHelp, openFeatureHelp } = useContextualHelp();
 const features = computed(() => Object.entries(snapshot.value?.catalog.features ?? {}).map(([name, definition]) => {
   const id = resolveName(name);
@@ -55,12 +54,12 @@ const features = computed(() => Object.entries(snapshot.value?.catalog.features 
   const surface = shell.surfaces.value.find(surface => surface.id === id);
   return { id, target, definition, surface, label: definition.title ?? surface?.label ?? id, form: settingsForm(target) };
 }));
-const selected = computed(() => features.value.find(feature => feature.id === selectedId.value) ?? features.value[0]);
+const selected = computed(() => features.value.find(feature => feature.id === settings.value.data.selectedFeatureId) ?? features.value[0]);
 const sidebar = ref<HTMLElement>();
 const scrollToSelected = () => sidebar.value?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
 onMounted(scrollToSelected);
 watch(() => selected.value?.id, scrollToSelected, { flush: 'post' });
-const selectFeature = (featureId: FeatureRef) => actor.send({ type: 'FEATURE.SELECT', featureId });
+const selectFeature = (featureId: FeatureRef) => send({ type: 'FEATURE.SELECT', featureId });
 const isVisible = (id: FeatureRef) => shell.surfaceVisibility.value[id] !== false;
 const toggleVisibility = (id: FeatureRef) => shell.setSurfaceVisible(id, !isVisible(id));
 </script>

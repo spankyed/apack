@@ -1,7 +1,7 @@
 import type { CommitAsks } from '../contract.ts'
 import { featureSettings } from '#generated/settings.ts';
 
-import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
+import { broadcast, tell } from '#generated/events.ts';
 import { AskError, type AsksEvents } from '@apackdev/sdk/events';
 import { safeEvents } from '@apackdev/sdk/helpers';
 import { defineHandlers } from '@apackdev/sdk/framework';
@@ -222,7 +222,7 @@ const handlers = defineHandlers<CodeCommitSystemContext, Event>();
 /** Says to every window that each of these files changed on disk, as a write here changed them */
 function filesChanged(paths: readonly string[]): void {
   for (const path of paths) {
-    broadcastToSurface(surfaceId, { type: 'explorer.FILE_CHANGED_EXTERNALLY', data: { path, changeType: 'change', modifiedAt: new Date() } })
+    broadcast(surfaceId, { type: 'explorer.FILE_CHANGED_EXTERNALLY', data: { path, changeType: 'change', modifiedAt: new Date() } })
   }
 }
 
@@ -546,7 +546,7 @@ const answers = handlers.answers<CommitAsks>({
     const threadsSettings = featureSettings.forFeature('threads').get()
     const provider = threadsSettings?.chat?.defaultMode || 'Claude Code'
 
-    sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT',
+    tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT',
       eventType: 'commit.generate',
       payload: { diff: truncatedDiff, branch, repoName, provider, ...(client && { client }) },
     })
@@ -921,7 +921,7 @@ export const commitSystem = setup({
      */
     announceRepositoryChanged: ({ event }) => {
       const { changed } = typeOf('commit.ANNOUNCE_REPOSITORY_CHANGED', event)
-      broadcastToSurface(surfaceId, { type: 'commit.REPOSITORY_CHANGED', changed })
+      broadcast(surfaceId, { type: 'commit.REPOSITORY_CHANGED', changed })
     },
 
     /**

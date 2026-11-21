@@ -1,6 +1,6 @@
 import type { FeatureRef } from '../ids/refs.ts';
 import type { Component } from 'vue';
-import type { AnyStateMachine, SnapshotFrom } from 'xstate';
+import type { AnyStateMachine } from 'xstate';
 import type { SurfaceHotkeyDefinition } from './hotkeys.ts';
 
 type RouteName = string;
@@ -80,11 +80,12 @@ export interface Surface {
   /**
    * Offers this surface's `panel` for surfaces that have none of their own. The app shows it in their place while
    * `isShown` holds of this surface's state, and its menu item (`label`) sends this surface `toggle`. The app asks
-   * only through these, never reading the surface's state itself.
+   * only through these, never reading the surface's state itself. `isShown` is handed what a component reads the
+   * surface with (`useState`): where its machine is, as a path, and what it holds.
    */
   fallbackPanel?: {
     label: string;
-    isShown: (snapshot: SnapshotFrom<AnyStateMachine>) => boolean;
+    isShown: (state: { readonly at: string; readonly data: unknown }) => boolean;
     toggle: { type: string };
   };
   chat?: Component;

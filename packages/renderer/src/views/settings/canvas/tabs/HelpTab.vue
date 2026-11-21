@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col h-full bg-neutral-900 text-neutral-200" data-testid="help-reader">
     <header class="flex items-center gap-3 p-4 border-b border-neutral-800">
-      <button aria-label="Back" :disabled="!context.history.length" @click="actor.send({ type: 'HELP.BACK' })" class="p-2 hover:bg-neutral-800 rounded disabled:opacity-30"><ArrowLeft :size="18" /></button>
+      <button aria-label="Back" :disabled="!context.history.length" @click="send({ type: 'HELP.BACK' })" class="p-2 hover:bg-neutral-800 rounded disabled:opacity-30"><ArrowLeft :size="18" /></button>
       <h1 class="font-semibold">Help</h1>
       <input aria-label="Search help" placeholder="Search help" :value="context.query" @input="search" class="ml-auto w-72 max-w-full bg-neutral-800 border border-neutral-700 rounded px-3 py-2 text-sm" />
     </header>
@@ -41,16 +41,16 @@
 </template>
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useSelector } from '@xstate/vue';
 import { ArrowLeft } from 'lucide-vue-next';
-import { useSurface, useShell, openHelp, openLink } from '@apackdev/sdk/fe';
+import { useState, useSurface, useShell, openHelp, openLink } from '@apackdev/sdk/fe';
 import { splitRef } from '@apackdev/sdk/ids';
 import { type SettingsState } from '@apackdev/host/fe';
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor';
 import { DISCORD_URL, MEMORIAL_URL } from '@/views/settings/constants';
 const actor: SettingsState = useSurface();
 const surfaces = useShell().surfaces;
-const context = useSelector(actor, s => s.context.help);
+const { state: settings, send } = useState(actor);
+const context = computed(() => settings.value.data.help);
 const selected = computed(() => context.value.catalog.articles.find(a => a.packId === context.value.target.packId && a.id === context.value.target.articleId));
 const articles = computed(() => {
   const query = context.value.query.trim().toLocaleLowerCase();
@@ -83,8 +83,8 @@ const features = computed(() => {
   return [...byRef].sort(([a], [b]) => a.localeCompare(b)).map(([ref, label]) => ({ ref, label }));
 });
 const featureFilter = computed(() => context.value.target.featureId ? `${context.value.target.packId}/${context.value.target.featureId}` : '');
-function readArticle(packId: string, articleId: string) { actor.send({ type: 'HELP.READ', packId, articleId }); }
-function search(event: Event) { actor.send({ type: 'HELP.SEARCH', query: (event.target as HTMLInputElement).value }); }
+function readArticle(packId: string, articleId: string) { send({ type: 'HELP.READ', packId, articleId }); }
+function search(event: Event) { send({ type: 'HELP.SEARCH', query: (event.target as HTMLInputElement).value }); }
 function filterFeature(event: Event) { const ref = splitRef((event.target as HTMLSelectElement).value); openHelp(ref ?? {}); }
 function articleLink(href: string) {
   const url = new URL(href, window.location.href);

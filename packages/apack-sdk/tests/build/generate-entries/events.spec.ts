@@ -252,7 +252,7 @@ describe('generated system sends', () => {
     expect(files['src/__generated__/bus-ids.ts']).toBeUndefined();
   });
 
-  it("gives a pack without systems a sendToSystem for its dependencies' systems", async () => {
+  it("gives a pack without systems a tell for its dependencies' systems", async () => {
     const files = await generate({ features: [{ id: 'sidebar', surface: { label: 'Fixture', state: writeSurfaceState('src/features/sidebar/fe/surface.ts') } }] }, { 'base-pack': dependency({ features: [system('calendar')] }, baseTypes) });
     const events = files['src/__generated__/events.ts'];
     expect(events).not.toContain('system-specs');

@@ -4,6 +4,7 @@
 
 ```ts
 
+import { AnyActorLogic } from 'xstate';
 import type { AnyActorRef } from 'xstate';
 import { AnyEventObject } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
@@ -19,18 +20,20 @@ import type { Editor } from '@tiptap/vue-3';
 import type { EditorState } from '@tiptap/pm/state';
 import { enqueueActions } from 'xstate';
 import { entityTypeOf } from '@elmdb/ears';
+import type { EventFrom } from 'xstate';
 import { EventObject } from 'xstate';
 import { ExtractPropTypes } from 'vue';
 import type { InjectionKey } from 'vue';
+import { InputFrom } from 'xstate';
 import { MachineContext } from 'xstate';
 import { MaybeRefOrGetter } from 'vue';
+import { OutputFrom } from 'xstate';
 import { ParameterizedObject } from 'xstate';
 import { PublicProps } from 'vue';
 import { Ref } from 'vue';
 import { RendererElement } from 'vue';
 import { RendererNode } from 'vue';
 import type { SnapshotFrom } from 'xstate';
-import { stopChild } from 'xstate';
 import { VNode } from 'vue';
 import { z } from 'zod';
 
@@ -39,25 +42,6 @@ export const ALL_COLORS: readonly ["blue", "orange", "purple", "green", "red", "
 
 // @public (undocumented)
 export type ArtifactFrontendBinding = ViewerFrontendBinding<ArtifactDeclaration, ArtifactDefinition>;
-
-// @public
-export const askId: <Kind extends string>(kind: Kind) => `${Kind}.${number}`;
-
-// @public
-export interface AskState<Args extends unknown[], O> {
-    ask(...args: Args): Promise<O>;
-    readonly outcome: O | undefined;
-    readonly pending: boolean;
-}
-
-// @public
-export interface AsksUnderWay {
-    // (undocumented)
-    readonly [id: string]: true;
-}
-
-// @public
-export const askUnderWay: (asking: AsksUnderWay, ...ids: string[]) => boolean;
 
 // @public (undocumented)
 export type BlockFrontendBinding = ViewerFrontendBinding<BlockDeclaration, BlockDefinition>;
@@ -185,12 +169,10 @@ export function createHotkeyProcessor<const TMap extends Record<string, string>,
 export function createNavHistory<T>(initial: T): NavHistory<T>;
 
 // @public
-export function endedAsk(event: {
-    type: string;
-}): string;
-
-// @public
-export const enqueueAsks: typeof enqueueActions;
+export interface EachMade<TLogic extends AnyActorLogic> {
+    readonly kind: 'each';
+    readonly logic: TLogic;
+}
 
 // @public
 export function entityIs<E extends string>(input: {
@@ -221,6 +203,9 @@ export interface FeSettingsHandle<T> extends ReadonlyFeSettingsHandle<T> {
     // (undocumented)
     set(update: SettingUpdate<T>): Promise<SettingsWriteResult>;
 }
+
+// @public
+export const freshKey: () => string;
 
 // @public
 export function getArtifactBinding(type: string): ArtifactFrontendBinding | undefined;
@@ -564,6 +549,55 @@ export interface KeyboardShortcut {
 export function loadTabGroups(storage: SurfaceStorage, name: string): TabGroup[];
 
 // @public
+export interface MachineState<TActor extends AnyActorRef> {
+    readonly at: string;
+    readonly data: SnapshotFrom<TActor> extends {
+        context: infer Context;
+    } ? Context : never;
+}
+
+// @public
+export type MadeEvent<TMakes> = TMakes extends Makes<infer M> ? EndedOf<M> | {
+    type: `xstate.done.actor.made.${string}`;
+    actorId: string;
+    output: unknown;
+} : never;
+
+// @public
+export interface Makes<M extends Declarations> {
+    readonly actors: {
+        readonly [N in keyof M & string as `made.${N}`]: LogicOf<M[N]>;
+    };
+    readonly done: 'xstate.done.actor.made.*';
+    drop(enqueue: MakesEnqueue, context: {
+        making: MakingFrom<M>;
+    }, name: keyof M & string, key?: string): void;
+    make<N extends OneNames<M>>(enqueue: MakesEnqueue, name: N, input: InputFrom<LogicOf<M[N]>>): void;
+    make<N extends EachNames<M>>(enqueue: MakesEnqueue, name: N, key: string, input: InputFrom<LogicOf<M[N]>>): void;
+    readonly names: readonly (keyof M & string)[];
+    none(): MakingFrom<M>;
+    settle<TContext extends MachineContext, TExpressionEvent extends EventObject, TEvent extends EventObject>(): ReturnType<typeof enqueueActions<TContext, TExpressionEvent, ParameterizedObject['params'] | undefined, TEvent, never, never, never, never, never>>;
+}
+
+// @public
+export function makes<const M extends Declarations>(declare: (the: typeof helpers) => M): Makes<M>;
+
+// @public
+export interface MakesEnqueue {
+    assign: (...given: never[]) => unknown;
+    spawnChild: (...given: never[]) => unknown;
+    stopChild: (...given: never[]) => unknown;
+}
+
+// @public
+export type Making<TMakes> = TMakes extends Makes<infer M> ? MakingFrom<M> : never;
+
+// @public
+export type MakingOf<Kinds extends Readonly<Record<string, 'one' | 'each'>>> = {
+    readonly [N in keyof Kinds]: Kinds[N] extends 'each' ? Readonly<Record<string, true>> : boolean;
+};
+
+// @public
 export function matchesHotkey(event: HotkeyEvent, config: KeyboardShortcut, cmdIsMeta?: boolean): boolean;
 
 // @public (undocumented)
@@ -575,10 +609,13 @@ export interface NavHistory<T> {
 }
 
 // @public
-export const noAsks: () => AsksUnderWay;
+export function onDslDeclarationsChanged(listener: () => void): () => void;
 
 // @public
-export function onDslDeclarationsChanged(listener: () => void): () => void;
+export interface OneMade<TLogic extends AnyActorLogic> {
+    readonly kind: 'one';
+    readonly logic: TLogic;
+}
 
 // @public (undocumented)
 export function onMenuOpenChange(open: boolean): void;
@@ -805,9 +842,6 @@ export interface StepFrontendBinding {
 }
 
 // @public
-export function stopAsks<TContext extends MachineContext, TExpressionEvent extends EventObject, TParams extends ParameterizedObject['params'] | undefined, TEvent extends EventObject>(...ids: string[]): ReturnType<typeof stopChild<TContext, TExpressionEvent, TParams, TEvent>>;
-
-// @public
 export interface Surface {
     // (undocumented)
     canvas?: Component | RouteComponents;
@@ -815,7 +849,10 @@ export interface Surface {
     chat?: Component;
     fallbackPanel?: {
         label: string;
-        isShown: (snapshot: SnapshotFrom<AnyStateMachine>) => boolean;
+        isShown: (state: {
+            readonly at: string;
+            readonly data: unknown;
+        }) => boolean;
         toggle: {
             type: string;
         };
@@ -1019,13 +1056,16 @@ export function useAppSettings(): Readonly<Ref<AppSettings | undefined>>;
 export function useArtifactDeclarations(): ComputedRef<readonly ArtifactCatalogEntry[]>;
 
 // @public
-export function useAsk<Args extends unknown[], O>(run: (...args: Args) => Promise<O>): AskState<Args, O>;
-
-// @public
 export function useBlockDeclarations(): ComputedRef<readonly BlockCatalogEntry[]>;
 
 // @public (undocumented)
 export function useDslDeclarations(): ComputedRef<readonly DslCatalogEntry[]>;
+
+// @public
+export interface UsedState<TActor extends AnyActorRef, TState = MachineState<TActor>> {
+    send(event: EventFrom<TActor>): void;
+    readonly state: ComputedRef<TState>;
+}
 
 // @public (undocumented)
 export function useFeatureSettings<T = unknown>(feature: FeatureRef): Readonly<Ref<T | undefined>>;
@@ -1048,6 +1088,15 @@ export function useSettingsStatus(): Readonly<Ref<ReturnType<SettingsPort['statu
 
 // @public
 export function useShell(): Shell;
+
+// @public
+export function useState<TActor extends AnyActorRef>(): UsedState<TActor>;
+
+// @public
+export function useState<TActor extends AnyActorRef>(actor: MaybeRefOrGetter<TActor>): UsedState<TActor>;
+
+// @public
+export function useState<TActor extends AnyActorRef>(actor: MaybeRefOrGetter<TActor | undefined>): UsedState<TActor, MachineState<TActor> | undefined>;
 
 // @public
 export function useStepDeclarations(): ComputedRef<readonly StepCatalogEntry[]>;

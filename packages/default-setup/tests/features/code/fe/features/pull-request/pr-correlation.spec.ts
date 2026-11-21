@@ -1,9 +1,9 @@
 // Which answer a PR view takes: the one in its own slot, keyed by what it asked for.
 //
 // A diff is a view fetching data, and the rule for that job (`packages/default-setup/CLAUDE.md`) is a slot
-// keyed by what was asked: each ask's comparison is recorded under the id it runs as, its answer writes that key, and the
-// view reads the key it is showing. The branch-only asker compares against no head, so nothing read off an
-// answer could tell its files from a PR's onto the same base; the recorded key does.
+// keyed by what was asked: each ask is made under its comparison, its answer writes that key, and the view reads
+// the key it is showing. The branch-only asker compares against no head, so nothing read off an answer could
+// tell its files from a PR's onto the same base; the key its ask was made under does.
 //
 // The file-diff half is its own because its answer **opens a tab**: a key decides which row to write, not
 // whether there should be one, so the tab is opened for the file still selected. The two halves are tested
@@ -14,8 +14,8 @@ import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 import type { GhPullRequest } from '#generated/types.ts';
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+const tell = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 
 // `addTabToParent` is how a file diff reaches the UI, and the only observable effect of that handler — it
 // guards on `self._parent`, so a standalone actor would silently open nothing and prove nothing
@@ -71,7 +71,7 @@ const selectPR = async (actor: ReturnType<typeof started>, which: GhPullRequest)
 };
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  tell.mockReset();
   resetAsks();
   addTabToParent.mockReset();
 });

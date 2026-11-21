@@ -263,7 +263,7 @@ import { Wrench, Copy, Check, Terminal } from 'lucide-vue-next'
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'
 import { useSurfaceState } from '#generated/fe.ts'
 import { openSurface } from '#generated/fe.ts'
-import { sendToSystem } from '#generated/events.ts'
+import { tell } from '#generated/events.ts'
 
 
 type PermissionMode =
@@ -459,7 +459,7 @@ function selectPermissionMode(mode: PermissionMode) {
     console.warn('[claude-session-artifact] no current thread; cannot update permission mode')
     return
   }
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'FORWARD_BRAIN_EVENT',
     eventType: 'user.update.permissionMode',
     payload: { threadId, mode },
@@ -469,7 +469,7 @@ function selectPermissionMode(mode: PermissionMode) {
 function clearGoal() {
   const threadId = currentThreadId.value
   if (!threadId) return
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'FORWARD_BRAIN_EVENT',
     eventType: 'user.goal.clear',
     payload: { threadId },
@@ -482,7 +482,7 @@ function selectWorktree(value: boolean) {
   if (value === useWorktree.value) return
   const threadId = currentThreadId.value
   if (!threadId) return
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'FORWARD_BRAIN_EVENT',
     eventType: 'user.update.worktree',
     payload: { threadId, useWorktree: value },

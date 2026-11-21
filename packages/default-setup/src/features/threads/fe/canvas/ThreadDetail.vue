@@ -6,13 +6,13 @@
       :isEditing="isViewMode"
       :isValid="isValid"
       :hideSave="isViewMode"
-      @back="actor.send({ type: isViewMode ? 'VIEW_LIST' : 'CANCEL_CREATE' })"
-      @save="actor.send({ type: 'CREATE_THREAD' })"
+      @back="send({ type: isViewMode ? 'VIEW_LIST' : 'CANCEL_CREATE' })"
+      @save="send({ type: 'CREATE_THREAD' })"
     >
       <template #actions>
         <Button
           v-if="isViewMode"
-          @click="actor.send({ type: 'OPEN_THREAD_CHAT', threadId })"
+          @click="send({ type: 'OPEN_THREAD_CHAT', threadId: threads.data.view.id })"
           variant="ghost"
           class="shrink-0"
         >
@@ -40,13 +40,13 @@
         ]"
       >
         <option
-          v-for="statusOption in (settings?.statuses || [])"
+          v-for="statusOption in (threads.data.settings?.statuses || [])"
           :key="statusOption.label"
           :value="statusOption.label"
         >
           {{ statusOption.label }}
         </option>
-        <option v-if="!settings?.statuses?.length" value="Backlog">Backlog</option>
+        <option v-if="!threads.data.settings?.statuses?.length" value="Backlog">Backlog</option>
       </select>
     </NameSaveHeader>
 
@@ -62,7 +62,7 @@
                 mode="editor"
                 show-gutter
                 :model-value="instructions"
-                :entity-id="threadId || mediaEntityId"
+                :entity-id="threads.data.view.id || mediaEntityId"
                 placeholder="Enter instructions for the agent"
                 @update:model-value="v => updateField('instructions', v)"
               />
@@ -95,7 +95,7 @@
             <TagInput
               data-onboarding-id="thread-tags-section"
               :modelValue="tags || []"
-              :available-tags="availableTags"
+              :available-tags="threads.data.availableTags"
               @update:modelValue="(newTags) => updateField('tags', newTags)"
               class="w-full"
             />
@@ -135,7 +135,7 @@
               </button>
               <button
                 v-if="isViewMode"
-                @click.stop="actor.send({ type: 'SHOW_CREATE_FORM_AS_CHILD', parentThreadId: threadId })"
+                @click.stop="send({ type: 'SHOW_CREATE_FORM_AS_CHILD', parentThreadId: threads.data.view.id })"
                 type="button"
                 class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium transition-colors rounded-md text-neutral-300 bg-neutral-800 hover:bg-neutral-700 hover:text-neutral-100"
               >
@@ -148,14 +148,14 @@
               :lite="!isViewMode"
               v-model="linkedThreads"
               :available-threads="threadsList"
-              :available-tags="availableTags"
-              :settings="settings"
-              :refusal="isViewMode ? linkRefusal : null"
-              @chat-click="(id) => actor.send({ type: 'OPEN_THREAD_CHAT', threadId: id })"
-              @select="(id) => actor.send({ type: 'SELECT_THREAD', id })"
-              @status-change="(id, status) => actor.send({ type: 'UPDATE_THREAD_STATUS', id, status })"
+              :available-tags="threads.data.availableTags"
+              :settings="threads.data.settings"
+              :refusal="isViewMode ? threads.data.linkRefusal : null"
+              @chat-click="(id) => send({ type: 'OPEN_THREAD_CHAT', threadId: id })"
+              @select="(id) => send({ type: 'SELECT_THREAD', id })"
+              @status-change="(id, status) => send({ type: 'UPDATE_THREAD_STATUS', id, status })"
               @update:modelValue="(links) => updateField('linkedThreads', links)"
-              @set-parent="(childIds, parentId) => actor.send({ type: 'SET_THREAD_PARENT', childIds, parentId })"
+              @set-parent="(childIds, parentId) => send({ type: 'SET_THREAD_PARENT', childIds, parentId })"
             />
           </CollapsibleSection>
         </div>
@@ -165,10 +165,10 @@
           <CollapsibleSection :default-open="false" button-class="py-3">
             <template #label>Metadata</template>
             <div class="flex flex-wrap justify-center gap-x-5 gap-y-1 text-xs text-neutral-500">
-              <span>ID <span class="font-mono text-neutral-400">{{ threadId }}</span></span>
-              <span>Short Code <span class="text-neutral-400">{{ shortCode || '—' }}</span></span>
-              <span>Created <span class="text-neutral-400">{{ formatDate(timestamp) }}</span></span>
-              <span>Last Activity <span class="text-neutral-400">{{ formatDate(lastMessageTimestamp || timestamp) }}</span></span>
+              <span>ID <span class="font-mono text-neutral-400">{{ threads.data.view.id }}</span></span>
+              <span>Short Code <span class="text-neutral-400">{{ threads.data.view.shortCode || '—' }}</span></span>
+              <span>Created <span class="text-neutral-400">{{ formatDate(threads.data.view.timestamp) }}</span></span>
+              <span>Last Activity <span class="text-neutral-400">{{ formatDate(threads.data.view.lastMessageTimestamp || threads.data.view.timestamp) }}</span></span>
             </div>
           </CollapsibleSection>
         </div>
@@ -178,12 +178,11 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, computed, nextTick } from 'vue'
 import { Plus, MessageSquare, Link } from 'lucide-vue-next'
 import Button from '@apackdev/ui/design/button'
-import { useSelector } from '@xstate/vue'
 import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts'
 import type { ThreadEditFields } from '#generated/types.ts'
 import type { Ref } from 'vue'
@@ -198,43 +197,34 @@ const actor: ThreadsState = useSurface();
 const mediaEntityId = crypto.randomUUID();
 
 // Mode derivation from state machine
-const state = useSelector(actor, (s) => s);
-const isViewMode = computed(() => state.value.matches('view'));
+const { state: threads, send } = useState(actor);
+const isViewMode = computed(() => threads.value.at === 'view');
 const mode = computed<'view' | 'create'>(() => isViewMode.value ? 'view' : 'create');
 
 // Unified context selectors
 const contextSlice = computed(() =>
-  isViewMode.value ? state.value.context.view : state.value.context.create
+  isViewMode.value ? threads.value.data.view : threads.value.data.create
 );
 const topic = computed(() => contextSlice.value.topic || '');
 const instructions = computed(() => contextSlice.value.instructions || '');
 const tags = computed(() => contextSlice.value.tags || []);
 const linkedThreads = computed(() => contextSlice.value.linkedThreads || []);
-const linkRefusal = useSelector(actor, (state) => state.context.linkRefusal);
 
 // Shared selectors
-const availableTags = useSelector(actor, (state) => state.context.availableTags);
-const threadMap = useSelector(actor, (state) => state.context.threadMap);
-const threadIdsAll = useSelector(actor, (state) => state.context.threadIds);
-const threadsList = computed(() => threadsFromStore(threadMap.value, threadIdsAll.value));
-const settings = useSelector(actor, (state) => state.context.settings);
+const threadsList = computed(() => threadsFromStore(threads.value.data.threadMap, threads.value.data.threadIds));
 
 // View-only selectors
-const threadId = useSelector(actor, (state) => state.context.view.id);
-const messages = useSelector(actor, (state) => state.context.view.messages || []);
-const status = useSelector(actor, (state) => state.context.view.status || 'Backlog');
-const shortCode = useSelector(actor, (state) => state.context.view.shortCode);
-const timestamp = useSelector(actor, (state) => state.context.view.timestamp);
-const lastMessageTimestamp = useSelector(actor, (state) => state.context.view.lastMessageTimestamp);
+const messages = computed(() => threads.value.data.view.messages || []);
+const status = computed(() => threads.value.data.view.status || 'Backlog');
 
 const statusValue = computed(() =>
-  isViewMode.value ? status.value : (settings.value?.statuses?.[0]?.label || 'Backlog')
+  isViewMode.value ? status.value : (threads.value.data.settings?.statuses?.[0]?.label || 'Backlog')
 );
 
 const isValid = computed(() => topic.value.trim() !== '');
 
 const updateField = (key: keyof ThreadEditFields, value: ThreadEditFields[keyof ThreadEditFields]) => {
-  actor.send({ type: 'UPDATE_THREAD_FIELD', key, value, state: mode.value });
+  send({ type: 'UPDATE_THREAD_FIELD', key, value, state: mode.value });
 };
 
 // Section scroll handling
@@ -264,7 +254,7 @@ const formatDate = (ts?: number) => {
 };
 
 const getTagStyles = (tagName: string) => {
-  const color = availableTags.value?.find(t => t.name === tagName)?.color || '#A855F7';
+  const color = threads.value.data.availableTags?.find(t => t.name === tagName)?.color || '#A855F7';
   return {
     backgroundColor: `${color}1A`,
     color,

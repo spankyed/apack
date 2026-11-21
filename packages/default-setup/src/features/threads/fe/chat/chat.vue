@@ -6,8 +6,8 @@
       <ThreadSidebar
         v-if="showThreadSidebar && !isOnboarding"
         :style="{ width: sidebarWidthPx + 'px' }"
-        @select-thread="(threadId: string) => { expandChatIfCollapsed(); actor.send({ type: 'OPEN_THREAD_CHAT', threadId }) }"
-        @open-message="(result: MessageSearchResult) => { expandChatIfCollapsed(); actor.send({ type: 'OPEN_MESSAGE', threadId: result.threadId, messageId: result.messageId }) }"
+        @select-thread="(threadId: string) => { expandChatIfCollapsed(); send({ type: 'OPEN_THREAD_CHAT', threadId }) }"
+        @open-message="(result: MessageSearchResult) => { expandChatIfCollapsed(); send({ type: 'OPEN_MESSAGE', threadId: result.threadId, messageId: result.messageId }) }"
         @close="showThreadSidebar = false"
       />
       <PanelResizer
@@ -39,9 +39,9 @@
               </div>
               <div v-else class="w-9/12 py-2 mx-auto space-y-1" ref="messagesContent">
                 <!-- Load older messages -->
-                <div v-if="messagePagination.hasMore" class="flex justify-center py-3">
+                <div v-if="threads.data.messagePagination.hasMore" class="flex justify-center py-3">
                   <button
-                    v-if="!messagePagination.isLoading"
+                    v-if="!threads.data.messagePagination.isLoading"
                     @click="requestLoadMore"
                     class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors"
                   >
@@ -64,7 +64,7 @@
                       :is-tail="tailMessageIds.has(id)"
                       :is-claude-code-thread="!!currentThread?.context?.claudeCode"
                       @open-lightbox="openLightbox"
-                      @fork="(messageId: string) => actor.send({ type: 'FORK_THREAD', messageId, threadId: currentThread?.id, threadTopic: currentThread?.topic })"
+                      @fork="(messageId: string) => send({ type: 'FORK_THREAD', messageId, threadId: currentThread?.id, threadTopic: currentThread?.topic })"
                       @unqueue="handleUnqueue"
                       @resend="handleResend"
                       @revert="(messageId: string) => handleRevert(messageId)"
@@ -83,30 +83,30 @@
           <div class="flex-shrink-0 w-full" :class="$style.inputContainer">
             <ChatInput
               :current-thread="currentThread"
-              :current-mode="currentMode"
-              :current-phase="currentPhase"
+              :current-mode="threads.data.mode"
+              :current-phase="threads.data.phase"
               :prefill-text="prefillText"
               :prefill-references="prefillReferences"
               :is-busy="isBusy"
-              :modes="modes"
-              :default-mode="settings?.defaultMode"
-              :hotkeys="hotkeys"
+              :modes="threads.data.modes"
+              :default-mode="threads.data.chatSettings?.defaultMode"
+              :hotkeys="threads.data.hotkeys"
               :quick-prompts="quickPrompts"
               :quick-prompt-number-key-inserts="quickPromptNumberKeyInserts"
-              :quick-prompt-cursor="quickPromptCursor"
+              :quick-prompt-cursor="threads.data.quickPromptCursor"
               :recording-limit-minutes="recordingLimitMinutes"
               :status-line="statusLine"
               :status-line-cwd="statusLineCwd"
               @send-message="handleSendMessage"
               @send-command="handleSendCommand"
-              @mode-change="(mode: string) => actor.send({ type: 'SET_MODE', mode: mode as any })"
-              @phase-change="(phase: string) => actor.send({ type: 'SET_PHASE', phase })"
+              @mode-change="(mode: string) => send({ type: 'SET_MODE', mode: mode as any })"
+              @phase-change="(phase: string) => send({ type: 'SET_PHASE', phase })"
               @set-default-mode="(mode: string) => threadsSettings.set({ path: ['chat', 'defaultMode'], value: mode })"
               @set-default-phase="(phase: string) => threadsSettings.set({ path: ['chat', 'defaultPhase'], value: phase })"
-              @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })"
+              @pause="send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })"
               @open-lightbox="openLightbox"
               @update-quick-prompts="(prompts: QuickPrompt[]) => threadsSettings.set({ path: ['chat', 'quickPrompts'], value: prompts })"
-              @close-quick-prompts="actor.send({ type: 'CLOSE_QUICK_PROMPTS' })"
+              @close-quick-prompts="send({ type: 'CLOSE_QUICK_PROMPTS' })"
               @revert="(messageId: string) => handleRevert(messageId, false, true)"
               @revert-with-files="(messageId: string) => handleRevert(messageId, true, true)"
               @summarize-from-here="(messageId: string) => handleSummarize(messageId, true)"
@@ -120,16 +120,16 @@
             :current-thread="currentThread"
             :recent-threads="recentThreads"
             @view-thread="(threadId: string) => handleViewDetails(threadId)"
-            @open-thread-chat="(threadId: string) => { expandChatIfCollapsed(); actor.send({ type: 'OPEN_THREAD_CHAT', threadId }) }"
+            @open-thread-chat="(threadId: string) => { expandChatIfCollapsed(); send({ type: 'OPEN_THREAD_CHAT', threadId }) }"
             @view-dashboard="handleViewDashboard"
             @toggle-inline-dashboard="handleToggleInlineDashboard"
             @toggle-thread-sidebar="handleToggleThreadSidebar"
             @toggle-inline-tabs="handleToggleInlineTabs"
             @view-artifacts="(threadId: string) => handleViewArtifacts(threadId)"
-            @new-thread="() => { expandChatIfCollapsed(); rotateQuote(); actor.send({ type: 'CLEAR_THREAD' }) }"
-            @new-thread-in-project="(dir: string) => { expandChatIfCollapsed(); rotateQuote(); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: dir }) }"
-            @new-thread-no-project="() => { expandChatIfCollapsed(); rotateQuote(); actor.send({ type: 'NEW_THREAD_NO_PROJECT' }) }"
-            @new-thread-as-child="(parentThreadId: string) => actor.send({ type: 'CREATE_CHILD_THREAD', parentThreadId })"
+            @new-thread="() => { expandChatIfCollapsed(); rotateQuote(); send({ type: 'CLEAR_THREAD' }) }"
+            @new-thread-in-project="(dir: string) => { expandChatIfCollapsed(); rotateQuote(); send({ type: 'NEW_THREAD_IN_PROJECT', directory: dir }) }"
+            @new-thread-no-project="() => { expandChatIfCollapsed(); rotateQuote(); send({ type: 'NEW_THREAD_NO_PROJECT' }) }"
+            @new-thread-as-child="(parentThreadId: string) => send({ type: 'CREATE_CHILD_THREAD', parentThreadId })"
           />
         </div>
       </div>
@@ -195,13 +195,12 @@ import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import ImageLightbox from '@apackdev/ui/design/ImageLightbox'
 import ConfirmationDialog from '@apackdev/ui/design/ConfirmationDialog'
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
-import { useSurface, useShell } from '@apackdev/sdk/fe'
+import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import { openSurface } from '#generated/fe.ts'
-import { useSelector } from '@xstate/vue'
 import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts';
 import type { MessageEntity, MessageSearchResult, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
-import { sendToSystem } from '#generated/events.ts'
+import { tell } from '#generated/events.ts'
 import { useSettings } from '#generated/settings-fe.ts';
 
 const threadsSettings = useSettings('threads')
@@ -211,23 +210,23 @@ const actor: ThreadsState = useSurface();
 // A message, command or fork of this window's that was not done is told here, where it was sent from. Telling and
 // saying so are one step, run once the toast is drawn: the machine drops exactly the failures told
 const toast = ref<InstanceType<typeof ToastNotification>>()
-const sendFailures = useSelector(actor, (state) => state.context.sendFailures)
+const { state: threads, send } = useState(actor)
 watchPostEffect(() => {
-  const told = sendFailures.value
+  const told = threads.value.data.sendFailures
   if (!toast.value || told.length === 0) return
   for (const failure of told) toast.value.error('Message not sent', failure.message)
-  actor.send({ type: 'CHAT.FAILURES_TOLD', told })
+  send({ type: 'CHAT.FAILURES_TOLD', told })
 })
 const isOnboarding = shell.isOnboarding;
-const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
+const allMessages = computed(() => (threads.value.data.currentThread?.messages || []) as MessageEntity[]);
 const visibleMessages = computed(() => allMessages.value.filter(m => !(m as any).compacted));
 const messagesById = computed(() => new Map<string, MessageEntity>(visibleMessages.value.map(message => [message.id, message])));
-const chatMessageCount = useSelector(actor, state => state.context.chatMessageIds.length);
-const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
-const messagesReady = computed(() => !messagePagination.value.isLoading && allMessages.value.length >= chatMessageCount.value);
+const messagesReady = computed(() => !threads.value.data.messagePagination.isLoading && allMessages.value.length >= threads.value.data.chatMessageIds.length);
 // The message to bring into view, while the thread shown is its own
-const focusMessageId = useSelector(actor, ({ context }) =>
-  context.focusMessage && context.focusMessage.threadId === context.currentThread?.id ? context.focusMessage.messageId : null);
+const focusMessageId = computed(() => {
+  const context = threads.value.data
+  return context.focusMessage && context.focusMessage.threadId === context.currentThread?.id ? context.focusMessage.messageId : null
+});
 const style = useCssModule();
 
 // Scroll preservation for prepending older messages
@@ -236,11 +235,11 @@ let prependScroll: { height: number; top: number } | undefined;
 // Asks only when the machine takes the ask (`loadMoreMessages`): one it dropped would leave the page already loading,
 // a focused message's seek's, handled as this prepend
 function requestLoadMore() {
-  if (messagePagination.value.isLoading || !messagePagination.value.hasMore) return;
+  if (threads.value.data.messagePagination.isLoading || !threads.value.data.messagePagination.hasMore) return;
   const el = messagesContainer.value;
   if (!el) return;
   prependScroll = { height: el.scrollHeight, top: el.scrollTop };
-  actor.send({ type: 'LOAD_MORE_MESSAGES' });
+  send({ type: 'LOAD_MORE_MESSAGES' });
 }
 
 /** Rows with no later processed user message are eligible for queued/cancelled actions. */
@@ -255,27 +254,21 @@ const tailMessageIds = computed(() => {
   return ids
 })
 
-const currentThread = useSelector(actor, (state) => state.context.currentThread)
+const currentThread = computed(() => threads.value.data.currentThread)
 const scrollPositioning = createScrollPositioning(callback => requestAnimationFrame(callback), id => cancelAnimationFrame(id))
 watch(() => currentThread.value?.id, () => scrollPositioning.reset(), { flush: 'sync' })
 onUnmounted(() => scrollPositioning.reset())
-const recentThreadIds = useSelector(actor, (state) => state.context.recentThreadIds)
-const threadMap = useSelector(actor, (state) => state.context.threadMap)
-const recentThreads = computed(() => threadsFromStore(threadMap.value, recentThreadIds.value) as ThreadEntity[])
-const currentMode = useSelector(actor, (state) => state.context.mode)
-const currentPhase = useSelector(actor, (state) => state.context.phase)
-const modes = useSelector(actor, (state) => state.context.modes)
-const hotkeys = useSelector(actor, (state) => state.context.hotkeys)
-const quickPrompts = useSelector(actor, (state) => (state.context.chatSettings?.quickPrompts || []) as QuickPrompt[])
-const quickPromptNumberKeyInserts = useSelector(actor, (state) => state.context.chatSettings?.quickPromptNumberKeyInserts ?? true)
-const quickPromptCursor = useSelector(actor, (state) => state.context.quickPromptCursor)
-const recordingLimitMinutes = useSelector(actor, (state) => state.context.settings?.recordingLimitMinutes ?? 3)
+const recentThreads = computed(() => threadsFromStore(threads.value.data.threadMap, threads.value.data.recentThreadIds) as ThreadEntity[])
+const quickPrompts = computed(() => (threads.value.data.chatSettings?.quickPrompts || []) as QuickPrompt[])
+const quickPromptNumberKeyInserts = computed(() => threads.value.data.chatSettings?.quickPromptNumberKeyInserts ?? true)
+const recordingLimitMinutes = computed(() => threads.value.data.settings?.recordingLimitMinutes ?? 3)
 // True if the current thread's *raw* chat state matches the one the user
 // marked as "busy" in settings. Intentionally ignores chatStateOverrides
 // (the short-lived flash used to surface terminal states like success/error):
 // pausing a transient visual flash is semantically wrong — we only want
 // Pause/Esc to act when the agent is actually in the busy state.
-const isBusy = useSelector(actor, ({ context }) => {
+const isBusy = computed(() => {
+  const context = threads.value.data
   const busyId = context.settings?.chatStates?.find(c => c.busy)?.id
   const threadId = context.currentThread?.id
   return !!busyId && !!threadId && context.chatStates[threadId] === busyId
@@ -338,7 +331,6 @@ const isNearBottom = ref(true)
 const pendingScrollOnSend = ref(false)
 const lightboxOpen = ref(false)
 const lightboxSrc = ref('')
-const settings = useSelector(actor, (state) => state.context.chatSettings)
 const showRevertDialog = ref(false)
 const pendingRevertMessageId = ref<string | null>(null)
 const dontAskAgain = ref(false)
@@ -362,23 +354,23 @@ function handleStatuslineClick() {
 }
 
 function handleSendMessage(text: string, references?: MessageReferences) {
-  actor.send({ type: 'SEND_MESSAGE', text, references })
+  send({ type: 'SEND_MESSAGE', text, references })
   pendingScrollOnSend.value = true
 }
 
 function handleUnqueue(messageId: string) {
   if (currentThread.value?.id) {
-    actor.send({ type: 'UNQUEUE_MESSAGE', threadId: currentThread.value.id, messageId })
+    send({ type: 'UNQUEUE_MESSAGE', threadId: currentThread.value.id, messageId })
   }
 }
 
 function handleResend(messageId: string, text: string, references?: any) {
-  actor.send({ type: 'DISMISS_MESSAGE', messageId })
+  send({ type: 'DISMISS_MESSAGE', messageId })
   handleSendMessage(text, references)
 }
 
 function handleSendCommand(command: string, text: string, references?: MessageReferences) {
-  actor.send({ type: 'SEND_COMMAND', command, text, references })
+  send({ type: 'SEND_COMMAND', command, text, references })
   pendingScrollOnSend.value = true
 }
 
@@ -389,7 +381,7 @@ function onScroll() {
   isNearBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
 
   // Trigger load-more when scrolled near the top
-  if (scrollPositioning.ready() && el.scrollTop < 100 && messagePagination.value.hasMore && !prependScroll) {
+  if (scrollPositioning.ready() && el.scrollTop < 100 && threads.value.data.messagePagination.hasMore && !prependScroll) {
     requestLoadMore()
   }
 }
@@ -476,15 +468,15 @@ function handleRevert(messageId: string, restoreFiles = false, skipConfirm = fal
   if (msg?.status === 'queued' || msg?.status === 'cancelled') {
     prefillInput(msg)
     if (msg.status === 'queued' && currentThread.value?.id) {
-      actor.send({ type: 'UNQUEUE_MESSAGE', threadId: currentThread.value.id, messageId })
+      send({ type: 'UNQUEUE_MESSAGE', threadId: currentThread.value.id, messageId })
     }
-    actor.send({ type: 'DISMISS_MESSAGE', messageId })
+    send({ type: 'DISMISS_MESSAGE', messageId })
     return
   }
 
   pendingRestoreFiles = restoreFiles
   pendingIsSummarize.value = false
-  if (skipConfirm || settings.value?.skipRevertConfirm) {
+  if (skipConfirm || threads.value.data.chatSettings?.skipRevertConfirm) {
     doRevert(messageId)
   } else {
     pendingRevertMessageId.value = messageId
@@ -495,7 +487,7 @@ function handleRevert(messageId: string, restoreFiles = false, skipConfirm = fal
 function handleSummarize(messageId: string, skipConfirm = false) {
   pendingRestoreFiles = false
   pendingIsSummarize.value = true
-  if (skipConfirm || settings.value?.skipRevertConfirm) {
+  if (skipConfirm || threads.value.data.chatSettings?.skipRevertConfirm) {
     doSummarize(messageId)
   } else {
     pendingRevertMessageId.value = messageId
@@ -536,7 +528,7 @@ function prefillInput(msg: MessageEntity | undefined) {
 function doRevert(messageId: string) {
   if (!currentThread.value?.id) return
   const msg = allMessages.value.find(m => m.id === messageId)
-  actor.send({
+  send({
     type: 'REVERT_THREAD',
     messageId,
     threadId: currentThread.value.id,
@@ -552,7 +544,7 @@ function doRevert(messageId: string) {
 function doSummarize(messageId: string) {
   if (!currentThread.value?.id) return
   const msg = allMessages.value.find(m => m.id === messageId)
-  actor.send({
+  send({
     type: 'SUMMARIZE_THREAD',
     messageId,
     threadId: currentThread.value.id,
@@ -561,7 +553,7 @@ function doSummarize(messageId: string) {
 }
 
 function handleToggleCompacted(markerId: string, compacted: boolean) {
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'TOGGLE_COMPACTED',
     markerId,
     compacted,
@@ -583,12 +575,12 @@ function showFocusedMessage(messages: MessageEntity[]): boolean {
     scrollPositioning.position(() => el.scrollIntoView({ block: 'center' }))
     el.classList.add(style.focused)
     setTimeout(() => el.classList.remove(style.focused), 1600)
-    actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
+    send({ type: 'FOCUSED_MESSAGE_SHOWN' })
     return true
   }
   const message = messages.find(m => m.id === focused)
   if (!message || !(message as any).compacted) return true
-  actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
+  send({ type: 'FOCUSED_MESSAGE_SHOWN' })
   return false
 }
 

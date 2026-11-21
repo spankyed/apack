@@ -72,7 +72,7 @@ describe('internal-package-imports', () => {
 const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; elsewhere?: string }> = {
   'own-modules': {
     onFile: [
-      ["import { sendToSystem } from '#generated/events';\n",
+      ["import { tell } from '#generated/events';\n",
         "src/f.ts:1: '#generated/events' names no file — write '#generated/events.ts'"],
       // The `.js` form is this rule's too, not a second rule's: one offence, one message, and this one names the fix
       ["import { sibling } from './sibling.js';\n",
@@ -86,8 +86,8 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
   'elmdb-imports': { onFile: [["import { Database } from 'elmdb';\n", 'src/f.ts:1: elmdb']] },
   'ears-imports': { onFile: [["import { defineEars } from '@elmdb/ears';\n", 'src/f.ts:1: @elmdb/ears']] },
   'untyped-sends': {
-    onFile: [["import { untypedSendToSystem } from '@apackdev/sdk/events';\n",
-      'src/f.ts:1: untypedSendToSystem from @apackdev/sdk/events']],
+    onFile: [["import { untypedTell } from '@apackdev/sdk/events';\n",
+      'src/f.ts:1: untypedTell from @apackdev/sdk/events']],
   },
   'raw-transport': {
     onFile: [['export const send = () => _rootEvents.emitOutgoing(event);\n', 'src/f.ts:1: _rootEvents']],
@@ -102,6 +102,7 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
       ["globalThis.sessionStorage.removeItem('draft');\n", 'src/f.ts:1: sessionStorage'],
     ],
   },
+  'machine-selectors': { onFile: [["import { useSelector } from '@xstate/vue';\n", 'src/f.ts:1: @xstate/vue']] },
   'backend-console': { elsewhere: 'backend-console fires under a backend path and not under a frontend one' },
   // A `_`-prefixed import from an @apackdev package, which needs no pack fixture to be offending
   'internal-package-imports': { elsewhere: 'internal-package-imports' },
@@ -129,6 +130,19 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
     elsewhere: "ask-answers leaves a pack's tests and its reads of an answer alone",
   },
   // Both spellings of the reserved key, since a property name is the same key written two ways
+  'ask-ends': {
+    onFile: [
+      ["export const on = { 'xstate.done.actor.push': { actions: 'pushed' } };\n", 'src/f.ts:1: xstate.done.actor'],
+      ["export const on = { [`xstate.done.actor.${PUSH}`]: { actions: 'pushed' } };\n", 'src/f.ts:1: xstate.done.actor'],
+    ],
+  },
+  'swallowed-ask-ends': {
+    onFile: [[
+      "import { makes } from '@apackdev/sdk/fe';\nexport const on = {\n  '*': { actions: 'route' },\n};\n",
+      "src/f.ts:2: '*'",
+    ]],
+    elsewhere: 'swallowed-ask-ends leaves a wildcard that settles beside it, and a machine that makes no asks',
+  },
   'reserved-event-keys': {
     onFile: [
       ["export const answer = { type: 'DONE', _call: mine };\n", 'src/f.ts:1: _call:'],
@@ -213,6 +227,14 @@ describe('every rule', () => {
    * Telling an answer from another event is reading one, and a spec driving an asking machine has to hand it the
    * answers its system would: neither is an answer written in place of a system's, or a transition for one.
    */
+  it('swallowed-ask-ends leaves a wildcard that settles beside it, and a machine that makes no asks', () => {
+    const dir = pack({
+      'src/settles.ts': "import { makes } from '@apackdev/sdk/fe';\nconst made = makes(() => ({}));\nexport const on = { [made.done]: { actions: made.settle() }, '*': { actions: 'route' } };\n",
+      'src/asks-nothing.ts': "export const on = { '*': { actions: 'route' } };\n",
+    });
+    expect(problems(dir, 'swallowed-ask-ends')).toEqual([]);
+  });
+
   it("ask-answers leaves a pack's tests and its reads of an answer alone", () => {
     const dir = completePack({
       'src/reads-it.ts': "export const taken = (event: E) => event.type === 'ASK_ANSWERED';\n",
@@ -351,7 +373,7 @@ describe('every rule', () => {
    */
   it('reports an offence two rules word differently under one rule, not two', () => {
     const dir = completePack({
-      'src/features/memos/fe/contract.ts': "import { sendToSystem } from '#generated/events';\nexport type Contract = { state: {} };\n",
+      'src/features/memos/fe/contract.ts': "import { tell } from '#generated/events';\nexport type Contract = { state: {} };\n",
     });
     const reported = [...packRuleProblems(dir)].filter(([, found]) => found.some((line) => line.includes('#generated/events')));
     expect(reported.map(([key]) => key), 'one import, told to a pack author under more than one rule').toEqual(['contract-leaves']);
@@ -376,14 +398,14 @@ describe('every rule', () => {
   it('claims the offence a whole-pack rule named, not the whole line it sat on', () => {
     const dir = completePack({
       'src/features/memos/fe/contract.ts':
-        "import type { T } from '../../calendar/fe/state.ts'; import { untypedSendToSystem } from '@apackdev/sdk/events';\n"
-        + 'export type Contract = { state: { t: T; send: typeof untypedSendToSystem } };\n',
+        "import type { T } from '../../calendar/fe/state.ts'; import { untypedTell } from '@apackdev/sdk/events';\n"
+        + 'export type Contract = { state: { t: T; send: typeof untypedTell } };\n',
       'src/features/memos/fe/surface.ts': 'export type P = { id: string };\n',
       'src/features/calendar/fe/state.ts': 'export type T = { id: string };\n',
     });
     expect(problems(dir, 'contract-leaves')).toEqual(['src/features/memos/fe/contract.ts:1: ../../calendar/fe/state.ts']);
     expect(problems(dir, 'untyped-sends'), 'the second offence on that line went with the first')
-      .toEqual(['src/features/memos/fe/contract.ts:1: untypedSendToSystem from @apackdev/sdk/events']);
+      .toEqual(['src/features/memos/fe/contract.ts:1: untypedTell from @apackdev/sdk/events']);
   });
 
   it('names a case that exists for each rule covered elsewhere', () => {
@@ -512,8 +534,8 @@ describe('when several rules are right about one site', () => {
   });
 
   it('gives an untyped send from the raw transport to the send rule', () => {
-    expect(offender("import { untypedSendToSystem } from '@apackdev/sdk/rpc/client';\n")).toEqual([
-      'untyped-sends: src/extensions/steps/x.ts:1: untypedSendToSystem from @apackdev/sdk/rpc/client',
+    expect(offender("import { untypedTell } from '@apackdev/sdk/rpc/client';\n")).toEqual([
+      'untyped-sends: src/extensions/steps/x.ts:1: untypedTell from @apackdev/sdk/rpc/client',
     ]);
   });
 
@@ -523,7 +545,7 @@ describe('when several rules are right about one site', () => {
    * separately — each rule's own early return — and nothing said the site changes hands.
    */
   it('hands that site to the transport rule inside generated code, which exempts nothing', () => {
-    expect(offenderIn('src/__generated__/x.ts', "import { untypedSendToSystem } from '@apackdev/sdk/rpc/client';\n"))
+    expect(offenderIn('src/__generated__/x.ts', "import { untypedTell } from '@apackdev/sdk/rpc/client';\n"))
       .toEqual(['raw-transport: src/__generated__/x.ts:1: @apackdev/sdk/rpc/client']);
   });
 
@@ -623,9 +645,15 @@ describe('when several rules are right about one site', () => {
       // component-sends sits beside untyped-sends: both answer "which send, from where"
       // window-storage sits beside backend-console: both say which API to reach for instead of a global
       'untyped-sends', 'component-sends', 'raw-transport', 'backend-console', 'window-storage',
+      // machine-selectors is one more "which API to reach for": the SDK's reader instead of the machine library's
+      'machine-selectors',
       'repository-casts',
       // ask-answers and reserved-event-keys contest nothing: no other rule reads an object's properties
       'ask-answers',
+      // ask-ends reads a string, which no other rule does
+      'ask-ends',
+      // swallowed-ask-ends reads an object's keys in a file that imports makes, which no other rule does
+      'swallowed-ask-ends',
       // reserved-event-keys is last and contests nothing: no other rule reads a property name, so where it
       // sits is free, and a convention belongs after the rules about what a module imports
       'reserved-event-keys',

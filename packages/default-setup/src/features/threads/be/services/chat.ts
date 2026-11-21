@@ -1,4 +1,4 @@
-import { broadcastToSurface } from '#generated/events.ts';
+import { broadcast } from '#generated/events.ts';
 import { EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { BlockConfig, BlockResponse, MessageEntity, ThreadCreateData, MessageReferences, ToolActivityEntry } from '#features/threads/be/types.ts';
@@ -360,7 +360,7 @@ export function streamMessageText(params: {
   text: string;
   done?: true;
 }): void {
-  broadcastToSurface('threads', {
+  broadcast('threads', {
     type: 'MESSAGE_TEXT_APPENDED',
     messageId: params.messageId,
     at: params.at,
@@ -395,7 +395,7 @@ export function streamMessageBlockText(params: {
   text: string;
   done?: true;
 }): void {
-  broadcastToSurface('threads', {
+  broadcast('threads', {
     type: 'MESSAGE_BLOCK_TEXT_APPENDED',
     messageId: params.messageId,
     blockId: params.blockId,
@@ -459,7 +459,7 @@ export function createThread(
  */
 export function showThread(threadId: EARS.EntityId, options: { restore?: boolean } = {}): void {
   visitThread(threadId, options);
-  broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId, ...(options.restore && { restore: options.restore }) });
+  broadcast('threads', { type: 'SHOW_THREAD', threadId, ...(options.restore && { restore: options.restore }) });
 }
 
 /**

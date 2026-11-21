@@ -7,7 +7,7 @@
         v-if="inListState"
         :flows="flows"
         :root-flow-id="rootFlowId"
-        :selected-flow-id="selectedFlowId"
+        :selected-flow-id="flowsMachine.data.selectedFlowId"
         :multi-selected-flow-ids="multiSelectedFlowIds"
         @flow-click="handleFlowClick"
         @flow-dblclick="handleFlowDblClick"
@@ -28,12 +28,12 @@
     <FlowEditor
       :nodes="plainNodes"
       :edges="plainEdges"
-      :selected-flow-id="selectedFlowId"
+      :selected-flow-id="flowsMachine.data.selectedFlowId"
       :selected-flow-label="currentFlowLabel"
       :selected-node-id="selected?.id"
       :editing-node-id="editingNode?.id"
       :show-overlay="inListState"
-      :selected-handle="selectedHandle"
+      :selected-handle="flowsMachine.data.selectedHandle"
       @node-click="handleNodeClick"
       @node-double-click="handleNodeDoubleClick"
       @connect="handleConnect"
@@ -60,7 +60,7 @@
       :selected-node="editingNode"
       :actions="actions"
       :flows="flows"
-      :models="models"
+      :models="flowsMachine.data.models"
       :prompts="prompts"
       :edges="plainEdges"
       @close="handleCloseNodeEditor"
@@ -94,13 +94,12 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState } from '@apackdev/sdk/fe'
 
-import { computed, type Ref, ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
+import { computed, ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import type { Connection, NodeMouseEvent, Node as VueFlowNode, EdgeUpdateEvent, EdgeMouseEvent } from '@vue-flow/core'
 import { calculateLayoutAsync, type LayoutDirection } from '#features/flows/fe/canvas/layout-utils.ts'
-import type { NodeEntity } from '#generated/types.ts'
 import { useNodeStyles } from '@apackdev/ui/components/node-styles'
 
 import '@vue-flow/core/dist/style.css'
@@ -109,7 +108,6 @@ import '@vue-flow/core/dist/theme-default.css'
 import { type FlowsState } from '#features/flows/fe/state.ts'
 import { useView } from '#generated/fe.ts'
 import { useSettings } from '#generated/settings-fe.ts'
-import { useSelector } from '@xstate/vue'
 
 // Import sub-components
 import FlowsList from './components/FlowsList.vue'
@@ -133,12 +131,10 @@ const targetFlow = ref<Partial<FlowEntity> | null>(null)
 /* ------------------------------------------------------------ */
 /*  reactive state from the actor                               */
 /* ------------------------------------------------------------ */
-const actor: FlowsState = useSurface()
+const { state: flowsMachine, send } = useState<FlowsState>()
 
-const inListState = useSelector(actor, (s) => s.hasTag('list-flows'))
-const inViewState = useSelector(actor, (s) => s.hasTag('view-flow'))
-const nodes   = useSelector(actor, (s) => s.context.graph.nodes)
-const edges   = useSelector(actor, (s) => s.context.graph.edges)
+const inListState = computed(() => flowsMachine.value.at === 'list')
+const inViewState = computed(() => flowsMachine.value.at === 'view')
 const settings = useSettings('flows')
 // The flows this window lists, the root one first: the list view, kept current by the backend
 const flowList = useView('flows', 'list')
@@ -156,61 +152,51 @@ const flows = computed(() => {
 // What the breadcrumb and the history read of the list
 watch(() => flowList.data, (list) => {
   if (!list) return
-  actor.send({ type: 'FLOWS.READ', rootFlowId: list.rootFlowId, labels: Object.fromEntries(list.flows.flatMap(f => (f.id ? [[f.id, f.label ?? '']] : []))) })
+  send({ type: 'FLOWS.READ', rootFlowId: list.rootFlowId, labels: Object.fromEntries(list.flows.flatMap(f => (f.id ? [[f.id, f.label ?? '']] : []))) })
 }, { immediate: true })
-const positions = useSelector(actor, (s) => s.context.graph.positions)
-const selectedFlowId = useSelector(actor, (s) => s.context.selectedFlowId)
-const selectedNodeId = useSelector(actor, (s) => s.context.selectedNodeId)
-const selected = useSelector(actor, (s) =>
-  s.context.graph.nodes.find(node => node.id === s.context.selectedNodeId)
-) as Ref<NodeEntity | undefined>
-const editingNode = useSelector(actor, (s) =>
-  s.context.graph.nodes.find(node => node.id === s.context.editingNodeId)
-) as Ref<NodeEntity | undefined>
+const selected = computed(() =>
+  flowsMachine.value.data.graph.nodes.find(node => node.id === flowsMachine.value.data.selectedNodeId)
+)
+const editingNode = computed(() =>
+  flowsMachine.value.data.graph.nodes.find(node => node.id === flowsMachine.value.data.editingNodeId)
+)
 // Every action, for the node palette: the actions feature's list, kept current by the backend
 const actionList = useView('actions', 'list', { limit: null, categories: [] })
 const actions = computed(() => actionList.data?.actions ?? [])
-const models = useSelector(actor, (s) => s.context.models)
 // Every prompt, for a prompt node's form: the prompts feature's list, kept current by the backend
 const promptList = useView('prompts', 'list', { limit: null, categories: [] })
 const prompts = computed(() => promptList.data?.prompts ?? [])
-const selectedHandle = useSelector(actor, (s) => s.context.selectedHandle)
-const canvasError = useSelector(actor, (s) => s.context.canvasError)
 
 // The open flow's graph — or the one being opened — as its view reads it, which the machine applies, or holds behind
 // the editor's own writes until they're answered. It reads the view again when the machine asks (`writes.refreshes`).
-const graphFlowId = useSelector(actor, (s) => s.context.pendingFlow?.flowId ?? s.context.selectedFlowId)
-const refreshes = useSelector(actor, (s) => s.context.writes.refreshes)
+const graphFlowId = computed(() => flowsMachine.value.data.pendingFlow?.flowId ?? flowsMachine.value.data.selectedFlowId)
 const graph = useView('flows', 'graph', () => (graphFlowId.value ? { flowId: graphFlowId.value } : null))
 watch(() => [graph.status, graph.data] as const, ([status, data]) => {
   if (status !== 'ready' || !graphFlowId.value) return
-  actor.send({ type: 'FLOW.GRAPH_READ', flowId: graphFlowId.value, data: data ?? null })
+  send({ type: 'FLOW.GRAPH_READ', flowId: graphFlowId.value, data: data ?? null })
 })
-watch(refreshes, () => graph.refresh())
+watch(() => flowsMachine.value.data.writes.refreshes, () => graph.refresh())
 
 const canvasToast = ref<InstanceType<typeof ToastNotification>>()
 
-watch(canvasError, (error) => {
+watch(() => flowsMachine.value.data.canvasError, (error) => {
   if (error) {
     canvasToast.value?.error(error)
-    actor.send({ type: 'CANVAS.CLEAR_ERROR' })
+    send({ type: 'CANVAS.CLEAR_ERROR' })
   }
 })
 
 // Context-menu dialog bridge flags
-const showEditLabelDialog = useSelector(actor, (s) => s.context.showEditLabelDialog)
-const showDeleteFlowDialog = useSelector(actor, (s) => s.context.showDeleteFlowDialog)
-
-watch(showEditLabelDialog, (show) => {
+watch(() => flowsMachine.value.data.showEditLabelDialog, (show) => {
   if (show) {
     openEditDialog()
-    actor.send({ type: 'FLOW.DIALOG_CLOSED' })
+    send({ type: 'FLOW.DIALOG_CLOSED' })
   }
 })
-watch(showDeleteFlowDialog, (show) => {
+watch(() => flowsMachine.value.data.showDeleteFlowDialog, (show) => {
   if (show) {
     if (currentFlow.value) openDeleteDialog(currentFlow.value)
-    actor.send({ type: 'FLOW.DIALOG_CLOSED' })
+    send({ type: 'FLOW.DIALOG_CLOSED' })
   }
 })
 
@@ -241,8 +227,8 @@ function handleKeydown(e: KeyboardEvent) {
 
   if (multiSelectedFlowIds.value.size > 0) {
     openDeleteDialog()
-  } else if (selectedFlowId.value) {
-    const flow = flows.value.find(f => f.id === selectedFlowId.value)
+  } else if (flowsMachine.value.data.selectedFlowId) {
+    const flow = flows.value.find(f => f.id === flowsMachine.value.data.selectedFlowId)
     if (flow) openDeleteDialog(flow)
   }
 }
@@ -251,9 +237,9 @@ onMounted(() => window.addEventListener('keydown', handleKeydown))
 onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
 
 // Watch for flow changes and re-center view after layout is computed
-watch(selectedFlowId, () => {
+watch(() => flowsMachine.value.data.selectedFlowId, () => {
   // When flow changes, watch for next position update then fitView
-  const unwatch = watch(positions, (newPositions) => {
+  const unwatch = watch(() => flowsMachine.value.data.graph.positions, (newPositions) => {
     if (Object.keys(newPositions).length > 0) {
       nextTick(() => fitView())
       unwatch()
@@ -262,14 +248,14 @@ watch(selectedFlowId, () => {
 }, { immediate: true })
 
 const plainNodes = computed(() => {
-  const selId = selectedNodeId.value
-  const mappedNodes = nodes.value
+  const selId = flowsMachine.value.data.selectedNodeId
+  const mappedNodes = flowsMachine.value.data.graph.nodes
     .map((n) => ({
       id       : n.id!,
       type     : n.nodeType,
       position : {
-        x: positions.value[n.id]?.x ?? 0,
-        y: positions.value[n.id]?.y ?? 0
+        x: flowsMachine.value.data.graph.positions[n.id]?.x ?? 0,
+        y: flowsMachine.value.data.graph.positions[n.id]?.y ?? 0
       },
       selected : n.id === selId,
       data     : n,
@@ -279,8 +265,8 @@ const plainNodes = computed(() => {
 })
 
 const plainEdges = computed(() =>
-  Object.values(edges.value).map((e) => {
-    const sourceNode = nodes.value.find(n => n.id === e.source)
+  Object.values(flowsMachine.value.data.graph.edges).map((e) => {
+    const sourceNode = flowsMachine.value.data.graph.nodes.find(n => n.id === e.source)
     const isFromEventNode = isTriggerNode(sourceNode?.nodeType)
     const isAnimated = e.kind === 'transitions_to' && isFromEventNode
 
@@ -295,7 +281,7 @@ const plainEdges = computed(() =>
 )
 
 const currentFlow = computed(() =>
-  allFlows.value.find(f => f.id === selectedFlowId.value)
+  allFlows.value.find(f => f.id === flowsMachine.value.data.selectedFlowId)
 )
 
 const currentFlowLabel = computed(() =>
@@ -320,7 +306,7 @@ function handleDrop(e: DragEvent) {
     y: e.clientY - rect.top,
   })
 
-  actor.send({
+  send({
     type: 'NODE.CREATE',
     nodeType,
     position,
@@ -329,14 +315,14 @@ function handleDrop(e: DragEvent) {
 
 function handlePaletteClick(nodeType: string) {
   if (paletteClickDisabled.value) return
-  actor.send({
+  send({
     type: 'NODE.CREATE',
     nodeType,
   })
 }
 
 function handleCreateConnectedNode(nodeType: string, sourceNodeId: string, sourceHandle?: string) {
-  actor.send({
+  send({
     type: 'NODE.CREATE_CONNECTED',
     nodeType,
     sourceNodeId,
@@ -345,11 +331,11 @@ function handleCreateConnectedNode(nodeType: string, sourceNodeId: string, sourc
 }
 
 function handleHandleSelect(nodeId: string, handleId?: string) {
-  actor.send({ type: 'HANDLE.SELECT', nodeId, handleId })
+  send({ type: 'HANDLE.SELECT', nodeId, handleId })
 }
 
 function handleHandleDeselect() {
-  actor.send({ type: 'HANDLE.DESELECT' })
+  send({ type: 'HANDLE.DESELECT' })
 }
 
 function handleEdgeSelect(nodeId: string, handleId?: string) {
@@ -366,7 +352,7 @@ function handleEdgeSelect(nodeId: string, handleId?: string) {
 function handleRemoveHandle(nodeId: string, handleId?: string) {
   const parsed = handleId?.match(/(exit|branch)-(\d+)/)
   if (parsed) {
-    actor.send({
+    send({
       type: 'HANDLE.REINDEX',
       nodeId,
       prefix: parsed[1],
@@ -377,19 +363,19 @@ function handleRemoveHandle(nodeId: string, handleId?: string) {
 }
 
 function handleNodeClick(e: NodeMouseEvent) {
-  actor.send({ type: 'NODE.CLICK', nodeId: e.node.id })
+  send({ type: 'NODE.CLICK', nodeId: e.node.id })
 }
 
 function handleNodeDoubleClick(e: NodeMouseEvent) {
-  actor.send({ type: 'NODE.DOUBLE_CLICK', nodeId: e.node.id })
+  send({ type: 'NODE.DOUBLE_CLICK', nodeId: e.node.id })
 }
 
 function handleCloseNodeEditor() {
-  actor.send({ type: 'NODE.EDITOR.CLOSE' })
+  send({ type: 'NODE.EDITOR.CLOSE' })
 }
 
 function handleConnect(params: Connection) {
-  actor.send({
+  send({
     type: 'EDGE.CONNECT',
     src: params.source,
     tgt: params.target,
@@ -411,10 +397,10 @@ function handleFlowClick(flow: Partial<FlowEntity>, event: MouseEvent) {
   shiftAnchorFlowId.value = flow.id
 
   const enablePreview = settings.value.value?.enableFlowPreview ?? true
-  const isAlreadySelected = selectedFlowId.value === flow.id
+  const isAlreadySelected = flowsMachine.value.data.selectedFlowId === flow.id
   const shouldOpenEditor = !enablePreview || isAlreadySelected
 
-  actor.send({
+  send({
     type: shouldOpenEditor ? 'FLOW.SELECT' : 'FLOW.PREVIEW',
     flowId: flow.id
   })
@@ -422,7 +408,7 @@ function handleFlowClick(flow: Partial<FlowEntity>, event: MouseEvent) {
 
 function handleShiftClick(flow: Partial<FlowEntity>) {
   if (!flow.id) return
-  const anchorId = shiftAnchorFlowId.value || selectedFlowId.value
+  const anchorId = shiftAnchorFlowId.value || flowsMachine.value.data.selectedFlowId
   if (!anchorId) return
 
   const flowList = flows.value
@@ -450,11 +436,11 @@ function clearMultiSelect() {
 
 function handleFlowDblClick(flow: Partial<FlowEntity>) {
   clearMultiSelect()
-  if (flow.id) actor.send({ type: 'FLOW.SELECT', flowId: flow.id })
+  if (flow.id) send({ type: 'FLOW.SELECT', flowId: flow.id })
 }
 
 function handleCreateFlow() {
-  actor.send({ type: 'FLOW.CREATE' })
+  send({ type: 'FLOW.CREATE' })
 }
 
 // Unified dialog handlers
@@ -492,7 +478,7 @@ function openDeleteDialog(flow?: Partial<FlowEntity>) {
 const handleUpdateLabel = (label: string) => {
   if (!targetFlow.value?.id || !label) return
 
-  actor.send({ type: 'FLOW.UPDATE_LABEL', flowId: targetFlow.value.id, label })
+  send({ type: 'FLOW.UPDATE_LABEL', flowId: targetFlow.value.id, label })
   labelDialogOpen.value = false
   targetFlow.value = null
 }
@@ -500,14 +486,14 @@ const handleUpdateLabel = (label: string) => {
 const handleConfirmDelete = () => {
   if (isBulkDelete.value) {
     for (const flowId of multiSelectedFlowIds.value) {
-      actor.send({ type: 'FLOW.DELETE', flowId: flowId as EARS.EntityId })
+      send({ type: 'FLOW.DELETE', flowId: flowId as EARS.EntityId })
     }
     clearMultiSelect()
     return
   }
 
   if (!targetFlow.value?.id) return
-  actor.send({ type: 'FLOW.DELETE', flowId: targetFlow.value.id })
+  send({ type: 'FLOW.DELETE', flowId: targetFlow.value.id })
   targetFlow.value = null
 }
 
@@ -517,28 +503,28 @@ async function handleExportFlowDSL(flow: Partial<FlowEntity>) {
   if (!flow.id) return
   const dir = await window.electronAPI?.fileUtils.selectPath({ type: 'directory' })
   if (!dir || typeof dir !== 'string') return
-  actor.send({ type: 'DSL.RESET_EXPORT_STATUS' })
-  actor.send({ type: 'DSL.EXPORT', directory: dir, flowId: flow.id })
+  send({ type: 'DSL.RESET_EXPORT_STATUS' })
+  send({ type: 'DSL.EXPORT', directory: dir, flowId: flow.id })
 }
 
 function handleOverlayClick() {
-  if (selectedFlowId.value) actor.send({ type: 'FLOW.SELECT', flowId: selectedFlowId.value })
+  if (flowsMachine.value.data.selectedFlowId) send({ type: 'FLOW.SELECT', flowId: flowsMachine.value.data.selectedFlowId })
 }
 
 function handleGoBack() {
-  actor.send({ type: 'GO.BACK' })
+  send({ type: 'GO.BACK' })
 }
 
 async function handleLayout(direction?: LayoutDirection) {
   // Calculate new positions using async ELK layout
   const newPositions = await calculateLayoutAsync(
-    { nodes: nodes.value, edges: edges.value },
+    { nodes: flowsMachine.value.data.graph.nodes, edges: flowsMachine.value.data.graph.edges },
     { direction }
   )
 
   // Save all positions to state
   for (const [nodeId, pos] of Object.entries(newPositions)) {
-    actor.send({
+    send({
       type: 'NODE.UPDATE_POSITION',
       nodeId,
       position: pos
@@ -557,11 +543,11 @@ async function handleNodesInitialized() {
 }
 
 function handleNodeUpdate(nodeId: string, updates: Record<string, any>) {
-  actor.send({ type: 'NODE.UPDATE', nodeId: nodeId as any, updates })
+  send({ type: 'NODE.UPDATE', nodeId: nodeId as any, updates })
 }
 
 function handleReindexBranches(nodeId: string, data: { type: 'inserted' | 'removed'; index: number }) {
-  actor.send({
+  send({
     type: 'HANDLE.REINDEX',
     nodeId,
     prefix: 'branch',
@@ -573,7 +559,7 @@ function handleReindexBranches(nodeId: string, data: { type: 'inserted' | 'remov
 function handleNodeDragStop(event: NodeMouseEvent) {
   const node = event.node
   if (node.id && node.position) {
-    actor.send({
+    send({
       type: 'NODE.UPDATE_POSITION',
       nodeId: node.id,
       position: { x: node.position.x, y: node.position.y }
@@ -583,7 +569,7 @@ function handleNodeDragStop(event: NodeMouseEvent) {
 
 function handleNodesRemove(nodes: { id: string }[]) {
   for (const node of nodes) {
-    actor.send({ type: 'NODE.DELETE', nodeId: node.id })
+    send({ type: 'NODE.DELETE', nodeId: node.id })
   }
 }
 
@@ -592,15 +578,15 @@ function handleSelectionChange(changes: { id: string; selected: boolean }[]) {
   const deselectedChange = changes.find(change => !change.selected)
 
   if (selectedChange) {
-    actor.send({ type: 'NODE.SELECTION_CHANGE', nodeId: selectedChange.id, selected: true })
+    send({ type: 'NODE.SELECTION_CHANGE', nodeId: selectedChange.id, selected: true })
   } else if (deselectedChange) {
-    actor.send({ type: 'NODE.SELECTION_CHANGE', nodeId: '', selected: false })
+    send({ type: 'NODE.SELECTION_CHANGE', nodeId: '', selected: false })
   }
 }
 
 function handleEdgesRemove(edges: { id: string }[]) {
   for (const edge of edges) {
-    actor.send({ type: 'EDGE.DISCONNECT', edgeId: edge.id })
+    send({ type: 'EDGE.DISCONNECT', edgeId: edge.id })
   }
 }
 
@@ -611,7 +597,7 @@ function handleEdgeUpdate(event: EdgeUpdateEvent) {
     || (edge.sourceHandle ?? null) !== (connection.sourceHandle ?? null)
     || (edge.targetHandle ?? null) !== (connection.targetHandle ?? null)
   if (moved) {
-    actor.send({
+    send({
       type: 'EDGE.RECONNECT',
       edgeId: edge.id,
       source: connection.source,

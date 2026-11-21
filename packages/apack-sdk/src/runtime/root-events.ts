@@ -29,7 +29,7 @@ export interface RootEvents {
   /** A message for a backend system, which the bus routes */
   emitIncoming(message: Message): void;
   onIncoming(callback: (message: Message) => void): () => void;
-  /** A message for a frontend surface sent outside a system (`broadcastToSurface`), which the bus delivers while a client is connected */
+  /** A message for a frontend surface sent outside a system (`broadcast`), which the bus delivers while a client is connected */
   emitSurfaceSend(message: Message): void;
   onSurfaceSend(callback: (message: Message) => void): () => void;
   /** A message the clients receive */

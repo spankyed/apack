@@ -193,11 +193,11 @@
 
 <script setup lang="ts">
 import { Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useAsk, useSettingsDraft } from '@apackdev/sdk/fe'
-import { ask } from '#generated/events.ts'
+import { useSettingsDraft, useState } from '@apackdev/sdk/fe'
+import type { NotesState } from './state.ts'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref } from 'vue'
 
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 
@@ -234,10 +234,15 @@ const updatePosition = (value: 'left' | 'right') => {
   })
 }
 
-// An import, asked from here: how the last one ended is shown until another is picked
-const importing = useAsk((directory: string) => ask('notes', { type: 'IMPORT_NOTES', directory }))
-const imported = shallowRef<typeof importing.outcome>()
-const isImporting = computed(() => importing.pending)
+// The import and the export are the surface's machine's: it makes each, and holds how the last one ended. What an
+// earlier visit to this form left is not shown again
+const { state: surface, send } = useState<NotesState>()
+send({ type: 'NOTES.FORGET_IMPORT' })
+send({ type: 'NOTES.FORGET_EXPORT' })
+
+// How the last import ended, shown until another is picked
+const imported = computed(() => surface.value.data.imported)
+const isImporting = computed(() => surface.value.data.making.importNotes)
 const importStatus = computed(() => (imported.value === undefined ? 'idle' : imported.value.ok ? 'success' : 'error'))
 const applyErrors = computed(() => {
   if (imported.value === undefined) return []
@@ -245,20 +250,19 @@ const applyErrors = computed(() => {
 })
 const importedCount = computed(() => (imported.value?.ok ? imported.value.value.count : 0))
 
-// An export, asked from here: how the last one ended is shown until another is made
+// How the last export ended, shown until another is made
 const exportFormat = ref<'markdown' | 'json'>('markdown')
 const exportDirectory = ref<string>('')
-const exporting = useAsk((directory: string, format: 'markdown' | 'json') => ask('notes', { type: 'EXPORT_NOTES', directory, format }))
-const exported = shallowRef<typeof exporting.outcome>()
-const isExporting = computed(() => exporting.pending)
+const exported = computed(() => surface.value.data.exported)
+const isExporting = computed(() => surface.value.data.making.exportNotes)
 const exportStatus = computed(() => (exported.value === undefined ? 'idle' : exported.value.ok ? 'success' : 'error'))
 const exportErrors = computed(() => (exported.value?.ok === false ? [exported.value.failure.message] : []))
 const exportedFilePath = computed(() => (exported.value?.ok ? exported.value.value.filePath : ''))
 const exportedItemCount = computed(() => (exported.value?.ok ? exported.value.value.itemCount : 0))
 
-// Import - directory picker, then the ask
+// Import - directory picker, then the machine's ask
 const selectAndImportNotes = async () => {
-  imported.value = undefined
+  send({ type: 'NOTES.FORGET_IMPORT' })
 
   const directory = await window.electronAPI?.fileUtils.selectPath({
     type: 'directory'
@@ -266,7 +270,7 @@ const selectAndImportNotes = async () => {
 
   if (!directory || Array.isArray(directory)) return
 
-  imported.value = await importing.ask(directory)
+  send({ type: 'NOTES.IMPORT', directory })
 }
 
 // Export
@@ -277,7 +281,6 @@ const selectExportDirectory = async () => {
 
 const exportNotesToFile = async () => {
   if (!exportDirectory.value) return
-  exported.value = undefined
-  exported.value = await exporting.ask(exportDirectory.value, exportFormat.value)
+  send({ type: 'NOTES.EXPORT', directory: exportDirectory.value, format: exportFormat.value })
 }
 </script>

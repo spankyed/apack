@@ -9,19 +9,19 @@
       leave-from-class="translate-x-0 opacity-100"
       leave-to-class="-translate-x-full opacity-0"
     >
-      <div v-if="showLeftPanel" class="flex flex-col border-r w-72 border-neutral-800/50 bg-neutral-900">
+      <div v-if="brain.data.showLeftPanel" class="flex flex-col border-r w-72 border-neutral-800/50 bg-neutral-900">
         <div class="px-5 py-3.5 border-b border-neutral-800/50 bg-neutral-900/30">
           <div class="flex items-center justify-between">
             <h3 class="text-xs font-semibold tracking-wider uppercase text-neutral-500">Watched Events</h3>
-            <span v-if="possibleEvents && possibleEvents.length > 0" class="text-xs text-neutral-500">
-              {{ possibleEvents.length }} event{{ possibleEvents.length !== 1 ? 's' : '' }}
+            <span v-if="brain.data.possibleEvents && brain.data.possibleEvents.length > 0" class="text-xs text-neutral-500">
+              {{ brain.data.possibleEvents.length }} event{{ brain.data.possibleEvents.length !== 1 ? 's' : '' }}
             </span>
           </div>
         </div>
         <div class="flex-1 overflow-y-auto">
           <EventsList
-            :events="possibleEvents"
-            :pulsing-event-type="pulsingEventType"
+            :events="brain.data.possibleEvents"
+            :pulsing-event-type="brain.data.pulsingEventType"
             @event-click="handleEventClick"
           />
         </div>
@@ -37,7 +37,7 @@
       leave-from-class="translate-y-0 opacity-100"
       leave-to-class="-translate-y-full opacity-0"
     >
-      <div v-if="brainIsPaused" class="absolute top-0 left-0 right-0 z-10 flex items-center justify-center gap-3 px-4 py-1.5 bg-amber-900/80 border-b border-amber-700/50 text-amber-200 text-xs">
+      <div v-if="brain.data.brainIsPaused" class="absolute top-0 left-0 right-0 z-10 flex items-center justify-center gap-3 px-4 py-1.5 bg-amber-900/80 border-b border-amber-700/50 text-amber-200 text-xs">
         <span>Brain Paused — Events Queued</span>
         <button
           class="px-2 py-0.5 text-xs font-medium rounded bg-amber-700/60 hover:bg-amber-600/60 text-amber-100 transition-colors"
@@ -58,21 +58,21 @@
       leave-to-class="-translate-y-full opacity-0"
     >
       <div
-        v-if="latestRuntimeError"
+        v-if="brain.data.latestRuntimeError"
         :class="[
           'absolute left-0 right-0 z-20 flex items-center justify-between gap-3 border-b border-red-700/50 bg-red-950/90 px-4 py-2 text-xs text-red-100',
-          brainIsPaused ? 'top-8' : 'top-0'
+          brain.data.brainIsPaused ? 'top-8' : 'top-0'
         ]"
       >
         <div class="min-w-0">
           <div class="flex items-center gap-2">
             <span class="font-semibold">Brain runtime error</span>
-            <span v-if="latestRuntimeError.nodeLabel || latestRuntimeError.actionLabel" class="truncate text-red-200/80">
-              {{ latestRuntimeError.nodeLabel || latestRuntimeError.actionLabel }}
+            <span v-if="brain.data.latestRuntimeError.nodeLabel || brain.data.latestRuntimeError.actionLabel" class="truncate text-red-200/80">
+              {{ brain.data.latestRuntimeError.nodeLabel || brain.data.latestRuntimeError.actionLabel }}
             </span>
           </div>
           <div class="truncate text-red-100/80">
-            {{ latestRuntimeError.message }}
+            {{ brain.data.latestRuntimeError.message }}
           </div>
         </div>
         <button
@@ -87,18 +87,18 @@
     <!-- Center: RunNode Graph (Always visible) -->
     <div class="relative flex-1 overflow-hidden bg-neutral-900" @click="handleCanvasClick">
       <RunNodeGraph
-        :run-node-tree="runNodeTree"
-        :flow-run-node-id="flowRunNodeId"
+        :run-node-tree="brain.data.runNodeTree"
+        :flow-run-node-id="brain.data.flowRunNodeId"
         :can-go-back="canGoBack"
-        :animations-enabled="animationsEnabled"
-        :selected-node-id="selectedStepNode?.id"
+        :animations-enabled="brain.data.animationsEnabled"
+        :selected-node-id="brain.data.selectedStepNode?.id"
         @node-click="handleNodeClick"
         @flow-navigate="handleFlowNavigate"
         @back-click="handleBackClick"
       />
 
       <!-- Brain Stopped Overlay -->
-      <div v-if="brainIsDead && runNodeTree && runNodeTree.length" class="absolute inset-0 z-20 flex items-center justify-center bg-neutral-900/60 backdrop-blur-[1px]">
+      <div v-if="brain.data.brainIsDead && brain.data.runNodeTree && brain.data.runNodeTree.length" class="absolute inset-0 z-20 flex items-center justify-center bg-neutral-900/60 backdrop-blur-[1px]">
         <div class="text-center">
           <div class="flex items-center justify-center w-14 h-14 mx-auto mb-4 rounded-full bg-neutral-800/80 border border-neutral-700/50">
             <svg class="w-7 h-7 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -119,89 +119,78 @@
 
     <!-- Step Node Details Panel (Slide-out) -->
     <StepNodeDetails
-      :node="selectedStepNode"
+      :node="brain.data.selectedStepNode"
       @close="handleCloseDetails"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState } from '@apackdev/sdk/fe'
 
-import { useSelector } from '@xstate/vue'
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import { type BrainState } from '#features/brain/fe/state.ts';
 import RunNodeGraph from './components/RunNodeGraph.vue';
 import EventsList from './components/EventsList.vue';
 import StepNodeDetails from './components/StepNodeDetails.vue';
-import { sendToSystem } from '#generated/events.ts';
+import { tell } from '#generated/events.ts';
 
-const actor: BrainState = useSurface();
+const { state: brain, send } = useState<BrainState>();
 
 // Selectors for state
-const runNodeTree = useSelector(actor, (state) => state.context.runNodeTree);
-const possibleEvents = useSelector(actor, (state) => state.context.possibleEvents);
-const flowRunNodeId = useSelector(actor, (state) => state.context.flowRunNodeId);
-const pulsingEventType = useSelector(actor, (state) => state.context.pulsingEventType);
-const canGoBack = useSelector(actor, (state) => (state.context.flowHierarchy?.length ?? 0) > 1);
-const brainIsPaused = useSelector(actor, (state) => state.context.brainIsPaused);
-const brainIsDead = useSelector(actor, (state) => state.context.brainIsDead);
-const latestRuntimeError = useSelector(actor, (state) => state.context.latestRuntimeError);
+const canGoBack = computed(() => (brain.value.data.flowHierarchy?.length ?? 0) > 1);
 
 // UI state selectors
-const showLeftPanel = useSelector(actor, (state) => state.context.showLeftPanel);
-const selectedStepNode = useSelector(actor, (state) => state.context.selectedStepNode);
-const animationsEnabled = useSelector(actor, (state) => state.context.animationsEnabled);
 
 // Event handlers
 const handleNodeClick = (nodeId: string) => {
-  if (brainIsDead.value) return;
-  actor.send({ type: 'NODE.CLICK', nodeId });
+  if (brain.value.data.brainIsDead) return;
+  send({ type: 'NODE.CLICK', nodeId });
 };
 
 const handleFlowNavigate = (runNodeId: string) => {
-  if (brainIsDead.value) return;
-  actor.send({ type: 'FLOW.NAVIGATE', runNodeId });
+  if (brain.value.data.brainIsDead) return;
+  send({ type: 'FLOW.NAVIGATE', runNodeId });
 };
 
 const handleBackClick = () => {
-  if (brainIsDead.value) return;
-  actor.send({ type: 'BACK.CLICK' });
+  if (brain.value.data.brainIsDead) return;
+  send({ type: 'BACK.CLICK' });
 };
 
 const handleStart = () => {
-  sendToSystem('brain', {
+  tell('brain', {
     type: 'START_BRAIN',
   });
 };
 
 const handleEventClick = (eventType: string) => {
-  actor.send({ type: 'EVENT.CLICK', eventType });
+  send({ type: 'EVENT.CLICK', eventType });
 };
 
 const handleCloseDetails = () => {
-  actor.send({ type: 'CLOSE_DETAILS' });
+  send({ type: 'CLOSE_DETAILS' });
 };
 
 const handleResume = () => {
-  actor.send({ type: 'RESUME_BRAIN' });
+  send({ type: 'RESUME_BRAIN' });
 };
 
 const handleDismissRuntimeError = () => {
-  actor.send({ type: 'DISMISS_RUNTIME_ERROR' });
+  send({ type: 'DISMISS_RUNTIME_ERROR' });
 };
 
 const handleCanvasClick = (event: MouseEvent) => {
   // Only close if we have a selected node and the click is directly on the canvas
   // The StepNodeDetails panel has @click.stop to prevent propagation
-  if (selectedStepNode.value) {
+  if (brain.value.data.selectedStepNode) {
     handleCloseDetails();
   }
 };
 
 // Keyboard shortcuts
 const handleKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && selectedStepNode.value) {
+  if (e.key === 'Escape' && brain.value.data.selectedStepNode) {
     handleCloseDetails();
   }
 };

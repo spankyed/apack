@@ -1,7 +1,7 @@
 import { setup } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
-// broadcastToSurface is typed with the events each of this pack's surfaces receives
-import { broadcastToSurface } from '#generated/events.ts';
+// broadcast is typed with the events each of this pack's surfaces receives
+import { broadcast } from '#generated/events.ts';
 import type { Contract } from './contract.ts';
 
 export const __CAMEL__Spec = defineSystem<Contract>();
@@ -12,7 +12,7 @@ export const __CAMEL__System = setup({
   // named no sender. A handler that answers an ask uses it; one that publishes, like this, does not.
   actions: __CAMEL__Spec.actions({
     sendConnectedData: () => {
-      broadcastToSurface('__NAME__', {
+      broadcast('__NAME__', {
         type: '__CONNECTED_EVENT__',
         data: {},
       });

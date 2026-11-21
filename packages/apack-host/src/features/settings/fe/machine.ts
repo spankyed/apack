@@ -4,7 +4,7 @@ import { safeEvents } from '@apackdev/sdk/fe'
 import { type TrailClickEvent } from '@apackdev/sdk/fe'
 import type { OutgoingSettingsEvents } from '../be/types.ts'
 import type { SecretMetadata, SecretsStatus } from '@apackdev/sdk/services'
-import { sendToSystem } from '../../../events.ts'
+import { tell } from '../../../events.ts'
 import type { PackContentPreview } from '@apackdev/sdk/build'
 import type { FeatureRef } from '@apackdev/sdk/ids';
 
@@ -145,7 +145,7 @@ export function createSettingsMachine(io: SettingsIO) {
     testCliProvider: assign(({ context, event }) => {
       const ev = typeOf('CLI.TEST', event);
       // The code feature resolves CLIs: `resolve-cli` and the stored paths are its own
-      sendToSystem({ role: 'code' }, {
+      tell({ role: 'code' }, {
         type: 'TEST_CLI_PROVIDER',
         provider: ev.provider,
       });
@@ -171,7 +171,7 @@ export function createSettingsMachine(io: SettingsIO) {
     previewPackContent: assign(({ context, event }) => {
       const ev = typeOf('PACK_CONTENT.PREVIEW', event);
       // The packs system owns content orchestration; its answers come back to this surface, which draws them
-      sendToSystem('packs', {
+      tell('packs', {
         type: 'PREVIEW_PACK_CONTENT',
         directory: ev.directory,
       });
@@ -282,7 +282,7 @@ export function createSettingsMachine(io: SettingsIO) {
         return selected.length === total ? null : selected;
       };
 
-      sendToSystem('packs', {
+      tell('packs', {
         type: 'IMPORT_PACK_CONTENT',
         directory,
         include: Object.fromEntries(Object.keys(preview.content).map((key) => [key, toIncludeField(key)])),
@@ -339,7 +339,7 @@ export function createSettingsMachine(io: SettingsIO) {
   id,
   
   initial: 'ready',
-  entry: () => sendToSystem('help', { type: 'GET_HELP' }),
+  entry: () => tell('help', { type: 'GET_HELP' }),
   on: {
     HELP_CATALOG: { actions: 'updateHelp' },
     'HELP.OPEN': { actions: ['updateHelp', assign({ activeTab: 'help' })] },
