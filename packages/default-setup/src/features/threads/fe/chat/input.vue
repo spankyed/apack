@@ -31,11 +31,11 @@
 
         <!-- Attachment strip: files then images, horizontal scroll -->
         <div v-if="pendingFiles.length || pendingImages.length"
-          class="flex shrink-0 items-end gap-2 mx-4 pt-3 overflow-x-auto scrollbar-thin">
+          class="flex shrink-0 items-end gap-2 mx-4 pt-3 overflow-x-auto scrollbar-thin" :class="$style.attachments">
           <ImageThumbnail v-for="(img, index) in pendingImages" :key="'i-'+index"
-            :src="img.dataUrl" :name="img.name" class="group" @click="$emit('open-lightbox', img.dataUrl)">
-            <button type="button" @click="removeImage(index)"
-              class="absolute -top-1.5 -right-1.5 w-4 h-4 bg-neutral-900/80 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors opacity-0 group-hover:opacity-100">
+            :src="img.dataUrl" :name="img.name" :compact="!!nativeSubmit" class="group" @click="$emit('open-lightbox', img.dataUrl)">
+            <button type="button" :aria-label="`Remove ${img.name}`" @click="removeImage(index)"
+              class="absolute top-0.5 right-0.5 h-5 w-5 rounded-md bg-neutral-950/85 text-neutral-200 flex items-center justify-center hover:bg-neutral-700 focus-visible:ring-2 focus-visible:ring-blue-400">
               <X :size="10" />
             </button>
           </ImageThumbnail>
@@ -995,6 +995,7 @@ const handleSubmit = async () => {
 @media (max-height: 700px) {
   :global([data-composer-form]) { padding-top: 4px; padding-bottom: 4px; }
   .input :global([data-composer-toolbar]) { padding-top: 4px; padding-bottom: 4px; }
+  .attachments { padding-top: 6px; }
   .input { --composer-default-history-reserve: 2rem; --composer-field-history-reserve: 2rem; }
   .inputBackgroundNotes { --composer-default-history-reserve: min(4rem, calc(var(--composer-available-height) * 0.4)); }
   /* A rich draft must leave the conversation's task controls reachable. */

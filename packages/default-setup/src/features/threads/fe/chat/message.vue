@@ -10,7 +10,7 @@
     ]"
   >
     <!-- Measure against the transcript width; native expansion can change the drawn bubble's width. -->
-    <div v-if="hasNativeUserFrame" ref="originalUserBody" inert aria-hidden="true" class="pointer-events-none invisible absolute left-4 right-4 top-3 leading-relaxed text-[15px]">
+    <div v-if="hasNativeUserFrame" ref="originalUserBody" inert aria-hidden="true" class="pointer-events-none invisible absolute left-4 right-4 top-3 leading-relaxed text-[15px]" :class="{ compactImageMeasure: compactImageLayout }">
       <slot />
     </div>
     <!-- Marker message: compact divider with toggle -->
@@ -146,12 +146,12 @@
         ]"
         @click="isUser && isTruncated && !userExpanded && (userExpanded = true)"
       >
-        <div ref="bubbleContentRef" class="px-4 py-3">
+        <div ref="bubbleContentRef" class="px-4 py-3" :class="{ compactImageMessage: compactImageLayout }">
         <!-- Attachments: files then images, horizontal scroll -->
         <div v-if="message.references?.files?.length || message.references?.images?.length" ref="attachmentStrip"
-          class="flex items-end gap-2 mb-2 overflow-x-auto scrollbar-thin">
+          class="flex items-end gap-2 mb-2 overflow-x-auto scrollbar-thin" :class="{ compactImageStrip: compactImageLayout }">
           <ImageThumbnail v-for="(img, index) in message.references.images" :key="'i-'+index"
-            :src="img.url" :name="img.name" @click="$emit('open-lightbox', img.url)" />
+            :src="img.url" :name="img.name" :compact="isClaudeCodeThread" @click="$emit('open-lightbox', img.url)" />
           <FileBlock v-for="(file, index) in message.references.files" :key="'f-'+index"
             :file="file" class="flex-shrink-0" />
         </div>
@@ -181,7 +181,7 @@
         </template>
 
         <!-- Message content -->
-        <div data-chat-message-content class="leading-relaxed text-[15px]">
+        <div data-chat-message-content class="min-w-0 leading-relaxed text-[15px]">
           <slot v-if="!hasNativeTranscript" />
           <div v-else-if="!hasNativeUserFrame" hidden inert aria-hidden="true"><slot /></div>
           <template v-for="part in hasNativeTranscript ? nativeParts : []" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
@@ -337,6 +337,9 @@ const forking = ref(false)
 const revertMenu = useContextMenu()
 
 const isUser = computed(() => props.message.sender === 'user')
+const compactImageLayout = computed(() => isUser.value && props.isClaudeCodeThread
+  && props.message.references?.images?.length === 1 && !!userMessageText.value.trim()
+  && !props.message.references.files?.length && !props.message.references.context?.length && !props.message.blocks?.length)
 const selectionRowId = computed(() => {
   const context = props.message.context
   if (!props.isClaudeCodeThread || !['user', 'assistant'].includes(props.message.sender) || Array.isArray(context?.claudeNativeMessages) && context.claudeNativeMessages.length > 1) return undefined
@@ -375,14 +378,20 @@ watch([() => props.message.id, () => props.isClaudeCodeThread, () => isUser.valu
 
 // Observe natural content rather than the bubble whose height truncation changes.
 // Measurement runs after layout, including rich-text transactions outside Vue's render cycle.
-watch([bubbleContentRef, originalUserBody, isUser, hasNativeUserFrame], ([bubble, original, user, native], _prev, onCleanup) => {
+watch([bubbleContentRef, originalUserBody, attachmentStrip, isUser, hasNativeUserFrame], ([bubble, original, attachments, user, native], _prev, onCleanup) => {
   const content = native ? original : bubble
   if (!content || !user) return
-  const observer = new ResizeObserver(([entry]) => {
-    const height = entry.borderBoxSize[0].blockSize + (native ? (attachmentStrip.value?.offsetHeight ?? 0) + 26 : 0)
-    isTruncated.value = Math.round(height) > MAX_USER_MSG_HEIGHT
+  const observer = new ResizeObserver(() => {
+    const textHeight = content.offsetHeight
+    const attachmentHeight = attachments?.offsetHeight ?? 0
+    const attachmentLayout = attachments?.parentElement
+    const inlineImage = attachmentLayout && getComputedStyle(attachmentLayout).display === 'grid'
+    const bodyHeight = inlineImage ? Math.max(textHeight, attachmentHeight) : textHeight + attachmentHeight
+    const height = native ? bodyHeight + 26 : textHeight
+    isTruncated.value = height > MAX_USER_MSG_HEIGHT
   })
   observer.observe(content, { box: 'border-box' })
+  if (native && attachments) observer.observe(attachments, { box: 'border-box' })
   onCleanup(() => observer.disconnect())
 }, { flush: 'post' })
 
@@ -450,6 +459,12 @@ const copyMessageText = async () => {
 
 .animate-fade-in {
   animation: fade-in 0.3s ease-out;
+}
+
+@media (max-height: 700px) {
+  .compactImageMessage { display: grid; grid-template-columns: 3rem minmax(0, 1fr); align-items: center; gap: 0.75rem; padding-block: 0.5rem; }
+  .compactImageStrip { margin-bottom: 0; overflow: visible; }
+  .compactImageMeasure { padding-inline-start: 3.75rem; }
 }
 
 .command-bubble {
