@@ -1366,7 +1366,7 @@ await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(c
 
 
 async function ownerPost(path,body){
- return new Promise((resolve,reject)=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:2000},response=>{const chunks=[];response.on('data',chunk=>chunks.push(chunk));response.on('end',()=>{try{if(response.statusCode!==200)throw Error('Native owner broker refused');resolve(JSON.parse(Buffer.concat(chunks).toString()));}catch(error){reject(error);}});});request.on('error',reject);request.on('timeout',()=>request.destroy(Error('Native owner broker timeout')));request.end(JSON.stringify({sessionId:JSON.parse(readFileSync(configUrl,'utf8')).sessionId,...body}));});
+ return new Promise((resolve,reject)=>{const request=http.request({socketPath:config.socketPath,path,method:'POST',headers:{'x-apack-native-token':config.token,'content-type':'application/json'},timeout:2000},response=>{const chunks=[];response.on('data',chunk=>chunks.push(chunk));response.on('end',()=>{try{if(response.statusCode!==200)throw Object.assign(Error('Native owner broker refused'),{status:response.statusCode});resolve(JSON.parse(Buffer.concat(chunks).toString()));}catch(error){reject(error);}});});request.on('error',reject);request.on('timeout',()=>request.destroy(Error('Native owner broker timeout')));request.end(JSON.stringify({sessionId:JSON.parse(readFileSync(configUrl,'utf8')).sessionId,...body}));});
 }
 function ownerAgents(facts){
  const result=new Map();
@@ -1381,7 +1381,7 @@ function ownerAgents(facts){
  }
  return [...result.values()];
 }
-let ownerReading=false,ownerIndependent=false,reportedView,viewHeartbeat=0,reportedTranscript,reportedActivity,activitySequence=0,reportedFocus,focusSequence=0,reportedPreview,previewSequence=0,reportedBilling,billingSequence=0;
+let ownerReading=false,ownerIndependent=false,reportedView,viewHeartbeat=0,reportedTranscript,reportedActivity,activitySequence=0,reportedFocus,focusSequence=0,reportedPreview,previewSequence=0,settledBillingKey,billingSequence=0;
 // Admit a native reset before publishing observations that are fenced by the broker's old session.
 async function followNativeOwnerSession(gate){
  if(gate.sessionId===JSON.parse(readFileSync(configUrl,'utf8')).sessionId)return;
@@ -1405,7 +1405,16 @@ const ownerTimer=setInterval(async()=>{
   const refreshView=viewKey!==reportedView||++viewHeartbeat>=4;
   if(refreshView){const response=await ownerPost('/native-view',{sessionId:gate.sessionId,pid:process.pid,view:gate.view,sequence:gate.sequence});reportedView=viewKey;viewHeartbeat=0;await reportPendingPromptRefusal(response?.pendingSubmissionId);}
   const billingKey=JSON.stringify([gate.sessionId,gate.billing]);
-  if(gate.billing&&billingKey!==reportedBilling&&await ownerPost('/native-billing',{sessionId:gate.sessionId,pid:process.pid,sequence:++billingSequence,...gate.billing}))reportedBilling=billingKey;
+  if(gate.billing&&billingKey!==settledBillingKey){
+   try{
+    await ownerPost('/native-billing',{sessionId:gate.sessionId,pid:process.pid,sequence:++billingSequence,...gate.billing});
+    settledBillingKey=billingKey;
+   }catch(error){
+    // Clear can leave the last request's billing snapshot in the CLI. A 400 retires that snapshot.
+    // Transient delivery errors can retry, while command polling continues either way.
+    if(error?.status===400)settledBillingKey=billingKey;
+   }
+  }
   const previewKey=JSON.stringify([gate.sessionId,gate.sequence,gate.preview]);
   if((refreshView||previewKey!==reportedPreview)&&await ownerPost('/native-preview',{sessionId:gate.sessionId,pid:process.pid,sequence:++previewSequence,viewRevision:gate.sequence,preview:gate.preview}))reportedPreview=previewKey;
   const focusKey=JSON.stringify([gate.sessionId,gate.sequence,gate.focus]);
