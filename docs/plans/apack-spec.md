@@ -5,7 +5,8 @@ Status: proposed, 2026-11-21, in Claude Code session `c6ebd24e-7b7d-4f7d-b520-92
 record of the design it reached and the work it implies.
 
 Related: [answers-in-the-contract.md](answers-in-the-contract.md) and spankyed/apack#583 move the app toward asks while
-staying on XState. This plan takes the same idea further and has not been reconciled with either.
+staying on XState. [Alongside results-are-asks](#alongside-results-are-asks) says what this design takes from that
+work, what it leaves, and what the two should share so that one leads to the other.
 
 ## Why
 
@@ -95,6 +96,9 @@ stays. Giving `at` goes to that path.
 6. **An ask answers and does not change data.** To change data it sends its own state an event. See Decisions.
 7. **Every ask ends exactly once**: with its answer, a refusal it declares, or `failed`, `abandoned`, `unavailable` or
    `disconnected`.
+8. **A refusal is a kind, a message, and the data that kind declares.** `refuses` names kinds alone
+   (`'not-found' | 'no-access'`) or each kind with what it carries (`{ 'name-taken': { existingId: string } }`). The
+   handler has to give that data to `refuse`, and an asker reads it once it has checked the kind.
 
 ### Communication
 
@@ -130,6 +134,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
 | An ask does not change data by returning | Considered and declined: every change then has one shape, the extractor stays complete, and no real port needed it. To revisit if ports show many ask-plus-event pairs; the form would be an explicit `change((data) => …)` |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
+| A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
 
 ## What the prototype proves
 
@@ -148,9 +153,71 @@ commands. Types and kernel together are about 450 lines.
   caught a handler dropped during a port.
 - **Mistakes that do not compile** were checked at each stage with `@ts-expect-error`: a state missing from a
   definition, entering a state without its data, reading a field of a state it is not in, an answer of the wrong type,
-  an undeclared refusal, telling a state an event it does not take.
+  an undeclared refusal, telling a state an event it does not take. Three about a refusal's data are in `threads.mts`:
+  refusing without the data a kind declares, giving data to a kind that declares none, and reading that data before
+  the kind is checked.
 - **Steps were measured against plain actor delivery** on an earlier version of the prototype: an observer saw states
   disagree twice without steps and never with them. That measurement is not in this folder.
+
+## Alongside results-are-asks
+
+[answers-in-the-contract.md](answers-in-the-contract.md) and spankyed/apack#583 make every result an ask while staying
+on XState. Its answering side and this design are one idea: asks declared in the contract, a table with one handler
+per ask, a handler that returns its answer and throws its refusal, and `failed` and `unavailable` as every ask's.
+
+### Taken from it
+
+| In #583 | Here |
+|---|---|
+| A refusal carries data declared per kind | Rule 8, and in the prototype |
+| The bus answers an ask nothing took | `unavailable` |
+| A handler's `signal` aborts when the asking window goes | The same, and also when the asker's own state is left |
+| Tests ask through the harness (`app.ask`) | `system.ask`; a harness over this keeps that method |
+
+### Left out, and why
+
+| In #583 | Why not here |
+|---|---|
+| `ASK_ANSWERED` and `ASK_FAILED` as events, with `isAnswered`, `answerOf` and `AnswersOf` | A second way to receive an answer. Every transition then needs a guard naming its ask. An asker awaits `ask`, in a component or in a state's `run` |
+| Answers wired through the machine (`answers.actions`, `answers.on`) | `asks` is a table of the state. A system with no states inside is that table and nothing else |
+| `waiting`, read by a handler to learn whether anyone asked | A handler does not branch on transport. What every window should hear is a `broadcast`, whoever asked. A write nobody waits for is still open (Not built) |
+| A feed beside the answer (`sendToWindow(client, …)`) | `progress`, declared on the ask and heard only by its asker |
+| A cancelled ask whose handler keeps running, and a `superseded` refusal | Leaving the asker's state aborts the handler's `signal` |
+| A disk error mapped to `not-found` or `no-access` where declared | A handler names its own refusals. A mapping the handler does not show is one a reader has to know about |
+
+### What the two should share
+
+Code written on XState now should read the same after a move to this design. That is a matter of names and of where
+pack code touches XState.
+
+**One vocabulary.** #583 says `ask` for an ask's fields, `fails` and `failure`. Renaming once, on XState, is cheaper
+than renaming again here.
+
+| Concept | Name in both |
+|---|---|
+| An ask's declaration | `{ args, answer, refuses, progress }` |
+| Asking | `ask(name, ask, args)`, resolving to an `Outcome` |
+| Refusing | `throw refuse(kind, message, data?)` |
+| Telling the asker before the answer | `progress(update)` |
+| Stopping work nobody waits for | the handler's `signal` |
+| Telling a system | `tell` |
+| Telling a surface in every window | `broadcast` |
+
+**Seams the SDK owns.** Each of these is work on XState today, and each removes a line the move would otherwise touch.
+
+- **Handlers are plain functions in tables beside the machine**: asks, and events keyed by name with each handler given
+  its own event. A single-state system is then two tables and a trivial machine.
+- **A component reads state through the SDK**, handed `{ at, data }` computed from the XState snapshot, and never
+  calls `useSelector` on an actor. There are 439 such calls.
+- **A machine is defined through the SDK**, which may only re-export XState's `setup` and `assign` at first. A pack rule
+  then refuses a direct `xstate` import in pack sources.
+- **A loading flag is a state that invokes the ask**, and an independent concern is an actor of its own, never a
+  parallel state.
+- **A spec drives a feature at its boundary**: events in, `ask`, state read through the SDK. 132 spec files import
+  XState, and one that reads an actor's context is rewritten by the move.
+
+What does not carry over is authoring in this design's syntax on XState's runtime. A handler here chooses where to go
+when it runs, and XState's targets are fixed in the machine's config.
 
 ## Not built
 
@@ -183,19 +250,22 @@ commands. Types and kernel together are about 450 lines.
 
 No step is started. Each is a decision point.
 
-1. **Settle the open design** that the first real ports will hit: the Vue binding, how a state follows a view, and a
+1. **Bring the XState code to the shared vocabulary and seams** ([Alongside results-are-asks](#alongside-results-are-asks)),
+   stacked on spankyed/apack#583. It is worth doing whether or not anything after it is: it removes the event path
+   for answers, and leaves pack code that does not name XState.
+2. **Settle the open design** that the first real ports will hit: the Vue binding, how a state follows a view, and a
    write nobody waits for.
-2. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The kernel
+3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The kernel
    takes an injectable scheduler so interleavings can be replayed.
-3. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is
+4. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is
    the pack contract and moves with every feature ported.
-4. **Prove the bridge**, so that states and XState machines run on one bus and features move one at a time. If it cannot
+5. **Prove the bridge**, so that states and XState machines run on one bus and features move one at a time. If it cannot
    be built, the plan needs a different migration and is reconsidered here.
-5. **Port one feature end to end as the go or no-go**: the code search, both halves, with its specs. Judge it on line
+6. **Port one feature end to end as the go or no-go**: the code search, both halves, with its specs. Judge it on line
    count, whether its specs pass unchanged in what they assert, and typecheck time.
-6. **Port in order of risk**: the 20 single-state backend systems, the 13 single-state surfaces, surfaces with states,
+7. **Port in order of risk**: the 20 single-state backend systems, the 13 single-state surfaces, surfaces with states,
    the brain, then the bus and the shell.
-7. **Remove XState and the bridge**, and regenerate the recorded API reports.
+8. **Remove XState and the bridge**, and regenerate the recorded API reports.
 
 ## The name
 

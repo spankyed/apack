@@ -11,7 +11,12 @@
 //   broadcast(name, event)   from the backend to that surface in every window
 
 export type AnyEvent = { readonly type: string }
-export type AskShape = { args: object; answer: unknown; refuses?: string; progress?: unknown }
+/**
+ * One ask. `refuses` names the ways it may be refused that an asker can act on: kinds alone
+ * (`'not-found' | 'no-access'`), or each kind with the data its refusal carries
+ * (`{ 'name-taken': { existingId: string } }`).
+ */
+export type AskShape = { args: object; answer: unknown; refuses?: string | Record<string, object>; progress?: unknown }
 export type Asks = Record<string, AskShape>
 
 /** What a state is, declared as a type: its own data, and the states inside it. The same shape all the way down. */
@@ -26,11 +31,21 @@ export type AskEnd =
   | 'abandoned'     // whatever was answering ended first
   | 'unavailable'   // nothing takes this ask where it was sent
   | 'disconnected'  // the link to whoever was answering closed
-export type AskFailure<K extends string = never> = { readonly kind: K | AskEnd; readonly message: string }
-export type Outcome<V, K extends string = never> = { readonly ok: true; readonly value: V } | { readonly ok: false; readonly failure: AskFailure<K> }
-type Refuses<A extends AskShape> = A extends { refuses: infer K extends string } ? K : never
+/** An ask's refusals by kind, with what each carries: nothing, where only kinds were declared. */
+type Refusals<A> = A extends { refuses: infer R } ? ([R] extends [string] ? { [K in R]: {} } : R) : {}
+type Refuses<A> = keyof Refusals<A> & string
+type RefusalData<D> = [keyof D] extends [never] ? [] : {} extends D ? [data?: D] : [data: D]
+/**
+ * Why an ask was not done, as its asker gets it: a kind to branch on, a message to show, and whatever data the ask
+ * declares for that kind. Checking `kind` narrows to that data.
+ */
+export type AskFailure<A = {}> =
+  | { [K in Refuses<A>]: { readonly kind: K; readonly message: string } & Readonly<Refusals<A>[K]> }[Refuses<A>]
+  | { readonly kind: AskEnd; readonly message: string }
+export type Outcome<V, F = AskFailure> = { readonly ok: true; readonly value: V } | { readonly ok: false; readonly failure: F }
+type AnyOutcome = Outcome<unknown, { readonly kind: string; readonly message: string }>
 type ProgressOf<A extends AskShape> = A extends { progress: infer P } ? P : never
-type OutcomeOf<A extends AskShape> = Outcome<A['answer'], Refuses<A>>
+type OutcomeOf<A extends AskShape> = Outcome<A['answer'], AskFailure<A>>
 
 /** In a state's `data`, marks a field that whoever enters the state has to give. */
 export const given: unique symbol = Symbol('given')
@@ -106,8 +121,11 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
 }
 
 export interface AskScope<R, H extends string, E extends AnyEvent, N extends Net, A extends AskShape> extends Scope<R, H, E, N> {
-  /** `throw refuse(kind, message)` answers with one of the refusals the ask declares. */
-  refuse(kind: Refuses<A>, message: string): Error
+  /**
+   * `throw refuse(kind, message)` answers with one of the refusals the ask declares. A kind that carries data takes
+   * it as a third argument: required when the declaration has required fields, and not accepted when it has none.
+   */
+  refuse<K extends Refuses<A>>(kind: K, message: string, ...data: RefusalData<Refusals<A>[K]>): Error
   /** Tells whoever asked something before the answer. Only they hear it. */
   progress(update: ProgressOf<A>): void
 }
@@ -147,13 +165,13 @@ export function reaching<N extends Net = Nothing>() {
 
 // ── the system ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
-class Refusal extends Error { constructor(readonly kind: string, message: string) { super(message) } }
+class Refusal extends Error { constructor(readonly kind: string, message: string, readonly data?: object) { super(message) } }
 class Question {
   settled = false
-  constructor(private readonly settle: (outcome: Outcome<unknown, string>) => void) {}
-  end(outcome: Outcome<unknown, string>): void { if (!this.settled) { this.settled = true; this.settle(outcome) } }
+  constructor(private readonly settle: (outcome: AnyOutcome) => void) {}
+  end(outcome: AnyOutcome): void { if (!this.settled) { this.settled = true; this.settle(outcome) } }
 }
-const refusal = (kind: string, message: string): Outcome<unknown, string> => ({ ok: false, failure: { kind: kind as AskEnd, message } })
+const refusal = (kind: string, message: string, data?: object): AnyOutcome => ({ ok: false, failure: { ...data, kind, message } })
 
 type Plain = Record<string, unknown>
 type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; states?: Record<string, LooseDef> }
@@ -177,14 +195,14 @@ type Item =
   | { kind: 'event'; ref: string; event: AnyEvent }
   | { kind: 'ask'; ref: string; name: string; args: object; question: Question; heard?: Heard; gone?: AbortSignal }
   | { kind: 'result'; of: Active; value: unknown }
-  | { kind: 'answer'; question: Question; outcome: Outcome<unknown, string> }
+  | { kind: 'answer'; question: Question; outcome: AnyOutcome }
   | { kind: 'out'; leave: () => void }
 
 /** What one system offers another over a link. */
 interface Port {
   event(ref: string, event: AnyEvent): void
   /** Returns what to call when whoever asked has gone. */
-  ask(ref: string, name: string, args: object, heard: Heard, settle: (outcome: Outcome<unknown, string>) => void): () => void
+  ask(ref: string, name: string, args: object, heard: Heard, settle: (outcome: AnyOutcome) => void): () => void
 }
 /** A link between a window and its backend. What crosses it arrives later, and not at all once it is closed. */
 interface Link { open: boolean }
@@ -242,7 +260,7 @@ export function system(host: { side: 'backend' | 'window'; trace?(line: string):
 
   const ask = (to: string | { ref: string }, name: string, args: object, signal: AbortSignal | undefined, heard: Heard | undefined): Promise<never> => new Promise((resolve, reject) => {
     const ref = refOf(to)
-    const question = new Question(resolve as unknown as (outcome: Outcome<unknown, string>) => void)
+    const question = new Question(resolve as unknown as (outcome: AnyOutcome) => void)
     // Once whoever asked has ended, its continuation never runs.
     signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
     if (!isAcross(to)) { enqueue({ kind: 'ask', ref, name, args, question, heard }); return }
@@ -370,13 +388,13 @@ export function system(host: { side: 'backend' | 'window'; trace?(line: string):
     const { name, args, question, heard, gone } = item
     const found = top && taker(top, 'asks', name)
     if (!found) { leaving.push(() => question.end(refusal('unavailable', `${item.ref} does not take ${name}`))); return }
-    const failed = (error: unknown): Outcome<unknown, string> =>
-      (error instanceof Refusal ? refusal(error.kind, error.message) : refusal('failed', error instanceof Error ? error.message : String(error)))
+    const failed = (error: unknown): AnyOutcome =>
+      (error instanceof Refusal ? refusal(error.kind, error.message, error.data) : refusal('failed', error instanceof Error ? error.message : String(error)))
     const signal = gone ? AbortSignal.any([found.of.controller.signal, gone]) : found.of.controller.signal
     try {
       const made = found.handler(args, {
         ...scopeOf(found.of, signal),
-        refuse: (kind: string, message: string) => new Refusal(kind, message),
+        refuse: (kind: string, message: string, data?: object) => new Refusal(kind, message, data),
         progress: (update: unknown) => { if (!signal.aborted) out(() => heard?.(update)) },
       })
       if (made instanceof Promise) {

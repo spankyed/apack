@@ -11,7 +11,7 @@
 // from `inference` directly where the app goes through a brain flow. `findDocument` stands for `libraryService.find`
 // and `inference` for `services.inference`.
 
-import { given, reaching, system } from './state.mts'
+import { given, reaching, system, type AskFailure } from './state.mts'
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // What can be reached by name. In the app a pack's generated facade would declare this.
@@ -36,7 +36,8 @@ type ThreadsAsks = {
     args: { threadId: string; text: string; documentId?: string }
     progress: { text: string }                                   // each piece of the reply, as it is written
     answer: { reply: string }
-    refuses: 'no-such-thread' | 'attachment-missing'
+    // Kinds alone, or a kind with the data its refusal carries
+    refuses: { 'no-such-thread': {}; 'attachment-missing': { documentId: string } }
   }
 }
 
@@ -125,7 +126,7 @@ function threads(inference: { streamText(prompt: string, signal: AbortSignal): A
         let attached = ''
         if (documentId) {
           const found = await ask('library', 'GET_DOCUMENT', { id: documentId })
-          if (!found.ok) throw refuse('attachment-missing', `Could not attach ${documentId}: ${found.failure.message}`)
+          if (!found.ok) throw refuse('attachment-missing', found.failure.message, { documentId })
           attached = ` [with ${found.value.document.name}]`
         }
 
@@ -269,7 +270,8 @@ function threadsSurface(log: (line: string) => void) {
               )
 
               if (sent.ok) return { at: 'thread.idle', data: { lastReply: sent.value.reply } }
-              if (sent.failure.kind === 'attachment-missing') return { at: 'thread.idle', data: { problem: sent.failure.message } }
+              // Checking the kind narrows to what that refusal carries
+              if (sent.failure.kind === 'attachment-missing') return { at: 'thread.idle', data: { problem: `Could not attach ${sent.failure.documentId}: ${sent.failure.message}` } }
               if (sent.failure.kind === 'disconnected') return { at: 'thread.idle', data: { problem: 'The connection was lost while sending.' } }
               return { at: 'thread.idle', data: { problem: sent.failure.message } }
             },
@@ -285,6 +287,38 @@ function threadsSurface(log: (line: string) => void) {
     },
   })
 }
+
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// What must not compile: a refusal's data is part of the ask's declaration
+// ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+
+/** Never called: it exists to be typechecked. */
+function mustNotCompile(): void {
+
+  state<Threads, ThreadsEvent, ThreadsAsks>()({
+    data: { titles: {}, messages: {} },
+    asks: {
+      CREATE_THREAD: () => ({ threadId: 'THR-1' }),
+      // @ts-expect-error `attachment-missing` carries the document's id, so it cannot be refused without one
+      USER_MSG: async (_, { refuse }) => { throw refuse('attachment-missing', 'no') },
+    },
+  })
+
+  state<Threads, ThreadsEvent, ThreadsAsks>()({
+    data: { titles: {}, messages: {} },
+    asks: {
+      CREATE_THREAD: () => ({ threadId: 'THR-1' }),
+      // @ts-expect-error `no-such-thread` carries nothing, so it takes no document id
+      USER_MSG: async (_, { refuse }) => { throw refuse('no-such-thread', 'no', { documentId: 'DOC-1' }) },
+    },
+  })
+
+  const failure = undefined as unknown as AskFailure<ThreadsAsks['USER_MSG']>
+  // @ts-expect-error the document's id exists only once the kind is known to be `attachment-missing`
+  void failure.documentId
+  if (failure.kind === 'attachment-missing') void failure.documentId
+}
+void mustNotCompile
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // Running it: one backend, two windows.
