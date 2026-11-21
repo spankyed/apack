@@ -50,7 +50,8 @@ async function consumer() {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-installed-types-'));
   const modules = path.join(root, 'node_modules');
   fs.mkdirSync(path.join(modules, '@apackdev'), { recursive: true });
-  for (const name of ['sdk', 'ears']) fs.symlinkSync(path.join(REPO_ROOT, 'node_modules/@apackdev', name), path.join(modules, '@apackdev', name), 'dir');
+  fs.symlinkSync(path.join(REPO_ROOT, 'node_modules/@apackdev/sdk'), path.join(modules, '@apackdev', 'sdk'), 'dir');
+  fs.symlinkSync(path.join(REPO_ROOT, 'node_modules/@elmdb'), path.join(modules, '@elmdb'), 'dir');
   fs.symlinkSync(path.join(REPO_ROOT, 'node_modules/xstate'), path.join(modules, 'xstate'), 'dir');
   const library = path.join(modules, 'external-events');
   fs.mkdirSync(library);
@@ -65,7 +66,7 @@ async function consumer() {
   const pack = preparePack(root, manifest.id, {
     'apack.json': JSON.stringify(manifest),
     'package.json': JSON.stringify({ ...JSON.parse(packageJson(manifest.id)), dependencies: {
-      'external-events': '1.0.0', '@apackdev/sdk': '0.1.0', '@apackdev/ears': '0.1.0', xstate: '^5.19.2' } }),
+      'external-events': '1.0.0', '@apackdev/sdk': '0.1.0', '@elmdb/ears': '0.1.0', xstate: '^5.19.2' } }),
     'tsconfig.json': tsconfig, 'src/contract.ts': "export type { Contract } from 'external-events';",
     'src/surface.ts': "import { createMachine } from 'xstate'; export default createMachine({ id: 'view' });",
     'src/system.ts': `import { setup } from 'xstate'; import { defineSystem } from '@apackdev/sdk/framework';

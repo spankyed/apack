@@ -94,8 +94,8 @@ Before comparing reports, run `node scripts/with-source.mjs tsx tests/performanc
 warmups and twenty measured trials; a comparison does not itself certify balanced order or quiet
 resources. The command rejects missing/unsuccessful/inconsistent trials and oversized input reports.
 Startup additionally requires successful process invocations and matching per-launch manifests/results.
-For native isolation, set `APACK_LINUX_ELMDB_ROOT` to a clean frozen checkout at `vendor/elmdb.rev`;
-never qualify timings against another agent's changing native tree.
+For native isolation, qualify against elmdb's release as the lockfile installs it, never a local checkout
+(`npm run deps:local`): a comparison refuses a manifest whose native package is not from a release.
 
 Controlled manual counterfactuals: `APACK_PERFORMANCE_SCENARIO=search-supersession` delivers real old
 results directly to the actor after supersession/cancellation (transport guards are separately tested).
@@ -135,7 +135,7 @@ bundle was built from the current source. Keep all captured inputs frozen while 
 Controlled mode overhead uses the maintained runner after normal producer/runtime builds:
 
 ```sh
-APACK_LINUX_ELMDB_ROOT=/private/tmp/apack-performance-elmdb-pinned npm run test:linux -- bash -lc \
+npm run test:linux -- bash -lc \
   'npm run chain -- --only build:runtime --no-native --cores 1 && xvfb-run -a node scripts/with-source.mjs tsx scripts/qualify-performance.ts --scenario all --mode disabled --compare lightweight'
 ```
 

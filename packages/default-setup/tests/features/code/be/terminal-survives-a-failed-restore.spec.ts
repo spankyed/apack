@@ -14,7 +14,7 @@
 // is left outside is a settings read and a query.
 import { describe, expect, it } from 'vitest'
 import { resetTestData, startApp, takeSystemErrors } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { repository } from '#generated/repository.ts'
 import { EARS, newId } from '#generated/ears.ts'
 import { defaultShell } from '#features/code/be/services/known-shells.ts'

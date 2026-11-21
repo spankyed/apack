@@ -3,7 +3,7 @@ import { EARS } from '@apackdev/sdk';
 import { expandRecord, collapseRecord, mapProblems } from '@apackdev/sdk/steps';
 import type { FieldMapping, MapEntry } from '@apackdev/sdk/steps';
 import { isPlainObject } from '@apackdev/sdk/utils/pure';
-import { RESERVED_ATTRIBUTES } from '@apackdev/ears';
+import { RESERVED_ATTRIBUTES } from '@apackdev/sdk/ears';
 
 export function compile(node: Record<string, unknown>, nodeId: string, ts: number, _ctx: StepCompileContext): StepCompileResult {
   return {

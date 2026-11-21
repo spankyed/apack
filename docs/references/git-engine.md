@@ -2,9 +2,8 @@
 
 The code that runs git for the code feature and keeps the picture of one working tree is a package of its own,
 `apack-git`, in a repository of its own: [spankyed/apack-git](https://github.com/spankyed/apack-git). The
-built-in pack depends on it at `file:../../vendor/apack-git`, a link to a checkout pinned by
-`vendor/apack-git.rev`. Run `npm run link:apack-git` to make the link; the linker refuses a checkout that is
-not one or that does not hold the pin, and builds the engine's `dist/` when it is older than its sources.
+built-in pack depends on `@apackdev/git`, which the root's `overrides` take from the tarball apack-git's CI attaches
+to the release of a commit (`npm run deps:pin -- apack-git <commit>` moves it).
 
 ## Why it is not in this repository
 
@@ -279,10 +278,7 @@ elsewhere, access the sign-in lacks, an organisation's single sign-on, or nothin
 
 ## Working on both at once
 
-The link points at a checkout, so an edit there is what a local build here uses once the engine is built
-(`npm run build` in the checkout, or `npm run link:apack-git`, which builds when `dist/` is stale). A local
-chain then runs against the checkout's working tree, where CI clones the pin: the linker says when the two
-differ. Commit and push the engine, move `vendor/apack-git.rev` to that commit, and land both.
-
-In the Linux test container the engine arrives as files, its manifest and its `dist/`, since what the Mac
-built is what Linux runs (`scripts/linux-runner.ts`).
+`npm run deps:local -- apack-git [path]` points the override at a checkout, so an edit there is what a local build
+here uses once the engine is built (`npm run build` in the checkout). Commit and push the engine; once its CI has
+released that commit, `npm run deps:pin -- apack-git <commit>` and land the change here (`npm run deps:released` undoes
+the local link).

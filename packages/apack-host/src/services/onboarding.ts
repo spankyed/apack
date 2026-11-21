@@ -1,4 +1,4 @@
-import type { Ears } from '@apackdev/ears';
+import type { Ears } from '@elmdb/ears';
 import type { OnboardingService } from '@apackdev/sdk/services';
 import { createAppState } from '../app-state/index.ts';
 

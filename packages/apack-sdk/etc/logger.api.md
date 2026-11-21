@@ -4,7 +4,7 @@
 
 ```ts
 
-import { EARS as EARS_2 } from '@apackdev/ears';
+import { EARS as EARS_2 } from '@elmdb/ears';
 
 // @public
 export function createLogger(source?: string, options?: LoggerOptions): Logger;

@@ -6,7 +6,7 @@ import type { CommitStatus, Contract as CodeSystemContract, GitFailure } from '#
 import { fromAsk, sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
-import { withStaged, withUnstaged } from 'apack-git/staging';
+import { withStaged, withUnstaged } from '@apackdev/git/staging';
 import type { BlameLine, ChangedFile, MergePreview, CommitFailure, CommitTrailer, ConflictKind, LineCount, DiffHunk, GitProgress, OperationMove, ProgressDuring, RepositoryChange, RepositoryOperation, RewriteAction, SignInHelp, SlowStatus, StartableOperation } from '../../../be/types.ts';
 import type { OpenFile } from '../../contract.ts';
 

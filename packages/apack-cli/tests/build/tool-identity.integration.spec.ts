@@ -30,9 +30,10 @@ it('refuses skipped generation after a packaged helper chunk changes at the same
   const modules = path.join(root, 'node_modules');
   fs.mkdirSync(path.join(modules, '@apackdev'), { recursive: true });
   fs.symlinkSync(cli, path.join(modules, '@apackdev/cli'), 'dir');
-  for (const name of ['sdk', 'ears', 'ui']) {
+  for (const name of ['sdk', 'ui']) {
     fs.symlinkSync(path.join(REPO_ROOT, 'node_modules/@apackdev', name), path.join(modules, '@apackdev', name), 'dir');
   }
+  fs.symlinkSync(path.join(REPO_ROOT, 'node_modules/@elmdb'), path.join(modules, '@elmdb'), 'dir');
   const pack = preparePack(root, 'tool-consumer', {
     'apack.json': JSON.stringify({ id: 'tool-consumer', name: 'Tool Consumer', version: '1.0.0', data: { entities: { Memo: {} } } }),
     'package.json': packageJson('tool-consumer'), 'tsconfig.json': tsconfig,

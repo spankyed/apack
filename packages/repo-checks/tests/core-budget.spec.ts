@@ -18,7 +18,7 @@ describe('coresFor', () => {
   const TEN = 10;
 
   it('weighs a step with no entry at one core', () => {
-    expect(coresFor('typecheck:ears', TEN)).toBe(1);
+    expect(coresFor('typecheck:no-such-leg', TEN)).toBe(1);
   });
 
   it('weighs an uncapped pool at vitest\'s default of one less than the box', () => {

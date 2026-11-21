@@ -1,8 +1,9 @@
 // Keeps this machine's rebuildable build caches inside a budget: `npm run janitor` once, `npm run janitor:install` to
 // have launchd run it every hour. `--dry` says what it would remove and removes nothing.
 //
-// Its reach is every Rust checkout linked under `vendor/` and every worktree of each, derived rather than named
-// (`lib/vendored-checkouts.ts`), so a sibling is covered the day it is linked. That is where the disk went:
+// Its reach is the checkout of each repository apack takes packages from (`lib/external-packages.mjs`) that sits beside
+// the main one and is a Rust checkout, and every worktree of each: what `npm run deps:local` builds against. That is where
+// the disk went:
 // rustc's incremental sessions accumulate one directory per compilation unit, and a unit whose features or flags
 // change starts another without removing the last — 270 of them, 11 GB, in two days of one checkout. And every
 // worktree builds into a target of its own, so when the disk is low the ones nobody is building in give theirs back. What it may
@@ -16,7 +17,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { type IncrementalUnit, type ProfileOutput, limitsFor, planIdleProfileClearing, planIncrementalEviction, planTmpRemoval } from './lib/janitor-policy.ts';
-import { rustCheckoutsIn, vendoredCheckouts } from './lib/vendored-checkouts.ts';
+import { REPOSITORIES } from './lib/external-packages.mjs';
+import { primaryWorktree } from './lib/worktrees.mjs';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
 const LABEL = 'dev.apack.janitor';
@@ -49,9 +51,16 @@ function worktreesOf(main: string): string[] {
   return [...new Set(worktrees)].filter((dir) => fs.existsSync(dir));
 }
 
-/** Every Rust checkout linked under `vendor/`, worktrees included */
+/**
+ * Every Rust checkout of the repositories apack takes packages from, beside this checkout and named for its
+ * repository, worktrees included. **It refuses an empty set rather than answering one**: a janitor holding nothing to
+ * its budget would report one every hour, a check that reports nothing having looked at nothing.
+ */
 function rustCheckouts(): string[] {
-  return [...new Set(rustCheckoutsIn(vendoredCheckouts(REPO_ROOT)).flatMap(worktreesOf))];
+  const siblings = Object.keys(REPOSITORIES).map((repo) => path.join(path.dirname(primaryWorktree(REPO_ROOT)), repo));
+  const rust = siblings.filter((dir) => fs.existsSync(path.join(dir, 'Cargo.toml')));
+  if (rust.length === 0) throw new Error(`No Rust checkout beside this one: looked for ${siblings.join(', ')}`);
+  return [...new Set(rust.flatMap(worktreesOf))];
 }
 
 /** A target's profile directories: those cargo locks, `target/debug` and `target/<triple>/debug` alike */
@@ -207,8 +216,8 @@ else {
   const before = freeBytes();
   const limits = limitsFor(before);
   say(`--- ${new Date().toISOString()}${dry ? ' (dry)' : ''}: ${gb(before)} free`);
-  // **A refusal is reported into the log this writes, not thrown past it.** `rustCheckoutsIn` refuses an
-  // empty `vendor/` on purpose, and thrown from here that refusal escaped before `writeLog()` — the only
+  // **A refusal is reported into the log this writes, not thrown past it.** `rustCheckouts` refuses an
+  // empty set on purpose, and thrown from here that refusal escaped before `writeLog()` — the only
   // thing that trims the log to `LOG_LINES`. So an hourly launchd run with no link appended a stack trace to
   // the one file this script exists to keep bounded, for ever, and swept nothing while doing it.
   let checkouts: string[] = [];

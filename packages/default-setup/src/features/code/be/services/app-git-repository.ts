@@ -1,4 +1,4 @@
-// The app's half of a repository: what the git engine (`apack-git`) leaves to its host. The engine owns one working
+// The app's half of a repository: what the git engine (`@apackdev/git`) leaves to its host. The engine owns one working
 // tree's truth and every git process; this owns when to fetch unasked, which branch a pull request is based on,
 // files as data URLs for a window, the words a failed push or pull is said in, and what the engine is handed to
 // run with.
@@ -9,7 +9,7 @@ import { execFileWhileWorking, processWork, watchWork } from '@apackdev/sdk/prog
 import {
   GitError, GitRepository, GitWatcherService,
   type GitErrorCode, type GitProgress, type RepositoryTies,
-} from 'apack-git'
+} from '@apackdev/git'
 import type { RepositoryHandle, WatcherHandle } from '../types.ts'
 import { featureSettings } from '#generated/settings.ts'
 import { getDataDirPath } from '#generated/paths.ts'

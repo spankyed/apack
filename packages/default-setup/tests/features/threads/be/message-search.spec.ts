@@ -1,5 +1,5 @@
 // The threads panel's message search: what its `messageSearch` view answers. Matching and ranking are elmdb's (its
-// text specs) and the builder's (`apack-ears/tests/engine/search.spec.ts`); this holds the feature to what its panel
+// text specs) and the builder's (EARS' `tests/engine/search.spec.ts`, in elmdb); this holds the feature to what its panel
 // lists — newer before older, a snippet around the match, each message's thread, no compaction marker — and to the
 // view following what the search reads, a new match included.
 import { describe, expect, it, vi } from 'vitest'

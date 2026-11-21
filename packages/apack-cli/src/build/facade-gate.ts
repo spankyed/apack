@@ -1,7 +1,8 @@
 import * as fs from 'node:fs';
 import { packageName } from '@apackdev/host/build/specifiers';
 import { SOURCE_CONDITION } from '@apackdev/host/build/source-resolution';
-import { createRequire, isBuiltin } from 'node:module';
+import { dependencyClosure } from '@apackdev/host/build/package-identity';
+import { isBuiltin } from 'node:module';
 import * as path from 'node:path';
 import ts from 'typescript';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
@@ -12,8 +13,12 @@ const DECLARATION_EXTENSIONS: readonly string[] = [ts.Extension.Dts, ts.Extensio
 
 
 /**
- * Packages a facade may import: every dependent has them. @apackdev/* packages, @apackdev/sdk's peer
- * dependencies (as the pack resolves the SDK) and Node's built-in modules.
+ * Packages a facade may import: every dependent has them. @apackdev/* packages, @apackdev/sdk's peer dependencies and
+ * Node's built-in modules — the peers read from the SDK as the pack resolves it, with every package it brings
+ * (`dependencyClosure`), which refuses an SDK whose dependencies don't resolve. **Not a package the SDK brings**: a
+ * dependent depends on the SDK alone, and where npm nests what the SDK brings, the dependent can't resolve it. The
+ * declaration bundler writes the one a pack's types come from as the SDK's entry for it (`THROUGH_SDK`), so EARS reaches
+ * a facade as `@apackdev/sdk/ears`, and naming `@elmdb/ears` here is a facade that would fail in that install.
  *
  * **"Every dependent has them" is checked, not assumed**, which is worth knowing before deriving it again: a
  * dependency's facade is inlined into the dependent's tree verbatim, at `src/__generated__/deps/<packId>.d.ts`,
@@ -26,9 +31,8 @@ const DECLARATION_EXTENSIONS: readonly string[] = [ts.Extension.Dts, ts.Extensio
  * its state from a machine, which is what `contract-leaves` is there to stop.
  */
 function allowedPackages(packDir: string): { allows: (name: string) => boolean; description: string } {
-  const manifest = createRequire(path.join(packDir, 'package.json')).resolve('@apackdev/sdk/package.json');
-  const { peerDependencies = {} } = JSON.parse(fs.readFileSync(manifest, 'utf-8')) as { peerDependencies?: Record<string, string> };
-  const peers = Object.keys(peerDependencies);
+  const [sdk] = dependencyClosure('@apackdev/sdk', packDir);
+  const peers = Object.keys(sdk!.manifest.peerDependencies ?? {});
   return {
     allows: (name) => name.startsWith('@apackdev/') || peers.includes(name) || isBuiltin(name),
     description: `@apackdev/* packages, @apackdev/sdk's peer dependencies (${peers.join(', ')}) and Node built-ins`,
@@ -208,7 +212,7 @@ export function facadeProblems(packDir: string, bundleFile: string): string[] {
   try {
     allowed = allowedPackages(packDir);
   } catch (err) {
-    return [`${rel} can't be checked: @apackdev/sdk doesn't resolve from ${packDir} (install the pack's dependencies). ${errorMessage(err)}`];
+    return [`${rel} can't be checked: @apackdev/sdk and what it brings don't resolve from ${packDir} (install the pack's dependencies). ${errorMessage(err)}`];
   }
 
   const options = checkOptions(packDir);

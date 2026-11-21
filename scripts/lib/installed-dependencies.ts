@@ -2,12 +2,13 @@
 //
 // **Both answers are cheap, and both questions are otherwise answered by a step failing late for a reason it does
 // not name.** A run over an install that does not match its pins spends the whole chain on a result that cannot
-// pass: a broker the pin moved past fails every terminal case in `test:e2e` as `terminal.ERROR`, and a package
-// left at an older version fails whichever spec happens to reach the behaviour that changed. So these refuse up
-// front, naming what is stale and the command that fixes it.
+// pass: a terminal broker the lockfile moved past fails every terminal case in `test:e2e` as `terminal.ERROR`, and a
+// package left at an older version fails whichever spec happens to reach the behaviour that changed. So these refuse
+// up front, naming what is stale and the command that fixes it.
 import * as fs from 'node:fs';
-import { createRequire } from 'node:module';
 import * as path from 'node:path';
+import { SINGLE_COPY_PACKAGES, extraCopies } from '../../build/prod/single-copy.mjs';
+import { missingBroker } from './broker-installed.mjs';
 
 /** One entry of a lockfile's `packages`: only the fields that say which bytes are installed, and whether it may be absent */
 interface LockedPackage {
@@ -68,34 +69,32 @@ export function lockfileDrift(repoRoot: string): string | undefined {
   return `node_modules does not match package-lock.json — ${fix}:\n    ${parts.join('\n    ')}`;
 }
 
-/** The terminal broker package's directory in a checkout */
-export const brokerPackageDir = (repoRoot: string): string => path.join(repoRoot, 'packages', 'terminal-broker');
-
 /**
- * Whether the terminal broker the pin names is installed for this platform, asked of `@app/terminal-broker` itself.
+ * Whether the install holds more than one copy of a package the app loads once (`SINGLE_COPY_PACKAGES`: EARS and
+ * `elmdb`), read from npm's record of the install like `lockfileDrift`. A link and the directory it points at are one
+ * copy; two directories, or links to two, are two. The lockfile can pin two, and an install matching it is still
+ * refused: one copy is what the app needs, not what the lockfile says.
  *
- * **Its own answer, not a second reading of `pin.json`**: `brokerBinary()` is what the app, the CLI and the tests
- * resolve the broker with, and it answers absence when the pin moved without an install. A platform the pin has
- * no files for has nothing an install could fetch, so that is not refused here.
- *
- * Answers `undefined` when it is installed, and otherwise the refusal.
+ * Answers the refusals, none when each has one copy (or the install has no record, which `lockfileDrift` refuses).
  */
-export function brokerDrift(packageDir: string): string | undefined {
-  const broker = createRequire(path.join(packageDir, 'package.json'))(path.join(packageDir, 'src', 'index.js')) as {
-    PLATFORM: string;
-    brokerBinary(): string | undefined;
-    brokerBinaryPath(): string;
-    commit: string;
-  };
-  const pin = JSON.parse(fs.readFileSync(path.join(packageDir, 'src', 'pin.json'), 'utf8')) as { files: Record<string, unknown> };
-  if (pin.files[broker.PLATFORM] === undefined || broker.brokerBinary() !== undefined) return undefined;
-  return `the terminal broker pinned at apack-terminal ${broker.commit.slice(0, 7)} is not installed for ${broker.PLATFORM}`
-    + ` (looked for ${path.relative(process.cwd(), broker.brokerBinaryPath())}) — run \`npm run fetch:terminal-broker\``;
+export function duplicateCopies(repoRoot: string): string[] {
+  const hidden = path.join(repoRoot, 'node_modules', '.package-lock.json');
+  if (!fs.existsSync(hidden)) return [];
+  const marker = 'node_modules/';
+  const copies = Object.entries(packagesOf(hidden)).flatMap(([key, entry]) => {
+    const name = key.slice(key.lastIndexOf(marker) + marker.length);
+    if (!key.includes(marker) || !SINGLE_COPY_PACKAGES.includes(name)) return [];
+    return [{ name, copy: entry.link ? entry.resolved ?? key : key, where: key }];
+  });
+  return extraCopies(copies).map((refusal) => `node_modules holds a package twice — ${refusal}`);
 }
 
 /** Every refusal this checkout's install earns: empty when it holds what it pins */
 export function installRefusals(repoRoot: string): string[] {
-  return [lockfileDrift(repoRoot), brokerDrift(brokerPackageDir(repoRoot))].filter((line) => line !== undefined);
+  // The broker only once the install matches, since a stale or absent install is its own refusal and may hold no broker
+  const drift = lockfileDrift(repoRoot);
+  return [drift, ...duplicateCopies(repoRoot), drift === undefined ? missingBroker(repoRoot) : undefined]
+    .filter((line) => line !== undefined);
 }
 
 function packagesOf(file: string): Record<string, LockedPackage> {

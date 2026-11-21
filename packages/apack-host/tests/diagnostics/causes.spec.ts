@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import type { EarsOperationObserver } from '@apackdev/ears';
+import type { EarsOperationObserver } from '@elmdb/ears';
 import { createNodePerformanceController } from '../../src/diagnostics/node.ts';
 
 function fixture() {

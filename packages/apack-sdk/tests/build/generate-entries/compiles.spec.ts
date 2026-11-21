@@ -57,7 +57,7 @@ function typecheck(files: Record<string, string>, names: string[], noUnusedLocal
   const sdk = path.resolve(import.meta.dirname, '../../..');
   const fromSdk = (name: string) => path.dirname(createRequire(path.join(sdk, 'package.json')).resolve(`${name}/package.json`));
   // The generated facades import the engine too, which a pack installs with the SDK
-  const links = { '@apackdev/sdk': sdk, '@apackdev/ears': fromSdk('@apackdev/ears'), zod: fromSdk('zod'), vue: fromSdk('vue') };
+  const links = { '@apackdev/sdk': sdk, '@elmdb/ears': fromSdk('@elmdb/ears'), zod: fromSdk('zod'), vue: fromSdk('vue') };
   for (const [name, target] of Object.entries(links)) {
     const link = path.join(root, 'node_modules', name);
     fs.mkdirSync(path.dirname(link), { recursive: true });
@@ -397,7 +397,7 @@ it('preserves prototype-like entity wires in generated registrations and typed/u
   expect(typecheck(files, ['src/probe.ts'])).toEqual([]);
   const outfile = path.join(root, 'probe.mjs');
   buildSync({ entryPoints: [path.join(root, 'src/probe.ts')], outfile,
-    bundle: true, platform: 'node', format: 'esm', external: ['@apackdev/sdk/*', '@apackdev/ears'] });
+    bundle: true, platform: 'node', format: 'esm', external: ['@apackdev/sdk/*', '@elmdb/ears'] });
   await execFileWhileWorking(process.execPath, ['--import', 'tsx', outfile]);
 });
 

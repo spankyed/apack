@@ -37,7 +37,7 @@ describe('what each published tree is asked', () => {
    * argument that is a directory is `--pack` by another spelling, whether or not the flag is there.
    */
   it('never hands either tool a path inside the tree it is checking', () => {
-    const trees = [tree('apack-ears', WITH_TYPES), tree('apack-sdk', TYPES_IN_EXPORTS), tree('apack-ui', WITH_TYPES)];
+    const trees = [tree('apack-testing', WITH_TYPES), tree('apack-sdk', TYPES_IN_EXPORTS), tree('apack-ui', WITH_TYPES)];
     const checks = checksFor(trees, packInto);
     expect(checks).toHaveLength(6);
     for (const { label, args } of checks) {
@@ -83,9 +83,9 @@ describe('the trees it is asked of', () => {
       pkg, dir, manifest: JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf-8')) as Record<string, unknown>,
     }));
     expect(trees.map(({ pkg }) => pkg)).toEqual(
-      ['apack-ears', 'apack-sdk', 'apack-ui', 'apack-testing', 'apack-cli']);
-    // Four of the five: `@apackdev/cli` publishes a bundle and no declarations
+      ['apack-sdk', 'apack-ui', 'apack-testing', 'apack-cli']);
+    // Three of the four: `@apackdev/cli` publishes a bundle and no declarations
     expect(trees.filter(({ manifest }) => declaresTypes(manifest)).map(({ pkg }) => pkg))
-      .toEqual(['apack-ears', 'apack-sdk', 'apack-ui', 'apack-testing']);
+      .toEqual(['apack-sdk', 'apack-ui', 'apack-testing']);
   });
 });

@@ -3,9 +3,9 @@ import { keepHostModulesResolvable, withModuleBridge } from '../module-bridge.ts
 import { SHARED_INSTANCE_MODULES } from './sdk-modules.ts';
 
 // The SDK bridge: pack runtime code shares the loader's shared-instance packages (@apackdev/sdk,
-// @apackdev/ears); it never requires @apackdev/host (check:specifiers and apack pack build reject it).
+// @elmdb/ears); it never requires @apackdev/host (check:specifiers and apack pack build reject it).
 // The API bundle inlines them (tsup bundles them). Any CJS code loaded at runtime (external packs,
-// built-in dev entry) that does require('@apackdev/ears') would otherwise get a SEPARATE module
+// built-in dev entry) that does require('@elmdb/ears') would otherwise get a SEPARATE module
 // instance, with no bound app and no installed engine.
 // sdk-modules.ts imports every export statically, so they resolve to the BUNDLED instances, the
 // ones with hydrated data; withHostResolution injects them into the require cache so dynamically

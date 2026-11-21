@@ -1,7 +1,7 @@
 import type { PerformanceExecution } from './performance.ts';
 // The one port between the SDK and the app it runs in: the resources a running app owns, bound once per
 // process. Behaviour over them (sends, logging, error reports, `services`) is SDK code.
-import type { CallReport, Ears } from '@apackdev/ears';
+import type { CallReport, Ears } from '@elmdb/ears';
 import { _bindEars } from '../ears/index.ts';
 import { setSecretValueMatcher } from '../utils/redact.ts';
 import type { RootEvents } from './root-events.ts';
@@ -15,8 +15,8 @@ import type { TerminalService } from '../services/terminal.ts';
 import type { SettingsAdmin } from '../services/settings.ts';
 import type { PackRegistryView } from './packs-view.ts';
 
-/** The app's EARS engine as a program is handed it: its operations, without `admin` (`createEarsEngine` from `@apackdev/ears`) */
-export type { Ears } from '@apackdev/ears';
+/** The app's EARS engine as a program is handed it: its operations, without `admin` (`createEarsEngine` from `@elmdb/ears`) */
+export type { Ears } from '@elmdb/ears';
 
 /** What the app implements and packs call through `services` */
 export interface HostRuntimeServices {

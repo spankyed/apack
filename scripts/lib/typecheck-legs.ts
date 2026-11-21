@@ -76,10 +76,9 @@ export const ENSURE = 'packages:ensure';
  * plausible, and `--cores 1` is how to test it if a leg ever starts behaving differently in company.
  */
 export const TYPECHECK_LEGS: readonly Leg[] = [
-  { name: ENSURE, command: 'npm run packages:ensure', scope: ['apack-ears', 'apack-sdk', 'apack-ui', 'apack-cli', 'apack-testing'] },
+  { name: ENSURE, command: 'npm run packages:ensure', scope: ['apack-sdk', 'apack-ui', 'apack-cli', 'apack-testing'] },
   { name: 'typecheck:renderer', command: 'npm run typecheck:renderer', alsoReads: ['build/build-metadata.ts', 'package.json'] },
   { name: 'typecheck:api', command: 'npm run typecheck:api', alsoReads: ['package.json'] },
-  { name: 'typecheck:ears', command: 'npm run typecheck:ears' },
   { name: 'typecheck:sdk', command: 'npm run typecheck:sdk' },
   { name: 'typecheck:host', command: 'npm run typecheck:host' },
   { name: 'typecheck:ui', command: 'npm run typecheck:ui' },

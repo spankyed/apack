@@ -4,7 +4,7 @@
 
 ```ts
 
-import type { CallReport } from '@apackdev/ears';
+import type { CallReport } from '@elmdb/ears';
 
 // @public
 export function consoleEars(names: EarsNames, input?: {

@@ -1,5 +1,5 @@
-// One EARS engine: a row written through @apackdev/ears, imported directly, reads back through default-setup's
-// repository, which default-setup's runtime registered on its own @apackdev/ears — and the SDK's services object
+// One EARS engine: a row written with the SDK's untyped engine operations reads back through default-setup's
+// repository, which default-setup's runtime registered on the engine it was given — and the SDK's services object
 // reaches that same registration rather than a copy of it
 import { describe, expect, it } from 'vitest';
 import { untypedCreate } from '@apackdev/sdk/ears';
@@ -9,9 +9,9 @@ import { repository } from '#generated/repository.ts';
 
 describe('the engine a pack imports', () => {
   it("is the one the SDK and its dependencies' runtimes use", () => {
-    const id = untypedCreate('Note', { title: 'Written through @apackdev/ears', content: '', noteType: 'document', icon: null, completed: false, hideCompletedChildren: false, displayOrder: 0, lastSeen: 0 }).id();
+    const id = untypedCreate('Note', { title: 'Written untyped', content: '', noteType: 'document', icon: null, completed: false, hideCompletedChildren: false, displayOrder: 0, lastSeen: 0 }).id();
     // Typed, through the facade codegen writes: this pack's repositories and its dependencies'
-    expect(repository.noteQueries.byIdDTO(id)).toMatchObject({ id, title: 'Written through @apackdev/ears' });
+    expect(repository.noteQueries.byIdDTO(id)).toMatchObject({ id, title: 'Written untyped' });
     expect(services.repository.noteQueries.byIdDTO(id)).toEqual(repository.noteQueries.byIdDTO(id));
   });
 

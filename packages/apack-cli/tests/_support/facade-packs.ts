@@ -36,7 +36,7 @@
  * facade gate pays. Plus the file-level floor, and two files named for what they cover.
  *
  * **And layout is the only axis that splits it without paying the fixture twice.** `buildPacks` runs two
- * real `apack pack build`s, and for the published layout an `installPublishedPackages()` that npm-packs three
+ * real `apack pack build`s, and for the published layout an `installPublishedPackages()` that npm-packs two
  * tarballs and is *not* memoised. A split by subject — typechecks here, completions there — would run
  * that fixture in both files and raise the half's total work to lower its floor, which is the trade
  * `generate-entries` already made for nothing (`apack-sdk/tests/build/generate-entries/_support/pack.ts`

@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { readInstalledContributionCatalog, disabledPackIds } from '@apackdev/host/packs';
 import { createSettingsBackupValidator } from '@apackdev/host/settings';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@elmdb/ears';
 import { databaseBackupStore, importDatabase, readBackup, type BackupLog } from '@apackdev/host/backup';
 import { findRunningApp, openRunHistory, resetRunHistoryInPlace, type AppDatabase } from '@apackdev/host/database';
 import { createSecretsStore } from '@apackdev/host/secrets';

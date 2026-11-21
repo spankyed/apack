@@ -1,6 +1,6 @@
 // A built pack's content runtime (dist/build/content-runtime.mjs) loaded into a bare SDK test runtime: no
 // host, no app. default-setup's is the example: a Note written through it gets default-setup's rows.
-import { type EARS } from '@apackdev/ears';
+import { type EARS } from '@elmdb/ears';
 import { boundEars as ears } from '@apackdev/sdk/ears';
 import * as fs from 'node:fs';
 import * as os from 'node:os';

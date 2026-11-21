@@ -8,10 +8,13 @@
 // It runs a probe in the app's own executable as Node (ELECTRON_RUN_AS_NODE=1, as the app starts its API),
 // resolving each module from packages/api as the API does:
 //   elmdb             opens a database in a temp dir, writes its schema, closes, opens it again and reads it back
+//   @elmdb/ears       opens a database through EARS, the copy the API loads (it leaves EARS external to its bundle),
+//                     writes an entity and answers a query for it: EARS' own dependencies (msgpackr) and its `elmdb`
+//                     peer resolving to the binding above, in the packaged layout
 //   @napi-rs/keyring  loads its binding, without touching the credential store
 //
-//   apack-terminal    runs the pinned broker `@app/terminal-broker` installed, every file the pin names for this
-//                     platform being there (on Windows, the ConPTY beside the binary)
+//   apack-terminal    runs the broker `@apackdev/terminal` answers from its platform package, with the ConPTY
+//                     beside the binary on Windows
 //
 // **The broker is a binary rather than a module, so its probe is a spawn.** A pty belongs to the
 // `apack-terminal` broker, which the app starts as a child process; what can be wrong with it is what can
@@ -75,6 +78,22 @@ async function main() {
   console.log('elmdb: wrote, closed, reopened and read back');
 
 
+  // Imported, as the API imports it: EARS is ESM. Resolved from packages/api, so it is the copy the API loads
+  const { pathToFileURL } = require('node:url');
+  const { openDatabase } = await import(pathToFileURL(load.resolve('@elmdb/ears/database')).href);
+  const { createEarsEngine } = await import(pathToFileURL(load.resolve('@elmdb/ears')).href);
+  const database = openDatabase({ path: path.join(dataDir, 'ears'), schema: { types: { Smoke: { required: [], indexes: ['title'] } }, relations: {}, roles: [] } });
+  try {
+    const engine = createEarsEngine({ database });
+    const id = engine.create('Smoke').set('title', 'smoke').id();
+    const found = engine.query('Smoke').where('title', 'smoke').ids();
+    if (found.length !== 1 || found[0] !== id) throw new Error('EARS answered ' + JSON.stringify(found) + ' for the entity ' + id + ' it wrote');
+  } finally {
+    database.close();
+  }
+  console.log('@elmdb/ears: opened a database, wrote and answered a query');
+
+
   const { Entry } = load('@napi-rs/keyring');
   if (typeof Entry !== 'function') throw new Error('@napi-rs/keyring has no Entry');
   console.log('@napi-rs/keyring: binding loaded');
@@ -85,8 +104,12 @@ async function main() {
   // be wrong in a release: a binary built for another architecture never reaches its own argument check,
   // and one the package did not carry is not there to run. Asked of the package, not of a path, because
   // the name carries .exe on Windows and the package is what knows that.
-  const broker = load('@app/terminal-broker').brokerBinary();
-  if (!broker) throw new Error('@app/terminal-broker holds no broker for this platform, or not every file its pin names');
+  const broker = load('@apackdev/terminal').brokerBinary();
+  if (!broker) throw new Error('@apackdev/terminal holds no broker for this platform: its platform package is not in the app');
+  // Without these beside it, a Windows broker runs on the system's ConPTY rather than the one it was built with
+  const beside = process.platform === 'win32' ? ['conpty.dll', 'OpenConsole.exe'] : [];
+  const missing = beside.filter((file) => !require('node:fs').existsSync(path.join(path.dirname(broker), file)));
+  if (missing.length) throw new Error('apack-terminal is missing ' + missing.join(' and ') + ' beside ' + broker);
   const ran = require('node:child_process').spawnSync(broker, [], { encoding: 'utf8' });
   if (ran.error) throw new Error('apack-terminal did not run: ' + ran.error.message);
   if (ran.status !== 2 || !/usage: apack-terminal/.test(ran.stderr || '')) {

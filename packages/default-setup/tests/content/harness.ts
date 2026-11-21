@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { buildPackConfigFromManifest, compilePack } from '@apackdev/sdk/build';
 import { createDocumentsApplier } from '@apackdev/sdk/content';
 import { applyRecord, importCompiledContent, type ApplyRecord, type AppliedItem, type ImportMode, type ApplyResult, type ContentSelection } from '@apackdev/sdk/utils';
-import { type EARS } from '@apackdev/ears';
+import { type EARS } from '@apackdev/sdk';
 import { findRelations, untypedQuery as query } from '@apackdev/sdk/ears';
 import { entityIds } from '@apackdev/sdk/testing';
 import { resetTestData, testMediaPath } from '@apackdev/testing/harness';

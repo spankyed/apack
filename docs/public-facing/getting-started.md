@@ -23,7 +23,7 @@ Whichever `apack` you run, inside a pack it hands off to the `@apackdev/cli` ver
 | Package | What it is |
 |---|---|
 | `@apackdev/sdk` | Pack-facing API and types (`@apackdev/sdk/fe`, `/steps`, `/events`, …). A dependency of every pack. Libraries shared with the host (vue, xstate, zod) and the AI SDK (`ai` 7, whose types `services.inference` uses) are peer dependencies, and so is TypeScript (5.7 or later). |
-| `@apackdev/ears` | The EARS data engine and its types: what the generated `#generated/ears` and `#generated/repository` build on (`EarsError`; `createEarsEngine` for tests and tooling). The untyped operations over the app's engine — `untypedQuery`, `untypedWrite`, `findRelations`, `wouldCreateCycle` — are `@apackdev/sdk/ears`, and `RepositoryError`, which a repository throws, is `@apackdev/sdk/repositories`. The app shares one instance with every pack, as it does `@apackdev/sdk`. A dependency of every pack. |
+| `@elmdb/ears` | The EARS data engine, which `@apackdev/sdk` depends on, so a pack installs the one its SDK was built with and names it nowhere. What packs use of it comes through the SDK: `@apackdev/sdk/ears` holds the untyped operations over the app's engine (`untypedQuery`, `untypedWrite`, `findRelations`, `wouldCreateCycle`) and the engine's types and helpers the generated `#generated/ears` builds on (`defineEars`, `QueryBuilder`, `BaseEntity`, `RESERVED_ATTRIBUTES`), and `@apackdev/sdk` its `EARS` namespace. `RepositoryError`, which a repository throws, is `@apackdev/sdk/repositories`. The app shares one instance with every pack, as it does `@apackdev/sdk`. |
 | `@apackdev/ui` | Vue components, tiptap and Monaco editors and UI composables (`@apackdev/ui/design/button`, `@apackdev/ui/components/tiptap/TiptapEditor`). Add it when your pack's UI uses them; it brings the editor libraries, so backend-only packs leave it out. Packs use the app's copy at runtime (see `build.bundleUi` in the manifest docs). |
 | `@apackdev/cli` | The `apack` command and build toolchain. A devDependency of every pack. |
 | `@apackdev/testing` | Pack tests: `@apackdev/testing/harness` runs a pack's content, systems, services and flows in unit tests without the app, `@apackdev/testing/vitest` configures Vitest for it (`isolatedDataDir`), and `@apackdev/testing` is the Playwright fixture for E2E tests in the app (`@playwright/test` is a peer). |
@@ -45,7 +45,7 @@ apack pack build
 ```
 my-pack/
   apack.json              # Pack manifest — the single source of truth
-  package.json             # depends on @apackdev/sdk and @apackdev/ears, pins @apackdev/cli and @apackdev/testing
+  package.json             # depends on @apackdev/sdk, pins @apackdev/cli and @apackdev/testing
   tsconfig.json
   vitest.config.ts         # unit tests: an isolated data dir per run, the harness setup
   .gitignore

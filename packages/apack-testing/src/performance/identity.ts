@@ -31,8 +31,8 @@ function treeIdentity(root: string) {
 }
 
 export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture' | 'mode' | 'cache' | 'warmups'> & { runtime?: Record<string, string> }, root = process.cwd()) {
-  const records = JSON.parse(process.env.APACK_EXECUTION_RECORDS ?? '{"source":[],"native":[]}') as { source: string[]; native: string[] };
-  if (![records.source, records.native].every(paths => Array.isArray(paths) && paths.every(file => typeof file === 'string' && /^\.apack-[a-z0-9.-]+$/.test(file)))) throw new Error('Invalid execution record declarations');
+  const records = JSON.parse(process.env.APACK_EXECUTION_RECORDS ?? '{"source":[]}') as { source: string[] };
+  if (!(Array.isArray(records.source) && records.source.every(file => typeof file === 'string' && /^\.apack-[a-z0-9.-]+$/.test(file)))) throw new Error('Invalid execution record declarations');
   const git = (args: string[], cwd = root) => execFileSync('git', args, { cwd });
   const diff = git(['diff', '--binary', 'HEAD']);
   const untracked = (cwd: string) => git(['ls-files', '--others', '--exclude-standard', '-z'], cwd).toString().split('\0').filter(Boolean);
@@ -45,17 +45,19 @@ export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture'
   const memoryLimit = Number(limit('memory.max'));
   const builds = ['packages/api/dist', 'packages/main/dist', 'packages/preload/dist', 'packages/renderer/dist', 'packages/default-setup/dist']
     .map(directory => ({ ...treeIdentity(path.join(root, directory)), path: directory }));
-  const nativeRoot = path.join(root, 'vendor/elmdb');
-  const native = path.join(nativeRoot, 'crates/elmdb-node');
-  const nativeSource = classifySourceFiles(git(['diff', '--binary', 'HEAD'], nativeRoot), untracked(nativeRoot), records.native);
-  const bindings = readdirSync(native).filter(file => file.endsWith('.node')).sort();
+  // The native package as the install put it: the lockfile's source and integrity for it, and the bytes of every binding
+  // it and its platform packages hold
+  const locked = (JSON.parse(readFileSync(path.join(root, 'package-lock.json'), 'utf8')) as { packages: Record<string, { resolved?: string; integrity?: string }> }).packages['node_modules/elmdb'];
+  const nodeModules = path.join(root, 'node_modules');
+  const nativeDirs = ['elmdb', ...readdirSync(nodeModules).filter(name => name.startsWith('elmdb-')),
+    ...readdirSync(path.join(nodeModules, '@elmdb')).map(name => `@elmdb/${name}`)];
+  const bindings = nativeDirs.flatMap(dir => (readdirSync(path.join(nodeModules, dir), { recursive: true }) as string[])
+    .filter(file => file.endsWith('.node')).map(file => `node_modules/${dir}/${file}`)).sort();
   if (bindings.length === 0) throw new Error('No elmdb native binding found for the performance manifest');
-  for (const file of bindings) builds.push({ path: `vendor/elmdb/crates/elmdb-node/${file}`, sha256: digest(readFileSync(path.join(native, file))) });
+  for (const file of bindings) builds.push({ path: file, sha256: digest(readFileSync(path.join(root, file))) });
   return manifestSchema.parse({
     format: 1, source: { revision: git(['rev-parse', 'HEAD']).toString().trim(), dirty: source.dirty, excludedUntracked: source.excludedUntracked, diffSha256: sourceHash.digest('hex') },
-    builds, ...options, native: { pin: readFileSync(path.join(root, 'vendor/elmdb.rev'), 'utf8').trim(),
-      checkoutRevision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: native }).toString().trim(),
-      dirty: nativeSource.dirty, excludedUntracked: nativeSource.excludedUntracked },
+    builds, ...options, native: { resolved: locked?.resolved ?? '', integrity: locked?.integrity ?? '' },
     runtime: { node: process.versions.node, v8: process.versions.v8, osRelease: release(), ...options.runtime },
     machine: { platform: process.platform, arch: process.arch, cpus: Math.ceil(cpuCount), memoryBytes: Number.isFinite(memoryLimit) && memoryLimit > 0 ? Math.min(totalmem(), memoryLimit) : totalmem(),
       identity: digest(JSON.stringify({ hostname: process.env.APACK_PERFORMANCE_MACHINE_ID ?? hostname(), model: cpus()[0]?.model })) },

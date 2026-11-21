@@ -4,8 +4,6 @@
 // where a spec can reach them without starting a build — the same arrangement `chain-output.spec.ts` and
 // `chain-lock.spec.ts` have, and the reason both of those are pure specs over imported functions.
 import * as fs from 'node:fs';
-import { vendoredDriftLine, vendoredNote } from '../../../scripts/lib/chain-evidence.ts';
-import type { VendoredState } from '../../../scripts/lib/vendored-checkouts.ts';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -189,78 +187,5 @@ describe('a failure on a deadline', () => {
 
   it('counts each message', () => {
     expect(deadlinesNote(failed('Test timed out in 1ms\nTest timed out in 2ms\nHook timed out in 3ms'))).toBe('3 deadline messages in its output');
-  });
-});
-
-/**
- * **A run that compiled against a vendored checkout says which one.**
- *
- * `vendor/elmdb` and `vendor/apack-terminal` are links to sibling checkouts, so a local run builds against
- * whatever those working trees hold while CI clones the commit `vendor/<name>.rev` pins. The two diverge
- * routinely, and a run that does not record it cannot be told from one that matched: a failure naming a
- * symbol the pinned code lacks reads as a defect in the branch under test, and a checkout that has since
- * moved back cannot be asked afterwards.
- */
-describe('what a run compiled against', () => {
-  const state = (over: Partial<VendoredState> = {}): VendoredState =>
-    ({ name: 'apack-terminal', pinned: 'aaaa111', head: 'aaaa111', dirty: false, ...over });
-
-  it('names each link, what it is at, and what it is pinned to', () => {
-    const note = vendoredNote([state(), state({ name: 'elmdb', pinned: 'bbbb222', head: 'bbbb222' })]);
-
-    expect(note).toContain('vendor/apack-terminal: at aaaa111, pinned aaaa111');
-    expect(note).toContain('vendor/elmdb: at bbbb222, pinned bbbb222');
-  });
-
-  it('says so when the checkout has moved off its pin, which is what makes the run incomparable', () => {
-    expect(vendoredNote([state({ head: 'cccc333' })])).toContain('DRIFTED from its pin');
-  });
-
-  it('does not cry drift when the checkout is at its pin', () => {
-    // The guard against a note that says everything is wrong and so says nothing
-    expect(vendoredNote([state()])).not.toContain('DRIFTED');
-  });
-
-  it('says so when the checkout is dirty, since a commit does not describe it then', () => {
-    expect(vendoredNote([state({ dirty: true })])).toContain('dirty');
-    expect(vendoredNote([state()])).not.toContain('dirty');
-  });
-
-  /**
-   * **The result line, because a drift decides what a verdict is worth.**
-   *
-   * The evidence file records every link either way, but a run against a checkout that is not at its pin did
-   * not build what a strict run clones — and that belongs beside the verdict rather than in a file someone
-   * opens after a failure. It reports and never fails: which commit a sibling sits on is the developer's to
-   * choose, and refusing it would stop work on the vendored code itself.
-   */
-  it('qualifies the verdict when a checkout is off its pin, and says nothing when none is', () => {
-    expect(vendoredDriftLine([state()]), 'a clean run says nothing extra').toBeUndefined();
-
-    const line = vendoredDriftLine([state({ head: 'cccc333dddd' })]);
-    expect(line).toContain('vendor/apack-terminal');
-    expect(line, 'where it is').toContain('cccc333');
-    expect(line, 'and what it should be').toContain('aaaa111');
-    expect(line, 'and why that matters').toContain('CI clones');
-  });
-
-  it('names every drifted link rather than the first', () => {
-    const line = vendoredDriftLine([state({ head: 'cccc333' }), state({ name: 'elmdb', head: 'eeee555' })]);
-
-    expect(line).toContain('vendor/apack-terminal');
-    expect(line).toContain('vendor/elmdb');
-  });
-
-  it('calls nothing drifted for a link with no pin or no checkout', () => {
-    // Absence is not disagreement: a link resolving to no git checkout, or one with no `.rev` committed,
-    // has nothing to compare — reporting those as drift would make the line fire for every such repo
-    expect(vendoredDriftLine([state({ head: undefined })])).toBeUndefined();
-    expect(vendoredDriftLine([state({ pinned: undefined })])).toBeUndefined();
-  });
-
-  it('reports the absences rather than an empty line', () => {
-    expect(vendoredNote([state({ head: undefined })])).toContain('not a git checkout');
-    expect(vendoredNote([state({ pinned: undefined })])).toContain('no .rev committed');
-    expect(vendoredNote([]), 'a checkout with nothing linked still says so').toContain('nothing linked');
   });
 });

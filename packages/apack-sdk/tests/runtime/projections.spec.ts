@@ -3,7 +3,7 @@
 // write to anything else doesn't run them, and nothing but a first run, a new version or an unknowable answer derives
 // everything again, a chunk per unit like any backlog.
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import type { EARS, EarsEngine } from '@apackdev/ears';
+import type { EARS, EarsEngine } from '@elmdb/ears';
 import { catchUpTestProjections, resetTestData, startTestRuntime, testPacks } from '../../src/testing/index.ts';
 import { boundEars, untypedCreate, untypedQuery, untypedWrite } from '../../src/ears/index.ts';
 import { SDK_ROW_RULES } from '../../src/types/sdk-entities.ts';

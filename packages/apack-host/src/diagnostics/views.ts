@@ -1,4 +1,4 @@
-import type { WatchReadContext } from '@apackdev/ears';
+import type { WatchReadContext } from '@elmdb/ears';
 import type { PerformanceCarrier } from '@apackdev/sdk/runtime';
 import type { ViewObservation } from '../views/index.ts';
 import type { createPerformanceController } from './controller.ts';

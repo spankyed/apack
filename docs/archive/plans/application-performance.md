@@ -26,8 +26,8 @@ Inspect current source before implementation; the survey is a starting point, no
 |---|---|
 | [Host services](../../../packages/apack-host/src/services/index.ts) | Compose diagnostics with each runtime and own recorder lifecycle. |
 | [Host runtime contract](../../../packages/apack-sdk/src/runtime/host-runtime.ts) | Expose runtime diagnostics without global exporter configuration in libraries. |
-| [EARS call accounting](../../../packages/apack-ears/src/calls.ts) | Reuse operation accounting; separate cheap attribution from optional stack capture. |
-| [EARS connection](../../../packages/apack-ears/src/database.ts) | Observe backend-neutral read, write, unit and watch boundaries. |
+| [EARS call accounting](https://github.com/spankyed/elmdb/blob/main/packages/ears/src/calls.ts) | Reuse operation accounting; separate cheap attribution from optional stack capture. |
+| [EARS connection](https://github.com/spankyed/elmdb/blob/main/packages/ears/src/database.ts) | Observe backend-neutral read, write, unit and watch boundaries. |
 | [Renderer transport](../../../packages/renderer/src/transport/client.ts) | Carry action context across transport and correlate view delivery. |
 | [E2E guidance](../../../tests/e2e/CLAUDE.md) | Reuse owned Electron processes, Playwright and disposable profiles. |
 | Existing loop measurement utilities under `scripts/` | Reuse event-loop measurement lessons, with application-specific lifecycle and overhead validation. |

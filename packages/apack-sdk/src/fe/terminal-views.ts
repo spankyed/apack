@@ -9,7 +9,7 @@ import { boundFeHost } from '../runtime/fe-host.ts';
  * and the broker's own view protocol runs over it — the API process is not on the path at all.
  *
  * One connection carries every session a window draws. Which session, and everything else the bytes mean,
- * is the protocol's (`apack-terminal-view`'s `BrokerViews` speaks it); this is only how they travel.
+ * is the protocol's (`@apackdev/terminal-view`'s `BrokerViews` speaks it); this is only how they travel.
  */
 export interface TerminalViewStream {
   send(bytes: Uint8Array): void;
