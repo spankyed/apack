@@ -251,7 +251,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | Every state inside must be defined | Optional entries. An example that left one out was unreadable |
 | A handler names the path to go to | `leave`, by which a state changed the state around it |
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
-| An ask does not change data by returning | Considered and declined: every change then has one shape, the extractor stays complete, and no real port needed it. To revisit if ports show many ask-plus-event pairs; the form would be an explicit `change((data) => …)` |
+| An ask does not change data by returning | Considered and declined: every change then has one shape, the extractor stays complete, and no real port needed it. To revisit if ports show many ask-plus-event pairs; the form would be an explicit `change((data) => …)`. The precedent leans the other way and the port should settle it: Erlang's `gen_statem` replies and moves in one handler, Effect's `Machine` handlers return `[reply, newState]`, and Temporal, which held queries to reading only, added Updates that change state and answer |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
 | What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
 | An ask whose asker has gone throws `Left` where it is awaited | Never settling it, which was tried first. A promise that never settles skips every `finally` after it, so a lock or a handle taken before the ask is held for good, and `Promise.all` over it hangs. Rejection is what `AbortSignal`, `fetch` and structured concurrency do, and code written for them is already correct here |
@@ -454,6 +454,15 @@ The design is the smaller half of the value. In the order they would pay:
    harness, so that a pack's spec runs a scenario under every ordering the way it runs a case today, and a reduction
    that skips orderings differing only in two things that cannot affect each other, which is what would let two
    windows be run in full. This is the strongest reason to own the kernel.
+
+   Two things to take from fast-check's scheduler, which is the nearest tool in JavaScript. **Scenarios that are
+   generated.** It runs model-based tests through its scheduler: a random sequence of commands, under a random
+   interleaving. A state here declares every event it takes, so what a user does can be generated from the
+   declaration, where the prototype's five scenarios are written by hand. **Time as something the schedule picks.**
+   When a timer is pending, "go to the next timer" is one more thing that can run next. That is how a delay enters a
+   schedule, when delays exist. What the prototype already does that fast-check does not: it runs every ordering
+   where fast-check samples, and it waits a turn of the event loop to know that everything has settled where
+   fast-check waits fifty microtask ticks and takes the quiet for it.
 3. **The graph as a recorded file.** `graph.mts` is a script. As a recorded file per feature, with `:check` and
    `:update` halves like the API reports, a change to a state's graph shows in the diff. The same data gives pack rules:
    a state never entered, an event nothing takes, an ask nobody asks, and **a cycle of asks**. A answering an ask by
@@ -466,7 +475,11 @@ The design is the smaller half of the value. In the order they would pay:
    where most handlers sit.
 4. **The step log.** A step is already one whole unit: its cause, the handlers that ran, the data that changed, and
    what left the system. Recorded, it gives a bug report that replays to the same state, a test made from a recording,
-   and a timeline in the Logs surface that shows what one click caused across every state it reached.
+   and a timeline in the Logs surface that shows what one click caused across every state it reached. What crosses a
+   link carries the step that sent it, so that a step on the backend names the step in the window that caused it, as
+   Effect's `Machine` parents the span that handles a request to the span that sent it. The log holds which event and
+   which fields changed, never what an event or an ask carried: Effect copies a request's fields into its span, and a
+   payload is where a key or a document's text would be.
 5. **A pack rule against a promise nobody awaits.** The kernel keeps a dropped ask from taking the process down, but
    the code that dropped it also never sees its answer or its refusal. `no-floating-promises` over pack sources, as a
    pack rule beside the others, refuses it for every pack.
@@ -495,7 +508,13 @@ projects. Each would loosen the fit to this app.
 - **A write nobody waits for**, which appliers and migrations make today.
 - **Window-to-window sends**, the app's `sendToSurface`.
 - **Keyed dynamic children**: a flow per run, a surface per pack, a system per registration. The brain, the bus and the
-  shell need them. A keyed set of views is covered by `watch`; a keyed set of states is not.
+  shell need them. A keyed set of views is covered by `watch`; a keyed set of states is not. The shape to take is
+  Effect's, whose `Machine` forks work under a key with one of two policies: `start` under a key that either replaces
+  what is running there, or does nothing when something is.
+- **Events only the state itself may send.** A state has one union of events, so anything that can reach it can tell
+  it `FOUND` or `PIECES`, which only its own work should. The app's contracts already keep `incoming` apart from
+  `internal`, and the prototype lost that: `send` should take both, and `tell` and `broadcast` only what is
+  incoming. Effect's `Machine` has the same split as public and private requests.
 - **A check for a cycle of asks.** Two systems that each answer by asking the other wait on each other without end,
   and nothing reports it. It is a pack rule over the recorded graph, under What to build around it.
 - **A bound across steps.** A step is cut short after ten thousand things. Two systems that tell each other across a
@@ -505,10 +524,14 @@ projects. Each would loosen the fit to this app.
 - **A field with a default still has to be given** when entering its state, because the types cannot see the default.
 - **Restoring a state after a reconnect or a code reload.** A state is plain data, `{ at, data }`, so it can be handed
   back to a fresh copy of itself, which is what `useSurfaceDraft` does by hand today for what a component holds. Wanted,
-  and waits for the first port to say what it must carry.
-- **Saving a state to disk** is not wanted. Its running work cannot be saved, so a restored state would be at
-  `searching` with nothing searching, and a saved state is a stored format that would then have to be kept stable.
+  and waits for the first port to say what it must carry. Restoring is entering: the state is entered at `at` with
+  `data` given, so its `run` starts again, and a state restored at `searching` searches. Effect's `Machine` restores
+  the same way, by starting afresh with the previous state handed in, and saves nothing that was in flight.
+- **Saving a state to disk** is not wanted. A saved state is a stored format that would then have to be kept stable.
+  And restoring starts a state's work again, which is right for a search a moment after a reload and wrong for a
+  message that was being sent a day ago.
 - **Delayed transitions and history states** are absent. The app uses one delayed transition and no history states.
+  A delay, when there is one, goes through the kernel's `later` so that a schedule can choose when it fires.
 - **The kernel's own rough edges.** Reading a state that has ended throws, and a returned field that no active state
   owns is dropped without a word.
 - **The bridge**: running a state inside XState's actor system during a migration. Unproven, and the migration order
@@ -536,7 +559,8 @@ Step 1 is under way; no later step is started. Each is a decision point.
    spankyed/apack#591 did the vocabulary and the asking side, which removes the event path for answers.
    [What #591 delivered](#what-591-delivered) lists the seams still to do, which are what leave pack code that does not
    name XState.
-2. **Settle the open design** that the first real ports will hit: the Vue binding, and a write nobody waits for.
+2. **Settle the open design** that the first real ports will hit: the Vue binding, a write nobody waits for, events
+   only the state itself may send, and whether an ask may change data.
 3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The
    prototype's kernel takes a schedule and its checks run every ordering; the kernel in the tree keeps both.
 4. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is
