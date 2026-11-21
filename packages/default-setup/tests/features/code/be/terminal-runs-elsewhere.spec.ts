@@ -7,7 +7,7 @@
 // rather than quietly becoming a shell here.
 import { afterEach, describe, expect, it } from 'vitest'
 import { mockService, resetTestData, startApp, takeSystemErrors } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { featureSettings } from '#generated/settings.ts'
 import { repository } from '#generated/repository.ts'
 import { EARS, newId } from '#generated/ears.ts'

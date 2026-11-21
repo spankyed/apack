@@ -10,7 +10,7 @@
 // Windows can open. So the platform reader stays — over the authority's value instead of a second capture.
 import { describe, expect, it, vi } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 
 const handlers = () => ({ onEvent: vi.fn(), onExit: vi.fn(), onCrashed: vi.fn() })
 

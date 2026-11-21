@@ -41,49 +41,49 @@ const listed = (path: string, files: string[], truncated = false) => ({ type: 'c
 const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false, refs: false };
 
 it('opens a folder\'s row by asking what is in it, lists that, and closes it again', () => {
-  const actor = panelShowing([folder('vendor/')]);
+  const actor = panelShowing([folder('third-party/')]);
 
-  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'vendor/' });
-  expect(listings()).toEqual(['vendor/']);
-  actor.send(listed('vendor/', ['vendor/a.js', 'vendor/lib/b.js'], true));
-  expect(actor.getSnapshot().context.openFolders).toEqual({ 'vendor/': { files: ['vendor/a.js', 'vendor/lib/b.js'], truncated: true } });
+  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'third-party/' });
+  expect(listings()).toEqual(['third-party/']);
+  actor.send(listed('third-party/', ['third-party/a.js', 'third-party/lib/b.js'], true));
+  expect(actor.getSnapshot().context.openFolders).toEqual({ 'third-party/': { files: ['third-party/a.js', 'third-party/lib/b.js'], truncated: true } });
 
-  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'vendor/' });
+  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'third-party/' });
   expect(actor.getSnapshot().context.openFolders).toEqual({});
 });
 
 it('drops a listing that arrives for a folder closed since it was asked for', () => {
-  const actor = panelShowing([folder('vendor/')]);
-  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'vendor/' });
-  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'vendor/' });
+  const actor = panelShowing([folder('third-party/')]);
+  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'third-party/' });
+  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'third-party/' });
 
-  actor.send(listed('vendor/', ['vendor/a.js']));
+  actor.send(listed('third-party/', ['third-party/a.js']));
 
   expect(actor.getSnapshot().context.openFolders).toEqual({});
 });
 
 it('closes a folder whose row is gone from the status, and lists again the ones still there', () => {
-  const actor = panelShowing([folder('vendor/'), folder('scratch/')]);
-  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'vendor/' });
+  const actor = panelShowing([folder('third-party/'), folder('scratch/')]);
+  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'third-party/' });
   actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'scratch/' });
-  actor.send(listed('vendor/', ['vendor/a.js']));
+  actor.send(listed('third-party/', ['third-party/a.js']));
   sendToSystem.mockReset();
 
-  tellStatus(actor, [folder('vendor/')]);
+  tellStatus(actor, [folder('third-party/')]);
 
-  expect(Object.keys(actor.getSnapshot().context.openFolders)).toEqual(['vendor/']);
-  expect(listings()).toEqual(['vendor/']);
+  expect(Object.keys(actor.getSnapshot().context.openFolders)).toEqual(['third-party/']);
+  expect(listings()).toEqual(['third-party/']);
 });
 
 // A file made deep in the folder moves no status: the news names the folder
 it('lists an open folder again when told it changed, and not when told of another file', () => {
-  const actor = panelShowing([folder('vendor/')]);
-  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'vendor/' });
+  const actor = panelShowing([folder('third-party/')]);
+  actor.send({ type: 'commit.TOGGLE_FOLDER', path: 'third-party/' });
   sendToSystem.mockReset();
 
   actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, diffs: true, files: ['src/a.ts'] } });
   expect(listings()).toEqual([]);
 
-  actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, diffs: true, files: ['vendor/'] } });
-  expect(listings()).toEqual(['vendor/']);
+  actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, diffs: true, files: ['third-party/'] } });
+  expect(listings()).toEqual(['third-party/']);
 });

@@ -8,7 +8,7 @@
 // The host's terminal service is mocked, so no process is spawned and nothing here is about pty.
 import { describe, expect, it } from 'vitest'
 import { startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { TERMINAL_COLORS } from '#features/code/be/terminal-colors.ts'
 
 /**

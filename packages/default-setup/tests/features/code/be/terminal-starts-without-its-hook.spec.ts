@@ -11,7 +11,7 @@
 // facts and nothing else.
 import { describe, expect, it } from 'vitest'
 import { mockService, resetTestData, startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 
 
 describe('a shell whose integration could not be written', () => {

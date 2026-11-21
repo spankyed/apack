@@ -5,7 +5,7 @@ import { resetTestData, startApp, type TestApp } from '@apackdev/testing/harness
 import { testRootEvents } from '@apackdev/sdk/testing'
 import type { ProgramStatusRecord } from '@apackdev/sdk/services'
 import type { TerminalStatus } from '#features/code/be/types.ts'
-import { recordingBroker } from './terminal-broker.ts'
+import { recordingBroker } from './recording-broker.ts'
 
 export const CODE = 'default-setup/code'
 export const WINDOW = 'c-main'

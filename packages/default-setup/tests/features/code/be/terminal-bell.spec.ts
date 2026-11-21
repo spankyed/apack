@@ -2,7 +2,7 @@
 // the same bell is shown once, and two bells on the same terminal are two notifications.
 import { describe, expect, it } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 
 const CODE = 'default-setup/code'
 const WINDOW = 'c-main'

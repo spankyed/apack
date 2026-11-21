@@ -32,9 +32,9 @@ async function codeOverChanges() {
   await git(directory, 'add', '.');
   await git(directory, 'commit', '--quiet', '-m', 'first');
   fs.writeFileSync(path.join(directory, 'a.txt'), 'committed\nand an edit\n');
-  fs.mkdirSync(path.join(directory, 'vendor/lib'), { recursive: true });
-  fs.writeFileSync(path.join(directory, 'vendor/lib/one.js'), 'one\n');
-  fs.writeFileSync(path.join(directory, 'vendor/two.js'), 'two\n');
+  fs.mkdirSync(path.join(directory, 'third-party/lib'), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'third-party/lib/one.js'), 'one\n');
+  fs.writeFileSync(path.join(directory, 'third-party/two.js'), 'two\n');
   app = await startApp({ systems: ['code'] });
   await app.connect();
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
@@ -49,33 +49,33 @@ const statusPaths = async () => {
 it('answers a discard with what it kept, and puts it back for the window that asks', async () => {
   const directory = await codeOverChanges();
 
-  const discarded = await app!.send('code', { type: 'commit.REVERT_FILES', paths: ['a.txt', 'vendor/'] }, asWindow);
+  const discarded = await app!.send('code', { type: 'commit.REVERT_FILES', paths: ['a.txt', 'third-party/'] }, asWindow);
   const { kept } = (await app!.nextEmit('code', 'commit.FILES_REVERTED', { answering: discarded })).data as { kept: Kept };
 
   expect(kept).toEqual({ id: expect.any(String), notKept: [] });
   expect(fs.readFileSync(path.join(directory, 'a.txt'), 'utf8')).toBe('committed\n');
-  expect(fs.existsSync(path.join(directory, 'vendor'))).toBe(false);
+  expect(fs.existsSync(path.join(directory, 'third-party'))).toBe(false);
   expect(await statusPaths()).toEqual([]);
 
   const undone = await app!.send('code', { type: 'commit.RESTORE_DISCARDED', id: kept.id! }, asWindow);
   expect((await app!.nextEmit('code', 'commit.DISCARD_RESTORED', { answering: undone })).data).toEqual({
-    id: kept.id, restored: ['a.txt', 'vendor/lib/one.js', 'vendor/two.js'], left: [],
+    id: kept.id, restored: ['a.txt', 'third-party/lib/one.js', 'third-party/two.js'], left: [],
   });
 
   expect(fs.readFileSync(path.join(directory, 'a.txt'), 'utf8')).toBe('committed\nand an edit\n');
-  expect(fs.readFileSync(path.join(directory, 'vendor/lib/one.js'), 'utf8')).toBe('one\n');
-  expect(await statusPaths()).toEqual(['a.txt', 'vendor/']);
+  expect(fs.readFileSync(path.join(directory, 'third-party/lib/one.js'), 'utf8')).toBe('one\n');
+  expect(await statusPaths()).toEqual(['a.txt', 'third-party/']);
 });
 
 it('says beforehand which files a discard could not bring back, to the window about to ask for it', async () => {
   const directory = await codeOverChanges();
   // One byte past what a discard keeps a copy of
-  fs.writeFileSync(path.join(directory, 'vendor/video.bin'), Buffer.alloc(10 * 1024 * 1024 + 1));
+  fs.writeFileSync(path.join(directory, 'third-party/video.bin'), Buffer.alloc(10 * 1024 * 1024 + 1));
 
-  const asked = await app!.send('code', { type: 'commit.PREVIEW_DISCARD', paths: ['a.txt', 'vendor/'] }, asWindow);
+  const asked = await app!.send('code', { type: 'commit.PREVIEW_DISCARD', paths: ['a.txt', 'third-party/'] }, asWindow);
 
   expect((await app!.nextEmit('code', 'commit.DISCARD_PREVIEWED', { answering: asked })).data).toEqual({
-    paths: ['a.txt', 'vendor/'], notKept: ['vendor/video.bin'],
+    paths: ['a.txt', 'third-party/'], notKept: ['third-party/video.bin'],
   });
 });
 
