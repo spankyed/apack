@@ -1,0 +1,78 @@
+.DatabaseObjectResultsTable_tableWrap {
+  min-width: 100%;
+}
+
+.DatabaseObjectResultsTable_table {
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.DatabaseObjectResultsTable_table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgb(23 23 23);
+}
+
+.DatabaseObjectResultsTable_table th {
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(23 23 23);
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  padding: 8px 16px;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.DatabaseObjectResultsTable_table tbody {
+  background: rgb(38 38 38 / 20%);
+}
+
+.DatabaseObjectResultsTable_table tr {
+  border-bottom: 1px solid rgb(38 38 38);
+}
+
+.DatabaseObjectResultsTable_table tbody tr {
+  cursor: pointer;
+  position: relative;
+}
+
+.DatabaseObjectResultsTable_table tbody tr:hover {
+  background: rgb(64 64 64 / 30%);
+}
+
+.DatabaseObjectResultsTable_table td {
+  color: rgb(245 245 245);
+  font-size: 14px;
+  padding: 8px 16px;
+}
+
+.DatabaseObjectResultsTable_cell {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.DatabaseObjectResultsTable_copied {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.DatabaseObjectResultsTable_copiedInner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 20%);
+  color: rgb(163 163 163);
+  font-size: 12px;
+  padding: 4px 8px;
+}

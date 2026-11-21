@@ -1,0 +1,34 @@
+.ChatShot_root {
+  position: absolute;
+  inset: 0;
+}
+
+.ChatShot_appReveal {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 48%;
+}
+
+.ChatShot_composerMotion {
+  position: absolute;
+  z-index: 4;
+  transform-origin: 50% 50%;
+  will-change: left, top, width, transform;
+}
+
+.ChatShot_root .MessageBubble_row {
+  animation: none;
+}
+
+.ChatShot_viewerWrapper {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.ChatShot_viewerProse {
+  outline: none;
+}
+
+.ChatShot_viewerProse p {
+  margin: 0;
+}

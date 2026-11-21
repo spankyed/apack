@@ -1,0 +1,36 @@
+.MessageMarker_root {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.25rem 1rem;
+}
+
+.MessageMarker_line {
+  height: 1px;
+  flex: 1;
+  background: rgb(64 64 64 / 50%);
+}
+
+.MessageMarker_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-style: italic;
+  padding: 0.25rem 0.5rem;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.MessageMarker_button:hover {
+  background: rgb(38 38 38 / 50%);
+  color: rgb(229 229 229);
+}
+
+.MessageMarker_button span {
+  white-space: nowrap;
+}

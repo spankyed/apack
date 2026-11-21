@@ -1,0 +1,153 @@
+.LogsDataRenderer_root {
+  position: relative;
+}
+
+.LogsDataRenderer_actions {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.LogsDataRenderer_action,
+.LogsDataRenderer_compactAction {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.LogsDataRenderer_action:hover,
+.LogsDataRenderer_compactAction:hover {
+  background: rgb(64 64 64);
+  color: rgb(229 229 229);
+}
+
+.LogsDataRenderer_action {
+  padding: 4px 8px;
+}
+
+.LogsDataRenderer_compactAction {
+  padding: 4px;
+}
+
+.LogsDataRenderer_scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.LogsDataRenderer_mono {
+  width: max-content;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.LogsDataRenderer_primitive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.LogsDataRenderer_type {
+  flex-shrink: 0;
+  color: rgb(82 82 82);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.LogsDataRenderer_nullish {
+  color: rgb(115 115 115);
+  font-style: italic;
+}
+
+.LogsDataRenderer_string {
+  color: rgb(74 222 128);
+  white-space: nowrap;
+}
+
+.LogsDataRenderer_number {
+  color: rgb(251 146 60);
+  white-space: nowrap;
+}
+
+.LogsDataRenderer_boolean {
+  color: rgb(34 211 238);
+  white-space: nowrap;
+}
+
+.LogsDataRenderer_defaultValue {
+  color: rgb(229 229 229);
+}
+
+.LogsDataRenderer_composite {
+  display: inline-block;
+}
+
+.LogsDataRenderer_toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 2px 4px;
+  font-size: 12px;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.LogsDataRenderer_toggle:hover {
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+}
+
+.LogsDataRenderer_openChevron {
+  transform: rotate(90deg);
+}
+
+.LogsDataRenderer_arrayLabel {
+  color: rgb(96 165 250);
+}
+
+.LogsDataRenderer_objectLabel,
+.LogsDataRenderer_key {
+  color: rgb(192 132 252);
+}
+
+.LogsDataRenderer_count {
+  color: rgb(115 115 115);
+}
+
+.LogsDataRenderer_children {
+  margin-top: 4px;
+}
+
+.LogsDataRenderer_childRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 2px 0 2px 16px;
+}
+
+.LogsDataRenderer_index {
+  min-width: 16px;
+  flex-shrink: 0;
+  color: rgb(82 82 82);
+  text-align: right;
+  font-size: 10px;
+}
+
+.LogsDataRenderer_key {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

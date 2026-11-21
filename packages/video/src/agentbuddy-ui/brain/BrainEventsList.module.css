@@ -1,0 +1,231 @@
+.BrainEventsList_root {
+  height: 100%;
+  overflow-y: auto;
+}
+
+.BrainEventsList_row {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  border-bottom: 1px solid rgb(38 38 38 / 50%);
+  padding: 10px 20px;
+  transition: opacity 0.2s ease, background 0.2s ease;
+}
+
+.BrainEventsList_row:hover {
+  background: rgb(255 255 255 / 3%);
+}
+
+.BrainEventsList_row[data-dimmed="true"] {
+  opacity: 0.4;
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="listener"] {
+  background: linear-gradient(90deg, transparent, rgb(59 130 246 / 10%), transparent);
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="schedule"] {
+  background: linear-gradient(90deg, transparent, rgb(249 115 22 / 10%), transparent);
+}
+
+.BrainEventsList_row[data-active="true"]::before {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1px;
+  content: "";
+  animation: BrainEventsList_scan 0.6s ease-out;
+}
+
+.BrainEventsList_row[data-active="true"]::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  content: "";
+  animation: BrainEventsList_glow 0.6s ease-out;
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="listener"]::before {
+  background: linear-gradient(90deg, transparent, rgb(96 165 250), transparent);
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="listener"]::after {
+  background: linear-gradient(90deg, transparent, rgb(59 130 246 / 10%), transparent);
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="schedule"]::before {
+  background: linear-gradient(90deg, transparent, rgb(251 146 60), transparent);
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="schedule"]::after {
+  background: linear-gradient(90deg, transparent, rgb(249 115 22 / 10%), transparent);
+}
+
+.BrainEventsList_inner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.BrainEventsList_copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.BrainEventsList_title {
+  margin-bottom: 2px;
+  color: rgb(245 245 245);
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="listener"] .BrainEventsList_title {
+  color: rgb(191 219 254);
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="schedule"] .BrainEventsList_title {
+  color: rgb(254 215 170);
+}
+
+.BrainEventsList_meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.BrainEventsList_eventType {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.BrainEventsList_icon {
+  position: relative;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 4px;
+  background: rgb(59 130 246 / 10%);
+  color: rgb(96 165 250);
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.3s ease;
+}
+
+.BrainEventsList_row:hover .BrainEventsList_icon {
+  background: rgb(59 130 246 / 20%);
+}
+
+.BrainEventsList_row[data-trigger="schedule"] .BrainEventsList_icon {
+  background: rgb(249 115 22 / 10%);
+  color: rgb(251 146 60);
+}
+
+.BrainEventsList_row[data-trigger="schedule"]:hover .BrainEventsList_icon {
+  background: rgb(249 115 22 / 20%);
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="listener"] .BrainEventsList_icon {
+  background: rgb(59 130 246 / 30%);
+  color: rgb(147 197 253);
+  animation: BrainEventsList_subtlePulse 0.6s ease-in-out;
+  transform: scale(1.1);
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="schedule"] .BrainEventsList_icon {
+  background: rgb(249 115 22 / 30%);
+  color: rgb(253 186 116);
+  animation: BrainEventsList_subtlePulse 0.6s ease-in-out;
+  transform: scale(1.1);
+}
+
+.BrainEventsList_row[data-active="true"] .BrainEventsList_icon::before {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  content: "";
+  animation: BrainEventsList_ripple 0.6s ease-out;
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="listener"] .BrainEventsList_icon::before {
+  background: rgb(96 165 250 / 30%);
+}
+
+.BrainEventsList_row[data-active="true"][data-trigger="schedule"] .BrainEventsList_icon::before {
+  background: rgb(251 146 60 / 30%);
+}
+
+.BrainEventsList_empty {
+  display: flex;
+  height: 192px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  color: rgb(163 163 163);
+  font-size: 14px;
+  text-align: center;
+}
+
+.BrainEventsList_emptyIcon {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.BrainEventsList_emptyIcon svg {
+  color: rgb(115 115 115);
+}
+
+.BrainEventsList_empty p {
+  margin: 0;
+  color: rgb(163 163 163);
+}
+
+@keyframes BrainEventsList_ripple {
+  from {
+    opacity: 1;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+@keyframes BrainEventsList_scan {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+@keyframes BrainEventsList_glow {
+  0% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes BrainEventsList_subtlePulse {
+  0%,
+  100% {
+    transform: scale(1.1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}

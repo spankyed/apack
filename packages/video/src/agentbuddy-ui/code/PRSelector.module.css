@@ -1,0 +1,129 @@
+.PRSelector_root {
+  position: relative;
+  min-width: 0;
+  flex: 1;
+}
+
+.PRSelector_button {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.25rem;
+  background: rgb(23 23 23);
+  color: rgb(212 212 212);
+  font-size: 12px;
+  line-height: 1;
+  padding: 0.375rem 0.625rem 0.375rem 0.5rem;
+  text-align: left;
+}
+
+.PRSelector_button svg {
+  flex-shrink: 0;
+}
+
+.PRSelector_openIcon {
+  color: rgb(74 222 128);
+}
+
+.PRSelector_placeholderIcon {
+  color: rgb(163 163 163);
+}
+
+.PRSelector_button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.PRSelector_placeholder {
+  color: rgb(163 163 163);
+}
+
+.PRSelector_state {
+  border-radius: 0.25rem;
+  background: rgb(82 82 82);
+  color: rgb(212 212 212);
+  font-size: 9px;
+  line-height: 16px;
+  padding: 0 0.25rem;
+}
+
+.PRSelector_state[data-state="MERGED"] {
+  background: rgb(147 51 234 / 50%);
+  color: rgb(216 180 254);
+}
+
+.PRSelector_state[data-state="CLOSED"] {
+  background: rgb(220 38 38 / 50%);
+  color: rgb(252 165 165);
+}
+
+.PRSelector_dropdown {
+  position: absolute;
+  z-index: 50;
+  width: 100%;
+  max-height: 15rem;
+  overflow-y: auto;
+  margin-top: 0.25rem;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.25rem;
+  background: rgb(38 38 38);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 30%);
+}
+
+.PRSelector_dropdownItem {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  background: transparent;
+  color: rgb(212 212 212);
+  font-size: 12px;
+  padding: 0.375rem 0.75rem;
+  text-align: left;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.PRSelector_dropdownItem:hover {
+  background: rgb(64 64 64);
+}
+
+.PRSelector_dropdownItem[data-selected="true"] {
+  color: rgb(96 165 250);
+}
+
+.PRSelector_dropdownItem span:nth-child(2) {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.PRSelector_statusIcon {
+  flex-shrink: 0;
+  color: rgb(74 222 128);
+}
+
+.PRSelector_statusIcon[data-state="MERGED"] {
+  color: rgb(192 132 252);
+}
+
+.PRSelector_statusIcon[data-state="CLOSED"] {
+  color: rgb(248 113 113);
+}
+
+.PRSelector_statusIcon[data-state="DRAFT"] {
+  color: rgb(163 163 163);
+}
+
+.PRSelector_emptyDropdown {
+  padding: 0.5rem 0.75rem;
+  color: rgb(115 115 115);
+  font-size: 12px;
+}

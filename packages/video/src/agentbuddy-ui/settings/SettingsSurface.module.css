@@ -1,0 +1,49 @@
+.SettingsSurface_root {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background: rgb(23 23 23);
+  color: rgb(245 245 245);
+}
+
+.SettingsSurface_tabs {
+  display: flex;
+  border-bottom: 1px solid rgb(38 38 38);
+}
+
+.SettingsSurface_tab {
+  position: relative;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: rgb(163 163 163);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 12px 16px;
+  transition: color 160ms ease;
+}
+
+.SettingsSurface_tab:hover {
+  color: rgb(229 229 229);
+}
+
+.SettingsSurface_tab[data-active="true"] {
+  color: white;
+}
+
+.SettingsSurface_tab[data-active="true"]::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: rgb(59 130 246);
+  content: "";
+}
+
+.SettingsSurface_content {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}

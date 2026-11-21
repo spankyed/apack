@@ -1,0 +1,45 @@
+.JsonSettingsEditor_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.JsonSettingsEditor_actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.JsonSettingsEditor_resetButton,
+.JsonSettingsEditor_saveButton {
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.JsonSettingsEditor_resetButton {
+  background: rgb(64 64 64 / 85%);
+  color: rgb(212 212 212);
+}
+
+.JsonSettingsEditor_resetButton:hover {
+  background: rgb(82 82 82);
+}
+
+.JsonSettingsEditor_saveButton {
+  background: rgb(64 64 64 / 85%);
+  color: rgb(115 115 115);
+  cursor: not-allowed;
+}
+
+.JsonSettingsEditor_editorFrame {
+  height: calc(100vh - 220px);
+  overflow: hidden;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+}

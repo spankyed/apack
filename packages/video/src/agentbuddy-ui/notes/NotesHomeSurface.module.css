@@ -1,0 +1,242 @@
+.NotesHomeSurface_root {
+  height: 100%;
+  overflow-y: auto;
+  background: transparent;
+  padding: 0 24px 24px;
+}
+
+.NotesHomeSurface_greeting {
+  color: rgb(245 245 245);
+  font-size: 30px;
+  font-weight: 700;
+  margin: 0;
+  padding: 56px 0 24px;
+  text-align: center;
+}
+
+.NotesHomeSurface_content {
+  width: 100%;
+  max-width: 672px;
+  margin: 0 auto;
+}
+
+.NotesHomeSurface_searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+  animation: NotesHomeSurface_softEnter 260ms ease both;
+}
+
+.NotesHomeSurface_searchBox {
+  position: relative;
+  flex: 1;
+}
+
+.NotesHomeSurface_searchIcon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  color: rgb(115 115 115);
+  transform: translateY(-50%);
+}
+
+.NotesHomeSurface_searchBox input {
+  width: 100%;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+  outline: none;
+  padding: 8px 12px 8px 36px;
+  font-size: 14px;
+}
+
+.NotesHomeSurface_searchBox input::placeholder {
+  color: rgb(115 115 115);
+}
+
+.NotesHomeSurface_newNoteButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(37 99 235);
+  color: white;
+  padding: 8px 12px;
+  font-size: 14px;
+  transition: background-color 160ms ease;
+}
+
+.NotesHomeSurface_newNoteButton:hover {
+  background: rgb(59 130 246);
+}
+
+.NotesHomeSurface_newNoteButton[data-pressed="true"] {
+  background: rgb(29 78 216);
+  box-shadow: 0 0 0 1px rgb(147 197 253 / 28%), 0 10px 28px rgb(37 99 235 / 28%);
+  transform: translateY(1px) scale(0.985);
+}
+
+.NotesHomeSurface_searchResults {
+  display: grid;
+}
+
+.NotesHomeSurface_searchResult {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(212 212 212);
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 14px;
+  transition: background-color 160ms ease;
+}
+
+.NotesHomeSurface_searchResult:hover {
+  background: rgb(38 38 38);
+}
+
+.NotesHomeSurface_searchResultIcon {
+  display: inline-flex;
+  align-items: center;
+  color: rgb(115 115 115);
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.NotesHomeSurface_noResults,
+.NotesHomeSurface_empty {
+  color: rgb(115 115 115);
+  font-size: 14px;
+  text-align: center;
+}
+
+.NotesHomeSurface_noResults {
+  padding: 32px 0;
+}
+
+.NotesHomeSurface_section + .NotesHomeSurface_section {
+  margin-top: 24px;
+}
+
+.NotesHomeSurface_section {
+  animation: NotesHomeSurface_softEnter 280ms ease both;
+}
+
+.NotesHomeSurface_header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(163 163 163);
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+
+.NotesHomeSurface_header svg {
+  color: rgb(115 115 115);
+}
+
+.NotesHomeSurface_section:nth-child(2) .NotesHomeSurface_header svg {
+  color: rgb(250 204 21);
+}
+
+.NotesHomeSurface_cards {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.NotesHomeSurface_cards::-webkit-scrollbar {
+  display: none;
+}
+
+.NotesHomeSurface_empty {
+  padding: 32px 0;
+}
+
+.NotesHomeSurface_card {
+  display: flex;
+  width: 160px;
+  min-height: 110px;
+  flex-shrink: 0;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 0.75rem;
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+  padding: 1rem;
+  text-align: left;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+
+.NotesHomeSurface_card:hover {
+  border-color: rgb(82 82 82 / 50%);
+  background: rgb(42 42 42);
+}
+
+.NotesHomeSurface_card[data-active="true"] {
+  border-color: rgb(96 165 250 / 55%);
+  box-shadow: 0 0 0 1px rgb(59 130 246 / 35%);
+}
+
+.NotesHomeSurface_card[data-pressed="true"] {
+  border-color: rgb(96 165 250 / 70%);
+  background: rgb(45 45 45);
+  box-shadow: 0 0 0 1px rgb(59 130 246 / 45%), 0 16px 36px rgb(0 0 0 / 28%);
+  transform: translateY(1px) scale(0.985);
+}
+
+.NotesHomeSurface_card[data-favorite="true"] {
+  border-color: rgb(202 138 4 / 35%);
+}
+
+.NotesHomeSurface_cardIcon {
+  color: rgb(115 115 115);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.NotesHomeSurface_cardCopy {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.NotesHomeSurface_cardCopy span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: rgb(229 229 229);
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.NotesHomeSurface_cardCopy small {
+  color: rgb(115 115 115);
+  font-size: 0.75rem;
+}
+
+@keyframes NotesHomeSurface_softEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

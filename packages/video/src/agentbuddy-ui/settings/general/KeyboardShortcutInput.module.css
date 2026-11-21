@@ -1,0 +1,93 @@
+.KeyboardShortcutInput_root {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.KeyboardShortcutInput_label {
+  min-width: 0;
+  margin-right: 12px;
+  overflow: hidden;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.KeyboardShortcutInput_box {
+  display: flex;
+  position: relative;
+  min-width: 0;
+  min-height: 39px;
+  flex: 1;
+  align-items: center;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 8px 12px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.KeyboardShortcutInput_box:hover {
+  border-color: rgb(82 82 82);
+}
+
+.KeyboardShortcutInput_key {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.KeyboardShortcutInput_globalBadge {
+  margin-left: auto;
+  margin-right: 8px;
+  border-radius: 6px;
+  background: rgb(59 130 246 / 20%);
+  color: rgb(96 165 250);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+}
+
+.KeyboardShortcutInput_globalBadge + .KeyboardShortcutInput_key {
+  margin-left: 0;
+}
+
+.KeyboardShortcutInput_empty {
+  margin-left: auto;
+  color: rgb(115 115 115);
+  white-space: nowrap;
+}
+
+.KeyboardShortcutInput_keyboardIcon {
+  margin-left: 8px;
+  color: rgb(115 115 115);
+}
+
+.KeyboardShortcutInput_resetButton {
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(163 163 163);
+  padding: 8px 12px;
+  transition: border-color 150ms ease, color 150ms ease;
+}
+
+.KeyboardShortcutInput_resetButton:hover {
+  border-color: rgb(115 115 115);
+  color: rgb(212 212 212);
+}

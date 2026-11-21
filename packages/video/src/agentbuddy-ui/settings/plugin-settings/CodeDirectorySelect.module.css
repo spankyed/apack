@@ -1,0 +1,157 @@
+.CodeDirectorySelect_root {
+  position: relative;
+}
+
+.CodeDirectorySelect_trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+  text-align: left;
+  outline: none;
+  transition: border-color 150ms ease, box-shadow 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+.CodeDirectorySelect_trigger:not(:disabled):hover {
+  border-color: rgb(82 82 82);
+}
+
+.CodeDirectorySelect_trigger:focus {
+  border-color: rgb(59 130 246 / 50%);
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 20%);
+}
+
+.CodeDirectorySelect_trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.CodeDirectorySelect_selectedLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.CodeDirectorySelect_chevron {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  color: rgb(212 212 212);
+  transition: transform 150ms ease;
+}
+
+.CodeDirectorySelect_chevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+
+.CodeDirectorySelect_dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  width: 100%;
+  max-height: 384px;
+  overflow: hidden;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 35%), 0 8px 10px -6px rgb(0 0 0 / 35%);
+}
+
+.CodeDirectorySelect_dropdown::before {
+  display: block;
+  height: 4px;
+  content: "";
+}
+
+.CodeDirectorySelect_dropdown::after {
+  display: block;
+  height: 4px;
+  content: "";
+}
+
+.CodeDirectorySelect_option,
+.CodeDirectorySelect_directoryOption {
+  cursor: pointer;
+  color: rgb(229 229 229);
+  font-size: 14px;
+  padding: 8px 12px;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.CodeDirectorySelect_option[data-hovered="true"],
+.CodeDirectorySelect_directoryOption:hover {
+  background: rgb(64 64 64);
+}
+
+.CodeDirectorySelect_option[data-active="true"],
+.CodeDirectorySelect_directoryOption[data-active="true"] {
+  background: rgb(37 99 235);
+  color: white;
+}
+
+.CodeDirectorySelect_separator {
+  margin: 4px 0;
+  border-top: 1px solid rgb(64 64 64);
+}
+
+.CodeDirectorySelect_projectHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgb(38 38 38 / 50%);
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+}
+
+.CodeDirectorySelect_projectDot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+}
+
+.CodeDirectorySelect_directoryOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-left: 24px;
+}
+
+.CodeDirectorySelect_directoryMain {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+}
+
+.CodeDirectorySelect_folderName {
+  flex: 0 0 auto;
+  font-weight: 500;
+}
+
+.CodeDirectorySelect_fullPath {
+  min-width: 0;
+  overflow: hidden;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.CodeDirectorySelect_projectName {
+  flex: 0 0 auto;
+  color: rgb(115 115 115);
+  font-size: 12px;
+}

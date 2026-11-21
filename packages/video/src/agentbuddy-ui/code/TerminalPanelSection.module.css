@@ -1,0 +1,121 @@
+.TerminalPanelSection_root {
+  flex-shrink: 0;
+  border-top: 1px solid rgb(38 38 38);
+}
+
+.TerminalPanelSection_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 0.75rem 1.25rem;
+  transition: background 150ms ease;
+}
+
+.TerminalPanelSection_header:hover {
+  background: rgb(38 38 38 / 60%);
+}
+
+.TerminalPanelSection_title {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.TerminalPanelSection_actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.TerminalPanelSection_iconButton {
+  display: flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 0;
+}
+
+.TerminalPanelSection_iconButton:hover {
+  background: rgb(64 64 64);
+  color: rgb(229 229 229);
+}
+
+.TerminalPanelSection_iconButton:disabled {
+  cursor: not-allowed;
+}
+
+.TerminalPanelSection_iconButton:disabled:hover {
+  background: transparent;
+  color: rgb(163 163 163);
+}
+
+.TerminalPanelSection_disabledIcon {
+  opacity: 0.3;
+}
+
+.TerminalPanelSection_expanded {
+  display: flex;
+  height: 160px;
+  overflow: hidden;
+  border-top: 1px solid rgb(38 38 38);
+}
+
+.TerminalPanelSection_terminalBody {
+  flex: 1;
+  min-width: 0;
+  background: rgb(30 30 30);
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.TerminalPanelSection_terminalBody > span {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+}
+
+.TerminalPanelSection_terminalList {
+  width: 125px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-left: 1px solid rgb(38 38 38);
+}
+
+.TerminalPanelSection_terminalRow,
+.TerminalPanelSection_activeTerminal {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  padding: 0.375rem 0.5rem;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.TerminalPanelSection_activeTerminal {
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+}
+
+.TerminalPanelSection_terminalRow:hover {
+  background: rgb(38 38 38 / 50%);
+}
+
+.TerminalPanelSection_terminalRow span,
+.TerminalPanelSection_activeTerminal span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

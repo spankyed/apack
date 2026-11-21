@@ -79,6 +79,23 @@ npm run start:inspect    # Dev mode with Electron inspection enabled
 npm run start:no-build   # Start dev mode without rebuilding first
 ```
 
+### Video Render OOM
+
+If a Remotion video render that previously worked starts failing with a Node
+heap OOM, treat stale Remotion/webpack cache state as the first suspect:
+
+```sh
+rm -rf packages/video/node_modules/.cache
+```
+
+Then rerun the same render. If it still fails, retry once with a larger heap:
+
+```sh
+NODE_OPTIONS=--max-old-space-size=4096 npm run video:render
+```
+
+See [`packages/video/README.md`](packages/video/README.md) for the full notes.
+
 ### Build
 
 ```sh

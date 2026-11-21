@@ -1,0 +1,169 @@
+.CodePluginSettings_root {
+  max-width: 768px;
+}
+
+.CodePluginSettings_divider {
+  border-top: 1px solid rgb(38 38 38);
+  padding-top: 32px;
+}
+
+.CodePluginSettings_copy {
+  margin: 0 0 16px;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.CodePluginSettings_stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.CodePluginSettings_hotkeyStack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.CodePluginSettings_compactStack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.CodePluginSettings_labelRow,
+.CodePluginSettings_settingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.CodePluginSettings_label {
+  color: rgb(229 229 229);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.CodePluginSettings_linkButton {
+  border: 0;
+  background: transparent;
+  color: rgb(96 165 250);
+  font: inherit;
+  font-size: 12px;
+  transition: color 150ms ease;
+}
+
+.CodePluginSettings_linkButton:hover {
+  color: rgb(147 197 253);
+}
+
+.CodePluginSettings_help {
+  color: rgb(82 82 82);
+  font-size: 12px;
+  line-height: 1.35;
+  margin: 4px 0 0;
+}
+
+.CodePluginSettings_select,
+.CodePluginSettings_input,
+.CodePluginSettings_scriptLabel,
+.CodePluginSettings_scriptCommand,
+.CodePluginSettings_hotkeyInput {
+  border: 1px solid rgb(82 82 82);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+  font-size: 14px;
+  outline: none;
+  padding: 8px 12px;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.CodePluginSettings_select:focus,
+.CodePluginSettings_input:focus,
+.CodePluginSettings_scriptLabel:focus,
+.CodePluginSettings_scriptCommand:focus {
+  border-color: rgb(59 130 246);
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 20%);
+}
+
+.CodePluginSettings_select {
+  width: 100%;
+}
+
+.CodePluginSettings_input {
+  width: 80px;
+  padding: 4px 8px;
+}
+
+.CodePluginSettings_checkbox {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: rgb(37 99 235);
+}
+
+.CodePluginSettings_scriptRow,
+.CodePluginSettings_hotkeyPair {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.CodePluginSettings_hotkeyPair {
+  gap: 16px;
+}
+
+.CodePluginSettings_scriptLabel {
+  width: 128px;
+  padding: 4px 8px;
+}
+
+.CodePluginSettings_scriptCommand {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  padding: 4px 8px;
+}
+
+.CodePluginSettings_iconButton {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: rgb(115 115 115);
+  transition: color 150ms ease;
+}
+
+.CodePluginSettings_iconButton:not(:disabled):hover {
+  color: rgb(248 113 113);
+}
+
+.CodePluginSettings_iconButton:disabled {
+  cursor: not-allowed;
+  color: rgb(64 64 64);
+}
+
+.CodePluginSettings_hotkeyGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.CodePluginSettings_hotkeyLabel {
+  color: rgb(212 212 212);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.CodePluginSettings_hotkeyInput {
+  min-width: 180px;
+  padding: 6px 10px;
+}
+
+.CodePluginSettings_hotkeyPair > .CodePluginSettings_hotkeyGroup {
+  flex: 1;
+}

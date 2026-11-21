@@ -1,0 +1,11 @@
+.DatabasePrimitiveResultDisplay_root {
+  padding: 16px;
+}
+
+.DatabasePrimitiveResultDisplay_value {
+  border-radius: 6px;
+  background: rgb(23 23 23);
+  color: rgb(245 245 245);
+  padding: 16px;
+  font-size: 14px;
+}

@@ -1,0 +1,11 @@
+.DatabaseJsonResultDisplay_root {
+  padding: 16px;
+}
+
+.DatabaseJsonResultDisplay_editorFrame {
+  height: 400px;
+  max-height: 600px;
+  overflow: hidden;
+  border: 1px solid rgb(38 38 38);
+  border-radius: 6px;
+}

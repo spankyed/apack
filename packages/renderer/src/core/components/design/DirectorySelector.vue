@@ -71,6 +71,7 @@ interface Props {
   resetButtonTitle?: string
   containerClass?: string
   truncateStart?: boolean
+  homeDirectory?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -93,13 +94,18 @@ const value = computed(() => props.modelValue)
 // Format the display path
 const displayPath = computed(() => {
   if (!value.value) return props.placeholder
+
+  const normalizedHome = props.homeDirectory?.replace(/\/+$/, '')
+  const formattedPath = normalizedHome && (value.value === normalizedHome || value.value.startsWith(`${normalizedHome}/`))
+    ? `~${value.value.slice(normalizedHome.length)}`
+    : value.value
   
   // If truncateStart is true and path is long, show only the end
-  if (props.truncateStart && value.value.length > 50) {
-    return '...' + value.value.slice(-47)
+  if (props.truncateStart && formattedPath.length > 50) {
+    return '...' + formattedPath.slice(-47)
   }
   
-  return value.value
+  return formattedPath
 })
 
 // Select a directory using Electron API

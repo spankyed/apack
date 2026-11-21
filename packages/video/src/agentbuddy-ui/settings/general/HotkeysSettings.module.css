@@ -1,0 +1,126 @@
+.HotkeysSettings_root {
+  max-width: 768px;
+}
+
+.HotkeysSettings_header {
+  margin-bottom: 32px;
+}
+
+.HotkeysSettings_title {
+  color: white;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.HotkeysSettings_description,
+.HotkeysSettings_hint {
+  color: rgb(115 115 115);
+  font-size: 14px;
+  margin: 0;
+}
+
+.HotkeysSettings_group {
+  margin-bottom: 24px;
+}
+
+.HotkeysSettings_row {
+  display: flex;
+  gap: 16px;
+  max-width: 768px;
+}
+
+.HotkeysSettings_hint {
+  color: rgb(82 82 82);
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+.HotkeysSettings_divider {
+  border-top: 1px solid rgb(38 38 38);
+  margin: 24px 0;
+}
+
+.HotkeysSettings_sectionTitle {
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+}
+
+.HotkeysSettings_customList {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.HotkeysSettings_customItem {
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38 / 50%);
+}
+
+.HotkeysSettings_customRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+
+.HotkeysSettings_eventInput {
+  min-height: 34px;
+  flex: 1;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  outline: none;
+  background: rgb(38 38 38);
+  color: white;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 14px;
+  padding: 6px 12px;
+  text-transform: uppercase;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+
+.HotkeysSettings_eventInput::placeholder {
+  color: rgb(82 82 82);
+}
+
+.HotkeysSettings_removeButton {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(163 163 163);
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.HotkeysSettings_removeButton:hover {
+  background: rgb(64 64 64);
+}
+
+.HotkeysSettings_add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 2px dashed rgb(64 64 64);
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(163 163 163);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.HotkeysSettings_add:hover {
+  border-color: rgb(82 82 82);
+  color: rgb(212 212 212);
+}

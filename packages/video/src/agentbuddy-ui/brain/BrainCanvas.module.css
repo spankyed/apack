@@ -1,0 +1,97 @@
+.BrainCanvas_root {
+  position: relative;
+  height: 100%;
+  flex: 1;
+  overflow: hidden;
+  background-color: rgb(23 23 23);
+  background-image: radial-gradient(rgb(255 255 255 / 8%) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.BrainCanvas_viewport {
+  position: absolute;
+  inset: 0;
+}
+
+.BrainCanvas_edges {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  width: 100%;
+  height: 100%;
+}
+
+.BrainCanvas_edge {
+  fill: none;
+  stroke: rgb(115 115 115);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  marker-end: url(#brain-arrow);
+}
+
+.BrainCanvas_edge[data-active="true"] {
+  stroke-dasharray: 5 5;
+  animation: BrainCanvas_dash 0.55s linear infinite;
+}
+
+.BrainCanvas_edgeMarker {
+  fill: rgb(115 115 115);
+}
+
+.BrainCanvas_backButton,
+.BrainCanvas_fitButton,
+.BrainCanvas_currentLabel {
+  position: absolute;
+  z-index: 4;
+  border: 1px solid rgb(38 38 38);
+  border-radius: 6px;
+  background: rgb(23 23 23 / 90%);
+  color: rgb(212 212 212);
+  backdrop-filter: blur(4px);
+}
+
+.BrainCanvas_backButton,
+.BrainCanvas_fitButton {
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.BrainCanvas_backButton:hover,
+.BrainCanvas_fitButton:hover {
+  background: rgb(38 38 38);
+  color: rgb(245 245 245);
+}
+
+.BrainCanvas_backButton {
+  top: 16px;
+  left: 16px;
+  border: 1px solid rgb(38 38 38);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.BrainCanvas_fitButton {
+  bottom: 16px;
+  left: 16px;
+  display: grid;
+  padding: 6px;
+  place-items: center;
+}
+
+.BrainCanvas_currentLabel {
+  top: 16px;
+  left: 50%;
+  padding: 8px 16px;
+  transform: translateX(-50%);
+  color: rgb(245 245 245);
+  font-size: 14px;
+}
+
+@keyframes BrainCanvas_dash {
+  to { stroke-dashoffset: -10; }
+}

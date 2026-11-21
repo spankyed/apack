@@ -1,0 +1,85 @@
+.ThreadListView_root {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  padding: 1rem 1.5rem;
+}
+
+.ThreadListView_table {
+  overflow: hidden;
+  border: 1px solid rgb(38 38 38);
+  border-radius: 0.5rem;
+  background: rgb(23 23 23);
+}
+
+.ThreadListView_headerRow,
+.ThreadListView_row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) 160px minmax(160px, 0.6fr) 120px;
+  align-items: center;
+  gap: 1rem;
+}
+
+.ThreadListView_headerRow {
+  border-bottom: 1px solid rgb(38 38 38);
+  color: rgb(115 115 115);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 0.75rem 1rem;
+  text-transform: uppercase;
+}
+
+.ThreadListView_row {
+  border-bottom: 1px solid rgb(38 38 38 / 70%);
+  color: rgb(212 212 212);
+  font-size: 14px;
+  padding: 0.875rem 1rem;
+}
+
+.ThreadListView_row:last-child {
+  border-bottom: 0;
+}
+
+.ThreadListView_titleCell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.625rem;
+}
+
+.ThreadListView_titleCell svg {
+  flex-shrink: 0;
+  color: rgb(163 163 163);
+}
+
+.ThreadListView_titleCell span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ThreadListView_status {
+  color: rgb(163 163 163);
+}
+
+.ThreadListView_tags {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.ThreadListView_tags span {
+  border-radius: 999px;
+  background: rgb(64 64 64 / 50%);
+  color: rgb(212 212 212);
+  font-size: 12px;
+  padding: 0.125rem 0.5rem;
+}
+
+.ThreadListView_updated {
+  color: rgb(115 115 115);
+  font-size: 13px;
+  text-align: right;
+}

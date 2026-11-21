@@ -1,0 +1,41 @@
+.CodeShot_root {
+  position: absolute;
+  inset: 0;
+}
+
+.CodeShot_appReveal {
+  position: absolute;
+  inset: 0;
+  transform-origin: 62% 50%;
+  will-change: opacity, transform;
+}
+
+.CodeShot_panelMotion {
+  position: absolute;
+  z-index: 4;
+  overflow: hidden;
+  border: 1px solid rgb(38 38 38);
+  border-radius: 0.5rem;
+  background: rgb(23 23 23);
+  box-shadow: 0 44px 130px rgb(0 0 0 / 48%);
+  transform-origin: 50% 50%;
+  will-change: height, left, opacity, top, transform, width;
+}
+
+.CodeShot_panelContent {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.CodeShot_browserMotion {
+  position: absolute;
+  z-index: 5;
+  transform-origin: 50% 50%;
+  will-change: opacity, transform;
+}
+
+.CodeShot_browserMotion > * {
+  height: 100%;
+}

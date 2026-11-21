@@ -1,0 +1,258 @@
+.SettingsCommon_panel {
+  max-width: 896px;
+}
+
+.SettingsCommon_panelNarrow {
+  max-width: 768px;
+}
+
+.SettingsCommon_header {
+  margin-bottom: 32px;
+}
+
+.SettingsCommon_title {
+  color: white;
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.SettingsCommon_description {
+  color: rgb(115 115 115);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.SettingsCommon_card {
+  border: 1px solid rgb(38 38 38);
+  border-radius: 12px;
+  background: rgb(23 23 23 / 50%);
+  margin-bottom: 24px;
+  padding: 24px;
+}
+
+.SettingsCommon_dangerCard {
+  border: 1px solid rgb(127 29 29 / 30%);
+  border-radius: 12px;
+  background: rgb(127 29 29 / 10%);
+  margin-top: 32px;
+  padding: 24px;
+}
+
+.SettingsCommon_sectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgb(212 212 212);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  margin-bottom: 16px;
+  text-transform: uppercase;
+}
+
+.SettingsCommon_sectionHeader svg {
+  color: rgb(163 163 163);
+}
+
+.SettingsCommon_dangerHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgb(248 113 113);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.SettingsCommon_label {
+  display: block;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  margin-bottom: 10px;
+}
+
+.SettingsCommon_input,
+.SettingsCommon_textarea {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38 / 50%);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 16px;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.SettingsCommon_input:hover,
+.SettingsCommon_textarea:hover {
+  border-color: rgb(82 82 82);
+}
+
+.SettingsCommon_input:focus,
+.SettingsCommon_textarea:focus {
+  border-color: rgb(59 130 246 / 50%);
+  box-shadow: 0 0 0 2px rgb(59 130 246 / 30%);
+}
+
+.SettingsCommon_primaryButton,
+.SettingsCommon_dangerButton {
+  border: 0;
+  border-radius: 8px;
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  margin-top: 16px;
+  padding: 8px 16px;
+  transition: background-color 160ms ease, opacity 160ms ease;
+}
+
+.SettingsCommon_primaryButton {
+  background: rgb(37 99 235);
+}
+
+.SettingsCommon_primaryButton:hover {
+  background: rgb(59 130 246);
+}
+
+.SettingsCommon_dangerButton {
+  background: rgb(220 38 38);
+}
+
+.SettingsCommon_dangerButton:hover {
+  background: rgb(239 68 68);
+}
+
+.SettingsCommon_primaryButton:disabled,
+.SettingsCommon_dangerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.SettingsCommon_primaryButton[data-status="previewing"] {
+  background: rgb(64 64 64);
+  color: rgb(163 163 163);
+  opacity: 1;
+}
+
+.SettingsCommon_secondaryButton {
+  border: 0;
+  border-radius: 8px;
+  background: rgb(64 64 64);
+  color: rgb(212 212 212);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  transition: background-color 160ms ease, opacity 160ms ease;
+}
+
+.SettingsCommon_secondaryButton:hover {
+  background: rgb(82 82 82);
+}
+
+.SettingsCommon_secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.SettingsCommon_successNotice,
+.SettingsCommon_errorNotice {
+  margin-top: 16px;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.SettingsCommon_successNotice {
+  border: 1px solid rgb(22 101 52 / 50%);
+  background: rgb(20 83 45 / 20%);
+}
+
+.SettingsCommon_errorNotice {
+  border: 1px solid rgb(127 29 29 / 50%);
+  background: rgb(127 29 29 / 20%);
+}
+
+.SettingsCommon_successNotice p,
+.SettingsCommon_errorNotice p {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.SettingsCommon_successNotice p {
+  color: rgb(74 222 128);
+  font-weight: 500;
+}
+
+.SettingsCommon_errorNotice p {
+  color: rgb(248 113 113);
+}
+
+.SettingsCommon_successNotice div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  color: rgb(74 222 128 / 80%);
+  font-size: 12px;
+}
+
+.SettingsCommon_successNotice button,
+.SettingsCommon_errorNotice button {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  margin-top: 12px;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.SettingsCommon_successNotice button {
+  color: rgb(34 197 94 / 80%);
+}
+
+.SettingsCommon_errorNotice button {
+  color: rgb(239 68 68 / 80%);
+}
+
+.SettingsCommon_confirmRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.SettingsCommon_confirmRow .SettingsCommon_dangerButton {
+  margin-top: 0;
+}
+
+.SettingsCommon_confirmRow span {
+  color: rgb(248 113 113);
+  font-size: 14px;
+}
+
+.SettingsCommon_textarea {
+  min-height: 220px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  line-height: 1.5;
+  resize: none;
+}
+
+.SettingsCommon_hint {
+  color: rgb(82 82 82);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.SettingsCommon_grid2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}

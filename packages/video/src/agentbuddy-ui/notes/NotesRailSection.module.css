@@ -1,0 +1,64 @@
+.NotesRailSection_root {
+  border-bottom: 1px solid rgb(38 38 38);
+  padding: 0.75rem 0.5rem;
+}
+
+.NotesRailSection_label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-left: 0.625rem;
+  margin-bottom: 0.25rem;
+  border: 0;
+  background: transparent;
+  color: rgb(115 115 115);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  padding: 0 0.375rem;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.NotesRailSection_iconWrap {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.NotesRailSection_star,
+.NotesRailSection_chevron {
+  position: absolute;
+  inset: 0;
+}
+
+.NotesRailSection_star {
+  color: rgb(234 179 8 / 60%);
+}
+
+.NotesRailSection_chevron {
+  color: rgb(115 115 115);
+  opacity: 0;
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.NotesRailSection_chevronExpanded {
+  position: absolute;
+  inset: 0;
+  color: rgb(115 115 115);
+  opacity: 0;
+  transform: rotate(90deg);
+  transition: opacity 150ms ease, transform 150ms ease;
+}
+
+.NotesRailSection_label:hover .NotesRailSection_star {
+  opacity: 0;
+}
+
+.NotesRailSection_label:hover .NotesRailSection_chevron,
+.NotesRailSection_label:hover .NotesRailSection_chevronExpanded {
+  opacity: 1;
+  transform: rotate(90deg);
+}

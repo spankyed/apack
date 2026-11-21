@@ -1,0 +1,205 @@
+.DatabaseGraphExplorer_root {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background: rgb(38 38 38);
+}
+
+.DatabaseGraphExplorer_canvasRegion {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.DatabaseGraphExplorer_canvas {
+  position: absolute;
+  inset: 0;
+  background: rgb(38 38 38);
+}
+
+.DatabaseGraphExplorer_graphSvg {
+  width: 100%;
+  height: 100%;
+}
+
+.DatabaseGraphExplorer_edge {
+  stroke: #e5e7eb;
+  stroke-width: 1.5;
+}
+
+.DatabaseGraphExplorer_edgeLabel rect {
+  fill: rgb(255 255 255 / 80%);
+}
+
+.DatabaseGraphExplorer_edgeLabel text {
+  fill: #6b7280;
+  font-size: 10px;
+  text-anchor: middle;
+}
+
+.DatabaseGraphExplorer_node text {
+  fill: rgb(229 229 229);
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.DatabaseGraphExplorer_empty,
+.DatabaseGraphExplorer_loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.DatabaseGraphExplorer_loading {
+  background: rgb(38 38 38 / 50%);
+  backdrop-filter: blur(4px);
+}
+
+.DatabaseGraphExplorer_emptyIconWrap {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 16px;
+  color: rgb(163 163 163);
+}
+
+.DatabaseGraphExplorer_emptyPing {
+  position: absolute;
+  inset: 0;
+  color: rgb(82 82 82);
+  opacity: 0.75;
+  animation: DatabaseGraphExplorer_ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.DatabaseGraphExplorer_empty h4,
+.DatabaseGraphExplorer_loading h4 {
+  margin: 0 0 4px;
+  color: rgb(245 245 245);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.DatabaseGraphExplorer_empty p,
+.DatabaseGraphExplorer_loading p {
+  margin: 0;
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.DatabaseGraphExplorer_loadingSpinner {
+  margin-bottom: 16px;
+  color: rgb(59 130 246);
+  animation: DatabaseGraphExplorer_spin 900ms linear infinite;
+}
+
+.DatabaseGraphExplorer_infoPanel {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 256px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  box-shadow: 0 10px 15px rgb(0 0 0 / 30%);
+  padding: 16px;
+}
+
+.DatabaseGraphExplorer_infoHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.DatabaseGraphExplorer_infoHeader h4,
+.DatabaseGraphExplorer_properties h5 {
+  margin: 0;
+}
+
+.DatabaseGraphExplorer_infoHeader h4 {
+  color: rgb(245 245 245);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.DatabaseGraphExplorer_infoHeader button {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(107 114 128);
+  padding: 4px;
+  transition: background-color 160ms ease;
+}
+
+.DatabaseGraphExplorer_infoHeader button:hover {
+  background: rgb(64 64 64);
+}
+
+.DatabaseGraphExplorer_infoFields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.DatabaseGraphExplorer_infoField,
+.DatabaseGraphExplorer_infoFieldSmall {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.DatabaseGraphExplorer_infoField span,
+.DatabaseGraphExplorer_infoFieldSmall span {
+  color: rgb(156 163 175);
+  font-size: 12px;
+}
+
+.DatabaseGraphExplorer_infoField p,
+.DatabaseGraphExplorer_infoFieldSmall p {
+  margin: 0;
+  color: rgb(229 229 229);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.DatabaseGraphExplorer_infoFieldSmall p {
+  color: rgb(209 213 219);
+  font-size: 12px;
+}
+
+.DatabaseGraphExplorer_monospace {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.DatabaseGraphExplorer_properties {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid rgb(64 64 64);
+  padding-top: 8px;
+}
+
+.DatabaseGraphExplorer_properties h5 {
+  color: rgb(209 213 219);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+@keyframes DatabaseGraphExplorer_spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes DatabaseGraphExplorer_ping {
+  75%,
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}

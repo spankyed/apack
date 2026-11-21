@@ -1,0 +1,185 @@
+.ThreadDashboardSurface_root {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: rgb(23 23 23);
+}
+
+.ThreadDashboardSurface_pinnedRow,
+.ThreadDashboardSurface_tabRow {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  overflow: hidden;
+  border-bottom: 1px solid rgb(38 38 38);
+}
+
+.ThreadDashboardSurface_tabRow {
+  background: rgb(23 23 23);
+}
+
+.ThreadDashboardSurface_tab,
+.ThreadDashboardSurface_tabActive {
+  display: flex;
+  max-width: 200px;
+  height: 30px;
+  align-items: center;
+  border-right: 1px solid rgb(38 38 38);
+  color: rgb(163 163 163);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 16px;
+}
+
+.ThreadDashboardSurface_tabActive {
+  border-top: 1px solid rgb(59 130 246);
+  background: rgb(31 31 31);
+  color: white;
+}
+
+.ThreadDashboardSurface_tab[data-hovered="true"],
+.ThreadDashboardSurface_tabActive[data-hovered="true"] {
+  background: rgb(38 38 38);
+  color: rgb(245 245 245);
+}
+
+.ThreadDashboardSurface_tabDot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgb(82 82 82);
+  margin-right: 10px;
+}
+
+.ThreadDashboardSurface_tabLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ThreadDashboardSurface_tabPin,
+.ThreadDashboardSurface_tabPinPinned {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  color: rgb(82 82 82);
+  opacity: 0;
+}
+
+.ThreadDashboardSurface_tabPinPinned {
+  color: rgb(96 165 250);
+  opacity: 1;
+}
+
+.ThreadDashboardSurface_tab[data-hovered="true"] .ThreadDashboardSurface_tabPin,
+.ThreadDashboardSurface_tabActive[data-hovered="true"] .ThreadDashboardSurface_tabPin {
+  color: rgb(96 165 250);
+  opacity: 1;
+}
+
+.ThreadDashboardSurface_tabPin[data-pressed="true"] {
+  transform: translateY(1px) scale(0.9);
+}
+
+/* content-viewer.vue: sidebar (w-64, border-r) + main content (p-6). */
+.ThreadDashboardSurface_body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.ThreadDashboardSurface_body[data-sidebar="false"] .ThreadDashboardSurface_content {
+  flex: 1;
+}
+
+/* artifact-list.vue: w-64, border-r border-neutral-800, bg-neutral-900, p-2. */
+.ThreadDashboardSurface_artifactSidebar {
+  display: flex;
+  width: 256px;
+  min-height: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  border-right: 1px solid rgb(38 38 38);
+  background: rgb(23 23 23);
+  padding: 8px;
+}
+
+/* artifact-item.vue: rounded-md px-2.5 py-1.5, pill colors per state. */
+.ThreadDashboardSurface_artifactItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 0.375rem;
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.ThreadDashboardSurface_artifactItem[data-color="purple"] {
+  background: rgb(168 85 247 / 15%);
+  color: rgb(192 132 252);
+}
+
+.ThreadDashboardSurface_artifactItem[data-color="emerald"] {
+  background: rgb(16 185 129 / 15%);
+  color: rgb(52 211 153);
+}
+
+.ThreadDashboardSurface_artifactItem[data-color="amber"] {
+  background: rgb(245 158 11 / 15%);
+  color: rgb(251 191 36);
+}
+
+.ThreadDashboardSurface_artifactItem[data-color="cyan"] {
+  background: rgb(6 182 212 / 15%);
+  color: rgb(34 211 238);
+}
+
+.ThreadDashboardSurface_artifactItem[data-selected="true"] {
+  background: rgb(37 99 235);
+  color: white;
+}
+
+.ThreadDashboardSurface_artifactItem[data-selected="true"][data-color="purple"] {
+  background: rgb(147 51 234);
+}
+
+.ThreadDashboardSurface_artifactItem[data-selected="true"][data-color="emerald"] {
+  background: rgb(5 150 105);
+}
+
+.ThreadDashboardSurface_artifactItem[data-selected="true"][data-color="amber"] {
+  background: rgb(217 119 6);
+}
+
+.ThreadDashboardSurface_artifactItem[data-selected="true"][data-color="cyan"] {
+  background: rgb(8 145 178);
+}
+
+.ThreadDashboardSurface_artifactItemIcon {
+  flex: 0 0 auto;
+}
+
+.ThreadDashboardSurface_artifactItemTitle {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* content-viewer.vue main content: flex-1, p-6, scrollable. */
+.ThreadDashboardSurface_content {
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+}

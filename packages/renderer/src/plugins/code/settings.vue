@@ -20,6 +20,7 @@
         <DirectorySelect
           v-model="defaultBaseDirectory"
           :projects="projects"
+          :home-directory="homeDirectory"
           :disabled="getAllProjects().length === 0"
           @update:modelValue="saveDefaultDirectory"
         />
@@ -519,9 +520,38 @@ const projects = computed(() => {
   return (useSelector(settingsActor, (state: any) => state.context.settings?.general?.projects).value || []) as Project[]
 })
 
+const homeDirectory = computed(() => {
+  for (const project of projects.value) {
+    for (const directory of project.directories || []) {
+      const home = getHomeDirectoryFromPath(directory)
+      if (home) return home
+    }
+  }
+
+  return null
+})
+
 // Helper functions
 const getAllProjects = (): Project[] => {
   return projects.value
+}
+
+const getHomeDirectoryFromPath = (path: string): string | null => {
+  const segments = path.split('/').filter(Boolean)
+
+  if (segments.length >= 2 && segments[0] === 'Users') {
+    return `/${segments[0]}/${segments[1]}`
+  }
+
+  if (segments.length >= 2 && segments[0] === 'home') {
+    return `/${segments[0]}/${segments[1]}`
+  }
+
+  if (segments.length >= 3 && segments[0] === 'var' && segments[1] === 'home') {
+    return `/${segments[0]}/${segments[1]}/${segments[2]}`
+  }
+
+  return null
 }
 
 // Save functions

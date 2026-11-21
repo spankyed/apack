@@ -1,0 +1,96 @@
+.FilePickerBlock_root {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.FilePickerBlock_responseHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.FilePickerBlock_responseHeader svg {
+  color: rgb(34 197 94);
+}
+
+.FilePickerBlock_path,
+.FilePickerBlock_pathResponse {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 14px;
+  padding: 0.5rem 0.75rem;
+}
+
+.FilePickerBlock_path svg,
+.FilePickerBlock_pathResponse svg {
+  color: rgb(163 163 163);
+  flex-shrink: 0;
+}
+
+.FilePickerBlock_path {
+  border: 1px solid rgb(82 82 91);
+  background: rgb(64 64 64 / 0.5);
+  color: rgb(229 229 229);
+}
+
+.FilePickerBlock_pathResponse {
+  border: 1px solid rgb(82 82 91 / 0.5);
+  background: rgb(64 64 64 / 0.3);
+  color: rgb(212 212 212);
+}
+
+.FilePickerBlock_path span,
+.FilePickerBlock_pathResponse span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.FilePickerBlock_browse,
+.FilePickerBlock_browseDisabled {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid rgb(82 82 91);
+  border-radius: 0.5rem;
+  background: rgb(64 64 64);
+  color: rgb(229 229 229);
+  font-size: 14px;
+  padding: 0.5rem 1rem;
+}
+
+.FilePickerBlock_browse:hover {
+  background: rgb(82 82 91);
+}
+
+.FilePickerBlock_browseDisabled {
+  background: rgb(64 64 64 / 0.5);
+  color: rgb(113 113 122);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.FilePickerBlock_remove,
+.FilePickerBlock_removeDisabled {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 0.25rem;
+}
+
+.FilePickerBlock_removeDisabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

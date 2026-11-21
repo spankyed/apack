@@ -1,0 +1,14 @@
+.DatabaseKeyboardHint_root {
+  display: none;
+  align-items: center;
+  gap: 4px;
+  margin: 0 8px;
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+@container (min-width: 48rem) {
+  .DatabaseKeyboardHint_root {
+    display: flex;
+  }
+}

@@ -1,0 +1,13 @@
+.WorkflowShot_root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.WorkflowShot_appReveal {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 48%;
+  will-change: opacity;
+}

@@ -1,0 +1,39 @@
+.DatabaseResultStates_center {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.DatabaseResultStates_muted {
+  color: rgb(115 115 115);
+}
+
+.DatabaseResultStates_error {
+  text-align: center;
+  color: rgb(239 68 68);
+}
+
+.DatabaseResultStates_error div {
+  font-weight: 600;
+}
+
+.DatabaseResultStates_error p {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+
+.DatabaseResultStates_noResults {
+  text-align: center;
+}
+
+.DatabaseResultStates_noResults svg {
+  margin-bottom: 16px;
+  color: rgb(163 163 163);
+}
+
+.DatabaseResultStates_noResults p {
+  color: rgb(156 163 175);
+  font-size: 14px;
+}

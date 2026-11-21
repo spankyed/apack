@@ -128,7 +128,7 @@ const settings: SettingsData = {
           { id: 'qp_1', text: 'Write a commit message' },
           { id: 'qp_2', text: 'Plan thoroughly before implementing' },  
           { id: 'qp_3', text: 'Please investigate thoroughly and report back.' },
-          { id: 'qp_4', text: 'Conduct a thorough review of these changes for bugs and completeness, than report back with findings' },
+          { id: 'qp_4', text: 'Conduct a thorough review of these changes for bugs and completeness, then report back with findings' },
           { id: 'qp_5', text: 'Cleanup the changes making making the code more succinct, simple, and maintainable.' },
           { id: 'qp_6', text: 'Summarize the conversation to a md file' },
         ],

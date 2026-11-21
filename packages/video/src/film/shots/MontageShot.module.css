@@ -1,0 +1,11 @@
+.MontageShot_segment {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 52%;
+  will-change: opacity, transform;
+}
+
+.MontageShot_layer {
+  position: absolute;
+  inset: 0;
+}

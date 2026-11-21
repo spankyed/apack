@@ -1,0 +1,270 @@
+.PRComments_root {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgb(38 38 38);
+}
+
+.PRComments_tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.PRComments_tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(115 115 115);
+  font-size: 12px;
+  padding: 0.25rem 0.5rem;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.PRComments_tabs button:hover {
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+}
+
+.PRComments_tabs .PRComments_activeTab {
+  background: rgb(64 64 64 / 50%);
+  color: rgb(229 229 229);
+}
+
+.PRComments_count {
+  color: rgb(115 115 115);
+}
+
+.PRComments_panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+.PRComments_empty {
+  color: rgb(115 115 115);
+  font-size: 12px;
+  font-style: italic;
+  padding: 0.5rem 0;
+}
+
+.PRComments_commentCard,
+.PRComments_reviewThread,
+.PRComments_commentInput {
+  overflow: hidden;
+  border: 1px solid rgb(38 38 38);
+  border-radius: 0.25rem;
+  background: rgb(38 38 38 / 40%);
+}
+
+.PRComments_commentCard header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgb(38 38 38 / 60%);
+  padding: 0.375rem 0.75rem;
+}
+
+.PRComments_commentCard strong,
+.PRComments_reviewCommentHeader strong {
+  color: rgb(212 212 212);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.PRComments_commentCard header > span,
+.PRComments_reviewCommentHeader span {
+  flex: 1;
+  color: rgb(82 82 82);
+  font-size: 12px;
+}
+
+.PRComments_commentActions {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.PRComments_commentActions button {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(115 115 115);
+}
+
+.PRComments_commentActions button:hover {
+  color: rgb(212 212 212);
+}
+
+.PRComments_commentBody {
+  color: rgb(212 212 212);
+  font-size: 11px;
+  line-height: 1.5;
+  padding: 0.5rem 0.75rem;
+  white-space: pre-line;
+}
+
+.PRComments_commentInput {
+  position: relative;
+  min-height: 74px;
+  color: rgb(115 115 115);
+  font-size: 11px;
+  padding: 0.375rem 0.75rem 2rem;
+}
+
+.PRComments_commentInput button {
+  position: absolute;
+  right: 0.375rem;
+  bottom: 0.375rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: rgb(37 99 235);
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0.25rem 0.625rem;
+}
+
+.PRComments_reviewThread > header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgb(38 38 38 / 60%);
+  padding: 0.375rem 0.75rem;
+}
+
+.PRComments_expandedChevron {
+  flex-shrink: 0;
+  color: rgb(115 115 115);
+  transform: rotate(90deg);
+}
+
+.PRComments_reviewThread header div {
+  min-width: 0;
+  flex: 1;
+}
+
+.PRComments_reviewThread header strong,
+.PRComments_reviewThread header span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.PRComments_reviewThread header strong {
+  color: rgb(212 212 212);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.PRComments_reviewThread header span {
+  color: rgb(115 115 115);
+  font-size: 11px;
+}
+
+.PRComments_reviewThread header em {
+  border-radius: 999px;
+  background: rgb(113 63 18 / 40%);
+  color: rgb(250 204 21);
+  font-size: 11px;
+  font-style: normal;
+  padding: 0.125rem 0.375rem;
+}
+
+.PRComments_reviewThread header em[data-resolved="true"] {
+  background: rgb(20 83 45 / 40%);
+  color: rgb(74 222 128);
+}
+
+.PRComments_diffBlock {
+  margin: 0;
+  overflow-x: hidden;
+  border-bottom: 1px solid rgb(38 38 38 / 50%);
+  background: rgb(10 10 10 / 35%);
+  color: rgb(163 163 163);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 20px;
+  padding: 0.5rem 0.75rem;
+  white-space: pre;
+}
+
+.PRComments_diffBlock span {
+  display: block;
+}
+
+.PRComments_diffBlock span[data-kind="added"] {
+  background: rgb(5 46 22 / 30%);
+  color: rgb(134 239 172);
+}
+
+.PRComments_diffBlock span[data-kind="removed"] {
+  background: rgb(69 10 10 / 30%);
+  color: rgb(252 165 165);
+}
+
+.PRComments_diffBlock span[data-kind="meta"] {
+  color: rgb(147 197 253);
+}
+
+.PRComments_reviewComment {
+  padding: 0.5rem 0.75rem;
+}
+
+.PRComments_reviewComment[data-divider="true"] {
+  border-top: 1px solid rgb(38 38 38 / 50%);
+}
+
+.PRComments_reviewCommentHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.PRComments_reviewComment .PRComments_commentBody {
+  padding: 0;
+}
+
+.PRComments_reviewThread footer {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-top: 1px solid rgb(38 38 38);
+  padding: 0.5rem 0.75rem;
+}
+
+.PRComments_reviewThread footer span {
+  flex: 1;
+}
+
+.PRComments_reviewThread footer button {
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  padding: 0.125rem 0.5rem;
+}
+
+.PRComments_reviewThread footer button:hover {
+  background: rgb(64 64 64);
+}
+
+.PRComments_reviewThread footer .PRComments_resolveButton {
+  color: rgb(74 222 128);
+}
+
+.PRComments_reviewThread footer .PRComments_unresolveButton {
+  color: rgb(250 204 21);
+}

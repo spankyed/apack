@@ -1,0 +1,98 @@
+.ActionsButton_base {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.ActionsButton_primary {
+  background: rgb(37 99 235);
+  color: white;
+}
+
+.ActionsButton_primary:hover {
+  background: rgb(29 78 216);
+}
+
+.ActionsButton_primary:active {
+  background: rgb(37 99 235);
+}
+
+.ActionsButton_secondary {
+  background: rgb(209 213 219);
+  color: rgb(31 41 55);
+}
+
+.ActionsButton_secondary:hover {
+  background: rgb(229 231 235);
+}
+
+.ActionsButton_secondary:active {
+  background: rgb(96 165 250);
+}
+
+.ActionsButton_transparent {
+  background: transparent;
+  color: rgb(229 229 229);
+}
+
+.ActionsButton_ghost {
+  background: transparent;
+  color: rgb(212 212 212);
+}
+
+.ActionsButton_transparent:hover,
+.ActionsButton_ghost:hover {
+  background: rgb(64 64 64);
+  color: white;
+}
+
+.ActionsButton_danger {
+  background: rgb(220 38 38);
+  color: white;
+}
+
+.ActionsButton_danger:hover {
+  background: rgb(185 28 28);
+}
+
+.ActionsButton_danger:active {
+  background: rgb(153 27 27);
+}
+
+.ActionsButton_disabled_primary,
+.ActionsButton_disabled_secondary,
+.ActionsButton_disabled_transparent,
+.ActionsButton_disabled_ghost,
+.ActionsButton_disabled_danger {
+  cursor: not-allowed;
+  transform: none;
+}
+
+.ActionsButton_disabled_primary {
+  background: rgb(75 85 99);
+  color: rgb(209 213 219);
+}
+
+.ActionsButton_disabled_secondary {
+  background: rgb(107 114 128);
+  color: rgb(31 41 55);
+}
+
+.ActionsButton_disabled_transparent,
+.ActionsButton_disabled_ghost {
+  background: transparent;
+  color: rgb(115 115 115);
+}
+
+.ActionsButton_disabled_danger {
+  background: rgb(127 29 29);
+  color: rgb(252 165 165);
+}

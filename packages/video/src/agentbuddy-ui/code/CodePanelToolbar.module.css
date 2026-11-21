@@ -1,0 +1,148 @@
+.CodePanelToolbar_header {
+  display: flex;
+  height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgb(38 38 38);
+  padding: 0 1rem;
+}
+
+.CodePanelToolbar_title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(229 229 229);
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.CodePanelToolbar_title svg,
+.CodePanelToolbar_refresh {
+  color: rgb(163 163 163);
+}
+
+.CodePanelToolbar_headerActions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.75rem;
+}
+
+.CodePanelToolbar_directoryMenu {
+  display: flex;
+  max-width: 150px;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0.25rem;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.CodePanelToolbar_directoryMenu:hover {
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+}
+
+.CodePanelToolbar_directoryMenu span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.CodePanelToolbar_refresh {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.CodePanelToolbar_refresh:hover {
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+}
+
+.CodePanelToolbar_panelRow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  border-bottom: 1px solid rgb(38 38 38);
+}
+
+.CodePanelToolbar_toolbarSlot {
+  min-width: 0;
+  flex: 1;
+}
+
+.CodePanelToolbar_panelButtons {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
+}
+
+.CodePanelToolbar_panelButton,
+.CodePanelToolbar_activePanelButton {
+  position: relative;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(163 163 163);
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.CodePanelToolbar_panelButton:hover {
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+}
+
+.CodePanelToolbar_activePanelButton {
+  background: rgb(26 91 180);
+  color: rgb(245 245 245);
+}
+
+.CodePanelToolbar_activePanelButton:hover {
+  background: rgb(26 91 180);
+  color: rgb(245 245 245);
+}
+
+.CodePanelToolbar_badge {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgb(37 99 235);
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  padding: 0 2px;
+}
+
+.CodePanelToolbar_divider {
+  width: 1px;
+  height: 20px;
+  background: rgb(64 64 64);
+  margin: 0 0.25rem;
+}

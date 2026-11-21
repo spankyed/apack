@@ -1,0 +1,262 @@
+.FlowNodeForm_overlay {
+  position: absolute;
+  inset: 0;
+  background: rgb(0 0 0 / 30%);
+  will-change: opacity;
+}
+
+.FlowNodeForm_panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  width: 40%;
+  min-width: 420px;
+  height: 100%;
+  flex-direction: column;
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+  will-change: opacity, transform;
+}
+
+.FlowNodeForm_header {
+  display: flex;
+  height: 45px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgb(38 38 38);
+  padding: 0 1rem;
+}
+
+.FlowNodeForm_title {
+  color: rgb(245 245 245);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.FlowNodeForm_actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.FlowNodeForm_nextButton,
+.FlowNodeForm_closeButton,
+.FlowNodeForm_sectionAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: rgb(96 165 250);
+  font: inherit;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.FlowNodeForm_nextButton {
+  gap: 0.375rem;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 0.375rem 0.5rem;
+}
+
+.FlowNodeForm_closeButton {
+  width: 30px;
+  height: 30px;
+  color: rgb(163 163 163);
+}
+
+.FlowNodeForm_nextButton:hover,
+.FlowNodeForm_closeButton:hover,
+.FlowNodeForm_sectionAction:hover {
+  background: rgb(38 38 38);
+  color: rgb(191 219 254);
+}
+
+.FlowNodeForm_body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.FlowNodeForm_stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.FlowNodeForm_field,
+.FlowNodeForm_section {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.FlowNodeForm_section {
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+.FlowNodeForm_section + .FlowNodeForm_section {
+  border-top: 1px solid rgb(38 38 38);
+  padding-top: 1.5rem;
+}
+
+.FlowNodeForm_labelRow,
+.FlowNodeForm_sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.FlowNodeForm_label,
+.FlowNodeForm_sectionTitle {
+  color: rgb(115 115 115);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.FlowNodeForm_required {
+  color: rgb(239 68 68);
+}
+
+.FlowNodeForm_input,
+.FlowNodeForm_select,
+.FlowNodeForm_segmented,
+.FlowNodeForm_textarea,
+.FlowNodeForm_code {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.375rem;
+  background: rgb(38 38 38 / 50%);
+  color: rgb(229 229 229);
+  font: inherit;
+  font-size: 14px;
+  padding: 0.625rem 0.75rem;
+}
+
+.FlowNodeForm_textarea {
+  min-height: 78px;
+  resize: none;
+}
+
+.FlowNodeForm_segmented {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  overflow: hidden;
+  padding: 0;
+}
+
+.FlowNodeForm_segment {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid rgb(64 64 64);
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.FlowNodeForm_segment:last-child {
+  border-right: 0;
+}
+
+.FlowNodeForm_segmentActive {
+  background: rgb(212 212 212 / 14%);
+  color: rgb(212 212 212);
+}
+
+.FlowNodeForm_checkboxField {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(212 212 212);
+  font-size: 13px;
+}
+
+.FlowNodeForm_checkbox {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(82 82 82);
+  border-radius: 0.25rem;
+  background: rgb(38 38 38);
+  color: rgb(147 197 253);
+}
+
+.FlowNodeForm_checkboxChecked {
+  border-color: rgb(59 130 246 / 70%);
+  background: rgb(37 99 235 / 30%);
+}
+
+.FlowNodeForm_code {
+  overflow: hidden;
+  min-height: 160px;
+  padding: 0;
+}
+
+.FlowNodeForm_description {
+  color: rgb(82 82 82);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.FlowNodeForm_sectionAction {
+  gap: 0.25rem;
+  color: rgb(96 165 250);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0.25rem 0.5rem;
+}
+
+.FlowNodeForm_card {
+  display: grid;
+  gap: 0.75rem;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.375rem;
+  background: rgb(38 38 38 / 30%);
+  padding: 0.75rem;
+}
+
+.FlowNodeForm_cardWarning {
+  border-color: rgb(249 115 22 / 30%);
+}
+
+.FlowNodeForm_cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.FlowNodeForm_badge {
+  border-radius: 0.25rem;
+  background: rgb(64 64 64);
+  color: rgb(212 212 212);
+  font-size: 12px;
+  font-weight: 650;
+  padding: 0.125rem 0.5rem;
+}
+
+.FlowNodeForm_cardWarning .FlowNodeForm_badge {
+  background: rgb(249 115 22 / 20%);
+  color: rgb(253 186 116);
+}
+
+.FlowNodeForm_cardTitle {
+  min-width: 0;
+  flex: 1;
+  color: rgb(212 212 212);
+  font-size: 13px;
+  font-weight: 600;
+}

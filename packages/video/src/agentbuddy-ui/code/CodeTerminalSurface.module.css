@@ -1,0 +1,32 @@
+.CodeTerminalSurface_root {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  background: rgb(23 23 23);
+}
+
+.CodeTerminalSurface_tabs {
+  display: flex;
+  height: 36px;
+  align-items: stretch;
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(23 23 23);
+}
+
+.CodeTerminalSurface_tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-right: 1px solid rgb(38 38 38);
+  background: rgb(31 31 31);
+  color: rgb(212 212 212);
+  font-size: 0.8125rem;
+  padding: 0 0.75rem;
+}
+
+.CodeTerminalSurface_body {
+  min-height: 0;
+  flex: 1;
+  background: rgb(23 23 23);
+}

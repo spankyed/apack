@@ -1,0 +1,47 @@
+.DatabasePrimitiveResultsTable_root {
+  min-width: 100%;
+}
+
+.DatabasePrimitiveResultsTable_table {
+  min-width: 100%;
+  border-collapse: collapse;
+}
+
+.DatabasePrimitiveResultsTable_table thead {
+  position: sticky;
+  top: 0;
+  background: rgb(23 23 23);
+}
+
+.DatabasePrimitiveResultsTable_table th {
+  border-bottom: 1px solid rgb(38 38 38);
+  color: rgb(163 163 163);
+  padding: 8px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.DatabasePrimitiveResultsTable_table tbody {
+  background: rgb(38 38 38);
+}
+
+.DatabasePrimitiveResultsTable_table tr {
+  border-bottom: 1px solid rgb(38 38 38);
+}
+
+.DatabasePrimitiveResultsTable_table tbody tr:hover {
+  background: rgb(23 23 23);
+}
+
+.DatabasePrimitiveResultsTable_table td {
+  color: rgb(245 245 245);
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.DatabasePrimitiveResultsTable_table td div {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
