@@ -175,11 +175,11 @@ export function getAppVersion(): string {
  * (`getEnvironment`, `@app/main`'s api-server module) cannot add one the list does not name and cannot omit one
  * it does — the record it builds is typed by this, and either direction fails the typecheck.
  *
- * That is what makes the strip at the other end safe. A terminal spawns the user's shell from the API process's
- * own environment, so everything here is inherited by it, and every one of them is the app talking to itself:
- * `ELECTRON_RUN_AS_NODE=1` breaks any Electron app the user launches from that shell, `NODE_ENV=production`
- * changes what their `npm install` does, and the token is app-process-level access to their own data. The
- * hand-written deny-list that used to sit beside the spawn named two of these.
+ * That is what makes the strip at the other end safe. Everything the API starts inherits its environment —
+ * the shell a terminal spawns and an agent child alike, and whatever either of them goes on to run — and
+ * every name here is the app talking to itself: `ELECTRON_RUN_AS_NODE=1` breaks any Electron app launched
+ * from there, `NODE_ENV=production` changes what an `npm install` does, `APACK_USER_DATA_DIR` and
+ * `SHIPPED_PACKS_DIR` say where the user's data is, and the token is app-process-level access to it.
  */
 export const APP_PROCESS_ENV_VARS = [
   'NODE_ENV',

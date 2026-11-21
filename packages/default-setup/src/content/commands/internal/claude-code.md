@@ -4,13 +4,16 @@ name: Claude Code commands
 <!-- section:field -->
 **cc-sessions**: Session ID (optional, lists all if omitted)
 **cc-config**: get|set <key> [value]
+**cc-plan**: Show the current native plan without a model turn
 **cc-context**: Show context window usage breakdown
 **cc-status**: Show version and auth info
-**cc-model**: Model name (optional, shows current if omitted)
+**cc-models**: Read the matching native conversation catalog; `start` permits temporary discovery and session hooks. `start --include-unsupported-models` explicitly includes unknown account models.
+**cc-model**: Select this thread's model through its idle native conversation, or stage it for the next launch. With no argument, show selected and last reported model.
 **cc-memory**: File name or add|remove <name>
 **cc-recap**: Summarize current conversation
 **cc-skills**: List installed skills
 **cc-compact**: Custom instructions (optional, summarize context)
+**cc-reset**: Disconnect this thread from its idle native session; preserves saved history. Pause a running turn first.
 **cc-resume**: Session ID (optional, lists sessions if omitted)
 **cc-import**: [all] [no-limit] (imports up to 50 from current dir by default; "all" imports from all dirs; "no-limit" removes cap)
 **cc-add-dir**: <path> [--remember]
@@ -19,7 +22,9 @@ name: Claude Code commands
 **cc-fork**: Fork from last assistant message
 **cc-stats**: Show version, auth, and config info
 **cc-doctor**: Diagnose installation
-**cc-mcp**: Manage MCP servers
+**cc-mcp**: [status|list] shows the live owner’s connections when running; list otherwise reads saved configuration. Other arguments manage saved MCP configuration.
 **cc-agents**: List configured agents
 **cc-bypass**: Toggle bypass permissions mode
 **cc-goal**: <condition> | clear | (no args for status)
+
+`/cc-mcp reconnect <server>`, `/cc-mcp enable <server>` and `/cc-mcp disable <server>` control the current live conversation through Claude’s native connection manager. Enable/disable requests are idempotent. Without a live owner they do not launch a configuration process. Native trust and managed-policy restrictions still apply.

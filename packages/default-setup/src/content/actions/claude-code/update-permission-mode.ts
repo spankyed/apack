@@ -1,12 +1,12 @@
 /**
  * CC: Update Permission Mode — persists the user's permission mode choice
- * to thread context and auto-approves any pending control request when
+ * after the running CLI acknowledges it, and auto-approves any pending control request when
  * switching to bypass mode.
  */
 
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, EntityId } from '#generated/services.ts';
-import { getClaudeState, persistClaudeState, updateChatState } from './_helpers/thread-context.ts';
+import { getClaudeState, persistClaudeState, updateChatState, type PermissionMode } from './_helpers/thread-context.ts';
 import { DONT_BYPASS } from './_helpers/auto-approve.ts';
 
 export const meta: ActionMeta = {
@@ -23,20 +23,42 @@ export async function action(
   params: Record<string, any>,
   services: Services,
 ) {
-  const { threadId, mode } = params as { threadId: string; mode: string };
+  const { threadId, mode: requestedMode } = params as { threadId: string; mode: string };
+  let mode = requestedMode;
   if (!threadId || !mode) return { success: false, reason: 'missing threadId or mode' };
 
   const prior = getClaudeState(services, threadId);
   if (!prior) return { success: false, reason: 'no claude state on thread' };
 
-  const updates: Record<string, unknown> = { permissionMode: mode };
+  const modes: readonly PermissionMode[] = ['default', 'acceptEdits', 'plan', 'bypassPermissions', 'dontAsk', 'auto'];
+  if (!modes.includes(mode as PermissionMode)) return { success: false, reason: 'invalid permission mode' };
+
+  const handle = services.cli.claudeCode.getHandle(threadId);
+  const native = services.cli.claudeCode.getNativeTerminal(threadId);
+  const control = native ?? handle;
+  if (control) {
+    try {
+      mode = await control.setPermissionMode(mode as PermissionMode);
+    } catch (error) {
+      return { success: false, reason: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  const current = getClaudeState(services, threadId);
+  if (!current) return { success: false, reason: 'claude state removed while changing mode' };
+  const currentHandle = services.cli.claudeCode.getHandle(threadId);
+  const currentNative = services.cli.claudeCode.getNativeTerminal(threadId);
+  if (control && (currentNative ?? currentHandle) !== control || !control && currentNative) {
+    return { success: false, reason: 'active Claude session changed while changing mode' };
+  }
+  const updates: Record<string, unknown> = { permissionMode: mode,
+    prePlanMode: mode === 'plan' ? currentNative?.state.session?.prePlanMode ?? (prior.permissionMode === 'plan' ? prior.prePlanMode : prior.permissionMode ?? 'default') : undefined };
 
   // If switching to bypass and there's a paused control request, auto-approve it.
   if (mode === 'bypassPermissions') {
-    const pending = prior.pendingControlRequest;
+    const pending = current.pendingControlRequest;
     if (pending?.requestId && !DONT_BYPASS.has(pending.toolName)) {
-      const handle = (services.cli as any).claudeCode.getHandle(threadId);
-      if (handle) {
+      if (handle && currentHandle === handle) {
         handle.respond(pending.requestId, {
           behavior: 'allow',
           updatedInput: pending.originalInput ?? {},

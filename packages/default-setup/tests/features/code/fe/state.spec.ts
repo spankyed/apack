@@ -13,9 +13,9 @@ import { createActor } from 'xstate'
 import type { OpenFile } from '#features/code/fe/contract.ts'
 
 vi.mock('#generated/events.ts', () => ({ sendToSystem: vi.fn(), broadcastToSurface: vi.fn(), sendToSurface: vi.fn() }))
-vi.mock('#features/code/fe/utils/terminal-pool.ts', async (importOriginal) => ({
+vi.mock('#extensions/terminal/pool.ts', async (importOriginal) => ({
   // The real `viewSettingsOf` is the mapping under test; only the pool is replaced
-  ...(await importOriginal<typeof import('#features/code/fe/utils/terminal-pool.ts')>()),
+  ...(await importOriginal<typeof import('#extensions/terminal/pool.ts')>()),
   terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn(), disposeAll: vi.fn(), setCopyOnSelect: vi.fn(), setViewSettings: vi.fn() },
 }))
 vi.mock('#features/code/fe/utils/terminal-events.ts', () => ({
@@ -23,7 +23,7 @@ vi.mock('#features/code/fe/utils/terminal-events.ts', () => ({
 }))
 
 const codeState = (await import('#features/code/fe/state.ts')).default
-const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool } = await import('#extensions/terminal/pool.ts')
 
 const TABS_KEY = 'default-setup/code:open-tabs'
 const GROUPS_KEY = 'default-setup/code:tab-groups'

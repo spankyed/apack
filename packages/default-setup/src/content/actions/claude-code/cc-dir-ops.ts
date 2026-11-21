@@ -6,6 +6,7 @@
 
 import type { ActionMeta } from '@apackdev/sdk/build';
 import type { Services, Z } from '#generated/services.ts';
+import { parseCommandArguments } from './_helpers/command-arguments.ts';
 import { getClaudeState, persistClaudeState, setProjectDirectory, updateClaudeState } from './_helpers/thread-context.ts';
 
 export const meta: ActionMeta = {
@@ -26,9 +27,9 @@ type Handler = (
   threadId?: string,
 ) => Promise<{ text: string; data?: any }>;
 
-/** Rejoin args (split by dispatcher) into a single path, stripping flags and trailing slashes. */
+/** Rejoin path arguments after quote parsing, excluding command flags. */
 function parseDirPath(args: string[]): string {
-  return args.filter(a => !a.startsWith('--')).join(' ').replace(/\/+$/, '');
+  return args.filter(a => !a.startsWith('--')).join(' ');
 }
 
 /** Shorten a path to at most the last 2 segments for display. */
@@ -50,15 +51,17 @@ export async function action(
 ) {
   const { command, text, threadId } = params;
   const name = (command as string).replace(/^cc-/, '');
-  const args = text?.trim() ? text.trim().split(/\s+/) : [];
 
   const handler = handlers[name];
+  let success = !!handler;
   let result: { text: string; data?: any; skipMessage?: boolean };
 
   if (handler) {
     try {
+      const args = parseCommandArguments(text ?? '');
       result = await handler(args, services, threadId);
     } catch (error: any) {
+      success = false;
       result = { text: `cc-${name} failed: ${error?.message || 'Unknown error'}` };
     }
   } else {
@@ -69,7 +72,7 @@ export async function action(
     services.chat.sendBlockMessage({ threadId, text: result.text, blocks: [] });
   }
 
-  return { success: !!handler, command: `cc-${name}`, text: result.text, data: result.data };
+  return { success, command: `cc-${name}`, text: result.text, data: result.data };
 }
 
 // ── Handlers ────────────────────────────────────────────────────────
@@ -85,6 +88,18 @@ async function handleAddDir(
   const dirPath = parseDirPath(args);
   if (!dirPath) return { text: 'Usage: /cc-add-dir <path> [--remember]' };
 
+  // A failed remembered-settings edit must not change the thread's next launch roots.
+  if (remember) {
+    const settings = await services.cli.claudeCode.readSettings();
+    const perms = settings.permissions ?? {};
+    const dirs: string[] = perms.additionalDirectories ?? [];
+    if (!dirs.includes(dirPath)) {
+      perms.additionalDirectories = [...dirs, dirPath];
+      settings.permissions = perms;
+      await services.cli.claudeCode.writeSettings(settings);
+    }
+  }
+
   if (threadId) {
     const state = getClaudeState(services, threadId);
     const existing = state?.additionalDirs ?? [];
@@ -95,17 +110,6 @@ async function handleAddDir(
       updateClaudeState(services, threadId as any, (prev: any) => ({
         additionalDirs: [...new Set([...(prev.additionalDirs ?? []), dirPath])],
       }));
-    }
-  }
-
-  if (remember) {
-    const settings = await services.cli.claudeCode.readSettings();
-    const perms = settings.permissions ?? {};
-    const dirs: string[] = perms.additionalDirectories ?? [];
-    if (!dirs.includes(dirPath)) {
-      perms.additionalDirectories = [...dirs, dirPath];
-      settings.permissions = perms;
-      await services.cli.claudeCode.writeSettings(settings);
     }
   }
 

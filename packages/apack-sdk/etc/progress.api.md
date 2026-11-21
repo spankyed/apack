@@ -93,6 +93,16 @@ export type ProcessFailure =
     readonly refusal: Refusal;
     readonly stdout: string;
     readonly stderr: string;
+}
+/**
+* Its `input` could not be written, because it closed its stdin or exited without reading it: whatever it then
+* wrote answers something other than what it was given. A child still running is stopped as an abort stops it
+*/
+| {
+    readonly kind: 'input';
+    readonly error: Error;
+    readonly stdout: string;
+    readonly stderr: string;
 };
 
 // @public

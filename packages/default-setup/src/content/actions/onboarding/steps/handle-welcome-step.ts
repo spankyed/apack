@@ -57,7 +57,7 @@ export async function action(
 
   // ── Discover sessions from both providers → extract project dirs ──
   const [ccSessions, codexSessions] = await Promise.all([
-    (ccFound && ccAuthenticated)
+    ccFound
       ? services.cli.claudeCode.listAllSessions({ limit: 50 }).catch(() => [] as any[])
       : Promise.resolve([] as any[]),
     codexFound

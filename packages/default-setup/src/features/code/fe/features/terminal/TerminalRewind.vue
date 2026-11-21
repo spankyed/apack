@@ -37,7 +37,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { History } from 'lucide-vue-next'
 import { type CodeState } from '#features/code/fe/state.ts'
 import { rewindViewId, type TerminalInfo } from '#features/code/fe/features/terminal/state.ts'
-import { terminalPool } from '#features/code/fe/utils/terminal-pool.ts'
+import { terminalPool } from '#extensions/terminal/pool.ts'
 import { panelChild } from '../children.ts'
 
 /** How often a drag of the moment asks for another: each is a screen rebuilt and sent */

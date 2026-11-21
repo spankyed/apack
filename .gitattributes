@@ -1,2 +1,5 @@
+# Keep generated contract reports with their source changes, expandable in GitHub review.
+packages/**/etc/*.api.md linguist-generated
+packages/**/etc/*.component.md linguist-generated
 # Committed license texts the app's notices copy, compared byte for byte across machines
 build/licenses/* text eol=lf

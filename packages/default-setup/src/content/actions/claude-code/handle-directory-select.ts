@@ -34,6 +34,7 @@ export async function action(
       model?: string;
       allowedTools?: string[];
       disallowedTools?: string[];
+      channels?: string[];
       systemPrompt?: string;
       messageId?: string;
       references?: any;
@@ -76,6 +77,7 @@ export async function action(
     model: pendingDirectorySelect.model,
     allowedTools: pendingDirectorySelect.allowedTools,
     disallowedTools: pendingDirectorySelect.disallowedTools,
+    channels: pendingDirectorySelect.channels,
     systemPrompt: pendingDirectorySelect.systemPrompt,
     messageId: pendingDirectorySelect.messageId,
     references: pendingDirectorySelect.references,

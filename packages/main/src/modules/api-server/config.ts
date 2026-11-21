@@ -93,8 +93,9 @@ export const getEnvironment = (port: number, options: { apiToken: string; startu
   }
 
   // Typed by AppProcessEnv, which is derived from APP_PROCESS_ENV_VARS: a variable added here without being
-  // named there, or named there and not set here, fails the typecheck. The terminal strips that same list from
-  // the shell it spawns, so this is also the list of what a user's shell must not inherit.
+  // named there, or named there and not set here, fails the typecheck. Everything the API starts inherits
+  // these, and both the shell a terminal spawns and the strip applied to an agent child read that same
+  // declaration — so this record is also the list of what a process started for the user must not inherit.
   const appProcessEnv: AppProcessEnv = {
     NODE_ENV: app.isPackaged ? 'production' : 'development',
     API_PORT: port.toString(),

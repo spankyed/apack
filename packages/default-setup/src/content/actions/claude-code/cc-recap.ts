@@ -1,3 +1,5 @@
+import { getClaudeState } from './_helpers/thread-context.ts';
+import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
 /**
  * CC: Recap — summarizes the current thread's conversation history.
  *
@@ -103,6 +105,7 @@ async function generateRecap(
   }
 
   const handle = await services.cli.claudeCode.query({
+    ...claudeProfileOptions(getClaudeState(services, threadId)),
     prompt: serialized,
     systemPrompt: recapSystemPrompt,
     permissionMode: 'plan',

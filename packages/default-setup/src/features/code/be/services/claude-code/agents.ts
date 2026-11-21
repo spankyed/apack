@@ -1,24 +1,40 @@
-/**
- * `claude agents` — list configured agent definitions.
- *
- * Custom agents are defined via settings / `--agents` JSON / `.claude/agents`
- * directories. This namespace just exposes what the CLI already knows about.
- */
+/** Native agent/session listing. Configured agent definitions come from query initialization. */
+import { z } from 'zod'
+import { run, runJson, type SubcommandOptions } from './subcommand.ts'
 
-import { run, type SubcommandOptions } from './subcommand.ts'
+const sessionFields = {
+  cwd: z.string(),
+  startedAt: z.number(),
+  sessionId: z.string().optional(),
+  name: z.string().optional(),
+  status: z.enum(['idle', 'waiting', 'busy']).optional(),
+  waitingFor: z.string().optional(),
+}
+const jobId = z.string().regex(/^[a-f0-9]{8}$/u)
+const jobState = z.enum(['working', 'blocked', 'done', 'failed', 'stopped'])
+const nativeSession = z.union([
+  z.object({ ...sessionFields, kind: z.literal('interactive'), pid: z.number().int().positive() }),
+  z.object({ ...sessionFields, kind: z.literal('background'), id: jobId,
+    state: jobState, pid: z.number().int().positive().optional() }),
+  // Native process registration can precede a persistent background job record.
+  z.object({ ...sessionFields, kind: z.literal('background'), pid: z.number().int().positive(),
+    id: z.never().optional(), state: z.never().optional() }),
+])
 
-export interface AgentInfo {
-  name: string
-  description?: string
-  source?: string
-  [key: string]: unknown
+export type ClaudeNativeSession = z.infer<typeof nativeSession>
+
+/** List original sessions; a stopped job has no live PID or activity status. */
+export async function list(
+  opts: { settingSources?: string; all?: boolean; sessionCwd?: string } & SubcommandOptions = {},
+): Promise<ClaudeNativeSession[]> {
+  const args = ['agents', '--json']
+  if (opts.all) args.push('--all')
+  if (opts.sessionCwd !== undefined) args.push('--cwd', opts.sessionCwd)
+  if (opts.settingSources !== undefined) args.push('--setting-sources', opts.settingSources)
+  return z.array(nativeSession).parse(await runJson<unknown>(args, opts))
 }
 
-/** List configured agents. Returns raw stdout (CLI has no --json). */
-export async function list(
-  opts: { settingSources?: string } & SubcommandOptions = {},
-): Promise<string> {
-  const args = ['agents']
-  if (opts.settingSources) args.push('--setting-sources', opts.settingSources)
-  return run(args, opts)
+/** Stop a native background job, preserving its conversation and job record. */
+export async function stop(id: string, opts: SubcommandOptions = {}): Promise<string> {
+  return run(['stop', jobId.parse(id)], opts)
 }

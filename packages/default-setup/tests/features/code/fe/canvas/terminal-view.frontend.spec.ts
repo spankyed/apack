@@ -4,13 +4,13 @@
 // lives in a component — a host's lifecycle, and the wiring between the view and the actor that owns the
 // pty. Mounted in the code surface's scope, that half is a case rather than a reading.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RESIZE_SETTLE_MS } from '#features/code/fe/utils/terminal-pool.ts'
+import { RESIZE_SETTLE_MS } from '#extensions/terminal/pool.ts'
 
 vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-view.ts')).viewModule())
 
 const { views, lastView } = await import('../_support/terminal-view.ts')
 const { startCodeSurface, terminalInfo } = await import('../_support/terminal-host.ts')
-const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool } = await import('#extensions/terminal/pool.ts')
 const TerminalView = (await import('#features/code/fe/canvas/TerminalView.vue')).default
 
 let surface: ReturnType<typeof startCodeSurface> | undefined

@@ -1945,21 +1945,22 @@ describe('findEmulatorImports', () => {
     ]);
   });
 
-  it('allows the one module that owns the emulator, and its spec', () => {
+  it('allows the one module that owns shell and native drawings, and their stand-in specs', () => {
     // Both are real paths in this repo rather than fixture ones, so the allowance is checked against the
     // constants the rule uses rather than against a tree written to match them
-    expect(findEmulatorImports(['packages/default-setup/src/features/code/fe/utils'], repoRootDir())).toEqual([]);
+    expect(findEmulatorImports(['packages/default-setup/src/extensions/terminal', 'packages/default-setup/src/features/code/fe/utils'], repoRootDir())).toEqual([]);
     expect(findEmulatorImports(['packages/default-setup/tests/features/code/fe/utils'], repoRootDir())).toEqual([]);
+    expect(findEmulatorImports(['packages/default-setup/src/features/threads/fe/chat', 'packages/default-setup/tests/features/threads/fe/chat'], repoRootDir())).toEqual([]);
   });
 
   it('reports the owner itself when it has stopped importing an emulator, so the rule cannot pass over nothing', () => {
     // The owner is read from disk rather than from the population, so a fixture tree does not report one;
     // here it is a root where the owner's path exists and holds no import
-    const empty = path.join(root, 'packages/default-setup/src/features/code/fe/utils');
+    const empty = path.join(root, 'packages/default-setup/src/extensions/terminal');
     fs.mkdirSync(empty, { recursive: true });
-    fs.writeFileSync(path.join(empty, 'terminal-pool.ts'), 'export const terminalPool = {};\n');
+    fs.writeFileSync(path.join(empty, 'pool.ts'), 'export const terminalPool = {};\n');
     expect(findEmulatorImports(['src'], root)).toEqual([
-      'packages/default-setup/src/features/code/fe/utils/terminal-pool.ts: imports no emulator, so this rule has no subject',
+      'packages/default-setup/src/extensions/terminal/pool.ts: imports no emulator, so this rule has no subject',
     ]);
   });
 });

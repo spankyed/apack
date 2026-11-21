@@ -117,6 +117,8 @@ export type CodeContext = {
   searchPrefillText: string
   panelTerminalId: string | null
   panelTerminalExpanded: boolean
+  pendingClaudeProfileSetup?: string
+  claudeProfileSetupError?: string
   pendingTerminalTabIds?: string[]
   panelNavHistory: NavHistory<PanelType>
 }
@@ -127,6 +129,7 @@ export type CodeContext = {
  * prefix — so they are spelled out, and each names the child that handles it.
  */
 export type CodeInboxEvent =
+  | {type: 'OPEN_CLAUDE_PROFILE_SETUP'}
   | { type: 'UPDATE_STATE'; updates: Partial<CodeContext> }
   /**
    * Open a terminal. Every field is optional because the surface's own senders pass `cwd` alone, and
@@ -135,6 +138,7 @@ export type CodeInboxEvent =
    */
   | { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string }
   | { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
+  | { type: 'explorer.OPEN_FILE'; path: string }
   | { type: 'codeActions.OPEN_ACTION'; actionId: EARS.EntityId }
   | { type: 'codePrompts.OPEN_PROMPT'; promptId: EARS.EntityId }
 

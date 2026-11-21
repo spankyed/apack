@@ -776,6 +776,10 @@
               "additionalProperties": {
                 "type": "string"
               }
+            },
+            "claudeProfile": {
+              "type": "string",
+              "enum": ["shared", "app"]
             }
           },
           "required": [
@@ -804,7 +808,8 @@
             "showCommits",
             "showWorktrees",
             "trailersRemovedOnCommit",
-            "cliPaths"
+            "cliPaths",
+            "claudeProfile"
           ],
           "additionalProperties": false,
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -908,7 +913,8 @@
           "showCommits": true,
           "showWorktrees": false,
           "trailersRemovedOnCommit": ["Co-authored-by"],
-          "cliPaths": {}
+          "cliPaths": {},
+          "claudeProfile": "shared"
         },
         "title": "Code",
         "form": "src/features/code/fe/settings.vue"
@@ -2434,6 +2440,10 @@
         "kind": "input",
         "fe": "src/extensions/blocks/input/ApprovalButtons.vue"
       },
+      "mcp-elicitation": {
+        "kind": "input",
+        "fe": "src/extensions/blocks/input/McpElicitationInput.vue"
+      },
       "button-group": {
         "kind": "input",
         "fe": "src/extensions/blocks/input/ButtonGroupInput.vue"
@@ -2505,6 +2515,7 @@
       "suggestions": {
         "extensions": {
           "referenceSuggestion": "src/extensions/tiptap/reference-suggestion.ts#ReferenceSuggestion",
+          "claudePromptSource": "src/features/threads/fe/chat/native-prompt-source.ts#ClaudePromptSource",
           "commandViewerDecoration": "src/extensions/tiptap/command-viewer-decoration.ts#CommandViewerDecoration"
         },
         "popups": {

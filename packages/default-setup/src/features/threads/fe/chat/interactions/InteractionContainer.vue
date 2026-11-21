@@ -1,5 +1,5 @@
 <template>
-  <div class="interaction-container mt-3 space-y-3">
+  <div class="interaction-container mt-3 space-y-3" :data-chat-pending-interaction="hasPendingInput || undefined">
     <template v-for="(block, index) in blocks" :key="index">
       <component
         v-if="getBlockComponent(block.type)"
@@ -35,6 +35,9 @@ const threadsActor: ThreadsState = useSurface()
 
 // ─── Block component resolution ─────────────────────────────────────
 const declarations = useBlockDeclarations()
+const hasPendingInput = computed(() => !props.isDisabled && props.blocks.some(block =>
+  declarations.value.some(entry => entry.type === block.type && entry.declaration.kind === 'input')))
+
 const getBlockComponent = (type: string) => {
   declarations.value
   return getBlockBinding(type)?.binding.fe?.component

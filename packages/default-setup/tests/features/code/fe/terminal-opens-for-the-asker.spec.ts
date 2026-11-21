@@ -26,7 +26,7 @@ const parent = vi.hoisted(() => ({ updateParentState: vi.fn(), addTabToParent: v
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => parent);
 
 // The pool renders a terminal with the emulator, which reaches `self` as it loads; nothing here draws anything
-vi.mock('#features/code/fe/utils/terminal-pool.ts', () => ({ terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn() } }));
+vi.mock('#extensions/terminal/pool.ts', () => ({ terminalPool: { dispose: vi.fn(), syncProcesses: vi.fn() } }));
 vi.mock('#features/code/fe/utils/terminal-events.ts', () => ({
   terminalEventBus: { emit: vi.fn(), clearOutput: vi.fn(), prunePersistedOutputs: vi.fn() },
 }));

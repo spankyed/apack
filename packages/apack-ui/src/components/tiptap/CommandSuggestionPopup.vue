@@ -16,6 +16,7 @@
       >
         <span class="command-suggestion-name">/{{ cmd.name }}</span>
       </div>
+      <CompletionRows :offer="nativeOffer" :selected-index="selectedIndex - filteredCommands.length" @hover="selectedIndex = filteredCommands.length + $event" />
       <div v-if="filteredCommands.length === 0" class="command-suggestion-empty">
         No matching commands
       </div>
@@ -24,6 +25,8 @@
 </template>
 
 <script setup lang="ts">
+import CompletionRows from './CompletionRows.vue'
+import { getEditorCompletionOffer } from '@apackdev/sdk/fe'
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import type { Editor } from '@tiptap/core'
 import { commandSuggestionKey, COMMAND_TRIGGER_POS } from './extensions/command-suggestion.ts'
@@ -34,7 +37,8 @@ const props = defineProps<{
   editor: Editor
 }>()
 
-const selectedIndex = ref(0)
+const nativeOffer = computed(() => getEditorCompletionOffer(props.editor).value)
+const selectedIndex = ref(-1)
 const popupEl = ref<HTMLElement | null>(null)
 const popupStyle = ref<Record<string, string>>({ bottom: '0px', left: '0px' })
 
@@ -51,7 +55,11 @@ const isPopupVisible = computed(() => isActive.value && !selectedCommand.value)
 const { commands: filteredCommands } = useCommandItems(query)
 
 watch(filteredCommands, () => {
-  selectedIndex.value = 0
+  selectedIndex.value = filteredCommands.value.length ? 0 : -1
+}, { immediate: true })
+watch(() => nativeOffer.value?.id, () => {
+  nextTick(updatePosition)
+  if (selectedIndex.value >= filteredCommands.value.length) selectedIndex.value = filteredCommands.value.length ? 0 : -1
 })
 
 function updatePosition() {
@@ -88,7 +96,9 @@ function handleClickOutside(event: MouseEvent) {
   if (!isPopupVisible.value) return
   const target = event.target as Node
   if (popupEl.value?.contains(target)) return
-  deactivateAndClean()
+  const tr = props.editor.state.tr
+  tr.setMeta(commandSuggestionKey, { deactivate: true })
+  props.editor.view.dispatch(tr)
 }
 
 watch(isPopupVisible, (visible) => {
@@ -108,9 +118,13 @@ function scrollToSelected() {
 function handleKeyDown(event: KeyboardEvent) {
   if (!isPopupVisible.value) return
 
-  const maxIndex = filteredCommands.value.length - 1
+  const maxIndex = filteredCommands.value.length + (nativeOffer.value?.rows.length ?? 0) - 1
 
   switch (event.key) {
+    case 'Escape':
+      nativeOffer.value?.dismiss()
+      break
+
     case 'ArrowDown':
       event.preventDefault()
       event.stopPropagation()
@@ -133,6 +147,7 @@ function handleKeyDown(event: KeyboardEvent) {
       {
         const cmd = filteredCommands.value[selectedIndex.value]
         if (cmd) selectCommand(cmd)
+        else nativeOffer.value?.rows[selectedIndex.value - filteredCommands.value.length]?.select()
       }
       break
 
@@ -180,18 +195,7 @@ function selectCommand(cmd: PackCommand) {
   selectedIndex.value = 0
 }
 
-function deactivateAndClean() {
-  const state = suggestionState.value
-  if (!state) return
 
-  const from = COMMAND_TRIGGER_POS
-  const to = props.editor.state.selection.head
-
-  const { tr } = props.editor.state
-  tr.delete(from, to)
-  tr.setMeta(commandSuggestionKey, { deactivate: true })
-  props.editor.view.dispatch(tr)
-}
 </script>
 
 <style scoped>

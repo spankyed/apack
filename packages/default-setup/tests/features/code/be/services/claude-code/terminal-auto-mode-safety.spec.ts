@@ -1,0 +1,63 @@
+import vm from 'node:vm'
+import { createHash, randomUUID } from 'node:crypto'
+import { rewriteClaudeNativePlatformSelectors } from '#features/code/be/services/claude-code/native-platform-runtime.ts'
+import { claudeTerminalAutoModeSafetyRuntime } from '#features/code/be/services/claude-code/terminal-auto-mode-safety-runtime.ts'
+import { ClaudeNativeNoticeSchema, isClaudeNativeNoticeDecision } from '#features/code/common/native-notice.ts'
+const originalHashes={"WSe":"2a6dc28b03f51681cb4abed041acf275283c52da83129398812f4e96364dd7c5","YWt":"a51adcf0434842a2eabe95dd3f62a191f631770fd7d5ba361b8cf5179ea966b0","Iyn":"678153e182e122b019c14ab6666de60caebad605ecd4613b3e9d8da5fa78c76e","m2":"09f5854932e537fa4669f05c81095ce505b5c4144dfd5bd05e78eae4d2275d97","jCo":"c7a484d56957c0adf117332232a02b567657b59242042d864a691b97973af5fd","Vve":"890edd596eaf12f38060c35cf72f77496ed437496a8e0b16191ea0fcfdfa025e","Kve":"754c1e01c11e637dd27d08a655f7265c50fcc78e4047e25edfff1115ffefc0d2","Xe":"e4dae558e89660907f9bba0c9481fcbc49b0b2efb6c32e5695b4799212e419a5"}
+type FixtureControl = { options: { value: string; label: string }[]; defaultFocusValue: string; refuseInput: () => boolean; onChange: ReturnType<typeof vi.fn>; onCancel: () => unknown; defaultValue?: string[]; submitButtonText?: string; onSubmit?: () => void }
+function fixture(role:'nudge'|'review'|'flagged'='review',picking=false){
+ const functions={jCo:function jCo(){},Vve:function Vve(){},Kve:function Kve(){},WSe:function WSe(){},YWt:function YWt(){},Iyn:function Iyn(){},Xe:function Xe(){},m2:function m2(){}}
+ const sessionId=randomUUID(),payload={currentMode:'default',mode:'append',environment:['Original environment'],allow:['Bash(test)'],soft_deny:[],hard_deny:[],remove_from_permissions_allow:[],notes:['Original note'],flagged:['Bash(*)','Read(**)'],runId:'original-run'},item={id:randomUUID(),kind:role==='nudge'?'auto_default_nudge':role==='review'?'auto_mode_setup_review':'auto_mode_flagged_allow',payload},open=[item]
+ const calls={choice:vi.fn(),cancel:vi.fn(()=>open.splice(0)),selection:vi.fn(),submit:vi.fn()},grace=vi.fn(()=>false)
+ let nativeSelection:string[]=[]
+ const control=()=>({options:role==='flagged'?[{value:'all',label:'Remove them all'},{value:'pick',label:'Pick which to remove'},{value:'leave',label:'Leave them'}]:[{value:'accept',label:'Original accept'},{value:'decline',label:'Original decline'}],defaultFocusValue:role==='flagged'?'all':'decline',refuseInput:grace,onChange:vi.fn((value:string)=>{calls.choice(value);if(value==='pick')enterPicker();else open.splice(0)}),onCancel:calls.cancel})
+ const selector: { type: () => void; memoizedProps: FixtureControl }={type:functions.Xe,memoizedProps:control()}
+ const panel={memoizedProps:{title:role==='nudge'?'Make auto mode your default permission mode?':role==='review'?'Review proposed auto-mode setup':'Review rules that skip checks',children:{props:{children:['Original full warning and rule details',{type:functions.Xe,props:{children:'INTERACTIVE SELECTOR'}}]}},inputGuide:{props:{children:['Your setup is saved either way','terminal keys']}}},child:selector}
+ const renderer={type:role==='nudge'?functions.WSe:role==='review'?functions.YWt:functions.Iyn,memoizedProps:{currentMode:payload.currentMode,proposal:payload,flagged:payload.flagged},child:panel}
+ const wrapper={type:role==='nudge'?functions.jCo:role==='review'?functions.Vve:functions.Kve,memoizedProps:{payload,answer:vi.fn(),wouldTakeAnswer:()=>true},child:renderer}
+ function enterPicker(){
+  selector.type=functions.m2
+  selector.memoizedProps={options:payload.flagged.map(value=>({value,label:'Original '+value})),defaultFocusValue:'',refuseInput:grace,onCancel:calls.cancel,onChange:vi.fn((values:string[])=>{nativeSelection=[...values];calls.selection(values);enterPicker()}),defaultValue:[...nativeSelection],submitButtonText:'Remove selected',onSubmit:()=>{calls.submit([...nativeSelection]);open.splice(0)}}
+  panel.memoizedProps.title='Pick which to remove';panel.memoizedProps.children={props:{children:[{type:functions.m2,props:{children:'INTERACTIVE SELECTOR'}}]}}
+ }
+ if(picking)enterPicker()
+ const binding={surface:'terminal',toolContext:()=>({dialogStore:{getState:()=>({open})}})},n={themeRoots:{ai:()=>new Map([[undefined,{container:{current:wrapper}}]])},questionOptions:{q:()=>sessionId}},mapped=new Map(Object.entries(originalHashes).map(([name,hash])=>[hash,createHash('sha256').update(functions[name as keyof typeof functions].toString()).digest('hex')]))
+ let format=async(_n:unknown,node:unknown):Promise<string>=>{if(node==null)return '';if(Array.isArray(node))return (await Promise.all(node.map(value=>format(_n,value)))).join('');if(typeof node==='object'){const value=node as {type?:unknown;props?:{children?:unknown}};if(value.type===functions.Xe||value.type===functions.m2)throw Error('Interactive selector rendered');return format(_n,value.props?.children)}return String(node)}
+ const runtime=vm.runInNewContext(rewriteClaudeNativePlatformSelectors(claudeTerminalAutoModeSafetyRuntime)+';({read:nativeAutoModeSafety,project:projectNativeAutoModeSafety,answer:answerNativeAutoModeSafety})',{originalContext:binding,AbortController,process:{stdout:undefined},composerFunctionHashes:new WeakMap(),createHash,nativeFunctionName:(s:string)=>s,nativeFunctionHash:(s:string)=>mapped.get(s),configUrl:'private',readFileSync:()=>JSON.stringify({sessionId}),randomUUID,dialogRevisions:new Map(),nativeGenericPermissionText:(...args:Parameters<typeof format>)=>format(...args),setTimeout,Date})
+ const request=(decision:string,selected_values?:string[])=>({id:item.id,revision:runtime.read(n).revision,session_id:sessionId,decision,...selected_values?{selected_values}:{}})
+ return{runtime,n,payload,item,open,wrapper,renderer,panel,selector,calls,grace,request,enterPicker,setFormat:(f:typeof format)=>{format=f}}
+}
+it.each([['nudge','auto_nudge_accept','accept'],['nudge','auto_nudge_decline','decline'],['review','auto_review_accept','accept'],['review','auto_review_decline','decline'],['flagged','auto_rules_all','all'],['flagged','auto_rules_leave','leave']] as const)('delegates %s %s to its original callback and retains native warning/default focus',async(role,decision,value)=>{
+ const f=fixture(role),notice=ClaudeNativeNoticeSchema.parse(await f.runtime.project(f.n,f.runtime.read(f.n)));expect(notice.paragraphs[0]).toBe('Original full warning and rule details');expect('preferredChoice'in notice&&notice.preferredChoice).toBe(role==='flagged'?'auto_rules_all':role==='nudge'?'auto_nudge_decline':'auto_review_decline');expect(isClaudeNativeNoticeDecision(notice,decision)).toBe(true);expect(f.grace).not.toHaveBeenCalled();const request=f.request(decision);await f.runtime.answer(f.n,request);expect(f.calls.choice).toHaveBeenCalledExactlyOnceWith(value);await expect(f.runtime.answer(f.n,request)).rejects.toThrow('expired')
+})
+it('uses native picking and selection state before invoking the original argument-free submit',async()=>{
+ const f=fixture('flagged');await f.runtime.answer(f.n,f.request('auto_rules_pick'));expect(f.open).toHaveLength(1)
+ const notice=ClaudeNativeNoticeSchema.parse(await f.runtime.project(f.n,f.runtime.read(f.n)));expect(notice).toMatchObject({phase:'pick',selectedValues:[],rules:[{value:'Bash(*)',label:'Original Bash(*)'},{value:'Read(**)',label:'Original Read(**)'}],choices:[{value:'auto_rules_submit',label:'Remove selected'}]});expect(notice.paragraphs).toContain('Your setup is saved either way');expect(isClaudeNativeNoticeDecision(notice,'auto_rules_select')).toBe(true)
+ const old=f.request('auto_rules_select',['Read(**)']);await f.runtime.answer(f.n,old);expect(f.calls.selection).toHaveBeenCalledExactlyOnceWith(['Read(**)']);expect(f.open).toHaveLength(1);await expect(f.runtime.answer(f.n,old)).rejects.toThrow('expired')
+ await f.runtime.answer(f.n,f.request('auto_rules_submit'));expect(f.calls.submit).toHaveBeenCalledExactlyOnceWith(['Read(**)']);expect(f.open).toHaveLength(0)
+})
+it.each([{values:['Bash(*)','Bash(*)']},{values:['Foreign(*)']}])('refuses invalid native rule selection $values',async({values})=>{const f=fixture('flagged',true);await expect(f.runtime.answer(f.n,f.request('auto_rules_select',values))).rejects.toThrow('selection is unavailable');expect(f.calls.selection).not.toHaveBeenCalled()})
+it.each(['nudge','review','flagged'] as const)('delegates %s cancellation without inventing a policy result',async role=>{const f=fixture(role);await f.runtime.answer(f.n,f.request('auto_safety_cancel'));expect(f.calls.cancel).toHaveBeenCalledOnce();expect(f.calls.choice).not.toHaveBeenCalled()})
+it('respects native grace and refuses a previously cancelled request before callbacks',async()=>{const f=fixture();const request=f.request('auto_review_accept');f.grace.mockReturnValue(true);await expect(f.runtime.answer(f.n,request)).rejects.toThrow('not ready');expect(f.calls.choice).not.toHaveBeenCalled();f.grace.mockReturnValue(false);await expect(f.runtime.answer(f.n,request,{aborted:true})).rejects.toThrow('cancelled');expect(f.calls.choice).not.toHaveBeenCalled()})
+it('fences original item/control/session and payload revisions',async()=>{const f=fixture(),request=f.request('auto_review_accept');await expect(f.runtime.answer(f.n,{...request,session_id:randomUUID()})).rejects.toThrow('expired');f.payload.notes.push('New native proposal');await expect(f.runtime.answer(f.n,request)).rejects.toThrow('expired');const next=f.request('auto_review_accept');f.selector.memoizedProps={...f.selector.memoizedProps};await expect(f.runtime.answer(f.n,next)).rejects.toThrow('expired');expect(f.calls.choice).not.toHaveBeenCalled()})
+it('never binds to an old wrapper that reused the same rules array',()=>{const f=fixture('flagged');f.wrapper.memoizedProps.payload={...f.payload};expect(f.runtime.read(f.n).item).toBeUndefined()})
+it('rejects policy choices from another review phase',async()=>{const f=fixture('flagged',true);await expect(f.runtime.answer(f.n,f.request('auto_rules_all'))).rejects.toThrow('choice is unavailable');expect(f.calls.choice).not.toHaveBeenCalled()})
+it('drops a dialog retired during formatting while refusing its old decision',async()=>{
+ const f=fixture('nudge'),d=f.runtime.read(f.n),request=f.request('auto_nudge_accept')
+ f.setFormat(async()=>{f.open.splice(0);return 'Original text'})
+ await expect(f.runtime.project(f.n,d)).resolves.toBeUndefined()
+ await expect(f.runtime.answer(f.n,request)).rejects.toThrow('expired');expect(f.calls.choice).not.toHaveBeenCalled()
+})
+it('drops an obsolete paint when the native control changes without retiring the dialog',async()=>{
+ const f=fixture(),d=f.runtime.read(f.n),request=f.request('auto_review_accept')
+ f.setFormat(async()=>{f.selector.memoizedProps={...f.selector.memoizedProps};return 'Original text'})
+ await expect(f.runtime.project(f.n,d)).resolves.toBeUndefined();expect(f.open).toHaveLength(1)
+ await expect(f.runtime.answer(f.n,request)).rejects.toThrow('expired');expect(f.calls.choice).not.toHaveBeenCalled()
+})
+it('does not acknowledge a settling choice whose original dialog remains open',async()=>{const f=fixture();f.selector.memoizedProps.onChange=vi.fn();await expect(f.runtime.answer(f.n,f.request('auto_review_accept'))).rejects.toThrow('has not accepted')})
+
+it('waits through a transient unmounted picker without treating it as retirement',async()=>{
+ const f=fixture('flagged'),request=f.request('auto_rules_pick')
+ f.selector.memoizedProps.onChange=vi.fn(()=>{const old=f.wrapper.memoizedProps.payload;f.wrapper.memoizedProps.payload={...old};setTimeout(()=>{f.wrapper.memoizedProps.payload=old;f.enterPicker()},10)})
+ await f.runtime.answer(f.n,request);expect(f.open).toHaveLength(1);expect(f.runtime.read(f.n).source.picking).toBe(true)
+})

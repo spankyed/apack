@@ -10,7 +10,7 @@
         <TiptapBlockMenu :editor="editor" />
         <TiptapImageBubbleMenu :editor="editor" @view-image="(src: string) => emit('imageClick', src)" />
       </template>
-      <TiptapBubbleMenu v-if="cfg.textBubbleMenu" :editor="editor" />
+      <TiptapBubbleMenu v-if="cfg.textBubbleMenu" :editor="editor" :contain-within-editor="mode === 'input' && variant === 'chat'" />
     </template>
     <p v-if="problem" role="status">{{ problem }}</p>
     <editor-content v-else :editor="editor" :class="editorClass" />

@@ -63,10 +63,19 @@ describe('a process that ends by itself', () => {
     expect(failure).toEqual({ kind: 'exited', exitCode: 3, signal: null, stdout: 'partial', stderr: 'why' });
   });
 
-  it('survives a child that exits without reading its input', async () => {
+  it('survives a child that exits without reading its input, and says the input was not written', async () => {
     // More than a pipe holds, so the write is still under way when the reader is gone
-    const outcome = await node('process.exit(0)', { input: 'x'.repeat(4 * 1024 * 1024) });
-    expect(outcome.ok).toBe(true);
+    const failure = failureOf(await node('process.exit(0)', { input: 'x'.repeat(4 * 1024 * 1024) }), 'input');
+    expect(failure.error).toMatchObject({ code: 'EPIPE' });
+  });
+
+  it('stops a child still running after it closed its stdin unread, and says the input was not written', async () => {
+    const pidFile = path.join(dir, 'pid');
+    const run = node(announcing(pidFile, `require('node:fs').closeSync(0); setTimeout(() => {}, ${SELF_EXIT_MS});`),
+      { input: 'x'.repeat(4 * 1024 * 1024) });
+    const failure = failureOf(await run, 'input');
+    expect(failure.error).toMatchObject({ code: 'EPIPE' });
+    expect(isRunning(await announced(pidFile)), 'the child was stopped').toBe(false);
   });
 });
 

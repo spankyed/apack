@@ -41,7 +41,7 @@ import { ContextMenuItem, ContextMenuSeparator } from 'reka-ui'
 import { ClipboardCopy, History, Pin, PinOff, Search } from 'lucide-vue-next'
 import { MENU_ITEM_CLASS, MENU_SEPARATOR_CLASS } from '#features/code/fe/features/explorer/constants.ts'
 import { type CodeState } from '#features/code/fe/state.ts'
-import type { TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
+import type { TerminalAttachment } from '#extensions/terminal/pool.ts'
 import { panelChild } from '../children.ts'
 
 const props = defineProps<{

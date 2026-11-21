@@ -1,3 +1,7 @@
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { list, listAll, find, view, remove } from '#features/code/be/services/claude-code/sessions.ts'
 /**
  * Tests for `encodeProjectPath` — the cwd-to-bucket encoder used by
  * `claudeCode.sessions.list()`.
@@ -66,4 +70,72 @@ describe('encodeProjectPath', () => {
     expect(encodeProjectPath('/Users/spankyed/Develop/Projects/apack'))
       .toBe('-Users-spankyed-Develop-Projects-apack')
   })
+})
+
+it('all-session discovery uses the native journal cwd instead of guessing from a lossy bucket name', async () => {
+ const directory=await mkdtemp(join(tmpdir(),'native-session-dirs-'))
+ vi.stubEnv('CLAUDE_CONFIG_DIR',directory)
+ try {
+  const cwd='/private/tmp/project-with-hyphens.and spaces'
+  const bucket=join(directory,'projects',encodeProjectPath(cwd));await mkdir(bucket,{recursive:true})
+  await writeFile(join(bucket,'native-session.jsonl'),'malformed\n'+JSON.stringify({type:'user',cwd,message:{role:'user',content:'Hello'}})+'\n')
+  await writeFile(join(bucket,'unknown-session.jsonl'),JSON.stringify({type:'user',message:{role:'user',content:'Unknown project'}})+'\n')
+  const sessions=await listAll()
+  expect(sessions.find(s=>s.id==='native-session')?.cwd).toBe(cwd)
+  expect(sessions.find(s=>s.id==='unknown-session')?.cwd).toBeUndefined()
+ } finally {vi.unstubAllEnvs();await rm(directory,{recursive:true,force:true})}
+});
+
+it('finds the latest native title anywhere in a large journal and decodes JSON escapes', async () => {
+ const directory=await mkdtemp(join(tmpdir(),'native-session-titles-'));vi.stubEnv('CLAUDE_CONFIG_DIR',directory)
+ try {
+  const cwd='/private/tmp/native-title-project',id='title-session',bucket=join(directory,'projects',encodeProjectPath(cwd))
+  await mkdir(bucket,{recursive:true})
+  const title='Latest "quoted" title \u2014 \u96ea\nsecond line \\ path'
+  const rows=[{type:'user',cwd,message:{content:'H'.repeat(9000)}},{type:'ai-title',sessionId:id,aiTitle:'AI fallback'},
+   {type:'custom-title',sessionId:id,customTitle:'Older title'}, {type:'custom-title',sessionId:id,customTitle:title},
+   {type:'ai-title',sessionId:id,aiTitle:'Later AI title'}, {type:'custom-title',sessionId:'foreign',customTitle:'Foreign title'},
+   {type:'assistant',sessionId:id,message:{content:[{customTitle:'Embedded fake title'}]}}, {type:'assistant',message:{content:'T'.repeat(9000)}}]
+  await writeFile(join(bucket,id+'.jsonl'),rows.map(row=>JSON.stringify(row)).join('\n')+'\n{"type":"custom-title","customTitle":')
+  expect((await list({cwd}))[0]?.title).toBe(title)
+  const all=await listAll();expect(all[0]?.title).toBe(title);expect(all[0]?.cwd).toBe(cwd)
+ } finally {vi.unstubAllEnvs();await rm(directory,{recursive:true,force:true})}
+})
+it('uses only matching native title records, supports JSON whitespace, and falls back to the latest AI title',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'native-session-ai-titles-'));vi.stubEnv('CLAUDE_CONFIG_DIR',directory)
+ try {
+  const cwd='/private/tmp/native-title-project',id='ai-session',bucket=join(directory,'projects',encodeProjectPath(cwd));await mkdir(bucket,{recursive:true})
+  const lines=[JSON.stringify({type:'ai-title',sessionId:id,aiTitle:'Old AI'}),JSON.stringify({type:'ai-title',sessionId:id,aiTitle:'New AI'}).replaceAll(':',':   '),
+   JSON.stringify({type:'assistant',sessionId:id,customTitle:'Not title metadata',message:{content:'text'}}),'broken',JSON.stringify(null),JSON.stringify({type:'custom-title',sessionId:'other',customTitle:'Not this session'})]
+  await writeFile(join(bucket,id+'.jsonl'),lines.join('\n')+'\n')
+  expect((await list({cwd}))[0]?.title).toBe('New AI')
+ } finally {vi.unstubAllEnvs();await rm(directory,{recursive:true,force:true})}
+})
+
+
+it('keeps identical session IDs isolated across native process profiles', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'native-session-profiles-'))
+  const cwd = '/projects/profile-test', id = 'same-session'
+  const shared = join(directory, 'shared'), owned = join(directory, 'app owned')
+  vi.stubEnv('CLAUDE_CONFIG_DIR', shared)
+  try {
+    for (const [root, text] of [[shared, 'Shared journal'], [owned, 'Owned journal']]) {
+      const bucket = join(root, 'projects', encodeProjectPath(cwd))
+      await mkdir(bucket, { recursive: true })
+      await writeFile(join(bucket, `${id}.jsonl`), JSON.stringify({type: 'user', cwd, message: {role: 'user', content: text}}) + '\n')
+    }
+    const env = {CLAUDE_CONFIG_DIR: owned}
+    const [sharedRows, ownedRows] = await Promise.all([view(id, {cwd}), view(id, {cwd, env})])
+    expect(sharedRows[0]?.message).toEqual({role: 'user', content: 'Shared journal'})
+    expect(ownedRows[0]?.message).toEqual({role: 'user', content: 'Owned journal'})
+    expect((await list({cwd, env})).map(row => row.file)).toEqual([join(owned, 'projects', encodeProjectPath(cwd), `${id}.jsonl`)])
+    expect((await listAll({env})).map(row => row.file)).toEqual([join(owned, 'projects', encodeProjectPath(cwd), `${id}.jsonl`)])
+    await remove(id, {cwd, env})
+    expect(await find(id, {cwd, env})).toBeNull()
+    expect(await find(id, {cwd})).not.toBeNull()
+    expect(process.env.CLAUDE_CONFIG_DIR).toBe(shared)
+  } finally {
+    vi.unstubAllEnvs()
+    await rm(directory, {recursive: true, force: true})
+  }
 })

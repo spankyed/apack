@@ -1,3 +1,4 @@
+import { claudeProfileOptions } from '../../../features/code/common/native-profile.ts';
 /**
  * CC: Compact — compacts a Claude Code session's context and creates a marker message.
  */
@@ -61,6 +62,7 @@ async function handleCompact(
     const sessionCwd = ccState?.cwd;
     const prompt = args.length > 0 ? `/compact ${args.join(' ')}` : '/compact';
     const handle = await services.cli.claudeCode.query({
+    ...claudeProfileOptions(ccState),
       ...(sessionCwd && { cwd: sessionCwd }),
       prompt,
       resume: sessionId,

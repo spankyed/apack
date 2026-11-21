@@ -1,0 +1,63 @@
+import { z } from 'zod'
+import {claudeSettingsSnapshot} from './native-settings.ts'
+import type {ClaudeCreditRequest} from './native-credit.ts'
+
+/** Exact notice emitted by the reviewed 2.1.302 Opus 5 same-model refusal retry. */
+export const claudeOpus5RefusalRetryNotice = "Opus 5's safeguards stopped the response above · continuing once with that noted"
+
+const identity = { id: z.string().min(1).max(256), revision: z.string().uuid(), sessionId: z.string().uuid() }
+const body = { title: z.string().max(16000), paragraphs: z.array(z.string().max(16000)).max(32) }
+/** Native owns the dialog, available choices, timeout and acknowledgement. */
+export const ClaudeNativeNoticeSchema = z.discriminatedUnion('kind', [
+  z.object({...identity,...body,kind:z.literal('fable_overage_consent_prompt'),snapshot:claudeSettingsSnapshot.refine(snapshot=>!!snapshot.editor,'Native credit editor required')}),
+  z.object({...identity,...body,kind:z.literal('credit_consent_result'),severity:z.literal('feedback'),links:z.array(z.string().url().max(4096).regex(/^https?:\/\//)).max(16)}),
+  z.object({ ...identity, ...body, kind: z.literal('chrome_install_upsell'), preferredChoice: z.literal('chrome_not_now'), choices: z.array(z.object({ value: z.enum(['chrome_install', 'chrome_not_now', 'chrome_never']), label: z.string().min(1).max(4000), description: z.string().max(4000).optional() })).length(3) }),
+  z.object({ ...identity, ...body, kind: z.literal('chrome_install_setup'), phase: z.enum(['waiting_install', 'connecting', 'stalled', 'connected', 'failed']), installPageOpened: z.boolean(), choices: z.array(z.object({ value: z.enum(['chrome_continue', 'chrome_wait', 'chrome_skip']), label: z.string().min(1).max(4000), description: z.string().max(4000).optional() })).min(1).max(2) }),
+  z.object({ ...identity, ...body, kind: z.literal('effort_preference_result'), severity: z.enum(['warning', 'feedback']) }),
+  z.object({ ...identity, ...body, kind: z.literal('effort_medium_nudge'), model: z.string().max(4096), warning: z.string().max(16000).optional(), preferredChoice: z.enum(['effort_accept', 'effort_decline']), choices: z.array(z.object({ value: z.enum(['effort_accept', 'effort_decline']), label: z.string().min(1).max(4000) })).length(2) }),
+  z.object({ ...identity, ...body, kind: z.literal('auto_default_nudge'), preferredChoice: z.enum(['auto_nudge_accept', 'auto_nudge_decline']).optional(), choices: z.array(z.object({ value: z.enum(['auto_nudge_accept', 'auto_nudge_decline']), label: z.string().min(1).max(4000) })).min(1).max(3) }),
+  z.object({ ...identity, ...body, kind: z.literal('auto_mode_setup_review'), preferredChoice: z.enum(['auto_review_accept', 'auto_review_decline']).optional(), choices: z.array(z.object({ value: z.enum(['auto_review_accept', 'auto_review_decline']), label: z.string().min(1).max(4000) })).min(1).max(3) }),
+  z.object({ ...identity, ...body, kind: z.literal('auto_mode_flagged_allow'), preferredChoice: z.enum(['auto_rules_all', 'auto_rules_pick', 'auto_rules_leave', 'auto_rules_submit']).optional(), choices: z.array(z.object({ value: z.enum(['auto_rules_all', 'auto_rules_pick', 'auto_rules_leave', 'auto_rules_submit']), label: z.string().min(1).max(4000) })).min(1).max(3), phase: z.enum(['review', 'pick']), rules: z.array(z.object({ value: z.string().max(16000), label: z.string().max(16000) })).max(1024), selectedValues: z.array(z.string().max(16000)).max(1024) }),
+  z.object({ ...identity, ...body, kind: z.literal('computer_use_approval'), phase: z.enum(['apps', 'os_permissions']), preferredChoice: z.literal('computer_deny').optional(), choices: z.array(z.object({ value: z.enum(['computer_deny', 'computer_allow', 'computer_accessibility', 'computer_screen_recording', 'computer_retry']), label: z.string().min(1).max(4000) })).min(1).max(3) }),
+  z.object({ ...identity, ...body, kind: z.literal('permission_browser'), toolName: z.string().startsWith('mcp__claude-in-chrome__').max(256), requestId: z.string().min(1).max(256), choices: z.array(z.object({ value: z.enum(['browser_allow', 'browser_domain', 'browser_deny']), label: z.string().min(1).max(4000) })).min(2).max(3) }),
+  z.object({ ...identity, ...body, kind: z.literal('left_arrow_confirm'), preferredChoice: z.enum(['background_confirm', 'background_stay']), choices: z.array(z.object({ value: z.enum(['background_confirm', 'background_stay']), label: z.string().min(1).max(4000) })).length(2) }),
+  z.object({ ...identity, ...body, kind: z.literal('sandbox_network_access'), choices: z.array(z.object({ value: z.enum(['sandbox_allow', 'sandbox_remember', 'sandbox_deny']), label: z.string().min(1).max(4000) })).min(2).max(3) }),
+  z.object({ ...identity, ...body, kind: z.literal('managed_settings_security'), paragraphsAnsi: z.array(z.string().max(200000)).length(4), preferredChoice: z.enum(['policy_approve', 'policy_reject']), choices: z.array(z.object({ value: z.enum(['policy_approve', 'policy_reject']), label: z.string().min(1).max(4000) })).length(2) }).refine(value => value.paragraphs.length === value.paragraphsAnsi.length, 'Managed settings text/style rows must agree'),
+  z.object({ ...identity, ...body, kind: z.literal('refusal_fallback_prompt'), helpUrl: z.string().url().startsWith('https://').max(4000).optional(), originalModel: z.string().max(16000), fallbackModel: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['retry_fallback', 'edit_prompt']), label: z.string().min(1).max(4000) })).length(2) }),
+  z.object({ ...identity, ...body, kind: z.literal('autocompact_offer'), selectedTokens: z.number().int().positive(), canPrevious: z.boolean(), canNext: z.boolean(), choices: z.array(z.object({ value: z.enum(['compact_accept', 'compact_keep']), label: z.string().min(1).max(4000) })).length(2) }),
+  z.object({ ...identity, ...body, kind: z.literal('cold_resume_quota'), trigger: z.enum(['resume', 'idle']), preferredChoice: z.enum(['quota_resume', 'quota_new_conversation']).optional(), choices: z.array(z.object({ value: z.enum(['quota_resume', 'quota_new_conversation']), label: z.string().min(1).max(4000), description: z.string().max(4000).optional() })).length(2) }),
+  z.object({ ...identity, ...body, kind: z.literal('newer_model_inline'), ansi: z.string().max(200000) }),
+  z.object({ ...identity, ...body, kind: z.literal('newer_model_offer'), choices: z.array(z.object({ value: z.enum(['newer_keep', 'newer_accept']), label: z.string().min(1).max(4000) })).length(2) }),
+  z.object({ ...identity, ...body, kind: z.literal('resume_return'), choices: z.array(z.object({ value: z.enum(['resume_compact', 'resume_continue', 'resume_never']), label: z.string().min(1).max(4000) })).length(3) }),
+  z.object({ ...identity, ...body, kind: z.literal('goal_proposal'), choices: z.array(z.object({ value: z.enum(['goal_decline', 'goal_accept']), label: z.string().min(1).max(4000) })).length(2) }),
+  z.object({ ...identity, ...body, kind: z.literal('auto_mode_server_fallback'), helpUrl: z.string().max(4000) }),
+  z.object({ ...identity, ...body, kind: z.literal('plugin_hint'), pluginName: z.string().max(16000), marketplaceName: z.string().max(16000), sourceCommand: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'disable']), label: z.string().min(1).max(4000) })).length(3) }),
+  z.object({ ...identity, ...body, kind: z.literal('lsp_recommendation'), pluginName: z.string().max(16000), marketplaceName: z.string().max(16000), fileExtension: z.string().max(16000), choices: z.array(z.object({ value: z.enum(['yes', 'no', 'never', 'disable']), label: z.string().min(1).max(4000) })).length(4) }),
+])
+export type ClaudeNativeNotice = z.infer<typeof ClaudeNativeNoticeSchema>
+export type ClaudeNativeNoticeResponse = Pick<ClaudeNativeNotice, 'id' | 'revision' | 'sessionId'> & ({decision:'credit';credit:ClaudeCreditRequest} | { selectedValues?: string[]; decision: 'effort_accept' | 'effort_decline' | 'auto_nudge_accept' | 'auto_nudge_decline' | 'auto_review_accept' | 'auto_review_decline' | 'auto_rules_all' | 'auto_rules_pick' | 'auto_rules_leave' | 'auto_rules_select' | 'auto_rules_submit' | 'auto_safety_cancel' | 'computer_deny' | 'computer_allow' | 'computer_accessibility' | 'computer_screen_recording' | 'computer_retry' | 'computer_cancel' | 'chrome_install' | 'chrome_not_now' | 'chrome_never' | 'chrome_continue' | 'chrome_wait' | 'chrome_skip' | 'chrome_cancel' | 'browser_allow' | 'browser_domain' | 'browser_deny' | 'browser_cancel' | 'quota_resume' | 'quota_new_conversation' | 'quota_dismiss' | 'newer_accept' | 'newer_keep' | 'newer_dismiss' | 'resume_compact' | 'resume_continue' | 'resume_never' | 'resume_dismiss' | 'background_confirm' | 'background_stay' | 'sandbox_allow' | 'sandbox_remember' | 'sandbox_deny' | 'sandbox_cancel' | 'policy_approve' | 'policy_reject' | 'compact_previous' | 'compact_next' | 'compact_accept' | 'compact_keep' | 'compact_dismiss' | 'goal_accept' | 'goal_decline' | 'retry_fallback' | 'edit_prompt' | 'cancelled' | 'continue' | 'interrupt' | 'yes' | 'no' | 'never' | 'disable' })
+export function isClaudeNativeNoticeDecision(notice: ClaudeNativeNotice, decision: string): boolean {
+  if (notice.kind === 'fable_overage_consent_prompt') return decision === 'credit'
+  if (notice.kind === 'credit_consent_result') return false
+  if (notice.kind === 'chrome_install_setup' || notice.kind === 'chrome_install_upsell') return decision === 'chrome_cancel' || notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'newer_model_inline' || notice.kind === 'effort_preference_result') return false
+  if (notice.kind === 'effort_medium_nudge') return notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'auto_default_nudge' || notice.kind === 'auto_mode_setup_review') return decision === 'auto_safety_cancel' || notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'auto_mode_flagged_allow') return decision === 'auto_safety_cancel' || decision === 'auto_rules_select' && notice.phase === 'pick' || notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'computer_use_approval') return decision === 'computer_cancel' || notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'permission_browser') return decision === 'browser_cancel' || notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'left_arrow_confirm') return notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'sandbox_network_access') return decision === 'sandbox_cancel' || notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'managed_settings_security') return notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'autocompact_offer') return decision === 'compact_dismiss' || decision === 'compact_previous' && notice.canPrevious || decision === 'compact_next' && notice.canNext || notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'cold_resume_quota') return decision === 'quota_dismiss' || notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'newer_model_offer') return decision === 'newer_dismiss' || notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'resume_return') return decision === 'resume_dismiss' || notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'goal_proposal') return notice.choices.some(choice => choice.value === decision)
+  if (notice.kind === 'refusal_fallback_prompt') return decision === 'cancelled' || notice.choices.some(choice => choice.value === decision)
+  return notice.kind === 'lsp_recommendation' || notice.kind === 'plugin_hint' ? notice.choices.some(choice => choice.value === decision) : decision === 'continue' || decision === 'interrupt'
+}
+
+/** Original dialog settlement identities, scoped to their native conversation. */
+export const ClaudeNativeMessageRetirementsSchema = z.array(z.object({ sessionId: z.string().uuid(), uuids: z.array(z.string().uuid()), rewoundUserUuids: z.array(z.string().uuid()).optional(), rewoundNoticeUuids: z.array(z.string().uuid()).optional() }))
+export type ClaudeNativeMessageRetirements = z.infer<typeof ClaudeNativeMessageRetirementsSchema>

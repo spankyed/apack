@@ -6,7 +6,7 @@ vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-v
 
 const { views, lastView } = await import('../_support/terminal-view.ts')
 const { startCodeSurface, terminalInfo } = await import('../_support/terminal-host.ts')
-const { terminalPool } = await import('#features/code/fe/utils/terminal-pool.ts')
+const { terminalPool } = await import('#extensions/terminal/pool.ts')
 const TerminalView = (await import('#features/code/fe/canvas/TerminalView.vue')).default
 
 let surface: ReturnType<typeof startCodeSurface> | undefined
