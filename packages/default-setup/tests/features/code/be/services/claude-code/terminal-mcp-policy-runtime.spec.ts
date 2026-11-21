@@ -4,13 +4,17 @@ import { claudeTerminalMcpPolicyRuntime } from '#features/code/be/services/claud
 
 function fixture() {
   const allowed = { name: 'managed', type: 'connected', config: {} }
-  const blocked = { name: 'local', type: 'connected', config: {} }
+  const blocked = { name: 'local', type: 'connected', config: {}, client: {} }
   const pending = { name: 'pending', type: 'pending', config: {} }
   const clients = [allowed, blocked, pending]
   const context = { getAppState: () => ({ mcp: { clients } }), setAppState: vi.fn() }
   const Mc = vi.fn((name: string) => name === 'managed' ? null : 'managed-policy')
   const mark = vi.fn((name: string) => clients.splice(clients.findIndex(client => client.name === name), 1))
   const detach = vi.fn(async () => { expect(clients).not.toContain(blocked) })
+  const cache = new Map<string, Promise<unknown>>()
+  const dispose = vi.fn((name: string, _config: object, expected: Promise<unknown>) => {
+    if (cache.get(name) === expected) cache.delete(name)
+  })
   const over = vi.fn(() => ({ get: () => ({ clients }), markReconnectDiscarded: mark }))
   let observer: (connection: unknown) => void = vi.fn()
   const originalObserver = observer
@@ -18,11 +22,17 @@ function fixture() {
   const load = vi.fn(async (name: string) => {
     if (name === 'chunk-hdxpvbx1.js') return wiring
     if (name === 'chunk-z0mpv66t.js') return { knt: { over } }
-    return { mcpClientModule: () => ({ detachAndCloseConnection: detach }) }
+    if (name === 'chunk-kkq7q3vx.js') return { Jn: (serverName: string) => serverName }
+    return { mcpClientModule: () => ({
+      detachAndCloseConnection: detach,
+      connectToServer: { cache },
+      peekSettledConnection: (name: string) => Promise.race([cache.get(name), Promise.resolve(undefined)]),
+      disposeServerConnectionDetached: dispose,
+    }) }
   })
   const retire = new Function('importClaudeNativeModule', rewriteClaudeNativePlatformSelectors(claudeTerminalMcpPolicyRuntime)
     + '\nreturn retireNativePolicyBlockedMcpConnections')(load)
-  return { allowed, blocked, pending, clients, context, Mc, mark, detach, over, load, wiring, originalObserver,
+  return { allowed, blocked, pending, clients, context, Mc, mark, detach, cache, dispose, over, load, wiring, originalObserver,
     run: (isCurrent = () => true) => retire({ runtime: { Mc } }, context, isCurrent) }
 }
 
@@ -33,6 +43,42 @@ it('lets original policy retire only refused live connections and detaches after
   expect(f.clients).toEqual([f.allowed, f.pending])
   expect(f.over).toHaveBeenCalledWith({ getState: f.context.getAppState, setState: f.context.setAppState })
   expect(f.mark).toHaveBeenCalledExactlyOnceWith(f.blocked.name, f.blocked.config)
+  expect(f.detach).toHaveBeenCalledExactlyOnceWith(f.blocked)
+})
+
+it('disposes the exact cached dial so native policy restoration can reconnect', async () => {
+  const f = fixture()
+  const cached = Promise.resolve({ ...f.blocked })
+  f.cache.set(f.blocked.name, cached)
+  await f.run()
+  expect(f.dispose).toHaveBeenCalledExactlyOnceWith(f.blocked.name, f.blocked.config, cached)
+  expect(f.cache.has(f.blocked.name)).toBe(false)
+  expect(f.detach).not.toHaveBeenCalled()
+})
+
+it('leaves a concurrently replaced cached dial alone', async () => {
+  const f = fixture()
+  const replacement = Promise.resolve({ ...f.blocked, client: {} })
+  const cached = Promise.resolve(f.blocked)
+  const get = f.cache.get.bind(f.cache)
+  vi.spyOn(f.cache, 'get').mockImplementationOnce(name => {
+    queueMicrotask(() => { f.cache.set(f.blocked.name, replacement) })
+    return get(name)
+  })
+  f.cache.set(f.blocked.name, cached)
+  await f.run()
+  expect(f.cache.get(f.blocked.name)).toBe(replacement)
+  expect(f.dispose).not.toHaveBeenCalled()
+  expect(f.detach).toHaveBeenCalledExactlyOnceWith(f.blocked)
+})
+
+it('does not wait for an unrelated unfinished dial to close the refused live client', async () => {
+  const f = fixture()
+  const pending = new Promise(() => {})
+  f.cache.set(f.blocked.name, pending)
+  await f.run()
+  expect(f.cache.get(f.blocked.name)).toBe(pending)
+  expect(f.dispose).not.toHaveBeenCalled()
   expect(f.detach).toHaveBeenCalledExactlyOnceWith(f.blocked)
 })
 

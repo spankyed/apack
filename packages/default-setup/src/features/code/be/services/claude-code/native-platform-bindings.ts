@@ -329,6 +329,12 @@ export const claudeNativeLinuxBindings: {
         "knt": "_nt"
       }
     },
+    "chunk-kkq7q3vx.js": {
+      "module": "chunk-fhf0nb53.js",
+      "exports": {
+        "Jn": "Jn"
+      }
+    },
     "chunk-y0a0212f.js": {
       "module": "chunk-7pgnqqdd.js",
       "exports": {

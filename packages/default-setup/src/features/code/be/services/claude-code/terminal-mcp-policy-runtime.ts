@@ -26,6 +26,20 @@ function observeNativeMcpConnections(wiring){
  nativeMcpClientObservers.add(observe);
  wiring.kbt(observe);
 }
+async function detachNativePolicyBlockedMcpConnection(transport,connection,key){
+ const cached=transport.connectToServer.cache.get(key);
+ if(cached){
+  const previous=await transport.peekSettledConnection(connection.name,connection.config);
+  if((previous===connection||(previous?.type==='connected'&&previous.client===connection.client))
+    &&transport.connectToServer.cache.get(key)===cached){
+   // Detached close alone only evicts the dial under the native cache rollout.
+   // Evict this exact dial so a later native policy update can reopen the same server.
+   transport.disposeServerConnectionDetached(connection.name,connection.config,cached);
+   return;
+  }
+ }
+ await transport.detachAndCloseConnection(connection);
+}
 async function retireNativePolicyBlockedMcpConnections(n,context,isCurrent){
  const wiring=await import('/$bunfs/root/chunk-hdxpvbx1.js');
  if(!isCurrent())return;
@@ -37,6 +51,7 @@ async function retireNativePolicyBlockedMcpConnections(n,context,isCurrent){
  if(!blocked().length)return;
  const {knt}=await import('/$bunfs/root/chunk-z0mpv66t.js');
  const {mcpClientModule}=await import('/$bunfs/root/chunk-y0a0212f.js');
+ const {Jn:connectionKey}=await import('/$bunfs/root/chunk-kkq7q3vx.js');
  if(!isCurrent())return;
  const store=knt.over({getState:context.getAppState,setState:context.setAppState});
  const transport=mcpClientModule();
@@ -47,7 +62,7 @@ async function retireNativePolicyBlockedMcpConnections(n,context,isCurrent){
   if(store.get().clients.includes(connection))continue;
   // Cancel before close so the original HTTP client does not classify revocation as session expiry.
   nativeMcpHttpCallLifetime.get(connection.client)?.abort(Error('MCP access revoked by managed policy'));
-  closing.push(transport.detachAndCloseConnection(connection));
+  closing.push(detachNativePolicyBlockedMcpConnection(transport,connection,connectionKey(connection.name,connection.config)));
  }
  await Promise.all(closing);
 }
