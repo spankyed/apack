@@ -325,14 +325,24 @@ thread.value?.data.messages                   // nothing until that thread runs
 
 A component does not call `mirror`. It calls `useState`:
 
-```ts
-const threads = useState('threads')                               // a state the window runs, by name
-threads.state.value.data.titles[id]                               // renders again when that title changes
-threads.send({ type: 'OPEN_THREAD', threadId })
+```vue
+<script setup lang="ts">
+const { state: threads, send, child } = useState('threads')                  // a state the window runs, by name
+const { state: thread } = useState(() => child('thread', props.threadId))   // one of many, following the prop
+</script>
 
-const thread = useState(() => threads.child('thread', props.threadId))   // one of many, following the prop
-thread.state.value?.data.messages
+<template>
+  <h1>{{ threads.data.titles[id] }}</h1>                    <!-- renders again when that title changes -->
+  <p v-if="within(threads, 'thread')">{{ threads.data.threadId }}</p>
+  <p v-if="thread">{{ thread.data.messages.length }}</p>   <!-- nothing while that thread is not running -->
+  <button @click="send({ type: 'OPEN_THREAD', threadId })">Open</button>
+</template>
 ```
+
+`useState` gives a ref and what to send with, as an object to take apart by name. That is how Vue's own guidance
+has a composable return, and how VueUse, TanStack Query and XState's binding do: a ref that a component's setup holds
+by name is read in its template without `.value`. In the script it is `threads.value`, and leaving that out does not
+compile.
 
 What it is built to get right is where bindings to a renderer usually go wrong:
 
@@ -423,6 +433,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | A nested change is an edit to a draft, built here | Spreads at every level (`{ ...data.titles, [id]: title }`), which get worse with depth. Immer and Mutative were considered; a state's data is plain by rule, so most of what they handle cannot occur, the kernel wants the changed fields in its own shape, and the kernel is meant to have no dependencies. To revisit, in favour of Mutative, if the draft grows special cases |
 | A change that cannot be made is refused whole, by one rule, where it is tried | Three rules, which is what there was. A stray field in an edit was found after the edit had run, and reported without the line that wrote it. The same stray field given as a field was dropped without a word and the rest taken. And a move to a state that does not exist, or without what the state needs, was made anyway and reported after. Each was a half-made change, and two of the three said nothing |
 | A state is mirrored once for all its readers, and the system is listened to once | A mirror for each component, which is what `mirror` was: each made its own copy of the state and listened to every step to see whether it was its own. A hundred components reading one state copied it a hundred times, and every step asked all of them. And nothing ended a subscription, so each one stayed for good |
+| `useState` gives a ref, taken apart by name | A reactive object read with no `.value` anywhere, as Pinia's stores are. A started state may not be running, and nothing is not an object; a handle that follows a prop changes which object it is. Vue's way of saying either is a ref, so refs are one shape for every case where objects would be two. And taking a store apart loses its reactivity without a word, which is what Pinia's `storeToRefs` is for; a ref read without `.value` in a script is a type error |
 | A component reads and sends, and cannot ask | Giving `useState` an `ask`. An ask made from a component has no owner to stop it or to say where the state goes if it fails, which is what `run` and `failed` are for |
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
@@ -528,9 +539,11 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   something the user does while progress waits is handled after it; another ask's answer is not ahead of progress
   sent before it; a frame hands over what waits when nothing else arrives first; and stopping a window mid-ask leaves
   nothing unhandled.
-- **Components render only for what they read** (`vue.mts`, `vue-check.mts`, 11 checks). These are Vue components
+- **Components render only for what they read** (`vue.mts`, `vue-check.mts`, 23 checks). These are Vue components
   mounted with Vue's own runtime, into a tree of plain objects in place of a page, and what is counted is how often
-  each rendered. A change renders only the components that read that place; a change in one of many renders that
+  each rendered. Every check runs twice: with the components written as render functions, and with the same
+  components written as templates and compiled by Vue's compiler, reading the state with no `.value`. One more, for
+  templates: what a template sends on a click reaches the state. A change renders only the components that read that place; a change in one of many renders that
   one and neither the others nor the list; one added renders the list and the new one; one removed is gone without
   its component rendering with nothing to show; fifty changes before Vue renders are one render; a component reading
   two states never sees one ahead of the other, and renders once for a step that changed both; a handle that follows
@@ -539,6 +552,14 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   renders one, and there is one mirror for each state however many components read it, and none once nothing does.
   Five mistakes do not compile: a state the window does not run, an event it does not take, one of many without its
   key, reading one that may not be running without saying what if it is not, and asking.
+- **A template is held to the same types** (`vue-fixture/Board.vue`, checked by `vue-tsc`). A component file written
+  as the app writes one. Inside `v-if="within(board, 'open')"`, or `v-if="board.at === 'open'"`, the data of that
+  state can be read; inside `v-if="card"`, or with `?.`, what a card holds can be; a `v-for` over a field and a
+  `send` from a click are typed. Six lines are marked as having to be errors and are: reading the data of a state
+  the board may not be at, reading a card that may not be running, a field there is not, an event the board does not
+  take, an event without what it declares, and a state there is not to be inside. With the marks taken out the
+  compiler names each, on its line, in a sentence: `Type '"SHUFFLE"' is not assignable to type '"ADD" | "RETITLE" |
+  "OPEN" | "CLOSE"'`.
 - **A reader runs again only for the place it read** (`mirror.mts`, `binding-check.mts`, 12 checks, with
   `@vue/reactivity`'s `effect` standing for a component's render): a message in one thread runs only that thread's
   reader, a rename only that title's, a move only the reader of where the state is; removing from a list and deleting
@@ -662,9 +683,10 @@ The design is the smaller half of the value. In the order they would pay:
 
 1. **The Vue binding, on the app's own components.** `useState` exists and is checked by rendering (What a component
    reads). What is left is what a check cannot say: the 439 `useSelector` sites moved onto it, in components written
-   as the app writes them, with templates, in a window. That is where it will show whether reading through
-   `.state.value` is what a template wants, whether `within` narrows well enough there, and what the first paint of
-   a large state costs, since a mirror copies a state once when its first reader arrives.
+   as the app writes them, in a window. Templates read it without `.value` and `within` narrows inside a `v-if`,
+   which a compiled template and `vue-tsc` now show. What is not known is what the first paint of a large state
+   costs, since a mirror copies a state once when its first reader arrives, and what the step log would give Vue's
+   devtools, as Pinia gives them its stores.
 2. **Tests that replay interleavings.** The risk in this design is ordering: a result that arrives after its state was
    left. The prototype has this: `schedule.mts`, under What the prototype proves. What is left is its place in the
    harness, so that a pack's spec runs a scenario under every ordering the way it runs a case today, and a reduction
@@ -717,8 +739,8 @@ projects. Each would loosen the fit to this app.
 
 ## Not built
 
-- **The Vue binding in the app.** `useState` is built and renders, in a check. No component of the app uses it, no
-  template has been written against it, and nothing has been measured in a window. 439 `useSelector` sites wait on
+- **The Vue binding in the app.** `useState` is built and renders, in a check. No component of the app uses it, and
+  nothing has been measured in a window. 439 `useSelector` sites wait on
   it.
 - **Roles**: `tell({ role: 'brain' }, …)`.
 - **A write nobody waits for**, which appliers and migrations make today.

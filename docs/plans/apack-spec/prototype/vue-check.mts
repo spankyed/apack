@@ -1,8 +1,14 @@
 // `useState`, checked by rendering. These are real Vue components, mounted with Vue's own runtime into a tree of
 // plain objects in place of a page, so that what is counted is what Vue did: how often each component rendered.
 //
+// Every check runs twice: with components written as render functions, and with the same components written as
+// templates and compiled by Vue's compiler, which is how the app writes them. A template reads a state without
+// `.value`, since Vue unwraps a ref that a component's setup returns by name.
+//
 //   npx tsx docs/plans/apack-spec/prototype/vue-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
+import { compile } from '@vue/compiler-dom'
+import * as runtime from '@vue/runtime-core'
 import { createRenderer, defineComponent, h, nextTick, ref, type Component } from '@vue/runtime-core'
 import { mirrors } from './mirror.mts'
 import { each, given, reaching, system, type Each } from './state.mts'
@@ -10,8 +16,8 @@ import { vueBinding } from './vue.mts'
 
 // ── what is rendered into ───────────────────────────────────────────────────────────────────────────────────────────
 
-interface Node { type: string; text: string; children: Node[]; parent: Node | undefined }
-const node = (type: string, text = ''): Node => ({ type, text, children: [], parent: undefined })
+interface Node { type: string; text: string; children: Node[]; parent: Node | undefined; on: Record<string, (() => void) | undefined> }
+const node = (type: string, text = ''): Node => ({ type, text, children: [], parent: undefined, on: {} })
 const { createApp } = createRenderer<Node, Node>({
   createElement: (type) => node(type),
   createText: (text) => node('#text', text),
@@ -27,9 +33,20 @@ const { createApp } = createRenderer<Node, Node>({
   remove: (child) => { if (child.parent) child.parent.children.splice(child.parent.children.indexOf(child), 1); child.parent = undefined },
   parentNode: (of) => of.parent ?? null,
   nextSibling: (of) => { const among = of.parent?.children ?? []; return among[among.indexOf(of) + 1] ?? null },
-  patchProp: () => {},
+  // What a template listens for is kept, so that a check can do what a click would.
+  patchProp: (of, key, _, next) => { if (key.startsWith('on')) of.on[key] = next as (() => void) | undefined },
 })
-const shown = (of: Node): string => (of.type === '#text' ? of.text : of.type === '#comment' ? '' : of.children.map(shown).join(of.type === 'ul' ? ' | ' : ''))
+const shown = (of: Node): string => (of.type === '#text' ? of.text : of.type === '#comment' ? '' : of.children.map(shown).filter(Boolean).join(of.type === 'ul' ? ' | ' : ''))
+const find = (of: Node, type: string): Node | undefined => (of.type === type ? of : of.children.map((child) => find(child, type)).find(Boolean))
+
+/** A component from a template, compiled as Vue compiles one. `onRender` is given what the template reads from. */
+const templated = (template: string, options: { props?: Record<string, unknown>; components?: Record<string, Component>; setup: (props: any) => Record<string, unknown> }, onRender: (reads: any) => void): Component => {
+  const { code } = compile(template, { mode: 'function', prefixIdentifiers: true })
+  const render = new Function('Vue', code)(runtime) as (...given: unknown[]) => unknown
+  return defineComponent({ ...options, render(this: unknown, ...given: unknown[]) { onRender(given[0]); return render.apply(this, given) } } as never) as Component
+}
+/** How the components are written, for the run of the checks that is under way. */
+let written: 'render functions' | 'templates' = 'render functions'
 
 // ── the states ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -70,7 +87,7 @@ const { provide, useState } = vueBinding<{ board: typeof board }>()
 // ── the components ──────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** A board on a page: the components, how often each rendered, and what each saw. */
-const mounted = (parts: Array<'title' | 'where' | 'list' | 'pair' | 'picked'> = ['title', 'where', 'list']) => {
+const mounted = (parts: Array<'title' | 'where' | 'list' | 'pair' | 'picked' | 'retitle'> = ['title', 'where', 'list']) => {
   const sys = system({ side: 'window' })
   const handle = sys.start('board', board)
   const send = (event: BoardEvent): void => sys.send(handle, event)
@@ -111,7 +128,25 @@ const mounted = (parts: Array<'title' | 'where' | 'list' | 'pair' | 'picked'> = 
     return () => { rendered('pair'); pairs.push([it.state.value.data.told, a.state.value?.data.bumps]); return h('p', `${it.state.value.data.told}`) }
   })
   const Picked = defineComponent(() => () => h(CardView, { id: picked.value }))
-  const all: Record<string, Component> = { title: Title, where: Where, list: List, pair: Pair, picked: Picked }
+  const functions: Record<string, Component> = { title: Title, where: Where, list: List, pair: Pair, picked: Picked }
+
+  // The same components as templates. Each destructures what `useState` gives and returns it by name, which is what
+  // `<script setup>` does, so the template reads `state.data.title` and not `state.value.data.title`.
+  const CardTemplate = templated('<li v-if="card">{{ card.data.label }} {{ card.data.bumps }}</li><li v-else>nothing</li>', {
+    props: { id: { type: String, required: true } },
+    setup: (props: { id: string }) => { const { child } = useState('board'); const { state: card } = useState(() => child('card', props.id)); return { card } },
+  }, (reads) => { rendered(`card ${reads.id}`); if (!reads.card) sawNothing.push(reads.id) })
+  const templates: Record<string, Component> = {
+    title: templated('<h1>{{ state.data.title }}</h1>', { setup: () => { const { state } = useState('board'); return { state } } }, () => rendered('title')),
+    where: templated('<p>{{ state.at }}</p>', { setup: () => { const { state } = useState('board'); return { state } } }, () => rendered('where')),
+    list: templated('<ul><CardView v-for="(label, id) in state.data.items" :key="id" :id="id" /></ul>', { components: { CardView: CardTemplate }, setup: () => { const { state } = useState('board'); return { state } } }, () => rendered('list')),
+    pair: templated('<p>{{ board.data.told }}</p>', {
+      setup: () => { const { state: board, child } = useState('board'); const { state: a } = useState(() => child('card', 'a')); return { board, a } },
+    }, (reads) => { rendered('pair'); pairs.push([reads.board.data.told, reads.a?.data.bumps]) }),
+    picked: templated('<CardView :id="picked" />', { components: { CardView: CardTemplate }, setup: () => ({ picked }) }, () => {}),
+    retitle: templated(`<button @click="send({ type: 'RETITLE', title: 'Clicked' })">Rename</button>`, { setup: () => { const { send } = useState('board'); return { send } } }, () => rendered('retitle')),
+  }
+  const all = written === 'templates' ? templates : functions
 
   const page = node('page')
   const app = createApp(defineComponent(() => () => parts.map((part) => h(all[part]!))))
@@ -125,7 +160,7 @@ const mounted = (parts: Array<'title' | 'where' | 'list' | 'pair' | 'picked'> = 
     Object.assign(since, renders)
     return names
   }
-  return { sys, send, ran, renders, page, picked, sawNothing, pairs, shows: (): string => shown(page), unmount: (): void => app.unmount(), mirrored: (): number => mirrors(sys).size }
+  return { sys, send, ran, renders, page, picked, sawNothing, pairs, click: (type: string): void => find(page, type)!.on.onClick!(), shows: (): string => shown(page), unmount: (): void => app.unmount(), mirrored: (): number => mirrors(sys).size }
 }
 
 const checks: Array<[string, () => Promise<void>]> = [
@@ -260,9 +295,26 @@ defineComponent(() => {
   return () => null
 })
 
+/** Only a template has something to click. */
+const templateOnly: Array<[string, () => Promise<void>]> = [
+  ['what a template sends on a click reaches the state, and what reads the place it changed renders again', async () => {
+    const it = mounted(['title', 'retitle'])
+    it.click('button')
+    deepStrictEqual(await it.ran(), ['title'])
+    strictEqual(it.shows(), 'ClickedRename')
+    it.unmount()
+  }],
+]
+
 let failed = 0
-for (const [name, check] of checks) {
-  try { await check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 8).join(' ')}`) }
+let total = 0
+for (const form of ['render functions', 'templates'] as const) {
+  written = form
+  console.log(`\nwritten as ${form}`)
+  for (const [name, check] of form === 'templates' ? [...checks, ...templateOnly] : checks) {
+    total++
+    try { await check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 8).join(' ')}`) }
+  }
 }
-console.log(`\n${checks.length - failed} of ${checks.length} passed`)
+console.log(`\n${total - failed} of ${total} passed`)
 if (failed) process.exitCode = 1

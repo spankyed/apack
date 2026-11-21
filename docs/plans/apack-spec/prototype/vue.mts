@@ -4,13 +4,19 @@
 //
 //   provide(app, system)                                          // once, where the app is made
 //
-//   const threads = useState('threads')                           // in a component's setup
-//   threads.state.value.at                                        // re-renders when it moves
-//   threads.state.value.data.titles[id]                           // re-renders when that title changes
-//   threads.send({ type: 'OPEN_THREAD', threadId })
+//   <script setup lang="ts">
+//   const { state: threads, send, child } = useState('threads')
+//   const { state: thread } = useState(() => child('thread', props.threadId))   // one of many, following the prop
+//   </script>
 //
-//   const thread = useState(() => threads.child('thread', props.threadId))   // one of many, following the prop
-//   thread.state.value?.data.messages                             // nothing while that thread is not running
+//   <template>
+//     <h1>{{ threads.data.titles[id] }}</h1>                       <!-- renders again when that title changes -->
+//     <p v-if="thread">{{ thread.data.messages.length }}</p>      <!-- nothing while that thread is not running -->
+//     <button @click="send({ type: 'OPEN_THREAD', threadId })">Open</button>
+//   </template>
+//
+// What `useState` gives is taken apart by name, as Vue's composables are: a ref that a component's setup holds by
+// name is read in its template without `.value`. In the script it is `threads.value`.
 //
 // A component reads and sends. It does not ask: an ask is work with an owner, and a component is not one. What a
 // component needs done, it sends to a state, whose `run` does it.

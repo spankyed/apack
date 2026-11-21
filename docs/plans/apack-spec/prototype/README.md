@@ -10,7 +10,8 @@ the app: nothing imports it, and no check covers it.
 | `append-cost.mts` | What a growing list costs one change at a time and in batches, on the draft and through an ask. Runs, for about 25 seconds |
 | `mirror.mts` | A running state as a reactive value: the kernel's changed places written into a copy that `@vue/reactivity` tracks. One copy for each state, shared by all that read it |
 | `vue.mts` | `useState`: what a Vue component uses to read a running state and tell it things |
-| `vue-check.mts` | `useState` checked by rendering real components with Vue's runtime and counting what rendered. Runs |
+| `vue-check.mts` | `useState` checked by rendering real components with Vue's runtime and counting what rendered, as render functions and as compiled templates. Runs |
+| `vue-fixture/` | A component file with a template, and the states it reads, for `vue-tsc` to check: what a template may read, and six lines that have to be errors |
 | `window-frame.mts` | What a frame is in a window: the next paint while it shows, the next turn while it is hidden |
 | `progress-check.mts` | That progress is gathered and nothing else is, and that what a state hears keeps the order it was sent in. Runs |
 | `schedule.mts` | A schedule given to the kernel in place of the event loop: runs a scenario under every ordering, or a seed's worth, and replays one |
@@ -58,6 +59,10 @@ npx tsx docs/plans/apack-spec/prototype/binding-check.mts
 
 ```bash
 npx tsx docs/plans/apack-spec/prototype/vue-check.mts
+```
+
+```bash
+npx vue-tsc --noEmit -p docs/plans/apack-spec/prototype/vue-fixture/tsconfig.json
 ```
 
 ```bash
