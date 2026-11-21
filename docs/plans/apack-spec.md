@@ -1036,6 +1036,18 @@ projects. Each would loosen the fit to this app.
       refresh does with a component whose shape changed;
     - **what is saved is a state and every state it started**, each with what it held;
     - **reads are asked again and writes are not made again**, which is what `awaits` and `makes` already are.
+- **The app's components against read-only data.** A component reads through `useState` and is not rewritten in
+  the move, so it has to compile against what this kernel hands it. On `7093d9744a`, 2026-11-22, with the `data`
+  that `useState` gives typed read-only all the way down (Vue's `DeepReadonly`) and nothing else changed, the
+  typecheck of the SDK and of the host passes, and the renderer and the built-in pack report 140 errors in 30 files:
+  15 in 4 files of the renderer, 125 in 26 files of the pack, 56 of those in the threads feature and 41 in code.
+  **None is a write.** There is no assignment to a read-only field and no list changed in place among them. Every
+  one is a value read from a machine handed to something that says it may write to it: a prop, a helper's
+  parameter, a `Ref<string[]>`. 19 are a plain `string[]`, and 17 are a `Thread` as its entity type declares it,
+  whose lists are writable and whose type is not to be widened to make a caller compile
+  (`packages/apack-sdk/TYPED-EARS.md`), so what takes one to read says so in its own signature. That no write was
+  found is not that there is none: one made through a helper typed as writable is what the compiler cannot see.
+  These are to be put right as each feature is ported, by saying in a prop or a parameter that it only reads.
 - **The Vue binding in a window.** One thing about it is not known, and cannot be found out here:
   - **Devtools.** Pinia shows its stores in Vue's devtools, with what changed them and when. A step is already that
     record here: its cause, the handlers that ran, the fields that changed. Giving it to the devtools belongs with
