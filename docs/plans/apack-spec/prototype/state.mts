@@ -125,28 +125,43 @@ type Below<S, P> = P extends `${infer H}.${infer T}` ? DataOf<Sub<S, H>> & Below
 type DataAt<S, P extends string> = P extends '' ? DataOf<S> : DataOf<S> & Below<S, P>
 
 /**
- * A value as it is read. Its fields cannot be assigned, and a field that is a list, a map or a set cannot be changed
- * in place. That is as far as the type goes: what is inside a list, or inside an object a field holds, is typed as
- * it was declared.
+ * A value as it is read. No field of it can be assigned, at any depth, and a field that is a list, a map or a set
+ * cannot be changed in place. A list further in than a field is typed as it was declared.
  *
- * It stops there because that is as far as TypeScript holds a type to it. A read-only list is refused where a
- * writable one is expected, so the type is kept by every helper it is handed to. A read-only object is not: it
- * passes for a writable one, so read-only fields further in would be dropped at the first helper, and would cost a
- * change to every type they met on the way. What holds at every depth is that the value is frozen.
+ * Each half goes as far as it costs nothing. A read-only object is taken wherever a writable one is expected, so
+ * read-only fields at every depth ask nothing of a helper that takes the object. A read-only list is refused where a
+ * writable one is expected, which is the one thing TypeScript holds a caller to: said of a field's own list it is
+ * kept across a call, and said of every list inside an entity it would refuse the entity wherever its declared type
+ * is asked for. What holds at every depth, whatever the types say, is that the value is frozen.
  */
+/** What has nothing inside it to write. Asked first, so that a string marked as a kind of id, which is a string and an object at once, stays the string it is. */
+type Whole = string | number | bigint | boolean | symbol | null | undefined
 export type Read<T> =
-  T extends (...given: never[]) => unknown ? T
-  : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Key, Held>
+  T extends Whole ? T
+  : T extends (...given: never[]) => unknown ? T
+  : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Key, Inside<Held>>
   : T extends ReadonlySet<infer Item> ? ReadonlySet<Item>
-  : T extends readonly unknown[] ? Readonly<T>
   : T extends object ? { readonly [K in keyof T]: ReadHeld<T[K]> }
   : T
-/** What a field holds, as it is read: a list, a map or a set that cannot be changed in place, and anything else as it is. */
+/** What a field holds, as it is read: a list, a map or a set that cannot be changed in place, and an object whose fields cannot be assigned. */
 type ReadHeld<T> =
-  T extends (...given: never[]) => unknown ? T
-  : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Key, Held>
+  T extends Whole ? T
+  : T extends (...given: never[]) => unknown ? T
+  : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Key, Inside<Held>>
   : T extends ReadonlySet<infer Item> ? ReadonlySet<Item>
-  : T extends readonly unknown[] ? Readonly<T>
+  : T extends object ? { readonly [K in keyof T]: Inside<T[K]> }
+  : T
+/**
+ * What is further in than a field: an object's fields cannot be assigned, at any depth, and a list, a map or a set
+ * is as it was declared. A read-only object is taken wherever a writable one is expected, so saying it costs no
+ * caller anything. A read-only list is not, so one further in is left writable in its type, and frozen.
+ */
+type Inside<T> =
+  T extends Whole ? T
+  : T extends (...given: never[]) => unknown ? T
+  : T extends ReadonlyMap<unknown, unknown> | ReadonlySet<unknown> ? T
+  : T extends readonly unknown[] ? { [K in keyof T]: Inside<T[K]> }
+  : T extends object ? { readonly [K in keyof T]: Inside<T[K]> }
   : T
 /** What a field may be given: its own type, or that read from somewhere it cannot be written. */
 type Givable<D> = { [K in keyof D]: D[K] | Read<D[K]> }

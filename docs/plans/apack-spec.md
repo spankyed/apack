@@ -173,24 +173,29 @@ points at.
    that held something another could still change would change with no step, which is the fault; freezing puts the
    error at the write, in the other's code, with a message that names neither.
 
-   **The types say it one level in, and a list all the way.** What a handler is handed and what is read from a state
-   are typed so that a field cannot be assigned and a list a field holds cannot be changed in place: `data.count = 1`,
-   `data.items.push(x)` and `data.items.sort()` do not compile. Further in, the types say nothing, and freezing does:
-   `data.byId.a.push(x)` compiles and throws on the line that ran it. The types stop there because that is as far as
-   TypeScript holds anyone to them. A read-only list is not taken where a list that may be written is expected, so
-   the word carries across a call. A read-only object is taken where a writable one is expected, so past a call the
-   word is worth nothing, and a type that says it at every depth costs a cast or a rewritten signature at every
-   helper and buys only the writes made in the same expression as the read. The flag that would have closed that,
+   **The types say a field at every depth, and a list where a field holds it.** What a handler is handed and what
+   is read from a state are typed so that no field can be assigned, however far in, and a list a field holds cannot
+   be changed in place: `data.count = 1`, `data.titles[id] = title`, `data.open.title = title`, `data.items.push(x)`
+   and `data.items.sort()` do not compile. What the types leave is a list further in changed in place:
+   `data.byId.a.push(x)` compiles and throws on the line that ran it. Each half goes as far as it costs nothing, and
+   the two are different because TypeScript treats them differently. A read-only object is taken wherever a writable
+   one is expected, so saying it at every depth asks nothing of a helper that takes the object as its type declares
+   it: measured on the app, it adds no error at all (Not built). The same fact means the word does not carry across a
+   call, so it refuses the write made where the value was read, which is where a handler writes. A read-only list is
+   not taken where a list that may be written is expected. Said of a field's own list, that is the word carrying
+   across a call. Said of every list inside an entity, it refuses the entity wherever its declared type is asked for,
+   which is what a type read-only at every depth cost. The flag that would have made an object's word carry too,
    `--enforceReadonly`, was closed unmerged on 2026-03-24 (TypeScript PR 58296), and nothing here waits on it.
-   Solid took the deep type off its stores for this reason (PR 3261, 2026-09-04), Redux Toolkit declined to add it,
+   Solid took the type that is read-only at every depth off its stores for what it cost (PR 3261, 2026-09-04), Redux Toolkit declined to add it,
    and Valtio ships it with a way out; Vue's `readonly()` and Effect type it deep. What is read can be handed on as
    it is, since handing on is not writing: given back as a change, sent, told, broadcast, reported, said as progress,
    given as an answer or as an ask's arguments. None asks for a copy or a cast. A draft is the one place a write is
    written, and it is typed as what may be written to, apart from what is read. That leaves one place a read value is
    not taken as it is: a list assigned to a field of a draft, `d.items = data.items`. It would be safe, and TypeScript
    cannot give a field one type to read and another to assign, so there it is copied, or given as a field of the
-   change. **Freezing is the guarantee and the types are the early word.** What the types leave, a write further in
-   or one made through a helper typed as writable, is for a lint rule to find before it runs (Not built).
+   change. **Freezing is the guarantee and the types are the early word.** What the types leave, a list further in
+   changed in place or a write made through a helper typed as writable, is for a lint rule to find before it runs
+   (Not built).
 
    **A change is all of it or none, and what the compiler refuses the kernel refuses too.** The types already rule out
    adding or removing a field, giving a field no state has, moving to a state that does not exist, and entering a
@@ -581,7 +586,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | An event handler is not given `ask` | `ask` everywhere. An event handler cannot await, so it could only start an ask and drop the promise, with nothing around it to take a `Left`. That floating promise is what took a process down when a check stopped a window mid-ask. Without `ask` the mistake does not compile, and the kernel still catches an ask started in `run` and never awaited |
 | A component is handed the state's own values, a field at a time | A reactive copy of the state, written to only at the places a step changed, which was built first and rendered to the key. Moving the app's components onto `useState` showed what a copy costs: a machine that drops what it is told by `includes` never matched the copies sent back, `structuredClone` refused a proxy, a component definition held in data was copied, a watch did not run when a result was replaced by an equal one, and a mirrored object sent in an event put the mirror's storage into the machine. Every one is the copy not being the state's object. And tracking the path a reader took through proxies that hand over the state's own value at the end, which only saves a value that is not an object: a list passed to a child is a proxy again. MobX, Solid's stores, Pinia and Vue's `reactive` all track that way, and each ships a way to unwrap and a list of what to watch for. Valtio hands a component a frozen snapshot with what it read tracked, which is that done soundly and is more to build; the promise above leaves room to go there, since a reader that runs less often is still one that runs when what it read changed. This is what Vue's own guide shows for an outside store, Immer or XState held in a `shallowRef`, and what the app ships |
 | What a state holds is frozen | Leaving it as it is and trusting that nothing writes to it. With a copy, a component that wrote to what it read damaged the copy. With the state's own objects it damages the state: no handler ran, nobody is told, and every earlier value that shares the object changes with it. Two of the prototype's own checks were sorting a state's list in place. Immer freezes what it makes for the same reason, and Vue leaves a frozen object unwrapped |
-| The types say read-only one level in, and a list all the way | Read-only at every depth, which is what Vue's `readonly()` and Effect type. TypeScript holds a caller to a read-only list and to nothing else: a read-only object passes for a writable one, so a deep type refuses a write only in the expression that read it, and costs a signature at every helper that takes an entity as its type declares it. Measured on the app, the deep type is 125 errors in the built-in pack and the shallow one 53, with no write among either (Not built). Solid removed the deep type from its stores, Redux Toolkit declined it, and Immer's is left off by most who use it. And no types at all, as Redux Toolkit, NgRx and Apollo have it, which gives up the one check that does carry: a list sorted or pushed to in place, the commonest write there is. Freezing is the guarantee under either |
+| The types say a field read-only at every depth, and a list where a field holds it | Read-only at every depth for lists too, which is what Vue's `readonly()` and Effect type. TypeScript holds a caller to a read-only list and not to a read-only object, so a list typed read-only inside an entity refuses the entity at every helper that takes it as its type declares it: measured on the app, 125 errors in the built-in pack against 54, with no write among either (Not built). And read-only one level in only, a field and a list a field holds, which leaves `data.titles[id] = title` compiling: the commonest write there is to a record kept by id, and refusing it costs nothing, since a read-only object passes wherever a writable one is asked for. Measured, the pack and the renderer report the same errors with it as without. Solid removed the deep type from its stores, Redux Toolkit declined it, and Immer's is left off by most who use it. And no types at all, as Redux Toolkit, NgRx and Apollo have it, which gives up the one check that does carry: a list sorted or pushed to in place, the commonest write there is. Freezing is the guarantee under either |
 | A field replaced by an equal value is a change | Keeping the old object where the new one is equal to it, as TanStack Query does to render less. The app shows a toast when a result is replaced, whatever it holds, so replaced has to mean changed |
 | A hidden window's frame is the next turn | `requestAnimationFrame` always. A hidden window gets none, so what was gathered for it grew without bound until it was shown |
 | Progress is heard as a list, once a frame | One call per update. It made a change, a notice and a copy of the growing list per item: fine at 10,000, unusable at 100,000. A persistent vector would make appends cheap, but its values are not plain arrays, which the snapshot, the wire and the templates all assume. Chunked lists stay plain but push the chunking onto every reader |
@@ -1052,18 +1057,24 @@ projects. Each would loosen the fit to this app.
   the move, so it has to compile against what this kernel hands it. Measured twice on `908a41d41b`, 2026-11-21,
   with only the type of the `data` that `useState` gives changed. The typecheck of the SDK and of the host passes
   either way. Typed read-only at every depth (Vue's `DeepReadonly`), the built-in pack reports 125 errors in 26 files
-  and the renderer's 44 lines in 4 files. Typed as the kernel types it, a field and a list a field holds, the pack reports 53 in
-  21 files and the renderer's 4 lines in 2 files, which are 2 errors each reported twice. **None is a write, under either.** There is no assignment to a read-only field
+  and the renderer's 44 lines in 4 files. Typed one level in, a field and a list a field holds, the pack reports 54 in
+  21 files and the renderer's 4 lines in 2 files, which are 2 errors each reported twice. Typed as the kernel types
+  it, every field at every depth as well, both report those same errors and no other: a read-only object is taken
+  wherever a writable one is asked for. **None is a write, under any of the three.** There is no assignment to a read-only field
   and no list changed in place among them. Every one is a value read from a machine handed to something that says it
-  may write to it: a prop, a helper's parameter, a `Ref<string[]>`. Of the 57 lines that remain, 39 are a read-only list
+  may write to it: a prop, a helper's parameter, a `Ref<string[]>`. Of the 58 lines that remain, most are a read-only list
   handed where a writable one is asked for, which is the one thing TypeScript holds a caller to and the thing worth
   saying: a prop or a parameter that only reads a list says `readonly string[]`. What the deep type added to that was
   mostly a `Thread` handed on as its entity type declares it, whose lists are writable and whose type is not to be
   widened to make a caller compile (`packages/apack-sdk/TYPED-EARS.md`). That no write was found is not that there
-  is none: one made further in, or through a helper typed as writable, is what the compiler cannot see. What remains is
+  is none: a list further in changed in place, or a write through a helper typed as writable, is what the compiler
+  cannot see. A type that takes an object apart has to ask first whether it is a string: one marked as a kind of id
+  (`FeatureRef`) is a string and an object at once, and taken apart it is refused everywhere a string is asked for,
+  which the first measurement of this showed as 28 lines in the renderer. What remains is
   to be put right as each feature is ported.
-- **A lint rule for a write to what was read.** The types refuse a field assigned and a list changed in place, and
-  freezing throws on the rest when it runs. Between them is a write further in that no check runs over. A rule
+- **A lint rule for a write to what was read.** The types refuse a field assigned at any depth and a field's list
+  changed in place, and freezing throws on the rest when it runs. Between them is a list further in changed in place,
+  and a write through a helper typed as writable, that no check runs over. A rule
   that refuses an assignment or an in-place method through anything read from a state closes it before a run:
   `eslint-plugin-functional`'s `immutable-data` and unicorn's `no-array-sort`, `no-array-reverse` and
   `no-array-splice` are the kind, and it belongs with the pack rules, since a pack is where the handlers are.
