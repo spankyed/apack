@@ -13,6 +13,13 @@ import type { ClaudeNativeSubmissionReceipt } from '#features/code/be/services/c
 import type { MessageReferences, ToolActivityEntry } from './types.ts'
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 
+const historyWatchers = new Set<() => void>()
+
+/** Retire callbacks before killed owners can drain against an unloaded pack. */
+export function disposeClaudeTerminalHistory() {
+  for (const dispose of historyWatchers) dispose()
+}
+
 /** Mirror the process, independent of mounted windows; UUIDs make repeated journal rows idempotent. */
 export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNativeTerminalOwner, current: () => boolean, readLaunch: () => Promise<ClaudeNativeLaunch | undefined>) {
   const nativeMessages = new Map<string, { id: EntityId; terminal: boolean; timestamp?: number; order?: number }>()
@@ -21,7 +28,8 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
   const results = new Map<string, { text: string; error: boolean; uuid?: string; agentId?: string; assistantUuid?: string }>()
   const agentRows = new Map<string, ClaudeNativeJournalEntry>()
   let lastTaskSnapshot = ''
-  let stopped = false, journalPending = false, inFlight: Promise<void> | undefined, lastMetadata = '', problem: string | undefined
+  let disposed = false, journalPending = false, inFlight: Promise<void> | undefined, lastMetadata = '', problem: string | undefined
+  const ownsHistory = () => !disposed && current()
   const initial = repository.chatQueries.threadData(threadId)
   const retired = new Set<string>(), rewoundUsers = new Set<string>(), rewoundNotices = new Set<string>()
   const retirementScopes = new Map<string, { uuids: Set<string>; rewoundUserUuids: Set<string>; rewoundNoticeUuids: Set<string> }>()
@@ -138,7 +146,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const batch = await owner.readJournal()
         journalPending = batch.pending
         problem = batch.problems.length ? batch.problems.join('; ') : undefined
-        if (!current() || !repository.threadQueries.byId(threadId)) return
+        if (!ownsHistory() || !repository.threadQueries.byId(threadId)) return
         applyRetirements()
         // Journal reads advance their cursor. Persist rows before fallible dialog RPCs.
         for (const entry of batch.entries) {
@@ -185,7 +193,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
           await owner.refreshMcpInput()
           await owner.refreshNotice()
         }
-        if (!current() || !repository.threadQueries.byId(threadId)) return
+        if (!ownsHistory() || !repository.threadQueries.byId(threadId)) return
         applyRetirements()
         const genericPermissions = backgrounded ? [] : await owner.getGenericToolPermissionDialogs()
         const toolPermissions = backgrounded ? [] : await owner.getToolPermissionDialogs()
@@ -194,7 +202,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         const bashes = backgrounded ? [] : await owner.getBashDialogs()
         const questions = backgrounded ? [] : await owner.getQuestionDialogs()
         const plans = backgrounded ? [] : await owner.getPlanDialogs()
-        if (!current() || !repository.threadQueries.byId(threadId)) return
+        if (!ownsHistory() || !repository.threadQueries.byId(threadId)) return
         const dialogThread = repository.threadQueries.byId(threadId)!
         const priorControl = object(dialogThread.context?.claudeCode?.pendingControlRequest)
         const dialog = toolPermissions.at(0) ?? workflows.at(0) ?? reads.at(0) ?? bashes.at(0) ?? questions.at(0) ?? plans.at(0)
@@ -277,7 +285,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         if (snapshot === lastMetadata) return
         lastMetadata = snapshot
         const nativeLaunch = await readLaunch()
-        if (!current()) return
+        if (!ownsHistory()) return
         const thread = repository.threadQueries.byId(threadId)
         if (!thread) return
         const prior = thread.context?.claudeCode ?? {}
@@ -298,7 +306,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
       } catch (error) {
         journalPending = false
         problem = error instanceof Error ? error.message : 'Native conversation history could not be synchronized'
-        const thread = current() ? repository.threadQueries.byId(threadId) : undefined
+        const thread = ownsHistory() ? repository.threadQueries.byId(threadId) : undefined
         if (thread && thread.context?.claudeCode?.sessionError !== problem) {
           const context = { ...thread.context, claudeCode: { ...thread.context?.claudeCode, sessionError: problem, chatState: 'error' } }
           repository.threadCommands.update(threadId, { context }); updateChatState(threadId, 'error')
@@ -307,12 +315,29 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
     })().finally(() => { inFlight = undefined })
     return inFlight
   }
-  const timer = setInterval(() => { if (!stopped) void flush() }, 250); timer.unref?.()
+  const timer = setInterval(() => { void flush() }, 250)
+  timer.unref?.()
+  const dispose = () => {
+    disposed = true
+    clearInterval(timer)
+    historyWatchers.delete(dispose)
+  }
+  historyWatchers.add(dispose)
   void flush()
-  owner.beforeRelease(async () => { stopped = true; clearInterval(timer); await inFlight; do { await flush() } while (journalPending && current()) })
+  owner.beforeRelease(async () => {
+    clearInterval(timer)
+    try {
+      await inFlight
+      if (!disposed) {
+        do { await flush() } while (journalPending && ownsHistory())
+      }
+    } finally {
+      dispose()
+    }
+  })
   return {
     acceptSubmission(receipt: ClaudeNativeSubmissionReceipt, references: MessageReferences) {
-      if (!current() || receipt.sessionId !== owner.state.sessionId) return
+      if (!ownsHistory() || receipt.sessionId !== owner.state.sessionId) return
       const key = JSON.stringify([receipt.sessionId, receipt.uuid]), retained = structuredClone(references)
       acceptedReferences.set(key, retained)
       const existing = nativeMessages.get(key)

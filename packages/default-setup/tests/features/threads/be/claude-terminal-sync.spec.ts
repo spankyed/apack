@@ -64,6 +64,27 @@ it.each([false, true])('persists the final row beyond the batch boundary on exit
   expect(fake.thread.context.claudeCode).toMatchObject(damaged ? { chatState: 'error', sessionError: 'Native transcript contains invalid JSON' } : { chatState: 'paused', sessionError: undefined })
 })
 
+it.each(['journal result', 'journal error'])('retires in-flight %s when the pack is unloaded', async outcome => {
+  const { disposeClaudeTerminalHistory, syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  const pending = Promise.withResolvers<Awaited<ReturnType<ClaudeNativeTerminalOwner['readJournal']>>>()
+  const current = vi.fn(() => { throw new Error('Pack services are unavailable until the host accepts this runtime') })
+  let release!: () => Promise<void>
+  const readJournal = vi.fn(() => pending.promise)
+  const owner = {
+    readJournal, beforeRelease(listener: () => Promise<void>) { release = listener },
+  } as unknown as ClaudeNativeTerminalOwner
+  syncClaudeTerminalThread('thread' as EntityId, owner, current, readLaunch)
+
+  disposeClaudeTerminalHistory()
+  const released = release()
+  if (outcome === 'journal result') pending.resolve({ entries: [], pending: true, problems: [] })
+  else pending.reject(new Error('Terminal closed during the journal read'))
+  await expect(released).resolves.toBeUndefined()
+  expect(readJournal).toHaveBeenCalledOnce()
+  expect(current).not.toHaveBeenCalled()
+  expect(fake.messages).toEqual([])
+})
+
 it.each([false, true])('retains receipt-bound references when journal arrives before receipt: %s', async journalFirst => {
   const uuid = '55555555-5555-5555-5555-555555555555', otherUuid = '66666666-6666-6666-6666-666666666666'
   const entry = (id: string) => ({ sessionId, row: { sessionId, uuid: id, type: 'user', message: { content: 'Native rewritten text' } } })

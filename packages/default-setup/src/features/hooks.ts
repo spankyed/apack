@@ -1,3 +1,4 @@
+import { disposeClaudeTerminalHistory } from './threads/be/claude-terminal-sync.ts';
 import { clearClaudeUiViews } from './threads/be/claude-ui.ts';
 import { killAllHandles } from './code/be/services/claude-code/handle-store.ts';
 import { clearAllSchedules } from './brain/be/services/scheduler.ts';
@@ -65,6 +66,7 @@ export const onShutdown = () => {
   // only by its modules. The pack stopping is not always the process ending: a reload replaces those modules in
   // a process that goes on, where a child they started would run on with nothing left to end it, and the views
   // a handle fed would have nobody to reach. Stopping the app server ends every Codex turn with it.
+  dispose(disposeClaudeTerminalHistory);
   dispose(clearClaudeUiViews);
   dispose(killAllHandles);
   dispose(stopCodex);
