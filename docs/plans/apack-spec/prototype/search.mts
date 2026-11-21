@@ -186,7 +186,7 @@ const searchSurface = state<SearchSurface, SearchSurfaceEvent>()({
 
       // Only a search that is running has results and progress arriving.
       on: {
-        RESULT:   ({ data: result }, { data }) => ({ data: { searchResults: [...data.searchResults, result] } }),
+        RESULT:   ({ data: result })   => ({ data: (d) => { d.searchResults.push(result) } }),
         PROGRESS: ({ data: progress })         => ({ data: { searchProgress: progress } }),
       },
     },

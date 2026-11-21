@@ -11,6 +11,8 @@
 //   broadcast(name, event)   from the backend to that surface in every window
 //   watch(key, feature, view, args, heard)   follows a live read of the database for as long as the state is the case
 
+import { produce } from './draft.mts'
+
 export type AnyEvent = { readonly type: string }
 /**
  * One ask. `refuses` names the ways it may be refused that an asker can act on: kinds alone
@@ -95,9 +97,16 @@ type Gained<S, H, T> = T extends `${infer TH}.${infer TT}`
   ? (H extends `${TH}.${infer HT}` ? Gained<Sub<S, TH>, HT, TT> : H extends TH ? Below<Sub<S, TH>, TT> : Below<S, T>)
   : DataOf<Sub<S, T>>
 
+/**
+ * A change to data: the fields to replace, or a function that edits a draft of the data in place. The draft is the way
+ * to change something nested: `(d) => { d.titles[id] = title }`. Nothing is mutated; a new value is made from the edits.
+ * A move says its data as fields, since what it gives is the data of the states it enters.
+ */
+type Change<D> = Partial<D> | ((draft: D) => void)
+
 /** What happens next, in the shape of the value: where to be, and what data changes. */
 type Next<R, H extends string> =
-  | { at?: never; data: Partial<DataAt<R, H>> }
+  | { at?: never; data: Change<DataAt<R, H>> }
   | { [T in Paths<R>]: {} extends Gained<R, H, T> ? { at: T; data?: Partial<DataAt<R, T>> } : { at: T; data: Gained<R, H, T> & Partial<DataAt<R, T>> } }[Paths<R>]
 
 /** A state this one started. Only its starter holds it: it can be told, asked and read, never written. */
@@ -249,7 +258,7 @@ export interface System {
   /** Every running state here, as of the last commit. */
   snapshot(): Record<string, unknown>
   /** Called once per step that changed anything, after it has committed. */
-  subscribe(listener: (changed: readonly string[]) => void): void
+  subscribe(listener: (changed: readonly string[], fields: Readonly<Record<string, readonly string[]>>) => void): void
   /** From a window: joins it to its backend. Closing the link is the window going away. */
   connect(backend: System): { close(): void }
   stop(): void
@@ -263,7 +272,10 @@ export function system(host: { side: 'backend' | 'window'; views?: ViewHost; tra
   /** What leaves when the step commits: answers, progress, what crosses a link, and word to subscribers. */
   const leaving: Array<() => void> = []
   const changed = new Set<string>()
-  const listeners: Array<(changed: readonly string[]) => void> = []
+  /** For each running state that changed in this step, the fields of its data that did. */
+  const fields = new Map<string, Set<string>>()
+  const touch = (ref: string, field: string): void => { changed.add(ref); fields.set(ref, (fields.get(ref) ?? new Set()).add(field)) }
+  const listeners: Array<(changed: readonly string[], fields: Readonly<Record<string, readonly string[]>>) => void> = []
   let committed: Record<string, unknown> = {}
   let stepping = false
 
@@ -404,11 +416,23 @@ export function system(host: { side: 'backend' | 'window'; views?: ViewHost; tra
 
   const apply = (active: Active, next: unknown): void => {
     if (next === undefined || next === null || active.controller.signal.aborted) return
-    const { at, data = {} } = next as { at?: string; data?: Plain }
+    const { at, data = {} } = next as { at?: string; data?: Plain | ((draft: Plain) => void) }
     const top = active.top
-    if (at !== undefined) go(top, at, data)
-    for (const [field, value] of Object.entries(data)) if (field in top.data) top.data = { ...top.data, [field]: value }
-    changed.add(top.ref)
+    if (typeof data === 'function') {
+      // Edits to a draft. A field can be edited, never added or removed: which fields exist is the states' to say.
+      const before = top.data
+      const { value, touched } = produce(before, data)
+      const kept = Object.fromEntries(Object.keys(before).map((field) => [field, field in value ? value[field] : before[field]]))
+      for (const [field] of touched) { if (field! in before && field! in value) touch(top.ref, field!); else trace(`DEFECT: ${top.ref} has no field ${field} to change`) }
+      top.data = touched.length ? kept : before
+      return
+    }
+    if (at !== undefined) { go(top, at, data); changed.add(top.ref) }
+    for (const [field, value] of Object.entries(data)) {
+      if (!(field in top.data)) continue
+      if (!Object.is(top.data[field], value)) touch(top.ref, field)
+      top.data = { ...top.data, [field]: value }
+    }
   }
 
   const taker = (top: Running, table: 'on' | 'asks', name: string): { handler: Function; of: Active } | undefined => {
@@ -452,7 +476,9 @@ export function system(host: { side: 'backend' | 'window'; views?: ViewHost; tra
       const refs = [...changed]
       changed.clear()
       committed = Object.fromEntries([...running].map(([ref, top]) => [ref, valueOf(top)]))
-      leaving.push(() => { for (const listener of listeners) listener(refs) })
+      const which = Object.fromEntries([...fields].map(([ref, touched]) => [ref, [...touched]]))
+      fields.clear()
+      leaving.push(() => { for (const listener of listeners) listener(refs, which) })
     }
     for (const leave of leaving.splice(0)) leave()
   }

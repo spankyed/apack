@@ -60,7 +60,7 @@ const threadsSurface = state<ThreadsSurface, ThreadsSurfaceEvent>()({
     VIEW_THREAD: ({ id }) => ({ at: 'detail', data: { id, detail: null } }),
 
     'THREADS.READ': ({ threads })     => ({ data: { threads } }),
-    'TAB.READ':     ({ tab }, { data }) => ({ data: { tabs: { ...data.tabs, [tab.threadId]: tab } } }),
+    'TAB.READ':     ({ tab })         => ({ data: (d) => { d.tabs[tab.threadId] = tab } }),
     VIEW_FAILED:    ({ view, error }) => ({ data: { problem: `${view}: ${error}` } }),
 
     // One view per open tab: a keyed set, started and stopped as the set changes.
@@ -71,8 +71,7 @@ const threadsSurface = state<ThreadsSurface, ThreadsSurfaceEvent>()({
         watch(`tab:${threadId}`, 'threads', 'tab', { threadId }, (update) =>
           send(update.ok ? { type: 'TAB.READ', tab: update.value } : { type: 'VIEW_FAILED', view: 'tab', error: update.error }))
       }
-      const tabs = Object.fromEntries(Object.entries(data.tabs).filter(([threadId]) => open.includes(threadId)))
-      return { data: { openTabs: open, tabs } }
+      return { data: (d) => { d.openTabs = open; for (const threadId of Object.keys(d.tabs)) if (!open.includes(threadId)) delete d.tabs[threadId] } }
     },
   },
 

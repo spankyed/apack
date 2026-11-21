@@ -147,15 +147,15 @@ function threads(inference: { streamText(prompt: string, signal: AbortSignal): A
     },
 
     on: {
-      THREAD_ADDED: ({ threadId, title }, { data, broadcast }) => {
+      THREAD_ADDED: ({ threadId, title }, { broadcast }) => {
         // to that surface in every window
         broadcast('threads', { type: 'THREAD_CREATED', threadId, title })
-        return { data: { titles: { ...data.titles, [threadId]: title }, messages: { ...data.messages, [threadId]: [] } } }
+        return { data: (d) => { d.titles[threadId] = title; d.messages[threadId] = [] } }
       },
 
-      MESSAGE_STORED: ({ threadId, text, reply }, { data, broadcast }) => {
+      MESSAGE_STORED: ({ threadId, text, reply }, { broadcast }) => {
         broadcast('threads', { type: 'THREAD_CHANGED', threadId })
-        return { data: { messages: { ...data.messages, [threadId]: [...(data.messages[threadId] ?? []), text, reply] } } }
+        return { data: (d) => { d.messages[threadId]?.push(text, reply) } }
       },
     },
   })

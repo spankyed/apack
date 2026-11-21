@@ -83,6 +83,18 @@ Exactly one path is the case, so where a state is is one string, and its data is
 A handler or `run` returns the same two fields the value has: `{ at, data }`. Giving only `data` changes fields and
 stays. Giving `at` goes to that path.
 
+`data` is the fields to replace, or, for a change to something nested, a function that edits a draft in place:
+
+```ts
+THREAD_ADDED: ({ threadId, title }) => ({
+  data: (d) => { d.titles[threadId] = title; d.messages[threadId] = [] },
+}),
+```
+
+Nothing is mutated: a new value is made from the edits, what was not edited is the same object as before, and the
+kernel learns exactly which fields changed. A draft edits fields that exist and cannot add or remove one, since which
+fields exist is the states' to say.
+
 ### Rules
 
 1. **An event or ask goes to the innermost state that takes it**, then outward.
@@ -158,13 +170,14 @@ batch, and this repo's own `transact` followed by `watch`.
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
 | An ask does not change data by returning | Considered and declined: every change then has one shape, the extractor stays complete, and no real port needed it. To revisit if ports show many ask-plus-event pairs; the form would be an explicit `change((data) => …)` |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
+| A nested change is an edit to a draft, built here | Spreads at every level (`{ ...data.titles, [id]: title }`), which get worse with depth. Immer and Mutative were considered; a state's data is plain by rule, so most of what they handle cannot occur, the kernel wants the changed fields in its own shape, and the kernel is meant to have no dependencies. To revisit, in favour of Mutative, if the draft grows special cases |
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
 
 ## What the prototype proves
 
 Everything below is in [`apack-spec/prototype/`](apack-spec/prototype/) and runs from the repo root; its README has the
-commands. Types and kernel together are about 500 lines.
+commands. Types and kernel together are about 540 lines, and the draft 110.
 
 - **Two real features are ported.** The code search, backend and surface (`search.mts`), runs: results stream, a second
   search aborts the first on the backend, and cancel works. About 167 and 192 non-blank lines become about 39 and 77.
@@ -179,6 +192,12 @@ commands. Types and kernel together are about 500 lines.
 - **A surface follows views** (`views.mts`), modelled on the threads surface: one for as long as the surface runs, one
   only while a thread is open, and one per open tab. Opening another thread stops the last one's view; closing a tab
   stops its view; stopping the surface stops the rest.
+- **A draft** (`draft.mts`, 110 lines; `draft-check.mts`, 15 checks) for what a hand-built one gets wrong: the old
+  value untouched, what was not edited kept as the same object, an edit that changes nothing returning the very same
+  value, the same place read twice being the same draft, arrays through `push`, `splice`, `sort` and `length`, keys
+  added and deleted, one part of the draft assigned to another, what is not plain handed over as it is, and a draft
+  kept past its handler refusing to be used. The kernel tells subscribers which fields of each state changed in a
+  step, and tells them nothing when a handler changed nothing.
 - **`within` narrows by path** (`state.mts`, used in `threads.mts`): inside `thread` the thread's id can be read,
   inside `thread.sending` the streamed text can, and a state that does not exist does not compile.
 - **Mistakes that do not compile** were checked at each stage with `@ts-expect-error`: a state missing from a
@@ -262,8 +281,8 @@ The design is the smaller half of the value. In the order they would pay:
    if (within(thread, 'thread')) thread.data.threadId
    ```
 
-   `within` exists. `useState` and per-field reactivity do not, and a per-field change is known to the kernel only as
-   "this state changed" today.
+   `within` exists, and the kernel tells a subscriber which fields of a state changed in a step, which is what
+   per-field reactivity needs. `useState` and the reactivity itself do not exist.
 2. **Tests that replay interleavings.** The risk in this design is ordering: a result that arrives after its state was
    left. A kernel with an injectable scheduler can run every ordering of a scenario, or a seeded one, and replay a
    failure exactly. This is the strongest reason to own the kernel.
@@ -278,8 +297,8 @@ The design is the smaller half of the value. In the order they would pay:
    the screen, and the answer is right by construction. For this product it is the capability most worth having, and
    no state library offers it.
 6. **The rough edges the examples showed.** A state it started is reached with `child('draft', draft)` each time and
-   should be declared once. A nested update is noisy (`{ ...data.titles, [id]: title }`). The two under Not built about
-   fields: a default that still has to be given, and names unique along a path.
+   should be declared once. The two under Not built about fields: a default that still has to be given, and names
+   unique along a path.
 
 Deliberately not built: parallel states, history states, a visual editor, and a general-purpose library for other
 projects. Each would loosen the fit to this app.
