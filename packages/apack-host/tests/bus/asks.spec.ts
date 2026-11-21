@@ -19,7 +19,10 @@ type Contract = {
   context: { count: number };
   incoming: { type: 'OPEN' } | { type: 'CLOSE' };
   outgoing: { type: 'COUNTED' };
-  asks: { COUNT: { answer: { count: number } }; READ: { answer: { count: number } }; WAIT: { answer: { count: number } } };
+  asks: {
+    COUNT: { answer: { count: number } }; READ: { answer: { count: number } }; WAIT: { answer: { count: number } };
+    STREAM: { answer: { count: number }; progress: number };
+  };
 };
 const spec = defineSystem<Contract>();
 /** What WAIT's handler waits on, which a case settles */
@@ -28,13 +31,24 @@ const answers = spec.answers({
   COUNT: ({ context }) => ({ count: context.count + 1 }),
   READ: ({ context }) => ({ count: context.count }),
   WAIT: () => new Promise<number>((resolve) => { release = resolve; }).then((count) => ({ count })),
+  // Tells its asker 1 and 2, waits to be released, then tells 3 and answers: what it was handed says whether to go on
+  STREAM: async ({ progress, signal }) => {
+    progress(1);
+    progress(2);
+    const count = await new Promise<number>((resolve) => { release = resolve; });
+    streamStopped = signal.aborted;
+    progress(3);
+    return { count };
+  },
 });
+/** Whether STREAM's handler found its signal aborted when it was released */
+let streamStopped: boolean | undefined;
 
 /** A system that takes COUNT only while open, and READ in either state */
 const counter = setup({ types: spec.types, actions: { ...answers.actions } }).createMachine({
   context: { count: 41 },
   initial: 'closed',
-  on: { READ: answers.on.READ, WAIT: answers.on.WAIT },
+  on: { READ: answers.on.READ, WAIT: answers.on.WAIT, STREAM: answers.on.STREAM },
   states: {
     closed: { on: { OPEN: 'open' } },
     open: { on: { COUNT: answers.on.COUNT, CLOSE: 'closed' } },
@@ -47,7 +61,7 @@ const send = (message: Message) => { bus.send({ type: 'INCOMING', message }); };
 
 beforeEach(async () => {
   registry.registerPack({ id: 'counter-pack', features: { counter: {
-    system: { machine: counter, receives: ['OPEN', 'CLOSE', 'COUNT', 'READ', 'WAIT'], asks: { COUNT: [], READ: [], WAIT: [] } },
+    system: { machine: counter, receives: ['OPEN', 'CLOSE', 'COUNT', 'READ', 'WAIT', 'STREAM'], asks: { COUNT: [], READ: [], WAIT: [], STREAM: [] } },
     // The surface a window's ask comes from, which its answer goes back to
     surface: { receives: [] },
   } } });
@@ -114,5 +128,30 @@ describe('an ask', () => {
     release(1);
     await flush();
     expect(takeSystemErrors()).toEqual([]);
+  });
+
+  it('hears what its handler tells it before the answer, in order', async () => {
+    const heard: unknown[] = [];
+    const asking = untypedAsk(COUNTER, { type: 'STREAM' }, { heard: (update) => { heard.push(update); } });
+    await flush();
+    expect(heard).toEqual([1, 2]);
+    release(7);
+    expect(await asking).toEqual({ ok: true, value: { count: 7 } });
+    expect(heard).toEqual([1, 2, 3]);
+    expect(streamStopped).toBe(false);
+  });
+
+  it('that its asker stops aborts its handler\'s signal, and nothing more of it is heard', async () => {
+    const heard: unknown[] = [];
+    const stopping = new AbortController();
+    const asking = untypedAsk(COUNTER, { type: 'STREAM' }, { signal: stopping.signal, heard: (update) => { heard.push(update); } });
+    await flush();
+    stopping.abort(new Error('the asker moved on'));
+    await expect(asking).rejects.toThrow('the asker moved on');
+    await flush();
+    release(7);
+    await flush();
+    expect(streamStopped).toBe(true);
+    expect(heard).toEqual([1, 2]);
   });
 });

@@ -9,16 +9,16 @@ import { randomId } from '../utils/random-id.ts';
 import type { ApplicationHotkeys } from '../types/index.ts';
 import { eventTypes } from './event-types.ts';
 import { _currentDelivery, type _Delivery } from './delivery.ts';
-import { ASK_ANSWER_TYPES, isAskAnswer, _unavailable, type AskAnswered, type AskFailed, type AskFailure, type AskOutcome, type AskPayload, type SystemAskMap } from './ask.ts';
+import { ASK_ANSWER_TYPES, ASK_CANCELLED, isAskAnswer, _unavailable, type AskProgressed, type ProgressPayload, type AskAnswered, type AskFailed, type AskFailure, type AskOutcome, type AskPayload, type SystemAskMap } from './ask.ts';
 import { fromPromise, type PromiseActorLogic } from 'xstate';
 import type { ContractIncoming, ContractOutgoing, SystemEvents } from '../framework/define-system.ts';
 
 export { eventTypes, type TypeOfEvent } from './event-types.ts';
 export {
-  ASK_ANSWER_TYPES, AskError, answerOf, isAnswered, isAskAnswer, _answered, _askFailureOf, _failedAnswer, _refuse, _unavailable,
+  ASK_ANSWER_TYPES, ASK_CANCELLED, AskError, answerOf, isAnswered, isAskAnswer, _answered, _askFailureOf, _failedAnswer, _progressed, _refuse, _unavailable,
   type AnsweredEvent, type AnswerPayload, type AnswersOf, type AskAnswered, type AskDeclaration, type AskEventOf, type AskEventsOf, type AskFailed,
   type AskFailure, type AskName, type AskOutcome, type AskPayload, type ContractAsks, type DeclaredFailureKind,
-  type DeclaredFailures, type RefuseOf, type StandardFailureKind, type SystemAskMap,
+  type DeclaredFailures, type RefuseOf, type StandardFailureKind, type SystemAskMap, type AskProgressed, type ProgressEventOf, type ProgressPayload,
 } from './ask.ts';
 export { _currentDelivery, _runDelivery, type _Delivery, type _Asker, type _AskDelivery } from './delivery.ts';
 
@@ -302,7 +302,7 @@ export type OpenEntity = { type: 'OPEN_ENTITY'; id: import('@apackdev/ears').EAR
  * changing, an entity to open, and the two answers an ask gets, which come back to whoever asked whichever system
  * it asked.
  */
-export const SURFACE_EVENT_TYPES = eventTypes<FeatureSettingsUpdated | OpenEntity | AskAnswered | AskFailed>()('FEATURE_SETTINGS_UPDATED', 'OPEN_ENTITY', ...ASK_ANSWER_TYPES);
+export const SURFACE_EVENT_TYPES = eventTypes<FeatureSettingsUpdated | OpenEntity | AskAnswered | AskFailed | AskProgressed>()('FEATURE_SETTINGS_UPDATED', 'OPEN_ENTITY', ...ASK_ANSWER_TYPES);
 
 /** `M` keyed `<PackId>/<key>`: a pack's features by their refs */
 export type Qualified<PackId extends string, M> = { [K in keyof M & string as `${PackId}/${K}`]: M[K] };
@@ -596,20 +596,29 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
 
     /**
      * An ask as actor logic, for a machine to invoke: its input is the ask's fields, its output how it ended
-     * (`onOutcome`, `@apackdev/sdk/helpers`, writes a transition per way). Stopping the invoking state gives up on
-     * the answer, which the handler goes on to give anyway.
+     * (`onOutcome`, `@apackdev/sdk/helpers`, writes a transition per way). What the handler tells it before the answer
+     * reaches the invoking machine as `<ask>.progress` (`ProgressEventOf`). Stopping the invoking state stops the ask:
+     * the handler's `signal` aborts, and nothing more of it arrives.
      */
     fromAsk(to: SystemTarget, type: string): PromiseActorLogic<UntypedAskOutcome, object | undefined> {
-      return fromPromise<UntypedAskOutcome, object | undefined>(({ input, signal }) =>
-        askVia(typeof to === 'string' ? resolve(to) : getDesignated(to.role), { ...input, type }, labels, { signal }));
+      return fromPromise<UntypedAskOutcome, object | undefined>(({ input, signal, self }) =>
+        askVia(typeof to === 'string' ? resolve(to) : getDesignated(to.role), { ...input, type }, labels, {
+          signal,
+          heard: (update) => { (self as unknown as { _parent?: { send(event: object): void } })._parent?.send({ type: `${type}.progress`, update }); },
+        }));
     },
   };
 }
 
 /** What an ask takes beside the event */
-export interface AskOptions {
-  /** Gives up on the answer: the ask's promise rejects with the signal's reason. The handler is not stopped by it */
+export interface AskOptions<P = unknown> {
+  /**
+   * Stops the ask: its promise rejects with the signal's reason, and the system is told, so its handler's own
+   * `signal` aborts and work nobody waits for can stop
+   */
   signal?: AbortSignal;
+  /** Called with each thing the handler tells its asker before the answer (`progress`) */
+  heard?: (update: P) => void;
 }
 
 /** How an ask ended, where nothing types it */
@@ -623,7 +632,7 @@ export type UntypedAskOutcome = { readonly ok: true; readonly value: unknown } |
  * (`SHARED_INSTANCE_PACKAGES`), and a call is unique to the process that minted it, so an answer naming one of
  * these can be for nobody else.
  */
-const pendingAsks = new Map<string, (outcome: UntypedAskOutcome) => void>();
+const pendingAsks = new Map<string, { settle(outcome: UntypedAskOutcome): void; heard?: (update: unknown) => void }>();
 
 /**
  * Where an answer to an ask made outside any delivery is addressed: a participant that is always registered, so the
@@ -638,10 +647,20 @@ function askVia(to: string, event: { type: string; [key: string]: unknown }, lab
   const signal = options?.signal;
   return new Promise<UntypedAskOutcome>((resolve, reject) => {
     if (signal?.aborted) { reject(signal.reason); return; }
-    const abort = () => { pendingAsks.delete(call); reject(signal!.reason); };
-    pendingAsks.set(call, (outcome) => { pendingAsks.delete(call); signal?.removeEventListener('abort', abort); resolve(outcome); });
-    signal?.addEventListener('abort', abort, { once: true });
     const inWindow = _isFeHostBound();
+    const abort = () => {
+      pendingAsks.delete(call);
+      reject(signal!.reason);
+      // Told to the system that is answering, under the call it answers, so that one handler stops and no other
+      const cancel = { to, event: { type: ASK_CANCELLED }, call: newCall(), answering: call, ...labels };
+      if (inWindow) boundFeHost().client.send(cancel, () => {});
+      else sendIncoming(cancel);
+    };
+    pendingAsks.set(call, {
+      settle: (outcome) => { pendingAsks.delete(call); signal?.removeEventListener('abort', abort); resolve(outcome); },
+      ...(options?.heard === undefined ? {} : { heard: options.heard as (update: unknown) => void }),
+    });
+    signal?.addEventListener('abort', abort, { once: true });
     const sender = _currentDelivery()?.receiver ?? (inWindow || client !== undefined ? ASK_RETURN_ADDRESS.window : ASK_RETURN_ADDRESS.backend);
     const message = _performanceEnvelope({ to, event, call, ...labels, sender, ...(client === undefined ? {} : { client }) });
     // A send the API refuses is an ask nothing will answer: no system of that name runs. Answered here as the bus
@@ -666,10 +685,44 @@ export function _askOnConnection(client: string, to: string, event: { type: stri
  */
 export function _settleAsk(message: Pick<Message, 'answering' | 'event'>): boolean {
   const call = message.answering;
-  const settle = call === undefined ? undefined : pendingAsks.get(call);
-  if (settle === undefined || !isAskAnswer(message.event)) return false;
+  const pending = call === undefined ? undefined : pendingAsks.get(call);
+  // What a handler said before answering is its asker's alone: heard if the asker still waits, and dropped if not
+  if (call !== undefined && (message.event as { type?: unknown }).type === 'ASK_PROGRESS') {
+    pending?.heard?.((message.event as AskProgressed).update);
+    return true;
+  }
+  if (pending === undefined || !isAskAnswer(message.event)) return false;
   const { event } = message;
-  settle(event.type === 'ASK_ANSWERED' ? { ok: true, value: event.answer } : { ok: false, failure: event.failure as AskFailure });
+  pending.settle(event.type === 'ASK_ANSWERED' ? { ok: true, value: event.answer } : { ok: false, failure: event.failure as AskFailure });
+  return true;
+}
+
+/** The asks this process is answering, by the call each arrived under: what an asker's cancel aborts */
+const runningAsks = new Map<string, AbortController>();
+
+/**
+ * @internal The signal an ask's handler is handed: it aborts when the window that asked goes, and when whoever asked
+ * stops the ask (`AskOptions.signal`). `_askEnded` forgets it once the handler has answered.
+ */
+export function _askSignal(call: string | undefined, client: string | undefined): AbortSignal {
+  const connection = _connectionSignal(client);
+  if (call === undefined) return connection;
+  const controller = new AbortController();
+  runningAsks.set(call, controller);
+  return AbortSignal.any([connection, controller.signal]);
+}
+
+/** @internal Forgets an ask this process has finished answering */
+export const _askEnded = (call: string | undefined): void => { if (call !== undefined) runningAsks.delete(call); };
+
+/**
+ * @internal Stops the ask `message` cancels, and says whether it was a cancel: `true` means the message goes no
+ * further. The bus asks this before routing to a system, since a cancel is the ask's and not the machine's.
+ */
+export function _cancelAsk(message: Pick<Message, 'answering' | 'event'>): boolean {
+  if ((message.event as { type?: unknown }).type !== ASK_CANCELLED) return false;
+  const controller = message.answering === undefined ? undefined : runningAsks.get(message.answering);
+  controller?.abort(new Error('Whoever asked stopped waiting'));
   return true;
 }
 
@@ -934,7 +987,7 @@ export type TypedSendToSystem<S extends SystemEventMap> = (<Id extends keyof S &
 export type TypedAsk<A extends SystemAskMap> = (<Id extends keyof A & string, K extends keyof A[Id] & string>(
   system: Id,
   event: { type: K } & AskPayload<A[Id][K]>,
-  options?: AskOptions,
+  options?: AskOptions<ProgressPayload<A[Id][K]>>,
 ) => Promise<AskOutcome<A[Id][K]>>) & ((target: { role: string }, event: { type: string; [key: string]: unknown }, options?: AskOptions) => Promise<UntypedAskOutcome>);
 
 /** `fromAsk` typed against a system ask map: the actor's input is the ask's fields, its output how it ended */

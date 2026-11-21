@@ -1,7 +1,7 @@
 import { _withPerformanceEvent } from '../runtime/performance.ts';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
-import { _answered, _askFailureOf, _clientOf, _connectionSignal, _currentDelivery, _failedAnswer, _refuse, _replyTo, ASK_ANSWER_TYPES, type AnswerPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskFailed, type AskName, type AskEventsOf, type ContractAsks, type RefuseOf } from '../events/index.ts';
+import { _answered, _askEnded, _askFailureOf, _askSignal, _clientOf, _currentDelivery, _failedAnswer, _progressed, _refuse, _replyTo, ASK_ANSWER_TYPES, ASK_CANCELLED, type AnswerPayload, type ProgressPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskFailed, type AskProgressed, type AskName, type AskEventsOf, type ContractAsks, type RefuseOf } from '../events/index.ts';
 import { reportError } from '../logger/report-error.ts';
 import type { ArrayChanges } from '../utils/change-detection.ts';
 import { eventTypes } from '../events/event-types.ts';
@@ -51,12 +51,15 @@ export type SystemEvents =
    */
   | AskAnswered
   | AskFailed
+  | AskProgressed
+  /** An asker stopping an ask of this system's. The bus takes it, and the ask's handler's `signal` aborts */
+  | { type: typeof ASK_CANCELLED }
 
 /**
  * The event types every system accepts, as a value: a send of one to a feature that runs no system is nobody's, and
  * dropped without a warning.
  */
-export const SYSTEM_EVENT_TYPES = eventTypes<SystemEvents>()('SEND_STATE', 'CLIENT_CONNECTED', 'PACK_CHANGED', 'FEATURE_SETTINGS_UPDATED', 'DATA_REPLACED', 'DATA_CHANGED_ELSEWHERE', ...ASK_ANSWER_TYPES);
+export const SYSTEM_EVENT_TYPES = eventTypes<SystemEvents>()('SEND_STATE', 'CLIENT_CONNECTED', 'PACK_CHANGED', 'FEATURE_SETTINGS_UPDATED', 'DATA_REPLACED', 'DATA_CHANGED_ELSEWHERE', ...ASK_ANSWER_TYPES, ASK_CANCELLED);
 
 /**
  * What a system's contract declares. A feature exports one as `Contract` from its `be/contract.ts`, and `apack.json`
@@ -220,7 +223,7 @@ export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
   readonly context: ContractContext<C>;
   /** The system's own actor, to send it an event — a state the answer moves it into */
   readonly self: SystemArgs<C>['self'];
-  /** Aborts when the window that asked goes; never, for an ask another system made */
+  /** Aborts when the window that asked goes, and when whoever asked stops the ask */
   readonly signal: AbortSignal;
   /** The connection the ask arrived on, absent for one another system made */
   readonly client?: string;
@@ -229,6 +232,11 @@ export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
    * a handler that must still be heard tells every window itself
    */
   readonly waiting: boolean;
+  /**
+   * Tells whoever asked something before the answer, as the ask declares under `progress`. Only they hear it, and
+   * nothing is told once `signal` has aborted
+   */
+  readonly progress: (update: ProgressPayload<ContractAsks<C>[K]>) => void;
   /** Builds a refusal of one of the kinds the ask declares, for the handler to throw */
   readonly refuse: RefuseOf<ContractAsks<C>[K]>;
 }
@@ -345,7 +353,10 @@ function answer(asked: string, handler: (args: object) => unknown, args: { event
   if (delivery?.ask) delivery.ask.taken = true;
   const reply = _replyTo(delivery);
   const client = _clientOf(delivery);
+  const call = delivery?.call;
+  const signal = _askSignal(call, client);
   const refused = (error: unknown) => {
+    _askEnded(call);
     const failure = _askFailureOf(error, delivery?.ask?.kinds);
     if (reply) reply(_failedAnswer(asked, failure));
     // Nobody asked, so no window shows it: work a handler does for an applier, a migration or a timer
@@ -353,14 +364,19 @@ function answer(asked: string, handler: (args: object) => unknown, args: { event
   };
   let made: unknown;
   try {
-    made = handler({ args: args.event, context: args.context, self: args.self, signal: _connectionSignal(client), refuse: _refuse, waiting: reply !== undefined, ...(client === undefined ? {} : { client }) });
+    made = handler({
+      args: args.event, context: args.context, self: args.self, signal, refuse: _refuse, waiting: reply !== undefined,
+      progress: (update: unknown) => { if (!signal.aborted) reply?.(_progressed(asked, update)); },
+      ...(client === undefined ? {} : { client }),
+    });
   } catch (error) {
     refused(error);
     return;
   }
   // Two handlers rather than a `catch` after: a throw from answering is the bus's, not the work's, and is not answered again
-  if (isThenable(made)) Promise.resolve(made).then((value) => { reply?.(_answered(asked, value)); }, refused);
-  else reply?.(_answered(asked, made));
+  const answered = (value: unknown) => { _askEnded(call); reply?.(_answered(asked, value)); };
+  if (isThenable(made)) Promise.resolve(made).then(answered, refused);
+  else answered(made);
 }
 
 /**

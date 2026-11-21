@@ -37,7 +37,10 @@ export type AnswersOf<C, K extends AskName<C> = AskName<C>> = {
 }[K];
 
 // @public
-export const ASK_ANSWER_TYPES: readonly ["ASK_ANSWERED", "ASK_FAILED"];
+export const ASK_ANSWER_TYPES: readonly ["ASK_ANSWERED", "ASK_FAILED", "ASK_PROGRESS"];
+
+// @public
+export const ASK_CANCELLED = "ASK_CANCELLED";
 
 // @public
 export type AskAnswered<K extends string = string, A = unknown> = {
@@ -50,6 +53,7 @@ export type AskAnswered<K extends string = string, A = unknown> = {
 export interface AskDeclaration {
     answer?: unknown;
     args?: object;
+    progress?: unknown;
     refuses?: Record<string, object>;
 }
 
@@ -60,6 +64,9 @@ export interface _AskDelivery {
     // (undocumented)
     taken: boolean;
 }
+
+// @internal
+export const _askEnded: (call: string | undefined) => void;
 
 // @internal
 export type _Asker =
@@ -135,7 +142,8 @@ export function _askOnConnection(client: string, to: string, event: {
 }): Promise<UntypedAskOutcome>;
 
 // @public
-export interface AskOptions {
+export interface AskOptions<P = unknown> {
+    heard?: (update: P) => void;
     signal?: AbortSignal;
 }
 
@@ -146,6 +154,16 @@ export type AskOutcome<D> = Outcome<AnswerPayload<D>, AskFailure<D>>;
 export type AskPayload<D> = D extends {
     args: infer Payload;
 } ? Payload : {};
+
+// @public
+export type AskProgressed<K extends string = string, P = unknown> = {
+    type: 'ASK_PROGRESS';
+    asked: K;
+    update: P;
+};
+
+// @internal
+export function _askSignal(call: string | undefined, client: string | undefined): AbortSignal;
 
 // @internal
 export const _CALL_KEY = "_call";
@@ -164,6 +182,9 @@ export const _callOn: (message: Pick<Message, "answering">) => {
 export interface CallOptions {
     call?: string;
 }
+
+// @internal
+export function _cancelAsk(message: Pick<Message, 'answering' | 'event'>): boolean;
 
 // @internal
 export function _clientOf(delivery: _Delivery | undefined): string | undefined;
@@ -365,6 +386,20 @@ export type OpenEntity = {
 // @public
 export type OutgoingEventsOf<C> = ContractOutgoing<C>;
 
+// @internal
+export const _progressed: (asked: string, update: unknown) => AskProgressed;
+
+// @public
+export type ProgressEventOf<C, K extends AskName<C>> = {
+    type: `${K}.progress`;
+    update: ProgressPayload<ContractAsks<C>[K]>;
+};
+
+// @public
+export type ProgressPayload<D> = D extends {
+    progress: infer Progress;
+} ? Progress : never;
+
 // @public
 export type PublicSurfaceInboxOf<C> = C extends {
     inbox: {
@@ -433,7 +468,7 @@ export const settleCall: <T>(pending: Record<string, T>, event: {
 export type StandardFailureKind = 'failed' | 'unavailable';
 
 // @public
-export const SURFACE_EVENT_TYPES: readonly ["FEATURE_SETTINGS_UPDATED", "OPEN_ENTITY", "ASK_ANSWERED", "ASK_FAILED"];
+export const SURFACE_EVENT_TYPES: readonly ["FEATURE_SETTINGS_UPDATED", "OPEN_ENTITY", "ASK_ANSWERED", "ASK_FAILED", "ASK_PROGRESS"];
 
 // @public
 export type SurfaceEvents = {
@@ -471,7 +506,7 @@ export type SystemTarget = string | {
 // @public
 export type TypedAsk<A extends SystemAskMap> = (<Id extends keyof A & string, K extends keyof A[Id] & string>(system: Id, event: {
     type: K;
-} & AskPayload<A[Id][K]>, options?: AskOptions) => Promise<AskOutcome<A[Id][K]>>) & ((target: {
+} & AskPayload<A[Id][K]>, options?: AskOptions<ProgressPayload<A[Id][K]>>) => Promise<AskOutcome<A[Id][K]>>) & ((target: {
     role: string;
 }, event: {
     type: string;

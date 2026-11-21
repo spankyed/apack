@@ -8,7 +8,7 @@ import { reportError } from '@apackdev/sdk/logger';
 import { HOST } from '../refs.ts';
 import { answerUnavailable, deliverAs } from './delivery.ts';
 import { SYSTEM_EVENT_TYPES } from '@apackdev/sdk/framework';
-import { SURFACE_EVENT_TYPES, _callOn, _currentDelivery, _isPendingAsk, _settleAsk, senderSuffix, type Message } from '@apackdev/sdk/events';
+import { SURFACE_EVENT_TYPES, _callOn, _cancelAsk, _currentDelivery, _isPendingAsk, _settleAsk, senderSuffix, type Message } from '@apackdev/sdk/events';
 import type { PackRegistry } from '../packs/registry.ts';
 
 
@@ -311,6 +311,8 @@ export function createBusMachine(options: BusOptions) {
         // An answer to an ask this process is waiting on is that ask's, and goes to no system: its address is only
         // what brought it here (`ask`, `@apackdev/sdk/events`)
         if (_settleAsk(event.message)) return;
+        // An asker stopping an ask is that ask's too: its handler's signal aborts, and the system's machine never sees it
+        if (_cancelAsk(event.message)) return;
         const { to, event: incoming, sender, client, call } = event.message;
         const actor = system.get(to);
         // One of the system's declared asks, which is answered exactly once: by its handler, or here when none took it

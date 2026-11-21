@@ -24,6 +24,7 @@ export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
     readonly args: AskEventOf<C, K>;
     readonly client?: string;
     readonly context: ContractContext<C>;
+    readonly progress: (update: ProgressPayload<ContractAsks<C>[K]>) => void;
     readonly refuse: RefuseOf<ContractAsks<C>[K]>;
     readonly self: SystemArgs<C>['self'];
     readonly signal: AbortSignal;
@@ -921,7 +922,7 @@ export interface SurfaceDeclaration {
 export function _surfaceTargets(surface: SurfaceDeclaration): [string, string][];
 
 // @public
-export const SYSTEM_EVENT_TYPES: readonly ["SEND_STATE", "CLIENT_CONNECTED", "PACK_CHANGED", "FEATURE_SETTINGS_UPDATED", "DATA_REPLACED", "DATA_CHANGED_ELSEWHERE", "ASK_ANSWERED", "ASK_FAILED"];
+export const SYSTEM_EVENT_TYPES: readonly ["SEND_STATE", "CLIENT_CONNECTED", "PACK_CHANGED", "FEATURE_SETTINGS_UPDATED", "DATA_REPLACED", "DATA_CHANGED_ELSEWHERE", "ASK_ANSWERED", "ASK_FAILED", "ASK_PROGRESS", "ASK_CANCELLED"];
 
 // @public
 export interface SystemContract {
@@ -1010,7 +1011,11 @@ export type SystemEvents =
 * The answers to this system's own asks of another system, when it handles them as events rather than awaiting
 * them (`ask`): every system may ask, so every system receives them
 */
-| AskAnswered | AskFailed;
+| AskAnswered | AskFailed | AskProgressed
+/** An asker stopping an ask of this system's. The bus takes it, and the ask's handler's `signal` aborts */
+| {
+    type: typeof ASK_CANCELLED;
+};
 
 // @public
 export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>> {

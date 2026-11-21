@@ -23,10 +23,18 @@ export interface AskDeclaration {
    * message: `{ 'name-taken': { existingId: string } }`. `failed` and `unavailable` are every ask's, and not declared
    */
   refuses?: Record<string, object>;
+  /**
+   * What its handler tells whoever asked before the answer, each time it has something: a search's matches as they
+   * are found, how far a push has got. Absent for an ask that only answers
+   */
+  progress?: unknown;
 }
 
 /** The two answers an ask gets, as values: every surface and every system receives them */
-export const ASK_ANSWER_TYPES = ['ASK_ANSWERED', 'ASK_FAILED'] as const;
+export const ASK_ANSWER_TYPES = ['ASK_ANSWERED', 'ASK_FAILED', 'ASK_PROGRESS'] as const;
+
+/** What an asker sends to stop an ask it no longer waits on: the handler's `signal` aborts. Every system accepts it */
+export const ASK_CANCELLED = 'ASK_CANCELLED';
 
 /** The kinds every ask may fail as: anything its handler did not name, and an ask nothing took */
 export type StandardFailureKind = 'failed' | 'unavailable';
@@ -42,6 +50,9 @@ export type AskPayload<D> = D extends { args: infer Payload } ? Payload : {};
 
 /** What an ask is answered with: `void` for one that is only done */
 export type AnswerPayload<D> = D extends { answer: infer Answer } ? Answer : void;
+
+/** What an ask's handler tells its asker before the answer: `never` for an ask that declares no progress */
+export type ProgressPayload<D> = D extends { progress: infer Progress } ? Progress : never;
 
 /** The failures an ask declares, by kind, with what each carries */
 export type DeclaredFailures<D> = D extends { refuses: infer Fails } ? Fails : {};
@@ -72,6 +83,15 @@ export type AskAnswered<K extends string = string, A = unknown> = { type: 'ASK_A
 
 /** An ask that was not done: which was asked, and why */
 export type AskFailed<K extends string = string, F extends { kind: string } = AskFailure> = { type: 'ASK_FAILED'; asked: K; failure: F };
+
+/** Something an ask's handler told its asker before the answer: which was asked, and what it said */
+export type AskProgressed<K extends string = string, P = unknown> = { type: 'ASK_PROGRESS'; asked: K; update: P };
+
+/**
+ * The event a machine that invokes an ask (`fromAsk`) is sent for each thing its handler tells it before the answer:
+ * `<ask>.progress`, so a transition names the ask it is about and needs no guard.
+ */
+export type ProgressEventOf<C, K extends AskName<C>> = { type: `${K}.progress`; update: ProgressPayload<ContractAsks<C>[K]> };
 
 /**
  * The answers a system's asks get, for a machine that asks it and handles them as events: one answered and one
@@ -146,6 +166,9 @@ export const _answered = (asked: string, answer: unknown): AskAnswered => ({ typ
 /** @internal The answer to an ask that was not done */
 export const _failedAnswer = (asked: string, failure: { kind: string; message: string }): AskFailed<string, { kind: string; message: string }> =>
   ({ type: 'ASK_FAILED', asked, failure });
+
+/** @internal What an ask's handler told its asker before the answer */
+export const _progressed = (asked: string, update: unknown): AskProgressed => ({ type: 'ASK_PROGRESS', asked, update });
 
 /** @internal The answer the bus gives an ask nothing took */
 export const _unavailable = (asked: string, message: string) => _failedAnswer(asked, { kind: 'unavailable', message });
