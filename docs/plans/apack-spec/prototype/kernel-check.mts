@@ -222,28 +222,42 @@ const checks: Array<[string, () => void]> = [
   }],
 ]
 
-// What must not compile: what a handler is handed, and what is read from a state, cannot be written at any depth.
-state<Shape, Event>()({
-  data: { titles: {}, messages: {}, count: 0, repository: new Repository('/a'), kept: null },
-  start: 'list',
-  on: {
-    // @ts-expect-error a field is changed by returning a change
-    NOTHING: (_, { data }) => { data.count = 1 },
-    // @ts-expect-error and so is what a field holds
-    ADD: ({ id, title }, { data }) => { data.titles[id] = title },
-    // @ts-expect-error a list is not changed in place
-    RENAME: ({ id }, { data }) => { data.messages[id]?.push('renamed') },
-    // A draft is where to write: it is the data to edit, and a new value is made from the edits.
-    OPEN: ({ id }) => ({ at: 'thread', data: { threadId: id } }),
-  },
-  states: { list: {}, thread: { data: { threadId: given } } },
-})
+// What must not compile: a field of what a handler is handed, or of what is read from a state, cannot be assigned
+// at any depth, and a field that is a list cannot be changed in place. What the types leave is a list further in
+// changed in place: that compiles, and is what freezing is for (the checks above on a write in place, and on one
+// through a helper).
 {
-  const read = undefined as unknown as import('./state.mts').Value<Shape>
-  // @ts-expect-error what is read from a state cannot be written
+  type Shelf = { data: { items: string[]; count: number; byId: Record<string, string[]>; books: { title: string; tags: string[] }[] } }
+  type ShelfEvent = { type: 'ASSIGN' } | { type: 'PUSH' } | { type: 'SORT' } | { type: 'KEYED' } | { type: 'DEEP' } | { type: 'FURTHER_IN' }
+  state<Shelf, ShelfEvent>()({
+    data: { items: [], count: 0, byId: {}, books: [] },
+    on: {
+      // @ts-expect-error a field is changed by returning a change
+      ASSIGN: (_, { data }) => { data.count = 1 },
+      // @ts-expect-error a list a field holds is not changed in place
+      PUSH: (_, { data }) => { data.items.push('pushed') },
+      // @ts-expect-error nor sorted in place
+      SORT: (_, { data }) => { data.items.sort() },
+      // @ts-expect-error nor is an entry of a record a field holds assigned
+      KEYED: (_, { data }) => { data.byId.a = [] },
+      // @ts-expect-error nor a field of an object, however far in
+      DEEP: (_, { data }) => { const book = data.books[0]; if (book) book.title = 'renamed' },
+      // This compiles, and throws when it runs: the list is inside what a field holds, and is typed as it was declared.
+      FURTHER_IN: (_, { data }) => { data.byId.a?.push('further in') },
+    },
+  })
+  const read = undefined as unknown as import('./state.mts').Value<Shelf>
+  // What is read is handed on as its declared type wherever that only asks for an object: read-only fields ask
+  // nothing of a helper, and a string marked as a kind of id is still that string.
+  type BookId = string & { readonly book: true }
+  type Book = { id: BookId; title: string; tags: string[] }
+  const held = undefined as unknown as import('./state.mts').Value<{ data: { open: Book; byId: Record<string, Book> } }>
+  const takes = (_book: Book, _id: BookId): void => {}
+  if (false) { takes(held.data.open, held.data.open.id); takes(held.data.byId.a!, held.data.byId.a!.id) }
+  // @ts-expect-error what is read from a state cannot be assigned
   if (false) read.data.count = 1
-  // @ts-expect-error at any depth
-  if (false) read.data.messages.a!.sort()
+  // @ts-expect-error and a list it holds cannot be changed in place
+  if (false) read.data.items.sort()
 }
 
 // What is read can be handed on as it is: sent, told, reported as progress, given as an answer, and given back as a
