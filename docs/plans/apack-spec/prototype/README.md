@@ -9,7 +9,7 @@ the app: nothing imports it, and no check covers it.
 | `state.mts` | The types a state's code is checked against, and the kernel: systems, steps, asks, the link between a backend and its windows |
 | `draft.mts` | Data edited in place, from which a new value is made. What the kernel uses for a nested change |
 | `append-cost.mts` | What a growing list costs one change at a time and in batches, on the draft and through an ask. Runs, for about 25 seconds |
-| `mirror.mts` | A running state as a reactive value: the kernel's changed places written into a copy that `@vue/reactivity` tracks. One copy for each state, shared by all that read it |
+| `mirror.mts` | A running state as a value a component reads: each field is the state's own object, never copied or wrapped, written when the state replaces it. One mirror for each state, shared by all that read it |
 | `vue.mts` | `useState`: what a Vue component uses to read a running state and tell it things |
 | `vue-check.mts` | `useState` checked by rendering real components with Vue's runtime and counting what rendered, as render functions and as compiled templates. Runs |
 | `vue-fixture/` | A component file with a template, and the states it reads, for `vue-tsc` to check: what a template may read, and six lines that have to be errors |
@@ -26,7 +26,7 @@ the app: nothing imports it, and no check covers it.
 | `answer-check.mts` | An ask that changes something as it answers: the change is there with the answer, a refused change fails the ask, nothing is lost across a wait. Runs |
 | `failure-check.mts` | What happens when a state's work or a handler throws: where the state goes, and that the kernel goes on. Runs |
 | `leaving-check.mts` | What happens to an ask when whoever made it goes: it throws `Left` where awaited, `finally` runs, the answerer is told, nothing hangs. Runs |
-| `binding-check.mts` | That a reader runs again only for the place it read, and that a hidden window still hears. Runs |
+| `binding-check.mts` | That a reader is handed the state's own values and runs when a field it read is replaced, that none of it can be written, and that a hidden window still hears. Runs |
 | `kernel-check.mts` | What the kernel does with a change to data, a move that edits a draft and the refused edits included. Runs |
 | `draft-check.mts` | The checks a hand-built draft has to pass. Runs |
 | `search.mts` | The app's code search, backend and surface, ported. Runs, and checks what each step leaves |

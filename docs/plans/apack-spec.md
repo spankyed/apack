@@ -48,6 +48,20 @@ Specific costs recorded in the source today:
   (`code/fe/state.ts`).
 - **An event no state takes is dropped silently.**
 
+**What is left for the kernel, now that the app's vocabulary is this design's.** On `97ee092630`, 2026-11-22, the
+app's components read through `useState`, its machines make their asks by name, and a send is `tell` or
+`broadcast`, all on XState ([What #591 delivered](#what-591-delivered)). That took the daily cost out: the selectors,
+the ids of asks, the events an answer arrived as. What XState with those helpers still cannot do is what the kernel
+is for:
+
+- data that exists only in the state that declares it, checked by the compiler. This is the smallest of them: 33 of
+  the 49 machines have one state or none;
+- a step: one message and everything it causes committed together, so nothing is seen half-made;
+- work that has one owner and stops when its owner does, and an ask that ends where it is awaited;
+- reads, views and started states that follow from the data, where a machine starts and stops each by hand;
+- every ordering of a scenario run, where a spec runs the one that happened;
+- the graph read off the types, with nothing run.
+
 ## The design
 
 There is one primitive, a **state**. A state has its own data and, if it has states inside it, is at exactly one of
@@ -147,6 +161,16 @@ points at.
 
    **A move that also changes data changes the data first**, so the work of the state it enters reads the data as the
    handler left it.
+
+   **What a state holds is a value, and it is frozen.** Every plain object and list a state holds is frozen, all
+   the way down, when it becomes the state's. A handler changes data by returning a change, never by writing to what
+   it was handed, and one that writes throws on that line, changes nothing and is reported. A component is handed
+   these same objects ([What a component reads](#what-a-component-reads)) and cannot write to them either. It costs
+   little: a step makes new objects only for what it changed, and freezing stops at what is frozen already. What is
+   not plain data is left as it is. And **what goes into a state is the state's from then on**: an object a handler
+   stores is frozen where it stands, so whoever else kept it and writes to it later is the one that fails. A state
+   that held something another could still change would change with no step, which is the fault; freezing puts the
+   error at the write, in the other's code, with a message that names neither.
 
    **A change is all of it or none, and what the compiler refuses the kernel refuses too.** The types already rule out
    adding or removing a field, giving a field no state has, moving to a state that does not exist, and entering a
@@ -347,21 +371,37 @@ report raised once.
 
 ### What a component reads
 
-The kernel tells a subscriber, for each step, the exact places in a state's data that changed, as paths:
-`['messages', 'THR-1', '3']` is the fourth message of one thread and nothing else. `mirror` writes just those places
-into a reactive copy of the state, and Vue's own dependency tracking does the rest: whatever read a place that changed
-runs again, and nothing else does. A component showing one thread does not re-render when another thread gets a
-message.
+A component is handed **the state's own values, a field at a time**. `mirror` holds each field of a state's data as
+the very object the state holds, never a copy and never made reactive, and writes a field when the state replaces
+it. Whatever read that field runs again.
 
 ```ts
 const threads = mirror(system, handle)
-threads.value.at                              // reactive
-threads.value.data.messages[threadId]         // read again only when that thread's messages change
+threads.value.at                              // read again when it moves
+threads.value.data.messages                   // read again when the state replaces `messages`
 ```
 
-One of many is read the same way, through the handle of a state the first one starts. It reads as nothing while it
-is not running, and whatever read it runs again when it starts and when it stops. Which there are is the starter's
-field, read like any other:
+That is safe to hand out because the kernel freezes what a state holds, all the way down (rule 4). An object a
+component reads is found by `includes`, can be cloned, is the same one when it is sent back, and throws if it is
+written to. What is not plain data, a class instance or a component, is handed over as it is.
+
+**What a reader is promised is that it runs at least when what it read changed.** It also runs for any other change
+inside a field it read: two components that read different keys of one record both render when one key changes. A
+render that finds nothing different costs the render and not the page. Where that is too much there are two ways to
+be exact, and neither wraps a value:
+
+- **One of many is a state of its own** (`starts`, rule 10), with a mirror of its own. A change in one card renders
+  that card, however many there are.
+- **`computed(() => threads.data.messages[id])`** gives the same object for as long as that list is not replaced,
+  since the kernel makes a new object only for what a change touched, and a computed does not pass on a value that
+  came out the same.
+
+What a state is making (`making`) is the kernel's own record and holds only whether each is under way, so it is kept
+to the key: a spinner on one file renders again for that file.
+
+One of many is read through the handle of a state the first one starts. It reads as nothing while it is not
+running, and whatever read it runs again when it starts and when it stops. Which there are is the starter's field,
+read like any other:
 
 ```ts
 const thread = mirror(system, system.child(handle, 'thread', threadId))
@@ -377,7 +417,7 @@ const { state: thread } = useState(() => child('thread', props.threadId))   // o
 </script>
 
 <template>
-  <h1>{{ threads.data.titles[id] }}</h1>                    <!-- renders again when that title changes -->
+  <h1>{{ threads.data.titles[id] }}</h1>                    <!-- renders again when a title changes -->
   <p v-if="within(threads, 'thread')">{{ threads.data.threadId }}</p>
   <p v-if="thread">{{ thread.data.messages.length }}</p>   <!-- nothing while that thread is not running -->
   <button @click="send({ type: 'OPEN_THREAD', threadId })">Open</button>
@@ -393,7 +433,8 @@ What it is built to get right is where bindings to a renderer usually go wrong:
 
 - **A state is mirrored once, however many components read it**, from the first reader to the last, and a state
   nobody reads is not mirrored at all. The system is listened to once. So a step costs a lookup for each state it
-  changed and a write for each place that changed, and nothing for each component.
+  changed and a write for each field it replaced, and nothing for each component. Nothing is copied, when the first
+  reader arrives or after.
 - **No component sees one state ahead of another.** A step tells its subscribers once, when it has committed, and
   every mirror is written then, before Vue renders anything. A component reading two states renders once for a step
   that changed both, with both as that step left them.
@@ -408,8 +449,16 @@ What it is built to get right is where bindings to a renderer usually go wrong:
 - **A component reads and sends, and does not ask.** An ask is work, and work has an owner (rule 9), which a
   component is not. What a component needs done it sends to a state, whose `run` does it.
 
-There is no selector to write and nothing to compare, which is what the 439 `useSelector` sites do today. The copy is
-the mirror's own: a reactive object is written to in place, and the kernel's values are shared and never mutated.
+This is the binding the app has on XState (`@apackdev/sdk`'s `useState`), with the same things promised, so a
+component written against it today is not written again when the kernel under it changes.
+
+Two things it costs, neither of which anything catches:
+
+- **It is coarse unless asked.** What is easy to write in a template, `threads.data.titles[id]`, renders for a change
+  to any title. Being exact takes knowing to reach for a computed.
+- **A value kept is a value as it was.** `const items = threads.value.data.items` in a component's setup is that
+  list as it stood, for good: a field is replaced, never written into. It is whole and never half-changed, and it
+  does not follow.
 
 ### Following a view
 
@@ -477,7 +526,9 @@ batch, and this repo's own `transact` followed by `watch`.
 | `Left` is an exception, raised again by every later ask from the state that was left | The other designs that exist. A third outcome that runs `finally` and skips `catch` (Bluebird 3, the withdrawn TC39 cancelable promises) is the cleanest and cannot be expressed through native `await`. A separate interruption channel (Effect, ZIO) means writing in an effect system. Dropping the computation (Rust) needs destructors. A value to check (Go's `context`) lets code run on after it should have stopped. Killing with no unwinding (Erlang) is what never settling was, and `use(release)` already gives its cleanup. What every exception design has had to repair is cancellation swallowed by a `catch` meant for failures (Python moved `CancelledError` out from under `Exception`; Kotlin's `runCatching`), and raising once only (asyncio, which Trio corrected). Raising again is in the kernel; the swallowing is a pack rule, under What to build around it |
 | A `run` that awaits must declare `failed` | Leaving it optional, as XState's `onError` is: a forgotten one is the stuck state every XState codebase has met. And requiring it of every `run`, which would ask a line of the many that only start a child or follow a view and cannot fail later. And restarting the state as Erlang's supervisors do, which loses what a surface holds and needs a limit on restarts to not loop |
 | An event handler is not given `ask` | `ask` everywhere. An event handler cannot await, so it could only start an ask and drop the promise, with nothing around it to take a `Left`. That floating promise is what took a process down when a check stopped a window mid-ask. Without `ask` the mistake does not compile, and the kernel still catches an ask started in `run` and never awaited |
-| A component reads a reactive copy that is written to only where the state changed | A selector and a comparison per reader, as `useSelector` has: every reader runs its selector on every change to decide whether it cares. And replacing the copy whole per step, which re-renders everything that read anything |
+| A component is handed the state's own values, a field at a time | A reactive copy of the state, written to only at the places a step changed, which was built first and rendered to the key. Moving the app's components onto `useState` showed what a copy costs: a machine that drops what it is told by `includes` never matched the copies sent back, `structuredClone` refused a proxy, a component definition held in data was copied, a watch did not run when a result was replaced by an equal one, and a mirrored object sent in an event put the mirror's storage into the machine. Every one is the copy not being the state's object. And tracking the path a reader took through proxies that hand over the state's own value at the end, which only saves a value that is not an object: a list passed to a child is a proxy again. MobX, Solid's stores, Pinia and Vue's `reactive` all track that way, and each ships a way to unwrap and a list of what to watch for. Valtio hands a component a frozen snapshot with what it read tracked, which is that done soundly and is more to build; the promise above leaves room to go there, since a reader that runs less often is still one that runs when what it read changed. This is what Vue's own guide shows for an outside store, Immer or XState held in a `shallowRef`, and what the app ships |
+| What a state holds is frozen | Leaving it as it is and trusting that nothing writes to it. With a copy, a component that wrote to what it read damaged the copy. With the state's own objects it damages the state: no handler ran, nobody is told, and every earlier value that shares the object changes with it. Two of the prototype's own checks were sorting a state's list in place. Immer freezes what it makes for the same reason, and Vue leaves a frozen object unwrapped |
+| A field replaced by an equal value is a change | Keeping the old object where the new one is equal to it, as TanStack Query does to render less. The app shows a toast when a result is replaced, whatever it holds, so replaced has to mean changed |
 | A hidden window's frame is the next turn | `requestAnimationFrame` always. A hidden window gets none, so what was gathered for it grew without bound until it was shown |
 | Progress is heard as a list, once a frame | One call per update. It made a change, a notice and a copy of the growing list per item: fine at 10,000, unusable at 100,000. A persistent vector would make appends cheap, but its values are not plain arrays, which the snapshot, the wire and the templates all assume. Chunked lists stay plain but push the chunking onto every reader |
 | A nested change is an edit to a draft, built here | Spreads at every level (`{ ...data.titles, [id]: title }`), which get worse with depth. Immer and Mutative were considered; a state's data is plain by rule, so most of what they handle cannot occur, the kernel wants the changed fields in its own shape, and the kernel is meant to have no dependencies. To revisit, in favour of Mutative, if the draft grows special cases |
@@ -522,7 +573,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   is not declared; leaving the starts out; naming a field that is neither keyed nor a list; giving a started state
   less than it marks `given`; and naming bare a state that has to be given something. `threads.mts` runs on it: a
   thread for each title, told which it is, and the composer's draft for as long as a thread is open.
-- **Reads and writes, with no ids** (`awaits-check.mts`, 12 checks; `makes-check.mts`, 14 checks; `commit.mts`, 12
+- **Reads and writes, with no ids** (`awaits-check.mts`, 12 checks; `makes-check.mts`, 15 checks; `commit.mts`, 12
   comparisons). `commit.mts` is a slice of the app's commit surface: its status and the diff of the selected file as
   reads, and staging, unstaging and a push as writes. Two files staged at once are both under way and both gone when
   they end; the status is read again when the repository changes; selecting another file gives up the read of the
@@ -626,12 +677,12 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   something the user does while progress waits is handled after it; another ask's answer is not ahead of progress
   sent before it; a frame hands over what waits when nothing else arrives first; and stopping a window mid-ask leaves
   nothing unhandled.
-- **Components render only for what they read** (`vue.mts`, `vue-check.mts`, 23 checks). These are Vue components
+- **Components render only for what they read** (`vue.mts`, `vue-check.mts`, 24 checks). These are Vue components
   mounted with Vue's own runtime, into a tree of plain objects in place of a page, and what is counted is how often
   each rendered. Every check runs twice: with the components written as render functions, and with the same
   components written as templates and compiled by Vue's compiler, reading the state with no `.value`. One more, for
-  templates: what a template sends on a click reaches the state. A change renders only the components that read that place; a change in one of many renders that
-  one and neither the others nor the list; one added renders the list and the new one; one removed is gone without
+  templates: what a template sends on a click reaches the state. A change renders only the components that read that field; a change in one of many renders that
+  one and neither the others nor the list, since each of many is a state of its own; one added renders the list and the new one; one removed is gone without
   its component rendering with nothing to show; fifty changes before Vue renders are one render; a component reading
   two states never sees one ahead of the other, and renders once for a step that changed both; a handle that follows
   a prop reads the other state when the prop changes, and the one it left is no longer mirrored; one that is not
@@ -647,26 +698,36 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   take, an event without what it declares, and a state there is not to be inside. With the marks taken out the
   compiler names each, on its line, in a sentence: `Type '"SHUFFLE"' is not assignable to type '"ADD" | "RETITLE" |
   "OPEN" | "CLOSE"'`.
-- **A reader runs again only for the place it read** (`mirror.mts`, `binding-check.mts`, 12 checks, with
-  `@vue/reactivity`'s `effect` standing for a component's render): a message in one thread runs only that thread's
-  reader, a rename only that title's, a move only the reader of where the state is; removing from a list and deleting
-  a key reach their readers; and the state's own value is never written to. One of many, reached from outside by
-  name and key: a change in one runs only that one's reader; one that is not running reads as nothing, and its reader
-  runs when it starts and when it stops; one that stops and starts again is read afresh. The same file checks a window's frame:
-  the next paint while it shows, the next turn while it is hidden, and what was waiting handed over once when it hides.
+- **A reader is handed the state's own values** (`mirror.mts`, `binding-check.mts`, 18 checks, with
+  `@vue/reactivity`'s `effect` standing for a component's render). A change inside a field runs every reader of that
+  field and no reader of another; a reader of one part through a computed runs only when that part was replaced; a
+  move runs the reader of where the state is, and the mirror gains and loses the fields the states do. What a reader
+  is handed is the state's own object, and what a change did not touch is the same object after it; an object read
+  from a state is the one the state finds when it is sent back; what is read can be cloned; a value that is not plain
+  data is handed over as it is and is not frozen; a field replaced by an equal value runs its reader; and nothing a
+  reader is handed can be written. One of many, reached from outside by name and key: a change in one runs only that
+  one's reader; one that is not running reads as nothing, and its reader runs when it starts and when it stops. A
+  reader of whether one write is under way runs for that one and not for another (`makes-check.mts`). The same file
+  checks a window's frame: the next paint while it shows, the next turn while it is hidden, and what was waiting
+  handed over once when it hides. Six changes to a copy of the kernel and the mirror each fail a check: nothing
+  frozen, everything frozen, a copy handed out, an equal value not written, a field the state no longer has kept, and
+  what is under way written whole.
 - **Progress gathered into batches** (`append-cost.mts`): the measurement above, and the search and threads examples,
   which now make one change per batch.
 - **A draft** (`draft.mts`, 139 lines; `draft-check.mts`, 18 checks) for what a hand-built one gets wrong: the old
   value untouched, what was not edited kept as the same object, an edit that changes nothing returning the very same
   value, the same place read twice being the same draft, arrays through `push`, `splice`, `sort` and `length`, keys
   added and deleted, one part of the draft assigned to another, what is not plain handed over as it is, and a draft
-  kept past its handler refusing to be used, and the three refused mistakes. `kernel-check.mts` holds thirteen on
+  kept past its handler refusing to be used, and the three refused mistakes. `kernel-check.mts` holds seventeen on
   what the kernel does with a change: subscribers told which fields of a state changed in a step and told nothing when
   a handler changed nothing, a move that edits a draft, and each refused edit reported with the data left as it was.
   A change that cannot be made is refused whole: an edit that adds or removes a field, reported with the line that
   tried; a good write before a bad one, not made; fields with a stray one among them, none taken; and a move with a
   stray field, to a state that is not there, or without what the state needs, refused before anything is left or
   entered. The three examples and the interleaving, progress and leaving checks run without one being reported.
+  What a state holds is frozen all the way down, and what is not plain data is not; a handler that writes to what the
+  state holds changes nothing and is reported; and an object a state is handed can no longer be written to by
+  whoever kept it.
 - **`within` narrows by path** (`state.mts`, used in `threads.mts`): inside `thread` the thread's id can be read,
   inside `thread.sending` the streamed text can, and a state that does not exist does not compile.
 - **Mistakes that do not compile** were checked at each stage with `@ts-expect-error`: a state missing from a
@@ -814,8 +875,8 @@ What that taught, which changes this plan:
   in an event put the mirror's own storage into the machine's context. What shipped holds each field as the
   machine's own value, neither copied nor made reactive, and writes a field when the machine replaced it, which is
   what a `useSelector` over the field did. The cost is that two components reading different keys inside one field
-  both render when it is replaced. **[What a component reads](#what-a-component-reads) is written for the copy, and
-  is open again** (Not built).
+  both render when it is replaced. **[What a component reads](#what-a-component-reads) is now written for that**, and the
+  prototype's mirror is built that way.
 - **A read made on an event is a `makes`.** The helper does not tell a read from a write, so the reads moved with
   the writes and `asks-under-way.ts` could go without `awaits`. What was not built on XState is a read that asks
   again when a field changes.
@@ -838,13 +899,10 @@ Then step 2 of the order of work.
 
 The design is the smaller half of the value. In the order they would pay:
 
-1. **The Vue binding, on the app's own components.** `useState` exists and is checked by rendering (What a component
-   reads), and on XState the app's components read through it. What is left is the binding over this design's own
-   kernel, which is to be decided again (Not built), and what a check cannot say of it, in components written
-   as the app writes them, in a window. Templates read it without `.value` and `within` narrows inside a `v-if`,
-   which a compiled template and `vue-tsc` now show. What is not known is what the first paint of a large state
-   costs, since a mirror copies a state once when its first reader arrives, and what the step log would give Vue's
-   devtools, as Pinia gives them its stores.
+1. **The Vue binding, in a window.** `useState` is the app's own, with the same things promised over either kernel
+   ([What a component reads](#what-a-component-reads)), and it is checked by rendering, by a compiled template and
+   by `vue-tsc`. What a check cannot say is what the step log would give Vue's devtools, as Pinia gives them its
+   stores, and whether types that are read-only all the way down can be lived with (Not built).
 2. **Tests that replay interleavings.** The risk in this design is ordering: a result that arrives after its state was
    left. The prototype has this: `schedule.mts`, under What the prototype proves. What is left is its place in the
    harness, so that a pack's spec runs a scenario under every ordering the way it runs a case today, and a reduction
@@ -897,33 +955,45 @@ projects. Each would loosen the fit to this app.
 
 ## Not built
 
-- **The Vue binding, decided again.** On XState every component of the app reads through `useState`
-  (spankyed/apack#596), and what that showed is that the reactive copy this design mirrors a state into breaks
-  identity ([what the cleanup taught](#what-591-delivered)). The kernel knows which places a step changed, which
-  XState does not, so it can do better than a field at a time, but only while what a component is handed is the
-  state's own value: a reader that tracks the path it read and is handed the kernel's object at the end of it, with
-  whatever a component sends unwrapped on the way back. That is not built or checked. Two more things are not known:
-  - **What the first paint of a large state costs.** A mirror copies a state once, when its first reader arrives,
-    and the checks hold states of a few hundred small items. What that copy costs for a state the size the app
-    holds, in a window, at the moment a surface opens, needs the app's own data and a paint to time. If it shows,
-    the copy can be made as each part is first read and not all at once.
+- **What the second step of the cutover waits on.** The host's bus and shell are ported before any feature
+  ([Order of work](#order-of-work)), and four things they need are not designed. They are in the order the bus and
+  the shell meet them:
+  1. **Events only the state itself may send.** A state has one union of events, so anything that can reach it can
+     tell it `FOUND` or `PIECES`, which only its own work should. The app's contracts already keep `incoming` apart
+     from `internal`, and the prototype lost that: `send` should take both, and `tell` and `broadcast` only what is
+     incoming. Effect's `Machine` has the same split as public and private requests.
+  2. **Window-to-window sends**, the app's `sendToSurface`: one surface telling another in its own window what that
+     surface's contract says it takes. It is the same question as the first, asked of a surface: what others may
+     send it is its incoming events.
+  3. **Roles**: `tell({ role: 'brain' }, …)`, a name the host resolves to whichever system plays it.
+  4. **Restoring a state after a reconnect or a code reload.** A state is plain data, `{ at, data }`, so it can be
+     handed back to a fresh copy of itself, which is what `useSurfaceDraft` does by hand today for what a component
+     holds. Restoring is entering: the state is entered at `at` with `data` given, so its `run` starts again, and a
+     state restored at `searching` searches. Effect's `Machine` restores the same way, by starting afresh with the
+     previous state handed in, and saves nothing that was in flight. What a state started is started again, since
+     it follows from the data, but with nothing of its own: a restored threads system has every thread running and
+     none of their messages. What is saved to restore from has to hold what each started state held as well.
+- **The Vue binding in a window.** Two things about it are not known, and neither can be found out here:
+  - **Whether types that are read-only all the way down can be lived with.** A state's values are frozen, so
+    `.push()` on one throws. The types should say so, or it compiles and fails only where it is run. But a helper
+    that takes `string[]` does not take a read-only list, and how much of the app that touches is not known. Many
+    who use Immer leave its read-only type off for this. To be tried on the first port, with freezing as the floor
+    either way.
   - **Devtools.** Pinia shows its stores in Vue's devtools, with what changed them and when. A step is already that
-    record here: its cause, the handlers that ran, the places that changed. Giving it to the devtools belongs with
+    record here: its cause, the handlers that ran, the fields that changed. Giving it to the devtools belongs with
     the step log (What to build around it), and is worth doing only against the components people will inspect.
-- **Roles**: `tell({ role: 'brain' }, …)`.
+- **A machine's context is not frozen on XState**, so a component that writes to what `useState` handed it changes
+  the machine's own object, with no event. `useSelector` handed out the same objects before. It is left as it is:
+  freezing what a component is handed freezes the machine's context, and a machine that writes to its context in
+  place, or keeps an actor there, would throw. It goes when a surface is ported, since this kernel freezes.
 - **A write nobody waits for**, which appliers and migrations make today.
 - **The rest of the commit surface.** Reads and writes are built and checked on a slice of it: five of its 54 asks,
   two reads and three writes. What the slice does not show is the other 49, and whether "a state when what the surface takes
   changes, an awaited ask otherwise" stays a clear rule across them. The asks the panel reads as under way by id
   today (a commit, a checkout, a worktree change, signing in) are the ones to try it on.
-- **Window-to-window sends**, the app's `sendToSurface`.
 - **What is left of what a state starts and follows.** Rule 10 is built and checked on two examples. Not built: the
   brain, the bus and the shell on it, which are the app's own cases: a flow per run, a surface per pack, a system per
   registration.
-- **Events only the state itself may send.** A state has one union of events, so anything that can reach it can tell
-  it `FOUND` or `PIECES`, which only its own work should. The app's contracts already keep `incoming` apart from
-  `internal`, and the prototype lost that: `send` should take both, and `tell` and `broadcast` only what is
-  incoming. Effect's `Machine` has the same split as public and private requests.
 - **A check for a cycle of asks.** Two systems that each answer by asking the other wait on each other without end,
   and nothing reports it. It is a pack rule over the recorded graph, under What to build around it.
 - **A bound across steps.** A step is cut short after ten thousand things. Two systems that tell each other across a
@@ -935,27 +1005,20 @@ projects. Each would loosen the fit to this app.
 - **Undoing what a handler sent before it threw.** Its change is not made, and what it told others is still told.
 - **Field names unique along a path** are assumed and not enforced.
 - **A field with a default still has to be given** when entering its state, because the types cannot see the default.
-- **Restoring a state after a reconnect or a code reload.** A state is plain data, `{ at, data }`, so it can be handed
-  back to a fresh copy of itself, which is what `useSurfaceDraft` does by hand today for what a component holds. Wanted,
-  and waits for the first port to say what it must carry. Restoring is entering: the state is entered at `at` with
-  `data` given, so its `run` starts again, and a state restored at `searching` searches. Effect's `Machine` restores
-  the same way, by starting afresh with the previous state handed in, and saves nothing that was in flight. What a
-  state started is started again, since it follows from the data, but with nothing of its own: a restored threads
-  system has every thread running and none of their messages. What is saved to restore from has to hold what each
-  started state held as well.
 - **Saving a state to disk** is not wanted. A saved state is a stored format that would then have to be kept stable.
   And restoring starts a state's work again, which is right for a search a moment after a reload and wrong for a
   message that was being sent a day ago.
 - **Delayed transitions and history states** are absent. The app uses one delayed transition and no history states.
   A delay, when there is one, goes through the kernel's `later` so that a schedule can choose when it fires.
 - **The kernel's own rough edge.** Reading a state that has ended throws.
-- **The bridge**: running a state inside XState's actor system during a migration. Unproven, and the migration order
-  below depends on it.
 
 ## Costs
 
-- **Size.** Files that define a machine total about 27,500 lines, and 132 spec files import XState. A half-finished
-  migration is worse than either end.
+- **Size.** Files that define a machine total about 27,500 lines, and 132 spec files import XState.
+- **The move is made in one piece.** There is no bridge between the two kernels ([Order of work](#order-of-work)),
+  so the app does not run on the branch until every machine is across. A design fault shows part-way through and is
+  paid for in everything ported by then, which is why the hardest surface goes first. A change to a machine on
+  `master` in the meantime is made again on the branch. And nothing of it lands until all of it does.
 - **No ecosystem.** No visualizer and no community knowledge; models and people know XState.
 - **Edge cases.** XState has years of fixes that a new kernel would rediscover.
 - **Compile errors are deep.** A missing `failed` is reported as the whole state not being assignable, with the line
@@ -971,26 +1034,37 @@ projects. Each would loosen the fit to this app.
 
 ## Order of work
 
-Step 1 is under way; no later step is started. Each is a decision point.
+Step 1 is done. No later step is started.
 
-1. **Bring the XState code to the shared vocabulary and seams** ([Alongside results-are-asks](#alongside-results-are-asks)).
-   spankyed/apack#591 did the vocabulary and the asking side, which removes the event path for answers.
-   [What #591 delivered](#what-591-delivered) lists what is still to do on XState, which is what leaves a component
-   that names neither XState nor an actor. A machine goes on naming XState until its feature is ported.
-2. **Settle the open design** that the first real ports will hit: a write nobody waits for, and events only the
-   state itself may send.
-3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The
-   prototype's kernel takes a schedule and its checks run every ordering; the kernel in the tree keeps both.
-4. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is
-   the pack contract and moves with every feature ported.
-5. **Prove the bridge**, so that states and XState machines run on one bus and features move one at a time. If it cannot
-   be built, the plan needs a different migration and is reconsidered here.
-6. **Port one feature end to end as the go or no-go**: the code search, both halves, with its specs. Judge it on line
-   count, whether its specs pass unchanged in what they assert, and typecheck time.
-7. **Port in order of risk**: the 20 single-state backend systems, the 13 single-state surfaces, surfaces with states,
-   the brain, then the bus and the shell. The commit and pull-request surfaces are taken apart by concern as they
-   are ported, each concern a state the surface starts.
-8. **Remove XState and the bridge**, and regenerate the recorded API reports.
+**There is no bridge.** A bridge would run states and XState machines on one bus so that features could move one at
+a time, with the app running throughout. It is not built, and is not to be: it is a second kernel's worth of joins to
+write, test and then delete, at the boundary where a step meets something that has none. What makes going without
+one reasonable is step 1. A component names neither XState nor an actor, a send is `tell` or `broadcast`, and an
+ask is the SDK's, so what the move rewrites is the files that define a machine and their specs, and no component.
+
+1. **Bring the XState code to the shared vocabulary and seams.** Done, and merged: spankyed/apack#591 and #593 for
+   asks, #596 for `useState`, #597 and #599 for `makes`, #600 for `tell` and `broadcast`
+   ([What #591 delivered](#what-591-delivered)). A machine goes on naming XState until it is ported.
+2. **Build the kernel in the tree**, with no dependencies, as its own workspace, from the prototype and with its
+   checks: the schedule and every ordering, the refusals, what must not compile. Not a sibling repository: its API
+   is the pack contract.
+3. **Port the host's bus and shell**, which everything else runs inside. Four things they need are not designed
+   and are settled here, in the order under [Not built](#not-built): events only the state itself may send,
+   window-to-window sends, roles, and restoring a state.
+4. **Put the test harness on it**, so that a feature's specs run against the kernel. From here to the end the app
+   does not start, and this is how each port is known to work: a feature is across when its specs pass, unchanged in
+   what they assert.
+5. **Port the commit surface and the code system it asks, first.** It is the hardest: 54 asks, none of them a
+   state's own work. If `awaits` and `makes` fall short, or a state turns out to need more than one place to be at,
+   it shows here and costs one surface. On XState with `makes` its machine is about 1,620 lines; what it comes to
+   here is the measure of what the kernel is worth, to be written down and not acted on. The commit and
+   pull-request surfaces are taken apart by concern as they are ported, each concern a state the surface starts.
+6. **Port the rest**, the hardest of what is left each time: the brain, the surfaces with states, then the 13
+   single-state surfaces and the 20 single-state backend systems, which are the least likely to surprise.
+7. **Remove XState**, start the app, run the chain, and regenerate the recorded API reports.
+
+While the branch is open, a change to a file that defines a machine on `master` is made again on the branch, so
+such changes are kept few, and the branch is brought up to `master` often enough that each is small.
 
 ## The name
 

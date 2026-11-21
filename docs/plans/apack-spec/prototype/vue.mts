@@ -10,7 +10,7 @@
 //   </script>
 //
 //   <template>
-//     <h1>{{ threads.data.titles[id] }}</h1>                       <!-- renders again when that title changes -->
+//     <h1>{{ threads.data.titles[id] }}</h1>                       <!-- renders again when a title changes -->
 //     <p v-if="thread">{{ thread.data.messages.length }}</p>      <!-- nothing while that thread is not running -->
 //     <button @click="send({ type: 'OPEN_THREAD', threadId })">Open</button>
 //   </template>

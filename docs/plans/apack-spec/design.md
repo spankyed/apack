@@ -194,6 +194,9 @@ A component reads and sends. It does not ask.
 ## What holds, always
 
 - **Only a handler changes data.** The kernel never does. What is under way is its own record, beside the data.
+- **What a state holds is a value, and it is frozen.** A write to it throws on the line that tried. A component is
+  handed these same objects, a field at a time, and runs again at least when a field it read was replaced. To be
+  exact inside a field, give each of many a state of its own, or read the part through a `computed`.
 - **A change is all of it or none.** What the compiler refuses, the kernel refuses too, whole, where it is tried.
 - **One message and everything it causes is one step.** Nothing leaves until the step commits, so nobody sees a
   half-made change, and what runs is matched to the data once, as the step ends.
