@@ -92,12 +92,15 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
     && origin.taskKind === 'mcp-task' && row.entrypoint === 'cli' && row.promptSource === 'system'
     && row.turnOrigin === 'task_notification' && content.length === 1 && typeof message.content === 'string'
     && text.length <= 32_768) {
-    const match = /^<task-notification>\n<task-id>[a-z0-9]{1,64}<\/task-id>\n<status>(stopped|completed)<\/status>\n<summary>(MCP task [^<>\r\n]{1,1024})<\/summary>\n<result>\n([\s\S]*)\n<\/result>\n<\/task-notification>$/.exec(text)
+    const match = /^<task-notification>\n<task-id>[a-z0-9]{1,64}<\/task-id>\n<status>(stopped|completed|failed|cancelled)<\/status>\n<summary>(MCP task [^<>\r\n]{1,1024})<\/summary>\n<result>\n([\s\S]*)\n<\/result>\n<\/task-notification>$/.exec(text)
     if (!match) return
     const [, status, summary, result] = match
-    if (!summary || (status === 'completed'
-      ? !summary.endsWith(' completed.')
-      : !summary.endsWith(': outcome unknown.') || !result?.startsWith('Task outcome unknown:'))) return
+    if (!summary || result === undefined) return
+    if (status === 'stopped') {
+      if (!summary.endsWith(': outcome unknown.') || !result.startsWith('Task outcome unknown:')) return
+    } else if (!summary.endsWith(` ${status}.`)) return
+    if (status === 'failed' && !result.startsWith('Task failed: ')) return
+    if (status === 'cancelled' && !result.startsWith('Task cancelled: ') && result !== 'Task was cancelled by the server.') return
     const timestamp = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN
     return { uuid: row.uuid, sessionId: entry.sessionId, sender: 'system', text: summary, blocks: [],
       ...(Number.isFinite(timestamp) ? { timestamp } : {}),

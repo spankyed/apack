@@ -148,6 +148,22 @@ it('shows the native MCP completion summary without showing its result payload',
   ]) expect(projectClaudeTerminalHistory({ sessionId, row: { ...notification, ...changes } })).toBeUndefined()
 })
 
+it.each([
+  ['failed', 'Task failed: private server failure detail'],
+  ['cancelled', 'Task cancelled: private server cancellation detail'],
+  ['cancelled', 'Task was cancelled by the server.'],
+])('shows the native %s MCP summary as a system row', (status, result) => {
+  const summary = `MCP task owned-review-1 (research/review) ${status}.`
+  const content = `<task-notification>\n<task-id>owner1</task-id>\n<status>${status}</status>\n<summary>${summary}</summary>\n<result>\n${result}\n</result>\n</task-notification>`
+  const notification = { ...row, type: 'user', entrypoint: 'cli', promptSource: 'system', turnOrigin: 'task_notification',
+    origin: { kind: 'task-notification', producer: 'session-task', taskKind: 'mcp-task' }, message: { content } }
+  expect(projectClaudeTerminalHistory({ sessionId, row: notification })).toMatchObject({
+    sender: 'system', text: summary, blocks: [], context: { cliUuid: uuid, claudeTerminalMessage: { uuid, sessionId } },
+  })
+  const mismatchedResult = { ...notification, message: { content: content.replace(result, 'Raw task output') } }
+  expect(projectClaudeTerminalHistory({ sessionId, row: mismatchedResult })).toBeUndefined()
+})
+
 it('omits native empty-command stdout while preserving literal user text and stderr', () => {
   const stdout = '<local-command-stdout>\u001b[2m(no content)\u001b[22m</local-command-stdout>'
   const command = { ...row, type: 'user', entrypoint: 'cli', message: { content: stdout } }
