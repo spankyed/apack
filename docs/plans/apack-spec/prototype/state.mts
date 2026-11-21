@@ -190,15 +190,29 @@ type On<R, H extends string, E extends AnyEvent, N extends Net> =
 type Answering<R, H extends string, E extends AnyEvent, A extends Asks, N extends Net> =
   { [Q in keyof A]?: (args: A[Q]['args'], scope: AskScope<R, H, E, N, A[Q]>) => A[Q]['answer'] | Promise<A[Q]['answer']> }
 
+/**
+ * Where a state goes when its work fails: what `run` threw, and what happens next. It is an event's handler in every
+ * other way: synchronous, and without `ask`. It is never given a `Left`, which is the state having been left and not
+ * its work failing, so it is where to handle a failure without a `catch` that could take one.
+ */
+type Failed<R, H extends string, E extends AnyEvent, N extends Net> = (error: unknown, scope: EventScope<R, H, E, N>) => Next<R, H> | void
+
+/**
+ * What a state does while it is the case. Work that awaits can fail long after the state was entered, with nobody
+ * around it, so a `run` that returns a promise has to say where the state goes then. A `run` that only sets things up
+ * may leave `failed` out: what it throws is reported, and the state stays as it was entered.
+ */
+type Work<R, H extends string, E extends AnyEvent, N extends Net> =
+  | { run?: (scope: Scope<R, H, E, N>) => Next<R, H> | void; failed?: Failed<R, H, E, N> }
+  | { run: (scope: Scope<R, H, E, N>) => Promise<Next<R, H> | void>; failed: Failed<R, H, E, N> }
+
 /** The definition of a state. The same keys at every depth, the outermost included. */
 export type Def<R, S, H extends string, E extends AnyEvent, A extends Asks, N extends Net> = {
   /** The events it takes while it is the case. An event goes to the innermost state that takes it. */
   on?: On<R, H, E, N>
   /** The asks it answers while it is the case. An ask goes to the innermost state that answers it. */
   asks?: Answering<R, H, E, A, N>
-  /** What it does while it is the case. What it returns, now or later, happens only if it still is. */
-  run?(scope: Scope<R, H, E, N>): Next<R, H> | void | Promise<Next<R, H> | void>
-} & ([keyof DataOf<S>] extends [never] ? { data?: never } : {
+} & Work<R, H, E, N> & ([keyof DataOf<S>] extends [never] ? { data?: never } : {
   /** Its own data: each field's starting value, or `given` for one whoever enters it has to give. */
   data: { [K in keyof DataOf<S>]-?: DataOf<S>[K] | Given }
 }) & ([Names<S>] extends [never] ? { start?: never; states?: never } : {
@@ -236,7 +250,7 @@ class Question {
 const refusal = (kind: string, message: string, data?: object): AnyOutcome => ({ ok: false, failure: { ...data, kind, message } })
 
 type Plain = Record<string, unknown>
-type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; states?: Record<string, LooseDef> }
+type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; failed?: Function; states?: Record<string, LooseDef> }
 type Heard = (update: unknown) => void
 
 interface Active {
@@ -258,6 +272,7 @@ type Item =
   | { kind: 'event'; ref: string; event: AnyEvent }
   | { kind: 'ask'; ref: string; name: string; args: object; question: Question; heard?: Heard; gone?: AbortSignal }
   | { kind: 'result'; of: Active; value: unknown }
+  | { kind: 'failure'; of: Active; error: unknown }
   | { kind: 'answer'; question: Question; outcome: AnyOutcome }
   | { kind: 'out'; leave: () => void }
 
@@ -267,8 +282,14 @@ interface Port {
   /** Returns what to call when whoever asked has gone. */
   ask(ref: string, name: string, args: object, heard: Heard, settle: (outcome: AnyOutcome) => void): () => void
 }
+/**
+ * Things that happen one after another: what crosses a link in one direction, or a system's frames. What is in one
+ * lane keeps its order, as messages on one socket do. What is in two lanes can come in either order, and that is the
+ * whole of what a schedule may choose.
+ */
+export interface Lane { readonly label: string }
 /** A link between a window and its backend. What crosses it arrives later, and not at all once it is closed. */
-interface Link { open: boolean }
+interface Link { open: boolean; readonly up: Lane; readonly down: Lane }
 const PORT = Symbol('port')
 
 /**
@@ -296,12 +317,27 @@ const LARGE = 10_000
 
 export function system(host: {
   side: 'backend' | 'window'
+  /** What this system is called in a lane's label and nowhere else. */
+  name?: string
   views?: ViewHost
+  /**
+   * Runs something later, after whatever is ahead of it in its lane. The default is the next turn of the event loop.
+   * A check gives a schedule here, which decides the order between lanes and can run every one of them.
+   */
+  later?(lane: Lane, run: () => void): void
   /** Runs something once per frame. A window gives `requestAnimationFrame`; the default is the next turn of the event loop. */
   frame?(run: () => void): void
   trace?(line: string): void
 }): System {
   const trace = (line: string): void => host.trace?.(line)
+  const called = host.name ?? host.side
+  const later = host.later ?? ((_: Lane, run: () => void): void => { setImmediate(run) })
+  const frames: Lane = { label: `${called}'s frame` }
+  const frame = host.frame ?? ((run: () => void): void => later(frames, run))
+  /** Code that is not the kernel's, called where its throwing must not stop the step it is in. */
+  const safely = (what: string, call: () => void): void => {
+    try { call() } catch (error) { trace(`DEFECT: ${what} threw: ${error instanceof Error ? error.message : String(error)}`) }
+  }
   const running = new Map<string, Running>()
   const outside: Item[] = []
   const inside: Item[] = []
@@ -331,7 +367,7 @@ export function system(host: {
   let up: { link: Link; port: Port; waiting: Set<Question>; gone: Set<() => void> } | undefined
   /** A backend's links to its windows. */
   const down = new Set<{ link: Link; port: Port }>()
-  const carry = (link: Link, across: () => void): void => { setImmediate(() => { if (link.open) across() }) }
+  const carry = (link: Link, way: 'up' | 'down', across: () => void): void => { later(link[way], () => { if (link.open) across() }) }
 
   const innermost = (top: Running): Active => { let active = top.root; while (active.inside) active = active.inside; return active }
   const valueOf = (top: Running): Plain => { const at = innermost(top).path; return at ? { at, data: { ...top.data } } : { data: { ...top.data } } }
@@ -348,7 +384,7 @@ export function system(host: {
     if (!isAcross(to)) { enqueue({ kind: 'event', ref, event }); return }
     const mine = up
     if (!mine) { trace(`nothing to tell ${ref}: not connected`); return }
-    out(() => carry(mine.link, () => mine.port.event(ref, event)))
+    out(() => carry(mine.link, 'up', () => mine.port.event(ref, event)))
   }
 
   /**
@@ -363,12 +399,12 @@ export function system(host: {
   let due = false
   const handOver = (): void => {
     due = false
-    for (const each of gathered.splice(0)) if (!each.signal?.aborted) each.hears(each.updates)
+    for (const each of gathered.splice(0)) if (!each.signal?.aborted) safely('what hears progress', () => each.hears(each.updates))
   }
   const gather = (hears: (updates: unknown[]) => void, signal: AbortSignal | undefined) => (update: unknown): void => {
     const last = gathered[gathered.length - 1]
     if (last?.hears === hears) last.updates.push(update); else gathered.push({ hears, signal, updates: [update] })
-    if (!due) { due = true; (host.frame ?? setImmediate)(handOver) }
+    if (!due) { due = true; frame(handOver) }
   }
 
   const ask = (to: string | { ref: string }, name: string, args: object, signal: AbortSignal | undefined, hears: ((updates: unknown[]) => void) | undefined): Promise<never> => new Promise((resolve, reject) => {
@@ -385,12 +421,12 @@ export function system(host: {
     const mine = up
     if (!mine) { question.end(refusal('disconnected', `Not connected, so ${ref} cannot be asked`)); return }
     mine.waiting.add(question)
-    out(() => carry(mine.link, () => {
+    out(() => carry(mine.link, 'up', () => {
       // Whoever asked may have ended before the ask crossed the link: then it is never started.
       if (signal?.aborted) { mine.waiting.delete(question); return }
       const gone = mine.port.ask(ref, name, args,
-        (update) => carry(mine.link, () => heard?.(update)),
-        (outcome) => carry(mine.link, () => { mine.waiting.delete(question); mine.gone.delete(gone); question.end(outcome) }))
+        (update) => carry(mine.link, 'down', () => heard?.(update)),
+        (outcome) => carry(mine.link, 'down', () => { mine.waiting.delete(question); mine.gone.delete(gone); question.end(outcome) }))
       mine.gone.add(gone)
       signal?.addEventListener('abort', gone, { once: true })
     }))
@@ -411,11 +447,11 @@ export function system(host: {
         asked.catch(() => {})
         return asked
       },
-      broadcast: (to: string, event: AnyEvent) => { if (alive()) out(() => { for (const window of down) carry(window.link, () => window.port.event(to, event)) }) },
+      broadcast: (to: string, event: AnyEvent) => { if (alive()) out(() => { for (const window of down) carry(window.link, 'down', () => window.port.event(to, event)) }) },
       watch: (key: string, feature: string, view: string, args: object, heard: (update: ViewUpdate<unknown>) => void) => {
         if (!alive() || !host.views) return
         mine.watching.get(key)?.()
-        mine.watching.set(key, host.views(feature, view, args, (update) => { if (alive()) heard(update) }))
+        mine.watching.set(key, host.views(feature, view, args, (update) => { if (alive()) safely('what hears a view', () => heard(update)) }))
       },
       unwatch: (key: string) => { mine.watching.get(key)?.(); mine.watching.delete(key) },
       read: (target: { ref: string }) => valueOf(running.get(target.ref)!),
@@ -435,9 +471,11 @@ export function system(host: {
       else top.data = { ...top.data, [field]: initial }
     }
     if (path) trace(`${top.ref} entered ${path}`)
-    const made = def.run?.(scopeOf(active))
+    let made: unknown
+    // What `run` throws at once is a failure like any later one, taken up when the entering it is part of is done.
+    try { made = def.run?.(scopeOf(active)) } catch (error) { inside.push({ kind: 'failure', of: active, error }); return active }
     if (made instanceof Promise) {
-      made.then((value) => arrive({ kind: 'result', of: active, value }), (error) => { if (!active.controller.signal.aborted) trace(`${top.ref} failed: ${String(error)}`) })
+      made.then((value) => arrive({ kind: 'result', of: active, value }), (error) => arrive({ kind: 'failure', of: active, error }))
     } else if (made !== undefined) inside.push({ kind: 'result', of: active, value: made })
     return active
   }
@@ -450,7 +488,7 @@ export function system(host: {
     active.watching.clear()
     for (const ref of active.started.reverse()) end(ref)
     for (const question of active.questions) leaving.push(() => question.end(refusal('abandoned', 'It stopped before answering')))
-    for (const release of active.releases.reverse()) release()
+    for (const release of active.releases.reverse()) safely(`a release of ${active.top.ref}`, release)
     const { ...rest } = active.top.data
     for (const field of Object.keys(active.def.data ?? {})) delete rest[field]
     active.top.data = rest
@@ -518,12 +556,29 @@ export function system(host: {
       if (at !== undefined) { const was = top.data; go(top, at, {}); moved(top, was) }
       return
     }
-    if (at !== undefined) { const was = top.data; go(top, at, data); moved(top, was) }
+    // Data first, then the move: the work of a state that is entered reads the data as the handler left it.
     for (const [field, value] of Object.entries(data)) {
       if (!(field in top.data)) continue
       if (!Object.is(top.data[field], value)) touchAt(top.ref, [field])
       top.data = { ...top.data, [field]: value }
     }
+    if (at !== undefined) { const was = top.data; go(top, at, data); moved(top, was) }
+  }
+
+  /**
+   * A state's work failed. If the state is still the case it goes where its `failed` says, with the error. If it was
+   * left first there is nowhere to go: a `Left` is that leaving and nothing more, and anything else is reported.
+   */
+  const fail = (active: Active, error: unknown): void => {
+    if (error instanceof Left) return
+    const where = `${active.top.ref}${active.path ? ` in ${active.path}` : ''}`
+    const said = error instanceof Error ? error.message : String(error)
+    if (active.controller.signal.aborted) { trace(`${where} failed after it was left: ${said}`); return }
+    trace(`${where} failed: ${said}`)
+    const failed = active.def.failed
+    if (!failed) { trace(`DEFECT: ${where} says nowhere to go when its work fails, and stays as it is`); return }
+    const { ask: _, ...scope } = scopeOf(active)
+    safely(`${where}'s failed`, () => apply(active, failed(error, scope)))
   }
 
   const taker = (top: Running, table: 'on' | 'asks', name: string): { handler: Function; of: Active } | undefined => {
@@ -535,13 +590,17 @@ export function system(host: {
   const handle = (item: Item): void => {
     if (item.kind === 'out') { leaving.push(item.leave); return }
     if (item.kind === 'result') { apply(item.of, item.value); return }
+    if (item.kind === 'failure') { fail(item.of, item.error); return }
     if (item.kind === 'answer') { leaving.push(() => item.question.end(item.outcome)); return }
     const top = running.get(item.ref)
     if (item.kind === 'event') {
       const found = top && taker(top, 'on', item.event.type)
       if (!found) { trace(`${item.ref} ignored ${item.event.type}`); return }
       const { ask: _, ...scope } = scopeOf(found.of)
-      apply(found.of, found.handler(item.event, scope))
+      // A handler that throws changes nothing: the state is as it was before the event, which it could handle.
+      try { apply(found.of, found.handler(item.event, scope)) } catch (error) {
+        trace(`DEFECT: ${item.ref} threw handling ${item.event.type}, and nothing changed: ${error instanceof Error ? error.message : String(error)}`)
+      }
       return
     }
     const { name, args, question, heard, gone } = item
@@ -575,18 +634,19 @@ export function system(host: {
       fields.clear()
       const where = Object.fromEntries(places)
       places.clear()
-      leaving.push(() => { for (const listener of listeners) listener(refs, which, where) })
+      leaving.push(() => { for (const listener of listeners) safely('a subscriber', () => listener(refs, which, where)) })
     }
-    for (const leave of leaving.splice(0)) leave()
+    for (const leave of leaving.splice(0)) safely('what leaves at the commit', leave)
   }
 
   /** One step: something from outside, then everything it caused inside, then the commit. */
   const step = (first: () => void): void => {
     stepping = true
-    first()
-    while (inside.length) handle(inside.shift()!)
-    commit()
-    stepping = false
+    try {
+      first()
+      while (inside.length) handle(inside.shift()!)
+      commit()
+    } finally { stepping = false }
   }
   const pump = (): void => { while (!stepping && outside.length) step(() => handle(outside.shift()!)) }
   const arrive = (item: Item): void => { handOver(); outside.push(item); pump() }
@@ -615,7 +675,7 @@ export function system(host: {
     snapshot: () => committed,
     subscribe: (listener) => { listeners.push(listener) },
     connect: (backend) => {
-      const link: Link = { open: true }
+      const link: Link = { open: true, up: { label: `${called} to its backend` }, down: { label: `the backend to ${called}` } }
       const theirs = backend as unknown as { [PORT]: Port; attach(window: { link: Link; port: Port }): () => void }
       const mine = { link, port: theirs[PORT], waiting: new Set<Question>(), gone: new Set<() => void>() }
       up = mine

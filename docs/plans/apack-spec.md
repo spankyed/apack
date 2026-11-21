@@ -80,6 +80,7 @@ Exactly one path is the case, so where a state is is one string, and its data is
 | `on` | The events it takes. Synchronous. A handler returns what happens next |
 | `asks` | The asks it answers. May be async. A handler returns the answer |
 | `run` | What it does while it is the case. May be async. What it returns happens only if the state still is the case |
+| `failed` | Where it goes when `run` throws, given what was thrown. Synchronous. Required when `run` is async |
 
 A handler or `run` returns the same two fields the value has: `{ at, data }`. Giving only `data` changes fields and
 stays. Giving `at` goes to that path.
@@ -114,6 +115,20 @@ points at.
 4. **Async work belongs to a state.** An event handler cannot await, and is not given `ask`: it goes to a state whose
    `run` does the work. Leaving that state aborts `signal` and discards a late result. This is what makes cancel and
    latest-wins need no code.
+
+   **Work that awaits says where the state goes if it fails.** A `run` that returns a promise does not compile without
+   `failed`, which is given what was thrown and returns what happens next, as an event's handler does. Without it a
+   state whose work threw would stay where it was with nothing running, which on a surface is a screen that never
+   leaves "searching". `failed` is not given a `Left`: being left is not failing. So it is also where to handle a
+   failure without writing a `catch`, which could take a `Left`. A `run` that only sets things up need not say; what it
+   throws is reported and the state stays as entered.
+
+   **Nothing a pack's code throws stops the kernel.** A handler that throws changes nothing and is reported, and the
+   state takes the next event as before; what it had already sent is sent, as a process that crashes has sent what it
+   sent. A release, a subscriber, or what hears progress or a view that throws is reported and the rest still run.
+
+   **A move that also changes data changes the data first**, so the work of the state it enters reads the data as the
+   handler left it.
 5. **Cleanup is registered where the resource is taken**: `use(release)` runs when the state ends, however it ends.
 6. **An ask answers and does not change data.** To change data it sends its own state an event. See Decisions.
 7. **Every ask ends exactly once**: with its answer, a refusal it declares, or `failed`, `abandoned`, `unavailable` or
@@ -241,6 +256,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
 | An ask whose asker has gone throws `Left` where it is awaited | Never settling it, which was tried first. A promise that never settles skips every `finally` after it, so a lock or a handle taken before the ask is held for good, and `Promise.all` over it hangs. Rejection is what `AbortSignal`, `fetch` and structured concurrency do, and code written for them is already correct here |
 | `Left` is an exception, raised again by every later ask from the state that was left | The other designs that exist. A third outcome that runs `finally` and skips `catch` (Bluebird 3, the withdrawn TC39 cancelable promises) is the cleanest and cannot be expressed through native `await`. A separate interruption channel (Effect, ZIO) means writing in an effect system. Dropping the computation (Rust) needs destructors. A value to check (Go's `context`) lets code run on after it should have stopped. Killing with no unwinding (Erlang) is what never settling was, and `use(release)` already gives its cleanup. What every exception design has had to repair is cancellation swallowed by a `catch` meant for failures (Python moved `CancelledError` out from under `Exception`; Kotlin's `runCatching`), and raising once only (asyncio, which Trio corrected). Raising again is in the kernel; the swallowing is a pack rule, under What to build around it |
+| A `run` that awaits must declare `failed` | Leaving it optional, as XState's `onError` is: a forgotten one is the stuck state every XState codebase has met. And requiring it of every `run`, which would ask a line of the many that only start a child or follow a view and cannot fail later. And restarting the state as Erlang's supervisors do, which loses what a surface holds and needs a limit on restarts to not loop |
 | An event handler is not given `ask` | `ask` everywhere. An event handler cannot await, so it could only start an ask and drop the promise, with nothing around it to take a `Left`. That floating promise is what took a process down when a check stopped a window mid-ask. Without `ask` the mistake does not compile, and the kernel still catches an ask started in `run` and never awaited |
 | A component reads a reactive copy that is written to only where the state changed | A selector and a comparison per reader, as `useSelector` has: every reader runs its selector on every change to decide whether it cares. And replacing the copy whole per step, which re-renders everything that read anything |
 | A hidden window's frame is the next turn | `requestAnimationFrame` always. A hidden window gets none, so what was gathered for it grew without bound until it was shown |
@@ -267,6 +283,28 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 - **A surface follows views** (`views.mts`), modelled on the threads surface: one for as long as the surface runs, one
   only while a thread is open, and one per open tab. Opening another thread stops the last one's view; closing a tab
   stops its view; stopping the surface stops the rest.
+- **Every ordering, not the one that happened** (`schedule.mts`, `interleaving-check.mts`, 8 checks). The kernel puts
+  off everything through lanes: what crosses a link one way is a lane, and so are a system's frames. A lane keeps its
+  order, as a socket does, and a schedule chooses between lanes. `explore` runs a scenario under every such choice,
+  `sample` under a seed's worth, and a failure comes back with the choices that `replay` runs again. Run under every
+  ordering there is: a second search started over a first shows only the second (6,836 orderings); a search cancelled
+  at any moment has nothing arrive afterwards and lets go of what it held (60); progress, broadcasts and the answer are
+  heard in the order sent wherever a click lands (23,259); work that finishes after its state was left changes
+  nothing (3). Two windows on one backend, one closing at any moment, has too many to run and is sampled (5,000 from
+  one seed), which the result line says. And the check that the tool finds anything: the same search with its results
+  taken from a broadcast passes under the first ordering, fails at the fifth, and fails the same way on replay.
+  Mutating a copy of the kernel confirms the checks: no hand-over before an arrival, a late result applied, and an ask
+  that never settles each fail one.
+
+  It found a defect on its first run that no ordering was needed for: a move that also changed outer data started the
+  entered state's `run` before the data was applied, so `run` read the old value. `search.mts` had it and its output
+  did not show it.
+- **Failing goes somewhere, and breaks nothing** (`failure-check.mts`, 10 checks): work that fails later, or at once,
+  goes where `failed` says with what it threw; a state left while asking has not failed and nothing is reported; work
+  that fails after its state was left changes nothing and is reported; a handler that throws changes nothing and the
+  next event is handled; a `failed` that throws is reported; a release that throws does not stop the others; and an
+  async `run` without `failed` does not compile. Before this a `run` or a handler that threw at once escaped the step
+  and left the kernel refusing everything after it.
 - **Leaving mid-ask unwinds, and nothing hangs or crashes** (`leaving-check.mts`, 7 checks): a `run` awaiting an ask
   when its state is left has its `finally` run and its lock released, and nothing after the ask runs; the trace says an
   ask was left and reports no failure; an ask inside `Promise.all` ends too; the answerer's `signal` aborts, and a
@@ -405,8 +443,10 @@ The design is the smaller half of the value. In the order they would pay:
    `useState` itself, a composable that finds the state by name, mirrors it for the component's lifetime and stops with
    it, and the port of real components onto it.
 2. **Tests that replay interleavings.** The risk in this design is ordering: a result that arrives after its state was
-   left. A kernel with an injectable scheduler can run every ordering of a scenario, or a seeded one, and replay a
-   failure exactly. This is the strongest reason to own the kernel.
+   left. The prototype has this: `schedule.mts`, under What the prototype proves. What is left is its place in the
+   harness, so that a pack's spec runs a scenario under every ordering the way it runs a case today, and a reduction
+   that skips orderings differing only in two things that cannot affect each other, which is what would let two
+   windows be run in full. This is the strongest reason to own the kernel.
 3. **The graph as a recorded file.** `graph.mts` is a script. As a recorded file per feature, with `:check` and
    `:update` halves like the API reports, a change to a state's graph shows in the diff. The same data gives pack rules:
    a state never entered, an event nothing takes, an ask nobody asks. That is the whole of the checking worth having.
@@ -445,8 +485,9 @@ projects. Each would loosen the fit to this app.
 - **Window-to-window sends**, the app's `sendToSurface`.
 - **Keyed dynamic children**: a flow per run, a surface per pack, a system per registration. The brain, the bus and the
   shell need them. A keyed set of views is covered by `watch`; a keyed set of states is not.
-- **A bound on a step, and what a thrown handler does.** Two states that tell each other forever never commit, and a
-  handler that throws has no defined outcome beyond being reported.
+- **A bound on a step.** Two states that tell each other forever never commit. A schedule stops a run that has not
+  come to rest after ten thousand things; the kernel itself has no such limit.
+- **Undoing what a handler sent before it threw.** Its change is not made, and what it told others is still told.
 - **Field names unique along a path** are assumed and not enforced.
 - **A field with a default still has to be given** when entering its state, because the types cannot see the default.
 - **Restoring a state after a reconnect or a code reload.** A state is plain data, `{ at, data }`, so it can be handed
@@ -479,8 +520,8 @@ Step 1 is under way; no later step is started. Each is a decision point.
    [What #591 delivered](#what-591-delivered) lists the seams still to do, which are what leave pack code that does not
    name XState.
 2. **Settle the open design** that the first real ports will hit: the Vue binding, and a write nobody waits for.
-3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The kernel
-   takes an injectable scheduler so interleavings can be replayed.
+3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The
+   prototype's kernel takes a schedule and its checks run every ordering; the kernel in the tree keeps both.
 4. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is
    the pack contract and moves with every feature ported.
 5. **Prove the bridge**, so that states and XState machines run on one bus and features move one at a time. If it cannot

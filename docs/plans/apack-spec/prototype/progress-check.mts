@@ -66,6 +66,7 @@ const panel = (heard: string[]) => state<{ states: { idle: {}; streaming: { data
         heard.push(done.ok ? `answer:stream:${done.value.sent}` : 'answer:failed')
         return { at: 'idle' }
       },
+      failed: () => ({ at: 'idle' }),
     },
   },
 })
@@ -83,6 +84,7 @@ const quick = (heard: string[]) => state<{ states: { idle: {}; asking: { data: {
         heard.push(done.ok ? `answer:${done.value}` : 'answer:failed')
         return { at: 'idle' }
       },
+      failed: () => ({ at: 'idle' }),
     },
   },
 })

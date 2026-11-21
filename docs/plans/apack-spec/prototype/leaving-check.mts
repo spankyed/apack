@@ -61,6 +61,8 @@ const panel = (saw: string[], lock: { held: boolean }) => state<Panel, PanelEven
         }
         return { at: 'idle' }
       },
+      // Given what `run` threw when it is not a `Left`. These checks only ever leave, so it is never called.
+      failed: (error) => { saw.push(`failed was given ${String(error)}`); return { at: 'idle' } },
     },
   },
 })

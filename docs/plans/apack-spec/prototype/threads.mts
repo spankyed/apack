@@ -232,6 +232,9 @@ function threadsSurface(log: (line: string) => void) {
           if (!made.ok) return { at: 'list', data: { problem: made.failure.message } }
           return { at: 'thread', data: { threadId: made.value.threadId, lastReply: null, problem: null } }
         },
+
+        // A refusal is a value and is handled above. This is for what was not expected: a bug in `run` itself.
+        failed: (error) => ({ at: 'list', data: { problem: error instanceof Error ? error.message : String(error) } }),
       },
 
       // ── thread: a state with states inside it ─────────────────────────────────────────────────────────────────────
@@ -276,6 +279,8 @@ function threadsSurface(log: (line: string) => void) {
               if (sent.failure.kind === 'disconnected') return { at: 'thread.idle', data: { problem: 'The connection was lost while sending.' } }
               return { at: 'thread.idle', data: { problem: sent.failure.message } }
             },
+
+            failed: (error) => ({ at: 'thread.idle', data: { problem: error instanceof Error ? error.message : String(error) } }),
 
             on: {
               TEXT_APPENDED: ({ text }, { data }) => ({ data: { streamed: data.streamed + text } }),

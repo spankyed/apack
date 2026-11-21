@@ -67,6 +67,7 @@ const panel = state<Panel, PanelEvent>()({
         await ask('finder', 'FIND', { count: data.count }, (results) => send({ type: 'FOUND', results: [...results] }))
         return { at: 'idle' }
       },
+      failed: () => ({ at: 'idle' }),
       on: { FOUND: ({ results }) => ({ data: (d) => { d.results.push(...results); d.changes++ } }) },
     },
   },

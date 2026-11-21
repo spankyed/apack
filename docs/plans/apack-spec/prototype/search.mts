@@ -189,6 +189,9 @@ const searchSurface = state<SearchSurface, SearchSurfaceEvent>()({
         return found.ok ? { at: 'idle' } : { at: 'idle', data: { searchError: found.failure.message } }
       },
 
+      // A search that could not be made is a refusal, handled above. This is for what `run` itself threw.
+      failed: (error) => ({ at: 'idle', data: { searchError: error instanceof Error ? error.message : String(error) } }),
+
       // Only a search that is running has results and progress arriving.
       on: {
         FOUND: ({ results, progress }) => ({
