@@ -683,7 +683,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   letting something begin before it acts, as in "search again before the first finishes", and the work a stand-in
   backend pretends to do. A kernel changed so that a read asks itself round without end used to keep the checks
   from ever finishing. It now fails one of them in a second, with "Still not at rest after 5000 turns".
-- **Which views are followed follows the data** (`follows-check.mts`, 15 checks; `views.mts`, 13 comparisons): a view
+- **Which views are followed follows the data** (`follows-check.mts`, 16 checks; `views.mts`, 13 comparisons): a view
   is followed from the moment its state is the case; what it delivers goes to its handler; a change to what it asks
   for follows it again and stops the one before, whose later deliveries are not heard; a change to anything else
   leaves it as it is; one is followed for each item of a list and stops when its item goes, each hearing with its own
@@ -692,7 +692,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   it asks for is refused and reported; one view may lead another, two that lead each other are refused where the
   circle closes, and a change from anywhere else follows a view again as before; and stopping stops all of it. Six mistakes do not compile. `views.mts`, the
   threads surface's three kinds of view, has no call that follows or stops following one.
-- **An answer and its change cannot disagree** (`answer-check.mts`, 12 checks): an ask that only answers changes
+- **An answer and its change cannot disagree** (`answer-check.mts`, 13 checks): an ask that only answers changes
   nothing; one that answers with a change has made it by the time the answer is had, and subscribers hear of it in
   that step, once; an answer can come with a move that gives the entered state its data; a change that is refused
   fails the ask and changes nothing; two asks that each add one after a wait both count; and an ask whose answering
@@ -731,7 +731,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   13 comparisons). Before this they printed and exited 0 whatever happened, which is how the defect above ran
   unseen. A search result carries the text it matched, so the comparison says which search found it; putting the
   defect back in a copy of the kernel fails `search.mts` at "it searched for the second query".
-- **Failing goes somewhere, and breaks nothing** (`failure-check.mts`, 12 checks): work that fails later, or at once,
+- **Failing goes somewhere, and breaks nothing** (`failure-check.mts`, 13 checks): work that fails later, or at once,
   goes where `failed` says with what it threw; a state left while asking has not failed and nothing is reported; work
   that fails after its state was left changes nothing and is reported; a handler that throws changes nothing and the
   next event is handled; a `failed` that throws is reported; a release that throws does not stop the others; an ask
@@ -787,7 +787,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   what is under way written whole.
 - **Progress gathered into batches** (`append-cost.mts`): the measurement above, and the search and threads examples,
   which now make one change per batch.
-- **A draft** (`draft.mts`, 139 lines; `draft-check.mts`, 18 checks) for what a hand-built one gets wrong: the old
+- **A draft** (`draft.mts`, 139 lines; `draft-check.mts`, 19 checks) for what a hand-built one gets wrong: the old
   value untouched, what was not edited kept as the same object, an edit that changes nothing returning the very same
   value, the same place read twice being the same draft, arrays through `push`, `splice`, `sort` and `length`, keys
   added and deleted, one part of the draft assigned to another, what is not plain handed over as it is, and a draft
