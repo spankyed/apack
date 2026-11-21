@@ -1,88 +1,105 @@
-// Rows, in memory: what stands in for the app's database where the kernel's rule about rows is checked. The kernel is
-// given a `Store` and knows nothing else of it. This one keeps rows in tables and does what the rule needs of any
-// store: a write is taken only while a step is open, everything a step wrote is kept at once or not at all, and what
-// was written since a mark can be undone on its own.
-import type { Store, Unit } from './state.mts'
+// Rows, as the kernel's rule about them is checked: one interface, kept two ways. `memory` keeps rows in maps, and
+// `store-elmdb.mts` keeps them in the app's engine. The kernel is given `transact` and nothing else of either.
+//
+// `transact` is the engine's: it runs a function as one unit, a throw undoes what it wrote, one inside another joins
+// it and is undone alone when it throws, and the writer is taken at the first write. The rest is what a check reads
+// rows with, and the rule a pack's engine holds: a write is made inside a unit.
 
 export type Row = Readonly<Record<string, unknown>>
+export type Table = 'thread' | 'link' | 'import'
 
-/** What a write outside a step throws. A handler that has waited is outside one, and returns its writes as a change. */
-export const WROTE_OUTSIDE_A_STEP = 'A row is written in a step. After an await a handler is outside one: return the write as part of the change, `(draft) => { … }`, which is made in a step.'
+/** What a write outside a unit throws. A handler that has waited is outside its step, and returns its writes as a change. */
+export const WROTE_OUTSIDE_A_STEP = 'A row is written in a step. After an await a handler is outside one: return the write as part of the change, `{ data: (draft) => { … } }`, which is made in a step.'
 
-export interface MemoryStore extends Store {
-  put(table: string, id: string, row: Row): void
-  remove(table: string, id: string): void
-  /** As a reader inside the step sees it: with what the step has written so far. */
-  get(table: string, id: string): Row | undefined
-  ids(table: string): string[]
-  /** As anything outside the step sees it: what was last kept. */
-  kept(table: string, id: string): Row | undefined
-  /** How many steps wrote, and so took the one writer there is. A step that wrote nothing is not one. */
+export interface Rows {
+  /** What the kernel is given. */
+  transact<T>(run: () => T): T
+  put(table: Table, id: string, row: Row): void
+  remove(table: Table, id: string): void
+  /** Joins two threads. Whether both exist is looked at when the unit commits, so the other end may be written after. */
+  join(from: string, to: string): void
+  joined(from: string, to: string): boolean
+  /** As whoever is reading sees it: with what the open unit has written, inside one. */
+  get(table: Table, id: string): Row | undefined
+  count(table: Table): number
+  /** How many units wrote, and so took the one writer there is. */
   readonly opened: number
   readonly commits: number
-  /** Whether a step has written and not yet been kept or given up. */
+  /** Whether a unit has written and not yet been kept or given up. */
   readonly writing: boolean
   /** Makes the next keeping fail, as a full disk would. */
   failNext(why: string): void
+  close(): void
 }
 
-export function memory(): MemoryStore {
+export function memory(): Rows {
   const tables = new Map<string, Map<string, Row>>()
-  const keptRows = new Map<string, Map<string, Row>>()
-  const table = (of: Map<string, Map<string, Row>>, name: string): Map<string, Row> => of.get(name) ?? of.set(name, new Map()).get(name)!
-  /** How to take back each write of the open step, in the order they were made. */
+  const table = (name: string): Map<string, Row> => tables.get(name) ?? tables.set(name, new Map()).get(name)!
+  const joins = new Set<string>()
+  /** How deep in units the code running is. */
+  let depth = 0
+  /** How to take back each write of the open unit, in the order they were made: there once the unit has written. */
   let undo: Array<() => void> | undefined
-  let stepOpen = false
   let opened = 0
   let commits = 0
   let failing: string | undefined
   const writes = (): Array<() => void> => {
-    if (!stepOpen) throw new Error(WROTE_OUTSIDE_A_STEP)
-    // The writer is taken at the first write and not when the step begins.
+    if (depth === 0) throw new Error(WROTE_OUTSIDE_A_STEP)
     if (!undo) { undo = []; opened++ }
     return undo
   }
   const back = (to: number): void => { if (undo) for (const take of undo.splice(to).reverse()) take() }
   return {
+    transact: (run) => {
+      const mark = undo?.length ?? 0
+      depth++
+      let value: ReturnType<typeof run>
+      try { value = run() } catch (error) {
+        depth--
+        back(mark)
+        if (depth === 0) undo = undefined
+        throw error
+      }
+      depth--
+      if (depth > 0 || !undo) return value
+      const wrote = undo.length > 0
+      // What was left until now: both ends of every join are there.
+      const loose = [...joins].find((pair) => pair.split('>').some((end) => !table('thread').has(end)))
+      const why = loose ? `join(${loose}): no thread has this id` : failing
+      if (wrote && why !== undefined) { failing = undefined; back(0); undo = undefined; throw new Error(why) }
+      undo = undefined
+      if (wrote) commits++
+      return value
+    },
     put: (name, id, row) => {
       const log = writes()
-      const rows = table(tables, name)
+      const rows = table(name)
       const was = rows.get(id)
       rows.set(id, Object.freeze({ ...row }))
       log.push(() => { if (was === undefined) rows.delete(id); else rows.set(id, was) })
     },
     remove: (name, id) => {
       const log = writes()
-      const rows = table(tables, name)
+      const rows = table(name)
       const was = rows.get(id)
       if (was === undefined) return
       rows.delete(id)
       log.push(() => { rows.set(id, was) })
     },
-    get: (name, id) => table(tables, name).get(id),
-    ids: (name) => [...table(tables, name).keys()],
-    kept: (name, id) => table(keptRows, name).get(id),
+    join: (from, to) => {
+      const log = writes()
+      const pair = `${from}>${to}`
+      if (joins.has(pair)) return
+      joins.add(pair)
+      log.push(() => { joins.delete(pair) })
+    },
+    joined: (from, to) => joins.has(`${from}>${to}`),
+    get: (name, id) => table(name).get(id),
+    count: (name) => table(name).size,
     get opened() { return opened },
     get commits() { return commits },
     get writing() { return undo !== undefined },
     failNext: (why) => { failing = why },
-    begin: (): Unit => {
-      if (stepOpen) throw new Error('A step was begun while another was open')
-      stepOpen = true
-      const close = (): void => { stepOpen = false; undo = undefined }
-      return {
-        mark: () => undo?.length ?? 0,
-        undo: (mark) => back(mark),
-        commit: () => {
-          if (!undo) { close(); return }
-          if (failing !== undefined) { const why = failing; failing = undefined; back(0); close(); throw new Error(why) }
-          keptRows.clear()
-          for (const [name, rows] of tables) keptRows.set(name, new Map(rows))
-          commits++
-          close()
-        },
-        abort: () => { back(0); close() },
-      }
-    },
+    close: () => {},
   }
 }

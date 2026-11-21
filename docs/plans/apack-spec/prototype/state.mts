@@ -599,21 +599,10 @@ type Item =
   | { kind: 'out'; leave: () => void }
 
 /**
- * Where rows are kept. The kernel is given one and names no database: it opens a unit for each step, and everything
- * written in the step is kept when the step commits, at once, or not at all.
+ * A database's `transact`, which is all the kernel knows of one: it runs a function as one unit, whose writes are kept
+ * together when it returns and undone when it throws. One inside another joins it, and is undone alone when it throws.
  */
-export interface Store { begin(): Unit }
-/** One step's writes. A store takes its one writer at the step's first write, so a step that writes nothing takes none. */
-export interface Unit {
-  /** A place to go back to. */
-  mark(): number
-  /** Takes back everything written since a mark, and nothing from before it. */
-  undo(mark: number): void
-  /** Keeps everything written. If it throws, nothing was kept. */
-  commit(): void
-  /** Keeps nothing. */
-  abort(): void
-}
+export type Transact = <T>(run: () => T) => T
 
 /** What one system offers another over a link. */
 interface Port {
@@ -674,10 +663,10 @@ export function system(host: {
   name?: string
   views?: ViewHost
   /**
-   * Where this system's rows are kept. With one, a step is a unit of it: a handler's rows, the data it changed and
-   * what it sent are kept together, and a handler that changes nothing has written nothing.
+   * The `transact` of the database this system's rows are kept in. With one, a step is a unit of it: a handler's rows,
+   * the data it changed and what it sent are kept together, and a handler that changes nothing has written nothing.
    */
-  store?: Store
+  transact?: Transact
   /**
    * Runs something later, after whatever is ahead of it in its lane. The default is the next turn of the event loop.
    * A check gives a schedule here, which decides the order between lanes and can run every one of them.
@@ -716,8 +705,8 @@ export function system(host: {
   const inside: Item[] = []
   /** What leaves when the step commits: answers, progress, what crosses a link, and word to subscribers. */
   const leaving: Array<(() => void) & { lost?: () => void }> = []
-  /** The open step's writes, if this system has somewhere to keep rows. */
-  let unit: Unit | undefined
+  /** Thrown inside a unit to have what it wrote undone, and caught around it. */
+  const UNDONE = Symbol('undone')
   /** Whether what is being handled changed nothing: it threw, was refused, or its change could not be made. */
   let nothingChanged = false
   /** Set when a step's rows could not be kept. The states are ahead of the rows then, and no more steps are taken. */
@@ -906,8 +895,8 @@ export function system(host: {
     let made: unknown
     // What `run` throws at once is a failure like any later one, taken up when the entering it is part of is done.
     // And what it wrote before it threw is taken back: work that fails at once has done nothing.
-    const mark = unit?.mark()
-    try { made = def.run?.(scopeOf(active)) } catch (error) { if (mark !== undefined) unit!.undo(mark); inside.push({ kind: 'failure', of: active, error }); return active }
+    const begin = (): void => { made = def.run?.(scopeOf(active)) }
+    try { if (host.transact) host.transact(begin); else begin() } catch (error) { inside.push({ kind: 'failure', of: active, error }); return active }
     if (made instanceof Promise) {
       under(made, (value) => arrive({ kind: 'result', of: active, value }), (error) => arrive({ kind: 'failure', of: active, error }))
     } else if (made !== undefined) inside.push({ kind: 'result', of: active, value: made })
@@ -1260,12 +1249,9 @@ export function system(host: {
    * a change that could not be made has its rows taken back, and the rows of everything else in the step stay.
    */
   const handle = (item: Item): void => {
-    const mark = unit?.mark()
-    nothingChanged = false
-    try { take(item) } catch (error) { nothingChanged = true; throw error } finally {
-      if (nothingChanged && mark !== undefined) unit!.undo(mark)
-      nothingChanged = false
-    }
+    const within = host.transact
+    if (!within) { take(item); return }
+    try { within(() => { nothingChanged = false; take(item); if (nothingChanged) throw UNDONE }) } catch (error) { if (error !== UNDONE) throw error }
   }
   const take = (item: Item): void => {
     if (item.kind === 'out') { leaving.push(item.leave); return }
@@ -1403,19 +1389,16 @@ export function system(host: {
     } catch (error) { nothingChanged = true; answer(question, failed(error)) }
   }
 
+  /** A step's rows could not be kept. Nothing has left yet, so nobody was told of a change that was not made. */
+  const lost = (error: unknown): void => {
+    broken = true
+    trace(`DEFECT: ${called} could not keep what a step wrote, and takes no more steps: its states are ahead of its rows. ${said(error)}`)
+    changed.clear(); fields.clear(); places.clear()
+    inside.length = 0; outside.length = 0; held.length = 0
+    // Whoever asked is told it failed. Nothing else leaves.
+    for (const leave of leaving.splice(0)) if (leave.lost) safely('what leaves at the commit', leave.lost)
+  }
   const commit = (): void => {
-    // Rows first. Nothing has left yet, so if they cannot be kept nobody was told of a change that was not made.
-    const kept = unit
-    unit = undefined
-    try { kept?.commit() } catch (error) {
-      broken = true
-      trace(`DEFECT: ${called} could not keep what a step wrote, and takes no more steps: its states are ahead of its rows. ${said(error)}`)
-      changed.clear(); fields.clear(); places.clear()
-      inside.length = 0; outside.length = 0
-      // Whoever asked is told it failed. Nothing else leaves.
-      for (const leave of leaving.splice(0)) if (leave.lost) safely('what leaves at the commit', leave.lost)
-      return
-    }
     if (changed.size) {
       const refs = [...changed]
       changed.clear()
@@ -1442,14 +1425,15 @@ export function system(host: {
     }
     if (broken) { inside.length = 0; outside.length = 0; return }
     stepping = true
-    unit = host.store?.begin()
-    try {
+    // Whether everything was handled. A throw before that is the kernel's own; one after is the database not keeping it.
+    let handled = false
+    const all = (): void => {
       first()
-      let handled = 0
+      let count = 0
       for (;;) {
-        for (; inside.length; handled++) {
+        for (; inside.length; count++) {
           const item = inside.shift()!
-          if (handled < RUNAWAY) { handle(item); continue }
+          if (count < RUNAWAY) { handle(item); continue }
           // What it had done is committed, so that the states can be read and the report says where they got to.
           trace(`DEFECT: a step was cut short after ${RUNAWAY} things, at ${'ref' in item ? item.ref : item.kind}: something tells something else without end`)
           inside.length = 0
@@ -1466,13 +1450,17 @@ export function system(host: {
       // What is still waiting was sent to nothing that runs.
       settling = true
       try { for (const item of held.splice(0)) handle(item) } finally { settling = false }
-      commit()
-    } finally {
-      // A step that did not reach its commit keeps nothing.
-      if (unit) { const open = unit; unit = undefined; safely('giving up what a step wrote', () => open.abort()) }
-      stepping = false
-      hearing = undefined
+      handled = true
     }
+    try {
+      // The step is one unit: its rows are kept as `transact` returns, and only then does anything leave.
+      try { if (host.transact) host.transact(all); else all() } catch (error) {
+        if (!handled) throw error
+        lost(error)
+        return
+      }
+      commit()
+    } finally { stepping = false; hearing = undefined }
   }
   /** What was sent in this step to a state that is not running, until the step's match says whether it is to be. */
   const held: Array<Extract<Item, { ref: string }>> = []

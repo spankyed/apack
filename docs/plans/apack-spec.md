@@ -608,23 +608,32 @@ Three things follow.
 - **Only 27 writes sit next to something outside**, a file, a session, a model, since those are what a function
   waits for. That is the part no database transaction can cover, and it is a seventh of the writes.
 
-**So a step is a transaction.** The kernel is given a store and opens one unit of it for each step: everything the
-step writes is kept when the step commits, at once, or none of it is. The store takes its writer at the step's first
-write and not before. elmdb has what this needs. A step runs to its end without waiting, which is what its unit
-takes, and inside a unit it has savepoints (`savepoint`, `rollbackTo`, `release`), which the second rule below uses.
+**So a step is a transaction.** The kernel is given one thing of the database, its `transact`, and runs each step
+inside it:
+
+```ts
+system({ side: 'backend', transact: engine.transact })
+```
+
+That is the whole of the join, and the engine already does the rest. Its `transact` runs a function as one unit,
+kept when it returns and undone when it throws. One inside another joins it, as a savepoint, and is undone alone
+when it throws. It takes the writer at the first write, and a unit that wrote nothing commits nothing. So the kernel
+runs a step in one `transact` and each thing the step handles in one inside it, and a repository's command, which
+is a `transact` of its own, joins whichever it is called in.
 
 - **A handler writes as it does now**, with its repository's commands, and reads its own writes back. The 184
   calls to a command stay as they are.
 - **A handler that changes nothing has written nothing.** A step is not refused whole and never was: one handler
   in it can throw while the others stand, and each already leaves its state's data as it was. Rows now go the same
-  way. The kernel marks the store before each thing it handles and goes back to the mark when the handler threw,
-  refused, or returned a change that could not be made, so that handler's rows are taken back and the rows of
-  everything else in the step are kept. The 24 torn handlers are whole without being touched.
+  way. Each thing a step handles runs in a unit inside the step's, and the kernel has it undone when the handler
+  threw, refused, or returned a change that could not be made. That handler's rows are taken back, its commands'
+  included, and the rows of everything else in the step are kept. The 24 torn handlers are whole without being
+  touched.
 - **Nothing leaves before the rows are in.** An answer, a broadcast, progress and word to a subscriber are released
   after the transaction commits, which is the order they already keep with a state's data. A view runs again after
   the same commit, so a window is never told of a row it cannot yet read. This is a Durable Object's output gate
   and the transactional outbox, with the outbox in memory.
-- **A write outside a step is refused**, by the engine a pack is handed, on the line that made it. After an
+- **A write outside a unit is refused**, by the engine a pack is handed, on the line that made it. After an
   `await` a handler is outside one, and the rule it already has covers this: it only returns. What it returns is a
   change, a change is made in a step, and a change's function may write as well as edit the draft:
 
@@ -646,9 +655,28 @@ takes, and inside a unit it has savepoints (`savepoint`, `rollbackTo`, `release`
 - **What a handler wrote before it waited is kept.** An ask that writes a row, waits, and is then refused has
   kept the row: the write was in the step that took the ask, which committed. This is what progress it sent does
   too. A row that should not outlive a refusal is written in the change that comes with the answer.
-- **Rows that cannot be kept stop the system.** If the commit fails (a full disk), nothing has left yet: whoever
-  asked in that step is told it failed, nobody is told of a change, and the system takes no more steps, since its
-  states are then ahead of its rows. The app restarts from the rows.
+- **Rows that cannot be kept stop the system.** If the commit fails, nothing has left yet: whoever asked in that
+  step is told it failed, nobody is told of a change, and the system takes no more steps, since its states are then
+  ahead of its rows. The app restarts from the rows. Two things make a commit fail. One is the disk. The other is
+  the one check elmdb leaves until a unit commits: that both ends of a relation exist (`Check::Ends`, so that a
+  link may be written before the entity it names). A handler that links to nothing is found there, which is too
+  late to blame it, and today that stops the system as a full disk does. The fix is elmdb's and small: run the
+  checks a savepoint deferred when the savepoint is released, so that the handler's own unit fails and only its rows
+  go ([Not built](#not-built)).
+
+**What it costs**, on elmdb, 2026-11-21, an M1 Pro under a load of 5.5, temporary databases with syncing off, the
+median of seven runs (`prototype/rows-cost.mts`):
+
+| A step that | Engine alone | Through the kernel |
+|---|---|---|
+| writes nothing | | 6.2 µs, against 6.3 µs given no database |
+| writes one row | 45 µs | 59 µs |
+| has ten handlers write a row each | 208 µs, or 242 µs with each write in a unit of its own | 298 µs |
+| ten rows, a step each | | 586 µs |
+
+A step that writes nothing pays nothing, since the writer is never taken. A unit around a handler is about 3 µs
+once the step has written. What costs is the commit: ten rows in ten steps are 2.8 times ten rows in one, so a
+stream is written a batch to a step, which is what gathering progress into frames already does.
 
 **What it does not cover, said so that nobody takes it for more:**
 
@@ -659,9 +687,10 @@ takes, and inside a unit it has savepoints (`savepoint`, `rollbackTo`, `release`
   recorded has to be something a later look can find again: the commit by its hash, the file by its path.
 - **The run history**, which is a second database with its own engine. A run node is written beside a step and
   not in it.
-- **A flow action.** An action is not a state: it is work the brain runs, and its 31 writes are each their own
-  unit as now, with `transact` when several belong together. Whether an action's result should carry its writes back
-  to the brain's step is settled when the brain is ported, against the actions.
+- **A flow action.** An action is not a state: it is work the brain runs, outside any step. Its 31 writes are each
+  a command, which is a unit of its own, and several that belong together go in one `transact`, as now. A bare
+  write outside any unit is refused there as everywhere. Whether an action's result should carry its writes back to
+  the brain's step is settled when the brain is ported, against the actions.
 - **Durable is later than committed.** A commit is on disk within a second (group commit). An answer released after
   a commit and before that can outlive its row through a power cut. A handler whose answer must not says
   `durable: true`, as `transact` takes today, and its step waits.
@@ -732,7 +761,7 @@ first, and nothing above needs it.
 | A component reads and sends, and cannot ask | Giving `useState` an `ask`. An ask made from a component has no owner to stop it or to say where the state goes if it fails, which is what `run` and `failed` are for |
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
-| A step is one unit of the store: rows, data and what is sent are kept together, and a handler that changes nothing has written nothing. A handler writes with its repository as now; after an `await` it returns the writes. | Writes made as the handler runs, outside the step: a refused ask had written, and 24 of 25 handlers with several writes could leave part of them. A handler returning every write as a description, dropped: a command's result (a new id) is read by the next line in most of them, and 165 of 192 writes already sit where a step is open. |
+| A step is one unit of the database, which the kernel knows as its `transact` and nothing else: rows, data and what is sent are kept together, and a handler that changes nothing has written nothing. A handler writes with its repository as now; after an `await` it returns the writes. | Writes made as the handler runs, outside the step: a refused ask had written, and 24 of 25 handlers with several writes could leave part of them. A store of the kernel's own with marks to go back to, dropped: the engine's `transact` inside itself is that already, and a command's own unit joins it. A handler returning every write as a description, dropped: a command's result (a new id) is read by the next line in most of them, and 165 of 192 writes already sit where a step is open. |
 
 ## What the prototype proves
 
@@ -800,17 +829,23 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 
   Thirteen mistakes do not compile across the two. The graph lists each read with what it depends on, each write,
   and which handler says to make which.
-- **A step is one unit of the store** (`store.mts`, `rows-check.mts`, 16 checks, against rows in memory). A row and
-  the data that counts it are kept together, and a subscriber told of the step can read the row. A step that writes
-  nothing never takes the writer. A handler that throws after two writes leaves neither, and in the same step the
-  handler beside it keeps its own, in one commit. An ask refused after it wrote has written nothing. A change that
-  refuses, and a change the kernel will not make, take back their own rows and the handler's. Work that throws at
-  once has written nothing. A write after an `await` throws on its line, saying what to do, and the same write
-  returned in the change is kept with the data. Work left before it returned writes nothing. What an ask wrote
-  before it waited is kept when it is refused after. Rows that cannot be kept: the asker is told it failed, no
-  subscriber hears, and no more steps are taken. And under all 420 orderings of two imports, a create, a note and a
-  handler that throws, the count a state holds is the number of rows kept. Eleven changes to a copy of the kernel,
-  each taking out one part of this, each fail a check.
+- **A step is one unit of the database** (`rows-check.mts`, 42 checks). Every check is run twice: against rows in
+  memory (`store.mts`) and against elmdb through `@elmdb/ears` on a temporary database (`store-elmdb.mts`), with the
+  kernel given the `transact` of each and nothing else. A row and the data that counts it are kept together, and a
+  subscriber told of the step can read the row. A step that writes nothing never takes the writer. A handler that
+  throws after two writes leaves neither, and in the same step the handler beside it keeps its own, in one commit.
+  An ask refused after it wrote has written nothing. A change that refuses, and a change the kernel will not make,
+  take back their own rows and the handler's. Work that throws at once has written nothing. A write after an
+  `await` throws on its line, saying what to do, and the same write returned in the change is kept with the data.
+  Work left before it returned writes nothing. What an ask wrote before it waited is kept when it is refused after.
+  Rows that cannot be kept: the asker is told it failed, no subscriber hears, and no more steps are taken. Two
+  commands, each a unit of its own, are kept with the count in one commit, and a handler that refuses after they
+  returned takes back what they wrote. Outside any step a command is still whole and a bare write is refused. A link
+  whose far end is written later in the step is kept, and a link to nothing loses the step and stops the system.
+  Under all 420 orderings of two imports, a create, a note and a handler that throws, the count a state holds is
+  the number of rows kept, on each store. And on elmdb, a watch of the rows is delivered after the step that wrote
+  them, by when the state has counted them, and whoever was answered reads the row at once. Ten changes to a copy
+  of the kernel, each taking out one part of this, each fail a check on both stores.
 - **A check that fails says so, and does not hang** (`checks.mts`). All fifteen check files run their checks
   through one runner. Every system a check makes is stopped when the check ends, however it ends, so one that fails
   part-way leaves nothing running to keep the process alive. A system in a check is given a limit on how many steps
@@ -1260,14 +1295,16 @@ projects. Each would loosen the fit to this app.
 - **Saving a state to disk** is not wanted. A saved state is a stored format that would then have to be kept stable.
   And restoring starts a state's work again, which is right for a search a moment after a reload and wrong for a
   message that was being sent a day ago.
-- **The app's engine as the store** ([Rows](#rows)). The rule is proven against rows in memory. Three things are
-  left for the store that goes over elmdb, built with the kernel:
-  - a savepoint opened only when something is written after a mark, so that marking each thing handled costs
-    nothing in a step that writes nothing;
-  - the engine a pack is handed refusing a write outside a step, where the prototype's store does it;
-  - elmdb's checks at commit. A row that fails one fails the whole step and stops the system, where it should fail
-    the handler that wrote it. Which checks elmdb leaves until commit, and whether they can be run when a savepoint
-    is released, is to read in elmdb.
+- **Rows** ([Rows](#rows)): the rule is proven on elmdb. What is left is not the kernel's:
+  - *In elmdb:* the checks a savepoint deferred run when it is released, so that a link to nothing fails the handler
+    that wrote it and not the step.
+  - *In the SDK:* the engine a pack is handed refuses a bare write outside a unit. In the prototype that is a count
+    kept around `transact` (`store-elmdb.mts`), and it is the same there.
+  - *A step that must be on disk before it answers.* `transact` takes `durable: true`; a handler has no way to ask
+    for it yet. It is one more key on what a handler returns, and is added when a handler needs it.
+  - *Restart.* Nothing here kills a system between something done outside and the row that records it. That is
+    checked against the first ported feature that does both, since what is to be found again differs by feature.
+  - *A flow action's writes and the brain's step*, settled with the brain.
 - **Delayed transitions and history states** are absent. The app uses one delayed transition and no history states.
   A delay, when there is one, goes through the kernel's `later` so that a schedule can choose when it fires.
 - **The kernel's own rough edge.** Reading a state that has ended throws.
@@ -1309,11 +1346,11 @@ ask is the SDK's, so what the move rewrites is the files that define a machine a
    ([What #591 delivered](#what-591-delivered)). A machine goes on naming XState until it is ported.
 2. **Build the kernel in the tree**, with no dependencies, as its own workspace, from the prototype and with its
    checks: the schedule and every ordering, the refusals, what must not compile. Not a sibling repository: its API
-   is the pack contract. It takes the store a step is a transaction of ([Rows](#rows)) as something it is given, so
+   is the pack contract. It takes the `transact` a step is run in ([Rows](#rows)) as something it is given, so
    that it names no database.
 3. **Port the host's bus and shell**, which everything else runs inside. Two things they need are settled here,
    against the real ones ([Not built](#not-built)): roles, and restoring a state. The host gives the
-   kernel the app's engine as its store, and the engine a pack is handed refuses a write outside a step.
+   kernel the app's engine's `transact`, and the engine a pack is handed refuses a write outside a unit.
 4. **Put the test harness on it**, so that a feature's specs run against the kernel. From here to the end the app
    does not start, and this is how each port is known to work: a feature is across when its specs pass, unchanged in
    what they assert.
