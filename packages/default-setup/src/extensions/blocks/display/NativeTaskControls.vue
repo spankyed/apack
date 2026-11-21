@@ -10,7 +10,7 @@
       <button v-if="workflow && task.canResume && controls.foregroundAvailable.value" type="button" :disabled="pending || !!state?.resume?.requested" class="rounded border border-white/10 px-2 py-1 text-[11px] text-blue-300 hover:bg-white/5 disabled:opacity-40" @click="controls.operate(task, 'resume_workflow')">{{ state?.resume?.requested ? 'Resume requested' : 'Resume Workflow' }}</button>
       <button type="button" class="rounded px-2 py-1 text-[11px] text-red-300 hover:bg-red-400/10 disabled:opacity-40" :disabled="pending || (workflow || shell || mcp ? task.canStop !== true : task.status !== 'running')" @click="controls.operate(task, 'stop')">{{ pending && state?.operation === 'stop' ? 'Stopping…' : workflow ? 'Stop Workflow' : shell ? 'Stop command' : mcp ? 'Stop task' : 'Stop Agent' }}</button>
     </div>
-    <p v-if="state?.status === 'error'" role="alert" class="mt-2 text-xs text-red-300">{{ state.problem }}</p>
+    <p v-if="state?.status === 'error' && !mcpDialog" role="alert" class="mt-2 text-xs text-red-300">{{ state.problem }}</p>
     <section v-if="!workflow && !shell && !mcp && shown && state?.details" :aria-label="workflow ? 'Workflow details' : 'Agent conversation'" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-2 text-xs">
       <button type="button" class="mb-2 text-[11px] text-neutral-400 hover:text-neutral-200 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'inspect')">{{ workflow ? 'Refresh details' : 'Refresh conversation' }}</button>
       <NativeAgentDetails :details="state.details" />
@@ -45,6 +45,7 @@
         </header>
         <div class="min-h-0 overflow-y-auto p-4 text-xs">
           <NativeMcpTaskDetails :info="task.mcp ?? state.details.mcp" :status="task.status" />
+          <p v-if="state.status === 'error'" role="alert" class="mt-3 text-red-300">{{ state.problem }}</p>
           <button type="button" :disabled="pending" class="mt-3 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh task details</button>
         </div>
         <footer class="flex shrink-0 justify-end gap-2 border-t border-white/10 px-4 py-3">
