@@ -8,7 +8,6 @@
  * The rule itself lives in `@apackdev/host/build/packages-built`, which everything that needs it imports
  * by that name: a relative import of this file would put the repo root into `@apackdev/testing`'s
  * declaration emit and move every declaration its bundle publishes.
-
  */
 import * as fs from 'node:fs';
 import { pathToFileURL } from 'node:url';

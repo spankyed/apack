@@ -146,7 +146,7 @@ describe('packageIdentity', () => {
     for (const entry of [
       { ...registry, resolved: 'file:../lib-1.0.0.tgz' },
       { version: '1.0.0', resolved: 'git+ssh://git@github.com/x/lib.git#abc' },
-      { ...registry, link: true },
+      { resolved: '../lib', link: true },
       { ...registry, version: '0.9.0' },
       { ...registry, integrity: undefined },
     ]) expect(packageIdentity(installed('node_modules/lib', entry).dir).hash, JSON.stringify(entry)).toBe(files);

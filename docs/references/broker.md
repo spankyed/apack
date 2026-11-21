@@ -369,5 +369,3 @@ know which shell is on the other end.
   ([evidence](../goals/evidence/terminal-view.md)) and are held in the suite only to their text, neither
   shell being installed where the suite runs; PowerShell was run on Linux, so how a Windows console
   orders the hook's writes against the prompt is unseen. bash newer than 3.2 was not run.
-- **A packaged build ships no broker.** The binary is resolved from `APACK_TERMINAL_BINARY` or the linked
-  checkout's debug build. Per-platform builds and their signing belong with the composition that ships it.

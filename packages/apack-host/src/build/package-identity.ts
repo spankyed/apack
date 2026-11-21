@@ -1,14 +1,15 @@
 /**
  * Which packages a package brings, and what each one is.
  *
- * Every package this repository depends on outside the registry is version 0.0.0 or a workspace's 0.1.0 behind a
- * `file:` link, so a version says nothing about what a package holds. What it holds is what `npm pack` would ship
- * from its directory, and that is the same set of files whether the directory is a registry install or a linked
- * checkout: a registry install is that set, unpacked. So a package's identity is its name, its version and a hash of
+ * A workspace package, or one a pack or `npm run deps:local` links, keeps its version while its files change, so a
+ * version says nothing about what a package holds. What it holds is what `npm pack` would ship from its directory,
+ * and that is the same set of files whether the directory is an install or a linked checkout: an install is that
+ * set, unpacked. So a package's identity is its name, its version and a hash of
  * that set, and nothing here guesses which of its folders matter.
  *
- * **A registry install already carries that hash**: npm checked the tarball it unpacked against the `integrity` its
- * lockfile records, so a package npm installed from the registry is identified by that instead of by reading its files
+ * **An install from a URL already carries that hash**: npm checked the tarball it unpacked against the `integrity` its
+ * lockfile records (a registry's, or a release of one of our other repositories), so such a package is identified by
+ * that instead of by reading its files
  * again — which is most of the packages and nearly all of the files a pack's scope covers.
  */
 import * as fs from 'node:fs';
@@ -121,7 +122,6 @@ interface LockedPackage {
   readonly version?: string;
   readonly resolved?: string;
   readonly integrity?: string;
-  readonly link?: boolean;
 }
 
 /** Each lockfile read, by path, kept while its size and modification time are the ones it was read at */
@@ -153,7 +153,7 @@ function registryIntegrity(root: string, version: string): string | undefined {
     const packages = lockfilePackages(path.join(dir, 'package-lock.json'));
     if (packages) {
       const entry = packages[path.relative(dir, root).split(path.sep).join('/')];
-      const fromRegistry = entry !== undefined && !entry.link && /^https?:\/\//.test(entry.resolved ?? '');
+      const fromRegistry = entry !== undefined && /^https?:\/\//.test(entry.resolved ?? '');
       return fromRegistry && entry.version === version && entry.integrity ? entry.integrity : undefined;
     }
     if (path.dirname(dir) === dir) return undefined;

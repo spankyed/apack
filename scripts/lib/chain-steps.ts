@@ -791,7 +791,7 @@ function inputsForSuites(suites: readonly UnitSuite[], half: Half): Pick<ChainSt
  * so the edge to `build:default-setup` survives on the leg that has it, and the other fourteen stop waiting for a
  * build they never read.
  *
- * What the scope narrows is the source: an edit under the renderer does not invalidate `typecheck:ears`.
+ * What the scope narrows is the source: an edit under the renderer does not invalidate `typecheck:sdk`.
  *
  * `dep-files.spec.ts` checks each leg's declaration against what the compiler reported reading, which is
  * the half that would catch a scope narrower than the truth.

@@ -193,7 +193,7 @@ function bundled(at: CheckoutPaths, pkg: string, ...copiedPaths: string[]): Buil
   const { repoFile, pkgFile } = at;
   return {
     inputs: [...sharedInputs(at), repoFile('scripts', 'bundle-package.ts'),
-      repoFile('scripts', 'lib', 'published-imports.ts'), ...copiedPaths.map(file => pkgFile(pkg, file)),
+      repoFile('scripts', 'lib', 'published-imports.ts'), repoFile('scripts', 'lib', 'external-packages.mjs'), ...copiedPaths.map(file => pkgFile(pkg, file)),
       // The repository's license, which the bundle copies into the published package
       repoFile('LICENSE'),
       pkgFile(pkg, 'src'), pkgFile(pkg, 'package.json'), pkgFile(pkg, 'tsconfig.json'),

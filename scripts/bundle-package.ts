@@ -16,6 +16,7 @@ import { manifestPaths, type Manifest } from '@apackdev/host/build/published-man
 import { SHARED_INSTANCE_PACKAGES } from '@apackdev/host/build/shared-deps';
 import ts from 'typescript';
 import { BareImports } from './lib/published-imports.ts';
+import { repositoryOf } from './lib/external-packages.mjs';
 import { build, type BuildOptions, type Plugin } from 'esbuild';
 
 interface BundleConfig {
@@ -115,17 +116,14 @@ const workspaceManifestFile = (name: string) => createRequire(path.join(repoRoot
 const workspaceManifest = (name: string) => JSON.parse(fs.readFileSync(workspaceManifestFile(name), 'utf-8'));
 const sharedPkgs = SHARED_INSTANCE_PACKAGES.map(workspaceManifest);
 /**
- * What the shared-instance packages take from another of our repositories (EARS, from elmdb's release, or a local
- * checkout's, which the root's `overrides` name by URL or `file:` path): inlined with them, as the build it was made
- * from, since no registry holds it
+ * What the shared-instance packages take from another of our repositories (EARS, from elmdb's release,
+ * `lib/external-packages.mjs`): inlined with them, as the build it was made from, since no registry holds it
  */
-const external = Object.entries<unknown>(JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8')).overrides ?? {})
-  .filter(([, spec]) => typeof spec === 'string' && /^(https:|file:)/.test(spec)).map(([name]) => name);
-const LINKED = sharedPkgs.flatMap((shared) => Object.keys(shared.dependencies ?? {}).filter((name) => external.includes(name)));
-const inlinedPkgs = [...SHARED_INSTANCE_PACKAGES, ...LINKED].map((name) => ({ name, manifest: workspaceManifest(name) }));
+const FROM_RELEASES = sharedPkgs.flatMap((shared) => Object.keys(shared.dependencies ?? {}).filter((name) => repositoryOf(name) !== undefined));
+const inlinedPkgs = [...SHARED_INSTANCE_PACKAGES, ...FROM_RELEASES].map((name) => ({ name, manifest: workspaceManifest(name) }));
 const hostPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages', 'apack-host', 'package.json'), 'utf-8'));
 const SHARED = new Set<string>(SHARED_INSTANCE_PACKAGES);
-const INLINED = new Set([...SHARED, ...LINKED, '@apackdev/host']);
+const INLINED = new Set([...SHARED, ...FROM_RELEASES, '@apackdev/host']);
 
 const builtins = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)]);
 
@@ -274,9 +272,9 @@ async function main(): Promise<void> {
       dependencies[shared.name] = shared.version;
     }
   }
-  // The private host package and what the SDK links are inlined, never installed
+  // The private host package and what the SDK takes from a release are inlined, never installed
   delete dependencies['@apackdev/host'];
-  for (const name of LINKED) delete dependencies[name];
+  for (const name of FROM_RELEASES) delete dependencies[name];
 
   for (const file of config.copy ?? []) {
     const from = path.join(pkgDir, file);

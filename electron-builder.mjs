@@ -6,7 +6,6 @@ import {createRequire} from 'node:module';
 import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
 import {electronNoticesPointer, electronSbomComponent, ffmpegSource, shipElectronNotices} from './scripts/lib/electron-notices.ts';
 import {brokerNoticesFile, brokerSbomComponent, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
-import {REPOSITORIES} from './scripts/lib/external-packages.mjs';
 
 /**
  * Electron Builder Configuration
@@ -113,10 +112,9 @@ export default /** @type import('electron-builder').Configuration */
       sbom: {
         file: path.join(context.outDir, `${releasePrefix}-${metadata.version}-${os}-${Arch[context.arch]}.cdx.json`),
         app: {name: productName, version: metadata.version},
-        // The packages our other repositories' releases publish, by the repository and directory each is packed from,
-        // which no registry publishes (scripts/lib/external-packages.mjs)
-        identity: sbomIdentity(projectDir, Object.fromEntries(Object.entries(REPOSITORIES).flatMap(([repo, {packages}]) =>
-          Object.entries(packages).map(([name, {dir}]) => [name, dir === '.' ? repo : `${repo}#${dir}`])))),
+        // The packages our other repositories' releases publish, which no registry publishes, by the repository and
+        // directory each is packed from (scripts/lib/external-packages.mjs)
+        identity: sbomIdentity(projectDir),
         // The runtime the app ships, with the Chromium and FFmpeg inside it, and the broker with the files beside it
         others: [electronSbomComponent(electronVersion), brokerSbomComponent(projectDir, appDir, brokerPlatform)].filter(Boolean),
       },
