@@ -32,6 +32,12 @@ const composerPlacement=z.object({component:z.enum(['Spinner','SessionMode','Pro
 export type ClaudeUiComposerPlacement=z.infer<typeof composerPlacement>
 const terminalPlacement=z.object({component:z.enum(['TurnDuration','InfoNotice']),id:z.string().min(1).max(256),revision:z.string().regex(/^[a-f0-9]{64}$/),anchorIds:z.array(z.string().min(1).max(256)).max(256)}).strict()
 export type ClaudeUiTerminalPlacement=z.infer<typeof terminalPlacement>
+const transcriptTimestamp = z.object({
+  uuid: z.string().min(1).max(256),
+  datetime: z.iso.datetime(),
+  label: z.string().min(1).max(256),
+}).strict()
+export type ClaudeTranscriptTimestamp = z.infer<typeof transcriptTimestamp>
 const clientId = z.string().regex(/^[A-Za-z0-9._-]{1,64}$/)
 const surface = z.enum(['desktop', 'mobile', 'vscode'])
 const surfaces = z.array(z.enum(['terminal', 'desktop', 'mobile', 'vscode']))
@@ -141,6 +147,11 @@ export function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIni
     return controls.request(value)
   }
   return {
+    async transcriptTimestamps(id: string): Promise<ClaudeTranscriptTimestamp[]> {
+      if (!(await initialized()).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
+      return z.object({ timestamps: z.array(transcriptTimestamp).max(512) }).strict()
+        .parse(await request({ subtype: 'apack_ui_terminal_timestamps', client_id: clientId.parse(id) })).timestamps
+    },
     async terminalPlacements(id: string): Promise<ClaudeUiTerminalPlacement[]> {
       if (!(await initialized()).capabilities?.includes('apack_ui_instance_lifetime_v1')) return []
       return z.object({placements:z.array(terminalPlacement).max(128)}).strict().parse(await request({subtype:'apack_ui_terminal_placements',client_id:clientId.parse(id)})).placements

@@ -27,6 +27,8 @@
         </template>
         <template v-else>
           <p class="mb-2 text-[10px] uppercase tracking-wider text-neutral-500">{{ message.role === 'user' ? 'You' : name }}</p>
+          <time v-if="timestamps.has(message.uuid)" :datetime="timestamps.get(message.uuid)?.datetime" data-claude-message-timestamp
+            class="mb-1 block break-words text-xs text-neutral-400">{{ timestamps.get(message.uuid)?.label }}</time>
           <NativeTranscriptMessage v-if="frames.get(message.uuid)" :frame="frames.get(message.uuid)!" @press="press" @field="field" />
           <TiptapEditor v-else mode="viewer" variant="chat" :model-value="message.text" />
         </template>
@@ -106,6 +108,7 @@ const pageSelection = provideClaudeUiSelection(() => selectionRoot.value)
 watch(() => JSON.stringify([uiMount.value, state.value?.agent?.messages.filter(message => message.role === 'user').at(-1)?.uuid]), pageSelection.clear)
 
 const frames = computed(() => new Map(state.value?.transcriptMessages?.map(frame => [frame.uuid, frame])))
+const timestamps = computed(() => new Map(selectedOwner.value ? state.value?.transcriptTimestamps?.map(timestamp => [timestamp.uuid, timestamp]) : []))
 const terminal = computed(() => context.value.nativeTerminalViews[terminalMount])
 const selectedOwner = computed(() => {
   const owner = terminal.value?.state, selected = owner?.view

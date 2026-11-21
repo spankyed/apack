@@ -109,6 +109,43 @@ function nativeTerminalPlacements(n){
  }
  return result;
 }
+const terminalTimestampSeen=new Map();
+let terminalTimestampRoot,terminalTimestampView,terminalTimestampRows=[];
+function nativeTranscriptTimestamps(n){
+ const binding=originalContext??n.runtime.ey();
+ if(binding?.surface!=='terminal'||binding.toolContext(new AbortController()).getAppState().showMessageTimestamps!==true){
+  terminalTimestampRoot=undefined;terminalTimestampView=undefined;terminalTimestampRows=[];return terminalTimestampRows;
+ }
+ const root=n.themeRoots.ai().get(process.stdout)?.container?.current;
+ const view=clientViewKey(n);
+ if(root===terminalTimestampRoot&&view===terminalTimestampView)return terminalTimestampRows;
+ const pending=root?[root]:[],seen=new Set(),labels=new Map(),ambiguous=new Set();
+ while(pending.length){
+  const fiber=pending.pop();
+  if(seen.has(fiber))continue;
+  if(seen.size>=16384){labels.clear();break;}
+  seen.add(fiber);
+  const props=fiber.memoizedProps,row=fiber.updateQueue?.memoCache?.data?.[0],message=props?.message;
+  if(typeof fiber.type==='function'&&fiber.type.name==='ul'&&props?.showMessageTimestamps===true&&message===row?.[0]&&row[1]===true&&row[7]?.props?.children===row[3]&&row[11]?.props?.children===row[7]){
+   let hash=composerFunctionHashes.get(fiber.type);
+   if(!hash){hash=createHash('sha256').update(Function.prototype.toString.call(fiber.type)).digest('hex');composerFunctionHashes.set(fiber.type,hash);}
+   const label=row[3],uuid=message?.uuid,raw=message?.type==='attachment'&&message.attachment?.type==='queued_command'?(message.attachment.timestamp??message.timestamp):message?.timestamp;
+   if(hash==='322c1d6c6c77b53deab4e99856a2d8502181ae0ad07f707bcf904aeb34861662'&&typeof uuid==='string'&&uuid.length>0&&uuid.length<=256&&typeof label==='string'&&label.trim()&&label.length<=256&&typeof raw==='string'){
+    const time=new Date(raw);
+    if(Number.isFinite(time.getTime())){
+     const datetime=time.toISOString(),prior=labels.get(uuid);
+     if(prior&&(prior.datetime!==datetime||prior.label!==label))ambiguous.add(uuid);
+     labels.set(uuid,{uuid,datetime,label});
+    }
+   }
+  }
+  if(fiber.sibling)pending.push(fiber.sibling);
+  if(fiber.child)pending.push(fiber.child);
+ }
+ terminalTimestampRoot=root;terminalTimestampView=view;
+ terminalTimestampRows=[...labels.values()].filter(row=>!ambiguous.has(row.uuid)).slice(-512);
+ return terminalTimestampRows;
+}
 function terminalPlacementList(n){return [...nativeTerminalPlacements(n).values()].map(source=>({component:source.component,id:source.id,revision:source.fingerprint,anchorIds:source.anchorIds}));}
 function terminalPlacementFacts(n,component,id){return nativeTerminalPlacements(n).get(JSON.stringify([component,id]));}
 function currentTerminalPlacementAction(n,request){
@@ -120,7 +157,13 @@ function currentTerminalPlacementAction(n,request){
 function refreshTerminalPlacements(n){
  if(!clients.size)return;
  let list;try{list=terminalPlacementList(n)}catch{list=[]}
+ let timestamps;try{timestamps=JSON.stringify(nativeTranscriptTimestamps(n));}catch{timestamps='[]';}
+
  for(const client of clients){if(!clientViewCurrent(n,client))continue;
+  if(terminalTimestampSeen.get(client)!==timestamps){
+   terminalTimestampSeen.set(client,timestamps);
+   publish({type:'system',subtype:'ui_invalidate',event:'ui.render',terminal_timestamps:true,client_id:client,instances:[]});
+  }
   const next=new Map(list.map(item=>[JSON.stringify([item.component,item.id]),item.revision])),prior=terminalPlacementSeen.get(client),changed=[];
   for(const[key,revision]of next)if(!prior||prior.get(key)!==revision){const[component,id]=JSON.parse(key);n.nativeClients.suspendInstance(client,component,id);changed.push({surface:'desktop',component,instance_id:id});}
   for(const key of prior?.keys()??[])if(!next.has(key)){const[component,id]=JSON.parse(key);n.nativeClients.release(client,component,id);terminalPlacementFrames.delete(JSON.stringify([client,component,id]));changed.push({surface:'desktop',component,instance_id:id});}

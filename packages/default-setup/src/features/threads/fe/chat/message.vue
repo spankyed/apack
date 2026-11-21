@@ -60,7 +60,7 @@
       >
         <div class="flex items-center overflow-hidden border rounded-lg shadow-lg bg-neutral-800 border-neutral-700">
           <!-- Timestamp -->
-          <span v-if="message.createdAt" class="text-xs text-neutral-400 px-3 py-1.5 border-r border-neutral-700 whitespace-nowrap">
+          <span v-if="message.createdAt && !bodyTimestamp && !assistantTimestamps.size" class="text-xs text-neutral-400 px-3 py-1.5 border-r border-neutral-700 whitespace-nowrap">
             {{ formatMessageTime(new Date(message.createdAt)) }}
           </span>
 
@@ -158,6 +158,8 @@
         @click="isUser && isTruncated && !userExpanded && (userExpanded = true)"
       >
         <div ref="bubbleContentRef" class="px-4 py-3" :class="{ compactImageMessage: compactImageLayout }">
+        <time v-if="bodyTimestamp" :datetime="bodyTimestamp.datetime" data-claude-message-timestamp
+          class="mb-1 block break-words text-xs text-neutral-400" :class="{ 'text-right': isUser }">{{ bodyTimestamp.label }}</time>
         <!-- Attachments: files then images, horizontal scroll -->
         <div v-if="message.references?.files?.length || message.references?.images?.length" ref="attachmentStrip"
           class="flex items-end gap-2 mb-2 overflow-x-auto scrollbar-thin" :class="{ compactImageStrip: compactImageLayout }">
@@ -196,6 +198,9 @@
           <slot v-if="!hasNativeTranscript" />
           <div v-else-if="!hasNativeUserFrame" hidden inert aria-hidden="true"><slot /></div>
           <template v-for="part in hasNativeTranscript ? nativeParts : []" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
+            <time v-if="part.kind === 'native' && !isUser && assistantTimestamps.has(part.frame.uuid)"
+              :datetime="assistantTimestamps.get(part.frame.uuid)?.datetime" data-claude-message-timestamp
+              class="mb-1 block break-words text-xs text-neutral-400">{{ assistantTimestamps.get(part.frame.uuid)?.label }}</time>
             <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="presentTranscriptFrame(part.frame)"
               @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
             <TiptapEditor v-else mode="viewer" variant="chat" :model-value="part.text" />
@@ -268,9 +273,12 @@ import ImageThumbnail from './ImageThumbnail.vue'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useContextMenu } from '@apackdev/ui/composables/useContextMenu'
 
+type ClaudeTranscriptTimestamp = import('#features/code/be/services/claude-code/ui-controls.ts').ClaudeTranscriptTimestamp
+
 interface ChatMessageProps {
   message: MessageEntity
   nativeFrames?: ClaudeUiTranscriptFrame[]
+  nativeTimestamps?: ReadonlyMap<string, ClaudeTranscriptTimestamp>
   nativeViewId?: string
   nativeBlockExpansion?: readonly number[]
   isTyping?: boolean
@@ -351,6 +359,24 @@ const isUser = computed(() => props.message.sender === 'user')
 const compactImageLayout = computed(() => isUser.value && props.isClaudeCodeThread
   && props.message.references?.images?.length === 1 && !!userMessageText.value.trim()
   && !props.message.references.files?.length && !props.message.references.context?.length && !props.message.blocks?.length)
+const assistantTimestamps = computed(() => {
+  const sources = props.message.context?.claudeNativeMessages
+  if (!props.isClaudeCodeThread || props.message.sender !== 'assistant' || !Array.isArray(sources)) return new Map<string, ClaudeTranscriptTimestamp>()
+  const labels = new Map<string, ClaudeTranscriptTimestamp>()
+  for (const row of sources) {
+    if (row && typeof row.uuid === 'string') {
+      const stamp = props.nativeTimestamps?.get(row.uuid)
+      if (stamp) labels.set(row.uuid, stamp)
+    }
+  }
+  return labels
+})
+const bodyTimestamp = computed(() => {
+  if (!props.isClaudeCodeThread || !props.nativeTimestamps?.size) return
+  const uuid = props.message.context?.cliUuid
+  if (isUser.value && !props.message.status && typeof uuid === 'string') return props.nativeTimestamps.get(uuid)
+  if (!hasNativeTranscript.value && assistantTimestamps.value.size === 1) return assistantTimestamps.value.values().next().value
+})
 const selectionRowId = computed(() => {
   const context = props.message.context
   if (!props.isClaudeCodeThread || !['user', 'assistant'].includes(props.message.sender) || Array.isArray(context?.claudeNativeMessages) && context.claudeNativeMessages.length > 1) return undefined

@@ -515,6 +515,7 @@ export const claudeNativeLinuxBindings: {
     }
   },
   "functionNames": {
+    "ul": "ul",
     "Lst": "Wst",
     "sCe": "vCe",
     "WCo": "o_o",
@@ -582,6 +583,7 @@ export const claudeNativeLinuxBindings: {
     "Xe": "Xe"
   },
   "functionHashes": {
+    "322c1d6c6c77b53deab4e99856a2d8502181ae0ad07f707bcf904aeb34861662": "5dfa0297d4269a2b20f728be53a9d9bb38a538df63bdc1cb9e787312ebc5888e",
     "73991c6e58be63f833bd28c99cb9d1475bf4d61c9506e61c601135dad12e4850": "e09dae1fdfa38d5ebb554f4376ac455cb892e6fa2c41f691416082597948d93c",
     "1881b29f0df68643fbbddd89ecc94dda427c4ac21e596c4d73aadf6494b7e411": "b9a953839986e5303d9ebc26230ebd370573038ae9b103b63d785f5e9b4a14db",
     "31de5abb44ffd78579919bfd0574f3f08c124efcc60007f3344c240ca2b2faa6": "57bbe855416429d7ad078be8d45455e83d8edff6dd06a60337849e3718252381",

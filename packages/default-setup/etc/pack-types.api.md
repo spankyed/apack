@@ -779,8 +779,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    plan: "plan";
                     default: "default";
+                    plan: "plan";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -2392,8 +2392,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                plan: "plan";
                 default: "default";
+                plan: "plan";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -3377,6 +3377,8 @@ type ClaudeTerminalViewSnapshot = {
     }[];
 };
 
+type ClaudeTranscriptTimestamp = z.infer<typeof transcriptTimestamp>;
+
 type ClaudeTurnConsumer = (turn: ClaudeConversationTurn) => Promise<void>;
 
 type ClaudeUiActionKeyRequest = z.infer<typeof actionKeyRequest>;
@@ -3594,6 +3596,7 @@ type ClaudeUiMountState = ({
         messageId: string;
     })[];
     transcriptMessages?: ClaudeUiTranscriptFrame[];
+    transcriptTimestamps?: ClaudeTranscriptTimestamp[];
     question?: ClaudeUiQuestionFrame;
     approval?: ClaudeUiApprovalFrame;
 };
@@ -8647,8 +8650,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    plan: "plan";
     default: "default";
+    plan: "plan";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -11461,6 +11464,7 @@ declare function createClaudePromptHosts(write: (value: unknown) => boolean, pai
 
 /** Native UI transport only. A renderer must validate tree nodes before displaying them. */
 declare function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeInitialization, 'capabilities'>>, controls: Pick<ReturnType<typeof createHostControls>, 'request'>, promptHosts?: Pick<ReturnType<typeof createClaudePromptHosts>, 'answers' | 'detach' | 'register'>, printClients?: ClaudePrintClientProjection): {
+    transcriptTimestamps(id: string): Promise<ClaudeTranscriptTimestamp[]>;
     terminalPlacements(id: string): Promise<ClaudeUiTerminalPlacement[]>;
     composerPlacements(id: string): Promise<ClaudeUiComposerPlacement[]>;
     managedSettingsDiagnostics(id: string): Promise<ClaudeManagedSettingsDiagnostic[]>;
@@ -12223,8 +12227,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        append: "append";
         insert: "insert";
+        append: "append";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;
@@ -13110,6 +13114,12 @@ declare const toolGroup: z.ZodObject<{
     isExpanded: z.ZodBoolean;
     initialized: z.ZodBoolean;
     revision: z.ZodString;
+}, z.core.$strict>;
+
+declare const transcriptTimestamp: z.ZodObject<{
+    uuid: z.ZodString;
+    datetime: z.ZodISODateTime;
+    label: z.ZodString;
 }, z.core.$strict>;
 
 /**

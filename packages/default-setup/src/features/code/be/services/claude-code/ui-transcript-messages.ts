@@ -2,7 +2,7 @@ import type { ClaudeUiToolGroup, ClaudeUiComposerPlacement, ClaudeUiTerminalPlac
 import { stripVTControlCharacters } from 'node:util'
 import { createClaudeUiDrawing, type ClaudeUiDrawing } from './ui-tree.ts'
 import { claudeAssistantDisplayText } from '../../../common/claude-message-display.ts'
-import type { ClaudeUiControls } from './ui-controls.ts'
+import type { ClaudeTranscriptTimestamp, ClaudeUiControls } from './ui-controls.ts'
 import type { ClaudeUiTranscriptFrame, ClaudeUiTranscriptRow, ClaudeUiFieldEvent, ClaudeUiNode } from './ui-presentation.ts'
 
 type Entry = {
@@ -48,7 +48,7 @@ const originalDisplayText = (row: ClaudeUiTranscriptRow) => row.component === 'A
 
 /** Message instances share one view attachment; each keeps its own drawing and callback lifetime. */
 export function createClaudeTranscriptMessageHost(options: {
-  ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'diagnostics' | 'managedSettingsDiagnostics'>
+  ui: Pick<ClaudeUiControls, 'render' | 'press' | 'input' | 'select' | 'releaseInstance' | 'toolGroups' | 'composerPlacements' | 'terminalPlacements' | 'diagnostics' | 'managedSettingsDiagnostics'> & Partial<Pick<ClaudeUiControls, 'transcriptTimestamps'>>
   client: { client_id: string; surface: 'desktop' }
   rows(groups: readonly ClaudeUiToolGroup[], composer: readonly (ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[]): ClaudeUiTranscriptRow[]
   current(): boolean
@@ -56,6 +56,7 @@ export function createClaudeTranscriptMessageHost(options: {
 }) {
   const entries = new Map<string, Entry>()
   let groups: ClaudeUiToolGroup[] = [], placements: (ClaudeUiComposerPlacement | ClaudeUiTerminalPlacement)[] = [], readingGroups=false, groupsAgain=false
+  let timestamps: ClaudeTranscriptTimestamp[] = [], timestampRevision = 0, timestampReading = false
   let managedSettingsDiagnostics: import('./ui-controls.ts').ClaudeManagedSettingsDiagnostic[]=[]
   let diagnostics: import('./ui-controls.ts').ClaudeUiDiagnosticAttachment[] = [], readingDiagnostics=false, diagnosticsAgain=false
   let disposed = false, started = false, rendering = false, refreshPending = false, nextInstanceRevision = 0
@@ -109,6 +110,21 @@ export function createClaudeTranscriptMessageHost(options: {
       if(!current())return
       if(JSON.stringify(next)!==JSON.stringify(groups)||JSON.stringify(nextPlacements)!==JSON.stringify(placements)){groups=next;placements=nextPlacements;refresh()}
     } finally { readingGroups=false;if(groupsAgain){groupsAgain=false;void refreshGroups()} }
+  }
+  async function refreshTimestamps() {
+    if (!current() || !started || !options.ui.transcriptTimestamps || timestampReading) return
+    timestampReading = true
+    const revision = timestampRevision
+    try {
+      let next: ClaudeTranscriptTimestamp[] = []
+      try { next = await options.ui.transcriptTimestamps(options.client.client_id) } catch { /* Source unavailable. */ }
+      if (current() && revision === timestampRevision && JSON.stringify(next) !== JSON.stringify(timestamps)) {
+        timestamps = next; publish()
+      }
+    } finally {
+      timestampReading = false
+      if (revision !== timestampRevision) void refreshTimestamps()
+    }
   }
   async function refreshDiagnostics() {
     if(!current()||!started)return
@@ -209,10 +225,15 @@ export function createClaudeTranscriptMessageHost(options: {
       const rows=options.rows(groups,placements)
       return diagnostics.flatMap(diagnostic=>{const anchor=diagnostic.anchorIds.map(id=>rows.find(row=>row.uuid===id||'assistantUuid' in row&&row.assistantUuid===id||'resultUuid' in row&&row.resultUuid===id)).find(Boolean);return anchor?[{...diagnostic,messageId:anchor.messageId}]:[]})
     },
-    start() { started = true; refresh(); void refreshGroups();void refreshDiagnostics() },
+    get timestamps() { return current() ? timestamps : [] },
+    start() { started = true; refresh(); void refreshGroups();void refreshDiagnostics();void refreshTimestamps() },
     refresh,
     receive(line: Record<string, unknown>) {
       if (!current()) return
+      if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.terminal_timestamps === true) {
+        if (line.client_id === options.client.client_id) { timestampRevision++; void refreshTimestamps() }
+        return
+      }
       if(line.type==='attachment'||line.type==='assistant'||line.type==='user'||line.type==='conversation_reset'||line.type==='system'&&line.subtype==='ui_invalidate')void refreshDiagnostics()
       if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') {
         if(line.tool_groups===true||line.composer_placements===true||line.terminal_placements===true){if(typeof line.client_id==='string'&&line.client_id!==options.client.client_id)return;void refreshGroups()}

@@ -84,7 +84,7 @@
                     <ChatMessage
                       v-if="messagesById.has(id)"
                       :message="messagesById.get(id)!"
-                      :native-frames="nativeUiDrawing?.transcriptMessages" :native-view-id="nativeUiMount?.mountId" :native-block-expansion="nativeBlockExpansion[id]"
+                      :native-timestamps="nativeTranscriptTimestamps" :native-frames="nativeUiDrawing?.transcriptMessages" :native-view-id="nativeUiMount?.mountId" :native-block-expansion="nativeBlockExpansion[id]"
                       @native-ui-press="pressNativeUi" @native-ui-field="editNativeUi"
                       @native-ui-message-view="reportNativeMessageView" @native-ui-block-view="reportNativeBlockView" @native-ui-block-release="releaseNativeBlockView"
                       :is-tail="tailMessageIds.has(id)"
@@ -429,6 +429,7 @@ const nativeUiDrawing = computed(() => {
   const mount = nativeUiMount.value
   return mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId]?.state : undefined
 })
+const nativeTranscriptTimestamps = computed(() => new Map(nativeUiDrawing.value?.transcriptTimestamps?.map(timestamp => [timestamp.uuid, timestamp])))
 const nativeFocus = computed(() => {
   const mount = nativeUiMount.value
   return mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId]?.focus : undefined
