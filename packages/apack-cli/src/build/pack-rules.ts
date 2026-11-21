@@ -452,6 +452,31 @@ const RULE_LIST = [
     },
   },
   {
+    key: 'swallowed-ask-ends',
+    rule: "A machine that makes asks (makes, @apackdev/sdk/fe) writes `[made.done]: { actions: made.settle() }` beside "
+      + "every `'*'` transition it has. A state's wildcard is tried before its parent's transitions, so one written "
+      + "without it takes the end of every ask made while the machine is in that state: the ask is never let go, and "
+      + '`making` says it is under way for good',
+    check(view, place) {
+      if (place.packRelative.startsWith('tests/')) return [];
+      const makesAsks = view.visit((node) => {
+        const imported = importedFrom(node);
+        return imported?.module === '@apackdev/sdk/fe' && imported.names.includes('makes') ? ['makes'] : undefined;
+      }).length > 0;
+      if (!makesAsks) return [];
+      return view.visit((node) => {
+        if (!ts.isObjectLiteralExpression(node)) return undefined;
+        const named = (name: ts.PropertyName | undefined): string | undefined =>
+          name && (ts.isStringLiteralLike(name) || ts.isIdentifier(name)) ? name.text : undefined;
+        if (!node.properties.some((property) => named(property.name) === '*')) return undefined;
+        // `[made.done]`, whatever the declared asks are called
+        const settles = node.properties.some((property) => property.name && ts.isComputedPropertyName(property.name)
+          && ts.isPropertyAccessExpression(property.name.expression) && property.name.expression.name.text === 'done');
+        return settles ? undefined : ["'*'"];
+      });
+    },
+  },
+  {
     key: 'reserved-event-keys',
     rule: "`_call` is the app's key on a delivered event: the delivery doors write the call an answer "
       + 'answers under it, so a property a pack writes under that name is overwritten on the way in and read '

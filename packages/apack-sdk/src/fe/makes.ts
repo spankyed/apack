@@ -55,7 +55,7 @@ type Declared = OneMade<AnyActorLogic> | EachMade<AnyActorLogic>
 type Declarations = Readonly<Record<string, Declared>>
 type LogicOf<D> = D extends { logic: infer TLogic extends AnyActorLogic } ? TLogic : never
 
-type MakingOf<M extends Declarations> = {
+type MakingFrom<M extends Declarations> = {
   readonly [N in keyof M]: M[N] extends EachMade<AnyActorLogic> ? Readonly<Record<string, true>> : boolean
 }
 
@@ -66,10 +66,20 @@ type EndedOf<M extends Declarations> = {
 }[keyof M & string]
 
 /**
+ * Which asks are under way, for the asks a surface's contract names with their kinds:
+ * `making: MakingOf<{ export: 'one'; nodeDetails: 'each' }>`. A contract is a leaf and cannot name its machine, so
+ * this is how it publishes the asks other code may read as under way. It names as many of the machine's asks as it
+ * means to publish, and the machine's `makes` is held to the names and kinds it gives.
+ */
+export type MakingOf<Kinds extends Readonly<Record<string, 'one' | 'each'>>> = {
+  readonly [N in keyof Kinds]: Kinds[N] extends 'each' ? Readonly<Record<string, true>> : boolean
+}
+
+/**
  * Which of a machine's declared asks are under way, as its context holds it: `Making<typeof made>`. A boolean for
  * `one`, the keys under way for `each`
  */
-export type Making<TMakes> = TMakes extends Makes<infer M> ? MakingOf<M> : never
+export type Making<TMakes> = TMakes extends Makes<infer M> ? MakingFrom<M> : never
 
 /**
  * The events `makes` adds to a machine's own: `MadeEvent<typeof made>`. How each declared ask ended, `made.<name>`
@@ -108,7 +118,7 @@ export interface Makes<M extends Declarations> {
   /** The declared asks as a machine's actors: `setup({ actors: made.actors })`, or spread beside its others */
   readonly actors: { readonly [N in keyof M & string as `made.${N}`]: LogicOf<M[N]> }
   /** `making` with nothing under way: what a machine's context starts with */
-  none(): MakingOf<M>
+  none(): MakingFrom<M>
   /** The event that ends any ask made: the key of the one transition that settles them */
   readonly done: 'xstate.done.actor.made.*'
   /** The action of that transition: lets the ask go, clears it from `making`, and raises `made.<name>` */
@@ -118,7 +128,7 @@ export interface Makes<M extends Declarations> {
   /** Makes the ask of one key, giving up the one before under that key */
   make<N extends EachNames<M>>(enqueue: MakesEnqueue, name: N, key: string, input: InputFrom<LogicOf<M[N]>>): void
   /** Gives an ask up: the one of its name, or of an `each` the one under `key`, or with no key every one */
-  drop(enqueue: MakesEnqueue, context: { making: MakingOf<M> }, name: keyof M & string, key?: string): void
+  drop(enqueue: MakesEnqueue, context: { making: MakingFrom<M> }, name: keyof M & string, key?: string): void
   /** Every declared name: what a machine that gives all its asks up goes through */
   readonly names: readonly (keyof M & string)[]
 }

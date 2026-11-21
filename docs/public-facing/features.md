@@ -283,6 +283,12 @@ one before; `made.drop(enqueue, context, name, key?)` gives one up; `freshKey()`
 nothing of their own to be told apart by. The `ask-ends` pack rule refuses a transition written on
 `xstate.done.actor.<id>`.
 
+`making` is the machine's own, typed from its `makes`. For another feature to read one of a surface's asks as under
+way, the surface's contract names it with its kind, as many as it means to publish:
+`making: MakingOf<{ export: 'one'; nodeDetails: 'each' }>` (`@apackdev/sdk/fe`). A state with a `'*'` transition of its
+own carries `[made.done]: { actions: made.settle() }` beside it, or that wildcard takes every ask's end
+(`swallowed-ask-ends`).
+
 A spec driving the whole system asks with `app.ask(system, event, { client?, signal?, heard? })`, which resolves to
 the `Outcome`. The `ask-answers` pack rule refuses an `ASK_ANSWERED`, `ASK_FAILED` or `ASK_PROGRESS` written by hand
 in a pack's source: they are how an answer travels, and never a pack's to write.

@@ -10,7 +10,7 @@ import { ActionEntity, ActionParameter, ContentSection, DocumentShortCode, EARS 
 import { ArtifactItem } from '@apackdev/sdk/artifacts';
 import * as _apackdev_sdk_build from '@apackdev/sdk/build';
 import { ContractAsks, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
-import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
+import { HotkeysMap, MakingOf, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
@@ -1987,18 +1987,18 @@ interface DatabaseContext {
      * Which of the asks this window makes are under way, by the name the machine makes each under. A node's details
      * are asked for per node, so those are the ids of the nodes being read
      */
-    making: {
-        readonly query: boolean;
-        readonly transaction: boolean;
-        readonly aiQuery: boolean;
-        readonly flowRuns: boolean;
-        readonly flowEvents: boolean;
-        readonly backupInfo: boolean;
-        readonly export: boolean;
-        readonly import: boolean;
-        readonly reset: boolean;
-        readonly nodeDetails: Readonly<Record<string, true>>;
-    };
+    making: MakingOf<{
+        query: 'one';
+        transaction: 'one';
+        aiQuery: 'one';
+        flowRuns: 'one';
+        flowEvents: 'one';
+        backupInfo: 'one';
+        export: 'one';
+        import: 'one';
+        reset: 'one';
+        nodeDetails: 'each';
+    }>;
     schema: DatabaseSchemaInfo;
     currentQuery: string;
     queryResult: any;
