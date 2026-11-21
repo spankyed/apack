@@ -145,7 +145,7 @@ interface Props {
   node: RunNode | RunTree;
   depth?: number;
   nodeDetails?: RunNode;
-  nodeDetailsMap?: Map<string, RunNode>;
+  nodeDetailsMap?: ReadonlyMap<string, RunNode>;
 }
 
 const props = withDefaults(defineProps<Props>(), {

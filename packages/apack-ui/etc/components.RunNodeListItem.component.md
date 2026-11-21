@@ -7,7 +7,7 @@ props {
   depth?: number | undefined;
   node: RunNode | RunTree;
   nodeDetails?: RunNode | undefined;
-  nodeDetailsMap?: Map<string, RunNode> | undefined;
+  nodeDetailsMap?: ReadonlyMap<string, RunNode> | undefined;
   onOpen-flow?: ((runNodeId: string) => any) | undefined;
   onRequest-details?: ((nodeId: string) => any) | undefined;
   onToggle?: ((nodeId: string) => any) | undefined;

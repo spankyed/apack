@@ -165,9 +165,9 @@ import { useTrackedMenuOpen } from '@apackdev/sdk/fe'
 
 const props = defineProps<{
   tasks: NoteSummary[]
-  allNotes: NoteSummary[]
+  allNotes: readonly NoteSummary[]
   selectedTaskId: string | null
-  expandedNodeIds: string[]
+  expandedNodeIds: readonly string[]
   currentNoteId: string | null
   currentNoteTitle: string
   currentNoteIcon: string | null

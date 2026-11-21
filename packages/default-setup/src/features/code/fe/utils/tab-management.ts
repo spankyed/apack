@@ -122,7 +122,7 @@ export function nextActiveFromHistory<T extends BaseTab>(
  * @returns Reordered array of tabs
  */
 export function reorderTabs<T extends BaseTab>(
-  openFiles: T[],
+  openFiles: readonly T[],
   fromIndex: number,
   toIndex: number
 ): T[] {
@@ -130,7 +130,7 @@ export function reorderTabs<T extends BaseTab>(
   if (fromIndex < 0 || fromIndex >= openFiles.length ||
       toIndex < 0 || toIndex >= openFiles.length ||
       fromIndex === toIndex) {
-    return openFiles
+    return [...openFiles]
   }
 
   const result = [...openFiles]
@@ -164,8 +164,8 @@ export function reorderTabs<T extends BaseTab>(
  * @returns Object with pinned tabs, pinned groups, grouped tabs by group, and ungrouped tabs
  */
 export function groupTabs<T extends BaseTab>(
-  tabs: T[],
-  groups: TabGroup[]
+  tabs: readonly T[],
+  groups: readonly TabGroup[]
 ): {
   pinnedTabs: T[]
   pinnedGroups: { group: TabGroup; tabs: T[] }[]

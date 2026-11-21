@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue'
 
 interface DragDropOptions {
-  selectedPaths: Ref<string[]>
+  selectedPaths: Ref<readonly string[]>
   onMove: (sourcePaths: string[], targetDir: string) => void
   onCopyFiles?: (sourcePaths: string[], targetDir: string) => void
 }

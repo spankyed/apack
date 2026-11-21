@@ -137,7 +137,7 @@ const treeContainerRef = ref<HTMLElement | null>(null)
 // Build flattened visible paths for shift-range selection
 function getFlattenedVisiblePaths(): string[] {
   const paths: string[] = []
-  function walk(files: FileInfo[]) {
+  function walk(files: readonly FileInfo[]) {
     for (const file of files) {
       paths.push(file.path)
       if (file.type === 'directory' && expandedDirs.value.has(file.path)) {

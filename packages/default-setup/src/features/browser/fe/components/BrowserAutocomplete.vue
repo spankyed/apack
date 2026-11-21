@@ -35,7 +35,7 @@ import { displayUrl as formatUrl } from '../history.ts';
 const failedFavicons = reactive(new Set<string>());
 
 defineProps<{
-  suggestions: AutocompleteSuggestion[];
+  suggestions: readonly AutocompleteSuggestion[];
   selectedIndex: number;
 }>();
 

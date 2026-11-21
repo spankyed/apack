@@ -255,9 +255,9 @@ const GUIDE_INDENT_PX = 12
 
 const props = withDefaults(defineProps<{
   note: NoteSummary
-  allNotes: NoteSummary[]
+  allNotes: readonly NoteSummary[]
   currentNoteId: string | null
-  expandedNodeIds: string[]
+  expandedNodeIds: readonly string[]
   depth: number
   getItemClass: (noteId: string) => string
   taskMode?: boolean

@@ -388,10 +388,10 @@ import {
 
 // Props
 const props = defineProps<{
-  tabs: (OpenFile | TerminalTab | ActionTab | PromptTab)[]
+  tabs: readonly (OpenFile | TerminalTab | ActionTab | PromptTab)[]
   activeTabPath: string | null
   baseDirectory?: string
-  tabGroups: TabGroupType[]
+  tabGroups: readonly TabGroupType[]
 }>()
 
 // Emits

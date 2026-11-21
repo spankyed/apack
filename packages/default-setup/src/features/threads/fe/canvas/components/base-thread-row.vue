@@ -101,7 +101,7 @@ export interface BaseThreadData {
 
 const props = defineProps<{
   thread: BaseThreadData
-  availableTags?: ThreadTagOption[]
+  availableTags?: readonly ThreadTagOption[]
   settings?: ThreadsSettings | null
   chatStates?: Record<string, string>
   chatStateOverrides?: Record<string, { id: string; expiresAt: number }>

@@ -132,7 +132,7 @@ const isKanbanView = computed(() => threads.value.at === 'kanban')
 const statuses = computed(() => threads.value.data.settings?.statuses || [])
 const chatStateConfigs = computed(() => threads.value.data.settings?.chatStates || [])
 
-const allTags = computed<ThreadTagOption[]>(() => {
+const allTags = computed<readonly ThreadTagOption[]>(() => {
   const settingsTags = threads.value.data.availableTags || []
   const settingsTagNames = new Set(settingsTags.map(t => t.name))
   const adHocNames = new Set<string>()

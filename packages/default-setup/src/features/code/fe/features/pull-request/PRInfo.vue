@@ -142,8 +142,8 @@ import { openLink } from '@apackdev/sdk/fe'
 
 const props = defineProps<{
   pr: GhPullRequest | null
-  comments: GhPRComment[]
-  branches: string[]
+  comments: readonly GhPRComment[]
+  branches: readonly string[]
   isLoading?: boolean
   isUpdating?: boolean
   /** How the last write a form waits on was answered: the edit is left on its own success */

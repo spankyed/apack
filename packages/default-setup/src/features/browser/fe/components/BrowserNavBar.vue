@@ -108,11 +108,11 @@ const props = defineProps<{
   canGoBack: boolean;
   canGoForward: boolean;
   isLoading: boolean;
-  suggestions: AutocompleteSuggestion[];
+  suggestions: readonly AutocompleteSuggestion[];
   selectedSuggestionIndex: number;
   inlineCompletion: string | null;
   isBookmarked: boolean;
-  bookmarks: Bookmark[];
+  bookmarks: readonly Bookmark[];
 }>();
 
 const emit = defineEmits<{

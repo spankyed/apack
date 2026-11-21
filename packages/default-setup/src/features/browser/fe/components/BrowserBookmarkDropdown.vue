@@ -41,7 +41,7 @@ import { X } from 'lucide-vue-next';
 import type { Bookmark } from '../state.ts';
 
 defineProps<{
-  bookmarks: Bookmark[];
+  bookmarks: readonly Bookmark[];
 }>();
 
 const emit = defineEmits<{

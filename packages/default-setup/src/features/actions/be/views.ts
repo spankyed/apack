@@ -7,7 +7,7 @@ import type { EARS } from '#generated/ears.ts';
 
 export const actionViews = defineViews({
   /** The first `limit` actions in `categories` (every category when it's empty), or all of them without a limit */
-  list: ({ limit, categories }: { limit: number | null; categories: string[] }) => repository.actionQueries.list(limit, categories),
+  list: ({ limit, categories }: { limit: number | null; categories: readonly string[] }) => repository.actionQueries.list(limit, categories),
   /** One action, or `null` for one that doesn't exist or is in the trash */
   byId: ({ id }: { id: EARS.EntityId }) => repository.actionQueries.byId(id) ?? null,
 });

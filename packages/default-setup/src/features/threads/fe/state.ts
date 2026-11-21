@@ -314,7 +314,7 @@ export type { ChatState, ThreadListItem } from './contract.ts';
 
 type ThreadLike = Partial<ThreadEntity> & { id: string };
 
-export function threadsFromStore<T>(threadMap: Record<string, T>, threadIds: string[]): T[] {
+export function threadsFromStore<T>(threadMap: Record<string, T>, threadIds: readonly string[]): T[] {
   return threadIds.map(id => threadMap[id]).filter((thread): thread is T => Boolean(thread));
 }
 

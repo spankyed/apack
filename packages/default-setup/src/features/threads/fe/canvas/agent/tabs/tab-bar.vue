@@ -198,9 +198,9 @@ import { type ThreadsState } from '#features/threads/fe/state.ts';
 const actor: ThreadsState = useSurface();
 
 const props = defineProps<{
-  tabs: Tab[];
+  tabs: readonly Tab[];
   activeTabId: string;
-  tabGroups: ThreadTabGroup[];
+  tabGroups: readonly ThreadTabGroup[];
 }>();
 
 function selectTab(tabId: string) {

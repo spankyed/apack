@@ -114,7 +114,7 @@ interface Category {
 
 interface Props {
   categories: Category[]
-  selectedCategories: string[]
+  selectedCategories: readonly string[]
 }
 
 interface Emits {

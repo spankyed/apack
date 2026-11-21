@@ -1203,7 +1203,7 @@ const toggleFolder = (file: GitStatusFile) => send({ type: 'commit.TOGGLE_FOLDER
 
 /** What can be done now, and why not, from what the panel holds of the repository: worded here, decided by the engine */
 const canBeDone = computed(() => whatCanBeDone({
-  files: git.value.data.gitStatus, truncated: git.value.data.isStatusTruncated, branch: git.value.data.gitBranch, hasUpstream: git.value.data.hasUpstream,
+  files: [...git.value.data.gitStatus], truncated: git.value.data.isStatusTruncated, branch: git.value.data.gitBranch, hasUpstream: git.value.data.hasUpstream,
   ahead: git.value.data.commitsAhead, behind: git.value.data.commitsBehind, hasIdentity: git.value.data.hasIdentity, ...(git.value.data.operation && { operation: git.value.data.operation }),
 }))
 const REASONS: Record<UnavailableReason, string> = {

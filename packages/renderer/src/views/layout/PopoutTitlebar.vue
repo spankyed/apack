@@ -76,7 +76,7 @@ import type { ContextMenuItem } from '@apackdev/sdk/fe'
 import type { BreadcrumbItem } from '@apackdev/host/fe'
 
 withDefaults(defineProps<{
-  breadcrumbs?: BreadcrumbItem[]
+  breadcrumbs?: readonly BreadcrumbItem[]
   menuItems?: ContextMenuItem[]
   headerClass?: string
 }>(), {
