@@ -68,6 +68,14 @@ describe('a facade whose type comes from EARS', () => {
     });
   }
 
+  // TypeScript names the type differently in the two (`import("@elmdb/ears")`, or the entry), and rollup-plugin-dts
+  // names its namespace import after that: the facade a dependent gets is the same text either way
+  it('is the same text from a hoisted and a nested install', async () => {
+    const [hoisted, nested] = [await facade('same-hoisted', 'hoisted'), await facade('same-nested', 'nested')];
+    if (!hoisted.bundled.success || !nested.bundled.success) throw new Error('bundle failed');
+    expect(hoisted.bundled.content).toBe(nested.bundled.content);
+  });
+
   // Written as the entry, the facade would name a type the entry doesn't export: refused, naming the entry
   it("refuses the rewrite when the SDK's entry re-exports EARS by name", async () => {
     const { bundled } = await facade('named', 'hoisted', "export { openThing } from '@elmdb/ears';");

@@ -94,8 +94,9 @@ describe('facade gate', () => {
       'src/__generated__/pack-types.ts': "import type { internalsService } from '../internals.ts';\nexport type Services = { internals: typeof internalsService };\n",
     });
     expect(problems).toEqual([
-      expect.stringMatching(/imports "@apackdev\/sdk\/runtime\/internals", which @apackdev\/sdk doesn't export to installed dependents: in a checkout it resolves only under the @apackdev\/source condition, and the published manifest drops the entry \(reached from: Services\)$/),
+      // A facade's imports are in specifier order (`forDependents`)
       expect.stringMatching(/imports "@apackdev\/host\/packs", a private package dependents can't install \(reached from: Services\)$/),
+      expect.stringMatching(/imports "@apackdev\/sdk\/runtime\/internals", which @apackdev\/sdk doesn't export to installed dependents: in a checkout it resolves only under the @apackdev\/source condition, and the published manifest drops the entry \(reached from: Services\)$/),
       expect.stringContaining("error TS2307: Cannot find module '@apackdev/sdk/runtime/internals'"),
     ]);
   });

@@ -313,8 +313,10 @@ Before the gate, the declaration bundler writes a package the pack reaches only 
 (`writeThroughSdk`, `build/through-sdk.ts`, over `THROUGH_SDK` in `@apackdev/host/build/shared-deps`: `@elmdb/ears` →
 `@apackdev/sdk/ears`), in the facade and the flow helpers' declarations (`forDependents`). TypeScript writes an inferred
 EARS type by where EARS is installed, as `import("@elmdb/ears")` when npm hoists it, so the pack's source can't keep it
-out; the rewrite refuses an SDK whose entry doesn't say `export * from '@elmdb/ears'`
-(`tests/build/through-sdk.integration.spec.ts`, a hoisted and a nested install).
+out; the rewrite refuses an SDK whose entry doesn't say `export * from '@elmdb/ears'`. It also names the entry's
+namespace import as the entry would and puts the leading imports in specifier order (`forDependents`), so a facade
+built in a hoisted install and one built in a nested install are the same text (`tests/build/through-sdk.integration.spec.ts`,
+and `types-bundler-determinism`, which builds one in the workspace and one in the published packages' nested install).
 
 `facadeProblems(packDir, bundleFile)` in `build/facade-gate.ts` checks `dist/types/pack-types.d.ts` before it goes into the snapshot's `defs`. Dependents compile it with `skipLibCheck`, where these problems would silently become `any`:
 
