@@ -173,6 +173,13 @@ points at.
    that held something another could still change would change with no step, which is the fault; freezing puts the
    error at the write, in the other's code, with a message that names neither.
 
+   **The types say the same, all the way down.** What a handler is handed and what is read from a state are typed
+   so that nothing in them can be written at any depth: a field assigned to, a list pushed to or sorted in place, and
+   `v-model` on what a field holds do not compile. A change may be given what was read from a state, so nothing
+   read has to be copied to be handed back, and a draft is the one place a write is written. The types are the early
+   word and not the whole of it: TypeScript lets a read-only object be passed where one that will be written to is
+   expected, so a write made through such a helper compiles. It throws when it runs, which is what freezing is for.
+
    **A change is all of it or none, and what the compiler refuses the kernel refuses too.** The types already rule out
    adding or removing a field, giving a field no state has, moving to a state that does not exist, and entering a
    state without what it marks `given`. Code that gets past them with a cast meets the same rule when it runs, and
@@ -340,6 +347,24 @@ shape as `internal`, and taken under `internal`. Nothing outside a state reaches
 sent to it from outside is looked for under `on` alone, and one that only the state sends itself is ignored and
 said to be. `send` takes both, so a state may send itself what others may send it. This is the app's own split of a
 contract into `incoming` and `internal`.
+
+**A write is told when losing it does not matter, and asked when it does.** There is no third way to make one. A
+`tell` is heard by whatever is running to hear it, and what goes wrong in handling it is reported there and nowhere
+else: that is right for word that something happened, which whoever missed it will find out another way. A write
+that has to be made is asked, by something that owns the asking and awaits it, so that one made of nothing running
+comes back `unavailable` and one that fails comes back saying so. "A write that matters, which nobody waits for" is
+not a kind of write to provide for. It is a write whose failure goes nowhere.
+
+On `97ee092630`, 2026-11-22, by text search outside specs, the app tells a system from code that is not a machine in
+these places, and each is to be said to be one or the other as its feature is ported:
+
+| Where | Tells | What it is |
+|---|---|---|
+| Flow actions that read a model's stream (`claude-code`, `codex`) | 9, each `TRIGGER_BRAIN_EVENT` to the brain | A flow's event. Losing one is a flow that does not run, so these are asks |
+| Flow actions when a turn ends or is taken back | 3, each `CHECK_FOR_EXTERNAL_CHANGES` to the code system | Word that something may have changed. A tell |
+| Step runtimes (`schedule`, `fire`) | 2 | To be read |
+| Components (`.vue`) | 12, in 8 files | A component sends to its own state and to nothing else ([What a component reads](#what-a-component-reads)), so each goes through the surface |
+| The code system's helpers (`terminal.ts`, `commit.ts`, `terminal-pool.ts`) | 6 | Part of their feature's port |
 
 A surface is told by another surface in its window with `tell({ surface: 'detail' }, event)`, typed by the events
 that surface is declared with. It is named as a surface because a feature's backend system and its surface are
@@ -544,6 +569,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | An event handler is not given `ask` | `ask` everywhere. An event handler cannot await, so it could only start an ask and drop the promise, with nothing around it to take a `Left`. That floating promise is what took a process down when a check stopped a window mid-ask. Without `ask` the mistake does not compile, and the kernel still catches an ask started in `run` and never awaited |
 | A component is handed the state's own values, a field at a time | A reactive copy of the state, written to only at the places a step changed, which was built first and rendered to the key. Moving the app's components onto `useState` showed what a copy costs: a machine that drops what it is told by `includes` never matched the copies sent back, `structuredClone` refused a proxy, a component definition held in data was copied, a watch did not run when a result was replaced by an equal one, and a mirrored object sent in an event put the mirror's storage into the machine. Every one is the copy not being the state's object. And tracking the path a reader took through proxies that hand over the state's own value at the end, which only saves a value that is not an object: a list passed to a child is a proxy again. MobX, Solid's stores, Pinia and Vue's `reactive` all track that way, and each ships a way to unwrap and a list of what to watch for. Valtio hands a component a frozen snapshot with what it read tracked, which is that done soundly and is more to build; the promise above leaves room to go there, since a reader that runs less often is still one that runs when what it read changed. This is what Vue's own guide shows for an outside store, Immer or XState held in a `shallowRef`, and what the app ships |
 | What a state holds is frozen | Leaving it as it is and trusting that nothing writes to it. With a copy, a component that wrote to what it read damaged the copy. With the state's own objects it damages the state: no handler ran, nobody is told, and every earlier value that shares the object changes with it. Two of the prototype's own checks were sorting a state's list in place. Immer freezes what it makes for the same reason, and Vue leaves a frozen object unwrapped |
+| The types say read-only all the way down | Read-only at the top and freezing below it, which compiles `data.items.push(x)` and fails where it is run, on whichever path runs. Vue's `readonly()` is typed this way. Most of TypeScript's stores are not: Immer offers the type and most who use it leave it off, and Redux Toolkit, NgRx and Apollo freeze and say nothing in the types, because a read-only list is not taken where a list is expected and every helper down the way has to say what it does. That cost is what the type is for: a helper that only reads says so, and one that writes is found. What it is not is sound, since a read-only object passes for a writable one, and so it is kept beside freezing and never in place of it |
 | A field replaced by an equal value is a change | Keeping the old object where the new one is equal to it, as TanStack Query does to render less. The app shows a toast when a result is replaced, whatever it holds, so replaced has to mean changed |
 | A hidden window's frame is the next turn | `requestAnimationFrame` always. A hidden window gets none, so what was gathered for it grew without bound until it was shown |
 | Progress is heard as a list, once a frame | One call per update. It made a change, a notice and a copy of the growing list per item: fine at 10,000, unusable at 100,000. A persistent vector would make appends cheap, but its values are not plain arrays, which the snapshot, the wire and the templates all assume. Chunked lists stay plain but push the chunking onto every reader |
@@ -742,7 +768,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   value untouched, what was not edited kept as the same object, an edit that changes nothing returning the very same
   value, the same place read twice being the same draft, arrays through `push`, `splice`, `sort` and `length`, keys
   added and deleted, one part of the draft assigned to another, what is not plain handed over as it is, and a draft
-  kept past its handler refusing to be used, and the three refused mistakes. `kernel-check.mts` holds seventeen on
+  kept past its handler refusing to be used, and the three refused mistakes. `kernel-check.mts` holds eighteen on
   what the kernel does with a change: subscribers told which fields of a state changed in a step and told nothing when
   a handler changed nothing, a move that edits a draft, and each refused edit reported with the data left as it was.
   A change that cannot be made is refused whole: an edit that adds or removes a field, reported with the line that
@@ -751,7 +777,9 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   entered. The three examples and the interleaving, progress and leaving checks run without one being reported.
   What a state holds is frozen all the way down, and what is not plain data is not; a handler that writes to what the
   state holds changes nothing and is reported; and an object a state is handed can no longer be written to by
-  whoever kept it.
+  whoever kept it. A field assigned to, what a field holds assigned to, a list changed in place, and either done
+  to what is read from a state do not compile; a write through a helper that takes what it is given as writable
+  does compile, and still changes nothing and is reported.
 - **`within` narrows by path** (`state.mts`, used in `threads.mts`): inside `thread` the thread's id can be read,
   inside `thread.sending` the streamed text can, and a state that does not exist does not compile.
 - **Mistakes that do not compile** were checked at each stage with `@ts-expect-error`: a state missing from a
@@ -783,7 +811,7 @@ per ask, a handler that returns its answer and throws its refusal, and `failed` 
 |---|---|
 | `ASK_ANSWERED` and `ASK_FAILED` as events, with `isAnswered`, `answerOf` and `AnswersOf` | A second way to receive an answer. Every transition then needs a guard naming its ask. An asker awaits `ask` in a state's `run`, or in the handler of an ask it is answering |
 | Answers wired through the machine (`answers.actions`, `answers.on`) | `asks` is a table of the state. A system with no states inside is that table and nothing else |
-| `waiting`, read by a handler to learn whether anyone asked | A handler does not branch on transport. What every window should hear is a `broadcast`, whoever asked. A write nobody waits for is still open (Not built) |
+| `waiting`, read by a handler to learn whether anyone asked | A handler does not branch on transport. What every window should hear is a `broadcast`, whoever asked. A write nobody waits for is told or asked, by whether losing it matters ([Communication](#communication)) |
 | A feed beside the answer (`sendToWindow(client, …)`) | `progress`, declared on the ask and heard only by its asker |
 | A cancelled ask whose handler keeps running, and a `superseded` refusal | Leaving the asker's state aborts the handler's `signal` |
 | A disk error mapped to `not-found` or `no-access` where declared | A handler names its own refusals. A mapping the handler does not show is one a reader has to know about |
@@ -986,8 +1014,13 @@ projects. Each would loosen the fit to this app.
   beside the definitions, and is better settled against the real bus and shell than guessed at here.
   - *Settled, since each changes a definition:* events only the state itself may send, and one surface telling
     another in its window ([Communication](#communication)).
-  - **Roles**: `tell({ role: 'brain' }, …)`, a name the host resolves to whichever system plays it. The address is
-    the shape `{ surface }` has; which system plays a role is the host's to say, from a pack's manifest.
+  - **Roles**: `tell({ role: 'brain' }, …)`, a name the host resolves to whichever system plays it. The app writes
+    it this way already, and the address is the shape `{ surface }` has. Which system plays a role is the host's to
+    say, from a pack's manifest. Three rules are settled, and what is left is the host's side of them:
+    - a role is resolved when what was sent is delivered, and not when it is sent, so the pack that plays it can be
+      replaced between the two;
+    - a `tell` to a role nobody plays is ignored, and that is said;
+    - an `ask` of a role nobody plays is answered `unavailable`.
   - **Restoring a state after a reconnect or a code reload.** A state is plain data, `{ at, data }`, so it can be
     handed back to a fresh copy of itself, which is what `useSurfaceDraft` does by hand today for what a component
     holds. Restoring is entering: the state is entered at `at` with `data` given, so its `run` starts again, and a
@@ -995,13 +1028,15 @@ projects. Each would loosen the fit to this app.
     previous state handed in, and saves nothing that was in flight. What a state started is started again, since
     it follows from the data, but with nothing of its own: a restored threads system has every thread running and
     none of their messages. What is saved to restore from has to hold what each started state held as well. What
-    it must carry is what the shell does on a reconnect today, which is why it waits for the shell.
-- **The Vue binding in a window.** Two things about it are not known, and neither can be found out here:
-  - **Whether types that are read-only all the way down can be lived with.** A state's values are frozen, so
-    `.push()` on one throws. The types should say so, or it compiles and fails only where it is run. But a helper
-    that takes `string[]` does not take a read-only list, and how much of the app that touches is not known. Many
-    who use Immer leave its read-only type off for this. To be tried on the first port, with freezing as the floor
-    either way.
+    it must carry is what the shell does on a reconnect today, which is why it waits for the shell. Three rules are
+    settled:
+    - **what is restored is looked at before anything is entered**, as a move is (rule 4): a state there is not, a
+      field missing or a field no state has, and it is refused whole, the state starts afresh, and that is said. A
+      definition that changed since the value was saved is the ordinary case of this, and is what React's fast
+      refresh does with a component whose shape changed;
+    - **what is saved is a state and every state it started**, each with what it held;
+    - **reads are asked again and writes are not made again**, which is what `awaits` and `makes` already are.
+- **The Vue binding in a window.** One thing about it is not known, and cannot be found out here:
   - **Devtools.** Pinia shows its stores in Vue's devtools, with what changed them and when. A step is already that
     record here: its cause, the handlers that ran, the fields that changed. Giving it to the devtools belongs with
     the step log (What to build around it), and is worth doing only against the components people will inspect.
@@ -1009,7 +1044,6 @@ projects. Each would loosen the fit to this app.
   the machine's own object, with no event. `useSelector` handed out the same objects before. It is left as it is:
   freezing what a component is handed freezes the machine's context, and a machine that writes to its context in
   place, or keeps an actor there, would throw. It goes when a surface is ported, since this kernel freezes.
-- **A write nobody waits for**, which appliers and migrations make today.
 - **The rest of the commit surface.** Reads and writes are built and checked on a slice of it: five of its 54 asks,
   two reads and three writes. What the slice does not show is the other 49, and whether "a state when what the surface takes
   changes, an awaited ask otherwise" stays a clear rule across them. The asks the panel reads as under way by id

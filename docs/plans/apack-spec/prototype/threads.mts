@@ -246,7 +246,7 @@ type ThreadsSurface = {
   }
 }
 
-const withUnseen = (unseen: string[], threadId: string): string[] => (unseen.includes(threadId) ? unseen : [...unseen, threadId])
+const withUnseen = (unseen: readonly string[], threadId: string): readonly string[] => (unseen.includes(threadId) ? unseen : [...unseen, threadId])
 
 function threadsSurface(log: (line: string) => void) {
   return state<ThreadsSurface, ThreadsSurfaceEvent>()({
@@ -435,7 +435,7 @@ if (process.argv[1]?.endsWith('threads.mts')) {
   /** What a window shows, with the fields that are only there in some states as null where they are not. */
   const shows = (of: typeof a) => {
     const now = of.window.read(of.surface)
-    const d = now.data as { threadId?: string; lastReply?: string | null; streamed?: string; unseen: string[]; problem: string | null }
+    const d = now.data as { threadId?: string; lastReply?: string | null; streamed?: string; unseen: readonly string[]; problem: string | null }
     return { at: now.at, threadId: d.threadId ?? null, streamed: d.streamed ?? null, lastReply: d.lastReply ?? null, unseen: d.unseen, problem: d.problem }
   }
   const stored = (): string[] => (backend.snapshot()['threads/thread/THR-1'] as { data: Thread['data'] }).data.messages
