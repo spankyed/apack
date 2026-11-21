@@ -1,5 +1,8 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
-import { sendToSystem } from '#generated/events.ts';
+import { fromAsk, sendToSystem } from '#generated/events.ts';
+import type { AnswerPayload, AskFailure, AskOutcome } from '@apackdev/sdk/events';
+import { safeEvents } from '@apackdev/sdk/helpers';
+import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { updateParentState, getParentContext, addTabToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, renameInTabViewHistory } from '../../utils/tab-management.ts';
 import { addRecentFile } from '../../utils/recent-files.ts';
@@ -67,6 +70,29 @@ export interface QuickOpenResult {
   score?: number
 }
 
+/** The explorer asks of the code system */
+type ExplorerAsks = { [K in Extract<keyof CodeSystemContract['asks'], `explorer.${string}`>]: CodeSystemContract['asks'][K] };
+
+/**
+ * The asks this machine makes several of at once, by the name each is spawned under: a spawned ask's id is
+ * `<name>.<n>`, so its answer arrives as `xstate.done.actor.<name>.<n>` and a transition names the kind it is about
+ */
+type SpawnedAsks = {
+  list: 'explorer.LIST_FILES'
+  read: 'explorer.READ_FILE'
+  write: 'explorer.WRITE_FILE'
+  delete: 'explorer.DELETE_FILE'
+  rename: 'explorer.RENAME_FILE'
+  mkdir: 'explorer.CREATE_DIRECTORY'
+  move: 'explorer.MOVE_FILES'
+  copy: 'explorer.COPY_FILES'
+};
+
+/** How a spawned ask ended, as the event its actor finishes with */
+type AskEnded = {
+  [Name in keyof SpawnedAsks]: { type: `xstate.done.actor.${Name}.${string}`; output: AskOutcome<ExplorerAsks[SpawnedAsks[Name]]>; actorId: string }
+}[keyof SpawnedAsks];
+
 export type Event =
   | { type: 'explorer.LIST_FILES'; path: string }
   | { type: 'explorer.CREATE_FILE'; name: string }
@@ -78,10 +104,6 @@ export type Event =
   | { type: 'explorer.WRITE_FILE'; path: string; content: string }
   | { type: 'explorer.CLOSE_FILE'; path: string }
   | { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
-  | { type: 'explorer.FILES_LISTED'; data: { path: string; files: FileInfo[] } }
-  | { type: 'explorer.FILE_DELETED'; data: { path: string } }
-  | { type: 'explorer.FILE_RENAMED'; data: { oldPath: string; newPath: string } }
-  | { type: 'explorer.DIRECTORY_CREATED'; data: { path: string } }
   | { type: 'explorer.ERROR'; message: string }
   // Tree view events
   | { type: 'explorer.EXPAND_DIRECTORY'; path: string }
@@ -89,36 +111,73 @@ export type Event =
   | { type: 'explorer.SELECT_ITEMS'; paths: string[] }
   | { type: 'explorer.MOVE_ITEMS'; sourcePaths: string[]; targetDir: string }
   // Backend events that affect file state
-  | { type: 'explorer.FILE_CONTENT'; data: { path: string; content: string; encoding: string } }
-  | { type: 'explorer.FILE_SAVED'; data: { path: string } }
   | { type: 'explorer.FILE_CHANGED_EXTERNALLY'; data: { path: string; modifiedAt: Date; changeType: 'add' | 'change' | 'unlink' } }
-  | { type: 'explorer.CODE_ERROR'; data: { message: string; code?: string; path?: string } }
   // Quick open events
   | { type: 'explorer.QUICK_OPEN_SEARCH'; baseDirectory: string }
-  | { type: 'explorer.QUICK_OPEN_RESULTS'; data: QuickOpenResult[] }
-  // Move/copy results from backend
-  | { type: 'explorer.FILES_MOVED'; data: { sourcePaths: string[]; targetDir: string; movedPaths: string[] } }
-  | { type: 'explorer.FILES_COPIED'; data: { targetDir: string; copiedPaths: string[] } }
   | { type: 'explorer.COPY_FILES'; sourcePaths: string[]; targetDir: string }
   // Reveal in tree
   | { type: 'explorer.REVEAL_IN_TREE'; path: string }
   | { type: 'explorer.CLEAR_REVEAL' }
   | { type: 'explorer.REFRESH_TREE' }
-  // Broadcast events from parent
-  | { type: 'CODE_STARTED'; data: { baseDirectory: string | null } };
+  // What the surface starts from, handed on by the surface
+  | { type: 'CODE_STARTED'; data: { baseDirectory: string | null } }
+  // How each ask this machine spawned ended
+  | AskEnded;
+
+const typeOf = safeEvents<Event>();
+
+/** The id the next ask of a kind is spawned under, which no other ask has */
+let spawned = 0;
+const askId = <Name extends keyof SpawnedAsks>(name: Name): `${Name}.${number}` => `${name}.${++spawned}`;
+
+/** How the spawned ask an event ends ended; throws for an event that ends none, which is an action on the wrong transition */
+function outcomeIn(event: Event): AskEnded['output'] {
+  if (!('output' in event)) throw new Error(`Expected the end of an ask, got ${event.type}`)
+  return event.output
+}
+
+/** The answer a spawned ask ended with, for an action its transition runs only when it was answered (`answered`) */
+function answerIn<Name extends keyof SpawnedAsks>(name: Name, event: Event): AnswerPayload<ExplorerAsks[SpawnedAsks[Name]]> {
+  const outcome = outcomeIn(event)
+  if (!event.type.startsWith(`xstate.done.actor.${name}.`) || !outcome.ok) throw new Error(`Expected the answer to a ${name} ask, got ${event.type}`)
+  return outcome.value as AnswerPayload<ExplorerAsks[SpawnedAsks[Name]]>
+}
+
+/** Why a file ask was not done: a file failure says which path and how, any other only says */
+type FileAskFailure = AskFailure<ExplorerAsks['explorer.READ_FILE']>;
 
 export const explorerState = setup({
   types: {
     context: {} as CodeExplorerContext,
     events: {} as Event
   },
+  actors: {
+    list: fromAsk('code', 'explorer.LIST_FILES'),
+    read: fromAsk('code', 'explorer.READ_FILE'),
+    write: fromAsk('code', 'explorer.WRITE_FILE'),
+    delete: fromAsk('code', 'explorer.DELETE_FILE'),
+    rename: fromAsk('code', 'explorer.RENAME_FILE'),
+    mkdir: fromAsk('code', 'explorer.CREATE_DIRECTORY'),
+    move: fromAsk('code', 'explorer.MOVE_FILES'),
+    copy: fromAsk('code', 'explorer.COPY_FILES'),
+    findFiles: fromAsk('code', 'explorer.QUICK_OPEN_SEARCH'),
+  },
+  guards: {
+    /** The ask an event ends was answered, rather than refused */
+    answered: ({ event }) => outcomeIn(event).ok,
+  },
   actions: {
     setLoading: ({ self }) => {
       updateParentState(self, { isLoading: true, error: null })
     },
 
+    /** An ask that ended is no longer this machine's child */
+    forgetAsk: enqueueActions(({ enqueue, event }) => {
+      if ('actorId' in event) enqueue.stopChild(event.actorId)
+    }),
+
     handleFileContent: assign(({ event, context, self }) => {
-      const ev = event as { type: 'explorer.FILE_CONTENT'; data: { path: string; content: string; encoding: string; size?: number; isBinary?: boolean } }
+      const ev = { data: answerIn('read', event) }
       const parentContext = getParentContext(self)
       const openFiles = parentContext?.openFiles || []
       const existingFile = openFiles.find((f: any) => f.path === ev.data.path)
@@ -173,7 +232,7 @@ export const explorerState = setup({
     }),
 
     handleFileSaved: ({ event, self }) => {
-      const ev = event as { type: 'explorer.FILE_SAVED'; data: { path: string } }
+      const ev = { data: answerIn('write', event) }
       const parentContext = getParentContext(self)
 
       const updatedFiles = (parentContext?.openFiles || []).map((f: any) => {
@@ -192,8 +251,8 @@ export const explorerState = setup({
       updateParentState(self, { openFiles: updatedFiles })
     },
 
-    handleFileChangedExternally: ({ event, self }) => {
-      const ev = event as { type: 'explorer.FILE_CHANGED_EXTERNALLY'; data: { path: string; modifiedAt: Date; changeType: 'add' | 'change' | 'unlink' } }
+    handleFileChangedExternally: enqueueActions(({ event, self, enqueue }) => {
+      const ev = typeOf('explorer.FILE_CHANGED_EXTERNALLY', event)
       const parentContext = getParentContext(self)
       const openFiles = parentContext?.openFiles || []
       const file = openFiles.find((f: any) => f.path === ev.data.path)
@@ -220,38 +279,40 @@ export const explorerState = setup({
 
         // Only refresh if file is not modified by user
         if (!file.modified) {
-          sendToSystem('code', { type: 'explorer.READ_FILE', path: ev.data.path })
+          enqueue.spawnChild('read', { id: askId('read'), input: { path: ev.data.path } })
         }
       }
-    },
+    }),
 
+    /** An ask that was not done, of whichever kind: shown where the explorer shows its errors */
     handleCodeError: ({ event, self }) => {
-      const ev = event as { type: 'explorer.CODE_ERROR'; data: { message: string; code?: string; path?: string } }
+      const outcome = outcomeIn(event)
+      if (outcome.ok) return
+      const failure: FileAskFailure = outcome.failure
 
       // A tab restored from storage whose file has since gone: drop the tab rather than leave one that can
       // never load. A pinned one goes too — `removeTabs` exempts nothing, deliberately, because pinning is
       // about where a tab sits and not about outliving what it shows, and every caller of it is a subject
       // that is gone.
-      if (ev.data.code === 'NOT_FOUND' && ev.data.path) {
+      if (failure.kind === 'file' && failure.code === 'NOT_FOUND' && failure.path) {
         const parentContext = getParentContext(self)
         const openFiles = parentContext?.openFiles ?? []
-        if (openFiles.some((f: any) => f.path === ev.data.path)) {
-          const result = removeTabs(openFiles, ev.data.path, parentContext.activeFilePath)
+        if (openFiles.some((f: any) => f.path === failure.path)) {
+          const result = removeTabs(openFiles, failure.path, parentContext.activeFilePath)
           updateParentState(self, { ...result, error: null, isLoading: false })
           return
         }
       }
 
-      updateParentState(self, { error: ev.data.message, isLoading: false })
+      updateParentState(self, { error: failure.message, isLoading: false })
     },
 
-    listFiles: ({ event }) => {
-      const ev = event as { type: 'explorer.LIST_FILES'; path: string }
-      sendToSystem('code', { type: 'explorer.LIST_FILES', path: ev.path })
-    },
+    listFiles: enqueueActions(({ event, enqueue }) => {
+      enqueue.spawnChild('list', { id: askId('list'), input: { path: typeOf('explorer.LIST_FILES', event).path } })
+    }),
 
     assignFiles: assign(({ event, context, self }) => {
-      const ev = event as { type: 'explorer.FILES_LISTED'; data: { path: string; files: FileInfo[] } }
+      const ev = { data: answerIn('list', event) }
       const parentContext = getParentContext(self)
       const baseDirectory = parentContext?.baseDirectory || ''
 
@@ -277,49 +338,44 @@ export const explorerState = setup({
       }
     }),
 
-    deleteFile: ({ event }) => {
-      const ev = event as { type: 'explorer.DELETE_FILE'; path: string }
-      sendToSystem('code', { type: 'explorer.DELETE_FILE', path: ev.path })
-    },
-
-    createDirectory: ({ event }) => {
-      const ev = event as { type: 'explorer.CREATE_DIRECTORY'; path: string }
-      sendToSystem('code', { type: 'explorer.CREATE_DIRECTORY', path: ev.path })
-    },
-
-    renameFile: ({ event }) => {
-      const ev = event as { type: 'explorer.RENAME_FILE'; oldPath: string; newPath: string }
-      sendToSystem('code', { type: 'explorer.RENAME_FILE', oldPath: ev.oldPath, newPath: ev.newPath })
-    },
-
-    assignError: ({ event, self }) => {
-      const ev = event as { type: 'explorer.ERROR'; message: string }
-      updateParentState(self, { error: ev.message, isLoading: false })
-    },
-
-    handleCodeConnected: assign(({ event, self }) => {
-      const ev = event as { type: 'CODE_STARTED'; data: { baseDirectory: string | null } }
-      updateParentState(self, { baseDirectory: ev.data.baseDirectory })
-      if (ev.data.baseDirectory) {
-        sendToSystem('code', { type: 'explorer.LIST_FILES', path: ev.data.baseDirectory })
-      }
-      return emptyTreeState()
+    deleteFile: enqueueActions(({ event, enqueue }) => {
+      enqueue.spawnChild('delete', { id: askId('delete'), input: { path: typeOf('explorer.DELETE_FILE', event).path } })
     }),
 
-    openFile: assign(({ event, context }) => {
-      const ev = event as { type: 'explorer.OPEN_FILE'; path: string; editorMode?: 'richText' | 'plainText' }
-      sendToSystem('code', { type: 'explorer.READ_FILE', path: ev.path })
+    createDirectory: enqueueActions(({ event, enqueue }) => {
+      enqueue.spawnChild('mkdir', { id: askId('mkdir'), input: { path: typeOf('explorer.CREATE_DIRECTORY', event).path } })
+    }),
+
+    renameFile: enqueueActions(({ event, enqueue }) => {
+      const { oldPath, newPath } = typeOf('explorer.RENAME_FILE', event)
+      enqueue.spawnChild('rename', { id: askId('rename'), input: { oldPath, newPath } })
+    }),
+
+    assignError: ({ event, self }) => {
+      updateParentState(self, { error: typeOf('explorer.ERROR', event).message, isLoading: false })
+    },
+
+    handleCodeConnected: enqueueActions(({ event, self, enqueue }) => {
+      const ev = typeOf('CODE_STARTED', event)
+      updateParentState(self, { baseDirectory: ev.data.baseDirectory })
+      if (ev.data.baseDirectory) {
+        enqueue.spawnChild('list', { id: askId('list'), input: { path: ev.data.baseDirectory } })
+      }
+      enqueue.assign(emptyTreeState())
+    }),
+
+    openFile: enqueueActions(({ event, context, enqueue }) => {
+      const ev = typeOf('explorer.OPEN_FILE', event)
+      enqueue.spawnChild('read', { id: askId('read'), input: { path: ev.path } })
       if (ev.editorMode) {
         const newMap = new Map(context.pendingEditorMode)
         newMap.set(ev.path, ev.editorMode)
-        return { pendingEditorMode: newMap }
+        enqueue.assign({ pendingEditorMode: newMap })
       }
-      return {}
     }),
 
     openFiles: enqueueActions(({ enqueue, event }) => {
-      const ev = event as { type: 'explorer.OPEN_FILES'; paths: string[] }
-      ev.paths.forEach(path => {
+      typeOf('explorer.OPEN_FILES', event).paths.forEach(path => {
         enqueue(({ self }) => {
           self.send({ type: 'explorer.OPEN_FILE', path })
         })
@@ -327,7 +383,7 @@ export const explorerState = setup({
     }),
 
     setBaseDirectory: assign(({ event, self }) => {
-      const ev = event as { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
+      const ev = typeOf('explorer.SET_BASE_DIRECTORY', event)
 
       // Send SET_BASE_DIRECTORY to the parent code system to update everything
       // (backend's UPDATE_BASE_DIRECTORY handler auto-lists files via listBaseFiles)
@@ -342,18 +398,18 @@ export const explorerState = setup({
       return emptyTreeState()
     }),
 
-    refreshTree: assign(({ context, self }) => {
+    refreshTree: enqueueActions(({ context, self, enqueue }) => {
       const parentContext = getParentContext(self)
       const baseDirectory = parentContext?.baseDirectory || ''
-      if (!baseDirectory) return {}
+      if (!baseDirectory) return
 
       // Re-fetch base directory
-      sendToSystem('code', { type: 'explorer.LIST_FILES', path: baseDirectory })
+      enqueue.spawnChild('list', { id: askId('list'), input: { path: baseDirectory } })
 
       // Re-fetch all currently expanded directories
       for (const dir of context.expandedDirs) {
         if (dir !== baseDirectory) {
-          sendToSystem('code', { type: 'explorer.LIST_FILES', path: dir })
+          enqueue.spawnChild('list', { id: askId('list'), input: { path: dir } })
         }
       }
 
@@ -361,84 +417,80 @@ export const explorerState = setup({
       const loadingDirs = new Set(context.expandedDirs)
       loadingDirs.add(baseDirectory)
 
-      return {
+      enqueue.assign({
         dirContents: {} as Record<string, FileInfo[]>,
         loadingDirs,
-      }
+      })
     }),
 
-    expandDirectory: assign(({ event, context }) => {
-      const ev = event as { type: 'explorer.EXPAND_DIRECTORY'; path: string }
+    expandDirectory: enqueueActions(({ event, context, enqueue }) => {
+      const ev = typeOf('explorer.EXPAND_DIRECTORY', event)
       const newExpanded = new Set(context.expandedDirs)
       newExpanded.add(ev.path)
 
       // If we already have cached contents, just expand
       if (context.dirContents[ev.path]) {
-        return { expandedDirs: newExpanded }
+        enqueue.assign({ expandedDirs: newExpanded })
+        return
       }
 
       // Otherwise, fetch contents
       const newLoading = new Set(context.loadingDirs)
       newLoading.add(ev.path)
-      sendToSystem('code', { type: 'explorer.LIST_FILES', path: ev.path })
+      enqueue.spawnChild('list', { id: askId('list'), input: { path: ev.path } })
 
-      return {
+      enqueue.assign({
         expandedDirs: newExpanded,
         loadingDirs: newLoading,
-      }
+      })
     }),
 
     collapseDirectory: assign(({ event, context }) => {
-      const ev = event as { type: 'explorer.COLLAPSE_DIRECTORY'; path: string }
       const newExpanded = new Set(context.expandedDirs)
-      newExpanded.delete(ev.path)
+      newExpanded.delete(typeOf('explorer.COLLAPSE_DIRECTORY', event).path)
       return { expandedDirs: newExpanded }
     }),
 
-    selectItems: assign(({ event }) => {
-      const ev = event as { type: 'explorer.SELECT_ITEMS'; paths: string[] }
-      return { selectedPaths: ev.paths }
+    selectItems: assign(({ event }) => ({ selectedPaths: typeOf('explorer.SELECT_ITEMS', event).paths })),
+
+    moveItems: enqueueActions(({ event, enqueue }) => {
+      const { sourcePaths, targetDir } = typeOf('explorer.MOVE_ITEMS', event)
+      enqueue.spawnChild('move', { id: askId('move'), input: { sourcePaths, targetDir } })
     }),
 
-    moveItems: ({ event }) => {
-      const ev = event as { type: 'explorer.MOVE_ITEMS'; sourcePaths: string[]; targetDir: string }
-      sendToSystem('code', { type: 'explorer.MOVE_FILES', sourcePaths: ev.sourcePaths, targetDir: ev.targetDir })
-    },
-
-    copyFiles: ({ event }) => {
-      const ev = event as { type: 'explorer.COPY_FILES'; sourcePaths: string[]; targetDir: string }
-      sendToSystem('code', { type: 'explorer.COPY_FILES', sourcePaths: ev.sourcePaths, targetDir: ev.targetDir })
-    },
-
-    handleFilesCopied: assign(({ event }) => {
-      const ev = event as { type: 'explorer.FILES_COPIED'; data: { targetDir: string; copiedPaths: string[] } }
-      sendToSystem('code', { type: 'explorer.LIST_FILES', path: ev.data.targetDir })
-      return { selectedPaths: [] as string[] }
+    copyFiles: enqueueActions(({ event, enqueue }) => {
+      const { sourcePaths, targetDir } = typeOf('explorer.COPY_FILES', event)
+      enqueue.spawnChild('copy', { id: askId('copy'), input: { sourcePaths, targetDir } })
     }),
 
-    handleFilesMoved: assign(({ event }) => {
-      const ev = event as { type: 'explorer.FILES_MOVED'; data: { sourcePaths: string[]; targetDir: string; movedPaths: string[] } }
+    handleFilesCopied: enqueueActions(({ event, enqueue }) => {
+      enqueue.spawnChild('list', { id: askId('list'), input: { path: answerIn('copy', event).targetDir } })
+      enqueue.assign({ selectedPaths: [] })
+    }),
+
+    handleFilesMoved: enqueueActions(({ event, enqueue }) => {
+      const moved = answerIn('move', event)
 
       // Refresh the target directory
-      sendToSystem('code', { type: 'explorer.LIST_FILES', path: ev.data.targetDir })
+      enqueue.spawnChild('list', { id: askId('list'), input: { path: moved.targetDir } })
 
       // Refresh all unique source parent directories
-      const sourceParentDirs = new Set(ev.data.sourcePaths.map(getParentDir))
+      const sourceParentDirs = new Set(moved.sourcePaths.map(getParentDir))
       sourceParentDirs.forEach(dir => {
-        sendToSystem('code', { type: 'explorer.LIST_FILES', path: dir })
+        enqueue.spawnChild('list', { id: askId('list'), input: { path: dir } })
       })
 
       // Clear selection
-      return { selectedPaths: [] as string[] }
+      enqueue.assign({ selectedPaths: [] })
     }),
 
-    handleFileDeleted: ({ event, self }) => {
-      const ev = event as { type: 'explorer.FILE_DELETED'; data: { path: string } }
+    handleFileDeleted: enqueueActions(({ event, self, enqueue }) => {
+      const ev = { data: answerIn('delete', event) }
       const parentContext = getParentContext(self)
 
       // Refresh the parent directory of the deleted file
       const parentDir = getParentDir(ev.data.path)
-      sendToSystem('code', { type: 'explorer.LIST_FILES', path: parentDir })
+      enqueue.spawnChild('list', { id: askId('list'), input: { path: parentDir } })
 
       // Remove from open files if it's open
       if (parentContext?.openFiles?.find((f: any) => f.path === ev.data.path)) {
@@ -450,20 +502,20 @@ export const explorerState = setup({
 
         updateParentState(self, result)
       }
-    },
+    }),
 
-    handleFileRenamed: ({ event, self }) => {
-      const ev = event as { type: 'explorer.FILE_RENAMED'; data: { oldPath: string; newPath: string } }
+    handleFileRenamed: enqueueActions(({ event, self, enqueue }) => {
+      const ev = { data: answerIn('rename', event) }
       const parentContext = getParentContext(self)
 
       // Refresh the parent directory of the renamed file
       const parentDir = getParentDir(ev.data.oldPath)
-      sendToSystem('code', { type: 'explorer.LIST_FILES', path: parentDir })
+      enqueue.spawnChild('list', { id: askId('list'), input: { path: parentDir } })
 
       // If renamed to a different directory, also refresh that
       const newParentDir = getParentDir(ev.data.newPath)
       if (newParentDir !== parentDir) {
-        sendToSystem('code', { type: 'explorer.LIST_FILES', path: newParentDir })
+        enqueue.spawnChild('list', { id: askId('list'), input: { path: newParentDir } })
       }
 
       // Update open files if renamed file is open
@@ -484,50 +536,36 @@ export const explorerState = setup({
           tabViewHistory: renameInTabViewHistory(parentContext?.tabViewHistory || [], ev.data.oldPath, ev.data.newPath)
         })
       }
-    },
+    }),
 
-    handleDirectoryCreated: assign(({ event, context }) => {
-      const ev = event as { type: 'explorer.DIRECTORY_CREATED'; data: { path: string } }
+    handleDirectoryCreated: enqueueActions(({ event, context, enqueue }) => {
+      const ev = { data: answerIn('mkdir', event) }
 
       // Refresh the parent directory to show the new directory
       const parentDir = getParentDir(ev.data.path)
-      sendToSystem('code', { type: 'explorer.LIST_FILES', path: parentDir })
+      enqueue.spawnChild('list', { id: askId('list'), input: { path: parentDir } })
 
       // Expand parent so the new folder is visible, select it, and mark for rename
       const newExpanded = new Set(context.expandedDirs)
       newExpanded.add(parentDir)
 
-      return {
+      enqueue.assign({
         expandedDirs: newExpanded,
         selectedPaths: [ev.data.path],
-      }
+      })
     }),
 
-    writeFile: ({ event }) => {
-      const ev = event as { type: 'explorer.WRITE_FILE'; path: string; content: string }
-      sendToSystem('code', { type: 'explorer.WRITE_FILE', path: ev.path, content: ev.content })
-    },
+    writeFile: enqueueActions(({ event, enqueue }) => {
+      const { path, content } = typeOf('explorer.WRITE_FILE', event)
+      enqueue.spawnChild('write', { id: askId('write'), input: { path, content } })
+    }),
 
     closeFile: ({ event }) => {
-      const ev = event as { type: 'explorer.CLOSE_FILE'; path: string }
-      sendToSystem('code', { type: 'explorer.CLOSE_FILE', path: ev.path })
+      sendToSystem('code', { type: 'explorer.CLOSE_FILE', path: typeOf('explorer.CLOSE_FILE', event).path })
     },
 
-    quickOpenSearch: ({ event }) => {
-      const ev = event as { type: 'explorer.QUICK_OPEN_SEARCH'; baseDirectory: string }
-      sendToSystem('code', { type: 'explorer.QUICK_OPEN_SEARCH', baseDirectory: ev.baseDirectory })
-    },
-
-    handleQuickOpenResults: ({ event, self }) => {
-      const ev = event as { type: 'explorer.QUICK_OPEN_RESULTS'; data: QuickOpenResult[] }
-      updateParentState(self, {
-        quickOpenResults: ev.data,
-        quickOpenLoading: false
-      })
-    },
-
-    revealInTree: assign(({ event, context, self }) => {
-      const ev = event as { type: 'explorer.REVEAL_IN_TREE'; path: string }
+    revealInTree: enqueueActions(({ event, context, self, enqueue }) => {
+      const ev = typeOf('explorer.REVEAL_IN_TREE', event)
       const parentContext = getParentContext(self)
       const baseDirectory = parentContext?.baseDirectory || ''
 
@@ -547,16 +585,16 @@ export const explorerState = setup({
         newExpanded.add(dir)
         if (!context.dirContents[dir]) {
           newLoading.add(dir)
-          sendToSystem('code', { type: 'explorer.LIST_FILES', path: dir })
+          enqueue.spawnChild('list', { id: askId('list'), input: { path: dir } })
         }
       }
 
-      return {
+      enqueue.assign({
         expandedDirs: newExpanded,
         loadingDirs: newLoading,
         selectedPaths: [ev.path],
         revealPath: ev.path,
-      }
+      })
     }),
 
     clearReveal: assign({ revealPath: null }),
@@ -565,105 +603,122 @@ export const explorerState = setup({
   id: 'explorer',
   initial: 'idle',
   context: emptyTreeState,
-  states: {
-    idle: {
-      on: {
-        'CODE_STARTED': {
-          actions: 'handleCodeConnected'
-        },
-        'explorer.REFRESH_TREE': {
-          actions: 'refreshTree'
-        },
-        'explorer.LIST_FILES': {
-          actions: ['setLoading', 'listFiles']
-        },
-        'explorer.FILES_LISTED': {
-          actions: 'assignFiles'
-        },
-        'explorer.DELETE_FILE': {
-          actions: 'deleteFile'
-        },
-        'explorer.CREATE_DIRECTORY': {
-          actions: 'createDirectory'
-        },
-        'explorer.RENAME_FILE': {
-          actions: 'renameFile'
-        },
-        'explorer.OPEN_FILE': {
-          actions: 'openFile'
-        },
-        'explorer.OPEN_FILES': {
-          actions: 'openFiles'
-        },
-        'explorer.SET_BASE_DIRECTORY': {
-          actions: 'setBaseDirectory'
-        },
-        'explorer.EXPAND_DIRECTORY': {
-          actions: 'expandDirectory'
-        },
-        'explorer.COLLAPSE_DIRECTORY': {
-          actions: 'collapseDirectory'
-        },
-        'explorer.SELECT_ITEMS': {
-          actions: 'selectItems'
-        },
-        'explorer.MOVE_ITEMS': {
-          actions: 'moveItems'
-        },
-        'explorer.FILES_MOVED': {
-          actions: 'handleFilesMoved'
-        },
-        'explorer.COPY_FILES': {
-          actions: 'copyFiles'
-        },
-        'explorer.FILES_COPIED': {
-          actions: 'handleFilesCopied'
-        },
-        'explorer.FILE_DELETED': {
-          actions: 'handleFileDeleted'
-        },
-        'explorer.FILE_RENAMED': {
-          actions: 'handleFileRenamed'
-        },
-        'explorer.DIRECTORY_CREATED': {
-          actions: 'handleDirectoryCreated'
-        },
-        'explorer.ERROR': {
-          actions: 'assignError'
-        },
-        // Handle backend events
-        'explorer.FILE_CONTENT': {
-          actions: 'handleFileContent'
-        },
-        'explorer.FILE_SAVED': {
-          actions: 'handleFileSaved'
-        },
-        'explorer.FILE_CHANGED_EXTERNALLY': {
-          actions: 'handleFileChangedExternally'
-        },
-        'explorer.CODE_ERROR': {
-          actions: 'handleCodeError'
-        },
-        'explorer.WRITE_FILE': {
-          actions: 'writeFile'
-        },
-        'explorer.CLOSE_FILE': {
-          actions: 'closeFile'
-        },
-        'explorer.QUICK_OPEN_SEARCH': {
-          actions: 'quickOpenSearch'
-        },
-        'explorer.QUICK_OPEN_RESULTS': {
-          actions: 'handleQuickOpenResults'
-        },
-        'explorer.REVEAL_IN_TREE': {
-          actions: 'revealInTree'
-        },
-        'explorer.CLEAR_REVEAL': {
-          actions: 'clearReveal'
-        }
-      }
+  on: {
+    'CODE_STARTED': {
+      actions: 'handleCodeConnected'
+    },
+    'explorer.REFRESH_TREE': {
+      actions: 'refreshTree'
+    },
+    'explorer.LIST_FILES': {
+      actions: ['setLoading', 'listFiles']
+    },
+    'explorer.DELETE_FILE': {
+      actions: 'deleteFile'
+    },
+    'explorer.CREATE_DIRECTORY': {
+      actions: 'createDirectory'
+    },
+    'explorer.RENAME_FILE': {
+      actions: 'renameFile'
+    },
+    'explorer.OPEN_FILE': {
+      actions: 'openFile'
+    },
+    'explorer.OPEN_FILES': {
+      actions: 'openFiles'
+    },
+    'explorer.SET_BASE_DIRECTORY': {
+      actions: 'setBaseDirectory'
+    },
+    'explorer.EXPAND_DIRECTORY': {
+      actions: 'expandDirectory'
+    },
+    'explorer.COLLAPSE_DIRECTORY': {
+      actions: 'collapseDirectory'
+    },
+    'explorer.SELECT_ITEMS': {
+      actions: 'selectItems'
+    },
+    'explorer.MOVE_ITEMS': {
+      actions: 'moveItems'
+    },
+    'explorer.COPY_FILES': {
+      actions: 'copyFiles'
+    },
+    'explorer.ERROR': {
+      actions: 'assignError'
+    },
+    'explorer.FILE_CHANGED_EXTERNALLY': {
+      actions: 'handleFileChangedExternally'
+    },
+    'explorer.WRITE_FILE': {
+      actions: 'writeFile'
+    },
+    'explorer.CLOSE_FILE': {
+      actions: 'closeFile'
+    },
+    // Entering `findingFiles` again stops the listing under way and starts this one
+    'explorer.QUICK_OPEN_SEARCH': {
+      target: '.findingFiles', reenter: true
+    },
+    // How each spawned ask ended: its answer taken, or its failure shown
+    'xstate.done.actor.list.*': [
+      { guard: 'answered', actions: ['assignFiles', 'forgetAsk'] },
+      { actions: ['handleCodeError', 'forgetAsk'] },
+    ],
+    'xstate.done.actor.read.*': [
+      { guard: 'answered', actions: ['handleFileContent', 'forgetAsk'] },
+      { actions: ['handleCodeError', 'forgetAsk'] },
+    ],
+    'xstate.done.actor.write.*': [
+      { guard: 'answered', actions: ['handleFileSaved', 'forgetAsk'] },
+      { actions: ['handleCodeError', 'forgetAsk'] },
+    ],
+    'xstate.done.actor.delete.*': [
+      { guard: 'answered', actions: ['handleFileDeleted', 'forgetAsk'] },
+      { actions: ['handleCodeError', 'forgetAsk'] },
+    ],
+    'xstate.done.actor.rename.*': [
+      { guard: 'answered', actions: ['handleFileRenamed', 'forgetAsk'] },
+      { actions: ['handleCodeError', 'forgetAsk'] },
+    ],
+    'xstate.done.actor.mkdir.*': [
+      { guard: 'answered', actions: ['handleDirectoryCreated', 'forgetAsk'] },
+      { actions: ['handleCodeError', 'forgetAsk'] },
+    ],
+    'xstate.done.actor.move.*': [
+      { guard: 'answered', actions: ['handleFilesMoved', 'forgetAsk'] },
+      { actions: ['handleCodeError', 'forgetAsk'] },
+    ],
+    'xstate.done.actor.copy.*': [
+      { guard: 'answered', actions: ['handleFilesCopied', 'forgetAsk'] },
+      { actions: ['handleCodeError', 'forgetAsk'] },
+    ],
+    'explorer.REVEAL_IN_TREE': {
+      actions: 'revealInTree'
+    },
+    'explorer.CLEAR_REVEAL': {
+      actions: 'clearReveal'
     }
+  },
+  states: {
+    idle: {},
+    // Every file under a folder is being listed for quick open, for exactly as long as this state is
+    findingFiles: {
+      invoke: {
+        src: 'findFiles',
+        input: ({ event }) => ({ baseDirectory: typeOf('explorer.QUICK_OPEN_SEARCH', event).baseDirectory }),
+        onDone: {
+          target: 'idle',
+          actions: ({ event, self }) => {
+            updateParentState(self, event.output.ok
+              ? { quickOpenResults: event.output.value, quickOpenLoading: false }
+              : { error: event.output.failure.message, isLoading: false })
+          },
+        },
+      },
+    },
   }
 });
 

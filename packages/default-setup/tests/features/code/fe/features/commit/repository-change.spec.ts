@@ -4,10 +4,10 @@
 // has open are read again too, when the news says theirs changed.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { made, resetAsks } from '../../_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
 const getParentContext = vi.hoisted(() => vi.fn((): { openFiles?: unknown[] } => ({})));
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -19,7 +19,7 @@ const { commitState } = await import('#features/code/fe/features/commit/state.ts
 
 const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false, refs: false };
 /** What the panel asked the backend for, in order */
-const asked = () => sendToSystem.mock.calls.map(([, event]) => (event as { type: string }).type);
+const asked = () => made.map(ask => ask.event.type);
 /** A panel in a window that shows the code surface, which is when it follows the repository */
 const shownPanel = () => {
   const actor = createActor(commitState).start();
@@ -28,14 +28,14 @@ const shownPanel = () => {
 };
 const told = (changed: Partial<typeof NOTHING> & { files?: string[] }) => {
   const actor = shownPanel();
-  sendToSystem.mockReset();
+  resetAsks();
   actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, ...changed } });
   actor.stop();
   return asked();
 };
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  resetAsks();
   getParentContext.mockReturnValue({});
 });
 
@@ -60,8 +60,8 @@ const OPEN = [
   { path: 'pr-diff:a.ts', isDiff: true, isPrDiff: true, gitFile: { path: 'a.ts', staged: false } },
 ];
 /** The diffs the panel asked the backend to read, in order */
-const diffsAsked = () => sendToSystem.mock.calls
-  .map(([, event]) => event as { type: string; path: string; staged: boolean })
+const diffsAsked = () => made
+  .map(ask => ask.event as { type: string; path: string; staged: boolean })
   .filter(event => event.type === 'commit.GET_GIT_DIFF')
   .map(event => `${event.path}:${event.staged ? 'staged' : 'unstaged'}`);
 
@@ -102,7 +102,7 @@ it('reads again an open diff of a file inside a folder the news names', () => {
 it('asks nothing while the window does not show the code surface, and asks for all that changed when it does', () => {
   getParentContext.mockReturnValue({ openFiles: OPEN });
   const actor = createActor(commitState).start();
-  sendToSystem.mockReset();
+  resetAsks();
 
   actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, status: true, diffs: true, files: ['a.ts'] } });
   actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, history: true, diffs: true, files: ['b.ts'] } });
@@ -112,7 +112,7 @@ it('asks nothing while the window does not show the code surface, and asks for a
   expect(asked().filter(type => type !== 'commit.GET_GIT_DIFF')).toEqual(['commit.GET_GIT_STATUS', 'commit.LOG_LIST']);
   expect(diffsAsked()).toEqual(['a.ts:unstaged', 'a.ts:staged', 'b.ts:unstaged']);
 
-  sendToSystem.mockReset();
+  resetAsks();
   actor.send({ type: 'commit.HIDDEN' });
   actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, status: true } });
   expect(asked(), 'hidden again').toEqual([]);

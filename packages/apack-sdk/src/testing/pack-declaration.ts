@@ -21,7 +21,7 @@ export function nativePackDeclarationFixture(fixture: PackRegistration, metadata
     })) }),
     eventContracts: Object.fromEntries(Object.entries(fixture.features ?? {})
       .filter(([, feature]) => feature.system || feature.surface).map(([id, feature]) => [id, {
-        ...(feature.system && { system: { incoming: [...feature.system.receives], outgoing: [] } }),
+        ...(feature.system && { system: { incoming: [...feature.system.receives], outgoing: [], ...(feature.system.asks && { asks: feature.system.asks }) } }),
         ...(feature.surface && { surface: { receives: [...feature.surface.receives] } }),
       }])),
     ...((fixture.contentWriters !== undefined || fixture.appliers !== undefined) && { content: {

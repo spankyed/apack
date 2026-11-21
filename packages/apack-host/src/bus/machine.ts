@@ -6,9 +6,9 @@ import { carrySettingsRequest } from '../features/settings/be/access.ts';
 import { enqueueActions, fromCallback, setup, spawnChild, type AnyActorRef, type AnyActorLogic, type AnyStateMachine } from 'xstate';
 import { reportError } from '@apackdev/sdk/logger';
 import { HOST } from '../refs.ts';
-import { deliverAs } from './delivery.ts';
+import { answerUnavailable, deliverAs } from './delivery.ts';
 import { SYSTEM_EVENT_TYPES } from '@apackdev/sdk/framework';
-import { SURFACE_EVENT_TYPES, _callOn, senderSuffix, type Message } from '@apackdev/sdk/events';
+import { SURFACE_EVENT_TYPES, _callOn, _cancelAsk, _currentDelivery, _isPendingAsk, _settleAsk, senderSuffix, type Message } from '@apackdev/sdk/events';
 import type { PackRegistry } from '../packs/registry.ts';
 
 
@@ -54,7 +54,7 @@ export type BusSourceEvent = Extract<BackendEvents, { type: 'INCOMING' | 'OUTGOI
 
 export interface BusOptions {
   /** The registered packs whose systems the bus runs */
-  registry: Pick<PackRegistry, 'getRegisteredSystems' | 'getRegisteredPackSystemIds' | 'getSurfaceEventValidationMap' | 'getEventValidationMap'>;
+  registry: Pick<PackRegistry, 'getRegisteredSystems' | 'getRegisteredPackSystemIds' | 'getSurfaceEventValidationMap' | 'getEventValidationMap' | 'askKinds'>;
   /** The systems the bus runs, by id; defaults to every system in `registry` */
   systems?(): ReadonlyMap<string, AnyStateMachine>;
   /** Delivers a message a system sent to a frontend surface */
@@ -198,6 +198,9 @@ export function createBusMachine(options: BusOptions) {
       listen: spawnChild('listen', { id: 'bus-listen' }),
       notify: ({ event }) => {
         if (event.type !== 'OUTGOING') return;
+        // An answer to an ask this process made on a connection is that ask's: only the pack test harness asks so, as
+        // the window it stands in for. A window's own asks are taken off its subscription, in the window
+        if (_settleAsk(event.message)) return;
         // The counterpart of receiveClientEvent: a client's event is checked against what a system
         // accepts, and a system's event against what the surface receives. Reported and dropped rather
         // than thrown — the caller is a running system, and a malformed message must not take it down.
@@ -305,8 +308,15 @@ export function createBusMachine(options: BusOptions) {
         };
 
         if (event.type !== 'INCOMING') return;
+        // An answer to an ask this process is waiting on is that ask's, and goes to no system: its address is only
+        // what brought it here (`ask`, `@apackdev/sdk/events`)
+        if (_settleAsk(event.message)) return;
+        // An asker stopping an ask is that ask's too: its handler's signal aborts, and the system's machine never sees it
+        if (_cancelAsk(event.message)) return;
         const { to, event: incoming, sender, client, call } = event.message;
         const actor = system.get(to);
+        // One of the system's declared asks, which is answered exactly once: by its handler, or here when none took it
+        const kinds = options.registry.askKinds(to, incoming.type);
         // Delivered inside a scope naming the message, so the system can answer its sender with `reply` and a
         // send it makes while handling carries its own ref.
         //
@@ -320,7 +330,17 @@ export function createBusMachine(options: BusOptions) {
           reportUndeclared(to, incoming.type, event.message);
           const delivered = { ...incoming, ..._callOn(event.message) };
           carrySettingsRequest(incoming, delivered);
-          deliverAs({ to, sender, client, call, diagnostics: event.message.diagnostics }, delivered, () => actor.send(delivered));
+          const ask = kinds === undefined ? undefined : { kinds, taken: false };
+          // A system asking itself through the bus is still handling the message that made it ask, so XState queues
+          // this one behind it: it has not been handled yet, rather than refused, and is not answered here
+          const queued = _currentDelivery()?.receiver === to;
+          deliverAs({ to, sender, client, call, diagnostics: event.message.diagnostics }, delivered, () => actor.send(delivered), ask);
+          if (ask && !ask.taken && !queued) answerUnavailable(event.message, `The "${to}" system does not take "${incoming.type}" in the state it is in`);
+        }
+        // An ask, which is answered whatever happens to it: one the registry knows the system declares, or one this
+        // process is waiting on and that nothing registered would otherwise answer
+        else if (kinds !== undefined || _isPendingAsk(call)) {
+          answerUnavailable(event.message, `No "${to}" system is running to answer "${incoming.type}"`);
         }
         // An event every system accepts (a feature's settings changing) is the feature's system's if it runs one
         else if (!(SYSTEM_EVENT_TYPES as readonly string[]).includes(incoming.type)) {

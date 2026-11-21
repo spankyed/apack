@@ -6,8 +6,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -16,7 +16,7 @@ afterEach(async () => {
   resetTestData();
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const git = async (cwd: string, ...args: string[]) =>
   String((await execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd })).stdout).trim();
 type Page = { commits: { subject: string; parents: string[] }[]; cursor?: string; path?: string; continued?: boolean };
@@ -38,12 +38,12 @@ it('answers the history with parents, and a file\'s history across its rename', 
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const whole = await app.send('code', { type: 'commit.LOG_LIST' }, asWindow);
-  const { data } = await app.nextEmit('code', 'commit.LOG_LIST_RECEIVED', { answering: whole });
+  const whole = app.ask('code', { type: 'commit.LOG_LIST' }, asWindow);
+  const data = await answered(whole);
   expect((data as Page).commits.map(({ subject, parents }) => [subject, parents.length])).toEqual([['other', 1], ['renamed', 1], ['first', 0]]);
 
-  const ofFile = await app.send('code', { type: 'commit.LOG_LIST', path: 'new.txt' }, asWindow);
-  const { data: history } = await app.nextEmit('code', 'commit.LOG_LIST_RECEIVED', { answering: ofFile });
+  const ofFile = app.ask('code', { type: 'commit.LOG_LIST', path: 'new.txt' }, asWindow);
+  const history = await answered(ofFile);
   expect(history).toMatchObject({ path: 'new.txt' });
   expect((history as Page).commits.map(({ subject }) => subject)).toEqual(['renamed', 'first']);
 });

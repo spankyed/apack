@@ -2,9 +2,9 @@
 // nothing to show as an error.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -14,26 +14,28 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
 
 const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 
-beforeEach(() => sendToSystem.mockReset());
-const sent = () => sendToSystem.mock.calls.map(([, event]) => (event as { type: string }).type);
+beforeEach(resetAsks);
 
-it('asks the backend to stop the push running, and to stop nothing when none runs', () => {
+it('stops the push running by no longer waiting on it, and stops nothing when none runs', () => {
   const actor = createActor(commitState).start();
 
   actor.send({ type: 'commit.STOP_PUSH' });
-  expect(sent()).toEqual([]);
+  expect(asksOf('commit.PUBLISH_BRANCH')).toEqual([]);
+  expect(actor.getSnapshot().context.pushStopped).toBe(false);
 
   actor.send({ type: 'commit.PUSH_BRANCH' });
   actor.send({ type: 'commit.STOP_PUSH' });
-  expect(sent()).toContain('commit.STOP_PUSH');
+  expect(latestAsk('commit.PUBLISH_BRANCH').stopped).toBe(true);
 });
 
 it('leaves pushing once the push is stopped, with no error to show', () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.PUSH_BRANCH' });
-  expect(actor.getSnapshot().context.isPushing).toBe(true);
+  expect(actor.getSnapshot().matches({ push: 'pushing' })).toBe(true);
+  latestAsk('commit.PUBLISH_BRANCH').tell({ during: 'push', stage: 'Writing objects', percent: 42 });
 
-  actor.send({ type: 'commit.PUSH_STOPPED' });
+  actor.send({ type: 'commit.STOP_PUSH' });
 
-  expect(actor.getSnapshot().context).toMatchObject({ isPushing: false, gitError: null, progress: null });
+  expect(actor.getSnapshot().matches({ push: 'idle' })).toBe(true);
+  expect(actor.getSnapshot().context).toMatchObject({ pushStopped: true, gitError: null, progress: null });
 });

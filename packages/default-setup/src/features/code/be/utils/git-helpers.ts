@@ -1,25 +1,9 @@
-import type { Reply } from '@apackdev/sdk/events';
-import type { OutgoingCodeEvents } from '../contract.ts'
-import { answer } from '../answer.ts'
-import type { AppGitRepository } from '../services/app-git-repository.ts'
+import type { CodeSystemContext } from '../types.ts'
+import { repositoryOf, type AppGitRepository } from '../services/app-git-repository.ts'
 
-type ErrorEventType = 'commit.ERROR_RECEIVED' | 'pr.ERROR'
-
-/** Whether the system has a repository; without one, says so to whoever asked (\`answer\`) */
-export function requireGitRepository<T extends { gitRepository: AppGitRepository | null }>(
-  context: T,
-  reply: Reply<OutgoingCodeEvents> | undefined,
-  errorEventType: ErrorEventType = 'commit.ERROR_RECEIVED'
-): context is T & { gitRepository: AppGitRepository } {
-  if (!context.gitRepository) {
-    const message = 'No directory selected. Please select a directory first.'
-
-    if (errorEventType === 'pr.ERROR') {
-      answer(reply, { type: 'pr.ERROR', message })
-    } else {
-      answer(reply, { type: 'commit.ERROR_RECEIVED', data: { message } })
-    }
-    return false
-  }
-  return true
+/** The repository the code surface is over, for an ask that runs git: an ask made with none is refused */
+export function gitRepositoryOf(context: CodeSystemContext): AppGitRepository {
+  const repository = repositoryOf(context.gitRepository)
+  if (!repository) throw new Error('No directory selected. Please select a directory first.')
+  return repository
 }

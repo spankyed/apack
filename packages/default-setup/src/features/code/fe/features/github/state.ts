@@ -1,8 +1,9 @@
 // The app's sign-in to GitHub as a window shows it: who it is signed in as, and a sign-in under way with the code
 // to type at github.com. The backend holds the token; a window holds only what it shows.
-import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
-import { answersCall, newCall } from '@apackdev/sdk/events'
-import { sendToSystem } from '#generated/events.ts'
+import { setup, assign, spawnChild, stopChild, type ActorRefFrom, type DoneActorEvent } from 'xstate'
+import type { AskOutcome, ProgressEventOf } from '@apackdev/sdk/events'
+import { fromAsk, sendToSystem } from '#generated/events.ts'
+import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts'
 import type { GitHubAccount, GitHubSignInFailure } from '#features/code/be/services/github.ts'
 
 export interface GitHubSignInCode {
@@ -14,16 +15,14 @@ export interface GitHubSignInCode {
 export interface CodeGitHubContext {
   /** Who the app is signed in as, `null` when it is not, and `undefined` until the backend has said */
   account: GitHubAccount | null | undefined
-  /** The sign-in this window started and is showing the code of */
-  signIn: { code?: GitHubSignInCode } | null
-  /**
-   * The call that sign-in was asked with. Starting another ends this one, whose ending then arrives as an answer
-   * to an ask nobody is waiting on: only the answers to this call are this window's to show
-   */
-  signInAsk: string | null
+  /** The code of the sign-in this window started, once GitHub has given it; `null` before, and with none under way */
+  code: GitHubSignInCode | null
   /** How the last sign-in this window started ended, when it did not end signed in */
   failure: { reason: GitHubSignInFailure; message: string } | null
 }
+
+/** The id the read of the account is spawned under */
+const ACCOUNT = 'account'
 
 export type Event =
   // What a window asks
@@ -31,19 +30,24 @@ export type Event =
   | { type: 'github.SIGN_IN' }
   | { type: 'github.CANCEL_SIGN_IN' }
   | { type: 'github.SIGN_OUT' }
-  // What the backend answers, and its news
-  | { type: 'github.ACCOUNT'; account: GitHubAccount | null }
-  | { type: 'github.SIGN_IN_CODE'; userCode: string; verificationUri: string; expiresAt: number }
-  | { type: 'github.SIGN_IN_FAILED'; reason: GitHubSignInFailure; message: string }
+  // What the sign-in under way says before it ends: the code to type at GitHub
+  | ProgressEventOf<CodeSystemContract, 'github.SIGN_IN'>
+  // How this window's read of the account ended
+  | DoneActorEvent<AskOutcome<CodeSystemContract['asks']['github.GET_ACCOUNT']>, typeof ACCOUNT>
+  // The backend's news
   | { type: 'github.ACCOUNT_CHANGED'; account: GitHubAccount | null }
+
+/** The reasons a sign-in says it ended without an account; anything else it ended with is shown as a failure */
+const SIGN_IN_REFUSALS: readonly string[] = ['unconfigured', 'denied', 'expired', 'cancelled'] satisfies GitHubSignInFailure[]
 
 export const githubState = setup({
   types: {
     context: {} as CodeGitHubContext,
     events: {} as Event,
   },
-  guards: {
-    answersTheSignIn: ({ context, event }) => answersCall(event, context.signInAsk),
+  actors: {
+    readAccount: fromAsk('code', 'github.GET_ACCOUNT'),
+    signIn: fromAsk('code', 'github.SIGN_IN'),
   },
   actions: {
     /**
@@ -58,43 +62,49 @@ export const githubState = setup({
   },
 }).createMachine({
   id: 'github',
-  context: { account: undefined, signIn: null, signInAsk: null, failure: null },
+  initial: 'idle',
+  context: { account: undefined, code: null, failure: null },
   on: {
-    'github.GET_ACCOUNT': { actions: () => { sendToSystem('code', { type: 'github.GET_ACCOUNT' }) } },
-    'github.SIGN_IN': {
-      actions: enqueueActions(({ enqueue }) => {
-        const call = newCall()
-        enqueue.assign({ signIn: {}, signInAsk: call, failure: null })
-        enqueue(() => { sendToSystem('code', { type: 'github.SIGN_IN' }, { call }) })
-      }),
-    },
-    'github.CANCEL_SIGN_IN': {
-      actions: [
-        assign({ signIn: () => null, signInAsk: () => null }),
-        () => { sendToSystem('code', { type: 'github.CANCEL_SIGN_IN' }) },
-      ],
-    },
     'github.SIGN_OUT': { actions: () => { sendToSystem('code', { type: 'github.SIGN_OUT' }) } },
-
-    'github.ACCOUNT': { actions: assign({ account: ({ event }) => event.account }) },
-    'github.SIGN_IN_CODE': {
-      guard: 'answersTheSignIn',
-      actions: [
-        assign({ signIn: ({ event }) => ({ code: { userCode: event.userCode, verificationUri: event.verificationUri, expiresAt: event.expiresAt } }) }),
-        { type: 'handOverCode', params: ({ event }) => ({ userCode: event.userCode, verificationUri: event.verificationUri }) },
-      ],
+    // Who the app is signed in as, read when a view of it asks: a read under way is replaced by the newer one
+    'github.GET_ACCOUNT': { actions: [stopChild(ACCOUNT), spawnChild('readAccount', { id: ACCOUNT, input: {} })] },
+    [`xstate.done.actor.${ACCOUNT}`]: {
+      actions: [stopChild(ACCOUNT), assign({ account: ({ context, event }) => event.output.ok ? event.output.value : context.account })],
     },
-    // A cancel is not a failure to show
-    'github.SIGN_IN_FAILED': {
-      guard: 'answersTheSignIn',
-      actions: assign({
-        signIn: () => null,
-        signInAsk: () => null,
-        failure: ({ event }) => event.reason === 'cancelled' ? null : { reason: event.reason, message: event.message },
-      }),
-    },
+    // Entering `signingIn` again ends the sign-in under way and starts this one
+    'github.SIGN_IN': { target: '.signingIn', reenter: true, actions: assign({ failure: null }) },
+    'github.CANCEL_SIGN_IN': { target: '.idle' },
     // Another window's sign-in, or this one's, ends any this window shows
-    'github.ACCOUNT_CHANGED': { actions: assign({ account: ({ event }) => event.account, signIn: () => null, signInAsk: () => null, failure: () => null }) },
+    'github.ACCOUNT_CHANGED': { target: '.idle', actions: assign({ account: ({ event }) => event.account, failure: null }) },
+  },
+  states: {
+    idle: {},
+    // A sign-in is under way for exactly as long as this state is: leaving it ends the sign-in on the backend
+    signingIn: {
+      invoke: {
+        src: 'signIn',
+        input: {},
+        onDone: {
+          target: 'idle',
+          actions: assign(({ event: { output } }) => {
+            if (output.ok) return { account: output.value }
+            const { kind, message } = output.failure
+            // A cancel is not a failure to show
+            if (kind === 'cancelled') return {}
+            return { failure: { reason: SIGN_IN_REFUSALS.includes(kind) ? kind as GitHubSignInFailure : 'failed', message } }
+          }),
+        },
+      },
+      exit: assign({ code: null }),
+      on: {
+        'github.SIGN_IN.progress': {
+          actions: [
+            assign({ code: ({ event }) => event.update }),
+            { type: 'handOverCode', params: ({ event }) => event.update },
+          ],
+        },
+      },
+    },
   },
 })
 

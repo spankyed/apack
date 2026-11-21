@@ -15,7 +15,7 @@ async function reset(target: unknown) {
   const app = await startApp({ systems: [SETTINGS] });
   await app.connect();
   const call = await app.send(SETTINGS, { type: 'RESET_SETTINGS', target }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: SETTINGS, client: WINDOW });
-  return app.nextEmit(SETTINGS, 'SETTINGS_SAVED', { answering: call });
+  return app.nextEmit(SETTINGS, 'ASK_ANSWERED', { answering: call });
 }
 
 describe('settings reset ownership', () => {
@@ -60,7 +60,7 @@ describe('settings reset ownership', () => {
     packSettings.forGroup('assistant').set({ path: ['name'], value: 'Assistant' });
 
     const call = await app.send(SETTINGS, { type: 'RESET_ALL_SETTINGS' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: SETTINGS, client: WINDOW });
-    await app.nextEmit(SETTINGS, 'SETTINGS_SAVED', { answering: call });
+    await app.nextEmit(SETTINGS, 'ASK_ANSWERED', { answering: call });
 
     expect(stored()).toEqual({});
   });
@@ -72,7 +72,7 @@ describe('settings reset ownership', () => {
     const before = structuredClone(stored());
 
     const call = await app.send(SETTINGS, { type: 'RESET_SETTINGS' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: SETTINGS, client: WINDOW });
-    await app.nextEmit(SETTINGS, 'SETTINGS_REFUSED', { answering: call });
+    await app.nextEmit(SETTINGS, 'ASK_FAILED', { answering: call });
 
     expect(stored()).toEqual(before);
   });

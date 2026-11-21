@@ -1821,6 +1821,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         system?: {
             incoming: string[];
             outgoing: string[];
+            asks?: Record<string, string[]> | undefined;
         } | undefined;
         surface?: {
             receives: string[];
@@ -1829,6 +1830,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         system?: {
             incoming: string[];
             outgoing: string[];
+            asks?: Record<string, string[]> | undefined;
         } | undefined;
         surface?: {
             receives: string[];
@@ -1837,6 +1839,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         system?: {
             incoming: string[];
             outgoing: string[];
+            asks?: Record<string, string[]> | undefined;
         } | undefined;
         surface?: {
             receives: string[];
@@ -1845,6 +1848,7 @@ export const _NativePackDeclarationSchema: z.ZodObject<{
         system?: {
             incoming: string[];
             outgoing: string[];
+            asks?: Record<string, string[]> | undefined;
         } | undefined;
         surface?: {
             receives: string[];

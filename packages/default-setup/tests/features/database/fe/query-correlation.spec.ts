@@ -1,94 +1,112 @@
-// The console's two verbs: an answer is taken only by the ask that is waiting for it.
+// The console's two verbs: the result shown is the one last asked for.
 //
-// `EXECUTE_QUERY` and `EXECUTE_TRANSACTION` are independent and each holds one outstanding call, so an
-// answer is placed by the call it names (`Message.answering`, which a delivery door puts on the event) and
-// not by anything in its payload. Two slots rather than one, because deleting a row chains a transaction
-// into a follow-up query and a single slot would have the query overwrite the transaction it came from.
-//
-// The case worth reading is the last pair: an answer carrying **no** call, arriving when nothing is
-// outstanding. Whether a hand-written comparison refuses it depends on how the empty slot is spelled —
-// `undefined === null` is false and `undefined === undefined` is true — which is a correctness question
-// settled by a sentinel, and the reason `answersCall` owns it instead and `_callOf` is not a pack's to
-// call.
+// `EXECUTE_QUERY` and `EXECUTE_TRANSACTION` are independent, one of each under way at a time: asking again gives up
+// the ask under way, so its answer is nobody's. Two rather than one, because deleting a row chains a transaction into
+// a follow-up query.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
-import { sentCall } from '../../../_support/calls.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+/** The asks the machine has made, in order: what each was, what it carried, and the spec's way to end it */
+const asks = vi.hoisted(() => [] as Array<{ type: string; input: Record<string, unknown>; stopped: boolean; settle(outcome: unknown): void }>);
+vi.mock('#generated/events.ts', async () => {
+  const { fromPromise } = await import('xstate');
+  return {
+    fromAsk: (_to: string, type: string) => fromPromise(({ input, signal }) => new Promise((resolve) => {
+      const ask = { type, input: input as Record<string, unknown>, stopped: false, settle: resolve };
+      signal.addEventListener('abort', () => { ask.stopped = true; });
+      asks.push(ask);
+    })),
+  };
+});
+// The schema is not these cases' subject: a view that is never delivered
+vi.mock('#generated/fe.ts', async () => {
+  const { fromCallback } = await import('xstate');
+  return { fromView: () => fromCallback(() => {}) };
+});
 
-const { default: databaseState } = await import('#features/database/fe/state.ts');
+const { default: databaseState, isRunningCode } = await import('#features/database/fe/state.ts');
 
-/** The call the nth send of `type` was asked under */
-const callFor = (type: string, nth = 0) => sentCall(sendToSystem, type, nth);
+/** The nth ask of `type` the machine made */
+const asked = (type: string, nth = 0) => {
+  const ask = asks.filter((made) => made.type === type)[nth];
+  if (!ask) throw new Error(`no ${type} #${nth} was asked`);
+  return ask;
+};
+
+/** Ends an ask as its system would, unless the machine gave it up, and waits for the machine to have heard */
+async function end(ask: (typeof asks)[number], outcome: unknown) {
+  // An ask that was stopped is never answered: its answer, when it comes, is nobody's
+  if (!ask.stopped) ask.settle(outcome);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+const answer = (ask: (typeof asks)[number], value: unknown) => end(ask, { ok: true, value });
+const fail = (ask: (typeof asks)[number], failure: { kind: string; message: string; [key: string]: unknown }) => end(ask, { ok: false, failure });
 
 const console_ = () => createActor(databaseState).start();
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  asks.length = 0;
 });
 
-it('takes the result for the query it is waiting on', () => {
+it('takes the result for the query it is waiting on', async () => {
   const actor = console_();
   actor.send({ type: 'QUERY.EXECUTE', code: 'return 1' });
+  expect(asked('EXECUTE_QUERY').input).toEqual({ code: 'return 1' });
+  expect(isRunningCode(actor.getSnapshot()), 'running until it is answered').toBe(true);
 
-  actor.send(answerTo(callFor('EXECUTE_QUERY'), { type: 'QUERY_RESULT', result: 'mine', executionTime: 1 }));
+  await answer(asked('EXECUTE_QUERY'), { result: 'mine', executionTime: 1 });
 
   expect(actor.getSnapshot().context.queryResult).toBe('mine');
+  expect(isRunningCode(actor.getSnapshot())).toBe(false);
 });
 
-it('ignores a result for a query it has stopped waiting on', () => {
+it('gives up a query when another is asked for, and takes the later one', async () => {
   const actor = console_();
   actor.send({ type: 'QUERY.EXECUTE', code: 'return 1' });
-  const abandoned = callFor('EXECUTE_QUERY');
-  // Asked again, so the first is no longer the outstanding one
+  // Asked again, so the first is no longer waited on
   actor.send({ type: 'QUERY.EXECUTE', code: 'return 2' });
+  expect(asked('EXECUTE_QUERY').stopped, 'the first was given up').toBe(true);
 
-  actor.send(answerTo(abandoned, { type: 'QUERY_RESULT', result: 'stale', executionTime: 1 }));
+  await answer(asked('EXECUTE_QUERY'), { result: 'stale', executionTime: 1 });
   expect(actor.getSnapshot().context.queryResult, 'not taken').toBeNull();
 
-  actor.send(answerTo(callFor('EXECUTE_QUERY', 1), { type: 'QUERY_RESULT', result: 'current', executionTime: 1 }));
+  await answer(asked('EXECUTE_QUERY', 1), { result: 'current', executionTime: 1 });
   expect(actor.getSnapshot().context.queryResult).toBe('current');
 });
 
-/**
- * The two verbs keep separate slots, which matters because they share the result field.
- *
- * A `TRANSACTION_RESULT` writes `queryResult`, so the only thing keeping a transaction's answer out of a
- * query's result is that it is matched against `pendingTransactionCall` — empty here, since no transaction
- * was asked. One slot for both would take this.
- */
-it('does not let one verb take the other verb\'s answer', () => {
+// The two verbs are asked for independently: a transaction does not give up the query under way
+it('keeps a query under way through a transaction', async () => {
   const actor = console_();
   actor.send({ type: 'QUERY.EXECUTE', code: 'return 1' });
+  actor.send({ type: 'TRANSACTION.EXECUTE', code: 'return 2' });
+  expect(asked('EXECUTE_QUERY').stopped).toBe(false);
 
-  // A transaction answer naming the *query's* call: the right call, the wrong slot
-  actor.send(answerTo(callFor('EXECUTE_QUERY'), { type: 'TRANSACTION_RESULT', result: 'wrong slot', executionTime: 1 }));
-
-  expect(actor.getSnapshot().context.queryResult, 'no transaction was outstanding').toBeNull();
+  await answer(asked('EXECUTE_TRANSACTION'), { result: 'written', executionTime: 1 });
+  expect(isRunningCode(actor.getSnapshot()), 'the query is still running').toBe(true);
+  await answer(asked('EXECUTE_QUERY'), { result: 'read', executionTime: 1 });
+  expect(actor.getSnapshot().context.queryResult).toBe('read');
+  expect(isRunningCode(actor.getSnapshot())).toBe(false);
 });
 
-/**
- * An answer carrying no call at all, with nothing outstanding — refused.
- *
- * Held by two things independently — `answersCall` refuses an empty slot, and the slot is `null` — so this
- * fires only on losing both. `apack-sdk/tests/events/calls.spec.ts` holds the check itself.
- */
-it('refuses a result carrying no call when no query is outstanding', () => {
+it('shows why a query could not run', async () => {
   const actor = console_();
+  actor.send({ type: 'QUERY.EXECUTE', code: 'return nope' });
 
-  actor.send({ type: 'QUERY_RESULT', result: 'nobody asked', executionTime: 1 });
+  await fail(asked('EXECUTE_QUERY'), { kind: 'failed', message: 'nope is not defined' });
 
-  expect(actor.getSnapshot().context.queryResult).toBeNull();
+  expect(actor.getSnapshot().context.error).toBe('nope is not defined');
+  expect(isRunningCode(actor.getSnapshot())).toBe(false);
 });
 
-it('refuses one once the query it was waiting on has settled', () => {
+// Deleting a row is a transaction, and the query in the editor is run again once it is done
+it('runs the current query again after a row is deleted', async () => {
   const actor = console_();
-  actor.send({ type: 'QUERY.EXECUTE', code: 'return 1' });
-  actor.send(answerTo(callFor('EXECUTE_QUERY'), { type: 'QUERY_RESULT', result: 'mine', executionTime: 1 }));
+  actor.send({ type: 'QUERY.UPDATE', code: 'return rows' });
+  actor.send({ type: 'ENTITY.DELETE', entityId: 'Note-1' });
 
-  actor.send({ type: 'QUERY_RESULT', result: 'stray', executionTime: 1 });
+  await answer(asked('EXECUTE_TRANSACTION'), { result: { deleted: 'Note-1' }, executionTime: 1 });
 
-  expect(actor.getSnapshot().context.queryResult, 'the settled answer still stands').toBe('mine');
+  expect(asked('EXECUTE_QUERY').input).toEqual({ code: 'return rows' });
+  await answer(asked('EXECUTE_QUERY'), { result: 'what is left', executionTime: 1 });
+  expect(actor.getSnapshot().context.queryResult).toBe('what is left');
 });

@@ -9,7 +9,6 @@ import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
 import { resolveGitPath } from '#features/code/be/utils/resolve-cli.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -18,7 +17,7 @@ afterEach(async () => {
   resetTestData();
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const git = (cwd: string, ...args: string[]) =>
   execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd });
 
@@ -69,17 +68,15 @@ const refusesToFetch = await (async () => {
 it.runIf(refusesToFetch)('says a file diff needs a version the clone was not given, and fetches nothing', async () => {
   await partialClone();
 
-  const asked = await app!.send('code', { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'a.txt', baseBranch: 'HEAD~1' }, asWindow);
+  const asked = await app!.ask('code', { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'a.txt', baseBranch: 'HEAD~1' }, asWindow);
 
-  const { data } = await app!.nextEmit('code', 'pr.FILE_CONTENT_MISSING', { answering: asked });
-  expect(data).toEqual({ path: 'a.txt', baseBranch: 'HEAD~1' });
+  expect(asked).toEqual({ ok: false, failure: { kind: 'content-missing', message: expect.any(String), path: 'a.txt', baseBranch: 'HEAD~1' } });
 });
 
 it('fetches the version a file diff needs when the window asks it to', async () => {
   await partialClone();
 
-  const asked = await app!.send('code', { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'a.txt', baseBranch: 'HEAD~1', fetchMissing: true }, asWindow);
+  const asked = await app!.ask('code', { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'a.txt', baseBranch: 'HEAD~1', fetchMissing: true }, asWindow);
 
-  const { data } = await app!.nextEmit('code', 'pr.FILE_DIFF_RECEIVED', { answering: asked });
-  expect(data).toMatchObject({ path: 'a.txt', originalContent: 'one\n', modifiedContent: 'two\n' });
+  expect(asked).toMatchObject({ ok: true, value: { path: 'a.txt', originalContent: 'one\n', modifiedContent: 'two\n' } });
 });

@@ -2,13 +2,12 @@
 // asks for the same diff again, allowed to fetch. The answer it gets is the one that opens the tab.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
-import { sentCall } from '../../../../../_support/calls.ts';
+import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 import type { GhPullRequest } from '#generated/types.ts';
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts';
 
 const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 const addTabToParent = vi.hoisted(() => vi.fn());
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent,
@@ -22,48 +21,52 @@ const { pullRequestState } = await import('#features/code/fe/features/pull-reque
 const pr = { number: 1, baseRefName: 'main', headRefName: 'feature-a' } as unknown as GhPullRequest;
 const file = (path: string) => ({ path, status: 'modified', staged: false }) as GitStatusFile;
 const missing = { path: 'a.ts', baseBranch: 'main', headBranch: 'feature-a' };
+/** The refusal of a file diff that needs content the clone was not given */
+const refuseAsMissing = (nth = 0) =>
+  asksOf('pr.GET_BRANCH_FILE_DIFF')[nth]!.refuse('a.ts needs content this clone was not given', { kind: 'content-missing', ...missing });
 
 /** A panel showing a PR, which has asked for one file's diff */
-const asking = () => {
+const asking = async () => {
   const actor = createActor(pullRequestState).start();
   actor.send({ type: 'pr.SELECT_PR_BY_NUMBER', number: 1 });
-  actor.send(answerTo(sentCall(sendToSystem, 'pr.SELECT_PR'), { type: 'pr.PR_DETAILS_RECEIVED' as const, data: { pr, comments: [], fetchedAt: Date.now() } }));
+  await latestAsk('pr.SELECT_PR').answer({ pr, comments: [], fetchedAt: Date.now() });
   actor.send({ type: 'pr.SELECT_FILE', file: file('a.ts') });
   actor.send({ type: 'pr.VIEW_DIFF', path: 'a.ts' });
   return actor;
 };
-const asked = () => sendToSystem.mock.calls.map(([, event]) => event as Record<string, unknown>);
 
 beforeEach(() => {
   sendToSystem.mockReset();
+  resetAsks();
   addTabToParent.mockReset();
 });
 
-it('offers to download what the diff lacks, and asks for it again, allowed to fetch, when taken up', () => {
-  const actor = asking();
+it('offers to download what the diff lacks, and asks for it again, allowed to fetch, when taken up', async () => {
+  const actor = await asking();
 
-  actor.send(answerTo(sentCall(sendToSystem, 'pr.GET_BRANCH_FILE_DIFF'), { type: 'pr.FILE_CONTENT_MISSING' as const, data: missing }));
+  await refuseAsMissing();
   expect(actor.getSnapshot().context.missingFileDiff).toEqual(missing);
 
   actor.send({ type: 'pr.FETCH_MISSING_DIFF' });
-  expect(asked().at(-1)).toEqual({ type: 'pr.GET_BRANCH_FILE_DIFF', ...missing, fetchMissing: true });
+  expect(latestAsk('pr.GET_BRANCH_FILE_DIFF').event).toEqual({ type: 'pr.GET_BRANCH_FILE_DIFF', ...missing, fetchMissing: true });
   expect(actor.getSnapshot().context.missingFileDiff, 'and the offer is gone').toBeNull();
 
-  actor.send(answerTo(sentCall(sendToSystem, 'pr.GET_BRANCH_FILE_DIFF', 1), { type: 'pr.FILE_DIFF_RECEIVED' as const, data: { ...missing, staged: false } }));
+  await asksOf('pr.GET_BRANCH_FILE_DIFF')[1]!.answer({ ...missing, staged: false });
   expect(addTabToParent, 'the answer to the second ask opens the tab').toHaveBeenCalledTimes(1);
 });
 
-it('offers nothing for a diff it never asked for', () => {
-  const actor = asking();
+it('offers nothing for a diff of a pull request since left', async () => {
+  const actor = await asking();
+  actor.send({ type: 'pr.BACK_TO_BRANCH' });
 
-  actor.send({ type: 'pr.FILE_CONTENT_MISSING', data: missing });
+  await refuseAsMissing();
 
   expect(actor.getSnapshot().context.missingFileDiff).toBeNull();
 });
 
-it('drops the offer when the user moves to another file', () => {
-  const actor = asking();
-  actor.send(answerTo(sentCall(sendToSystem, 'pr.GET_BRANCH_FILE_DIFF'), { type: 'pr.FILE_CONTENT_MISSING' as const, data: missing }));
+it('drops the offer when the user moves to another file', async () => {
+  const actor = await asking();
+  await refuseAsMissing();
 
   actor.send({ type: 'pr.SELECT_FILE', file: file('b.ts') });
 

@@ -1,5 +1,7 @@
 import { setup, assign , type ActorRefFrom } from 'xstate';
-import { sendToSystem } from '#generated/events.ts';
+import { fromAsk } from '#generated/events.ts';
+import type { ProgressEventOf } from '@apackdev/sdk/events';
+import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { getParentContext } from '../../utils/parent-communication.ts';
 
 // Search types
@@ -26,7 +28,6 @@ export interface SearchProgress {
 export interface CodeSearchContext {
   searchQuery: string
   searchResults: SearchResult[]
-  isSearching: boolean
   searchError: string | null
   searchProgress: SearchProgress | null
   searchOptions: {
@@ -43,84 +44,36 @@ export type Event =
   | { type: 'search.CANCEL' }
   | { type: 'search.CLEAR' }
   | { type: 'search.UPDATE_OPTIONS'; options: Partial<CodeSearchContext['searchOptions']> }
-  | { type: 'search.RESULT'; data: SearchResult }
-  | { type: 'search.PROGRESS'; data: SearchProgress }
-  | { type: 'search.COMPLETE' }
-  | { type: 'search.ERROR'; message: string }
   | { type: 'search.CLEAR_ERROR' }
   | { type: 'search.DIRECTORY_CHANGED'; baseDirectory: string }
-  | { type: 'CODE_STARTED' };
+  | { type: 'CODE_STARTED' }
+  // What the search asked for says as it runs: how far it is, and each file's matches
+  | ProgressEventOf<CodeSystemContract, 'search.SEARCH_FILES'>;
 
 export const searchState = setup({
   types: {
     context: {} as CodeSearchContext,
     events: {} as Event
   },
+  actors: {
+    searchFiles: fromAsk('code', 'search.SEARCH_FILES'),
+  },
   actions: {
-    startSearch: ({ event, context, self }) => {
-      const ev = event as { type: 'search.START'; query: string }
-      const parentContext = getParentContext(self)
-
-      sendToSystem('code', {
-        type: 'search.SEARCH_FILES',
-        query: ev.query,
-        path: parentContext?.baseDirectory,
-        includePattern: context.searchOptions.includePattern || undefined,
-        excludePattern: context.searchOptions.excludePattern || undefined,
-        caseSensitive: context.searchOptions.caseSensitive,
-        wholeWord: context.searchOptions.wholeWord,
-        useRegex: context.searchOptions.useRegex,
-      })
-    },
-
-    cancelSearch: () => {
-      sendToSystem('code', { type: 'search.CANCEL_SEARCH' })
-    },
-
     assignSearchQuery: assign({
-      searchQuery: ({ event }) => {
-        const ev = event as { type: 'search.START'; query: string }
-        return ev.query
-      },
-      isSearching: true,
+      searchQuery: ({ event }) => (event as { type: 'search.START'; query: string }).query,
       searchError: null,
       searchResults: []
     }),
 
-    assignSearchResult: assign({
-      searchResults: ({ context, event }) => {
-        const ev = event as { type: 'search.RESULT'; data: SearchResult }
-        return [...context.searchResults, ev.data]
-      }
-    }),
-
-    assignSearchProgress: assign({
-      searchProgress: ({ event }) => {
-        const ev = event as { type: 'search.PROGRESS'; data: SearchProgress }
-        return ev.data
-      }
-    }),
-
-    assignSearchComplete: assign({
-      isSearching: false,
-      searchProgress: null
-    }),
-
-    assignSearchError: assign({
-      searchError: ({ event }) => {
-        const ev = event as { type: 'search.ERROR'; message: string }
-        return ev.message
-      },
-      isSearching: false,
-      searchProgress: null
+    hearSearch: assign(({ context, event }) => {
+      const { update } = event as ProgressEventOf<CodeSystemContract, 'search.SEARCH_FILES'>
+      return 'result' in update ? { searchResults: [...context.searchResults, update.result] } : { searchProgress: update.progress }
     }),
 
     clearSearch: assign({
       searchQuery: '',
       searchResults: [],
-      isSearching: false,
       searchError: null,
-      searchProgress: null
     }),
 
     clearError: assign({
@@ -133,11 +86,6 @@ export const searchState = setup({
         return { ...context.searchOptions, ...ev.options }
       }
     }),
-
-    handleCodeStartup: () => {
-      // No immediate action needed on startup
-      // Error will be shown if user tries to search without a directory
-    },
 
     handleDirectoryChanged: ({ self, context, event }) => {
       const ev = event as { type: 'search.DIRECTORY_CHANGED'; baseDirectory: string }
@@ -153,7 +101,6 @@ export const searchState = setup({
   context: {
     searchQuery: '',
     searchResults: [],
-    isSearching: false,
     searchError: null,
     searchProgress: null,
     searchOptions: {
@@ -164,46 +111,42 @@ export const searchState = setup({
       useRegex: false
     }
   },
+  on: {
+    // Entering `searching` again stops the search under way and starts this one
+    'search.START': { target: '.searching', reenter: true, actions: 'assignSearchQuery' },
+    'search.CANCEL': { target: '.idle' },
+    'search.CLEAR': { target: '.idle', actions: 'clearSearch' },
+    'search.UPDATE_OPTIONS': { actions: 'updateSearchOptions' },
+    'search.CLEAR_ERROR': { actions: 'clearError' },
+    'search.DIRECTORY_CHANGED': { actions: 'handleDirectoryChanged' },
+    // Nothing to do as the code surface starts: a search with no directory says so when it is asked for
+    'CODE_STARTED': {},
+  },
   states: {
-    idle: {
+    idle: {},
+    // A search is under way for exactly as long as this state is: leaving it stops the search on the backend
+    searching: {
+      invoke: {
+        src: 'searchFiles',
+        input: ({ context, self }) => ({
+          query: context.searchQuery,
+          path: getParentContext(self)?.baseDirectory,
+          includePattern: context.searchOptions.includePattern || undefined,
+          excludePattern: context.searchOptions.excludePattern || undefined,
+          caseSensitive: context.searchOptions.caseSensitive,
+          wholeWord: context.searchOptions.wholeWord,
+          useRegex: context.searchOptions.useRegex,
+        }),
+        onDone: {
+          target: 'idle',
+          actions: assign({ searchError: ({ event }) => (event.output.ok ? null : event.output.failure.message) }),
+        },
+      },
+      exit: assign({ searchProgress: null }),
       on: {
-        'search.START': {
-          actions: ['assignSearchQuery', 'startSearch']
-        },
-        'search.CANCEL': {
-          actions: 'cancelSearch'
-        },
-        'search.CLEAR': {
-          actions: 'clearSearch'
-        },
-        'search.UPDATE_OPTIONS': {
-          actions: 'updateSearchOptions'
-        },
-        'search.RESULT': {
-          guard: ({ context }) => context.searchQuery !== '',
-          actions: 'assignSearchResult'
-        },
-        'search.PROGRESS': {
-          guard: ({ context }) => context.searchQuery !== '',
-          actions: 'assignSearchProgress'
-        },
-        'search.COMPLETE': {
-          actions: 'assignSearchComplete'
-        },
-        'search.ERROR': {
-          actions: 'assignSearchError'
-        },
-        'search.CLEAR_ERROR': {
-          actions: 'clearError'
-        },
-        'search.DIRECTORY_CHANGED': {
-          actions: 'handleDirectoryChanged'
-        },
-        'CODE_STARTED': {
-          actions: 'handleCodeStartup'
-        }
-      }
-    }
+        'search.SEARCH_FILES.progress': { actions: 'hearSearch' },
+      },
+    },
   }
 });
 

@@ -70,12 +70,12 @@ import JsonDisplay from './components/JsonDisplay.vue';
 import ExplainDisplay from './components/ExplainDisplay.vue';
 import { isExplanation } from './composables/explanation.ts';
 import PrimitiveDisplay from './components/PrimitiveDisplay.vue';
-import type { DatabaseState } from '../../state.ts'
+import { isRunningCode, type DatabaseState } from '../../state.ts'
 
 // State Management
 const actor: DatabaseState = useSurface();
 const queryResult = useSelector(actor, (state) => state.context.queryResult);
-const isLoading = useSelector(actor, (state) => state.context.isLoading);
+const isLoading = useSelector(actor, isRunningCode);
 const error = useSelector(actor, (state) => state.context.error);
 const executionTime = useSelector(actor, (state) => state.context.executionTime);
 

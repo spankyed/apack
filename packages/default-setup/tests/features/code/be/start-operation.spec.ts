@@ -8,8 +8,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -19,7 +19,7 @@ afterEach(async () => {
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const git = async (cwd: string, ...args: string[]) =>
   (await execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd })).stdout.trim();
 
@@ -52,8 +52,8 @@ async function codeOverTwoBranches({ conflicting }: { conflicting: boolean }) {
 }
 
 async function operationNow(): Promise<{ kind: string } | undefined> {
-  const call = await app!.send('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
-  return ((await app!.nextEmit('code', 'commit.STATUS_RECEIVED', { answering: call })).data as { operation?: { kind: string } }).operation;
+  const call = app!.ask('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
+  return ((await answered(call)) as { operation?: { kind: string } }).operation;
 }
 
 const KINDS = ['merge', 'rebase', 'cherry-pick'] as const;
@@ -64,14 +64,15 @@ describe.each(KINDS)('a %s', (kind) => {
     const { directory, head, side } = await codeOverTwoBranches({ conflicting: false });
     const before = await head();
 
-    const call = await app!.send('code', { type: 'commit.START_OPERATION', kind, target: targetOf(kind, side) }, asWindow);
+    const call = app!.ask('code', { type: 'commit.START_OPERATION', kind, target: targetOf(kind, side) }, asWindow);
 
-    expect((await app!.nextEmit('code', 'commit.OPERATION_STARTED', { answering: call })).data).toEqual({ kind, target: targetOf(kind, side), stopped: false });
+    const { undoable, ...started } = await answered(call);
+    expect(started).toEqual({ kind, target: targetOf(kind, side), stopped: false });
     expect(fs.readFileSync(path.join(directory, 's.txt'), 'utf8')).toBe('side\n');
-    expect((await app!.nextEmit('code', 'commit.UNDOABLE_RECEIVED', { answering: call })).data).not.toBeNull();
+    expect(undoable).not.toBeNull();
 
-    const undo = await app!.send('code', { type: 'commit.UNDO_LAST' }, asWindow);
-    await app!.nextEmit('code', 'commit.UNDONE', { answering: undo });
+    const undo = app!.ask('code', { type: 'commit.UNDO_LAST' }, asWindow);
+    await answered(undo);
     expect(await head(), 'and undoing it puts the branch back').toBe(before);
   });
 
@@ -79,13 +80,13 @@ describe.each(KINDS)('a %s', (kind) => {
     const { directory, head, side } = await codeOverTwoBranches({ conflicting: true });
     const before = await head();
 
-    const call = await app!.send('code', { type: 'commit.START_OPERATION', kind, target: targetOf(kind, side) }, asWindow);
+    const call = app!.ask('code', { type: 'commit.START_OPERATION', kind, target: targetOf(kind, side) }, asWindow);
 
-    expect((await app!.nextEmit('code', 'commit.OPERATION_STARTED', { answering: call })).data).toMatchObject({ kind, stopped: true });
+    expect(await answered(call)).toMatchObject({ kind, stopped: true });
     expect(await operationNow()).toMatchObject({ kind });
 
-    const abort = await app!.send('code', { type: 'commit.MOVE_OPERATION', move: 'abort' }, asWindow);
-    await app!.nextEmit('code', 'commit.OPERATION_MOVED', { answering: abort });
+    const abort = app!.ask('code', { type: 'commit.MOVE_OPERATION', move: 'abort' }, asWindow);
+    await answered(abort);
     expect(await operationNow()).toBeUndefined();
     expect(await head()).toBe(before);
     expect(fs.readFileSync(path.join(directory, 'm.txt'), 'utf8')).toBe('main\n');
@@ -94,20 +95,20 @@ describe.each(KINDS)('a %s', (kind) => {
 
 it('begins none while another is in progress, and says which', async () => {
   await codeOverTwoBranches({ conflicting: true });
-  const first = await app!.send('code', { type: 'commit.START_OPERATION', kind: 'merge', target: 'side' }, asWindow);
-  await app!.nextEmit('code', 'commit.OPERATION_STARTED', { answering: first });
+  const first = app!.ask('code', { type: 'commit.START_OPERATION', kind: 'merge', target: 'side' }, asWindow);
+  await answered(first);
 
-  const second = await app!.send('code', { type: 'commit.START_OPERATION', kind: 'rebase', target: 'side' }, asWindow);
+  const second = app!.ask('code', { type: 'commit.START_OPERATION', kind: 'rebase', target: 'side' }, asWindow);
 
-  expect(((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: second })).data as { message: string }).message).toMatch(/merge of side is in progress/);
+  expect(((await refused(second)) as { message: string }).message).toMatch(/merge of side is in progress/);
 });
 
 it('says what a merge would do before it is done', async () => {
   await codeOverTwoBranches({ conflicting: true });
 
-  const call = await app!.send('code', { type: 'commit.PREVIEW_MERGE', target: 'side' }, asWindow);
+  const call = app!.ask('code', { type: 'commit.PREVIEW_MERGE', target: 'side' }, asWindow);
 
-  expect((await app!.nextEmit('code', 'commit.MERGE_PREVIEWED', { answering: call })).data).toEqual({ target: 'side', preview: { kind: 'conflicts', files: ['m.txt'] } });
+  expect(await answered(call)).toEqual({ target: 'side', preview: { kind: 'conflicts', files: ['m.txt'] } });
 });
 
 it('shows the window the commits of every local branch, to pick from', async () => {
@@ -121,8 +122,8 @@ it('shows the window the commits of every local branch, to pick from', async () 
   await git(directory, 'checkout', '--quiet', 'main');
   await git(directory, 'branch', '--quiet', '-D', 'elsewhere');
 
-  const call = await app!.send('code', { type: 'commit.LOG_LIST' }, asWindow);
-  const { commits } = (await app!.nextEmit('code', 'commit.LOG_LIST_RECEIVED', { answering: call })).data as { commits: { hash: string; subject: string }[] };
+  const call = app!.ask('code', { type: 'commit.LOG_LIST' }, asWindow);
+  const { commits } = (await answered(call)) as { commits: { hash: string; subject: string }[] };
 
   expect(commits.map(commit => commit.subject).sort()).toEqual(['base', 'main', 'side']);
   expect(commits.map(commit => commit.hash)).toContain(side);

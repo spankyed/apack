@@ -188,6 +188,11 @@ export function findPackWindowStorage(dirs: readonly string[] = PACK_SOURCE_DIRS
   return packRule('window-storage', dirs, root);
 }
 
+/** `file:line: ASK_ANSWERED:` for each answer to an ask a pack writes by hand rather than through its `answers` table */
+export function findHandWrittenAnswers(dirs: readonly string[] = PACK_SOURCE_DIRS, root = repoRoot): string[] {
+  return packRule('ask-answers', dirs, root);
+}
+
 /**
  * `file:line: _call:` for each write of the reserved key a delivery door puts a call under.
  *
@@ -1082,6 +1087,7 @@ const RULE_LIST = [
     rule: 'Derive shared-instance packages from SHARED_INSTANCE_PACKAGES (@apackdev/host/build/shared-deps) instead of naming them',
   },
   backed('findRepositoryCasts', 'repository-casts', findRepositoryCasts, packageSourceDirs()),
+  backed('findHandWrittenAnswers', 'ask-answers', findHandWrittenAnswers, PACK_SOURCE_DIRS),
   backed('findReservedEventKeys', 'reserved-event-keys', findReservedEventKeys, PACK_CODE_DIRS),
   backed('findCrossFeatureImports', 'cross-feature-imports', findCrossFeatureImports, PACK_SRC_ROOTS),
   backed('findContractLeafImports', 'contract-leaves', findContractLeafImports, PACK_SRC_ROOTS),

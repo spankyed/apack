@@ -1,37 +1,55 @@
-import { answer } from '../answer.ts'
-import { defineHandlers } from '@apackdev/sdk/framework';
+import type { SearchAsks } from '../contract.ts'
+import { defineHandlers } from '@apackdev/sdk/framework'
+import type { AsksEvents } from '@apackdev/sdk/events'
 import { assign, setup } from 'xstate'
 
 import { FileSystemRepository } from '../services/filesystem.ts'
 import type { SearchOptions } from '../types.ts'
 
-// Incoming events from frontend
-
-// Outgoing events to frontend
-
 export interface CodeSearchSystemContext {
   repository: FileSystemRepository | null
-  activeSearchController?: AbortController
 }
 
 export type Event =
-  | { type: 'search.SEARCH_FILES';
-      query: string;
-      path: string;
-      includePattern?: string;
-      excludePattern?: string;
-      caseSensitive?: boolean;
-      wholeWord?: boolean;
-      useRegex?: boolean;
-      maxResults?: number;
-    }
-  | { type: 'search.CANCEL_SEARCH' }
-  | { type: 'search.ASSIGN_SEARCH_CONTROLLER'; controller: AbortController }
-  | { type: 'search.CLEAR_SEARCH_CONTROLLER'; controller: AbortController }
-  | { type: 'search.UPDATE_BASE_DIRECTORY'; path: string };
+  | { type: 'search.UPDATE_BASE_DIRECTORY'; path: string }
+  // The search asks, which the code system forwards here to be answered
+  | AsksEvents<SearchAsks>;
 
-/** Hands each handler the answer for the message it is handling — see `defineHandlers` */
 const handlers = defineHandlers<CodeSearchSystemContext, Event>();
+
+/** The search asks, answered here over the folder this machine holds */
+const answers = handlers.answers<SearchAsks>({
+  /**
+   * Answered with every match once the search ends, and told as it goes to whoever asked: how far it is, and each
+   * file's matches as they are found. `signal` aborts when they stop waiting, which stops the search
+   */
+  'search.SEARCH_FILES': async ({ args, context, signal, progress }) => {
+    const { repository } = context
+    if (!repository) throw new Error('No directory selected. Please select a directory first.')
+
+    const options: SearchOptions = {
+      query: args.query,
+      path: args.path,
+      includePattern: args.includePattern,
+      excludePattern: args.excludePattern,
+      caseSensitive: args.caseSensitive,
+      wholeWord: args.wholeWord,
+      useRegex: args.useRegex,
+      maxResults: args.maxResults,
+    }
+    let totalMatches = 0
+    const results = await repository.searchFiles(
+      options,
+      (filesSearched, totalFiles, currentFile) => progress({ progress: { filesSearched, totalFiles, currentFile } }),
+      (result) => {
+        totalMatches += result.matches.length
+        progress({ result })
+      },
+      signal,
+    )
+    return { results, totalMatches }
+  },
+});
 
 export const searchSystem = setup({
   types: {
@@ -39,144 +57,22 @@ export const searchSystem = setup({
     events: {} as Event,
     input: {} as { baseDirectory: string | null },
   },
-  actions: handlers.actions({
-    searchFiles: async ({ event, context, self, reply }) => {
-      const ev = event as {
-        type: 'search.SEARCH_FILES';
-        query: string;
-        path: string;
-        includePattern?: string;
-        excludePattern?: string;
-        caseSensitive?: boolean;
-        wholeWord?: boolean;
-        useRegex?: boolean;
-        maxResults?: number;
-      }
-
-      if (!context.repository) {
-        answer(reply, {
-          type: 'search.ERROR',
-          data: { message: 'No directory selected. Please select a directory first.' }
-        })
-        return
-      }
-
-      // Cancel any existing search
-      if (context.activeSearchController) {
-        context.activeSearchController.abort()
-      }
-
-      // Create new abort controller
-      const controller = new AbortController()
-      self.send({ type: 'search.ASSIGN_SEARCH_CONTROLLER', controller })
-
-      try {
-        const searchOptions: SearchOptions = {
-          query: ev.query,
-          path: ev.path,
-          includePattern: ev.includePattern,
-          excludePattern: ev.excludePattern,
-          caseSensitive: ev.caseSensitive,
-          wholeWord: ev.wholeWord,
-          useRegex: ev.useRegex,
-          maxResults: ev.maxResults
-        }
-
-        let totalMatches = 0
-
-        const results = await context.repository.searchFiles(
-          searchOptions,
-          // Progress callback
-          (filesSearched, totalFiles, currentFile) => {
-            if (!controller.signal.aborted) {
-              answer(reply, {
-                type: 'search.PROGRESS',
-                data: { filesSearched, totalFiles, currentFile }
-              })
-            }
-          },
-          // Result callback (incremental results)
-          (result) => {
-            if (!controller.signal.aborted) {
-              totalMatches += result.matches.length
-              answer(reply, {
-                type: 'search.RESULT',
-                data: result
-              })
-            }
-          },
-          controller.signal
-        )
-
-        if (!controller.signal.aborted) {
-          answer(reply, {
-            type: 'search.COMPLETE',
-            data: { results, totalMatches }
-          })
-        }
-      } catch (error: any) {
-        if (!controller.signal.aborted) {
-          answer(reply, {
-            type: 'search.ERROR',
-            data: { message: error.message }
-          })
-        }
-      } finally {
-        self.send({ type: 'search.CLEAR_SEARCH_CONTROLLER', controller })
-      }
-    },
-
-    cancelSearch: ({ context }) => {
-      if (context.activeSearchController) {
-        context.activeSearchController.abort()
-      }
-    },
-
-    assignSearchController: assign({
-      activeSearchController: ({ event }) => {
-        const ev = event as { type: 'search.ASSIGN_SEARCH_CONTROLLER'; controller: AbortController }
-        return ev.controller
-      }
-    }),
-
-    // A search that ends clears its own controller and no other: one replaced while it ran ends after the search
-    // that replaced it began, whose controller is the one held by then
-    clearSearchController: assign({
-      activeSearchController: ({ context, event }) => {
-        const ev = event as { type: 'search.CLEAR_SEARCH_CONTROLLER'; controller: AbortController }
-        return context.activeSearchController === ev.controller ? undefined : context.activeSearchController
-      }
-    }),
-
+  actions: {
+    ...answers.actions,
     updateBaseDirectory: assign({
-      repository: ({ event }) => {
-        const ev = event as { type: 'search.UPDATE_BASE_DIRECTORY'; path: string }
-        return new FileSystemRepository(ev.path)
-      }
+      repository: ({ event }) => new FileSystemRepository((event as { type: 'search.UPDATE_BASE_DIRECTORY'; path: string }).path)
     }),
-  })
+  },
 }).createMachine({
   id: 'search',
   initial: 'idle',
   context: ({ input }: { input?: { baseDirectory: string | null } }) => ({
     repository: input?.baseDirectory ? new FileSystemRepository(input.baseDirectory) : null,
-    activeSearchController: undefined
   }),
   states: {
     idle: {
       on: {
-        'search.SEARCH_FILES': {
-          actions: 'searchFiles'
-        },
-        'search.CANCEL_SEARCH': {
-          actions: 'cancelSearch'
-        },
-        'search.ASSIGN_SEARCH_CONTROLLER': {
-          actions: 'assignSearchController'
-        },
-        'search.CLEAR_SEARCH_CONTROLLER': {
-          actions: 'clearSearchController'
-        },
+        ...answers.on,
         'search.UPDATE_BASE_DIRECTORY': {
           actions: 'updateBaseDirectory'
         }

@@ -7,8 +7,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 
@@ -32,7 +32,7 @@ afterEach(async () => {
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const git = async (cwd: string, ...args: string[]) =>
   (await execFileWhileWorking('git', args, { cwd }).catch(() => ({ stdout: '' }))).stdout.trim();
 
@@ -45,8 +45,8 @@ it('turns on the untracked cache, and the file monitor where git has one, in the
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const call = await app.send('code', { type: 'commit.SPEED_UP_STATUS' }, asWindow);
-  const turnedOn = (await app.nextEmit('code', 'commit.STATUS_SPED_UP', { answering: call })).data as { fileMonitor: boolean; untrackedCache: boolean };
+  const call = app.ask('code', { type: 'commit.SPEED_UP_STATUS' }, asWindow);
+  const turnedOn = (await answered(call)) as { fileMonitor: boolean; untrackedCache: boolean };
 
   expect(turnedOn.untrackedCache).toBe(true);
   expect(await git(directory, 'config', '--local', 'core.untrackedCache')).toBe('true');

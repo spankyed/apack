@@ -118,6 +118,14 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
     onFile: [['const memos = repository as unknown as Repositories;\n', 'src/f.ts:1: repository as unknown as Repositories']],
     elsewhere: 'repository-casts allows the generated facade, which is this cast by design',
   },
+  // Both answers, and both spellings of the key they are written under
+  'ask-answers': {
+    onFile: [
+      ["export const done = { type: 'ASK_ANSWERED', asked: 'SAVE', answer: 1 };\n", 'src/f.ts:1: ASK_ANSWERED:'],
+      ["reply({ 'type': 'ASK_FAILED', asked: 'SAVE', failure });\n", 'src/f.ts:1: ASK_FAILED:'],
+    ],
+    elsewhere: "ask-answers leaves a pack's tests and its reads of an answer alone",
+  },
   // Both spellings of the reserved key, since a property name is the same key written two ways
   'reserved-event-keys': {
     onFile: [
@@ -197,6 +205,19 @@ describe('every rule', () => {
       'src/in-a-test.ts': "export const answer = answerTo(call, { type: 'DONE' });\n",
     });
     expect(problems(dir, 'reserved-event-keys')).toEqual(['src/writes-it.ts:1: _call:']);
+  });
+
+  /**
+   * What a pack does with an answer it receives is reading one, and a spec driving an asking machine has to hand it
+   * the answers its system would: neither is an answer written in place of a system's.
+   */
+  it("ask-answers leaves a pack's tests and its reads of an answer alone", () => {
+    const dir = completePack({
+      'src/reads-it.ts': "export const taken = (event: E) => event.type === 'ASK_ANSWERED' && isAnswered(event, 'SAVE');\n",
+      'src/routes-it.ts': "export const on = { ASK_FAILED: { actions: 'showFailure' } };\n",
+      'tests/drives-a-machine.spec.ts': "actor.send({ type: 'ASK_ANSWERED', asked: 'SAVE', answer: 1 });\n",
+    });
+    expect(packRuleProblems(dir, ['src', 'tests']).get('ask-answers') ?? []).toEqual([]);
   });
 
   /**
@@ -602,6 +623,8 @@ describe('when several rules are right about one site', () => {
       // window-storage sits beside backend-console: both say which API to reach for instead of a global
       'untyped-sends', 'component-sends', 'raw-transport', 'backend-console', 'window-storage',
       'repository-casts',
+      // ask-answers and reserved-event-keys contest nothing: no other rule reads an object's properties
+      'ask-answers',
       // reserved-event-keys is last and contests nothing: no other rule reads a property name, so where it
       // sits is free, and a convention belongs after the rules about what a module imports
       'reserved-event-keys',

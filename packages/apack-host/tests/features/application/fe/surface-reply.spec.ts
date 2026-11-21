@@ -13,7 +13,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createActor, setup, type AnyEventObject, type MachineContext } from 'xstate';
 import type { Surface } from '@apackdev/sdk/fe';
-import type { Reply } from '@apackdev/sdk/events';
+import { _currentDelivery, _replyTo, type Reply } from '@apackdev/sdk/events';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { startFeTestRuntime, stopFeTestRuntime } from '@apackdev/sdk/testing';
 import { createShellMachine } from '../../../../src/fe/index.ts';
@@ -32,15 +32,20 @@ let heard: Array<{ surface: string; type: string }>;
 const handlers = defineHandlers<MachineContext, AnyEventObject>();
 
 /**
- * A surface that answers an `ASK` and records whether it was handed the means to.
- *
- * The handler is in `spec.actions`' record rather than inline in the config, which is the arrangement that gets
- * it a `reply` at all — an inline action never passes through the wrapper.
+ * The answer for `event`, where it is the message being delivered: what an ask's answer is sent through, read as
+ * the `answers` table reads it, and nothing for an event the machine made itself
  */
+const answerFor = (event: AnyEventObject): Reply | undefined => {
+  const delivery = _currentDelivery();
+  return delivery?.event === event ? _replyTo(delivery) : undefined;
+};
+
+/** A surface that answers an `ASK` and records whether its delivery gave it an answer to send */
 function answering(id: string): Surface {
   const state = setup({
     actions: handlers.actions({
-      note: ({ event, reply }: { event: AnyEventObject; reply?: Reply }) => {
+      note: ({ event }) => {
+        const reply = answerFor(event);
         handed.push({ surface: id, type: event.type, canAnswer: reply !== undefined });
         if (event.type !== 'ASK') return;
         reply?.({ type: 'ANSWER', asked: event.tag as string });

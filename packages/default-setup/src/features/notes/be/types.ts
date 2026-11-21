@@ -54,32 +54,29 @@ export type RecentNote = Pick<NoteDTO, 'id' | 'title' | 'icon' | 'noteType' | 'u
 // Its own shape, which the app stores without knowing: the app owns the document, each feature its slice.
 export type NotesSettings = import('#generated/settings.ts').SettingsOf<'notes'>;
 
-export type IncomingNoteEvents =
-  | { type: 'CREATE_NOTE'; title: string; content?: string; icon?: string | null; parentId?: string; skipContentSync?: boolean; noteType?: 'document' | 'tasklist' | 'task'; completed?: boolean; displayOrder?: number }
-  | { type: 'UPDATE_NOTE'; id: string; title?: string; content?: string; icon?: string | null; completed?: boolean; hideCompletedChildren?: boolean; favorite?: boolean }
-  | { type: 'DELETE_NOTE'; id: string }
-  | { type: 'SOFT_DELETE_NOTE'; id: string }
-  | { type: 'RESTORE_NOTE'; id: string }
-  | { type: 'MOVE_NOTE'; ids: string[]; newParentId: string | null }
-  | { type: 'REORDER_NOTE'; id: string; newParentId: string | null; newIndex: number }
-  | { type: 'VIEW_NOTE'; id: string }
-  | { type: 'PERMANENTLY_DELETE_NOTE'; id: string }
-  | { type: 'EMPTY_TRASH' }
-  | { type: 'IMPORT_NOTES'; directory: string }
-  | { type: 'EXPORT_NOTES'; directory: string; format: 'markdown' | 'json' };
-
 /**
- * What the notes system sends: the answers to a window's writes, and an import's or an export's outcome. The notes
- * themselves are its views.
+ * A window's writes to its notes, each answered once: the surface applies its own edits at once and holds the notes'
+ * views while any of its writes is unanswered (`ViewWrites`), so every write is an ask. Creating one answers with the
+ * note it made, for the window that asked to open; an import or an export answers with what it did.
  */
-export type OutgoingNotesEvents =
-  /** The note a `CREATE_NOTE` made, for the window that asked to open */
-  | { type: 'NOTE_CREATED'; note: NoteSummary }
-  /** Any other write landed */
-  | { type: 'NOTE_WRITTEN' }
-  /** A write was refused, and why: the window puts back the notes as stored */
-  | { type: 'NOTE_WRITE_FAILED'; error: string }
-  | { type: 'NOTES_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'NOTES_IMPORT_FAILED'; errors: string[] }
-  | { type: 'NOTES_EXPORTED'; filePath: string; itemCount: number }
-  | { type: 'NOTES_EXPORT_FAILED'; errors: string[] }
+export type NoteAsks = {
+  CREATE_NOTE: { args: { title: string; content?: string; icon?: string | null; parentId?: string; skipContentSync?: boolean; noteType?: 'document' | 'tasklist' | 'task'; completed?: boolean; displayOrder?: number }; answer: { note?: NoteSummary } }
+  UPDATE_NOTE: { args: { id: string; title?: string; content?: string; icon?: string | null; completed?: boolean; hideCompletedChildren?: boolean; favorite?: boolean } }
+  DELETE_NOTE: { args: { id: string } }
+  SOFT_DELETE_NOTE: { args: { id: string } }
+  RESTORE_NOTE: { args: { id: string } }
+  MOVE_NOTE: { args: { ids: string[]; newParentId: string | null } }
+  REORDER_NOTE: { args: { id: string; newParentId: string | null; newIndex: number } }
+  PERMANENTLY_DELETE_NOTE: { args: { id: string } }
+  EMPTY_TRASH: {}
+  EXPORT_NOTES: { args: { directory: string; format: 'markdown' | 'json' }; answer: { filePath: string; itemCount: number } }
+  /** Imported with what could not be, unless nothing could, which fails */
+  IMPORT_NOTES: { args: { directory: string }; answer: { count: number; errors?: string[] } }
+}
+
+/** What a window tells the notes system and is not answered for */
+export type IncomingNoteEvents =
+  | { type: 'VIEW_NOTE'; id: string };
+
+/** The notes system sends no window anything of its own: the notes are its views, and each ask is answered */
+export type OutgoingNotesEvents = never

@@ -1,6 +1,6 @@
 import { setup, type ActorRefFrom, assign } from 'xstate';
 import { safeEvents, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
-import { sendToSystem } from '#generated/events.ts';
+import { fromAsk, sendToSystem } from '#generated/events.ts';
 import type { LogsSettings } from '#generated/types.ts';
 import type { LogsContext } from './contract.ts';
 import type { OutgoingLogsEvents } from '#features/logs/be/types.ts';
@@ -36,15 +36,11 @@ const logsState = setup({
     context: {} as LogsContext,
     events: {} as LogsEvents,
   },
+  actors: {
+    /** The buffer, which the system answers this window alone */
+    getLogs: fromAsk('logs', 'GET_LOGS'),
+  },
   actions: {
-    /** The buffer, which the system answers this window alone; asked in a delivery naming the surface */
-    requestLogs: () => {
-      sendToSystem(id, { type: 'GET_LOGS' });
-    },
-    setLogs: assign(({ event }) => {
-      const ev = typeOf('LOGS_READ', event);
-      return { logs: ev.logs, settings: ev.settings };
-    }),
     addLog: assign({
       logs: ({ context, event }) => {
         const newLog = typeOf('LOG_ADDED', event).log;
@@ -91,37 +87,32 @@ const logsState = setup({
       excludedSources: [],
     },
   },
+  on: {
+    // Asked where a delivery names the surface: as the shell starts it, and again as the settings that filter the
+    // buffer change. Entering `reading` again gives up the read under way for this one
+    SURFACE_STARTED: { target: '.reading', reenter: true },
+    FEATURE_SETTINGS_UPDATED: { target: '.reading', reenter: true, actions: 'updateSettings' },
+    LOG_ADDED: { actions: 'addLog' },
+    LOGS_CLEARED: { actions: 'clearLogs' },
+    SET_FILTER_LEVEL: { actions: 'setFilterLevel' },
+    SET_SEARCH: { actions: 'setSearch' },
+    CLEAR_LOGS: { actions: ['clearLogs', 'sendClearLogsToBackend'] },
+  },
   states: {
-    active: {
-      on: {
-        SURFACE_STARTED: {
-          actions: 'requestLogs',
-        },
-        'LOGS_READ': {
-          actions: 'setLogs',
-        },
-        'LOG_ADDED': {
-          actions: 'addLog',
-        },
-        'LOGS_CLEARED': {
-          actions: 'clearLogs',
-        },
-        SET_FILTER_LEVEL: {
-          actions: 'setFilterLevel',
-        },
-        SET_SEARCH: {
-          actions: 'setSearch',
-        },
-        CLEAR_LOGS: {
-          actions: ['clearLogs', 'sendClearLogsToBackend'],
-        },
-        // The settings filter the buffer, so the surface asks for it again as they now filter it
-        FEATURE_SETTINGS_UPDATED: {
-          actions: ['updateSettings', 'requestLogs'],
+    active: {},
+    // The buffer is being read for exactly as long as this state is
+    reading: {
+      invoke: {
+        src: 'getLogs',
+        input: {},
+        onDone: {
+          target: 'active',
+          // A buffer that could not be read leaves what is shown as it is
+          actions: assign(({ event }) => (event.output.ok ? { logs: event.output.value.logs, settings: event.output.value.settings } : {})),
         },
       },
     },
   },
-}); 
+});
 
 export default logsState; 

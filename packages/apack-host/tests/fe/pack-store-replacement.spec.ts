@@ -143,7 +143,7 @@ describe('prepared frontend replacement', () => {
     const snapshot: SettingsSnapshot = { runId: 'run', revision: 0, status: 'ready',
       catalog: createContributionCatalog(appSettingsDefinition).settings(),
       values: { app: structuredClone(appSettingsDefinition.defaults) as unknown as SettingsSnapshot['values']['app'], packs: {}, features: {} } };
-    window.receive({ to: 'host/settings', event: { type: 'SETTINGS_LOADED', snapshot }, answering: messages[0].call });
+    window.receive({ to: 'host/settings', event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot } }, answering: messages[0].call });
     const writes: Message[] = [];
     const bound = window.bindPort('owner', async message => { writes.push(message); });
     const packs = createNativeFrontendTestRegistry();

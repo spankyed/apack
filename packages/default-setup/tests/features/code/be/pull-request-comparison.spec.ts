@@ -10,8 +10,7 @@ import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
 
-const CODE = 'default-setup/code';
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -59,16 +58,27 @@ async function pullRequestOver({ remote: remoteName = 'origin', initialBranch = 
   return { running: app, remote, root };
 }
 
-const ask = async (running: NonNullable<typeof app>, event: { type: string; [key: string]: unknown }, answeredWith: string): Promise<Record<string, any>> =>
-  running.nextEmit('code', answeredWith, { answering: await running.send('code', event, asWindow) });
+/** What the code system answers a window's ask, which has to be answered rather than refused */
+const answered = async (running: NonNullable<typeof app>, event: { type: string; [key: string]: unknown }): Promise<Record<string, any>> => {
+  const outcome = await running.ask('code', event, asWindow);
+  if (!outcome.ok) throw new Error(`${event.type} was refused: ${outcome.failure.message}`);
+  return outcome.value as Record<string, any>;
+};
+
+/** Why the code system refused a window's ask, which has to be refused */
+const refused = async (running: NonNullable<typeof app>, event: { type: string; [key: string]: unknown }) => {
+  const outcome = await running.ask('code', event, asWindow);
+  if (outcome.ok) throw new Error(`${event.type} was answered, not refused`);
+  return outcome.failure;
+};
 
 const pr = { baseBranch: 'main', headBranch: 'feature', prNumber: 1 };
 
 it('reads a file\'s original side where the branch left its base, so what the base did since is not shown as undone', async () => {
   const { running } = await pullRequestOver();
 
-  expect((await ask(running, { type: 'pr.GET_BRANCH_DIFF', ...pr }, 'pr.BRANCH_DIFF_RECEIVED')).data.files).toEqual([expect.objectContaining({ path: 'a.txt' })]);
-  expect((await ask(running, { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'a.txt', ...pr }, 'pr.FILE_DIFF_RECEIVED')).data)
+  expect((await answered(running, { type: 'pr.GET_BRANCH_DIFF', ...pr })).files).toEqual([expect.objectContaining({ path: 'a.txt' })]);
+  expect(await answered(running, { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'a.txt', ...pr }))
     .toMatchObject({ originalContent: 'one\n', modifiedContent: 'one\nfeature\n' });
 });
 
@@ -78,29 +88,29 @@ it('compares with a base the checkout has only on the remote', async () => {
     await git(checkout, 'branch', '--quiet', '-D', 'main');
   } });
 
-  expect((await ask(running, { type: 'pr.GET_BRANCH_DIFF', ...pr }, 'pr.BRANCH_DIFF_RECEIVED')).data.files).toEqual([expect.objectContaining({ path: 'a.txt' })]);
-  expect((await ask(running, { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'a.txt', ...pr }, 'pr.FILE_DIFF_RECEIVED')).data).toMatchObject({ originalContent: 'one\n' });
+  expect((await answered(running, { type: 'pr.GET_BRANCH_DIFF', ...pr })).files).toEqual([expect.objectContaining({ path: 'a.txt' })]);
+  expect(await answered(running, { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'a.txt', ...pr })).toMatchObject({ originalContent: 'one\n' });
   // The checkout's own branch against the remote's base, which is all there is of it here
-  expect((await ask(running, { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main' }, 'pr.BRANCH_DIFF_RECEIVED')).data.files).toEqual([]);
-  expect(await ask(running, { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'gone', headBranch: 'feature' }, 'pr.ERROR'))
+  expect((await answered(running, { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main' })).files).toEqual([]);
+  expect(await refused(running, { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'gone', headBranch: 'feature' }))
     .toMatchObject({ message: 'gone, the branch this is compared with, is not on the remote.' });
 });
 
 it('fetches from the remote the branch follows, whatever it is called', async () => {
   const { running } = await pullRequestOver({ remote: 'upstream' });
 
-  expect((await ask(running, { type: 'pr.GET_BRANCH_DIFF', ...pr }, 'pr.BRANCH_DIFF_RECEIVED')).data.files).toEqual([expect.objectContaining({ path: 'a.txt' })]);
-  expect((await ask(running, { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main', headBranch: 'feature' }, 'pr.BRANCH_DIFF_RECEIVED')).data.files).toHaveLength(1);
+  expect((await answered(running, { type: 'pr.GET_BRANCH_DIFF', ...pr })).files).toEqual([expect.objectContaining({ path: 'a.txt' })]);
+  expect((await answered(running, { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main', headBranch: 'feature' })).files).toHaveLength(1);
 });
 
 it('opens a file of a comparison without fetching again, and says a fetch that failed', async () => {
   const { running, remote, root } = await pullRequestOver();
-  await ask(running, { type: 'pr.GET_BRANCH_DIFF', ...pr }, 'pr.BRANCH_DIFF_RECEIVED');
+  await answered(running, { type: 'pr.GET_BRANCH_DIFF', ...pr });
   // The remote cannot be reached any more: only a fetch would notice
   fs.renameSync(remote, path.join(root, 'moved.git'));
 
-  expect((await ask(running, { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'a.txt', ...pr }, 'pr.FILE_DIFF_RECEIVED')).data).toMatchObject({ modifiedContent: 'one\nfeature\n' });
-  expect(await ask(running, { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main', headBranch: 'feature' }, 'pr.ERROR'))
+  expect(await answered(running, { type: 'pr.GET_BRANCH_FILE_DIFF', path: 'a.txt', ...pr })).toMatchObject({ modifiedContent: 'one\nfeature\n' });
+  expect(await refused(running, { type: 'pr.GET_BRANCH_DIFF', baseBranch: 'main', headBranch: 'feature' }))
     .toMatchObject({ message: expect.stringContaining('feature could not be fetched from origin') });
 });
 
@@ -108,5 +118,5 @@ it('answers a comparison whose base cannot be worked out and whose head is gone,
   // No main, master or develop, and no remote HEAD naming one: there is no base to find
   const { running } = await pullRequestOver({ initialBranch: 'trunk', prepare: checkout => git(checkout, 'remote', 'set-head', 'origin', '-d') });
 
-  expect(await ask(running, { type: 'pr.GET_BRANCH_DIFF', headBranch: 'gone' }, 'pr.ERROR')).toMatchObject({ message: expect.any(String) });
+  expect(await refused(running, { type: 'pr.GET_BRANCH_DIFF', headBranch: 'gone' })).toMatchObject({ message: expect.any(String) });
 });

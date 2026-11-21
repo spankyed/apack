@@ -165,17 +165,16 @@
 
 <script setup lang="ts">
 import { Plus, X, Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useSettingsDraft, useSurface } from '@apackdev/sdk/fe'
+import { useAsk, useSettingsDraft } from '@apackdev/sdk/fe'
+import { ask } from '#generated/events.ts'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
-import { ref } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 import ColorPicker from '@apackdev/ui/design/ColorPicker'
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
 import type { Category } from '#generated/types.ts'
-import { useSelector } from '@xstate/vue'
-import type { PromptsState } from './state.ts'
 
 interface Props {
   settings?: SettingsOf<'prompts'>
@@ -221,26 +220,30 @@ const removeCategory = (index: number) => {
   }
 }
 
-// Get prompts actor and state via selectors
-const promptsActor: PromptsState = useSurface()
+// An import, asked from here: how the last one ended is shown until another is picked
+const importing = useAsk((prompts: unknown) => ask('prompts', { type: 'IMPORT_PROMPTS', prompts }))
+const imported = shallowRef<typeof importing.outcome>()
+const isImporting = computed(() => importing.pending)
+const importStatus = computed(() => (imported.value === undefined ? 'idle' : imported.value.ok ? 'success' : 'error'))
+const applyErrors = computed(() => {
+  if (imported.value === undefined) return []
+  return imported.value.ok ? imported.value.value.errors ?? [] : imported.value.failure.message.split('\n')
+})
+const importedCount = computed(() => (imported.value?.ok ? imported.value.value.count : 0))
 
-// Import state
-const isImporting = useSelector(promptsActor, (state) => state.context.promptsImport.status === 'importing')
-const importStatus = useSelector(promptsActor, (state) => state.context.promptsImport.status)
-const applyErrors = useSelector(promptsActor, (state) => state.context.promptsImport.errors)
-const importedCount = useSelector(promptsActor, (state) => state.context.promptsImport.importedCount)
-
-// Export state
+// An export, asked from here: how the last one ended is shown until another is made
 const exportDirectory = ref<string>('')
-const isExporting = useSelector(promptsActor, (state) => state.context.promptsExport.status === 'exporting')
-const exportStatus = useSelector(promptsActor, (state) => state.context.promptsExport.status)
-const exportErrors = useSelector(promptsActor, (state) => state.context.promptsExport.errors)
-const exportedFilePath = useSelector(promptsActor, (state) => state.context.promptsExport.filePath)
-const exportedPromptCount = useSelector(promptsActor, (state) => state.context.promptsExport.promptCount)
+const exporting = useAsk((directory: string) => ask('prompts', { type: 'EXPORT_PROMPTS', directory }))
+const exported = shallowRef<typeof exporting.outcome>()
+const isExporting = computed(() => exporting.pending)
+const exportStatus = computed(() => (exported.value === undefined ? 'idle' : exported.value.ok ? 'success' : 'error'))
+const exportErrors = computed(() => (exported.value?.ok === false ? [exported.value.failure.message] : []))
+const exportedFilePath = computed(() => (exported.value?.ok ? exported.value.value.filePath : ''))
+const exportedPromptCount = computed(() => (exported.value?.ok ? exported.value.value.promptCount : 0))
 
-// Import - file picker and send to state machine
+// Import - file picker, then the ask
 const selectAndImportPrompts = async () => {
-  promptsActor.send({ type: 'PROMPTS.RESET_IMPORT_STATUS' })
+  imported.value = undefined
 
   const filePath = await window.electronAPI?.fileUtils.selectPath({
     type: 'file'
@@ -261,10 +264,7 @@ const selectAndImportPrompts = async () => {
       return
     }
 
-    promptsActor.send({
-      type: 'PROMPTS.IMPORT',
-      prompts,
-    })
+    imported.value = await importing.ask(prompts)
   } catch {
     // Silently fail for file reading errors
   }
@@ -276,9 +276,9 @@ const selectExportDirectory = async () => {
   if (dir && typeof dir === 'string') exportDirectory.value = dir
 }
 
-const exportPromptsToFile = () => {
+const exportPromptsToFile = async () => {
   if (!exportDirectory.value) return
-  promptsActor.send({ type: 'PROMPTS.RESET_EXPORT_STATUS' })
-  promptsActor.send({ type: 'PROMPTS.EXPORT', directory: exportDirectory.value })
+  exported.value = undefined
+  exported.value = await exporting.ask(exportDirectory.value)
 }
 </script>

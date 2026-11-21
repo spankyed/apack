@@ -225,6 +225,7 @@
       :items="sectionMenuItems"
       @close="showMenu = false"
     />
+    <ToastNotification ref="toast" />
   </div>
 </template>
 
@@ -262,6 +263,7 @@ import { useStatusSeen } from './useStatusSeen.ts'
 import TerminalMenuExtras from './TerminalMenuExtras.vue'
 import TerminalRewind from './TerminalRewind.vue'
 import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
+import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import { useSectionVisibilityMenu } from '#features/code/fe/composables/useSectionVisibilityMenu.ts'
 import type { TerminalScript } from '#generated/types.ts'
 import type { TerminalAttachment } from '#features/code/fe/utils/terminal-pool.ts'
@@ -279,6 +281,11 @@ useStatusSeen(terminalActor, () => panelTerminalId.value ?? undefined)
 const openFiles = useSelector(codeActor, (state) => state.context.openFiles)
 const terminals = useSelector(terminalActor, (state) => state.context.terminals)
 const activity = useSelector(terminalActor, (state) => state.context.activity)
+
+// A terminal ask of this window's that was not done is told here: the system answers it to this window alone
+const toast = ref<InstanceType<typeof ToastNotification>>()
+const failure = useSelector(terminalActor, (state) => state.context.failure)
+watch(failure, (failed) => { if (failed) toast.value?.error('Terminal error', failed.message) })
 
 const featureSettings = useSettings('code')
 const storedCodeSettings = featureSettings.value

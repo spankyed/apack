@@ -32,7 +32,7 @@ function failureOf(event: ApiStatusEvent): ShellFailure {
 const views = new Set<{ subscribe(): void; unsubscribe(): void }>();
 
 export const feClient: ShellClient = {
-  send: (message) => {
+  send: (message, refused) => {
     // Caught, since an unhandled rejection shows the error page. The report leaves out the payload, and goes to
     // the app's log (and so diagnostics) as well as the console.
     //
@@ -46,6 +46,7 @@ export const feClient: ShellClient = {
       console.error(`[fe-client] ${report}`);
       window.electronAPI?.rendererLog?.write({ level: 'error', source: 'fe-client', message: report }).catch(() => {});
       if (!message.answering) globalToast.error(report);
+      refused?.();
     });
   },
 

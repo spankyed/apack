@@ -9,7 +9,7 @@ import * as _apackdev_sdk from '@apackdev/sdk';
 import { ActionEntity, ActionParameter, ContentSection, DocumentShortCode, EARS as EARS$1, FlowEntity, NodeBase, PromptEntity, SdkEntityShapes, TemplateInput } from '@apackdev/sdk';
 import { ArtifactItem } from '@apackdev/sdk/artifacts';
 import * as _apackdev_sdk_build from '@apackdev/sdk/build';
-import { HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, Reply, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
+import { ContractAsks, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
 import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
@@ -19,6 +19,58 @@ import { HostServices, ProgramStatusRecord } from '@apackdev/sdk/services';
 import { ExecutionContext, FieldMapping, RunNode, RunNodeId, RunStatus, RunTree, StepInput, StepRuntimeError } from '@apackdev/sdk/steps';
 import { BinaryOperator } from '@apackdev/sdk/utils';
 import { z } from 'zod';
+
+/**
+ * A window's writes to its actions, each answered once: that it landed, or why it was refused. What a write changed
+ * reaches every window through the views.
+ */
+type ActionAsks = {
+    CREATE_ACTION: {
+        args: {
+            label: string;
+            input: Record<string, any>;
+            actionFn: string;
+            output?: any;
+            description?: string;
+            category?: string;
+        };
+    };
+    UPDATE_ACTION: {
+        args: {
+            actionId: string;
+            label?: string;
+            input?: Record<string, any>;
+            actionFn?: string;
+            output?: any;
+            description?: string;
+            category?: string;
+        };
+    };
+    DELETE_ACTION: {
+        args: {
+            actionId: string;
+        };
+    };
+    /** Imported with what could not be, unless nothing could, which fails */
+    IMPORT_ACTIONS: {
+        args: {
+            actions: any;
+        };
+        answer: {
+            count: number;
+            errors?: string[];
+        };
+    };
+    EXPORT_ACTIONS: {
+        args: {
+            directory: string;
+        };
+        answer: {
+            filePath: string;
+            actionCount: number;
+        };
+    };
+};
 
 interface ActionNode extends NodeBase {
     nodeType: 'action';
@@ -53,6 +105,33 @@ interface ActionTab {
     isPreview?: boolean;
 }
 
+/** What a window asks of an action's code, answered by the code system's actions child (`actionsSystem`) */
+type ActionsAsks = {
+    /** The action, with its code to edit in a tab */
+    'codeActions.OPEN_ACTION': {
+        args: {
+            actionId: string;
+        };
+        answer: ActionEntity & {
+            actionFnContent?: string;
+        };
+        refuses: {
+            'not-found': {};
+        };
+    };
+    /** Saves the tab's code into the action, answered with the action as it is now */
+    'codeActions.SAVE_ACTION': {
+        args: {
+            actionId: string;
+            actionFn: string;
+        };
+        answer: ActionEntity;
+        refuses: {
+            'not-found': {};
+        };
+    };
+};
+
 interface ActionsContext {
     /** The action open in the detail view */
     selectedActionId?: EARS.EntityId;
@@ -63,17 +142,8 @@ interface ActionsContext {
     /** How many actions the list shows: a page more each time the user scrolls to its end */
     listLimit: number;
     selectedCategories: string[];
-    actionsImport: {
-        status: 'error' | 'idle' | 'importing' | 'success';
-        errors: string[];
-        importedCount: number;
-    };
-    actionsExport: {
-        status: 'error' | 'exporting' | 'idle' | 'success';
-        errors: string[];
-        filePath: string;
-        actionCount: number;
-    };
+    /** Why the last of this window's writes was refused, until the user dismisses it */
+    writeError: string | null;
     formData: {
         label: string;
         description?: string;
@@ -343,6 +413,49 @@ interface Bookmark {
     displayOrder: number;
 }
 
+/**
+ * What the brain system answers. A run's tree and a run node's details are in the run history, which no view can
+ * watch, so a window asks for them.
+ */
+type BrainAsks = {
+    /** The tree of the root run, or of the flow run a window shows, with the brain's state, which a window just started has not heard yet */
+    REQUEST_SURFACE_DATA: {
+        args: {
+            flowRunNodeId?: string;
+        };
+        answer: {
+            data: FlowRunNodeData;
+            state: BrainStateEvent;
+        };
+    };
+    OPEN_RUN_NODE: {
+        args: {
+            runNodeId: string;
+        };
+        answer: OpenedRun;
+        refuses: {
+            'not-a-flow': {};
+        };
+    };
+    /** The flow that ran the one a window shows, or the root run's when it shows the root */
+    GO_BACK_RUN_NODE: {
+        args: {
+            currentFlowRunNodeId?: string;
+        };
+        answer: OpenedRun;
+    };
+    /** A run node, or null for one the history no longer holds */
+    GET_RUN_NODE_DETAILS: {
+        args: {
+            runNodeId: string;
+        };
+        answer: {
+            runNodeId: RunNodeId;
+            details: RunNodeDetails | null;
+        };
+    };
+};
+
 interface BrainContext {
     flowRunNodeId?: string;
     runNodeTree?: RunTree[];
@@ -415,6 +528,11 @@ type BrainInternalEvents = {
     isFlow?: boolean;
 };
 
+/** What the brain's state is, as every window hears it */
+type BrainStateEvent = Extract<OutgoingBrainEvents, {
+    type: 'BRAIN_STATE';
+}>;
+
 /** How a local branch stands against the branch it follows */
 interface BranchStandingOf {
     upstream?: string;
@@ -429,6 +547,20 @@ interface BreadcrumbItem {
     name: string;
     path: string[];
 }
+
+/**
+ * What the browser system answers: the tabs and bookmarks a window restores as it starts. It is a snapshot the window
+ * takes once and then owns — each window syncs its own tabs back — so it is asked for rather than followed as a view,
+ * where every window's sync would replace the tabs another window is using.
+ */
+type BrowserAsks = {
+    GET_SAVED_SESSION: {
+        answer: {
+            savedTabs: SavedTab[];
+            savedBookmarks: SavedBookmark[];
+        };
+    };
+};
 
 interface BrowserBookmarkEntity {
     id: EARS.EntityId;
@@ -681,6 +813,12 @@ interface CliServiceType {
     };
 }
 
+/**
+ * Every ask the code system answers. A child's asks are named for it (`commit.*`), which is the panel that takes
+ * their answers; the system answers them all, each child's handlers beside that child's machine
+ */
+type CodeAsks = CodeSystemAsks & ExplorerAsks & SearchAsks & CommitAsks & PullRequestAsks & TerminalAsks & ActionsAsks & PromptsAsks & GitHubAsks;
+
 type CodeConnectedData = {
     baseDirectory: string | null;
     settings?: CodeSettings;
@@ -769,6 +907,37 @@ type CodeInboxEvent = {
 
 type CodeSettings = SettingsOf<'code'>;
 
+/** What a window asks the code system itself */
+type CodeSystemAsks = {
+    /** What a window's code surface starts from: the directory and the settings. Its panels ask for what they show */
+    GET_CODE_START: {
+        answer: CodeConnectedData;
+    };
+    /**
+     * The repositories under the folder the user opened: its own, nested ones, submodules and linked worktrees, for
+     * the commit panel's picker. `current` is the one the panels show
+     */
+    'commit.LIST_REPOSITORIES': {
+        answer: {
+            repositories: RepositoryUnder[];
+            truncated: boolean;
+            current: string | null;
+        };
+    };
+    /**
+     * Moves the code surface to one of the repository's worktrees, answered with the folder it is over now. A path the
+     * repository does not list as a worktree is refused, and the folder stays where it is
+     */
+    'commit.WORKTREE_SWITCH': {
+        args: {
+            path: string;
+        };
+        answer: {
+            path: string;
+        };
+    };
+};
+
 interface CodeSystemContext {
     baseDirectory: string | null;
     /**
@@ -846,6 +1015,564 @@ interface CollectionDTO {
     symlinkPath?: string;
 }
 
+/** What a window asks of the repository, answered by the commit child over the repository it holds */
+type CommitAsks = {
+    /**
+     * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
+     * have failed: the panel then changes only when it is asked again, and says so. `truncated` says there are more
+     * changed files than `files` lists. `operation` is what git is in the middle of there, when it is in the middle
+     * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
+     * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
+     */
+    'commit.GET_GIT_STATUS': {
+        answer: CommitStatus;
+        refuses: GitFails;
+    };
+    'commit.GET_GIT_DIFF': {
+        args: {
+            path?: string;
+            staged?: boolean;
+        };
+        answer: GitDiff;
+        refuses: GitFails;
+    };
+    'commit.STAGE_FILES': {
+        args: {
+            paths: string[];
+        };
+        answer: {
+            paths: string[];
+        };
+        refuses: GitFails;
+    };
+    'commit.UNSTAGE_FILES': {
+        args: {
+            paths: string[];
+        };
+        answer: {
+            paths: string[];
+        };
+        refuses: GitFails;
+    };
+    /** Commits what is staged, answered with the message as committed */
+    'commit.COMMIT': {
+        args: {
+            message: string;
+        };
+        answer: {
+            message: string;
+        } & UndoableAfter;
+        refuses: GitFails;
+    };
+    'commit.GET_CURRENT_BRANCH': {
+        answer: {
+            branch: string;
+        };
+        refuses: GitFails;
+    };
+    'commit.REVERT_FILE': {
+        args: {
+            path: string;
+        };
+        answer: {
+            path: string;
+            kept: DiscardKept;
+        };
+        refuses: GitFails;
+    };
+    'commit.REVERT_FILES': {
+        args: {
+            paths: string[];
+        };
+        answer: {
+            paths: string[];
+            kept: DiscardKept;
+        };
+        refuses: GitFails;
+    };
+    /** Which of what discarding these rows would remove cannot be brought back, for the window about to ask */
+    'commit.PREVIEW_DISCARD': {
+        args: {
+            paths: string[];
+        };
+        answer: {
+            paths: string[];
+            notKept: string[];
+        };
+        refuses: GitFails;
+    };
+    /** Puts back what a discard kept, by the id its answer carried */
+    'commit.RESTORE_DISCARDED': {
+        args: {
+            id: string;
+        };
+        answer: {
+            id: string;
+        } & DiscardRestored;
+        refuses: GitFails;
+    };
+    /** The user trusts the repository to have git run what its own configuration and hooks name */
+    'commit.TRUST_REPOSITORY': {
+        args: {
+            repository: string;
+        };
+        answer: {
+            repository: string;
+        };
+        refuses: GitFails;
+    };
+    /** The user trusts the repository git refused for who owns it: added to their safe.directory */
+    'commit.TRUST_OWNERSHIP': {
+        answer: {
+            directory: string;
+        };
+        refuses: GitFails;
+    };
+    /** The branches, and how each local one stands against what it follows, by its name */
+    'commit.GET_ALL_BRANCHES': {
+        answer: {
+            branches: string[];
+            standing?: Record<string, BranchStandingOf>;
+            tags?: {
+                name: string;
+                commit: string;
+            }[];
+        };
+        refuses: GitFails;
+    };
+    /** Checks out a branch there is, and with `pull` pulls it from what it follows once it is checked out */
+    'commit.CHECKOUT_BRANCH': {
+        args: {
+            branchName: string;
+            pull?: boolean;
+        };
+        progress: GitProgressDuring;
+        answer: {
+            branchName: string;
+        };
+        refuses: GitFails;
+    };
+    /** Makes a branch at what is checked out, and checks it out */
+    'commit.CREATE_BRANCH': {
+        args: {
+            branchName: string;
+        };
+        answer: {
+            branchName: string;
+        };
+        refuses: GitFails;
+    };
+    /** Pushes what is checked out. Whoever asked stops it by no longer waiting, which ends git and what it started */
+    'commit.PUBLISH_BRANCH': {
+        progress: GitProgressDuring;
+        answer: {
+            branchName: string;
+        };
+        refuses: GitFails;
+    };
+    'commit.PULL_BRANCH': {
+        progress: GitProgressDuring;
+        answer: {
+            branchName: string;
+        };
+        refuses: GitFails;
+    };
+    /**
+     * Hands the changes to the flow that writes a commit message, answered once it has them: the flow tells the asking
+     * window what it made (`commit.MESSAGE_GENERATED`) or why it made none
+     */
+    'commit.GENERATE_MESSAGE': {
+        refuses: GitFails;
+    };
+    /** Stash what is changed: only what is staged, or only `paths`, when asked. Answered with the stash's message */
+    'commit.STASH_PUSH': {
+        args: {
+            message?: string;
+            stagedOnly?: boolean;
+            paths?: string[];
+        };
+        answer: {
+            message: string;
+        };
+        refuses: GitFails;
+    };
+    /** Make a tag at `commit` (what is checked out when none), annotated when `message` is given */
+    'commit.CREATE_TAG': {
+        args: {
+            name: string;
+            commit?: string;
+            message?: string;
+        };
+        answer: {
+            name: string;
+        };
+        refuses: GitFails;
+    };
+    'commit.DELETE_TAG': {
+        args: {
+            name: string;
+        };
+        answer: {
+            name: string;
+        };
+        refuses: GitFails;
+    };
+    /** Push a tag to the remote */
+    'commit.PUSH_TAG': {
+        args: {
+            name: string;
+        };
+        answer: {
+            name: string;
+        };
+        refuses: GitFails;
+    };
+    'commit.RENAME_BRANCH': {
+        args: {
+            name: string;
+            to: string;
+        };
+        answer: {
+            name: string;
+            to: string;
+        };
+        refuses: GitFails;
+    };
+    /**
+     * Turn on git's own file monitor and untracked cache here, which the user clicked for: it writes the repository's
+     * config. Answered with which of the two were turned on: the file monitor only where git has one for this system
+     */
+    'commit.SPEED_UP_STATUS': {
+        answer: {
+            fileMonitor: boolean;
+            untrackedCache: boolean;
+        };
+        refuses: GitFails;
+    };
+    'commit.STASH_LIST': {
+        answer: {
+            stashes: StashEntry[];
+        };
+        refuses: GitFails;
+    };
+    /** A stash applied without a conflict; one that conflicts is refused, and the status shows the conflict */
+    'commit.STASH_APPLY': {
+        args: {
+            index: number;
+        };
+        answer: {
+            index: number;
+            popped: boolean;
+        };
+        refuses: GitFails;
+    };
+    /** A stash applied and dropped without a conflict; one that conflicts is refused and kept */
+    'commit.STASH_POP': {
+        args: {
+            index: number;
+        };
+        answer: {
+            index: number;
+            popped: boolean;
+        };
+        refuses: GitFails;
+    };
+    'commit.STASH_DROP': {
+        args: {
+            index: number;
+        };
+        answer: UndoableAfter;
+        refuses: GitFails;
+    };
+    'commit.STASH_CLEAR': {
+        answer: UndoableAfter;
+        refuses: GitFails;
+    };
+    /** The files a stash holds, to look into before applying it */
+    'commit.GET_STASH_CHANGES': {
+        args: {
+            index: number;
+        };
+        answer: {
+            index: number;
+            files: ChangedFile[];
+        };
+        refuses: GitFails;
+    };
+    /**
+     * Who last changed each line of a file, from the top of the folder, for the editor's gutter. Whoever asked stops
+     * the read by no longer waiting, as a panel does that asks for another file's
+     */
+    'commit.GET_BLAME': {
+        args: {
+            path: string;
+        };
+        answer: {
+            path: string;
+            lines: BlameLine[];
+        };
+        refuses: GitFails;
+    };
+    /** Bring a submodule to the commit the repository records for it, setting it up first if it is not */
+    'commit.UPDATE_SUBMODULE': {
+        args: {
+            path: string;
+        };
+        progress: GitProgressDuring;
+        answer: {
+            path: string;
+        };
+        refuses: GitFails;
+    };
+    /**
+     * Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already
+     * pushed. Refused as `published` when the commit is already on a remote branch, undone only once the user says so
+     */
+    'commit.UNDO_LAST': {
+        args: {
+            evenIfPublished?: boolean;
+        };
+        answer: {
+            id: string;
+            summary: string;
+        } & UndoableAfter;
+        refuses: GitFails & {
+            published: {};
+        };
+    };
+    'commit.WORKTREE_LIST': {
+        answer: {
+            worktrees: WorktreeEntry[];
+        };
+        refuses: GitFails;
+    };
+    'commit.WORKTREE_ADD': {
+        args: {
+            path: string;
+            branch?: string;
+            createBranch?: boolean;
+        };
+        answer: {
+            path: string;
+            branch: string;
+        };
+        refuses: GitFails;
+    };
+    'commit.WORKTREE_REMOVE': {
+        args: {
+            path: string;
+            force?: boolean;
+        };
+        answer: {
+            path: string;
+        };
+        refuses: GitFails;
+    };
+    'commit.RESOLVE_CONFLICT': {
+        args: {
+            path: string;
+            strategy: 'ours' | 'theirs';
+        };
+        answer: {
+            path: string;
+        };
+        refuses: GitFails;
+    };
+    'commit.MARK_RESOLVED': {
+        args: {
+            path: string;
+        };
+        answer: {
+            path: string;
+        };
+        refuses: GitFails;
+    };
+    'commit.RESOLVE_ALL_CONFLICTS': {
+        args: {
+            strategy: 'ours' | 'theirs';
+        };
+        refuses: GitFails;
+    };
+    /**
+     * Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up. Where that
+     * leaves the repository is in its status
+     */
+    'commit.MOVE_OPERATION': {
+        args: {
+            move: OperationMove;
+        };
+        answer: {
+            move: OperationMove;
+        };
+        refuses: GitFails;
+    };
+    /** Merge a branch in, rebase onto one, or pick a commit onto what is checked out: `stopped` on a conflict, which the status describes as in progress */
+    'commit.START_OPERATION': {
+        args: {
+            kind: StartableOperation;
+            target: string;
+        };
+        answer: {
+            kind: StartableOperation;
+            target: string;
+            stopped: boolean;
+        } & UndoableAfter;
+        refuses: GitFails;
+    };
+    /**
+     * Amend the last commit with what is staged, and `message` in place of its own when given. Refused as `published`
+     * when a remote branch already holds it: done only once the user says to go on
+     */
+    'commit.AMEND': {
+        args: {
+            message?: string;
+            evenIfPublished?: boolean;
+        };
+        answer: UndoableAfter;
+        refuses: GitFails & {
+            published: {};
+        };
+    };
+    /** A commit's whole message, for rewording it */
+    'commit.GET_COMMIT_MESSAGE': {
+        args: {
+            hash: string;
+        };
+        answer: {
+            hash: string;
+            message: string;
+        };
+        refuses: GitFails;
+    };
+    /** The trailers git reads at the end of the message being written, with the message they were read of */
+    'commit.READ_TRAILERS': {
+        args: {
+            message: string;
+        };
+        answer: {
+            message: string;
+            trailers: CommitTrailer[];
+        };
+        refuses: GitFails;
+    };
+    /** The message being written without one of its trailers, each line of it: `without` is `message` when it had no such trailer */
+    'commit.REMOVE_TRAILER': {
+        args: {
+            message: string;
+            trailer: CommitTrailer;
+        };
+        answer: {
+            message: string;
+            without: string;
+        };
+        refuses: GitFails;
+    };
+    /**
+     * Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it.
+     * Refused as `published` when a remote branch already holds commits it would change
+     */
+    'commit.REWRITE_COMMIT': {
+        args: {
+            hash: string;
+            action: RewriteAction;
+            message?: string;
+            evenIfPublished?: boolean;
+        };
+        answer: {
+            hash: string;
+            action: RewriteAction;
+        } & UndoableAfter;
+        refuses: GitFails & {
+            published: {};
+        };
+    };
+    /** What merging a branch in would do, before it is done */
+    'commit.PREVIEW_MERGE': {
+        args: {
+            target: string;
+        };
+        answer: {
+            target: string;
+            preview: MergePreview;
+        };
+        refuses: GitFails;
+    };
+    /** The files in an untracked folder that is listed as one row */
+    'commit.LIST_UNTRACKED': {
+        args: {
+            path: string;
+        };
+        answer: {
+            path: string;
+            files: string[];
+            truncated: boolean;
+        };
+        refuses: GitFails;
+    };
+    /** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
+    'commit.APPLY_HUNK': {
+        args: {
+            path: string;
+            staged: boolean;
+            hunk: string;
+        };
+        answer: {
+            path: string;
+            staged: boolean;
+            hunk: string;
+        };
+        refuses: GitFails;
+    };
+    /** Git can sign in to this host now the app is signed in to GitHub: fetching starts again, and the window runs again what was refused */
+    'commit.SET_UP_SIGN_IN': {
+        args: {
+            host: string;
+            during?: 'pull' | 'push';
+        };
+        answer: {
+            host: string;
+            during?: 'pull' | 'push';
+        };
+        refuses: GitFails;
+    };
+    /**
+     * A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history.
+     * The answer says which file's it is and whether it goes on from a cursor; `cursor` for the next. Whoever asked
+     * stops the read by no longer waiting, as a panel does that asks for the history again
+     */
+    'commit.LOG_LIST': {
+        args: {
+            cursor?: string;
+            path?: string;
+        };
+        answer: {
+            commits: HistoryCommit[];
+            cursor?: string;
+            path?: string;
+            continued?: boolean;
+        };
+        refuses: GitFails;
+    };
+    'commit.REVERT_COMMIT': {
+        args: {
+            hash: string;
+        };
+        answer: {
+            hash: string;
+        };
+        refuses: GitFails;
+    };
+    'commit.RESET_TO_COMMIT': {
+        args: {
+            hash: string;
+        };
+        answer: {
+            hash: string;
+        } & UndoableAfter;
+        refuses: GitFails;
+    };
+};
+
 /** What the commit panel is told of a command that failed */
 interface CommitFailure {
     message: string;
@@ -870,6 +1597,25 @@ interface CommitFailure {
         output: string;
     };
 }
+
+/** What the commit panel shows of the checkout, as `commit.GET_GIT_STATUS` answers it */
+type CommitStatus = {
+    files: GitStatusFile[];
+    counts?: LineCount[];
+    pullPreview?: MergePreview;
+    hasIdentity?: boolean;
+    slowStatus?: SlowStatus;
+    truncated: boolean;
+    branch: string;
+    hasUpstream: boolean;
+    commitsAhead: number;
+    commitsBehind: number;
+    watching: boolean;
+    watchSilent?: boolean;
+    operation?: RepositoryOperation;
+    fetchSuspended?: boolean;
+    signIn?: SignInHelp;
+};
 
 /**
  * One trailer at the end of a commit message — `Co-authored-by: A <a@example.com>` — as git reads it: its key as
@@ -1014,11 +1760,12 @@ type Contract$b = {
     incoming: IncomingLogEvents;
     internal: LogsInternalEvents;
     outgoing: OutgoingLogsEvents;
+    asks: LogsAsks;
 };
 
 type Contract$c = {
-    incoming: IncomingDatabaseEvents;
     outgoing: OutgoingDatabaseEvents;
+    asks: DatabaseAsks;
 };
 
 type Contract$d = {
@@ -1026,50 +1773,55 @@ type Contract$d = {
     incoming: IncomingBrainEvents;
     internal: BrainInternalEvents;
     outgoing: OutgoingBrainEvents;
+    asks: BrainAsks;
 };
 
 type Contract$e = {
-    incoming: IncomingPromptEvents;
     outgoing: OutgoingPromptEvents;
+    asks: PromptAsks;
 };
 
 type Contract$f = {
-    incoming: IncomingActionEvents;
     outgoing: OutgoingActionEvents;
+    asks: ActionAsks;
 };
 
 type Contract$g = {
-    incoming: IncomingFlowsEvents;
     outgoing: OutgoingFlowsEvents;
+    asks: FlowsAsks;
 };
 
 type Contract$h = {
     context: LibrarySystemContext;
-    incoming: IncomingLibraryEvents;
     outgoing: OutgoingLibraryEvents;
+    asks: LibraryAsks;
 };
 
 type Contract$i = {
     context: BrowserContext$1;
     incoming: IncomingBrowserEvents;
     outgoing: OutgoingBrowserEvents;
+    asks: BrowserAsks;
 };
 
 type Contract$j = {
     incoming: IncomingNoteEvents;
     outgoing: OutgoingNotesEvents;
+    asks: NoteAsks;
 };
 
 type Contract$k = {
     context: CodeSystemContext;
     incoming: IncomingCodeEvents;
     outgoing: OutgoingCodeEvents;
+    asks: CodeAsks;
 };
 
 type Contract$l = {
     context: ThreadsContext$1;
     incoming: IncomingThreadsEvents;
     outgoing: OutgoingThreadsEvents;
+    asks: ThreadsAsks;
 };
 
 type ControlCancelLine = z.infer<typeof ControlCancelLineSchema>;
@@ -1133,24 +1885,115 @@ interface CreateNode extends NodeBase {
     inferLabel?: boolean;
 }
 
+/**
+ * What a window asks the database feature, each answered once. A query or a transaction is answered with its result
+ * or refused as \`failed\` with why it could not run; the run history's reads answer with an empty page where they
+ * cannot be read, as the viewer shows nothing either way. Replacing or exporting the data answers with what it did,
+ * and generating a query with only that it started: the query comes from the flow it starts.
+ */
+type DatabaseAsks = {
+    EXECUTE_QUERY: {
+        args: {
+            code: string;
+        };
+        answer: Ran;
+    };
+    EXECUTE_TRANSACTION: {
+        args: {
+            code: string;
+        };
+        answer: Ran;
+    };
+    GET_FLOW_RUNS: {
+        answer: {
+            flows: RunNode[];
+        };
+    };
+    /** A page of a flow run's events: \`offset\` is which page, which tells two pages of one flow apart */
+    GET_FLOW_EVENTS: {
+        args: {
+            flowId: string;
+            offset?: number;
+            limit?: number;
+        };
+        answer: {
+            flowId: string;
+            events: RunTree[];
+            hasMore: boolean;
+            offset: number;
+        };
+    };
+    GET_NODE_DETAILS: {
+        args: {
+            nodeId: string;
+        };
+        answer: {
+            nodeId: string;
+            details: RunNode | null;
+        };
+    };
+    GET_BACKUP_INFO: {
+        args: {
+            path: string;
+        };
+        answer: {
+            info: {
+                timestamp: number;
+                databases: string[];
+                size: number;
+                hasMedia?: boolean;
+            } | null;
+        };
+    };
+    /** Refused for an empty prompt; otherwise the flow that writes the query has started */
+    GENERATE_AI_QUERY: {
+        args: {
+            prompt: string;
+            mode?: 'query' | 'transaction';
+        };
+    };
+    /** Answered with the backup's path */
+    EXPORT_DATABASE: {
+        args: {
+            path: string;
+            name?: string;
+            databases: ('lmdb' | 'runHistory')[];
+        };
+        answer: {
+            path: string;
+        };
+    };
+    /**
+     * Answered with what to tell the user. A backup holding databases this app cannot is refused as
+     * `unknown-databases`, naming them, for the user to decide whether to import it without them
+     */
+    IMPORT_DATABASE: {
+        args: {
+            path: string;
+            skipUnknownDatabases?: boolean;
+        };
+        answer: {
+            message: string;
+        };
+        refuses: {
+            'unknown-databases': {
+                unknownDatabases: string[];
+            };
+        };
+    };
+    RESET_DATABASE: {
+        answer: {
+            message: string;
+        };
+    };
+};
+
 interface DatabaseContext {
     schema: DatabaseSchemaInfo;
     currentQuery: string;
     queryResult: any;
-    isLoading: boolean;
     error: string | null;
     executionTime: number | null;
-    /**
-     * The call each answer has to name to be accepted, or `null` when nothing is outstanding.
-     *
-     * Two fields rather than one: the verbs are independent, and deleting a row chains a transaction into
-     * a follow-up query, so a single slot would have the query overwrite the transaction it came from.
-     *
-     * What goes in them is what `sendToSystem` returned for the ask; what reads them is `answersCall`, which
-     * refuses an empty slot — so neither the request nor the answer declares a field for it.
-     */
-    pendingQueryCall: string | null;
-    pendingTransactionCall: string | null;
     selectedSchemaItem: {
         type: 'attribute' | 'entity' | 'relation';
         value: string;
@@ -1164,7 +2007,6 @@ interface DatabaseContext {
     flowEvents: RunTree[];
     expandedNodes: Set<string>;
     nodeDetails: Map<string, RunNode>;
-    isLoadingRuns: boolean;
     runPagination: {
         offset: number;
         limit: number;
@@ -1176,8 +2018,6 @@ interface DatabaseContext {
         size: number;
         hasMedia?: boolean;
     } | null;
-    exporting: boolean;
-    importing: boolean;
     /** The last export or import to finish, a new object each time */
     backupResult: {
         operation: 'export' | 'import';
@@ -1480,6 +2320,112 @@ interface ExecOnceResult {
     exitCode: number;
 }
 
+/** What a window asks the explorer, answered by the code system's explorer child (`explorerSystem`) over its folder */
+type ExplorerAsks = {
+    'explorer.LIST_FILES': {
+        args: {
+            path: string;
+        };
+        answer: DirectoryContent;
+        refuses: FileFailure;
+    };
+    /** A file's content for an editor, which is watched from then on until the editor closes it (`explorer.CLOSE_FILE`) */
+    'explorer.READ_FILE': {
+        args: {
+            path: string;
+        };
+        answer: FileContent;
+        refuses: FileFailure;
+    };
+    'explorer.WRITE_FILE': {
+        args: {
+            path: string;
+            content: string;
+        };
+        answer: {
+            path: string;
+        };
+        refuses: FileFailure;
+    };
+    'explorer.CREATE_FILE': {
+        args: {
+            path: string;
+            content?: string;
+        };
+        answer: {
+            path: string;
+        };
+        refuses: FileFailure;
+    };
+    'explorer.DELETE_FILE': {
+        args: {
+            path: string;
+        };
+        answer: {
+            path: string;
+        };
+        refuses: FileFailure;
+    };
+    'explorer.RENAME_FILE': {
+        args: {
+            oldPath: string;
+            newPath: string;
+        };
+        answer: {
+            oldPath: string;
+            newPath: string;
+        };
+        refuses: FileFailure;
+    };
+    'explorer.CREATE_DIRECTORY': {
+        args: {
+            path: string;
+        };
+        answer: {
+            path: string;
+        };
+        refuses: FileFailure;
+    };
+    'explorer.GET_FILE_INFO': {
+        args: {
+            path: string;
+        };
+        answer: FileInfo;
+        refuses: FileFailure;
+    };
+    /** Every file under a folder, for quick open */
+    'explorer.QUICK_OPEN_SEARCH': {
+        args: {
+            baseDirectory: string;
+        };
+        answer: QuickOpenResult$1[];
+        refuses: FileFailure;
+    };
+    'explorer.MOVE_FILES': {
+        args: {
+            sourcePaths: string[];
+            targetDir: string;
+        };
+        answer: {
+            sourcePaths: string[];
+            targetDir: string;
+            movedPaths: string[];
+        };
+        refuses: FileFailure;
+    };
+    'explorer.COPY_FILES': {
+        args: {
+            sourcePaths: string[];
+            targetDir: string;
+        };
+        answer: {
+            targetDir: string;
+            copiedPaths: string[];
+        };
+        refuses: FileFailure;
+    };
+};
+
 interface FileChangeInfo {
     path: string;
     modifiedAt: Date;
@@ -1494,6 +2440,11 @@ interface FileContent {
     isBinary?: boolean;
     isVideo?: boolean;
 }
+
+/** A file operation refused: `code` says why, and `path` where, as the filesystem service names them */
+type FileFailure = {
+    file: Omit<CodeSystemError, 'message'>;
+};
 
 interface FileInfo {
     name: string;
@@ -1541,6 +2492,130 @@ interface FlowRunNodeData {
         label: string;
     }>;
 }
+
+/**
+ * What a window asks the flows system, each answered once: the editor applies its own edits at once and holds the
+ * flow's view behind its unanswered writes, so every write is an ask. A create answers with what it made, for the
+ * window that asked to open or to put in place of the one it drew; the model catalog is asked as the surface starts.
+ */
+type FlowsAsks = {
+    /** The models the editor offers */
+    GET_MODEL_CATALOG: {
+        answer: ModelCatalog;
+    };
+    /** Answered with the flow made, which only the window that asked opens; its id is minted by the create */
+    CREATE_FLOW: {
+        answer: {
+            flowId: EARS.EntityId;
+        };
+    };
+    DELETE_FLOW: {
+        args: {
+            flowId: string;
+        };
+    };
+    UPDATE_FLOW_LABEL: {
+        args: {
+            flowId: string;
+            label: string;
+        };
+    };
+    /** Answered with the node made, for the editor to put in place of the one it added under `tempId` */
+    CREATE_NODE: {
+        args: {
+            flowId: string;
+            tempId: string;
+            nodeData: any;
+        };
+        answer: {
+            tempId: string;
+            nodeId: EARS.EntityId;
+            node: NodeEntity;
+        };
+    };
+    UPDATE_NODE: {
+        args: {
+            flowId: string;
+            nodeId: string;
+            nodeData: any;
+        };
+    };
+    DELETE_NODE: {
+        args: {
+            flowId: string;
+            nodeId: string;
+        };
+    };
+    /** Answered with the relation made, for the editor to give the edge it drew */
+    CREATE_EDGE: {
+        args: {
+            flowId: string;
+            sourceId: string;
+            targetId: string;
+            sourceHandle?: string;
+            targetHandle?: string;
+        };
+        answer: {
+            sourceId: EARS.EntityId;
+            targetId: EARS.EntityId;
+            relId: EARS.RelationId;
+            sourceHandle?: string;
+            targetHandle?: string;
+        };
+    };
+    DELETE_EDGE: {
+        args: {
+            flowId: string;
+            edgeId: string;
+        };
+    };
+    UPDATE_EDGE: {
+        args: {
+            flowId: string;
+            edgeId: string;
+            source: string;
+            target: string;
+            sourceHandle?: string;
+            targetHandle?: string;
+        };
+    };
+    REINDEX_HANDLES: {
+        args: {
+            flowId: string;
+            nodeId: string;
+            prefix: string;
+            index: number;
+            direction: -1 | 1;
+        };
+    };
+    /** Makes a flow the root flow the brain runs (its root role), or, with null, leaves no flow the root */
+    SET_ROOT_FLOW: {
+        args: {
+            flowId: string | null;
+        };
+    };
+    /** Answered with the flows it made; refused, with every reference it could not resolve, when one does not */
+    IMPORT_DSL: {
+        args: {
+            dsl: any;
+        };
+        answer: {
+            flowIds: EARS.EntityId[];
+        };
+    };
+    /** Every flow, or the one named, written to a file in `directory` */
+    EXPORT_DSL: {
+        args: {
+            directory: string;
+            flowId?: string;
+        };
+        answer: {
+            filePath: string;
+            flowCount: number;
+            skipped: string[];
+        };
+    };
+};
 
 interface FlowsContext {
     /** A flow the user asked to open, until its graph's view reads it; what the user does next cancels it */
@@ -1763,6 +2838,17 @@ interface GitDiff {
 
 type GitErrorCode = (typeof GIT_ERROR_CODES)[number];
 
+/** The ways every commit ask may be refused: git's failure, with what can be done about it */
+type GitFails = {
+    git: GitFailure;
+};
+
+/**
+ * Why a git command failed, beside the message: what git said of it and what the panel can do about it. Every commit
+ * ask may be refused with one (`git`)
+ */
+type GitFailure = Omit<CommitFailure, 'message'>;
+
 interface GitHubAccount {
     login: string;
     name?: string;
@@ -1779,11 +2865,45 @@ interface GitHubAccount {
  */
 type GitHubApiFailure = 'failed' | 'head-moved' | 'missing-scope' | 'not-found' | 'not-github' | 'rate-limited' | 'signed-out' | 'sso';
 
+/** What a window asks of the GitHub sign-in, answered by the github child (`features/github.ts`) */
+type GitHubAsks = {
+    /** Who the app is signed in to GitHub as, from what it holds: GitHub is not asked */
+    'github.GET_ACCOUNT': {
+        answer: GitHubAccount | null;
+    };
+    /**
+     * Signs in. As it goes it tells whoever asked the code to type at `verificationUri`; it is answered with the
+     * account once they approved it there, which every window hears too (`github.ACCOUNT_CHANGED`), or with why it
+     * ended without one. Whoever asked ends it by no longer waiting
+     */
+    'github.SIGN_IN': {
+        progress: {
+            userCode: string;
+            verificationUri: string;
+            expiresAt: number;
+        };
+        answer: GitHubAccount;
+        refuses: {
+            unconfigured: {};
+            denied: {};
+            expired: {};
+            cancelled: {};
+        };
+    };
+};
+
 /** Where GitHub answers: the web host that runs sign-in, and the REST API */
 interface GitHubEndpoints {
     web: string;
     api: string;
 }
+
+/** A refusal of GitHub's, with the reason the panel acts on, as `pr.CHECK_GITHUB_ACCESS` answers it */
+type GitHubRefused = {
+    github: {
+        reason: GitHubApiFailure;
+    };
+};
 
 interface GitHubSignIn {
     /** Where GitHub answers, which the API calls made with this sign-in go to as well */
@@ -1795,12 +2915,6 @@ interface GitHubSignIn {
     /** The account a token signs in as */
     fetchAccount(token: string, signal: AbortSignal): Promise<GitHubAccount>;
 }
-
-/**
- * Why a sign-in ended without a token: no OAuth App configured for this build, the user refused it at github.com,
- * the code expired before they approved it, the app cancelled it, or GitHub could not be asked or said something else
- */
-type GitHubSignInFailure = 'cancelled' | 'denied' | 'expired' | 'failed' | 'unconfigured';
 
 interface GitHubToken {
     token: string;
@@ -1816,6 +2930,11 @@ interface GitProgress {
     /** How much of that is done, from 0 to 100 */
     percent: number;
 }
+
+/** How far along a push, a pull, a checkout or a submodule update is, as git says, told to whoever asked for it while it runs */
+type GitProgressDuring = {
+    during: ProgressDuring;
+} & GitProgress;
 
 interface GitStatusFile {
     path: string;
@@ -1853,56 +2972,7 @@ interface ImageReference {
     name: string;
 }
 
-type IncomingActionEvents = {
-    type: 'CREATE_ACTION';
-    label: string;
-    input: Record<string, any>;
-    actionFn: string;
-    output?: any;
-    description?: string;
-    category?: string;
-} | {
-    type: 'UPDATE_ACTION';
-    actionId: string;
-    label?: string;
-    input?: Record<string, any>;
-    actionFn?: string;
-    output?: any;
-    description?: string;
-    category?: string;
-} | {
-    type: 'DELETE_ACTION';
-    actionId: string;
-} | {
-    type: 'IMPORT_ACTIONS';
-    actions: any;
-} | {
-    type: 'EXPORT_ACTIONS';
-    directory: string;
-};
-
-type IncomingActionsEvents = {
-    type: 'codeActions.OPEN_ACTION';
-    actionId: string;
-} | {
-    type: 'codeActions.SAVE_ACTION';
-    actionId: string;
-    actionFn: string;
-};
-
 type IncomingBrainEvents = {
-    type: 'OPEN_RUN_NODE';
-    runNodeId: string;
-} | {
-    type: 'GO_BACK_RUN_NODE';
-    currentFlowRunNodeId?: string;
-} | {
-    type: 'REQUEST_SURFACE_DATA';
-    flowRunNodeId?: string;
-} | {
-    type: 'GET_RUN_NODE_DETAILS';
-    runNodeId: string;
-} | {
     type: 'TOGGLE_INSPECT';
 } | {
     type: 'START_BRAIN';
@@ -1932,21 +3002,13 @@ type IncomingBrowserEvents = {
 } | {
     type: 'SYNC_BOOKMARKS';
     bookmarks: SavedBookmark[];
-}
-/** The tabs and bookmarks a window restores as it starts: answered with \`SAVED_SESSION_READ\` */
- | {
-    type: 'GET_SAVED_SESSION';
 };
 
-type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | IncomingCommitEvents | IncomingPullRequestEvents | IncomingTerminalEvents | IncomingActionsEvents | IncomingPromptsEvents | IncomingGitHubEvents | {
+type IncomingCodeEvents = IncomingExplorerEvents | IncomingTerminalEvents | IncomingGitHubEvents | {
     type: 'SET_BASE_DIRECTORY';
     path: string;
     fromUserNavigation?: boolean;
     fromPicker?: boolean;
-}
-/** The repositories under the folder the user opened: its own, nested ones, submodules and linked worktrees */
- | {
-    type: 'LIST_REPOSITORIES';
 }
 /** Works in one of them: it becomes the base directory, and the folder the user opened is still what is listed */
  | {
@@ -1959,13 +3021,6 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
     provider: string;
 }
 /**
- * What a window's code surface starts from, asked as the shell starts it: answered with \`CODE_STARTED\`, and by the
- * explorer and the terminals, to which the system hands this same ask, with the files and the running terminals
- */
- | {
-    type: 'GET_CODE_START';
-}
-/**
  * Something may have changed on disk that no file event reported: a window gained focus, a terminal command
  * finished, an agent's turn ended. The repository and the open files are read again, and what differs is
  * announced as it would have been.
@@ -1976,395 +3031,16 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | Incomi
     by?: 'window';
 };
 
-type IncomingCommitEvents = {
-    type: 'commit.GET_GIT_STATUS';
-} | {
-    type: 'commit.GET_GIT_DIFF';
-    path?: string;
-    staged?: boolean;
-} | {
-    type: 'commit.STAGE_FILES';
-    paths: string[];
-} | {
-    type: 'commit.UNSTAGE_FILES';
-    paths: string[];
-} | {
-    type: 'commit.COMMIT';
-    message: string;
-} | {
-    type: 'commit.GET_CURRENT_BRANCH';
-} | {
-    type: 'commit.REVERT_FILE';
-    path: string;
-} | {
-    type: 'commit.REVERT_FILES';
-    paths: string[];
-}
-/** Which of what discarding these rows would remove cannot be brought back, for the window about to ask */
- | {
-    type: 'commit.PREVIEW_DISCARD';
-    paths: string[];
-}
-/** Puts back what a discard kept, by the id its answer carried */
- | {
-    type: 'commit.RESTORE_DISCARDED';
-    id: string;
-}
-/** The user trusts the repository to have git run what its own configuration and hooks name */
- | {
-    type: 'commit.TRUST_REPOSITORY';
-    repository: string;
-}
-/** Stops the push running: git and what it started are ended, and the push is answered as stopped */
- | {
-    type: 'commit.STOP_PUSH';
-}
-/** The user trusts the repository git refused for who owns it: added to their safe.directory */
- | {
-    type: 'commit.TRUST_OWNERSHIP';
-} | {
-    type: 'commit.GET_ALL_BRANCHES';
-}
-/** Checks out a branch there is, and with `pull` pulls it from what it follows once it is checked out */
- | {
-    type: 'commit.CHECKOUT_BRANCH';
-    branchName: string;
-    pull?: boolean;
-}
-/** Makes a branch at what is checked out, and checks it out */
- | {
-    type: 'commit.CREATE_BRANCH';
-    branchName: string;
-} | {
-    type: 'commit.PUBLISH_BRANCH';
-} | {
-    type: 'commit.PULL_BRANCH';
-} | {
-    type: 'commit.GENERATE_MESSAGE';
-}
-/** Stash what is changed: only what is staged, or only `paths`, when asked */
- | {
-    type: 'commit.STASH_PUSH';
-    message?: string;
-    stagedOnly?: boolean;
-    paths?: string[];
-}
-/** Make a tag at `commit` (what is checked out when none), annotated when `message` is given */
- | {
-    type: 'commit.CREATE_TAG';
-    name: string;
-    commit?: string;
-    message?: string;
-} | {
-    type: 'commit.DELETE_TAG';
-    name: string;
-}
-/** Push a tag to the remote */
- | {
-    type: 'commit.PUSH_TAG';
-    name: string;
-} | {
-    type: 'commit.RENAME_BRANCH';
-    name: string;
-    to: string;
-}
-/** Turn on git's own file monitor and untracked cache here, which the user clicked for: it writes the repository's config */
- | {
-    type: 'commit.SPEED_UP_STATUS';
-} | {
-    type: 'commit.STASH_LIST';
-} | {
-    type: 'commit.STASH_APPLY';
-    index: number;
-} | {
-    type: 'commit.STASH_POP';
-    index: number;
-} | {
-    type: 'commit.STASH_DROP';
-    index: number;
-} | {
-    type: 'commit.STASH_CLEAR';
-}
-/** The files a stash holds, to look into before applying it */
- | {
-    type: 'commit.GET_STASH_CHANGES';
-    index: number;
-}
-/** Who last changed each line of a file, from the top of the folder, for the editor's gutter */
- | {
-    type: 'commit.GET_BLAME';
-    path: string;
-}
-/** Bring a submodule to the commit the repository records for it, setting it up first if it is not */
- | {
-    type: 'commit.UPDATE_SUBMODULE';
-    path: string;
-}
-/** Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already pushed */
- | {
-    type: 'commit.UNDO_LAST';
-    evenIfPublished?: boolean;
-} | {
-    type: 'commit.WORKTREE_LIST';
-} | {
-    type: 'commit.WORKTREE_ADD';
-    path: string;
-    branch?: string;
-    createBranch?: boolean;
-} | {
-    type: 'commit.WORKTREE_REMOVE';
-    path: string;
-    force?: boolean;
-} | {
-    type: 'commit.WORKTREE_SWITCH';
-    path: string;
-} | {
-    type: 'commit.RESOLVE_CONFLICT';
-    path: string;
-    strategy: 'ours' | 'theirs';
-} | {
-    type: 'commit.MARK_RESOLVED';
-    path: string;
-} | {
-    type: 'commit.RESOLVE_ALL_CONFLICTS';
-    strategy: 'ours' | 'theirs';
-}
-/** Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up */
- | {
-    type: 'commit.MOVE_OPERATION';
-    move: OperationMove;
-}
-/** Merge a branch in, rebase onto one, or pick a commit onto what is checked out */
- | {
-    type: 'commit.START_OPERATION';
-    kind: StartableOperation;
-    target: string;
-}
-/** Amend the last commit with what is staged, and `message` in place of its own when given */
- | {
-    type: 'commit.AMEND';
-    message?: string;
-    evenIfPublished?: boolean;
-}
-/** A commit's whole message, for rewording it */
- | {
-    type: 'commit.GET_COMMIT_MESSAGE';
-    hash: string;
-}
-/** The trailers git reads at the end of the message being written */
- | {
-    type: 'commit.READ_TRAILERS';
-    message: string;
-}
-/** The message being written without one of its trailers, each line of it */
- | {
-    type: 'commit.REMOVE_TRAILER';
-    message: string;
-    trailer: CommitTrailer;
-}
-/** Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it */
- | {
-    type: 'commit.REWRITE_COMMIT';
-    hash: string;
-    action: RewriteAction;
-    message?: string;
-    evenIfPublished?: boolean;
-}
-/** What merging a branch in would do, before it is done */
- | {
-    type: 'commit.PREVIEW_MERGE';
-    target: string;
-}
-/** The files in an untracked folder that is listed as one row */
- | {
-    type: 'commit.LIST_UNTRACKED';
-    path: string;
-}
-/** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
- | {
-    type: 'commit.APPLY_HUNK';
-    path: string;
-    staged: boolean;
-    hunk: string;
-}
-/** Git can sign in to this host now the app is signed in to GitHub: fetching starts again, and the window runs again what was refused */
- | {
-    type: 'commit.SET_UP_SIGN_IN';
-    host: string;
-    during?: 'pull' | 'push';
-}
-/** A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history */
- | {
-    type: 'commit.LOG_LIST';
-    cursor?: string;
-    path?: string;
-} | {
-    type: 'commit.REVERT_COMMIT';
-    hash: string;
-} | {
-    type: 'commit.RESET_TO_COMMIT';
-    hash: string;
-};
-
-type IncomingDatabaseEvents = {
-    type: 'EXECUTE_QUERY';
-    code: string;
-} | {
-    type: 'EXECUTE_TRANSACTION';
-    code: string;
-} | {
-    type: 'GENERATE_AI_QUERY';
-    prompt: string;
-    mode?: 'query' | 'transaction';
-} | {
-    type: 'GET_FLOW_RUNS';
-} | {
-    type: 'GET_FLOW_EVENTS';
-    flowId: string;
-    offset?: number;
-    limit?: number;
-} | {
-    type: 'GET_NODE_DETAILS';
-    nodeId: string;
-} | {
-    type: 'EXPORT_DATABASE';
-    path: string;
-    name?: string;
-    databases: ('lmdb' | 'runHistory')[];
-} | {
-    type: 'IMPORT_DATABASE';
-    path: string;
-    skipUnknownDatabases?: boolean;
-} | {
-    type: 'GET_BACKUP_INFO';
-    path: string;
-} | {
-    type: 'RESET_DATABASE';
-};
-
-type IncomingExplorerEvents = {
-    type: 'explorer.LIST_FILES';
-    path: string;
-} | {
-    type: 'explorer.READ_FILE';
-    path: string;
-} | {
-    type: 'explorer.WRITE_FILE';
-    path: string;
-    content: string;
-} | {
-    type: 'explorer.CREATE_FILE';
-    path: string;
-    content?: string;
-} | {
-    type: 'explorer.DELETE_FILE';
-    path: string;
-} | {
-    type: 'explorer.RENAME_FILE';
-    oldPath: string;
-    newPath: string;
-} | {
-    type: 'explorer.CREATE_DIRECTORY';
-    path: string;
-} | {
-    type: 'explorer.GET_FILE_INFO';
-    path: string;
-} | {
+type IncomingExplorerEvents = 
+/** The editor stopped showing the file: a change to it on disk is no one's to hear of */
+{
     type: 'explorer.CLOSE_FILE';
     path: string;
-} | {
-    type: 'explorer.QUICK_OPEN_SEARCH';
-    baseDirectory: string;
-} | {
-    type: 'explorer.MOVE_FILES';
-    sourcePaths: string[];
-    targetDir: string;
-} | {
-    type: 'explorer.COPY_FILES';
-    sourcePaths: string[];
-    targetDir: string;
-};
-
-type IncomingFlowsEvents = 
-/** The models the editor offers: answered with \`MODEL_CATALOG_READ\` */
-{
-    type: 'GET_MODEL_CATALOG';
-} | {
-    type: 'CREATE_FLOW';
-} | {
-    type: 'DELETE_FLOW';
-    flowId: string;
-} | {
-    type: 'UPDATE_FLOW_LABEL';
-    flowId: string;
-    label: string;
-} | {
-    type: 'CREATE_NODE';
-    flowId: string;
-    tempId: string;
-    nodeData: any;
-} | {
-    type: 'UPDATE_NODE';
-    flowId: string;
-    nodeId: string;
-    nodeData: any;
-} | {
-    type: 'DELETE_NODE';
-    flowId: string;
-    nodeId: string;
-} | {
-    type: 'CREATE_EDGE';
-    flowId: string;
-    sourceId: string;
-    targetId: string;
-    sourceHandle?: string;
-    targetHandle?: string;
-} | {
-    type: 'DELETE_EDGE';
-    flowId: string;
-    edgeId: string;
-} | {
-    type: 'UPDATE_EDGE';
-    flowId: string;
-    edgeId: string;
-    source: string;
-    target: string;
-    sourceHandle?: string;
-    targetHandle?: string;
-} | {
-    type: 'IMPORT_DSL';
-    dsl: any;
-} | {
-    type: 'EXPORT_DSL';
-    directory: string;
-    flowId?: string;
-} | {
-    type: 'REINDEX_HANDLES';
-    flowId: string;
-    nodeId: string;
-    prefix: string;
-    index: number;
-    direction: -1 | 1;
-}
-/** Makes a flow the root flow the brain runs (its root role), or, with null, leaves no flow the root */
- | {
-    type: 'SET_ROOT_FLOW';
-    flowId: string | null;
 };
 
 type IncomingGitHubEvents = 
-/** Who the app is signed in to GitHub as, from what it holds: GitHub is not asked */
-{
-    type: 'github.GET_ACCOUNT';
-}
-/** Starts a sign-in, ending any under way: the asker is sent the code to type, then how it ended */
- | {
-    type: 'github.SIGN_IN';
-} | {
-    type: 'github.CANCEL_SIGN_IN';
-}
 /** Forgets the token. It stays valid at GitHub until the user revokes it there, which Settings says */
- | {
+{
     type: 'github.SIGN_OUT';
 }
 /** The app's stored secrets changed (no values): the sign-in held is read again on its next use */
@@ -2372,377 +3048,35 @@ type IncomingGitHubEvents =
     type: 'SECRETS_CHANGED';
 };
 
-type IncomingLibraryEvents = {
-    type: 'CREATE_DOCUMENT';
-    name: string;
-    content: ContentSection[];
-    tags: string[];
-    collectionId?: string;
-    documentType?: string;
-} | {
-    type: 'UPDATE_DOCUMENT';
-    id: string;
-    name: string;
-    content: ContentSection[];
-    tags: string[];
-    collectionId?: string;
-} | {
-    type: 'DELETE_DOCUMENT';
-    id: string;
-}
-/** A document on disk, which no view can watch: answered with `DOCUMENT_LOADED` */
- | {
-    type: 'GET_DOCUMENT';
-    id: string;
-} | {
-    type: 'CREATE_COLLECTION';
-    name: string;
-    description?: string;
-    parentId?: string;
-} | {
-    type: 'UPDATE_COLLECTION';
-    id: string;
-    name: string;
-    description?: string;
-} | {
-    type: 'DELETE_COLLECTION';
-    id: string;
-} | {
-    type: 'MOVE_DOCUMENT';
-    documentId: string;
-    collectionId?: string;
-}
-/** A folder on disk, which no view can watch: answered with `FOLDER_CONTENTS_LOADED` */
- | {
-    type: 'GET_FOLDER_CONTENTS';
-    folderId: string | null;
-}
-/** Which of these symlinked collections no longer reach their folder on disk: answered with `SYMLINKS_CHECKED` */
- | {
-    type: 'CHECK_SYMLINKS';
-    ids: string[];
-} | {
-    type: 'RENAME_ITEM';
-    id: string;
-    name: string;
-    itemType: 'document' | 'folder';
-} | {
-    type: 'DELETE_ITEMS';
-    ids: string[];
-} | {
-    type: 'MOVE_ITEMS';
-    ids: string[];
-    targetFolderId: string | null;
-} | {
-    type: 'CREATE_SYMLINK_COLLECTION';
-    name: string;
-    symlinkPath: string;
-    parentId?: string;
-} | {
-    type: 'UPDATE_SYMLINK_PATH';
-    collectionId: string;
-    newPath: string;
-} | {
-    type: 'IMPORT_LIBRARY';
-    directory: string;
-} | {
-    type: 'EXPORT_LIBRARY';
-    directory: string;
-    format: 'json' | 'markdown';
-};
-
 type IncomingLogEvents = {
     type: 'CLEAR_LOGS';
-}
-/** The buffer as the settings filter it, and the settings: answered with \`LOGS_READ\` */
- | {
-    type: 'GET_LOGS';
 };
 
+/** What a window tells the notes system and is not answered for */
 type IncomingNoteEvents = {
-    type: 'CREATE_NOTE';
-    title: string;
-    content?: string;
-    icon?: string | null;
-    parentId?: string;
-    skipContentSync?: boolean;
-    noteType?: 'document' | 'task' | 'tasklist';
-    completed?: boolean;
-    displayOrder?: number;
-} | {
-    type: 'UPDATE_NOTE';
-    id: string;
-    title?: string;
-    content?: string;
-    icon?: string | null;
-    completed?: boolean;
-    hideCompletedChildren?: boolean;
-    favorite?: boolean;
-} | {
-    type: 'DELETE_NOTE';
-    id: string;
-} | {
-    type: 'SOFT_DELETE_NOTE';
-    id: string;
-} | {
-    type: 'RESTORE_NOTE';
-    id: string;
-} | {
-    type: 'MOVE_NOTE';
-    ids: string[];
-    newParentId: string | null;
-} | {
-    type: 'REORDER_NOTE';
-    id: string;
-    newParentId: string | null;
-    newIndex: number;
-} | {
     type: 'VIEW_NOTE';
     id: string;
-} | {
-    type: 'PERMANENTLY_DELETE_NOTE';
-    id: string;
-} | {
-    type: 'EMPTY_TRASH';
-} | {
-    type: 'IMPORT_NOTES';
-    directory: string;
-} | {
-    type: 'EXPORT_NOTES';
-    directory: string;
-    format: 'json' | 'markdown';
-};
-
-type IncomingPromptEvents = {
-    type: 'CREATE_PROMPT';
-    label: string;
-    inputs: Record<string, any>;
-    templateFn: string;
-    outputSchema?: any;
-    description?: string;
-    category?: string;
-} | {
-    type: 'UPDATE_PROMPT';
-    promptId: string;
-    label?: string;
-    inputs?: Record<string, any>;
-    templateFn?: string;
-    outputSchema?: any;
-    description?: string;
-    category?: string;
-} | {
-    type: 'DELETE_PROMPT';
-    promptId: string;
-} | {
-    type: 'IMPORT_PROMPTS';
-    prompts: any;
-} | {
-    type: 'EXPORT_PROMPTS';
-    directory: string;
-};
-
-type IncomingPromptsEvents = {
-    type: 'codePrompts.OPEN_PROMPT';
-    promptId: string;
-} | {
-    type: 'codePrompts.SAVE_PROMPT';
-    promptId: string;
-    templateFn: string;
-};
-
-type IncomingPullRequestEvents = 
-/** `prNumber` reads the head from what GitHub keeps of that pull request, which outlives its branch */
-{
-    type: 'pr.GET_BRANCH_DIFF';
-    baseBranch?: string;
-    headBranch?: string;
-    prNumber?: number;
-}
-/** `fetchMissing`: content a partial clone was not given is fetched for this diff, where it is otherwise answered as missing */
- | {
-    type: 'pr.GET_BRANCH_FILE_DIFF';
-    path: string;
-    baseBranch: string;
-    headBranch?: string;
-    prNumber?: number;
-    fetchMissing?: boolean;
-}
-/** A page of the pull requests in `state`, newest first, from `after` (the last page's `next`), by `query` where there is one */
- | {
-    type: 'pr.LIST_PRS';
-    state: PRListState;
-    query?: string;
-    after?: string;
-}
-/** Checks out the pull request's head as a branch here (`pr.PR_CHECKED_OUT`) */
- | {
-    type: 'pr.CHECKOUT_PR';
-    number: number;
-} | {
-    type: 'pr.SELECT_PR';
-    number: number;
-} | {
-    type: 'pr.CREATE_PR';
-    title: string;
-    body: string;
-    base?: string;
-    draft?: boolean;
-}
-/** `sha` is the head shown: GitHub merges nothing where the head has moved since (`head-moved`) */
- | {
-    type: 'pr.MERGE_PR';
-    number: number;
-    method?: 'merge' | 'rebase' | 'squash';
-    sha?: string;
-} | {
-    type: 'pr.CLOSE_PR';
-    number: number;
-} | {
-    type: 'pr.TOGGLE_DRAFT';
-    number: number;
-    isDraft: boolean;
-} | {
-    type: 'pr.CHECK_BRANCH_PR';
-}
-/** Whether the app's GitHub sign-in can work with the pull requests of the repository the remote names */
- | {
-    type: 'pr.CHECK_GITHUB_ACCESS';
-} | {
-    type: 'pr.GET_PR_AUTOFILL';
-} | {
-    type: 'pr.GET_SMART_BASE_BRANCH';
-}
-/**
- * Deletes the pull request's branch on GitHub: refused for a fork's branch, and for one another open pull request
- * is from. Answered with the branch deleted, or one already gone
- */
- | {
-    type: 'pr.DELETE_BRANCH';
-    number: number;
-} | {
-    type: 'pr.UPDATE_PR';
-    number: number;
-    title?: string;
-    body?: string;
-    base?: string;
-} | {
-    type: 'pr.CREATE_COMMENT';
-    number: number;
-    body: string;
-} | {
-    type: 'pr.EDIT_COMMENT';
-    commentId: number;
-    body: string;
-} | {
-    type: 'pr.DELETE_COMMENT';
-    commentId: number;
-} | {
-    type: 'pr.GET_COMMENTS';
-    number: number;
-} | {
-    type: 'pr.GET_REVIEW_THREADS';
-    number: number;
-} | {
-    type: 'pr.REPLY_TO_THREAD';
-    prNumber: number;
-    commentId: number;
-    body: string;
-} | {
-    type: 'pr.RESOLVE_THREAD';
-    threadId: string;
-} | {
-    type: 'pr.UNRESOLVE_THREAD';
-    threadId: string;
-} | {
-    type: 'pr.EDIT_REVIEW_COMMENT';
-    commentId: number;
-    body: string;
-} | {
-    type: 'pr.DELETE_REVIEW_COMMENT';
-    commentId: number;
-};
-
-type IncomingSearchEvents = {
-    type: 'search.SEARCH_FILES';
-    query: string;
-    path: string;
-    includePattern?: string;
-    excludePattern?: string;
-    caseSensitive?: boolean;
-    wholeWord?: boolean;
-    useRegex?: boolean;
-    maxResults?: number;
-} | {
-    type: 'search.CANCEL_SEARCH';
 };
 
 type IncomingTerminalEvents = 
-/** `target` is one of the code settings' `terminalTargets`, by id: somewhere other than this machine to run it */
+/**
+ * Keystrokes, sent as typed and answered by nothing: the hottest send there is, and a terminal not found is
+ * reported to the user rather than answered
+ */
 {
-    type: 'terminal.CREATE_TERMINAL';
-    title?: string;
-    cwd?: string;
-    shell?: string;
-    cols?: number;
-    rows?: number;
-    target?: string;
-} | {
-    type: 'terminal.CLOSE_TERMINAL';
-    terminalId: string;
-}
-/** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
- | {
-    type: 'terminal.RESTART_TERMINAL';
-    terminalId: string;
-} | {
     type: 'terminal.TERMINAL_INPUT';
     terminalId: string;
     data: string;
-} | {
-    type: 'terminal.RESIZE_TERMINAL';
-    terminalId: string;
-    cols: number;
-    rows: number;
-    cellWidth?: number;
-    cellHeight?: number;
 }
 /** This window has stopped showing that terminal, so its fit no longer holds the grid down */
  | {
     type: 'terminal.STOPPED_FITTING';
     terminalId: string;
-} | {
-    type: 'terminal.RENAME_TERMINAL';
-    terminalId: string;
-    customTitle: string;
-} | {
-    type: 'terminal.REFRESH_LIST';
-} | {
-    type: 'terminal.OPEN_TERMINAL_TAB';
-    terminalId: string;
-}
-/** Whether that terminal's shell goes on running when the app is not, to be taken up again at the next start */
- | {
-    type: 'terminal.KEEP_TERMINAL';
-    terminalId: string;
-    kept: boolean;
 }
 /** The person is looking at that terminal: what its programs have said they finished or failed at is seen */
  | {
     type: 'terminal.STATUS_SEEN';
     terminalId: string;
-}
-/** Open that terminal's recording to look back through, drawn at this size. Answered with `terminal.REWOUND` */
- | {
-    type: 'terminal.REWIND';
-    terminalId: string;
-    cols: number;
-    rows: number;
-}
-/** Show an open recording as it was at `at`, in milliseconds since the Unix epoch */
- | {
-    type: 'terminal.REWIND_SEEK';
-    session: string;
-    at: number;
 } | {
     type: 'terminal.REWIND_CLOSE';
     session: string;
@@ -2756,70 +3090,8 @@ type IncomingTerminalEvents =
 };
 
 type IncomingThreadsEvents = {
-    type: 'CREATE_THREAD';
-    topic: string;
-    tags?: string[];
-    instructions: string;
-    linkedThreads?: {
-        id: string;
-        relation: ThreadLinkRelation;
-    }[];
-    parentThreadId?: string;
-} | {
     type: 'VIEW_THREAD';
     threadId: string;
-} | {
-    type: 'UPDATE_THREAD_STATUS';
-    threadId: string;
-    status: string;
-} | {
-    type: 'UPDATE_THREAD_FIELD';
-    threadId: string;
-    key: string;
-    value: any;
-} | {
-    type: 'DELETE_THREAD';
-    threadId: string;
-} | {
-    type: 'SET_THREAD_PARENT';
-    childIds: string[];
-    parentId: string;
-} | {
-    type: 'EXPORT_THREADS';
-    directory: string;
-} | {
-    type: 'IMPORT_THREADS';
-    directory: string;
-} | {
-    type: 'USER_MSG';
-    text: string;
-    mode?: string;
-    phase?: string;
-    threadId?: string;
-    references?: {
-        images?: {
-            url: string;
-            name: string;
-        }[];
-        files?: {
-            name: string;
-            path: string;
-            typeLabel: string;
-            isImage: boolean;
-        }[];
-        context?: {
-            refType: 'document' | 'folder' | 'note' | 'task' | 'tasklist' | 'thread';
-            refId: string;
-            shortCode: string;
-            label: string;
-        }[];
-    };
-    cwdOverride?: string;
-    forceDirectoryPicker?: boolean;
-} | {
-    type: 'OPEN_THREAD_CHAT';
-    threadId: string;
-    restore?: boolean;
 } | {
     type: 'PAUSE_TURN';
     threadId: string;
@@ -2828,11 +3100,6 @@ type IncomingThreadsEvents = {
     messageId: string;
     threadId: string;
     response: any;
-} | {
-    type: 'FORK_THREAD';
-    messageId: string;
-    threadId?: string;
-    threadTopic?: string;
 } | {
     type: 'REVERT_THREAD';
     messageId: string;
@@ -2844,32 +3111,6 @@ type IncomingThreadsEvents = {
     messageId: string;
     threadId: string;
 } | {
-    type: 'USER_COMMAND';
-    command: string;
-    text: string;
-    mode?: string;
-    phase?: string;
-    threadId?: string;
-    references?: {
-        images?: {
-            url: string;
-            name: string;
-        }[];
-        files?: {
-            name: string;
-            path: string;
-            typeLabel: string;
-            isImage: boolean;
-        }[];
-        context?: {
-            refType: 'document' | 'folder' | 'note' | 'task' | 'tasklist' | 'thread';
-            refId: string;
-            shortCode: string;
-            label: string;
-        }[];
-    };
-    cwdOverride?: string;
-} | {
     type: 'TOGGLE_COMPACTED';
     markerId: string;
     compacted: boolean;
@@ -2880,10 +3121,6 @@ type IncomingThreadsEvents = {
     type: 'FORWARD_BRAIN_EVENT';
     eventType: string;
     payload?: any;
-}
-/** What a window's chat starts from: answered with \`CHAT_STARTED\` */
- | {
-    type: 'GET_CHAT_START';
 } | {
     type: 'CLIENT_CONNECTED';
 } | {
@@ -2919,25 +3156,177 @@ interface LLMNode extends NodeBase {
     systemPrompt?: string;
 }
 
+/**
+ * What a window asks the library, each answered once: a write with what it made or that it landed, a fetch of what is
+ * on disk (which no view can watch) with what it read, an import or an export with what it did. What a write changed
+ * in the library itself reaches every window through the views; a write on disk, which no view sees, is told
+ * (`FOLDER_CHANGED`).
+ */
+type LibraryAsks = {
+    CREATE_DOCUMENT: {
+        args: {
+            name: string;
+            content: ContentSection[];
+            tags: string[];
+            collectionId?: EARS.EntityId;
+            documentType?: string;
+        };
+        refuses: OnDisk;
+    };
+    UPDATE_DOCUMENT: {
+        args: {
+            id: EARS.EntityId;
+            name: string;
+            content: ContentSection[];
+            tags: string[];
+        };
+        refuses: OnDisk;
+    };
+    DELETE_DOCUMENT: {
+        args: {
+            id: EARS.EntityId;
+        };
+    };
+    /** A document, read from disk when it is a file under a symlinked folder */
+    GET_DOCUMENT: {
+        args: {
+            id: EARS.EntityId;
+        };
+        answer: {
+            document: DocumentDTO;
+        };
+        refuses: OnDisk;
+    };
+    /** Answered with the folder it made in the library, for the window that asked to name; one on disk is only made */
+    CREATE_COLLECTION: {
+        args: {
+            name: string;
+            description?: string;
+            parentId?: EARS.EntityId;
+        };
+        answer: {
+            collection?: CollectionDTO;
+        };
+        refuses: OnDisk;
+    };
+    UPDATE_COLLECTION: {
+        args: {
+            id: EARS.EntityId;
+            name: string;
+            description?: string;
+        };
+    };
+    DELETE_COLLECTION: {
+        args: {
+            id: EARS.EntityId;
+        };
+    };
+    MOVE_DOCUMENT: {
+        args: {
+            documentId: EARS.EntityId;
+            collectionId?: EARS.EntityId;
+        };
+    };
+    /** A folder's contents, read from disk when it is a symlinked folder or one inside one */
+    GET_FOLDER_CONTENTS: {
+        args: {
+            folderId: EARS.EntityId | null;
+        };
+        answer: FolderContents;
+        refuses: OnDisk;
+    };
+    /** Which of these symlinked collections no longer reach their folder on disk */
+    CHECK_SYMLINKS: {
+        args: {
+            ids: EARS.EntityId[];
+        };
+        answer: {
+            ids: EARS.EntityId[];
+            broken: EARS.EntityId[];
+        };
+    };
+    RENAME_ITEM: {
+        args: {
+            id: EARS.EntityId;
+            name: string;
+            itemType: 'document' | 'folder';
+        };
+        refuses: OnDisk;
+    };
+    DELETE_ITEMS: {
+        args: {
+            ids: EARS.EntityId[];
+        };
+        refuses: OnDisk;
+    };
+    MOVE_ITEMS: {
+        args: {
+            ids: EARS.EntityId[];
+            targetFolderId: EARS.EntityId | null;
+        };
+        refuses: OnDisk;
+    };
+    CREATE_SYMLINK_COLLECTION: {
+        args: {
+            name: string;
+            symlinkPath: string;
+            parentId?: EARS.EntityId;
+        };
+        answer: {
+            collection: CollectionDTO;
+        };
+    };
+    /** Refused as `not-found` for a path that is no folder */
+    UPDATE_SYMLINK_PATH: {
+        args: {
+            collectionId: EARS.EntityId;
+            newPath: string;
+        };
+        refuses: {
+            'not-found': {};
+        };
+    };
+    EXPORT_LIBRARY: {
+        args: {
+            directory: string;
+            format: 'json' | 'markdown';
+        };
+        answer: {
+            filePath: string;
+            itemCount: number;
+        };
+    };
+    /** Imported with what could not be, unless nothing could, which fails */
+    IMPORT_LIBRARY: {
+        args: {
+            directory: string;
+        };
+        answer: {
+            count: number;
+            errors?: string[];
+        };
+    };
+};
+
 interface LibraryContext {
     currentView: 'browser' | 'create' | 'create-index' | 'edit' | 'edit-index' | 'test-index';
     editingDocument?: DocumentDTO;
-    editingDocumentId?: string;
+    editingDocumentId?: EARS.EntityId;
     items: LibraryItem[];
-    currentFolderId: string | null;
+    currentFolderId: EARS.EntityId | null;
     currentPath: string[];
-    selectedItems: string[];
+    selectedItems: EARS.EntityId[];
     selectedDocument: DocumentDTO | null;
     sortBy: 'kind' | 'modified' | 'name' | 'size';
     sortDirection: 'asc' | 'desc';
     breadcrumbs: BreadcrumbItem[];
     editingItem?: LibraryItem;
-    itemToEdit?: string | null;
-    newItemId?: string | null;
-    expandedFolderIds: string[];
-    expandedFolderChildren: Record<string, LibraryItem[]>;
-    loadingFolderIds: string[];
-    diskFolderIds: (string | null)[];
+    itemToEdit?: EARS.EntityId | null;
+    newItemId?: EARS.EntityId | null;
+    expandedFolderIds: EARS.EntityId[];
+    expandedFolderChildren: Record<EARS.EntityId, LibraryItem[]>;
+    loadingFolderIds: EARS.EntityId[];
+    diskFolderIds: (EARS.EntityId | null)[];
     searchIndices: SearchIndex[];
     editingIndexId?: string;
     editingIndex?: SearchIndex;
@@ -2952,27 +3341,16 @@ interface LibraryContext {
     isBroken: boolean;
     lastKnownPath: string | null;
     writeError: string | null;
-    libraryImport: {
-        status: 'error' | 'idle' | 'importing' | 'success';
-        errors: string[];
-        importedCount: number;
-    };
-    libraryExport: {
-        status: 'error' | 'exporting' | 'idle' | 'success';
-        errors: string[];
-        filePath: string;
-        itemCount: number;
-    };
-    navHistory: NavHistory<string | null>;
+    navHistory: NavHistory<EARS.EntityId | null>;
 }
 
 /** Where an editor link into the library lands */
 type LibraryInboxEvent = {
     type: 'EDIT_DOCUMENT';
-    documentId: string;
+    documentId: EARS.EntityId;
 } | {
     type: 'NAVIGATE_TO_FOLDER';
-    folderId: string | null;
+    folderId: EARS.EntityId | null;
 };
 
 /**
@@ -3068,6 +3446,16 @@ interface LogEntry {
 }
 
 type LogLevel = 'debug' | 'error' | 'info' | 'warn';
+
+/** What the logs system answers: the buffer as the settings filter it, and the settings, for a window as it starts */
+type LogsAsks = {
+    GET_LOGS: {
+        answer: {
+            logs: LogEntry[];
+            settings: LogsSettings;
+        };
+    };
+};
 
 interface LogsContext {
     logs: LogEntry[];
@@ -3184,6 +3572,12 @@ interface MessageSearchResult {
     clippedEnd: boolean;
 }
 
+/** Where a message or a command went: the thread, and whether sending it started that thread */
+type MessageSent = {
+    threadId: EARS.EntityId;
+    started: boolean;
+};
+
 /**
  * The next characters of a message's own text, from the offset they start at.
  *
@@ -3220,6 +3614,94 @@ interface NormalizedRunNodeTree {
     rootIds: string[];
     childrenById: Record<string, string[]>;
 }
+
+/**
+ * A window's writes to its notes, each answered once: the surface applies its own edits at once and holds the notes'
+ * views while any of its writes is unanswered (`ViewWrites`), so every write is an ask. Creating one answers with the
+ * note it made, for the window that asked to open; an import or an export answers with what it did.
+ */
+type NoteAsks = {
+    CREATE_NOTE: {
+        args: {
+            title: string;
+            content?: string;
+            icon?: string | null;
+            parentId?: string;
+            skipContentSync?: boolean;
+            noteType?: 'document' | 'task' | 'tasklist';
+            completed?: boolean;
+            displayOrder?: number;
+        };
+        answer: {
+            note?: NoteSummary;
+        };
+    };
+    UPDATE_NOTE: {
+        args: {
+            id: string;
+            title?: string;
+            content?: string;
+            icon?: string | null;
+            completed?: boolean;
+            hideCompletedChildren?: boolean;
+            favorite?: boolean;
+        };
+    };
+    DELETE_NOTE: {
+        args: {
+            id: string;
+        };
+    };
+    SOFT_DELETE_NOTE: {
+        args: {
+            id: string;
+        };
+    };
+    RESTORE_NOTE: {
+        args: {
+            id: string;
+        };
+    };
+    MOVE_NOTE: {
+        args: {
+            ids: string[];
+            newParentId: string | null;
+        };
+    };
+    REORDER_NOTE: {
+        args: {
+            id: string;
+            newParentId: string | null;
+            newIndex: number;
+        };
+    };
+    PERMANENTLY_DELETE_NOTE: {
+        args: {
+            id: string;
+        };
+    };
+    EMPTY_TRASH: {};
+    EXPORT_NOTES: {
+        args: {
+            directory: string;
+            format: 'json' | 'markdown';
+        };
+        answer: {
+            filePath: string;
+            itemCount: number;
+        };
+    };
+    /** Imported with what could not be, unless nothing could, which fails */
+    IMPORT_NOTES: {
+        args: {
+            directory: string;
+        };
+        answer: {
+            count: number;
+            errors?: string[];
+        };
+    };
+};
 
 interface NoteDTO {
     id: string;
@@ -3294,17 +3776,6 @@ interface NotesContext {
     selectedNoteIds: string[];
     selectedTaskId: string | null;
     selectedTask: NoteSummary | null;
-    notesImport: {
-        status: 'error' | 'idle' | 'importing' | 'success';
-        errors: string[];
-        importedCount: number;
-    };
-    notesExport: {
-        status: 'error' | 'exporting' | 'idle' | 'success';
-        errors: string[];
-        filePath: string;
-        itemCount: number;
-    };
     showTrash: boolean;
     noteScrollPositions: Record<string, number>;
     panelSearchActive: boolean;
@@ -3323,6 +3794,15 @@ declare const OPERATION_KINDS: readonly ["merge", "rebase", "cherry-pick", "reve
 
 /** What can be done with what git is in the middle of: carry on once its conflicts are settled, leave out the commit a rebase stopped at, or give it up */
 declare const OPERATION_MOVES: readonly ["continue", "skip", "abort"];
+
+/**
+ * What a write or a fetch under a symlinked folder may find on disk, beside the standard two: what it named is gone,
+ * or is closed to this user. The disk's own errors are these kinds wherever an ask declares them.
+ */
+type OnDisk = {
+    'not-found': {};
+    'no-access': {};
+};
 
 interface OpenFile {
     path: string;
@@ -3346,58 +3826,24 @@ interface OpenFile {
     isPreview?: boolean;
 }
 
+/** A flow run a window opens: its tree, and where it sits among the flows that ran it */
+type OpenedRun = {
+    runNodeId: EARS.EntityId;
+    data: FlowRunNodeData;
+};
+
 type OperationKind = (typeof OPERATION_KINDS)[number];
 
 type OperationMove = (typeof OPERATION_MOVES)[number];
 
-/** What the actions system answers with: an import's or an export's outcome. The actions themselves are its views. */
-type OutgoingActionEvents = {
-    type: 'ACTIONS_IMPORTED';
-    count: number;
-    errors?: string[];
-} | {
-    type: 'ACTIONS_IMPORT_FAILED';
-    errors: string[];
-} | {
-    type: 'ACTIONS_EXPORTED';
-    filePath: string;
-    actionCount: number;
-} | {
-    type: 'ACTIONS_EXPORT_FAILED';
-    errors: string[];
-};
-
-type OutgoingActionsEvents = {
-    type: 'codeActions.ACTION_SELECTED';
-    actionId: string;
-    data: ActionEntity & {
-        actionFnContent?: string;
-    };
-} | {
-    type: 'codeActions.ACTION_UPDATED';
-    action: ActionEntity;
-    actionId: string;
-} | {
-    type: 'codeActions.CODE_ERROR';
-    data: {
-        message: string;
-    };
-};
+/** The actions system sends no window anything of its own: the actions are its views, and each ask is answered */
+type OutgoingActionEvents = never;
 
 /**
- * What the brain system sends the Brain surface. A run's tree and a run node's details are in the run history, which no
- * view can watch, so they are answers to the window that asked (\`REQUEST_SURFACE_DATA\`, \`OPEN_RUN_NODE\`,
- * \`GO_BACK_RUN_NODE\`, \`GET_RUN_NODE_DETAILS\`). The rest is news for every window: the brain's state, an event's
- * pulse, and the run's live feed, which patches the tree a window holds as streaming tokens patch a message.
+ * What the brain system sends every window: the brain's state, an event's pulse, and the run's live feed, which patches
+ * the tree a window holds as streaming tokens patch a message.
  */
 type OutgoingBrainEvents = {
-    type: 'RECEIVE_SURFACE_DATA';
-    data: FlowRunNodeData;
-} | {
-    type: 'RUN_NODE_OPENED';
-    runNodeId: EARS.EntityId;
-    data: FlowRunNodeData;
-} | {
     type: 'RUN_NODE_SPAWNED';
     runNode: RunNode;
     parentId?: EARS.EntityId;
@@ -3409,10 +3855,6 @@ type OutgoingBrainEvents = {
 } | {
     type: 'EVENT_PULSE';
     eventType: string;
-} | {
-    type: 'RUN_NODE_DETAILS';
-    runNodeId: RunNodeId;
-    details: RunNodeDetails | null;
 } | {
     type: 'BRAIN_RUNTIME_ERROR';
     error: StepRuntimeError;
@@ -3447,21 +3889,10 @@ type OutgoingBrainEvents = {
     type: 'BRAIN_RESUMED';
 };
 
-/**
- * What the browser system sends: the saved session, to the window that asked. It is a snapshot the window takes once
- * and then owns — each window syncs its own tabs back — so it is fetched rather than followed as a view, where every
- * window's sync would replace the tabs another window is using.
- */
-type OutgoingBrowserEvents = {
-    type: 'SAVED_SESSION_READ';
-    savedTabs: SavedTab[];
-    savedBookmarks: SavedBookmark[];
-};
+/** The browser system sends its surface nothing it was not asked for */
+type OutgoingBrowserEvents = never;
 
-type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingActionsEvents | OutgoingPromptsEvents | OutgoingGitHubEvents | {
-    type: 'CODE_STARTED';
-    data: CodeConnectedData;
-}
+type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingGitHubEvents
 /**
  * The code surface's directory moved, for every window, which all show the one directory: each asks again for what
  * it starts from and for what its panels show. News, with no listing on it.
@@ -3469,15 +3900,6 @@ type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | Outgoi
  | {
     type: 'BASE_DIRECTORY_CHANGED';
     baseDirectory: string;
-}
-/** What `LIST_REPOSITORIES` found, for the window that asked; `current` is the one the panels show */
- | {
-    type: 'commit.REPOSITORIES_RECEIVED';
-    data: {
-        repositories: RepositoryUnder[];
-        truncated: boolean;
-        current: string | null;
-    };
 }
 /** What testing a CLI found, for the Settings view that asked (the host declares its surface takes it) */
  | {
@@ -3490,239 +3912,16 @@ type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | Outgoi
 
 type OutgoingCommitEvents = 
 /**
- * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
- * have failed: the panel then changes only when it is asked again, and says so. `truncated` says there are more
- * changed files than `files` lists. `operation` is what git is in the middle of there, when it is in the middle
- * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
- * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
+ * The repository changed, on disk or by a write from any window: news for every window. It says which parts
+ * changed and carries none of them, so a window asks again for what it shows of those and for nothing else —
+ * an edited file is no reason to read the log again
  */
 {
-    type: 'commit.STATUS_RECEIVED';
-    data: {
-        files: GitStatusFile[];
-        counts?: LineCount[];
-        pullPreview?: MergePreview;
-        hasIdentity?: boolean;
-        slowStatus?: SlowStatus;
-        truncated: boolean;
-        branch: string;
-        hasUpstream: boolean;
-        commitsAhead: number;
-        commitsBehind: number;
-        watching: boolean;
-        watchSilent?: boolean;
-        operation?: RepositoryOperation;
-        fetchSuspended?: boolean;
-        signIn?: SignInHelp;
-    };
+    type: 'commit.REPOSITORY_CHANGED';
+    changed: RepositoryChange;
 }
-/** What git was in the middle of was moved on as asked. Where that leaves the repository is in its status */
+/** The commit message a flow wrote for the window that asked for one (`commit.GENERATE_MESSAGE`) has begun */
  | {
-    type: 'commit.OPERATION_MOVED';
-    data: {
-        move: OperationMove;
-    };
-}
-/** It ran, or it stopped on a conflict, which the status then describes as in progress */
- | {
-    type: 'commit.OPERATION_STARTED';
-    data: {
-        kind: StartableOperation;
-        target: string;
-        stopped: boolean;
-    };
-} | {
-    type: 'commit.MERGE_PREVIEWED';
-    data: {
-        target: string;
-        preview: MergePreview;
-    };
-} | {
-    type: 'commit.AMENDED';
-} | {
-    type: 'commit.COMMIT_MESSAGE_RECEIVED';
-    data: {
-        hash: string;
-        message: string;
-    };
-}
-/** The trailers of the message asked about, which the answer names */
- | {
-    type: 'commit.TRAILERS_READ';
-    data: {
-        message: string;
-        trailers: CommitTrailer[];
-    };
-}
-/** The message asked about without the trailer asked to remove: `without` is `message` when it had no such trailer */
- | {
-    type: 'commit.TRAILER_REMOVED';
-    data: {
-        message: string;
-        without: string;
-    };
-} | {
-    type: 'commit.COMMIT_REWRITTEN';
-    data: {
-        hash: string;
-        action: RewriteAction;
-    };
-}
-/** A remote branch already holds commits the amend or rewrite would change: done only once the user says to go on */
- | {
-    type: 'commit.REWRITE_NEEDS_CONFIRMATION';
-    data: {
-        message: string;
-    };
-} | {
-    type: 'commit.DIFF_RECEIVED';
-    data: GitDiff;
-} | {
-    type: 'commit.FILES_STAGED';
-    data: {
-        paths: string[];
-    };
-} | {
-    type: 'commit.FILES_UNSTAGED';
-    data: {
-        paths: string[];
-    };
-} | {
-    type: 'commit.COMMIT_SUCCESS';
-    data: {
-        message: string;
-    };
-} | {
-    type: 'commit.FILE_REVERTED';
-    data: {
-        path: string;
-        kept: DiscardKept;
-    };
-} | {
-    type: 'commit.FILES_REVERTED';
-    data: {
-        paths: string[];
-        kept: DiscardKept;
-    };
-} | {
-    type: 'commit.DISCARD_PREVIEWED';
-    data: {
-        paths: string[];
-        notKept: string[];
-    };
-} | {
-    type: 'commit.DISCARD_RESTORED';
-    data: {
-        id: string;
-    } & DiscardRestored;
-} | {
-    type: 'commit.REPOSITORY_TRUSTED';
-    data: {
-        repository: string;
-    };
-} | {
-    type: 'commit.OWNERSHIP_TRUSTED';
-    data: {
-        directory: string;
-    };
-}
-/** A push the user stopped, answered to the window that pushed: nothing failed */
- | {
-    type: 'commit.PUSH_STOPPED';
-} | {
-    type: 'commit.ERROR_RECEIVED';
-    data: CommitFailure;
-} | {
-    type: 'commit.HUNK_APPLIED';
-    data: {
-        path: string;
-        staged: boolean;
-        hunk: string;
-    };
-}
-/** How far along a push, a pull, a checkout or a submodule update is, for the window that asked for it */
- | {
-    type: 'commit.PROGRESS';
-    data: {
-        during: ProgressDuring;
-    } & GitProgress;
-} | {
-    type: 'commit.UNTRACKED_LISTED';
-    data: {
-        path: string;
-        files: string[];
-        truncated: boolean;
-    };
-}
-/** Git signs in to this host with the app's GitHub sign-in now */
- | {
-    type: 'commit.SIGN_IN_SET_UP';
-    data: {
-        host: string;
-        during?: 'pull' | 'push';
-    };
-} | {
-    type: 'commit.BRANCH_RETRIEVED';
-    data: {
-        branch: string;
-    };
-}
-/** The branches, and how each local one stands against what it follows, by its name */
- | {
-    type: 'commit.BRANCHES_RECEIVED';
-    data: {
-        branches: string[];
-        standing?: Record<string, BranchStandingOf>;
-        tags?: {
-            name: string;
-            commit: string;
-        }[];
-    };
-} | {
-    type: 'commit.TAG_CREATED';
-    data: {
-        name: string;
-    };
-} | {
-    type: 'commit.TAG_DELETED';
-    data: {
-        name: string;
-    };
-} | {
-    type: 'commit.TAG_PUSHED';
-    data: {
-        name: string;
-    };
-} | {
-    type: 'commit.BRANCH_RENAMED';
-    data: {
-        name: string;
-        to: string;
-    };
-}
-/** Which of the two were turned on: the file monitor only where git has one for this system */
- | {
-    type: 'commit.STATUS_SPED_UP';
-    data: {
-        fileMonitor: boolean;
-        untrackedCache: boolean;
-    };
-} | {
-    type: 'commit.BRANCH_CHECKOUT_SUCCESS';
-    data: {
-        branchName: string;
-    };
-} | {
-    type: 'commit.BRANCH_PUSHED';
-    data: {
-        branchName: string;
-    };
-} | {
-    type: 'commit.BRANCH_PULLED';
-    data: {
-        branchName: string;
-    };
-} | {
     type: 'commit.GENERATING_MESSAGE';
 } | {
     type: 'commit.MESSAGE_GENERATED';
@@ -3730,166 +3929,25 @@ type OutgoingCommitEvents =
         message: string;
     };
 }
-/**
- * The repository changed, on disk or by a write from any window: news for every window. It says which parts
- * changed and carries none of them, so a window asks again for what it shows of those and for nothing else —
- * an edited file is no reason to read the log again
- */
+/** The flow writing a commit message for the window that asked made none, and this says why */
  | {
-    type: 'commit.REPOSITORY_CHANGED';
-    changed: RepositoryChange;
-} | {
-    type: 'commit.STASH_LIST_RECEIVED';
-    data: {
-        stashes: StashEntry[];
-    };
-}
-/** The files a stash holds, read without applying it, for the window that asked */
- | {
-    type: 'commit.STASH_CHANGES_RECEIVED';
-    data: {
-        index: number;
-        files: ChangedFile[];
-    };
-} | {
-    type: 'commit.BLAME_RECEIVED';
-    data: {
-        path: string;
-        lines: BlameLine[];
-    };
-}
-/** The submodule is at the commit the repository records for it */
- | {
-    type: 'commit.SUBMODULE_UPDATED';
-    data: {
-        path: string;
-    };
-} | {
-    type: 'commit.STASH_SUCCESS';
-    data: {
-        message: string;
-    };
-}
-/** A stash was applied, or with `popped` applied and dropped, without a conflict */
- | {
-    type: 'commit.STASH_APPLIED';
-    data: {
-        index: number;
-        popped: boolean;
-    };
-} | {
-    type: 'commit.WORKTREE_LIST_RECEIVED';
-    data: {
-        worktrees: WorktreeEntry[];
-    };
-} | {
-    type: 'commit.WORKTREE_ADDED';
-    data: {
-        path: string;
-        branch: string;
-    };
-} | {
-    type: 'commit.WORKTREE_REMOVED';
-    data: {
-        path: string;
-    };
-}
-/** The worktree a window asked to switch to is the folder the code surface is over now, answered to that window */
- | {
-    type: 'commit.WORKTREE_SWITCHED';
-    data: {
-        path: string;
-    };
-} | {
-    type: 'commit.CONFLICT_RESOLVED';
-    data: {
-        path: string;
-    };
-} | {
-    type: 'commit.ALL_CONFLICTS_RESOLVED';
-}
-/** A page of history, saying which file's it is and whether it goes on from a cursor; `cursor` for the next */
- | {
-    type: 'commit.LOG_LIST_RECEIVED';
-    data: {
-        commits: HistoryCommit[];
-        cursor?: string;
-        path?: string;
-        continued?: boolean;
-    };
-} | {
-    type: 'commit.REVERT_COMMIT_SUCCESS';
-    data: {
-        hash: string;
-    };
-} | {
-    type: 'commit.RESET_COMMIT_SUCCESS';
-    data: {
-        hash: string;
-    };
-}
-/** What `commit.UNDO_LAST` would take back, after a write that can be: nothing when there is none */
- | {
-    type: 'commit.UNDOABLE_RECEIVED';
-    data: {
-        id: string;
-        summary: string;
-    } | null;
-} | {
-    type: 'commit.UNDONE';
-    data: {
-        id: string;
-        summary: string;
-    };
-}
-/** The commit to be undone is already on a remote branch: undone only once the user says so, and this says why */
- | {
-    type: 'commit.UNDO_NEEDS_CONFIRMATION';
+    type: 'commit.MESSAGE_NOT_GENERATED';
     data: {
         message: string;
     };
 };
 
 /**
- * What the database system sends. Every one answers whoever asked, by `reply`, but two: `DATABASE_REPLACED`, which is
- * news for every window, and the generated query, which a flow sends to the asking window by its connection.
+ * What the database system sends beside its answers: `DATABASE_REPLACED`, which is news for every window, and the
+ * generated query, which a flow sends to the asking window by its connection.
  */
 type OutgoingDatabaseEvents = 
 /**
  * The data was replaced — imported or reset — by any window: every window drops the results it shows and the run
- * history it holds, which name rows that may be gone. A notification; the window that
- * asked has its own outcome too.
+ * history it holds, which name rows that may be gone. A notification; the window that asked is answered too.
  */
 {
     type: 'DATABASE_REPLACED';
-}
-/**
- * The four replies to `EXECUTE_QUERY`/`EXECUTE_TRANSACTION`.
- *
- * **None of them names the request, because the envelope does.** `reply` stamps `Message.answering` with
- * the call the request was sent under, and the delivery door puts that on the delivered event under a
- * reserved key — so a requester tells its own answer from someone else's by asking `answersCall`
- * (`@apackdev/sdk/events`), and neither side declares a field for it.
- *
- * **The call is the requester's, which is what makes it identify a request rather than an emit.** The case
- * it exists for is a requester that gave up waiting and asked again: an id stamped when the *answer* is
- * built gives the abandoned request's late answer the newest id, so that answer wins. It has to be unique
- * across windows for the same reason — an answer can reach every one of them.
- */
- | {
-    type: 'QUERY_RESULT';
-    result: any;
-    executionTime: number;
-} | {
-    type: 'QUERY_ERROR';
-    error: string;
-} | {
-    type: 'TRANSACTION_RESULT';
-    result: any;
-    executionTime: number;
-} | {
-    type: 'TRANSACTION_ERROR';
-    error: string;
 }
 /**
  * The three a flow sends (`db-query`, `db-transaction`) to the window that asked: a flow run is no delivery, so it
@@ -3902,575 +3960,78 @@ type OutgoingDatabaseEvents =
     query: string;
 }
 /**
- * Generating a query from a prompt failed, which is not a query failing.
- *
- * **Its own event because it answers nothing.** It is broadcast, not replied, so it carries no call — and
- * the guard on `QUERY_ERROR` takes only an answer whose call is the one outstanding. Sent as a
- * `QUERY_ERROR` it would be dropped by that guard every time and the surface's loading flag would never
- * clear, which is the failure this split prevents. An answer and an announcement are different things,
- * and one event cannot be both.
+ * Generating a query from a prompt failed in the flow, which is not a query failing. Its own event because it
+ * answers no ask: the flow sends it long after `GENERATE_AI_QUERY` was answered.
  */
  | {
     type: 'AI_QUERY_ERROR';
     error: string;
-} | {
-    type: 'FLOW_RUNS_RESULT';
-    flows: RunNode[];
-}
-/**
- * `offset` is which page these events are, which is what tells two pages of one flow apart — the flow id
- * alone cannot, so a viewer correlating on it places a late page by wherever it has since got to.
- */
- | {
-    type: 'FLOW_EVENTS_RESULT';
-    flowId: string;
-    events: RunTree[];
-    hasMore: boolean;
-    offset: number;
-} | {
-    type: 'NODE_DETAILS_RESULT';
-    nodeId: string;
-    details: RunNode | null;
-} | {
-    type: 'EXPORT_DATABASE_SUCCESS';
-    path: string;
-} | {
-    type: 'EXPORT_DATABASE_ERROR';
-    error: string;
-} | {
-    type: 'IMPORT_DATABASE_SUCCESS';
-    message?: string;
-} | {
-    type: 'IMPORT_DATABASE_ERROR';
-    error: string;
-    unknownDatabases?: string[];
-} | {
-    type: 'BACKUP_INFO_RESULT';
-    info: {
-        timestamp: number;
-        databases: string[];
-        size: number;
-        hasMedia?: boolean;
-    } | null;
-} | {
-    type: 'RESET_DATABASE_SUCCESS';
-    message: string;
-} | {
-    type: 'RESET_DATABASE_ERROR';
-    error: string;
 };
 
-type OutgoingExplorerEvents = {
-    type: 'explorer.FILES_LISTED';
-    data: DirectoryContent;
-} | {
-    type: 'explorer.FILE_CREATED';
-    data: {
-        path: string;
-    };
-} | {
-    type: 'explorer.FILE_DELETED';
-    data: {
-        path: string;
-    };
-} | {
-    type: 'explorer.FILE_RENAMED';
-    data: {
-        oldPath: string;
-        newPath: string;
-    };
-} | {
-    type: 'explorer.DIRECTORY_CREATED';
-    data: {
-        path: string;
-    };
-} | {
-    type: 'explorer.FILE_INFO';
-    data: FileInfo;
-} | {
-    type: 'explorer.FILE_CONTENT';
-    data: FileContent;
-} | {
-    type: 'explorer.FILE_SAVED';
-    data: {
-        path: string;
-    };
-} | {
-    type: 'explorer.CODE_ERROR';
-    data: CodeSystemError;
-} | {
+type OutgoingExplorerEvents = 
+/** A file open in an editor changed on disk: news for every window, which each reads again if it shows the file */
+{
     type: 'explorer.FILE_CHANGED_EXTERNALLY';
     data: FileChangeInfo;
-} | {
-    type: 'explorer.QUICK_OPEN_RESULTS';
-    data: QuickOpenResult$1[];
-} | {
-    type: 'explorer.FILES_MOVED';
-    data: {
-        sourcePaths: string[];
-        targetDir: string;
-        movedPaths: string[];
-    };
-} | {
-    type: 'explorer.FILES_COPIED';
-    data: {
-        targetDir: string;
-        copiedPaths: string[];
-    };
 };
 
-/**
- * What the flows system sends: the model catalog when asked to publish, and the answers to a window's writes. The
- * flows themselves are its views.
- */
-type OutgoingFlowsEvents = 
-/** The models the editor offers, answered to the window that asked as its surface starts */
-{
-    type: 'MODEL_CATALOG_READ';
-    data: ModelCatalog;
-}
-/**
- * The flow *you* asked to create, answered to the window that asked, which then opens it. Its id is minted by the
- * create, so nothing the asker sent could identify it.
- */
- | {
-    type: 'FLOW_OPENED';
-    flowId: EARS.EntityId;
-}
-/** The node a `CREATE_NODE` made, for the editor to put in place of the one it added under `tempId` */
- | {
-    type: 'NODE_CREATED';
-    tempId: string;
-    nodeId: EARS.EntityId;
-    node: NodeEntity;
-}
-/** The relation a `CREATE_EDGE` made, for the editor to give the edge it drew */
- | {
-    type: 'EDGE_CREATED';
-    sourceId: EARS.EntityId;
-    targetId: EARS.EntityId;
-    relId: EARS.RelationId;
-    sourceHandle?: string;
-    targetHandle?: string;
-}
-/** Any other write landed */
- | {
-    type: 'FLOW_WRITTEN';
-}
-/** A write was refused, and why: the editor puts back the flow as stored */
- | {
-    type: 'FLOW_WRITE_FAILED';
-    error: string;
-} | {
-    type: 'DSL_IMPORTED';
-    flowIds: EARS.EntityId[];
-    errors?: string[];
-} | {
-    type: 'DSL_IMPORT_FAILED';
-    errors: string[];
-} | {
-    type: 'DSL_EXPORTED';
-    filePath: string;
-    flowCount: number;
-    skipped: string[];
-} | {
-    type: 'DSL_EXPORT_FAILED';
-    errors: string[];
-};
+/** The flows system sends no window anything of its own: the flows are its views, and each ask is answered */
+type OutgoingFlowsEvents = never;
 
-type OutgoingGitHubEvents = {
-    type: 'github.ACCOUNT';
-    account: GitHubAccount | null;
-}
-/** The code to type at `verificationUri`, for the window that asked to sign in */
- | {
-    type: 'github.SIGN_IN_CODE';
-    userCode: string;
-    verificationUri: string;
-    expiresAt: number;
-} | {
-    type: 'github.SIGN_IN_FAILED';
-    reason: GitHubSignInFailure;
-    message: string;
-}
+type OutgoingGitHubEvents = 
 /** News for every window: the account the app is signed in as changed, or it signed out (`null`) */
- | {
+{
     type: 'github.ACCOUNT_CHANGED';
     account: GitHubAccount | null;
 };
 
 /**
- * What the library system sends: the answers to a window's writes and fetches, an import's or an export's outcome,
- * and the one notification there is, a folder on disk having changed. What the library stores is its views; what is
- * on disk is fetched, since a view watches the engine and nothing else.
+ * What the library system sends beside its answers: the one notification there is, a folder on disk having changed. What the library stores is its views; what is on disk is fetched.
  */
 type OutgoingLibraryEvents = 
-/** The folder a `CREATE_COLLECTION` made, for the window that asked to name */
-{
-    type: 'COLLECTION_CREATED';
-    data: {
-        collection: CollectionDTO;
-    };
-}
-/** Any other write landed */
- | {
-    type: 'LIBRARY_WRITTEN';
-}
-/** A write was refused, and why */
- | {
-    type: 'LIBRARY_WRITE_FAILED';
-    error: string;
-}
-/** A fetch of what is on disk could not be made, and why */
- | {
-    type: 'LIBRARY_READ_FAILED';
-    error: string;
-}
-/** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
- | {
-    type: 'FOLDER_CONTENTS_LOADED';
-    data: FolderContents;
-}
-/** A document on disk, as `GET_DOCUMENT` asked */
- | {
-    type: 'DOCUMENT_LOADED';
-    data: {
-        document: DocumentDTO;
-    };
-}
-/** The symlinked collections `CHECK_SYMLINKS` named whose folder is gone */
- | {
-    type: 'SYMLINKS_CHECKED';
-    ids: string[];
-    broken: string[];
-}
 /**
  * Something on disk under a symlinked folder changed — `folderId`'s contents, or, with `null`, which is not known —
  * for every window showing such a folder to fetch it again. A notification: no window asked for it.
  */
- | {
+{
     type: 'FOLDER_CHANGED';
     folderId: string | null;
-} | {
-    type: 'LIBRARY_IMPORTED';
-    count: number;
-    errors?: string[];
-} | {
-    type: 'LIBRARY_IMPORT_FAILED';
-    errors: string[];
-} | {
-    type: 'LIBRARY_EXPORTED';
-    filePath: string;
-    itemCount: number;
-} | {
-    type: 'LIBRARY_EXPORT_FAILED';
-    errors: string[];
 };
 
-/**
- * What the logs system sends: the buffer, to the window that asked for it (as it starts, and when the settings that
- * filter it change); and to every window, each entry as it is logged — a feed — and that the buffer was cleared.
- */
+/** What the logs system sends every window: each entry as it is logged — a feed — and that the buffer was cleared */
 type OutgoingLogsEvents = {
-    type: 'LOGS_READ';
-    logs: LogEntry[];
-    settings: LogsSettings;
-} | {
     type: 'LOG_ADDED';
     log: LogEntry;
 } | {
     type: 'LOGS_CLEARED';
 };
 
-/**
- * What the notes system sends: the answers to a window's writes, and an import's or an export's outcome. The notes
- * themselves are its views.
- */
-type OutgoingNotesEvents = 
-/** The note a `CREATE_NOTE` made, for the window that asked to open */
-{
-    type: 'NOTE_CREATED';
-    note: NoteSummary;
-}
-/** Any other write landed */
- | {
-    type: 'NOTE_WRITTEN';
-}
-/** A write was refused, and why: the window puts back the notes as stored */
- | {
-    type: 'NOTE_WRITE_FAILED';
-    error: string;
-} | {
-    type: 'NOTES_IMPORTED';
-    count: number;
-    errors?: string[];
-} | {
-    type: 'NOTES_IMPORT_FAILED';
-    errors: string[];
-} | {
-    type: 'NOTES_EXPORTED';
-    filePath: string;
-    itemCount: number;
-} | {
-    type: 'NOTES_EXPORT_FAILED';
-    errors: string[];
-};
+/** The notes system sends no window anything of its own: the notes are its views, and each ask is answered */
+type OutgoingNotesEvents = never;
 
-/** What the prompts system answers with: an import's or an export's outcome. The prompts themselves are its views. */
-type OutgoingPromptEvents = {
-    type: 'PROMPTS_IMPORTED';
-    count: number;
-    errors?: string[];
-} | {
-    type: 'PROMPTS_IMPORT_FAILED';
-    errors: string[];
-} | {
-    type: 'PROMPTS_EXPORTED';
-    filePath: string;
-    promptCount: number;
-} | {
-    type: 'PROMPTS_EXPORT_FAILED';
-    errors: string[];
-};
+/** The prompts system sends no window anything of its own: the prompts are its views, and each ask is answered */
+type OutgoingPromptEvents = never;
 
-type OutgoingPromptsEvents = {
-    type: 'codePrompts.PROMPT_SELECTED';
-    promptId: string;
-    data: PromptEntity & {
-        templateFnContent?: string;
-    };
-} | {
-    type: 'codePrompts.PROMPT_UPDATED';
-    prompt: PromptEntity;
-    promptId: string;
-} | {
-    type: 'codePrompts.CODE_ERROR';
-    data: {
-        message: string;
-    };
-};
-
-type OutgoingPullRequestEvents = {
-    type: 'pr.BRANCH_DIFF_RECEIVED';
-    data: {
-        files: GitStatusFile[];
-        baseBranch: string;
-        headBranch?: string;
-    };
-} | {
-    type: 'pr.FILE_DIFF_RECEIVED';
-    data: GitDiff & {
-        baseBranch: string;
-        headBranch?: string;
-    };
-}
-/** A file's diff needs content this partial clone was not given, which is fetched only when the user asks */
- | {
-    type: 'pr.FILE_CONTENT_MISSING';
-    data: {
-        path: string;
-        baseBranch: string;
-        headBranch?: string;
-        prNumber?: number;
-    };
-}
-/** What failed, said; for a refusal of GitHub's, the reason the panel acts on, as `pr.GITHUB_ACCESS_CHECKED` gives it */
- | {
-    type: 'pr.ERROR';
-    message: string;
-    reason?: GitHubApiFailure;
-}
+type OutgoingPullRequestEvents = 
 /** The repository's commits or branches moved, which is all of it a pull request is read from: news for every window */
- | {
+{
     type: 'pr.GIT_STATUS_REFRESHED';
     data: {
         timestamp: Date;
-    };
-}
-/** A page of the list asked for, and the cursor of the next, `null` where it was the last */
- | {
-    type: 'pr.PRS_LISTED';
-    data: {
-        prs: GhPullRequest[];
-        next: string | null;
-    };
-}
-/** The branch the pull request was checked out as, and what that did to a branch already there */
- | {
-    type: 'pr.PR_CHECKED_OUT';
-    data: {
-        number: number;
-        branch: string;
-        checkout: PRBranchCheckout;
-    };
-}
-/**
- * `fetchedAt` is when these details were read from GitHub, and the viewer keeps the newest per PR so a
- * slow retry cannot overwrite fresher data from a concurrent fetch.
- *
- * **A clock rather than a counter, because the two sides do not share a lifetime.** What this is
- * compared against lives in the renderer, which outlives the backend: anything reset by an API restart
- * or a pack reload reads as older there forever after, and every later answer is dropped.
- */
- | {
-    type: 'pr.PR_DETAILS_RECEIVED';
-    data: {
-        pr: GhPullRequest;
-        comments: GhPRComment[];
-        fetchedAt: number;
-    };
-} | {
-    type: 'pr.PR_CREATED';
-    data: {
-        pr: GhPullRequest;
-    };
-} | {
-    type: 'pr.PR_MERGED';
-    data: {
-        number: number;
-    };
-} | {
-    type: 'pr.PR_CLOSED';
-    data: {
-        number: number;
-    };
-} | {
-    type: 'pr.PR_DRAFT_TOGGLED';
-    data: {
-        number: number;
-        isDraft: boolean;
-    };
-} | {
-    type: 'pr.BRANCH_PR_CHECKED';
-    data: {
-        pr: GhPullRequest | null;
-    };
-}
-/** `ok`, or why not, with what to tell the user */
- | {
-    type: 'pr.GITHUB_ACCESS_CHECKED';
-    data: {
-        access: 'ok' | GitHubApiFailure;
-        message?: string;
-    };
-} | {
-    type: 'pr.AUTOFILL_RECEIVED';
-    data: {
-        title: string;
-        body: string;
-    };
-} | {
-    type: 'pr.SMART_BASE_BRANCH_RECEIVED';
-    data: {
-        branch: string;
-    };
-} | {
-    type: 'pr.BRANCH_DELETED';
-    data: {
-        branch: string;
-    };
-} | {
-    type: 'pr.PR_UPDATED';
-    data: {
-        number: number;
-        title?: string;
-        body?: string;
-        base?: string;
-    };
-} | {
-    type: 'pr.COMMENT_CREATED';
-    data: {
-        number: number;
-    };
-} | {
-    type: 'pr.COMMENT_EDITED';
-    data: {
-        commentId: number;
-    };
-} | {
-    type: 'pr.COMMENT_DELETED';
-    data: {
-        commentId: number;
-    };
-} | {
-    type: 'pr.COMMENTS_RECEIVED';
-    data: {
-        number: number;
-        comments: GhPRComment[];
-    };
-} | {
-    type: 'pr.REVIEW_THREADS_RECEIVED';
-    data: {
-        threads: GhReviewThread[];
-    };
-} | {
-    type: 'pr.THREAD_REPLIED';
-    data: {
-        prNumber: number;
-    };
-} | {
-    type: 'pr.THREAD_RESOLVED';
-    data: {
-        threadId: string;
-    };
-} | {
-    type: 'pr.THREAD_UNRESOLVED';
-    data: {
-        threadId: string;
-    };
-} | {
-    type: 'pr.REVIEW_COMMENT_EDITED';
-    data: {
-        commentId: number;
-    };
-} | {
-    type: 'pr.REVIEW_COMMENT_DELETED';
-    data: {
-        commentId: number;
-    };
-};
-
-type OutgoingSearchEvents = {
-    type: 'search.RESULT';
-    data: SearchResult;
-} | {
-    type: 'search.PROGRESS';
-    data: SearchProgress;
-} | {
-    type: 'search.COMPLETE';
-    data: {
-        results: SearchResult[];
-        totalMatches: number;
-    };
-} | {
-    type: 'search.ERROR';
-    data: {
-        message: string;
     };
 };
 
 type OutgoingTerminalEvents = 
 /**
- * A terminal exists — news for every window, each of which asks for the list again (\`terminal.REFRESH_LIST\`, answered
- * with \`terminal.TERMINALS_LISTED\`). It names the terminal and carries no instruction: a window that did not ask for
- * it must not open it, which is what \`terminal.OPENED\` is for.
+ * A terminal exists — news for every window, each of which asks for the list again (`terminal.REFRESH_LIST`). It
+ * names the terminal and carries no instruction: a window that did not ask for it must not open it, which is what
+ * the answer to `terminal.CREATE_TERMINAL` is for.
  */
 {
     type: 'terminal.CREATED';
     data: {
         terminalId: string;
     };
-}
-/**
- * The terminal *you* asked for, answered to the window that asked.
- *
- * Its id does not exist until it is created, so nothing the asker sent could identify it — which is why
- * this is addressed rather than keyed. Before it existed, `terminal.CREATED` carried both jobs and every
- * window routed a new terminal into its own panel.
- */
- | {
-    type: 'terminal.OPENED';
-    data: TerminalInfo;
 }
 /**
  * **What a terminal's program did that is not on its screen**, for every window: the five below. The
@@ -4539,8 +4100,8 @@ type OutgoingTerminalEvents =
  * A pty has one `(cols, rows)` and the window that opened it owns them (M2), so a second window's fit is
  * refused — and a window that is never told renders at a grid nothing agreed to. This carries the accepted
  * one, so no window has to assume its own request took effect: broadcast when the grid moved, since every
- * window showing the terminal needs it, and replied to the asker when its request was refused, which is
- * news to nobody else.
+ * window showing the terminal needs it. A window whose own fit was refused is told by the answer to its
+ * `terminal.RESIZE_TERMINAL`, that being news to nobody else.
  */
  | {
     type: 'terminal.RESIZED';
@@ -4567,18 +4128,6 @@ type OutgoingTerminalEvents =
         cwd: string;
         title?: string;
     };
-} | {
-    type: 'terminal.ERROR';
-    data: {
-        message: string;
-        terminalId?: string;
-    };
-} | {
-    type: 'terminal.TERMINALS_LISTED';
-    data: TerminalInfo[];
-} | {
-    type: 'terminal.TERMINAL_TAB_OPENED';
-    data: TerminalInfo;
 }
 /** Whether a terminal's shell outlives the app changed: news for every window, which each draws on its tab */
  | {
@@ -4598,53 +4147,15 @@ type OutgoingTerminalEvents =
         terminalId: string;
         statuses: TerminalStatus[];
     };
-}
-/**
- * A recording is open, for the window that asked: `session` is what its view is drawn from, and it runs
- * between `first` and `last`, in milliseconds since the Unix epoch.
- */
- | {
-    type: 'terminal.REWOUND';
-    data: {
-        terminalId: string;
-        session: string;
-        first: number;
-        last: number;
-    };
-}
-/** The moment an open recording now shows, for the window that asked */
- | {
-    type: 'terminal.REWIND_SOUGHT';
-    data: {
-        session: string;
-        at: number;
-    };
 };
 
 /**
- * What the threads system sends. What it stores is its views (\`be/views.ts\`); what it sends is the answers to a
- * window's asks and writes, and the few notifications a flow sends a window, none of which carries a row.
+ * What the threads system sends every window: a thread to show (one a flow opened, a first message started, or a
+ * fork), the streamed reply's feed, and the few notifications a flow sends a window, none of which carries a row.
  */
 type OutgoingThreadsEvents = 
-/** The thread a \`CREATE_THREAD\` made, for the window that asked to mark */
+/** Open this thread in the chat, in every window: one a flow opened, a first message or command started, or a fork */
 {
-    type: 'THREAD_CREATED';
-    id: EARS.EntityId;
-}
-/** Any other write landed */
- | {
-    type: 'THREAD_WRITTEN';
-}
-/** A write was refused, and why */
- | {
-    type: 'THREAD_WRITE_FAILED';
-    error: string;
-}
-/**
- * Open this thread in the chat: to the window that asked (a message that started a thread, a fork), or, from a flow,
- * which has no window to answer, to every window. It names the thread; its content is the thread's views.
- */
- | {
     type: 'SHOW_THREAD';
     threadId: EARS.EntityId;
     restore?: boolean;
@@ -4681,27 +4192,6 @@ type OutgoingThreadsEvents =
     at: number;
     text: string;
     done?: true;
-} | {
-    type: 'CHAT_STARTED';
-    data: ChatStart;
-} | {
-    type: 'THREAD_CHAT_ERROR';
-    threadId: string;
-    error: string;
-} | {
-    type: 'THREADS_EXPORTED';
-    filePath: string;
-    threadCount: number;
-} | {
-    type: 'THREADS_EXPORT_FAILED';
-    errors: string[];
-} | {
-    type: 'THREADS_IMPORTED';
-    count: number;
-    errors?: string[];
-} | {
-    type: 'THREADS_IMPORT_FAILED';
-    errors: string[];
 } | {
     type: 'SET_MODE';
     mode: string;
@@ -4780,6 +4270,30 @@ type OwnSurfaceEvents = {
  * (`kept`). The engine's `BranchCheckout`, which the backend hands on as this
  */
 type PRBranchCheckout = 'created' | 'current' | 'fast-forwarded' | 'kept';
+
+/**
+ * A pull request's details once GitHub has worked out whether it can merge.
+ *
+ * `fetchedAt` is when these details were read from GitHub, and the viewer keeps the newest per PR so a slow retry
+ * cannot overwrite fresher data from a concurrent fetch.
+ *
+ * **A clock rather than a counter, because the two sides do not share a lifetime.** What this is compared against
+ * lives in the renderer, which outlives the backend: anything reset by an API restart or a pack reload would read as
+ * older there forever after, and every later answer would be dropped.
+ */
+type PRDetails = {
+    pr: GhPullRequest;
+    comments: GhPRComment[];
+    fetchedAt: number;
+};
+
+/** Where a file's diff is asked of: the comparison it is in, and the file */
+type PRFileDiffWhere = {
+    path: string;
+    baseBranch: string;
+    headBranch?: string;
+    prNumber?: number;
+};
 
 type PRListState = (typeof PR_LIST_STATES)[number];
 
@@ -4865,6 +4379,21 @@ type PackSurfaceState = {
     'brain': SurfaceStateOf<Contract$2>;
     'database': SurfaceStateOf<Contract$1>;
     'logs': SurfaceStateOf<Contract>;
+};
+
+/** Feature id → the asks this pack's system for that feature answers, by name (dependents name it `default-setup/<feature>`). */
+type PackSystemAsks = {
+    'threads': ContractAsks<SystemContracts['threads']>;
+    'code': ContractAsks<SystemContracts['code']>;
+    'notes': ContractAsks<SystemContracts['notes']>;
+    'browser': ContractAsks<SystemContracts['browser']>;
+    'library': ContractAsks<SystemContracts['library']>;
+    'flows': ContractAsks<SystemContracts['flows']>;
+    'actions': ContractAsks<SystemContracts['actions']>;
+    'prompts': ContractAsks<SystemContracts['prompts']>;
+    'brain': ContractAsks<SystemContracts['brain']>;
+    'database': ContractAsks<SystemContracts['database']>;
+    'logs': ContractAsks<SystemContracts['logs']>;
 };
 
 /** Feature id → the events this pack's system for that feature receives (dependents name it `default-setup/<feature>`). */
@@ -4975,6 +4504,58 @@ type Predicate = {
 /** The commands whose progress the window that asked for one is told: a push, a pull, a checkout, a submodule update */
 type ProgressDuring = 'checkout' | 'pull' | 'push' | 'submodule';
 
+/**
+ * A window's writes to its prompts, each answered once: that it landed, or why it was refused. What a write changed
+ * reaches every window through the views.
+ */
+type PromptAsks = {
+    CREATE_PROMPT: {
+        args: {
+            label: string;
+            inputs: Record<string, any>;
+            templateFn: string;
+            outputSchema?: any;
+            description?: string;
+            category?: string;
+        };
+    };
+    UPDATE_PROMPT: {
+        args: {
+            promptId: string;
+            label?: string;
+            inputs?: Record<string, any>;
+            templateFn?: string;
+            outputSchema?: any;
+            description?: string;
+            category?: string;
+        };
+    };
+    DELETE_PROMPT: {
+        args: {
+            promptId: string;
+        };
+    };
+    /** Imported with what could not be, unless nothing could, which fails */
+    IMPORT_PROMPTS: {
+        args: {
+            prompts: any;
+        };
+        answer: {
+            count: number;
+            errors?: string[];
+        };
+    };
+    EXPORT_PROMPTS: {
+        args: {
+            directory: string;
+        };
+        answer: {
+            filePath: string;
+            promptCount: number;
+        };
+    };
+};
+
 declare class PromptService {
     findByLabel(label: string): _apackdev_sdk.PromptEntity | undefined;
     /**
@@ -5006,6 +4587,33 @@ interface PromptTab {
     isPreview?: boolean;
 }
 
+/** What a window asks of a prompt's template, answered by the code system's prompts child (`promptsSystem`) */
+type PromptsAsks = {
+    /** The prompt, with its template to edit in a tab */
+    'codePrompts.OPEN_PROMPT': {
+        args: {
+            promptId: string;
+        };
+        answer: PromptEntity & {
+            templateFnContent?: string;
+        };
+        refuses: {
+            'not-found': {};
+        };
+    };
+    /** Saves the tab's template into the prompt, answered with the prompt as it is now */
+    'codePrompts.SAVE_PROMPT': {
+        args: {
+            promptId: string;
+            templateFn: string;
+        };
+        answer: PromptEntity;
+        refuses: {
+            'not-found': {};
+        };
+    };
+};
+
 interface PromptsContext {
     /** The prompt open in the detail view */
     selectedPromptId?: EARS.EntityId;
@@ -5016,17 +4624,8 @@ interface PromptsContext {
     /** How many prompts the list shows: a page more each time the user scrolls to its end */
     listLimit: number;
     selectedCategories: string[];
-    promptsImport: {
-        status: 'error' | 'idle' | 'importing' | 'success';
-        errors: string[];
-        importedCount: number;
-    };
-    promptsExport: {
-        status: 'error' | 'exporting' | 'idle' | 'success';
-        errors: string[];
-        filePath: string;
-        promptCount: number;
-    };
+    /** Why the last of this window's writes was refused, until the user dismisses it */
+    writeError: string | null;
     formData: {
         label: string;
         description?: string;
@@ -5060,6 +4659,279 @@ type PromptsInboxEvent = {
 } | {
     type: 'PROMPT.SELECT';
     promptId: EARS.EntityId;
+};
+
+/** What a window asks of the pull requests, answered by the pull request child (`features/pull-request.ts`) */
+type PullRequestAsks = {
+    /** `prNumber` reads the head from what GitHub keeps of that pull request, which outlives its branch */
+    'pr.GET_BRANCH_DIFF': {
+        args: {
+            baseBranch?: string;
+            headBranch?: string;
+            prNumber?: number;
+        };
+        answer: {
+            files: GitStatusFile[];
+            baseBranch: string;
+            headBranch?: string;
+        };
+    };
+    /**
+     * `fetchMissing`: content a partial clone was not given is fetched for this diff, where it is otherwise refused as
+     * `content-missing`, which is fetched only when the user asks
+     */
+    'pr.GET_BRANCH_FILE_DIFF': {
+        args: PRFileDiffWhere & {
+            fetchMissing?: boolean;
+        };
+        answer: GitDiff & {
+            baseBranch: string;
+            headBranch?: string;
+        };
+        refuses: {
+            'content-missing': PRFileDiffWhere;
+        };
+    };
+    /** A page of the pull requests in `state`, newest first, from `after` (the last page's `next`), by `query` where there is one; `next` is `null` on the last */
+    'pr.LIST_PRS': {
+        args: {
+            state: PRListState;
+            query?: string;
+            after?: string;
+        };
+        answer: {
+            prs: GhPullRequest[];
+            next: string | null;
+        };
+        refuses: GitHubRefused;
+    };
+    /** Checks out the pull request's head as a branch here: the branch it became, and what that did to a branch already there */
+    'pr.CHECKOUT_PR': {
+        args: {
+            number: number;
+        };
+        answer: {
+            number: number;
+            branch: string;
+            checkout: PRBranchCheckout;
+        };
+        refuses: GitHubRefused;
+    };
+    /** The pull request's details */
+    'pr.SELECT_PR': {
+        args: {
+            number: number;
+        };
+        answer: PRDetails;
+        refuses: GitHubRefused;
+    };
+    'pr.CREATE_PR': {
+        args: {
+            title: string;
+            body: string;
+            base?: string;
+            draft?: boolean;
+        };
+        answer: {
+            pr: GhPullRequest;
+        };
+        refuses: GitHubRefused;
+    };
+    /**
+     * `sha` is the head shown: GitHub merges nothing where the head has moved since (`head-moved`). A refused merge
+     * carries the pull request read again, where it could be, so the panel shows what refused it
+     */
+    'pr.MERGE_PR': {
+        args: {
+            number: number;
+            method?: 'merge' | 'rebase' | 'squash';
+            sha?: string;
+        };
+        answer: {
+            number: number;
+        };
+        refuses: {
+            github: {
+                reason: GitHubApiFailure;
+                details?: PRDetails;
+            };
+        };
+    };
+    'pr.CLOSE_PR': {
+        args: {
+            number: number;
+        };
+        answer: {
+            number: number;
+        };
+        refuses: GitHubRefused;
+    };
+    /** `isDraft` is what it is now. Marked ready, its details once GitHub has worked out whether it can merge */
+    'pr.TOGGLE_DRAFT': {
+        args: {
+            number: number;
+            isDraft: boolean;
+        };
+        answer: {
+            number: number;
+            isDraft: boolean;
+            details?: PRDetails;
+        };
+        refuses: GitHubRefused;
+    };
+    /** The current branch's own pull request, `null` where it has none */
+    'pr.CHECK_BRANCH_PR': {
+        answer: {
+            pr: GhPullRequest | null;
+        };
+        refuses: GitHubRefused;
+    };
+    /** Whether the app's GitHub sign-in can work with the pull requests of the repository the remote names: `ok`, or why not, with what to tell the user */
+    'pr.CHECK_GITHUB_ACCESS': {
+        answer: {
+            access: 'ok' | GitHubApiFailure;
+            message?: string;
+        };
+    };
+    /** A title and a body for a new pull request, from the branch's commits: empty where they cannot be read */
+    'pr.GET_PR_AUTOFILL': {
+        answer: {
+            title: string;
+            body: string;
+        };
+    };
+    /** The branch a new pull request is most likely against */
+    'pr.GET_SMART_BASE_BRANCH': {
+        answer: {
+            branch: string;
+        };
+    };
+    /**
+     * Deletes the pull request's branch on GitHub: refused for a fork's branch, and for one another open pull request
+     * is from. Answered with the branch deleted, or one already gone
+     */
+    'pr.DELETE_BRANCH': {
+        args: {
+            number: number;
+        };
+        answer: {
+            branch: string;
+        };
+        refuses: GitHubRefused;
+    };
+    /** A base moved brings the details once GitHub has worked out whether it can merge */
+    'pr.UPDATE_PR': {
+        args: {
+            number: number;
+            title?: string;
+            body?: string;
+            base?: string;
+        };
+        answer: {
+            number: number;
+            title?: string;
+            body?: string;
+            base?: string;
+            details?: PRDetails;
+        };
+        refuses: GitHubRefused;
+    };
+    'pr.CREATE_COMMENT': {
+        args: {
+            number: number;
+            body: string;
+        };
+        answer: {
+            number: number;
+        };
+        refuses: GitHubRefused;
+    };
+    'pr.EDIT_COMMENT': {
+        args: {
+            commentId: number;
+            body: string;
+        };
+        answer: {
+            commentId: number;
+        };
+        refuses: GitHubRefused;
+    };
+    'pr.DELETE_COMMENT': {
+        args: {
+            commentId: number;
+        };
+        answer: {
+            commentId: number;
+        };
+        refuses: GitHubRefused;
+    };
+    'pr.GET_COMMENTS': {
+        args: {
+            number: number;
+        };
+        answer: {
+            number: number;
+            comments: GhPRComment[];
+        };
+        refuses: GitHubRefused;
+    };
+    'pr.GET_REVIEW_THREADS': {
+        args: {
+            number: number;
+        };
+        answer: {
+            threads: GhReviewThread[];
+        };
+        refuses: GitHubRefused;
+    };
+    'pr.REPLY_TO_THREAD': {
+        args: {
+            prNumber: number;
+            commentId: number;
+            body: string;
+        };
+        answer: {
+            prNumber: number;
+        };
+        refuses: GitHubRefused;
+    };
+    'pr.RESOLVE_THREAD': {
+        args: {
+            threadId: string;
+        };
+        answer: {
+            threadId: string;
+        };
+        refuses: GitHubRefused;
+    };
+    'pr.UNRESOLVE_THREAD': {
+        args: {
+            threadId: string;
+        };
+        answer: {
+            threadId: string;
+        };
+        refuses: GitHubRefused;
+    };
+    'pr.EDIT_REVIEW_COMMENT': {
+        args: {
+            commentId: number;
+            body: string;
+        };
+        answer: {
+            commentId: number;
+        };
+        refuses: GitHubRefused;
+    };
+    'pr.DELETE_REVIEW_COMMENT': {
+        args: {
+            commentId: number;
+        };
+        answer: {
+            commentId: number;
+        };
+        refuses: GitHubRefused;
+    };
 };
 
 /**
@@ -5263,6 +5135,12 @@ interface QuickOpenResult$1 {
  */
 declare const REPOSITORY_PARTS: readonly ["status", "diffs", "history", "stashes", "worktrees", "refs"];
 
+/** What a query or a transaction answers with: its result, and how long it took */
+type Ran = {
+    result: any;
+    executionTime: number;
+};
+
 type RateLimitLine = z.infer<typeof RateLimitLineSchema>;
 
 /** Rate limit warnings. */
@@ -5380,6 +5258,35 @@ interface ScheduleNode extends NodeBase {
     nodeType: 'schedule';
     cronExpression: string;
 }
+
+/** What a window asks the search, answered by the code system (`searchAnswers`) */
+type SearchAsks = {
+    /**
+     * Every match, once the search ends. As it goes it tells whoever asked how far it is and each file's matches as
+     * they are found. Whoever asked stops it by no longer waiting: a search panel that starts another, or cancels
+     */
+    'search.SEARCH_FILES': {
+        args: {
+            query: string;
+            path: string;
+            includePattern?: string;
+            excludePattern?: string;
+            caseSensitive?: boolean;
+            wholeWord?: boolean;
+            useRegex?: boolean;
+            maxResults?: number;
+        };
+        progress: {
+            progress: SearchProgress;
+        } | {
+            result: SearchResult;
+        };
+        answer: {
+            results: SearchResult[];
+            totalMatches: number;
+        };
+    };
+};
 
 interface SearchIndex extends SearchIndexConfig {
     id: EARS.EntityId;
@@ -5614,6 +5521,113 @@ interface Tab {
 }
 
 type TabGroupColor = 'blue' | 'gray' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow';
+
+/**
+ * What a window asks of the terminals, answered by the code system's terminal child (`terminalSystem`). A terminal
+ * that is not there, or a broker that refused, is a failure whoever asked is answered with and shows
+ */
+type TerminalAsks = {
+    /**
+     * `target` is one of the code settings' `terminalTargets`, by id: somewhere other than this machine to run it.
+     * Answered with the terminal *you* asked for: its id does not exist until it is created, so nothing the asker sent
+     * could identify it. Every window hears `terminal.CREATED` as well, and none of them opens it
+     */
+    'terminal.CREATE_TERMINAL': {
+        args: {
+            title?: string;
+            cwd?: string;
+            shell?: string;
+            cols?: number;
+            rows?: number;
+            target?: string;
+        };
+        answer: TerminalInfo;
+    };
+    'terminal.CLOSE_TERMINAL': {
+        args: {
+            terminalId: string;
+        };
+    };
+    /** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
+    'terminal.RESTART_TERMINAL': {
+        args: {
+            terminalId: string;
+        };
+    };
+    /**
+     * This window's fit. Answered with the grid the pty runs at when that is not the one asked for — another window's
+     * smaller fit holds it — and `null` when it took
+     */
+    'terminal.RESIZE_TERMINAL': {
+        args: {
+            terminalId: string;
+            cols: number;
+            rows: number;
+            cellWidth?: number;
+            cellHeight?: number;
+        };
+        answer: {
+            terminalId: string;
+            cols: number;
+            rows: number;
+        } | null;
+    };
+    'terminal.RENAME_TERMINAL': {
+        args: {
+            terminalId: string;
+            customTitle: string;
+        };
+    };
+    /** The running terminals */
+    'terminal.REFRESH_LIST': {
+        answer: TerminalInfo[];
+    };
+    /** A running terminal, to open as a tab */
+    'terminal.OPEN_TERMINAL_TAB': {
+        args: {
+            terminalId: string;
+        };
+        answer: TerminalInfo;
+    };
+    /** Whether that terminal's shell goes on running when the app is not, to be taken up again at the next start */
+    'terminal.KEEP_TERMINAL': {
+        args: {
+            terminalId: string;
+            kept: boolean;
+        };
+    };
+    /**
+     * Open that terminal's recording to look back through, drawn at this size, for the window that asked: `session` is
+     * what its view is drawn from, and it runs between `first` and `last`, in milliseconds since the Unix epoch
+     */
+    'terminal.REWIND': {
+        args: {
+            terminalId: string;
+            cols: number;
+            rows: number;
+        };
+        answer: {
+            terminalId: string;
+            session: string;
+            first: number;
+            last: number;
+        };
+    };
+    /**
+     * Show an open recording as it was at `at`, in milliseconds since the Unix epoch. Answered with the moment it
+     * shows now, `null` where the recording is not open
+     */
+    'terminal.REWIND_SEEK': {
+        args: {
+            session: string;
+            at: number;
+        };
+        answer: {
+            session: string;
+            at: number;
+        } | null;
+    };
+};
 
 interface TerminalEntity {
     id: EARS.EntityId;
@@ -5963,6 +5977,106 @@ type ThreadViewData = Simplify<ThreadCreateData & {
     messages?: ThreadExtendedData['messages'];
 }>;
 
+/**
+ * What the threads system answers. What it stores is its views (\`be/views.ts\`); a window's writes and commands are
+ * asks, answered to the window that made them.
+ */
+type ThreadsAsks = {
+    CREATE_THREAD: {
+        args: {
+            topic: string;
+            tags?: string[];
+            instructions: string;
+            linkedThreads?: {
+                id: string;
+                relation: ThreadLinkRelation;
+            }[];
+            parentThreadId?: string;
+        };
+        answer: {
+            id: EARS.EntityId;
+        };
+    };
+    UPDATE_THREAD_STATUS: {
+        args: {
+            threadId: string;
+            status: string;
+        };
+    };
+    UPDATE_THREAD_FIELD: {
+        args: {
+            threadId: string;
+            key: string;
+            value: any;
+        };
+    };
+    DELETE_THREAD: {
+        args: {
+            threadId: string;
+        };
+    };
+    SET_THREAD_PARENT: {
+        args: {
+            childIds: string[];
+            parentId: string;
+        };
+    };
+    EXPORT_THREADS: {
+        args: {
+            directory: string;
+        };
+        answer: {
+            filePath: string;
+            threadCount: number;
+        };
+    };
+    /** Imported with what could not be, unless nothing could, which fails */
+    IMPORT_THREADS: {
+        args: {
+            directory: string;
+        };
+        answer: {
+            count: number;
+            errors?: string[];
+        };
+    };
+    /** A thread opened in the chat, and marked visited; one that is gone fails, naming it */
+    OPEN_THREAD_CHAT: {
+        args: {
+            threadId: string;
+            restore?: boolean;
+        };
+        refuses: {
+            'not-found': {
+                threadId: string;
+            };
+        };
+    };
+    USER_MSG: {
+        args: UserMessage;
+        answer: MessageSent;
+    };
+    USER_COMMAND: {
+        args: UserCommand;
+        answer: MessageSent;
+    };
+    /** A thread forked from a message, which every window is told to show */
+    FORK_THREAD: {
+        args: {
+            messageId: string;
+            threadId?: string;
+            threadTopic?: string;
+        };
+        answer: {
+            threadId: EARS.EntityId;
+        };
+    };
+    /** What a window's chat starts from */
+    GET_CHAT_START: {
+        answer: ChatStart;
+    };
+};
+
 interface ThreadsContext {
     threadMap: Record<string, ThreadListItem>;
     threadIds: string[];
@@ -6079,7 +6193,7 @@ interface ThreadsContext {
     freshThreadIds: string[];
     /** This window's thread writes, which hold the views back until they are answered */
     writes: ViewWrites;
-    /** The call the link form's last save went under, until it is answered, and why that save was refused, if it was */
+    /** The ask the link form's last save is, by the id it was spawned under, until it ends, and why that save was refused, if it was */
     linkSave: string | null;
     linkRefusal: string | null;
 }
@@ -6227,6 +6341,17 @@ interface TurnStartParams {
     model?: string;
 }
 
+/**
+ * What Undo would take back after a write that can be taken back: nothing (`null`) when there is none, and absent
+ * when it could not be read
+ */
+type UndoableAfter = {
+    undoable?: {
+        id: string;
+        summary: string;
+    } | null;
+};
+
 type UnknownLine = z.infer<typeof UnknownLineSchema>;
 
 /** Fallthrough catch-all: the CLI adds new top-level types regularly. */
@@ -6250,6 +6375,34 @@ interface UpdateNode extends NodeBase {
 
 type UpdateOnMissing = 'create' | 'fail' | 'ignore';
 
+/** A slash command a user runs in the chat, in a thread or to start one */
+type UserCommand = {
+    command: string;
+    text: string;
+    mode?: string;
+    phase?: string;
+    threadId?: string;
+    references?: {
+        images?: {
+            url: string;
+            name: string;
+        }[];
+        files?: {
+            name: string;
+            path: string;
+            typeLabel: string;
+            isImage: boolean;
+        }[];
+        context?: {
+            refType: 'document' | 'folder' | 'note' | 'task' | 'tasklist' | 'thread';
+            refId: string;
+            shortCode: string;
+            label: string;
+        }[];
+    };
+    cwdOverride?: string;
+};
+
 /** User message written to stdin during a stream-json conversation. */
 interface UserInputMessage {
     type: 'user';
@@ -6260,6 +6413,34 @@ interface UserInputMessage {
     parent_tool_use_id?: string | null;
     session_id?: string;
 }
+
+/** A message a user sends in the chat, to a thread or to start one */
+type UserMessage = {
+    text: string;
+    mode?: string;
+    phase?: string;
+    threadId?: string;
+    references?: {
+        images?: {
+            url: string;
+            name: string;
+        }[];
+        files?: {
+            name: string;
+            path: string;
+            typeLabel: string;
+            isImage: boolean;
+        }[];
+        context?: {
+            refType: 'document' | 'folder' | 'note' | 'task' | 'tasklist' | 'thread';
+            refId: string;
+            shortCode: string;
+            label: string;
+        }[];
+    };
+    cwdOverride?: string;
+    forceDirectoryPicker?: boolean;
+};
 
 type UserStreamLine = z.infer<typeof UserStreamLineSchema>;
 
@@ -7203,7 +7384,7 @@ declare const libraryQueries: {
     /** A folder's contents wherever they are: on disk for a symlinked folder, else in the library */
     readonly getFolderContents: (folderId: EARS.EntityId | null) => Promise<FolderContents>;
     /** The symlinked collections among `ids` whose folder on disk is gone */
-    readonly brokenSymlinks: (ids: readonly string[]) => Promise<string[]>;
+    readonly brokenSymlinks: <Id extends string>(ids: readonly Id[]) => Promise<Id[]>;
     /**
      * A folder's contents as the library stores them: its folders and documents, its path and breadcrumbs. It reads the
      * engine and nothing else, so a view can watch it; whether a symlinked folder still reaches its disk is
@@ -7423,12 +7604,11 @@ declare function sendSystemMessage(options: {
 };
 
 /**
- * Open a thread in the chat: visited (`visitThread`), and the chat told to show it — the window that asked, or, from an action, which has no asker, every
- * window, as `answer` decides.
+ * Open a thread in the chat of every window: visited (`visitThread`), and the chat told to show it. For an action, which
+ * no window is waiting on; a window that asks to open a thread is answered instead, and opens it itself.
  */
 declare function showThread(threadId: EARS.EntityId, options?: {
     restore?: boolean;
-    reply?: Reply<OutgoingThreadsEvents>;
 }): void;
 
 declare function storeHandle(key: string, handle: CodexTurnHandle): void;
@@ -7677,5 +7857,5 @@ declare function visitThread(threadId: EARS.EntityId, options?: {
     restore?: boolean;
 }): void;
 
-export type { PackShapes as PackEntityShapes, PackFeatureSettings, PackGroupSettings, PackStepNodes, PackSurfaceEvents, PackSurfaceState, PackSystemEvents, Repositories, Services };
+export type { PackShapes as PackEntityShapes, PackFeatureSettings, PackGroupSettings, PackStepNodes, PackSurfaceEvents, PackSurfaceState, PackSystemAsks, PackSystemEvents, Repositories, Services };
 ```

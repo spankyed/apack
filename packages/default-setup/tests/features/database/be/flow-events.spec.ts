@@ -23,15 +23,18 @@ it('pages a run\'s events newest first, each with what it ran, saying when there
   await app.connect()
 
   // Asked as the surface asks: a fetch is answered to its asker, and nobody else
-  const asked = { sender: 'default-setup/database', client: 'c-main' }
-  const firstPage = await app.send('database', { type: 'GET_FLOW_EVENTS', flowId: flow, offset: 0, limit: 2 }, asked)
-  const one = await app.nextEmit('database', 'FLOW_EVENTS_RESULT', { answering: firstPage }) as unknown as EventsPage
+  const asked = { client: 'c-main' }
+  const page = async (offset: number) => {
+    const outcome = await app.ask('database', { type: 'GET_FLOW_EVENTS', flowId: flow, offset, limit: 2 }, asked)
+    if (!outcome.ok) throw new Error(outcome.failure.message)
+    return outcome.value as EventsPage
+  }
+  const one = await page(0)
   expect(one.events.map((event) => event.id)).toEqual([third, second])
   expect(one.events[0].children.map((child) => child.label)).toEqual(['third step'])
   expect(one.hasMore).toBe(true)
 
-  const secondPage = await app.send('database', { type: 'GET_FLOW_EVENTS', flowId: flow, offset: 2, limit: 2 }, asked)
-  const two = await app.nextEmit('database', 'FLOW_EVENTS_RESULT', { answering: secondPage }) as unknown as EventsPage
+  const two = await page(2)
   expect(two.events.map((event) => event.id)).toEqual([first])
   expect(two.hasMore).toBe(false)
 })

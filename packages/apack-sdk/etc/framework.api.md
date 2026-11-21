@@ -20,6 +20,34 @@ import type { SearchDeclaration } from '@apackdev/ears';
 import { z } from 'zod';
 
 // @public
+export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
+    readonly args: AskEventOf<C, K>;
+    readonly client?: string;
+    readonly context: ContractContext<C>;
+    readonly progress: (update: ProgressPayload<ContractAsks<C>[K]>) => void;
+    readonly refuse: RefuseOf<ContractAsks<C>[K]>;
+    readonly self: SystemArgs<C>['self'];
+    readonly signal: AbortSignal;
+}
+
+// @public
+export type AnswerHandler<C extends SystemContract, K extends AskName<C>> = (args: AnswerArgs<C, K>) => AnswerPayload<ContractAsks<C>[K]> | PromiseLike<AnswerPayload<ContractAsks<C>[K]>>;
+
+// @public
+export interface Answers<C extends SystemContract, K extends AskName<C> = AskName<C>> {
+    // (undocumented)
+    readonly actions: {
+        readonly [N in K]: (args: SystemArgs<C>, params: undefined) => void;
+    };
+    // (undocumented)
+    readonly on: {
+        readonly [N in K]: {
+            readonly actions: N;
+        };
+    };
+}
+
+// @public
 export type ArrayChanges = Record<string, DiffResult<DiffItem>>;
 
 // @public (undocumented)
@@ -66,6 +94,26 @@ export interface BlockCatalogEntry {
 
 // @public (undocumented)
 export type BlockDeclaration = z.infer<typeof BlockEntrySchema>;
+
+// @public
+export interface ChildAnswerArgs<TContext extends MachineContext, TEvent extends EventObject, A, K extends keyof A & string> {
+    // (undocumented)
+    readonly args: {
+        type: K;
+    } & AskPayload<A[K]>;
+    // (undocumented)
+    readonly client?: string;
+    // (undocumented)
+    readonly context: TContext;
+    // (undocumented)
+    readonly progress: (update: ProgressPayload<A[K]>) => void;
+    // (undocumented)
+    readonly refuse: RefuseOf<A[K]>;
+    // (undocumented)
+    readonly self: Args<TContext, TEvent>['self'];
+    // (undocumented)
+    readonly signal: AbortSignal;
+}
 
 // @internal
 export function _compileSettingsDefinition(definition: SettingsDefinition): SettingsValidator;
@@ -115,12 +163,7 @@ export function declaredContentKeys(manifest: {
 }): string[];
 
 // @public
-export function defineHandlers<TContext extends MachineContext, TEvent extends EventObject, TOut extends {
-    type: string;
-} = {
-    type: string;
-    [key: string]: unknown;
-}>(): Handlers<TContext, TEvent, TOut>;
+export function defineHandlers<TContext extends MachineContext, TEvent extends EventObject>(): Handlers<TContext, TEvent>;
 
 // @public
 export function defineProjections<const T extends ProjectionDefinitions>(projections: T): T;
@@ -199,6 +242,7 @@ export interface FeatureEventContract {
     system?: {
         incoming: readonly string[];
         outgoing: readonly string[];
+        asks?: Readonly<Record<string, readonly string[]>>;
     };
 }
 
@@ -236,22 +280,27 @@ export function getPackHelp(): HelpCatalog;
 export function getSettingsCatalog(): SettingsCatalog;
 
 // @public
-export interface Handlers<TContext extends MachineContext, TEvent extends EventObject, TOut extends {
-    type: string;
-} = {
-    type: string;
-    [key: string]: unknown;
-}> {
+export interface Handlers<TContext extends MachineContext, TEvent extends EventObject> {
     actions<P extends ActionParams>(defs: {
         [K in keyof P]: (args: Args<TContext, TEvent> & {
-            reply?: Reply<TOut>;
             client?: string;
         }, params: P[K]) => void;
     }): {
         [K in keyof P]: (args: Args<TContext, TEvent>, params: P[K]) => void;
     };
+    answers<A extends Record<string, AskDeclaration>>(defs: {
+        readonly [K in keyof A & string]: (args: ChildAnswerArgs<TContext, TEvent, A, K>) => AnswerPayload<A[K]> | PromiseLike<AnswerPayload<A[K]>>;
+    }): {
+        readonly actions: {
+            readonly [K in keyof A & string]: (args: Args<TContext, TEvent>, params: undefined) => void;
+        };
+        readonly on: {
+            readonly [K in keyof A & string]: {
+                readonly actions: K;
+            };
+        };
+    };
     input<I>(build: (args: InputArgs<TContext, TEvent> & {
-        reply?: Reply<TOut>;
         client?: string;
     }) => I): Mapper<TContext, TEvent, I, TEvent>;
 }
@@ -489,6 +538,7 @@ export interface PackFeatureSurface {
 
 // @public
 export interface PackFeatureSystem {
+    asks?: Readonly<Record<string, readonly string[]>>;
     // (undocumented)
     machine: AnyStateMachine;
     receives: readonly string[];
@@ -903,10 +953,11 @@ export interface SurfaceDeclaration {
 export function _surfaceTargets(surface: SurfaceDeclaration): [string, string][];
 
 // @public
-export const SYSTEM_EVENT_TYPES: readonly ["SEND_STATE", "CLIENT_CONNECTED", "PACK_CHANGED", "FEATURE_SETTINGS_UPDATED", "DATA_REPLACED", "DATA_CHANGED_ELSEWHERE"];
+export const SYSTEM_EVENT_TYPES: readonly ["SEND_STATE", "CLIENT_CONNECTED", "PACK_CHANGED", "FEATURE_SETTINGS_UPDATED", "DATA_REPLACED", "DATA_CHANGED_ELSEWHERE", "ASK_ANSWERED", "ASK_FAILED", "ASK_PROGRESS", "ASK_CANCELLED"];
 
 // @public
 export interface SystemContract {
+    asks?: Record<string, AskDeclaration>;
     // (undocumented)
     context?: unknown;
     // (undocumented)
@@ -986,26 +1037,30 @@ export type SystemEvents =
 */
 | {
     type: 'DATA_CHANGED_ELSEWHERE';
+}
+/**
+* How the answers to this system's own asks of another system travel. The ask that was made takes them (`ask`), and
+* no machine handles one: every system may ask, so every system receives them
+*/
+| AskAnswered | AskFailed | AskProgressed
+/** An asker stopping an ask of this system's. The bus takes it, and the ask's handler's `signal` aborts */
+| {
+    type: typeof ASK_CANCELLED;
 };
 
 // @public
-export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>, Extract<ContractOutgoing<C>, {
-    type: string;
-}>> {
+export interface SystemSpec<C extends SystemContract> extends Omit<Handlers<ContractContext<C>, MachineEvents<C>>, 'answers'> {
     actions<P extends ActionParams>(defs: {
         [K in keyof P]: (args: SystemArgs<C> & {
-            reply?: Reply<Extract<ContractOutgoing<C>, {
-                type: string;
-            }>>;
             client?: string;
         }, params: P[K]) => void;
     }): {
         [K in keyof P]: (args: SystemArgs<C>, params: P[K]) => void;
     };
+    answers<Elsewhere extends AskName<C> = never>(defs: {
+        readonly [K in Exclude<AskName<C>, Elsewhere>]: AnswerHandler<C, K>;
+    }): Answers<C, Exclude<AskName<C>, Elsewhere>>;
     input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & {
-        reply?: Reply<Extract<ContractOutgoing<C>, {
-            type: string;
-        }>>;
         client?: string;
     }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
     // (undocumented)

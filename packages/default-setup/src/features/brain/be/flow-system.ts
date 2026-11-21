@@ -129,7 +129,16 @@ type ChildCompletedEvent =
 
 type RunNodeFlowMachineInput = {};
 
-const typeOf = safeEvents<ChildCompletedEvent>();
+/** What a flow's machine handles: its own events, and whatever event one of its tracks listens for */
+type FlowMachineEvent =
+  | ChildCompletedEvent
+  | { type: 'FLOW_COMPLETE' }
+  | {
+    type: string;
+    [key: string]: any;
+  };
+
+const typeOf = safeEvents<FlowMachineEvent>();
 
 /**
  * Creates a child node (flow or step) and returns the machine, system ID, and runNode
@@ -287,13 +296,7 @@ export function createFlowNodeSystem(
     machine: setup({
       types: {
         context: {} as RunNodeFlowMachineContext,
-        events: {} as
-          | ChildCompletedEvent
-          | { type: 'FLOW_COMPLETE' }
-          | {
-            type: string;
-            [key: string]: any;
-          },
+        events: {} as FlowMachineEvent,
         input: {} as RunNodeFlowMachineInput,
       },
       actions: handlers.actions({
@@ -319,7 +322,7 @@ export function createFlowNodeSystem(
           brainLogger.debug(`Unregistered flow actor: ${flowRunNodeId}`);
         },
         handleTrackEvent: enqueueActions(({ context, event, enqueue }) => {
-          const typedEv = event as { type: string; [key: string]: any };
+          const typedEv: { type: string; [key: string]: any } = event;
           const eventType = typedEv.type;
 
           // Brain is paused — defer the raw event for replay on resume
@@ -431,7 +434,7 @@ export function createFlowNodeSystem(
         }),
         handleChildCompletion: enqueueActions(({ context, event, enqueue }) => {
           brainLogger.debug(`Child completed in flow - ${context.flowLabel}:`, { completion: event });
-          const typedEv = typeOf('CHILD_COMPLETED', event as any);
+          const typedEv = typeOf('CHILD_COMPLETED', event);
 
           if (typedEv.final) {
             brainLogger.debug(`Flow ${flowRunNodeId} received child completion with final=true from ${typedEv.stepId || typedEv.runNodeId}`);
@@ -695,7 +698,7 @@ export function createFlowNodeSystem(
         // Handle local events that are fired within this flow
         FIRE_LOCAL_EVENT: {
           actions: [({ event, self }) => {
-            const typedEvent = event as { type: 'FIRE_LOCAL_EVENT'; eventType: string; payload?: any };
+            const typedEvent = typeOf('FIRE_LOCAL_EVENT', event);
             // Re-raise the event locally for handling
             if (typedEvent.eventType) {
               self.send({

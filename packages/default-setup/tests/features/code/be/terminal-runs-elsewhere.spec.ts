@@ -13,8 +13,8 @@ import { repository } from '#generated/repository.ts'
 import { EARS, newId } from '#generated/ears.ts'
 import { commandArguments } from '#features/code/be/services/terminal.ts'
 import type { TerminalInfo } from '#features/code/be/types.ts'
+import { answered } from './_support/answered.ts'
 
-const CODE = 'default-setup/code'
 const WINDOW = 'c-main'
 const DEVBOX = { id: 'tt_devbox', label: 'devbox', command: 'ssh -p 2222 "dev box" apack-terminal proxy /tmp/t.sock' }
 const DEVBOX_ARGV = ['ssh', '-p', '2222', 'dev box', 'apack-terminal', 'proxy', '/tmp/t.sock']
@@ -34,8 +34,7 @@ afterEach(() => { resetTestData() })
 describe('a terminal on a target', () => {
   it("is opened through the target's command, with nothing of this machine's asked of it", async () => {
     const { app, broker, written } = await started()
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id, cwd: '/Users/me/project' }, { sender: CODE, client: WINDOW })
-    const opened = (await app.nextEmit('code', 'terminal.OPENED')).data as TerminalInfo
+    const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id, cwd: '/Users/me/project' }, { client: WINDOW }))
     await app.settle()
 
     expect(broker.opened.map(({ target }) => target)).toEqual([DEVBOX_ARGV])
@@ -50,9 +49,8 @@ describe('a terminal on a target', () => {
 
   it('is refused when the settings name no such target, and no shell is started here in its place', async () => {
     const { app, broker } = await started()
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', target: 'tt_gone' }, { sender: CODE, client: WINDOW })
-    expect((await app.nextEmit('code', 'terminal.ERROR')).data).toMatchObject({ message: expect.stringContaining('tt_gone') })
-    expect(takeSystemErrors()).toHaveLength(1)
+    expect(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', target: 'tt_gone' }, { client: WINDOW })).toMatchObject({ ok: false, failure: { message: expect.stringContaining('tt_gone') } })
+    expect(takeSystemErrors(), 'the refusal is the asker\'s to show, and is told to nobody else').toEqual([])
     expect(broker.opened).toEqual([])
     await app.stop()
   })
@@ -84,8 +82,7 @@ describe('a terminal on a target', () => {
 
   it('takes up the shell it had on the target when it is started again, where the target still has it', async () => {
     const { app, broker } = await started()
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id }, { sender: CODE, client: WINDOW })
-    const opened = (await app.nextEmit('code', 'terminal.OPENED')).data as TerminalInfo
+    const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id }, { client: WINDOW }))
     await app.settle()
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
 
@@ -116,8 +113,7 @@ describe('a terminal on a target', () => {
 
   it('has the shell it left on the target ended when it is closed without having been reached', async () => {
     const { app, broker } = await started()
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id }, { sender: CODE, client: WINDOW })
-    const opened = (await app.nextEmit('code', 'terminal.OPENED')).data as TerminalInfo
+    const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id }, { client: WINDOW }))
     await app.settle()
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
     // The app starts again; the shell is still on the target and this run has not reached it
@@ -163,8 +159,7 @@ describe('a terminal on a target', () => {
 
   it('is neither recorded nor looked back through, both being files on this machine', async () => {
     const { app, broker } = await started()
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id }, { sender: CODE, client: WINDOW })
-    const opened = (await app.nextEmit('code', 'terminal.OPENED')).data as TerminalInfo
+    const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', target: DEVBOX.id }, { client: WINDOW }))
     await app.settle()
     const { terminalService } = await import('#features/code/be/services/terminal.ts')
 

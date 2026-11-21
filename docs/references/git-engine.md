@@ -92,7 +92,7 @@ commit feature (`failureOf`).
 **Only a fetch and a push can be stopped** (`fetch(signal)`, `pushBranch(onProgress, signal)`). Stopped midway,
 each leaves the working tree and the index as they were; a commit, a checkout, a stash or a merge would leave
 them half-written with a lock behind, and a pull is one `git pull` whose merge cannot be told apart from its
-fetch. The panel offers it while a push runs (`commit.STOP_PUSH`, answered `commit.PUSH_STOPPED`).
+fetch. The panel offers it while a push runs (`commit.STOP_PUSH`; the publish's answer says it was `stopped`).
 
 Stopping asks git to end, so it lets go of its locks, along with the helpers it started (`ssh`, the HTTPS
 helper), found from the process table by their parents, since git does not end them when it is signalled. Any
@@ -117,7 +117,7 @@ git that cannot be told not to fetch, every read in a partial clone waits in tha
 
 `GitRepository.repositoriesUnder(folder)` finds the folder's repository and those nested in it, submodules and
 linked worktrees, by what each one's `.git` is, without running git. The commit panel shows a picker when there is
-more than one (`LIST_REPOSITORIES`, `commit.REPOSITORIES_RECEIVED`); choosing one makes it the base directory, as a
+more than one (the `commit.LIST_REPOSITORIES` ask); choosing one makes it the base directory, as a
 worktree switch does, and the picker goes on listing what is under the folder the user opened (`openedDirectory`).
 A submodule's row in its parent's status says how it differs (`submodule`).
 
@@ -168,7 +168,7 @@ remote branch holds is asked about (`commit.REWRITE_NEEDS_CONFIRMATION`) and don
 `refsModel()` reads every branch with its upstream and how far ahead and behind it is in one command, beside the
 remotes with their addresses and the tags. The snapshot's `refs` part says when any of them moved; `history` is what
 is checked out and the local branches, so a fetch that moves a remote's branch is news of the refs alone. The branch
-picker shows each local branch's standing (`commit.BRANCHES_RECEIVED` `standing`).
+picker shows each local branch's standing (the `standing` in the answer to `commit.GET_ALL_BRANCHES`).
 
 The commit panel lists the tags in its branch picker, each pushed (`pushTag`) or deleted there, and makes one at a
 commit of its history (`createTag`); a local branch is renamed from its row in the picker (`renameBranch`), and a
