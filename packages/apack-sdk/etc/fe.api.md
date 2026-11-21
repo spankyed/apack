@@ -19,6 +19,7 @@ import type { Editor } from '@tiptap/vue-3';
 import type { EditorState } from '@tiptap/pm/state';
 import { enqueueActions } from 'xstate';
 import { entityTypeOf } from '@apackdev/ears';
+import type { EventFrom } from 'xstate';
 import { EventObject } from 'xstate';
 import { ExtractPropTypes } from 'vue';
 import type { InjectionKey } from 'vue';
@@ -564,6 +565,14 @@ export interface KeyboardShortcut {
 export function loadTabGroups(storage: SurfaceStorage, name: string): TabGroup[];
 
 // @public
+export interface MachineState<TActor extends AnyActorRef> {
+    readonly at: string;
+    readonly data: SnapshotFrom<TActor> extends {
+        context: infer Context;
+    } ? Context : never;
+}
+
+// @public
 export function matchesHotkey(event: HotkeyEvent, config: KeyboardShortcut, cmdIsMeta?: boolean): boolean;
 
 // @public (undocumented)
@@ -1027,6 +1036,12 @@ export function useBlockDeclarations(): ComputedRef<readonly BlockCatalogEntry[]
 // @public (undocumented)
 export function useDslDeclarations(): ComputedRef<readonly DslCatalogEntry[]>;
 
+// @public
+export interface UsedState<TActor extends AnyActorRef, TState = MachineState<TActor>> {
+    send(event: EventFrom<TActor>): void;
+    readonly state: ComputedRef<TState>;
+}
+
 // @public (undocumented)
 export function useFeatureSettings<T = unknown>(feature: FeatureRef): Readonly<Ref<T | undefined>>;
 
@@ -1048,6 +1063,15 @@ export function useSettingsStatus(): Readonly<Ref<ReturnType<SettingsPort['statu
 
 // @public
 export function useShell(): Shell;
+
+// @public
+export function useState<TActor extends AnyActorRef>(): UsedState<TActor>;
+
+// @public
+export function useState<TActor extends AnyActorRef>(actor: MaybeRefOrGetter<TActor>): UsedState<TActor>;
+
+// @public
+export function useState<TActor extends AnyActorRef>(actor: MaybeRefOrGetter<TActor | undefined>): UsedState<TActor, MachineState<TActor> | undefined>;
 
 // @public
 export function useStepDeclarations(): ComputedRef<readonly StepCatalogEntry[]>;
