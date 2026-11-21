@@ -4,6 +4,8 @@ import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { packInputFiles, packInputsHash } from '@apackdev/host/build/pack-inputs';
+import { dependencyClosure, packageIdentity } from '@apackdev/host/build/package-identity';
+import { SHARED_INSTANCE_PACKAGES } from '@apackdev/host/build/shared-deps';
 
 function packageRoot(entry: string): string {
   let root = path.dirname(entry);
@@ -15,7 +17,15 @@ function packageRoot(entry: string): string {
   return fs.realpathSync.native(root);
 }
 
-/** Complete implementation scopes, rather than a previous build's observed imports. */
+/**
+ * Complete implementation scopes, rather than a previous build's observed imports.
+ *
+ * The CLI's own code is read as a directory: `src` run from a checkout, `dist` once bundled, and in a checkout the
+ * host's and SDK's `src` too, which it runs from source. Every other package it scopes is read by its identity
+ * (`packageIdentity`: name, version and the files it ships), never by a folder guessed inside it: in a checkout the
+ * shared-instance packages the SDK brings (`@elmdb/ears`, linked from elmdb's checkout at version 0.0.0), and beside
+ * a published CLI the installed SDK, whose declarations the bundled code reads.
+ */
 export function buildToolHash(moduleUrl = import.meta.url): string {
   const entry = fs.realpathSync.native(fileURLToPath(moduleUrl));
   const root = cliPackageDirectory(moduleUrl);
@@ -23,6 +33,7 @@ export function buildToolHash(moduleUrl = import.meta.url): string {
   const scopes: Array<{ name: string; root: string; directory: string }> = [
     { name: '@apackdev/cli', root, directory: source ? 'src' : 'dist' },
   ];
+  const identities: string[] = [];
   const require = createRequire(moduleUrl);
   if (source) {
     for (const [name, specifier] of [
@@ -34,14 +45,15 @@ export function buildToolHash(moduleUrl = import.meta.url): string {
         : path.dirname(require.resolve(`${name}/package.json`));
       scopes.push({ name, root: owner, directory: 'src' });
     }
-    // EARS is consumed as its built `dist`, linked from the elmdb checkout, in source mode as in any other
-    const ears = path.dirname(require.resolve('@elmdb/ears/package.json'));
-    scopes.push({ name: '@elmdb/ears', root: ears, directory: 'dist' });
+    const brought = dependencyClosure('@apackdev/sdk', root);
+    for (const name of SHARED_INSTANCE_PACKAGES.filter((pkg) => pkg !== '@apackdev/sdk')) {
+      const pkg = brought.find((member) => member.name === name);
+      if (pkg === undefined) throw new Error(`Missing build tool implementation: ${name} isn't among @apackdev/sdk's dependencies`);
+      identities.push(identityLine(pkg.directory));
+    }
   } else {
     // Bundled code still reads installed SDK declarations, including package-root installations.
-    const owner = path.dirname(require.resolve('@apackdev/sdk/package.json'));
-    const compiled = packageRoot(require.resolve('@apackdev/sdk/build'));
-    scopes.push({ name: '@apackdev/sdk', root: owner, directory: path.relative(owner, compiled) || '.' });
+    identities.push(identityLine(path.dirname(require.resolve('@apackdev/sdk/package.json'))));
   }
   // Published CLI code inlines host/SDK/EARS; include every shipped chunk, not only a version.
   const hash = createHash('sha256');
@@ -55,8 +67,14 @@ export function buildToolHash(moduleUrl = import.meta.url): string {
     hash.update(fs.readFileSync(path.join(scope.root, 'package.json')));
     hash.update(packInputsHash(directory));
   }
+  for (const identity of identities) hash.update(identity);
   hash.update(packInputsHash(path.join(root, 'bin')));
   return hash.digest('hex');
+}
+
+function identityLine(directory: string): string {
+  const { name, version, hash } = packageIdentity(directory);
+  return `${name}@${version}:${hash}\n`;
 }
 
 /** The executing CLI's owner, shared by implementation and npm resolution scopes. */

@@ -21,15 +21,16 @@ function tool(source: boolean) {
   write(entry, 'export const identity = 1;');
   for (const name of source ? ['host', 'sdk'] : ['sdk']) {
     write(`node_modules/@apackdev/${name}/package.json`, JSON.stringify({ name: `@apackdev/${name}`, version: '1.0.0',
+      ...(source && name === 'sdk' && { dependencies: { '@elmdb/ears': '0.0.0' } }),
       exports: { '.': './entry.js', './package.json': './package.json',
         './build': source ? './entry.js' : './dist/helper.ts', './build/shared-deps': './entry.js' } }));
     write(`node_modules/@apackdev/${name}/entry.js`, 'export {};');
     write(`node_modules/@apackdev/${name}/${source ? 'src' : 'dist'}/helper.ts`, 'export const helper = 1;');
     if (!source) write(`node_modules/@apackdev/${name}/dist/package.json`, JSON.stringify({ name: `@apackdev/${name}` }));
   }
-  // EARS, linked from elmdb's checkout, is its built `dist` in a checkout too
+  // EARS, linked from elmdb's checkout, which the SDK brings: read by what it ships
   if (source) {
-    write('node_modules/@elmdb/ears/package.json', JSON.stringify({ name: '@elmdb/ears', version: '0.0.0',
+    write('node_modules/@elmdb/ears/package.json', JSON.stringify({ name: '@elmdb/ears', version: '0.0.0', files: ['dist'],
       exports: { '.': './dist/index.js', './package.json': './package.json' } }));
     write('node_modules/@elmdb/ears/dist/index.js', 'export const helper = 1;');
   }
@@ -105,9 +106,22 @@ it('uses workspace ownership even when a resolved SDK output contains nested pac
   const scope = tool(true);
   scope.write('node_modules/@apackdev/sdk/dist/package.json', JSON.stringify({ name: '@apackdev/sdk' }));
   scope.write('node_modules/@apackdev/sdk/dist/helper.js', 'export {};');
-  scope.write('node_modules/@apackdev/sdk/package.json', JSON.stringify({ name: '@apackdev/sdk',
+  scope.write('node_modules/@apackdev/sdk/package.json', JSON.stringify({ name: '@apackdev/sdk', dependencies: { '@elmdb/ears': '0.0.0' },
     exports: { './package.json': './package.json', './build': './dist/helper.js' } }));
   const before = scope.hash();
   scope.write('node_modules/@apackdev/sdk/src/helper.ts', 'export const helper = 2;');
   expect(scope.hash()).not.toBe(before);
+});
+
+it("reads EARS by what it ships, so a file of its checkout that isn't shipped is not the tool", () => {
+  const scope = tool(true);
+  const before = scope.hash();
+  scope.write('node_modules/@elmdb/ears/src/index.ts', 'export const helper = 2;');
+  expect(scope.hash()).toBe(before);
+});
+
+it("refuses an SDK whose EARS doesn't resolve rather than leave it out", () => {
+  const scope = tool(true);
+  fs.rmSync(path.join(scope.root, 'node_modules/@elmdb'), { recursive: true });
+  expect(scope.hash).toThrow(/@elmdb\/ears, declared by @apackdev\/sdk/);
 });
