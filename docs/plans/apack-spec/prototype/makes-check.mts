@@ -4,7 +4,7 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/makes-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { run, system } from './checks.mts'
+import { rest, run, system } from './checks.mts'
 import { commit, git, type CommitEvent } from './commit.mts'
 import { explore, sample, type Schedule } from './schedule.mts'
 import { reaching } from './state.mts'
@@ -124,7 +124,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     send({ type: 'ADD', id: 'a' })
     send({ type: 'ADD', id: 'b' })
     deepStrictEqual(making(), { run: { a: true, b: true }, save: false })
-    await turns(12)
+    await rest()
     deepStrictEqual(making(), { run: {}, save: false })
     deepStrictEqual({ done: now().done.sort(), did }, { done: ['a done', 'b done'], did: ['run a', 'run b'] })
   }],
@@ -135,7 +135,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     send({ type: 'ADD', id: 'a' })
     deepStrictEqual(steps, [{ making: true, data: false }])
     deepStrictEqual(now(), before)
-    await turns(12)
+    await rest()
   }],
   ['one that is under way is the same one: it is not made twice', async () => {
     const { send, did } = wired()
@@ -143,15 +143,15 @@ const checks: Array<[string, () => Promise<void>]> = [
     send({ type: 'ADD', id: 'a' })
     send({ type: 'SAVE' })
     send({ type: 'SAVE' })
-    await turns(12)
+    await rest()
     deepStrictEqual(did.sort(), ['run a', 'save '])
   }],
   ['once it has ended it can be made again', async () => {
     const { send, did } = wired()
     send({ type: 'ADD', id: 'a' })
-    await turns(12)
+    await rest()
     send({ type: 'ADD', id: 'a' })
-    await turns(12)
+    await rest()
     deepStrictEqual(did, ['run a', 'run a'])
   }],
   ['giving one up tells the one answering, and how it ended is not heard', async () => {
@@ -160,28 +160,28 @@ const checks: Array<[string, () => Promise<void>]> = [
     await turns(1)
     send({ type: 'DROP', id: 'a' })
     deepStrictEqual(making().run, {})
-    await turns(12)
+    await rest()
     deepStrictEqual(did, ['run a', 'gave up a'])
     deepStrictEqual({ done: now().done, problem: now().problem }, { done: [], problem: null })
   }],
   ['how one ended may have it made again', async () => {
     const { send, now, making, did } = wired()
     send({ type: 'ADD', id: 'flaky' })
-    await turns(20)
+    await rest()
     deepStrictEqual(did.filter((line) => line.startsWith('run')), ['run flaky', 'run flaky'])
     deepStrictEqual({ done: now().done, making: making().run, problem: now().problem }, { done: ['flaky done'], making: {}, problem: null })
   }],
   ['what one says before it ends is heard, as a list', async () => {
     const { send, now } = wired()
     send({ type: 'ADD', id: 'a' })
-    await turns(12)
+    await rest()
     deepStrictEqual(now().heard, ['a began', 'a ended'])
   }],
   ['it is made when the step commits, with the data as the handler left it', async () => {
     const { send, now, did } = wired()
     send({ type: 'TYPE', text: 'before' })
     send({ type: 'TYPE_AND_SAVE', text: 'after' })
-    await turns(12)
+    await rest()
     deepStrictEqual({ did, saved: now().saved }, { did: ['save after'], saved: 'after' })
   }],
   ['one at a time is under way or it is not', async () => {
@@ -190,7 +190,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     strictEqual(making().save, true)
     send({ type: 'STOP_SAVING' })
     strictEqual(making().save, false)
-    await turns(12)
+    await rest()
     deepStrictEqual(did, ['save ', 'gave up saving '])
   }],
   ['leaving the state gives up what it was making, and entering it again makes nothing', async () => {
@@ -203,14 +203,14 @@ const checks: Array<[string, () => Promise<void>]> = [
     // Whoever reads what it is making is told that it changed.
     deepStrictEqual(steps.map((step) => step.making), [true])
     send({ type: 'TURN', on: true })
-    await turns(12)
+    await rest()
     // A write was said once. It is not said again by the state being the case again, as a read would be.
     deepStrictEqual({ did, done: now().done }, { did: ['run a', 'gave up a'], done: [] })
   }],
   ['a handler that throws has still said what it said: what it told to be made is made', async () => {
     const { send, now, did, defects } = wired()
     send({ type: 'BREAK', id: 'a' })
-    await turns(12)
+    await rest()
     strictEqual(defects.length, 1)
     deepStrictEqual({ did, done: now().done }, { did: ['run a'], done: ['a done'] })
   }],

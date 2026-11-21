@@ -20,6 +20,25 @@ export const system: typeof kernel = (host) => {
   made.push(one)
   return one
 }
+/** More turns than this without coming to rest is waiting on what never comes. */
+const TURNS = 5_000
+const turn = (): Promise<void> => new Promise((resolve) => { setImmediate(resolve) })
+
+/**
+ * Waits until everything a check started has come to rest: every system it made has nothing under way. That is what
+ * a check means by waiting, where a count of turns is a guess at how long that takes. One that never comes to rest
+ * fails, saying so.
+ */
+export async function rest(): Promise<void> {
+  const atRest = (): boolean => made.every((one) => one.idle())
+  for (let turns = 0; turns < TURNS; turns++) {
+    await turn()
+    // Twice, a turn apart: what one thing ending leads to has had its turn to begin.
+    if (atRest() && (await turn(), atRest())) return
+  }
+  throw new Error(`Still not at rest after ${TURNS} turns: something is waiting on what never comes`)
+}
+
 const stopAll = (): void => { for (const one of made.splice(0).reverse()) { try { one.stop() } catch { /* it was stopping anyway */ } } }
 
 export interface Tally {

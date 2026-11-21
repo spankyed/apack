@@ -4,7 +4,7 @@
 //   npx tsx docs/plans/apack-spec/prototype/answer-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { explore, type Schedule } from './schedule.mts'
-import { run, system } from './checks.mts'
+import { rest, run, system } from './checks.mts'
 import { answered, given, reaching } from './state.mts'
 
 type CounterAsks = {
@@ -168,7 +168,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     await sys.ask(it, 'CLOSE', { reason: 'early' })
     const outcome = await later
     strictEqual(!outcome.ok && outcome.failure.kind, 'abandoned')
-    await turns(10)
+    await rest()
     strictEqual(now().data.count, 0)
     sys.stop()
   }],

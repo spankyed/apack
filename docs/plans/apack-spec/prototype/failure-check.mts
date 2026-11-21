@@ -3,7 +3,7 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/failure-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { run, system } from './checks.mts'
+import { rest, run, system } from './checks.mts'
 import { system as unlimited } from './state.mts'
 import { given, reaching } from './state.mts'
 
@@ -96,7 +96,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     const it = wired()
     it.send({ type: 'START', how: 'later' })
     strictEqual(it.at(), 'working')
-    await turns(10)
+    await rest()
     strictEqual(it.at(), 'idle')
     strictEqual(it.problem(), 'broke later')
     it.stop()
@@ -111,7 +111,7 @@ const checks: Array<[string, () => Promise<void>]> = [
   ['work that succeeds never reaches `failed`', async () => {
     const it = wired()
     it.send({ type: 'START', how: 'not at all' })
-    await turns(10)
+    await rest()
     strictEqual(it.at(), 'idle')
     strictEqual(it.problem(), null)
     deepStrictEqual(it.traced.filter((line) => !line.includes('release')), [])
@@ -122,7 +122,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     it.send({ type: 'START', how: 'while asking' })
     await turns(6)
     it.send({ type: 'LEAVE' })
-    await turns(10)
+    await rest()
     strictEqual(it.at(), 'idle')
     strictEqual(it.problem(), null)
     deepStrictEqual(it.traced.filter((line) => line.includes('failed')), [])
@@ -132,7 +132,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     const it = wired()
     it.send({ type: 'START', how: 'later' })
     it.send({ type: 'LEAVE' })
-    await turns(10)
+    await rest()
     strictEqual(it.problem(), null)
     ok(it.traced.some((line) => line.includes('failed after it was left: broke later')))
     it.stop()
@@ -151,7 +151,7 @@ const checks: Array<[string, () => Promise<void>]> = [
   ['a `failed` that throws is reported, and the state takes events as before', async () => {
     const it = wired()
     it.send({ type: 'START', how: 'in failed too' })
-    await turns(10)
+    await rest()
     strictEqual(it.at(), 'working')
     ok(it.traced.some((line) => line.includes("failed threw: failed broke as well")))
     it.send({ type: 'LEAVE' })

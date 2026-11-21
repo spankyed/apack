@@ -546,12 +546,19 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 
   Thirteen mistakes do not compile across the two. The graph lists each read with what it depends on, each write,
   and which handler says to make which.
-- **A check that fails says so, and does not hang** (`checks.mts`). The check files run their checks through one
-  runner. Every system a check makes is stopped when the check ends, however it ends, so one that fails part-way
-  leaves nothing running to keep the process alive. A system in a check is given a limit on how many steps it will
-  take, and says so when it reaches it; the app gives none, since an agent's loop is one thing leading to the next
-  for as long as it runs. A kernel changed so that a read asks itself round without end used to keep the checks from
-  ever finishing, and now fails one of them in a second.
+- **A check that fails says so, and does not hang** (`checks.mts`). All thirteen check files run their checks
+  through one runner. Every system a check makes is stopped when the check ends, however it ends, so one that fails
+  part-way leaves nothing running to keep the process alive. A system in a check is given a limit on how many steps
+  it will take, and says so when it reaches it; the app gives none, since an agent's loop is one thing leading to the
+  next for as long as it runs.
+
+  A check waits with `rest()`, until everything it started has come to rest, where it used to wait a number of turns
+  someone had guessed was enough. The kernel says whether anything is under way in it (`idle`): work a state is
+  doing, an ask being answered or waited on, something put off, something gathered. Thirty-seven waits are now
+  that. The counted turns that remain are of two kinds and neither is a guess at how long something takes: a check
+  letting something begin before it acts, as in "search again before the first finishes", and the work a stand-in
+  backend pretends to do. A kernel changed so that a read asks itself round without end used to keep the checks
+  from ever finishing. It now fails one of them in a second, with "Still not at rest after 5000 turns".
 - **Which views are followed follows the data** (`follows-check.mts`, 15 checks; `views.mts`, 13 comparisons): a view
   is followed from the moment its state is the case; what it delivers goes to its handler; a change to what it asks
   for follows it again and stops the one before, whose later deliveries are not heard; a change to anything else

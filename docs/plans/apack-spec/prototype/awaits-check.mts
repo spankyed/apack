@@ -3,7 +3,7 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/awaits-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { run, system } from './checks.mts'
+import { rest, run, system } from './checks.mts'
 import { commit, git, type CommitEvent } from './commit.mts'
 import { explore, type Schedule } from './schedule.mts'
 import { reaching } from './state.mts'
@@ -97,25 +97,25 @@ const checks: Array<[string, () => Promise<void>]> = [
   ['a read is asked when a field it names changes, and not when another does', async () => {
     const { send, now, did } = wired()
     send({ type: 'SET_QUERY', query: 'apack' })
-    await turns(10)
+    await rest()
     strictEqual(now().found, 'APACK')
     send({ type: 'RENAME', title: 'Another' })
-    await turns(10)
+    await rest()
     deepStrictEqual(did, ['lookup apack'])
   }],
   ['a field that only counts has it asked again', async () => {
     const { send, did } = wired()
     send({ type: 'SET_QUERY', query: 'apack' })
-    await turns(10)
+    await rest()
     send({ type: 'AGAIN' })
-    await turns(10)
+    await rest()
     deepStrictEqual(did, ['lookup apack', 'lookup apack'])
   }],
   ['where there is nothing to ask for, nothing is asked', async () => {
     const { send, did } = wired()
     send({ type: 'AGAIN' })
     send({ type: 'SET_QUERY', query: '' })
-    await turns(10)
+    await rest()
     deepStrictEqual(did, [])
   }],
   ['a read asked again gives up the one before: the one answering is told, and only the last is taken', async () => {
@@ -123,25 +123,25 @@ const checks: Array<[string, () => Promise<void>]> = [
     send({ type: 'SET_QUERY', query: 'first' })
     await turns(1)
     send({ type: 'SET_QUERY', query: 'second' })
-    await turns(12)
+    await rest()
     strictEqual(now().found, 'SECOND')
     deepStrictEqual(did, ['lookup first', 'gave up first', 'lookup second'])
   }],
   ['what a read says before it ends is heard, as a list', async () => {
     const { send, now } = wired()
     send({ type: 'SET_QUERY', query: 'apack' })
-    await turns(10)
+    await rest()
     deepStrictEqual(now().heard, ['apack began', 'apack ended'])
   }],
   ['one is asked for each item of a list, once, and what it found stays', async () => {
     const { send, now, did } = wired()
     send({ type: 'WATCH', ids: ['a', 'b'] })
-    await turns(10)
+    await rest()
     deepStrictEqual(now().labels, { a: 'A', b: 'B' })
     // A read does not end by taking its key out: the list is the data's, and it is as it was.
     deepStrictEqual(now().watched, ['a', 'b'])
     send({ type: 'WATCH', ids: ['a', 'b', 'c'] })
-    await turns(10)
+    await rest()
     deepStrictEqual(did, ['lookup a', 'lookup b', 'lookup c'])
     deepStrictEqual(now().labels, { a: 'A', b: 'B', c: 'C' })
   }],
@@ -150,7 +150,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     send({ type: 'WATCH', ids: ['a', 'b'] })
     await turns(1)
     send({ type: 'WATCH', ids: ['b'] })
-    await turns(10)
+    await rest()
     deepStrictEqual(did, ['lookup a', 'lookup b', 'gave up a'])
     deepStrictEqual(now().labels, { b: 'B' })
   }],
@@ -159,17 +159,17 @@ const checks: Array<[string, () => Promise<void>]> = [
     send({ type: 'SET_QUERY', query: 'apack' })
     await turns(1)
     send({ type: 'TURN', on: false })
-    await turns(10)
+    await rest()
     deepStrictEqual({ did, found: now().found }, { did: ['lookup apack', 'gave up apack'], found: null })
     // The data still says to look it up, so being the case again is asking again.
     send({ type: 'TURN', on: true })
-    await turns(10)
+    await rest()
     strictEqual(now().found, 'APACK')
   }],
   ['how a read ended may not change a field it is asked from: it is reported, and not asked again', async () => {
     const { send, now, did, defects } = wired()
     send({ type: 'CIRCLE' })
-    await turns(20)
+    await rest()
     deepStrictEqual(did, ['lookup round 1'])
     strictEqual(now().circling, 2)
     strictEqual(defects.length, 1)
@@ -183,7 +183,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     deepStrictEqual(looked, [])
     send({ type: 'WATCH', ids: ['a'] })
     strictEqual(looked.length, 1)
-    await turns(10)
+    await rest()
   }],
 ]
 

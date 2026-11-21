@@ -2,6 +2,7 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/draft-check.mts
 import { deepStrictEqual, notStrictEqual, ok, strictEqual, throws } from 'node:assert'
+import { run } from './checks.mts'
 import { produce } from './draft.mts'
 
 const freeze = <T,>(value: T): T => {
@@ -142,9 +143,4 @@ const checks: Array<[string, () => void]> = [
   }],
 ]
 
-let failed = 0
-for (const [name, check] of checks) {
-  try { check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n')[0]}`) }
-}
-console.log(`\n${checks.length - failed} of ${checks.length} passed`)
-if (failed) process.exitCode = 1
+await run(checks)

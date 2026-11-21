@@ -559,6 +559,11 @@ export interface System {
   subscribe(listener: (changed: readonly string[], fields: Readonly<Record<string, readonly string[]>>, changes: Readonly<Record<string, Changes>>) => void): () => void
   /** From a window: joins it to its backend. Closing the link is the window going away. */
   connect(backend: System): { close(): void }
+  /**
+   * Whether nothing is under way here: no work a state is doing, no ask being answered or waited on, nothing put off
+   * and nothing gathered. For a check, to wait until what it did has come to rest and not for a count of turns.
+   */
+  idle(): boolean
   stop(): void
 }
 
@@ -591,7 +596,15 @@ export function system(host: {
   let defects = 0
   const trace = (line: string): void => { if (line.startsWith('DEFECT')) defects++; host.trace?.(line) }
   const called = host.name ?? host.side
-  const later = host.later ?? ((_: Lane, run: () => void): void => { setImmediate(run) })
+  /** How many things are under way: work, asks, and what was put off. Nothing is, when this is nought. */
+  let pending = 0
+  /** Counts a promise as under way until it settles, and whatever its settling does is done. */
+  const under = <T,>(made: Promise<T>, done: (value: T) => void, failed: (error: unknown) => void): void => {
+    pending++
+    made.then((value) => { try { done(value) } finally { pending-- } }, (error) => { try { failed(error) } finally { pending-- } })
+  }
+  const putOff = host.later ?? ((_: Lane, run: () => void): void => { setImmediate(run) })
+  const later = (lane: Lane, run: () => void): void => { pending++; putOff(lane, () => { pending--; run() }) }
   const frames: Lane = { label: `${called}'s frame` }
   const frame = host.frame ?? ((run: () => void): void => later(frames, run))
   /** Code that is not the kernel's, called where its throwing must not stop the step it is in. */
@@ -692,7 +705,9 @@ export function system(host: {
     if (!due) { due = true; frame(handOver) }
   }
 
-  const ask = (to: string | { ref: string }, name: string, args: object, signal: AbortSignal | undefined, hears: ((updates: unknown[]) => void) | undefined): Promise<never> => new Promise((resolve, reject) => {
+  /** An ask is under way from when it is made until it ends, however it ends. */
+  const asked = <T,>(made: Promise<T>): Promise<T> => { under(made, () => {}, () => {}); return made }
+  const ask = (to: string | { ref: string }, name: string, args: object, signal: AbortSignal | undefined, hears: ((updates: unknown[]) => void) | undefined): Promise<never> => asked(new Promise((resolve, reject) => {
     const ref = refOf(to)
     const heard = hears && gather(hears, signal)
     // What was gathered is handed over before the answer, so an answer is never ahead of progress sent before it.
@@ -715,7 +730,7 @@ export function system(host: {
       mine.gone.add(gone)
       signal?.addEventListener('abort', gone, { once: true })
     }))
-  })
+  }))
 
   const scopeOf = (mine: Active, signal: AbortSignal = mine.controller.signal) => {
     const alive = (): boolean => !mine.controller.signal.aborted
@@ -761,7 +776,7 @@ export function system(host: {
     // What `run` throws at once is a failure like any later one, taken up when the entering it is part of is done.
     try { made = def.run?.(scopeOf(active)) } catch (error) { inside.push({ kind: 'failure', of: active, error }); return active }
     if (made instanceof Promise) {
-      made.then((value) => arrive({ kind: 'result', of: active, value }), (error) => arrive({ kind: 'failure', of: active, error }))
+      under(made, (value) => arrive({ kind: 'result', of: active, value }), (error) => arrive({ kind: 'failure', of: active, error }))
     } else if (made !== undefined) inside.push({ kind: 'result', of: active, value: made })
     return active
   }
@@ -1220,7 +1235,7 @@ export function system(host: {
       })
       if (made instanceof Promise) {
         found.of.questions.add(question)
-        made.then(
+        under(made,
           (value) => arrive(isAnswered(value) ? { kind: 'answer', question, outcome: { ok: true, value: value.answer }, change: { of: found.of, next: value.next } } : { kind: 'answer', question, outcome: { ok: true, value } }),
           (error) => arrive({ kind: 'answer', question, outcome: failed(error) }),
         )
@@ -1333,6 +1348,7 @@ export function system(host: {
         },
       }
     },
+    idle: () => pending === 0 && !due && !stepping && outside.length === 0,
     stop: () => step(() => { for (const ref of [...running.keys()].reverse()) end(ref) }),
   }
   ;(self as unknown as { attach(window: { link: Link; port: Port }): () => void }).attach = (window) => { down.add(window); return () => { down.delete(window) } }

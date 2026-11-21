@@ -3,7 +3,8 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/interleaving-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { explore, replay, sample, type Explored, type Schedule } from './schedule.mts'
+import { run } from './checks.mts'
+import { explore, replay, sample, type Schedule } from './schedule.mts'
 import { reaching, system } from './state.mts'
 
 type FinderAsks = {
@@ -227,71 +228,37 @@ const broken = (schedule: Schedule): (() => void) => {
   return () => { deepStrictEqual(window.read(it).data.results, ['b result']) }
 }
 
-const said = (found: Explored): string => `${found.orderings} ordering${found.orderings === 1 ? '' : 's'}${found.complete ? ', all there are' : ''}`
-const unhandled: unknown[] = []
-process.on('unhandledRejection', (reason) => { unhandled.push(reason) })
+await run([], async (tally) => {
+  for (const [name, scenario] of scenarios) await tally.every(name, () => explore(scenario))
+  await tally.every('a window closed at any moment: its search unwinds, and the backend goes on answering the other window', () => sample(twoWindows, { seed: 1, runs: 5_000 }), 'sampled')
 
-let failed = 0
-const pass = (name: string, detail: string): void => { console.log(`  ok    ${name}  (${detail})`) }
-const fail = (name: string, detail: string): void => { failed++; console.log(`  FAIL  ${name}\n        ${detail}`) }
-
-for (const [name, scenario] of scenarios) {
-  const found = await explore(scenario)
-  if (found.failure) fail(name, `${String(found.failure.error).split('\n').slice(0, 4).join(' ')}\n        after: ${found.failure.taken.join(' → ')}\n        replay: [${found.failure.choices.join(', ')}]`)
-  // An exploration that stopped at its limit proved only what it ran, and says so by failing.
-  else if (!found.complete) fail(name, `stopped at ${found.orderings} orderings with more to run`)
-  else if (found.orderings < 2) fail(name, 'there was only one ordering, so nothing was explored')
-  else pass(name, said(found))
-}
-
-{
-  const name = 'a window closed at any moment: its search unwinds, and the backend goes on answering the other window'
-  const found = await sample(twoWindows, { seed: 1, runs: 5_000 })
-  if (found.failure) fail(name, `${String(found.failure.error).split('\n').slice(0, 4).join(' ')}\n        after: ${found.failure.taken.join(' → ')}\n        replay: [${found.failure.choices.join(', ')}]`)
-  else pass(name, `${found.orderings} orderings from seed 1, of more than can all be run`)
-}
-
-{
-  const name = 'exploring finds the order that breaks results taken from a broadcast, and replaying it breaks the same way'
-  const found = await explore(broken)
-  if (!found.failure) fail(name, `no ordering failed in ${said(found)}`)
-  else {
+  await tally.check('exploring finds the order that breaks results taken from a broadcast, and replaying it breaks the same way', async () => {
+    const found = await explore(broken)
+    ok(found.failure, `no ordering failed in ${found.orderings}`)
     const again = await replay(broken, found.failure.choices)
     const first = await replay(broken, [])
-    try {
-      ok(again.error !== undefined, 'the replay did not fail')
-      deepStrictEqual(again.taken, found.failure.taken)
-      strictEqual(first.error, undefined, 'the first ordering fails too, so nothing had to be found')
-      pass(name, `found at ordering ${found.orderings}: ${found.failure.taken.filter((each) => each.startsWith('finding')).join(', then ')}`)
-    } catch (error) { fail(name, String(error).split('\n')[0]!) }
-  }
-}
+    ok(again.error !== undefined, 'the replay did not fail')
+    deepStrictEqual(again.taken, found.failure.taken)
+    strictEqual(first.error, undefined, 'the first ordering fails too, so nothing had to be found')
+    // The order it found: the second search's work done before the first's.
+    deepStrictEqual(found.failure.taken.filter((each) => each.startsWith('finding')), ['finding b', 'finding a'])
+  })
 
-{
-  const name = 'a seed chooses the same orderings every time'
-  const taken = async (seed: number): Promise<string> => { const all: string[] = []; await sample((schedule) => { const check = scenarios[0]![1](schedule); return () => { check(); all.push('.') } }, { seed, runs: 25 }); return `${all.length}` }
-  const orders = async (seed: number): Promise<string[]> => {
-    const seen: string[] = []
-    await sample((schedule) => {
-      const order: string[] = []
-      const watched: Schedule = { ...schedule, work: (label, value) => schedule.work(label, value).then((done) => { order.push(label); return done }) }
-      const check = scenarios[0]![1](watched)
-      return () => { check(); seen.push(order.join(',')) }
-    }, { seed, runs: 25 })
-    return seen
-  }
-  try {
-    strictEqual(await taken(7), '25')
+  await tally.check('a seed chooses the same orderings every time', async () => {
+    const orders = async (seed: number): Promise<string[]> => {
+      const seen: string[] = []
+      await sample((schedule) => {
+        const order: string[] = []
+        const watched: Schedule = { ...schedule, work: (label, value) => schedule.work(label, value).then((done) => { order.push(label); return done }) }
+        const check = scenarios[0]![1](watched)
+        return () => { check(); seen.push(order.join(',')) }
+      }, { seed, runs: 25 })
+      return seen
+    }
     const [once, again, other] = [await orders(7), await orders(7), await orders(8)]
+    strictEqual(once.length, 25)
     deepStrictEqual(once, again)
     ok(new Set(once).size > 1, 'every run took the same order')
     ok(once.join() !== other.join(), 'another seed chose the same orderings')
-    pass(name, '25 runs, twice, and another seed differs')
-  } catch (error) { fail(name, String(error).split('\n')[0]!) }
-}
-
-await new Promise((resolve) => setImmediate(resolve))
-if (unhandled.length) fail('nothing was left unhandled', String(unhandled[0])); else console.log('  ok    none of it left a rejection unhandled')
-const total = scenarios.length + 4
-console.log(`\n${total - failed} of ${total} passed`)
-if (failed) process.exitCode = 1
+  })
+})

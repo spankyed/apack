@@ -4,7 +4,7 @@
 //   npx tsx docs/plans/apack-spec/prototype/starts-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { explore, type Schedule } from './schedule.mts'
-import { run, system } from './checks.mts'
+import { rest, run, system } from './checks.mts'
 import { answered, given, reaching, type Each } from './state.mts'
 
 const state = reaching()

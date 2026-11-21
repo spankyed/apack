@@ -11,7 +11,8 @@ import { compile } from '@vue/compiler-dom'
 import * as runtime from '@vue/runtime-core'
 import { createRenderer, defineComponent, h, nextTick, ref, type Component } from '@vue/runtime-core'
 import { mirrors } from './mirror.mts'
-import { given, reaching, system, type Each } from './state.mts'
+import { run, system } from './checks.mts'
+import { given, reaching, type Each } from './state.mts'
 import { vueBinding } from './vue.mts'
 
 // ── what is rendered into ───────────────────────────────────────────────────────────────────────────────────────────
@@ -306,15 +307,6 @@ const templateOnly: Array<[string, () => Promise<void>]> = [
   }],
 ]
 
-let failed = 0
-let total = 0
-for (const form of ['render functions', 'templates'] as const) {
-  written = form
-  console.log(`\nwritten as ${form}`)
-  for (const [name, check] of form === 'templates' ? [...checks, ...templateOnly] : checks) {
-    total++
-    try { await check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 8).join(' ')}`) }
-  }
-}
-console.log(`\n${total - failed} of ${total} passed`)
-if (failed) process.exitCode = 1
+const written_as = (form: typeof written, list: typeof checks): typeof checks =>
+  list.map(([name, check]) => [`${form}: ${name}`, async () => { written = form; await check() }])
+await run([...written_as('render functions', checks), ...written_as('templates', [...checks, ...templateOnly])])

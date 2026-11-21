@@ -20,7 +20,7 @@ the app: nothing imports it, and no check covers it.
 | `commit.mts` | A slice of the app's commit surface ported: its status and a diff as reads it awaits, staging and a push as writes it makes. Runs, and checks what each step leaves |
 | `awaits-check.mts` | The reads a state awaits: from the fields it names, or one for each key of a field. Runs |
 | `makes-check.mts` | The writes a state makes: said once with `make`, with which are under way kept by the kernel. Runs, for about 10 seconds |
-| `checks.mts` | What the check files run their checks with: every system a check makes is stopped however it ends, and given a limit on its steps |
+| `checks.mts` | What every check file runs its checks with: each system a check makes is stopped however it ends and given a limit on its steps, and `rest()` waits until what the check started has come to rest |
 | `starts-check.mts` | The states a state starts: declared, and which of them run follows from its data. Runs |
 | `follows-check.mts` | The views a state follows: declared, and which are followed, and what each is asked for, follow from its data. Runs |
 | `answer-check.mts` | An ask that changes something as it answers: the change is there with the answer, a refused change fails the ask, nothing is lost across a wait. Runs |

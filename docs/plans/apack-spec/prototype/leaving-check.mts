@@ -3,7 +3,7 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/leaving-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { run, system } from './checks.mts'
+import { rest, run, system } from './checks.mts'
 import { given, Left, reaching } from './state.mts'
 
 type SlowAsks = {
@@ -127,7 +127,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     it.send({ type: 'START', how: 'relay' })
     await turns(8)
     it.send({ type: 'LEAVE' })
-    await turns(10)
+    await rest()
     ok(backendSaw.includes('RELAY unwound'))
     ok(backendSaw.includes('WAIT told its asker had gone'))
     it.stop()
@@ -137,7 +137,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     it.send({ type: 'START', how: 'fetch' })
     await turns(8)
     it.send({ type: 'LEAVE' })
-    await turns(10)
+    await rest()
     strictEqual(it.backendTraced.length, 1)
     ok(it.backendTraced[0]!.startsWith('slow stopped answering FETCH'))
     it.stop()
@@ -147,7 +147,7 @@ const checks: Array<[string, () => Promise<void>]> = [
     it.send({ type: 'START', how: 'floating' })
     await turns(6)
     it.send({ type: 'LEAVE' })
-    await turns(50)
+    await rest()
     // The code went on, since nothing it awaited was the ask. What it returned came after its state was left, and was dropped.
     deepStrictEqual(it.saw, ['ran on after the ask', 'finally ran'])
     strictEqual(it.at(), 'idle')
@@ -156,7 +156,7 @@ const checks: Array<[string, () => Promise<void>]> = [
   ['an answer that arrives in time is unaffected', async () => {
     const it = wired()
     it.send({ type: 'START', how: 'await' })
-    await turns(60)
+    await rest()
     deepStrictEqual(it.saw, ['ran on after the ask', 'finally ran'])
     strictEqual(it.at(), 'idle')
     it.stop()
