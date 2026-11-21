@@ -64,6 +64,7 @@ type SearchSystemAsks = {
 type App = {
   systems: { 'code/search': { events: SearchSystemEvent; asks: SearchSystemAsks } }
   surfaces: {}
+  views: {}
 }
 const state = reaching<App>()
 

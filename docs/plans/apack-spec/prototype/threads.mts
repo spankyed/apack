@@ -63,6 +63,7 @@ type App = {
   surfaces: {
     threads: { events: ThreadsSurfaceEvent }
   }
+  views: {}
 }
 
 const state = reaching<App>()

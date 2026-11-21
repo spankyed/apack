@@ -113,6 +113,30 @@ stays. Giving `at` goes to that path.
 Names are typed by one declaration of what can be reached, which a pack's generated facade would supply. A state may
 also `start` another that lives exactly as long as it does, and reach it through the handle it gets back.
 
+### Following a view
+
+Data a window shows from the database stays a view. A component reads one with `useView`, unchanged: it has nothing to
+do with states. A surface that has to follow one from its machine does it with `watch`, which is what `fromView`
+becomes:
+
+```ts
+detail: {
+  data: { id: given, detail: given },
+
+  run({ data, watch, send }) {
+    watch('detail', 'threads', 'detail', { id: data.id }, (update) =>
+      send(update.ok ? { type: 'DETAIL.READ', detail: update.value } : { type: 'VIEW_FAILED', view: 'detail', error: update.error }))
+  },
+}
+```
+
+A watch belongs to the state that made it and ends when that state does, so nothing is spawned or stopped by hand. The
+first argument is a key: a second watch under the same key replaces the first, and `unwatch(key)` ends one, which is
+how a set is followed, one per open tab.
+
+On `375e00a563`, 2026-11-21, by text search: `useView` has 26 call sites and `fromView` nine, eight of them in the
+threads surface, which spawns and stops each view's actor itself in about a dozen places.
+
 ### Systems and steps
 
 States run in a system. The backend is one system and each window is another, joined by a link. Within a system, one
@@ -139,7 +163,7 @@ batch, and this repo's own `transact` followed by `watch`.
 ## What the prototype proves
 
 Everything below is in [`apack-spec/prototype/`](apack-spec/prototype/) and runs from the repo root; its README has the
-commands. Types and kernel together are about 450 lines.
+commands. Types and kernel together are about 500 lines.
 
 - **Two real features are ported.** The code search, backend and surface (`search.mts`), runs: results stream, a second
   search aborts the first on the backend, and cancel works. About 167 and 192 non-blank lines become about 39 and 77.
@@ -151,6 +175,9 @@ commands. Types and kernel together are about 450 lines.
 - **The graph can be derived without running anything** (`graph.mts`): states, moves, what each state answers, and
   which other states it reaches, read from handler return types by the TypeScript checker. An earlier version of it
   caught a handler dropped during a port.
+- **A surface follows views** (`views.mts`), modelled on the threads surface: one for as long as the surface runs, one
+  only while a thread is open, and one per open tab. Opening another thread stops the last one's view; closing a tab
+  stops its view; stopping the surface stops the rest.
 - **Mistakes that do not compile** were checked at each stage with `@ts-expect-error`: a state missing from a
   definition, entering a state without its data, reading a field of a state it is not in, an answer of the wrong type,
   an undeclared refusal, telling a state an event it does not take. Three about a refusal's data are in `threads.mts`:
@@ -222,17 +249,18 @@ when it runs, and XState's targets are fixed in the machine's config.
 ## Not built
 
 - **The Vue binding.** Nothing renders. 439 `useSelector` sites depend on it.
-- **Views.** Data a window shows from the database stays with `useView`; how a state follows one is undecided.
 - **Roles**: `tell({ role: 'brain' }, …)`.
 - **A write nobody waits for**, which appliers and migrations make today.
 - **Window-to-window sends**, the app's `sendToSurface`.
 - **Keyed dynamic children**: a flow per run, a surface per pack, a system per registration. The brain, the bus and the
-  shell need them.
+  shell need them. A keyed set of views is covered by `watch`; a keyed set of states is not.
 - **A bound on a step.** Two states that tell each other forever never commit.
 - **Field names unique along a path** are assumed and not enforced.
 - **A field with a default still has to be given** when entering its state, because the types cannot see the default.
 - **Persistence, delayed transitions and history states** are absent. The app uses one delayed transition and no
   history states.
+- **The kernel's own rough edges.** Reading a state that has ended throws, and a returned field that no active state
+  owns is dropped without a word.
 - **The bridge**: running a state inside XState's actor system during a migration. Unproven, and the migration order
   below depends on it.
 
@@ -253,8 +281,7 @@ No step is started. Each is a decision point.
 1. **Bring the XState code to the shared vocabulary and seams** ([Alongside results-are-asks](#alongside-results-are-asks)),
    stacked on spankyed/apack#583. It is worth doing whether or not anything after it is: it removes the event path
    for answers, and leaves pack code that does not name XState.
-2. **Settle the open design** that the first real ports will hit: the Vue binding, how a state follows a view, and a
-   write nobody waits for.
+2. **Settle the open design** that the first real ports will hit: the Vue binding, and a write nobody waits for.
 3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The kernel
    takes an injectable scheduler so interleavings can be replayed.
 4. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is

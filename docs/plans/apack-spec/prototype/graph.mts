@@ -98,7 +98,9 @@ const VERBS = new Set(['tell', 'ask', 'broadcast', 'start'])
 const visit = (node: any): void => {
   // state<Shape, Events, Asks>()(definition)
   if (ts.isCallExpression(node) && ts.isCallExpression(node.expression) && ts.isIdentifier(node.expression.expression)
-    && node.expression.expression.text === 'state' && node.expression.typeArguments?.length && node.arguments.length === 1 && ts.isObjectLiteralExpression(node.arguments[0])) {
+    && node.expression.expression.text === 'state' && node.expression.typeArguments?.length && node.arguments.length === 1 && ts.isObjectLiteralExpression(node.arguments[0])
+    // A definition written to show what does not compile is not one to describe.
+    && !node.getFullText().includes('@ts-expect-error')) {
     const [shapeNode, eventNode, askNode] = node.expression.typeArguments
     const eventType = eventNode ? checker.getTypeFromTypeNode(eventNode) : undefined
     const events = eventType ? members(eventType).flatMap((m: Type) => { const t = m.getProperty?.('type'); return t ? literalsOf(typeOf(t)) : [] }) : []

@@ -9,6 +9,7 @@ the app: nothing imports it, and no check covers it.
 | `search.mts` | The app's code search, backend and surface, ported. Runs |
 | `library.mts` | The app's library system ported handler for handler. Typechecks against stand-ins for its imports; not run |
 | `threads.mts` | Three backend systems and two windows: asks, tells, a streamed reply, a broadcast, a disconnect, and a refusal that carries data. Runs |
+| `views.mts` | A surface following views, modelled on the threads surface: one always, one while a thread is open, one per tab. Runs |
 | `graph.mts` | Derives each state's graph from its types, running nothing |
 | `xstate-survey.mts` | The survey of how the app uses XState that the plan's figures come from |
 
@@ -23,6 +24,10 @@ npx tsx docs/plans/apack-spec/prototype/threads.mts
 ```
 
 ```bash
+npx tsx docs/plans/apack-spec/prototype/views.mts
+```
+
+```bash
 npx tsx docs/plans/apack-spec/prototype/graph.mts docs/plans/apack-spec/prototype/threads.mts
 ```
 
@@ -33,5 +38,5 @@ npx tsx docs/plans/apack-spec/prototype/xstate-survey.mts "$PWD"
 Typecheck:
 
 ```bash
-npx tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --allowImportingTsExtensions --noUncheckedIndexedAccess --skipLibCheck --types node docs/plans/apack-spec/prototype/state.mts docs/plans/apack-spec/prototype/search.mts docs/plans/apack-spec/prototype/library.mts docs/plans/apack-spec/prototype/threads.mts
+npx tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --allowImportingTsExtensions --noUncheckedIndexedAccess --skipLibCheck --types node docs/plans/apack-spec/prototype/state.mts docs/plans/apack-spec/prototype/search.mts docs/plans/apack-spec/prototype/library.mts docs/plans/apack-spec/prototype/threads.mts docs/plans/apack-spec/prototype/views.mts
 ```

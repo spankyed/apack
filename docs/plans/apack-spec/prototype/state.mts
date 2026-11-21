@@ -9,6 +9,7 @@
 //   ask(name, ask, args)     of a backend system: exactly one answer, refusal or failure comes back
 //   progress(update)         from the handler of an ask, to whoever asked, before it answers
 //   broadcast(name, event)   from the backend to that surface in every window
+//   watch(key, feature, view, args, heard)   follows a live read of the database for as long as the state is the case
 
 export type AnyEvent = { readonly type: string }
 /**
@@ -23,8 +24,18 @@ export type Asks = Record<string, AskShape>
 export type Shape = { data?: object; states?: Record<string, Shape> }
 
 /** What some code can reach by name: the backend's systems, and the surfaces a window runs. */
-export type Net = { systems: Record<string, { events: AnyEvent; asks: Asks }>; surfaces: Record<string, { events: AnyEvent }> }
-type Nothing = { systems: {}; surfaces: {} }
+export type Net = {
+  systems: Record<string, { events: AnyEvent; asks: Asks }>
+  surfaces: Record<string, { events: AnyEvent }>
+  /** The live reads a feature offers, by feature and then by name. */
+  views: Record<string, Record<string, { args: object; result: unknown }>>
+}
+type Nothing = { systems: {}; surfaces: {}; views: {} }
+
+/** What a view delivers: its result, and each changed result after it, or why it could not be read. */
+export type ViewUpdate<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: string }
+/** What runs a view: it calls `heard` with the result and every changed result until the function it returns is called. */
+export type ViewHost = (feature: string, view: string, args: object, heard: (update: ViewUpdate<unknown>) => void) => () => void
 
 export type AskEnd =
   | 'failed'        // the handler threw
@@ -110,6 +121,16 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
   /** From the backend: tells that surface, in every window, an event. */
   broadcast<K extends keyof N['surfaces'] & string>(to: K, event: N['surfaces'][K]['events']): void
 
+  /**
+   * Follows a view until this state stops being the case. `heard` is called with its result and each changed result.
+   * A second watch under the same key replaces the first, which is how a view is followed again with other arguments.
+   */
+  watch<F extends keyof N['views'] & string, V extends keyof N['views'][F] & string>(
+    key: string, feature: F, view: V, args: N['views'][F][V]['args'], heard: (update: ViewUpdate<N['views'][F][V]['result']>) => void,
+  ): void
+  /** Stops following the view watched under this key. */
+  unwatch(key: string): void
+
   /** A state this one started, as it is now. */
   read<V2>(of: Handle<V2, never, Asks>): V2
   /** Starts a state that runs exactly as long as this one is the case. */
@@ -188,6 +209,7 @@ interface Active {
   readonly releases: Array<() => void>
   readonly questions: Set<Question>
   readonly started: string[]
+  readonly watching: Map<string, () => void>
 }
 interface Running { ref: string; data: Plain; root: Active }
 
@@ -222,7 +244,7 @@ export interface System {
   stop(): void
 }
 
-export function system(host: { side: 'backend' | 'window'; trace?(line: string): void }): System {
+export function system(host: { side: 'backend' | 'window'; views?: ViewHost; trace?(line: string): void }): System {
   const trace = (line: string): void => host.trace?.(line)
   const running = new Map<string, Running>()
   const outside: Item[] = []
@@ -268,6 +290,8 @@ export function system(host: { side: 'backend' | 'window'; trace?(line: string):
     if (!mine) { question.end(refusal('disconnected', `Not connected, so ${ref} cannot be asked`)); return }
     mine.waiting.add(question)
     out(() => carry(mine.link, () => {
+      // Whoever asked may have ended before the ask crossed the link: then it is never started.
+      if (signal?.aborted) { mine.waiting.delete(question); return }
       const gone = mine.port.ask(ref, name, args,
         (update) => carry(mine.link, () => heard?.(update)),
         (outcome) => carry(mine.link, () => { mine.waiting.delete(question); mine.gone.delete(gone); question.end(outcome) }))
@@ -287,6 +311,12 @@ export function system(host: { side: 'backend' | 'window'; trace?(line: string):
       tell: (to: string | { ref: string }, event: AnyEvent) => { if (alive()) tell(to, event) },
       ask: (to: string | { ref: string }, name: string, args: object, heard?: Heard) => ask(to, name, args, mine.controller.signal, heard),
       broadcast: (to: string, event: AnyEvent) => { if (alive()) out(() => { for (const window of down) carry(window.link, () => window.port.event(to, event)) }) },
+      watch: (key: string, feature: string, view: string, args: object, heard: (update: ViewUpdate<unknown>) => void) => {
+        if (!alive() || !host.views) return
+        mine.watching.get(key)?.()
+        mine.watching.set(key, host.views(feature, view, args, (update) => { if (alive()) heard(update) }))
+      },
+      unwatch: (key: string) => { mine.watching.get(key)?.(); mine.watching.delete(key) },
       read: (target: { ref: string }) => valueOf(running.get(target.ref)!),
       start: (name: string, made: { def: unknown }) => { mine.started.push(`${ref}/${name}`); return begin(`${ref}/${name}`, made.def as LooseDef) },
       child: (name: string) => ({ ref: `${ref}/${name}` }),
@@ -296,7 +326,7 @@ export function system(host: { side: 'backend' | 'window'; trace?(line: string):
 
   const enter = (top: Running, def: LooseDef, name: string, around: Active | undefined, entering: Plain): Active => {
     const path = around?.path ? `${around.path}.${name}` : name
-    const active: Active = { top, def, name, path, around, inside: undefined, controller: new AbortController(), releases: [], questions: new Set(), started: [] }
+    const active: Active = { top, def, name, path, around, inside: undefined, controller: new AbortController(), releases: [], questions: new Set(), started: [], watching: new Map() }
     if (around) around.inside = active; else top.root = active
     for (const [field, initial] of Object.entries(def.data ?? {})) {
       if (field in entering) top.data = { ...top.data, [field]: entering[field] }
@@ -315,6 +345,8 @@ export function system(host: { side: 'backend' | 'window'; trace?(line: string):
     if (active.inside) exit(active.inside)
     if (active.path) trace(`${active.top.ref} left ${active.path}`)
     active.controller.abort()
+    for (const stop of active.watching.values()) stop()
+    active.watching.clear()
     for (const ref of active.started.reverse()) end(ref)
     for (const question of active.questions) leaving.push(() => question.end(refusal('abandoned', 'It stopped before answering')))
     for (const release of active.releases.reverse()) release()
