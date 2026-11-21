@@ -69,11 +69,13 @@ it('recognizes the original loggedIn auth status after native setup', async () =
 it('reads fresh native settings without resuming the saved conversation in the probe', async () => {
   const controller = new AbortController()
   const close = vi.fn(async () => controller.abort())
-  const query = vi.spyOn(claudeCode, 'query').mockResolvedValue({
-    getSettings: async () => ({}),
+  type Handle = Awaited<ReturnType<typeof claudeCode.query>>
+  const probe: Pick<Handle, 'getSettings' | 'getPermissionMode' | 'close'> = {
+    getSettings: async () => ({ effective: {}, sources: [] }),
     getPermissionMode: async () => 'acceptEdits',
     close,
-  } as Awaited<ReturnType<typeof claudeCode.query>>)
+  }
+  const query = vi.spyOn(claudeCode, 'query').mockResolvedValue(probe as unknown as Handle)
   try {
     await expect(cliService.claudeCode.openNativeTerminal('probe-parked-session', {
       resume: { sessionId: '77d76a62-9301-47f4-adaf-cc33e402c697', cwd: root, permissionMode: 'acceptEdits' },
