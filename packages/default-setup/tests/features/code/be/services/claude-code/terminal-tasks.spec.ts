@@ -280,7 +280,7 @@ it('projects the original complete report and warning only for the inspected nat
 })
 
 function mcpFixture() {
-  const task = { id: 'registry-mcp', type: 'mcp_task', description: 'Review workspace', status: 'running', serverName: 'workspace', toolName: 'review', mcpTaskId: 'server-task-42', mcpStatus: 'input_required', startTime: 1000, pollIntervalMs: 5000, protocol: 'sep2663', isBackgrounded: true }
+  const task = { id: 'registry-mcp', type: 'mcp_task', description: 'Review workspace', status: 'running', serverName: 'workspace', toolName: 'review', mcpTaskId: 'server-task-42', mcpStatus: 'input_required', startTime: 1000, pollIntervalMs: 5000, protocol: 'sep2663', isBackgrounded: true, parked: undefined as boolean | undefined }
   const registry = { all: () => ({ [task.id]: task }) }
   const stop = vi.fn(async () => {}), context = { taskRegistry: registry, session: {}, storageV5: {}, setAppState: vi.fn(), getAppState: vi.fn() }
   const runtime = vm.runInNewContext(claudeTerminalTaskRuntime + ';({control:nativeTaskControl,list:nativeMcpTasks})', { Buffer }) as { control: (...args: any[]) => Promise<any>; list: (...args: any[]) => any[] }
@@ -294,6 +294,17 @@ it('keeps MCP registry/server identities and input-required details separate fro
   expect(f.stop).not.toHaveBeenCalled();expect(f.list()).toHaveLength(1)
   f.task.isBackgrounded=false;expect(f.list()).toEqual([])
   await expect(f.request('inspect')).rejects.toThrow('no longer listed')
+})
+it('preserves the native parked state and last poll interval through task details and activity', async () => {
+  const f = mcpFixture()
+  f.task.parked = true
+  expect(f.list()[0].mcp).toMatchObject({ parked: true, status: 'input_required', pollIntervalMs: 5000 })
+  expect(ClaudeNativeTaskResultSchema.parse(await f.request('inspect')).details?.mcp)
+    .toMatchObject({ parked: true, status: 'input_required', pollIntervalMs: 5000 })
+
+  f.task.parked = false
+  expect(f.list()[0].mcp).not.toHaveProperty('parked')
+  expect(ClaudeNativeTaskResultSchema.parse(await f.request('inspect')).details?.mcp).not.toHaveProperty('parked')
 })
 it('uses original MCP user-stop and rejects foreign, pending and Agent-only operations', async () => {
   const f=mcpFixture();expect(await f.request('stop')).toEqual({stopped:true})

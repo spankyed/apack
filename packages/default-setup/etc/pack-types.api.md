@@ -1540,6 +1540,7 @@ declare const ClaudeNativeMcpTaskInfoSchema: z.ZodObject<{
     serverTaskId: z.ZodOptional<z.ZodString>;
     status: z.ZodString;
     statusMessage: z.ZodOptional<z.ZodString>;
+    parked: z.ZodOptional<z.ZodLiteral<true>>;
     pollIntervalMs: z.ZodOptional<z.ZodNumber>;
     startTime: z.ZodNumber;
     endTime: z.ZodOptional<z.ZodNumber>;

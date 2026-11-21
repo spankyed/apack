@@ -2,6 +2,7 @@ import { createApp, h, ref, computed, provide, nextTick, type App } from 'vue'
 import NativeTaskControls from '#extensions/blocks/display/NativeTaskControls.vue'
 import NativeManagedTasks from '#features/threads/fe/chat/NativeManagedTasks.vue'
 import { claudeTaskControls } from '#extensions/blocks/display/native-task-controls.ts'
+import type { ClaudeNativeMcpTaskInfo } from '#features/code/common/native-mcp-task.ts'
 import type { ClaudeTerminalTaskState } from '#features/threads/be/claude-terminal-views.ts'
 let app: App | undefined
 afterEach(() => { app?.unmount(); document.body.replaceChildren() })
@@ -141,6 +142,50 @@ it('shows MCP task details and native refusal without offering Agent controls', 
   button('Task details').click();expect(operate).toHaveBeenLastCalledWith(task,'inspect')
 })
 
+
+it('updates opened MCP details when the native task is parked', async () => {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) { this.open = true })
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) { this.open = false })
+  const mcp: ClaudeNativeMcpTaskInfo = {
+    serverTaskId: 'server-task-42', status: 'working', startTime: Date.now(), pollIntervalMs: 1000, truncated: false,
+  }
+  const active = {
+    kind: 'mcp' as const, id: 'registry-mcp', ownerId: 'owner', sessionId: 'session', status: 'running', canStop: true, mcp,
+  }
+  const task = ref(active)
+  const state = ref<ClaudeTerminalTaskState>({
+    ownerId: 'owner', sessionId: 'session', taskId: active.id, revision: 1, operation: 'inspect', status: 'done',
+    details: { taskId: active.id, name: 'Review', status: 'running', canInput: false, canMessage: false, mcp: active.mcp, messages: [], truncated: false },
+  })
+  const root = document.createElement('div'), operate = vi.fn()
+  document.body.append(root)
+  app = createApp({
+    setup() {
+      provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'), state: computed(() => state.value), operate })
+      return () => h(NativeTaskControls, { task: task.value })
+    },
+  })
+  app.mount(root)
+  ;[...root.querySelectorAll('button')].find(button => button.textContent === 'Task details')!.click()
+  await nextTick()
+  const dialog = root.querySelector('dialog')!
+  expect(dialog.textContent).toContain('Every 1s')
+  const statusMessage = 'server did not reconnect within 300s'
+  task.value = { ...active, mcp: { ...active.mcp, parked: true, statusMessage } }
+  await nextTick()
+  expect(dialog.textContent).toContain('Outcome unknown')
+  expect(dialog.textContent).toContain('Last server status')
+  expect(dialog.textContent).toContain('working')
+  expect(dialog.textContent).toContain(statusMessage)
+  expect(dialog.textContent).toContain('server-task-42')
+  expect(dialog.textContent).not.toContain('Polling')
+  ;[...dialog.querySelectorAll('button')].find(button => button.textContent === 'Stop task')!.click()
+  expect(operate).toHaveBeenLastCalledWith(task.value, 'stop')
+  task.value = active
+  await nextTick()
+  expect(dialog.textContent).toContain('Every 1s')
+  expect(dialog.textContent).not.toContain('Outcome unknown')
+})
 
 it('routes remote-review management to Claude without invented Agent or Stop controls', async () => {
   const root=document.createElement('div');document.body.append(root)

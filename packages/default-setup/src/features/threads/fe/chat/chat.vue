@@ -107,7 +107,7 @@
         <NativeManagedTasks v-if="!nativeTerminalActive && managedTasks.length" :tasks="managedTasks" :disabled="nativeSessionBackgrounded || nativeAgentsDecisionPending || mainCommandActive || !!pendingNativeApproval || !!pendingNativeQuestion || !!pendingNativePlan || !nativeComposerOwner || nativeComposerOwner.view?.kind !== 'main'" @manage="mainComposer?.openTaskManager()" />
         <section v-if="!nativeTerminalActive && mcpTasks.length" aria-label="MCP tasks" class="mt-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in mcpTasks" :key="task.id" :data-native-mcp-task-id="task.id" class="py-2">
-            <div class="flex items-start justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.mcp?.status.replaceAll('_', ' ') ?? task.status }}</span></div>
+            <div class="flex items-start justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ claudeMcpTaskStatusLabel(task.mcp, task.status) }}</span></div>
             <NativeTaskControls :task="task" />
           </div>
         </section>
@@ -239,6 +239,7 @@ import NativeManagedSettingsNotice from './NativeManagedSettingsNotice.vue'
 import NativeDiagnosticAttachment from './NativeDiagnosticAttachment.vue'
 import NativeToolGroup from './NativeToolGroup.vue'
 import { provide, ref, computed, watch, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
+import { claudeMcpTaskStatusLabel } from '#features/code/common/native-mcp-task.ts'
 import { readClaudeDecisionPauseScope, type ClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import { createScrollPositioning } from './scroll-positioning.ts'
 

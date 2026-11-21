@@ -12,7 +12,7 @@ function nativeManagedTasks(registry){
 function nativeMcpTaskInfo(n,task){
  let truncated=false;const text=(value,limit)=>{if(typeof value!=='string')return;const clean=n.taskOutputText.stripVTControlCharacters(value);if(clean.length>limit)truncated=true;let shown=clean.slice(0,limit);const last=shown.charCodeAt(shown.length-1);if(last>=0xd800&&last<=0xdbff)shown=shown.slice(0,-1);return shown;};
  if(typeof task.mcpStatus!=='string'||!task.mcpStatus)throw Error('Native MCP task status is unavailable');
- return {serverName:text(task.serverName,512),toolName:text(task.toolName,512),serverTaskId:text(task.mcpTaskId,512),status:task.mcpStatus.slice(0,64),statusMessage:text(task.statusMessage,4096),pollIntervalMs:task.pollIntervalMs,startTime:task.startTime,endTime:task.endTime,protocol:text(task.protocol,64),truncated};
+ return {serverName:text(task.serverName,512),toolName:text(task.toolName,512),serverTaskId:text(task.mcpTaskId,512),status:task.mcpStatus.slice(0,64),statusMessage:text(task.statusMessage,4096),...(task.parked===true&&{parked:true}),pollIntervalMs:task.pollIntervalMs,startTime:task.startTime,endTime:task.endTime,protocol:text(task.protocol,64),truncated};
 }
 function nativeMcpTaskVisible(task){return task.type==='mcp_task'&&['running','pending'].includes(task.status)&&!('isBackgrounded' in task&&task.isBackgrounded===false);}
 function nativeMcpTasks(n,registry){
