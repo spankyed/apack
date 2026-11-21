@@ -65,22 +65,24 @@ it('signals nothing more once the terminal has already exited',async()=>{
 })
 
 it('checks early preload registration once the broker returns the terminal handle', async () => {
- const opening = Promise.withResolvers<void>()
- const requested = Promise.withResolvers<void>()
+ let releaseOpen!: () => void
+ let markRequested!: () => void
+ const opening = new Promise<void>(resolve => { releaseOpen = resolve })
+ const requested = new Promise<void>(resolve => { markRequested = resolve })
  const owns = vi.fn(async (pid: number) => pid === 2202)
  f.open.mockImplementation(async (_options, listeners) => {
-  requested.resolve()
-  await opening.promise
+  markRequested()
+  await opening
   return { ...nativeSession(listeners, { pid: 2201 }), owns }
  })
  const prepared = await prepareClaudeNativeTerminal({sessionId:'11111111-1111-1111-1111-111111111111',cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]}})
  const starting = prepared.start()
- await requested.promise
+ await requested
  const check = f.captureOwnership.mock.lastCall![0]
  const owned = check(2202)
  const foreign = check(9999)
  expect(owns).not.toHaveBeenCalled()
- opening.resolve()
+ releaseOpen()
  await starting
  await expect(owned).resolves.toBe(true)
  await expect(foreign).resolves.toBe(false)
