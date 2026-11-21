@@ -7,7 +7,7 @@
 // One writer keeps the record: `enqueueAsks`, used in place of XState's `enqueueActions`. Its `enqueue.spawnChild` and
 // `enqueue.stopChild` are XState's, and each also records or clears the id. `stopAsks` is that stop as an action of its
 // own, for a transition's list. Nothing else writes `asking`, and a machine that keeps it spawns and stops through these.
-import { enqueueActions, type stopChild } from 'xstate'
+import { enqueueActions, type EventObject, type MachineContext, type ParameterizedObject, type stopChild } from 'xstate'
 
 /** The ids of a machine's spawned asks that are under way; kept in its context as `asking` */
 export interface AsksUnderWay { readonly [id: string]: true }
@@ -60,5 +60,11 @@ export const enqueueAsks = ((collect: (args: { enqueue: Enqueue; context: { aski
   )) as unknown as typeof enqueueActions
 
 /** An action that stops the asks spawned under `ids` and clears them from `asking`: XState's `stopChild`, recorded */
-export const stopAsks = ((...ids: string[]) =>
-  enqueueAsks(({ enqueue }) => { for (const id of ids) enqueue.stopChild(id) })) as unknown as (...ids: string[]) => ReturnType<typeof stopChild>
+export function stopAsks<
+  TContext extends MachineContext,
+  TExpressionEvent extends EventObject,
+  TParams extends ParameterizedObject['params'] | undefined,
+  TEvent extends EventObject,
+>(...ids: string[]): ReturnType<typeof stopChild<TContext, TExpressionEvent, TParams, TEvent>> {
+  return enqueueAsks(({ enqueue }) => { for (const id of ids) enqueue.stopChild(id) }) as unknown as ReturnType<typeof stopChild<TContext, TExpressionEvent, TParams, TEvent>>
+}

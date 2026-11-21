@@ -22,7 +22,9 @@ import { entityTypeOf } from '@apackdev/ears';
 import { EventObject } from 'xstate';
 import { ExtractPropTypes } from 'vue';
 import type { InjectionKey } from 'vue';
+import { MachineContext } from 'xstate';
 import { MaybeRefOrGetter } from 'vue';
+import { ParameterizedObject } from 'xstate';
 import { PublicProps } from 'vue';
 import { Ref } from 'vue';
 import { RendererElement } from 'vue';
@@ -795,7 +797,7 @@ export interface StepFrontendBinding {
 }
 
 // @public
-export const stopAsks: (...ids: string[]) => ReturnType<typeof stopChild>;
+export function stopAsks<TContext extends MachineContext, TExpressionEvent extends EventObject, TParams extends ParameterizedObject['params'] | undefined, TEvent extends EventObject>(...ids: string[]): ReturnType<typeof stopChild<TContext, TExpressionEvent, TParams, TEvent>>;
 
 // @public
 export interface Surface {
