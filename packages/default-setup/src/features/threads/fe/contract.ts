@@ -103,7 +103,7 @@ export interface ThreadsContext {
   freshThreadIds: string[];
   /** This window's thread writes, which hold the views back until they are answered */
   writes: ViewWrites;
-  /** The ask the link form's last save is, by the id it was spawned under, until it ends, and why that save was refused, if it was */
+  /** The ask the link form's last save is, by the key it was made under, until it ends, and why that save was refused, if it was */
   linkSave: string | null;
   linkRefusal: string | null;
   /**

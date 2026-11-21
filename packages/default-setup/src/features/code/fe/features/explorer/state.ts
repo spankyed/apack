@@ -1,8 +1,8 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
 import { fromAsk, sendToSystem } from '#generated/events.ts';
-import type { AnswerPayload, AskFailure, AskOutcome } from '@apackdev/sdk/events';
+import type { AskFailure } from '@apackdev/sdk/events';
 import { safeEvents } from '@apackdev/sdk/helpers';
-import { askId, endedAsk } from '@apackdev/sdk/fe';
+import { freshKey, makes, type MadeEvent, type MakesEnqueue, type Making } from '@apackdev/sdk/fe';
 import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { updateParentState, getParentContext, addTabToParent } from '../../utils/parent-communication.ts';
 import { removeTabs, renameInTabViewHistory } from '../../utils/tab-management.ts';
@@ -45,20 +45,21 @@ function getParentDir(filePath: string): string {
 }
 
 export interface CodeExplorerContext {
+  /** Which of the asks the machine makes (`made`) are under way */
+  making: Making<typeof made>
   rootFiles: FileInfo[]
   expandedDirs: Set<string>
   dirContents: Record<string, FileInfo[]>
   loadingDirs: Set<string>
-  /** The folder each listing under way was asked for, by the id its ask was spawned under */
-  listings: Record<string, string>
   selectedPaths: string[]
   revealPath: string | null
   pendingEditorMode: Map<string, 'richText' | 'plainText'>
 }
 
-function emptyTreeState(): CodeExplorerContext {
+/** The tree with nothing read. The asks under way are not the tree's, and go on as they were */
+function emptyTreeState(): Omit<CodeExplorerContext, 'making'> {
   return {
-    rootFiles: [], expandedDirs: new Set(), dirContents: {}, loadingDirs: new Set(), listings: {},
+    rootFiles: [], expandedDirs: new Set(), dirContents: {}, loadingDirs: new Set(),
     selectedPaths: [], revealPath: null, pendingEditorMode: new Map(),
   }
 }
@@ -77,24 +78,32 @@ export interface QuickOpenResult {
 type ExplorerAsks = { [K in Extract<keyof CodeSystemContract['asks'], `explorer.${string}`>]: CodeSystemContract['asks'][K] };
 
 /**
- * The asks this machine makes several of at once, by the name each is spawned under: a spawned ask's id is
- * `<name>.<n>`, so its answer arrives as `xstate.done.actor.<name>.<n>` and a transition names the kind it is about
+ * The asks this machine makes several of at once, each under the name the machine makes it by. A listing is one under
+ * way per folder, by the folder's path; every other is made under a key of its own (`freshKey`), so that every one
+ * asked for is done
  */
-type SpawnedAsks = {
-  list: 'explorer.LIST_FILES'
-  read: 'explorer.READ_FILE'
-  write: 'explorer.WRITE_FILE'
-  delete: 'explorer.DELETE_FILE'
-  rename: 'explorer.RENAME_FILE'
-  mkdir: 'explorer.CREATE_DIRECTORY'
-  move: 'explorer.MOVE_FILES'
-  copy: 'explorer.COPY_FILES'
-};
+const made = makes(({ each }) => ({
+  list: each(fromAsk('code', 'explorer.LIST_FILES')),
+  read: each(fromAsk('code', 'explorer.READ_FILE')),
+  write: each(fromAsk('code', 'explorer.WRITE_FILE')),
+  delete: each(fromAsk('code', 'explorer.DELETE_FILE')),
+  rename: each(fromAsk('code', 'explorer.RENAME_FILE')),
+  mkdir: each(fromAsk('code', 'explorer.CREATE_DIRECTORY')),
+  move: each(fromAsk('code', 'explorer.MOVE_FILES')),
+  copy: each(fromAsk('code', 'explorer.COPY_FILES')),
+}));
 
-/** How a spawned ask ended, as the event its actor finishes with */
-type AskEnded = {
-  [Name in keyof SpawnedAsks]: { type: `xstate.done.actor.${Name}.${string}`; output: AskOutcome<ExplorerAsks[SpawnedAsks[Name]]>; actorId: string }
-}[keyof SpawnedAsks];
+/** The name an ask is made under */
+type Name = (typeof made.names)[number];
+
+/** How an ask the machine made ended */
+type Made = MadeEvent<typeof made>;
+
+/** How the ask made as `N` ended */
+type OutcomeOf<N extends Name> = Extract<Made, { type: `made.${N}` }> extends { outcome: infer Outcome } ? Outcome : never;
+
+/** What the ask made as `N` is answered with */
+type AnswerOf<N extends Name> = OutcomeOf<N> extends infer Outcome ? (Outcome extends { ok: true; value: infer Answer } ? Answer : never) : never;
 
 export type Event =
   | { type: 'explorer.LIST_FILES'; path: string }
@@ -122,35 +131,27 @@ export type Event =
   | { type: 'explorer.REFRESH_TREE' }
   // What the surface starts from, handed on by the surface
   | { type: 'CODE_STARTED'; data: { baseDirectory: string | null } }
-  // How each ask this machine spawned ended
-  | AskEnded;
+  // How each ask this machine made ended
+  | Made;
 
 const typeOf = safeEvents<Event>();
 
-/** What an action enqueues a listing with: the action's own `enqueue` */
-interface ListingEnqueue {
-  spawnChild(src: 'list', options: { id: string; input: { path: string } }): void
-  assign(assignment: (args: { context: CodeExplorerContext }) => Partial<CodeExplorerContext>): void
+/** Asks for a folder's listing, in place of one under way for that folder */
+function askForListing(enqueue: MakesEnqueue, path: string): void {
+  made.make(enqueue, 'list', path, { path })
 }
 
-/** Asks for a folder's listing, recording the folder under the ask's id: a listing that fails need not name its folder */
-function askForListing(enqueue: ListingEnqueue, path: string): void {
-  const id = askId('list')
-  enqueue.spawnChild('list', { id, input: { path } })
-  enqueue.assign(({ context }) => ({ listings: { ...context.listings, [id]: path } }))
+/** How the ask an event ends ended; throws for an event that ends none, which is an action on the wrong transition */
+function outcomeIn(event: Event): OutcomeOf<Name> {
+  if (!('outcome' in event)) throw new Error(`Expected the end of an ask, got ${event.type}`)
+  return event.outcome
 }
 
-/** How the spawned ask an event ends ended; throws for an event that ends none, which is an action on the wrong transition */
-function outcomeIn(event: Event): AskEnded['output'] {
-  if (!('output' in event)) throw new Error(`Expected the end of an ask, got ${event.type}`)
-  return event.output
-}
-
-/** The answer a spawned ask ended with, for an action its transition runs only when it was answered (`answered`) */
-function answerIn<Name extends keyof SpawnedAsks>(name: Name, event: Event): AnswerPayload<ExplorerAsks[SpawnedAsks[Name]]> {
+/** The answer an ask ended with, for an action its transition runs only when it was answered (`answered`) */
+function answerIn<N extends Name>(name: N, event: Event): AnswerOf<N> {
   const outcome = outcomeIn(event)
-  if (!event.type.startsWith(`xstate.done.actor.${name}.`) || !outcome.ok) throw new Error(`Expected the answer to a ${name} ask, got ${event.type}`)
-  return outcome.value as AnswerPayload<ExplorerAsks[SpawnedAsks[Name]]>
+  if (event.type !== `made.${name}` || !outcome.ok) throw new Error(`Expected the answer to a ${name} ask, got ${event.type}`)
+  return outcome.value as AnswerOf<N>
 }
 
 /** Why a file ask was not done: a file failure says which path and how, any other only says */
@@ -162,14 +163,7 @@ export const explorerState = setup({
     events: {} as Event
   },
   actors: {
-    list: fromAsk('code', 'explorer.LIST_FILES'),
-    read: fromAsk('code', 'explorer.READ_FILE'),
-    write: fromAsk('code', 'explorer.WRITE_FILE'),
-    delete: fromAsk('code', 'explorer.DELETE_FILE'),
-    rename: fromAsk('code', 'explorer.RENAME_FILE'),
-    mkdir: fromAsk('code', 'explorer.CREATE_DIRECTORY'),
-    move: fromAsk('code', 'explorer.MOVE_FILES'),
-    copy: fromAsk('code', 'explorer.COPY_FILES'),
+    ...made.actors,
     findFiles: fromAsk('code', 'explorer.QUICK_OPEN_SEARCH'),
   },
   guards: {
@@ -181,24 +175,13 @@ export const explorerState = setup({
       updateParentState(self, { isLoading: true, error: null })
     },
 
-    /**
-     * A listing ended, so it is not one under way, and one that was not done leaves its folder unmarked as loading,
-     * as an answered one does. The folder is the one it was asked for, since a failure need not name a path
-     */
+    /** A listing that was not done leaves its folder unmarked as loading, as an answered one does: the folder is the one it was asked for, since a failure need not name a path */
     listingEnded: assign(({ context, event }) => {
-      const id = endedAsk(event)
-      if (!(id in context.listings)) return {}
-      const { [id]: path, ...listings } = context.listings
-      if (outcomeIn(event).ok || !context.loadingDirs.has(path!)) return { listings }
+      const path = typeOf('made.list', event).key
+      if (outcomeIn(event).ok || !context.loadingDirs.has(path)) return {}
       const loadingDirs = new Set(context.loadingDirs)
-      loadingDirs.delete(path!)
-      return { listings, loadingDirs }
-    }),
-
-    /** An ask that ended stops being this machine's child */
-    forgetAsk: enqueueActions(({ enqueue, event }) => {
-      const id = endedAsk(event)
-      enqueue.stopChild(id)
+      loadingDirs.delete(path)
+      return { loadingDirs }
     }),
 
     handleFileContent: assign(({ event, context, self }) => {
@@ -304,7 +287,7 @@ export const explorerState = setup({
 
         // Only refresh if file is not modified by user
         if (!file.modified) {
-          enqueue.spawnChild('read', { id: askId('read'), input: { path: ev.data.path } })
+          made.make(enqueue, 'read', freshKey(), { path: ev.data.path })
         }
       }
     }),
@@ -364,16 +347,16 @@ export const explorerState = setup({
     }),
 
     deleteFile: enqueueActions(({ event, enqueue }) => {
-      enqueue.spawnChild('delete', { id: askId('delete'), input: { path: typeOf('explorer.DELETE_FILE', event).path } })
+      made.make(enqueue, 'delete', freshKey(), { path: typeOf('explorer.DELETE_FILE', event).path })
     }),
 
     createDirectory: enqueueActions(({ event, enqueue }) => {
-      enqueue.spawnChild('mkdir', { id: askId('mkdir'), input: { path: typeOf('explorer.CREATE_DIRECTORY', event).path } })
+      made.make(enqueue, 'mkdir', freshKey(), { path: typeOf('explorer.CREATE_DIRECTORY', event).path })
     }),
 
     renameFile: enqueueActions(({ event, enqueue }) => {
       const { oldPath, newPath } = typeOf('explorer.RENAME_FILE', event)
-      enqueue.spawnChild('rename', { id: askId('rename'), input: { oldPath, newPath } })
+      made.make(enqueue, 'rename', freshKey(), { oldPath, newPath })
     }),
 
     handleCodeConnected: enqueueActions(({ event, self, enqueue }) => {
@@ -387,7 +370,7 @@ export const explorerState = setup({
 
     openFile: enqueueActions(({ event, context, enqueue }) => {
       const ev = typeOf('explorer.OPEN_FILE', event)
-      enqueue.spawnChild('read', { id: askId('read'), input: { path: ev.path } })
+      made.make(enqueue, 'read', freshKey(), { path: ev.path })
       if (ev.editorMode) {
         const newMap = new Map(context.pendingEditorMode)
         newMap.set(ev.path, ev.editorMode)
@@ -476,12 +459,12 @@ export const explorerState = setup({
 
     moveItems: enqueueActions(({ event, enqueue }) => {
       const { sourcePaths, targetDir } = typeOf('explorer.MOVE_ITEMS', event)
-      enqueue.spawnChild('move', { id: askId('move'), input: { sourcePaths, targetDir } })
+      made.make(enqueue, 'move', freshKey(), { sourcePaths, targetDir })
     }),
 
     copyFiles: enqueueActions(({ event, enqueue }) => {
       const { sourcePaths, targetDir } = typeOf('explorer.COPY_FILES', event)
-      enqueue.spawnChild('copy', { id: askId('copy'), input: { sourcePaths, targetDir } })
+      made.make(enqueue, 'copy', freshKey(), { sourcePaths, targetDir })
     }),
 
     handleFilesCopied: enqueueActions(({ event, enqueue }) => {
@@ -578,7 +561,7 @@ export const explorerState = setup({
 
     writeFile: enqueueActions(({ event, enqueue }) => {
       const { path, content } = typeOf('explorer.WRITE_FILE', event)
-      enqueue.spawnChild('write', { id: askId('write'), input: { path, content } })
+      made.make(enqueue, 'write', freshKey(), { path, content })
     }),
 
     closeFile: ({ event }) => {
@@ -623,7 +606,7 @@ export const explorerState = setup({
 }).createMachine({
   id: 'explorer',
   initial: 'idle',
-  context: emptyTreeState,
+  context: () => ({ making: made.none(), ...emptyTreeState() }),
   on: {
     'CODE_STARTED': {
       actions: 'handleCodeConnected'
@@ -680,38 +663,39 @@ export const explorerState = setup({
     'explorer.QUICK_OPEN_SEARCH': {
       target: '.findingFiles', reenter: true
     },
-    // How each spawned ask ended: its answer taken, or its failure shown
-    'xstate.done.actor.list.*': [
-      { guard: 'answered', actions: ['assignFiles', 'listingEnded', 'forgetAsk'] },
-      { actions: ['handleCodeError', 'listingEnded', 'forgetAsk'] },
+    // How each ask ended: its answer taken, or its failure shown
+    [made.done]: { actions: made.settle() },
+    'made.list': [
+      { guard: 'answered', actions: ['assignFiles', 'listingEnded'] },
+      { actions: ['handleCodeError', 'listingEnded'] },
     ],
-    'xstate.done.actor.read.*': [
-      { guard: 'answered', actions: ['handleFileContent', 'forgetAsk'] },
-      { actions: ['handleCodeError', 'forgetAsk'] },
+    'made.read': [
+      { guard: 'answered', actions: 'handleFileContent' },
+      { actions: 'handleCodeError' },
     ],
-    'xstate.done.actor.write.*': [
-      { guard: 'answered', actions: ['handleFileSaved', 'forgetAsk'] },
-      { actions: ['handleCodeError', 'forgetAsk'] },
+    'made.write': [
+      { guard: 'answered', actions: 'handleFileSaved' },
+      { actions: 'handleCodeError' },
     ],
-    'xstate.done.actor.delete.*': [
-      { guard: 'answered', actions: ['handleFileDeleted', 'forgetAsk'] },
-      { actions: ['handleCodeError', 'forgetAsk'] },
+    'made.delete': [
+      { guard: 'answered', actions: 'handleFileDeleted' },
+      { actions: 'handleCodeError' },
     ],
-    'xstate.done.actor.rename.*': [
-      { guard: 'answered', actions: ['handleFileRenamed', 'forgetAsk'] },
-      { actions: ['handleCodeError', 'forgetAsk'] },
+    'made.rename': [
+      { guard: 'answered', actions: 'handleFileRenamed' },
+      { actions: 'handleCodeError' },
     ],
-    'xstate.done.actor.mkdir.*': [
-      { guard: 'answered', actions: ['handleDirectoryCreated', 'forgetAsk'] },
-      { actions: ['handleCodeError', 'forgetAsk'] },
+    'made.mkdir': [
+      { guard: 'answered', actions: 'handleDirectoryCreated' },
+      { actions: 'handleCodeError' },
     ],
-    'xstate.done.actor.move.*': [
-      { guard: 'answered', actions: ['handleFilesMoved', 'forgetAsk'] },
-      { actions: ['handleCodeError', 'forgetAsk'] },
+    'made.move': [
+      { guard: 'answered', actions: 'handleFilesMoved' },
+      { actions: 'handleCodeError' },
     ],
-    'xstate.done.actor.copy.*': [
-      { guard: 'answered', actions: ['handleFilesCopied', 'forgetAsk'] },
-      { actions: ['handleCodeError', 'forgetAsk'] },
+    'made.copy': [
+      { guard: 'answered', actions: 'handleFilesCopied' },
+      { actions: 'handleCodeError' },
     ],
     'explorer.REVEAL_IN_TREE': {
       actions: 'revealInTree'

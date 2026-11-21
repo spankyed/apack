@@ -10,7 +10,7 @@ import * as _apackdev_sdk_build from '@apackdev/sdk/build';
 import * as _apackdev_sdk_ears from '@apackdev/sdk/ears';
 import { ShortCode } from '@apackdev/sdk/ears';
 import { ContractAsks, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
-import { AsksUnderWay, HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
+import { HotkeysMap, MakingOf, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
@@ -1983,8 +1983,22 @@ type DatabaseAsks = {
 };
 
 interface DatabaseContext {
-    /** The asks this window has under way, by the id each is spawned under */
-    asking: AsksUnderWay;
+    /**
+     * Which of the asks this window makes are under way, by the name the machine makes each under. A node's details
+     * are asked for per node, so those are the ids of the nodes being read
+     */
+    making: MakingOf<{
+        query: 'one';
+        transaction: 'one';
+        aiQuery: 'one';
+        flowRuns: 'one';
+        flowEvents: 'one';
+        backupInfo: 'one';
+        export: 'one';
+        import: 'one';
+        reset: 'one';
+        nodeDetails: 'each';
+    }>;
     schema: DatabaseSchemaInfo;
     currentQuery: string;
     queryResult: any;
@@ -6172,7 +6186,7 @@ interface ThreadsContext {
     freshThreadIds: string[];
     /** This window's thread writes, which hold the views back until they are answered */
     writes: ViewWrites;
-    /** The ask the link form's last save is, by the id it was spawned under, until it ends, and why that save was refused, if it was */
+    /** The ask the link form's last save is, by the key it was made under, until it ends, and why that save was refused, if it was */
     linkSave: string | null;
     linkRefusal: string | null;
     /**

@@ -1,6 +1,6 @@
-import { askId, endedAsk, entityIs } from '@apackdev/sdk/fe'
+import { entityIs, freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
-import { and, assign, enqueueActions, setup, stopChild, type ActorRefFrom } from 'xstate'
+import { and, assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import {
@@ -9,8 +9,6 @@ import {
   type TrailClickEvent,
 } from '@apackdev/sdk/fe'
 import type { Contract, ActionsContext, ActionsInboxEvent } from './contract.ts'
-import type { UntypedAskOutcome } from '@apackdev/sdk/events'
-import { outcomeOf } from '@apackdev/sdk/helpers'
 import type { ActionEntity, ActionParameter } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
 import { fromAsk } from '#generated/events.ts'
@@ -48,25 +46,47 @@ type UIEvent =
   | { type: 'TOGGLE_METADATA_SECTION'; show: boolean }
   | { type: 'FILTER.TOGGLE_CATEGORY'; categoryName: string }
   | { type: 'FILTER.CLEAR' }
+  /** The settings form's import and export, and the result of each no longer shown */
+  | { type: 'ACTIONS.IMPORT'; actions: unknown }
+  | { type: 'ACTIONS.FORGET_IMPORT' }
+  | { type: 'ACTIONS.EXPORT'; directory: string }
+  | { type: 'ACTIONS.FORGET_EXPORT' }
 
-/** One of this window's writes ended: the done event of the ask spawned for it, which says whether it was refused */
-type WriteEnded = { type: `xstate.done.actor.write.${number}`; output: UntypedAskOutcome; actorId: string }
+/**
+ * The asks this window makes. Each write is asked on its own, so one refused says so whatever else is under way; an
+ * import and an export are one at a time
+ */
+const made = makes(({ one, each }) => ({
+  createAction: each(fromAsk('actions', 'CREATE_ACTION')),
+  updateAction: each(fromAsk('actions', 'UPDATE_ACTION')),
+  deleteAction: each(fromAsk('actions', 'DELETE_ACTION')),
+  importActions: one(fromAsk('actions', 'IMPORT_ACTIONS')),
+  exportActions: one(fromAsk('actions', 'EXPORT_ACTIONS')),
+}))
 
-export type ActionsEvents = OpenEntity | UIEvent | TrailClickEvent | WriteEnded
+/** How an ask the machine made ended */
+type Made = MadeEvent<typeof made>
+
+/** What the machine holds: what the surface publishes, the asks under way, and how the last import and export ended */
+type ActionsMachineContext = ActionsContext & {
+  /** Which of the asks the machine makes (`made`) are under way */
+  making: Making<typeof made>
+  /** How the last import ended, until another file is picked */
+  imported?: Extract<Made, { type: 'made.importActions' }>['outcome']
+  /** How the last export ended, until another is made */
+  exported?: Extract<Made, { type: 'made.exportActions' }>['outcome']
+}
+
+export type ActionsEvents = OpenEntity | UIEvent | TrailClickEvent | Made
 
 const typeOf = safeEvents<ActionsEvents>()
 
 const actionsState = setup({
   types: {
-    context: {} as ActionsContext,
+    context: {} as ActionsMachineContext,
     events: {} as ActionsEvents,
   },
-  actors: {
-    // This window's writes. Each is asked on its own, so one refused says so whatever else is under way
-    createAction: fromAsk('actions', 'CREATE_ACTION'),
-    updateAction: fromAsk('actions', 'UPDATE_ACTION'),
-    deleteAction: fromAsk('actions', 'DELETE_ACTION'),
-  },
+  actors: made.actors,
   actions: {
     // The list shows no action, so reopening one fills its form afresh from what its view reads then
     clearSelectedAction: assign({ selectedActionId: undefined, selectedLabel: undefined, formFor: undefined }),
@@ -114,34 +134,45 @@ const actionsState = setup({
 
     sendSaveAction: enqueueActions(({ context, enqueue }) => {
       // Creating or updating, by whether one is open
-      if (!context.selectedActionId) enqueue.spawnChild('createAction', { id: askId('write'), input: context.formData })
-      else enqueue.spawnChild('updateAction', { id: askId('write'), input: { actionId: context.selectedActionId, ...context.formData } })
+      if (!context.selectedActionId) made.make(enqueue, 'createAction', freshKey(), context.formData)
+      else made.make(enqueue, 'updateAction', freshKey(), { actionId: context.selectedActionId, ...context.formData })
     }),
 
     sendDeleteAction: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.DELETE', event);
-      enqueue.spawnChild('deleteAction', { id: askId('write'), input: { actionId: ev.actionId } })
+      made.make(enqueue, 'deleteAction', freshKey(), { actionId: ev.actionId })
     }),
 
     updateActionInput: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.UPDATE_INPUT', event);
-      enqueue.spawnChild('updateAction', { id: askId('write'), input: { actionId: ev.actionId, input: ev.input } })
+      made.make(enqueue, 'updateAction', freshKey(), { actionId: ev.actionId, input: ev.input })
     }),
 
     createActionInline: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.CREATE_INLINE', event);
-      enqueue.spawnChild('createAction', { id: askId('write'), input: { label: ev.label, actionFn: ev.actionFn, input: ev.input } })
+      made.make(enqueue, 'createAction', freshKey(), { label: ev.label, actionFn: ev.actionFn, input: ev.input })
     }),
 
     updateActionLabel: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.UPDATE_LABEL', event);
-      enqueue.spawnChild('updateAction', { id: askId('write'), input: { actionId: ev.actionId, label: ev.label } })
+      made.make(enqueue, 'updateAction', freshKey(), { actionId: ev.actionId, label: ev.label })
     }),
 
     /** A write this window asked for and did not get, shown until dismissed */
     showRefusal: assign(({ event }) => {
-      const output = outcomeOf<UntypedAskOutcome>(event)
-      return output.ok ? {} : { writeError: output.failure.message }
+      const { outcome } = typeOf(['made.createAction', 'made.updateAction', 'made.deleteAction'], event)
+      return outcome.ok ? {} : { writeError: outcome.failure.message }
+    }),
+
+    /* ── import and export ───────────────────────────────── */
+    importActions: enqueueActions(({ event, enqueue }) => {
+      enqueue.assign({ imported: undefined })
+      made.make(enqueue, 'importActions', { actions: typeOf('ACTIONS.IMPORT', event).actions })
+    }),
+
+    exportActions: enqueueActions(({ event, enqueue }) => {
+      enqueue.assign({ exported: undefined })
+      made.make(enqueue, 'exportActions', { directory: typeOf('ACTIONS.EXPORT', event).directory })
     }),
 
     /* ── form updates ────────────────────────────────────── */
@@ -271,6 +302,7 @@ const actionsState = setup({
     formFor: undefined,
     listLimit: ACTIONS_PAGE_SIZE,
     writeError: null,
+    making: made.none(),
     selectedCategories: [], // Filter state
     formData: {
       label: '',
@@ -283,7 +315,16 @@ const actionsState = setup({
   },
   on: {
     // What a write changed reaches every window through the views, so a landed one needs nothing here
-    'xstate.done.actor.write.*': { actions: ['showRefusal', stopChild(({ event }) => endedAsk(event))] },
+    [made.done]: { actions: made.settle() },
+    'made.createAction': { actions: 'showRefusal' },
+    'made.updateAction': { actions: 'showRefusal' },
+    'made.deleteAction': { actions: 'showRefusal' },
+    'ACTIONS.IMPORT': { actions: 'importActions' },
+    'ACTIONS.FORGET_IMPORT': { actions: assign({ imported: undefined }) },
+    'made.importActions': { actions: assign(({ event }) => ({ imported: event.outcome })) },
+    'ACTIONS.EXPORT': { actions: 'exportActions' },
+    'ACTIONS.FORGET_EXPORT': { actions: assign({ exported: undefined }) },
+    'made.exportActions': { actions: assign(({ event }) => ({ exported: event.outcome })) },
     CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Action' } }, target: '.detail', actions: 'selectAction' },
     'ACTION.SELECT': { target: '.detail', actions: 'selectAction' },

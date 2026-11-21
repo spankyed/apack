@@ -165,11 +165,11 @@
 
 <script setup lang="ts">
 import { Plus, X, Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useAsk, useSettingsDraft } from '@apackdev/sdk/fe'
-import { ask } from '#generated/events.ts'
+import { useSettingsDraft, useState } from '@apackdev/sdk/fe'
+import type { PromptsState } from './state.ts'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
-import { computed, ref, shallowRef } from 'vue'
+import { computed, ref } from 'vue'
 
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 import ColorPicker from '@apackdev/ui/design/ColorPicker'
@@ -220,10 +220,15 @@ const removeCategory = (index: number) => {
   }
 }
 
-// An import, asked from here: how the last one ended is shown until another is picked
-const importing = useAsk((prompts: unknown) => ask('prompts', { type: 'IMPORT_PROMPTS', prompts }))
-const imported = shallowRef<typeof importing.outcome>()
-const isImporting = computed(() => importing.pending)
+// The import and the export are the surface's machine's: it makes each, and holds how the last one ended. What an
+// earlier visit to this form left is not shown again
+const { state: surface, send } = useState<PromptsState>()
+send({ type: 'PROMPTS.FORGET_IMPORT' })
+send({ type: 'PROMPTS.FORGET_EXPORT' })
+
+// How the last import ended, shown until another is picked
+const imported = computed(() => surface.value.data.imported)
+const isImporting = computed(() => surface.value.data.making.importPrompts)
 const importStatus = computed(() => (imported.value === undefined ? 'idle' : imported.value.ok ? 'success' : 'error'))
 const applyErrors = computed(() => {
   if (imported.value === undefined) return []
@@ -231,19 +236,18 @@ const applyErrors = computed(() => {
 })
 const importedCount = computed(() => (imported.value?.ok ? imported.value.value.count : 0))
 
-// An export, asked from here: how the last one ended is shown until another is made
+// How the last export ended, shown until another is made
 const exportDirectory = ref<string>('')
-const exporting = useAsk((directory: string) => ask('prompts', { type: 'EXPORT_PROMPTS', directory }))
-const exported = shallowRef<typeof exporting.outcome>()
-const isExporting = computed(() => exporting.pending)
+const exported = computed(() => surface.value.data.exported)
+const isExporting = computed(() => surface.value.data.making.exportPrompts)
 const exportStatus = computed(() => (exported.value === undefined ? 'idle' : exported.value.ok ? 'success' : 'error'))
 const exportErrors = computed(() => (exported.value?.ok === false ? [exported.value.failure.message] : []))
 const exportedFilePath = computed(() => (exported.value?.ok ? exported.value.value.filePath : ''))
 const exportedPromptCount = computed(() => (exported.value?.ok ? exported.value.value.promptCount : 0))
 
-// Import - file picker, then the ask
+// Import - file picker, then the machine's ask
 const selectAndImportPrompts = async () => {
-  imported.value = undefined
+  send({ type: 'PROMPTS.FORGET_IMPORT' })
 
   const filePath = await window.electronAPI?.fileUtils.selectPath({
     type: 'file'
@@ -264,7 +268,7 @@ const selectAndImportPrompts = async () => {
       return
     }
 
-    imported.value = await importing.ask(prompts)
+    send({ type: 'PROMPTS.IMPORT', prompts })
   } catch {
     // Silently fail for file reading errors
   }
@@ -278,7 +282,6 @@ const selectExportDirectory = async () => {
 
 const exportPromptsToFile = async () => {
   if (!exportDirectory.value) return
-  exported.value = undefined
-  exported.value = await exporting.ask(exportDirectory.value)
+  send({ type: 'PROMPTS.EXPORT', directory: exportDirectory.value })
 }
 </script>

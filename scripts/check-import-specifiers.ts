@@ -203,6 +203,22 @@ export function findHandWrittenAnswers(dirs: readonly string[] = PACK_SOURCE_DIR
 }
 
 /**
+ * `file:line: xstate.done.actor` for each transition a pack's machine writes on the end of an actor it spawned by
+ * hand, which it declares with `makes` from `@apackdev/sdk/fe` and takes as `made.<name>` instead.
+ */
+export function findHandKeptAskEnds(dirs: readonly string[] = PACK_SOURCE_DIRS, root = repoRoot): string[] {
+  return packRule('ask-ends', dirs, root);
+}
+
+/**
+ * `file:line: '*'` for each wildcard transition, in a pack's machine that makes asks with `makes`, written without
+ * the transition that settles them beside it.
+ */
+export function findSwallowedAskEnds(dirs: readonly string[] = PACK_SOURCE_DIRS, root = repoRoot): string[] {
+  return packRule('swallowed-ask-ends', dirs, root);
+}
+
+/**
  * `file:line: _call:` for each write of the reserved key a delivery door puts a call under.
  *
  * The key is the app's: `_callOn` writes it and `_callOf` reads it, so a property a pack writes under that
@@ -1134,6 +1150,8 @@ const RULE_LIST = [
   },
   backed('findRepositoryCasts', 'repository-casts', findRepositoryCasts, packageSourceDirs()),
   backed('findHandWrittenAnswers', 'ask-answers', findHandWrittenAnswers, PACK_SOURCE_DIRS),
+  backed('findHandKeptAskEnds', 'ask-ends', findHandKeptAskEnds, PACK_SOURCE_DIRS),
+  backed('findSwallowedAskEnds', 'swallowed-ask-ends', findSwallowedAskEnds, PACK_SOURCE_DIRS),
   backed('findReservedEventKeys', 'reserved-event-keys', findReservedEventKeys, PACK_CODE_DIRS),
   backed('findCrossFeatureImports', 'cross-feature-imports', findCrossFeatureImports, PACK_SRC_ROOTS),
   backed('findContractLeafImports', 'contract-leaves', findContractLeafImports, PACK_SRC_ROOTS),

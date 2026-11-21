@@ -54,7 +54,7 @@ const databaseActor: DatabaseState = useSurface()
 
 // State selectors
 const { state: database, send } = useState(databaseActor)
-const isLoadingRuns = computed(() => readingRuns({ context: database.value.data }))
+const isLoadingRuns = computed(() => readingRuns(database.value.data.making))
 
 // Actions
 function toggleNode(nodeId: string) {

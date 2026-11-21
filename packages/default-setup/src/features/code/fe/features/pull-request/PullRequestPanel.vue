@@ -275,9 +275,9 @@
 import { computed, ref, watch } from 'vue'
 import type { PRBranchCheckout } from '#generated/types.ts'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
-import { askUnderWay, useState, useSurface, useShell } from '@apackdev/sdk/fe'
+import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
-import { branchDeletable, refKey, DETAILS, LIST, LIST_MORE } from '#features/code/fe/features/pull-request/state.ts'
+import { branchDeletable, refKey } from '#features/code/fe/features/pull-request/state.ts'
 import {
   AlertCircle, AlertTriangle, GitBranch, GitPullRequest, RefreshCw,
   Loader2, ArrowLeft, X
@@ -312,7 +312,7 @@ const { state: git, send: sendCommit } = useState(commitActor)
 const prFiles = computed(() =>
   pullRequest.value.data.diffsByRef[refKey(pullRequest.value.data.prBaseBranch, pullRequest.value.data.selectedPR?.headRefName)] ?? [])
 // Which page of the list is being read: its first, which starts it again, or the one after those read
-const prListReading = computed(() => askUnderWay(pullRequest.value.data.asking, LIST) ? 'first' : askUnderWay(pullRequest.value.data.asking, LIST_MORE) ? 'more' : null)
+const prListReading = computed(() => pullRequest.value.data.making.list ? 'first' : pullRequest.value.data.making.listMore ? 'more' : null)
 const selectedPR = computed(() => pullRequest.value.data.selectedPR)
 const isSubmittingComment = computed(() => pullRequest.value.data.inflightMutations > 0)
 // Signing in or out anywhere changes what this repository's pull requests answer, so ask again
@@ -322,7 +322,7 @@ watch(() => github.value.data.account, (now, before) => {
   send({ type: 'pr.CHECK_GITHUB_ACCESS' })
   send({ type: 'pr.REFRESH_STATUS' })
 })
-const isLoadingDetails = computed(() => askUnderWay(pullRequest.value.data.asking, DETAILS))
+const isLoadingDetails = computed(() => pullRequest.value.data.making.details)
 const isPushing = computed(() => git.value.data.making.push)
 
 // Computed
