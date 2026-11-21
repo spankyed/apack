@@ -200,7 +200,7 @@ A write is told when losing it does not matter, and asked when it does. There is
 - **Only a handler changes data.** The kernel never does. What is under way is its own record, beside the data.
 - **What a state holds is a value, and it is frozen.** A write to it throws on the line that tried, and most do not
   compile: what is read is typed so that no field can be assigned, at any depth, and a list a
-  field holds cannot be changed in place. A component is
+  field holds cannot be changed in place. One that runs is reported with what to write. A component is
   handed these same objects, a field at a time, and runs again at least when a field it read was replaced. To be
   exact inside a field, give each of many a state of its own, or read the part through a `computed`.
 - **A change is all of it or none.** What the compiler refuses, the kernel refuses too, whole, where it is tried.

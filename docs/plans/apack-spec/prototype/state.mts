@@ -519,6 +519,23 @@ export class Left extends Error {
   constructor(what: string) { super(`${what} was left before this ask was answered`); this.name = 'Left' }
 }
 
+/**
+ * What the engine says of a write to something frozen: assigning a field, adding or removing one, and what a list's
+ * `push`, `pop`, `sort` and the like come to. `kernel-check.mts` makes each kind of write and fails when one of them
+ * is no longer said this way, which is what a change of engine would do.
+ */
+const WRITE_TO_FROZEN = /^Cannot (assign to read only property|add property|delete property|define property|redefine property)\b/
+/** What is added to such an error, since what the engine says names neither the mistake nor what to do. */
+export const WROTE_TO_WHAT_WAS_READ = 'That is what a write to data read from a state throws. Data is not written where it is read: it is changed by returning a change, `{ data: (d) => { … } }`, and `d` is what may be written to'
+/**
+ * An error as the kernel reports it. A write to what a state holds throws where it was tried, in a handler or in a
+ * helper the handler passed the value to, and the engine's words for it are about a property and an object. So
+ * they are followed by what happened and what to write, wherever the kernel reports what was thrown.
+ */
+export const said = (error: unknown): string => {
+  if (!(error instanceof Error)) return String(error)
+  return error instanceof TypeError && WRITE_TO_FROZEN.test(error.message) ? `${error.message}. ${WROTE_TO_WHAT_WAS_READ}` : error.message
+}
 class Refusal extends Error { constructor(readonly kind: string, message: string, readonly data?: object) { super(message) } }
 class Question {
   settled = false
@@ -670,7 +687,7 @@ export function system(host: {
   const frame = host.frame ?? ((run: () => void): void => later(frames, run))
   /** Code that is not the kernel's, called where its throwing must not stop the step it is in. */
   const safely = (what: string, call: () => void): void => {
-    try { call() } catch (error) { trace(`DEFECT: ${what} threw: ${error instanceof Error ? error.message : String(error)}`) }
+    try { call() } catch (error) { trace(`DEFECT: ${what} threw: ${said(error)}`) }
   }
   const running = new Map<string, Running>()
   const outside: Item[] = []
@@ -919,7 +936,6 @@ export function system(host: {
     return found
   }
   const keysOf = (held: unknown): string[] => [...new Set(Array.isArray(held) ? held as string[] : Object.keys((held ?? {}) as object))]
-  const said = (error: unknown): string => (error instanceof Error ? error.message : String(error))
   /** Where an error was thrown, outside the kernel and the draft: the line of the handler that did it. */
   const whereOf = (error: unknown): string => {
     const frames = error instanceof Error && error.stack ? error.stack.split('\n').slice(1) : []
@@ -1174,9 +1190,8 @@ export function system(host: {
   const fail = (active: Active, error: unknown): void => {
     if (error instanceof Left) return
     const where = `${active.top.ref}${active.path ? ` in ${active.path}` : ''}`
-    const said = error instanceof Error ? error.message : String(error)
-    if (active.controller.signal.aborted) { trace(`${where} failed after it was left: ${said}`); return }
-    trace(`${where} failed: ${said}`)
+    if (active.controller.signal.aborted) { trace(`${where} failed after it was left: ${said(error)}`); return }
+    trace(`${where} failed: ${said(error)}`)
     const failed = active.def.failed
     if (!failed) { trace(`DEFECT: ${where} says nowhere to go when its work fails, and stays as it is`); return }
     const { ask: _, ...scope } = scopeOf(active)
@@ -1302,7 +1317,7 @@ export function system(host: {
       const { ask: _, ...scope } = scopeOf(found.of)
       // A handler that throws changes nothing: the state is as it was before the event, which it could handle.
       try { apply(found.of, found.handler(item.event, scope)) } catch (error) {
-        trace(`DEFECT: ${item.ref} threw handling ${item.event.type}, and nothing changed: ${error instanceof Error ? error.message : String(error)}`)
+        trace(`DEFECT: ${item.ref} threw handling ${item.event.type}, and nothing changed: ${said(error)}`)
       }
       return
     }
@@ -1314,7 +1329,7 @@ export function system(host: {
       // The handler was itself asking, and whoever asked it went: it stopped answering, it did not fail.
       if (error instanceof Left) return refusal('abandoned', error.message)
       // Whoever asked is told it failed. Where it failed is said here, since the asker may be in another process.
-      const message = error instanceof Error ? error.message : String(error)
+      const message = said(error)
       // Work that was passed `signal` throws when it aborts. That is the handler stopping as it was asked to.
       if (signal.aborted) { trace(`${item.ref} stopped answering ${name}, as whoever asked had gone: ${message}`); return refusal('abandoned', message) }
       trace(`${item.ref} failed answering ${name}: ${message}`)

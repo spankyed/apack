@@ -199,9 +199,16 @@ points at.
    written, and it is typed as what may be written to, apart from what is read. That leaves one place a read value is
    not taken as it is: a list assigned to a field of a draft, `d.items = data.items`. It would be safe, and TypeScript
    cannot give a field one type to read and another to assign, so there it is copied, or given as a field of the
-   change. **Freezing is the guarantee and the types are the early word.** What the types leave, a list further in
-   changed in place or a write made through a helper typed as writable, is for a lint rule to find before it runs
-   (Not built).
+   change. **Freezing is the guarantee and the types are the early word.** What the types leave is a list further in
+   changed in place, and a write made through a helper typed as writable. Both throw where they are tried, and what
+   the engine says then is about a property and an object: `Cannot add property 1, object is not extensible`. So
+   wherever the kernel reports what a handler threw, such an error is followed by what happened and what to write:
+   that data is not written where it is read, and is changed by returning a change. That is the one word a write
+   through a helper can be given, since nothing that reads the code sees inside the helper. The kernel knows the
+   error by the engine's wording, which only adds to what is reported, and a check makes every kind of write and
+   fails when one is no longer worded so. Redux Toolkit and MobX do the same: the guarantee is at run time, and its
+   message is where the rule is learnt. A write made where the value was read is for a pack rule to refuse before it
+   runs (Not built).
 
    **A change is all of it or none, and what the compiler refuses the kernel refuses too.** The types already rule out
    adding or removing a field, giving a field no state has, moving to a state that does not exist, and entering a
@@ -1078,12 +1085,18 @@ projects. Each would loosen the fit to this app.
   (`FeatureRef`) is a string and an object at once, and taken apart it is refused everywhere a string is asked for,
   which the first measurement of this showed as 28 lines in the renderer. What remains is
   to be put right as each feature is ported.
-- **A lint rule for a write to what was read.** The types refuse a field assigned at any depth and a field's list
-  changed in place, and freezing throws on the rest when it runs. Between them is a list further in changed in place,
-  and a write through a helper typed as writable, that no check runs over. A rule
-  that refuses an assignment or an in-place method through anything read from a state closes it before a run:
-  `eslint-plugin-functional`'s `immutable-data` and unicorn's `no-array-sort`, `no-array-reverse` and
-  `no-array-splice` are the kind, and it belongs with the pack rules, since a pack is where the handlers are.
+- **A pack rule for a write to what was read.** The types refuse a field assigned at any depth and a field's list
+  changed in place, and a write that runs is reported with what to write. Between them is a list further in changed
+  in place, which compiles and is found only when its line runs. A rule closes the form of it that is written where
+  the value was read, and needs no types to: it refuses an assignment, a `delete` or a method that changes a list in
+  place (`push`, `pop`, `shift`, `unshift`, `splice`, `sort`, `reverse`, `fill`) whose target begins at the `data` a
+  handler is handed or at the `state.data` a component reads. `data.open.tags.push(x)` is refused; the same list
+  taken into a `const` first, or handed to a helper, is not seen, and is what the report at run time is for. It
+  belongs with the pack rules, so that `apack pack validate` and `check:specifiers` both run it, and it is written
+  when the first feature is ported (Order of work, step 5), since until then there is no handler in the tree for it
+  to read. `eslint-plugin-functional`'s `immutable-data` and unicorn's `no-array-sort`, `no-array-reverse` and
+  `no-array-splice` are the kind. Seeing through the `const` or the helper would take the types or the whole
+  program, and is not to be built: a check that runs the handler finds it, and says what to write.
 - **The Vue binding in a window.** One thing about it is not known, and cannot be found out here:
   - **Devtools.** Pinia shows its stores in Vue's devtools, with what changed them and when. A step is already that
     record here: its cause, the handlers that ran, the fields that changed. Giving it to the devtools belongs with
@@ -1163,6 +1176,8 @@ ask is the SDK's, so what the move rewrites is the files that define a machine a
    it shows here and costs one surface. On XState with `makes` its machine is about 1,620 lines; what it comes to
    here is the measure of what the kernel is worth, to be written down and not acted on. The commit and
    pull-request surfaces are taken apart by concern as they are ported, each concern a state the surface starts.
+   The pack rule for a write to what was read is written with it ([Not built](#not-built)), so that every later
+   port is held to it.
 6. **Port the rest**, the hardest of what is left each time: the brain, the surfaces with states, then the 13
    single-state surfaces and the 20 single-state backend systems, which are the least likely to surprise.
 7. **Remove XState**, start the app, run the chain, and regenerate the recorded API reports.
