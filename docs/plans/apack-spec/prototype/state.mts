@@ -336,24 +336,33 @@ export function system(host: {
   }
 
   /**
-   * Gathers progress and hands it over once a frame, as a list. One change per update is quadratic for a collection
-   * that grows, and nothing reads a state faster than a frame anyway.
+   * Progress gathered for this system, in the order it arrived: each entry is one ask's updates that came in a row.
+   *
+   * One change per update is quadratic for a collection that grows, and nothing reads a state faster than a frame, so
+   * progress is handed over once a frame, as a list. **It is the only thing that waits.** And it never waits behind
+   * anything: whatever else arrives here hands over what was gathered first (`handOver`), so progress is merged only
+   * with progress that came straight after it, and its order against every other message is the order it was sent in.
    */
-  const gathering = (heard: (updates: unknown[]) => void, signal: AbortSignal | undefined) => {
-    const waiting: unknown[] = []
-    let due = false
-    const flush = (): void => { due = false; if (waiting.length && !signal?.aborted) heard(waiting.splice(0)) }
-    return { add: (update: unknown): void => { waiting.push(update); if (!due) { due = true; (host.frame ?? setImmediate)(flush) } }, flush }
+  const gathered: Array<{ hears: (updates: unknown[]) => void; signal: AbortSignal | undefined; updates: unknown[] }> = []
+  let due = false
+  const handOver = (): void => {
+    due = false
+    for (const each of gathered.splice(0)) if (!each.signal?.aborted) each.hears(each.updates)
+  }
+  const gather = (hears: (updates: unknown[]) => void, signal: AbortSignal | undefined) => (update: unknown): void => {
+    const last = gathered[gathered.length - 1]
+    if (last?.hears === hears) last.updates.push(update); else gathered.push({ hears, signal, updates: [update] })
+    if (!due) { due = true; (host.frame ?? setImmediate)(handOver) }
   }
 
-  const ask = (to: string | { ref: string }, name: string, args: object, signal: AbortSignal | undefined, hears: ((updates: unknown[]) => void) | undefined): Promise<never> => new Promise((resolve, reject) => {
+  const ask = (to: string | { ref: string }, name: string, args: object, signal: AbortSignal | undefined, hears: ((updates: unknown[]) => void) | undefined): Promise<never> => new Promise((resolve) => {
     const ref = refOf(to)
-    const gathered = hears && gathering(hears, signal)
-    const heard = gathered?.add
-    // What was gathered is handed over before the answer, so the answer is never ahead of its own progress.
-    const question = new Question((outcome) => { gathered?.flush(); (resolve as unknown as (outcome: AnyOutcome) => void)(outcome) })
-    // Once whoever asked has ended, its continuation never runs.
-    signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+    const heard = hears && gather(hears, signal)
+    // What was gathered is handed over before the answer, so an answer is never ahead of progress sent before it.
+    // Once whoever asked has ended, the ask never settles: nothing after it runs, in the code that asked or in
+    // anything chained to it. Rejecting instead would need every such chain to catch, and one that did not would
+    // take the process down for a state merely having been left.
+    const question = new Question((outcome) => { handOver(); if (!signal?.aborted) (resolve as unknown as (outcome: AnyOutcome) => void)(outcome) })
     if (!isAcross(to)) { enqueue({ kind: 'ask', ref, name, args, question, heard }); return }
     const mine = up
     if (!mine) { question.end(refusal('disconnected', `Not connected, so ${ref} cannot be asked`)); return }
@@ -553,7 +562,7 @@ export function system(host: {
     stepping = false
   }
   const pump = (): void => { while (!stepping && outside.length) step(() => handle(outside.shift()!)) }
-  const arrive = (item: Item): void => { outside.push(item); pump() }
+  const arrive = (item: Item): void => { handOver(); outside.push(item); pump() }
   const enqueue = (item: Item): void => { if (stepping) inside.push(item); else arrive(item) }
 
   const port: Port = {

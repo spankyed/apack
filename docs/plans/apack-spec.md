@@ -116,7 +116,8 @@ points at.
 5. **Cleanup is registered where the resource is taken**: `use(release)` runs when the state ends, however it ends.
 6. **An ask answers and does not change data.** To change data it sends its own state an event. See Decisions.
 7. **Every ask ends exactly once**: with its answer, a refusal it declares, or `failed`, `abandoned`, `unavailable` or
-   `disconnected`.
+   `disconnected`. The one ask that does not end is one whose asker has: once the state that asked is left, its ask
+   never settles, so nothing after it runs, in the code that asked or in anything chained to it.
 8. **A refusal is a kind, a message, and the data that kind declares.** `refuses` names kinds alone
    (`'not-found' | 'no-access'`) or each kind with what it carries (`{ 'name-taken': { existingId: string } }`). The
    handler has to give that data to `refuse`, and an asker reads it once it has checked the kind.
@@ -148,7 +149,17 @@ streamed search results and streamed message text are where the app does exactly
    (`window-frame.mts`).
    **The sender gathers as well, one hop earlier.** What a backend sends a window within one turn should cross the
    socket as one frame, not one per item. In the app that is spankyed/apack#592, made at the socket under tRPC so it
-   holds for every message whatever sent it; the kernel's link sits on it and has nothing of its own to add.
+   holds for every message whatever sent it; the kernel's link sits on it and has nothing of its own to add. Its one rule is that whatever reads that socket splits
+   frames; the renderer and the testing client do, and a third reader would fail whenever two messages shared a turn.
+   **Only progress waits, and it never waits behind anything.** Events, tells, asks and answers are handled as they
+   arrive, as they always were. Whatever else arrives for a system hands over the progress gathered there first: a
+   broadcast, an answer, something the user does. So progress is merged only with progress that came straight after
+   it, and what a state hears, it hears in the order it was sent, whatever kind of message each was. Without this a
+   broadcast sent after a piece of text was heard before it, by up to a frame.
+   **What it costs.** Progress is heard up to one frame late, about 17 ms in a showing window. That is nothing for
+   text and results, and wrong for something that must be acted on at once and one at a time: that is an event, not
+   progress. There is no switch to turn gathering off; one would bring the quadratic cost back wherever it was used.
+   A check that sends progress has to let a frame come, or send something after it, before it reads the result.
 2. **One change per batch.** `(d) => { d.searchResults.push(...results) }` copies the list once for the whole batch.
    Nothing reads a state faster than a frame, so nothing is lost.
 3. **A large collection belongs in a view.** State data is what a surface is working with, not a store. The kernel
@@ -223,6 +234,8 @@ batch, and this repo's own `transact` followed by `watch`.
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
 | An ask does not change data by returning | Considered and declined: every change then has one shape, the extractor stays complete, and no real port needed it. To revisit if ports show many ask-plus-event pairs; the form would be an explicit `change((data) => …)` |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
+| What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
+| An ask whose asker has ended never settles | Rejecting it. Code that asks from `run` is covered by the kernel, but any other chain that did not catch took the process down, for a state merely having been left. Found when a check stopped a window mid-ask |
 | A component reads a reactive copy that is written to only where the state changed | A selector and a comparison per reader, as `useSelector` has: every reader runs its selector on every change to decide whether it cares. And replacing the copy whole per step, which re-renders everything that read anything |
 | A hidden window's frame is the next turn | `requestAnimationFrame` always. A hidden window gets none, so what was gathered for it grew without bound until it was shown |
 | Progress is heard as a list, once a frame | One call per update. It made a change, a notice and a copy of the growing list per item: fine at 10,000, unusable at 100,000. A persistent vector would make appends cheap, but its values are not plain arrays, which the snapshot, the wire and the templates all assume. Chunked lists stay plain but push the chunking onto every reader |
@@ -248,6 +261,10 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 - **A surface follows views** (`views.mts`), modelled on the threads surface: one for as long as the surface runs, one
   only while a thread is open, and one per open tab. Opening another thread stops the last one's view; closing a tab
   stops its view; stopping the surface stops the rest.
+- **Progress keeps its place** (`progress-check.mts`, 5 checks, a backend and a window with the window's frame held
+  by the check): two hundred pieces arrive as one list; a broadcast sent between two pieces is heard between them;
+  something the user does while progress waits is handled after it; another ask's answer is not ahead of progress
+  sent before it; and a frame hands over what waits when nothing else arrives first.
 - **A reader runs again only for the place it read** (`mirror.mts`, `binding-check.mts`, 9 checks, with
   `@vue/reactivity`'s `effect` standing for a component's render): a message in one thread runs only that thread's
   reader, a rename only that title's, a move only the reader of where the state is; removing from a list and deleting
