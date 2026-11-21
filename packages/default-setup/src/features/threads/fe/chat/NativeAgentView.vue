@@ -13,8 +13,8 @@
     <NativeHelpPanel v-else-if="panelActive && state?.agentInput?.panel?.commandName === 'help'" :key="state.agentInput.panel.id" :state="state.agentInput.settings" :owner-label="`Agent · ${name}`" @operate="settings" @close="panelInput()" />
     <NativeSettingsPanel v-else-if="panelActive && state?.agentInput?.panel && ['config','model','status','usage','theme'].includes(state.agentInput.panel.commandName)" :key="state.agentInput.panel.id" :subject="state.agentInput.panel.commandName === 'model' ? 'model' : state.agentInput.panel.commandName === 'theme' ? 'theme' : 'settings'" :owner-label="`Agent · ${name}`" :state="state.agentInput.settings" @operate="settings" @close="panelInput()" />
     <NativeCommandPanel v-else-if="panelActive && state?.agentInput?.panel && selectedOwner" :key="state.agentInput.panel.id" :name="state.agentInput.panel.commandName" :owner-label="`Agent · ${name}`" :owner-id="selectedOwner.ownerId" :terminal-session="terminal?.state?.terminalSession" :input-blocked="terminal?.state?.inputBlocked" @input="panelInput" @close="panelInput()" @resize="panelResize" />
-    <div v-show="!panelActive && !outputActive" class="native-agent-messages relative min-h-[6.5rem] flex-1">
-    <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full overflow-y-auto overscroll-contain px-4 py-3" role="region" tabindex="0" aria-label="Agent transcript">
+    <div v-show="!panelActive && !outputActive" class="native-agent-messages flex min-h-[6.5rem] flex-1">
+    <div ref="transcriptViewport" style="overflow-anchor: none" class="h-full min-w-0 flex-1 overflow-y-auto overscroll-contain py-3 pl-4 pr-1" role="region" tabindex="0" aria-label="Agent transcript">
       <div ref="transcriptContent">
       <p v-if="!state?.agent && state?.status !== 'error'" class="text-sm text-neutral-500">Loading Agent conversation…</p>
       <article v-for="message in state?.agent?.messages ?? []" :key="message.uuid" :data-native-agent-message="message.uuid" class="mb-5 min-w-0 last:mb-0">
@@ -35,7 +35,9 @@
       <p v-if="state?.agent?.truncated" class="text-xs text-neutral-500">Conversation preview shortened.</p>
       </div>
     </div>
-    <ScrollToBottomFob :visible="!transcriptScroll.following.value" aria-label="Jump to latest Agent message" @click="transcriptScroll.latest()" />
+    <div class="relative w-11 shrink-0">
+      <ScrollToBottomFob :visible="!transcriptScroll.following.value" aria-label="Jump to latest Agent message" @click="jumpToLatest" />
+    </div>
     </div>
     <section v-if="outputActive && state?.agentInput?.output" aria-label="Native command output" class="mx-4 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]">
       <header class="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
@@ -115,6 +117,10 @@ const selectedTask = computed(() => selectedOwner.value?.tasks.find(task => task
 const agentComposer = ref<InstanceType<typeof NativeAgentComposer>>(), commandPanel = ref<HTMLElement>(), cancelCommand = ref<HTMLButtonElement>(), commandSending = ref(false)
 const dismissedOutput = ref<string>()
 const outputActive = computed(() => state.value?.agentInput?.status === 'command_output' && !!state.value.agentInput.output && state.value.agentInput.output.messageId !== dismissedOutput.value)
+function jumpToLatest() {
+  transcriptViewport.value?.focus({ preventScroll: true })
+  transcriptScroll.latest()
+}
 function dismissOutput() { dismissedOutput.value = state.value?.agentInput?.output?.messageId; void nextTick(() => transcriptViewport.value?.focus({ preventScroll: true })) }
 const panelActive = computed(() => state.value?.agentInput?.status === 'panel')
 const commandActive = computed(() => panelActive.value || commandSending.value || state.value?.agentInput?.status === 'confirmation' || state.value?.agentInput?.status === 'deciding')

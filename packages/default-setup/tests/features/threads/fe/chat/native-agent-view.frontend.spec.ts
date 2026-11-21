@@ -2,16 +2,16 @@ import { createApp, h, nextTick, reactive, ref, type App } from 'vue'
 import NativeAgentView from '#features/threads/fe/chat/NativeAgentView.vue'
 import type { ClaudeTerminalViewSnapshot } from '#features/threads/be/claude-terminal-views.ts'
 import type { ClaudeNativeTaskDetails, ClaudeNativeTerminalState } from '#features/code/common/native-terminal.ts'
-const send = vi.fn()
+const send = vi.fn(), latest = vi.fn(), following = ref(true)
 let context: { nativeUiViews: Record<string, { state: { agent: ClaudeNativeTaskDetails; agentInput?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiMountState['agentInput'] } }>; nativeTerminalViews: Record<string, ClaudeTerminalViewSnapshot> }, app: App | undefined
 vi.mock('#extensions/terminal/pool.ts', () => ({ mountNativeTerminal: () => ({ fit: () => ({ columns: 80, rows: 24 }), write: () => {},setInputBlocked:vi.fn(), focus: () => {}, detach: () => {} }) }))
 vi.mock('@apackdev/sdk/fe', () => ({ useSurface: () => ({ send, getSnapshot: () => ({ context, status: 'active' }) }) }))
 vi.mock('@xstate/vue', async () => { const { computed } = await import('vue'); return { useSelector: (_actor: unknown, select: (value: unknown) => unknown) => computed(() => select({ context })) } })
-vi.mock('#features/threads/fe/chat/native-agent-scroll.ts', () => ({ useClaudeAgentScroll: () => ({ following: ref(true), latest: () => {}, intentRevision: () => 0 }) }))
+vi.mock('#features/threads/fe/chat/native-agent-scroll.ts', () => ({ useClaudeAgentScroll: () => ({ following, latest, intentRevision: () => 0 }) }))
 vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue', () => ({ default: { props: ['disabled', 'focus', 'openSettings'], setup(_props: unknown, { expose }: { expose(value: unknown): void }) { expose({ focus: () => document.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.focus() }) }, template: '<div><input aria-label="Agent draft" :disabled="disabled" /><button @click="openSettings">Claude settings</button></div>' } }))
 vi.mock('#features/threads/fe/chat/NativeTranscriptMessage.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', () => ({ default: { template: '<div />' } }))
-beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); send.mockClear(); context = reactive({ nativeUiViews: {}, nativeTerminalViews: {} }) })
+beforeEach(() => { vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); send.mockClear(); latest.mockClear(); following.value = true; context = reactive({ nativeUiViews: {}, nativeTerminalViews: {} }) })
 afterEach(() => { app?.unmount(); vi.unstubAllGlobals(); document.body.replaceChildren() })
 async function mount(draft = 'Keep this draft') {
   const root = document.createElement('div'); document.body.append(root)
@@ -84,6 +84,19 @@ it('shows original compaction as a system event and offers the worker summary as
   expect(details.textContent).not.toContain('You')
   expect(f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.disabled).toBe(false)
   expect(f.draftChange).not.toHaveBeenCalled()
+})
+
+it('moves focus to the transcript when jumping back to live output', async () => {
+  const f = await mount()
+  following.value = false
+  await nextTick()
+  const transcript = f.root.querySelector('[aria-label="Agent transcript"]')!
+  const jump = f.root.querySelector<HTMLButtonElement>('[aria-label="Jump to latest Agent message"]')!
+  expect(transcript.contains(jump)).toBe(false)
+  jump.focus()
+  jump.click()
+  expect(latest).toHaveBeenCalledOnce()
+  expect(document.activeElement).toBe(transcript)
 })
 
 it('renders native command output as bounded plain text outside the worker transcript', async () => {

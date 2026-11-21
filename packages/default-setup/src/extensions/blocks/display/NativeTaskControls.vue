@@ -15,7 +15,7 @@
       <button type="button" class="mb-2 text-[11px] text-neutral-400 hover:text-neutral-200 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'inspect')">{{ workflow ? 'Refresh details' : 'Refresh conversation' }}</button>
       <NativeAgentDetails :details="state.details" />
       <p v-if="!workflow && !state.details.messages.length" class="text-neutral-500">No conversation messages are available yet.</p>
-      <article v-for="message in state.details.messages" :key="message.uuid" class="mb-3 last:mb-0">
+      <article v-for="message in state.details.messages" :key="message.uuid" :data-native-agent-message="message.uuid" class="mb-3 last:mb-0">
         <template v-if="message.role === 'system'">
           <p v-if="message.compaction === 'boundary'" class="text-neutral-400">Conversation compacted</p>
           <details v-else>
