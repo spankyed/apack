@@ -222,28 +222,30 @@ const checks: Array<[string, () => void]> = [
   }],
 ]
 
-// What must not compile: what a handler is handed, and what is read from a state, cannot be written at any depth.
-state<Shape, Event>()({
-  data: { titles: {}, messages: {}, count: 0, repository: new Repository('/a'), kept: null },
-  start: 'list',
-  on: {
-    // @ts-expect-error a field is changed by returning a change
-    NOTHING: (_, { data }) => { data.count = 1 },
-    // @ts-expect-error and so is what a field holds
-    ADD: ({ id, title }, { data }) => { data.titles[id] = title },
-    // @ts-expect-error a list is not changed in place
-    RENAME: ({ id }, { data }) => { data.messages[id]?.push('renamed') },
-    // A draft is where to write: it is the data to edit, and a new value is made from the edits.
-    OPEN: ({ id }) => ({ at: 'thread', data: { threadId: id } }),
-  },
-  states: { list: {}, thread: { data: { threadId: given } } },
-})
+// What must not compile: a field of what a handler is handed, or of what is read from a state, cannot be assigned,
+// and a field that is a list cannot be changed in place. The types go that far and no further: a write further in
+// compiles, and is what freezing is for (the checks above on a write in place, and on one through a helper).
 {
-  const read = undefined as unknown as import('./state.mts').Value<Shape>
-  // @ts-expect-error what is read from a state cannot be written
+  type Shelf = { data: { items: string[]; count: number; byId: Record<string, string[]> } }
+  type ShelfEvent = { type: 'ASSIGN' } | { type: 'PUSH' } | { type: 'SORT' } | { type: 'FURTHER_IN' }
+  state<Shelf, ShelfEvent>()({
+    data: { items: [], count: 0, byId: {} },
+    on: {
+      // @ts-expect-error a field is changed by returning a change
+      ASSIGN: (_, { data }) => { data.count = 1 },
+      // @ts-expect-error a list a field holds is not changed in place
+      PUSH: (_, { data }) => { data.items.push('pushed') },
+      // @ts-expect-error nor sorted in place
+      SORT: (_, { data }) => { data.items.sort() },
+      // This compiles, and throws when it runs: the list is inside what a field holds, where the types do not reach.
+      FURTHER_IN: (_, { data }) => { data.byId.a?.push('further in') },
+    },
+  })
+  const read = undefined as unknown as import('./state.mts').Value<Shelf>
+  // @ts-expect-error what is read from a state cannot be assigned
   if (false) read.data.count = 1
-  // @ts-expect-error at any depth
-  if (false) read.data.messages.a!.sort()
+  // @ts-expect-error and a list it holds cannot be changed in place
+  if (false) read.data.items.sort()
 }
 
 // What is read can be handed on as it is: sent, told, reported as progress, given as an answer, and given back as a
