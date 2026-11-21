@@ -78,7 +78,7 @@ Exactly one path is the case, so where a state is is one string, and its data is
 | `start` | Which state inside it it is at when entered |
 | `states` | Every state inside it. Leaving one out does not compile |
 | `on` | The events it takes. Synchronous. A handler returns what happens next |
-| `asks` | The asks it answers. May be async. A handler returns the answer |
+| `asks` | The asks it answers. May be async. A handler returns the answer, or `answered(answer, next)` to change something as it answers |
 | `run` | What it does while it is the case. May be async. What it returns happens only if the state still is the case |
 | `failed` | Where it goes when `run` throws, given what was thrown. Synchronous. Required when `run` is async |
 
@@ -130,7 +130,14 @@ points at.
    **A move that also changes data changes the data first**, so the work of the state it enters reads the data as the
    handler left it.
 5. **Cleanup is registered where the resource is taken**: `use(release)` runs when the state ends, however it ends.
-6. **An ask answers and does not change data.** To change data it sends its own state an event. See Decisions.
+6. **An ask's answer and the change it makes are one thing.** A handler that only answers returns the answer. One
+   that also changes something returns `answered(answer, next)`, where `next` is what every other handler returns:
+   where to be, and what data changes. The change is made in the step the answer leaves in, so whoever asked sees
+   the change when they have the answer, and is never told of a change that was not made: a change that is refused
+   answers the ask `failed` and changes nothing. After an `await` the data is changed by editing a draft and not by
+   giving fields, which the compiler holds: fields would be worked out from the data as it was before the wait, and a
+   draft is edited against the data as it is when the change is made. If the state that was answering was left
+   meanwhile, the ask is `abandoned` and nothing is changed.
 7. **Every ask ends exactly once**: with its answer, a refusal it declares, or `failed`, `abandoned`, `unavailable` or
    `disconnected`. An ask whose asker has gone, because the state that asked was left or its system stopped, ends
    where it is awaited by throwing `Left`. The code that asked unwinds as cancelled code does everywhere: its `finally`
@@ -251,7 +258,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | Every state inside must be defined | Optional entries. An example that left one out was unreadable |
 | A handler names the path to go to | `leave`, by which a state changed the state around it |
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
-| An ask does not change data by returning | Considered and declined: every change then has one shape, the extractor stays complete, and no real port needed it. To revisit if ports show many ask-plus-event pairs; the form would be an explicit `change((data) => …)`. The precedent leans the other way and the port should settle it: Erlang's `gen_statem` replies and moves in one handler, Effect's `Machine` handlers return `[reply, newState]`, and Temporal, which held queries to reading only, added Updates that change state and answer |
+| An ask changes data only together with its answer, as `answered(answer, next)` | An ask that could not change data at all, which was the first decision: to change data it sent its own state an event and returned the answer separately. The answer could then say "created" before the event that did the creating was handled, and still say it if that event's handler threw. The handler could not see the result of its own change. And each such ask needed an event that existed only for it, which anything could tell the state. Every system this was checked against joins the two: Erlang's `gen_statem` replies and moves in one handler, Effect's `Machine` handlers return `[reply, newState]`, and Temporal added Updates beside its read-only queries. They are safe because their handlers do not interleave; these do, at each `await`, which is why a change after one must be a draft edit. The graph stays complete: the extractor reads `next` as it reads any handler's return |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
 | What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
 | An ask whose asker has gone throws `Left` where it is awaited | Never settling it, which was tried first. A promise that never settles skips every `finally` after it, so a lock or a handle taken before the ask is held for good, and `Promise.all` over it hangs. Rejection is what `AbortSignal`, `fetch` and structured concurrency do, and code written for them is already correct here |
@@ -276,7 +283,16 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   is not run. Its machine goes from 271 lines to 120, and four answer helpers and every result event go away.
 - **A backend with three systems and two windows runs** (`threads.mts`): an ask that streams to its asker only, a
   broadcast both windows hear, a typed refusal that came from a second system, and a window that disconnects
-  mid-stream, which ends its ask as `disconnected` and aborts the work on the backend.
+  mid-stream, which ends its ask as `disconnected` and aborts the work on the backend. Its threads system takes no
+  events at all: the two it had existed so that two asks could change data, and both went when those asks returned
+  `answered`.
+- **An answer and its change cannot disagree** (`answer-check.mts`, 9 checks): an ask that only answers changes
+  nothing; one that answers with a change has made it by the time the answer is had, and subscribers hear of it in
+  that step, once; an answer can come with a move that gives the entered state its data; a change that is refused
+  fails the ask and changes nothing; two asks that each add one after a wait both count; and an ask whose answering
+  state was left is abandoned with nothing changed. Under every ordering of three such asks and a close (24), the
+  count is exactly the number of answers that said they added. Giving fields after an `await`, a move that leaves out
+  what the entered state needs, and an answer of the wrong type do not compile.
 - **The graph can be derived without running anything** (`graph.mts`): states, moves, what each state answers, and
   which other states it reaches, read from handler return types by the TypeScript checker. An earlier version of it
   caught a handler dropped during a port.
@@ -560,7 +576,7 @@ Step 1 is under way; no later step is started. Each is a decision point.
    [What #591 delivered](#what-591-delivered) lists the seams still to do, which are what leave pack code that does not
    name XState.
 2. **Settle the open design** that the first real ports will hit: the Vue binding, a write nobody waits for, events
-   only the state itself may send, and whether an ask may change data.
+   and events only the state itself may send.
 3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The
    prototype's kernel takes a schedule and its checks run every ordering; the kernel in the tree keeps both.
 4. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is

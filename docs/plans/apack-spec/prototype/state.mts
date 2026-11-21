@@ -186,9 +186,32 @@ export interface AskScope<R, H extends string, E extends AnyEvent, N extends Net
 /** Events: synchronous. What a handler returns is what happens next. */
 type On<R, H extends string, E extends AnyEvent, N extends Net> =
   { [T in E['type']]?: (event: Extract<E, { type: T }>, scope: EventScope<R, H, E, N>) => Next<R, H> | void }
-/** Asks: may be async. What a handler returns is the answer; it changes nothing by returning. */
+const ANSWERED = Symbol('answered')
+/** An answer together with what happens next: what an ask's handler returns when answering also changes something. */
+export interface Answered<V, X> { readonly [ANSWERED]: true; readonly answer: V; readonly next: X }
+/**
+ * Answers, and says what happens next, as one thing. The change is made in the step the answer leaves in, so whoever
+ * asked never hears of a change that was not made: if the change is refused, the ask is answered `failed`.
+ */
+export function answered<V, X>(answer: V, next: X): Answered<V, X> { return { [ANSWERED]: true, answer, next } }
+
+/**
+ * What can happen next after an `await`. Data is changed by editing a draft, never by giving fields: fields would be
+ * worked out from data as it was before the wait, and would overwrite what changed meanwhile. A draft is edited when
+ * the change is made, against the data as it is then. A move still gives the fields the states it enters need.
+ */
+type NextAfterAwait<R, H extends string> =
+  | { at?: never; data: (draft: DataAt<R, H>) => void }
+  | { [T in Paths<R>]: {} extends Gained<R, H, T> ? { at: T; data?: (draft: DataAt<R, H>) => void } : { at: T; data: Gained<R, H, T> } }[Paths<R>]
+
+/**
+ * Asks: may be async. What a handler returns is the answer. To change something as well it returns
+ * `answered(answer, next)`, where `next` is what any handler returns: where to be, and what data changes.
+ */
 type Answering<R, H extends string, E extends AnyEvent, A extends Asks, N extends Net> =
-  { [Q in keyof A]?: (args: A[Q]['args'], scope: AskScope<R, H, E, N, A[Q]>) => A[Q]['answer'] | Promise<A[Q]['answer']> }
+  { [Q in keyof A]?: (args: A[Q]['args'], scope: AskScope<R, H, E, N, A[Q]>) =>
+    | A[Q]['answer'] | Answered<A[Q]['answer'], Next<R, H>>
+    | Promise<A[Q]['answer'] | Answered<A[Q]['answer'], NextAfterAwait<R, H>>> }
 
 /**
  * Where a state goes when its work fails: what `run` threw, and what happens next. It is an event's handler in every
@@ -273,7 +296,7 @@ type Item =
   | { kind: 'ask'; ref: string; name: string; args: object; question: Question; heard?: Heard; gone?: AbortSignal }
   | { kind: 'result'; of: Active; value: unknown }
   | { kind: 'failure'; of: Active; error: unknown }
-  | { kind: 'answer'; question: Question; outcome: AnyOutcome }
+  | { kind: 'answer'; question: Question; outcome: AnyOutcome; change?: { of: Active; next: unknown } }
   | { kind: 'out'; leave: () => void }
 
 /** What one system offers another over a link. */
@@ -332,7 +355,9 @@ export function system(host: {
   frame?(run: () => void): void
   trace?(line: string): void
 }): System {
-  const trace = (line: string): void => host.trace?.(line)
+  /** How many defects have been reported: what a change is checked against, to know whether it was made. */
+  let defects = 0
+  const trace = (line: string): void => { if (line.startsWith('DEFECT')) defects++; host.trace?.(line) }
   const called = host.name ?? host.side
   const later = host.later ?? ((_: Lane, run: () => void): void => { setImmediate(run) })
   const frames: Lane = { label: `${called}'s frame` }
@@ -553,7 +578,10 @@ export function system(host: {
       try { made = produce(before, data) } catch (error) { trace(`DEFECT: ${top.ref}: ${error instanceof Error ? error.message : String(error)}`); return }
       const { value, touched } = made
       const kept = Object.fromEntries(Object.keys(before).map((field) => [field, field in value ? value[field] : before[field]]))
-      for (const path of touched) { const field = path[0]!; if (field in before && field in value) touchAt(top.ref, path); else trace(`DEFECT: ${top.ref} has no field ${field} to change`) }
+      // All of an edit or none of it: one place it may not change, and nothing is changed.
+      const strays = touched.filter((path) => !(path[0]! in before && path[0]! in value))
+      if (strays.length) { for (const path of strays) trace(`DEFECT: ${top.ref} has no field ${path[0]} to change`); return }
+      for (const path of touched) touchAt(top.ref, path)
       top.data = touched.length ? kept : before
       for (const field of fields.get(top.ref) ?? []) large(top, field)
       if (at !== undefined) { const was = top.data; go(top, at, {}); moved(top, was) }
@@ -584,6 +612,14 @@ export function system(host: {
     safely(`${where}'s failed`, () => apply(active, failed(error, scope)))
   }
 
+  /** Makes the change an answer came with. An answer whose change was refused is not given: the ask failed. */
+  const withChange = (of: Active, next: unknown, outcome: AnyOutcome): AnyOutcome => {
+    const before = defects
+    apply(of, next)
+    return defects === before ? outcome : refusal('failed', 'The change that came with the answer was refused, so nothing was changed')
+  }
+  const isAnswered = (made: unknown): made is Answered<unknown, unknown> => typeof made === 'object' && made !== null && ANSWERED in made
+
   const taker = (top: Running, table: 'on' | 'asks', name: string): { handler: Function; of: Active } | undefined => {
     let of: Active | undefined = innermost(top)
     while (of && !of.def[table]?.[name]) of = of.around
@@ -594,7 +630,13 @@ export function system(host: {
     if (item.kind === 'out') { leaving.push(item.leave); return }
     if (item.kind === 'result') { apply(item.of, item.value); return }
     if (item.kind === 'failure') { fail(item.of, item.error); return }
-    if (item.kind === 'answer') { leaving.push(() => item.question.end(item.outcome)); return }
+    if (item.kind === 'answer') {
+      // An answer that came with a change: the change is made here, in the step the answer leaves in. If the state
+      // that answered was left meanwhile, its ask was ended as abandoned when it was, and nothing is changed.
+      const outcome = item.change && !item.change.of.controller.signal.aborted ? withChange(item.change.of, item.change.next, item.outcome) : item.outcome
+      leaving.push(() => item.question.end(outcome))
+      return
+    }
     const top = running.get(item.ref)
     if (item.kind === 'event') {
       const found = top && taker(top, 'on', item.event.type)
@@ -627,8 +669,14 @@ export function system(host: {
       })
       if (made instanceof Promise) {
         found.of.questions.add(question)
-        made.then((value) => arrive({ kind: 'answer', question, outcome: { ok: true, value } }), (error) => arrive({ kind: 'answer', question, outcome: failed(error) }))
-      } else leaving.push(() => question.end({ ok: true, value: made }))
+        made.then(
+          (value) => arrive(isAnswered(value) ? { kind: 'answer', question, outcome: { ok: true, value: value.answer }, change: { of: found.of, next: value.next } } : { kind: 'answer', question, outcome: { ok: true, value } }),
+          (error) => arrive({ kind: 'answer', question, outcome: failed(error) }),
+        )
+      } else {
+        const outcome: AnyOutcome = isAnswered(made) ? withChange(found.of, made.next, { ok: true, value: made.answer }) : { ok: true, value: made }
+        leaving.push(() => question.end(outcome))
+      }
     } catch (error) { leaving.push(() => question.end(failed(error))) }
   }
 

@@ -12,7 +12,7 @@
 // and `inference` for `services.inference`.
 
 import { deepStrictEqual } from 'node:assert'
-import { given, reaching, system, within, type AskFailure } from './state.mts'
+import { answered, given, reaching, system, within, type AskFailure } from './state.mts'
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // What can be reached by name. In the app a pack's generated facade would declare this.
@@ -28,9 +28,8 @@ type BrainAsks = {
   COUNT_FIRED: { args: {}; answer: number }
 }
 
-type ThreadsEvent =
-  | { type: 'THREAD_ADDED'; threadId: string; title: string }
-  | { type: 'MESSAGE_STORED'; threadId: string; text: string; reply: string }
+/** The threads system takes no events: everything that changes it is an ask, which answers. */
+type ThreadsEvent = never
 type ThreadsAsks = {
   CREATE_THREAD: { args: { title: string }; answer: { threadId: string } }
   USER_MSG: {
@@ -114,14 +113,15 @@ function threads(inference: { streamText(prompt: string, signal: AbortSignal): A
     data: { titles: {}, messages: {} },
 
     asks: {
-      // An ask answers; it does not change data. To change data it tells itself an event.
-      CREATE_THREAD: ({ title }, { data, send }) => {
+      // Answers, and changes data, as one thing: nobody is told a thread exists that was not made.
+      CREATE_THREAD: ({ title }, { data, broadcast }) => {
         const threadId = `THR-${Object.keys(data.titles).length + 1}`
-        send({ type: 'THREAD_ADDED', threadId, title })
-        return { threadId }
+        // to that surface in every window
+        broadcast('threads', { type: 'THREAD_CREATED', threadId, title })
+        return answered({ threadId }, { data: (d) => { d.titles[threadId] = title; d.messages[threadId] = [] } })
       },
 
-      async USER_MSG({ threadId, text, documentId }, { data, ask, tell, send, progress, refuse, signal }) {
+      async USER_MSG({ threadId, text, documentId }, { data, ask, tell, broadcast, progress, refuse, signal }) {
         if (!(threadId in data.titles)) throw refuse('no-such-thread', `There is no thread ${threadId}.`)
 
         // ask another backend system, by name
@@ -142,21 +142,9 @@ function threads(inference: { streamText(prompt: string, signal: AbortSignal): A
           progress({ text: piece })
         }
 
-        send({ type: 'MESSAGE_STORED', threadId, text, reply })
-        return { reply }
-      },
-    },
-
-    on: {
-      THREAD_ADDED: ({ threadId, title }, { broadcast }) => {
-        // to that surface in every window
-        broadcast('threads', { type: 'THREAD_CREATED', threadId, title })
-        return { data: (d) => { d.titles[threadId] = title; d.messages[threadId] = [] } }
-      },
-
-      MESSAGE_STORED: ({ threadId, text, reply }, { broadcast }) => {
         broadcast('threads', { type: 'THREAD_CHANGED', threadId })
-        return { data: (d) => { d.messages[threadId]?.push(text, reply) } }
+        // After an await the change is an edit to a draft, made against the data as it is when the answer leaves.
+        return answered({ reply }, { data: (d) => { d.messages[threadId]?.push(text, reply) } })
       },
     },
   })

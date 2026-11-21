@@ -49,7 +49,14 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
           if (signature) read(unwrap(signature.getReturnType()), path, handler.name)
         }
       } else if (property.name === 'asks') {
-        for (const handler of type.getProperties()) { takes.add(handler.name); answers.push(where(path, handler.name)) }
+        for (const handler of type.getProperties()) {
+          takes.add(handler.name)
+          answers.push(where(path, handler.name))
+          // An answer that comes with a change: `answered(answer, next)`. Its `next` is read as any handler's return is.
+          const signature = real(typeOf(handler))[0]?.getCallSignatures()[0]
+          const changes = signature ? unwrap(signature.getReturnType()).filter((value: Type) => value.getProperty?.('next') && value.getProperty?.('answer')) : []
+          if (changes.length) read(changes.flatMap((value: Type) => real(typeOf(value.getProperty('next')))), path, `${handler.name} (answering)`)
+        }
       } else if (property.name === 'run') {
         const returned = type.getCallSignatures()[0] ? unwrap(type.getCallSignatures()[0].getReturnType()) : []
         if (returned.length) read(returned, path, '(its work ends)')
