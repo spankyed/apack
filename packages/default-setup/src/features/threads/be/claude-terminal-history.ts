@@ -59,6 +59,19 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   if (command && !command.text) return
   const thinking = content.filter(block => block.type === 'thinking' && typeof block.thinking === 'string').map(block => block.thinking).join('\n')
   const origin = object(row.origin)
+  // An original MCP ending can contain model instructions and raw server text.
+  // Show only the bounded native summary of an original journal event.
+  if (row.type === 'user' && origin?.kind === 'task-notification' && origin.producer === 'session-task'
+    && origin.taskKind === 'mcp-task' && row.entrypoint === 'cli' && row.promptSource === 'system'
+    && row.turnOrigin === 'task_notification' && content.length === 1 && typeof message.content === 'string'
+    && text.length <= 32_768) {
+    const match = /^<task-notification>\n<task-id>[a-z0-9]{1,64}<\/task-id>\n<status>stopped<\/status>\n<summary>(MCP task [^<>\r\n]{1,1024}: outcome unknown\.)<\/summary>\n<result>\nTask outcome unknown:[\s\S]*\n<\/result>\n<\/task-notification>$/.exec(text)
+    if (!match) return
+    const timestamp = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN
+    return { uuid: row.uuid, sessionId: entry.sessionId, sender: 'system', text: match[1]!, blocks: [],
+      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+      context: { cliUuid: row.uuid, claudeTerminalMessage: { uuid: row.uuid, sessionId: entry.sessionId } } }
+  }
   const planContinuation = origin?.kind === 'auto-continuation' && typeof row.planContent === 'string' && row.queueSkipAttachments === true
   if (row.type === 'user' && !planContinuation && origin?.kind !== undefined && !['human', 'unclassified'].includes(String(origin.kind))) return
   if (row.type === 'user' && (content.some(block => block.type === 'tool_result') || row.isVisibleInTranscriptOnly === true)) return

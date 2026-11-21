@@ -91,6 +91,22 @@ it('projects original informational notice rows as inert system text with native
   expect(projectClaudeTerminalHistory({sessionId,row:{...notice,level:'debug'}})).toBeUndefined()
 })
 
+it('shows only the native unknown MCP outcome as a system notice', () => {
+  const summary = 'MCP task owned-review-1 (research/review) expired on the server: outcome unknown.'
+  const notification = { ...row, type: 'user', entrypoint: 'cli', promptSource: 'system', turnOrigin: 'task_notification',
+    origin: { kind: 'task-notification', producer: 'session-task', taskKind: 'mcp-task' },
+    message: { content: `<task-notification>\n<task-id>owner1</task-id>\n<status>stopped</status>\n<summary>${summary}</summary>\n<result>\nTask outcome unknown: extra model instructions and raw server text.\n</result>\n</task-notification>` } }
+  expect(projectClaudeTerminalHistory({sessionId,row:notification})).toMatchObject({sender:'system',text:summary,blocks:[],
+    context:{cliUuid:uuid,claudeTerminalMessage:{uuid,sessionId}}})
+  for(const changes of [
+    { sessionId:'foreign' }, { isSidechain:true }, { isMeta:true }, { promptSource:'user' },
+    { origin:{...notification.origin,taskKind:'local-agent'} },
+    { message:{content:notification.message.content.replace('<status>stopped','<status>completed')} },
+  ]) expect(projectClaudeTerminalHistory({sessionId,row:{...notification,...changes}})).toBeUndefined()
+  const human = { ...notification, origin: { kind: 'human' }, promptSource: 'user' }
+  expect(projectClaudeTerminalHistory({sessionId,row:human})).toMatchObject({sender:'user',text:notification.message.content})
+})
+
 it('omits native empty-command stdout while preserving literal user text and stderr', () => {
   const stdout = '<local-command-stdout>\u001b[2m(no content)\u001b[22m</local-command-stdout>'
   const command = { ...row, type: 'user', entrypoint: 'cli', message: { content: stdout } }
