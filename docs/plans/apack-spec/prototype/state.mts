@@ -198,16 +198,16 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
    * Tells this running state an event: one only it sends itself, which its `internal` handlers take, or one that
    * others may send it too.
    */
-  send(event: E | InternalOf<R>): void
+  send(event: Immutable<E | InternalOf<R>>): void
 
   /** Tells a backend system, or a state this one started, an event. Nobody waits. */
-  tell<K extends SystemsOf<N>>(to: K, event: N['systems'][K]['events']): void
-  tell<E2 extends AnyEvent>(to: Handle<unknown, E2, Asks>, event: E2): void
+  tell<K extends SystemsOf<N>>(to: K, event: Immutable<N['systems'][K]['events']>): void
+  tell<E2 extends AnyEvent>(to: Handle<unknown, E2, Asks>, event: Immutable<E2>): void
   /**
    * From a window: tells another surface in this window an event that surface says it takes. A surface and a
    * backend system can be called the same, so a surface is named as one. From the backend a surface is broadcast to.
    */
-  tell<K extends keyof N['surfaces'] & string>(to: { readonly surface: K }, event: N['surfaces'][K]['events']): void
+  tell<K extends keyof N['surfaces'] & string>(to: { readonly surface: K }, event: Immutable<N['surfaces'][K]['events']>): void
 
   /**
    * Asks a backend system, or a state this one started. `heard` is called with the progress made since it was last
@@ -222,13 +222,13 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
   ): Promise<OutcomeOf<A2[Q]>>
 
   /** From the backend: tells that surface, in every window, an event. */
-  broadcast<K extends keyof N['surfaces'] & string>(to: K, event: N['surfaces'][K]['events']): void
+  broadcast<K extends keyof N['surfaces'] & string>(to: K, event: Immutable<N['surfaces'][K]['events']>): void
 
   /**
    * Tells the state that started this one something. It arrives there as an event, with `from` saying which state
    * told it: its key, where it is one of many. Only its starter hears, as only whoever asked hears an ask's progress.
    */
-  report(event: ReportsOf<R>): void
+  report(event: Immutable<ReportsOf<R>>): void
 
   /**
    * Has an ask this state declares under `makes` made, once. It is made when the step commits, with the data as the
@@ -264,7 +264,7 @@ export interface AskScope<R, H extends string, E extends AnyEvent, N extends Net
    */
   refuse<K extends Refuses<A>>(kind: K, message: string, ...data: RefusalData<Refusals<A>[K]>): Error
   /** Tells whoever asked something before the answer. Only they hear it. */
-  progress(update: ProgressOf<A>): void
+  progress(update: Immutable<ProgressOf<A>>): void
 }
 
 /** Events: synchronous. What a handler returns is what happens next. */
@@ -297,8 +297,8 @@ type NextAfterAwait<R, H extends string> =
  */
 type Answering<R, H extends string, E extends AnyEvent, A extends Asks, N extends Net> =
   { [Q in keyof A]?: (args: A[Q]['args'], scope: AskScope<R, H, E, N, A[Q]>) =>
-    | A[Q]['answer'] | Answered<A[Q]['answer'], Next<R, H>>
-    | Promise<A[Q]['answer'] | Answered<A[Q]['answer'], NextAfterAwait<R, H>>> }
+    | Immutable<A[Q]['answer']> | Answered<Immutable<A[Q]['answer']>, Next<R, H>>
+    | Promise<Immutable<A[Q]['answer']> | Answered<Immutable<A[Q]['answer']>, NextAfterAwait<R, H>>> }
 
 /**
  * Where a state goes when its work fails: what `run` threw, and what happens next. It is an event's handler in every
@@ -584,7 +584,7 @@ export interface System {
    * how something outside a handler reaches one: a component reading one card of many.
    */
   child<C, K extends keyof C & string>(of: Handle<unknown, any, any, C>, name: K, ...key: C[K] extends Each<any> ? [key: string] : []): HandleOf<C[K]>
-  send<E extends AnyEvent>(to: Handle<unknown, E, Asks>, event: E): void
+  send<E extends AnyEvent>(to: Handle<unknown, E, Asks>, event: Immutable<E>): void
   ask<A extends Asks, Q extends keyof A & string>(of: Handle<unknown, never, A>, name: Q, args: Immutable<A[Q]['args']>, heard?: (updates: ReadonlyArray<ProgressOf<A[Q]>>) => void): Promise<OutcomeOf<A[Q]>>
   read<V>(of: Started<V, never, Asks, any>): V | undefined
   read<V>(of: Handle<V, never, Asks>): V

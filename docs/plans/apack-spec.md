@@ -175,10 +175,17 @@ points at.
 
    **The types say the same, all the way down.** What a handler is handed and what is read from a state are typed
    so that nothing in them can be written at any depth: a field assigned to, a list pushed to or sorted in place, and
-   `v-model` on what a field holds do not compile. A change may be given what was read from a state, so nothing
-   read has to be copied to be handed back, and a draft is the one place a write is written. The types are the early
+   `v-model` on what a field holds do not compile. What is read can be handed on as it is, since handing on is not
+   writing: given back as a change, sent, told, broadcast, reported, said as progress, given as an answer or as an
+   ask's arguments. None asks for a copy or a cast. A draft is the one place a write is written, and it is typed as
+   what may be written to, apart from what is read. That leaves one place a read value is not taken as it is:
+   assigned to a field of a draft, `d.items = data.items`. It would be safe, and TypeScript cannot give a field one
+   type to read and another to assign, so there it is copied, or given as a field of the change. The types are the early
    word and not the whole of it: TypeScript lets a read-only object be passed where one that will be written to is
    expected, so a write made through such a helper compiles. It throws when it runs, which is what freezing is for.
+   TypeScript has a flag proposed that would refuse that, `--enforceReadonly`, and the types here are meant to pass
+   under it, so that turning it on closes the hole with nothing redesigned. Nothing holds them to that yet: the
+   compiler this was checked with, 5.9.3, does not have the flag.
 
    **A change is all of it or none, and what the compiler refuses the kernel refuses too.** The types already rule out
    adding or removing a field, giving a field no state has, moving to a state that does not exist, and entering a

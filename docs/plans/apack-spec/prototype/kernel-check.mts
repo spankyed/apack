@@ -246,4 +246,34 @@ state<Shape, Event>()({
   if (false) read.data.messages.a!.sort()
 }
 
+// What is read can be handed on as it is: sent, told, reported as progress, given as an answer, and given back as a
+// change. None of these is a write, so none asks for a copy. Nothing here is run: it has to compile.
+{
+  type Shelf = { data: { items: string[]; picked: string[] }; internal: { type: 'TAKEN'; items: string[] } }
+  type ShelfEvent = { type: 'TAKE'; items: string[] } | { type: 'PASS_ON' }
+  type ShelfAsks = { LIST: { args: {}; progress: string[]; answer: string[] }; LIST_LATER: { args: {}; answer: string[] } }
+  state<Shelf, ShelfEvent, ShelfAsks>()({
+    data: { items: [], picked: [] },
+    on: {
+      TAKE: ({ items }) => ({ data: { picked: items } }),
+      PASS_ON: (_, { data, send }) => {
+        send({ type: 'TAKE', items: data.items })
+        send({ type: 'TAKEN', items: data.items })
+        return { data: { picked: data.items } }
+      },
+    },
+    internal: {
+      // The one place a read value is not taken as it is: a field of a draft, which is typed as what may be written
+      // to. It would be safe, since what is read is the state's own and frozen. TypeScript cannot give a field one
+      // type to read and another to assign, so here it is copied, or given as a field as `PASS_ON` does.
+      // @ts-expect-error a draft's field is typed writable, and what is read is not
+      TAKEN: (_, { data }) => ({ data: (d) => { d.picked = data.items } }),
+    },
+    asks: {
+      LIST: (_, { data, progress }) => { progress(data.items); return data.items },
+      LIST_LATER: async (_, { data }) => data.items,
+    },
+  })
+}
+
 await runChecks(checks)
