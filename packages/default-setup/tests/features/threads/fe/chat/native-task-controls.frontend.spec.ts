@@ -168,3 +168,72 @@ it('shows owned native activity Stop, pending/error state and retires old-owner 
  owner.value='owner';disabled.value=true;await nextTick();expect(stop().disabled).toBe(true)
  expect(root.querySelector('textarea')).toBeNull();expect(root.textContent).not.toContain('Open Agent')
 })
+
+it('replaces rendered Stop and Manage targets when a native task survives a conversation reset', async () => {
+  const task = ref({ id: 'scan', ownerId: 'owner', sessionId: 'before', kind: 'managed' as const,
+    nativeTaskType: 'auto_mode_scan' as const, name: 'Scan workspace', status: 'running', canStop: true })
+  const state = ref<ClaudeTerminalTaskState>()
+  const operate = vi.fn()
+  const root = document.createElement('div'); document.body.append(root)
+  app = createApp({ setup() {
+    provide(claudeTaskControls, { foregroundAvailable: computed(() => false), ownerId: computed(() => 'owner'),
+      state: computed(() => state.value), operate })
+    return () => h(NativeManagedTasks, { tasks: [task.value] })
+  } })
+  app.mount(root)
+  const stop = () => root.querySelector<HTMLButtonElement>('[aria-label="Stop Scan workspace"]')!
+  const manage = () => [...root.querySelectorAll('button')].find(button => button.textContent === 'Manage in Claude')!
+  const oldStop = stop(), oldManage = manage()
+  task.value = { ...task.value, name: 'Scan workspace again' }
+  await nextTick()
+  task.value = { ...task.value, name: 'Scan workspace' }
+  await nextTick()
+  expect(stop()).toBe(oldStop)
+  state.value = { ownerId: 'owner', sessionId: 'before', taskId: 'scan', revision: 1, operation: 'stop', status: 'pending' }
+  await nextTick()
+  expect(oldStop.textContent).toBe('Stopping…')
+
+  task.value = { ...task.value, sessionId: 'after' }
+  await nextTick()
+  expect(oldStop.isConnected).toBe(false)
+  expect(oldManage.isConnected).toBe(false)
+  expect(stop().disabled).toBe(false)
+  stop().click()
+  expect(operate).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: 'scan', sessionId: 'after' }), 'stop')
+})
+
+it('releases old task details and replies without inheriting them in the replacement Claude conversation', async () => {
+  const task = ref({ id: 'task', ownerId: 'owner', sessionId: 'before', status: 'running' })
+  const state = ref<ClaudeTerminalTaskState>({
+    ownerId: 'owner', sessionId: 'before', taskId: 'task', revision: 1, operation: 'inspect', status: 'done',
+    details: { taskId: 'task', name: 'Old task', status: 'running', canMessage: true, canInput: false, messages: [], truncated: false }
+  })
+  const operate = vi.fn()
+  const root = document.createElement('div'); document.body.append(root)
+  app = createApp({ setup() {
+    provide(claudeTaskControls, { foregroundAvailable: computed(() => true), ownerId: computed(() => 'owner'),
+      state: computed(() => state.value), operate })
+    return () => h(NativeTaskControls, { task: task.value })
+  } })
+  app.mount(root)
+  const button = (name: string) => [...root.querySelectorAll('button')].find(b => b.textContent === name)!
+  button('View Agent conversation').click()
+  await nextTick()
+  const editor = root.querySelector('textarea')!
+  editor.value = 'Keep this reply for the old task'
+  editor.dispatchEvent(new Event('input', { bubbles: true }))
+  await nextTick()
+
+  const before = button('Stop Agent')
+  task.value = { ...task.value, sessionId: 'after' }
+  await nextTick()
+  expect(before.isConnected).toBe(false)
+  expect(root.querySelector('textarea')).toBeNull()
+  expect(button('View Agent conversation').getAttribute('aria-expanded')).toBe('false')
+  state.value = { ...state.value, sessionId: 'after', revision: 2 }
+  await nextTick()
+  button('View Agent conversation').click()
+  await nextTick()
+  expect(root.querySelector('textarea')?.value).toBe('')
+  expect(operate).toHaveBeenLastCalledWith(expect.objectContaining({ sessionId: 'after' }), 'inspect')
+})

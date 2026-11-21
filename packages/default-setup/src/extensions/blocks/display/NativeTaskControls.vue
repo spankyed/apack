@@ -1,5 +1,5 @@
 <template>
-  <div v-if="task.kind !== 'managed' && controls && controls.ownerId.value === task.ownerId" @keydown.esc="leaveConversation" class="mt-2 min-w-0">
+  <div v-if="task.kind !== 'managed' && controls && controls.ownerId.value === task.ownerId" :key="taskKey" @keydown.esc="leaveConversation" class="mt-2 min-w-0">
     <div class="flex flex-wrap items-center gap-2">
       <button v-if="!workflow && !shell && !mcp && controls.foregroundAvailable.value" type="button" class="rounded border border-white/10 px-2 py-1 text-[11px] text-neutral-300 hover:bg-white/5 disabled:opacity-40" :disabled="pending" @click="controls.operate(task, 'foreground')">Open Agent</button>
       <NativeWorkflowDetails v-if="workflow" :details="state?.details" :pending="pending" :status="task.status" :problem="state?.status === 'error' ? state.problem : undefined" @inspect="controls.operate(task, 'inspect')" @worker="(operation, target) => controls?.operate(task, operation, undefined, target)" />
@@ -67,18 +67,28 @@ const workflow = computed(() => props.task.kind === 'workflow')
 const shell = computed(() => props.task.kind === 'shell')
 const mcp = computed(() => props.task.kind === 'mcp')
 const controls = inject(claudeTaskControls, undefined)
-const state = computed(() => { const value = controls?.state.value; return value?.ownerId === props.task.ownerId && value.taskId === props.task.id ? value : undefined })
+const taskKey = computed(() => JSON.stringify([props.task.ownerId, props.task.sessionId, props.task.id]))
+const sessionState = computed(() => {
+  const value = controls?.state.value
+  return value?.ownerId === props.task.ownerId && value.sessionId === props.task.sessionId ? value : undefined
+})
+const state = computed(() => sessionState.value?.taskId === props.task.id ? sessionState.value : undefined)
 watch(state, value => { if (value?.status === 'done' && (value.worker?.accepted || value.paused)) controls?.operate(props.task, 'inspect') })
 const shown = ref(false), draft = ref(''), toggle = ref<HTMLButtonElement | null>(null)
 const expanded = computed(() => shown.value && state.value !== undefined)
 let submitted: { revision: number; text: string } | undefined
+watch(taskKey, () => {
+  shown.value = false
+  draft.value = ''
+  submitted = undefined
+})
 watch(state, value => { if (submitted && value?.status === 'done' && (value.operation === 'send' && value.sent || value.operation === 'input' && value.input) && value.revision === submitted.revision && draft.value === submitted.text) draft.value = '' })
 function sendMessage() {
   if (!draft.value.trim() || pending.value) return
   const text = draft.value, revision = controls?.operate(props.task, state.value?.details?.canInput ? 'input' : 'send', text)
   if (revision !== undefined) submitted = { revision, text }
 }
-const pending = computed(() => controls?.state.value?.status === 'pending')
+const pending = computed(() => sessionState.value?.status === 'pending')
 function leaveConversation(event: KeyboardEvent) {
   if (event.isComposing || event.defaultPrevented || !expanded.value) return
   event.preventDefault(); event.stopPropagation(); shown.value = false; toggle.value?.focus({ preventScroll: true })
