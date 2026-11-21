@@ -1,0 +1,165 @@
+// What happens to an ask when whoever made it goes: the state that asked is left while the answer is still coming.
+// The ask ends where it is awaited, with `Left`, so the code that asked unwinds the way cancelled code does everywhere.
+//
+//   npx tsx docs/plans/apack-spec/prototype/leaving-check.mts
+import { deepStrictEqual, ok, strictEqual } from 'node:assert'
+import { given, Left, reaching, system } from './state.mts'
+
+type SlowAsks = {
+  WAIT: { args: { turns: number }; answer: string }
+  RELAY: { args: { turns: number }; answer: string }
+}
+type App = { systems: { slow: { events: never; asks: SlowAsks } }; surfaces: {}; views: {} }
+const state = reaching<App>()
+
+const turns = (count: number): Promise<void> => new Promise((resolve) => { let left = count; const tick = (): void => { if (left-- <= 0) resolve(); else setImmediate(tick) }; tick() })
+
+/** What the backend did, for the checks to read. */
+const backendSaw: string[] = []
+const slow = state<{}, never, SlowAsks>()({
+  asks: {
+    WAIT: async ({ turns: count }, { signal }) => {
+      signal.addEventListener('abort', () => backendSaw.push('WAIT told its asker had gone'))
+      await turns(count)
+      return 'done'
+    },
+    // A handler that itself asks. When whoever asked it goes, the ask it made goes with them.
+    RELAY: async ({ turns: count }, { ask }) => {
+      try { const inner = await ask('slow', 'WAIT', { turns: count }); return inner.ok ? inner.value : 'failed' }
+      finally { backendSaw.push('RELAY unwound') }
+    },
+  },
+})
+
+type PanelEvent = { type: 'START'; how: 'await' | 'all' | 'floating' | 'relay' } | { type: 'LEAVE' }
+type Panel = { states: { idle: {}; working: { data: { how: 'await' | 'all' | 'floating' | 'relay' } } } }
+
+const panel = (saw: string[], lock: { held: boolean }) => state<Panel, PanelEvent>()({
+  start: 'idle',
+  on: {
+    START: ({ how }) => ({ at: 'working', data: { how } }),
+    LEAVE: () => ({ at: 'idle' }),
+  },
+  states: {
+    idle: {},
+    working: {
+      data: { how: given },
+      async run({ data, ask }) {
+        lock.held = true
+        try {
+          if (data.how === 'await') await ask('slow', 'WAIT', { turns: 30 })
+          if (data.how === 'relay') await ask('slow', 'RELAY', { turns: 30 })
+          if (data.how === 'all') await Promise.all([ask('slow', 'WAIT', { turns: 30 }), turns(2)])
+          if (data.how === 'floating') { void ask('slow', 'WAIT', { turns: 30 }); await turns(40) }
+          saw.push('ran on after the ask')
+        } catch (error) {
+          saw.push(error instanceof Left ? 'unwound with Left' : `unwound with ${String(error)}`)
+          throw error
+        } finally {
+          lock.held = false
+          saw.push('finally ran')
+        }
+        return { at: 'idle' }
+      },
+    },
+  },
+})
+
+const wired = () => {
+  const saw: string[] = []
+  const lock = { held: false }
+  const traced: string[] = []
+  backendSaw.length = 0
+  const backend = system({ side: 'backend' })
+  backend.start('slow', slow)
+  const window = system({ side: 'window', trace: (line) => { if (/left unanswered|failed/.test(line)) traced.push(line) } })
+  window.connect(backend)
+  const handle = window.start('panel', panel(saw, lock))
+  return { saw, lock, traced, send: (event: PanelEvent): void => window.send(handle, event), at: (): string => window.read(handle).at, stop: (): void => { window.stop(); backend.stop() } }
+}
+
+const checks: Array<[string, () => Promise<void>]> = [
+  ['leaving mid-ask unwinds the code that asked: `finally` runs, what it held is let go, and nothing after the ask runs', async () => {
+    const it = wired()
+    it.send({ type: 'START', how: 'await' })
+    await turns(6)
+    strictEqual(it.lock.held, true)
+    it.send({ type: 'LEAVE' })
+    await turns(4)
+    deepStrictEqual(it.saw, ['unwound with Left', 'finally ran'])
+    strictEqual(it.lock.held, false)
+    strictEqual(it.at(), 'idle')
+    it.stop()
+  }],
+  ['the kernel says an ask was left, and does not call the unwinding a failure', async () => {
+    const it = wired()
+    it.send({ type: 'START', how: 'await' })
+    await turns(6)
+    it.send({ type: 'LEAVE' })
+    await turns(4)
+    strictEqual(it.traced.length, 1)
+    ok(it.traced[0]!.includes('left unanswered'))
+    it.stop()
+  }],
+  ['an ask combined with other work ends too, and does not hang', async () => {
+    const it = wired()
+    it.send({ type: 'START', how: 'all' })
+    await turns(6)
+    it.send({ type: 'LEAVE' })
+    await turns(4)
+    deepStrictEqual(it.saw, ['unwound with Left', 'finally ran'])
+    it.stop()
+  }],
+  ['the backend is told, and a handler that was itself asking unwinds as well', async () => {
+    const it = wired()
+    it.send({ type: 'START', how: 'relay' })
+    await turns(8)
+    it.send({ type: 'LEAVE' })
+    await turns(10)
+    ok(backendSaw.includes('RELAY unwound'))
+    ok(backendSaw.includes('WAIT told its asker had gone'))
+    it.stop()
+  }],
+  ['an ask that was started and never awaited does not take the process down', async () => {
+    const it = wired()
+    it.send({ type: 'START', how: 'floating' })
+    await turns(6)
+    it.send({ type: 'LEAVE' })
+    await turns(50)
+    // The code went on, since nothing it awaited was the ask. What it returned came after its state was left, and was dropped.
+    deepStrictEqual(it.saw, ['ran on after the ask', 'finally ran'])
+    strictEqual(it.at(), 'idle')
+    it.stop()
+  }],
+  ['an answer that arrives in time is unaffected', async () => {
+    const it = wired()
+    it.send({ type: 'START', how: 'await' })
+    await turns(60)
+    deepStrictEqual(it.saw, ['ran on after the ask', 'finally ran'])
+    strictEqual(it.at(), 'idle')
+    it.stop()
+  }],
+]
+
+// An event's handler is not given `ask`: it could only start one, with nothing around it to take a `Left`.
+state<Panel, PanelEvent>()({
+  start: 'idle',
+  on: {
+    // @ts-expect-error asking is for `run` and for an ask's handler
+    START: (_, { ask }) => { void ask },
+    LEAVE: () => ({ at: 'idle' }),
+  },
+  states: { idle: {}, working: { data: { how: given } } },
+})
+
+const unhandled: unknown[] = []
+process.on('unhandledRejection', (reason) => { unhandled.push(reason) })
+
+let failed = 0
+for (const [name, check] of checks) {
+  try { await check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 6).join(' ')}`) }
+}
+await turns(60)
+if (unhandled.length) { failed++; console.log(`  FAIL  nothing was left unhandled\n        ${String(unhandled[0])}`) } else console.log('  ok    none of it left a rejection unhandled')
+console.log(`\n${checks.length + 1 - failed} of ${checks.length + 1} passed`)
+if (failed) process.exitCode = 1

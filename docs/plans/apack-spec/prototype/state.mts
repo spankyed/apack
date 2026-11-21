@@ -166,6 +166,13 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
   use(release: () => void): void
 }
 
+/**
+ * What an event's handler is given: everything but `ask`. A handler is synchronous and cannot await an answer, and
+ * an ask it only started would end, if its state were left, with nothing around it to take that. Asking is for `run`
+ * and for an ask's handler, which the kernel is around.
+ */
+export type EventScope<R, H extends string, E extends AnyEvent, N extends Net> = Omit<Scope<R, H, E, N>, 'ask'>
+
 export interface AskScope<R, H extends string, E extends AnyEvent, N extends Net, A extends AskShape> extends Scope<R, H, E, N> {
   /**
    * `throw refuse(kind, message)` answers with one of the refusals the ask declares. A kind that carries data takes
@@ -178,7 +185,7 @@ export interface AskScope<R, H extends string, E extends AnyEvent, N extends Net
 
 /** Events: synchronous. What a handler returns is what happens next. */
 type On<R, H extends string, E extends AnyEvent, N extends Net> =
-  { [T in E['type']]?: (event: Extract<E, { type: T }>, scope: Scope<R, H, E, N>) => Next<R, H> | void }
+  { [T in E['type']]?: (event: Extract<E, { type: T }>, scope: EventScope<R, H, E, N>) => Next<R, H> | void }
 /** Asks: may be async. What a handler returns is the answer; it changes nothing by returning. */
 type Answering<R, H extends string, E extends AnyEvent, A extends Asks, N extends Net> =
   { [Q in keyof A]?: (args: A[Q]['args'], scope: AskScope<R, H, E, N, A[Q]>) => A[Q]['answer'] | Promise<A[Q]['answer']> }
@@ -210,6 +217,15 @@ export function reaching<N extends Net = Nothing>() {
 }
 
 // ── the system ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * What an ask is ended with when whoever made it has gone: the state that asked was left, or the system stopped.
+ * It is raised where the ask is awaited, as cancellation is everywhere else, so that `finally` runs and what was
+ * held is released. The kernel discards it at the top of `run` and of an ask's handler; nothing has to catch it.
+ */
+export class Left extends Error {
+  constructor(what: string) { super(`${what} was left before this ask was answered`); this.name = 'Left' }
+}
 
 class Refusal extends Error { constructor(readonly kind: string, message: string, readonly data?: object) { super(message) } }
 class Question {
@@ -355,15 +371,17 @@ export function system(host: {
     if (!due) { due = true; (host.frame ?? setImmediate)(handOver) }
   }
 
-  const ask = (to: string | { ref: string }, name: string, args: object, signal: AbortSignal | undefined, hears: ((updates: unknown[]) => void) | undefined): Promise<never> => new Promise((resolve) => {
+  const ask = (to: string | { ref: string }, name: string, args: object, signal: AbortSignal | undefined, hears: ((updates: unknown[]) => void) | undefined): Promise<never> => new Promise((resolve, reject) => {
     const ref = refOf(to)
     const heard = hears && gather(hears, signal)
     // What was gathered is handed over before the answer, so an answer is never ahead of progress sent before it.
-    // Once whoever asked has ended, the ask never settles: nothing after it runs, in the code that asked or in
-    // anything chained to it. Rejecting instead would need every such chain to catch, and one that did not would
-    // take the process down for a state merely having been left.
     const question = new Question((outcome) => { handOver(); if (!signal?.aborted) (resolve as unknown as (outcome: AnyOutcome) => void)(outcome) })
-    if (!isAcross(to)) { enqueue({ kind: 'ask', ref, name, args, question, heard }); return }
+    // Whoever asked has gone: the ask ends where it is awaited, with `Left`, so the code that asked unwinds.
+    const left = (): void => { trace(`an ask of ${ref} for ${name} was left unanswered by whoever made it`); reject(new Left(name)) }
+    if (signal?.aborted) { left(); return }
+    signal?.addEventListener('abort', left, { once: true })
+    // In the same system the asker's own signal tells the answerer; across a link, the port does.
+    if (!isAcross(to)) { enqueue({ kind: 'ask', ref, name, args, question, heard, gone: signal }); return }
     const mine = up
     if (!mine) { question.end(refusal('disconnected', `Not connected, so ${ref} cannot be asked`)); return }
     mine.waiting.add(question)
@@ -387,7 +405,12 @@ export function system(host: {
       signal,
       send: (event: AnyEvent) => { if (alive()) enqueue({ kind: 'event', ref, event }) },
       tell: (to: string | { ref: string }, event: AnyEvent) => { if (alive()) tell(to, event) },
-      ask: (to: string | { ref: string }, name: string, args: object, hears?: (updates: unknown[]) => void) => ask(to, name, args, mine.controller.signal, hears),
+      ask: (to: string | { ref: string }, name: string, args: object, hears?: (updates: unknown[]) => void) => {
+        const asked = ask(to, name, args, signal, hears)
+        // An ask that was started and never awaited ends with `Left` like any other, and that is not a failure of the process.
+        asked.catch(() => {})
+        return asked
+      },
       broadcast: (to: string, event: AnyEvent) => { if (alive()) out(() => { for (const window of down) carry(window.link, () => window.port.event(to, event)) }) },
       watch: (key: string, feature: string, view: string, args: object, heard: (update: ViewUpdate<unknown>) => void) => {
         if (!alive() || !host.views) return
@@ -517,14 +540,18 @@ export function system(host: {
     if (item.kind === 'event') {
       const found = top && taker(top, 'on', item.event.type)
       if (!found) { trace(`${item.ref} ignored ${item.event.type}`); return }
-      apply(found.of, found.handler(item.event, scopeOf(found.of)))
+      const { ask: _, ...scope } = scopeOf(found.of)
+      apply(found.of, found.handler(item.event, scope))
       return
     }
     const { name, args, question, heard, gone } = item
     const found = top && taker(top, 'asks', name)
     if (!found) { leaving.push(() => question.end(refusal('unavailable', `${item.ref} does not take ${name}`))); return }
     const failed = (error: unknown): AnyOutcome =>
-      (error instanceof Refusal ? refusal(error.kind, error.message, error.data) : refusal('failed', error instanceof Error ? error.message : String(error)))
+      (error instanceof Refusal ? refusal(error.kind, error.message, error.data)
+        // The handler was itself asking, and whoever asked it went: it stopped answering, it did not fail.
+        : error instanceof Left ? refusal('abandoned', error.message)
+        : refusal('failed', error instanceof Error ? error.message : String(error)))
     const signal = gone ? AbortSignal.any([found.of.controller.signal, gone]) : found.of.controller.signal
     try {
       const made = found.handler(args, {

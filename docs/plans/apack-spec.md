@@ -111,13 +111,17 @@ points at.
    are kept with their data. The target itself is always entered afresh, so going to where it already is restarts it.
 3. **Whoever enters a state gives the data of every state the move enters.** The compiler works out which those are
    from where the handler sits.
-4. **Async work belongs to a state.** An event handler cannot await. It goes to a state whose `run` does the work. Leaving
-   that state aborts `signal` and discards a late result. This is what makes cancel and latest-wins need no code.
+4. **Async work belongs to a state.** An event handler cannot await, and is not given `ask`: it goes to a state whose
+   `run` does the work. Leaving that state aborts `signal` and discards a late result. This is what makes cancel and
+   latest-wins need no code.
 5. **Cleanup is registered where the resource is taken**: `use(release)` runs when the state ends, however it ends.
 6. **An ask answers and does not change data.** To change data it sends its own state an event. See Decisions.
 7. **Every ask ends exactly once**: with its answer, a refusal it declares, or `failed`, `abandoned`, `unavailable` or
-   `disconnected`. The one ask that does not end is one whose asker has: once the state that asked is left, its ask
-   never settles, so nothing after it runs, in the code that asked or in anything chained to it.
+   `disconnected`. An ask whose asker has gone, because the state that asked was left or its system stopped, ends
+   where it is awaited by throwing `Left`. The code that asked unwinds as cancelled code does everywhere: its `finally`
+   runs, what it held is let go, and nothing after the ask runs. The kernel takes the `Left` at the top of `run` and
+   says in the trace that an ask was left; it is not a failure. The answerer's `signal` aborts, and a handler that was
+   itself asking unwinds the same way and answers `abandoned`.
 8. **A refusal is a kind, a message, and the data that kind declares.** `refuses` names kinds alone
    (`'not-found' | 'no-access'`) or each kind with what it carries (`{ 'name-taken': { existingId: string } }`). The
    handler has to give that data to `refuse`, and an asker reads it once it has checked the kind.
@@ -128,7 +132,7 @@ points at.
 |---|---|---|---|
 | `send(event)` | A state | Itself | No |
 | `tell(name, event)` | Anywhere | A backend system, by name | No |
-| `ask(name, ask, args, heard?)` | Anywhere | A backend system, by name | One answer, refusal or failure |
+| `ask(name, ask, args, heard?)` | A state's `run`, or an ask's handler | A backend system, by name | One answer, refusal or failure |
 | `progress(update)` | An ask's handler | Whoever asked, and only them, as a list at most once a frame | No |
 | `broadcast(name, event)` | The backend | That surface in every window | No |
 
@@ -235,7 +239,8 @@ batch, and this repo's own `transact` followed by `watch`.
 | An ask does not change data by returning | Considered and declined: every change then has one shape, the extractor stays complete, and no real port needed it. To revisit if ports show many ask-plus-event pairs; the form would be an explicit `change((data) => …)` |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
 | What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
-| An ask whose asker has ended never settles | Rejecting it. Code that asks from `run` is covered by the kernel, but any other chain that did not catch took the process down, for a state merely having been left. Found when a check stopped a window mid-ask |
+| An ask whose asker has gone throws `Left` where it is awaited | Never settling it, which was tried first. A promise that never settles skips every `finally` after it, so a lock or a handle taken before the ask is held for good, and `Promise.all` over it hangs. Rejection is what `AbortSignal`, `fetch` and structured concurrency do, and code written for them is already correct here |
+| An event handler is not given `ask` | `ask` everywhere. An event handler cannot await, so it could only start an ask and drop the promise, with nothing around it to take a `Left`. That floating promise is what took a process down when a check stopped a window mid-ask. Without `ask` the mistake does not compile, and the kernel still catches an ask started in `run` and never awaited |
 | A component reads a reactive copy that is written to only where the state changed | A selector and a comparison per reader, as `useSelector` has: every reader runs its selector on every change to decide whether it cares. And replacing the copy whole per step, which re-renders everything that read anything |
 | A hidden window's frame is the next turn | `requestAnimationFrame` always. A hidden window gets none, so what was gathered for it grew without bound until it was shown |
 | Progress is heard as a list, once a frame | One call per update. It made a change, a notice and a copy of the growing list per item: fine at 10,000, unusable at 100,000. A persistent vector would make appends cheap, but its values are not plain arrays, which the snapshot, the wire and the templates all assume. Chunked lists stay plain but push the chunking onto every reader |
@@ -261,10 +266,16 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 - **A surface follows views** (`views.mts`), modelled on the threads surface: one for as long as the surface runs, one
   only while a thread is open, and one per open tab. Opening another thread stops the last one's view; closing a tab
   stops its view; stopping the surface stops the rest.
-- **Progress keeps its place** (`progress-check.mts`, 5 checks, a backend and a window with the window's frame held
+- **Leaving mid-ask unwinds, and nothing hangs or crashes** (`leaving-check.mts`, 7 checks): a `run` awaiting an ask
+  when its state is left has its `finally` run and its lock released, and nothing after the ask runs; the trace says an
+  ask was left and reports no failure; an ask inside `Promise.all` ends too; the answerer's `signal` aborts, and a
+  handler that was itself asking unwinds; an ask started and never awaited leaves no unhandled rejection; an answer
+  that arrives in time is unaffected; and an event handler asking for `ask` does not compile.
+- **Progress keeps its place** (`progress-check.mts`, 6 checks, a backend and a window with the window's frame held
   by the check): two hundred pieces arrive as one list; a broadcast sent between two pieces is heard between them;
   something the user does while progress waits is handled after it; another ask's answer is not ahead of progress
-  sent before it; and a frame hands over what waits when nothing else arrives first.
+  sent before it; a frame hands over what waits when nothing else arrives first; and stopping a window mid-ask leaves
+  nothing unhandled.
 - **A reader runs again only for the place it read** (`mirror.mts`, `binding-check.mts`, 9 checks, with
   `@vue/reactivity`'s `effect` standing for a component's render): a message in one thread runs only that thread's
   reader, a rename only that title's, a move only the reader of where the state is; removing from a list and deleting
@@ -409,7 +420,10 @@ The design is the smaller half of the value. In the order they would pay:
    surface, with each event's name and the type of its fields. An agent driving the app asks that instead of reading
    the screen, and the answer is right by construction. For this product it is the capability most worth having, and
    no state library offers it.
-6. **The rough edges the examples showed.** A state it started is reached with `child('draft', draft)` each time and
+6. **A pack rule against a promise nobody awaits.** The kernel keeps a dropped ask from taking the process down, but
+   the code that dropped it also never sees its answer or its refusal. `no-floating-promises` over pack sources, as a
+   pack rule beside the others, refuses it for every pack.
+7. **The rough edges the examples showed.** A state it started is reached with `child('draft', draft)` each time and
    should be declared once. The two under Not built about fields: a default that still has to be given, and names
    unique along a path.
 
