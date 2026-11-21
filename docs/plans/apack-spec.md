@@ -240,6 +240,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
 | What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
 | An ask whose asker has gone throws `Left` where it is awaited | Never settling it, which was tried first. A promise that never settles skips every `finally` after it, so a lock or a handle taken before the ask is held for good, and `Promise.all` over it hangs. Rejection is what `AbortSignal`, `fetch` and structured concurrency do, and code written for them is already correct here |
+| `Left` is an exception, raised again by every later ask from the state that was left | The other designs that exist. A third outcome that runs `finally` and skips `catch` (Bluebird 3, the withdrawn TC39 cancelable promises) is the cleanest and cannot be expressed through native `await`. A separate interruption channel (Effect, ZIO) means writing in an effect system. Dropping the computation (Rust) needs destructors. A value to check (Go's `context`) lets code run on after it should have stopped. Killing with no unwinding (Erlang) is what never settling was, and `use(release)` already gives its cleanup. What every exception design has had to repair is cancellation swallowed by a `catch` meant for failures (Python moved `CancelledError` out from under `Exception`; Kotlin's `runCatching`), and raising once only (asyncio, which Trio corrected). Raising again is in the kernel; the swallowing is a pack rule, under What to build around it |
 | An event handler is not given `ask` | `ask` everywhere. An event handler cannot await, so it could only start an ask and drop the promise, with nothing around it to take a `Left`. That floating promise is what took a process down when a check stopped a window mid-ask. Without `ask` the mistake does not compile, and the kernel still catches an ask started in `run` and never awaited |
 | A component reads a reactive copy that is written to only where the state changed | A selector and a comparison per reader, as `useSelector` has: every reader runs its selector on every change to decide whether it cares. And replacing the copy whole per step, which re-renders everything that read anything |
 | A hidden window's frame is the next turn | `requestAnimationFrame` always. A hidden window gets none, so what was gathered for it grew without bound until it was shown |
@@ -423,7 +424,12 @@ The design is the smaller half of the value. In the order they would pay:
 6. **A pack rule against a promise nobody awaits.** The kernel keeps a dropped ask from taking the process down, but
    the code that dropped it also never sees its answer or its refusal. `no-floating-promises` over pack sources, as a
    pack rule beside the others, refuses it for every pack.
-7. **The rough edges the examples showed.** A state it started is reached with `child('draft', draft)` each time and
+7. **A pack rule against a swallowed `Left`.** A `catch` in `run` or in an ask's handler that can take a `Left` has to
+   rethrow it. One that does not lets the code carry on after its state was left. The kernel already drops what that
+   code returns and raises `Left` again at its next ask, so what the rule protects is a side effect outside the state,
+   a file written or a process started, made by code that should have stopped. Refusals come back as values, so
+   ordinary code has no reason to catch around an ask and the rule should fire rarely.
+8. **The rough edges the examples showed.** A state it started is reached with `child('draft', draft)` each time and
    should be declared once. The two under Not built about fields: a default that still has to be given, and names
    unique along a path.
 
