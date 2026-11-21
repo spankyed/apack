@@ -9,6 +9,7 @@ the app: nothing imports it, and no check covers it.
 | `state.mts` | The types a state's code is checked against, and the kernel: systems, steps, asks, the link between a backend and its windows |
 | `draft.mts` | Data edited in place, from which a new value is made. What the kernel uses for a nested change |
 | `append-cost.mts` | What a growing list costs one change at a time and in batches, on the draft and through an ask. Runs, for about 25 seconds |
+| `frozen-cost.mts` | What a frozen list costs to read and to copy, beside the same list unfrozen. A measurement: it prints, and refuses nothing |
 | `mirror.mts` | A running state as a value a component reads: each field is the state's own object, never copied or wrapped, written when the state replaces it. One mirror for each state, shared by all that read it |
 | `vue.mts` | `useState`: what a Vue component uses to read a running state and tell it things |
 | `vue-check.mts` | `useState` checked by rendering real components with Vue's runtime and counting what rendered, as render functions and as compiled templates. Runs |
@@ -127,8 +128,9 @@ npx tsx docs/plans/apack-spec/prototype/graph.mts docs/plans/apack-spec/prototyp
 npx tsx docs/plans/apack-spec/prototype/xstate-survey.mts "$PWD"
 ```
 
-Typecheck:
+Typecheck, every `.mts` file here. The options are `tsconfig.json`'s, which the fixture's extends, and the files are
+whichever are in the directory, so one added is checked without being named:
 
 ```bash
-npx tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --allowImportingTsExtensions --noUncheckedIndexedAccess --skipLibCheck --types node docs/plans/apack-spec/prototype/draft.mts docs/plans/apack-spec/prototype/draft-check.mts docs/plans/apack-spec/prototype/kernel-check.mts docs/plans/apack-spec/prototype/mirror.mts docs/plans/apack-spec/prototype/vue.mts docs/plans/apack-spec/prototype/vue-check.mts docs/plans/apack-spec/prototype/window-frame.mts docs/plans/apack-spec/prototype/binding-check.mts docs/plans/apack-spec/prototype/progress-check.mts docs/plans/apack-spec/prototype/leaving-check.mts docs/plans/apack-spec/prototype/failure-check.mts docs/plans/apack-spec/prototype/answer-check.mts docs/plans/apack-spec/prototype/starts-check.mts docs/plans/apack-spec/prototype/commit.mts docs/plans/apack-spec/prototype/awaits-check.mts docs/plans/apack-spec/prototype/internal-check.mts docs/plans/apack-spec/prototype/makes-check.mts docs/plans/apack-spec/prototype/checks.mts docs/plans/apack-spec/prototype/follows-check.mts docs/plans/apack-spec/prototype/schedule.mts docs/plans/apack-spec/prototype/interleaving-check.mts docs/plans/apack-spec/prototype/append-cost.mts docs/plans/apack-spec/prototype/state.mts docs/plans/apack-spec/prototype/search.mts docs/plans/apack-spec/prototype/library.mts docs/plans/apack-spec/prototype/threads.mts docs/plans/apack-spec/prototype/views.mts
+npx tsc -p docs/plans/apack-spec/prototype
 ```

@@ -1,14 +1,4 @@
 {
-  "compilerOptions": {
-    "strict": true,
-    "noEmit": true,
-    "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
-    "allowImportingTsExtensions": true,
-    "noUncheckedIndexedAccess": true,
-    "skipLibCheck": true,
-    "types": ["node"]
-  },
+  "extends": "../tsconfig.json",
   "include": ["*.vue", "*.mts"]
 }
