@@ -1,0 +1,70 @@
+# The apack-spec prototype
+
+What [`../../apack-spec.md`](../../apack-spec.md) describes, as code that runs. It is evidence for a plan, not part of
+the app: nothing imports it, and no check covers it.
+
+| File | What it is |
+|---|---|
+| `state.mts` | The types a state's code is checked against, and the kernel: systems, steps, asks, the link between a backend and its windows |
+| `draft.mts` | Data edited in place, from which a new value is made. What the kernel uses for a nested change |
+| `append-cost.mts` | What a growing list costs one change at a time and in batches, on the draft and through an ask. Runs, for about 25 seconds |
+| `mirror.mts` | A running state as a reactive value: the kernel's changed places written into a copy that `@vue/reactivity` tracks |
+| `window-frame.mts` | What a frame is in a window: the next paint while it shows, the next turn while it is hidden |
+| `progress-check.mts` | That progress is gathered and nothing else is, and that what a state hears keeps the order it was sent in. Runs |
+| `binding-check.mts` | That a reader runs again only for the place it read, and that a hidden window still hears. Runs |
+| `kernel-check.mts` | What the kernel does with a change to data, a move that edits a draft and the refused edits included. Runs |
+| `draft-check.mts` | The checks a hand-built draft has to pass. Runs |
+| `search.mts` | The app's code search, backend and surface, ported. Runs |
+| `library.mts` | The app's library system ported handler for handler. Typechecks against stand-ins for its imports; not run |
+| `threads.mts` | Three backend systems and two windows: asks, tells, a streamed reply, a broadcast, a disconnect, and a refusal that carries data. Runs |
+| `views.mts` | A surface following views, modelled on the threads surface: one always, one while a thread is open, one per tab. Runs |
+| `graph.mts` | Derives each state's graph from its types, running nothing |
+| `xstate-survey.mts` | The survey of how the app uses XState that the plan's figures come from |
+
+Run from the repo root.
+
+```bash
+npx tsx docs/plans/apack-spec/prototype/search.mts
+```
+
+```bash
+npx tsx docs/plans/apack-spec/prototype/threads.mts
+```
+
+```bash
+npx tsx docs/plans/apack-spec/prototype/views.mts
+```
+
+```bash
+npx tsx docs/plans/apack-spec/prototype/draft-check.mts
+```
+
+```bash
+npx tsx docs/plans/apack-spec/prototype/kernel-check.mts
+```
+
+```bash
+npx tsx docs/plans/apack-spec/prototype/binding-check.mts
+```
+
+```bash
+npx tsx docs/plans/apack-spec/prototype/progress-check.mts
+```
+
+```bash
+npx tsx docs/plans/apack-spec/prototype/append-cost.mts
+```
+
+```bash
+npx tsx docs/plans/apack-spec/prototype/graph.mts docs/plans/apack-spec/prototype/threads.mts
+```
+
+```bash
+npx tsx docs/plans/apack-spec/prototype/xstate-survey.mts "$PWD"
+```
+
+Typecheck:
+
+```bash
+npx tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --allowImportingTsExtensions --noUncheckedIndexedAccess --skipLibCheck --types node docs/plans/apack-spec/prototype/draft.mts docs/plans/apack-spec/prototype/draft-check.mts docs/plans/apack-spec/prototype/kernel-check.mts docs/plans/apack-spec/prototype/mirror.mts docs/plans/apack-spec/prototype/window-frame.mts docs/plans/apack-spec/prototype/binding-check.mts docs/plans/apack-spec/prototype/progress-check.mts docs/plans/apack-spec/prototype/append-cost.mts docs/plans/apack-spec/prototype/state.mts docs/plans/apack-spec/prototype/search.mts docs/plans/apack-spec/prototype/library.mts docs/plans/apack-spec/prototype/threads.mts docs/plans/apack-spec/prototype/views.mts
+```
