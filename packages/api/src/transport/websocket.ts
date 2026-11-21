@@ -11,6 +11,7 @@ import { SERVER_CONFIG, apiToken, apiTokenIsOwn, isApiToken } from '../boot/conf
 import { appDatabase, appPacks, appRunHistory, backendActor } from '../runtime/index.ts';
 import { installDevPack, reloadPackById } from '@apackdev/host/packs/runtime';
 import { writePrivateRuntimeFile } from '@apackdev/host/private-file';
+import { gatherSends } from '@apackdev/host/wire-frames';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import type { ApiEndpoint } from '@apackdev/host/process-liveness';
 import { API_HOST, API_TOKEN_HEADER } from '@apackdev/sdk/utils/pure';
@@ -142,6 +143,15 @@ export function createWebSocketServer() {
     publishApiFiles(port, token);
   });
 
+  // What a connection is sent within one turn leaves as one frame (`@apackdev/host/wire-frames`). Registered before
+  // tRPC's own handler, so the socket it sends on is already the gathering one.
+  const gathering = new Set<{ flush(): void }>();
+  wss.on('connection', (socket) => {
+    const gathered = gatherSends(socket as unknown as Parameters<typeof gatherSends>[0], setImmediate);
+    gathering.add(gathered);
+    socket.on('close', () => { gathering.delete(gathered); });
+  });
+
   // Apply tRPC handler
   const handler = applyWSSHandler({
     wss,
@@ -185,6 +195,8 @@ export function createWebSocketServer() {
     // is the app's hold on the broker closing (`@apackdev/host`'s `holdBrokerSessions`, held by Electron main).
     backendActor?.stop();
     handler.broadcastReconnectNotification();
+    // The process exits below, before the turn on which what was gathered would have left
+    for (const gathered of gathering) gathered.flush();
     wss.close();
     httpServer.close();
     // Exit explicitly so the 'exit' handler fires before Electron force-kills us

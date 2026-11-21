@@ -1,5 +1,6 @@
 import { createWSClient, wsLink, createTRPCClient, type TRPCClient } from '@trpc/client';
 import { API_HOST } from '@apackdev/sdk/utils/pure';
+import { splitFrame } from '@apackdev/host/wire-frames';
 import type { AppRouter } from '@app/api';   // ← BE import Type‑only!
 import type { _HostBridge } from '@apackdev/sdk/fe';
 
@@ -24,6 +25,21 @@ const apiToken = (typeof window !== 'undefined' && (window.electronAPI as _HostB
 class ApiSocket extends WebSocket {
   constructor(url: string | URL) {
     super(url, ['apack', `apack-token.${apiToken}`]);
+  }
+
+  /**
+   * The API sends what it had for this window within one turn as one frame (`@apackdev/host/wire-frames`). A
+   * listener is handed each message in it, in order and within the one task, so the client above sees the messages
+   * it always did and the window draws once for the frame rather than once for each.
+   */
+  override addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void {
+    if (type !== 'message' || typeof listener !== 'function') { super.addEventListener(type, listener, options); return; }
+    super.addEventListener('message', (event) => {
+      const data = (event as MessageEvent).data;
+      const messages = typeof data === 'string' ? splitFrame(data) : [];
+      if (messages.length < 2) { listener.call(this, event); return; }
+      for (const message of messages) listener.call(this, new MessageEvent('message', { data: message }));
+    }, options);
   }
 }
 
