@@ -28,6 +28,7 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
   const takes = new Set<string>()
   const entered = new Set<string>()
   const starts = new Map<string, string>()
+  const follows: string[] = []
   const where = (path: string, name: string): string => (path ? `${name} in ${path}` : name)
 
   /** A returned value that says `at` is a move to that path. Anything else changes data and stays. */
@@ -60,6 +61,17 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
       } else if (property.name === 'run') {
         const returned = type.getCallSignatures()[0] ? unwrap(type.getCallSignatures()[0].getReturnType()) : []
         if (returned.length) read(returned, path, '(its work ends)')
+      } else if (property.name === 'follows') {
+        // The views it follows, and what each one's handler does with what it delivers.
+        for (const followed of type.getProperties()) {
+          const declared = real(typeOf(followed))[0]
+          if (!declared) continue
+          const view = declared.getProperty('view')
+          follows.push(`${followed.name}${declared.getProperty('each') ? ' (one for each key)' : ''}${view ? ` of ${literalsOf(typeOf(view)).join('|')}` : ''}${path ? ` in ${path}` : ''}`)
+          const heard = declared.getProperty('heard')
+          const signature = heard && real(typeOf(heard))[0]?.getCallSignatures()[0]
+          if (signature) read(unwrap(signature.getReturnType()), path, `${followed.name} (hearing)`)
+        }
       } else if (property.name === 'failed') {
         const signature = type.getCallSignatures()[0]
         if (signature) read(unwrap(signature.getReturnType()), path, '(its work fails)')
@@ -102,6 +114,7 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
   if (stays.length) console.log(`  changes data only: ${stays.join(', ')}`)
   if (answers.length) console.log(`  answers: ${answers.join(', ')}`)
   if (startsStates.length) console.log(`  starts: ${startsStates.join(', ')}`)
+  if (follows.length) console.log(`  follows: ${follows.join(', ')}`)
   if (reaches.length) console.log(`  reaches: ${reaches.join(', ')}`)
   const findings: string[] = []
   for (const taken of [...events, ...asks]) if (!takes.has(taken)) findings.push(`nothing takes ${taken}`)

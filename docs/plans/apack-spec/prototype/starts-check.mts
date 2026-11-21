@@ -4,7 +4,7 @@
 //   npx tsx docs/plans/apack-spec/prototype/starts-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { explore, type Schedule } from './schedule.mts'
-import { answered, each, reaching, system, type Each } from './state.mts'
+import { answered, each, given, one, reaching, system, type Each } from './state.mts'
 
 const state = reaching()
 const turns = (count: number): Promise<void> => new Promise((resolve) => { let left = count; const tick = (): void => { if (left-- <= 0) resolve(); else setImmediate(tick) }; tick() })
@@ -13,20 +13,28 @@ const turns = (count: number): Promise<void> => new Promise((resolve) => { let l
 
 type CardEvent = { type: 'BUMP' }
 type CardAsks = { LABEL: { args: {}; answer: string }; SLOWLY: { args: {}; answer: string } }
-type Card = { data: { label: string; bumps: number } }
-const card = (id: string, label: string, log: string[]) => state<Card, CardEvent, CardAsks>()({
-  data: { label, bumps: 0 },
-  run({ use }) { log.push(`started ${id}`); use(() => { log.push(`stopped ${id}`) }) },
-  on: { BUMP: (_, { data }) => ({ data: { bumps: data.bumps + 1 } }) },
+type Card = {
+  data: { id: string; label: string; bumps: number }
+  /** What it tells the board, which started it. */
+  reports: { type: 'CARD_BUMPED'; bumps: number }
+}
+const card = (log: string[]) => state<Card, CardEvent, CardAsks>()({
+  // Which card it is and what it says are given by whoever starts it. How often it was bumped is its own.
+  data: { id: given, label: given, bumps: 0 },
+  run({ data, use }) { const { id } = data; log.push(`started ${id}`); use(() => { log.push(`stopped ${id}`) }) },
+  on: {
+    BUMP: (_, { data, report }) => { report({ type: 'CARD_BUMPED', bumps: data.bumps + 1 }); return { data: { bumps: data.bumps + 1 } } },
+  },
   asks: {
     LABEL: (_, { data }) => data.label,
     SLOWLY: async (_, { data }) => { await turns(20); return data.label },
   },
 })
 
-/** Started by the board only while it is open. */
-const helper = (log: string[]) => state<{}, never>()({
-  run({ use }) { log.push('started helper'); use(() => { log.push('stopped helper') }) },
+/** Started by the board only while it is open, and given the board's title as it is then. */
+const helper = (log: string[]) => state<{ data: { title: string } }, never>()({
+  data: { title: given },
+  run({ data, use }) { log.push(`started helper for ${data.title}`); use(() => { log.push('stopped helper') }) },
 })
 
 // ── the board ───────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -38,8 +46,9 @@ type BoardEvent =
   | { type: 'BUMP'; id: string }
   | { type: 'CLOSE' }
   | { type: 'OPEN' }
-  | { type: 'BREAK' }
   | { type: 'ADD_THEN_BUMP'; id: string; label: string }
+  // from a card it started
+  | { type: 'CARD_BUMPED'; bumps: number; from: string }
 type BoardAsks = {
   /** Adds an item once its work is done, and refuses if one is there by then. */
   ADD_LATER: { args: { id: string; label: string }; answer: 'added'; refuses: 'exists' }
@@ -48,21 +57,18 @@ type BoardAsks = {
   SLOWLY_OF: { args: { id: string }; answer: string }
 }
 type Board = {
-  data: { title: string; items: Record<string, string>; broken: boolean }
+  data: { title: string; items: Record<string, string>; lastBump: string | null }
   starts: { card: Each<ReturnType<typeof card>> }
   states: { open: { starts: { helper: ReturnType<typeof helper> } }; closed: {} }
 }
 
 const board = (log: string[], work: (label: string) => Promise<unknown> = () => turns(4)) => state<Board, BoardEvent, BoardAsks>()({
-  data: { title: 'Board', items: {}, broken: false },
+  data: { title: 'Board', items: {}, lastBump: null },
   start: 'open',
 
   starts: {
-    // The data says which cards there are, and a card is given its label from the data when it starts.
-    card: each(
-      (data) => { if (data.broken) throw new Error('the keys cannot be read'); return Object.keys(data.items) },
-      (id, data) => card(id, data.items[id]!, log),
-    ),
+    // A card for each item, told which it is and what it says.
+    card: each('items', card(log), (id, data) => ({ id, label: data.items[id]! })),
   },
 
   on: {
@@ -72,9 +78,9 @@ const board = (log: string[], work: (label: string) => Promise<unknown> = () => 
     BUMP: ({ id }, { tell, child }) => { tell(child('card', id), { type: 'BUMP' }) },
     CLOSE: () => ({ at: 'closed' }),
     OPEN: () => ({ at: 'open' }),
-    BREAK: () => ({ data: { broken: true } }),
     // Tells itself to add an item and then to bump it: two more things in the step this one is handled in.
     ADD_THEN_BUMP: ({ id, label }, { send }) => { send({ type: 'ADD', id, label }); send({ type: 'BUMP', id }) },
+    CARD_BUMPED: ({ bumps, from }) => ({ data: { lastBump: `${from} to ${bumps}` } }),
   },
 
   asks: {
@@ -92,49 +98,59 @@ const board = (log: string[], work: (label: string) => Promise<unknown> = () => 
   },
 
   states: {
-    open: { starts: { helper: helper(log) } },
+    open: { starts: { helper: one(helper(log), (data) => ({ title: data.title })) } },
     closed: {},
   },
 })
 
 const wired = () => {
   const log: string[] = []
-  const traced: string[] = []
-  const sys = system({ side: 'backend', trace: (line) => { if (line.startsWith('DEFECT')) traced.push(line) } })
+  const defects: string[] = []
+  const looked: string[] = []
+  const sys = system({ side: 'backend', trace: (line) => { if (line.startsWith('DEFECT')) defects.push(line); if (line.includes('looked at')) looked.push(line) } })
   const it = sys.start('board', board(log))
   const steps: string[][] = []
   sys.subscribe((changed) => { steps.push([...changed].sort()) })
   const cards = (): Record<string, unknown> => Object.fromEntries(Object.entries(sys.snapshot()).filter(([ref]) => ref.startsWith('board/card/')).map(([ref, value]) => [ref.slice('board/card/'.length), (value as { data: unknown }).data]))
-  return { sys, it, log, traced, steps, cards, send: (event: BoardEvent): void => sys.send(it, event) }
+  return { sys, it, log, defects, looked, steps, cards, send: (event: BoardEvent): void => sys.send(it, event), now: () => sys.read(it) }
 }
 
 const checks: Array<[string, () => Promise<void>]> = [
   ['a state it starts runs while it is the case, stops when it is left, and starts anew when it is entered again', async () => {
     const { log, send, sys } = wired()
-    deepStrictEqual(log, ['started helper'])
+    deepStrictEqual(log, ['started helper for Board'])
     send({ type: 'CLOSE' })
-    deepStrictEqual(log, ['started helper', 'stopped helper'])
+    deepStrictEqual(log, ['started helper for Board', 'stopped helper'])
     send({ type: 'OPEN' })
-    deepStrictEqual(log, ['started helper', 'stopped helper', 'started helper'])
+    deepStrictEqual(log, ['started helper for Board', 'stopped helper', 'started helper for Board'])
     sys.stop()
   }],
-  ['a key the data gains starts its state in that step, given what the data holds for it', async () => {
+  ['a started state is given its data once, when it starts: a fact that changes is kept by whichever state owns it', async () => {
+    const { log, send, sys } = wired()
+    send({ type: 'RETITLE', title: 'Another' })
+    deepStrictEqual((sys.snapshot()['board/helper'] as { data: unknown }).data, { title: 'Board' })
+    send({ type: 'CLOSE' })
+    send({ type: 'OPEN' })
+    deepStrictEqual(log.at(-1), 'started helper for Another')
+    sys.stop()
+  }],
+  ['a key the field gains starts its state in that step, given what the data holds for it', async () => {
     const { send, cards, steps, sys } = wired()
     steps.length = 0
     send({ type: 'ADD', id: 'a', label: 'Alpha' })
     deepStrictEqual(steps, [['board', 'board/card/a']])
-    deepStrictEqual(cards(), { a: { label: 'Alpha', bumps: 0 } })
+    deepStrictEqual(cards(), { a: { id: 'a', label: 'Alpha', bumps: 0 } })
     sys.stop()
   }],
   ['a state started part-way through a step is there for what comes next in that step', async () => {
     const { send, cards, steps, sys } = wired()
     steps.length = 0
     send({ type: 'ADD_THEN_BUMP', id: 'a', label: 'Alpha' })
-    deepStrictEqual(cards(), { a: { label: 'Alpha', bumps: 1 } })
+    deepStrictEqual(cards(), { a: { id: 'a', label: 'Alpha', bumps: 1 } })
     deepStrictEqual(steps, [['board', 'board/card/a']])
     sys.stop()
   }],
-  ['a key the data loses stops its state: what it held is let go, and what it was answering is abandoned', async () => {
+  ['a key the field loses stops its state: what it held is let go, and what it was answering is abandoned', async () => {
     const { send, cards, log, sys, it } = wired()
     send({ type: 'ADD', id: 'a', label: 'Alpha' })
     const slowly = sys.ask(it, 'SLOWLY_OF', { id: 'a' })
@@ -153,8 +169,32 @@ const checks: Array<[string, () => Promise<void>]> = [
     send({ type: 'RETITLE', title: 'Another' })
     send({ type: 'ADD', id: 'b', label: 'Beta' })
     send({ type: 'CLOSE' })
-    deepStrictEqual(cards(), { a: { label: 'Alpha', bumps: 2 }, b: { label: 'Beta', bumps: 0 } })
+    deepStrictEqual(cards(), { a: { id: 'a', label: 'Alpha', bumps: 2 }, b: { id: 'b', label: 'Beta', bumps: 0 } })
     deepStrictEqual(log.filter((line) => line.endsWith(' a')), ['started a'])
+    sys.stop()
+  }],
+  ['which there are is looked at again only when that field changes', async () => {
+    const { send, looked, sys } = wired()
+    looked.length = 0
+    send({ type: 'RETITLE', title: 'Another' })
+    send({ type: 'RETITLE', title: 'And another' })
+    deepStrictEqual(looked, [])
+    send({ type: 'ADD', id: 'a', label: 'Alpha' })
+    strictEqual(looked.length, 1)
+    // The card changing is not the board's items changing.
+    send({ type: 'BUMP', id: 'a' })
+    strictEqual(looked.length, 1)
+    sys.stop()
+  }],
+  ['a started state reports to the state that started it, which hears which one it was', async () => {
+    const { send, now, sys } = wired()
+    send({ type: 'ADD', id: 'a', label: 'Alpha' })
+    send({ type: 'ADD', id: 'b', label: 'Beta' })
+    send({ type: 'BUMP', id: 'b' })
+    strictEqual(now().data.lastBump, 'b to 1')
+    send({ type: 'BUMP', id: 'a' })
+    send({ type: 'BUMP', id: 'a' })
+    strictEqual(now().data.lastBump, 'a to 2')
     sys.stop()
   }],
   ['a state that is not running cannot be asked: the ask is answered `unavailable`', async () => {
@@ -162,17 +202,15 @@ const checks: Array<[string, () => Promise<void>]> = [
     deepStrictEqual(await sys.ask(it, 'LABEL_OF', { id: 'nobody' }), { ok: true, value: 'unavailable' })
     sys.stop()
   }],
-  ['keys that cannot be read are reported, and what was running goes on running', async () => {
-    const { send, cards, traced, log, sys } = wired()
-    send({ type: 'ADD', id: 'a', label: 'Alpha' })
-    send({ type: 'BREAK' })
-    strictEqual(traced.length, 1)
-    ok(traced[0]!.includes('could not say which card to start'))
-    deepStrictEqual(Object.keys(cards()), ['a'])
-    deepStrictEqual(log.filter((line) => line.endsWith(' a')), ['started a'])
+  ['a key that could not name a state is reported, and starts nothing', async () => {
+    const { send, cards, defects, sys } = wired()
+    send({ type: 'ADD', id: 'a/b', label: 'Slashed' })
+    strictEqual(defects.length, 1)
+    ok(defects[0]!.includes('a key cannot hold a slash'))
+    deepStrictEqual(cards(), {})
     sys.stop()
   }],
-  ['stopping the state stops everything it started, the last started first', async () => {
+  ['stopping stops everything that was started, the last started first', async () => {
     const { send, log, sys } = wired()
     send({ type: 'ADD', id: 'a', label: 'Alpha' })
     send({ type: 'ADD', id: 'b', label: 'Beta' })
@@ -201,9 +239,9 @@ const racing = (schedule: Schedule): (() => void) => {
 
 // What must not compile.
 state<Board, BoardEvent, BoardAsks>()({
-  data: { title: '', items: {}, broken: false },
+  data: { title: '', items: {}, lastBump: null },
   start: 'open',
-  starts: { card: each((data) => Object.keys(data.items), (id) => card(id, '', [])) },
+  starts: { card: each('items', card([]), (id) => ({ id, label: '' })) },
   on: {
     // @ts-expect-error a card is one of many, so reaching one takes its key
     BUMP: (_, { tell, child }) => { tell(child('card'), { type: 'BUMP' }) },
@@ -211,10 +249,12 @@ state<Board, BoardEvent, BoardAsks>()({
     ADD: (_, { child }) => { void child('deck') },
     // @ts-expect-error the helper is started by `open`, so only a handler inside `open` can reach it
     CLOSE: (_, { child }) => { void child('helper') },
+    // @ts-expect-error the board declares nothing it reports, so it has nothing to report
+    RETITLE: (_, { report }) => { report({ type: 'CARD_BUMPED', bumps: 1 }) },
   },
   states: {
     open: {
-      starts: { helper: helper([]) },
+      starts: { helper: one(helper([]), () => ({ title: '' })) },
       // Inside `open` it can be reached, and there is one, so it takes no key.
       on: { OPEN: (_, { child }) => { void child('helper') } },
     },
@@ -222,7 +262,29 @@ state<Board, BoardEvent, BoardAsks>()({
   },
 })
 // @ts-expect-error a state whose shape says it starts cards has to say which
-state<Board, BoardEvent, BoardAsks>()({ data: { title: '', items: {}, broken: false }, start: 'open', states: { open: { starts: { helper: helper([]) } }, closed: {} } })
+state<Board, BoardEvent, BoardAsks>()({ data: { title: '', items: {}, lastBump: null }, start: 'open', states: { open: { starts: { helper: one(helper([]), () => ({ title: '' })) } }, closed: {} } })
+state<Board, BoardEvent, BoardAsks>()({
+  data: { title: '', items: {}, lastBump: null },
+  start: 'open',
+  starts: {
+    // @ts-expect-error a title is neither a list nor keyed, so it cannot say which cards there are
+    card: each('title', card([]), (id) => ({ id, label: '' })),
+  },
+  states: { open: { starts: { helper: one(helper([]), () => ({ title: '' })) } }, closed: {} },
+})
+state<Board, BoardEvent, BoardAsks>()({
+  data: { title: '', items: {}, lastBump: null },
+  start: 'open',
+  starts: {
+    // @ts-expect-error a card has to be given its label as well as which it is
+    card: each('items', card([]), (id) => ({ id })),
+  },
+  states: {
+    // @ts-expect-error the helper has to be given its title, so it cannot be named bare
+    open: { starts: { helper: helper([]) } },
+    closed: {},
+  },
+})
 
 const unhandled: unknown[] = []
 process.on('unhandledRejection', (reason) => { unhandled.push(reason) })

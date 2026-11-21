@@ -2,9 +2,10 @@
 // (packages/default-setup/src/features/threads/fe/state.ts), which follows nine with `fromView`: one for as long as
 // the surface runs (`list`), one while a thread is open (`detail`), and one per open tab (`tab`).
 //
-// Today each is an actor the machine spawns and stops by hand. Here each is a `watch` owned by the state that needs
-// it, so it ends when that state does. `store` at the bottom stands in for the app's view host: it reads again after
-// every commit and delivers each changed result.
+// Today each is an actor the machine spawns and stops by hand. Here each is declared by the state that needs it,
+// under `follows`, and which are followed comes from the data: nothing follows or stops following one by hand.
+// `store` at the bottom stands in for the app's view host: it reads again after every commit and delivers each
+// changed result.
 
 import { deepStrictEqual } from 'node:assert'
 import { given, reaching, system, type ViewHost, type ViewUpdate } from './state.mts'
@@ -39,41 +40,35 @@ type ThreadsSurfaceEvent =
   | { type: 'SHOW_LIST' }
   | { type: 'VIEW_THREAD'; id: string }
   | { type: 'TABS_CHANGED'; open: string[] }
-  // from the views it follows
-  | { type: 'THREADS.READ'; threads: ThreadSummary[] }
-  | { type: 'DETAIL.READ'; detail: ThreadDetail }
-  | { type: 'TAB.READ'; tab: TabInfo }
-  | { type: 'VIEW_FAILED'; view: string; error: string }
 
 const threadsSurface = state<ThreadsSurface, ThreadsSurfaceEvent>()({
   data: { threads: [], tabs: {}, openTabs: [], problem: null },
   start: 'list',
 
-  // Followed for as long as the surface runs.
-  run({ watch, send }) {
-    watch('list', 'threads', 'list', {}, (update) =>
-      send(update.ok ? { type: 'THREADS.READ', threads: update.value } : { type: 'VIEW_FAILED', view: 'list', error: update.error }))
+  follows: {
+    // Followed for as long as the surface runs.
+    list: {
+      feature: 'threads', view: 'list',
+      args: () => ({}),
+      heard: (update) => (update.ok ? { data: { threads: update.value } } : { data: { problem: `list: ${update.error}` } }),
+    },
+
+    // One for each open tab. Which tabs are open is the data; opening or closing one is all it takes.
+    tab: {
+      feature: 'threads', view: 'tab', each: 'openTabs',
+      args: (threadId) => ({ threadId }),
+      heard: (update, { key }) => (update.ok ? { data: (d) => { d.tabs[key] = update.value } } : { data: { problem: `tab: ${update.error}` } }),
+    },
   },
 
   on: {
     SHOW_LIST:   ()       => ({ at: 'list' }),
-    // Going to `detail` while already there enters it afresh: the view of the last thread stops, and this one starts.
+    // Going to `detail` while already there enters it afresh, with the id of the thread to show.
     VIEW_THREAD: ({ id }) => ({ at: 'detail', data: { id, detail: null } }),
 
-    'THREADS.READ': ({ threads })     => ({ data: { threads } }),
-    'TAB.READ':     ({ tab })         => ({ data: (d) => { d.tabs[tab.threadId] = tab } }),
-    VIEW_FAILED:    ({ view, error }) => ({ data: { problem: `${view}: ${error}` } }),
-
-    // One view per open tab: a keyed set, started and stopped as the set changes.
-    TABS_CHANGED: ({ open }, { data, watch, unwatch, send }) => {
-      for (const threadId of data.openTabs) if (!open.includes(threadId)) unwatch(`tab:${threadId}`)
-      for (const threadId of open) {
-        if (data.openTabs.includes(threadId)) continue
-        watch(`tab:${threadId}`, 'threads', 'tab', { threadId }, (update) =>
-          send(update.ok ? { type: 'TAB.READ', tab: update.value } : { type: 'VIEW_FAILED', view: 'tab', error: update.error }))
-      }
-      return { data: (d) => { d.openTabs = open; for (const threadId of Object.keys(d.tabs)) if (!open.includes(threadId)) delete d.tabs[threadId] } }
-    },
+    TABS_CHANGED: ({ open }) => ({
+      data: (d) => { d.openTabs = open; for (const threadId of Object.keys(d.tabs)) if (!open.includes(threadId)) delete d.tabs[threadId] },
+    }),
   },
 
   states: {
@@ -82,14 +77,13 @@ const threadsSurface = state<ThreadsSurface, ThreadsSurfaceEvent>()({
     detail: {
       data: { id: given, detail: given },
 
-      // Followed only while a thread is open, with that thread's id.
-      run({ data, watch, send }) {
-        watch('detail', 'threads', 'detail', { id: data.id }, (update) =>
-          send(update.ok ? { type: 'DETAIL.READ', detail: update.value } : { type: 'VIEW_FAILED', view: 'detail', error: update.error }))
-      },
-
-      on: {
-        'DETAIL.READ': ({ detail }) => ({ data: { detail } }),
+      // Followed only while a thread is open, and asked for whichever thread that is.
+      follows: {
+        detail: {
+          feature: 'threads', view: 'detail',
+          args: (data) => ({ id: data.id }),
+          heard: (update) => (update.ok ? { data: { detail: update.value } } : { data: { problem: `detail: ${update.error}` } }),
+        },
       },
     },
   },

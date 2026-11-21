@@ -90,7 +90,8 @@ Exactly one path is the case, so where a state is is one string, and its data is
 | `on` | The events it takes. Synchronous. A handler returns what happens next |
 | `asks` | The asks it answers. May be async. A handler returns the answer, or `answered(answer, next)` to change something as it answers |
 | `run` | What it does while it is the case. May be async. What it returns happens only if the state still is the case |
-| `starts` | The states it starts, which run while it is the case. `each(keys, of)` gives one for each key the data holds |
+| `starts` | The states it starts, which run while it is the case. `each(field, state, given)` gives one for each key of a field |
+| `follows` | The views it follows while it is the case, each with what it is asked for and a handler for what it delivers |
 | `failed` | Where it goes when `run` throws, given what was thrown. Synchronous. Required when `run` is async |
 
 A handler or `run` returns the same two fields the value has: `{ at, data }`. Giving only `data` changes fields and
@@ -178,22 +179,49 @@ points at.
    so work that stopped part-way has changed nothing; and a handler that does reach its end has its change made even
    if whoever asked has gone, because the work was done and the data should say so. A handler that throws because its
    `signal` aborted has stopped, and is reported as that and not as a failure.
-10. **What a state starts is declared, and which of them run follows from its data.** A state names the states it
-    starts once, in its shape and its definition. One that is started alone runs for as long as its starter is the
-    case. Where there is one for each key, the definition gives a function from the data to the keys, and a function
-    from a key to its state:
+10. **What a state starts and follows is declared, and which of them run follows from its data.** A state names the
+    states it starts once, in its shape and its definition. One that is started alone runs for as long as its starter
+    is the case. Where there is one for each key, the definition names the field whose keys they are, or whose items
+    where the field is a list:
 
     ```ts
-    starts: { thread: each((data) => Object.keys(data.titles), (threadId) => thread(threadId, inference)) },
+    starts: { thread: each('titles', thread(inference), (threadId) => ({ threadId })) },
     ```
 
-    After everything a step handles, the kernel makes what is running match: a key the data gained starts its state,
-    one it lost stops its state, and one that stayed leaves its state as it is. **Nothing starts or stops a state by
-    hand**, so there is nothing to forget. Starting is a change to data, and so it has what every change has: it is
-    one step with the answer it came with, it can be checked and refused where it is made, and after an `await` it is
-    made against the data as it is then. What runs cannot disagree with the data, because it is worked out from it.
-    A handler reaches one with `child('draft')` or `child('thread', threadId)`, typed from the declaration, and only
-    from where the state that starts it is the case.
+    After everything a step handles, the kernel makes what is running match: a key the field gained starts its
+    state, one it lost stops its state, and one that stayed leaves its state as it is. **Nothing starts or stops a
+    state by hand**, so there is nothing to forget. Starting is a change to data, and so it has what every change has:
+    it is one step with the answer it came with, it can be checked and refused where it is made, and after an `await`
+    it is made against the data as it is then. What runs cannot disagree with the data, because it is worked out
+    from it. A handler reaches one with `child('draft')` or `child('thread', threadId)`, typed from the declaration,
+    and only from where the state that starts it is the case.
+
+    **A field is named, not worked out.** Which there are is looked at again only when that field changes, which the
+    kernel already knows, so it costs nothing while anything else changes. There is no function to throw. And the
+    graph can say a thread runs for each key of `titles`. A set that is part of another is a field of its own.
+
+    **A started state is given its data once, as it starts.** The fields it marks `given` in its own data are what
+    its starter has to give, from the key and the starter's data, and leaving one out does not compile. It is not
+    given again when the starter's data changes: a fact is kept by one state, and whatever needs it there asks.
+
+    **A started state tells only its starter**, with `report(event)`, as only whoever asked hears an ask's progress.
+    It arrives as an event like any other, with `from` saying which one told it.
+
+    **Views are followed the same way**, under `follows`. One followed alone is asked for what a function of the data
+    says, and is followed again when that comes out different. With `each`, one is followed for each key of a field.
+    What a view delivers goes to a handler, which returns what happens next as every handler does, so data still
+    changes only by what a handler returns:
+
+    ```ts
+    follows: {
+      detail: { feature: 'threads', view: 'detail', args: (data) => ({ id: data.id }), heard: (update) => … },
+      tab: { feature: 'threads', view: 'tab', each: 'openTabs', args: (threadId) => ({ threadId }), heard: (update, { key }) => … },
+    },
+    ```
+
+    What a view delivers may not change what that same view is asked for. It would be followed again, deliver again,
+    and never come to rest, and nothing bounds that across steps. The kernel refuses the following again and reports
+    it; the handler's change is made.
 
 ### Communication
 
@@ -204,6 +232,7 @@ points at.
 | `ask(name, ask, args, heard?)` | A state's `run`, or an ask's handler | A backend system, by name | One answer, refusal or failure |
 | `progress(update)` | An ask's handler | Whoever asked, and only them, as a list at most once a frame | No |
 | `broadcast(name, event)` | The backend | That surface in every window | No |
+| `report(event)` | A state that was started | The state that started it, and only that one | No |
 
 Names are typed by one declaration of what can be reached, which a pack's generated facade would supply. A state also declares the
 states it starts, and reaches each through `child`: rule 10.
@@ -265,23 +294,25 @@ the mirror's own: a reactive object is written to in place, and the kernel's val
 ### Following a view
 
 Data a window shows from the database stays a view. A component reads one with `useView`, unchanged: it has nothing to
-do with states. A surface that has to follow one from its machine does it with `watch`, which is what `fromView`
-becomes:
+do with states. A surface that has to follow one from its machine declares it under `follows` (rule 10), which is what
+`fromView` becomes:
 
 ```ts
 detail: {
   data: { id: given, detail: given },
 
-  run({ data, watch, send }) {
-    watch('detail', 'threads', 'detail', { id: data.id }, (update) =>
-      send(update.ok ? { type: 'DETAIL.READ', detail: update.value } : { type: 'VIEW_FAILED', view: 'detail', error: update.error }))
+  follows: {
+    detail: {
+      feature: 'threads', view: 'detail',
+      args: (data) => ({ id: data.id }),
+      heard: (update) => (update.ok ? { data: { detail: update.value } } : { data: { problem: update.error } }),
+    },
   },
 }
 ```
 
-A watch belongs to the state that made it and ends when that state does, so nothing is spawned or stopped by hand. The
-first argument is a key: a second watch under the same key replaces the first, and `unwatch(key)` ends one, which is
-how a set is followed, one per open tab.
+A view belongs to the state that declares it and ends when that state does. One per open tab is one for each item of
+the list of open tabs: opening or closing a tab is a change to that list, and nothing else.
 
 On `375e00a563`, 2026-11-21, by text search: `useView` has 26 call sites and `fromView` nine, eight of them in the
 threads surface, which spawns and stops each view's actor itself in about a dozen places.
@@ -309,6 +340,11 @@ batch, and this repo's own `transact` followed by `watch`.
 | Handlers that wait let others through, and the change checks what must hold | One handler at a time, as Effect's `Machine` and Erlang's `gen_server` run them. A handler then sees the same data throughout, and a reply that streams for half a minute keeps every other window out of that system until it ends. Each of those systems has a way round it (`fork` and reply later; a worker that replies), which is interleaving again with less around it; a caller that leaves cannot stop a handler already running; and a cycle of asks is a deadlock. Here every write was already one step. What could go wrong was a decision: check, wait, then act on a check no longer true. That is a long transaction, and the answer where work is long and conflicts are rare is to hold nothing and validate at the write. Locks, which Temporal suggests for this, bring the blocking back. A declared policy per ask, one at a time under a key, is left until a port needs it |
 | Where work is put says who owns it, and so when it stops | One rule for every handler. Stopping an ask's work when its asker goes is right for a search and wrong for a message being answered, and never stopping it, as Effect's `Machine` does once a handler is running, wastes the search. A flag on the ask saying it survives its asker, or a shield around part of a handler as Trio and Kotlin have, would each be a second way to say what a state's `run` already says: this work is the answerer's. The threads example had it wrong: a window that closed mid-reply aborted the reply, and the message it had sent was never stored |
 | What a state starts is declared and follows from its data | `start(name, state)` called from a handler, which the prototype had. A start was then something a handler did and not part of what it returned, so after an `await`, checking and starting could not be one step; nothing stopped a started state short of its starter ending; a handle was rebuilt from the definition at every use; and a state that was restored would have had nothing it started. And naming the starts in what a handler returns, beside `at` and `data`, which makes them one step and leaves them to be remembered: a start with no stop is a leak, and what runs is kept in two places. Working it out from data is what a view layer does with a keyed list, and what Effect's `forkOne` and `forkReplace` do by hand under a key: a key that stays is theirs "only if missing", and replacing is a key that changes |
+| What says which there are is a field, by name | A function from the data to the keys, which was built first: `each((data) => Object.keys(data.titles), …)`. It could throw, so there had to be a rule for what ran when it did. It had to be run again after every change, since nothing said what it read. And the graph could not say where the keys came from. Tracking what the function reads, as a signals library does, would fix the second and not the others |
+| A started state is given its data once | Data that follows the starter's as it changes. That keeps one fact in two states and needs a rule for which of them may write it |
+| A started state reports to its starter with one verb, into the starter's own events | A table of handlers per started state, which would have been a fourth beside `on`, `asks` and `follows` |
+| What a view delivers goes to a handler | Writing it straight into a field. Data would then change by something other than what a handler returns, and the graph would not show it |
+| A view may not change what it is itself asked for, refused as it happens | Finding it in the graph beforehand, which needs to know which fields a function reads. Refusing it when it happens stops it, where a finding only warns. Two views that each change what the other is asked for are not caught |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
 | What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
 | An ask whose asker has gone throws `Left` where it is awaited | Never settling it, which was tried first. A promise that never settles skips every `finally` after it, so a lock or a handle taken before the ask is held for good, and `Promise.all` over it hangs. Rejection is what `AbortSignal`, `fetch` and structured concurrency do, and code written for them is already correct here |
@@ -341,16 +377,27 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   busy by the thread itself, whose `writing` state answers the same ask its `idle` state accepts; accepting and
   starting to write are one step. The threads system takes no events: the two it had existed so that two asks could
   change data, and went when those asks returned `answered`.
-- **What runs follows the data** (`starts-check.mts`, 10 checks): a state started alone runs while its starter is
-  the case, stops when it is left and starts anew when it is entered again; a key the data gains starts its state in
-  that step, given what the data holds for it; one started part-way through a step is there for what comes next in
-  that step; a key the data loses stops its state, lets go of what it held and abandons what it was answering; a key
-  that stays leaves its state as it is whatever else changes; a state that is not running answers `unavailable`;
-  keys that cannot be read are reported and what was running goes on; and stopping stops everything, the last
-  started first. Under both orderings of two asks that add the same item after a wait, one is added, one is refused,
-  and one state starts. Reaching one of many without its key, reaching one that is not declared, reaching one from
-  outside the state that starts it, and leaving the starts out of a definition do not compile. `threads.mts` runs on
-  it: a thread for each title, and the composer's draft for as long as a thread is open.
+- **What runs follows the data** (`starts-check.mts`, 13 checks): a state started alone runs while its starter is
+  the case, stops when it is left and starts anew when it is entered again; it is given its data once, as it starts;
+  a key the field gains starts its state in that step, given what the data holds for it; one started part-way
+  through a step is there for what comes next in that step; a key the field loses stops its state, lets go of what it
+  held and abandons what it was answering; a key that stays leaves its state as it is whatever else changes; which
+  there are is looked at again only when that field changes; a started state reports to its starter, which hears
+  which one it was; a state that is not running answers `unavailable`; a key holding a slash is reported and starts
+  nothing; and stopping stops everything, the last started first. Under both orderings of two asks that add the same
+  item after a wait, one is added, one is refused, and one state starts. Eight mistakes do not compile: reaching one
+  of many without its key, one that is not declared, or one from outside the state that starts it; reporting what
+  is not declared; leaving the starts out; naming a field that is neither keyed nor a list; giving a started state
+  less than it marks `given`; and naming bare a state that has to be given something. `threads.mts` runs on it: a
+  thread for each title, told which it is, and the composer's draft for as long as a thread is open.
+- **Which views are followed follows the data** (`follows-check.mts`, 12 checks; `views.mts`, 13 comparisons): a view
+  is followed from the moment its state is the case; what it delivers goes to its handler; a change to what it asks
+  for follows it again and stops the one before, whose later deliveries are not heard; a change to anything else
+  leaves it as it is; one is followed for each item of a list and stops when its item goes, each hearing with its own
+  key; the list is looked at again only when it changes; a handler that throws changes nothing and is reported; a
+  view declared by a state inside is followed only while that state is the case; a view whose delivery changes what
+  it asks for is refused and reported; and stopping stops all of it. Four mistakes do not compile. `views.mts`, the
+  threads surface's three kinds of view, has no call that follows or stops following one.
 - **An answer and its change cannot disagree** (`answer-check.mts`, 12 checks): an ask that only answers changes
   nothing; one that answers with a change has made it by the time the answer is had, and subscribers hear of it in
   that step, once; an answer can come with a move that gives the entered state its data; a change that is refused
@@ -369,9 +416,6 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 - **The graph can be derived without running anything** (`graph.mts`): states, moves, what each state answers, and
   which other states it reaches, read from handler return types by the TypeScript checker. An earlier version of it
   caught a handler dropped during a port.
-- **A surface follows views** (`views.mts`), modelled on the threads surface: one for as long as the surface runs, one
-  only while a thread is open, and one per open tab. Opening another thread stops the last one's view; closing a tab
-  stops its view; stopping the surface stops the rest.
 - **Every ordering, not the one that happened** (`schedule.mts`, `interleaving-check.mts`, 8 checks). The kernel puts
   off everything through lanes: what crosses a link one way is a lane, and so are a system's frames. A lane keeps its
   order, as a socket does, and a schedule chooses between lanes. `explore` runs a scenario under every such choice,
@@ -596,11 +640,12 @@ projects. Each would loosen the fit to this app.
 - **Roles**: `tell({ role: 'brain' }, …)`.
 - **A write nobody waits for**, which appliers and migrations make today.
 - **Window-to-window sends**, the app's `sendToSurface`.
-- **What is left of the states a state starts.** Rule 10 is built and checked on one example. Not built: a started
-  state telling its starter something, which today goes by name and so only to a backend system; giving a started
-  state its data as `given` fields where it is now given by building its definition around it; and the brain, the bus
-  and the shell on it, which are the app's own cases: a flow per run, a surface per pack, a system per registration.
-  A set of views is still followed by hand with `watch` and `unwatch`, and should follow from data the same way.
+- **What is left of what a state starts and follows.** Rule 10 is built and checked on two examples. Not built: the
+  brain, the bus and the shell on it, which are the app's own cases: a flow per run, a surface per pack, a system per
+  registration. A component cannot reach a started state, since `child` exists only in a handler, so the Vue binding
+  has no way to read one card of many. Removing a key and adding it back keeps its state when one handler does both
+  and starts it anew when two events in one step do, which follows from matching after each thing handled and is a
+  rule someone will meet. And two views that each change what the other is asked for are not caught.
 - **Events only the state itself may send.** A state has one union of events, so anything that can reach it can tell
   it `FOUND` or `PIECES`, which only its own work should. The app's contracts already keep `incoming` apart from
   `internal`, and the prototype lost that: `send` should take both, and `tell` and `broadcast` only what is
@@ -616,7 +661,10 @@ projects. Each would loosen the fit to this app.
   back to a fresh copy of itself, which is what `useSurfaceDraft` does by hand today for what a component holds. Wanted,
   and waits for the first port to say what it must carry. Restoring is entering: the state is entered at `at` with
   `data` given, so its `run` starts again, and a state restored at `searching` searches. Effect's `Machine` restores
-  the same way, by starting afresh with the previous state handed in, and saves nothing that was in flight.
+  the same way, by starting afresh with the previous state handed in, and saves nothing that was in flight. What a
+  state started is started again, since it follows from the data, but with nothing of its own: a restored threads
+  system has every thread running and none of their messages. What is saved to restore from has to hold what each
+  started state held as well.
 - **Saving a state to disk** is not wanted. A saved state is a stored format that would then have to be kept stable.
   And restoring starts a state's work again, which is right for a search a moment after a reload and wrong for a
   message that was being sent a day ago.

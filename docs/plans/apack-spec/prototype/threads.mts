@@ -116,14 +116,15 @@ const brain = state<{ data: { fired: string[] } }, BrainEvent, BrainAsks>()({
 type Inference = { streamText(prompt: string, signal: AbortSignal): AsyncIterable<string> }
 
 type Thread = {
-  data: { messages: string[] }
+  data: { threadId: string; messages: string[] }
   states: { idle: {}; writing: { data: { text: string; attached: string } } }
 }
 
 /** One thread. It owns its messages and the writing of its reply, which goes on whoever asked for it. */
-function thread(threadId: string, inference: Inference) {
+function thread(inference: Inference) {
   return state<Thread, never, ThreadAsks>()({
-    data: { messages: [] },
+    // Which thread it is is given by whoever starts it.
+    data: { threadId: given, messages: [] },
     start: 'idle',
 
     states: {
@@ -136,9 +137,10 @@ function thread(threadId: string, inference: Inference) {
         data: { text: given, attached: given },
 
         // The innermost state that answers an ask wins: while writing, another message is refused.
-        asks: { WRITE: (_, { refuse }) => { throw refuse('busy', `A reply is already being written in ${threadId}.`) } },
+        asks: { WRITE: (_, { data, refuse }) => { throw refuse('busy', `A reply is already being written in ${data.threadId}.`) } },
 
         async run({ data, tell, broadcast, signal }) {
+          const { threadId } = data
           // tell another backend system, by name
           tell('brain', { type: 'TRIGGER_BRAIN_EVENT', eventType: 'threads.user_msg', payload: { threadId } })
 
@@ -153,8 +155,8 @@ function thread(threadId: string, inference: Inference) {
           return { at: 'idle', data: (d) => { d.messages.push(d.text, reply) } }
         },
 
-        failed: (error, { broadcast }) => {
-          broadcast('threads', { type: 'THREAD_CHANGED', threadId, reply: `(no reply: ${error instanceof Error ? error.message : String(error)})` })
+        failed: (error, { data, broadcast }) => {
+          broadcast('threads', { type: 'THREAD_CHANGED', threadId: data.threadId, reply: `(no reply: ${error instanceof Error ? error.message : String(error)})` })
           return { at: 'idle' }
         },
       },
@@ -173,7 +175,8 @@ function threads(inference: Inference) {
     data: { titles: {} },
 
     starts: {
-      thread: each((data) => Object.keys(data.titles), (threadId) => thread(threadId, inference)),
+      // A thread for each title, told which it is.
+      thread: each('titles', thread(inference), (threadId) => ({ threadId })),
     },
 
     asks: {
@@ -355,7 +358,7 @@ function mustNotCompile(): void {
 
   state<Threads, ThreadsEvent, ThreadsAsks>()({
     data: { titles: {} },
-    starts: { thread: each(() => [], (threadId) => thread(threadId, undefined as never)) },
+    starts: { thread: each('titles', thread(undefined as never), (threadId) => ({ threadId })) },
     asks: {
       CREATE_THREAD: () => ({ threadId: 'THR-1' }),
       // @ts-expect-error `attachment-missing` carries the document's id, so it cannot be refused without one
@@ -365,7 +368,7 @@ function mustNotCompile(): void {
 
   state<Threads, ThreadsEvent, ThreadsAsks>()({
     data: { titles: {} },
-    starts: { thread: each(() => [], (threadId) => thread(threadId, undefined as never)) },
+    starts: { thread: each('titles', thread(undefined as never), (threadId) => ({ threadId })) },
     asks: {
       CREATE_THREAD: () => ({ threadId: 'THR-1' }),
       // @ts-expect-error `no-such-thread` carries nothing, so it takes no document id

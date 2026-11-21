@@ -9,7 +9,9 @@
 //   ask(name, ask, args)     of a backend system: exactly one answer, refusal or failure comes back
 //   progress(update)         from the handler of an ask, to whoever asked, before it answers. It arrives in batches
 //   broadcast(name, event)   from the backend to that surface in every window
-//   watch(key, feature, view, args, heard)   follows a live read of the database for as long as the state is the case
+//   report(event)            from a state that was started, to the state that started it
+//
+// What a state starts, and the views it follows, are declared. Which of them run follows from its data.
 
 import { produce } from './draft.mts'
 
@@ -26,10 +28,16 @@ export type Asks = Record<string, AskShape>
  * What a state is, declared as a type: its own data, the states inside it, and the states it starts. The same shape
  * all the way down.
  */
-export type Shape = { data?: object; states?: Record<string, Shape>; starts?: Record<string, AnyState | Each<AnyState>> }
+export type Shape = {
+  data?: object
+  states?: Record<string, Shape>
+  starts?: Record<string, AnyState | Each<AnyState>>
+  /** At the outermost state only: what it tells whichever state started it. */
+  reports?: AnyEvent
+}
 
 /** Any state, as something another can start. */
-export type AnyState = State<any, any, any>
+export type AnyState = State<any, any, any, any>
 /** In a shape's `starts`: one of these for each key, where a bare state is the one. */
 export interface Each<T> { readonly _each?: T }
 
@@ -82,7 +90,10 @@ type StartsOf<S> = S extends { starts: infer C extends object } ? C : {}
 type StartsBelow<S, P> = P extends `${infer H}.${infer T}` ? StartsOf<Sub<S, H>> & StartsBelow<Sub<S, H>, T> : StartsOf<Sub<S, P>>
 /** Everything started where a handler sits: by its own state and by every state around it. */
 type StartsAt<S, P extends string> = P extends '' ? StartsOf<S> : StartsOf<S> & StartsBelow<S, P>
-type HandleOf<T> = T extends Each<infer X> ? HandleOf<X> : T extends State<infer S2, infer E2, infer A2> ? Handle<Value<S2>, E2, A2> : never
+type ReportsOf<S> = S extends { reports: infer P extends AnyEvent } ? P : never
+/** A field that says which there are: by its keys, or by its items. */
+type KeysField<D> = { [K in keyof D & string]: D[K] extends readonly string[] | Readonly<Record<string, unknown>> ? K : never }[keyof D & string]
+type HandleOf<T> = T extends Each<infer X> ? HandleOf<X> : T extends State<infer S2, infer E2, infer A2, any> ? Handle<Value<S2>, E2, A2> : never
 type Join<H extends string, K extends string> = H extends '' ? K : `${H}.${K}`
 
 type Paths<S> = [Names<S>] extends [never] ? never : { [K in Names<S>]: K | `${K}.${Paths<StatesOf<S>[K]>}` }[Names<S>]
@@ -160,14 +171,10 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
   broadcast<K extends keyof N['surfaces'] & string>(to: K, event: N['surfaces'][K]['events']): void
 
   /**
-   * Follows a view until this state stops being the case. `heard` is called with its result and each changed result.
-   * A second watch under the same key replaces the first, which is how a view is followed again with other arguments.
+   * Tells the state that started this one something. It arrives there as an event, with `from` saying which state
+   * told it: its key, where it is one of many. Only its starter hears, as only whoever asked hears an ask's progress.
    */
-  watch<F extends keyof N['views'] & string, V extends keyof N['views'][F] & string>(
-    key: string, feature: F, view: V, args: N['views'][F][V]['args'], heard: (update: ViewUpdate<N['views'][F][V]['result']>) => void,
-  ): void
-  /** Stops following the view watched under this key. */
-  unwatch(key: string): void
+  report(event: ReportsOf<R>): void
 
   /** A state this one started, as it is now. */
   read<V2>(of: Handle<V2, never, Asks>): V2
@@ -261,28 +268,74 @@ export type Def<R, S, H extends string, E extends AnyEvent, A extends Asks, N ex
    * key, for as long as its key is among the keys the data gives. Nothing starts or stops one by hand: change the
    * data, and what runs follows in the same step.
    */
-  starts: { [K in keyof StartsOf<S>]: StartsOf<S>[K] extends Each<infer X> ? EachOf<DataAt<R, H>, X> : StartsOf<S>[K] }
-}) & ([Names<S>] extends [never] ? { start?: never; states?: never } : {
+  starts: { [K in keyof StartsOf<S>]: StartsOf<S>[K] extends Each<infer X> ? EachOf<DataAt<R, H>, X>
+    : NeedsGiven<StartsOf<S>[K]> extends true ? OneOf<DataAt<R, H>, StartsOf<S>[K]> : StartsOf<S>[K] | OneOf<DataAt<R, H>, StartsOf<S>[K]> }
+}) & {
+  /**
+   * The views it follows while it is the case. What each is asked for comes from the data, and what it delivers goes
+   * to a handler, which returns what happens next as any handler does.
+   */
+  follows?: Record<string, Follow<R, H, E, N>>
+} & ([Names<S>] extends [never] ? { start?: never; states?: never } : {
   /** The state inside it that it is at when whoever enters it does not say. */
   start: { [K in Names<S>]: {} extends DataOf<StatesOf<S>[K]> ? K : never }[Names<S>]
   /** Every state inside it. */
   states: { [K in Names<S>]: Def<R, StatesOf<S>[K], Join<H, K>, E, A, N> }
 })
 
-export interface State<S extends Shape, E extends AnyEvent, A extends Asks> { readonly def: unknown; readonly _?: { s: S; e: E; a: A } }
+/** A state, as something that can be started. `G` names the fields of its own data that whoever starts it has to give. */
+export interface State<S extends Shape, E extends AnyEvent, A extends Asks, G extends string = never> { readonly def: unknown; readonly _?: { s: S; e: E; a: A; g: G } }
+/** The fields a definition marks `given` in its own data. */
+type GivenIn<D> = D extends { data: infer X } ? { [K in keyof X]: X[K] extends Given ? K : never }[keyof X] & string : never
 
-/** One state for each key: which keys there are, from the data, and the state for a key. */
-export interface EachOf<D, X> { readonly keys: (data: Readonly<D>) => Iterable<string>; readonly of: (key: string, data: Readonly<D>) => X }
+/** What a started state has to be given: the fields of its own data that it marks `given`. */
+type RootGiven<X> = X extends State<infer S2, any, any, infer G> ? Pick<DataOf<S2>, G & keyof DataOf<S2>> : never
+type NeedsGiven<X> = X extends State<any, any, any, infer G> ? ([G] extends [never] ? false : true) : false
+
+/** One state for each key of a field, each given its data from its key and the starter's data. */
+export interface EachOf<D, X> { readonly each: KeysField<D>; readonly state: X; readonly given: (key: string, data: Readonly<D>) => RootGiven<X> }
+/** One state, given its data from the starter's data. */
+export interface OneOf<D, X> { readonly state: X; readonly given: (data: Readonly<D>) => RootGiven<X> }
+
 /**
- * In a definition's `starts`: one state for each key the data gives. A key that appears starts its state, and one
- * that goes stops it. A key that stays leaves its state running as it is, whatever else in the data changes.
+ * In a definition's `starts`: one state for each key of a field of the data, or each item where the field is a list.
+ * A key that appears starts its state, given what `given` returns for it. One that goes stops its state. One that
+ * stays leaves its state running as it is. Which there are is looked at again only when that field changes.
  */
-export function each<D, X>(keys: (data: Readonly<D>) => Iterable<string>, of: (key: string, data: Readonly<D>) => X): EachOf<D, X> { return { keys, of } }
+export function each<D, X extends AnyState>(field: KeysField<D>, state: X, given: (key: string, data: Readonly<D>) => RootGiven<X>): EachOf<D, X> {
+  return { each: field, state, given }
+}
+/** In a definition's `starts`: a state that has to be given data, and what it is given, from the starter's data. */
+export function one<D, X extends AnyState>(state: X, given: (data: Readonly<D>) => RootGiven<X>): OneOf<D, X> { return { state, given } }
+
+/**
+ * A view to follow. Followed alone, what it is asked for is worked out from the data, and it is followed again when
+ * that comes out different. With `each`, one is followed for each key of that field, asked for what the key says.
+ */
+type Follow<R, H extends string, E extends AnyEvent, N extends Net> = {
+  [F in keyof N['views'] & string]: {
+    [V in keyof N['views'][F] & string]:
+      | {
+        readonly feature: F
+        readonly view: V
+        readonly each?: undefined
+        readonly args: (data: Readonly<DataAt<R, H>>) => N['views'][F][V]['args']
+        readonly heard: (update: ViewUpdate<N['views'][F][V]['result']>, scope: EventScope<R, H, E, N>) => Next<R, H> | void
+      }
+      | {
+        readonly feature: F
+        readonly view: V
+        readonly each: KeysField<DataAt<R, H>>
+        readonly args: (key: string) => N['views'][F][V]['args']
+        readonly heard: (update: ViewUpdate<N['views'][F][V]['result']>, scope: EventScope<R, H, E, N> & { readonly key: string }) => Next<R, H> | void
+      }
+  }[keyof N['views'][F] & string]
+}[keyof N['views'] & string]
 
 /** `state`, for code that can reach `N` by name. In the app this is what a pack's generated facade would export. */
 export function reaching<N extends Net = Nothing>() {
   return <S extends Shape, E extends AnyEvent = never, A extends Asks = {}>() =>
-    (def: Def<S, S, '', E, A, N>): State<S, E, A> => ({ def })
+    <D extends Def<S, S, '', E, A, N>>(def: D): State<S, E, A, GivenIn<D>> => ({ def })
 }
 
 // ── the system ──────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -305,7 +358,9 @@ class Question {
 const refusal = (kind: string, message: string, data?: object): AnyOutcome => ({ ok: false, failure: { ...data, kind, message } })
 
 type Plain = Record<string, unknown>
-type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; failed?: Function; states?: Record<string, LooseDef>; starts?: Record<string, { def: unknown } | { keys: Function; of: Function }> }
+type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; failed?: Function; states?: Record<string, LooseDef>; starts?: Record<string, { def: unknown } | { state: { def: unknown }; given: Function; each?: string }>
+  follows?: Record<string, { feature: string; view: string; each?: string; args: Function; heard: Function }>
+}
 type Heard = (update: unknown) => void
 
 interface Active {
@@ -320,15 +375,17 @@ interface Active {
   readonly questions: Set<Question>
   /** The states it has started, by where each runs. */
   readonly started: Set<string>
-  readonly watching: Map<string, () => void>
+  /** The views it follows, by name and key: what each was asked for, and how to stop following it. */
+  readonly following: Map<string, { readonly args: string; stop(): void }>
 }
-interface Running { ref: string; data: Plain; root: Active }
+interface Running { ref: string; data: Plain; root: Active; starter?: { readonly ref: string; readonly from: string } }
 
 type Item =
   | { kind: 'event'; ref: string; event: AnyEvent }
   | { kind: 'ask'; ref: string; name: string; args: object; question: Question; heard?: Heard; gone?: AbortSignal }
   | { kind: 'result'; of: Active; value: unknown }
   | { kind: 'failure'; of: Active; error: unknown }
+  | { kind: 'view'; of: Active; name: string; id: string; key: string | undefined; update: ViewUpdate<unknown> }
   | { kind: 'answer'; question: Question; outcome: AnyOutcome; change?: { of: Active; next: unknown } }
   | { kind: 'out'; leave: () => void }
 
@@ -407,10 +464,17 @@ export function system(host: {
   const changed = new Set<string>()
   /** For each running state that changed in this step, the fields of its data that did. */
   const fields = new Map<string, Set<string>>()
-  /** The running states whose data or place changed since what they start was last matched to it. */
-  const stale = new Set<string>()
-  const mark = (ref: string): void => { changed.add(ref); stale.add(ref) }
-  const touch = (ref: string, field: string): void => { mark(ref); fields.set(ref, (fields.get(ref) ?? new Set()).add(field)) }
+  /**
+   * The running states that changed since what they start and follow was last matched to their data, and which of
+   * their fields did: all of them, where a state moved or has only begun.
+   */
+  const stale = new Map<string, Set<string> | 'all'>()
+  const mark = (ref: string, field?: string): void => {
+    changed.add(ref)
+    const now = stale.get(ref)
+    if (field === undefined) stale.set(ref, 'all'); else if (now !== 'all') stale.set(ref, (now ?? new Set<string>()).add(field))
+  }
+  const touch = (ref: string, field: string): void => { mark(ref, field); fields.set(ref, (fields.get(ref) ?? new Set()).add(field)) }
   /** The same, to the place: what a reader of one part of the data needs, to know whether it is the part that changed. */
   const places = new Map<string, { moved: boolean; paths: string[][] }>()
   const placesOf = (ref: string) => places.get(ref) ?? places.set(ref, { moved: false, paths: [] }).get(ref)!
@@ -512,12 +576,12 @@ export function system(host: {
         return asked
       },
       broadcast: (to: string, event: AnyEvent) => { if (alive()) out(() => { for (const window of down) carry(window.link, 'down', () => window.port.event(to, event)) }) },
-      watch: (key: string, feature: string, view: string, args: object, heard: (update: ViewUpdate<unknown>) => void) => {
-        if (!alive() || !host.views) return
-        mine.watching.get(key)?.()
-        mine.watching.set(key, host.views(feature, view, args, (update) => { if (alive()) safely('what hears a view', () => heard(update)) }))
+      report: (event: AnyEvent) => {
+        if (!alive()) return
+        const starter = mine.top.starter
+        if (!starter) { trace(`${ref} was started by nothing, so it has nobody to report ${event.type} to`); return }
+        enqueue({ kind: 'event', ref: starter.ref, event: { ...event, from: starter.from } as AnyEvent })
       },
-      unwatch: (key: string) => { mine.watching.get(key)?.(); mine.watching.delete(key) },
       read: (target: { ref: string }) => valueOf(running.get(target.ref)!),
       child: (name: string, key?: string) => ({ ref: key === undefined ? `${ref}/${name}` : `${ref}/${name}/${key}` }),
       use: (release: () => void) => { mine.releases.push(release) },
@@ -526,7 +590,7 @@ export function system(host: {
 
   const enter = (top: Running, def: LooseDef, name: string, around: Active | undefined, entering: Plain): Active => {
     const path = around?.path ? `${around.path}.${name}` : name
-    const active: Active = { top, def, name, path, around, inside: undefined, controller: new AbortController(), releases: [], questions: new Set(), started: new Set(), watching: new Map() }
+    const active: Active = { top, def, name, path, around, inside: undefined, controller: new AbortController(), releases: [], questions: new Set(), started: new Set(), following: new Map() }
     if (around) around.inside = active; else top.root = active
     for (const [field, initial] of Object.entries(def.data ?? {})) {
       if (field in entering) top.data = { ...top.data, [field]: entering[field] }
@@ -547,8 +611,8 @@ export function system(host: {
     if (active.inside) exit(active.inside)
     if (active.path) trace(`${active.top.ref} left ${active.path}`)
     active.controller.abort()
-    for (const stop of active.watching.values()) stop()
-    active.watching.clear()
+    for (const followed of active.following.values()) followed.stop()
+    active.following.clear()
     for (const ref of [...active.started].reverse()) end(ref)
     active.started.clear()
     for (const question of active.questions) leaving.push(() => question.end(refusal('abandoned', 'It stopped before answering')))
@@ -578,42 +642,84 @@ export function system(host: {
     descend(kept, names.slice(shared), entering)
   }
 
+  const keysOf = (held: unknown): string[] => [...new Set(Array.isArray(held) ? held as string[] : Object.keys((held ?? {}) as object))]
+  const said = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+  /** The view whose delivery is being handled, while what it changed is matched: it may not change what it asks for. */
+  let hearing: string | undefined
+
   /**
-   * Makes what a running state has started match what it declares and the data it holds now: starts what should be
-   * running and is not, and stops what is running and should not be. This is all that ever starts or stops one.
+   * Makes what a running state has started, and the views it follows, match what it declares and the data it holds
+   * now. This is all that ever starts or stops either. `touched` is which of its fields changed since last time:
+   * what there is one of for each key of a field is looked at again only if that field did.
    */
-  const match = (top: Running): void => {
+  const match = (top: Running, touched: Set<string> | 'all'): void => {
+    const looks = (field: string): boolean => touched === 'all' || touched.has(field)
     for (let active: Active | undefined = top.root; active; active = active.inside) {
-      const wanted = new Map<string, () => LooseDef>()
-      /** A name whose keys could not be read keeps what it has running. */
-      const kept = new Set<string>()
-      for (const [name, declared] of Object.entries(active.def.starts ?? {})) {
+      const at = active
+      for (const [name, declared] of Object.entries(at.def.starts ?? {})) {
         const under = `${top.ref}/${name}`
-        if ('def' in declared) { wanted.set(under, () => declared.def as LooseDef); continue }
-        try { for (const key of declared.keys(top.data) as Iterable<string>) wanted.set(`${under}/${key}`, () => (declared.of(key, top.data) as { def: LooseDef }).def) }
-        catch (error) { trace(`DEFECT: ${top.ref} could not say which ${name} to start: ${error instanceof Error ? error.message : String(error)}`); kept.add(`${under}/`) }
+        const start = (ref: string, def: unknown, from: string, given: () => Plain): void => {
+          let entering: Plain
+          try { entering = given() } catch (error) { trace(`DEFECT: ${top.ref} could not say what to give ${ref}: ${said(error)}`); return }
+          at.started.add(ref)
+          begin(ref, def as LooseDef, entering, { ref: top.ref, from })
+        }
+        if ('def' in declared) { if (!at.started.has(under)) start(under, declared.def, name, () => ({})); continue }
+        if (declared.each === undefined) { if (!at.started.has(under)) start(under, declared.state.def, name, () => declared.given(top.data) as Plain); continue }
+        if (!looks(declared.each)) continue
+        trace(`${top.ref} looked at ${declared.each} for which ${name} to run`)
+        const wanted = new Map<string, string>()
+        for (const key of keysOf(top.data[declared.each])) {
+          if (key.includes('/')) trace(`DEFECT: ${top.ref} has a ${name} under ${JSON.stringify(key)}, and a key cannot hold a slash`); else wanted.set(`${under}/${key}`, key)
+        }
+        for (const ref of [...at.started]) if (ref.startsWith(`${under}/`) && !wanted.has(ref)) { at.started.delete(ref); end(ref) }
+        for (const [ref, key] of wanted) if (!at.started.has(ref)) start(ref, declared.state.def, key, () => declared.given(key, top.data) as Plain)
       }
-      const keeps = (ref: string): boolean => [...kept].some((under) => ref.startsWith(under))
-      for (const ref of [...active.started]) if (!wanted.has(ref) && !keeps(ref)) { active.started.delete(ref); end(ref) }
-      for (const [ref, make] of wanted) {
-        if (active.started.has(ref)) continue
-        let def: LooseDef
-        try { def = make() } catch (error) { trace(`DEFECT: ${top.ref} could not make ${ref} to start it: ${error instanceof Error ? error.message : String(error)}`); continue }
-        active.started.add(ref)
-        begin(ref, def)
+
+      const views = host.views
+      if (!views) continue
+      for (const [name, declared] of Object.entries(at.def.follows ?? {})) {
+        /** What should be followed under this name, and what each is asked for. */
+        const wanted = new Map<string, { key: string | undefined; args: () => object }>()
+        if (declared.each === undefined) wanted.set(name, { key: undefined, args: () => declared.args(top.data) as object })
+        else if (!looks(declared.each)) continue
+        else {
+          trace(`${top.ref} looked at ${declared.each} for which ${name} to follow`)
+          for (const key of keysOf(top.data[declared.each])) wanted.set(`${name}/${key}`, { key, args: () => declared.args(key) as object })
+        }
+
+        for (const [id, followed] of [...at.following]) if ((id === name || id.startsWith(`${name}/`)) && !wanted.has(id)) { followed.stop(); at.following.delete(id) }
+        for (const [id, { key, args }] of wanted) {
+          let asked: object
+          try { asked = args() } catch (error) { trace(`DEFECT: ${top.ref} could not say what to ask ${id} for: ${said(error)}`); continue }
+          const now = at.following.get(id)
+          const asking = JSON.stringify(asked)
+          if (now?.args === asking) continue
+          // What a view delivers may not change what that view is asked for: it would be followed again, deliver
+          // again, and never come to rest.
+          if (now && hearing === `${top.ref}#${id}`) { trace(`DEFECT: what ${top.ref} heard from ${id} changed what it asks ${id} for. It goes on following what it was`); continue }
+          now?.stop()
+          const mine: { args: string; stop(): void } = { args: asking, stop: () => {} }
+          at.following.set(id, mine)
+          const stop = views(declared.feature, declared.view, asked, (update) => {
+            if (!at.controller.signal.aborted && at.following.get(id) === mine) arrive({ kind: 'view', of: at, name, id, key, update })
+          })
+          mine.stop = stop
+        }
       }
     }
   }
   /** Matches every state that changed, and whatever that starts, until nothing is left to match. */
   const matchStale = (): void => {
-    while (stale.size) for (const ref of [...stale]) { stale.delete(ref); const top = running.get(ref); if (top) match(top) }
+    while (stale.size) for (const [ref, touched] of [...stale]) { stale.delete(ref); const top = running.get(ref); if (top) match(top, touched) }
+    hearing = undefined
   }
 
-  const begin = (ref: string, def: LooseDef): { ref: string } => {
+  const begin = (ref: string, def: LooseDef, entering: Plain = {}, starter?: Running['starter']): { ref: string } => {
     mark(ref)
-    const top = { ref, data: {}, root: undefined as unknown as Active }
+    const top: Running = { ref, data: {}, root: undefined as unknown as Active, starter }
     running.set(ref, top)
-    descend(enter(top, def, '', undefined, {}), [], {})
+    descend(enter(top, def, '', undefined, entering), [], {})
     return { ref }
   }
 
@@ -709,6 +815,16 @@ export function system(host: {
     if (item.kind === 'out') { leaving.push(item.leave); return }
     if (item.kind === 'result') { apply(item.of, item.value); return }
     if (item.kind === 'failure') { fail(item.of, item.error); return }
+    if (item.kind === 'view') {
+      const followed = item.of.def.follows?.[item.name]
+      if (!followed || item.of.controller.signal.aborted) return
+      const { ask: _, ...scope } = scopeOf(item.of)
+      hearing = `${item.of.top.ref}#${item.id}`
+      try { apply(item.of, followed.heard(item.update, item.key === undefined ? scope : { ...scope, key: item.key })) } catch (error) {
+        trace(`DEFECT: ${item.of.top.ref} threw hearing ${item.id}, and nothing changed: ${said(error)}`)
+      }
+      return
+    }
     if (item.kind === 'answer') {
       // An answer that came with a change: the change is made here, in the step the answer leaves in. If the state
       // that answered was left meanwhile, its ask was ended as abandoned when it was, and nothing is changed.
