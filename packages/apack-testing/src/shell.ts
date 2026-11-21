@@ -164,6 +164,8 @@ export async function startShell(packId: string, options: StartShellOptions, bac
     notify: {
       error: (title, detail) => { notices.push({ title, detail }); },
       errorPage: (title, detail) => { notices.push({ title, detail: describeFailure(detail) }); },
+      // A page taken down is no longer something the user was told: its notice goes with it
+      clearErrorPage: (title) => { for (let at = notices.length - 1; at >= 0; at--) if (notices[at]!.title === title) notices.splice(at, 1); },
     },
   }), { systemId: HOST.application, input: { ownsLastActiveSurface: false } });
   // Bound before the shell starts: starting it spawns the surfaces' actors, which may reach the frontend host
