@@ -26,7 +26,11 @@ const isPlain = (value: unknown): value is object => {
   return prototype === Object.prototype || prototype === null
 }
 
-export function produce<T extends object>(base: T, edit: (draft: T) => void): { value: T; touched: Path[] } {
+/**
+ * `fixed` says the outermost object's keys are not the edit's to change: its values can be edited and replaced, and
+ * a key can be neither added nor removed. The write that tries is the one that throws, so the error is on its line.
+ */
+export function produce<T extends object>(base: T, edit: (draft: T) => void, options: { fixed?: boolean } = {}): { value: T; touched: Path[] } {
   const touched = new Map<string, Path>()
   let open = true
   const closed = (): never => { throw new Error('A draft was used after the handler it was given to returned') }
@@ -98,6 +102,7 @@ export function produce<T extends object>(base: T, edit: (draft: T) => void): { 
       set(_, key, value) {
         if (!open) closed()
         if (typeof key === 'symbol') return false
+        if (options.fixed && !node.around && !(key in node.base)) throw new Error(`There is no field ${key} to change`)
         const next = plainOf(value)
         if (Object.is(latest(node)[key], next) && key in latest(node)) return true
         own(node)[key] = next
@@ -108,6 +113,7 @@ export function produce<T extends object>(base: T, edit: (draft: T) => void): { 
       deleteProperty(_, key) {
         if (!open) closed()
         if (typeof key === 'symbol' || !(key in latest(node))) return true
+        if (options.fixed && !node.around) throw new Error(`The field ${key} cannot be removed`)
         delete own(node)[key]
         node.inside.delete(key)
         note(node, key)

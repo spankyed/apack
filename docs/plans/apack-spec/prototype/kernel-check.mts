@@ -23,6 +23,13 @@ type Event =
   | { type: 'RETURNS_A_VALUE' }
   | { type: 'IS_ASYNC' }
   | { type: 'EDITS_AN_INSTANCE' }
+  | { type: 'REMOVES_A_FIELD' }
+  | { type: 'ONE_BAD_WRITE' }
+  | { type: 'GIVES_A_STRAY_FIELD' }
+  | { type: 'MOVES_WITH_A_STRAY_FIELD' }
+  | { type: 'MOVES_NOWHERE' }
+  | { type: 'MOVES_WITHOUT_WHAT_IT_NEEDS' }
+  | { type: 'EDITS_AND_MOVES_NOWHERE' }
 
 const state = reaching()
 const made = state<Shape, Event>()({
@@ -39,6 +46,15 @@ const made = state<Shape, Event>()({
     RETURNS_A_VALUE:   () => ({ data: ((d: Shape['data']) => ({ ...d, count: 99 })) as (d: Shape['data']) => void }),
     IS_ASYNC:          () => ({ data: (async (d: Shape['data']) => { await null; d.count = 99 }) as (d: Shape['data']) => void }),
     EDITS_AN_INSTANCE: () => ({ data: (d) => { d.repository.directory = '/b' } }),
+    REMOVES_A_FIELD:   () => ({ data: (d) => { delete (d as Partial<Shape['data']>).count } }),
+    // A good write, then a bad one: neither is made.
+    ONE_BAD_WRITE:     () => ({ data: (d) => { d.count = 5; (d as Record<string, unknown>).extra = 1 } }),
+    // The same mistakes made by giving fields. The types refuse each, which is why they are cast.
+    GIVES_A_STRAY_FIELD:         () => ({ data: { count: 5, extra: 1 } }) as never,
+    MOVES_WITH_A_STRAY_FIELD:    () => ({ at: 'thread', data: { threadId: 'a', count: 5, extra: 1 } }) as never,
+    MOVES_NOWHERE:               () => ({ at: 'board', data: { count: 5 } }) as never,
+    MOVES_WITHOUT_WHAT_IT_NEEDS: () => ({ at: 'thread', data: { count: 5 } }) as never,
+    EDITS_AND_MOVES_NOWHERE:     () => ({ at: 'board', data: (d: Shape['data']) => { d.count = 5 } }) as never,
   },
   states: {
     list: {},
@@ -98,6 +114,50 @@ const checks: Array<[string, () => void]> = [
     it.send({ type: 'ADD_A_FIELD' })
     ok(!('extra' in it.data()))
     ok(it.defects.some((line) => line.includes('no field extra')))
+  }],
+  ['the report says which line of the handler tried', () => {
+    const it = run()
+    it.send({ type: 'ADD_A_FIELD' })
+    ok(/There is no field extra to change \(kernel-check\.mts:\d+\)/.test(it.defects[0]!), it.defects[0])
+  }],
+  ['an edit cannot remove a field', () => {
+    const it = run()
+    it.send({ type: 'REMOVES_A_FIELD' })
+    strictEqual(it.data().count, 0)
+    ok(it.defects.some((line) => line.includes('The field count cannot be removed')))
+  }],
+  ['an edit is all of it or none: a good write before a bad one is not made', () => {
+    const it = run()
+    const before = it.notices.length
+    it.send({ type: 'ONE_BAD_WRITE' })
+    strictEqual(it.data().count, 0)
+    strictEqual(it.notices.length, before)
+    strictEqual(it.defects.length, 1)
+  }],
+  ['fields are all of them or none, as an edit is: a stray one is reported and the others are not taken', () => {
+    const it = run()
+    const before = it.notices.length
+    it.send({ type: 'GIVES_A_STRAY_FIELD' })
+    strictEqual(it.data().count, 0)
+    strictEqual(it.notices.length, before)
+    deepStrictEqual(it.defects, ['DEFECT: s has no field extra to change'])
+  }],
+  ['a move is refused before anything is left or entered', () => {
+    for (const [type, why] of [
+      ['MOVES_WITH_A_STRAY_FIELD', 'DEFECT: s will have no field extra at thread'],
+      ['MOVES_NOWHERE', 'DEFECT: s has no state board to go to'],
+      ['MOVES_WITHOUT_WHAT_IT_NEEDS', 'DEFECT: s cannot enter thread without threadId'],
+      ['EDITS_AND_MOVES_NOWHERE', 'DEFECT: s has no state board to go to'],
+    ] as const) {
+      const it = run()
+      const before = it.notices.length
+      it.send({ type })
+      strictEqual(it.at(), 'list', type)
+      strictEqual(it.data().count, 0, type)
+      ok(!('threadId' in it.data()), type)
+      strictEqual(it.notices.length, before, type)
+      deepStrictEqual(it.defects, [why])
+    }
   }],
   ['an edit that returns a value is reported and changes nothing', () => {
     const it = run()

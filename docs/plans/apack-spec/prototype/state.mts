@@ -661,6 +661,13 @@ export function system(host: {
 
   const keysOf = (held: unknown): string[] => [...new Set(Array.isArray(held) ? held as string[] : Object.keys((held ?? {}) as object))]
   const said = (error: unknown): string => (error instanceof Error ? error.message : String(error))
+  /** Where an error was thrown, outside the kernel and the draft: the line of the handler that did it. */
+  const whereOf = (error: unknown): string => {
+    const frames = error instanceof Error && error.stack ? error.stack.split('\n').slice(1) : []
+    const frame = frames.find((line) => !/[/\\](state|draft)\.mts/.test(line) && /\.[cm]?[jt]s/.test(line))
+    const found = frame?.match(/([^/\\(\s]+\.[cm]?[jt]s):(\d+)/)
+    return found ? ` (${found[1]}:${found[2]})` : ''
+  }
   /**
    * The view whose delivery this step began with, and the views whose deliveries led to it being asked what it is.
    * Everything in the step follows from that delivery. Whatever it leads to being asked is asked because of it, and
@@ -742,6 +749,43 @@ export function system(host: {
     while (stale.size) for (const [ref, touched] of [...stale]) { stale.delete(ref); const top = running.get(ref); if (top) match(top, touched) }
   }
 
+  /**
+   * Why a move cannot be made, if it cannot: worked out from the definition before anything is left or entered, so
+   * that a move that is refused has done nothing. It follows `go`: the states on the way that are the case are kept,
+   * the rest of the path is entered, and then whatever each of those starts at.
+   */
+  const cannotGo = (top: Running, at: string, entering: Plain): string | undefined => {
+    const names = at.split('.')
+    let def = top.root.def
+    let kept: Active | undefined = top.root
+    const after = new Set(Object.keys(def.data ?? {}))
+    const enters = (inner: LooseDef, path: string): string | undefined => {
+      for (const [field, initial] of Object.entries(inner.data ?? {})) {
+        after.add(field)
+        if (initial === given && !(field in entering)) return `cannot enter ${path} without ${field}`
+      }
+      return undefined
+    }
+    for (const [index, name] of names.entries()) {
+      const inner = def.states?.[name]
+      const path = names.slice(0, index + 1).join('.')
+      if (!inner) return `has no state ${path} to go to`
+      // A state on the way that is already the case is kept, with its data. The last is entered afresh.
+      kept = index < names.length - 1 && kept?.inside?.name === name ? kept.inside : undefined
+      if (kept) for (const field of Object.keys(inner.data ?? {})) after.add(field)
+      else { const problem = enters(inner, path); if (problem) return problem }
+      def = inner
+    }
+    for (let path = at; def.start !== undefined; ) {
+      path = `${path}.${def.start}`
+      def = def.states?.[def.start] ?? {}
+      const problem = enters(def, path)
+      if (problem) return problem
+    }
+    const stray = Object.keys(entering).find((field) => !after.has(field))
+    return stray === undefined ? undefined : `will have no field ${stray} at ${at}`
+  }
+
   const begin = (ref: string, def: LooseDef, entering: Plain = {}, starter?: Running['starter']): { ref: string } => {
     mark(ref)
     const top: Running = { ref, data: {}, root: undefined as unknown as Active, starter }
@@ -775,23 +819,30 @@ export function system(host: {
       const before = top.data
       let made: ReturnType<typeof produce<Plain>>
       // An edit that is refused changes nothing, and the move it came with is not made either.
-      try { made = produce(before, data) } catch (error) {
+      // A move is looked at before the edit is made: one that cannot be made takes its edit with it.
+      const cannot = at === undefined ? undefined : cannotGo(top, at, {})
+      if (cannot) { trace(`DEFECT: ${top.ref} ${cannot}`); return }
+      // Which fields there are is the states' to say, so the edit may change them and neither add nor remove one.
+      // The write that tries throws there and then, and an edit that throws has changed nothing.
+      try { made = produce(before, data, { fixed: true }) } catch (error) {
         // A change that came with an answer may refuse, with one of the refusals its ask declares.
         if (mayRefuse && error instanceof Refusal) throw error
-        trace(`DEFECT: ${top.ref}: ${error instanceof Error ? error.message : String(error)}`)
+        trace(`DEFECT: ${top.ref}: ${said(error)}${whereOf(error)}`)
         return
       }
       const { value, touched } = made
-      const kept = Object.fromEntries(Object.keys(before).map((field) => [field, field in value ? value[field] : before[field]]))
-      // All of an edit or none of it: one place it may not change, and nothing is changed.
-      const strays = touched.filter((path) => !(path[0]! in before && path[0]! in value))
-      if (strays.length) { for (const path of strays) trace(`DEFECT: ${top.ref} has no field ${path[0]} to change`); return }
       for (const path of touched) touchAt(top.ref, path)
-      top.data = touched.length ? kept : before
+      top.data = touched.length ? value : before
       for (const field of fields.get(top.ref) ?? []) large(top, field)
       if (at !== undefined) { const was = top.data; go(top, at, {}); moved(top, was) }
       return
     }
+    // The same rule for fields as for an edit: every one of them has to be a field there will be, or none is taken.
+    // Without a move those are the fields there are. With one, they are the fields of the states the move leaves it in.
+    const cannot = at === undefined
+      ? Object.keys(data).filter((field) => !(field in top.data)).map((field) => `has no field ${field} to change`)[0]
+      : cannotGo(top, at, data)
+    if (cannot) { trace(`DEFECT: ${top.ref} ${cannot}`); return }
     // Data first, then the move: the work of a state that is entered reads the data as the handler left it.
     for (const [field, value] of Object.entries(data)) {
       if (!(field in top.data)) continue

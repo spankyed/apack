@@ -141,6 +141,16 @@ points at.
 
    **A move that also changes data changes the data first**, so the work of the state it enters reads the data as the
    handler left it.
+
+   **A change is all of it or none, and what the compiler refuses the kernel refuses too.** The types already rule out
+   adding or removing a field, giving a field no state has, moving to a state that does not exist, and entering a
+   state without what it marks `given`. Code that gets past them with a cast meets the same rule when it runs, and
+   the whole change is refused: nothing is changed and no state is left or entered. An edit to a draft is refused at
+   the write that tried, so the report names the handler's own line. Fields that are given, and a move, are looked
+   at before anything is done: the fields there will be after a move are the data of the states on the path it
+   leaves the state at, which the definition says without running anything. This costs nothing where it does not
+   fire, because a draft builds a new value beside the old one and never changes it: refusing is keeping the old
+   one.
 5. **Cleanup is registered where the resource is taken**: `use(release)` runs when the state ends, however it ends.
 6. **An ask's answer and the change it makes are one thing.** A handler that only answers returns the answer. One
    that also changes something returns `answered(answer, next)`, where `next` is what every other handler returns:
@@ -381,6 +391,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | A hidden window's frame is the next turn | `requestAnimationFrame` always. A hidden window gets none, so what was gathered for it grew without bound until it was shown |
 | Progress is heard as a list, once a frame | One call per update. It made a change, a notice and a copy of the growing list per item: fine at 10,000, unusable at 100,000. A persistent vector would make appends cheap, but its values are not plain arrays, which the snapshot, the wire and the templates all assume. Chunked lists stay plain but push the chunking onto every reader |
 | A nested change is an edit to a draft, built here | Spreads at every level (`{ ...data.titles, [id]: title }`), which get worse with depth. Immer and Mutative were considered; a state's data is plain by rule, so most of what they handle cannot occur, the kernel wants the changed fields in its own shape, and the kernel is meant to have no dependencies. To revisit, in favour of Mutative, if the draft grows special cases |
+| A change that cannot be made is refused whole, by one rule, where it is tried | Three rules, which is what there was. A stray field in an edit was found after the edit had run, and reported without the line that wrote it. The same stray field given as a field was dropped without a word and the rest taken. And a move to a state that does not exist, or without what the state needs, was made anyway and reported after. Each was a half-made change, and two of the three said nothing |
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
 
@@ -498,9 +509,13 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   value untouched, what was not edited kept as the same object, an edit that changes nothing returning the very same
   value, the same place read twice being the same draft, arrays through `push`, `splice`, `sort` and `length`, keys
   added and deleted, one part of the draft assigned to another, what is not plain handed over as it is, and a draft
-  kept past its handler refusing to be used, and the three refused mistakes. `kernel-check.mts` holds eight more on
+  kept past its handler refusing to be used, and the three refused mistakes. `kernel-check.mts` holds thirteen on
   what the kernel does with a change: subscribers told which fields of a state changed in a step and told nothing when
   a handler changed nothing, a move that edits a draft, and each refused edit reported with the data left as it was.
+  A change that cannot be made is refused whole: an edit that adds or removes a field, reported with the line that
+  tried; a good write before a bad one, not made; fields with a stray one among them, none taken; and a move with a
+  stray field, to a state that is not there, or without what the state needs, refused before anything is left or
+  entered. The three examples and the interleaving, progress and leaving checks run without one being reported.
 - **`within` narrows by path** (`state.mts`, used in `threads.mts`): inside `thread` the thread's id can be read,
   inside `thread.sending` the streamed text can, and a state that does not exist does not compile.
 - **Mistakes that do not compile** were checked at each stage with `@ts-expect-error`: a state missing from a
@@ -703,8 +718,7 @@ projects. Each would loosen the fit to this app.
   message that was being sent a day ago.
 - **Delayed transitions and history states** are absent. The app uses one delayed transition and no history states.
   A delay, when there is one, goes through the kernel's `later` so that a schedule can choose when it fires.
-- **The kernel's own rough edges.** Reading a state that has ended throws, and a returned field that no active state
-  owns is dropped without a word.
+- **The kernel's own rough edge.** Reading a state that has ended throws.
 - **The bridge**: running a state inside XState's actor system during a migration. Unproven, and the migration order
   below depends on it.
 
