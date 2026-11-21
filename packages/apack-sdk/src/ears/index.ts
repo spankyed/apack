@@ -7,17 +7,16 @@
  * A pack's typed operations are its `#generated/ears`, which binds `defineEars` to `boundEars`. The `untyped*`
  * functions here are their unchecked twins; the rest have no typed form.
  *
+ * It is also all of `@elmdb/ears`, re-exported: a pack depends on the SDK alone and names EARS through here.
+ *
  * @packageDocumentation
  */
 import type { CallSiteNaming, Create, Ears, Query, Upsert, Write } from '@elmdb/ears';
 
-// What packs and their generated `#generated/ears` use of EARS itself, so that a pack names apack's SDK alone and
-// loads the EARS that SDK was built with
-export { defineEars, RESERVED_ATTRIBUTES } from '@elmdb/ears';
-export type {
-  BaseEntity, EarsSchema, QueryBuilder, QueryExplanation, RelationMatch, RelationRow, RelationStats, ShapeOf, ShortCode,
-  UntypedSchema, WriteBuilder,
-} from '@elmdb/ears';
+// All of EARS, so that a pack names apack's SDK alone and loads the EARS that SDK was built with. A pack's facade
+// writes any EARS type it infers from here (`EARS_THROUGH_SDK`, `@apackdev/host/build/shared-deps`), which holds only
+// while this is `export *`: a name EARS exports and this entry doesn't would be a facade naming nothing
+export * from '@elmdb/ears';
 
 let bound: Ears | undefined;
 
