@@ -151,7 +151,7 @@ answered to nobody**: it replies with `reply?.()`, and only a command's outcome,
 a broadcast through `answer`.
 
 **Git is run by one engine, which is a package of its own: `@apackdev/git`.** It runs every git process and keeps
-the picture of one working tree, in a repository of its own that the pack depends on through `vendor/apack-git`
+the picture of one working tree, in a repository of its own whose release the pack depends on (`@apackdev/git`)
 ([the git engine](../../docs/references/git-engine.md)): its files named below are that repository's, under
 `src/` and `tests/`. `apack pack build` bundles it into the pack's runtime, and its `@apackdev/git/staging` entry,
 which imports nothing of Node's, into the frontend. It has no dependencies and is handed how to run a process,

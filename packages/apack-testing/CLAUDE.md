@@ -174,7 +174,7 @@ delivered is what there is.
 (`resolve.conditions` and its `ssr` twin), so editing `@apackdev/sdk` or `@apackdev/ui`
 source hot-reloads the browser with no build step. The API's tsup build declares it too
 (`esbuildOptions.conditions`) and watches every workspace package it bundles, so main restarts the API on
-the new host or SDK code. EARS is elmdb's: `npm run link:elmdb` rebuilds its `dist` when the checkout moved, and the API, which leaves EARS external, loads it at its next restart.
+the new host or SDK code. EARS is elmdb's: a local checkout (`npm run deps:local -- elmdb`) is linked as it is, so its `dist` follows `npm run build` there, and the API, which leaves EARS external, loads it at its next restart.
 
 **Follows through the pack watcher, after a build.** The watcher (`startPackBuildWatcher`) subscribes to
 every input of every unit in `BUILD_UNITS`, so a saved package source runs door 3 and refreshes whichever

@@ -179,7 +179,7 @@ One change in the monorepo, which adds the dependency and deletes the copy.
    that hands the engine's answers to them, the policies, the actor, the panel, and every spec that runs the
    engine through the system.
 5. The guides say three siblings where they say two, and the engine gets a reference page as
-   [the terminal broker](../../references/terminal-broker.md) has.
+   [the terminal broker](../../references/broker.md) has.
 
 What the existing tooling already covers, so nothing is added for it: a link with no `Cargo.toml` is not a Rust
 checkout to the janitor or the Linux container's toolchain (`scripts/lib/vendored-checkouts.ts`), and every
