@@ -480,6 +480,7 @@ Checks:
 | `internal-package-imports` | an `@apackdev` export named `_x`: it is `@internal`, the app's own, and an app update is free to rename it | no |
 | `host-imports` | `@apackdev/host`, which is not installed for a pack | no |
 | `elmdb-imports` | `elmdb` or `@elmdb/ears/database`: your data comes through the engine the app installs | no |
+| `ears-imports` | `@elmdb/ears`: import EARS from `@apackdev/sdk/ears`, which re-exports all of it. EARS is your SDK's dependency, not your pack's, so your install need not have it where your pack resolves it | no |
 | `untyped-sends` | `untypedBroadcastToSurface`, `untypedSendToSystem` — use the typed facades from `#generated/events` | yes |
 | `raw-transport` | `_rootEvents`, `trpc.bus`, `@apackdev/sdk/rpc` | yes |
 | `backend-console` | `console.*` under `features/*/be/`, `migrations/` or `extensions/` — use `createLogger` from `@apackdev/sdk/logger` | yes |

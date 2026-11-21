@@ -1,7 +1,6 @@
 import * as fs from 'node:fs';
 import { packageName } from '@apackdev/host/build/specifiers';
 import { SOURCE_CONDITION } from '@apackdev/host/build/source-resolution';
-import { SHARED_INSTANCE_PACKAGES } from '@apackdev/host/build/shared-deps';
 import { dependencyClosure } from '@apackdev/host/build/package-identity';
 import { isBuiltin } from 'node:module';
 import * as path from 'node:path';
@@ -14,10 +13,12 @@ const DECLARATION_EXTENSIONS: readonly string[] = [ts.Extension.Dts, ts.Extensio
 
 
 /**
- * Packages a facade may import: every dependent has them. @apackdev/* packages, the shared-instance packages that
- * `@apackdev/sdk` brings (`@elmdb/ears`, whose types the SDK's are made of), @apackdev/sdk's peer dependencies and
- * Node's built-in modules — all read from the SDK as the pack resolves it, with every package it brings
- * (`dependencyClosure`), which refuses an SDK whose dependencies don't resolve.
+ * Packages a facade may import: every dependent has them. @apackdev/* packages, @apackdev/sdk's peer dependencies and
+ * Node's built-in modules — the peers read from the SDK as the pack resolves it, with every package it brings
+ * (`dependencyClosure`), which refuses an SDK whose dependencies don't resolve. **Not a package the SDK brings**: a
+ * dependent depends on the SDK alone, and where npm nests what the SDK brings, the dependent can't resolve it. The
+ * declaration bundler writes the one a pack's types come from as the SDK's entry for it (`THROUGH_SDK`), so EARS reaches
+ * a facade as `@apackdev/sdk/ears`, and naming `@elmdb/ears` here is a facade that would fail in that install.
  *
  * **"Every dependent has them" is checked, not assumed**, which is worth knowing before deriving it again: a
  * dependency's facade is inlined into the dependent's tree verbatim, at `src/__generated__/deps/<packId>.d.ts`,
@@ -30,13 +31,11 @@ const DECLARATION_EXTENSIONS: readonly string[] = [ts.Extension.Dts, ts.Extensio
  * its state from a machine, which is what `contract-leaves` is there to stop.
  */
 function allowedPackages(packDir: string): { allows: (name: string) => boolean; description: string } {
-  const [sdk, ...brought] = dependencyClosure('@apackdev/sdk', packDir);
-  const shared: readonly string[] = SHARED_INSTANCE_PACKAGES.filter((name) => name === sdk!.name || brought.some((pkg) => pkg.name === name));
+  const [sdk] = dependencyClosure('@apackdev/sdk', packDir);
   const peers = Object.keys(sdk!.manifest.peerDependencies ?? {});
   return {
-    allows: (name) => name.startsWith('@apackdev/') || shared.includes(name) || peers.includes(name) || isBuiltin(name),
-    description: `@apackdev/* packages, ${shared.filter((pkg) => !pkg.startsWith('@apackdev/')).join(', ')}, `
-      + `@apackdev/sdk's peer dependencies (${peers.join(', ')}) and Node built-ins`,
+    allows: (name) => name.startsWith('@apackdev/') || peers.includes(name) || isBuiltin(name),
+    description: `@apackdev/* packages, @apackdev/sdk's peer dependencies (${peers.join(', ')}) and Node built-ins`,
   };
 }
 

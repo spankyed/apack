@@ -66,7 +66,19 @@ describe('facade gate', () => {
       'src/__generated__/pack-types.ts': "import type { browserService } from '../browser.ts';\nexport type Services = { browser: typeof browserService };\n",
     });
     expect(problems).toEqual([
-      expect.stringMatching(/^dist\/types\/pack-types\.d\.ts:1:1 imports "playwright", which dependents don't have: facades may import only @apackdev\/\* packages, @elmdb\/ears, @apackdev\/sdk's peer dependencies \([^)]*\bxstate\b[^)]*\) and Node built-ins \(reached from: Services\)$/),
+      expect.stringMatching(/^dist\/types\/pack-types\.d\.ts:1:1 imports "playwright", which dependents don't have: facades may import only @apackdev\/\* packages, @apackdev\/sdk's peer dependencies \([^)]*\bxstate\b[^)]*\) and Node built-ins \(reached from: Services\)$/),
+    ]);
+  });
+
+  // The SDK brings EARS, but a dependent depends on the SDK alone: a facade naming EARS itself fails where npm nests
+  // it. The bundler writes the root as `@apackdev/sdk/ears`; a subpath with no SDK entry stays, and is refused here
+  it('fails a facade that imports a package the SDK brings rather than the SDK', async () => {
+    const { problems } = await gate('ears-subpath', {
+      'src/data.ts': "import type { openDatabase } from '@elmdb/ears/database';\nexport const dataService = { open: (): typeof openDatabase | null => null };\n",
+      'src/__generated__/pack-types.ts': "import type { dataService } from '../data.ts';\nexport type Services = { data: typeof dataService };\n",
+    });
+    expect(problems).toEqual([
+      expect.stringMatching(/^dist\/types\/pack-types\.d\.ts:1:1 imports "@elmdb\/ears\/database", which dependents don't have: facades may import only @apackdev\/\* packages, @apackdev\/sdk's peer dependencies \([^)]*\) and Node built-ins \(reached from: Services\)$/),
     ]);
   });
 

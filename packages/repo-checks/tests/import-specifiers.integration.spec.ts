@@ -1158,6 +1158,7 @@ describe('CHECKS', () => {
   const OFFENCES: Record<string, string> = {
     'host-imports': "import { edgeStore } from '@apackdev/host/ears';",
     'elmdb-imports': "import { Database } from 'elmdb';",
+    'ears-imports': "import { defineEars } from '@elmdb/ears';",
     'internal-package-imports': "import { _getMediaPath } from '@apackdev/sdk/utils';",
     'untyped-sends': "import { untypedSendToSystem } from '@apackdev/sdk/events';",
     'raw-transport': '_rootEvents.emitOutgoing(event);',
