@@ -10,8 +10,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { createRequire } from 'node:module';
 import { packInputsHash } from '@apackdev/host/build/pack-inputs';
+import { dependencyClosure, packageIdentity, UnresolvedDependencyError, type ClosurePackage } from '@apackdev/host/build/package-identity';
 import type { CompilationInputs } from './compilation-inputs.ts';
 import { dependencyInputsHash } from './dependency-inputs.ts';
 import type { ResolvedDepFiles } from '../commands/fetch-deps.ts';
@@ -108,48 +108,35 @@ export function takeForward(distDir: string, stagedDir: string, files: readonly 
 }
 
 /**
- * The `@apackdev` packages a pack's frontend compiles against, as the pack itself resolves them — workspace
- * source in a checkout, `node_modules` in an installed pack, which is the one layout a pack author has. The pack
- * names `@apackdev/sdk` and `@apackdev/ui`, and with them the SDK's EARS (`@elmdb/ears`), the copy the SDK
- * resolves wherever npm put it, since the SDK's types are largely EARS' and EARS can move while the SDK doesn't.
+ * What a pack's DSL definitions compile against beyond its own sources: `@apackdev/sdk` and `@apackdev/ui` as the
+ * pack resolves them, and every package each brings (`dependencyClosure`), as one hash of their identities
+ * (`packageIdentity`: name, version and the files each ships). That is workspace source in a checkout and
+ * `node_modules` in an installed pack, and a linked package such as EARS is read the same way as a registry one,
+ * since its version says nothing.
  *
- * **An `@apackdev` package it cannot find is a refusal, not an omission.** Leaving one out of the scope would
- * mean an upgrade to it did not invalidate anything, and the build would take a bundle forward that was compiled
- * against the version before. `packagesBuiltOrRefuse` is the same shape: where the evidence is missing, say
- * so rather than answer from what is left. EARS is the SDK's to bring, and an SDK that can't resolve it fails
- * the compile on its own.
+ * **A package it cannot find is a refusal, not an omission.** Leaving one out of the scope would mean a change to it
+ * did not invalidate anything, and the build would take a bundle forward that was compiled against the one before.
+ * `packagesBuiltOrRefuse` is the same shape: where the evidence is missing, say so rather than answer from what is
+ * left. `missing` names each declaration that doesn't resolve and who declared it.
  */
-export function apackScope(packDir: string): { readonly dirs: readonly string[] } | { readonly missing: readonly string[] } {
-  const fromPack = path.join(packDir, 'noop.js');
-  const dirs: string[] = [];
+export function apackScope(packDir: string): { readonly hash: string } | { readonly missing: readonly string[] } {
+  const packages = new Map<string, ClosurePackage>();
   const missing: string[] = [];
-  const resolveDir = (pkg: string, from: string): string | undefined => {
+  for (const name of ['@apackdev/sdk', '@apackdev/ui']) {
     try {
-      return path.dirname(fs.realpathSync(createRequire(from).resolve(`${pkg}/package.json`)));
-    } catch {
-      missing.push(pkg);
-      return undefined;
+      for (const pkg of dependencyClosure(name, packDir)) packages.set(pkg.directory, pkg);
+    } catch (err) {
+      if (!(err instanceof UnresolvedDependencyError)) throw err;
+      missing.push(...err.unresolved);
     }
-  };
-  const sdk = resolveDir('@apackdev/sdk', fromPack);
-  let ears: string | undefined;
-  try {
-    ears = sdk === undefined ? undefined : path.dirname(fs.realpathSync(createRequire(path.join(sdk, 'package.json')).resolve('@elmdb/ears/package.json')));
-  } catch {
-    ears = undefined;
   }
-  const ui = resolveDir('@apackdev/ui', fromPack);
-  for (const dir of [ears, sdk, ui]) if (dir !== undefined) dirs.push(path.join(dir, 'dist'));
-  return missing.length > 0 ? { missing } : { dirs };
-}
-
-/** Hashable file lists, each a scope rather than a list of reads */
-function hashTree(hash: ReturnType<typeof createHash>, dir: string): void {
-  for (const file of filesUnder(dir)) {
-    const content = fs.readFileSync(path.join(dir, file));
-    hash.update(`${file.length}:${file}:${content.length}:`);
-    hash.update(content);
-  }
+  if (missing.length > 0) return { missing };
+  // Sorted by what each package is, not where it is: two installs of the same packages are one scope
+  const identities = [...packages.keys()].map((directory) => {
+    const { name, version, hash } = packageIdentity(directory);
+    return `${name}@${version}:${hash}`;
+  }).sort();
+  return { hash: createHash('sha256').update(identities.join('\n')).digest('hex') };
 }
 
 /** The facade types a dependent compiles against: the pack's own sources, and what it compiles them with */
@@ -157,9 +144,9 @@ export function typesInputsHash(root: string, dependencies: ReadonlyMap<string, 
   return phaseInputsHash(root, { bundler: 'types-bundler.ts', dependencies, compilation });
 }
 
-/** The DSL defs: the manifest's `dsl` entries, the sources they name, and the packages their types come from */
-export function dslInputsHash(root: string, apackDirs: readonly string[], dependencies: ReadonlyMap<string, ResolvedDepFiles>, compilation: CompilationInputs): string {
-  return phaseInputsHash(root, { bundler: 'dsl-defs.ts', dirs: apackDirs, dependencies, compilation });
+/** The DSL defs: the manifest's `dsl` entries, the sources they name, and the packages their types come from (`apackScope`) */
+export function dslInputsHash(root: string, apackScopeHash: string, dependencies: ReadonlyMap<string, ResolvedDepFiles>, compilation: CompilationInputs): string {
+  return phaseInputsHash(root, { bundler: 'dsl-defs.ts', scope: apackScopeHash, dependencies, compilation });
 }
 
 /**
@@ -168,7 +155,7 @@ export function dslInputsHash(root: string, apackDirs: readonly string[], depend
  */
 function phaseInputsHash(root: string, o: {
   readonly bundler: string;
-  readonly dirs?: readonly string[];
+  readonly scope?: string;
   readonly dependencies: ReadonlyMap<string, ResolvedDepFiles>;
   readonly compilation: CompilationInputs;
 }): string {
@@ -176,7 +163,7 @@ function phaseInputsHash(root: string, o: {
   hash.update(o.bundler);
   hash.update(o.compilation.hash);
   hash.update(packInputsHash(root, { generated: true }));
-  for (const dir of o.dirs ?? []) hashTree(hash, dir);
+  if (o.scope !== undefined) hash.update(o.scope);
   hash.update(dependencyInputsHash(o.dependencies));
   return hash.digest('hex');
 }

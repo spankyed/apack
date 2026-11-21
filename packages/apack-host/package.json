@@ -23,6 +23,7 @@
     "./build/pack-inputs": "./src/build/pack-inputs.ts",
     "./build/pack-workdir": "./src/build/pack-workdir.ts",
     "./build/own-module-specifiers": "./src/build/own-module-specifiers.ts",
+    "./build/package-identity": "./src/build/package-identity.ts",
     "./build/packages-built": "./src/build/packages-built.ts",
     "./build/published-manifest": "./src/build/published-manifest.ts",
     "./build/shared-deps": "./src/build/shared-deps.ts",
@@ -72,6 +73,7 @@
     "ai": "^7.0.100",
     "apack-terminal": "file:../../vendor/apack-terminal/node",
     "fs-extra": "^11.4.0",
+    "minimatch": "^11.0.5",
     "semver": "^7.8.5",
     "tar": "^7.5.22",
     "xstate": "^5.19.2"

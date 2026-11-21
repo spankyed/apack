@@ -2,7 +2,8 @@ import * as fs from 'node:fs';
 import { packageName } from '@apackdev/host/build/specifiers';
 import { SOURCE_CONDITION } from '@apackdev/host/build/source-resolution';
 import { SHARED_INSTANCE_PACKAGES } from '@apackdev/host/build/shared-deps';
-import { createRequire, isBuiltin } from 'node:module';
+import { dependencyClosure } from '@apackdev/host/build/package-identity';
+import { isBuiltin } from 'node:module';
 import * as path from 'node:path';
 import ts from 'typescript';
 import { errorMessage } from '@apackdev/sdk/utils/pure';
@@ -13,9 +14,10 @@ const DECLARATION_EXTENSIONS: readonly string[] = [ts.Extension.Dts, ts.Extensio
 
 
 /**
- * Packages a facade may import: every dependent has them. @apackdev/* packages, the shared-instance packages
- * (`@elmdb/ears`, which the SDK brings and whose types the SDK's are made of), @apackdev/sdk's peer
- * dependencies (as the pack resolves the SDK) and Node's built-in modules.
+ * Packages a facade may import: every dependent has them. @apackdev/* packages, the shared-instance packages that
+ * `@apackdev/sdk` brings (`@elmdb/ears`, whose types the SDK's are made of), @apackdev/sdk's peer dependencies and
+ * Node's built-in modules — all read from the SDK as the pack resolves it, with every package it brings
+ * (`dependencyClosure`), which refuses an SDK whose dependencies don't resolve.
  *
  * **"Every dependent has them" is checked, not assumed**, which is worth knowing before deriving it again: a
  * dependency's facade is inlined into the dependent's tree verbatim, at `src/__generated__/deps/<packId>.d.ts`,
@@ -27,15 +29,13 @@ const DECLARATION_EXTENSIONS: readonly string[] = [ts.Extension.Dts, ts.Extensio
  * installs them for a pack that never names one; `xstate` would travel the identical route if a contract derived
  * its state from a machine, which is what `contract-leaves` is there to stop.
  */
-const SHARED = new Set<string>(SHARED_INSTANCE_PACKAGES);
-
 function allowedPackages(packDir: string): { allows: (name: string) => boolean; description: string } {
-  const manifest = createRequire(path.join(packDir, 'package.json')).resolve('@apackdev/sdk/package.json');
-  const { peerDependencies = {} } = JSON.parse(fs.readFileSync(manifest, 'utf-8')) as { peerDependencies?: Record<string, string> };
-  const peers = Object.keys(peerDependencies);
+  const [sdk, ...brought] = dependencyClosure('@apackdev/sdk', packDir);
+  const shared: readonly string[] = SHARED_INSTANCE_PACKAGES.filter((name) => name === sdk!.name || brought.some((pkg) => pkg.name === name));
+  const peers = Object.keys(sdk!.manifest.peerDependencies ?? {});
   return {
-    allows: (name) => name.startsWith('@apackdev/') || SHARED.has(name) || peers.includes(name) || isBuiltin(name),
-    description: `@apackdev/* packages, ${[...SHARED].filter((pkg) => !pkg.startsWith('@apackdev/')).join(', ')}, `
+    allows: (name) => name.startsWith('@apackdev/') || shared.includes(name) || peers.includes(name) || isBuiltin(name),
+    description: `@apackdev/* packages, ${shared.filter((pkg) => !pkg.startsWith('@apackdev/')).join(', ')}, `
       + `@apackdev/sdk's peer dependencies (${peers.join(', ')}) and Node built-ins`,
   };
 }
@@ -213,7 +213,7 @@ export function facadeProblems(packDir: string, bundleFile: string): string[] {
   try {
     allowed = allowedPackages(packDir);
   } catch (err) {
-    return [`${rel} can't be checked: @apackdev/sdk doesn't resolve from ${packDir} (install the pack's dependencies). ${errorMessage(err)}`];
+    return [`${rel} can't be checked: @apackdev/sdk and what it brings don't resolve from ${packDir} (install the pack's dependencies). ${errorMessage(err)}`];
   }
 
   const options = checkOptions(packDir);

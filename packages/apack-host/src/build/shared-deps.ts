@@ -1,7 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { findPackageDirectory } from './package-inputs.ts';
+import { dependencyClosure, readPackageManifest } from './package-identity.ts';
 import { SOURCE_CONDITION } from './source-resolution.ts';
 
 /**
@@ -51,20 +53,16 @@ export function sharedInstanceSpecifiers(pkg: string, exportsMap: Record<string,
 }
 
 /**
- * The exports map of a shared-instance package as `fromFile` (a path or file URL) resolves it. A pack
- * that doesn't depend on one directly gets the copy its @apackdev/sdk resolves.
+ * The exports map of a shared-instance package as `fromFile` (a path or file URL) resolves it: the copy Node gives the
+ * file's directory, or else the one `@apackdev/sdk` brings (`dependencyClosure`), which is how a pack that names only
+ * the SDK has the rest.
  */
 export function sharedInstanceExports(pkg: string, fromFile: string): Record<string, unknown> {
-  const require = createRequire(fromFile);
-  let manifest: string;
-  try {
-    manifest = require.resolve(`${pkg}/package.json`);
-  } catch (err) {
-    if (pkg === SHARED_INSTANCE_PACKAGES[0]) throw err;
-    const sdkManifest = fs.realpathSync(require.resolve(`${SHARED_INSTANCE_PACKAGES[0]}/package.json`));
-    manifest = createRequire(sdkManifest).resolve(`${pkg}/package.json`);
-  }
-  return (JSON.parse(fs.readFileSync(manifest, 'utf-8')) as { exports: Record<string, unknown> }).exports;
+  const fromDir = path.dirname(fromFile.startsWith('file:') ? fileURLToPath(fromFile) : fromFile);
+  const directory = findPackageDirectory(fromDir, pkg)?.directory
+    ?? dependencyClosure(SHARED_INSTANCE_PACKAGES[0], fromDir).find((member) => member.name === pkg)?.directory;
+  if (directory === undefined) throw new Error(`${pkg} doesn't resolve from ${fromDir}, and ${SHARED_INSTANCE_PACKAGES[0]} doesn't bring it`);
+  return (readPackageManifest(directory) as { exports?: Record<string, unknown> }).exports ?? {};
 }
 
 /**

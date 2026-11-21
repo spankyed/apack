@@ -149,6 +149,7 @@ function compiled(at: CheckoutPaths, pkg: string, ...extraInputs: string[]): Bui
       pkgFile('apack-host', 'src', 'build', 'node-options.d.ts'),
       // Reached through this module: it is where the list of inlined packages comes from
       pkgFile('apack-host', 'src', 'build', 'shared-deps.ts'),
+      pkgFile('apack-host', 'src', 'build', 'package-identity.ts'),
       pkgFile('apack-host', 'src', 'build', 'package-inputs.ts'),
       pkgFile('apack-host', 'src', 'build', 'pack-inputs.ts'),
       // How the built tree is published: assembled under `.temp/` and renamed over `dist`, so it decides where

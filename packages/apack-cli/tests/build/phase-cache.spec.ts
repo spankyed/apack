@@ -65,7 +65,7 @@ afterEach(() => {
 
 it('invalidates every cached phase when captured compiler inputs change', () => {
   const root = tmp({ 'apack.json': '{"id":"p"}' });
-  const phases = [scope => typesInputsHash(root, new Map(), scope), scope => dslInputsHash(root, [], new Map(), scope)] satisfies Array<(scope: typeof compilation) => string>;
+  const phases = [scope => typesInputsHash(root, new Map(), scope), scope => dslInputsHash(root, '', new Map(), scope)] satisfies Array<(scope: typeof compilation) => string>;
   for (const hash of phases) expect(hash({ ...compilation, hash: 'after' })).not.toBe(hash(compilation));
 });
 
@@ -128,56 +128,54 @@ describe('cached input scopes', () => {
 
   it('is the same for the same tree, so an untouched pack reuses', () => {
     const root = pack();
-    expect(dslInputsHash(root, [], new Map(), compilation)).toBe(dslInputsHash(root, [], new Map(), compilation));
+    expect(dslInputsHash(root, '', new Map(), compilation)).toBe(dslInputsHash(root, '', new Map(), compilation));
   });
 
 
 
   it('moves when a source changes', () => {
     const root = pack();
-    const before = dslInputsHash(root, [], new Map(), compilation);
+    const before = dslInputsHash(root, '', new Map(), compilation);
     fs.writeFileSync(path.join(root, 'src/a.ts'), 'export const a = 2');
-    expect(dslInputsHash(root, [], new Map(), compilation)).not.toBe(before);
+    expect(dslInputsHash(root, '', new Map(), compilation)).not.toBe(before);
   });
 
   it.each(['assets/icon.svg', 'components/entry.vue', 'vite.config.mts', 'package-lock.json'])('invalidates for authored input %s outside the old source scope', file => {
     const root = pack();
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.writeFileSync(path.join(root, file), 'before');
-    const before = dslInputsHash(root, [], new Map(), compilation);
+    const before = dslInputsHash(root, '', new Map(), compilation);
     fs.writeFileSync(path.join(root, file), 'after');
-    expect(dslInputsHash(root, [], new Map(), compilation)).not.toBe(before);
+    expect(dslInputsHash(root, '', new Map(), compilation)).not.toBe(before);
   });
 
   it('ignores unrelated build output while including generated bundle entries', () => {
     const root = pack();
-    const before = dslInputsHash(root, [], new Map(), compilation);
+    const before = dslInputsHash(root, '', new Map(), compilation);
     fs.mkdirSync(path.join(root, '.apack'), { recursive: true });
     fs.writeFileSync(path.join(root, '.apack/cache.json'), '{}');
     fs.mkdirSync(path.join(root, 'dist/runtime'), { recursive: true });
     fs.writeFileSync(path.join(root, 'dist/runtime/index.cjs'), 'output');
-    expect(dslInputsHash(root, [], new Map(), compilation)).toBe(before);
+    expect(dslInputsHash(root, '', new Map(), compilation)).toBe(before);
     fs.mkdirSync(path.join(root, 'src/__generated__'), { recursive: true });
     fs.writeFileSync(path.join(root, 'src/__generated__/pack-entry-fe.ts'), 'new entry');
-    expect(dslInputsHash(root, [], new Map(), compilation)).not.toBe(before);
+    expect(dslInputsHash(root, '', new Map(), compilation)).not.toBe(before);
   });
 
 
 
   it('moves when a package it compiles against changes, which is outside the pack', () => {
     const root = pack();
-    const sdk = tmp({ 'index.js': 'v1' });
-    const before = dslInputsHash(root, [sdk], new Map(), compilation);
-    fs.writeFileSync(path.join(sdk, 'index.js'), 'v2');
-    expect(dslInputsHash(root, [sdk], new Map(), compilation)).not.toBe(before);
+    const before = dslInputsHash(root, 'a'.repeat(64), new Map(), compilation);
+    expect(dslInputsHash(root, 'b'.repeat(64), new Map(), compilation)).not.toBe(before);
   });
 
   it('ignores a touch, because the key is content and not a timestamp', () => {
     const root = pack();
-    const before = dslInputsHash(root, [], new Map(), compilation);
+    const before = dslInputsHash(root, '', new Map(), compilation);
     const later = new Date(Date.now() + 60_000);
     fs.utimesSync(path.join(root, 'src/a.ts'), later, later);
-    expect(dslInputsHash(root, [], new Map(), compilation)).toBe(before);
+    expect(dslInputsHash(root, '', new Map(), compilation)).toBe(before);
   });
 });
 
@@ -199,14 +197,14 @@ describe('phase identities and dependencies', () => {
 
   it('the DSL hash moves when the manifest changes, since its entries are what it reads', () => {
     const root = pack();
-    const before = dslInputsHash(root, [], new Map(), compilation);
+    const before = dslInputsHash(root, '', new Map(), compilation);
     fs.writeFileSync(path.join(root, 'apack.json'), '{"id":"p","dsl":{}}');
-    expect(dslInputsHash(root, [], new Map(), compilation)).not.toBe(before);
+    expect(dslInputsHash(root, '', new Map(), compilation)).not.toBe(before);
   });
 
   it('gives each cached phase a distinct hash', () => {
     const root = pack();
-    expect(new Set([typesInputsHash(root, new Map(), compilation), dslInputsHash(root, [], new Map(), compilation)]).size).toBe(2);
+    expect(new Set([typesInputsHash(root, new Map(), compilation), dslInputsHash(root, '', new Map(), compilation)]).size).toBe(2);
   });
 });
 
@@ -235,39 +233,45 @@ it('refuses phase reuse when a previously consumed external input changes withou
 });
 
 describe('apackScope', () => {
-  const manifest = (name: string) => JSON.stringify({ name, version: '0.1.0' });
-
-  it("takes @elmdb/ears from the pack's SDK, which a pack that names only the SDK can't resolve itself", () => {
+  const manifest = (name: string, extra: object = {}) => JSON.stringify({ name, version: '0.1.0', files: ['dist'], ...extra });
+  const installed = () => ({
+    'package.json': JSON.stringify({ name: 'pack', version: '1.0.0' }),
+    'node_modules/@apackdev/sdk/package.json': manifest('@apackdev/sdk', { dependencies: { '@elmdb/ears': '0.0.0' } }),
+    'node_modules/@apackdev/sdk/dist/index.d.ts': 'export {};',
     // npm nested the SDK's EARS under it: nothing above the pack holds one
-    const pack = tmp({
-      'package.json': manifest('pack'),
-      'node_modules/@apackdev/sdk/package.json': manifest('@apackdev/sdk'),
-      'node_modules/@apackdev/sdk/node_modules/@elmdb/ears/package.json': manifest('@elmdb/ears'),
-      'node_modules/@apackdev/ui/package.json': manifest('@apackdev/ui'),
-    });
-    const real = fs.realpathSync(pack);
-    expect(apackScope(pack)).toEqual({ dirs: [
-      path.join(real, 'node_modules/@apackdev/sdk/node_modules/@elmdb/ears/dist'),
-      path.join(real, 'node_modules/@apackdev/sdk/dist'),
-      path.join(real, 'node_modules/@apackdev/ui/dist'),
-    ] });
+    'node_modules/@apackdev/sdk/node_modules/@elmdb/ears/package.json': manifest('@elmdb/ears'),
+    'node_modules/@apackdev/sdk/node_modules/@elmdb/ears/dist/index.d.ts': 'export const v = 1;',
+    'node_modules/@apackdev/ui/package.json': manifest('@apackdev/ui'),
+    'node_modules/@apackdev/ui/dist/index.d.ts': 'export {};',
+  });
+  const hashOf = (pack: string) => {
+    const scope = apackScope(pack);
+    if (!('hash' in scope)) throw new Error(scope.missing.join('\n'));
+    return scope.hash;
+  };
+
+  it("moves with what the SDK brings, which a pack that names only the SDK can't resolve itself", () => {
+    const pack = tmp(installed());
+    const before = hashOf(pack);
+    fs.writeFileSync(path.join(pack, 'node_modules/@apackdev/sdk/node_modules/@elmdb/ears/dist/index.d.ts'), 'export const v = 2;');
+    expect(hashOf(pack)).not.toBe(before);
   });
 
-  it('names an @apackdev package it cannot find rather than leave it out of the scope', () => {
-    const pack = tmp({
-      'package.json': manifest('pack'),
-      'node_modules/@apackdev/sdk/package.json': manifest('@apackdev/sdk'),
-    });
-    expect(apackScope(pack)).toEqual({ missing: ['@apackdev/ui'] });
+  it('reads what each package ships, not the rest of its directory', () => {
+    const pack = tmp(installed());
+    const before = hashOf(pack);
+    fs.writeFileSync(path.join(pack, 'node_modules/@apackdev/sdk/node_modules/@elmdb/ears/notes.md'), 'not shipped');
+    expect(hashOf(pack)).toBe(before);
   });
 
-  it("leaves EARS to the SDK that brings it: the scope is the SDK's and the UI's without one", () => {
-    const pack = tmp({
-      'package.json': manifest('pack'),
-      'node_modules/@apackdev/sdk/package.json': manifest('@apackdev/sdk'),
-      'node_modules/@apackdev/ui/package.json': manifest('@apackdev/ui'),
-    });
-    const real = fs.realpathSync(pack);
-    expect(apackScope(pack)).toEqual({ dirs: [path.join(real, 'node_modules/@apackdev/sdk/dist'), path.join(real, 'node_modules/@apackdev/ui/dist')] });
+  it('is the same scope wherever the same packages are installed', () => {
+    expect(hashOf(tmp(installed()))).toBe(hashOf(tmp(installed())));
+  });
+
+  it('names a package it cannot find, and who declared it, rather than leave it out of the scope', () => {
+    const { 'node_modules/@apackdev/ui/package.json': _ui, ...withoutUi } = installed();
+    expect(apackScope(tmp(withoutUi))).toEqual({ missing: [expect.stringMatching(/^@apackdev\/ui, declared by .*pack/)] });
+    const withoutEars = Object.fromEntries(Object.entries(installed()).filter(([file]) => !file.includes('@elmdb/ears')));
+    expect(apackScope(tmp(withoutEars))).toEqual({ missing: [expect.stringMatching(/^@elmdb\/ears, declared by @apackdev\/sdk/)] });
   });
 });

@@ -24,6 +24,31 @@ describe('APP_ONLY_EXPORTS', () => {
   });
 });
 
+describe('sharedInstanceExports', () => {
+  const write = (root: string, file: string, body: object) => {
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    fs.writeFileSync(path.join(root, file), JSON.stringify(body));
+  };
+
+  it('reads the EARS the SDK brings for a pack that names only the SDK, and the pack\'s own where it has one', () => {
+    const pack = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-instance-'));
+    try {
+      write(pack, 'package.json', { name: 'pack', dependencies: { '@apackdev/sdk': '*' } });
+      write(pack, 'node_modules/@apackdev/sdk/package.json', { name: '@apackdev/sdk', dependencies: { '@elmdb/ears': '*' }, exports: { '.': './sdk.js' } });
+      // npm nested the SDK's EARS under it: nothing above the pack holds one
+      write(pack, 'node_modules/@apackdev/sdk/node_modules/@elmdb/ears/package.json', { name: '@elmdb/ears', exports: { './brought': './x.js' } });
+      expect(sharedInstanceExports('@elmdb/ears', path.join(pack, 'index.ts'))).toEqual({ './brought': './x.js' });
+      write(pack, 'node_modules/@elmdb/ears/package.json', { name: '@elmdb/ears', exports: { './own': './x.js' } });
+      expect(sharedInstanceExports('@elmdb/ears', path.join(pack, 'index.ts'))).toEqual({ './own': './x.js' });
+      fs.rmSync(path.join(pack, 'node_modules/@elmdb'), { recursive: true });
+      fs.rmSync(path.join(pack, 'node_modules/@apackdev/sdk/node_modules'), { recursive: true });
+      expect(() => sharedInstanceExports('@elmdb/ears', path.join(pack, 'index.ts'))).toThrow('@elmdb/ears, declared by @apackdev/sdk');
+    } finally {
+      fs.rmSync(pack, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('getSharedBeDeps', () => {
   it('names the packages a pack backend gets from the host, and no frontend-only one', () => {
     const be = getSharedBeDeps();
