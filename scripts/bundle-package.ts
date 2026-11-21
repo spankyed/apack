@@ -1,6 +1,6 @@
 // Builds a publishable copy of a workspace package that ships as a bundle (@apackdev/cli,
 // @apackdev/testing) into <package>/dist/package. The shared-instance packages (SHARED_INSTANCE_PACKAGES), what
-// they link from another checkout (EARS, which no registry has) and the private @apackdev/host are inlined, the host
+// they take from a vendored checkout (EARS) and the private @apackdev/host are inlined, the host
 // and the SDK from source and EARS from its built `dist`, so the published package can use host-only modules; every
 // other package stays external and becomes a dependency at the version the workspace uses.
 //
@@ -115,11 +115,13 @@ const workspaceManifestFile = (name: string) => createRequire(path.join(repoRoot
 const workspaceManifest = (name: string) => JSON.parse(fs.readFileSync(workspaceManifestFile(name), 'utf-8'));
 const sharedPkgs = SHARED_INSTANCE_PACKAGES.map(workspaceManifest);
 /**
- * What the shared-instance packages link from another checkout (a `file:` dependency: EARS, from elmdb's): inlined with
- * them, since a published package can't depend on something no registry has
+ * What the shared-instance packages take from another checkout (EARS, from elmdb's, which the root's `overrides` maps to
+ * a `file:` path in `vendor/`): inlined with them, as the build it was made from rather than whatever a registry holds
+ * at that version
  */
-const LINKED = sharedPkgs.flatMap((shared) => Object.entries<string>(shared.dependencies ?? {})
-  .filter(([, range]) => range.startsWith('file:')).map(([name]) => name));
+const vendored = Object.entries<unknown>(JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8')).overrides ?? {})
+  .filter(([, spec]) => typeof spec === 'string' && spec.startsWith('file:')).map(([name]) => name);
+const LINKED = sharedPkgs.flatMap((shared) => Object.keys(shared.dependencies ?? {}).filter((name) => vendored.includes(name)));
 const inlinedPkgs = [...SHARED_INSTANCE_PACKAGES, ...LINKED].map((name) => ({ name, manifest: workspaceManifest(name) }));
 const hostPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages', 'apack-host', 'package.json'), 'utf-8'));
 const SHARED = new Set<string>(SHARED_INSTANCE_PACKAGES);
