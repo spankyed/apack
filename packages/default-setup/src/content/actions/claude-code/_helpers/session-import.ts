@@ -9,6 +9,8 @@ export function importedSessionMetadata(transcript: readonly Record<string, unkn
     if (row.type === 'cost-state' && typeof row.totalCostUSD === 'number'
       && Number.isFinite(row.totalCostUSD) && row.totalCostUSD >= 0) totalCostUsd = Math.max(totalCostUsd, row.totalCostUSD);
     if (row.type !== 'user' && row.type !== 'assistant') continue;
+    // Claude saves compacted context in a user-shaped row for the next model turn.
+    if (row.type === 'user' && row.isCompactSummary === true) continue;
     const message = object(row.message);
     const content = message?.content;
     const commandText = typeof content === 'string' ? content : Array.isArray(content) && content.every(block => object(block)?.type === 'text' && typeof object(block)?.text === 'string') ? content.map(block => object(block)!.text as string).join('\n') : undefined;

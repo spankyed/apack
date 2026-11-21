@@ -51,6 +51,18 @@ it('projects native model, turn UUIDs, tools and timestamps without counting too
  expect(importedSessionMetadata([user,user,{type:'user',uuid:'tool',message:{content:[{type:'tool_result'}]}},{type:'user',isMeta:true,message:{content:'Meta'}},{type:'assistant',timestamp:'2026-10-18T01:00:02Z',message:{model:'native-model',content:[{type:'tool_use',id:'tool-id'}]}},{type:'assistant',message:{model:'<synthetic>',content:[{type:'tool_use',id:'tool-id'}]}},{type:'cost-state',totalCostUSD:1.25}], 'native-session', '/fixture')).toEqual({nativeLaunch:{sessionId:'native-session',cwd:'/fixture'},model:'native-model',turns:1,toolCallCount:1,startedAt:Date.parse('2026-10-18T01:00:00Z'),lastTurnAt:Date.parse('2026-10-18T01:00:02Z'),totalCostUsd:1.25})
 });
 
+it('keeps saved compaction out of the turn count and last-turn timestamp', () => {
+ const transcript=[
+  {type:'user',uuid:'human',timestamp:'2026-10-18T01:00:00Z',message:{content:'Review the release'}},
+  {type:'assistant',timestamp:'2026-10-18T01:00:02Z',message:{model:'native-model',content:[{type:'text',text:'Ready'}]}},
+  {type:'system',subtype:'compact_boundary',timestamp:'2026-10-18T01:30:00Z',content:'Conversation compacted'},
+  {type:'user',uuid:'summary',isCompactSummary:true,isVisibleInTranscriptOnly:true,timestamp:'2026-10-18T01:30:00Z',message:{content:'Recovered release context'}},
+ ];
+ expect(importedSessionMetadata(transcript,'native-session')).toMatchObject({
+  turns:1,model:'native-model',lastTurnAt:Date.parse('2026-10-18T01:00:02Z'),
+ });
+});
+
 it('onboarding imports the same native metadata into thread context and remains idempotent', async () => {
  const caller=repository.threadCommands.create({topic:'Onboarding',instructions:''})
  repository.threadCommands.update(caller.id,{context:{onboarding:{step:'import-threads',threadId:caller.id,pendingMessageId:'Message-choice',data:{ccSessionCount:1}}}})

@@ -46,8 +46,8 @@ it('shows the original main compaction boundary and a closed read-only summary',
   startFeTestRuntime({ packs: { textEditor: () => [], onChanged: () => () => {} } as never })
   const root = document.createElement('div'); document.body.append(root)
   const rows = [
-    { id: 'boundary', entityType: 'Message', sender: 'system', text: 'Conversation compacted', context: { claudeNativeCompaction: 'boundary' } },
-    { id: 'summary', entityType: 'Message', sender: 'system', text: '<tag>Literal native summary</tag>', context: { claudeNativeCompaction: 'summary' } },
+    { id: 'boundary', entityType: 'Message', timestamp: 1, createdAt: 1, sender: 'system', text: 'Conversation compacted', context: { claudeNativeCompaction: 'boundary' } },
+    { id: 'summary', entityType: 'Message', timestamp: 2, createdAt: 2, sender: 'system', text: '<tag>Literal native summary</tag>', context: { claudeNativeCompaction: 'summary' } },
   ] as MessageEntity[]
   app = createApp({ render: () => h('main', rows.map(message => h(ChatMessage, { message, isClaudeCodeThread: true }))) })
   app.mount(root); await settle()
