@@ -95,6 +95,14 @@ Nothing is mutated: a new value is made from the edits, what was not edited is t
 kernel learns exactly which fields changed. A draft edits fields that exist and cannot add or remove one, since which
 fields exist is the states' to say.
 
+A move may edit a draft too, when it has nothing to give the states it enters: the draft is the data where the handler
+sits, edited before the move. A move that enters a state needing data gives it as fields.
+
+Three mistakes that would otherwise do nothing and say nothing are refused, reported, and change nothing: an edit that
+returns a value, an edit that is async, and an edit to a value that is not plain data. Such a value (a class instance,
+a `Date`) reads as itself and can be replaced whole; editing it would change the one object every earlier value still
+points at.
+
 ### Rules
 
 1. **An event or ask goes to the innermost state that takes it**, then outward.
@@ -198,7 +206,7 @@ batch, and this repo's own `transact` followed by `watch`.
 ## What the prototype proves
 
 Everything below is in [`apack-spec/prototype/`](apack-spec/prototype/) and runs from the repo root; its README has the
-commands. Types and kernel together are about 540 lines, and the draft 110.
+commands. Types and kernel together are about 550 lines, and the draft 139.
 
 - **Two real features are ported.** The code search, backend and surface (`search.mts`), runs: results stream, a second
   search aborts the first on the backend, and cancel works. About 167 and 192 non-blank lines become about 39 and 77.
@@ -215,12 +223,13 @@ commands. Types and kernel together are about 540 lines, and the draft 110.
   stops its view; stopping the surface stops the rest.
 - **Progress gathered into batches** (`append-cost.mts`): the measurement above, and the search and threads examples,
   which now make one change per batch.
-- **A draft** (`draft.mts`, 110 lines; `draft-check.mts`, 15 checks) for what a hand-built one gets wrong: the old
+- **A draft** (`draft.mts`, 139 lines; `draft-check.mts`, 18 checks) for what a hand-built one gets wrong: the old
   value untouched, what was not edited kept as the same object, an edit that changes nothing returning the very same
   value, the same place read twice being the same draft, arrays through `push`, `splice`, `sort` and `length`, keys
   added and deleted, one part of the draft assigned to another, what is not plain handed over as it is, and a draft
-  kept past its handler refusing to be used. The kernel tells subscribers which fields of each state changed in a
-  step, and tells them nothing when a handler changed nothing.
+  kept past its handler refusing to be used, and the three refused mistakes. `kernel-check.mts` holds eight more on
+  what the kernel does with a change: subscribers told which fields of a state changed in a step and told nothing when
+  a handler changed nothing, a move that edits a draft, and each refused edit reported with the data left as it was.
 - **`within` narrows by path** (`state.mts`, used in `threads.mts`): inside `thread` the thread's id can be read,
   inside `thread.sending` the streamed text can, and a state that does not exist does not compile.
 - **Mistakes that do not compile** were checked at each stage with `@ts-expect-error`: a state missing from a

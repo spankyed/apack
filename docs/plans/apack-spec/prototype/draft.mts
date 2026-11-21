@@ -3,7 +3,7 @@
 //   const { value, touched } = produce(data, (draft) => { draft.titles[id] = title })
 //
 // A state's data is plain: objects, arrays and values that are replaced whole. That is all a draft goes inside.
-// Anything else (a class instance, a Map, a Date) is handed over as it is, to be replaced and never edited.
+// Anything else (a class instance, a Map, a Date) can be read and replaced whole, and refuses to be edited.
 
 export type Path = ReadonlyArray<string>
 
@@ -18,6 +18,7 @@ interface Node {
 }
 
 const NODE = Symbol('draft')
+const WHOLE = Symbol('whole')
 const isPlain = (value: unknown): value is object => {
   if (typeof value !== 'object' || value === null) return false
   if (Array.isArray(value)) return true
@@ -54,8 +55,27 @@ export function produce<T extends object>(base: T, edit: (draft: T) => void): { 
     return made
   }
   const plainOf = (value: unknown): unknown => {
+    if (typeof value !== 'object' || value === null) return value
+    const whole = (value as { [WHOLE]?: object })[WHOLE]
+    if (whole) return whole
     const node = isPlain(value) ? (value as { [NODE]?: Node })[NODE] : undefined
     return node ? settle(node) : value
+  }
+
+  /**
+   * A value that is not plain data, as a draft hands it out: it reads as itself and its methods run on the real
+   * thing, and assigning to it throws. Editing it would change the one object every earlier value still points at.
+   */
+  const whole = (value: object, path: Path): object => {
+    const refuse = (): never => { throw new Error(`${path.join('.')} is not plain data, so it cannot be edited in a draft. Replace it whole`) }
+    return new Proxy(value, {
+      get(target, key) {
+        if (key === WHOLE) return target
+        const found = Reflect.get(target, key, target)
+        return typeof found === 'function' ? found.bind(target) : found
+      },
+      set: refuse, deleteProperty: refuse, defineProperty: refuse,
+    })
   }
 
   const draftOf = (base: object, around: Node | undefined, path: Path): object => {
@@ -67,7 +87,8 @@ export function produce<T extends object>(base: T, edit: (draft: T) => void): { 
         if (key === NODE) return node
         if (!open) closed()
         const value = Reflect.get(latest(node), key)
-        if (typeof key === 'symbol' || !isPlain(value)) return value
+        if (typeof key === 'symbol' || typeof value !== 'object' || value === null) return value
+        if (!isPlain(value)) return whole(value, [...node.path, key])
         const held = node.inside.get(key)
         if (held && held.node.base === value) return held.proxy
         const proxy = draftOf(value, node, [...node.path, key])
@@ -105,6 +126,14 @@ export function produce<T extends object>(base: T, edit: (draft: T) => void): { 
   }
 
   const draft = draftOf(base, undefined, [])
-  try { edit(draft as T) } finally { open = false }
+  let returned: unknown
+  try { returned = edit(draft as T) } finally { open = false }
+  // Both would otherwise do nothing and say nothing.
+  if (returned instanceof Promise) {
+    // What it goes on to do fails against the closed draft; that failure is this one, already reported.
+    returned.catch(() => {})
+    throw new Error('An edit cannot be async: a draft is closed as soon as the function returns')
+  }
+  if (returned !== undefined) throw new Error('An edit changes its draft and returns nothing. To replace a field, give the field')
   return { value: settle((draft as { [NODE]: Node })[NODE]) as T, touched: [...touched.values()] }
 }

@@ -91,14 +91,34 @@ const checks: Array<[string, () => void]> = [
     const { value } = produce(base, (draft) => { draft.a.n = 2; draft.b = draft.a })
     deepStrictEqual(value, { a: { n: 2 }, b: { n: 2 } })
   }],
-  ['what is not plain is handed over as it is, and can be replaced', () => {
-    class Repository { constructor(readonly directory: string) {} }
+  ['what is not plain reads as itself, runs its methods, and can be replaced', () => {
+    class Repository { #opened = 0; constructor(readonly directory: string) {} open(): number { return ++this.#opened } }
     const first = new Repository('/a')
-    const { value } = produce({ repository: first as Repository | null, when: new Date(0) }, (draft) => {
-      strictEqual(draft.repository, first)
+    const { value } = produce({ repository: first as Repository | null, other: null as Repository | null, when: new Date(0) }, (draft) => {
+      ok(draft.repository instanceof Repository)
+      strictEqual(draft.repository!.directory, '/a')
+      strictEqual(draft.repository!.open(), 1)
+      strictEqual(draft.when.getTime(), 0)
+      draft.other = draft.repository
       draft.repository = new Repository('/b')
     })
     ok(value.repository instanceof Repository && value.repository.directory === '/b')
+    strictEqual(value.other, first)
+  }],
+  ['what is not plain refuses to be edited', () => {
+    class Repository { cache: string[] = []; constructor(public directory: string) {} }
+    const first = new Repository('/a')
+    throws(() => produce({ repository: first }, (draft) => { draft.repository.directory = '/b' }), /repository is not plain data/)
+    throws(() => produce({ nested: { repository: first } }, (draft) => { draft.nested.repository.cache = [] }), /nested\.repository is not plain data/)
+    strictEqual(first.directory, '/a')
+  }],
+  ['an edit that returns a value is refused', () => {
+    const base = freeze({ count: 1 })
+    throws(() => produce(base, ((draft: { count: number }) => ({ ...draft, count: 2 })) as (draft: { count: number }) => void), /returns nothing/)
+  }],
+  ['an async edit is refused', () => {
+    const base = { count: 1 }
+    throws(() => produce(base, (async (draft: { count: number }) => { await null; draft.count = 2 }) as (draft: { count: number }) => void), /cannot be async/)
   }],
   ['it reports each place that changed', () => {
     const { touched } = produce(freeze({ titles: { a: 'A' } as Record<string, string>, messages: { a: ['x'] }, count: 1, same: 1 }), (draft) => {

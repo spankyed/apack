@@ -100,14 +100,15 @@ type Gained<S, H, T> = T extends `${infer TH}.${infer TT}`
 /**
  * A change to data: the fields to replace, or a function that edits a draft of the data in place. The draft is the way
  * to change something nested: `(d) => { d.titles[id] = title }`. Nothing is mutated; a new value is made from the edits.
- * A move says its data as fields, since what it gives is the data of the states it enters.
+ * A move that has nothing to give may edit a draft too: the draft is the data where the handler sits, edited before
+ * the move. A move that enters a state needing data says it as fields, since those fields are what it gives.
  */
 type Change<D> = Partial<D> | ((draft: D) => void)
 
 /** What happens next, in the shape of the value: where to be, and what data changes. */
 type Next<R, H extends string> =
   | { at?: never; data: Change<DataAt<R, H>> }
-  | { [T in Paths<R>]: {} extends Gained<R, H, T> ? { at: T; data?: Partial<DataAt<R, T>> } : { at: T; data: Gained<R, H, T> & Partial<DataAt<R, T>> } }[Paths<R>]
+  | { [T in Paths<R>]: {} extends Gained<R, H, T> ? { at: T; data?: Partial<DataAt<R, T>> | ((draft: DataAt<R, H>) => void) } : { at: T; data: Gained<R, H, T> & Partial<DataAt<R, T>> } }[Paths<R>]
 
 /** A state this one started. Only its starter holds it: it can be told, asked and read, never written. */
 export interface Handle<V, E extends AnyEvent, A extends Asks> { readonly ref: string; readonly _?: { v: V; e: (event: E) => void; a: A } }
@@ -456,11 +457,15 @@ export function system(host: {
     if (typeof data === 'function') {
       // Edits to a draft. A field can be edited, never added or removed: which fields exist is the states' to say.
       const before = top.data
-      const { value, touched } = produce(before, data)
+      let made: ReturnType<typeof produce<Plain>>
+      // An edit that is refused changes nothing, and the move it came with is not made either.
+      try { made = produce(before, data) } catch (error) { trace(`DEFECT: ${top.ref}: ${error instanceof Error ? error.message : String(error)}`); return }
+      const { value, touched } = made
       const kept = Object.fromEntries(Object.keys(before).map((field) => [field, field in value ? value[field] : before[field]]))
       for (const [field] of touched) { if (field! in before && field! in value) touch(top.ref, field!); else trace(`DEFECT: ${top.ref} has no field ${field} to change`) }
       top.data = touched.length ? kept : before
       for (const field of fields.get(top.ref) ?? []) large(top, field)
+      if (at !== undefined) { go(top, at, {}); changed.add(top.ref) }
       return
     }
     if (at !== undefined) { go(top, at, data); changed.add(top.ref) }
