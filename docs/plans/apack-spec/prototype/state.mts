@@ -38,6 +38,11 @@ export type Shape = {
   starts?: Record<string, AnyState | Each<AnyState>>
   /** At the outermost state only: what it tells whichever state started it. */
   reports?: AnyEvent
+  /**
+   * At the outermost state only: the events it sends itself, and nothing else may send it. They are taken by its
+   * `internal` handlers. What others may send it is the events it is declared with.
+   */
+  internal?: AnyEvent
   /** The asks it makes when told to, by name: `each` for one made for each of many keys, `one` for one at a time. */
   makes?: Record<string, 'each' | 'one'>
 }
@@ -105,6 +110,7 @@ type AllMakes<S> = MakesOf<S> & ([Names<S>] extends [never] ? {} : UnionToInters
 type MakingOf<M> = { readonly [K in keyof M]: M[K] extends 'each' ? Readonly<Record<string, true>> : boolean }
 type StartsAt<S, P extends string> = P extends '' ? StartsOf<S> : StartsOf<S> & StartsBelow<S, P>
 type ReportsOf<S> = S extends { reports: infer P extends AnyEvent } ? P : never
+type InternalOf<S> = S extends { internal: infer P extends AnyEvent } ? P : never
 /** A field that says which there are: by its keys, or by its items. */
 type KeysField<D> = { [K in keyof D & string]: D[K] extends readonly string[] | Readonly<Record<string, unknown>> ? K : never }[keyof D & string]
 type UnionToIntersection<U> = (U extends unknown ? (of: U) => void : never) extends (of: infer I) => void ? I : never
@@ -172,12 +178,20 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
   /** Aborted when this state stops being the case. For an ask, also when whoever asked has gone. */
   readonly signal: AbortSignal
 
-  /** Tells this running state an event. */
-  send(event: E): void
+  /**
+   * Tells this running state an event: one only it sends itself, which its `internal` handlers take, or one that
+   * others may send it too.
+   */
+  send(event: E | InternalOf<R>): void
 
   /** Tells a backend system, or a state this one started, an event. Nobody waits. */
   tell<K extends SystemsOf<N>>(to: K, event: N['systems'][K]['events']): void
   tell<E2 extends AnyEvent>(to: Handle<unknown, E2, Asks>, event: E2): void
+  /**
+   * From a window: tells another surface in this window an event that surface says it takes. A surface and a
+   * backend system can be called the same, so a surface is named as one. From the backend a surface is broadcast to.
+   */
+  tell<K extends keyof N['surfaces'] & string>(to: { readonly surface: K }, event: N['surfaces'][K]['events']): void
 
   /**
    * Asks a backend system, or a state this one started. `heard` is called with the progress made since it was last
@@ -238,8 +252,8 @@ export interface AskScope<R, H extends string, E extends AnyEvent, N extends Net
 }
 
 /** Events: synchronous. What a handler returns is what happens next. */
-type On<R, H extends string, E extends AnyEvent, N extends Net> =
-  { [T in E['type']]?: (event: Extract<E, { type: T }>, scope: EventScope<R, H, E, N>) => Next<R, H> | void }
+type On<R, H extends string, Taken extends AnyEvent, E extends AnyEvent, N extends Net> =
+  { [T in Taken['type']]?: (event: Extract<Taken, { type: T }>, scope: EventScope<R, H, E, N>) => Next<R, H> | void }
 const ANSWERED = Symbol('answered')
 /** An answer together with what happens next: what an ask's handler returns when answering also changes something. */
 export interface Answered<V, X> { readonly [ANSWERED]: true; readonly answer: V; readonly next: X }
@@ -289,7 +303,12 @@ type Work<R, H extends string, E extends AnyEvent, N extends Net> =
 /** The definition of a state. The same keys at every depth, the outermost included. */
 export type Def<R, S, H extends string, E extends AnyEvent, A extends Asks, N extends Net> = {
   /** The events it takes while it is the case. An event goes to the innermost state that takes it. */
-  on?: On<R, H, E, N>
+  on?: On<R, H, E, E, N>
+  /**
+   * The events it sends itself, while it is the case. Nothing outside it reaches these: what is told, broadcast or
+   * sent to it from outside is looked for in `on` alone.
+   */
+  internal?: On<R, H, InternalOf<R>, E, N>
   /** The asks it answers while it is the case. An ask goes to the innermost state that answers it. */
   asks?: Answering<R, H, E, A, N>
 } & Work<R, H, E, N> & ([keyof DataOf<S>] extends [never] ? { data?: never } : {
@@ -467,7 +486,7 @@ class Question {
 const refusal = (kind: string, message: string, data?: object): AnyOutcome => ({ ok: false, failure: { ...data, kind, message } })
 
 type Plain = Record<string, unknown>
-type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; failed?: Function; states?: Record<string, LooseDef>; starts?: (start: Function) => Record<string, { def: unknown } | { state: { def: unknown }; given: Function; each?: string }>
+type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; internal?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; failed?: Function; states?: Record<string, LooseDef>; starts?: (start: Function) => Record<string, { def: unknown } | { state: { def: unknown }; given: Function; each?: string }>
   follows?: (follow: Function) => Record<string, { feature: string; view: string; each?: string; from?: readonly string[]; args: Function; heard: Function }>
   awaits?: (asking: Function) => Record<string, { of: string; ask: string; each?: string; from?: readonly string[]; args: Function; ended: Function; heard?: Function }>
   makes?: (asking: { one: Function; each: Function }) => Record<string, { kind: 'one' | 'each'; of: string; ask: string; args: Function; ended: Function; heard?: Function }>
@@ -508,7 +527,7 @@ interface Running {
 }
 
 type Item =
-  | { kind: 'event'; ref: string; event: AnyEvent }
+  | { kind: 'event'; ref: string; event: AnyEvent; /** Sent by the state to itself. */ own?: true }
   | { kind: 'ask'; ref: string; name: string; args: object; question: Question; heard?: Heard; gone?: AbortSignal }
   | { kind: 'result'; of: Active; value: unknown }
   | { kind: 'failure'; of: Active; error: unknown }
@@ -684,6 +703,7 @@ export function system(host: {
     return Object.freeze({ ...value, making: frozen(making) })
   }
   const refOf = (to: string | { ref: string }): string => (typeof to === 'string' ? to : to.ref)
+  const isSurface = (to: unknown): to is { surface: string } => typeof to === 'object' && to !== null && 'surface' in to
 
   /** Something to leave at the commit: of this step, or of one of its own if none is running. */
   const out = (leave: () => void): void => { if (stepping) leaving.push(leave); else arrive({ kind: 'out', leave }) }
@@ -691,7 +711,13 @@ export function system(host: {
   /** A name is a backend system: here on the backend, across the link from a window. A handle is always here. */
   const isAcross = (to: string | { ref: string }): boolean => typeof to === 'string' && host.side === 'window'
 
-  const tell = (to: string | { ref: string }, event: AnyEvent): void => {
+  const tell = (to: string | { ref: string } | { surface: string }, event: AnyEvent): void => {
+    if (isSurface(to)) {
+      // A surface is in a window, and is told there. The backend has one of it in every window, and broadcasts.
+      if (host.side !== 'window') { trace(`DEFECT: ${called} told the surface ${to.surface} ${event.type}. A surface is told from its own window, and broadcast to from the backend`); return }
+      enqueue({ kind: 'event', ref: to.surface, event })
+      return
+    }
     const ref = refOf(to)
     if (!isAcross(to)) { enqueue({ kind: 'event', ref, event }); return }
     const mine = up
@@ -753,8 +779,8 @@ export function system(host: {
       get data() { return mine.top.data },
       get snapshot() { return valueOf(mine.top) },
       signal,
-      send: (event: AnyEvent) => { if (alive()) enqueue({ kind: 'event', ref, event }) },
-      tell: (to: string | { ref: string }, event: AnyEvent) => { if (alive()) tell(to, event) },
+      send: (event: AnyEvent) => { if (alive()) enqueue({ kind: 'event', ref, event, own: true }) },
+      tell: (to: string | { ref: string } | { surface: string }, event: AnyEvent) => { if (alive()) tell(to, event) },
       ask: (to: string | { ref: string }, name: string, args: object, hears?: (updates: unknown[]) => void) => {
         const asked = ask(to, name, args, signal, hears)
         // An ask that was started and never awaited ends with `Left` like any other, and that is not a failure of the process.
@@ -1130,7 +1156,7 @@ export function system(host: {
   }
   const isAnswered = (made: unknown): made is Answered<unknown, unknown> => typeof made === 'object' && made !== null && ANSWERED in made
 
-  const taker = (top: Running, table: 'on' | 'asks', name: string): { handler: Function; of: Active } | undefined => {
+  const taker = (top: Running, table: 'on' | 'internal' | 'asks', name: string): { handler: Function; of: Active } | undefined => {
     let of: Active | undefined = innermost(top)
     while (of && !of.def[table]?.[name]) of = of.around
     return of ? { handler: of.def[table]![name]!, of } : undefined
@@ -1222,8 +1248,15 @@ export function system(host: {
     // has been matched to the data.
     if (!top && !settling) { held.push(item); return }
     if (item.kind === 'event') {
-      const found = top && taker(top, 'on', item.event.type)
-      if (!found) { trace(`${item.ref} ignored ${item.event.type}`); return }
+      // What a state sends itself is looked for among what only it sends, and then among what anyone may. What
+      // comes from outside is looked for among what anyone may send, and nowhere else.
+      const found = top && ((item.own ? taker(top, 'internal', item.event.type) : undefined) ?? taker(top, 'on', item.event.type))
+      if (!found) {
+        trace(top && !item.own && taker(top, 'internal', item.event.type)
+          ? `${item.ref} was sent ${item.event.type} from outside, which only it sends itself: ignored`
+          : `${item.ref} ignored ${item.event.type}`)
+        return
+      }
       const { ask: _, ...scope } = scopeOf(found.of)
       // A handler that throws changes nothing: the state is as it was before the event, which it could handle.
       try { apply(found.of, found.handler(item.event, scope)) } catch (error) {

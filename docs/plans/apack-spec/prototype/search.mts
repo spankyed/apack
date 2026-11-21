@@ -118,6 +118,8 @@ type SearchSurface = {
     idle: {}
     searching: { data: { searchProgress: SearchProgress | null } }
   }
+  // From its own search, as it runs. Nothing else may send it this.
+  internal: { type: 'FOUND'; results: SearchResult[]; progress: SearchProgress | null }
 }
 
 type SearchSurfaceEvent =
@@ -129,8 +131,6 @@ type SearchSurfaceEvent =
   | { type: 'CLEAR_ERROR' }
   // from the code surface
   | { type: 'DIRECTORY_CHANGED'; baseDirectory: string }
-  // from its own search, as it runs
-  | { type: 'FOUND'; results: SearchResult[]; progress: SearchProgress | null }
 
 const searchSurface = state<SearchSurface, SearchSurfaceEvent>()({
   data: {
@@ -193,8 +193,8 @@ const searchSurface = state<SearchSurface, SearchSurfaceEvent>()({
       // A search that could not be made is a refusal, handled above. This is for what `run` itself threw.
       failed: (error) => ({ at: 'idle', data: { searchError: error instanceof Error ? error.message : String(error) } }),
 
-      // Only a search that is running has results and progress arriving.
-      on: {
+      // Only a search that is running has results and progress arriving, and only the search itself says so.
+      internal: {
         FOUND: ({ results, progress }) => ({
           data: (d) => { d.searchResults.push(...results); if (progress) d.searchProgress = progress },
         }),

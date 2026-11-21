@@ -45,7 +45,7 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
     for (const property of level.getProperties()) {
       const type = real(typeOf(property))[0]
       if (!type) continue
-      if (property.name === 'on') {
+      if (property.name === 'on' || property.name === 'internal') {
         for (const handler of type.getProperties()) {
           takes.add(handler.name)
           const signature = real(typeOf(handler))[0]?.getCallSignatures()[0]

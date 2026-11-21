@@ -105,7 +105,8 @@ Exactly one path is the case, so where a state is is one string, and its data is
 | `data` | Its own fields and their starting values. `given` marks a field whoever enters the state must supply |
 | `start` | Which state inside it it is at when entered |
 | `states` | Every state inside it. Leaving one out does not compile |
-| `on` | The events it takes. Synchronous. A handler returns what happens next |
+| `on` | The events others may send it. Synchronous. A handler returns what happens next |
+| `internal` | The events it sends itself, which nothing else may send it. The same handlers |
 | `asks` | The asks it answers. May be async. A handler returns the answer, or `answered(answer, next)` to change something as it answers |
 | `run` | What it does while it is the case. May be async. What it returns happens only if the state still is the case |
 | `starts` | The states it starts, which run while it is the case |
@@ -322,8 +323,9 @@ points at.
 
 | Verb | From | To | Waits |
 |---|---|---|---|
-| `send(event)` | A state | Itself | No |
+| `send(event)` | A state | Itself: an event only it sends, or one others may send it too | No |
 | `tell(name, event)` | Anywhere | A backend system, by name | No |
+| `tell({ surface }, event)` | A state in a window | Another surface in that window | No |
 | `ask(name, ask, args, heard?)` | A state's `run`, or an ask's handler | A backend system, by name | One answer, refusal or failure |
 | `progress(update)` | An ask's handler | Whoever asked, and only them, as a list at most once a frame | No |
 | `broadcast(name, event)` | The backend | That surface in every window | No |
@@ -331,6 +333,18 @@ points at.
 
 Names are typed by one declaration of what can be reached, which a pack's generated facade would supply. A state also declares the
 states it starts, and reaches each through `child`: rule 10.
+
+**Who may send a state what.** A state is declared with the events others may send it, and takes them under `on`.
+The events it sends itself as its own work goes on, a result found or a piece arrived, are declared apart, in its
+shape as `internal`, and taken under `internal`. Nothing outside a state reaches those: what is told, broadcast or
+sent to it from outside is looked for under `on` alone, and one that only the state sends itself is ignored and
+said to be. `send` takes both, so a state may send itself what others may send it. This is the app's own split of a
+contract into `incoming` and `internal`.
+
+A surface is told by another surface in its window with `tell({ surface: 'detail' }, event)`, typed by the events
+that surface is declared with. It is named as a surface because a feature's backend system and its surface are
+called the same: a name alone is the backend system. From the backend a surface is not told but broadcast to, since
+there is one of it in every window, and telling one from there is reported.
 
 ### Collections that grow
 
@@ -505,6 +519,8 @@ batch, and this repo's own `transact` followed by `watch`.
 | Every state inside must be defined | Optional entries. An example that left one out was unreadable |
 | A handler names the path to go to | `leave`, by which a state changed the state around it |
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
+| What a state sends itself is a table of its own, `internal` | One union of events and one `on` table, which is what there was. Anything that could reach a state could then tell it `FOUND` or `PIECES`, which only its own work should. And a list of which events are internal beside the one table, which says it twice and can disagree. Two tables need no list: what comes from outside is looked for in one of them, so the rule holds by where a handler is written. Effect's `Machine` has the split as public and private requests, and the app's contracts as `incoming` and `internal` |
+| A surface is told as `{ surface }`, with the verb a system is told with | A verb of its own, as the app's `sendToSurface` is beside `tell`. A feature's system and its surface share a name, so the name alone cannot say which. Naming the kind of thing in the address keeps one verb for telling, and is how a role is to be named too: `tell({ role: 'brain' }, …)` |
 | An ask changes data only together with its answer, as `answered(answer, next)` | An ask that could not change data at all, which was the first decision: to change data it sent its own state an event and returned the answer separately. The answer could then say "created" before the event that did the creating was handled, and still say it if that event's handler threw. The handler could not see the result of its own change. And each such ask needed an event that existed only for it, which anything could tell the state. Every system this was checked against joins the two: Erlang's `gen_statem` replies and moves in one handler, Effect's `Machine` handlers return `[reply, newState]`, and Temporal added Updates beside its read-only queries. They are safe because their handlers do not interleave; these do, at each `await`, which is why a change after one must be a draft edit. The graph stays complete: the extractor reads `next` as it reads any handler's return |
 | Handlers that wait let others through, and the change checks what must hold | One handler at a time, as Effect's `Machine` and Erlang's `gen_server` run them. A handler then sees the same data throughout, and a reply that streams for half a minute keeps every other window out of that system until it ends. Each of those systems has a way round it (`fork` and reply later; a worker that replies), which is interleaving again with less around it; a caller that leaves cannot stop a handler already running; and a cycle of asks is a deadlock. Here every write was already one step. What could go wrong was a decision: check, wait, then act on a check no longer true. That is a long transaction, and the answer where work is long and conflicts are rare is to hold nothing and validate at the write. Locks, which Temporal suggests for this, bring the blocking back. A declared policy per ask, one at a time under a key, is left until a port needs it |
 | Where work is put says who owns it, and so when it stops | One rule for every handler. Stopping an ask's work when its asker goes is right for a search and wrong for a message being answered, and never stopping it, as Effect's `Machine` does once a handler is running, wastes the search. A flag on the ask saying it survives its asker, or a shield around part of a handler as Trio and Kotlin have, would each be a second way to say what a state's `run` already says: this work is the answerer's. The threads example had it wrong: a window that closed mid-reply aborted the reply, and the message it had sent was never stored |
@@ -558,6 +574,14 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   busy by the thread itself, whose `writing` state answers the same ask its `idle` state accepts; accepting and
   starting to write are one step. The threads system takes no events: the two it had existed so that two asks could
   change data, and went when those asks returned `answered`.
+- **Only a state sends itself what is its own** (`internal-check.mts`, 7 checks). What a state sends itself is taken
+  by its internal handler; the same event from outside is not taken, and that is said; what others may send a state
+  it may send itself too; one surface tells another in its own window with no backend there to go through; a surface
+  and a backend system called the same are told apart by how each is named; and the backend telling a surface is
+  reported and sends nothing. Six mistakes do not compile: sending a state from outside what only it sends itself,
+  taking an internal event under `on` or an incoming one under `internal`, telling a surface an event it does not
+  take, telling a surface there is not, and a state sending itself an event it does not declare. `search.mts` runs
+  on it: what its search found is the search's own to say.
 - **What runs follows the data** (`starts-check.mts`, 15 checks): a state started alone runs while its starter is
   the case, stops when it is left and starts anew when it is entered again; it is given its data once, as it starts;
   a key the field gains starts its state in that step, given what the data holds for it; one started part-way
@@ -597,7 +621,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 
   Thirteen mistakes do not compile across the two. The graph lists each read with what it depends on, each write,
   and which handler says to make which.
-- **A check that fails says so, and does not hang** (`checks.mts`). All thirteen check files run their checks
+- **A check that fails says so, and does not hang** (`checks.mts`). All fourteen check files run their checks
   through one runner. Every system a check makes is stopped when the check ends, however it ends, so one that fails
   part-way leaves nothing running to keep the process alive. A system in a check is given a limit on how many steps
   it will take, and says so when it reaches it; the app gives none, since an agent's loop is one thing leading to the
@@ -956,23 +980,22 @@ projects. Each would loosen the fit to this app.
 ## Not built
 
 - **What the second step of the cutover waits on.** The host's bus and shell are ported before any feature
-  ([Order of work](#order-of-work)), and four things they need are not designed. They are in the order the bus and
-  the shell meet them:
-  1. **Events only the state itself may send.** A state has one union of events, so anything that can reach it can
-     tell it `FOUND` or `PIECES`, which only its own work should. The app's contracts already keep `incoming` apart
-     from `internal`, and the prototype lost that: `send` should take both, and `tell` and `broadcast` only what is
-     incoming. Effect's `Machine` has the same split as public and private requests.
-  2. **Window-to-window sends**, the app's `sendToSurface`: one surface telling another in its own window what that
-     surface's contract says it takes. It is the same question as the first, asked of a surface: what others may
-     send it is its incoming events.
-  3. **Roles**: `tell({ role: 'brain' }, …)`, a name the host resolves to whichever system plays it.
-  4. **Restoring a state after a reconnect or a code reload.** A state is plain data, `{ at, data }`, so it can be
-     handed back to a fresh copy of itself, which is what `useSurfaceDraft` does by hand today for what a component
-     holds. Restoring is entering: the state is entered at `at` with `data` given, so its `run` starts again, and a
-     state restored at `searching` searches. Effect's `Machine` restores the same way, by starting afresh with the
-     previous state handed in, and saves nothing that was in flight. What a state started is started again, since
-     it follows from the data, but with nothing of its own: a restored threads system has every thread running and
-     none of their messages. What is saved to restore from has to hold what each started state held as well.
+  ([Order of work](#order-of-work)). Four things they need were not designed. Two are now, and two are left for
+  that step, by one test: **does it change what a state's definition looks like?** One that does is cheap to settle
+  before anything is ported and has to be redone in every machine after. One that does not is something added
+  beside the definitions, and is better settled against the real bus and shell than guessed at here.
+  - *Settled, since each changes a definition:* events only the state itself may send, and one surface telling
+    another in its window ([Communication](#communication)).
+  - **Roles**: `tell({ role: 'brain' }, …)`, a name the host resolves to whichever system plays it. The address is
+    the shape `{ surface }` has; which system plays a role is the host's to say, from a pack's manifest.
+  - **Restoring a state after a reconnect or a code reload.** A state is plain data, `{ at, data }`, so it can be
+    handed back to a fresh copy of itself, which is what `useSurfaceDraft` does by hand today for what a component
+    holds. Restoring is entering: the state is entered at `at` with `data` given, so its `run` starts again, and a
+    state restored at `searching` searches. Effect's `Machine` restores the same way, by starting afresh with the
+    previous state handed in, and saves nothing that was in flight. What a state started is started again, since
+    it follows from the data, but with nothing of its own: a restored threads system has every thread running and
+    none of their messages. What is saved to restore from has to hold what each started state held as well. What
+    it must carry is what the shell does on a reconnect today, which is why it waits for the shell.
 - **The Vue binding in a window.** Two things about it are not known, and neither can be found out here:
   - **Whether types that are read-only all the way down can be lived with.** A state's values are frozen, so
     `.push()` on one throws. The types should say so, or it compiles and fails only where it is run. But a helper
@@ -1048,9 +1071,8 @@ ask is the SDK's, so what the move rewrites is the files that define a machine a
 2. **Build the kernel in the tree**, with no dependencies, as its own workspace, from the prototype and with its
    checks: the schedule and every ordering, the refusals, what must not compile. Not a sibling repository: its API
    is the pack contract.
-3. **Port the host's bus and shell**, which everything else runs inside. Four things they need are not designed
-   and are settled here, in the order under [Not built](#not-built): events only the state itself may send,
-   window-to-window sends, roles, and restoring a state.
+3. **Port the host's bus and shell**, which everything else runs inside. Two things they need are settled here,
+   against the real ones ([Not built](#not-built)): roles, and restoring a state.
 4. **Put the test harness on it**, so that a feature's specs run against the kernel. From here to the end the app
    does not start, and this is how each port is known to work: a feature is across when its specs pass, unchanged in
    what they assert.

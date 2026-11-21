@@ -23,7 +23,8 @@ Its shape is a type. Its definition has the same keys at every depth.
 |---|---|
 | `data` | Its own fields and their starting values. `given` marks one that whoever enters it has to give |
 | `start`, `states` | The states inside it, and which it is at when entered |
-| `on` | The events it takes. A handler is synchronous and returns what happens next: `{ at, data }` |
+| `on` | The events others may send it. A handler is synchronous and returns what happens next: `{ at, data }` |
+| `internal` | The events it sends itself, which nothing else may send it |
 | `asks` | The asks it answers. A handler returns the answer, or `answered(answer, next)` to change something as it answers |
 | `run`, `failed` | Work it does while it is the case, and where it goes if that work fails |
 | `starts` | Other states it runs |
@@ -181,8 +182,9 @@ follows: (follow) => ({
 
 | Verb | From | To |
 |---|---|---|
-| `send(event)` | A state | Itself |
+| `send(event)` | A state | Itself: an event only it sends, or one others may send it |
 | `tell(name, event)` | A state | A backend system. Nobody waits |
+| `tell({ surface }, event)` | A state in a window | Another surface in that window |
 | `ask(name, ask, args)` | A state's `run`, or an ask's handler | A backend system. One answer comes back |
 | `progress(update)` | An ask's handler | Whoever asked, and only them |
 | `broadcast(name, event)` | The backend | That surface in every window |
