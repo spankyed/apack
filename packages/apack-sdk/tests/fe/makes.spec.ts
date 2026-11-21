@@ -43,8 +43,12 @@ function board() {
     states: { open: {}, refused: {} },
   });
   const actor = createActor(machine).start();
-  const settled = () => new Promise<void>((resolve) => setTimeout(resolve));
-  return { ...it, actor, settled, context: () => actor.getSnapshot().context, of: (name: string) => it.asked.filter((one) => one.name === name) };
+  /** Answers an ask, and resolves once the machine has taken its end */
+  const answer = (one: { answer(outcome: Outcome): void }, outcome: Outcome) => new Promise<void>((resolve) => {
+    const heard = actor.subscribe(() => { heard.unsubscribe(); resolve(); });
+    one.answer(outcome);
+  });
+  return { ...it, actor, answer, context: () => actor.getSnapshot().context, of: (name: string) => it.asked.filter((one) => one.name === name) };
 }
 
 describe('makes: the asks a machine makes, by name', () => {
@@ -53,8 +57,7 @@ describe('makes: the asks a machine makes, by name', () => {
     expect(it.context().making).toEqual({ push: false, stage: {} });
     it.actor.send({ type: 'PUSH' });
     expect(it.context().making.push).toBe(true);
-    it.of('push')[0]!.answer({ ok: true, value: 'pushed' });
-    await it.settled();
+    await it.answer(it.of('push')[0]!, { ok: true, value: 'pushed' });
     expect(it.context().making.push).toBe(false);
     expect(it.context().heard).toEqual(['pushed']);
     expect(Object.keys(it.actor.getSnapshot().children)).toEqual([]);
@@ -64,17 +67,15 @@ describe('makes: the asks a machine makes, by name', () => {
     const it = board();
     it.actor.send({ type: 'PUSH' });
     it.actor.send({ type: 'STAGE', path: 'a' });
-    it.of('push')[0]!.answer({ ok: true, value: 'pushed' });
-    it.of('stage')[0]!.answer({ ok: true, value: 'staged' });
-    await it.settled();
+    await it.answer(it.of('push')[0]!, { ok: true, value: 'pushed' });
+    await it.answer(it.of('stage')[0]!, { ok: true, value: 'staged' });
     expect(it.context().atEnd).toEqual(['push:false', 'a:false']);
   });
 
   it('ends an ask as an event a guard and a target are written for', async () => {
     const it = board();
     it.actor.send({ type: 'PUSH' });
-    it.of('push')[0]!.answer({ ok: false, why: 'rejected' });
-    await it.settled();
+    await it.answer(it.of('push')[0]!, { ok: false, why: 'rejected' });
     expect(it.actor.getSnapshot().value).toBe('refused');
   });
 
@@ -83,11 +84,9 @@ describe('makes: the asks a machine makes, by name', () => {
     it.actor.send({ type: 'STAGE', path: 'src/a.b.ts' });
     it.actor.send({ type: 'STAGE', path: 'c' });
     expect(it.context().making.stage).toEqual({ 'src/a.b.ts': true, c: true });
-    it.of('stage')[1]!.answer({ ok: true, value: 'second' });
-    await it.settled();
+    await it.answer(it.of('stage')[1]!, { ok: true, value: 'second' });
     expect(it.context().making.stage).toEqual({ 'src/a.b.ts': true });
-    it.of('stage')[0]!.answer({ ok: false, why: 'locked' });
-    await it.settled();
+    await it.answer(it.of('stage')[0]!, { ok: false, why: 'locked' });
     expect(it.context().making.stage).toEqual({});
     expect(it.context().heard).toEqual(['c=second', 'src/a.b.ts=locked']);
   });
@@ -106,12 +105,11 @@ describe('makes: the asks a machine makes, by name', () => {
     const [first, second] = it.of('stage');
     expect(first!.givenUp).toBe(true);
     expect(second!.givenUp).toBe(false);
+    // The one given up is answered first, and is not heard: what is heard next is the one made last
     first!.answer({ ok: true, value: 'first' });
-    await it.settled();
-    expect(it.context().making.stage).toEqual({ a: true });
-    second!.answer({ ok: true, value: 'second' });
-    await it.settled();
+    await it.answer(second!, { ok: true, value: 'second' });
     expect(it.context().heard).toEqual(['a=second']);
+    expect(it.context().making.stage).toEqual({});
   });
 
   it('drops an ask: it is given up, no longer under way, and its end is never heard', async () => {
@@ -120,9 +118,11 @@ describe('makes: the asks a machine makes, by name', () => {
     it.actor.send({ type: 'STOP' });
     expect(it.of('push')[0]!.givenUp).toBe(true);
     expect(it.context().making.push).toBe(false);
-    it.of('push')[0]!.answer({ ok: true, value: 'pushed' });
-    await it.settled();
-    expect(it.context().heard).toEqual([]);
+    // Answered all the same, and not heard: what is heard next is a push made after it
+    it.of('push')[0]!.answer({ ok: true, value: 'dropped' });
+    it.actor.send({ type: 'PUSH' });
+    await it.answer(it.of('push')[1]!, { ok: true, value: 'pushed again' });
+    expect(it.context().heard).toEqual(['pushed again']);
   });
 
   it('drops one key of an ask, or with no key every one', () => {
