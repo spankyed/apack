@@ -15,17 +15,18 @@ import type { Editor } from '@tiptap/core'
 import { commandSuggestionKey } from '@apackdev/ui/components/tiptap/extensions/command-suggestion'
 import { referenceSuggestionKey } from '#extensions/tiptap/reference-suggestion.ts'
 import type { ClaudePromptCompletionRow } from '#generated/types.ts'
-const props = defineProps<{ editor?: Editor; rows: (ClaudePromptCompletionRow & { offerId: string })[]; disabled?: boolean }>()
+const props = defineProps<{ anchorEl: HTMLElement | null; editor?: Editor; rows: (ClaudePromptCompletionRow & { offerId: string })[]; disabled?: boolean }>()
 const emit = defineEmits<{ select: [index: number, offerId: string]; dismiss: [] }>()
 const root = ref<HTMLElement>(), hostPopup = ref(false)
-const visible = computed(() => !props.disabled && !hostPopup.value && props.rows.length > 0)
-const anchor = computed(() => props.editor && !props.editor.isDestroyed ? props.editor.view.dom : undefined)
+// Keep the native status, draft and Send outside the portalled popup.
+const anchor = computed(() => props.editor && !props.editor.isDestroyed ? props.anchorEl : null)
+const visible = computed(() => !!anchor.value && !props.disabled && !hostPopup.value && props.rows.length > 0)
 const { floatingStyles } = useFloating(anchor, root, {
   open: visible,
   strategy: 'fixed',
   placement: 'top-start',
   whileElementsMounted: autoUpdate,
-  middleware: [offset(4), flip({ padding: 8 }), shift({ padding: 8 }), size({ padding: 8, apply({ availableWidth, availableHeight, rects, elements }) {
+  middleware: [offset(6), flip({ padding: 8 }), shift({ padding: 8 }), size({ padding: 8, apply({ availableWidth, availableHeight, rects, elements }) {
     Object.assign(elements.floating.style, { width: `${Math.max(0, Math.min(rects.reference.width, availableWidth))}px`, maxHeight: `${Math.max(0, Math.min(160, availableHeight))}px` })
   } })],
 })

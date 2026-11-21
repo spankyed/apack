@@ -13,7 +13,7 @@ afterEach(() => { app?.unmount(); app = undefined; for (const editor of editors.
 async function mount() {
   const editor = new Editor({ extensions: [StarterKit], content: 'Draft #release' }); editors.push(editor)
   const root = document.createElement('div'); document.body.append(root, editor.view.dom)
-  const state = shallowReactive({ editor, disabled: false, rows: [{ text: '#release-public', label: 'Public release', description: 'Notes for customers', offerId: 'offer-one' }, { text: '#release-internal', label: 'Internal release', description: 'Notes for teammates', offerId: 'offer-one' }] })
+  const state = shallowReactive({ editor, anchorEl: root as HTMLElement | null, disabled: false, rows: [{ text: '#release-public', label: 'Public release', description: 'Notes for customers', offerId: 'offer-one' }, { text: '#release-internal', label: 'Internal release', description: 'Notes for teammates', offerId: 'offer-one' }] })
   const select = vi.fn(), dismiss = vi.fn()
   app = createApp({ render: () => h(NativePromptCompletions, { ...state, onSelect: select, onDismiss: dismiss }) }); app.mount(root); await nextTick()
   editor.view.dom.focus()
@@ -55,6 +55,10 @@ it('withdraws focused stale rows before showing a replacement offer', async () =
   f.state.rows = [{ text: '#fresh', label: 'Fresh choice', description: 'Current offer', offerId: 'offer-two' }]; await nextTick()
   expect(document.activeElement).toBe(f.editor.view.dom); expect(f.select).not.toHaveBeenCalled()
   f.buttons()[0]!.click(); expect(f.select).toHaveBeenCalledExactlyOnceWith(0, 'offer-two')
+})
+it('withdraws the portal when its composer anchor is absent', async () => {
+  const f = await mount(); f.state.anchorEl = null; await nextTick(); expect(f.buttons()).toHaveLength(0)
+  f.state.anchorEl = f.root; await nextTick(); expect(f.buttons()).toHaveLength(2)
 })
 it('withdraws disabled rows and removes keyboard ownership on unmount', async () => {
   const f = await mount(); f.state.disabled = true; await nextTick(); expect(f.buttons()).toHaveLength(0)
