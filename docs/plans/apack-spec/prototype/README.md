@@ -7,6 +7,7 @@ the app: nothing imports it, and no check covers it.
 |---|---|
 | `state.mts` | The types a state's code is checked against, and the kernel: systems, steps, asks, the link between a backend and its windows |
 | `draft.mts` | Data edited in place, from which a new value is made. What the kernel uses for a nested change |
+| `append-cost.mts` | What a growing list costs one change at a time and in batches, on the draft and through an ask. Runs, for about 25 seconds |
 | `draft-check.mts` | The checks a hand-built draft has to pass. Runs |
 | `search.mts` | The app's code search, backend and surface, ported. Runs |
 | `library.mts` | The app's library system ported handler for handler. Typechecks against stand-ins for its imports; not run |
@@ -34,6 +35,10 @@ npx tsx docs/plans/apack-spec/prototype/draft-check.mts
 ```
 
 ```bash
+npx tsx docs/plans/apack-spec/prototype/append-cost.mts
+```
+
+```bash
 npx tsx docs/plans/apack-spec/prototype/graph.mts docs/plans/apack-spec/prototype/threads.mts
 ```
 
@@ -44,5 +49,5 @@ npx tsx docs/plans/apack-spec/prototype/xstate-survey.mts "$PWD"
 Typecheck:
 
 ```bash
-npx tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --allowImportingTsExtensions --noUncheckedIndexedAccess --skipLibCheck --types node docs/plans/apack-spec/prototype/draft.mts docs/plans/apack-spec/prototype/draft-check.mts docs/plans/apack-spec/prototype/state.mts docs/plans/apack-spec/prototype/search.mts docs/plans/apack-spec/prototype/library.mts docs/plans/apack-spec/prototype/threads.mts docs/plans/apack-spec/prototype/views.mts
+npx tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --allowImportingTsExtensions --noUncheckedIndexedAccess --skipLibCheck --types node docs/plans/apack-spec/prototype/draft.mts docs/plans/apack-spec/prototype/draft-check.mts docs/plans/apack-spec/prototype/append-cost.mts docs/plans/apack-spec/prototype/state.mts docs/plans/apack-spec/prototype/search.mts docs/plans/apack-spec/prototype/library.mts docs/plans/apack-spec/prototype/threads.mts docs/plans/apack-spec/prototype/views.mts
 ```

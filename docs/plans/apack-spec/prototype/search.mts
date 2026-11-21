@@ -129,8 +129,7 @@ type SearchSurfaceEvent =
   // from the code surface
   | { type: 'DIRECTORY_CHANGED'; baseDirectory: string }
   // from its own search, as it runs
-  | { type: 'RESULT'; data: SearchResult }
-  | { type: 'PROGRESS'; data: SearchProgress }
+  | { type: 'FOUND'; results: SearchResult[]; progress: SearchProgress | null }
 
 const searchSurface = state<SearchSurface, SearchSurfaceEvent>()({
   data: {
@@ -178,7 +177,13 @@ const searchSurface = state<SearchSurface, SearchSurfaceEvent>()({
             wholeWord: data.searchOptions.wholeWord,
             useRegex: data.searchOptions.useRegex,
           },
-          (update) => send('result' in update ? { type: 'RESULT', data: update.result } : { type: 'PROGRESS', data: update.progress }),
+          // Progress arrives as a list, at most once a frame: one change for all of it.
+          (updates) => {
+            const results: SearchResult[] = []
+            let progress: SearchProgress | null = null
+            for (const update of updates) { if ('result' in update) results.push(update.result); else progress = update.progress }
+            send({ type: 'FOUND', results, progress })
+          },
         )
 
         return found.ok ? { at: 'idle' } : { at: 'idle', data: { searchError: found.failure.message } }
@@ -186,8 +191,9 @@ const searchSurface = state<SearchSurface, SearchSurfaceEvent>()({
 
       // Only a search that is running has results and progress arriving.
       on: {
-        RESULT:   ({ data: result })   => ({ data: (d) => { d.searchResults.push(result) } }),
-        PROGRESS: ({ data: progress })         => ({ data: { searchProgress: progress } }),
+        FOUND: ({ results, progress }) => ({
+          data: (d) => { d.searchResults.push(...results); if (progress) d.searchProgress = progress },
+        }),
       },
     },
   },

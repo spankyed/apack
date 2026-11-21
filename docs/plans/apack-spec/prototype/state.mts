@@ -7,7 +7,7 @@
 //
 //   tell(name, event)        to a backend system: nobody waits
 //   ask(name, ask, args)     of a backend system: exactly one answer, refusal or failure comes back
-//   progress(update)         from the handler of an ask, to whoever asked, before it answers
+//   progress(update)         from the handler of an ask, to whoever asked, before it answers. It arrives in batches
 //   broadcast(name, event)   from the backend to that surface in every window
 //   watch(key, feature, view, args, heard)   follows a live read of the database for as long as the state is the case
 
@@ -130,12 +130,16 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
   tell<K extends SystemsOf<N>>(to: K, event: N['systems'][K]['events']): void
   tell<E2 extends AnyEvent>(to: Handle<unknown, E2, Asks>, event: E2): void
 
-  /** Asks a backend system, or a state this one started. `heard` is called with each progress update before the answer. */
+  /**
+   * Asks a backend system, or a state this one started. `heard` is called with the progress made since it was last
+   * called, as a list: however fast updates are produced, they arrive at most once a frame, so that a stream of
+   * ten thousand is a few dozen changes and not ten thousand.
+   */
   ask<K extends SystemsOf<N>, Q extends keyof N['systems'][K]['asks'] & string>(
-    of: K, name: Q, args: AskOf<N, K, Q>['args'], heard?: (update: ProgressOf<AskOf<N, K, Q>>) => void,
+    of: K, name: Q, args: AskOf<N, K, Q>['args'], heard?: (updates: ReadonlyArray<ProgressOf<AskOf<N, K, Q>>>) => void,
   ): Promise<OutcomeOf<AskOf<N, K, Q>>>
   ask<A2 extends Asks, Q extends keyof A2 & string>(
-    of: Handle<unknown, never, A2>, name: Q, args: A2[Q]['args'], heard?: (update: ProgressOf<A2[Q]>) => void,
+    of: Handle<unknown, never, A2>, name: Q, args: A2[Q]['args'], heard?: (updates: ReadonlyArray<ProgressOf<A2[Q]>>) => void,
   ): Promise<OutcomeOf<A2[Q]>>
 
   /** From the backend: tells that surface, in every window, an event. */
@@ -253,7 +257,7 @@ const PORT = Symbol('port')
 export interface System {
   start<S extends Shape, E extends AnyEvent, A extends Asks>(ref: string, made: State<S, E, A>): Handle<Value<S>, E, A>
   send<E extends AnyEvent>(to: Handle<unknown, E, Asks>, event: E): void
-  ask<A extends Asks, Q extends keyof A & string>(of: Handle<unknown, never, A>, name: Q, args: A[Q]['args'], heard?: (update: ProgressOf<A[Q]>) => void): Promise<OutcomeOf<A[Q]>>
+  ask<A extends Asks, Q extends keyof A & string>(of: Handle<unknown, never, A>, name: Q, args: A[Q]['args'], heard?: (updates: ReadonlyArray<ProgressOf<A[Q]>>) => void): Promise<OutcomeOf<A[Q]>>
   read<V>(of: Handle<V, never, Asks>): V
   /** Every running state here, as of the last commit. */
   snapshot(): Record<string, unknown>
@@ -264,7 +268,16 @@ export interface System {
   stop(): void
 }
 
-export function system(host: { side: 'backend' | 'window'; views?: ViewHost; trace?(line: string): void }): System {
+/** A data field holding more items than this is reported: a collection that large belongs in a view. */
+const LARGE = 10_000
+
+export function system(host: {
+  side: 'backend' | 'window'
+  views?: ViewHost
+  /** Runs something once per frame. A window gives `requestAnimationFrame`; the default is the next turn of the event loop. */
+  frame?(run: () => void): void
+  trace?(line: string): void
+}): System {
   const trace = (line: string): void => host.trace?.(line)
   const running = new Map<string, Running>()
   const outside: Item[] = []
@@ -303,9 +316,23 @@ export function system(host: { side: 'backend' | 'window'; views?: ViewHost; tra
     out(() => carry(mine.link, () => mine.port.event(ref, event)))
   }
 
-  const ask = (to: string | { ref: string }, name: string, args: object, signal: AbortSignal | undefined, heard: Heard | undefined): Promise<never> => new Promise((resolve, reject) => {
+  /**
+   * Gathers progress and hands it over once a frame, as a list. One change per update is quadratic for a collection
+   * that grows, and nothing reads a state faster than a frame anyway.
+   */
+  const gathering = (heard: (updates: unknown[]) => void, signal: AbortSignal | undefined) => {
+    const waiting: unknown[] = []
+    let due = false
+    const flush = (): void => { due = false; if (waiting.length && !signal?.aborted) heard(waiting.splice(0)) }
+    return { add: (update: unknown): void => { waiting.push(update); if (!due) { due = true; (host.frame ?? setImmediate)(flush) } }, flush }
+  }
+
+  const ask = (to: string | { ref: string }, name: string, args: object, signal: AbortSignal | undefined, hears: ((updates: unknown[]) => void) | undefined): Promise<never> => new Promise((resolve, reject) => {
     const ref = refOf(to)
-    const question = new Question(resolve as unknown as (outcome: AnyOutcome) => void)
+    const gathered = hears && gathering(hears, signal)
+    const heard = gathered?.add
+    // What was gathered is handed over before the answer, so the answer is never ahead of its own progress.
+    const question = new Question((outcome) => { gathered?.flush(); (resolve as unknown as (outcome: AnyOutcome) => void)(outcome) })
     // Once whoever asked has ended, its continuation never runs.
     signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
     if (!isAcross(to)) { enqueue({ kind: 'ask', ref, name, args, question, heard }); return }
@@ -332,7 +359,7 @@ export function system(host: { side: 'backend' | 'window'; views?: ViewHost; tra
       signal,
       send: (event: AnyEvent) => { if (alive()) enqueue({ kind: 'event', ref, event }) },
       tell: (to: string | { ref: string }, event: AnyEvent) => { if (alive()) tell(to, event) },
-      ask: (to: string | { ref: string }, name: string, args: object, heard?: Heard) => ask(to, name, args, mine.controller.signal, heard),
+      ask: (to: string | { ref: string }, name: string, args: object, hears?: (updates: unknown[]) => void) => ask(to, name, args, mine.controller.signal, hears),
       broadcast: (to: string, event: AnyEvent) => { if (alive()) out(() => { for (const window of down) carry(window.link, () => window.port.event(to, event)) }) },
       watch: (key: string, feature: string, view: string, args: object, heard: (update: ViewUpdate<unknown>) => void) => {
         if (!alive() || !host.views) return
@@ -414,6 +441,14 @@ export function system(host: { side: 'backend' | 'window'; views?: ViewHost; tra
     changed.add(ref)
   }
 
+  const reported = new Set<string>()
+  const large = (top: Running, field: string): void => {
+    const held = top.data[field]
+    if (!Array.isArray(held) || held.length <= LARGE || reported.has(`${top.ref}.${field}`)) return
+    reported.add(`${top.ref}.${field}`)
+    trace(`LARGE: ${top.ref} holds ${held.length} items in ${field}. A collection this size belongs in a view`)
+  }
+
   const apply = (active: Active, next: unknown): void => {
     if (next === undefined || next === null || active.controller.signal.aborted) return
     const { at, data = {} } = next as { at?: string; data?: Plain | ((draft: Plain) => void) }
@@ -425,6 +460,7 @@ export function system(host: { side: 'backend' | 'window'; views?: ViewHost; tra
       const kept = Object.fromEntries(Object.keys(before).map((field) => [field, field in value ? value[field] : before[field]]))
       for (const [field] of touched) { if (field! in before && field! in value) touch(top.ref, field!); else trace(`DEFECT: ${top.ref} has no field ${field} to change`) }
       top.data = touched.length ? kept : before
+      for (const field of fields.get(top.ref) ?? []) large(top, field)
       return
     }
     if (at !== undefined) { go(top, at, data); changed.add(top.ref) }
@@ -513,7 +549,7 @@ export function system(host: { side: 'backend' | 'window'; views?: ViewHost; tra
       return handleOf!
     },
     send: (to, event) => arrive({ kind: 'event', ref: to.ref, event }),
-    ask: (of, name, args, heard) => ask(of, name, args, undefined, heard as Heard | undefined),
+    ask: (of, name, args, hears) => ask(of, name, args, undefined, hears as ((updates: unknown[]) => void) | undefined),
     read: (of) => committed[of.ref] as never,
     snapshot: () => committed,
     subscribe: (listener) => { listeners.push(listener) },

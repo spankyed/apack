@@ -267,7 +267,7 @@ function threadsSurface(log: (line: string) => void) {
               const sent = await ask(
                 'threads', 'USER_MSG',
                 { threadId: data.threadId, text: data.text, documentId: data.documentId ?? undefined },
-                (update) => send({ type: 'TEXT_APPENDED', text: update.text }),     // each piece, as it arrives
+                (updates) => send({ type: 'TEXT_APPENDED', text: updates.map((update) => update.text).join('') }),   // what was written since last heard
               )
 
               if (sent.ok) return { at: 'thread.idle', data: { lastReply: sent.value.reply } }

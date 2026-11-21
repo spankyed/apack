@@ -119,11 +119,31 @@ fields exist is the states' to say.
 | `send(event)` | A state | Itself | No |
 | `tell(name, event)` | Anywhere | A backend system, by name | No |
 | `ask(name, ask, args, heard?)` | Anywhere | A backend system, by name | One answer, refusal or failure |
-| `progress(update)` | An ask's handler | Whoever asked, and only them | No |
+| `progress(update)` | An ask's handler | Whoever asked, and only them, as a list at most once a frame | No |
 | `broadcast(name, event)` | The backend | That surface in every window | No |
 
 Names are typed by one declaration of what can be reached, which a pack's generated facade would supply. A state may
 also `start` another that lives exactly as long as it does, and reach it through the handle it gets back.
+
+### Collections that grow
+
+A value is replaced and never mutated, so appending to a list copies it. One change per item is then quadratic, and
+streamed search results and streamed message text are where the app does exactly that. Three rules settle it:
+
+1. **Progress arrives as a list, at most once a frame.** However fast a handler calls `progress`, whoever asked hears
+   what was made since it last heard, in one call. A window's frame is `requestAnimationFrame`; elsewhere it is a turn
+   of the event loop. What was gathered is handed over before the answer, so the answer is never ahead of its progress.
+2. **One change per batch.** `(d) => { d.searchResults.push(...results) }` copies the list once for the whole batch.
+   Nothing reads a state faster than a frame, so nothing is lost.
+3. **A large collection belongs in a view.** State data is what a surface is working with, not a store. The kernel
+   reports a field that passes 10,000 items, by name, so that it shows up as a finding and not as slowness.
+
+Text needs nothing: the engine joins strings without copying them, and 100,000 appended pieces cost a quarter of a second.
+
+`append-cost.mts`, 2026-11-21, Node 24.16.0 through `tsx`, on a machine that was not held quiet, so the ratios are the
+finding and the figures are not: appending 100,000 results one change each took 21.6 s, and 0.26 s at 100 per change.
+Streamed through an ask from a backend to a window, 100,000 results arrived as 199 changes in 0.12 s, with the size
+report raised once.
 
 ### Following a view
 
@@ -170,6 +190,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
 | An ask does not change data by returning | Considered and declined: every change then has one shape, the extractor stays complete, and no real port needed it. To revisit if ports show many ask-plus-event pairs; the form would be an explicit `change((data) => …)` |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
+| Progress is heard as a list, once a frame | One call per update. It made a change, a notice and a copy of the growing list per item: fine at 10,000, unusable at 100,000. A persistent vector would make appends cheap, but its values are not plain arrays, which the snapshot, the wire and the templates all assume. Chunked lists stay plain but push the chunking onto every reader |
 | A nested change is an edit to a draft, built here | Spreads at every level (`{ ...data.titles, [id]: title }`), which get worse with depth. Immer and Mutative were considered; a state's data is plain by rule, so most of what they handle cannot occur, the kernel wants the changed fields in its own shape, and the kernel is meant to have no dependencies. To revisit, in favour of Mutative, if the draft grows special cases |
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
@@ -192,6 +213,8 @@ commands. Types and kernel together are about 540 lines, and the draft 110.
 - **A surface follows views** (`views.mts`), modelled on the threads surface: one for as long as the surface runs, one
   only while a thread is open, and one per open tab. Opening another thread stops the last one's view; closing a tab
   stops its view; stopping the surface stops the rest.
+- **Progress gathered into batches** (`append-cost.mts`): the measurement above, and the search and threads examples,
+  which now make one change per batch.
 - **A draft** (`draft.mts`, 110 lines; `draft-check.mts`, 15 checks) for what a hand-built one gets wrong: the old
   value untouched, what was not edited kept as the same object, an edit that changes nothing returning the very same
   value, the same place read twice being the same draft, arrays through `push`, `splice`, `sort` and `length`, keys
