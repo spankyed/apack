@@ -7,8 +7,12 @@ import { createActor } from 'xstate';
 import type { ActionEntity } from '@apackdev/sdk';
 import type { EARS } from '#generated/ears.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+// Each ask the machine spawns is recorded as it is made, and ends as `asked` answers it: never, unless a case says
+const asked = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => {
+  const { fromPromise } = await import('xstate');
+  return { fromAsk: (to: string, type: string) => fromPromise(({ input }: { input: object }) => asked(to, { type, ...input })) };
+});
 
 const { default: actionsState, ACTIONS_PAGE_SIZE } = await import('#features/actions/fe/state.ts');
 
@@ -20,14 +24,15 @@ const loaded = (name: string, action: ActionEntity | null) => ({ type: 'ACTION.L
 const start = () => createActor(actionsState).start();
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  asked.mockReset();
+  asked.mockReturnValue(new Promise(() => {}));
 });
 
 it('opens a action without asking the backend for it, and fills the form from its view once', () => {
   const actor = start();
   actor.send({ type: 'ACTION.SELECT', actionId: id('Action-p1') });
   expect(actor.getSnapshot().matches('detail')).toBe(true);
-  expect(sendToSystem, 'the view reads the action; nothing is asked for').not.toHaveBeenCalled();
+  expect(asked, 'the view reads the action; nothing is asked for').not.toHaveBeenCalled();
 
   actor.send(loaded('Action-p1', aAction('Action-p1', 'first')));
   actor.send({ type: 'FORM.UPDATE_LABEL', label: 'typed' });
@@ -57,7 +62,7 @@ it('returns to the list when the open action is gone, deleted here or in another
   actor.send({ type: 'ACTION.SELECT', actionId: id('Action-p1') });
   actor.send(loaded('Action-p1', aAction('Action-p1')));
   actor.send({ type: 'ACTION.DELETE', actionId: id('Action-p1') });
-  expect(sendToSystem).toHaveBeenCalledWith('actions', { type: 'DELETE_ACTION', actionId: 'Action-p1' });
+  expect(asked).toHaveBeenCalledWith('actions', { type: 'DELETE_ACTION', actionId: 'Action-p1' });
   expect(actor.getSnapshot().matches('detail'), 'still open until its view says it is gone').toBe(true);
 
   actor.send(loaded('Action-p1', null));
@@ -83,7 +88,7 @@ it('shows a page more each time the list is read to its end', () => {
   actor.send({ type: 'ACTIONS.LOAD_MORE' });
   actor.send({ type: 'ACTIONS.LOAD_MORE' });
   expect(actor.getSnapshot().context.listLimit).toBe(3 * ACTIONS_PAGE_SIZE);
-  expect(sendToSystem).not.toHaveBeenCalled();
+  expect(asked).not.toHaveBeenCalled();
 });
 
 it('saves the form it holds, as an update of the open action or a new one', () => {
@@ -92,13 +97,13 @@ it('saves the form it holds, as an update of the open action or a new one', () =
   actor.send(loaded('Action-p1', aAction('Action-p1', 'first')));
   actor.send({ type: 'FORM.UPDATE_LABEL', label: 'edited' });
   actor.send({ type: 'ACTION.SAVE' });
-  expect(sendToSystem).toHaveBeenLastCalledWith('actions', expect.objectContaining({ type: 'UPDATE_ACTION', actionId: 'Action-p1', label: 'edited' }));
+  expect(asked).toHaveBeenLastCalledWith('actions', expect.objectContaining({ type: 'UPDATE_ACTION', actionId: 'Action-p1', label: 'edited' }));
   expect(actor.getSnapshot().matches('list')).toBe(true);
 
   actor.send({ type: 'ACTION.CREATE' });
   actor.send({ type: 'FORM.UPDATE_LABEL', label: 'new' });
   actor.send({ type: 'ACTION.SAVE' });
-  expect(sendToSystem).toHaveBeenLastCalledWith('actions', expect.objectContaining({ type: 'CREATE_ACTION', label: 'new' }));
+  expect(asked).toHaveBeenLastCalledWith('actions', expect.objectContaining({ type: 'CREATE_ACTION', label: 'new' }));
 });
 
 it('opens its entity from the create view and refuses unrelated entity types', () => {
@@ -112,10 +117,19 @@ it('opens its entity from the create view and refuses unrelated entity types', (
 });
 
 it('shows a write it asked for that was refused, until the user dismisses it', async () => {
-  const { askFailed } = await import('@apackdev/sdk/testing');
+  asked.mockResolvedValueOnce({ ok: false, failure: { kind: 'failed', message: 'No such action' } });
   const actor = start();
-  actor.send(askFailed('c-1', 'UPDATE_ACTION', { kind: 'failed', message: 'No such action' }));
-  expect(actor.getSnapshot().context.writeError).toBe('No such action');
+  actor.send({ type: 'ACTION.UPDATE_LABEL', actionId: 'Missing', label: 'renamed' });
+  await vi.waitFor(() => expect(actor.getSnapshot().context.writeError).toBe('No such action'));
+  expect(Object.keys(actor.getSnapshot().children), 'the ask that ended is not kept').toEqual([]);
   actor.send({ type: 'CLEAR_WRITE_ERROR' });
+  expect(actor.getSnapshot().context.writeError).toBeNull();
+});
+
+it('shows nothing for a write that landed', async () => {
+  asked.mockResolvedValueOnce({ ok: true, value: undefined });
+  const actor = start();
+  actor.send({ type: 'ACTION.UPDATE_LABEL', actionId: 'Action-p1', label: 'renamed' });
+  await vi.waitFor(() => expect(Object.keys(actor.getSnapshot().children)).toEqual([]));
   expect(actor.getSnapshot().context.writeError).toBeNull();
 });

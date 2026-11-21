@@ -1,6 +1,6 @@
 // Signing in to GitHub as a window does it, through the code system, against a stand-in for GitHub on this machine:
-// the window that asked is shown the code, the token is kept as this pack's own secret, every window is told the
-// account, and signing out forgets it, asking git's credential helpers to forget it too. That no other pack can
+// the window that asked is told the code and then the account, the token is kept as this pack's own secret, every
+// window is told the account, and signing out forgets it, asking git's credential helpers to forget it too. That no other pack can
 // read the secret is the host's binding, held in `@apackdev/host`'s secrets specs.
 //
 // Git is run here with a home of its own, whose `.gitconfig` is its user config, and no system configuration, so the
@@ -46,7 +46,7 @@ afterEach(async () => {
   resetTestData();
 });
 
-it('shows the asker the code, keeps the token as its own secret, tells every window the account, and forgets it on sign-out', async () => {
+it('tells the asker the code and then the account, keeps the token as its own secret, tells every window the account, and forgets it on sign-out', async () => {
   const standIn = await startGitHubStandIn({ tokenAnswers: [{ error: 'authorization_pending' }, { access_token: STAND_IN_TOKEN, scope: 'repo,workflow' }] });
   stops.push(standIn.close);
   mockService('github', createGitHubSignIn({ endpoints: standIn.endpoints, clientId: 'client-1', wait: async () => {} }));
@@ -56,7 +56,9 @@ it('shows the asker the code, keeps the token as its own secret, tells every win
   expect(await app.ask('code', { type: 'github.GET_ACCOUNT' }, asWindow)).toEqual({ ok: true, value: null });
 
   const changed = app.nextEmit('code', 'github.ACCOUNT_CHANGED');
-  expect(await app.ask('code', { type: 'github.SIGN_IN' }, asWindow)).toMatchObject({ ok: true, value: { userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device' } });
+  const heard: unknown[] = [];
+  expect(await app.ask('code', { type: 'github.SIGN_IN' }, { ...asWindow, heard: update => { heard.push(update) } })).toMatchObject({ ok: true, value: { login: 'octocat' } });
+  expect(heard, 'the code comes before the account, for the asker to type at GitHub').toMatchObject([{ userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device' }]);
   expect((await changed).account).toMatchObject({ login: 'octocat' });
 
   expect(storedSignIn()).toMatchObject({ token: STAND_IN_TOKEN, scopes: ['repo', 'workflow'], account: { login: 'octocat' } });
@@ -84,9 +86,32 @@ it('tells the asker why a sign-in ended without an account, and keeps nothing', 
   app = await startApp({ systems: ['code'] });
   await app.connect();
 
-  const ended = app.nextEmit('code', 'github.SIGN_IN_FAILED');
-  const asked = await app.ask('code', { type: 'github.SIGN_IN' }, asWindow);
+  const heard: unknown[] = [];
+  const asked = await app.ask('code', { type: 'github.SIGN_IN' }, { ...asWindow, heard: update => { heard.push(update) } });
 
-  expect(await ended, 'the window given the code is told how its sign-in ended').toMatchObject({ reason: 'denied', userCode: asked.ok ? (asked.value as { userCode: string }).userCode : undefined });
+  expect(heard).toMatchObject([{ userCode: 'ABCD-1234' }]);
+  expect(asked, 'the asker given the code is told how its sign-in ended').toMatchObject({ ok: false, failure: { kind: 'denied' } });
+  expect(storedSignIn()).toBeNull();
+});
+
+it('ends a sign-in whose asker stops waiting, and keeps nothing', async () => {
+  const standIn = await startGitHubStandIn({ tokenAnswers: [{ error: 'authorization_pending' }] });
+  stops.push(standIn.close);
+  // GitHub is asked again only once the wait between two polls ends, which here is when the asker stops
+  const waits: AbortSignal[] = [];
+  mockService('github', createGitHubSignIn({ endpoints: standIn.endpoints, clientId: 'client-1', wait: (_ms, signal) => new Promise((_resolve, reject) => {
+    waits.push(signal);
+    signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+  }) }));
+  app = await startApp({ systems: ['code'] });
+  await app.connect();
+
+  const stopping = new AbortController();
+  const asked = app.ask('code', { type: 'github.SIGN_IN' }, { ...asWindow, signal: stopping.signal });
+  await vi.waitFor(() => expect(waits).toHaveLength(1));
+
+  stopping.abort(new Error('the window cancelled'));
+  await expect(asked).rejects.toThrow('the window cancelled');
+  await vi.waitFor(() => expect(waits[0].aborted).toBe(true));
   expect(storedSignIn()).toBeNull();
 });

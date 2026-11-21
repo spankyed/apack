@@ -8,7 +8,7 @@ import { detectAllArrayChanges, errorMessage } from '@apackdev/sdk/utils/pure';
 import { done, failed, fromOutcome, onOutcome, outcomeOf, type FailureOf, type Outcome } from '@apackdev/sdk/helpers';
 import { AppDataBusyError, _captureHostServices, _settingsAdmin as preferences } from '@apackdev/sdk/services';
 import type { HostRuntimeServices } from '@apackdev/sdk/runtime';
-import { createLogger, reportError } from '@apackdev/sdk/logger';
+import { createLogger } from '@apackdev/sdk/logger';
 import { splitRef, type FeatureRef } from '@apackdev/sdk/ids';
 import { SettingsRefusedError } from '../document.ts';
 import { settingsRequestAccess, settingsRequestAdmin } from './access.ts';
@@ -48,21 +48,18 @@ export const settingsSpec = defineSystem<Contract>();
 
 /**
  * A change to the stored settings, answered with what it stored or why it stored nothing. The store's own refusals are
- * the user's to fix; anything else it throws is a bug here, and reported as one whether or not anybody asked. While the
- * stored data is being replaced or reset (`busy`) every change is refused, since storing it would either be lost with
- * the data or be taken for a change the user made — and refused rather than dropped, because a settings form waits for
- * the answer before it says "Saved".
+ * the user's to fix; anything else it throws is a bug here, thrown named for what it stopped, which whoever asked is
+ * answered with. While the stored data is being replaced or reset (`busy`) every change is refused, since storing it
+ * would either be lost with the data or be taken for a change the user made — and refused rather than dropped, because
+ * a settings form waits for the answer before it says "Saved".
  */
-function change<T>(what: string, busy: string | undefined, waiting: boolean, write: () => T): T {
+function change<T>(what: string, busy: string | undefined, write: () => T): T {
   if (busy !== undefined) throw new AskError('refused', busy, { problems: [busy] });
   try {
     return write();
   } catch (error) {
     if (error instanceof SettingsRefusedError) throw new AskError('refused', error.problems.join('; '), { problems: error.problems });
-    const bug = new Error(`${what}: ${errorMessage(error)}`);
-    // Nobody waiting, the answer reports it itself
-    if (waiting) reportError({ error: bug, source: 'settings' });
-    throw bug;
+    throw new Error(`${what}: ${errorMessage(error)}`);
   }
 }
 
@@ -75,24 +72,24 @@ export const answers = settingsSpec.answers({
     const recovery = preferences().getRecovery();
     return recovery ? { recovery } : stored();
   },
-  RECOVER_SETTINGS: ({ args, context, waiting }) => change("The settings weren't repaired", context.busy, waiting, () => {
+  RECOVER_SETTINGS: ({ args, context }) => change("The settings weren't repaired", context.busy, () => {
     settingsRequestAdmin(args).recover(args.request);
     return { recovery: preferences().getRecovery()! };
   }),
   // A surface's settings are keyed by its ref, which the frontend resolves before sending and the store checks
-  UPDATE_SETTINGS: ({ args, context, waiting }) => change("The settings weren't saved", context.busy, waiting, () => {
+  UPDATE_SETTINGS: ({ args, context }) => change("The settings weren't saved", context.busy, () => {
     settingsRequestAccess(args).service.set(args.target, args.path, args.value, args.condition);
     return stored();
   }),
-  REPLACE_SETTINGS: ({ args, context, waiting }) => change("The settings weren't replaced", context.busy, waiting, () => {
+  REPLACE_SETTINGS: ({ args, context }) => change("The settings weren't replaced", context.busy, () => {
     settingsRequestAdmin(args).replaceAll(args.data, args.condition);
     return stored();
   }),
-  RESET_SETTINGS: ({ args, context, waiting }) => change("The settings weren't reset", context.busy, waiting, () => {
+  RESET_SETTINGS: ({ args, context }) => change("The settings weren't reset", context.busy, () => {
     settingsRequestAccess(args).service.reset(args.target);
     return stored();
   }),
-  RESET_ALL_SETTINGS: ({ args, context, waiting }) => change("The settings weren't reset", context.busy, waiting, () => {
+  RESET_ALL_SETTINGS: ({ args, context }) => change("The settings weren't reset", context.busy, () => {
     settingsRequestAdmin(args).resetAll();
     return stored();
   }),

@@ -46,8 +46,8 @@ export type SystemEvents =
    */
   | { type: 'DATA_CHANGED_ELSEWHERE' }
   /**
-   * The answers to this system's own asks of another system, when it handles them as events rather than awaiting
-   * them (`ask`): every system may ask, so every system receives them
+   * How the answers to this system's own asks of another system travel. The ask that was made takes them (`ask`), and
+   * no machine handles one: every system may ask, so every system receives them
    */
   | AskAnswered
   | AskFailed
@@ -223,7 +223,6 @@ export interface ChildAnswerArgs<TContext extends MachineContext, TEvent extends
   readonly self: Args<TContext, TEvent>['self'];
   readonly signal: AbortSignal;
   readonly client?: string;
-  readonly waiting: boolean;
   readonly progress: (update: ProgressPayload<A[K]>) => void;
   readonly refuse: RefuseOf<A[K]>;
 }
@@ -263,11 +262,6 @@ export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
   readonly signal: AbortSignal;
   /** The connection the ask arrived on, absent for one another system made */
   readonly client?: string;
-  /**
-   * Whether anyone waits for the answer: false for an ask sent from no delivery — an action, a timer — whose outcome
-   * a handler that must still be heard tells every window itself
-   */
-  readonly waiting: boolean;
   /**
    * Tells whoever asked something before the answer, as the ask declares under `progress`. Only they hear it, and
    * nothing is told once `signal` has aborted
@@ -398,7 +392,7 @@ function answer(asked: string, handler: (args: object) => unknown, args: { event
   let made: unknown;
   try {
     made = handler({
-      args: args.event, context: args.context, self: args.self, signal, refuse: _refuse, waiting: reply !== undefined,
+      args: args.event, context: args.context, self: args.self, signal, refuse: _refuse,
       progress: (update: unknown) => { if (!signal.aborted) reply?.(_progressed(asked, update)); },
       ...(client === undefined ? {} : { client }),
     });

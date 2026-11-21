@@ -3,24 +3,29 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
 
-const sendToSystem = vi.hoisted(() => vi.fn())
-vi.mock('#generated/events.ts', () => ({ sendToSystem }))
+/** The reads of the buffer the machine has asked for, each answered by the spec */
+const reads = vi.hoisted(() => [] as Array<(outcome: unknown) => void>)
+vi.mock('#generated/events.ts', async () => {
+  const { fromPromise } = await import('xstate')
+  return {
+    sendToSystem: vi.fn(),
+    fromAsk: (_to: string, _type: string) => fromPromise(() => new Promise((resolve) => { reads.push(resolve) })),
+  }
+})
 const { default: logsState } = await import('#features/logs/fe/state.ts')
 
-const asks = () => sendToSystem.mock.calls.filter(([, event]) => event.type === 'GET_LOGS').length
+beforeEach(() => { reads.length = 0 })
 
-beforeEach(() => { sendToSystem.mockReset() })
-
-it('asks for the buffer when it starts and when its settings change, and shows what it is answered', () => {
+it('asks for the buffer when it starts and when its settings change, and shows what it is answered', async () => {
   const actor = createActor(logsState).start()
-  expect(asks()).toBe(0)
+  expect(reads).toHaveLength(0)
   actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true })
-  expect(asks()).toBe(1)
+  expect(reads).toHaveLength(1)
 
   actor.send({ type: 'FEATURE_SETTINGS_UPDATED', settings: { maxLogs: 10, excludedSources: [] } as never })
-  expect(asks()).toBe(2)
+  expect(reads).toHaveLength(2)
 
-  actor.send({ type: 'ASK_ANSWERED', asked: 'GET_LOGS', answer: { logs: [{ id: 'l1', timestamp: 1, level: 'info', message: 'hello' }], settings: { maxLogs: 10, excludedSources: [] } as never } })
-  expect(actor.getSnapshot().context.logs.map((log) => log.message)).toEqual(['hello'])
+  reads[1]({ ok: true, value: { logs: [{ id: 'l1', timestamp: 1, level: 'info', message: 'hello' }], settings: { maxLogs: 10, excludedSources: [] } } })
+  await vi.waitFor(() => expect(actor.getSnapshot().context.logs.map((log) => log.message)).toEqual(['hello']))
   actor.stop()
 })

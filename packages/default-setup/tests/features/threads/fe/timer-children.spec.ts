@@ -3,8 +3,18 @@
 import { afterAll, afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
 import { startFeTestRuntime } from '@apackdev/sdk/testing'
-import threadsState from '#features/threads/fe/state.ts'
 
+/** The asks the surface made, each ended by the case as the system would */
+const asks = vi.hoisted(() => [] as { type: string; end(outcome: object): void }[])
+vi.mock('#generated/events.ts', async (actual) => {
+  const { fromPromise } = await import('xstate')
+  return {
+    ...(await actual<object>()),
+    fromAsk: (_to: string, type: string) => fromPromise<object, object>(() => new Promise(end => { asks.push({ type, end }) })),
+  }
+})
+
+const { default: threadsState } = await import('#features/threads/fe/state.ts')
 
 afterAll(startFeTestRuntime({ client: { send() {}, watchView: () => () => {} } }))
 beforeEach(() => vi.useFakeTimers())
@@ -16,10 +26,14 @@ function startThreads() {
   return createActor(threadsState).start()
 }
 
-it('drops the new-thread timer once it clears the flag', () => {
+it('drops the new-thread timer once it clears the flag', async () => {
   const actor = startThreads()
   actor.send({ type: 'THREADS.READ', threads: [{ id: 'Thread-t1', topic: 'New' } as never] })
-  actor.send({ type: 'ASK_ANSWERED', asked: 'CREATE_THREAD', answer: { id: 'Thread-t1' } })
+  actor.send({ type: 'SHOW_CREATE_FORM' })
+  actor.send({ type: 'CREATE_THREAD' })
+  asks.find(ask => ask.type === 'CREATE_THREAD')!.end({ ok: true, value: { id: 'Thread-t1' } })
+  // The answer reaches the surface as the ask's promise settles
+  await vi.advanceTimersByTimeAsync(0)
   expect(children(actor)).toContain('clear-new-thread-flag-Thread-t1')
   expect(actor.getSnapshot().context.threadMap['Thread-t1']?.isNew).toBe(true)
 

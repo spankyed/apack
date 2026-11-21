@@ -111,9 +111,13 @@ test("a reloaded pack's browser surface restores what its system saved, asking a
     });
     expect(response.status, await response.text()).toBe(200);
 
-    await expect.poll(async () => (await received(appPage, 'browser', 'ASK_ANSWERED'))
-      .filter((event) => event.asked === 'GET_SAVED_SESSION')
-      .some((event) => (event.answer?.savedBookmarks ?? []).some((bookmark) => bookmark.url === url))).toBe(true);
+    // The answer is no event of the surface's: it is the output of the ask its machine invoked, so what shows it
+    // arrived is the surface holding the bookmark
+    await expect.poll(() => appPage.evaluate((ref) => {
+      const surface = (window as unknown as { applicationState: { system: { get(id: string): { getSnapshot(): { context: { bookmarks: { url: string }[] } } } | undefined } } })
+        .applicationState.system.get(ref);
+      return (surface?.getSnapshot().context.bookmarks ?? []).map((bookmark) => bookmark.url);
+    }, builtIn('browser'))).toContain(url);
   } finally {
     await app.send(builtIn('browser'), { type: 'SYNC_BOOKMARKS', bookmarks: [] });
   }

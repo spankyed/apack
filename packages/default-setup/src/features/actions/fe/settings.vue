@@ -165,17 +165,16 @@
 
 <script setup lang="ts">
 import { Plus, X, Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useSettingsDraft, useSurface } from '@apackdev/sdk/fe'
+import { useAsk, useSettingsDraft } from '@apackdev/sdk/fe'
+import { ask } from '#generated/events.ts'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
-import { ref } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 import ColorPicker from '@apackdev/ui/design/ColorPicker'
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
 import type { Category } from '#generated/types.ts'
-import { useSelector } from '@xstate/vue'
-import type { ActionsState } from './state.ts'
 
 interface Props {
   settings?: SettingsOf<'actions'>
@@ -221,26 +220,30 @@ const removeCategory = (index: number) => {
   }
 }
 
-// Get actions actor and state via selectors
-const actionsActor: ActionsState = useSurface()
+// An import, asked from here: how the last one ended is shown until another is picked
+const importing = useAsk((actions: unknown) => ask('actions', { type: 'IMPORT_ACTIONS', actions }))
+const imported = shallowRef<typeof importing.outcome>()
+const isImporting = computed(() => importing.pending)
+const importStatus = computed(() => (imported.value === undefined ? 'idle' : imported.value.ok ? 'success' : 'error'))
+const applyErrors = computed(() => {
+  if (imported.value === undefined) return []
+  return imported.value.ok ? imported.value.value.errors ?? [] : imported.value.failure.message.split('\n')
+})
+const importedCount = computed(() => (imported.value?.ok ? imported.value.value.count : 0))
 
-// Import state
-const isImporting = useSelector(actionsActor, (state) => state.context.actionsImport.status === 'importing')
-const importStatus = useSelector(actionsActor, (state) => state.context.actionsImport.status)
-const applyErrors = useSelector(actionsActor, (state) => state.context.actionsImport.errors)
-const importedCount = useSelector(actionsActor, (state) => state.context.actionsImport.importedCount)
-
-// Export state
+// An export, asked from here: how the last one ended is shown until another is made
 const exportDirectory = ref<string>('')
-const isExporting = useSelector(actionsActor, (state) => state.context.actionsExport.status === 'exporting')
-const exportStatus = useSelector(actionsActor, (state) => state.context.actionsExport.status)
-const exportErrors = useSelector(actionsActor, (state) => state.context.actionsExport.errors)
-const exportedFilePath = useSelector(actionsActor, (state) => state.context.actionsExport.filePath)
-const exportedActionCount = useSelector(actionsActor, (state) => state.context.actionsExport.actionCount)
+const exporting = useAsk((directory: string) => ask('actions', { type: 'EXPORT_ACTIONS', directory }))
+const exported = shallowRef<typeof exporting.outcome>()
+const isExporting = computed(() => exporting.pending)
+const exportStatus = computed(() => (exported.value === undefined ? 'idle' : exported.value.ok ? 'success' : 'error'))
+const exportErrors = computed(() => (exported.value?.ok === false ? [exported.value.failure.message] : []))
+const exportedFilePath = computed(() => (exported.value?.ok ? exported.value.value.filePath : ''))
+const exportedActionCount = computed(() => (exported.value?.ok ? exported.value.value.actionCount : 0))
 
-// Import - file picker and send to state machine
+// Import - file picker, then the ask
 const selectAndImportActions = async () => {
-  actionsActor.send({ type: 'ACTIONS.RESET_IMPORT_STATUS' })
+  imported.value = undefined
 
   const filePath = await window.electronAPI?.fileUtils.selectPath({
     type: 'file'
@@ -261,10 +264,7 @@ const selectAndImportActions = async () => {
       return
     }
 
-    actionsActor.send({
-      type: 'ACTIONS.IMPORT',
-      actions,
-    })
+    imported.value = await importing.ask(actions)
   } catch {
     // Silently fail for file reading errors
   }
@@ -276,9 +276,9 @@ const selectExportDirectory = async () => {
   if (dir && typeof dir === 'string') exportDirectory.value = dir
 }
 
-const exportActionsToFile = () => {
+const exportActionsToFile = async () => {
   if (!exportDirectory.value) return
-  actionsActor.send({ type: 'ACTIONS.RESET_EXPORT_STATUS' })
-  actionsActor.send({ type: 'ACTIONS.EXPORT', directory: exportDirectory.value })
+  exported.value = undefined
+  exported.value = await exporting.ask(exportDirectory.value)
 }
 </script>

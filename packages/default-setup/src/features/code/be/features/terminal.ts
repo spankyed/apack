@@ -1,8 +1,9 @@
 import { featureSettings } from '#generated/settings.ts';
-import type { AnswersTo, OutgoingTerminalEvents, TerminalAsks } from '../contract.ts'
+import type { OutgoingTerminalEvents, TerminalAsks } from '../contract.ts'
 
 import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
+import { safeEvents } from '@apackdev/sdk/helpers';
 import { setup, assign, fromPromise, waitFor, type AnyActorRef } from 'xstate'
 
 import { terminalService } from '../services/terminal.ts'
@@ -10,7 +11,7 @@ import { cwdAsReported } from '../utils/osc-cwd.ts'
 import { statusMoves } from '../utils/terminal-status.ts'
 import type { TerminalEvent } from '@apackdev/sdk/services'
 import { createLogger, reportError } from '@apackdev/sdk/logger';
-import { onConnectionEnded } from '@apackdev/sdk/events';
+import { onConnectionEnded, type AsksEvents } from '@apackdev/sdk/events';
 
 const logger = createLogger('terminal');
 
@@ -20,7 +21,7 @@ export interface CodeTerminalSystemContext {
   baseDirectory: string | null
 }
 
-/** What the terminal child handles: a window's input that nobody answers, and the code system's own */
+/** What the terminal child handles: a window's input that nobody answers, the code system's own, and the asks */
 export type Event =
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
   | { type: 'terminal.STOPPED_FITTING'; terminalId: string }
@@ -29,6 +30,10 @@ export type Event =
   /** The window looking back through a recording measured how many cells fit where it draws it */
   | { type: 'terminal.REWIND_RESIZE'; session: string; cols: number; rows: number }
   | { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
+  // The terminal asks, which the code system forwards here to be answered
+  | AsksEvents<TerminalAsks>
+
+const typeOf = safeEvents<Event>();
 
 /** A terminal's news, for every window showing the code surface: what its process did, never a listing */
 type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.CLIPBOARD' | 'terminal.BELL' | 'terminal.NOTIFIED'
@@ -155,90 +160,72 @@ const terminalHandlers = {
 }
 
 /**
- * A terminal failure, reported to the user.
- *
- * `reportError` is what reaches the user, the app turning a system error into a toast, and it needs no new
- * published API — `HostShell` exposes no `notify`, and adding one for this would publish a second way to say the
- * same thing. A failure is not news either: broadcast, every window would raise it, including the ones whose user
- * did nothing.
+ * A failure of something nobody asked for, reported to the user: keystrokes for a terminal that is not there.
+ * `reportError` is what reaches them, the app turning a system error into a toast. An ask's failure is not
+ * reported here: it is its asker's, which the ask's answer tells
  */
 const failTerminal = (operation: string, error: unknown): void => {
   reportError({ error, title: 'Terminal error', source: 'terminal', operation })
-}
-
-/**
- * Runs one terminal operation for an ask, refusing the ask with what it fails with — which settles it: the surface
- * keeps one entry per outstanding open. The asker's failure is reported here, naming the operation; one nobody
- * asked for is reported by the answer itself, so it is reported once either way.
- */
-async function reported<T>(operation: string, waiting: boolean, run: () => T | Promise<T>): Promise<T> {
-  try {
-    return await run()
-  } catch (error) {
-    if (waiting) failTerminal(operation, error)
-    throw error
-  }
 }
 
 /** A terminal's title, for saying which one was not found */
 const nameOf = (terminalId: string) => terminalService.get(terminalId)?.info.title ?? 'Terminal'
 
 /**
- * The terminals as restored: an ask about them waits until the child has taken up what the last run left, rather
+ * The terminals as restored: an ask about them waits until this machine has taken up what the last run left, rather
  * than being answered from a list that is still being filled
  */
 async function restored(self: AnyActorRef): Promise<void> {
-  const terminal = self.getSnapshot().children.terminal as AnyActorRef | undefined
-  if (!terminal) throw new Error('The terminals are not running')
-  await waitFor(terminal, snapshot => snapshot.value === 'idle')
+  await waitFor(self, snapshot => snapshot.value === 'idle')
 }
 
-/** The terminal asks, answered by the code system (`answers`, `system.ts`) */
-export const terminalAnswers: AnswersTo<TerminalAsks> = {
+/** Hands each handler the connection the message it handles arrived on — see `defineHandlers` */
+const handlers = defineHandlers<CodeTerminalSystemContext, Event>();
+
+/**
+ * The terminal asks, answered here. One that fails is refused with what it failed with, which is its asker's to
+ * show; one nobody asked for is reported by the answer itself
+ */
+const answers = handlers.answers<TerminalAsks>({
   // **The answer waits for the session**, because the process is the broker's and a socket away
-  'terminal.CREATE_TERMINAL': async ({ args, context, self, waiting }) => {
+  'terminal.CREATE_TERMINAL': async ({ args, context, self }) => {
     await restored(self)
     const cwd = args.cwd || context.baseDirectory
-    const terminalInfo = await reported('create', waiting, () => terminalService.create({
+    const terminalInfo = await terminalService.create({
       title: args.title,
       cwd: cwd && cwd.trim() ? cwd : undefined,
       shell: args.shell,
       cols: args.cols || 80,
       rows: args.rows || 24,
       target: args.target,
-    }, terminalHandlers))
+    }, terminalHandlers)
     // Every window's list grows, and only the window that asked opens it. A terminal's id is minted here, so
     // nothing the asker sent could have identified it
     emitToFrontend({ type: 'terminal.CREATED', data: { terminalId: terminalInfo.id } })
     return terminalInfo
   },
 
-  'terminal.RESTART_TERMINAL': async ({ args: { terminalId }, self, waiting }) => {
+  'terminal.RESTART_TERMINAL': async ({ args: { terminalId }, self }) => {
     await restored(self)
-    const info = await reported('restart', waiting, async () => {
-      const restarted = await terminalService.restart(terminalId, terminalHandlers)
-      if (!restarted) throw new Error(`No terminal ${terminalId}`)
-      return restarted
-    })
+    const info = await terminalService.restart(terminalId, terminalHandlers)
+    if (!info) throw new Error(`No terminal ${terminalId}`)
     // Every window showing this terminal has a new shell under it; the one that asked hears it too, which is why
     // this is news rather than the answer — a restart is not private to the window that clicked it
     emitToFrontend({ type: 'terminal.RESTARTED', data: info })
   },
 
-  'terminal.CLOSE_TERMINAL': async ({ args: { terminalId }, self, waiting }) => {
+  'terminal.CLOSE_TERMINAL': async ({ args: { terminalId }, self }) => {
     await restored(self)
-    await reported('close', waiting, async () => {
-      const terminalName = nameOf(terminalId)
-      const outcome = await terminalService.kill(terminalId, terminalHandlers)
-      // Only one of these is a terminal that was not there. A broker that would not end the session closed the
-      // terminal all the same, so the user is told what happened rather than that they asked about something
-      // that does not exist
-      if (outcome === 'unknown') throw new Error(`${terminalName} not found`)
-      if (outcome === 'refused') throw new Error(`The broker would not end ${terminalName}; it is closed here`)
-    })
+    const terminalName = nameOf(terminalId)
+    const outcome = await terminalService.kill(terminalId, terminalHandlers)
+    // Only one of these is a terminal that was not there. A broker that would not end the session closed the
+    // terminal all the same, so the user is told what happened rather than that they asked about something
+    // that does not exist
+    if (outcome === 'unknown') throw new Error(`${terminalName} not found`)
+    if (outcome === 'refused') throw new Error(`The broker would not end ${terminalName}; it is closed here`)
   },
 
-  'terminal.RESIZE_TERMINAL': ({ args, client, waiting }) => reported('resize', waiting, async () => {
+  'terminal.RESIZE_TERMINAL': async ({ args, client }) => {
     // One cell in pixels, where the window measured one: what a program asking for the size in pixels is told
     const cell = args.cellWidth && args.cellHeight ? { width: args.cellWidth, height: args.cellHeight } : undefined
     const terminalName = nameOf(args.terminalId)
@@ -253,57 +240,46 @@ export const terminalAnswers: AnswersTo<TerminalAsks> = {
     if (accepted.changed) emitToFrontend({ type: 'terminal.RESIZED', data: grid })
     // The asker that did not get what it asked for is told by its answer, which is its business and nobody else's
     return accepted.cols !== args.cols || accepted.rows !== args.rows ? grid : null
-  }),
-
-  'terminal.RENAME_TERMINAL': ({ args: { terminalId, customTitle }, waiting }) => reported('rename', waiting, () => {
-    if (!terminalService.rename(terminalId, customTitle)) throw new Error(`${nameOf(terminalId)} not found`)
-    broadcastToSurface(surfaceId, { type: 'terminal.RENAMED', data: { terminalId, customTitle } })
-  }),
-
-  'terminal.REFRESH_LIST': async ({ self, waiting }) => {
-    await restored(self)
-    return reported('list', waiting, () => terminalService.list())
   },
 
-  'terminal.OPEN_TERMINAL_TAB': async ({ args: { terminalId }, self, waiting }) => {
+  'terminal.RENAME_TERMINAL': ({ args: { terminalId, customTitle } }) => {
+    if (!terminalService.rename(terminalId, customTitle)) throw new Error(`${nameOf(terminalId)} not found`)
+    broadcastToSurface(surfaceId, { type: 'terminal.RENAMED', data: { terminalId, customTitle } })
+  },
+
+  'terminal.REFRESH_LIST': async ({ self }) => {
     await restored(self)
-    return reported('open-tab', waiting, () => {
-      const terminal = terminalService.list().find(t => t.id === terminalId)
-      if (!terminal) throw new Error('Terminal not found')
-      return terminal
-    })
+    return terminalService.list()
+  },
+
+  'terminal.OPEN_TERMINAL_TAB': async ({ args: { terminalId }, self }) => {
+    await restored(self)
+    const terminal = terminalService.list().find(t => t.id === terminalId)
+    if (!terminal) throw new Error('Terminal not found')
+    return terminal
   },
 
   /** Every window showing the terminal marks it as one that keeps running, which is news rather than the answer */
-  'terminal.KEEP_TERMINAL': async ({ args: { terminalId, kept }, self, waiting }) => {
+  'terminal.KEEP_TERMINAL': async ({ args: { terminalId, kept }, self }) => {
     await restored(self)
-    await reported('keep', waiting, async () => {
-      if (!await terminalService.keep(terminalId, kept)) throw new Error(`No running terminal ${terminalId}`)
-    })
+    if (!await terminalService.keep(terminalId, kept)) throw new Error(`No running terminal ${terminalId}`)
     emitToFrontend({ type: 'terminal.KEPT', data: { terminalId, kept } })
   },
 
   /** A recording is opened for the window that asked to look, and nobody else is looking */
-  'terminal.REWIND': async ({ args: { terminalId, cols, rows }, client, self, waiting }) => {
+  'terminal.REWIND': async ({ args: { terminalId, cols, rows }, client, self }) => {
     await restored(self)
-    return reported('rewind', waiting, async () => {
-      const opened = await terminalService.rewind(terminalId, { cols, rows }, client)
-      if (!opened) throw new Error(`No terminal ${terminalId}`)
-      return opened
-    })
+    const opened = await terminalService.rewind(terminalId, { cols, rows }, client)
+    if (!opened) throw new Error(`No terminal ${terminalId}`)
+    return opened
   },
 
-  'terminal.REWIND_SEEK': async ({ args: { session, at }, self, waiting }) => {
+  'terminal.REWIND_SEEK': async ({ args: { session, at }, self }) => {
     await restored(self)
-    return reported('rewind', waiting, async () => {
-      const sought = await terminalService.seekRewind(session, at)
-      return sought === null ? null : { session, at: sought }
-    })
+    const sought = await terminalService.seekRewind(session, at)
+    return sought === null ? null : { session, at: sought }
   },
-}
-
-/** Hands each handler the connection the message it handles arrived on — see `defineHandlers` */
-const handlers = defineHandlers<CodeTerminalSystemContext, Event>();
+})
 
 export const terminalSystem = setup({
   types: {
@@ -324,10 +300,12 @@ export const terminalSystem = setup({
       await terminalService.endUnclaimedKept()
     })
   },
-  actions: handlers.actions({
+  actions: {
+    ...answers.actions,
+    ...handlers.actions({
     /** Keystrokes: a terminal that is not there is reported, and nothing is answered */
     sendTerminalInput: ({ event }) => {
-      const ev = event as { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
+      const ev = typeOf('terminal.TERMINAL_INPUT', event)
       const terminalName = nameOf(ev.terminalId)
       void terminalService.write(ev.terminalId, ev.data)
         .then(found => {
@@ -343,7 +321,7 @@ export const terminalSystem = setup({
      * that need the new grid are the others.
      */
     stoppedFitting: ({ event, client }) => {
-      const ev = event as { type: 'terminal.STOPPED_FITTING'; terminalId: string }
+      const ev = typeOf('terminal.STOPPED_FITTING', event)
       if (client === undefined) return
       void terminalService.stoppedFitting(ev.terminalId, client)
         .then(accepted => {
@@ -355,37 +333,36 @@ export const terminalSystem = setup({
 
     /** News: what one window's person has looked at, every window stops marking */
     markStatusSeen: ({ event }) => {
-      const ev = event as { type: 'terminal.STATUS_SEEN'; terminalId: string }
+      const ev = typeOf('terminal.STATUS_SEEN', event)
       const statuses = terminalService.statusesSeen(ev.terminalId)
       if (statuses) emitToFrontend({ type: 'terminal.STATUS', data: { terminalId: ev.terminalId, statuses } })
     },
 
     resizeRewind: ({ event }) => {
-      const ev = event as { type: 'terminal.REWIND_RESIZE'; session: string; cols: number; rows: number }
+      const ev = typeOf('terminal.REWIND_RESIZE', event)
       void terminalService.resizeRewind(ev.session, ev.cols, ev.rows).catch(error => { logger.error('Could not resize a recording', { error }) })
     },
 
     closeRewind: ({ event }) => {
-      const ev = event as { type: 'terminal.REWIND_CLOSE'; session: string }
+      const ev = typeOf('terminal.REWIND_CLOSE', event)
       void terminalService.closeRewind(ev.session).catch(error => { logger.error('Could not close a recording', { error }) })
     },
 
     updateBaseDirectory: assign({
-      baseDirectory: ({ event }) => {
-        const ev = event as { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
-        return ev.path
-      }
+      baseDirectory: ({ event }) => typeOf('terminal.UPDATE_BASE_DIRECTORY', event).path
     })
-  })
+  }),
+  },
 }).createMachine({
   id: 'terminal',
   initial: 'initializing',
   context: ({ input }: { input?: { baseDirectory: string | null } }) => ({
     baseDirectory: input?.baseDirectory || null
   }),
-  // Stateless handlers safe during initialization. The asks about the terminals the restore takes up wait for
-  // it (`restored`), so they are answered from the list as restored
+  // Stateless handlers safe during initialization. The asks are taken in every state: those about the terminals
+  // the restore takes up wait for it (`restored`), so they are answered from the list as restored
   on: {
+    ...answers.on,
     'terminal.TERMINAL_INPUT': {
       actions: 'sendTerminalInput'
     },

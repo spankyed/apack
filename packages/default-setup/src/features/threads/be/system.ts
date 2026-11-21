@@ -128,7 +128,7 @@ export const answers = threadsSpec.answers({
       throw refuse('not-found', errorMessage(err), { threadId });
     }
   },
-  USER_MSG: ({ args, waiting }) => {
+  USER_MSG: ({ args, client }) => {
       try {
         const { text, mode, phase, threadId: providedThreadId, references, cwdOverride, forceDirectoryPicker } = args;
 
@@ -165,8 +165,8 @@ export const answers = threadsSpec.answers({
           ...(mode ? { context: { agent: mode } } : {}),
         });
 
-        // The window that sent the first message of a thread shows the thread it started; with none, every window does
-        if (started && !waiting) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId });
+        // A window that asked opens the thread from its answer. One no window asked for (a flow's) is shown to every window
+        if (started && !client) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId });
 
         sendToSystem('brain', {
           type: 'TRIGGER_BRAIN_EVENT',
@@ -188,7 +188,7 @@ export const answers = threadsSpec.answers({
         throw err;
       }
   },
-  USER_COMMAND: ({ args, waiting }) => {
+  USER_COMMAND: ({ args, client }) => {
       try {
       const { command, text, mode, phase, threadId: providedThreadId, references, cwdOverride } = args;
 
@@ -229,7 +229,7 @@ export const answers = threadsSpec.answers({
         ...(mode ? { context: { agent: mode } } : {}),
       });
 
-      if (started && !waiting) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId });
+      if (started && !client) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId });
 
       sendToSystem('brain', {
         type: 'TRIGGER_BRAIN_EVENT',
@@ -251,7 +251,7 @@ export const answers = threadsSpec.answers({
         throw err;
       }
   },
-  FORK_THREAD: ({ args, waiting }) => {
+  FORK_THREAD: ({ args, client }) => {
       const { messageId, threadId, threadTopic } = args;
       if (!threadId) throw new Error('There is no thread to fork from');
 
@@ -294,8 +294,8 @@ export const answers = threadsSpec.answers({
         }
 
         services.chat.visitThread(result.id);
-        // The window that forked shows the fork; with none, every window does
-        if (!waiting) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId: result.id });
+        // A window that asked opens the fork from its answer. One no window asked for is shown to every window
+        if (!client) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId: result.id });
 
         sendToSystem('brain', {
           type: 'TRIGGER_BRAIN_EVENT',

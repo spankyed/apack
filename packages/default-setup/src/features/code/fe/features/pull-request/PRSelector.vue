@@ -50,21 +50,21 @@
           <span class="truncate">#{{ pr.number }} {{ pr.title }}</span>
           <StateBadge :pr="pr" />
         </button>
-        <div v-if="list.asked && !list.asked.append" class="flex items-center gap-1.5 px-3 py-2 text-xs text-neutral-500">
+        <div v-if="reading === 'first'" class="flex items-center gap-1.5 px-3 py-2 text-xs text-neutral-500">
           <Loader2 :size="11" class="animate-spin" /> Loading…
         </div>
         <div v-else-if="list.read && list.prs.length === 0" class="px-3 py-2 text-xs text-neutral-500" data-testid="pr-list-empty">
           {{ list.query.trim() ? 'No pull requests match' : `No ${STATE_LABELS[list.state].toLowerCase()} pull requests` }}
         </div>
         <button
-          v-if="list.next && !(list.asked && !list.asked.append)"
+          v-if="list.next && reading !== 'first'"
           data-testid="pr-list-more"
-          :disabled="!!list.asked"
+          :disabled="reading !== null"
           @click="emit('load-more')"
           class="flex items-center justify-center w-full gap-1.5 px-3 py-1.5 text-xs text-neutral-400 hover:text-neutral-200 hover:bg-neutral-700 disabled:opacity-60 transition-colors"
         >
-          <Loader2 v-if="list.asked?.append" :size="11" class="animate-spin" />
-          <span>{{ list.asked?.append ? 'Loading…' : 'Load more' }}</span>
+          <Loader2 v-if="reading === 'more'" :size="11" class="animate-spin" />
+          <span>{{ reading === 'more' ? 'Loading…' : 'Load more' }}</span>
         </button>
       </div>
     </div>
@@ -82,6 +82,8 @@ import type { PRList } from './state.ts'
 
 const props = defineProps<{
   list: PRList
+  /** The page of the list being read: its first, the one after those read, or none */
+  reading: 'first' | 'more' | null
   selectedPR: GhPullRequest | null
 }>()
 

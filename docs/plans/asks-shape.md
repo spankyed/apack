@@ -1,6 +1,6 @@
 # Asks, in the shape they are meant to keep
 
-Status: in progress on `session/asks-shape`, which starts from spankyed/apack#583 (results are asks) and replaces it.
+Status: done but for what "Left open" lists, on `session/asks-shape`, which starts from spankyed/apack#583 (results are asks) and replaces it.
 This file is the work list: what each package changes, what it removes, how it is checked, and what is done.
 
 ## Why
@@ -88,15 +88,28 @@ resolves the invoked ask. A spec's mock of `#generated/events` that a machine's 
 | # | Package | State |
 |---|---|---|
 | 1 | One vocabulary | done |
-| 2 | Progress is part of an ask | the mechanism and the search are done; a push's progress is not |
-| 3 | Cancelling reaches the handler | done: the mechanism, and the search, which was its one user |
-| 4 | No `waiting` | not started |
+| 2 | Progress is part of an ask | done: the search, and push, pull, checkout and submodule updates, whose `commit.PROGRESS` feed is gone |
+| 3 | Cancelling reaches the handler | done: the search, a push (leaving `pushing` stops it) and the GitHub sign-in |
+| 4 | No `waiting` | done: a handler is not handed it. Threads broadcasts `SHOW_THREAD` only where no window asked, which it reads from `client` |
 | 5 | Asks are answered beside the machine | dropped, see above |
-| 6 | An asker awaits | the search is done; every other feature is not |
-| 7 | A loading flag is a state | the search's `isSearching` is done |
-| 8 | An event is narrowed, not cast | not started |
-| 9 | A code child answers its own asks | the mechanism and the search are done |
-| 10 | Close out | not started |
+| 6 | An asker awaits | done in every feature. `isAnswered`, `answerOf` and `AnswersOf` are gone from the SDK, and no surface handles `ASK_ANSWERED` or `ASK_FAILED` |
+| 7 | A loading flag is a state | done where package 6 touched one |
+| 8 | An event is narrowed, not cast | done in the files package 6 touched; the casts elsewhere stand |
+| 9 | A code child answers its own asks | done for the search; the code system still answers for its other children |
+| 10 | Close out | docs, API and facade reports done |
+
+## Left open
+
+- **The commit and pull-request surfaces of the code feature are `type: 'parallel'`.** Each has about ten asks that
+  can be under way at once (branches, stashes, worktrees, a push), and each became a region with an `idle` and an
+  asking state. The design aimed at has no parallel states. The way out is the recipe's third form: an ask that
+  nothing replaces is spawned under `<kind>.<n>` and handled on `xstate.done.actor.<kind>.*`, as the flows surface
+  does, and only an ask whose progress or cancelling the UI shows (a push) keeps a state.
+- The pull-request surface's `checkoutBase` sends `commit.CHECKOUT_BRANCH` as an event, so a refused checkout is not
+  shown there.
+- A terminal ask that is refused is shown by the panel's terminal section, and so only while that is mounted.
+- The explorer does not clear a folder's loading mark when its listing is refused.
+- Not checked in the running app: this branch was verified by the type check and the unit pools.
 
 ## When it lands
 

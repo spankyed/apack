@@ -105,7 +105,7 @@ describe('taking the offer to sign in to GitHub', () => {
   });
 });
 
-// A push that works says how far along it is to the window that asked, before it says it is done
+// A push that works tells whoever asked how far along it is, before it says it is done
 it('tells the window that pushed how far along the push is', async () => {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-progress-')));
   const remote = `${directory}-remote`;
@@ -121,10 +121,10 @@ it('tells the window that pushed how far along the push is', async () => {
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const call = ask({ type: 'commit.PUBLISH_BRANCH' });
+  const progress: unknown[] = [];
+  const call = app.ask('code', { type: 'commit.PUBLISH_BRANCH' }, { client: 'c-main', heard: update => { progress.push(update) } });
 
   await answered(call);
-  const progress = app.emitted('code').filter(event => event.type === 'commit.PROGRESS').map(event => event.data as { during: string; stage: string; percent: number });
   expect(progress.at(-1)).toEqual({ during: 'push', stage: 'Writing objects', percent: 100 });
 });
 

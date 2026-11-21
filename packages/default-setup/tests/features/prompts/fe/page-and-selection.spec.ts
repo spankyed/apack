@@ -7,8 +7,12 @@ import { createActor } from 'xstate';
 import type { PromptEntity } from '@apackdev/sdk';
 import type { EARS } from '#generated/ears.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+// Each ask the machine spawns is recorded as it is made, and ends as `asked` answers it: never, unless a case says
+const asked = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => {
+  const { fromPromise } = await import('xstate');
+  return { fromAsk: (to: string, type: string) => fromPromise(({ input }: { input: object }) => asked(to, { type, ...input })) };
+});
 
 const { default: promptsState, PROMPTS_PAGE_SIZE } = await import('#features/prompts/fe/state.ts');
 
@@ -20,14 +24,15 @@ const loaded = (name: string, prompt: PromptEntity | null) => ({ type: 'PROMPT.L
 const start = () => createActor(promptsState).start();
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  asked.mockReset();
+  asked.mockReturnValue(new Promise(() => {}));
 });
 
 it('opens a prompt without asking the backend for it, and fills the form from its view once', () => {
   const actor = start();
   actor.send({ type: 'PROMPT.SELECT', promptId: id('Prompt-p1') });
   expect(actor.getSnapshot().matches('detail')).toBe(true);
-  expect(sendToSystem, 'the view reads the prompt; nothing is asked for').not.toHaveBeenCalled();
+  expect(asked, 'the view reads the prompt; nothing is asked for').not.toHaveBeenCalled();
 
   actor.send(loaded('Prompt-p1', aPrompt('Prompt-p1', 'first')));
   actor.send({ type: 'FORM.UPDATE_LABEL', label: 'typed' });
@@ -57,7 +62,7 @@ it('returns to the list when the open prompt is gone, deleted here or in another
   actor.send({ type: 'PROMPT.SELECT', promptId: id('Prompt-p1') });
   actor.send(loaded('Prompt-p1', aPrompt('Prompt-p1')));
   actor.send({ type: 'PROMPT.DELETE', promptId: id('Prompt-p1') });
-  expect(sendToSystem).toHaveBeenCalledWith('prompts', { type: 'DELETE_PROMPT', promptId: 'Prompt-p1' });
+  expect(asked).toHaveBeenCalledWith('prompts', { type: 'DELETE_PROMPT', promptId: 'Prompt-p1' });
   expect(actor.getSnapshot().matches('detail'), 'still open until its view says it is gone').toBe(true);
 
   actor.send(loaded('Prompt-p1', null));
@@ -83,7 +88,7 @@ it('shows a page more each time the list is read to its end', () => {
   actor.send({ type: 'PROMPTS.LOAD_MORE' });
   actor.send({ type: 'PROMPTS.LOAD_MORE' });
   expect(actor.getSnapshot().context.listLimit).toBe(3 * PROMPTS_PAGE_SIZE);
-  expect(sendToSystem).not.toHaveBeenCalled();
+  expect(asked).not.toHaveBeenCalled();
 });
 
 it('saves the form it holds, as an update of the open prompt or a new one', () => {
@@ -92,13 +97,13 @@ it('saves the form it holds, as an update of the open prompt or a new one', () =
   actor.send(loaded('Prompt-p1', aPrompt('Prompt-p1', 'first')));
   actor.send({ type: 'FORM.UPDATE_LABEL', label: 'edited' });
   actor.send({ type: 'PROMPT.SAVE' });
-  expect(sendToSystem).toHaveBeenLastCalledWith('prompts', expect.objectContaining({ type: 'UPDATE_PROMPT', promptId: 'Prompt-p1', label: 'edited' }));
+  expect(asked).toHaveBeenLastCalledWith('prompts', expect.objectContaining({ type: 'UPDATE_PROMPT', promptId: 'Prompt-p1', label: 'edited' }));
   expect(actor.getSnapshot().matches('list')).toBe(true);
 
   actor.send({ type: 'PROMPT.CREATE' });
   actor.send({ type: 'FORM.UPDATE_LABEL', label: 'new' });
   actor.send({ type: 'PROMPT.SAVE' });
-  expect(sendToSystem).toHaveBeenLastCalledWith('prompts', expect.objectContaining({ type: 'CREATE_PROMPT', label: 'new' }));
+  expect(asked).toHaveBeenLastCalledWith('prompts', expect.objectContaining({ type: 'CREATE_PROMPT', label: 'new' }));
 });
 
 it('opens its entity from the create view and refuses unrelated entity types', () => {
@@ -112,10 +117,19 @@ it('opens its entity from the create view and refuses unrelated entity types', (
 });
 
 it('shows a write it asked for that was refused, until the user dismisses it', async () => {
-  const { askFailed } = await import('@apackdev/sdk/testing');
+  asked.mockResolvedValueOnce({ ok: false, failure: { kind: 'failed', message: 'No such prompt' } });
   const actor = start();
-  actor.send(askFailed('c-1', 'UPDATE_PROMPT', { kind: 'failed', message: 'No such prompt' }));
-  expect(actor.getSnapshot().context.writeError).toBe('No such prompt');
+  actor.send({ type: 'PROMPT.UPDATE_LABEL', promptId: 'Missing', label: 'renamed' });
+  await vi.waitFor(() => expect(actor.getSnapshot().context.writeError).toBe('No such prompt'));
+  expect(Object.keys(actor.getSnapshot().children), 'the ask that ended is not kept').toEqual([]);
   actor.send({ type: 'CLEAR_WRITE_ERROR' });
+  expect(actor.getSnapshot().context.writeError).toBeNull();
+});
+
+it('shows nothing for a write that landed', async () => {
+  asked.mockResolvedValueOnce({ ok: true, value: undefined });
+  const actor = start();
+  actor.send({ type: 'PROMPT.UPDATE_LABEL', promptId: 'Prompt-p1', label: 'renamed' });
+  await vi.waitFor(() => expect(Object.keys(actor.getSnapshot().children)).toEqual([]));
   expect(actor.getSnapshot().context.writeError).toBeNull();
 });

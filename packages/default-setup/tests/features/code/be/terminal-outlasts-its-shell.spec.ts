@@ -152,7 +152,7 @@ describe('a terminal asked to keep running', () => {
 
     expect(await app.ask('code', { type: 'terminal.KEEP_TERMINAL', terminalId: terminal.id, kept: true }, { client: WINDOW }))
       .toMatchObject({ ok: false, failure: { message: expect.stringContaining('only while terminals are restored') } })
-    expect(takeSystemErrors()).toHaveLength(1)
+    expect(takeSystemErrors(), 'the refusal is the asker\'s to show, and is told to nobody else').toEqual([])
     expect(broker.kept).toEqual([])
     await app.stop()
   })
@@ -182,7 +182,7 @@ describe('a terminal asked to keep running', () => {
     const { app } = await started()
     expect(await app.ask('code', { type: 'terminal.KEEP_TERMINAL', terminalId: 'Terminal:none', kept: true }, { client: WINDOW }))
       .toMatchObject({ ok: false, failure: { message: expect.stringContaining('Terminal:none') } })
-    expect(takeSystemErrors()).toHaveLength(1)
+    expect(takeSystemErrors(), 'the refusal is the asker\'s to show, and is told to nobody else').toEqual([])
     await app.stop()
   })
 })
@@ -212,7 +212,7 @@ describe('looking back through a terminal', () => {
     broker.refuseRewind()
     expect(await app.ask('code', { type: 'terminal.REWIND', terminalId: terminal.id, cols: 80, rows: 24 }, { client: WINDOW }))
       .toMatchObject({ ok: false, failure: { kind: 'failed' } })
-    expect(takeSystemErrors()).toHaveLength(1)
+    expect(takeSystemErrors(), 'the refusal is the asker\'s to show, and is told to nobody else').toEqual([])
     await app.stop()
   })
 

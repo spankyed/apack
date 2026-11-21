@@ -4,13 +4,13 @@ import { ref as featureRef } from '#generated/ref.ts'
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('browser'))
-import { setup, assign, fromCallback, type ActorRefFrom } from 'xstate';
+import { setup, assign, fromCallback, spawnChild, type ActorRefFrom, type DoneActorEvent } from 'xstate';
 import type { BrowserSettings } from '#generated/types.ts';
 import type { Bookmark, BrowserContext, BrowserInboxEvent, BrowserTab, BrowserTabPersistedId } from './contract.ts';
 import { autocomplete, recordVisit, updateHistoryMeta, displayUrl, type AutocompleteSuggestion } from './history.ts';
-import { sendToSystem } from '#generated/events.ts';
-import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
-import type { Contract as BrowserSystemContract } from '#features/browser/be/contract.ts';
+import { fromAsk, sendToSystem } from '#generated/events.ts';
+import type { AskOutcome } from '@apackdev/sdk/events';
+import type { BrowserAsks } from '#features/browser/be/types.ts';
 import { openSurface } from '#generated/fe.ts';
 import { getNextAvailableColor, saveTabGroups, loadTabGroups, type TabGroup, type TabGroupColor } from '@apackdev/sdk/fe';
 
@@ -76,8 +76,8 @@ type BrowserEvents =
   | { type: 'BOOKMARK.TOGGLE' }
   | { type: 'BOOKMARK.REMOVE'; url: string }
   | { type: 'BOOKMARK.NAVIGATE'; url: string }
-  // Backend events
-  | AnswersOf<BrowserSystemContract>
+  // How the ask for what the window restores ended
+  | DoneActorEvent<AskOutcome<BrowserAsks['GET_SAVED_SESSION']>, typeof SAVED_SESSION>
   | SurfaceLifecycleEvent
   // IPC bridge events
   | { type: 'IPC.TAB_CREATED'; tab: BrowserTabState }
@@ -86,6 +86,9 @@ type BrowserEvents =
   | { type: 'IPC.ACTIVE_TAB_CHANGED'; tabId: number };
 
 export type BrowserState = ActorRefFrom<typeof browserState>;
+
+/** The id the ask for the saved session runs under, which names the event its outcome arrives as */
+const SAVED_SESSION = 'savedSession' as const;
 
 function navAction(method: 'goBack' | 'goForward' | 'reload' | 'stop') {
   return ({ context }: { context: BrowserContext }) => {
@@ -234,6 +237,7 @@ const browserState = setup({
     events: {} as BrowserEvents,
   },
   actors: {
+    savedSession: fromAsk('browser', 'GET_SAVED_SESSION'),
     ipcBridge: fromCallback(({ sendBack }) => {
       const api = window.electronAPI?.browser;
       if (!api) return;
@@ -284,7 +288,7 @@ const browserState = setup({
   states: {
     active: {
       on: {
-        FEATURE_SETTINGS_UPDATED: { actions: assign({ settings: ({ event }) => (event as { settings: BrowserSettings }).settings }) },
+        FEATURE_SETTINGS_UPDATED: { actions: assign({ settings: ({ event }) => event.settings }) },
         'TAB.CREATE': {
           actions: ({ event }) => {
             window.electronAPI?.browser.createTab(event.url);
@@ -562,18 +566,20 @@ const browserState = setup({
         },
         // What the window restores, asked for when the shell starts the surface, in a delivery naming it
         SURFACE_STARTED: {
-          actions: () => { sendToSystem(id, { type: 'GET_SAVED_SESSION' }); },
+          actions: spawnChild('savedSession', { id: SAVED_SESSION, input: {} }),
         },
-        ASK_ANSWERED: {
-          guard: ({ event }) => isAnswered(event, 'GET_SAVED_SESSION'),
+        // A session that could not be read restores nothing
+        [`xstate.done.actor.${SAVED_SESSION}`]: {
+          guard: ({ event }) => event.output.ok,
           actions: [
-            assign(({ event }) => ({
+            assign(({ event }) => (event.output.ok ? {
               tabGroups: loadTabGroups(storage, 'tab-groups'),
               // A page with no favicon is saved without one, which the bar shows as an empty one
-              bookmarks: answerOf(event, 'GET_SAVED_SESSION').savedBookmarks.map((bookmark) => ({ ...bookmark, favicon: bookmark.favicon ?? '' })),
-            })),
+              bookmarks: event.output.value.savedBookmarks.map((bookmark) => ({ ...bookmark, favicon: bookmark.favicon ?? '' })),
+            } : {})),
             ({ context, event }) => {
-              const { savedTabs } = answerOf(event, 'GET_SAVED_SESSION');
+              if (!event.output.ok) return;
+              const { savedTabs } = event.output.value;
               const normalized = normalizeSavedTabs(savedTabs);
               if (normalized.invalidCount > 0) {
                 console.warn('[Browser] Dropping invalid saved tabs before restore', {

@@ -1,19 +1,18 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import type { AnyActorRef } from 'xstate';
-import { commitAnswers, commitSystem } from '../../../../src/features/code/be/features/commit.ts';
+import { takeSystemErrors } from '@apackdev/sdk/testing';
+import type { ActorRefFrom, EventFrom } from 'xstate';
+import { commitSystem } from '../../../../src/features/code/be/features/commit.ts';
 
 const actors: Array<{ stop(): void }> = [];
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { actors.splice(0).forEach(actor => actor.stop()); vi.useRealTimers(); });
 /**
- * The code system's answer to a window's ask, over a stand-in repository, reaching `commit` as its commit child: the
- * system answers every commit ask, and tells its child what the ask did
+ * A window's ask as it reaches the commit child, which the code system forwards it to: the child answers it over the
+ * repository it holds. Nobody waits here, so what the ask did is read off the repository and the announcements
  */
-function windowAsks<K extends keyof typeof commitAnswers>(commit: AnyActorRef, gitRepository: unknown, ask: Parameters<(typeof commitAnswers)[K]>[0]['args']) {
-  const code = { getSnapshot: () => ({ children: { commit } }), send: () => {} };
-  const handler = commitAnswers[ask.type as K] as (args: object) => unknown;
-  return Promise.resolve(handler({ args: ask, context: { gitRepository }, self: code })).catch(() => undefined);
+function windowAsks(commit: ActorRefFrom<typeof commitSystem>, ask: EventFrom<typeof commitSystem>) {
+  commit.send(ask);
 }
 
 function start() {
@@ -47,16 +46,17 @@ it('cancels a pending refresh when the commit actor stops', async () => {
 // is sent a listing it did not ask for
 it('announces a write as the repository changing, and lists nothing itself', async () => {
   const announced = vi.fn();
-  const gitRepository = { whenFetchDue: () => {}, stashDrop: async () => {}, lastUndoable: async () => null, refreshSnapshot: async () => NOTHING } as never;
+  const stashDrop = vi.fn(async () => {});
+  const gitRepository = { whenFetchDue: () => {}, stashDrop, lastUndoable: async () => null, refreshSnapshot: async () => NOTHING } as never;
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
     { input: { baseDirectory: '/repo', gitRepository } }).start();
   actors.push(actor);
 
-  const dropped = windowAsks(actor, gitRepository, { type: 'commit.STASH_DROP', index: 0 });
+  windowAsks(actor, { type: 'commit.STASH_DROP', index: 0 });
   await vi.advanceTimersByTimeAsync(150);
 
+  expect(stashDrop).toHaveBeenCalledWith(0);
   expect(announced).toHaveBeenCalledTimes(1);
-  expect(await dropped, 'what Undo takes back, and no listing of the stashes').toEqual({ undoable: null });
 });
 
 const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
@@ -172,8 +172,10 @@ it('tells the pull requests only when the history changed', async () => {
   // A write made here that moved no commit, as staging a file is
   // A window showing the repository asks for its status each time it is told that changed
   const aWindowAsks = async () => {
-    void windowAsks(actor, gitRepository, { type: 'commit.GET_GIT_STATUS' });
+    windowAsks(actor, { type: 'commit.GET_GIT_STATUS' });
     await vi.advanceTimersByTimeAsync(0);
+    // The stand-in is no repository, so the status is refused, which is reported since nobody waits to be told
+    takeSystemErrors();
   };
   actor.send({ type: 'commit.GIT_STATUS_CHANGED' });
   await vi.advanceTimersByTimeAsync(150);
@@ -201,9 +203,11 @@ function overAChangingRepository() {
   actors.push(actor);
   const after = async (event: Parameters<typeof actor.send>[0] | typeof WINDOW_ASKS) => {
     refreshSnapshot.mockClear();
-    if (event.type === 'commit.GET_GIT_STATUS') void windowAsks(actor, gitRepository, event);
+    if (event.type === 'commit.GET_GIT_STATUS') windowAsks(actor, event);
     else actor.send(event);
     await vi.advanceTimersByTimeAsync(0);
+    // The stand-in is no repository, so a status asked of it is refused, which is reported since nobody waits to be told
+    takeSystemErrors();
     return refreshSnapshot.mock.calls.map(([reading, options]) => `${reading}${options?.refreshIndex ? ', may write the index' : ''}`);
   };
   return after;

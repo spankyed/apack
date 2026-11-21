@@ -9,17 +9,17 @@ import type { OpenEntity } from '@apackdev/sdk/events'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe';
 import { targetIs, type TrailClickEvent } from '@apackdev/sdk/fe';
 import { safeEvents } from '@apackdev/sdk/fe';
-import { setup, assign, enqueueActions, fromCallback, spawnChild, stopChild, type AnyEventObject } from 'xstate';
+import { setup, assign, enqueueActions, fromCallback, spawnChild, stopChild, type AnyEventObject, type DoneActorEvent } from 'xstate';
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe';
 import type { ActorRefFrom } from 'xstate';
 import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, ThreadsSettings, MessageEntity, AgentThreadData, Tab, AgentSettings, AgentMode as AgentModeConfig, MessageReferences, BlockResponse, ChatPage, ChatStart, MessageSearchResult, ThreadDetailView, ThreadExtended, ThreadTabView } from '#generated/types.ts';
-import { viewRead, viewWrites, writeAnswered, writeSent, writing, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
+import { viewRead, viewWrites, writeEnded, writeSent, writing, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import { fromView } from '#generated/fe.ts';
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
-import type { MessageSent, OutgoingThreadsEvents } from '#features/threads/be/types.ts';
-import { sendToSystem } from '#generated/events.ts';
-import { answerOf, answersCall, isAnswered, type AnswersOf } from '@apackdev/sdk/events';
-import type { Contract as ThreadsSystemContract } from '#features/threads/be/contract.ts';
+import type { OutgoingThreadsEvents, ThreadsAsks } from '#features/threads/be/types.ts';
+import { fromAsk, sendToSystem } from '#generated/events.ts';
+import type { AskOutcome } from '@apackdev/sdk/events';
+import { outcomeOf } from '@apackdev/sdk/helpers';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
@@ -154,9 +154,34 @@ const defaultChatThread: AgentThreadData = {
 
 // ---- Event types ----
 
+/**
+ * What the machine asks the threads system, by the kind of ask it is to the machine: each is spawned under
+ * `<kind>.<n>`, so any number of a kind are under way at once and one transition, `xstate.done.actor.<kind>.*`, takes
+ * how each ended.
+ */
+type AskKinds = {
+  chatStart: 'GET_CHAT_START'
+  created: 'CREATE_THREAD'
+  opened: 'OPEN_THREAD_CHAT'
+  /** A message or a command, which may have started a thread */
+  sent: 'USER_MSG' | 'USER_COMMAND'
+  forked: 'FORK_THREAD'
+  imported: 'IMPORT_THREADS'
+  exported: 'EXPORT_THREADS'
+  /** Every write whose answer is only that it was done */
+  write: 'UPDATE_THREAD_STATUS' | 'UPDATE_THREAD_FIELD' | 'DELETE_THREAD' | 'SET_THREAD_PARENT'
+}
+
+let asked = 0
+/** The id one ask of `kind` is spawned under */
+const askId = <Kind extends keyof AskKinds>(kind: Kind): `${Kind}.${number}` => `${kind}.${++asked}`
+
+/** How the asks of each kind end: the done event of the ask spawned under that kind's id */
+type AskEnded = { [Kind in keyof AskKinds]: DoneActorEvent<AskOutcome<ThreadsAsks[AskKinds[Kind]]>, `${Kind}.${number}`> }
+
 type SystemEvent =
   | OutgoingThreadsEvents
-  | AnswersOf<ThreadsSystemContract>
+  | AskEnded[keyof AskKinds]
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: ThreadsSettings }
   | SurfaceLifecycleEvent
 
@@ -273,17 +298,14 @@ type ThreadEvents =
 
 const typeOf = safeEvents<ThreadEvents>()
 
-/** The thread an answer says to open: one a message or a command started, or a fork */
-function threadToShow(event: ThreadEvents): MessageSent['threadId'] | undefined {
-  if (isAnswered(event, 'FORK_THREAD')) return answerOf(event, 'FORK_THREAD').threadId
-  for (const sent of ['USER_MSG', 'USER_COMMAND'] as const) {
-    if (isAnswered(event, sent)) {
-      const { threadId, started } = answerOf(event, sent)
-      return started ? threadId : undefined
-    }
-  }
-  return undefined
-};
+/** The id of the spawned ask whose end `event` is */
+const endedAsk = (event: ThreadEvents): string => 'actorId' in event ? event.actorId : ''
+
+/** The thread this window asked to open and the system found gone, where that is how the ask ended */
+function goneOnOpen(event: ThreadEvents): string | undefined {
+  const outcome = outcomeOf<AskEnded['opened']['output']>(event)
+  return !outcome.ok && outcome.failure.kind === 'not-found' ? outcome.failure.threadId : undefined
+}
 
 export type { ChatState, ThreadListItem } from './contract.ts';
 
@@ -322,10 +344,10 @@ function removeThread(ctx: ThreadsContext, threadId: string) {
   return { threadMap: rest, threadIds: ctx.threadIds.filter(id => id !== threadId) };
 }
 
-function optimisticFieldUpdate(context: ThreadsContext, threadId: string, key: string, value: unknown) {
-  const call = sendToSystem(id, { type: 'UPDATE_THREAD_FIELD', threadId, key, value });
+/** A thread's field as the user set it, shown at once: `write` is the ask that stores it, which the views are held behind */
+function optimisticFieldUpdate(context: ThreadsContext, write: string, threadId: string, key: string, value: unknown) {
   return {
-    writes: writeSent(context.writes, call),
+    writes: writeSent(context.writes, write),
     ...patchThread(context, threadId, { [key]: value } as any),
     tabs: context.tabs.map(t => t.id === threadId ? { ...t, [key]: value, ...(key === 'topic' ? { label: value as string } : {}) } : t),
     ...(context.currentThread?.id === threadId ? { currentThread: { ...context.currentThread, [key]: value } } : {}),
@@ -415,6 +437,18 @@ const chatStateOverrideTimer = (threadId: string) => `clear-expired-override-${t
 const threadsState = setup({
   types: { context: {} as ThreadsContext, events: {} as ThreadEvents },
   actors: {
+    GET_CHAT_START: fromAsk(id, 'GET_CHAT_START'),
+    CREATE_THREAD: fromAsk(id, 'CREATE_THREAD'),
+    OPEN_THREAD_CHAT: fromAsk(id, 'OPEN_THREAD_CHAT'),
+    USER_MSG: fromAsk(id, 'USER_MSG'),
+    USER_COMMAND: fromAsk(id, 'USER_COMMAND'),
+    FORK_THREAD: fromAsk(id, 'FORK_THREAD'),
+    IMPORT_THREADS: fromAsk(id, 'IMPORT_THREADS'),
+    EXPORT_THREADS: fromAsk(id, 'EXPORT_THREADS'),
+    UPDATE_THREAD_STATUS: fromAsk(id, 'UPDATE_THREAD_STATUS'),
+    UPDATE_THREAD_FIELD: fromAsk(id, 'UPDATE_THREAD_FIELD'),
+    DELETE_THREAD: fromAsk(id, 'DELETE_THREAD'),
+    SET_THREAD_PARENT: fromAsk(id, 'SET_THREAD_PARENT'),
     /**
      * Follows the pointer for as long as this surface runs, and takes its listener back when it stops.
      *
@@ -454,9 +488,11 @@ const threadsState = setup({
   },
   actions: {
     // ---- Following the views ----
-    /** Asks for what the chat starts from, and follows the list: the shell's start, in a delivery naming the surface */
+    /** An ask that ended is done with: a spawned actor stays among the machine's children until it is stopped */
+    forgetAsk: stopChild(({ event }) => endedAsk(event)),
+    /** Asks for what the chat starts from, and follows the list, as the shell starts the surface */
     startSurface: enqueueActions(({ enqueue }) => {
-      enqueue(() => sendToSystem(id, { type: 'GET_CHAT_START' }));
+      enqueue.spawnChild('GET_CHAT_START', { id: askId('chatStart'), input: {} });
       enqueue('followList');
     }),
     followList: enqueueActions(({ enqueue }) => {
@@ -529,12 +565,14 @@ const threadsState = setup({
         enqueue.spawnChild('tabView', { id: viewChild.tab(threadId), input: { threadId } });
       }
     }),
-    /** An answer to one of this window's writes */
+    /** One of this window's writes ended */
     settleWrite: enqueueActions(({ context, event, enqueue }) => {
-      const writes = writeAnswered(context.writes, event as unknown as Record<string, unknown>, event.type === 'ASK_FAILED');
+      const ask = endedAsk(event);
+      const outcome = outcomeOf<AskEnded[keyof AskKinds]['output']>(event);
+      const writes = writeEnded(context.writes, ask, !outcome.ok);
       enqueue.assign({ writes });
-      if (answersCall(event as unknown as Record<string, unknown>, context.linkSave)) {
-        enqueue.assign({ linkSave: null, linkRefusal: event.type === 'ASK_FAILED' ? event.failure.message : null });
+      if (context.linkSave !== null && context.linkSave === ask) {
+        enqueue.assign({ linkSave: null, linkRefusal: outcome.ok ? null : outcome.failure.message });
       }
       if (writes.refreshes !== context.writes.refreshes) enqueue('refollowThreadViews');
     }),
@@ -726,7 +764,8 @@ const threadsState = setup({
      */
     dropThread: enqueueActions(({ context, event, enqueue, self }) => {
       // A thread whose view says it is gone, or one that was gone when this window asked to open it
-      const { threadId } = event.type === 'ASK_FAILED' ? event.failure as { threadId: string } : event as { type: string; threadId: string };
+      const threadId = event.type === 'CHAT.READ' || event.type === 'TAB.READ' ? event.threadId : goneOnOpen(event);
+      if (!threadId) return;
       const index = context.tabs.findIndex(t => t.id === threadId);
       const tabs = context.tabs.filter(t => t.id !== threadId);
       let activeTabId = context.activeTabId;
@@ -763,7 +802,7 @@ const threadsState = setup({
       const { threadId, restore } = typeOf(['OPEN_THREAD_CHAT', 'SHOW_THREAD'], event);
       enqueue(() => self.send({ type: 'VIEW_DASHBOARD' }));
       if (event.type === 'OPEN_THREAD_CHAT') {
-        enqueue(() => sendToSystem(id, { type: 'OPEN_THREAD_CHAT', threadId, ...(restore && { restore }) }));
+        enqueue.spawnChild('OPEN_THREAD_CHAT', { id: askId('opened'), input: { threadId, ...(restore && { restore }) } });
       }
       const known = context.threadMap[threadId];
       const label = known?.topic || context.tabs.find(t => t.id === threadId)?.label || `Thread ${known?.shortCode || ''}`.trim();
@@ -803,33 +842,45 @@ const threadsState = setup({
         }
       };
     }),
-    /** Opens the thread an answer says to: as a thread the system says to show, which every window handles alike */
-    showAnsweredThread: enqueueActions(({ event, enqueue }) => {
-      const threadId = threadToShow(event);
-      if (threadId) enqueue.raise({ type: 'SHOW_THREAD', threadId });
+    /**
+     * Opens the thread this window's message or command started, or its fork: as a thread the system says to show,
+     * which every window handles alike
+     */
+    showStartedThread: enqueueActions(({ event, enqueue }) => {
+      const outcome = outcomeOf<AskEnded['sent']['output']>(event);
+      if (outcome.ok && outcome.value.started) enqueue.raise({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
     }),
-    /** The thread this window asked to create landed: its write settles, and it is marked new until its flag clears */
+    showFork: enqueueActions(({ event, enqueue }) => {
+      const outcome = outcomeOf<AskEnded['forked']['output']>(event);
+      if (outcome.ok) enqueue.raise({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
+    }),
+    /**
+     * The create this window asked for ended: its write settles, and the thread it made is marked new until its flag
+     * clears
+     */
     threadCreated: enqueueActions(({ event, enqueue }) => {
-      const created = answerOf(event, 'CREATE_THREAD').id as string;
+      const outcome = outcomeOf<AskEnded['created']['output']>(event);
       enqueue('settleWrite');
+      if (!outcome.ok) return;
+      const created: string = outcome.value.id;
       enqueue('markCreated');
       enqueue.stopChild(newThreadFlagTimer(created));
       enqueue.spawnChild('clearNewThreadFlag', { id: newThreadFlagTimer(created), input: { id: created } });
     }),
     /** The thread this window created: marked new in the list, for its animation, and the form emptied */
     markCreated: assign(({ context, event }) => {
-      const created = answerOf(event, 'CREATE_THREAD').id as string;
-      const freshThreadIds = [...context.freshThreadIds, created];
+      const outcome = outcomeOf<AskEnded['created']['output']>(event);
+      if (!outcome.ok) return {};
+      const freshThreadIds = [...context.freshThreadIds, outcome.value.id];
       return { freshThreadIds, create: defaultThread, ...threadStore({ ...context, freshThreadIds }, context.lists) };
     }),
-    sendCreateThread: assign(({ context }) => {
+    sendCreateThread: assign(({ context, spawn }) => {
       const { parentThread: _parentThread, ...createData } = context.create;
-      const call = sendToSystem(id, {
-        type: 'CREATE_THREAD',
+      const write = spawn('CREATE_THREAD', { id: askId('created'), input: {
         ...createData,
         parentThreadId: context.create.parentThreadId,
-      });
-      return { writes: writeSent(context.writes, call) };
+      } }).id;
+      return { writes: writeSent(context.writes, write) };
     }),
     recordThreadNavigation: assign(({ context, event }) => ({
       navHistory: pushNavHistory(context.navHistory, `view:${typeOf(['SELECT_THREAD', 'OPEN_ENTITY'], event).id}`),
@@ -910,34 +961,36 @@ const threadsState = setup({
       const clearId = typeOf('CLEAR_NEW_THREAD_FLAG', event).id;
       return { ...patchThread(context, clearId, { isNew: false }), freshThreadIds: context.freshThreadIds.filter(fresh => fresh !== clearId) };
     }),
-    updateThreadStatus: assign(({ context, event }) => {
+    updateThreadStatus: assign(({ context, event, spawn }) => {
       const typedEvent = typeOf('UPDATE_THREAD_STATUS', event);
-      const call = sendToSystem(id, {
-        type: 'UPDATE_THREAD_STATUS',
+      const write = spawn('UPDATE_THREAD_STATUS', { id: askId('write'), input: {
         threadId: typedEvent.id,
         status: typedEvent.status,
-      });
-      return { writes: writeSent(context.writes, call) };
+      } }).id;
+      return { writes: writeSent(context.writes, write) };
     }),
-    sendUpdateThreadField: assign(({ event, context }) => {
+    sendUpdateThreadField: assign(({ event, context, spawn }) => {
       const { key, value } = typeOf('UPDATE_THREAD_FIELD', event);
-      const call = sendToSystem(id, {
-        type: 'UPDATE_THREAD_FIELD',
+      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: {
         threadId: context.view.id,
         key,
         value,
-      });
+      } }).id;
       return {
-        writes: writeSent(context.writes, call),
-        ...(key === 'linkedThreads' && { linkSave: call, linkRefusal: null }),
+        writes: writeSent(context.writes, write),
+        ...(key === 'linkedThreads' && { linkSave: write, linkRefusal: null }),
       };
     }),
-    renameThread: assign(({ event, context }) => {
+    renameThread: assign(({ event, context, spawn }) => {
       const { threadId, topic } = typeOf('RENAME_THREAD', event);
-      return optimisticFieldUpdate(context, threadId, 'topic', topic);
+      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: { threadId, key: 'topic', value: topic } }).id;
+      return optimisticFieldUpdate(context, write, threadId, 'topic', topic);
     }),
+    /** The feature's settings: the ones the chat starts from, or the ones they were changed to */
     setThreadsSettings: assign(({ event }) => {
-      const settings = isAnswered(event, 'GET_CHAT_START') ? answerOf(event, 'GET_CHAT_START').settings : typeOf('FEATURE_SETTINGS_UPDATED', event).settings;
+      const start = event.type === 'FEATURE_SETTINGS_UPDATED' ? undefined : outcomeOf<AskEnded['chatStart']['output']>(event);
+      if (start && !start.ok) return {};
+      const settings = start ? start.value.settings : typeOf('FEATURE_SETTINGS_UPDATED', event).settings;
       const chat = (settings as any)?.chat as AgentSettings | undefined;
       return {
         settings,
@@ -945,45 +998,34 @@ const threadsState = setup({
         ...(chat ? extractChatSettings(chat) : {}),
       };
     }),
-    deleteThread: assign(({ context, event }) => {
+    deleteThread: assign(({ context, event, spawn }) => {
       const { threadId } = typeOf('DELETE_THREAD', event);
-      const call = sendToSystem(id, {
-        type: 'DELETE_THREAD',
-        threadId,
-      });
-      return { writes: writeSent(context.writes, call) };
+      const write = spawn('DELETE_THREAD', { id: askId('write'), input: { threadId } }).id;
+      return { writes: writeSent(context.writes, write) };
     }),
-    archiveThread: assign(({ context, event }) => {
+    archiveThread: assign(({ context, event, spawn }) => {
       const { threadId } = typeOf('ARCHIVE_THREAD', event);
-      const call = sendToSystem(id, {
-        type: 'UPDATE_THREAD_FIELD',
-        threadId,
-        key: 'archived',
-        value: true,
-      });
-      return { writes: writeSent(context.writes, call) };
+      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: { threadId, key: 'archived', value: true } }).id;
+      return { writes: writeSent(context.writes, write) };
     }),
-    unpinThread: assign(({ event, context }) => {
+    unpinThread: assign(({ event, context, spawn }) => {
       const { threadId } = typeOf('UNPIN_THREAD', event);
-      return optimisticFieldUpdate(context, threadId, 'pinned', false);
+      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: { threadId, key: 'pinned', value: false } }).id;
+      return optimisticFieldUpdate(context, write, threadId, 'pinned', false);
     }),
-    pinThread: assign(({ event, context }) => {
+    pinThread: assign(({ event, context, spawn }) => {
       const { threadId } = typeOf('PIN_THREAD', event);
-      return optimisticFieldUpdate(context, threadId, 'pinned', true);
+      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: { threadId, key: 'pinned', value: true } }).id;
+      return optimisticFieldUpdate(context, write, threadId, 'pinned', true);
     }),
     toggleViewArchive: assign(({ context }) => {
       const next = { ...context, showArchived: !context.showArchived };
       return { showArchived: next.showArchived, ...threadStore(next, context.lists) };
     }),
-    unarchiveThread: assign(({ context, event }) => {
+    unarchiveThread: assign(({ context, event, spawn }) => {
       const { threadId } = typeOf('UNARCHIVE_THREAD', event);
-      const call = sendToSystem(id, {
-        type: 'UPDATE_THREAD_FIELD',
-        threadId,
-        key: 'archived',
-        value: false,
-      });
-      return { writes: writeSent(context.writes, call) };
+      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: { threadId, key: 'archived', value: false } }).id;
+      return { writes: writeSent(context.writes, write) };
     }),
     removeUnarchivedThread: assign(({ event, context }) => {
       const { threadId } = typeOf('UNARCHIVE_THREAD', event);
@@ -1008,18 +1050,18 @@ const threadsState = setup({
     setImportingThreads: assign(({ context }) => ({
       threadsImport: { ...context.threadsImport, status: 'importing' as const },
     })),
-    sendImportThreads: ({ event }) => {
-      if (event.type === 'THREADS.IMPORT') {
-        sendToSystem(id, { type: 'IMPORT_THREADS', directory: event.directory })
-      }
-    },
-    handleThreadsImported: assign(({ event }) => {
-      const { count, errors } = answerOf(event, 'IMPORT_THREADS')
-      return { threadsImport: { status: 'success' as const, errors: errors || [], importedCount: count } }
+    sendImportThreads: spawnChild('IMPORT_THREADS', {
+      id: () => askId('imported'),
+      input: ({ event }) => ({ directory: typeOf('THREADS.IMPORT', event).directory }),
     }),
-    handleThreadsImportFailed: assign(({ event }) => {
-      const { failure } = typeOf('ASK_FAILED', event)
-      return { threadsImport: { status: 'error' as const, errors: failure.message.split('\n'), importedCount: 0 } }
+    /** An import's answer is its status */
+    handleThreadsImportEnded: assign(({ event }) => {
+      const outcome = outcomeOf<AskEnded['imported']['output']>(event)
+      return {
+        threadsImport: outcome.ok
+          ? { status: 'success' as const, errors: outcome.value.errors || [], importedCount: outcome.value.count }
+          : { status: 'error' as const, errors: outcome.failure.message.split('\n'), importedCount: 0 },
+      }
     }),
     resetImportThreadsStatus: assign({
       threadsImport: { status: 'idle' as const, errors: [] as string[], importedCount: 0 },
@@ -1029,18 +1071,18 @@ const threadsState = setup({
     setExportingThreads: assign(({ context }) => ({
       threadsExport: { ...context.threadsExport, status: 'exporting' as const },
     })),
-    sendExportThreads: ({ event }) => {
-      if (event.type === 'THREADS.EXPORT') {
-        sendToSystem(id, { type: 'EXPORT_THREADS', directory: event.directory })
-      }
-    },
-    handleThreadsExported: assign(({ event }) => {
-      const { filePath, threadCount } = answerOf(event, 'EXPORT_THREADS')
-      return { threadsExport: { status: 'success' as const, errors: [] as string[], filePath, threadCount } }
+    sendExportThreads: spawnChild('EXPORT_THREADS', {
+      id: () => askId('exported'),
+      input: ({ event }) => ({ directory: typeOf('THREADS.EXPORT', event).directory }),
     }),
-    handleThreadsExportFailed: assign(({ event }) => {
-      const { failure } = typeOf('ASK_FAILED', event)
-      return { threadsExport: { status: 'error' as const, errors: [failure.message], filePath: '', threadCount: 0 } }
+    /** An export's answer is its status */
+    handleThreadsExportEnded: assign(({ event }) => {
+      const outcome = outcomeOf<AskEnded['exported']['output']>(event)
+      return {
+        threadsExport: outcome.ok
+          ? { status: 'success' as const, errors: [] as string[], filePath: outcome.value.filePath, threadCount: outcome.value.threadCount }
+          : { status: 'error' as const, errors: [outcome.failure.message], filePath: '', threadCount: 0 },
+      }
     }),
     resetExportThreadsStatus: assign({
       threadsExport: { status: 'idle' as const, errors: [] as string[], filePath: '', threadCount: 0 },
@@ -1082,14 +1124,10 @@ const threadsState = setup({
     toggleRootOnlyFilter: assign(({ context }) => ({
       filters: { ...context.filters, showRootOnly: !context.filters.showRootOnly },
     })),
-    sendSetThreadParent: assign(({ context, event }) => {
+    sendSetThreadParent: assign(({ context, event, spawn }) => {
       const { childIds, parentId } = typeOf('SET_THREAD_PARENT', event);
-      const call = sendToSystem(id, {
-        type: 'SET_THREAD_PARENT',
-        childIds,
-        parentId,
-      });
-      return { writes: writeSent(context.writes, call) };
+      const write = spawn('SET_THREAD_PARENT', { id: askId('write'), input: { childIds, parentId } }).id;
+      return { writes: writeSent(context.writes, write) };
     }),
 
     // ---- Chat/agent actions ----
@@ -1124,8 +1162,7 @@ const threadsState = setup({
     },
     sendMessage: enqueueActions(({ enqueue, context, event }) => {
       const { text, references } = typeOf('SEND_MESSAGE', event);
-      sendToSystem(id, {
-        type: 'USER_MSG',
+      enqueue.spawnChild('USER_MSG', { id: askId('sent'), input: {
         text,
         mode: context.mode,
         phase: context.phase,
@@ -1133,15 +1170,14 @@ const threadsState = setup({
         ...(references && { references }),
         ...(context.pendingThreadCwd && { cwdOverride: context.pendingThreadCwd }),
         ...(context.pendingForceDirectoryPicker && { forceDirectoryPicker: true }),
-      });
+      } });
       if (context.pendingThreadCwd || context.pendingForceDirectoryPicker) {
         enqueue.assign({ pendingThreadCwd: undefined, pendingForceDirectoryPicker: undefined });
       }
     }),
     sendCommand: enqueueActions(({ enqueue, context, event }) => {
       const { command, text, references } = typeOf('SEND_COMMAND', event);
-      sendToSystem(id, {
-        type: 'USER_COMMAND',
+      enqueue.spawnChild('USER_COMMAND', { id: askId('sent'), input: {
         command,
         text,
         mode: context.mode,
@@ -1149,7 +1185,7 @@ const threadsState = setup({
         threadId: context.currentThread?.id,
         ...(references && { references }),
         ...(context.pendingThreadCwd && { cwdOverride: context.pendingThreadCwd }),
-      });
+      } });
       if (context.pendingThreadCwd) {
         enqueue.assign({ pendingThreadCwd: undefined });
       }
@@ -1205,7 +1241,9 @@ const threadsState = setup({
      * the ones this window kept and the ones every window opens — and the thread to open
      */
     startChat: enqueueActions(({ enqueue, context, event, self }) => {
-      const start: ChatStart = answerOf(event, 'GET_CHAT_START');
+      const outcome = outcomeOf<AskEnded['chatStart']['output']>(event);
+      if (!outcome.ok) return;
+      const start: ChatStart = outcome.value;
       const extracted = extractChatSettings(start.settings?.chat || { modes: [], hotkeys: {} });
       const visibleModes = extracted.modes.filter(m => !m.hidden);
       const { mode, phase } = resolveDefaultModePhase(
@@ -1319,7 +1357,7 @@ const threadsState = setup({
       return { tabs };
     }),
     createTabGroup: assign(({ context, event }) => {
-      const { tabIds } = typeOf('CREATE_TAB_GROUP', event) as { type: string; tabIds?: string[] };
+      const { tabIds } = typeOf('CREATE_TAB_GROUP', event);
       const firstTab = tabIds?.[0] ? context.tabs.find(t => t.id === tabIds[0]) : undefined;
       const isPinned = firstTab?.pinned || false;
       const color = getNextAvailableColor(context.tabGroups, isPinned);
@@ -1512,10 +1550,13 @@ const threadsState = setup({
       if (context.messagePagination.hasMore) enqueue('loadMoreMessages');
       else enqueue.assign({ focusMessage: null });
     }),
-    forkThread: ({ event }) => {
-      const { messageId, threadId, threadTopic } = typeOf('FORK_THREAD', event);
-      sendToSystem(id, { type: 'FORK_THREAD', messageId, threadId, threadTopic });
-    },
+    forkThread: spawnChild('FORK_THREAD', {
+      id: () => askId('forked'),
+      input: ({ event }) => {
+        const { messageId, threadId, threadTopic } = typeOf('FORK_THREAD', event);
+        return { messageId, threadId, threadTopic };
+      },
+    }),
     revertThread: ({ event }) => {
       const { messageId, threadId, restoreFiles, userCliUuid } = typeOf('REVERT_THREAD', event);
       sendToSystem(id, {
@@ -1550,6 +1591,8 @@ const threadsState = setup({
     detailGone: ({ context, event }) => event.type === 'DETAIL.READ' && event.id === context.view.id && event.detail === null && !writing(context.writes),
     chatGone: ({ context, event }) => event.type === 'CHAT.READ' && event.threadId === context.currentThread?.id && event.chat === null && !writing(context.writes),
     tabGone: ({ event }) => event.type === 'TAB.READ' && event.tab === null,
+    /** Whether the thread this window asked to open was gone */
+    openedGone: ({ event }) => goneOnOpen(event) !== undefined,
   }
 }).createMachine({
   id,
@@ -1637,21 +1680,19 @@ const threadsState = setup({
       { guard: 'tabGone', actions: 'dropThread' },
       { actions: 'readTab' },
     ],
-    // Answers to this window's asks: its writes settle, and a thread a message or a fork made opens
-    ASK_ANSWERED: [
-      { guard: ({ event }) => isAnswered(event, 'GET_CHAT_START'), actions: 'startChat' },
-      { guard: ({ event }) => isAnswered(event, 'CREATE_THREAD'), actions: 'threadCreated' },
-      { guard: ({ event }) => isAnswered(event, 'IMPORT_THREADS'), actions: 'handleThreadsImported' },
-      { guard: ({ event }) => isAnswered(event, 'EXPORT_THREADS'), actions: 'handleThreadsExported' },
-      { guard: ({ event }) => threadToShow(event) !== undefined, actions: 'showAnsweredThread' },
-      { actions: 'settleWrite' },
+    // How each of this window's asks ended, by its kind (`AskKinds`): its writes settle, and a thread a message or a
+    // fork made opens
+    'xstate.done.actor.chatStart.*': { actions: ['forgetAsk', 'startChat'] },
+    'xstate.done.actor.created.*': { actions: ['forgetAsk', 'threadCreated'] },
+    'xstate.done.actor.opened.*': [
+      { guard: 'openedGone', actions: ['forgetAsk', 'dropThread'] },
+      { actions: 'forgetAsk' },
     ],
-    ASK_FAILED: [
-      { guard: ({ event }) => event.asked === 'IMPORT_THREADS', actions: 'handleThreadsImportFailed' },
-      { guard: ({ event }) => event.asked === 'EXPORT_THREADS', actions: 'handleThreadsExportFailed' },
-      { guard: ({ event }) => event.asked === 'OPEN_THREAD_CHAT' && event.failure.kind === 'not-found', actions: 'dropThread' },
-      { actions: 'settleWrite' },
-    ],
+    'xstate.done.actor.sent.*': { actions: ['forgetAsk', 'showStartedThread'] },
+    'xstate.done.actor.forked.*': { actions: ['forgetAsk', 'showFork'] },
+    'xstate.done.actor.imported.*': { actions: ['forgetAsk', 'handleThreadsImportEnded'] },
+    'xstate.done.actor.exported.*': { actions: ['forgetAsk', 'handleThreadsExportEnded'] },
+    'xstate.done.actor.write.*': { actions: ['forgetAsk', 'settleWrite'] },
     SHOW_THREAD: { actions: 'openThread' },
     // Thread management events
     SHOW_CREATE_FORM: {

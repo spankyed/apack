@@ -193,14 +193,13 @@
 
 <script setup lang="ts">
 import { Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useSettingsDraft, useSurface } from '@apackdev/sdk/fe'
+import { useAsk, useSettingsDraft } from '@apackdev/sdk/fe'
+import { ask } from '#generated/events.ts'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
-import { ref } from 'vue'
+import { computed, ref, shallowRef } from 'vue'
 
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
-import { useSelector } from '@xstate/vue'
-import type { NotesState } from './state.ts'
 
 interface Props {
   settings: SettingsOf<'notes'>
@@ -235,27 +234,31 @@ const updatePosition = (value: 'left' | 'right') => {
   })
 }
 
-// Get notes actor and state via selectors
-const notesActor: NotesState = useSurface()
+// An import, asked from here: how the last one ended is shown until another is picked
+const importing = useAsk((directory: string) => ask('notes', { type: 'IMPORT_NOTES', directory }))
+const imported = shallowRef<typeof importing.outcome>()
+const isImporting = computed(() => importing.pending)
+const importStatus = computed(() => (imported.value === undefined ? 'idle' : imported.value.ok ? 'success' : 'error'))
+const applyErrors = computed(() => {
+  if (imported.value === undefined) return []
+  return imported.value.ok ? imported.value.value.errors ?? [] : imported.value.failure.message.split('\n')
+})
+const importedCount = computed(() => (imported.value?.ok ? imported.value.value.count : 0))
 
-// Import state
-const isImporting = useSelector(notesActor, (state) => state.context.notesImport.status === 'importing')
-const importStatus = useSelector(notesActor, (state) => state.context.notesImport.status)
-const applyErrors = useSelector(notesActor, (state) => state.context.notesImport.errors)
-const importedCount = useSelector(notesActor, (state) => state.context.notesImport.importedCount)
-
-// Export state
+// An export, asked from here: how the last one ended is shown until another is made
 const exportFormat = ref<'markdown' | 'json'>('markdown')
 const exportDirectory = ref<string>('')
-const isExporting = useSelector(notesActor, (state) => state.context.notesExport.status === 'exporting')
-const exportStatus = useSelector(notesActor, (state) => state.context.notesExport.status)
-const exportErrors = useSelector(notesActor, (state) => state.context.notesExport.errors)
-const exportedFilePath = useSelector(notesActor, (state) => state.context.notesExport.filePath)
-const exportedItemCount = useSelector(notesActor, (state) => state.context.notesExport.itemCount)
+const exporting = useAsk((directory: string, format: 'markdown' | 'json') => ask('notes', { type: 'EXPORT_NOTES', directory, format }))
+const exported = shallowRef<typeof exporting.outcome>()
+const isExporting = computed(() => exporting.pending)
+const exportStatus = computed(() => (exported.value === undefined ? 'idle' : exported.value.ok ? 'success' : 'error'))
+const exportErrors = computed(() => (exported.value?.ok === false ? [exported.value.failure.message] : []))
+const exportedFilePath = computed(() => (exported.value?.ok ? exported.value.value.filePath : ''))
+const exportedItemCount = computed(() => (exported.value?.ok ? exported.value.value.itemCount : 0))
 
-// Import - directory picker and send to state machine
+// Import - directory picker, then the ask
 const selectAndImportNotes = async () => {
-  notesActor.send({ type: 'NOTES.RESET_IMPORT_STATUS' })
+  imported.value = undefined
 
   const directory = await window.electronAPI?.fileUtils.selectPath({
     type: 'directory'
@@ -263,10 +266,7 @@ const selectAndImportNotes = async () => {
 
   if (!directory || Array.isArray(directory)) return
 
-  notesActor.send({
-    type: 'NOTES.IMPORT',
-    directory,
-  })
+  imported.value = await importing.ask(directory)
 }
 
 // Export
@@ -275,9 +275,9 @@ const selectExportDirectory = async () => {
   if (dir && typeof dir === 'string') exportDirectory.value = dir
 }
 
-const exportNotesToFile = () => {
+const exportNotesToFile = async () => {
   if (!exportDirectory.value) return
-  notesActor.send({ type: 'NOTES.RESET_EXPORT_STATUS' })
-  notesActor.send({ type: 'NOTES.EXPORT', directory: exportDirectory.value, format: exportFormat.value })
+  exported.value = undefined
+  exported.value = await exporting.ask(exportDirectory.value, exportFormat.value)
 }
 </script>

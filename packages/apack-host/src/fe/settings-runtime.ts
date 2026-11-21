@@ -1,4 +1,4 @@
-import { newCall, type Message } from '@apackdev/sdk/events';
+import { isAskAnswer, newCall, type AskFailure, type Message, type UntypedAskOutcome } from '@apackdev/sdk/events';
 import { _settingsJsonProblems } from '@apackdev/sdk/framework';
 import type { SettingsPort } from '@apackdev/sdk/fe';
 import { settingsTargetPath, type SettingsSnapshot, type SettingsRecovery, type SettingsRecoveryRequest, type SettingsWriteCondition, type SettingsWriteResult } from '@apackdev/sdk/types';
@@ -139,6 +139,36 @@ export function createWindowSettingsRuntime(io: WindowSettingsIO) {
     return true;
   }
 
+  /** The problems a failed ask carries for the form to show: the store's own, else the failure's message */
+  function refusalOf(failure: AskFailure | undefined): SettingsWriteResult {
+    const { problems, message } = (failure ?? {}) as { problems?: unknown; message?: unknown };
+    if (Array.isArray(problems) && problems.length > 0 && problems.every(problem => typeof problem === 'string')) return { status: 'refused', problems: [...problems] };
+    return typeof message === 'string' ? refused(message) : refused('The backend returned an invalid settings refusal.');
+  }
+
+  /**
+   * How the ask sent under `call` ended, taken by whichever of this window's asks that is: the read it is loading
+   * from, or a change a caller awaits. An answer to neither — one that timed out, or was settled when the connection
+   * changed — is nobody's.
+   */
+  function answered(call: string | undefined, outcome: UntypedAskOutcome): void {
+    if (call === undefined) return;
+    if (call === readCall) {
+      if (!outcome.ok) { end('disconnected', 'The backend refused the settings read.'); return; }
+      const answer = (outcome.value ?? {}) as { snapshot?: unknown; recovery?: unknown };
+      if ('recovery' in answer) takeRecovery(answer.recovery, call);
+      else acceptSnapshot(answer.snapshot);
+      return;
+    }
+    const request = pending.get(call);
+    if (!request) return;
+    if (!outcome.ok) { settle(call, refusalOf(outcome.failure)); return; }
+    const answer = (outcome.value ?? {}) as { snapshot?: unknown; recovery?: unknown };
+    // A repair is answered with the recovery as it now stands, which settles it
+    if (request.repair) takeRecovery(answer.recovery, call);
+    else settle(call, acceptSnapshot(answer.snapshot) ? { status: 'saved' } : refused('The backend returned an invalid settings save snapshot.'));
+  }
+
   function createPort(write: (event: SettingsChange) => Promise<SettingsWriteResult>, caller?: string): SettingsPort {
     return {
       get: <T,>(target: import('@apackdev/sdk/types').SettingsTarget) => {
@@ -229,30 +259,10 @@ export function createWindowSettingsRuntime(io: WindowSettingsIO) {
       if (message.to !== HOST.settings) return false;
       const event = message.event;
       if (event.type === 'SETTINGS_RECOVERY') return takeRecovery((event as { recovery?: unknown }).recovery, message.answering);
-      if (event.type === 'ASK_ANSWERED' || event.type === 'ASK_FAILED') {
-        const { asked } = event as { asked?: unknown };
-        if (typeof asked !== 'string' || !SETTINGS_ASKS.has(asked)) return false;
-        if (event.type === 'ASK_ANSWERED') {
-          const answer = (event as { answer?: { snapshot?: unknown; recovery?: unknown } }).answer ?? {};
-          if (asked === 'RECOVER_SETTINGS' || (asked === 'GET_SETTINGS' && 'recovery' in answer)) return takeRecovery(answer.recovery, message.answering);
-          if (asked === 'GET_SETTINGS') {
-            if (status === 'disposed' || status === 'disconnected') return true;
-            if (!snapshot && !recovery && (!readCall || message.answering !== readCall)) return true;
-            acceptSnapshot(answer.snapshot);
-            return true;
-          }
-          if (message.answering && pending.has(message.answering)) {
-            settle(message.answering, acceptSnapshot(answer.snapshot) ? { status: 'saved' } : refused('The backend returned an invalid settings save snapshot.'));
-          }
-          return true;
-        }
-        const failure = (event as { failure?: { message?: unknown; problems?: unknown } }).failure ?? {};
-        const problems = failure.problems;
-        const result: SettingsWriteResult = Array.isArray(problems) && problems.length > 0 && problems.every(problem => typeof problem === 'string')
-          ? { status: 'refused', problems: [...problems] }
-          : typeof failure.message === 'string' ? refused(failure.message) : refused('The backend returned an invalid settings refusal.');
-        if (message.answering === readCall && readCall !== undefined) end('disconnected', 'The backend refused the settings read.');
-        else if (message.answering && pending.has(message.answering)) settle(message.answering, result);
+      // An answer to one of the settings system's asks is this runtime's, and goes to whichever of its asks it names
+      if (isAskAnswer(event)) {
+        if (!SETTINGS_ASKS.has(event.asked)) return false;
+        answered(message.answering, event.type === 'ASK_ANSWERED' ? { ok: true, value: event.answer } : { ok: false, failure: event.failure as AskFailure });
         return true;
       }
       if (!['SETTINGS_LOADED', 'SETTINGS_UPDATED', 'SETTINGS_RESET'].includes(event.type)) return false;

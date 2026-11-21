@@ -8,8 +8,7 @@ import { afterEach, expect, it } from 'vitest'
 import { startApp } from '@apackdev/testing/harness'
 import { repository } from '#generated/repository.ts'
 
-const LIBRARY = 'default-setup/library'
-const MAIN = 'c-main'
+const WINDOW = { client: 'c-main' }
 
 const dirs: string[] = []
 afterEach(() => {
@@ -31,8 +30,8 @@ it('answers the window that asked for a file that is no longer on disk', async (
   const app = await startApp({ systems: ['library'] })
   await app.connect()
   const { folderId } = symlinkedFolder()
-  const call = await app.send('library', { type: 'GET_DOCUMENT', id: `symlink:${folderId}/deleted.md` }, { sender: LIBRARY, client: MAIN })
-  expect(await app.nextEmit('library', 'ASK_FAILED', { answering: call })).toMatchObject({ asked: 'GET_DOCUMENT', failure: { kind: 'not-found', message: expect.stringContaining('deleted.md') } })
+  expect(await app.ask('library', { type: 'GET_DOCUMENT', id: `symlink:${folderId}/deleted.md` }, WINDOW))
+    .toMatchObject({ ok: false, failure: { kind: 'not-found', message: expect.stringContaining('deleted.md') } })
 })
 
 // A folder nobody may read is not one for the user that owns everything, and Windows has no such mode
@@ -41,6 +40,6 @@ it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)('answers the
   await app.connect()
   const { dir, folderId } = symlinkedFolder()
   fs.chmodSync(dir, 0o000)
-  const call = await app.send('library', { type: 'GET_FOLDER_CONTENTS', folderId }, { sender: LIBRARY, client: MAIN })
-  expect(await app.nextEmit('library', 'ASK_FAILED', { answering: call })).toMatchObject({ asked: 'GET_FOLDER_CONTENTS', failure: { kind: 'no-access', message: expect.stringContaining('EACCES') } })
+  expect(await app.ask('library', { type: 'GET_FOLDER_CONTENTS', folderId }, WINDOW))
+    .toMatchObject({ ok: false, failure: { kind: 'no-access', message: expect.stringContaining('EACCES') } })
 })

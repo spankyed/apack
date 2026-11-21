@@ -84,7 +84,6 @@ export type OutgoingDatabaseEvents =
   | { type: 'AI_QUERY_GENERATED'; query: string }
   /**
    * Generating a query from a prompt failed in the flow, which is not a query failing. Its own event because it
-   * answers no ask: the flow sends it long after `GENERATE_AI_QUERY` was answered, so it carries no call, and the
-   * console's query answers are taken only for the call outstanding.
+   * answers no ask: the flow sends it long after `GENERATE_AI_QUERY` was answered.
    */
   | { type: 'AI_QUERY_ERROR'; error: string };

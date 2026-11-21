@@ -3,10 +3,9 @@
 // was read before the write landed, and the answer to a status asked before the latest one.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { askAnswered, askFailed } from '@apackdev/sdk/testing';
+import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -17,95 +16,93 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
 const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 type GitStatusFile = import('#features/code/fe/features/commit/state.ts').GitStatusFile;
 
-beforeEach(() => sendToSystem.mockReset());
+beforeEach(resetAsks);
 
 const edited: GitStatusFile = { path: 'a.ts', status: 'modified', staged: false };
 const staged: GitStatusFile = { path: 'a.ts', status: 'modified', staged: true };
 const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false, refs: false };
 
-/** The asks of one kind the panel has made of the backend, by the call each was made under, oldest first */
-const asked = (type: string): string[] => sendToSystem.mock.calls
-  .filter(([, event]) => (event as { type: string }).type === type)
-  .map(([, , options]) => (options as { call: string }).call);
-/** The status the ask under `call` is answered with */
-const status = (call: string, files: GitStatusFile[]) =>
-  askAnswered(call, 'commit.GET_GIT_STATUS', { files, truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true });
+/** Answers the latest ask for the status with these files */
+const status = (files: GitStatusFile[]) =>
+  latestAsk('commit.GET_GIT_STATUS').answer({ files, truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true });
 
 /** A panel that has asked for the status and been told `a.ts` is edited and not staged */
-function panelShowingAnEdit() {
+async function panelShowingAnEdit() {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.REFRESH_STATUS' });
-  actor.send(status(asked('commit.GET_GIT_STATUS').at(-1)!, [edited]));
+  await status([edited]);
   const listed = () => actor.getSnapshot().context.gitStatus;
   expect(listed()).toEqual([edited]);
   return { actor, listed };
 }
 
-it('moves a staged file at once, holds a status read before the write landed, and then shows what git says', () => {
-  const { actor, listed } = panelShowingAnEdit();
+it('moves a staged file at once, holds a status read before the write landed, and then shows what git says', async () => {
+  const { actor, listed } = await panelShowingAnEdit();
 
   actor.send({ type: 'commit.STAGE_FILES', paths: ['a.ts'] });
   expect(listed(), 'before git has answered').toEqual([staged]);
 
   // Another window's news has the panel ask again, and the answer is of the repository before the write
+  actor.send({ type: 'commit.SHOWN' });
   actor.send({ type: 'commit.REPOSITORY_CHANGED', changed: { ...NOTHING, status: true } });
-  actor.send(status(asked('commit.GET_GIT_STATUS').at(-1)!, [edited]));
+  await status([edited]);
   expect(listed(), 'the file is not put back').toEqual([staged]);
 
-  const statusAsks = asked('commit.GET_GIT_STATUS').length;
-  actor.send(askAnswered(asked('commit.STAGE_FILES').at(-1)!, 'commit.STAGE_FILES', { paths: ['a.ts'] }));
-  expect(asked('commit.GET_GIT_STATUS'), 'git is asked once the write is answered').toHaveLength(statusAsks + 1);
+  const statusAsks = asksOf('commit.GET_GIT_STATUS').length;
+  await latestAsk('commit.STAGE_FILES').answer({ paths: ['a.ts'] });
+  expect(asksOf('commit.GET_GIT_STATUS'), 'git is asked once the write is answered').toHaveLength(statusAsks + 1);
 
   const fromGit: GitStatusFile[] = [staged, { path: 'b.ts', status: 'untracked', staged: false }];
-  actor.send(status(asked('commit.GET_GIT_STATUS').at(-1)!, fromGit));
+  await status(fromGit);
   expect(listed()).toEqual(fromGit);
 });
 
-it('moves an unstaged file at once', () => {
+it('moves an unstaged file at once', async () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.REFRESH_STATUS' });
-  actor.send(status(asked('commit.GET_GIT_STATUS').at(-1)!, [staged]));
+  await status([staged]);
 
   actor.send({ type: 'commit.UNSTAGE_FILES', paths: ['a.ts'] });
 
   expect(actor.getSnapshot().context.gitStatus).toEqual([{ ...edited, originalPath: undefined }]);
 });
 
-it('puts a file back, and says why, when staging it is refused', () => {
-  const { actor, listed } = panelShowingAnEdit();
+it('puts a file back, and says why, when staging it is refused', async () => {
+  const { actor, listed } = await panelShowingAnEdit();
   actor.send({ type: 'commit.STAGE_FILES', paths: ['a.ts'] });
 
-  actor.send(askFailed(asked('commit.STAGE_FILES').at(-1)!, 'commit.STAGE_FILES', { kind: 'git', message: 'the index is locked' }));
+  await latestAsk('commit.STAGE_FILES').refuse('the index is locked', { kind: 'git' });
   expect(actor.getSnapshot().context.gitError).toBe('the index is locked');
-  actor.send(status(asked('commit.GET_GIT_STATUS').at(-1)!, [edited]));
+  await status([edited]);
 
   expect(listed()).toEqual([edited]);
 });
 
-it('asks git for the list once, after the last of several writes is answered', () => {
-  const { actor } = panelShowingAnEdit();
+it('asks git for the list once, after the last of several writes is answered', async () => {
+  const { actor } = await panelShowingAnEdit();
   actor.send({ type: 'commit.STAGE_FILES', paths: ['a.ts'] });
   actor.send({ type: 'commit.UNSTAGE_FILES', paths: ['a.ts'] });
-  const statusAsks = asked('commit.GET_GIT_STATUS').length;
+  const statusAsks = asksOf('commit.GET_GIT_STATUS').length;
 
-  actor.send(askAnswered(asked('commit.STAGE_FILES').at(-1)!, 'commit.STAGE_FILES', { paths: ['a.ts'] }));
-  expect(asked('commit.GET_GIT_STATUS'), 'one write is still unanswered').toHaveLength(statusAsks);
+  await latestAsk('commit.STAGE_FILES').answer({ paths: ['a.ts'] });
+  expect(asksOf('commit.GET_GIT_STATUS'), 'one write is still unanswered').toHaveLength(statusAsks);
 
-  actor.send(askAnswered(asked('commit.UNSTAGE_FILES').at(-1)!, 'commit.UNSTAGE_FILES', { paths: ['a.ts'] }));
-  expect(asked('commit.GET_GIT_STATUS')).toHaveLength(statusAsks + 1);
+  await latestAsk('commit.UNSTAGE_FILES').answer({ paths: ['a.ts'] });
+  expect(asksOf('commit.GET_GIT_STATUS')).toHaveLength(statusAsks + 1);
 });
 
-// Git reads take as long as the repository is large, so an answer can arrive after a later ask was made. It is of
-// the repository as it was before that ask, and showing it would undo what the later answer shows
-it('shows the answer to the latest status it asked for, and no earlier one', () => {
-  const { actor, listed } = panelShowingAnEdit();
+// Git reads take as long as the repository is large, so a read can still be under way when a later one is asked
+// for. It is of the repository as it was before that ask, and showing it would undo what the later answer shows
+it('shows the answer to the latest status it asked for, and stops waiting on an earlier one', async () => {
+  const { actor, listed } = await panelShowingAnEdit();
   actor.send({ type: 'commit.REFRESH_STATUS' });
   actor.send({ type: 'commit.REFRESH_STATUS' });
-  const [earlier, latest] = asked('commit.GET_GIT_STATUS').slice(-2);
+  const [earlier, latest] = asksOf('commit.GET_GIT_STATUS').slice(-2);
 
-  actor.send(status(earlier!, []));
+  expect(earlier!.stopped).toBe(true);
+  await earlier!.answer({ files: [], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true });
   expect(listed(), 'the earlier answer is not shown').toEqual([edited]);
 
-  actor.send(status(latest!, [staged]));
+  await latest!.answer({ files: [staged], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true });
   expect(listed()).toEqual([staged]);
 });

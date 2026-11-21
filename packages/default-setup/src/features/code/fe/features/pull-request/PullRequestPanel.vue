@@ -82,6 +82,7 @@
           <!-- PR Selector — always shown when not checking -->
           <PRSelector
             :list="prList"
+            :reading="prListReading"
             :selectedPR="selectedPR"
             @select-pr="handleSelectPRFromDropdown"
             @shown="prActor?.send({ type: 'pr.LIST_SHOWN' })"
@@ -314,6 +315,8 @@ const missingFileDiff = useSelector(prActor, (state) => state.context.missingFil
 const isPrLoading = useSelector(prActor, (state) => state.context.isPrLoading)
 const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)
 const prList = useSelector(prActor, (state) => state.context.prList)
+// Which page of the list is being read: its first, which starts it again, or the one after those read
+const prListReading = useSelector(prActor, (state) => state.matches({ list: 'reading' }) ? 'first' : state.matches({ list: 'readingMore' }) ? 'more' : null)
 const isCheckingOut = useSelector(prActor, (state) => state.context.isCheckingOut)
 const lastCheckout = useSelector(prActor, (state) => state.context.lastCheckout)
 const selectedPR = useSelector(prActor, (state) => state.context.selectedPR)
@@ -344,10 +347,10 @@ const isClosing = useSelector(prActor, (state) => state.context.isClosing)
 const isTogglingDraft = useSelector(prActor, (state) => state.context.isTogglingDraft)
 const isDeletingBranch = useSelector(prActor, (state) => state.context.isDeletingBranch)
 const isUpdatingPR = useSelector(prActor, (state) => state.context.isUpdatingPR)
-const isLoadingDetails = useSelector(prActor, (state) => state.context.isLoadingDetails)
+const isLoadingDetails = useSelector(prActor, (state) => state.matches({ details: 'asking' }))
 const lastWriteAnswer = useSelector(prActor, (state) => state.context.lastWriteAnswer)
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
-const isPushing = useSelector(commitActor, (state) => state.context.isPushing)
+const isPushing = useSelector(commitActor, (state) => state.matches({ push: 'pushing' }))
 const currentBranch = useSelector(commitActor, (state) => state.context.gitBranch)
 const availableBranches = useSelector(commitActor, (state) => state.context.availableBranches)
 

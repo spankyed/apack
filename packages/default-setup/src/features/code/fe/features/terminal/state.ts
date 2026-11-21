@@ -1,6 +1,7 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
-import { sendToSystem } from '#generated/events.ts';
-import { answerOf, isAnswered, newCall, recordCall, settleCall, type AnswersOf, type AskName } from '@apackdev/sdk/events';
+import { fromAsk, sendToSystem } from '#generated/events.ts';
+import type { AnswerPayload, AskName, AskOutcome } from '@apackdev/sdk/events';
+import { safeEvents } from '@apackdev/sdk/helpers';
 import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { terminalPool } from '../../utils/terminal-pool.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
@@ -46,7 +47,7 @@ const createTerminalTab = (info: TerminalInfo) => ({
   terminalInfo: info
 })
 
-/** What this window meant by one `terminal.CREATE`, held until that ask is answered */
+/** What this window meant by one `terminal.CREATE`, held until the ask it made ends */
 interface PendingOpen {
   /** `'tab'` routes the created terminal to a canvas tab; otherwise it goes to the panel */
   target: 'tab' | null
@@ -86,19 +87,19 @@ export interface CodeTerminalContext {
   /** The recording this window is looking back through, when it is */
   rewind: TerminalRewindView | null
   /**
-   * What each outstanding `terminal.CREATE_TERMINAL` meant, by the call it was asked under.
+   * What each outstanding `terminal.CREATE_TERMINAL` meant, by the id its ask was spawned under.
    *
-   * **Keyed by the call, because nothing about the terminal identifies the ask.** A fetch keys its answers
-   * by what it asked for; a terminal ask carries nothing that does, since the backend mints the id. The call
-   * is what the asker has and the answer echoes, so it is the only key available.
+   * **Keyed by the ask, because nothing about the terminal identifies it.** A fetch keys its answers by what it
+   * asked for; a terminal ask carries nothing that does, since the backend mints the id. The ask's own id is what
+   * its ending names, so it is the only key available.
    *
    * **One slot for all of them is the trap**, and it is invisible when it fires: two creates in flight share
    * it, so the second's intent is what the first answer reads and the second answer finds nothing. Run
    * "build" then "test" before the first answer and `test` runs in the build terminal
    * (`docs/issues/ISSUE-terminal-integration-review.md`, T4).
    *
-   * An entry is removed by whichever answer settles the ask, the terminal or the refusal, so the map holds only
-   * what is genuinely in flight.
+   * An entry is removed when its ask ends, with the terminal or with a refusal, so the map holds only what is
+   * genuinely in flight.
    */
   pendingOpens: Record<string, PendingOpen>
   /**
@@ -118,20 +119,43 @@ export interface CodeTerminalContext {
    * for a terminal and then none until they look, so a program going back and forth tells them once.
    */
   statusNotified: Record<string, true>
+  /**
+   * The last of this window's asks that was not done, for the panel to tell the person: a terminal that is not
+   * there, a shell that would not start. A new object for each, so two failures with one message are two
+   */
+  failure: { message: string } | null
 }
 
-/** The asks this panel makes of the code system, whose answers the surface hands it */
-type TerminalAsk = Extract<AskName<CodeSystemContract>, `terminal.${string}`>
+/** The terminal asks of the code system */
+type TerminalAsks = { [K in Extract<AskName<CodeSystemContract>, `terminal.${string}`>]: CodeSystemContract['asks'][K] }
+
+/**
+ * The asks this machine makes several of at once, by the name each is spawned under: a spawned ask's id is
+ * `<name>.<n>`, so its ending arrives as `xstate.done.actor.<name>.<n>` and a transition names the kind it is about
+ */
+type SpawnedAsks = {
+  create: 'terminal.CREATE_TERMINAL'
+  close: 'terminal.CLOSE_TERMINAL'
+  restart: 'terminal.RESTART_TERMINAL'
+  resize: 'terminal.RESIZE_TERMINAL'
+  rename: 'terminal.RENAME_TERMINAL'
+  openTab: 'terminal.OPEN_TERMINAL_TAB'
+  keep: 'terminal.KEEP_TERMINAL'
+  rewind: 'terminal.REWIND'
+  seek: 'terminal.REWIND_SEEK'
+}
+
+/** How an ask ended, as the event its actor finishes with: a spawned one, or the list the `listing` state invokes */
+type AskEnded =
+  | { [Name in keyof SpawnedAsks]: { type: `xstate.done.actor.${Name}.${string}`; output: AskOutcome<TerminalAsks[SpawnedAsks[Name]]>; actorId: string } }[keyof SpawnedAsks]
+  | { type: 'xstate.done.actor.list'; output: AskOutcome<TerminalAsks['terminal.REFRESH_LIST']>; actorId: string }
 
 /** A grid the pty runs at: broadcast when it moved, or the answer to this window's own fit when that was refused */
 type TerminalGrid = { terminalId: string; cols: number; rows: number }
 
-/** The grid an event carries, as `terminal.RESIZED` or as the answer to this window's `terminal.RESIZE_TERMINAL` */
-const gridIn = (event: Event): TerminalGrid | null =>
-  isAnswered(event, 'terminal.RESIZE_TERMINAL') ? answerOf(event, 'terminal.RESIZE_TERMINAL') : (event as { data: TerminalGrid }).data
-
 export type Event =
-  | AnswersOf<CodeSystemContract, TerminalAsk>
+  /** How each ask this machine made ended */
+  | AskEnded
   /** The surface started over its folder: the panel asks for the running terminals */
   | { type: 'CODE_STARTED' }
   | { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string; on?: string }
@@ -172,6 +196,32 @@ export type Event =
   | { type: 'terminal.REWIND_RESIZE'; cols: number; rows: number }
   | { type: 'terminal.RESIZED'; data: TerminalGrid }
 
+const typeOf = safeEvents<Event>()
+
+/** The id the next ask of a kind is spawned under, which no other ask has */
+let spawned = 0
+const askId = <Name extends keyof SpawnedAsks>(name: Name): `${Name}.${number}` => `${name}.${++spawned}`
+
+/** How the ask an event ends ended; throws for an event that ends none, which is an action on the wrong transition */
+function outcomeIn(event: Event): AskEnded['output'] {
+  if (!('output' in event)) throw new Error(`Expected the end of an ask, got ${event.type}`)
+  return event.output
+}
+
+/** Whether an event is the end of a spawned ask of that kind */
+const ends = (name: keyof SpawnedAsks, event: Event): boolean => event.type.startsWith(`xstate.done.actor.${name}.`)
+
+/** The answer a spawned ask ended with, for an action its transition runs only when it was answered (`answered`) */
+function answerIn<Name extends keyof SpawnedAsks>(name: Name, event: Event): AnswerPayload<TerminalAsks[SpawnedAsks[Name]]> {
+  const outcome = outcomeIn(event)
+  if (!ends(name, event) || !outcome.ok) throw new Error(`Expected the answer to a ${name} ask, got ${event.type}`)
+  return outcome.value as AnswerPayload<TerminalAsks[SpawnedAsks[Name]]>
+}
+
+/** The grid an event carries, as `terminal.RESIZED` or as the answer to this window's `terminal.RESIZE_TERMINAL` */
+const gridIn = (event: Event): TerminalGrid | null =>
+  event.type === 'terminal.RESIZED' ? event.data : answerIn('resize', event)
+
 /**
  * Asks the main process to show the system notification a bell asks for. Through the bridge, because a window's own
  * `Notification` is refused while the window is not focused, which is the case this exists for.
@@ -194,83 +244,95 @@ export const terminalState = setup({
     context: {} as CodeTerminalContext,
     events: {} as Event
   },
+  actors: {
+    list: fromAsk('code', 'terminal.REFRESH_LIST'),
+    create: fromAsk('code', 'terminal.CREATE_TERMINAL'),
+    close: fromAsk('code', 'terminal.CLOSE_TERMINAL'),
+    restart: fromAsk('code', 'terminal.RESTART_TERMINAL'),
+    resize: fromAsk('code', 'terminal.RESIZE_TERMINAL'),
+    rename: fromAsk('code', 'terminal.RENAME_TERMINAL'),
+    openTab: fromAsk('code', 'terminal.OPEN_TERMINAL_TAB'),
+    keep: fromAsk('code', 'terminal.KEEP_TERMINAL'),
+    rewind: fromAsk('code', 'terminal.REWIND'),
+    seek: fromAsk('code', 'terminal.REWIND_SEEK'),
+  },
+  guards: {
+    /** The ask an event ends was answered, rather than refused */
+    answered: ({ event }) => outcomeIn(event).ok,
+    /** This window's fit was refused: its answer is the grid the pty runs at instead */
+    fitRefused: ({ event }) => {
+      const outcome = outcomeIn(event)
+      return ends('resize', event) && outcome.ok && outcome.value !== null
+    },
+  },
   actions: {
+    /** An ask that ended is no longer this machine's child */
+    forgetAsk: enqueueActions(({ enqueue, event }) => {
+      if ('actorId' in event) enqueue.stopChild(event.actorId)
+    }),
+
     /**
-     * **`enqueueActions`, so the intent is recorded under its call before the ask is sent.** A send made
-     * from inside an `assign` producer runs before the assign is applied, so an answer arriving in the same
-     * turn is matched against a record the ask has not written yet.
+     * An ask of this window's that was not done, kept for the panel to tell the person. The window that asked is the
+     * one that shows it: the system answers a failure to its asker and tells nobody else
      */
+    noteAskFailure: assign(({ event }) => {
+      const outcome = outcomeIn(event)
+      return outcome.ok ? {} : { failure: { message: outcome.failure.message } }
+    }),
+
+    /** The intent is recorded under the id its ask is spawned under, which is what the ask's ending names */
     createTerminal: enqueueActions(({ event, self, enqueue }) => {
-      const ev = event as { type: 'terminal.CREATE'; title?: string; cwd?: string; target?: 'tab'; command?: string; on?: string }
+      const ev = typeOf('terminal.CREATE', event)
       const parentContext = getParentContext(self)
       const baseDir = parentContext?.baseDirectory
-      const call = newCall()
+      const id = askId('create')
 
       enqueue.assign(({ context }) => ({
-        pendingOpens: recordCall(context.pendingOpens, call, { target: ev.target ?? null, command: ev.command ?? null }),
+        pendingOpens: { ...context.pendingOpens, [id]: { target: ev.target ?? null, command: ev.command ?? null } },
       }))
-      enqueue(() => {
-        sendToSystem('code', {
-          type: 'terminal.CREATE_TERMINAL',
+      enqueue.spawnChild('create', {
+        id,
+        input: {
           title: ev.title,
           // `on` is one of the settings' targets: somewhere else, where this machine's directory names nothing
           ...(ev.on === undefined
             ? { cwd: ev.cwd || (baseDir && baseDir.trim() ? baseDir : undefined) }
             : { target: ev.on }),
-        }, { call })
+        },
       })
     }),
 
-    closeTerminal: ({ event }) => {
-      const ev = event as { type: 'terminal.CLOSE'; terminalId: string }
-      sendToSystem('code', { type: 'terminal.CLOSE_TERMINAL', terminalId: ev.terminalId })
-    },
+    closeTerminal: enqueueActions(({ event, enqueue }) => {
+      enqueue.spawnChild('close', { id: askId('close'), input: { terminalId: typeOf('terminal.CLOSE', event).terminalId } })
+    }),
 
-    restartTerminal: ({ event }) => {
-      const ev = event as { type: 'terminal.RESTART'; terminalId: string }
-      sendToSystem('code', { type: 'terminal.RESTART_TERMINAL', terminalId: ev.terminalId })
-    },
+    restartTerminal: enqueueActions(({ event, enqueue }) => {
+      enqueue.spawnChild('restart', { id: askId('restart'), input: { terminalId: typeOf('terminal.RESTART', event).terminalId } })
+    }),
 
     sendTerminalInput: ({ event }) => {
-      const ev = event as { type: 'terminal.INPUT'; terminalId: string; data: string }
+      const ev = typeOf('terminal.INPUT', event)
       sendToSystem('code', { type: 'terminal.TERMINAL_INPUT', terminalId: ev.terminalId, data: ev.data })
     },
 
     releaseTerminalFit: ({ event }) => {
-      const ev = event as { type: 'terminal.DETACHED'; terminalId: string }
-      sendToSystem('code', { type: 'terminal.STOPPED_FITTING', terminalId: ev.terminalId })
+      sendToSystem('code', { type: 'terminal.STOPPED_FITTING', terminalId: typeOf('terminal.DETACHED', event).terminalId })
     },
 
-    resizeTerminal: ({ event }) => {
-      const ev = event as {
-        type: 'terminal.RESIZE'; terminalId: string; cols: number; rows: number
-        cellWidth?: number; cellHeight?: number
-      }
-      sendToSystem('code', {
-        type: 'terminal.RESIZE_TERMINAL',
-        terminalId: ev.terminalId,
-        cols: ev.cols,
-        rows: ev.rows,
-        cellWidth: ev.cellWidth,
-        cellHeight: ev.cellHeight,
-      })
-    },
+    resizeTerminal: enqueueActions(({ event, enqueue }) => {
+      const { terminalId, cols, rows, cellWidth, cellHeight } = typeOf('terminal.RESIZE', event)
+      enqueue.spawnChild('resize', { id: askId('resize'), input: { terminalId, cols, rows, cellWidth, cellHeight } })
+    }),
 
-    renameTerminal: ({ event }) => {
-      const ev = event as { type: 'terminal.RENAME'; terminalId: string; customTitle: string }
-      sendToSystem('code', {
-        type: 'terminal.RENAME_TERMINAL',
-        terminalId: ev.terminalId,
-        customTitle: ev.customTitle,
-      })
-    },
-
-    listTerminals: () => {
-      sendToSystem('code', { type: 'terminal.REFRESH_LIST' })
-    },
+    renameTerminal: enqueueActions(({ event, enqueue }) => {
+      const { terminalId, customTitle } = typeOf('terminal.RENAME', event)
+      enqueue.spawnChild('rename', { id: askId('rename'), input: { terminalId, customTitle } })
+    }),
 
     assignTerminals: enqueueActions(({ enqueue, self, event }) => {
-      const terminals = answerOf(event, 'terminal.REFRESH_LIST')
+      const outcome = outcomeIn(event)
+      if (event.type !== 'xstate.done.actor.list' || !outcome.ok) throw new Error(`Expected the list of terminals, got ${event.type}`)
+      const terminals = outcome.value as TerminalInfo[]
       enqueue(assign({ terminals }))
 
       enqueue(() => {
@@ -343,7 +405,7 @@ export const terminalState = setup({
 
     removeTerminal: assign({
       terminals: ({ context, event }) => {
-        const ev = event as { type: 'terminal.CLOSED'; data: { terminalId: string } }
+        const ev = typeOf('terminal.CLOSED', event)
         return context.terminals.filter(t => t.id !== ev.data.terminalId)
       }
     }),
@@ -357,7 +419,7 @@ export const terminalState = setup({
      */
     markTerminalCrashed: assign({
       terminals: ({ context, event }) => {
-        const ev = event as { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
+        const ev = typeOf('terminal.CRASHED', event)
         return context.terminals.map(one =>
           one.id === ev.data.terminalId ? { ...one, active: false, exited: { code: ev.data.code } } : one)
       }
@@ -365,21 +427,20 @@ export const terminalState = setup({
 
     /** Says on the screen that the shell has gone, where the user is already looking */
     noteCrashOnScreen: ({ event }) => {
-      const ev = event as { type: 'terminal.CRASHED'; data: { terminalId: string; code: number | null } }
+      const ev = typeOf('terminal.CRASHED', event)
       terminalPool.noteExit(ev.data.terminalId, ev.data.code)
     },
 
-    /** Draws the terminal from the session answering now, and says on it that the shell is a new one */
     /**
      * Tells the pool what the list now says of the terminal this event was about. Every event that changes
      * one runs this after its own change, so what draws a terminal never holds an older word on it than
      * the list does.
      */
     describeTerminal: ({ context, event }) => {
-      const data = event.type === 'terminal.RESIZED' || isAnswered(event, 'terminal.RESIZE_TERMINAL')
-        ? gridIn(event)
-        : (event as { data?: { terminalId?: string; id?: string } }).data
-      const id = data && ('terminalId' in data ? data.terminalId : data.id)
+      const id = event.type === 'terminal.RESIZED' || ends('resize', event) ? gridIn(event)?.terminalId
+        : event.type === 'terminal.RESTARTED' ? event.data.id
+        : 'data' in event && typeof event.data === 'object' ? event.data.terminalId
+        : undefined
       const info = context.terminals.find(terminal => terminal.id === id)
       if (info) terminalPool.describe(info)
     },
@@ -387,13 +448,13 @@ export const terminalState = setup({
     /** A new shell under a terminal that was already there: its descriptor is replaced, its place is not */
     takeRestartedTerminal: assign({
       terminals: ({ context, event }) => {
-        const ev = event as { type: 'terminal.RESTARTED'; data: TerminalInfo }
+        const ev = typeOf('terminal.RESTARTED', event)
         return context.terminals.map(one => one.id === ev.data.id ? ev.data : one)
       }
     }),
 
     updateTerminalTitle: enqueueActions(({ enqueue, context, event, self }) => {
-      const ev = event as { type: 'terminal.RENAMED'; data: { terminalId: string; customTitle: string } }
+      const ev = typeOf('terminal.RENAMED', event)
 
       // Update local terminals list
       enqueue.assign({
@@ -435,7 +496,7 @@ export const terminalState = setup({
     }),
 
     updateTerminalCwd: enqueueActions(({ enqueue, context, event, self }) => {
-      const ev = event as { type: 'terminal.CWD_CHANGED'; data: { terminalId: string; cwd: string; title?: string } }
+      const ev = typeOf('terminal.CWD_CHANGED', event)
 
       // Update terminal info in context
       enqueue(assign({
@@ -463,28 +524,20 @@ export const terminalState = setup({
       })
     }),
 
-    /**
-     * A failed ask stops being outstanding. What the user is told is the backend's job, through `reportError`
-     * — the app raises the toast. This surface held the message in a context field instead, which nothing
-     * rendered, and that is what made every terminal failure silent.
-     *
-     * A refusal settles the ask it answers, so its intent goes with it: a create that failed would
-     * otherwise leave its target and command in the map for the life of the surface. Only `pending` is
-     * wanted here — there is nothing to do with what the failed ask meant.
-     */
-    settleFailedAsk: assign(({ event, context }) => ({
-      pendingOpens: settleCall(context.pendingOpens, event).pending
-    })),
+    /** A create that ended stops being outstanding, and what it meant goes with it */
+    forgetOpen: assign(({ context, event }) => {
+      if (!('actorId' in event)) return {}
+      const { [event.actorId]: _ended, ...pendingOpens } = context.pendingOpens
+      return { pendingOpens }
+    }),
 
     cleanupTerminalOutput: ({ event }) => {
-      const ev = event as { type: 'terminal.CLOSED'; data: { terminalId: string } }
-      terminalPool.dispose(ev.data.terminalId)
+      terminalPool.dispose(typeOf('terminal.CLOSED', event).data.terminalId)
     },
 
     /** What a closed terminal's program had said goes with it */
     forgetActivity: assign(({ context, event }) => {
-      const ev = event as { type: 'terminal.CLOSED'; data: { terminalId: string } }
-      const { [ev.data.terminalId]: _gone, ...activity } = context.activity
+      const { [typeOf('terminal.CLOSED', event).data.terminalId]: _gone, ...activity } = context.activity
       return { activity }
     }),
 
@@ -497,7 +550,7 @@ export const terminalState = setup({
      * which the system shows once.
      */
     notifySystem: ({ event }) => {
-      const ev = event as Extract<Event, { type: 'terminal.NOTIFIED' }>
+      const ev = typeOf('terminal.NOTIFIED', event)
       if (document.hasFocus() || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
       new Notification(ev.data.title || 'Terminal', { body: ev.data.body, tag: `terminal:${ev.data.terminalId}` })
     },
@@ -509,7 +562,7 @@ export const terminalState = setup({
      * value that could be set twice.
      */
     ringBell: enqueueActions(({ context, event, self, enqueue }) => {
-      const ev = event as Extract<Event, { type: 'terminal.BELL' }>
+      const ev = typeOf('terminal.BELL', event)
       const id = ev.data.terminalId
       const settings = getParentContext(self)?.settings
       if (context.bells[id] === undefined) {
@@ -530,24 +583,24 @@ export const terminalState = setup({
     }),
 
     endBellNotifyWindow: assign(({ context, event }) => {
-      const { [(event as { terminalId: string }).terminalId]: _closed, ...rest } = context.notifying
+      const { [typeOf('terminal.BELL_NOTIFY_WINDOW_ENDED', event).terminalId]: _closed, ...rest } = context.notifying
       return { notifying: rest }
     }),
 
     endBellFlash: assign(({ context, event }) => {
-      const id = (event as { terminalId: string }).terminalId
+      const id = typeOf('terminal.BELL_FLASH_ENDED', event).terminalId
       if (context.bells[id] !== 'flashing') return {}
       return { bells: { ...context.bells, [id]: 'quiet' as const } }
     }),
 
     endBellWindow: assign(({ context, event }) => {
-      const { [(event as { terminalId: string }).terminalId]: _closed, ...rest } = context.bells
+      const { [typeOf('terminal.BELL_WINDOW_ENDED', event).terminalId]: _closed, ...rest } = context.bells
       return { bells: rest }
     }),
 
     /** What a terminal's program said that is not on its screen, kept for its tab to show */
     noteActivity: assign(({ context, event }) => {
-      const ev = event as Extract<Event, { type: 'terminal.BELL' | 'terminal.NOTIFIED' | 'terminal.PROGRESS' | 'terminal.TITLED' }>
+      const ev = typeOf(['terminal.BELL', 'terminal.NOTIFIED', 'terminal.PROGRESS', 'terminal.TITLED'], event)
       const id = ev.data.terminalId
       const before = context.activity[id] ?? {}
       let after: TerminalActivity
@@ -574,7 +627,7 @@ export const terminalState = setup({
      * mind. Read before the records are taken, since it is the difference from what was held that says so.
      */
     notifyStatus: enqueueActions(({ context, event, self, enqueue }) => {
-      const ev = event as Extract<Event, { type: 'terminal.STATUS' }>
+      const ev = typeOf('terminal.STATUS', event)
       const id = ev.data.terminalId
       const terminal = context.terminals.find(one => one.id === id)
       if (!terminal) return
@@ -593,7 +646,7 @@ export const terminalState = setup({
 
     /** What a terminal's programs say they are doing, replaced whole: there is nothing to merge */
     takeStatuses: assign(({ context, event }) => {
-      const ev = event as Extract<Event, { type: 'terminal.STATUS' }>
+      const ev = typeOf('terminal.STATUS', event)
       return {
         terminals: context.terminals.map(terminal => {
           if (terminal.id !== ev.data.terminalId) return terminal
@@ -605,7 +658,7 @@ export const terminalState = setup({
 
     /** The person looked, so what its programs wanted them for is seen — in every window, which the system tells */
     tellStatusSeen: enqueueActions(({ context, event, enqueue }) => {
-      const id = (event as { type: 'terminal.SEEN'; terminalId: string }).terminalId
+      const id = typeOf('terminal.SEEN', event).terminalId
       if (context.statusNotified[id] !== undefined) {
         const { [id]: _looked, ...rest } = context.statusNotified
         enqueue.assign({ statusNotified: rest })
@@ -617,20 +670,20 @@ export const terminalState = setup({
 
     /** The person looked: the bell and the notification were for them, and have been seen */
     markSeen: assign(({ context, event }) => {
-      const ev = event as { type: 'terminal.SEEN'; terminalId: string }
+      const ev = typeOf('terminal.SEEN', event)
       const before = context.activity[ev.terminalId]
       if (!before?.bell && !before?.notification) return {}
       const { bell: _bell, notification: _notification, ...rest } = before
       return { activity: { ...context.activity, [ev.terminalId]: rest } }
     }),
 
-    keepTerminal: ({ event }) => {
-      const ev = event as { type: 'terminal.KEEP'; terminalId: string; kept: boolean }
-      sendToSystem('code', { type: 'terminal.KEEP_TERMINAL', terminalId: ev.terminalId, kept: ev.kept })
-    },
+    keepTerminal: enqueueActions(({ event, enqueue }) => {
+      const { terminalId, kept } = typeOf('terminal.KEEP', event)
+      enqueue.spawnChild('keep', { id: askId('keep'), input: { terminalId, kept } })
+    }),
 
     markKept: assign(({ context, event }) => {
-      const ev = event as { type: 'terminal.KEPT'; data: { terminalId: string; kept: boolean } }
+      const ev = typeOf('terminal.KEPT', event)
       return {
         terminals: context.terminals.map(terminal => terminal.id === ev.data.terminalId
           ? { ...terminal, kept: ev.data.kept }
@@ -638,31 +691,30 @@ export const terminalState = setup({
       }
     }),
 
-    askForRewind: ({ event }) => {
-      const ev = event as { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
-      sendToSystem('code', { type: 'terminal.REWIND', terminalId: ev.terminalId, cols: ev.cols, rows: ev.rows })
-    },
+    askForRewind: enqueueActions(({ event, enqueue }) => {
+      const { terminalId, cols, rows } = typeOf('terminal.REWIND', event)
+      enqueue.spawnChild('rewind', { id: askId('rewind'), input: { terminalId, cols, rows } })
+    }),
 
     /** A recording opened for this window: shown at its end, which is where the terminal is now */
     openRewind: assign(({ context, event }) => {
-      const opened = answerOf(event, 'terminal.REWIND')
+      const opened = answerIn('rewind', event)
       // The one this window was looking at is closed where it was opened; what drew it goes here
       if (context.rewind && context.rewind.session !== opened.session) terminalPool.dispose(rewindViewId(context.rewind.session))
       return { rewind: { ...opened, at: opened.last } }
     }),
 
     resizeRewind: ({ context, event }) => {
-      const ev = event as { type: 'terminal.REWIND_RESIZE'; cols: number; rows: number }
+      const ev = typeOf('terminal.REWIND_RESIZE', event)
       if (context.rewind) sendToSystem('code', { type: 'terminal.REWIND_RESIZE', session: context.rewind.session, cols: ev.cols, rows: ev.rows })
     },
 
-    seekRewind: ({ context, event }) => {
-      const ev = event as { type: 'terminal.REWIND_SEEK'; at: number }
-      if (context.rewind) sendToSystem('code', { type: 'terminal.REWIND_SEEK', session: context.rewind.session, at: ev.at })
-    },
+    seekRewind: enqueueActions(({ context, event, enqueue }) => {
+      if (context.rewind) enqueue.spawnChild('seek', { id: askId('seek'), input: { session: context.rewind.session, at: typeOf('terminal.REWIND_SEEK', event).at } })
+    }),
 
     noteRewindSought: assign(({ context, event }) => {
-      const sought = answerOf(event, 'terminal.REWIND_SEEK')
+      const sought = answerIn('seek', event)
       if (!sought || context.rewind?.session !== sought.session) return {}
       return { rewind: { ...context.rewind, at: sought.at } }
     }),
@@ -684,7 +736,7 @@ export const terminalState = setup({
      * process answers whether it wrote the text; one too large to hold is refused, not cut.
      */
     writeClipboard: ({ event }) => {
-      const ev = event as { type: 'terminal.CLIPBOARD'; data: { terminalId: string; text: string } }
+      const ev = typeOf('terminal.CLIPBOARD', event)
       // A refusal (the text is too large) and a failed call both leave the clipboard as it was, so neither is an error here
       void window.electronAPI?.clipboard.writeText(ev.data.text).catch(() => false)
     },
@@ -695,18 +747,12 @@ export const terminalState = setup({
      * **Two correlations, answering different questions.** Addressing says *which window*: only the asker is
      * answered with the terminal, so hang this off the broadcast `terminal.CREATED` instead and every open
      * window routes a terminal it never asked for into its own panel and runs a command nobody typed there.
-     * The call says *which of that window's asks*, which addressing cannot — see `pendingOpens`.
-     *
-     * An answer whose call names no outstanding ask opens with the defaults, the panel and no command, which
-     * is what a terminal this window did not ask for should do.
+     * The ask's id says *which of that window's asks*, which addressing cannot — see `pendingOpens`.
      */
     handleTerminalOpened: enqueueActions(({ enqueue, context, self, event }) => {
-      const { recorded, pending } = settleCall(context.pendingOpens, event)
-      const { target, command } = recorded ?? { target: null, command: null }
-      enqueue.assign({ pendingOpens: pending })
+      const terminalInfo = answerIn('create', event)
+      const { target, command } = ('actorId' in event ? context.pendingOpens[event.actorId] : undefined) ?? { target: null, command: null }
       enqueue(() => {
-        const terminalInfo = answerOf(event, 'terminal.CREATE_TERMINAL')
-
         if (target === 'tab') {
           // Explicit tab target — create canvas tab
           addTabToParent(self, createTerminalTab(terminalInfo))
@@ -730,12 +776,10 @@ export const terminalState = setup({
       })
     }),
 
+    /** The closed terminal's tab goes, and the panel moves on from it. Run with `removeTerminal`, in either order */
     handleTerminalClosed: enqueueActions(({ enqueue, context, self, event }) => {
-      enqueue('removeTerminal')
-      enqueue('cleanupTerminalOutput')
       enqueue(() => {
-        const ev = event as { type: 'terminal.CLOSED'; data: { terminalId: string } }
-        const terminalId = ev.data.terminalId
+        const terminalId = typeOf('terminal.CLOSED', event).data.terminalId
         const parentContext = getParentContext(self)
         const terminalPath = `terminal:${terminalId}`
 
@@ -755,9 +799,8 @@ export const terminalState = setup({
           const tabbedIds = new Set(
             (result.openFiles || []).filter((f: any) => f.isTerminal).map((f: any) => f.terminalInfo.id)
           )
-          // `context` is the snapshot this body was entered with, so the closed terminal is still in it:
-          // `removeTerminal` is queued above and assigns after the body returns. Excluding it by id rather
-          // than relying on that order, since the order is what made the panel show a dead terminal
+          // Excluded by id rather than by this running after `removeTerminal`: relying on that order is what
+          // made the panel show a dead terminal
           const next = context.terminals.find(t => t.id !== terminalId && !tabbedIds.has(t.id))
           panelUpdate = { panelTerminalId: next?.id ?? null }
         }
@@ -767,7 +810,7 @@ export const terminalState = setup({
     }),
 
     openTerminalTab: ({ event, self }) => {
-      const ev = event as { type: 'terminal.OPEN_TAB'; terminalInfo: TerminalInfo }
+      const ev = typeOf('terminal.OPEN_TAB', event)
       const parentContext = getParentContext(self)
       const openFiles = parentContext?.openFiles || []
       const terminalPath = `terminal:${ev.terminalInfo.id}`
@@ -785,16 +828,15 @@ export const terminalState = setup({
       }
     },
 
-    openTerminalTabs: ({ event }) => {
-      const ev = event as { type: 'terminal.OPEN_TABS'; terminalIds: string[] }
-      // Send individual requests to backend for each terminal
-      ev.terminalIds.forEach(terminalId => {
-        sendToSystem('code', { type: 'terminal.OPEN_TERMINAL_TAB', terminalId })
+    /** One ask for each terminal, each answered with the terminal to open */
+    openTerminalTabs: enqueueActions(({ event, enqueue }) => {
+      typeOf('terminal.OPEN_TABS', event).terminalIds.forEach(terminalId => {
+        enqueue.spawnChild('openTab', { id: askId('openTab'), input: { terminalId } })
       })
-    },
+    }),
 
     handleTerminalTabOpened: ({ event, self }) => {
-      const ev = { data: answerOf(event, 'terminal.OPEN_TERMINAL_TAB') }
+      const ev = { data: answerIn('openTab', event) }
       const parentContext = getParentContext(self)
       const openFiles = parentContext?.openFiles || []
       const terminalPath = `terminal:${ev.data.id}`
@@ -824,7 +866,8 @@ export const terminalState = setup({
     pendingOpens: {},
     bells: {},
     notifying: {},
-    statusNotified: {}
+    statusNotified: {},
+    failure: null
   },
   on: {
     'terminal.CREATE': {
@@ -848,8 +891,9 @@ export const terminalState = setup({
     'terminal.RENAME': {
       actions: 'renameTerminal'
     },
+    // Entering `listing` again stops the ask under way and asks again: the list wanted is the one as it stands now
     'terminal.REFRESH_LIST': {
-      actions: 'listTerminals'
+      target: '.listing', reenter: true
     },
     'terminal.OPEN_TAB': {
       actions: 'openTerminalTab'
@@ -859,15 +903,15 @@ export const terminalState = setup({
     },
     // The surface started over its folder: what is running there
     CODE_STARTED: {
-      actions: 'listTerminals'
+      target: '.listing', reenter: true
     },
     // The news, which every window takes: the list grows and nothing else happens
     // A terminal exists, in some window: ask for the list again, which the system answers this window alone
     'terminal.CREATED': {
-      actions: 'listTerminals'
+      target: '.listing', reenter: true
     },
     'terminal.CLOSED': {
-      actions: ['handleTerminalClosed', 'forgetActivity']
+      actions: ['removeTerminal', 'cleanupTerminalOutput', 'handleTerminalClosed', 'forgetActivity']
     },
     'terminal.CRASHED': {
       actions: ['markTerminalCrashed', 'describeTerminal', 'noteCrashOnScreen']
@@ -902,23 +946,47 @@ export const terminalState = setup({
     'terminal.RESIZED': {
       actions: ['updateTerminalGrid', 'describeTerminal']
     },
-    // The answers to this window's asks, which only the window that asked is sent
-    ASK_ANSWERED: [
-      { guard: ({ event }) => isAnswered(event, 'terminal.REFRESH_LIST'), actions: 'assignTerminals' },
-      { guard: ({ event }) => isAnswered(event, 'terminal.CREATE_TERMINAL'), actions: 'handleTerminalOpened' },
-      { guard: ({ event }) => isAnswered(event, 'terminal.OPEN_TERMINAL_TAB'), actions: 'handleTerminalTabOpened' },
-      { guard: ({ event }) => isAnswered(event, 'terminal.REWIND'), actions: 'openRewind' },
-      { guard: ({ event }) => isAnswered(event, 'terminal.REWIND_SEEK'), actions: 'noteRewindSought' },
-      // This window's fit was refused: the grid the pty runs at instead
-      { guard: ({ event }) => isAnswered(event, 'terminal.RESIZE_TERMINAL') && gridIn(event) !== null, actions: ['updateTerminalGrid', 'describeTerminal'] },
+    // How each of this window's asks ended: its answer taken, or its failure kept for the panel to tell
+    'xstate.done.actor.create.*': [
+      { guard: 'answered', actions: ['handleTerminalOpened', 'forgetOpen', 'forgetAsk'] },
+      { actions: ['forgetOpen', 'noteAskFailure', 'forgetAsk'] },
     ],
-    ASK_FAILED: {
-      actions: 'settleFailedAsk'
-    },
+    'xstate.done.actor.openTab.*': [
+      { guard: 'answered', actions: ['handleTerminalTabOpened', 'forgetAsk'] },
+      { actions: ['noteAskFailure', 'forgetAsk'] },
+    ],
+    'xstate.done.actor.rewind.*': [
+      { guard: 'answered', actions: ['openRewind', 'forgetAsk'] },
+      { actions: ['noteAskFailure', 'forgetAsk'] },
+    ],
+    'xstate.done.actor.seek.*': [
+      { guard: 'answered', actions: ['noteRewindSought', 'forgetAsk'] },
+      { actions: ['noteAskFailure', 'forgetAsk'] },
+    ],
+    'xstate.done.actor.resize.*': [
+      { guard: 'fitRefused', actions: ['updateTerminalGrid', 'describeTerminal', 'forgetAsk'] },
+      { actions: ['noteAskFailure', 'forgetAsk'] },
+    ],
+    // Done is all these answer with, which the news tells every window: only a failure is this window's to show
+    'xstate.done.actor.close.*': { actions: ['noteAskFailure', 'forgetAsk'] },
+    'xstate.done.actor.restart.*': { actions: ['noteAskFailure', 'forgetAsk'] },
+    'xstate.done.actor.rename.*': { actions: ['noteAskFailure', 'forgetAsk'] },
+    'xstate.done.actor.keep.*': { actions: ['noteAskFailure', 'forgetAsk'] },
   },
   states: {
-    idle: {
-    }
+    idle: {},
+    // The running terminals are being asked for, for exactly as long as this state is
+    listing: {
+      invoke: {
+        id: 'list',
+        src: 'list',
+        input: {},
+        onDone: [
+          { guard: 'answered', target: 'idle', actions: 'assignTerminals' },
+          { target: 'idle', actions: 'noteAskFailure' },
+        ],
+      },
+    },
   }
 });
 

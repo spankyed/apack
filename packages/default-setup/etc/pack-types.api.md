@@ -105,7 +105,7 @@ interface ActionTab {
     isPreview?: boolean;
 }
 
-/** What a window asks of an action's code, answered by the code system (`actionsAnswers`) */
+/** What a window asks of an action's code, answered by the code system's actions child (`actionsSystem`) */
 type ActionsAsks = {
     /** The action, with its code to edit in a tab */
     'codeActions.OPEN_ACTION': {
@@ -144,17 +144,6 @@ interface ActionsContext {
     selectedCategories: string[];
     /** Why the last of this window's writes was refused, until the user dismisses it */
     writeError: string | null;
-    actionsImport: {
-        status: 'error' | 'idle' | 'importing' | 'success';
-        errors: string[];
-        importedCount: number;
-    };
-    actionsExport: {
-        status: 'error' | 'exporting' | 'idle' | 'success';
-        errors: string[];
-        filePath: string;
-        actionCount: number;
-    };
     formData: {
         label: string;
         description?: string;
@@ -1026,7 +1015,7 @@ interface CollectionDTO {
     symlinkPath?: string;
 }
 
-/** What a window asks of the repository, answered by the code system (`commitAnswers`) */
+/** What a window asks of the repository, answered by the commit child over the repository it holds */
 type CommitAsks = {
     /**
      * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
@@ -1157,6 +1146,7 @@ type CommitAsks = {
             branchName: string;
             pull?: boolean;
         };
+        progress: GitProgressDuring;
         answer: {
             branchName: string;
         };
@@ -1172,15 +1162,16 @@ type CommitAsks = {
         };
         refuses: GitFails;
     };
-    /** Pushes what is checked out; `stopped` when the user stopped it (`commit.STOP_PUSH`), which is no failure */
+    /** Pushes what is checked out. Whoever asked stops it by no longer waiting, which ends git and what it started */
     'commit.PUBLISH_BRANCH': {
+        progress: GitProgressDuring;
         answer: {
             branchName: string;
-            stopped: boolean;
         };
         refuses: GitFails;
     };
     'commit.PULL_BRANCH': {
+        progress: GitProgressDuring;
         answer: {
             branchName: string;
         };
@@ -1309,8 +1300,8 @@ type CommitAsks = {
         refuses: GitFails;
     };
     /**
-     * Who last changed each line of a file, from the top of the folder, for the editor's gutter. `stopped` when the
-     * same window asked for blame again before this was read, which nobody shows
+     * Who last changed each line of a file, from the top of the folder, for the editor's gutter. Whoever asked stops
+     * the read by no longer waiting, as a panel does that asks for another file's
      */
     'commit.GET_BLAME': {
         args: {
@@ -1320,15 +1311,14 @@ type CommitAsks = {
             path: string;
             lines: BlameLine[];
         };
-        refuses: GitFails & {
-            stopped: {};
-        };
+        refuses: GitFails;
     };
     /** Bring a submodule to the commit the repository records for it, setting it up first if it is not */
     'commit.UPDATE_SUBMODULE': {
         args: {
             path: string;
         };
+        progress: GitProgressDuring;
         answer: {
             path: string;
         };
@@ -1547,8 +1537,8 @@ type CommitAsks = {
     };
     /**
      * A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history.
-     * The answer says which file's it is and whether it goes on from a cursor; `cursor` for the next. `stopped` when
-     * the same window asked for the history again before this was read, which nobody shows
+     * The answer says which file's it is and whether it goes on from a cursor; `cursor` for the next. Whoever asked
+     * stops the read by no longer waiting, as a panel does that asks for the history again
      */
     'commit.LOG_LIST': {
         args: {
@@ -1561,9 +1551,7 @@ type CommitAsks = {
             path?: string;
             continued?: boolean;
         };
-        refuses: GitFails & {
-            stopped: {};
-        };
+        refuses: GitFails;
     };
     'commit.REVERT_COMMIT': {
         args: {
@@ -2004,20 +1992,8 @@ interface DatabaseContext {
     schema: DatabaseSchemaInfo;
     currentQuery: string;
     queryResult: any;
-    isLoading: boolean;
     error: string | null;
     executionTime: number | null;
-    /**
-     * The call each answer has to name to be accepted, or `null` when nothing is outstanding.
-     *
-     * Two fields rather than one: the verbs are independent, and deleting a row chains a transaction into
-     * a follow-up query, so a single slot would have the query overwrite the transaction it came from.
-     *
-     * What goes in them is what `sendToSystem` returned for the ask; what reads them is `answersCall`, which
-     * refuses an empty slot — so neither the request nor the answer declares a field for it.
-     */
-    pendingQueryCall: string | null;
-    pendingTransactionCall: string | null;
     selectedSchemaItem: {
         type: 'attribute' | 'entity' | 'relation';
         value: string;
@@ -2031,7 +2007,6 @@ interface DatabaseContext {
     flowEvents: RunTree[];
     expandedNodes: Set<string>;
     nodeDetails: Map<string, RunNode>;
-    isLoadingRuns: boolean;
     runPagination: {
         offset: number;
         limit: number;
@@ -2043,8 +2018,6 @@ interface DatabaseContext {
         size: number;
         hasMedia?: boolean;
     } | null;
-    exporting: boolean;
-    importing: boolean;
     /** The last export or import to finish, a new object each time */
     backupResult: {
         operation: 'export' | 'import';
@@ -2347,7 +2320,7 @@ interface ExecOnceResult {
     exitCode: number;
 }
 
-/** What a window asks the explorer, answered by the code system (`explorerAnswers`) over the explorer's folder */
+/** What a window asks the explorer, answered by the code system's explorer child (`explorerSystem`) over its folder */
 type ExplorerAsks = {
     'explorer.LIST_FILES': {
         args: {
@@ -2892,22 +2865,24 @@ interface GitHubAccount {
  */
 type GitHubApiFailure = 'failed' | 'head-moved' | 'missing-scope' | 'not-found' | 'not-github' | 'rate-limited' | 'signed-out' | 'sso';
 
-/** What a window asks of the GitHub sign-in, answered by the code system (`githubAnswers`) */
+/** What a window asks of the GitHub sign-in, answered by the github child (`features/github.ts`) */
 type GitHubAsks = {
     /** Who the app is signed in to GitHub as, from what it holds: GitHub is not asked */
     'github.GET_ACCOUNT': {
         answer: GitHubAccount | null;
     };
     /**
-     * Starts a sign-in, ending any under way: answered with the code to type at `verificationUri`, or why GitHub gave
-     * none. How the sign-in ends follows, as `github.ACCOUNT_CHANGED` or `github.SIGN_IN_FAILED`
+     * Signs in. As it goes it tells whoever asked the code to type at `verificationUri`; it is answered with the
+     * account once they approved it there, which every window hears too (`github.ACCOUNT_CHANGED`), or with why it
+     * ended without one. Whoever asked ends it by no longer waiting
      */
     'github.SIGN_IN': {
-        answer: {
+        progress: {
             userCode: string;
             verificationUri: string;
             expiresAt: number;
         };
+        answer: GitHubAccount;
         refuses: {
             unconfigured: {};
             denied: {};
@@ -2941,12 +2916,6 @@ interface GitHubSignIn {
     fetchAccount(token: string, signal: AbortSignal): Promise<GitHubAccount>;
 }
 
-/**
- * Why a sign-in ended without a token: no OAuth App configured for this build, the user refused it at github.com,
- * the code expired before they approved it, the app cancelled it, or GitHub could not be asked or said something else
- */
-type GitHubSignInFailure = 'cancelled' | 'denied' | 'expired' | 'failed' | 'unconfigured';
-
 interface GitHubToken {
     token: string;
     /** The scopes GitHub granted, which the user may have narrowed */
@@ -2961,6 +2930,11 @@ interface GitProgress {
     /** How much of that is done, from 0 to 100 */
     percent: number;
 }
+
+/** How far along a push, a pull, a checkout or a submodule update is, as git says, told to whoever asked for it while it runs */
+type GitProgressDuring = {
+    during: ProgressDuring;
+} & GitProgress;
 
 interface GitStatusFile {
     path: string;
@@ -3030,7 +3004,7 @@ type IncomingBrowserEvents = {
     bookmarks: SavedBookmark[];
 };
 
-type IncomingCodeEvents = IncomingExplorerEvents | IncomingCommitEvents | IncomingTerminalEvents | IncomingGitHubEvents | {
+type IncomingCodeEvents = IncomingExplorerEvents | IncomingTerminalEvents | IncomingGitHubEvents | {
     type: 'SET_BASE_DIRECTORY';
     path: string;
     fromUserNavigation?: boolean;
@@ -3057,12 +3031,6 @@ type IncomingCodeEvents = IncomingExplorerEvents | IncomingCommitEvents | Incomi
     by?: 'window';
 };
 
-type IncomingCommitEvents = 
-/** Stops the push running: git and what it started are ended, and the push is answered as stopped */
-{
-    type: 'commit.STOP_PUSH';
-};
-
 type IncomingExplorerEvents = 
 /** The editor stopped showing the file: a change to it on disk is no one's to hear of */
 {
@@ -3071,12 +3039,8 @@ type IncomingExplorerEvents =
 };
 
 type IncomingGitHubEvents = 
-/** Ends the sign-in under way, whose window is then told it was cancelled */
-{
-    type: 'github.CANCEL_SIGN_IN';
-}
 /** Forgets the token. It stays valid at GitHub until the user revokes it there, which Settings says */
- | {
+{
     type: 'github.SIGN_OUT';
 }
 /** The app's stored secrets changed (no values): the sign-in held is read again on its next use */
@@ -3377,17 +3341,6 @@ interface LibraryContext {
     isBroken: boolean;
     lastKnownPath: string | null;
     writeError: string | null;
-    libraryImport: {
-        status: 'error' | 'idle' | 'importing' | 'success';
-        errors: string[];
-        importedCount: number;
-    };
-    libraryExport: {
-        status: 'error' | 'exporting' | 'idle' | 'success';
-        errors: string[];
-        filePath: string;
-        itemCount: number;
-    };
     navHistory: NavHistory<EARS.EntityId | null>;
 }
 
@@ -3823,17 +3776,6 @@ interface NotesContext {
     selectedNoteIds: string[];
     selectedTaskId: string | null;
     selectedTask: NoteSummary | null;
-    notesImport: {
-        status: 'error' | 'idle' | 'importing' | 'success';
-        errors: string[];
-        importedCount: number;
-    };
-    notesExport: {
-        status: 'error' | 'exporting' | 'idle' | 'success';
-        errors: string[];
-        filePath: string;
-        itemCount: number;
-    };
     showTrash: boolean;
     noteScrollPositions: Record<string, number>;
     panelSearchActive: boolean;
@@ -3969,19 +3911,12 @@ type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingCommitEvents | Outgoi
 };
 
 type OutgoingCommitEvents = 
-/** How far along a push, a pull, a checkout or a submodule update is, for the window that asked for it while it runs */
-{
-    type: 'commit.PROGRESS';
-    data: {
-        during: ProgressDuring;
-    } & GitProgress;
-}
 /**
  * The repository changed, on disk or by a write from any window: news for every window. It says which parts
  * changed and carries none of them, so a window asks again for what it shows of those and for nothing else —
  * an edited file is no reason to read the log again
  */
- | {
+{
     type: 'commit.REPOSITORY_CHANGED';
     changed: RepositoryChange;
 }
@@ -4026,8 +3961,7 @@ type OutgoingDatabaseEvents =
 }
 /**
  * Generating a query from a prompt failed in the flow, which is not a query failing. Its own event because it
- * answers no ask: the flow sends it long after `GENERATE_AI_QUERY` was answered, so it carries no call, and the
- * console's query answers are taken only for the call outstanding.
+ * answers no ask: the flow sends it long after `GENERATE_AI_QUERY` was answered.
  */
  | {
     type: 'AI_QUERY_ERROR';
@@ -4045,15 +3979,8 @@ type OutgoingExplorerEvents =
 type OutgoingFlowsEvents = never;
 
 type OutgoingGitHubEvents = 
-/** A sign-in ended without an account, for the window that started it: the one that was given `userCode` */
-{
-    type: 'github.SIGN_IN_FAILED';
-    userCode: string;
-    reason: GitHubSignInFailure;
-    message: string;
-}
 /** News for every window: the account the app is signed in as changed, or it signed out (`null`) */
- | {
+{
     type: 'github.ACCOUNT_CHANGED';
     account: GitHubAccount | null;
 };
@@ -4223,11 +4150,11 @@ type OutgoingTerminalEvents =
 };
 
 /**
- * What the threads system sends every window: a thread to show that no window asked to (a flow's), the streamed
- * reply's feed, and the few notifications a flow sends a window, none of which carries a row.
+ * What the threads system sends every window: a thread to show (one a flow opened, a first message started, or a
+ * fork), the streamed reply's feed, and the few notifications a flow sends a window, none of which carries a row.
  */
 type OutgoingThreadsEvents = 
-/** Open this thread in the chat, in every window: a flow's, or one a message no window asked about started */
+/** Open this thread in the chat, in every window: one a flow opened, a first message or command started, or a fork */
 {
     type: 'SHOW_THREAD';
     threadId: EARS.EntityId;
@@ -4660,7 +4587,7 @@ interface PromptTab {
     isPreview?: boolean;
 }
 
-/** What a window asks of a prompt's template, answered by the code system (`promptsAnswers`) */
+/** What a window asks of a prompt's template, answered by the code system's prompts child (`promptsSystem`) */
 type PromptsAsks = {
     /** The prompt, with its template to edit in a tab */
     'codePrompts.OPEN_PROMPT': {
@@ -4699,17 +4626,6 @@ interface PromptsContext {
     selectedCategories: string[];
     /** Why the last of this window's writes was refused, until the user dismisses it */
     writeError: string | null;
-    promptsImport: {
-        status: 'error' | 'idle' | 'importing' | 'success';
-        errors: string[];
-        importedCount: number;
-    };
-    promptsExport: {
-        status: 'error' | 'exporting' | 'idle' | 'success';
-        errors: string[];
-        filePath: string;
-        promptCount: number;
-    };
     formData: {
         label: string;
         description?: string;
@@ -4745,7 +4661,7 @@ type PromptsInboxEvent = {
     promptId: EARS.EntityId;
 };
 
-/** What a window asks of the pull requests, answered by the code system (`pullRequestAnswers`) */
+/** What a window asks of the pull requests, answered by the pull request child (`features/pull-request.ts`) */
 type PullRequestAsks = {
     /** `prNumber` reads the head from what GitHub keeps of that pull request, which outlives its branch */
     'pr.GET_BRANCH_DIFF': {
@@ -5607,8 +5523,8 @@ interface Tab {
 type TabGroupColor = 'blue' | 'gray' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow';
 
 /**
- * What a window asks of the terminals, answered by the code system (`terminalAnswers`). A terminal that is not there,
- * or a broker that refused, is a failure the user is also told of
+ * What a window asks of the terminals, answered by the code system's terminal child (`terminalSystem`). A terminal
+ * that is not there, or a broker that refused, is a failure whoever asked is answered with and shows
  */
 type TerminalAsks = {
     /**
@@ -6144,7 +6060,7 @@ type ThreadsAsks = {
         args: UserCommand;
         answer: MessageSent;
     };
-    /** A thread forked from a message, which the window that asked opens */
+    /** A thread forked from a message, which every window is told to show */
     FORK_THREAD: {
         args: {
             messageId: string;
@@ -6277,7 +6193,7 @@ interface ThreadsContext {
     freshThreadIds: string[];
     /** This window's thread writes, which hold the views back until they are answered */
     writes: ViewWrites;
-    /** The call the link form's last save went under, until it is answered, and why that save was refused, if it was */
+    /** The ask the link form's last save is, by the id it was spawned under, until it ends, and why that save was refused, if it was */
     linkSave: string | null;
     linkRefusal: string | null;
 }

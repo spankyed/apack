@@ -1,5 +1,8 @@
-import type { AnswersTo, PRDetails, PullRequestAsks } from '../contract.ts'
+import type { PRDetails, PullRequestAsks } from '../contract.ts'
 import { broadcastToSurface } from '#generated/events.ts';
+import { defineHandlers } from '@apackdev/sdk/framework'
+import type { AsksEvents } from '@apackdev/sdk/events'
+import { safeEvents } from '@apackdev/sdk/helpers'
 import { setup, assign, type AnyActorRef } from 'xstate'
 
 import { createLogger } from '@apackdev/sdk/logger'
@@ -7,19 +10,22 @@ import { services } from '#generated/services.ts'
 import type { AppGitRepository } from '../services/app-git-repository.ts'
 import { gitHubOf, type GitHubOfCheckout } from './github.ts'
 import { GitHubApiError, type GitHubApi, type GitHubApiFailure } from '../services/github-api.ts'
-import type { CodeSystemContext, PRBranchCheckout } from '../types.ts'
-import { gitRepositoryOf } from '../utils/git-helpers.ts'
+import type { PRBranchCheckout } from '../types.ts'
 
 const logger = createLogger('pr')
 
 const surfaceId = 'code' as const
 
-/**
- * The pull request child, which holds what the code system's pull request answers read between asks: each
- * comparison as its branch diff last fetched and read it, by `comparisonKey`, so that opening a file fetches nothing.
- * Emptied when the folder changes
- */
+/** What the pull request child answers its asks over */
 export interface CodePullRequestSystemContext {
+  /** The repository of the folder the code system is over, `null` where it is over none */
+  gitRepository: AppGitRepository | null
+  /** The code system, which routes what this child tells the commit child */
+  code?: AnyActorRef
+  /**
+   * Each comparison as its branch diff last fetched and read it, by `comparisonKey`, so that opening a file fetches
+   * nothing. Emptied when the folder changes
+   */
   comparisons: Map<string, Comparison>
 }
 
@@ -37,7 +43,15 @@ const comparisonKey = ({ baseBranch, headBranch, prNumber }: ComparisonAsk): str
 
 export type Event =
   | { type: 'pr.GIT_STATUS_CHANGED' }
-  | { type: 'pr.UPDATE_BASE_DIRECTORY'; path: string };
+  | { type: 'pr.UPDATE_BASE_DIRECTORY'; path: string; gitRepository: AppGitRepository | null }
+  // The pull request asks, which the code system forwards here to be answered
+  | AsksEvents<PullRequestAsks>;
+
+/** The repository the code surface is over, for an ask that runs git: an ask made with none is refused */
+function gitRepositoryOf(context: CodePullRequestSystemContext): AppGitRepository {
+  if (!context.gitRepository) throw new Error('No directory selected. Please select a directory first.')
+  return context.gitRepository
+}
 
 function humanizeBranchName(branch: string): string {
   const stripped = branch.replace(/^(feature|fix|bugfix|hotfix|chore|refactor|docs|test|ci|build|perf|style|revert|release|AS|as)[/_]/i, '')
@@ -61,7 +75,7 @@ const refusedBy = (failure: GitHubRefusal) => (error: unknown): never => {
  * there is no repository, no remote on GitHub or no sign-in
  */
 async function onGitHub<T>(
-  context: CodeSystemContext,
+  context: CodePullRequestSystemContext,
   failure: GitHubRefusal,
   work: (github: GitHubApi, repo: AppGitRepository, remotes: Omit<GitHubOfCheckout, 'github'>) => Promise<T>,
   /** Asked of the repository first, and GitHub is asked nothing where it answers */
@@ -177,46 +191,15 @@ async function headBranchOf(repo: AppGitRepository, { remote }: { remote: string
  * does: the pull request panel, which is what follows a merge, asks for no status. A fetch that fails leaves the
  * repository as it was, which the read finds
  */
-async function fetchAndAnnounce(repo: AppGitRepository, code: AnyActorRef): Promise<void> {
+async function fetchAndAnnounce(repo: AppGitRepository, code: AnyActorRef | undefined): Promise<void> {
   await repo.fetch().catch(() => undefined)
   announceWrite(code)
 }
 
-/** Has the commit child check the repository after a write here, and announce what it changed */
-const announceWrite = (code: AnyActorRef): void => {
-  code.getSnapshot().children.commit?.send({ type: 'commit.GIT_STATUS_CHANGED' })
+/** Has the commit child check the repository after a write here, and announce what it changed: the code system routes it there */
+const announceWrite = (code: AnyActorRef | undefined): void => {
+  code?.send({ type: 'commit.GIT_STATUS_CHANGED' })
 }
-
-/** The comparisons the pull request child holds, which a file's diff reads and a branch diff writes */
-const comparisonsOf = (code: AnyActorRef): Map<string, Comparison> =>
-  (code.getSnapshot().children.pr as AnyActorRef | undefined)?.getSnapshot().context.comparisons ?? new Map()
-
-/** What the pull request child keeps between asks, and the news it broadcasts when the repository moves */
-export const pullRequestSystem = setup({
-  types: {
-    context: {} as CodePullRequestSystemContext,
-    events: {} as Event,
-  },
-  actions: {
-    // News for every window: the repository's commits or branches moved under them
-    handleGitStatusChanged: () => {
-      broadcastToSurface(surfaceId, { type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } })
-    },
-    forgetComparisons: assign({ comparisons: () => new Map() }),
-  },
-}).createMachine({
-  id: 'pull-request',
-  initial: 'idle',
-  context: () => ({ comparisons: new Map() }),
-  states: {
-    idle: {
-      on: {
-        'pr.GIT_STATUS_CHANGED': { actions: 'handleGitStatusChanged' },
-        'pr.UPDATE_BASE_DIRECTORY': { actions: 'forgetComparisons' },
-      }
-    }
-  }
-})
 
 /** Reads the branch's commits for a new pull request's title and body: one commit's own, or the branch's name and a list */
 function autofillOf(currentBranch: string, commits: { subject: string; body: string }[]): { title: string; body: string } {
@@ -225,26 +208,29 @@ function autofillOf(currentBranch: string, commits: { subject: string; body: str
   return { title: '', body: '' }
 }
 
-/** The pull-request asks, answered by the code system (`answers`, `system.ts`) */
-export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
+const handlers = defineHandlers<CodePullRequestSystemContext, Event>()
+const typeOf = safeEvents<Event>()
+
+/** The pull request asks, answered here over the repository and the comparisons this machine holds */
+const answers = handlers.answers<PullRequestAsks>({
   'pr.GET_SMART_BASE_BRANCH': async ({ context }) => ({ branch: await gitRepositoryOf(context).getPRBaseBranch() }),
 
-  'pr.GET_BRANCH_DIFF': async ({ args: { baseBranch: asked, headBranch, prNumber }, context, self }) => {
+  'pr.GET_BRANCH_DIFF': async ({ args: { baseBranch: asked, headBranch, prNumber }, context }) => {
     const repo = gitRepositoryOf(context)
     const baseBranch = asked ?? await repo.findBaseBranch({ preferUpstream: false })
     const comparisonAsk = { baseBranch, headBranch, prNumber }
     const comparison = await compare(repo, comparisonAsk)
     const files = await repo.readBranchDiff(comparison.original, comparison.head)
-    comparisonsOf(self).set(comparisonKey(comparisonAsk), comparison)
+    context.comparisons.set(comparisonKey(comparisonAsk), comparison)
     return { files, baseBranch, headBranch }
   },
 
-  'pr.GET_BRANCH_FILE_DIFF': async ({ args, context, self, refuse }) => {
+  'pr.GET_BRANCH_FILE_DIFF': async ({ args, context, refuse }) => {
     const repo = gitRepositoryOf(context)
     const where = { path: args.path, baseBranch: args.baseBranch, headBranch: args.headBranch, ...(args.prNumber && { prNumber: args.prNumber }) }
     const read = async () => {
       // The comparison its file list was read from, which is fetched again only when that list is asked for
-      const comparisons = comparisonsOf(self)
+      const { comparisons } = context
       const key = comparisonKey(args)
       const comparison = comparisons.get(key) ?? await compare(repo, args)
       comparisons.set(key, comparison)
@@ -299,7 +285,7 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
    * following nothing, since nothing here can push to it. A branch already here is moved only forward
    * (`checkoutBranchAt`). Every window is shown the checkout, as after any write here
    */
-  'pr.CHECKOUT_PR': async ({ args: { number }, context, self, refuse }) => {
+  'pr.CHECKOUT_PR': async ({ args: { number }, context, refuse }) => {
     const { branch, checkout } = await onGitHub(context, refuse, async (github, repo, remotes): Promise<{ branch: string; checkout: PRBranchCheckout }> => {
       const { branch, headInRemote } = await github.readHead(number)
       if (headInRemote) {
@@ -310,7 +296,7 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
       const local = `pr/${number}`
       return { branch: local, checkout: await repo.checkoutBranchAt(local, ref) }
     })
-    announceWrite(self)
+    announceWrite(context.code)
     return { number, branch, checkout }
   },
 
@@ -329,7 +315,7 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
    * A refused merge carries the pull request read again, so the panel reflects the check, review and mergeability
    * state the user is actually facing rather than whatever stale data led to the click
    */
-  'pr.MERGE_PR': async ({ args: { number, method, sha }, context, self, refuse }) => {
+  'pr.MERGE_PR': async ({ args: { number, method, sha }, context, refuse }) => {
     const repo = gitRepositoryOf(context)
     const { github } = await gitHubOf(repo).catch(refusedBy(refuse))
     try {
@@ -340,7 +326,7 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
       throw refuse('github', error.message, { reason: error.reason, ...(details && { details }) })
     }
     // GitHub moved the base: it is fetched, and every window shown what moved
-    void fetchAndAnnounce(repo, self)
+    void fetchAndAnnounce(repo, context.code)
     return { number }
   },
 
@@ -456,7 +442,7 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
    * remote names — another repository's is not this checkout's to delete — that no other open pull request is
    * from. One GitHub already deleted, on merge say, is deleted
    */
-  'pr.DELETE_BRANCH': async ({ args: { number }, context, self, refuse }) => {
+  'pr.DELETE_BRANCH': async ({ args: { number }, context, refuse }) => {
     const branch = await onGitHub(context, refuse, async (github, repo, { remote }) => {
       const { branch, headInRemote } = await github.readHead(number)
       if (!headInRemote) throw new Error(`#${number} is from a branch of another repository, a fork, which is not this checkout's to delete.`)
@@ -467,7 +453,38 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
       await repo.deleteRemoteTrackingBranch(branch, remote)
       return branch
     })
-    void fetchAndAnnounce(gitRepositoryOf(context), self)
+    void fetchAndAnnounce(gitRepositoryOf(context), context.code)
     return { branch }
   },
-}
+})
+
+/** What the pull request child keeps between asks, and the news it broadcasts when the repository moves */
+export const pullRequestSystem = setup({
+  types: {
+    context: {} as CodePullRequestSystemContext,
+    events: {} as Event,
+    input: {} as { gitRepository: AppGitRepository | null; code?: AnyActorRef },
+  },
+  actions: {
+    ...answers.actions,
+    // News for every window: the repository's commits or branches moved under them
+    handleGitStatusChanged: () => {
+      broadcastToSurface(surfaceId, { type: 'pr.GIT_STATUS_REFRESHED', data: { timestamp: new Date() } })
+    },
+    // The folder moved: its repository is the one asked from here on, and nothing compared in the last one is kept
+    takeRepository: assign(({ event }) => ({ gitRepository: typeOf('pr.UPDATE_BASE_DIRECTORY', event).gitRepository, comparisons: new Map() })),
+  },
+}).createMachine({
+  id: 'pull-request',
+  initial: 'idle',
+  context: ({ input }) => ({ gitRepository: input.gitRepository, code: input.code, comparisons: new Map() }),
+  states: {
+    idle: {
+      on: {
+        ...answers.on,
+        'pr.GIT_STATUS_CHANGED': { actions: 'handleGitStatusChanged' },
+        'pr.UPDATE_BASE_DIRECTORY': { actions: 'takeRepository' },
+      }
+    }
+  }
+})

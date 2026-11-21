@@ -327,8 +327,8 @@ export type SystemEvents =
     type: 'DATA_CHANGED_ELSEWHERE';
 }
 /**
-* The answers to this system's own asks of another system, when it handles them as events rather than awaiting
-* them (`ask`): every system may ask, so every system receives them
+* How the answers to this system's own asks of another system travel. The ask that was made takes them (`ask`), and
+* no machine handles one: every system may ask, so every system receives them
 */
 | AskAnswered | AskFailed | AskProgressed
 /** An asker stopping an ask of this system's. The bus takes it, and the ask's handler's `signal` aborts */

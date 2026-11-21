@@ -15,7 +15,7 @@ import { featureSettings } from '#generated/settings.ts';
  * Priority on startup:
  *   baseDirectory > defaultBaseDirectory > first workspace project > null
  */
-import type { Contract, SearchAsks } from './contract.ts';
+import type { Contract, CommitAsks, SearchAsks, ActionsAsks, PromptsAsks, PullRequestAsks, GitHubAsks, ExplorerAsks, TerminalAsks } from './contract.ts';
 import type { AppSettings } from '@apackdev/sdk/types';
 import { services } from '#generated/services.ts';
 import { broadcastToSurface, sendToWindow } from '#generated/events.ts';
@@ -31,14 +31,14 @@ import { AppGitRepository, GIT_COMMAND_LOG, openGitRepository, openGitWatcher, r
 import { gitWatcherActor } from './git-watcher-actor.ts'
 
 // child systems; their events come from the contract, which is where every child's now live
-import { explorerAnswers, explorerSystem } from './features/explorer.ts'
+import { explorerSystem } from './features/explorer.ts'
 import { searchSystem } from './features/search.ts'
-import { commitAnswers, commitSystem } from './features/commit.ts'
-import { pullRequestAnswers, pullRequestSystem } from './features/pull-request.ts'
-import { forgetHeldSignIn, githubAnswers, githubSystem } from './features/github.ts'
-import { terminalAnswers, terminalSystem } from './features/terminal.ts'
-import { actionsAnswers } from './features/actions.ts'
-import { promptsAnswers } from './features/prompts.ts'
+import { commitSystem } from './features/commit.ts'
+import { pullRequestSystem } from './features/pull-request.ts'
+import { forgetHeldSignIn, githubSystem } from './features/github.ts'
+import { terminalSystem } from './features/terminal.ts'
+import { actionsSystem } from './features/actions.ts'
+import { promptsSystem } from './features/prompts.ts'
 
 /** One of this system's children, by the id it was spawned under */
 function child(self: AnyActorRef, id: string): AnyActorRef | undefined {
@@ -84,7 +84,7 @@ function resolveInitialDirectory(
  * repository changing, the directory moving, a terminal's lifecycle — is news, broadcast where it happens with no
  * listing on it, and each window asks for what it shows.
  */
-export const answers = codeSpec.answers<keyof SearchAsks>({
+export const answers = codeSpec.answers<keyof SearchAsks | keyof ActionsAsks | keyof PromptsAsks | keyof CommitAsks | keyof PullRequestAsks | keyof GitHubAsks | keyof ExplorerAsks | keyof TerminalAsks>({
   GET_CODE_START: ({ context }) => ({
     baseDirectory: context.baseDirectory,
     settings: featureSettings.forFeature('code').get(),
@@ -106,13 +106,6 @@ export const answers = codeSpec.answers<keyof SearchAsks>({
     self.send({ type: 'SET_BASE_DIRECTORY', path, fromUserNavigation: true, fromPicker: true })
     return { path }
   },
-  ...explorerAnswers,
-  ...commitAnswers,
-  ...pullRequestAnswers,
-  ...terminalAnswers,
-  ...actionsAnswers,
-  ...promptsAnswers,
-  ...githubAnswers,
 })
 
 export const systemMachine = setup({
@@ -125,6 +118,8 @@ export const systemMachine = setup({
     pullRequestSystem,
     githubSystem,
     terminalSystem,
+    actionsSystem,
+    promptsSystem,
   },
   actions: {
     ...answers.actions,
@@ -151,7 +146,13 @@ export const systemMachine = setup({
           code: self
         }
       });
-      enqueue.spawnChild('pullRequestSystem', { id: 'pr' });
+      enqueue.spawnChild('pullRequestSystem', {
+        id: 'pr',
+        input: {
+          gitRepository: repositoryOf(context.gitRepository),
+          code: self
+        }
+      });
       enqueue.spawnChild('terminalSystem', {
         id: 'terminal',
         input: {
@@ -159,6 +160,9 @@ export const systemMachine = setup({
         }
       });
       enqueue.spawnChild('githubSystem', { id: 'github' });
+      // Named for the prefix of the asks they answer, which is how `routeEvent` finds them
+      enqueue.spawnChild('actionsSystem', { id: 'codeActions' });
+      enqueue.spawnChild('promptsSystem', { id: 'codePrompts' });
     }),
 
     routeEvent: ({ event, self }) => {
@@ -216,7 +220,7 @@ export const systemMachine = setup({
         path: newPath,
         gitRepository: repositoryOf(context.gitRepository)!
       });
-      child(self, 'pr')?.send({ type: 'pr.UPDATE_BASE_DIRECTORY', path: newPath });
+      child(self, 'pr')?.send({ type: 'pr.UPDATE_BASE_DIRECTORY', path: newPath, gitRepository: repositoryOf(context.gitRepository) });
       // Note: Updates terminal's base directory for new terminal creation.
       // Individual terminal processes track their own cwd independently.
       child(self, 'terminal')?.send({ type: 'terminal.UPDATE_BASE_DIRECTORY', path: newPath });
@@ -230,7 +234,7 @@ export const systemMachine = setup({
      * `resolve-cli` and the stored paths are this feature's; the Settings view asks for it and is told the result.
      */
     testCliProvider: ({ event, client }) => {
-      const { provider } = event as { type: 'TEST_CLI_PROVIDER'; provider: string };
+      const { provider } = codeSpec.typeOf('TEST_CLI_PROVIDER', event);
       // The Settings view of the window that asked; with no window, the Settings view in every window
       const answer = (result: { success: boolean; error?: string; resolvedPath?: string }) => {
         const tested = { type: 'CLI_TEST_RESULT' as const, provider, ...result };
@@ -248,7 +252,7 @@ export const systemMachine = setup({
     },
 
     updateSettings: ({ event, context, self }) => {
-      const ev = event as { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
+      const ev = { settings: codeSpec.typeOf('FEATURE_SETTINGS_UPDATED', event).settings as CodeSettings }
 
       // The resolved paths are cached, so a change to this feature's settings is where the cache is dropped
       clearCliPathCache();
@@ -292,7 +296,7 @@ export const systemMachine = setup({
      * files say what, if anything, differs.
      */
     checkForExternalChanges: ({ context, event, self }) => {
-      const byWindow = (event as { by?: 'window' }).by === 'window';
+      const byWindow = codeSpec.typeOf('CHECK_FOR_EXTERNAL_CHANGES', event).by === 'window';
       child(self, 'explorer')?.send({ type: 'explorer.CHECK_OPEN_FILES' });
       const checkRepository = () => { child(self, 'commit')?.send({ type: 'commit.REPOSITORY_MAY_HAVE_CHANGED', reconcile: true, byWindow }) };
       const watcher = watcherOf(context.gitWatcher);
@@ -352,7 +356,7 @@ export const systemMachine = setup({
         FEATURE_SETTINGS_UPDATED: {
           actions: [
             'updateSettings',
-            assign({ defaultBaseDirectory: ({ event }) => (event as { settings: CodeSettings }).settings.defaultBaseDirectory ?? null }),
+            assign({ defaultBaseDirectory: ({ event }) => (event.settings as CodeSettings).defaultBaseDirectory ?? null }),
           ]
         },
         // Handle SET_BASE_DIRECTORY specially
@@ -366,8 +370,7 @@ export const systemMachine = setup({
         SECRETS_CHANGED: { actions: () => forgetHeldSignIn() },
         SELECT_REPOSITORY: {
           actions: ({ event, self }) => {
-            const ev = event as { type: 'SELECT_REPOSITORY'; path: string }
-            self.send({ type: 'SET_BASE_DIRECTORY', path: ev.path, fromUserNavigation: true, fromPicker: true })
+            self.send({ type: 'SET_BASE_DIRECTORY', path: event.path, fromUserNavigation: true, fromPicker: true })
           },
         },
         // All other events get routed to children

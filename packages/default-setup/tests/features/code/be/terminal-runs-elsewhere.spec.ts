@@ -50,7 +50,7 @@ describe('a terminal on a target', () => {
   it('is refused when the settings name no such target, and no shell is started here in its place', async () => {
     const { app, broker } = await started()
     expect(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', target: 'tt_gone' }, { client: WINDOW })).toMatchObject({ ok: false, failure: { message: expect.stringContaining('tt_gone') } })
-    expect(takeSystemErrors()).toHaveLength(1)
+    expect(takeSystemErrors(), 'the refusal is the asker\'s to show, and is told to nobody else').toEqual([])
     expect(broker.opened).toEqual([])
     await app.stop()
   })

@@ -236,27 +236,27 @@ export const bookmarksSystem = setup({
 `answers.on` goes where the asks are taken: at the root for a system that takes them in every state, or one by one
 under a state (`DELETE_BOOKMARK: answers.on.DELETE_BOOKMARK`) for one that takes them only there. A handler is handed
 `args`, `context`, `self`, `refuse`, `client` (the asking window's connection, absent for another system's ask),
-`waiting` (whether anyone waits for the answer: false for an ask sent from an action or a timer, whose outcome a
-handler that must still be heard broadcasts itself) and `signal`, which aborts when the window that asked goes.
+`progress`, which tells whoever asked something before the answer where the ask declares `progress`, and `signal`,
+which aborts when the window that asked goes or whoever asked stops waiting.
 
-The asker gets one of two events back, correlated by the call the ask was sent under: `ASK_ANSWERED { asked, answer }`
-or `ASK_FAILED { asked, failure }`, where `failure` is `{ kind, message }` and whatever data its kind declares. Two
-kinds every ask may fail as, declared or not: `failed`, for anything the handler did not name, and `unavailable`,
-for an ask nothing took — the system is not running, or its current state does not take that ask — which the app
-answers itself. An error from the disk is `not-found` or `no-access` where the ask declares that kind. A failure
-nobody asked about is reported to the user; a success nobody asked about goes nowhere.
+An ask ends with its answer or with a failure: `{ kind, message }` and whatever data its kind declares. Two kinds
+every ask may fail as, declared or not: `failed`, for anything the handler did not name, and `unavailable`, for an
+ask nothing took (the system is not running, or its current state does not take that ask), which the app answers
+itself. An error from the disk is `not-found` or `no-access` where the ask declares that kind. A failure nobody asked
+about is reported to the user; a success nobody asked about goes nowhere. An ask that was stopped is not answered.
 
 | To ask | Use |
 |---|---|
-| from a surface's machine, going on while it is answered (a write) | `sendToSystem(name, event)`, and handle `ASK_ANSWERED`/`ASK_FAILED`: add `AnswersOf<TheirContract>` (`@apackdev/sdk/events`) to your machine's events, guard with `isAnswered(event, 'RENAME_BOOKMARK')`, read with `answerOf(event, 'RENAME_BOOKMARK')` |
-| from a surface's machine, waiting for the answer | `invoke: { src: fromAsk('bookmarks', 'GET_BOOKMARK') }` (`#generated/events`), which resolves to an `Outcome`; branch `onDone` with `onOutcome` (`@apackdev/sdk/helpers`) |
-| from a component with no machine | `useAsk((name: string) => ask('bookmarks', { type: 'RENAME_BOOKMARK', id, name }))` (`@apackdev/sdk/fe`), which follows `pending` and the last `outcome` |
-| from backend code | `await ask(name, event, { signal? })` (`#generated/events`), resolving to an `Outcome` |
+| from a surface's machine, where the UI shows it under way or a newer one replaces it | a state with `invoke: { src: fromAsk('bookmarks', 'GET_BOOKMARK'), input, onDone }` (`#generated/events`). `event.output` is an `Outcome`. Leaving the state stops the ask. What the handler tells it on the way arrives as `GET_BOOKMARK.progress` (`ProgressEventOf`, `@apackdev/sdk/events`) |
+| from a surface's machine, several at once | `spawnChild` the same `fromAsk` logic with an id, and handle `xstate.done.actor.<id>` |
+| from a component | `useAsk((name: string) => ask('bookmarks', { type: 'RENAME_BOOKMARK', id, name }))` (`@apackdev/sdk/fe`), which follows `pending` and the last `outcome` |
+| from backend code | `await ask(name, event, { signal?, heard? })` (`#generated/events`), resolving to an `Outcome` |
 
-A spec driving the whole system asks with `app.ask(system, event, { client? })`, which resolves to the `Outcome`. A
-spec driving an asking machine directly hands it answers built with `askAnswered(call, asked, answer)` and
-`askFailed(call, asked, failure)` from `@apackdev/sdk/testing`. The `ask-answers` pack rule refuses an
-`ASK_ANSWERED` or `ASK_FAILED` written by hand in a pack's source.
+A surface's machine does not handle an answer as an event: the ask it invoked or spawned takes it.
+
+A spec driving the whole system asks with `app.ask(system, event, { client?, signal?, heard? })`, which resolves to
+the `Outcome`. The `ask-answers` pack rule refuses an `ASK_ANSWERED`, `ASK_FAILED` or `ASK_PROGRESS` written by hand
+in a pack's source: they are how an answer travels, and never a pack's to write.
 
 ### Logging and errors
 

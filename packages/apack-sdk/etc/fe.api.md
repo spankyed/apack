@@ -1099,12 +1099,10 @@ export interface ViewWrites {
 export const viewWrites: () => ViewWrites;
 
 // @public
-export function writeAnswered(writes: ViewWrites, answer: {
-    [key: string]: unknown;
-}, refused?: boolean): ViewWrites;
+export function writeEnded(writes: ViewWrites, write: string, refused?: boolean): ViewWrites;
 
 // @public
-export const writeSent: (writes: ViewWrites, call: string) => ViewWrites;
+export const writeSent: (writes: ViewWrites, write: string) => ViewWrites;
 
 // @public
 export const writing: (writes: ViewWrites) => boolean;

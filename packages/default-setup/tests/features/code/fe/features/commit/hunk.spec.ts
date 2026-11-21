@@ -1,11 +1,9 @@
 // Staging one piece of a file's change from its diff: the panel has git do it, and is busy until git answers
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { askFailed } from '@apackdev/sdk/testing';
-import { sentCall } from '../../../../../_support/calls.ts';
+import { latestAsk, resetAsks } from '../../_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -15,39 +13,41 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
 
 const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 
-beforeEach(() => sendToSystem.mockReset());
+beforeEach(resetAsks);
 
 const PIECE = { type: 'commit.APPLY_HUNK', path: 'a.txt', staged: false, hunk: 'a piece' } as const;
 
-it('has git stage the piece, and is busy with it until git says it is done', () => {
+it('has git stage the piece, and is busy with it until git says it is done', async () => {
   const actor = createActor(commitState).start();
 
   actor.send(PIECE);
 
-  expect(sendToSystem).toHaveBeenCalledWith('code', PIECE, { call: expect.any(String) });
-  expect(actor.getSnapshot().context.isApplyingHunk).toBe(true);
+  expect(latestAsk('commit.APPLY_HUNK').event).toEqual(PIECE);
+  expect(actor.getSnapshot().matches({ hunk: 'applying' })).toBe(true);
 
-  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.APPLY_HUNK' as const, answer: { path: 'a.txt', staged: false, hunk: 'a piece' } });
-  expect(actor.getSnapshot().context.isApplyingHunk).toBe(false);
+  await latestAsk('commit.APPLY_HUNK').answer({ path: 'a.txt', staged: false, hunk: 'a piece' });
+  expect(actor.getSnapshot().matches({ hunk: 'idle' })).toBe(true);
 });
 
-it('is no longer busy, and says why, when git refuses the piece', () => {
+it('is no longer busy, and says why, when git refuses the piece', async () => {
   const actor = createActor(commitState).start();
   actor.send(PIECE);
 
-  actor.send(askFailed(sentCall(sendToSystem, 'commit.APPLY_HUNK'), 'commit.APPLY_HUNK', { kind: 'git', message: 'The file has changed since this change was read.' }));
+  await latestAsk('commit.APPLY_HUNK').refuse('The file has changed since this change was read.', { kind: 'git' });
 
-  expect(actor.getSnapshot().context).toMatchObject({ isApplyingHunk: false, gitError: 'The file has changed since this change was read.' });
+  expect(actor.getSnapshot().matches({ hunk: 'idle' })).toBe(true);
+  expect(actor.getSnapshot().context.gitError).toBe('The file has changed since this change was read.');
 });
 
 // The tab's diff is read again a moment after a piece is staged, and until then it still lists that piece
-it('holds a piece as done from when git stages it until a diff is read again', () => {
+it('holds a piece as done from when git stages it until a diff is read again', async () => {
   const actor = createActor(commitState).start();
   actor.send(PIECE);
 
-  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.APPLY_HUNK' as const, answer: { path: 'a.txt', staged: false, hunk: 'a piece' } });
+  await latestAsk('commit.APPLY_HUNK').answer({ path: 'a.txt', staged: false, hunk: 'a piece' });
   expect(actor.getSnapshot().context.appliedHunks).toEqual({ 'diff:a.txt:unstaged': ['a piece'] });
 
-  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.GET_GIT_DIFF' as const, answer: { path: 'a.txt', staged: false, originalContent: '', modifiedContent: '', hunks: [] } });
+  actor.send({ type: 'commit.VIEW_DIFF', path: 'a.txt', staged: false });
+  await latestAsk('commit.GET_GIT_DIFF').answer({ path: 'a.txt', staged: false, originalContent: '', modifiedContent: '', hunks: [] });
   expect(actor.getSnapshot().context.appliedHunks).toEqual({});
 });

@@ -56,10 +56,6 @@ export interface LibraryContext {
   // Why the last of this window's writes or fetches was not done, until the user dismisses it
   writeError: string | null
 
-  // Import/Export
-  libraryImport: { status: 'idle' | 'importing' | 'success' | 'error'; errors: string[]; importedCount: number }
-  libraryExport: { status: 'idle' | 'exporting' | 'success' | 'error'; errors: string[]; filePath: string; itemCount: number }
-
   navHistory: NavHistory<EARS.EntityId | null>
 }
 

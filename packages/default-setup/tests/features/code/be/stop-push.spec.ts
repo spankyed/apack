@@ -1,4 +1,4 @@
-// A push the window stops ends git and the ssh it started, and is answered as stopped rather than as a failure.
+// A push the window stops, by no longer waiting on it, ends git and the ssh it started.
 // The remote is one that never answers: git's ssh command is a process that waits for as long as its fixture is
 // there, and ends by itself when the fixture is deleted. Driven through the code system as a window drives it.
 import { afterEach, it } from 'vitest';
@@ -7,7 +7,6 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
-import { answered } from './_support/asks.ts';
 
 const dirs: string[] = [];
 const before = process.env.GIT_SSH_COMMAND;
@@ -33,7 +32,7 @@ const until = async <T>(check: () => T | undefined): Promise<T> => {
   }
 };
 
-it('stops a push that is waiting on the remote, ending git and the ssh it started, and says it was stopped', async () => {
+it('stops a push that is waiting on the remote once whoever asked for it stops waiting, ending git and the ssh it started', async () => {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-stop-push-')));
   const fixture = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-stop-push-ssh-')));
   dirs.push(directory, fixture);
@@ -53,10 +52,11 @@ setInterval(() => { if (!require('fs').existsSync(${JSON.stringify(fixture)})) p
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const pushed = app.ask('code', { type: 'commit.PUBLISH_BRANCH' }, asWindow);
+  const stopping = new AbortController();
+  const pushed = app.ask('code', { type: 'commit.PUBLISH_BRANCH' }, { ...asWindow, signal: stopping.signal });
   const ssh = await until(() => { const pid = fs.existsSync(pidFile) ? Number(fs.readFileSync(pidFile, 'utf8')) : 0; return pid > 0 ? pid : undefined; });
-  await app.send('code', { type: 'commit.STOP_PUSH' }, asWindow);
+  stopping.abort(new Error('the user stopped the push'));
 
-  expect(await answered(pushed), 'answered as stopped, which is no failure').toMatchObject({ stopped: true });
+  await expect(pushed, 'nobody waits on it, and nothing is said to have failed').rejects.toThrow('the user stopped the push');
   await until(() => (alive(ssh) ? undefined : true));
 });

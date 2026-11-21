@@ -127,8 +127,9 @@ is the worked example of a read, notes of writes, threads of commands.
   an ask nothing took — the system is not running, or its state does not take the ask — is `unavailable`, which the
   bus answers itself.
 - **An ask nobody waits on still does its work.** An action opening a thread, an applier writing a setting: the
-  handler runs, a failure is reported, a success goes nowhere. A handler whose outcome every window must still hear
-  when nobody asked reads `waiting` and broadcasts it as news — threads shows every window a thread a flow started.
+  handler runs, a failure is reported, a success goes nowhere. A handler is not told whether anyone waits. One whose
+  outcome every window must hear when no window asked broadcasts it where `client` is absent: threads shows every
+  window a thread a flow started, and the window that started one itself opens it from its answer.
 - **A feed beside an answer goes to the asking window** with `sendToWindow(client, surface, event)`, `client` being
   the connection the handler is handed: a search's results as it finds them, a push's progress. The answer still
   says how the whole ask ended.

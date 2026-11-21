@@ -24,19 +24,6 @@ export interface ActionsContext {
   /** Why the last of this window's writes was refused, until the user dismisses it */
   writeError: string | null;
 
-  // Import/Export state
-  actionsImport: {
-    status: 'idle' | 'importing' | 'success' | 'error';
-    errors: string[];
-    importedCount: number;
-  };
-  actionsExport: {
-    status: 'idle' | 'exporting' | 'success' | 'error';
-    errors: string[];
-    filePath: string;
-    actionCount: number;
-  };
-
   // Form data for create/edit
   formData: {
     label: string;

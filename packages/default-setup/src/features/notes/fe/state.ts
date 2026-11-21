@@ -1,6 +1,7 @@
-import { entityIs, viewRead, viewWrites, writeAnswered, writeSent, writing } from '@apackdev/sdk/fe'
-import type { OpenEntity } from '@apackdev/sdk/events'
-import { assign, setup, type ActorRefFrom } from 'xstate'
+import { entityIs, viewRead, viewWrites, writeEnded, writeSent, writing } from '@apackdev/sdk/fe'
+import type { OpenEntity, UntypedAskOutcome } from '@apackdev/sdk/events'
+import { randomId } from '@apackdev/sdk/utils/pure'
+import { assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbList } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import {
@@ -10,9 +11,7 @@ import {
 import type { NoteDTO, NoteSummary } from '#generated/types.ts'
 import type { Contract, NotesContext, NotesInboxEvent } from './contract.ts'
 import type { NoteSummary as CreatedNote } from '#features/notes/be/types.ts'
-import type { Contract as NotesSystemContract } from '#features/notes/be/contract.ts'
-import { answerOf, isAnswered, type AnswersOf } from '@apackdev/sdk/events'
-import { sendToSystem } from '#generated/events.ts'
+import { fromAsk, sendToSystem, type ask } from '#generated/events.ts'
 import { Trash2 } from 'lucide-vue-next'
 import { contextMenuFn } from '@apackdev/sdk/fe'
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe'
@@ -20,7 +19,17 @@ import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoFo
 export const id = 'notes' as const;
 export type NotesState = ActorRefFrom<typeof notesState>
 
-type SystemEvent = AnswersOf<NotesSystemContract>
+/** How a CREATE_NOTE this window asked for ended */
+type NoteCreation = Awaited<ReturnType<typeof ask<'notes', 'CREATE_NOTE'>>>
+
+// Every write is an ask the machine spawns, named for whether it creates a note: its done event carries the name
+// back, which is what its write was recorded under, and how it ended.
+type CreateEnded = { type: `xstate.done.actor.create.${string}`; output: NoteCreation; actorId: string }
+type WriteEnded = { type: `xstate.done.actor.write.${string}`; output: UntypedAskOutcome; actorId: string }
+const CREATE_ENDED = 'xstate.done.actor.create.*'
+const WRITE_ENDED = 'xstate.done.actor.write.*'
+const createId = (): string => `create.${randomId()}`
+const writeId = (): string => `write.${randomId()}`
 
 type UIEvent =
   | { type: 'NOTE.SELECT'; noteId: string }
@@ -57,10 +66,6 @@ type UIEvent =
   | { type: 'TASK.TOGGLE_EXPAND'; nodeId: string }
   | { type: 'NOTE.TOGGLE_FAVORITE'; noteId: string }
   | { type: 'VIEW_WELCOME' }
-  | { type: 'NOTES.IMPORT'; directory: string }
-  | { type: 'NOTES.RESET_IMPORT_STATUS' }
-  | { type: 'NOTES.EXPORT'; directory: string; format: 'markdown' | 'json' }
-  | { type: 'NOTES.RESET_EXPORT_STATUS' }
   | { type: 'NOTE.SHOW_TRASH' }
   | { type: 'NOTE.HIDE_TRASH' }
   | { type: 'NOTE.PERMANENTLY_DELETE'; noteId: string }
@@ -70,7 +75,7 @@ type UIEvent =
   | { type: 'NAVIGATE_BACK' }
   | { type: 'NAVIGATE_FORWARD' }
 
-export type NotesEvents = OpenEntity | UIEvent | SystemEvent | TrailClickEvent
+export type NotesEvents = OpenEntity | UIEvent | CreateEnded | WriteEnded | TrailClickEvent
 const typeOf = safeEvents<NotesEvents>()
 
 function findNearestTaskList(notes: NoteSummary[], noteId: string): NoteSummary | null {
@@ -102,21 +107,30 @@ function getAncestorChain(notes: NoteSummary[], noteId: string): NoteSummary[] {
   return chain
 }
 
-/** Whether an event is the answer to a CREATE_NOTE this window asked for, carrying the note it made */
-const isNoteCreated = (event: NotesEvents): boolean =>
-  event.type === 'ASK_ANSWERED' && event.asked === 'CREATE_NOTE' && event.answer.note !== undefined
+/** Whether an event is the done event of a CREATE_NOTE this window asked for */
+const isCreateEnded = (event: NotesEvents): event is CreateEnded => event.type.startsWith('xstate.done.actor.create.')
 
-/** The note an answered CREATE_NOTE made, for an action wired to the transitions `isNoteCreated` guards */
+/** Whether an event says a CREATE_NOTE this window asked for made a note, and carries it */
+const isNoteCreated = (event: NotesEvents): boolean =>
+  isCreateEnded(event) && event.output.ok && event.output.value.note !== undefined
+
+/** The note a CREATE_NOTE made, for an action wired to the transitions `isNoteCreated` guards */
 function created(event: NotesEvents): { note: CreatedNote } {
-  if (event.type !== 'ASK_ANSWERED' || event.asked !== 'CREATE_NOTE' || !event.answer.note) {
-    throw new Error(`Expected the answer to a CREATE_NOTE that made a note, got ${event.type}`)
+  if (!isCreateEnded(event) || !event.output.ok || !event.output.value.note) {
+    throw new Error(`Expected the done event of a CREATE_NOTE that made a note, got ${event.type}`)
   }
-  return { note: event.answer.note }
+  return { note: event.output.value.note }
 }
 
-/** A write, sent where the edit is made: its call recorded in the same assignment, for its answer to settle */
-const withWrite = (writes: NotesContext['writes'], call: string): { writes: NotesContext['writes'] } =>
-  ({ writes: writeSent(writes, call) })
+/** The done event of one of this window's writes, for an action wired to `CREATE_ENDED` or `WRITE_ENDED` */
+function ended(event: NotesEvents): CreateEnded | WriteEnded {
+  if (!('actorId' in event)) throw new Error(`Expected the done event of a write, got ${event.type}`)
+  return event
+}
+
+/** A write, asked where the edit is made: recorded in the same assignment under its ask's name, for its end to settle */
+const withWrite = (writes: NotesContext['writes'], write: string): { writes: NotesContext['writes'] } =>
+  ({ writes: writeSent(writes, write) })
 
 /** `notes` with `note` in it once, whether or not the tree view has brought it already */
 const withNote = (notes: NoteSummary[], note: NoteSummary): NoteSummary[] =>
@@ -133,6 +147,18 @@ const notesState = setup({
   types: {
     context: {} as NotesContext,
     events: {} as NotesEvents,
+  },
+  actors: {
+    // This window's writes, each asked on its own so each settles when it ends
+    createNote: fromAsk('notes', 'CREATE_NOTE'),
+    updateNote: fromAsk('notes', 'UPDATE_NOTE'),
+    deleteNote: fromAsk('notes', 'DELETE_NOTE'),
+    softDeleteNote: fromAsk('notes', 'SOFT_DELETE_NOTE'),
+    restoreNote: fromAsk('notes', 'RESTORE_NOTE'),
+    moveNote: fromAsk('notes', 'MOVE_NOTE'),
+    reorderNote: fromAsk('notes', 'REORDER_NOTE'),
+    permanentlyDeleteNote: fromAsk('notes', 'PERMANENTLY_DELETE_NOTE'),
+    emptyTrash: fromAsk('notes', 'EMPTY_TRASH'),
   },
   actions: {
     /** The tree as its view read it, which every write — this window's or another's — brings */
@@ -153,8 +179,12 @@ const notesState = setup({
     /** A result that may predate a write still unanswered: applying it would undo that edit on screen */
     holdView: assign(({ context }) => ({ writes: viewRead(context.writes).writes })),
 
-    /** One of this window's writes answered: once the last is, the views are read again if a result was held or one was refused */
-    settleWrite: assign(({ context, event }) => ({ writes: writeAnswered(context.writes, event, event.type === 'ASK_FAILED') })),
+    /** One of this window's writes ended: once the last has, the views are read again if a result was held or one was refused */
+    settleWrite: enqueueActions(({ context, event, enqueue }) => {
+      const { actorId, output } = ended(event)
+      enqueue.assign({ writes: writeEnded(context.writes, actorId, !output.ok) })
+      enqueue.stopChild(actorId)
+    }),
 
     selectNote: assign(({ event, context }) => {
       const noteId = typeOf(['NOTE.SELECT', 'NOTE.LINK_CLICKED'], event).noteId
@@ -222,47 +252,42 @@ const notesState = setup({
       }
     },
 
-    sendCreateNote: assign(({ context, event }) => {
+    sendCreateNote: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.CREATE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'CREATE_NOTE',
+      return withWrite(context.writes, spawn('createNote', { id: createId(), input: {
         title: ev.title ?? 'Untitled',
         content: ev.content,
         parentId: ev.parentId,
         displayOrder: ev.displayOrder,
-      }))
+      } }).id)
     }),
 
-    sendDeleteNote: assign(({ context, event }) => {
+    sendDeleteNote: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.DELETE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'DELETE_NOTE',
+      return withWrite(context.writes, spawn('deleteNote', { id: writeId(), input: {
         id: ev.noteId,
-      }))
+      } }).id)
     }),
 
-    sendSoftDeleteTask: assign(({ context, event }) => {
+    sendSoftDeleteTask: assign(({ context, event, spawn }) => {
       const ev = typeOf('TASK.DELETE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'DELETE_NOTE',
+      return withWrite(context.writes, spawn('deleteNote', { id: writeId(), input: {
         id: ev.taskId,
-      }))
+      } }).id)
     }),
 
-    sendSoftDeleteNote: assign(({ context, event }) => {
+    sendSoftDeleteNote: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.SOFT_DELETE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'SOFT_DELETE_NOTE',
+      return withWrite(context.writes, spawn('softDeleteNote', { id: writeId(), input: {
         id: ev.noteId,
-      }))
+      } }).id)
     }),
 
-    sendRestoreNote: assign(({ context, event }) => {
+    sendRestoreNote: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.RESTORE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'RESTORE_NOTE',
+      return withWrite(context.writes, spawn('restoreNote', { id: writeId(), input: {
         id: ev.noteId,
-      }))
+      } }).id)
     }),
 
     updateLocalContent: assign(({ context, event }) => {
@@ -270,13 +295,12 @@ const notesState = setup({
       return { contents: { ...context.contents, [ev.noteId]: ev.content } }
     }),
 
-    sendUpdateContent: assign(({ context, event }) => {
+    sendUpdateContent: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.UPDATE_CONTENT', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_NOTE',
+      return withWrite(context.writes, spawn('updateNote', { id: writeId(), input: {
         id: ev.noteId,
         content: ev.content,
-      }))
+      } }).id)
     }),
 
     updateLocalTitle: assign(({ context, event }) => {
@@ -293,13 +317,12 @@ const notesState = setup({
       }
     }),
 
-    sendUpdateTitle: assign(({ context, event }) => {
+    sendUpdateTitle: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.UPDATE_TITLE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_NOTE',
+      return withWrite(context.writes, spawn('updateNote', { id: writeId(), input: {
         id: ev.noteId,
         title: ev.title,
-      }))
+      } }).id)
     }),
 
     updateLocalIcon: assign(({ context, event }) => {
@@ -316,13 +339,12 @@ const notesState = setup({
       }
     }),
 
-    sendUpdateIcon: assign(({ context, event }) => {
+    sendUpdateIcon: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.UPDATE_ICON', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_NOTE',
+      return withWrite(context.writes, spawn('updateNote', { id: writeId(), input: {
         id: ev.noteId,
         icon: ev.icon,
-      }))
+      } }).id)
     }),
 
     toggleFavoriteLocal: assign(({ context, event }) => {
@@ -344,15 +366,14 @@ const notesState = setup({
       }
     }),
 
-    sendToggleFavorite: assign(({ context, event }) => {
+    sendToggleFavorite: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.TOGGLE_FAVORITE', event)
       const note = context.notes.find(n => n.id === ev.noteId)
       if (!note) return {}
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_NOTE',
+      return withWrite(context.writes, spawn('updateNote', { id: writeId(), input: {
         id: ev.noteId,
         favorite: note.favorite,
-      }))
+      } }).id)
     }),
 
     /** The note this window asked to create, which this window opens; every window's tree has it from its view */
@@ -415,14 +436,13 @@ const notesState = setup({
       }
     }),
 
-    sendCreateChildForSubDocumentInsert: assign(({ context, event }) => {
+    sendCreateChildForSubDocumentInsert: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.REQUEST_DOCUMENT_INSERT', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'CREATE_NOTE',
+      return withWrite(context.writes, spawn('createNote', { id: createId(), input: {
         title: 'Untitled',
         parentId: ev.parentId,
         skipContentSync: true,
-      }))
+      } }).id)
     }),
 
     toggleSelect: assign(({ context, event }) => {
@@ -443,33 +463,30 @@ const notesState = setup({
 
     clearSelection: assign({ selectedNoteIds: [] }),
 
-    sendMoveNotes: assign(({ context, event }) => {
+    sendMoveNotes: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.MOVE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'MOVE_NOTE',
+      return withWrite(context.writes, spawn('moveNote', { id: writeId(), input: {
         ids: ev.noteIds,
         newParentId: ev.newParentId,
-      }))
+      } }).id)
     }),
 
-    sendReorderNote: assign(({ context, event }) => {
+    sendReorderNote: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.REORDER', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'REORDER_NOTE',
+      return withWrite(context.writes, spawn('reorderNote', { id: writeId(), input: {
         id: ev.noteId,
         newParentId: ev.newParentId,
         newIndex: ev.newIndex,
-      }))
+      } }).id)
     }),
 
-    sendCreateTaskList: assign(({ context, event }) => {
+    sendCreateTaskList: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.CREATE_TASKLIST', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'CREATE_NOTE',
+      return withWrite(context.writes, spawn('createNote', { id: createId(), input: {
         title: 'Untitled',
         noteType: 'tasklist',
         parentId: ev.parentId,
-      }))
+      } }).id)
     }),
 
     selectTask: assign(({ event, context }) => {
@@ -486,35 +503,32 @@ const notesState = setup({
       selectedTask: null,
     }),
 
-    sendCreateTask: assign(({ context, event }) => {
+    sendCreateTask: assign(({ context, event, spawn }) => {
       const ev = typeOf('TASK.CREATE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'CREATE_NOTE',
+      return withWrite(context.writes, spawn('createNote', { id: createId(), input: {
         title: 'Untitled',
         parentId: ev.parentId,
         skipContentSync: true,
         noteType: 'task',
-      }))
+      } }).id)
     }),
 
-    sendToggleComplete: assign(({ context, event }) => {
+    sendToggleComplete: assign(({ context, event, spawn }) => {
       const ev = typeOf('TASK.TOGGLE_COMPLETE', event)
       const task = context.notes.find(n => n.id === ev.taskId)
       if (!task) return {}
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_NOTE',
+      return withWrite(context.writes, spawn('updateNote', { id: writeId(), input: {
         id: ev.taskId,
         completed: !task.completed,
-      }))
+      } }).id)
     }),
 
-    sendTaskUpdateContent: assign(({ context, event }) => {
+    sendTaskUpdateContent: assign(({ context, event, spawn }) => {
       const ev = typeOf('TASK.UPDATE_CONTENT', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_NOTE',
+      return withWrite(context.writes, spawn('updateNote', { id: writeId(), input: {
         id: ev.taskId,
         content: ev.content,
-      }))
+      } }).id)
     }),
 
     updateLocalTaskContent: assign(({ context, event }) => {
@@ -536,43 +550,39 @@ const notesState = setup({
       }
     }),
 
-    sendTaskUpdateTitle: assign(({ context, event }) => {
+    sendTaskUpdateTitle: assign(({ context, event, spawn }) => {
       const ev = typeOf('TASK.UPDATE_TITLE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_NOTE',
+      return withWrite(context.writes, spawn('updateNote', { id: writeId(), input: {
         id: ev.taskId,
         title: ev.title,
-      }))
+      } }).id)
     }),
 
-    sendDeleteTask: assign(({ context, event }) => {
+    sendDeleteTask: assign(({ context, event, spawn }) => {
       const ev = typeOf('TASK.DELETE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'DELETE_NOTE',
+      return withWrite(context.writes, spawn('deleteNote', { id: writeId(), input: {
         id: ev.taskId,
-      }))
+      } }).id)
     }),
 
-    sendToggleShowCompleted: assign(({ context }) => {
+    sendToggleShowCompleted: assign(({ context, spawn }) => {
       if (!context.currentNoteId) return {}
       const note = context.notes.find(n => n.id === context.currentNoteId)
       if (!note) return {}
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_NOTE',
+      return withWrite(context.writes, spawn('updateNote', { id: writeId(), input: {
         id: context.currentNoteId,
         hideCompletedChildren: !note.hideCompletedChildren,
-      }))
+      } }).id)
     }),
 
-    sendToggleHideCompletedChildren: assign(({ context, event }) => {
+    sendToggleHideCompletedChildren: assign(({ context, event, spawn }) => {
       const ev = typeOf('TASK.TOGGLE_HIDE_COMPLETED_CHILDREN', event)
       const note = context.notes.find(n => n.id === ev.nodeId)
       if (!note) return {}
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_NOTE',
+      return withWrite(context.writes, spawn('updateNote', { id: writeId(), input: {
         id: ev.nodeId,
         hideCompletedChildren: !note.hideCompletedChildren,
-      }))
+      } }).id)
     }),
 
     clearCurrentNote: assign(({ context }) => ({
@@ -581,85 +591,19 @@ const notesState = setup({
       navHistory: pushNavHistory(context.navHistory, null),
     })),
 
-    /* ── Notes Import actions ────────────────────────────── */
-    setImportingNotes: assign(({ context }) => ({
-      notesImport: {
-        ...context.notesImport,
-        status: 'importing' as const,
-      },
-    })),
-
-    sendImportNotes: ({ event }) => {
-      if (event.type === 'NOTES.IMPORT') {
-        sendToSystem(id, {
-          type: 'IMPORT_NOTES',
-          directory: event.directory,
-        })
-      }
-    },
-
-    handleNotesImported: assign(({ event }) => {
-      const { count, errors } = answerOf(event, 'IMPORT_NOTES')
-      return { notesImport: { status: 'success' as const, errors: errors || [], importedCount: count } }
-    }),
-
-    handleNotesImportFailed: assign(({ event }) => {
-      const { failure } = typeOf('ASK_FAILED', event)
-      return { notesImport: { status: 'error' as const, errors: failure.message.split('\n'), importedCount: 0 } }
-    }),
-
-    resetImportNotesStatus: assign({
-      notesImport: { status: 'idle' as const, errors: [] as string[], importedCount: 0 },
-    }),
-
-    /* ── Notes Export actions ────────────────────────────── */
-    setExportingNotes: assign(({ context }) => ({
-      notesExport: {
-        ...context.notesExport,
-        status: 'exporting' as const,
-      },
-    })),
-
-    sendExportNotes: ({ event }) => {
-      if (event.type === 'NOTES.EXPORT') {
-        sendToSystem(id, {
-          type: 'EXPORT_NOTES',
-          directory: event.directory,
-          format: event.format,
-        })
-      }
-    },
-
-    handleNotesExported: assign(({ event }) => {
-      const { filePath, itemCount } = answerOf(event, 'EXPORT_NOTES')
-      return { notesExport: { status: 'success' as const, errors: [] as string[], filePath, itemCount } }
-    }),
-
-    handleNotesExportFailed: assign(({ event }) => {
-      const { failure } = typeOf('ASK_FAILED', event)
-      return { notesExport: { status: 'error' as const, errors: [failure.message], filePath: '', itemCount: 0 } }
-    }),
-
-    resetExportNotesStatus: assign({
-      notesExport: { status: 'idle' as const, errors: [] as string[], filePath: '', itemCount: 0 },
-    }),
-
     showTrash: assign({ showTrash: true }),
 
     hideTrash: assign({ showTrash: false }),
 
-    sendPermanentlyDelete: assign(({ context, event }) => {
+    sendPermanentlyDelete: assign(({ context, event, spawn }) => {
       const ev = typeOf('NOTE.PERMANENTLY_DELETE', event)
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'PERMANENTLY_DELETE_NOTE',
+      return withWrite(context.writes, spawn('permanentlyDeleteNote', { id: writeId(), input: {
         id: ev.noteId,
-      }))
+      } }).id)
     }),
 
-    sendEmptyTrash: assign(({ context }) => {
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'EMPTY_TRASH',
-      }))
+    sendEmptyTrash: assign(({ context, spawn }) => {
+      return withWrite(context.writes, spawn('emptyTrash', { id: writeId(), input: {} }).id)
     }),
 
     saveScroll: assign(({ context, event }) => {
@@ -697,8 +641,6 @@ const notesState = setup({
     selectedNoteIds: [],
     selectedTaskId: null,
     selectedTask: null,
-    notesImport: { status: 'idle' as const, errors: [], importedCount: 0 },
-    notesExport: { status: 'idle' as const, errors: [], filePath: '', itemCount: 0 },
     showTrash: false,
     noteScrollPositions: {},
     panelSearchActive: false,
@@ -717,18 +659,9 @@ const notesState = setup({
       { guard: 'writing', actions: 'holdView' },
       { actions: 'takeNote' },
     ],
-    // An import's or an export's answer is its status; the rest answer this window's writes, and a refusal reads the
-    // notes as stored again
-    ASK_ANSWERED: [
-      { guard: ({ event }) => isAnswered(event, 'IMPORT_NOTES'), actions: 'handleNotesImported' },
-      { guard: ({ event }) => isAnswered(event, 'EXPORT_NOTES'), actions: 'handleNotesExported' },
-      { actions: 'settleWrite' },
-    ],
-    ASK_FAILED: [
-      { guard: ({ event }) => event.asked === 'IMPORT_NOTES', actions: 'handleNotesImportFailed' },
-      { guard: ({ event }) => event.asked === 'EXPORT_NOTES', actions: 'handleNotesExportFailed' },
-      { actions: 'settleWrite' },
-    ],
+    // A write that ended settles; a refused one reads the notes as stored again
+    [CREATE_ENDED]: { actions: 'settleWrite' },
+    [WRITE_ENDED]: { actions: 'settleWrite' },
     'NOTE.SOFT_DELETE': { actions: 'sendSoftDeleteNote' },
     'NOTE.RESTORE': { actions: 'sendRestoreNote' },
     'NOTE.TOGGLE_EXPAND': { actions: 'toggleExpand' },
@@ -750,10 +683,6 @@ const notesState = setup({
     'TASK.DELETE': { actions: 'sendSoftDeleteTask' },
     'TASK.TOGGLE_SHOW_COMPLETED': { actions: 'sendToggleShowCompleted' },
     'TASK.TOGGLE_HIDE_COMPLETED_CHILDREN': { actions: 'sendToggleHideCompletedChildren' },
-    'NOTES.IMPORT': { actions: ['setImportingNotes', 'sendImportNotes'] },
-    'NOTES.RESET_IMPORT_STATUS': { actions: 'resetImportNotesStatus' },
-    'NOTES.EXPORT': { actions: ['setExportingNotes', 'sendExportNotes'] },
-    'NOTES.RESET_EXPORT_STATUS': { actions: 'resetExportNotesStatus' },
     'NOTE.SHOW_TRASH': { actions: 'showTrash' },
     'NOTE.HIDE_TRASH': { actions: 'hideTrash' },
     'NOTE.PERMANENTLY_DELETE': { actions: 'sendPermanentlyDelete' },
@@ -884,7 +813,7 @@ const notesState = setup({
           actions: 'sendCreateTask',
         },
         // The note a CREATE_NOTE this window asked for made
-        ASK_ANSWERED: [
+        [CREATE_ENDED]: [
           {
             guard: ({ event, context }) => {
               if (!isNoteCreated(event)) return false
@@ -993,7 +922,7 @@ const notesState = setup({
           actions: 'sendCreateTask',
         },
         // The note a CREATE_NOTE this window asked for made
-        ASK_ANSWERED: [
+        [CREATE_ENDED]: [
           {
             guard: ({ context, event }) => isNoteCreated(event) && context.pendingSubDocumentInsert !== null,
             actions: ['handleSubDocumentInsertCreated', 'settleWrite'],

@@ -677,18 +677,18 @@ export type ThreadsAsks = {
   OPEN_THREAD_CHAT: { args: { threadId: string; restore?: boolean }; refuses: { 'not-found': { threadId: string } } };
   USER_MSG: { args: UserMessage; answer: MessageSent };
   USER_COMMAND: { args: UserCommand; answer: MessageSent };
-  /** A thread forked from a message, which the window that asked opens */
+  /** A thread forked from a message, which every window is told to show */
   FORK_THREAD: { args: { messageId: string; threadId?: string; threadTopic?: string }; answer: { threadId: EARS.EntityId } };
   /** What a window's chat starts from */
   GET_CHAT_START: { answer: ChatStart };
 };
 
 /**
- * What the threads system sends every window: a thread to show that no window asked to (a flow's), the streamed
- * reply's feed, and the few notifications a flow sends a window, none of which carries a row.
+ * What the threads system sends every window: a thread to show (one a flow opened, a first message started, or a
+ * fork), the streamed reply's feed, and the few notifications a flow sends a window, none of which carries a row.
  */
 export type OutgoingThreadsEvents =
-  /** Open this thread in the chat, in every window: a flow's, or one a message no window asked about started */
+  /** Open this thread in the chat, in every window: one a flow opened, a first message or command started, or a fork */
   | { type: 'SHOW_THREAD'; threadId: EARS.EntityId; restore?: boolean }
   /**
    * The next characters of a streamed reply, for every window showing that message.

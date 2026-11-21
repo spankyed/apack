@@ -155,7 +155,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     setCliTestResult: assign(({ context, event }) => {
-      const ev = event as { type: 'CLI_TEST_RESULT'; provider: string; success: boolean; error?: string; resolvedPath?: string };
+      const ev = typeOf('CLI_TEST_RESULT', event);
       return {
         cliTestResults: {
           ...context.cliTestResults,
@@ -169,7 +169,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     previewPackContent: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT.PREVIEW'; directory: string };
+      const ev = typeOf('PACK_CONTENT.PREVIEW', event);
       // The packs system owns content orchestration; its answers come back to this surface, which draws them
       sendToSystem('packs', {
         type: 'PREVIEW_PACK_CONTENT',
@@ -191,7 +191,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     setContentPreview: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT_PREVIEW'; preview: PackContentPreview };
+      const ev = typeOf('PACK_CONTENT_PREVIEW', event);
       const selection = Object.fromEntries(Object.entries(ev.preview.content).map(([key, items]) => [key, items.map(i => i.key)]));
       return {
         packContentImport: {
@@ -208,7 +208,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     setContentPreviewFailed: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT_PREVIEW_FAILED'; error: string };
+      const ev = typeOf('PACK_CONTENT_PREVIEW_FAILED', event);
       return {
         packContentImport: {
           ...context.packContentImport,
@@ -222,7 +222,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     toggleContentExpand: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT.TOGGLE_EXPAND'; key: string };
+      const ev = typeOf('PACK_CONTENT.TOGGLE_EXPAND', event);
       return {
         packContentImport: {
           ...context.packContentImport,
@@ -235,7 +235,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     toggleContentTypeAll: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT.TOGGLE_TYPE_ALL'; key: string };
+      const ev = typeOf('PACK_CONTENT.TOGGLE_TYPE_ALL', event);
       const preview = context.packContentImport.preview;
       if (!preview) return {};
       const currentlySelected = context.packContentImport.selection[ev.key] ?? [];
@@ -253,7 +253,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     toggleContentItem: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT.TOGGLE_ITEM'; key: string; item: string };
+      const ev = typeOf('PACK_CONTENT.TOGGLE_ITEM', event);
       const current = context.packContentImport.selection[ev.key] ?? [];
       const next = current.includes(ev.item)
         ? current.filter(k => k !== ev.item)
@@ -306,7 +306,7 @@ export function createSettingsMachine(io: SettingsIO) {
     })),
 
     setContentImported: assign(({ context, event }) => {
-      const ev = event as Extract<SettingsEvents, { type: 'PACK_CONTENT_IMPORTED' }>;
+      const ev = typeOf('PACK_CONTENT_IMPORTED', event);
       return {
         packContentImport: {
           ...context.packContentImport,
@@ -319,7 +319,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     setContentImportFailed: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT_IMPORT_FAILED'; error: string };
+      const ev = typeOf('PACK_CONTENT_IMPORT_FAILED', event);
       return {
         packContentImport: {
           ...context.packContentImport,
@@ -396,7 +396,7 @@ export function createSettingsMachine(io: SettingsIO) {
           actions: assign(({ context, event }) => ({
             packContentImport: {
               ...context.packContentImport,
-              importMode: (event as any).mode,
+              importMode: typeOf('PACK_CONTENT.SET_MODE', event).mode,
             },
           })),
         },

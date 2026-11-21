@@ -231,11 +231,11 @@ describe("checking out a pull request's branch", () => {
 })
 
 describe('the pull request list', () => {
-  const list = (extra: Record<string, unknown> = {}) => ({ state: 'open', query: '', prs: [], next: null, asked: null, read: true, ...extra })
+  const list = (extra: Record<string, unknown> = {}) => ({ state: 'open', query: '', prs: [], next: null, read: true, ...extra })
   const pr = (number: number) => ({ number, title: `PR ${number}`, state: 'OPEN', isDraft: false })
   const open = async (props: Record<string, unknown>) => {
     const handlers = { onShown: vi.fn(), 'onSet-state': vi.fn(), 'onSet-query': vi.fn(), 'onLoad-more': vi.fn(), 'onSelect-pr': vi.fn() }
-    mount(PRSelector, { selectedPR: null, ...handlers, ...props })
+    mount(PRSelector, { selectedPR: null, reading: null, ...handlers, ...props })
     document.querySelector('button')!.click()
     await nextTick()
     return handlers
@@ -266,7 +266,7 @@ describe('the pull request list', () => {
   })
 
   it('shows no Load more while the list is being read again, or after its last page', async () => {
-    await open({ list: list({ prs: [pr(9)], next: 'C1', asked: { call: 'c', append: false } }) })
+    await open({ list: list({ prs: [pr(9)], next: 'C1' }), reading: 'first' })
     expect(byTestId('pr-list-more')).toBeNull()
     expect(document.body.textContent).toContain('Loading')
     app!.unmount()

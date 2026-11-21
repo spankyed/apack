@@ -1,14 +1,13 @@
-// A terminal failure is reported, not only refused.
+// A terminal failure reaches the user once, through whoever can show it.
 //
-// A refusal settles the window's ask and shows nothing, so on its own every terminal failure is silent — a shell
-// that would not spawn, a terminal already gone, the `maxTerminals` limit refusing a create. `reportError` is what reaches the user: the app turns a system error into a toast
-// (F9 in the terminal integration review; decision 3 there chose this over a new `HostShell` command, which
-// would publish a second way to say the same thing).
+// A failed ask is answered to the window that asked, which shows it (the terminal panel's machine keeps it as
+// `failure`, `fe/features/terminal/state.ts`), and is told to nobody else. What nobody asked for has no window to
+// show it, so it is reported: `reportError` is what reaches the user there, the app turning a system error into a
+// toast. Keystrokes are that case, and so is an ask sent with no asker.
 //
 // **Every case here fails over a terminal that does not exist, which is deliberate: it spawns no process.**
 // A backend spec in this pack cannot stub the terminal service — `tests/setup.ts` is a setup file and imports
 // `pack-entry.ts`, so the real service is in the module graph before any `vi.mock` in a test file registers.
-// The `not found` paths reach `failTerminal` through the same helper every other failure uses.
 import { describe, expect, it } from 'vitest'
 import { startApp, takeSystemErrors } from '@apackdev/testing/harness'
 
@@ -16,7 +15,7 @@ import { startApp, takeSystemErrors } from '@apackdev/testing/harness'
 const WINDOW = 'c-main'
 
 describe('a terminal failure', () => {
-  it('is reported to the user, and refuses the window that asked', async () => {
+  it('refuses the window that asked, which shows it, and is reported to nobody else', async () => {
     const app = await startApp({ systems: ['code'] })
     await app.connect()
 
@@ -24,19 +23,19 @@ describe('a terminal failure', () => {
       .toMatchObject({ ok: false, failure: { message: expect.stringContaining('not found') } })
     await app.settle()
 
-    const reported = takeSystemErrors()
-    expect(reported, 'a refusal is shown by nothing, so it alone tells the user nothing').toHaveLength(1)
-    expect(reported[0]).toMatchObject({ source: 'terminal', operation: 'close' })
+    expect(takeSystemErrors(), 'reported as well, the user would be told twice').toEqual([])
+    expect(app.emitted('code'), 'and no other window hears of it').toEqual([])
   })
 
-  it('names the operation that failed, so two failures are not one message', async () => {
+  it('says what failed in the refusal, so two failures are not one message', async () => {
     const app = await startApp({ systems: ['code'] })
     await app.connect()
 
-    expect(await app.ask('code', { type: 'terminal.OPEN_TERMINAL_TAB', terminalId: 'gone' }, { client: WINDOW })).toMatchObject({ ok: false })
-    await app.settle()
+    const tab = await app.ask('code', { type: 'terminal.OPEN_TERMINAL_TAB', terminalId: 'gone' }, { client: WINDOW })
+    const keep = await app.ask('code', { type: 'terminal.KEEP_TERMINAL', terminalId: 'gone', kept: true }, { client: WINDOW })
 
-    expect(takeSystemErrors()[0]).toMatchObject({ source: 'terminal', operation: 'open-tab' })
+    expect(tab).toMatchObject({ ok: false, failure: { message: 'Terminal not found' } })
+    expect(keep).toMatchObject({ ok: false, failure: { message: expect.stringContaining('gone') } })
   })
 
   // Keystrokes are answered by nothing: there are too many of them, and a terminal that is not there is the user's to hear of

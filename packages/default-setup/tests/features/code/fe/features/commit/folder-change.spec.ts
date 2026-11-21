@@ -3,9 +3,10 @@
 // as a reconnect does, keeps them.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { latestAsk, resetAsks } from '../../_support/asks.ts';
 
 const parent = vi.hoisted(() => ({ baseDirectory: '/work/one' }));
-vi.mock('#generated/events.ts', () => ({ sendToSystem: vi.fn() }));
+vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -15,29 +16,31 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
 
 const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 
-beforeEach(() => { parent.baseDirectory = '/work/one'; });
+beforeEach(() => { resetAsks(); parent.baseDirectory = '/work/one'; });
 
 const trust = { repository: '/work/one/.git', asks: [{ kind: 'hook' as const, name: 'pre-commit', file: '/work/one/.git/hooks/pre-commit' }] };
 /** A panel over `/work/one` holding a refusal and an undone discard that left a file */
-function held() {
+async function held() {
   const actor = createActor(commitState).start();
   actor.send({ type: 'CODE_STARTED' });
-  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.REVERT_FILES' as const, answer: { paths: ['a.txt', 'b.txt'], kept: { id: 'abc123', notKept: [] } } });
-  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.RESTORE_DISCARDED' as const, answer: { id: 'abc123', restored: ['a.txt'], left: ['b.txt'] } });
-  actor.send({ type: 'ASK_FAILED' as const, asked: 'commit.GET_GIT_STATUS' as const, failure: { kind: 'git' as const, message: 'Not trusted.', code: 'untrusted', trust } });
+  actor.send({ type: 'commit.REVERT_FILES', paths: ['a.txt', 'b.txt'] });
+  await latestAsk('commit.REVERT_FILES').answer({ paths: ['a.txt', 'b.txt'], kept: { id: 'abc123', notKept: [] } });
+  actor.send({ type: 'commit.UNDO_DISCARD' });
+  await latestAsk('commit.RESTORE_DISCARDED').answer({ id: 'abc123', restored: ['a.txt'], left: ['b.txt'] });
+  await latestAsk('commit.GET_GIT_STATUS').refuse('Not trusted.', { kind: 'git', code: 'untrusted', trust });
   return actor;
 }
 
-it('keeps what it holds when the surface starts again over the same folder', () => {
-  const actor = held();
+it('keeps what it holds when the surface starts again over the same folder', async () => {
+  const actor = await held();
 
   actor.send({ type: 'CODE_STARTED' });
 
   expect(actor.getSnapshot().context).toMatchObject({ discardLeft: ['b.txt'], gitError: 'Not trusted.', gitFailure: { trust } });
 });
 
-it('drops the refusal and the discard of one folder when the surface starts over another', () => {
-  const actor = held();
+it('drops the refusal and the discard of one folder when the surface starts over another', async () => {
+  const actor = await held();
   parent.baseDirectory = '/work/two';
 
   actor.send({ type: 'CODE_STARTED' });

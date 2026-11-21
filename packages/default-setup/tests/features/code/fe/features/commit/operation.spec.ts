@@ -2,11 +2,9 @@
 // the status it is sent, and has git carry on with it, skip a commit or give it up.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { askAnswered, askFailed } from '@apackdev/sdk/testing';
-import { sentCall } from '../../../../../_support/calls.ts';
+import { latestAsk, resetAsks } from '../../_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -17,44 +15,44 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
 const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 type RepositoryOperation = import('#features/code/be/types.ts').RepositoryOperation;
 
-beforeEach(() => sendToSystem.mockReset());
+beforeEach(resetAsks);
 
 const MERGE: RepositoryOperation = { kind: 'merge', subject: 'side' };
 /** A panel that has been sent a status holding this operation */
-function panelTold(operation?: RepositoryOperation, fetchSuspended?: boolean) {
+async function panelTold(operation?: RepositoryOperation, fetchSuspended?: boolean) {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.REFRESH_STATUS' });
-  const [, , { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];
-  actor.send(askAnswered(call, 'commit.GET_GIT_STATUS', { files: [], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true, operation, fetchSuspended }));
+  await latestAsk('commit.GET_GIT_STATUS').answer({ files: [], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching: true, operation, fetchSuspended });
   return actor;
 }
 
-it('holds whether fetching by itself has stopped, as the status says', () => {
-  expect(panelTold(undefined, true).getSnapshot().context.isFetchSuspended).toBe(true);
-  expect(panelTold().getSnapshot().context.isFetchSuspended).toBe(false);
+it('holds whether fetching by itself has stopped, as the status says', async () => {
+  expect((await panelTold(undefined, true)).getSnapshot().context.isFetchSuspended).toBe(true);
+  expect((await panelTold()).getSnapshot().context.isFetchSuspended).toBe(false);
 });
 
-it('holds what git is in the middle of, and nothing when the status names nothing', () => {
-  expect(panelTold(MERGE).getSnapshot().context.operation).toEqual(MERGE);
-  expect(panelTold().getSnapshot().context.operation).toBeNull();
+it('holds what git is in the middle of, and nothing when the status names nothing', async () => {
+  expect((await panelTold(MERGE)).getSnapshot().context.operation).toEqual(MERGE);
+  expect((await panelTold()).getSnapshot().context.operation).toBeNull();
 });
 
-it('has git move it on, and is busy with that until git answers', () => {
-  const actor = panelTold(MERGE);
+it('has git move it on, and is busy with that until git answers', async () => {
+  const actor = await panelTold(MERGE);
 
   actor.send({ type: 'commit.MOVE_OPERATION', move: 'continue' });
-  expect(sendToSystem).toHaveBeenLastCalledWith('code', { type: 'commit.MOVE_OPERATION', move: 'continue' }, { call: expect.any(String) });
-  expect(actor.getSnapshot().context.isMovingOperation).toBe(true);
+  expect(latestAsk('commit.MOVE_OPERATION').event).toEqual({ type: 'commit.MOVE_OPERATION', move: 'continue' });
+  expect(actor.getSnapshot().matches({ moveOperation: 'moving' })).toBe(true);
 
-  actor.send({ type: 'ASK_ANSWERED' as const, asked: 'commit.MOVE_OPERATION' as const, answer: { move: 'continue' } });
-  expect(actor.getSnapshot().context.isMovingOperation).toBe(false);
+  await latestAsk('commit.MOVE_OPERATION').answer({ move: 'continue' });
+  expect(actor.getSnapshot().matches({ moveOperation: 'idle' })).toBe(true);
 });
 
-it('says why when git could not, and is no longer busy', () => {
-  const actor = panelTold(MERGE);
+it('says why when git could not, and is no longer busy', async () => {
+  const actor = await panelTold(MERGE);
   actor.send({ type: 'commit.MOVE_OPERATION', move: 'continue' });
 
-  actor.send(askFailed(sentCall(sendToSystem, 'commit.MOVE_OPERATION'), 'commit.MOVE_OPERATION', { kind: 'git', message: 'you have unmerged files' }));
+  await latestAsk('commit.MOVE_OPERATION').refuse('you have unmerged files', { kind: 'git' });
 
-  expect(actor.getSnapshot().context).toMatchObject({ isMovingOperation: false, gitError: 'you have unmerged files', operation: MERGE });
+  expect(actor.getSnapshot().matches({ moveOperation: 'idle' })).toBe(true);
+  expect(actor.getSnapshot().context).toMatchObject({ gitError: 'you have unmerged files', operation: MERGE });
 });

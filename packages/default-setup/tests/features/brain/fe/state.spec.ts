@@ -3,53 +3,82 @@
 // asked for straight away, since an ask from a timer carries no sender and could not be answered.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
-const { default: brainState } = await import('#features/brain/fe/state.ts');
-
-const asks = () => sendToSystem.mock.calls.filter(([, event]) => event.type === 'REQUEST_SURFACE_DATA').map(([, event]) => event);
 import type { BrainStateEvent } from '#features/brain/be/types.ts';
 
-const RUNNING: BrainStateEvent = { type: 'BRAIN_STATE', rootFlowId: 'Flow-root' as never, paused: false, inspectEnabled: false };
-/** The answer to an ask for a run's tree, which carries the brain's state beside it */
-const tree = (flowRunNodeId: `${string}-${string}`, state: BrainStateEvent = RUNNING) => ({
-  type: 'ASK_ANSWERED' as const,
-  asked: 'REQUEST_SURFACE_DATA' as const,
-  answer: { data: { flowRunNodeId, runNodeTree: [], possibleEvents: [], flowHierarchy: [] }, state },
+const sendToSystem = vi.hoisted(() => vi.fn());
+/** The asks the machine has made, in order: what each was, what it carried, and the spec's way to answer it */
+const made = vi.hoisted(() => [] as Array<{ type: string; input: object; answer(value: unknown): void }>);
+vi.mock('#generated/events.ts', async () => {
+  const { fromPromise } = await import('xstate');
+  return {
+    sendToSystem,
+    fromAsk: (_to: string, type: string) => fromPromise(({ input }) => new Promise((resolve) => {
+      made.push({ type, input: input as object, answer: (value: unknown) => resolve({ ok: true, value }) });
+    })),
+  };
 });
+const { default: brainState } = await import('#features/brain/fe/state.ts');
 
-beforeEach(() => { sendToSystem.mockReset(); });
+/** What each ask for a tree carried, in order */
+const asks = () => made.filter((ask) => ask.type === 'REQUEST_SURFACE_DATA').map((ask) => ask.input);
+
+const RUNNING: BrainStateEvent = { type: 'BRAIN_STATE', rootFlowId: 'Flow-root' as never, paused: false, inspectEnabled: false };
+
+/** Answers the latest ask for a tree, which carries the brain's state beside it, and waits for the machine to hear */
+async function answerTree(flowRunNodeId: `${string}-${string}`, state: BrainStateEvent = RUNNING) {
+  made.filter((ask) => ask.type === 'REQUEST_SURFACE_DATA').at(-1)!
+    .answer({ data: { flowRunNodeId, runNodeTree: [], possibleEvents: [], flowHierarchy: [] }, state });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+beforeEach(() => { sendToSystem.mockReset(); made.length = 0; });
 
 it('asks for the root run when the shell starts it, and nothing from its own entry', () => {
   const actor = createActor(brainState).start();
   expect(asks(), 'no delivery names an ask from the entry').toEqual([]);
   actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
-  expect(asks()).toEqual([{ type: 'REQUEST_SURFACE_DATA' }]);
+  expect(asks()).toEqual([{}]);
   actor.stop();
 });
 
-it('asks for the flow it shows on a pulse, and for the root when a run starts again', () => {
-  const actor = createActor(brainState).start();
-  actor.send(tree('Run-sub'));
-  actor.send({ type: 'EVENT_PULSE', eventType: 'user.message' });
-  expect(asks().at(-1), 'at once, in the pulse').toEqual({ type: 'REQUEST_SURFACE_DATA', flowRunNodeId: 'Run-sub' });
-
-  actor.send({ type: 'BRAIN_STARTED', rootFlowId: 'Flow-root' as never });
-  expect(asks().at(-1), 'a new run is the root').toEqual({ type: 'REQUEST_SURFACE_DATA' });
-  actor.stop();
-});
-
-it("takes the brain's state from an answer without asking again", () => {
+it('asks for the flow it shows on a pulse, and for the root when a run starts again', async () => {
   const actor = createActor(brainState).start();
   actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
-  actor.send(tree('RunNode-root', { type: 'BRAIN_STATE', rootFlowId: 'Flow-root' as never, paused: true, inspectEnabled: true }));
+  await answerTree('Run-sub');
+  actor.send({ type: 'EVENT_PULSE', eventType: 'user.message' });
+  expect(asks().at(-1), 'at once, in the pulse').toEqual({ flowRunNodeId: 'Run-sub' });
+
+  actor.send({ type: 'BRAIN_STARTED', rootFlowId: 'Flow-root' as never });
+  expect(asks().at(-1), 'a new run is the root').toEqual({});
+  actor.stop();
+});
+
+it("takes the brain's state from an answer without asking again", async () => {
+  const actor = createActor(brainState).start();
+  actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
+  await answerTree('RunNode-root', { type: 'BRAIN_STATE', rootFlowId: 'Flow-root' as never, paused: true, inspectEnabled: true });
   expect(asks(), 'the one ask, answered').toHaveLength(1);
   expect(actor.getSnapshot().context).toMatchObject({ brainIsDead: false, runningRootFlowId: 'Flow-root', brainIsPaused: true, inspectEnabled: true });
 
   actor.send({ type: 'BRAIN_STATE', startError: 'No root flow', paused: false, inspectEnabled: false });
   expect(actor.getSnapshot().context).toMatchObject({ brainIsDead: true, startError: 'No root flow', runningRootFlowId: undefined });
   expect(asks()).toHaveLength(1);
+  actor.stop();
+});
+
+// Going into a flow run is not given up for a pulse: the run it opens is the tree to show
+it('keeps opening a flow run through a pulse', async () => {
+  const actor = createActor(brainState).start();
+  actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true });
+  await answerTree('Run-root');
+  actor.send({ type: 'FLOW.NAVIGATE', runNodeId: 'Run-sub' });
+  actor.send({ type: 'EVENT_PULSE', eventType: 'user.message' });
+  expect(asks(), 'no tree asked for meanwhile').toHaveLength(1);
+
+  made.find((ask) => ask.type === 'OPEN_RUN_NODE')!.answer({ data: { flowRunNodeId: 'Run-sub', runNodeTree: [], possibleEvents: [], flowHierarchy: [] } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(actor.getSnapshot().context.flowRunNodeId).toBe('Run-sub');
+  expect(actor.getSnapshot().context.pulsingEventType, 'the pulse still shows').toBe('user.message');
   actor.stop();
 });
 

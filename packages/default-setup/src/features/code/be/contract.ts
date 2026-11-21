@@ -12,7 +12,7 @@ import type {
 } from './types.ts';
 import type { GitHubApiFailure, PRListState } from './services/github-api.ts';
 import type { FileChangeInfo } from './services/open-file-watcher.ts';
-import type { GitHubAccount, GitHubSignInFailure } from './services/github.ts';
+import type { GitHubAccount } from './services/github.ts';
 
 // ── The child actors' events ─────────────────────────────────────────────────────────────────────
 // They live here rather than beside each child because this module is the contract leaf: codegen reads it as a
@@ -30,7 +30,7 @@ export type OutgoingExplorerEvents =
 /** A file operation refused: `code` says why, and `path` where, as the filesystem service names them */
 type FileFailure = { file: Omit<CodeSystemError, 'message'> }
 
-/** What a window asks the explorer, answered by the code system (`explorerAnswers`) over the explorer's folder */
+/** What a window asks the explorer, answered by the code system's explorer child (`explorerSystem`) over its folder */
 export type ExplorerAsks = {
   'explorer.LIST_FILES': { args: { path: string }; answer: DirectoryContent; refuses: FileFailure }
   /** A file's content for an editor, which is watched from then on until the editor closes it (`explorer.CLOSE_FILE`) */
@@ -62,13 +62,7 @@ export type SearchAsks = {
 }
 
 // ── commit ─────────────────────────────────────────────────────────
-export type IncomingCommitEvents =
-  /** Stops the push running: git and what it started are ended, and the push is answered as stopped */
-  | { type: 'commit.STOP_PUSH' }
-
 export type OutgoingCommitEvents =
-  /** How far along a push, a pull, a checkout or a submodule update is, for the window that asked for it while it runs */
-  | { type: 'commit.PROGRESS'; data: { during: ProgressDuring } & GitProgress }
   /**
    * The repository changed, on disk or by a write from any window: news for every window. It says which parts
    * changed and carries none of them, so a window asks again for what it shows of those and for nothing else —
@@ -103,7 +97,10 @@ export type CommitStatus = {
   operation?: RepositoryOperation; fetchSuspended?: boolean; signIn?: SignInHelp
 }
 
-/** What a window asks of the repository, answered by the code system (`commitAnswers`) */
+/** How far along a push, a pull, a checkout or a submodule update is, as git says, told to whoever asked for it while it runs */
+type GitProgressDuring = { during: ProgressDuring } & GitProgress
+
+/** What a window asks of the repository, answered by the commit child over the repository it holds */
 export type CommitAsks = {
   /**
    * What the commit panel shows of the checkout. `watching` is false when its file watches could not be opened or
@@ -132,12 +129,12 @@ export type CommitAsks = {
   /** The branches, and how each local one stands against what it follows, by its name */
   'commit.GET_ALL_BRANCHES': { answer: { branches: string[]; standing?: Record<string, BranchStandingOf>; tags?: { name: string; commit: string }[] }; refuses: GitFails }
   /** Checks out a branch there is, and with `pull` pulls it from what it follows once it is checked out */
-  'commit.CHECKOUT_BRANCH': { args: { branchName: string; pull?: boolean }; answer: { branchName: string }; refuses: GitFails }
+  'commit.CHECKOUT_BRANCH': { args: { branchName: string; pull?: boolean }; progress: GitProgressDuring; answer: { branchName: string }; refuses: GitFails }
   /** Makes a branch at what is checked out, and checks it out */
   'commit.CREATE_BRANCH': { args: { branchName: string }; answer: { branchName: string }; refuses: GitFails }
-  /** Pushes what is checked out; `stopped` when the user stopped it (`commit.STOP_PUSH`), which is no failure */
-  'commit.PUBLISH_BRANCH': { answer: { branchName: string; stopped: boolean }; refuses: GitFails }
-  'commit.PULL_BRANCH': { answer: { branchName: string }; refuses: GitFails }
+  /** Pushes what is checked out. Whoever asked stops it by no longer waiting, which ends git and what it started */
+  'commit.PUBLISH_BRANCH': { progress: GitProgressDuring; answer: { branchName: string }; refuses: GitFails }
+  'commit.PULL_BRANCH': { progress: GitProgressDuring; answer: { branchName: string }; refuses: GitFails }
   /**
    * Hands the changes to the flow that writes a commit message, answered once it has them: the flow tells the asking
    * window what it made (`commit.MESSAGE_GENERATED`) or why it made none
@@ -166,12 +163,12 @@ export type CommitAsks = {
   /** The files a stash holds, to look into before applying it */
   'commit.GET_STASH_CHANGES': { args: { index: number }; answer: { index: number; files: ChangedFile[] }; refuses: GitFails }
   /**
-   * Who last changed each line of a file, from the top of the folder, for the editor's gutter. `stopped` when the
-   * same window asked for blame again before this was read, which nobody shows
+   * Who last changed each line of a file, from the top of the folder, for the editor's gutter. Whoever asked stops
+   * the read by no longer waiting, as a panel does that asks for another file's
    */
-  'commit.GET_BLAME': { args: { path: string }; answer: { path: string; lines: BlameLine[] }; refuses: GitFails & { stopped: {} } }
+  'commit.GET_BLAME': { args: { path: string }; answer: { path: string; lines: BlameLine[] }; refuses: GitFails }
   /** Bring a submodule to the commit the repository records for it, setting it up first if it is not */
-  'commit.UPDATE_SUBMODULE': { args: { path: string }; answer: { path: string }; refuses: GitFails }
+  'commit.UPDATE_SUBMODULE': { args: { path: string }; progress: GitProgressDuring; answer: { path: string }; refuses: GitFails }
   /**
    * Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already
    * pushed. Refused as `published` when the commit is already on a remote branch, undone only once the user says so
@@ -216,10 +213,10 @@ export type CommitAsks = {
   'commit.SET_UP_SIGN_IN': { args: { host: string; during?: 'push' | 'pull' }; answer: { host: string; during?: 'push' | 'pull' }; refuses: GitFails }
   /**
    * A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history.
-   * The answer says which file's it is and whether it goes on from a cursor; `cursor` for the next. `stopped` when
-   * the same window asked for the history again before this was read, which nobody shows
+   * The answer says which file's it is and whether it goes on from a cursor; `cursor` for the next. Whoever asked
+   * stops the read by no longer waiting, as a panel does that asks for the history again
    */
-  'commit.LOG_LIST': { args: { cursor?: string; path?: string }; answer: { commits: HistoryCommit[]; cursor?: string; path?: string; continued?: boolean }; refuses: GitFails & { stopped: {} } }
+  'commit.LOG_LIST': { args: { cursor?: string; path?: string }; answer: { commits: HistoryCommit[]; cursor?: string; path?: string; continued?: boolean }; refuses: GitFails }
   'commit.REVERT_COMMIT': { args: { hash: string }; answer: { hash: string }; refuses: GitFails }
   'commit.RESET_TO_COMMIT': { args: { hash: string }; answer: { hash: string } & UndoableAfter; refuses: GitFails }
 }
@@ -247,7 +244,7 @@ export type PRFileDiffWhere = { path: string; baseBranch: string; headBranch?: s
 /** A refusal of GitHub's, with the reason the panel acts on, as `pr.CHECK_GITHUB_ACCESS` answers it */
 type GitHubRefused = { github: { reason: GitHubApiFailure } }
 
-/** What a window asks of the pull requests, answered by the code system (`pullRequestAnswers`) */
+/** What a window asks of the pull requests, answered by the pull request child (`features/pull-request.ts`) */
 export type PullRequestAsks = {
   /** `prNumber` reads the head from what GitHub keeps of that pull request, which outlives its branch */
   'pr.GET_BRANCH_DIFF': { args: { baseBranch?: string; headBranch?: string; prNumber?: number }; answer: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
@@ -369,8 +366,8 @@ export type OutgoingTerminalEvents =
   | { type: 'terminal.STATUS'; data: { terminalId: string; statuses: TerminalStatus[] } }
 
 /**
- * What a window asks of the terminals, answered by the code system (`terminalAnswers`). A terminal that is not there,
- * or a broker that refused, is a failure the user is also told of
+ * What a window asks of the terminals, answered by the code system's terminal child (`terminalSystem`). A terminal
+ * that is not there, or a broker that refused, is a failure whoever asked is answered with and shows
  */
 export type TerminalAsks = {
   /**
@@ -408,7 +405,7 @@ export type TerminalAsks = {
 
 // ── actions ─────────────────────────────────────────────────────────
 
-/** What a window asks of an action's code, answered by the code system (`actionsAnswers`) */
+/** What a window asks of an action's code, answered by the code system's actions child (`actionsSystem`) */
 export type ActionsAsks = {
   /** The action, with its code to edit in a tab */
   'codeActions.OPEN_ACTION': { args: { actionId: string }; answer: ActionEntity & { actionFnContent?: string }; refuses: { 'not-found': {} } }
@@ -418,7 +415,7 @@ export type ActionsAsks = {
 
 // ── prompts ─────────────────────────────────────────────────────────
 
-/** What a window asks of a prompt's template, answered by the code system (`promptsAnswers`) */
+/** What a window asks of a prompt's template, answered by the code system's prompts child (`promptsSystem`) */
 export type PromptsAsks = {
   /** The prompt, with its template to edit in a tab */
   'codePrompts.OPEN_PROMPT': { args: { promptId: string }; answer: PromptEntity & { templateFnContent?: string }; refuses: { 'not-found': {} } }
@@ -428,29 +425,27 @@ export type PromptsAsks = {
 
 // ── github ─────────────────────────────────────────────────────────
 export type IncomingGitHubEvents =
-  /** Ends the sign-in under way, whose window is then told it was cancelled */
-  | { type: 'github.CANCEL_SIGN_IN' }
   /** Forgets the token. It stays valid at GitHub until the user revokes it there, which Settings says */
   | { type: 'github.SIGN_OUT' }
   /** The app's stored secrets changed (no values): the sign-in held is read again on its next use */
   | { type: 'SECRETS_CHANGED' }
 
 export type OutgoingGitHubEvents =
-  /** A sign-in ended without an account, for the window that started it: the one that was given `userCode` */
-  | { type: 'github.SIGN_IN_FAILED'; userCode: string; reason: GitHubSignInFailure; message: string }
   /** News for every window: the account the app is signed in as changed, or it signed out (`null`) */
   | { type: 'github.ACCOUNT_CHANGED'; account: GitHubAccount | null }
 
-/** What a window asks of the GitHub sign-in, answered by the code system (`githubAnswers`) */
+/** What a window asks of the GitHub sign-in, answered by the github child (`features/github.ts`) */
 export type GitHubAsks = {
   /** Who the app is signed in to GitHub as, from what it holds: GitHub is not asked */
   'github.GET_ACCOUNT': { answer: GitHubAccount | null }
   /**
-   * Starts a sign-in, ending any under way: answered with the code to type at `verificationUri`, or why GitHub gave
-   * none. How the sign-in ends follows, as `github.ACCOUNT_CHANGED` or `github.SIGN_IN_FAILED`
+   * Signs in. As it goes it tells whoever asked the code to type at `verificationUri`; it is answered with the
+   * account once they approved it there, which every window hears too (`github.ACCOUNT_CHANGED`), or with why it
+   * ended without one. Whoever asked ends it by no longer waiting
    */
   'github.SIGN_IN': {
-    answer: { userCode: string; verificationUri: string; expiresAt: number }
+    progress: { userCode: string; verificationUri: string; expiresAt: number }
+    answer: GitHubAccount
     refuses: { unconfigured: {}; denied: {}; expired: {}; cancelled: {} }
   }
 }
@@ -459,7 +454,6 @@ export type GitHubAsks = {
 
 export type IncomingCodeEvents =
   | IncomingExplorerEvents
-  | IncomingCommitEvents
   | IncomingTerminalEvents
   | IncomingGitHubEvents
   | { type: 'SET_BASE_DIRECTORY'; path: string; fromUserNavigation?: boolean; fromPicker?: boolean }

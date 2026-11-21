@@ -93,14 +93,14 @@ import { useSurface } from '@apackdev/sdk/fe'
 
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useSelector } from '@xstate/vue';
-import type { DatabaseState } from '../state.ts';
+import { isRunningCode, type DatabaseState } from '../state.ts';
 import QueryEditorHeader from './query-editor/QueryEditorHeader.vue';
 import SimpleMonacoEditor from '@apackdev/ui/components/SimpleMonacoEditor';
 import QueryEditorExamples from './query-editor/QueryEditorExamples.vue';
 
 const actor: DatabaseState = useSurface();
 const currentQuery = useSelector(actor, (state) => state.context.currentQuery);
-const isLoading = useSelector(actor, (state) => state.context.isLoading);
+const isLoading = useSelector(actor, isRunningCode);
 const error = useSelector(actor, (state) => state.context.error);
 const mode = useSelector(actor, (state) => state.context.mode);
 const settings = useSelector(actor, (state) => state.context.settings);
