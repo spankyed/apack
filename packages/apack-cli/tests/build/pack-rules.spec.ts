@@ -135,6 +135,13 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
       ["export const on = { [`xstate.done.actor.${PUSH}`]: { actions: 'pushed' } };\n", 'src/f.ts:1: xstate.done.actor'],
     ],
   },
+  'swallowed-ask-ends': {
+    onFile: [[
+      "import { makes } from '@apackdev/sdk/fe';\nexport const on = {\n  '*': { actions: 'route' },\n};\n",
+      "src/f.ts:2: '*'",
+    ]],
+    elsewhere: 'swallowed-ask-ends leaves a wildcard that settles beside it, and a machine that makes no asks',
+  },
   'reserved-event-keys': {
     onFile: [
       ["export const answer = { type: 'DONE', _call: mine };\n", 'src/f.ts:1: _call:'],
@@ -219,6 +226,14 @@ describe('every rule', () => {
    * Telling an answer from another event is reading one, and a spec driving an asking machine has to hand it the
    * answers its system would: neither is an answer written in place of a system's, or a transition for one.
    */
+  it('swallowed-ask-ends leaves a wildcard that settles beside it, and a machine that makes no asks', () => {
+    const dir = pack({
+      'src/settles.ts': "import { makes } from '@apackdev/sdk/fe';\nconst made = makes(() => ({}));\nexport const on = { [made.done]: { actions: made.settle() }, '*': { actions: 'route' } };\n",
+      'src/asks-nothing.ts': "export const on = { '*': { actions: 'route' } };\n",
+    });
+    expect(problems(dir, 'swallowed-ask-ends')).toEqual([]);
+  });
+
   it("ask-answers leaves a pack's tests and its reads of an answer alone", () => {
     const dir = completePack({
       'src/reads-it.ts': "export const taken = (event: E) => event.type === 'ASK_ANSWERED';\n",
@@ -636,6 +651,8 @@ describe('when several rules are right about one site', () => {
       'ask-answers',
       // ask-ends reads a string, which no other rule does
       'ask-ends',
+      // swallowed-ask-ends reads an object's keys in a file that imports makes, which no other rule does
+      'swallowed-ask-ends',
       // reserved-event-keys is last and contests nothing: no other rule reads a property name, so where it
       // sits is free, and a convention belongs after the rules about what a module imports
       'reserved-event-keys',

@@ -136,6 +136,15 @@ describe('makes: the asks a machine makes, by name', () => {
     expect(it.of('stage').map((one) => one.givenUp)).toEqual([true, true, true]);
   });
 
+  it('leaves making the same object when what was dropped was not under way', () => {
+    const it = board();
+    it.actor.send({ type: 'STAGE', path: 'a' });
+    const before = it.context().making;
+    it.actor.send({ type: 'STOP' });
+    it.actor.send({ type: 'UNSTAGE', path: 'never-staged' });
+    expect(it.context().making).toBe(before);
+  });
+
   it('refuses a name that holds a dot, an ask nobody declared, and a keyed ask made without its key', () => {
     const it = desk();
     expect(() => makes(({ one }) => ({ 'a.b': one(it.logic('x')) }))).toThrow(/holds a dot/);

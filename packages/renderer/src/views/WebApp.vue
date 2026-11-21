@@ -111,7 +111,7 @@ onUnmounted(() => registerGlobalToast(null))
 const { state: shell } = useState(applicationState)
 const surfaces = useSurfaceNavigation()
 const chatMaximized = computed(() => shell.value.data.panelSizes.chatMaximized ?? false)
-const isOnboarding = useSelector(applicationState, (s) => s.hasTag('onboarding'))
+const isOnboarding = computed(() => shell.value.at === 'onboarding' || shell.value.at.startsWith('onboarding.'))
 
 /** The surface offering its panel for surfaces without one (`fallbackPanel`), which says itself when it shows */
 const fallbackSurface = computed(() => shell.value.data.surfaces.find((p) => p.fallbackPanel && p.panel))

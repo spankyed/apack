@@ -210,6 +210,14 @@ export function findHandKeptAskEnds(dirs: readonly string[] = PACK_SOURCE_DIRS, 
 }
 
 /**
+ * `file:line: '*'` for each wildcard transition, in a pack's machine that makes asks with `makes`, written without
+ * the transition that settles them beside it.
+ */
+export function findSwallowedAskEnds(dirs: readonly string[] = PACK_SOURCE_DIRS, root = repoRoot): string[] {
+  return packRule('swallowed-ask-ends', dirs, root);
+}
+
+/**
  * `file:line: _call:` for each write of the reserved key a delivery door puts a call under.
  *
  * The key is the app's: `_callOn` writes it and `_callOf` reads it, so a property a pack writes under that
@@ -1106,6 +1114,7 @@ const RULE_LIST = [
   backed('findRepositoryCasts', 'repository-casts', findRepositoryCasts, packageSourceDirs()),
   backed('findHandWrittenAnswers', 'ask-answers', findHandWrittenAnswers, PACK_SOURCE_DIRS),
   backed('findHandKeptAskEnds', 'ask-ends', findHandKeptAskEnds, PACK_SOURCE_DIRS),
+  backed('findSwallowedAskEnds', 'swallowed-ask-ends', findSwallowedAskEnds, PACK_SOURCE_DIRS),
   backed('findReservedEventKeys', 'reserved-event-keys', findReservedEventKeys, PACK_CODE_DIRS),
   backed('findCrossFeatureImports', 'cross-feature-imports', findCrossFeatureImports, PACK_SRC_ROOTS),
   backed('findContractLeafImports', 'contract-leaves', findContractLeafImports, PACK_SRC_ROOTS),

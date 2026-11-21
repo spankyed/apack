@@ -570,12 +570,12 @@ export interface Makes<M extends Declarations> {
     };
     readonly done: 'xstate.done.actor.made.*';
     drop(enqueue: MakesEnqueue, context: {
-        making: MakingOf<M>;
+        making: MakingFrom<M>;
     }, name: keyof M & string, key?: string): void;
     make<N extends OneNames<M>>(enqueue: MakesEnqueue, name: N, input: InputFrom<LogicOf<M[N]>>): void;
     make<N extends EachNames<M>>(enqueue: MakesEnqueue, name: N, key: string, input: InputFrom<LogicOf<M[N]>>): void;
     readonly names: readonly (keyof M & string)[];
-    none(): MakingOf<M>;
+    none(): MakingFrom<M>;
     settle<TContext extends MachineContext, TExpressionEvent extends EventObject, TEvent extends EventObject>(): ReturnType<typeof enqueueActions<TContext, TExpressionEvent, ParameterizedObject['params'] | undefined, TEvent, never, never, never, never, never>>;
 }
 
@@ -590,7 +590,12 @@ export interface MakesEnqueue {
 }
 
 // @public
-export type Making<TMakes> = TMakes extends Makes<infer M> ? MakingOf<M> : never;
+export type Making<TMakes> = TMakes extends Makes<infer M> ? MakingFrom<M> : never;
+
+// @public
+export type MakingOf<Kinds extends Readonly<Record<string, 'one' | 'each'>>> = {
+    readonly [N in keyof Kinds]: Kinds[N] extends 'each' ? Readonly<Record<string, true>> : boolean;
+};
 
 // @public
 export function matchesHotkey(event: HotkeyEvent, config: KeyboardShortcut, cmdIsMeta?: boolean): boolean;
