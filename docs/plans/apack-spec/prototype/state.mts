@@ -375,8 +375,11 @@ interface Active {
   readonly questions: Set<Question>
   /** The states it has started, by where each runs. */
   readonly started: Set<string>
-  /** The views it follows, by name and key: what each was asked for, and how to stop following it. */
-  readonly following: Map<string, { readonly args: string; stop(): void }>
+  /**
+   * The views it follows, by name and key: what each was asked for, how to stop following it, and which views'
+   * deliveries led to it being asked that.
+   */
+  readonly following: Map<string, { readonly args: string; readonly because: ReadonlySet<string>; stop(): void }>
 }
 interface Running { ref: string; data: Plain; root: Active; starter?: { readonly ref: string; readonly from: string } }
 
@@ -644,8 +647,12 @@ export function system(host: {
 
   const keysOf = (held: unknown): string[] => [...new Set(Array.isArray(held) ? held as string[] : Object.keys((held ?? {}) as object))]
   const said = (error: unknown): string => (error instanceof Error ? error.message : String(error))
-  /** The view whose delivery is being handled, while what it changed is matched: it may not change what it asks for. */
-  let hearing: string | undefined
+  /**
+   * The view whose delivery this step began with, and the views whose deliveries led to it being asked what it is.
+   * Everything in the step follows from that delivery. Whatever it leads to being asked is asked because of it, and
+   * it may not lead back to itself or to any of those: what views ask for may not depend on each other in a circle.
+   */
+  let hearing: { readonly id: string; readonly because: ReadonlySet<string> } | undefined
 
   /**
    * Makes what a running state has started, and the views it follows, match what it declares and the data it holds
@@ -695,11 +702,18 @@ export function system(host: {
           const now = at.following.get(id)
           const asking = JSON.stringify(asked)
           if (now?.args === asking) continue
-          // What a view delivers may not change what that view is asked for: it would be followed again, deliver
-          // again, and never come to rest.
-          if (now && hearing === `${top.ref}#${id}`) { trace(`DEFECT: what ${top.ref} heard from ${id} changed what it asks ${id} for. It goes on following what it was`); continue }
+          const here = `${top.ref}#${id}`
+          // A circle would be followed again, deliver again, and never come to rest, each round a read of the
+          // database. It is refused where it closes: this view goes on being asked what it was.
+          if (now && hearing && (hearing.id === here || hearing.because.has(here))) {
+            trace(hearing.id === here
+              ? `DEFECT: what ${here} delivered changed what it is itself asked for. It goes on following what it was`
+              : `DEFECT: what ${hearing.id} delivered changed what ${here} is asked for, and ${here} is what led to ${hearing.id} being asked what it is. ${here} goes on following what it was`)
+            continue
+          }
           now?.stop()
-          const mine: { args: string; stop(): void } = { args: asking, stop: () => {} }
+          const because: ReadonlySet<string> = hearing ? new Set([...hearing.because, hearing.id]) : new Set()
+          const mine: { args: string; because: ReadonlySet<string>; stop(): void } = { args: asking, because, stop: () => {} }
           at.following.set(id, mine)
           const stop = views(declared.feature, declared.view, asked, (update) => {
             if (!at.controller.signal.aborted && at.following.get(id) === mine) arrive({ kind: 'view', of: at, name, id, key, update })
@@ -712,7 +726,6 @@ export function system(host: {
   /** Matches every state that changed, and whatever that starts, until nothing is left to match. */
   const matchStale = (): void => {
     while (stale.size) for (const [ref, touched] of [...stale]) { stale.delete(ref); const top = running.get(ref); if (top) match(top, touched) }
-    hearing = undefined
   }
 
   const begin = (ref: string, def: LooseDef, entering: Plain = {}, starter?: Running['starter']): { ref: string } => {
@@ -819,7 +832,7 @@ export function system(host: {
       const followed = item.of.def.follows?.[item.name]
       if (!followed || item.of.controller.signal.aborted) return
       const { ask: _, ...scope } = scopeOf(item.of)
-      hearing = `${item.of.top.ref}#${item.id}`
+      hearing = { id: `${item.of.top.ref}#${item.id}`, because: item.of.following.get(item.id)?.because ?? new Set() }
       try { apply(item.of, followed.heard(item.update, item.key === undefined ? scope : { ...scope, key: item.key })) } catch (error) {
         trace(`DEFECT: ${item.of.top.ref} threw hearing ${item.id}, and nothing changed: ${said(error)}`)
       }
@@ -906,7 +919,7 @@ export function system(host: {
         inside.length = 0
       }
       commit()
-    } finally { stepping = false }
+    } finally { stepping = false; hearing = undefined }
   }
   const pump = (): void => { while (!stepping && outside.length) step(() => handle(outside.shift()!)) }
   const arrive = (item: Item): void => { handOver(); outside.push(item); pump() }

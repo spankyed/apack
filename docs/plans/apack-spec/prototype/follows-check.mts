@@ -74,8 +74,31 @@ const shop = state<Shop, ShopEvent>()({
   },
 })
 
+// ── two views, each asked for what the other delivers ───────────────────────────────────────────────────────────────
+
+type PairEvent = { type: 'SET_LEFT'; currency: string }
+type Pair = { data: { left: string; right: string } }
+const pair = state<Pair, PairEvent>()({
+  data: { left: 'EUR', right: 'USD' },
+  on: { SET_LEFT: ({ currency }) => ({ data: { left: currency } }) },
+  follows: {
+    // What `left` delivers says what `right` is asked for. One view leading another is how a list leads a detail.
+    left: {
+      feature: 'shop', view: 'total',
+      args: (data) => ({ currency: data.left }),
+      heard: (update) => (update.ok ? { data: { right: `R${update.value}` } } : undefined),
+    },
+    // And what `right` delivers says what `left` is asked for, which closes the circle.
+    right: {
+      feature: 'shop', view: 'total',
+      args: (data) => ({ currency: data.right }),
+      heard: (update) => (update.ok ? { data: { left: `L${update.value}` } } : undefined),
+    },
+  },
+})
+
 /** Stands in for the view host: says what is followed, and delivers what a check tells it to. */
-const wired = () => {
+const wired = (which: 'shop' | 'pair' = 'shop') => {
   const calls: string[] = []
   const everFollowed = new Map<string, (update: ViewUpdate<unknown>) => void>()
   const following = new Set<string>()
@@ -90,7 +113,10 @@ const wired = () => {
   const looked: string[] = []
   const sys = system({ side: 'window', views, trace: (line) => { if (line.startsWith('DEFECT')) defects.push(line); if (line.includes('looked at')) looked.push(line) } })
   const it = sys.start('shop', shop)
+  const pairOf = which === 'pair' ? sys.start('pair', pair) : undefined
   return {
+    setLeft: (currency: string): void => sys.send(pairOf!, { type: 'SET_LEFT', currency }),
+    pair: () => sys.read(pairOf!).data,
     sys, calls, defects, looked,
     following: (): string[] => [...following].sort(),
     send: (event: ShopEvent): void => sys.send(it, event),
@@ -199,9 +225,40 @@ const checks: Array<[string, () => void]> = [
     // The handler's change is made: it is the following again that is refused.
     strictEqual(data().note, 'heard 7')
     strictEqual(defects.length, 1)
-    ok(defects[0]!.includes('changed what it asks echo for'))
+    ok(defects[0]!.includes('shop#echo delivered changed what it is itself asked for'))
     deepStrictEqual(calls, [])
     deepStrictEqual(following(), [eur, 'total{"currency":"GBP"}'])
+    sys.stop()
+  }],
+  ['one view may lead another: what the first delivers changes what the second is asked for', () => {
+    const { deliver, following, defects, pair: now, sys } = wired('pair')
+    deliver('total{"currency":"EUR"}', { ok: true, value: 1 })
+    deepStrictEqual(now(), { left: 'EUR', right: 'R1' })
+    ok(following().includes('total{"currency":"R1"}'))
+    deepStrictEqual(defects, [])
+    sys.stop()
+  }],
+  ['but not round in a circle: where it closes, the view goes on as it was, and it is reported', () => {
+    const { deliver, following, defects, calls, pair: now, sys } = wired('pair')
+    deliver('total{"currency":"EUR"}', { ok: true, value: 1 })
+    calls.length = 0
+    deliver('total{"currency":"R1"}', { ok: true, value: 2 })
+    // The handler's change is made. Following `left` again, which is what led here, is what is refused.
+    deepStrictEqual(now(), { left: 'L2', right: 'R1' })
+    deepStrictEqual(calls, [])
+    ok(following().includes('total{"currency":"EUR"}') && !following().includes('total{"currency":"L2"}'))
+    strictEqual(defects.length, 1)
+    ok(defects[0]!.includes('pair#left is what led to pair#right being asked what it is'))
+    sys.stop()
+  }],
+  ['a change from anywhere else follows a view again as before, and it leads the other again', () => {
+    const { deliver, following, defects, setLeft, sys } = wired('pair')
+    deliver('total{"currency":"EUR"}', { ok: true, value: 1 })
+    setLeft('GBP')
+    ok(following().includes('total{"currency":"GBP"}'))
+    deliver('total{"currency":"GBP"}', { ok: true, value: 3 })
+    ok(following().includes('total{"currency":"R3"}'))
+    deepStrictEqual(defects, [])
     sys.stop()
   }],
   ['stopping the state stops everything it followed', () => {

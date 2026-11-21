@@ -219,9 +219,14 @@ points at.
     },
     ```
 
-    What a view delivers may not change what that same view is asked for. It would be followed again, deliver again,
-    and never come to rest, and nothing bounds that across steps. The kernel refuses the following again and reports
-    it; the handler's change is made.
+    **What views ask for may not depend on each other in a circle.** One view may lead another: a list delivers, an
+    item is chosen, and a detail is asked for that item. What may not happen is that the detail's delivery changes
+    what the list is asked for. It would be followed again, deliver again and lead back, each round a read of the
+    database, and nothing bounds that across steps. Each followed view remembers which deliveries led to it being
+    asked what it is, and where a delivery would change what one of those is asked for, or the view itself, the
+    kernel refuses the following again and reports it. The handler's change to data is made; the view goes on being
+    asked what it was. A circle that would have settled after a round is refused as well: that it happens to settle
+    is not something to rest on.
 
 ### Communication
 
@@ -344,7 +349,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | A started state is given its data once | Data that follows the starter's as it changes. That keeps one fact in two states and needs a rule for which of them may write it |
 | A started state reports to its starter with one verb, into the starter's own events | A table of handlers per started state, which would have been a fourth beside `on`, `asks` and `follows` |
 | What a view delivers goes to a handler | Writing it straight into a field. Data would then change by something other than what a handler returns, and the graph would not show it |
-| A view may not change what it is itself asked for, refused as it happens | Finding it in the graph beforehand, which needs to know which fields a function reads. Refusing it when it happens stops it, where a finding only warns. Two views that each change what the other is asked for are not caught |
+| Views may not depend on each other in a circle, refused where the circle closes | Finding it in the graph beforehand, which needs to know which fields a function reads. Refusing it when it happens stops it, where a finding only warns. Refusing only a view that changes what it is itself asked for, which was built first and left the same fault one view longer. And refusing whatever a delivery leads to being asked, which forbids a list leading a detail |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
 | What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
 | An ask whose asker has gone throws `Left` where it is awaited | Never settling it, which was tried first. A promise that never settles skips every `finally` after it, so a lock or a handle taken before the ask is held for good, and `Promise.all` over it hangs. Rejection is what `AbortSignal`, `fetch` and structured concurrency do, and code written for them is already correct here |
@@ -390,13 +395,14 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   is not declared; leaving the starts out; naming a field that is neither keyed nor a list; giving a started state
   less than it marks `given`; and naming bare a state that has to be given something. `threads.mts` runs on it: a
   thread for each title, told which it is, and the composer's draft for as long as a thread is open.
-- **Which views are followed follows the data** (`follows-check.mts`, 12 checks; `views.mts`, 13 comparisons): a view
+- **Which views are followed follows the data** (`follows-check.mts`, 15 checks; `views.mts`, 13 comparisons): a view
   is followed from the moment its state is the case; what it delivers goes to its handler; a change to what it asks
   for follows it again and stops the one before, whose later deliveries are not heard; a change to anything else
   leaves it as it is; one is followed for each item of a list and stops when its item goes, each hearing with its own
   key; the list is looked at again only when it changes; a handler that throws changes nothing and is reported; a
   view declared by a state inside is followed only while that state is the case; a view whose delivery changes what
-  it asks for is refused and reported; and stopping stops all of it. Four mistakes do not compile. `views.mts`, the
+  it asks for is refused and reported; one view may lead another, two that lead each other are refused where the
+  circle closes, and a change from anywhere else follows a view again as before; and stopping stops all of it. Four mistakes do not compile. `views.mts`, the
   threads surface's three kinds of view, has no call that follows or stops following one.
 - **An answer and its change cannot disagree** (`answer-check.mts`, 12 checks): an ask that only answers changes
   nothing; one that answers with a change has made it by the time the answer is had, and subscribers hear of it in
@@ -645,7 +651,7 @@ projects. Each would loosen the fit to this app.
   registration. A component cannot reach a started state, since `child` exists only in a handler, so the Vue binding
   has no way to read one card of many. Removing a key and adding it back keeps its state when one handler does both
   and starts it anew when two events in one step do, which follows from matching after each thing handled and is a
-  rule someone will meet. And two views that each change what the other is asked for are not caught.
+  rule someone will meet.
 - **Events only the state itself may send.** A state has one union of events, so anything that can reach it can tell
   it `FOUND` or `PIECES`, which only its own work should. The app's contracts already keep `incoming` apart from
   `internal`, and the prototype lost that: `send` should take both, and `tell` and `broadcast` only what is
@@ -653,7 +659,11 @@ projects. Each would loosen the fit to this app.
 - **A check for a cycle of asks.** Two systems that each answer by asking the other wait on each other without end,
   and nothing reports it. It is a pack rule over the recorded graph, under What to build around it.
 - **A bound across steps.** A step is cut short after ten thousand things. Two systems that tell each other across a
-  link without end are a step each, and nothing bounds that; a schedule stops a run that has not come to rest.
+  link without end are a step each, and nothing bounds that; a schedule stops a run that has not come to rest. This
+  one is left as it is on purpose. A count of how many things led to this one, cut off at a limit, was considered:
+  an agent's loop is one thing leading to the next for as long as it runs, and so is reading results a page at a
+  time, so a limit would stop what the app is for. A circle of views is different, and is refused (rule 10), because
+  what a view is asked for is declared and a circle among declarations is a mistake whatever its length.
 - **Undoing what a handler sent before it threw.** Its change is not made, and what it told others is still told.
 - **Field names unique along a path** are assumed and not enforced.
 - **A field with a default still has to be given** when entering its state, because the types cannot see the default.
