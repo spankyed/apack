@@ -380,16 +380,12 @@ followed are `docs/plans/asks-shape.md` on that branch. Read against the tables 
 | A machine is defined through the SDK; no `xstate` import in a pack | Not done |
 | A spec drives a feature at its boundary | Partly: specs of asks ask, and many still read an actor's context |
 
-Two things #591 left that this design does not want, both listed in its "Left open":
+spankyed/apack#593, stacked on #591, finished what #591 listed as open: no surface machine is `type: 'parallel'`, and
+an ask that can be under way beside others is spawned under an id, with `askUnderWay(snapshot, id)` reading whether it
+is. That is XState's shape for "several asks at once"; here each is an awaited `ask` in a handler, and
+[collections that grow](#collections-that-grow) replaces finding an ask again by its id.
 
-- The commit and pull-request surfaces of the code feature became `type: 'parallel'`, a region per ask that can be
-  under way at once. The fix on XState is to spawn those asks, as the flows, brain and GitHub surfaces do; here each is
-  an awaited `ask` in a handler.
-- A spawned ask is found again by its id (`xstate.done.actor.<kind>.*`). That is XState's shape for "several of one
-  ask at once", and it is what [collections that grow](#collections-that-grow) replaces.
-
-**Where the next work starts.** The remaining seams of step 1, each its own PR on `master` once #591 is merged: spawn
-the asks of the commit and pull-request surfaces; rename to `tell` and `broadcast`; state read through the SDK in
+**Where the next work starts.** The remaining seams of step 1, each its own PR on `master` once #591 and #593 are merged: rename to `tell` and `broadcast`; state read through the SDK in
 components; machines defined through the SDK with a pack rule against `xstate`. Then step 2.
 
 ## What to build around it
