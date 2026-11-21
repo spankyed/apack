@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { packageName } from '@apackdev/host/build/specifiers';
 import { recordBundleReads, runPackageBuild } from '@apackdev/host/build/packages-built';
 import { replaceDir } from '@apackdev/host/replace-dir';
-import { manifestPaths, publishedSpec, type Manifest } from '@apackdev/host/build/published-manifest';
+import { manifestPaths, type Manifest } from '@apackdev/host/build/published-manifest';
 import { SHARED_INSTANCE_PACKAGES } from '@apackdev/host/build/shared-deps';
 import ts from 'typescript';
 import { BareImports } from './lib/published-imports.ts';
@@ -138,15 +138,14 @@ const externalizeAllButInlined: Plugin = {
 };
 
 function versionOf(name: string): string {
-  // The package's own ranges win; inlined shared-instance and host code brings their ranges. A `file:` range, relative to
-  // the manifest declaring it, is published as the version it links
-  const sources: Array<[Record<string, string> | undefined, string]> = [
-    [pkg.dependencies, pkgDir], [pkg.peerDependencies, pkgDir],
-    ...inlinedPkgs.flatMap(({ name, manifest }) => [[manifest.dependencies, path.dirname(workspaceManifestFile(name))], [manifest.peerDependencies, path.dirname(workspaceManifestFile(name))]] as Array<[Record<string, string> | undefined, string]>),
-    [hostPkg.dependencies, path.join(repoRoot, 'packages', 'apack-host')],
+  // The package's own ranges win; inlined shared-instance and host code brings their ranges
+  const sources: Array<Record<string, string> | undefined> = [
+    pkg.dependencies, pkg.peerDependencies,
+    ...inlinedPkgs.flatMap(({ manifest }) => [manifest.dependencies, manifest.peerDependencies]),
+    hostPkg.dependencies,
   ];
-  for (const [source, dir] of sources) {
-    if (source?.[name]) return publishedSpec(source[name], dir);
+  for (const source of sources) {
+    if (source?.[name]) return source[name];
   }
   throw new Error(`${pkg.name} bundle imports ${name}, which neither ${pkg.name}, the inlined packages nor @apackdev/host declares`);
 }

@@ -160,7 +160,7 @@ describe.skipIf(!PACKAGES_BUILT)('published @apackdev/sdk', () => {
     const published = JSON.parse(fs.readFileSync(path.join(consumer!, 'node_modules', '@apackdev', name, 'package.json'), 'utf-8'));
     const dir = path.join(REPO_ROOT, 'packages', `apack-${name}`);
     const workspace = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8'));
-    expect(published).toEqual(publishedManifest(workspace, dir));
+    expect(published).toEqual(publishedManifest(workspace));
     expect(JSON.stringify(published)).not.toContain('@apackdev/source');
   });
 });
