@@ -307,14 +307,13 @@ through the supplied provider because a test reset replaces it.
 - **One writer.** Every write, whoever makes it (the system, a feature through `services.settings`, an action, a
   applier, a migration), goes through `store.write()`, which checks the whole next document once
   (`document.ts`'s address checks and `validation.ts`'s catalog schemas for all three owners) and throws `SettingsRefusedError` otherwise, then tells its listeners.
-  The system turns that into one `FEATURE_SETTINGS_UPDATED` per feature whose settings changed, and answers the
-  sender `SETTINGS_SAVED` with the committed snapshot or `SETTINGS_REFUSED` with the store's reasons — **reply or broadcast, never both**
-  (`be/answer.ts`), which takes the answer as an argument: `reply` where the write named a sender, and a
-  broadcast to the `settings` surface where it named none — a write from an applier, a migration or a timer has
-  nobody to answer. Broadcasting every answer
-  instead leaves a sender that is not that surface learning nothing — a drive session's `/set-setting` then
-  reports success for every refused write. A refusal is the sender's to fix, so only
-  an unexpected error is reported as a system error.
+  The system turns that into one `FEATURE_SETTINGS_UPDATED` per feature whose settings changed. Each change is an
+  ask (`SettingsAsks`), answered to whoever asked with the committed snapshot, or failed as `refused` with the store's
+  reasons as `problems` — a drive session's `/set-setting` and a settings form both say what happened only from that
+  answer. A change nobody asked for (an applier, a migration, a timer) is answered to nobody: every window hears the
+  settings changed through `SETTINGS_UPDATED` either way. A refusal is the sender's to fix, so only an unexpected
+  error is reported as a system error. While the data is being replaced or reset every change is refused, with the
+  reason the busy state puts in the system's context (`busy`).
 - **`whileReplacingData`** brackets a wholesale replacement (reset or backup import): the writer tells listeners that one
   is running and, once it settles, that it ended, so those arrive in order with the writes they bracket and nothing
   is told a change in between. While one runs the system takes no pack change and refuses an app reset.

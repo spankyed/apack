@@ -18,16 +18,16 @@
       </button>
     </div>
 
-    <div v-else-if="signIn" class="space-y-2">
-      <template v-if="signIn.code">
+    <div v-else-if="signingIn" class="space-y-2">
+      <template v-if="code">
         <p class="text-sm text-neutral-200">
           The code is copied, and
-          <button class="text-blue-400 hover:text-blue-300" @click="openInBrowser(signIn.code.verificationUri)">{{ signIn.code.verificationUri }}</button>
+          <button class="text-blue-400 hover:text-blue-300" @click="openInBrowser(code.verificationUri)">{{ code.verificationUri }}</button>
           is open in your browser: paste it there and approve apack.
         </p>
         <div class="flex items-center gap-3">
-          <code class="px-3 py-1 text-lg tracking-widest text-neutral-100 bg-neutral-800 rounded select-all">{{ signIn.code.userCode }}</code>
-          <button class="text-xs text-blue-400 hover:text-blue-300" @click="copyCode(signIn.code.userCode)">{{ copied ? 'Copied' : 'Copy' }}</button>
+          <code class="px-3 py-1 text-lg tracking-widest text-neutral-100 bg-neutral-800 rounded select-all">{{ code.userCode }}</code>
+          <button class="text-xs text-blue-400 hover:text-blue-300" @click="copyCode(code.userCode)">{{ copied ? 'Copied' : 'Copy' }}</button>
         </div>
         <p class="text-xs text-neutral-600">Waiting for GitHub to say you approved it.</p>
       </template>
@@ -66,14 +66,15 @@ const github = panelChild(surface, 'github')!
 const send = (event: Parameters<PanelChild<'github'>['send']>[0]) => github.send(event)
 
 const account = useSelector(github, (state) => state.context.account)
-const signIn = useSelector(github, (state) => state.context.signIn)
+const signingIn = useSelector(github, (state) => state.matches('signingIn'))
+const code = useSelector(github, (state) => state.context.code)
 const failure = useSelector(github, (state) => state.context.failure)
 
 /** Whether the code shown now was copied: a new code is not, until it is */
 const copied = ref(false)
-watch(() => signIn.value?.code?.userCode, () => { copied.value = false })
-const copyCode = async (code: string) => {
-  copied.value = await window.electronAPI?.clipboard.writeText(code) ?? false
+watch(() => code.value?.userCode, () => { copied.value = false })
+const copyCode = async (userCode: string) => {
+  copied.value = await window.electronAPI?.clipboard.writeText(userCode) ?? false
 }
 // The system browser, where the user is signed in to GitHub, rather than a tab in the app
 const openInBrowser = (url: string) => { void window.electronAPI?.shell.openExternal(url) }

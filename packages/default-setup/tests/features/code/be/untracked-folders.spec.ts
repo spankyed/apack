@@ -6,8 +6,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -19,7 +19,7 @@ afterEach(async () => {
 
 const git = (cwd: string, ...args: string[]) =>
   execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 
 /** The code system over a repository with one tracked file and a folder of two files git tracks nothing in */
 async function codeOverAnUntrackedFolder() {
@@ -41,12 +41,12 @@ async function codeOverAnUntrackedFolder() {
 it('tells the window the folder as one row, and what is in it when the row is opened', async () => {
   await codeOverAnUntrackedFolder();
 
-  const asked = await app!.send('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
-  const status = (await app!.nextEmit('code', 'commit.STATUS_RECEIVED', { answering: asked })).data as { files: object[] };
+  const asked = app!.ask('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
+  const status = (await answered(asked)) as { files: object[] };
   expect(status.files).toEqual([{ path: 'third-party/', status: 'untracked', staged: false, isDirectory: true }]);
 
-  const opened = await app!.send('code', { type: 'commit.LIST_UNTRACKED', path: 'third-party/' }, asWindow);
-  expect((await app!.nextEmit('code', 'commit.UNTRACKED_LISTED', { answering: opened })).data).toEqual({
+  const opened = app!.ask('code', { type: 'commit.LIST_UNTRACKED', path: 'third-party/' }, asWindow);
+  expect(await answered(opened)).toEqual({
     path: 'third-party/', files: ['third-party/lib/one.js', 'third-party/two.js'], truncated: false,
   });
 });
@@ -55,9 +55,9 @@ it('tells the window the folder as one row, and what is in it when the row is op
 it('shows a file of the folder as a new file: nothing on the left, the file on the right', async () => {
   await codeOverAnUntrackedFolder();
 
-  const call = await app!.send('code', { type: 'commit.GET_GIT_DIFF', path: 'third-party/lib/one.js', staged: false }, asWindow);
+  const call = app!.ask('code', { type: 'commit.GET_GIT_DIFF', path: 'third-party/lib/one.js', staged: false }, asWindow);
 
-  expect((await app!.nextEmit('code', 'commit.DIFF_RECEIVED', { answering: call })).data).toMatchObject({
+  expect(await answered(call)).toMatchObject({
     path: 'third-party/lib/one.js', originalContent: '', modifiedContent: 'one\n',
   });
 });

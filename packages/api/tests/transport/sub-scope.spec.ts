@@ -67,25 +67,25 @@ describe('how far an outgoing message reaches', () => {
   });
 
   it('delivers a message that names a connection only to that one', () => {
-    emitOutgoing(anEvent('QUERY_RESULT', 'c-main'));
+    emitOutgoing(anEvent('ASK_ANSWERED', 'c-main'));
 
-    expect(main.types(), 'the connection that asked').toEqual(['QUERY_RESULT']);
+    expect(main.types(), 'the connection that asked').toEqual(['ASK_ANSWERED']);
     expect(popout.types(), 'and no other').toEqual([]);
   });
 
   // The two halves have to coexist: an addressed answer must not stop the broadcasts flowing
   it('keeps both kinds flowing on one connection', () => {
     emitOutgoing(anEvent('NOTE_UPDATED'));
-    emitOutgoing(anEvent('QUERY_RESULT', 'c-popout'));
+    emitOutgoing(anEvent('ASK_ANSWERED', 'c-popout'));
     emitOutgoing(anEvent('THREAD_UPDATED'));
 
     expect(main.types()).toEqual(['NOTE_UPDATED', 'THREAD_UPDATED']);
-    expect(popout.types()).toEqual(['NOTE_UPDATED', 'QUERY_RESULT', 'THREAD_UPDATED']);
+    expect(popout.types()).toEqual(['NOTE_UPDATED', 'ASK_ANSWERED', 'THREAD_UPDATED']);
   });
 
   // A connection that has gone, or one that never existed: the message is simply not delivered, never broadcast
   it('delivers nothing when the named connection is not subscribed', () => {
-    emitOutgoing(anEvent('QUERY_RESULT', 'c-gone'));
+    emitOutgoing(anEvent('ASK_ANSWERED', 'c-gone'));
 
     expect(main.types()).toEqual([]);
     expect(popout.types(), 'an unknown address is not a broadcast').toEqual([]);

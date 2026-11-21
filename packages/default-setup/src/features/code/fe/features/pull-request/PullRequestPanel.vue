@@ -82,6 +82,7 @@
           <!-- PR Selector — always shown when not checking -->
           <PRSelector
             :list="prList"
+            :reading="prListReading"
             :selectedPR="selectedPR"
             @select-pr="handleSelectPRFromDropdown"
             @shown="prActor?.send({ type: 'pr.LIST_SHOWN' })"
@@ -275,9 +276,9 @@ import { computed, ref, watch } from 'vue'
 import type { PRBranchCheckout } from '#generated/types.ts'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import { useSelector } from '@xstate/vue'
-import { useSurface, useShell } from '@apackdev/sdk/fe'
+import { askUnderWay, useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
-import { branchDeletable, refKey } from '#features/code/fe/features/pull-request/state.ts'
+import { branchDeletable, refKey, DETAILS, LIST, LIST_MORE } from '#features/code/fe/features/pull-request/state.ts'
 import {
   AlertCircle, AlertTriangle, GitBranch, GitPullRequest, RefreshCw,
   Loader2, ArrowLeft, X
@@ -292,7 +293,7 @@ import PRInfo from '#features/code/fe/features/pull-request/PRInfo.vue'
 import PRComments from '#features/code/fe/features/pull-request/PRComments.vue'
 import PRActionBar from '#features/code/fe/features/pull-request/PRActionBar.vue'
 import GitHubAccount from '#features/code/fe/features/github/GitHubAccount.vue'
-import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
+import { PUSH, type GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { TreeNode } from './types.ts'
 import { panelChild } from '../children.ts';
 
@@ -314,6 +315,8 @@ const missingFileDiff = useSelector(prActor, (state) => state.context.missingFil
 const isPrLoading = useSelector(prActor, (state) => state.context.isPrLoading)
 const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)
 const prList = useSelector(prActor, (state) => state.context.prList)
+// Which page of the list is being read: its first, which starts it again, or the one after those read
+const prListReading = useSelector(prActor, (state) => askUnderWay(state.context.asking, LIST) ? 'first' : askUnderWay(state.context.asking, LIST_MORE) ? 'more' : null)
 const isCheckingOut = useSelector(prActor, (state) => state.context.isCheckingOut)
 const lastCheckout = useSelector(prActor, (state) => state.context.lastCheckout)
 const selectedPR = useSelector(prActor, (state) => state.context.selectedPR)
@@ -344,10 +347,10 @@ const isClosing = useSelector(prActor, (state) => state.context.isClosing)
 const isTogglingDraft = useSelector(prActor, (state) => state.context.isTogglingDraft)
 const isDeletingBranch = useSelector(prActor, (state) => state.context.isDeletingBranch)
 const isUpdatingPR = useSelector(prActor, (state) => state.context.isUpdatingPR)
-const isLoadingDetails = useSelector(prActor, (state) => state.context.isLoadingDetails)
+const isLoadingDetails = useSelector(prActor, (state) => askUnderWay(state.context.asking, DETAILS))
 const lastWriteAnswer = useSelector(prActor, (state) => state.context.lastWriteAnswer)
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
-const isPushing = useSelector(commitActor, (state) => state.context.isPushing)
+const isPushing = useSelector(commitActor, (state) => askUnderWay(state.context.asking, PUSH))
 const currentBranch = useSelector(commitActor, (state) => state.context.gitBranch)
 const availableBranches = useSelector(commitActor, (state) => state.context.availableBranches)
 

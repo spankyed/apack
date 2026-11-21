@@ -7,9 +7,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -53,17 +53,17 @@ async function movedSubmodule() {
 
 /** The rows of the status the window is told */
 async function rows(app: Awaited<ReturnType<typeof startApp>>) {
-  const asked = await app.send('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
-  return (await app.nextEmit('code', 'commit.STATUS_RECEIVED', { answering: asked })).data as { files: { path: string; submodule?: { commit: boolean } }[] };
+  const asked = app.ask('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
+  return (await answered(asked)) as { files: { path: string; submodule?: { commit: boolean } }[] };
 }
 
 it('tells the window a submodule is on another commit, and brings it to the one recorded when asked', async () => {
   const { app, recorded, at } = await movedSubmodule();
   expect((await rows(app)).files).toMatchObject([{ path: 'lib', submodule: { commit: true } }]);
 
-  const asked = await app.send('code', { type: 'commit.UPDATE_SUBMODULE', path: 'lib' }, asWindow);
+  const asked = app.ask('code', { type: 'commit.UPDATE_SUBMODULE', path: 'lib' }, asWindow);
 
-  expect((await app.nextEmit('code', 'commit.SUBMODULE_UPDATED', { answering: asked })).data).toEqual({ path: 'lib' });
+  expect(await answered(asked)).toEqual({ path: 'lib' });
   expect(await at()).toBe(recorded);
   expect((await rows(app)).files).toEqual([]);
 });
@@ -72,8 +72,8 @@ it('answers an update of a path that is no submodule with the failure, changing 
   const { app, at } = await movedSubmodule();
   const before = await at();
 
-  const asked = await app.send('code', { type: 'commit.UPDATE_SUBMODULE', path: 'nothing-here' }, asWindow);
+  const asked = app.ask('code', { type: 'commit.UPDATE_SUBMODULE', path: 'nothing-here' }, asWindow);
 
-  expect((await app.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: asked })).data).toHaveProperty('message');
+  expect(await refused(asked)).toHaveProperty('message');
   expect(await at()).toBe(before);
 });

@@ -6,15 +6,16 @@ import { getTestSettings, resetTestData, startApp } from '@apackdev/testing/harn
 import { recordingBroker } from './_support/recording-broker.ts'
 import { cursorDefaultsOf } from '../../../../src/features/code/be/services/terminal.ts'
 import { featureSettings } from '#generated/settings.ts'
+import { answered } from './_support/answered.ts'
+import type { TerminalInfo } from '#features/code/be/types.ts'
 
 const CODE = 'default-setup/code'
 const WINDOW = 'c-main'
 
 async function openATerminal(app: Awaited<ReturnType<typeof startApp>>) {
-  await app.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { sender: CODE, client: WINDOW })
-  const opened = await app.nextEmit('code', 'terminal.OPENED')
+  const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { client: WINDOW }))
   await app.settle()
-  return (opened as unknown as { data: { id: string } }).data.id
+  return opened.id
 }
 
 /** The broker's name for the session a terminal was given, which is what the recording names it by */

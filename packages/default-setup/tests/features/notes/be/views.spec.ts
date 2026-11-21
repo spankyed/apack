@@ -72,10 +72,10 @@ describe('a write to a note', () => {
     const tree = app.watchView('notes', 'tree')
     await tree.next()
 
-    const call = await app.send('notes', { type: 'CREATE_NOTE', title: 'Fresh' }, asked)
-    const created = await app.nextEmit('notes', 'NOTE_CREATED', { answering: call }) as unknown as { note: NoteSummary }
-    expect(created.note).toMatchObject({ title: 'Fresh', parentId: null })
-    expect(created.note).not.toHaveProperty('content')
+    const created = await app.ask('notes', { type: 'CREATE_NOTE', title: 'Fresh' }, asked)
+    const note = created.ok ? (created.value as { note: NoteSummary }).note : undefined
+    expect(note).toMatchObject({ title: 'Fresh', parentId: null })
+    expect(note).not.toHaveProperty('content')
     expect(titles(await tree.next())).toEqual(['Fresh'])
   })
 
@@ -84,10 +84,9 @@ describe('a write to a note', () => {
     const app = await startApp({ systems: ['notes'] })
     await app.connect()
 
-    const landed = await app.send('notes', { type: 'UPDATE_NOTE', id, title: 'Renamed' }, asked)
-    await app.nextEmit('notes', 'NOTE_WRITTEN', { answering: landed })
-    const refused = await app.send('notes', { type: 'UPDATE_NOTE', id: 'Note-missing', title: 'Nothing' }, asked)
-    expect(await app.nextEmit('notes', 'NOTE_WRITE_FAILED', { answering: refused })).toMatchObject({ error: expect.stringContaining('Note-missing') })
+    expect(await app.ask('notes', { type: 'UPDATE_NOTE', id, title: 'Renamed' }, asked)).toEqual({ ok: true, value: undefined })
+    expect(await app.ask('notes', { type: 'UPDATE_NOTE', id: 'Note-missing', title: 'Nothing' }, asked))
+      .toEqual({ ok: false, failure: { kind: 'failed', message: expect.stringContaining('Note-missing') } })
 
     await app.send('notes', { type: 'UPDATE_NOTE', id, title: 'Renamed by nobody' })
     expect(repository.noteQueries.byId(id)?.title).toBe('Renamed by nobody')
@@ -96,6 +95,6 @@ describe('a write to a note', () => {
     // A refusal nobody asked for has no window to show it, so it is reported
     await app.send('notes', { type: 'UPDATE_NOTE', id: 'Note-missing', title: 'Nothing' })
     await app.settle()
-    expect(takeSystemErrors()).toEqual([expect.objectContaining({ source: 'notes', message: expect.stringContaining('Note-missing') })])
+    expect(takeSystemErrors()).toEqual([expect.objectContaining({ source: 'default-setup/notes', message: expect.stringContaining('Note-missing') })])
   })
 })

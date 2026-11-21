@@ -48,6 +48,15 @@ export function answerTo<E extends {
 }>(call: string, event: E): E;
 
 // @public
+export function askAnswered<K extends string, A>(call: string, asked: K, answer: A): AskAnswered<K, A>;
+
+// @public
+export function askFailed<K extends string, F extends {
+    kind: string;
+    message: string;
+}>(call: string, asked: K, failure: F): AskFailed<K, F>;
+
+// @public
 export function catchUpTestProjections(): Promise<void>;
 
 // @internal

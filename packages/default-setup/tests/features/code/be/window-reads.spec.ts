@@ -1,6 +1,6 @@
-// A window's blame and history reads, driven through the code system as windows drive it: a window asking again stops
-// the read of that kind it asked for before, a window going stops all of its, another window's are left running, and a
-// read stopped so is answered with nothing. The repository's reads are stood in for by ones that run until their
+// A window's blame and history reads, driven through the code system as windows drive it: a read stops when whoever
+// asked for it stops waiting, as a panel does that asks for another, a window going stops all of its, and another
+// window's are left running. The repository's reads are stood in for by ones that run until their
 // signal stops them, which is what a blame of a large file or a long history does; that the engine's reads stop on the
 // signal is apack-git's own spec.
 import { afterEach, expect, it, vi } from 'vitest';
@@ -11,9 +11,9 @@ import { GitError } from '@apackdev/git';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
 import { AppGitRepository } from '../../../../src/features/code/be/services/app-git-repository.ts';
+import { refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
-const asWindow = (client: string) => ({ sender: CODE, client });
+const asWindow = (client: string) => ({ client });
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -52,48 +52,55 @@ async function reading() {
   return { app, reads, stopped };
 }
 
-it("stops a window's earlier blame when it asks for another, leaving another window's, and answers the stopped one with nothing", async () => {
+it("stops a blame when whoever asked for it stops waiting, leaving another window's and the one asked for since", async () => {
   const { app, reads, stopped } = await reading();
+  const moved = new AbortController();
 
-  await app.send('code', { type: 'commit.GET_BLAME', path: 'a.ts' }, asWindow('one'));
-  await app.send('code', { type: 'commit.GET_BLAME', path: 'b.ts' }, asWindow('two'));
-  await app.send('code', { type: 'commit.GET_BLAME', path: 'c.ts' }, asWindow('one'));
+  const first = app.ask('code', { type: 'commit.GET_BLAME', path: 'a.ts' }, { ...asWindow('one'), signal: moved.signal });
+  void app.ask('code', { type: 'commit.GET_BLAME', path: 'b.ts' }, asWindow('two'));
+  await app.settle();
+  // The panel asks for another file's blame, and no longer waits on the first
+  moved.abort(new Error('the panel asked for another'));
+  void app.ask('code', { type: 'commit.GET_BLAME', path: 'c.ts' }, asWindow('one'));
+  await expect(first).rejects.toThrow('the panel asked for another');
   await app.settle();
 
   expect(reads.map(read => read.what)).toEqual(['blame a.ts', 'blame b.ts', 'blame c.ts']);
-  expect(stopped()).toEqual(['blame a.ts']);
-  expect(app.emitted('code').filter(event => event.type === 'commit.ERROR_RECEIVED')).toEqual([]);
+  await vi.waitFor(() => expect(stopped()).toEqual(['blame a.ts']));
 });
 
-it("stops a window's earlier page of history when it asks for another, whichever history either is of", async () => {
+it('stops a page of history when whoever asked for it stops waiting, whichever history the next is of', async () => {
   const { app, stopped } = await reading();
+  const moved = new AbortController();
 
-  await app.send('code', { type: 'commit.LOG_LIST', path: 'a.ts' }, asWindow('one'));
-  await app.send('code', { type: 'commit.LOG_LIST' }, asWindow('one'));
+  const first = app.ask('code', { type: 'commit.LOG_LIST', path: 'a.ts' }, { ...asWindow('one'), signal: moved.signal });
+  await app.settle();
+  moved.abort(new Error('the panel asked for another'));
+  void app.ask('code', { type: 'commit.LOG_LIST' }, asWindow('one'));
+  await expect(first).rejects.toThrow('the panel asked for another');
   await app.settle();
 
-  expect(stopped()).toEqual(['history a.ts']);
+  await vi.waitFor(() => expect(stopped()).toEqual(['history a.ts']));
 });
 
 it("stops every read of a window that goes, and none of another's", async () => {
   const { app, stopped } = await reading();
-  await app.send('code', { type: 'commit.GET_BLAME', path: 'a.ts' }, asWindow('one'));
-  await app.send('code', { type: 'commit.LOG_LIST', path: 'a.ts' }, asWindow('one'));
-  await app.send('code', { type: 'commit.GET_BLAME', path: 'b.ts' }, asWindow('two'));
+  void app.ask('code', { type: 'commit.GET_BLAME', path: 'a.ts' }, asWindow('one')).catch(() => {});
+  void app.ask('code', { type: 'commit.LOG_LIST', path: 'a.ts' }, asWindow('one')).catch(() => {});
+  void app.ask('code', { type: 'commit.GET_BLAME', path: 'b.ts' }, asWindow('two'));
   await app.settle();
 
   await app.endConnection('one');
   await app.settle();
 
   expect(stopped().sort()).toEqual(['blame a.ts', 'history a.ts']);
-  expect(app.emitted('code').filter(event => event.type === 'commit.ERROR_RECEIVED')).toEqual([]);
 });
 
 it('answers a read that fails for any other reason with the failure', async () => {
   const { app } = await reading();
   vi.mocked(AppGitRepository.prototype.blame).mockRejectedValueOnce(new GitError('no such path'));
 
-  const asked = await app.send('code', { type: 'commit.GET_BLAME', path: 'gone.ts' }, asWindow('one'));
+  const asked = app.ask('code', { type: 'commit.GET_BLAME', path: 'gone.ts' }, asWindow('one'));
 
-  expect((await app.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: asked })).data).toMatchObject({ message: 'no such path' });
+  expect(await refused(asked)).toMatchObject({ message: 'no such path' });
 });

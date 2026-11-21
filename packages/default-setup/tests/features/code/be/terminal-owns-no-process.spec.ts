@@ -6,17 +6,17 @@ import { resetTestData, startApp } from '@apackdev/testing/harness'
 import { recordingBroker } from './_support/recording-broker.ts'
 import { featureSettings } from '#generated/settings.ts'
 import { repository } from '#generated/repository.ts'
+import { answered } from './_support/answered.ts'
+import type { TerminalInfo } from '#features/code/be/types.ts'
 
 
-const CODE = 'default-setup/code'
 const WINDOW = 'c-main'
 
 /** Opens one terminal and settles, returning its id */
 async function openATerminal(app: Awaited<ReturnType<typeof startApp>>) {
-  await app.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { sender: CODE, client: WINDOW })
-  const opened = await app.nextEmit('code', 'terminal.OPENED')
+  const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { client: WINDOW }))
   await app.settle()
-  return (opened as unknown as { data: { id: string } }).data.id
+  return opened.id
 }
 
 describe('what the broker owning the process removes', () => {
@@ -44,7 +44,7 @@ describe('what the broker owning the process removes', () => {
 
     // A drag produces one of these per observed frame: 24 per action, measured
     for (let step = 0; step < 24; step++) {
-      await app.send('code', { type: 'terminal.RESIZE_TERMINAL', terminalId: id, cols: 80 - step, rows: 24 }, { sender: CODE, client: WINDOW })
+      await app.ask('code', { type: 'terminal.RESIZE_TERMINAL', terminalId: id, cols: 80 - step, rows: 24 }, { client: WINDOW })
     }
     await app.settle()
 

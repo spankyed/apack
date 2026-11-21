@@ -61,6 +61,9 @@ const getIcon = (type: Toast['type']) => {
   }
 };
 
+// Counts the toasts shown, for a key each: several shown in one turn are still told apart
+let shown = 0;
+
 const removeNotification = (id: string) => {
   const index = notifications.value.findIndex(n => n.id === id);
   if (index > -1) {
@@ -69,7 +72,7 @@ const removeNotification = (id: string) => {
 };
 
 const show = (toast: Omit<Toast, 'id'>) => {
-  const id = Date.now().toString();
+  const id = String(++shown);
   const notification: Toast = {
     id,
     duration: 4000,

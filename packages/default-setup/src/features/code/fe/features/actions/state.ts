@@ -1,28 +1,55 @@
 import type { ActionTab } from '../../contract.ts';
 export type { ActionTab } from '../../contract.ts';
-import { setup , type ActorRefFrom } from 'xstate';
-import { sendToSurface, sendToSystem } from '#generated/events.ts';
-import { updateParentState, getParentContext, addTabToParent } from '../../utils/parent-communication.ts';
-import type { ActionEntity } from '@apackdev/sdk';
+import { setup, enqueueActions, type ActorRefFrom, type AnyActorRef, type DoneActorEvent, type OutputFrom } from 'xstate';
+import { sendToSurface, fromAsk } from '#generated/events.ts';
+import { safeEvents } from '@apackdev/sdk/helpers';
+import { askId, endedAsk } from '@apackdev/sdk/fe';
+import { showTabInParent, updateTabsInParent } from '../../utils/parent-tabs.ts';
 import type { EARS } from '#generated/ears.ts';
 
+// The asks about an action's code. Several run at once, one per tab opening or saving, so each is spawned under
+// an id of its own (`open.<n>`, `save.<n>`) and its outcome arrives as that actor's done event
+const openAction = fromAsk('code', 'codeActions.OPEN_ACTION');
+const saveAction = fromAsk('code', 'codeActions.SAVE_ACTION');
+
+/** The action opens in a tab. One that could not be opened opens none */
+function showOpenedAction(self: AnyActorRef, output: OutputFrom<typeof openAction>): void {
+  if (!output.ok) return
+  const action = output.value
+  const tab: ActionTab = {
+    path: `action:${action.id}`,
+    content: action.actionFnContent || action.actionFn || '',
+    modified: false,
+    isAction: true,
+    actionEntity: action,
+  }
+  showTabInParent(self, tab)
+}
+
+/** The saved action replaces the one its tab holds. One that could not be saved leaves the tab modified */
+function takeSavedAction(self: AnyActorRef, output: OutputFrom<typeof saveAction>): void {
+  if (!output.ok) return
+  const action = output.value
+  updateTabsInParent(self, file => file.isAction && file.actionEntity.id === action.id
+    ? { ...file, actionEntity: action, modified: false }
+    : file)
+}
 
 export type Event =
   | { type: 'codeActions.OPEN_ACTION'; actionId: string }
   | { type: 'codeActions.SAVE_ACTION'; actionId: string; content: string }
-  // Backend events
-  | { type: 'codeActions.ACTION_SELECTED'; actionId: string; data: ActionEntity & { actionFnContent?: string } }
-  | { type: 'codeActions.ACTION_UPDATED'; action: ActionEntity; actionId: string }
+  // How an ask about an action's code ended
+  | DoneActorEvent<OutputFrom<typeof openAction>, `open.${number}`>
+  | DoneActorEvent<OutputFrom<typeof saveAction>, `save.${number}`>
   // Tab restoration
   | { type: 'codeActions.OPEN_TABS'; actionIds: string[] }
   /**
    * What the panel asks of the **actions surface**: its edits, which that surface sends its system.
    *
-   * The panel used to send these straight to that surface from its click handlers. Two things were wrong
-   * with that and the second is why they are here rather than merely tidier: a component is not inside any
-   * delivery, so the send carried no `Message.sender` and the actions surface had no address to answer — a
-   * refusal or an error had nowhere to go but a toast. A send made from this machine carries the code
-   * surface's ref, because the shell names a surface while it handles anything (`notifySurfaceActor`).
+   * Sent from this machine rather than from the panel's click handlers: a component is not inside any delivery,
+   * so a send it makes carries no `Message.sender` and the actions surface has no address to answer a refusal or
+   * an error to. A send made from this machine carries the code surface's ref, because the shell names a surface
+   * while it handles anything (`notifySurfaceActor`).
    *
    * The names match what they forward, so the hand-off reads as one; the `codeActions.` prefix is how the
    * code surface routes an event to this child.
@@ -32,103 +59,59 @@ export type Event =
   | { type: 'codeActions.DELETE'; actionId: EARS.EntityId }
   | { type: 'codeActions.CREATE_INLINE'; label: string; actionFn: string; input: Record<string, unknown> };
 
+const typeOf = safeEvents<Event>();
+
 export const actionsState = setup({
   types: {
     context: {} as Record<string, never>,
     events: {} as Event
   },
+  actors: { openAction, saveAction },
   actions: {
-    openAction: ({ event }) => {
-      const ev = event as { type: 'codeActions.OPEN_ACTION'; actionId: string }
-      sendToSystem('code', { type: 'codeActions.OPEN_ACTION', actionId: ev.actionId })
-    },
+    openAction: enqueueActions(({ enqueue, event }) => {
+      const { actionId } = typeOf('codeActions.OPEN_ACTION', event)
+      enqueue.spawnChild('openAction', { id: askId('open'), input: { actionId } })
+    }),
 
-    saveAction: ({ event }) => {
-      const ev = event as { type: 'codeActions.SAVE_ACTION'; actionId: string; content: string }
-      sendToSystem('code', {
-        type: 'codeActions.SAVE_ACTION',
-        actionId: ev.actionId,
-        actionFn: ev.content,
-      })
-    },
+    saveAction: enqueueActions(({ enqueue, event }) => {
+      const ev = typeOf('codeActions.SAVE_ACTION', event)
+      enqueue.spawnChild('saveAction', { id: askId('save'), input: { actionId: ev.actionId, actionFn: ev.content } })
+    }),
 
-    handleActionSelected: ({ event, self }) => {
-      const ev = event as { type: 'codeActions.ACTION_SELECTED'; actionId: string; data: ActionEntity & { actionFnContent?: string } }
-      const parentContext = getParentContext(self)
-      const openFiles = parentContext?.openFiles || []
-      const actionPath = `action:${ev.actionId}`
-
-      // Check if action tab already exists
-      const existingTab = openFiles.find((f: any) => f.path === actionPath)
-
-      if (existingTab) {
-        // Tab already exists, just activate it
-        updateParentState(self, {
-          activeFilePath: actionPath
-        })
-      } else {
-        // Create new action tab
-        const actionTab: ActionTab = {
-          path: actionPath,
-          content: ev.data.actionFnContent || ev.data.actionFn || '',
-          modified: false,
-          isAction: true,
-          actionEntity: ev.data
-        }
-        addTabToParent(self, actionTab, true)
-      }
-    },
-
-    updateActionInOpenFiles: ({ event, self }) => {
-      const ev = event as { type: 'codeActions.ACTION_UPDATED'; action: ActionEntity; actionId: string }
-      const parentContext = getParentContext(self)
-      const openFiles = parentContext?.openFiles || []
-
-      // Update the action entity in the open tab
-      const updatedFiles = openFiles.map((file: any) => {
-        if (file.isAction && file.actionEntity.id === ev.actionId) {
-          return {
-            ...file,
-            actionEntity: ev.action,
-            modified: false
-          }
-        }
-        return file
-      })
-
-      updateParentState(self, { openFiles: updatedFiles })
-    },
+    /** An ask that ended stops being this machine's child */
+    forgetAsk: enqueueActions(({ enqueue, event }) => {
+      const id = endedAsk(event)
+      enqueue.stopChild(id)
+    }),
 
     // The panel's asks of the actions surface, forwarded from here so each one carries a sender
 
     updateActionInput: ({ event }) => {
-      const ev = event as { type: 'codeActions.UPDATE_INPUT'; actionId: string; input: Record<string, unknown> }
+      const ev = typeOf('codeActions.UPDATE_INPUT', event)
       sendToSurface('actions', { type: 'ACTION.UPDATE_INPUT', actionId: ev.actionId, input: ev.input })
     },
 
     updateActionLabel: ({ event }) => {
-      const ev = event as { type: 'codeActions.UPDATE_LABEL'; actionId: string; label: string }
+      const ev = typeOf('codeActions.UPDATE_LABEL', event)
       sendToSurface('actions', { type: 'ACTION.UPDATE_LABEL', actionId: ev.actionId, label: ev.label })
     },
 
     deleteAction: ({ event }) => {
-      const ev = event as { type: 'codeActions.DELETE'; actionId: EARS.EntityId }
+      const ev = typeOf('codeActions.DELETE', event)
       sendToSurface('actions', { type: 'ACTION.DELETE', actionId: ev.actionId })
     },
 
     createActionInline: ({ event }) => {
-      const ev = event as { type: 'codeActions.CREATE_INLINE'; label: string; actionFn: string; input: Record<string, unknown> }
+      const ev = typeOf('codeActions.CREATE_INLINE', event)
       sendToSurface('actions', { type: 'ACTION.CREATE_INLINE', label: ev.label, actionFn: ev.actionFn, input: ev.input })
     },
 
-    // Handle tab restoration
-    openActionTabs: ({ event }) => {
-      const ev = event as { type: 'codeActions.OPEN_TABS'; actionIds: string[] }
-      // Open each action
-      ev.actionIds.forEach(actionId => {
-        sendToSystem('code', { type: 'codeActions.OPEN_ACTION', actionId })
-      })
-    }
+    /** The tabs a restore had open: one ask for each action */
+    openActionTabs: enqueueActions(({ enqueue, event }) => {
+      for (const actionId of typeOf('codeActions.OPEN_TABS', event).actionIds) {
+        enqueue.spawnChild('openAction', { id: askId('open'), input: { actionId } })
+      }
+    })
   }
 }).createMachine({
   id: 'codeActions',
@@ -144,13 +127,9 @@ export const actionsState = setup({
     'codeActions.OPEN_TABS': {
       actions: 'openActionTabs'
     },
-    // Backend events
-    'codeActions.ACTION_SELECTED': {
-      actions: 'handleActionSelected'
-    },
-    'codeActions.ACTION_UPDATED': {
-      actions: 'updateActionInOpenFiles'
-    },
+    // How its asks ended
+    'xstate.done.actor.open.*': { actions: [({ event, self }) => showOpenedAction(self, event.output), 'forgetAsk'] },
+    'xstate.done.actor.save.*': { actions: [({ event, self }) => takeSavedAction(self, event.output), 'forgetAsk'] },
     // The panel's asks of the actions surface
     'codeActions.UPDATE_INPUT': { actions: 'updateActionInput' },
     'codeActions.UPDATE_LABEL': { actions: 'updateActionLabel' },

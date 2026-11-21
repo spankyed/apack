@@ -48,8 +48,7 @@ describe('a change no file event reported', () => {
     const { directory } = await codeOverPlainDirectory();
     const file = path.join(directory, 'notes.txt');
     fs.writeFileSync(file, 'one\n');
-    await app!.send('code', { type: 'explorer.READ_FILE', path: file }, { sender: 'default-setup/code', client: 'c-main' });
-    await app!.nextEmit('code', 'explorer.FILE_CONTENT');
+    expect(await app!.ask('code', { type: 'explorer.READ_FILE', path: file }, { client: 'c-main' })).toMatchObject({ ok: true });
 
     // Each round is a change of its own, so the round the watcher first looked at the file in does not matter
     await expect.poll(async () => {

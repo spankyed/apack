@@ -46,7 +46,7 @@
 import { useSurface } from '@apackdev/sdk/fe'
 
 import { useSelector } from '@xstate/vue'
-import type { DatabaseState } from '../../state.ts'
+import { isLoadingRuns as readingRuns, type DatabaseState } from '../../state.ts'
 import { Loader2 } from 'lucide-vue-next'
 import RunNodeListItem from '@apackdev/ui/components/RunNodeListItem'
 
@@ -55,7 +55,7 @@ const databaseActor: DatabaseState = useSurface()
 // State selectors
 const flowEvents = useSelector(databaseActor, (state) => state.context.flowEvents)
 const nodeDetails = useSelector(databaseActor, (state) => state.context.nodeDetails)
-const isLoadingRuns = useSelector(databaseActor, (state) => state.context.isLoadingRuns)
+const isLoadingRuns = useSelector(databaseActor, readingRuns)
 const runPagination = useSelector(databaseActor, (state) => state.context.runPagination)
 
 // Actions

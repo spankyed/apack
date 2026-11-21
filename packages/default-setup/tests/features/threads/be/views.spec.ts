@@ -14,8 +14,8 @@ import { chatService } from '#features/threads/be/services/chat.ts'
 import { artifactService } from '#features/threads/be/services/artifact.ts'
 import { createStreamWriter } from '../../../../src/content/actions/claude-code/_helpers/stream-writer.ts'
 
-const THREADS = 'default-setup/threads'
-const asked = { sender: THREADS, client: 'c-main' }
+/** The connection a window asks on */
+const window = { client: 'c-main' }
 
 /** The view's results from here until one that is `null`: a thread gone */
 async function untilGone(view: TestView<unknown>) {
@@ -120,8 +120,9 @@ describe('what a window asks the threads system', () => {
     write(pinned).set('pinned', true)
     const app = await connected()
 
-    const call = await app.send('threads', { type: 'GET_CHAT_START' }, asked)
-    const { data } = await app.nextEmit('threads', 'CHAT_STARTED', { answering: call }) as unknown as { data: ChatStart }
+    const started = await app.ask('threads', { type: 'GET_CHAT_START' }, window)
+    if (!started.ok) throw new Error(started.failure.message)
+    const data = started.value as ChatStart
     expect(data.currentThreadId).toBe(pinned)
     expect(data.tabs).toEqual([{ id: pinned, label: 'Pinned', pinned: true }])
     expect(data.settings).toHaveProperty('chat')
@@ -130,14 +131,14 @@ describe('what a window asks the threads system', () => {
   it('answers each write, the thread it made, a landed one and a refused one, and runs one nobody asked for', async () => {
     const app = await connected()
 
-    const created = await app.send('threads', { type: 'CREATE_THREAD', topic: 'Made', instructions: '' }, asked)
-    const { id } = await app.nextEmit('threads', 'THREAD_CREATED', { answering: created }) as unknown as { id: EARS.EntityId }
+    const created = await app.ask('threads', { type: 'CREATE_THREAD', topic: 'Made', instructions: '' }, window)
+    if (!created.ok) throw new Error(created.failure.message)
+    const { id } = created.value as { id: EARS.EntityId }
     expect(repository.threadQueries.byId(id)?.topic).toBe('Made')
 
-    const landed = await app.send('threads', { type: 'UPDATE_THREAD_FIELD', threadId: id, key: 'topic', value: 'Renamed' }, asked)
-    await app.nextEmit('threads', 'THREAD_WRITTEN', { answering: landed })
-    const refused = await app.send('threads', { type: 'UPDATE_THREAD_FIELD', threadId: 'Thread-missing', key: 'topic', value: 'Nothing' }, asked)
-    expect(await app.nextEmit('threads', 'THREAD_WRITE_FAILED', { answering: refused })).toMatchObject({ error: expect.stringContaining('Thread-missing') })
+    expect(await app.ask('threads', { type: 'UPDATE_THREAD_FIELD', threadId: id, key: 'topic', value: 'Renamed' }, window)).toEqual({ ok: true, value: undefined })
+    expect(await app.ask('threads', { type: 'UPDATE_THREAD_FIELD', threadId: 'Thread-missing', key: 'topic', value: 'Nothing' }, window))
+      .toMatchObject({ ok: false, failure: { kind: 'failed', message: expect.stringContaining('Thread-missing') } })
     expect(takeSystemErrors(), 'and reported, as every thread operation that fails is').toHaveLength(1)
 
     await app.send('threads', { type: 'UPDATE_THREAD_FIELD', threadId: id, key: 'topic', value: 'Renamed by nobody' })
@@ -149,18 +150,16 @@ describe('what a window asks the threads system', () => {
     const [a, b] = [thread('A'), thread('B')]
     repository.threadCommands.update(a, { linkedThreads: [{ relation: 'blocks', id: b }] })
 
-    const looped = await app.send('threads', {
+    expect(await app.ask('threads', {
       type: 'UPDATE_THREAD_FIELD', threadId: b, key: 'linkedThreads', value: [{ relation: 'blocked by', id: a }, { relation: 'blocks', id: a }],
-    }, asked)
-    expect(await app.nextEmit('threads', 'THREAD_WRITE_FAILED', { answering: looped })).toMatchObject({ error: expect.stringContaining('already blocks') })
+    }, window)).toMatchObject({ ok: false, failure: { message: expect.stringContaining('already blocks') } })
     expect(takeSystemErrors(), 'the form shows it, so nothing reports it').toHaveLength(0)
 
     // A child made the parent of its own parent: the thread goes with the refused link
     const before = repository.threadQueries.listed().length
-    const child = await app.send('threads', {
+    expect(await app.ask('threads', {
       type: 'CREATE_THREAD', topic: 'Child', instructions: '', parentThreadId: a, linkedThreads: [{ relation: 'parent_of', id: a }],
-    }, asked)
-    expect(await app.nextEmit('threads', 'THREAD_WRITE_FAILED', { answering: child })).toMatchObject({ error: expect.stringContaining('already the parent') })
+    }, window)).toMatchObject({ ok: false, failure: { message: expect.stringContaining('already the parent') } })
     expect(repository.threadQueries.listed()).toHaveLength(before)
     takeSystemErrors()
   })

@@ -126,6 +126,7 @@ The contract is a **declared type**, not a value, and it lives in a leaf module 
 | `incoming` | what anything outside the system sends it: another system, a surface, a dependent pack. Required unless the system only broadcasts |
 | `internal` | what the system's own children send it (a `fromCallback` child telling its parent). These reach the machine's event union and nothing a dependent pack can see, so they can't be sent from outside. Optional |
 | `outgoing` | every event the system sends to surfaces, and the one place they're declared: the build types `broadcastToSurface` from it and lists what each surface receives. Required |
+| `asks` | what the system answers — a read, a write, a command — each with what it takes, what it answers with and how it may fail (see [Asks](#asks)). Optional |
 | `context` | the machine's context, `{}` when omitted |
 
 The spec it returns:
@@ -134,6 +135,7 @@ The spec it returns:
 |---|---|
 | `types` | `{ context; events }`, for `setup({ types })`: the events are `incoming \| internal \| SystemEvents`. `SystemEvents` is `SEND_STATE`, `CLIENT_CONNECTED`, `PACK_CHANGED { packId }`, `DATA_REPLACED` and `FEATURE_SETTINGS_UPDATED { settings, changes }`, so no contract lists them |
 | `typeOf` | `safeEvents` over the same events, to narrow an event by type in actions |
+| `answers` | the table that answers the contract's `asks` (see [Asks](#asks)) |
 
 ### Key rules
 
@@ -184,6 +186,83 @@ sendToSystem('default-setup/notes', { type: 'EMPTY_TRASH' });
 `sendToSystem` accepts only systems of your pack and its dependencies, and only the events each one declares (its contract's `incoming`); a missing field is reported against the event its `type` names. Each send names one system and one event type: a `systemId` or `type` typed as a union is rejected. A bare name is your own feature (`'bookmarks'` is `my-pack/bookmarks`). A dependency's system is always named with the dependency's id, so a feature of yours may share its name: `'notes'` is your own, `'default-setup/notes'` default-setup's. The app checks target and event-name membership against the accepted endpoint contract. The generated system inbox contains the contract's `incoming`, explicit `system.events.incoming` additions, and shared SDK lifecycle events. Private machine handlers do not define a public inbox; backend event diagnostics do not validate payloads or authorize senders.
 
 Backend code that needs the connection or every incoming event subscribes with `onConnected(callback)` and `onIncoming(callback)` from `@apackdev/sdk/events`; each returns an unsubscribe function. Log entries arrive through `onLog(callback)` from `@apackdev/sdk/logger`.
+
+### Asks
+
+**Something a surface or another system needs an answer to is an ask.** A read the engine cannot watch (a file on
+disk, the run history), a write the surface holds its views behind, a command whose outcome the user is shown: each
+is declared in the system's contract under `asks`, keyed by its event type.
+
+```typescript
+// be/contract.ts
+export type Contract = {
+  incoming: IncomingBookmarksEvents;
+  outgoing: OutgoingBookmarksEvents;
+  asks: {
+    // What it takes beside `type`, what it answers with, and the ways it may fail that an asker can act on
+    RENAME_BOOKMARK: {
+      args: { id: string; name: string };
+      answer: { name: string };
+      refuses: { 'name-taken': { existingId: string } };
+    };
+    // No `answer`: answered only that it was done
+    DELETE_BOOKMARK: { args: { id: string } };
+  };
+};
+```
+
+The system answers them with a table, one handler per ask — the compiler refuses one that is missing. **A handler
+returns its answer and throws its refusal**; it is never handed the means to send either, so no path through it can
+leave the asker waiting:
+
+```typescript
+// be/system.ts
+export const answers = bookmarksSpec.answers({
+  RENAME_BOOKMARK: ({ args, refuse }) => {
+    const existing = repository.bookmarkQueries.byName(args.name);
+    if (existing) throw refuse('name-taken', 'Another bookmark has that name', { existingId: existing.id });
+    repository.bookmarkCommands.rename(args.id, args.name);
+    return { name: args.name };
+  },
+  DELETE_BOOKMARK: ({ args }) => { repository.bookmarkCommands.delete(args.id); },
+});
+
+export const bookmarksSystem = setup({
+  types: bookmarksSpec.types,
+  actions: { ...answers.actions, ...bookmarksSpec.actions({ /* your other actions */ }) },
+}).createMachine({ on: { ...answers.on } });
+```
+
+`answers.on` goes where the asks are taken: at the root for a system that takes them in every state, or one by one
+under a state (`DELETE_BOOKMARK: answers.on.DELETE_BOOKMARK`) for one that takes them only there. A handler is handed
+`args`, `context`, `self`, `refuse`, `client` (the asking window's connection, absent for another system's ask),
+`progress`, which tells whoever asked something before the answer where the ask declares `progress`, and `signal`,
+which aborts when the window that asked goes or whoever asked stops waiting.
+
+An ask ends with its answer or with a failure: `{ kind, message }` and whatever data its kind declares. Two kinds
+every ask may fail as, declared or not: `failed`, for anything the handler did not name, and `unavailable`, for an
+ask nothing took (the system is not running, or its current state does not take that ask), which the app answers
+itself. An error from the disk is `not-found` or `no-access` where the ask declares that kind. A failure nobody asked
+about is reported to the user; a success nobody asked about goes nowhere. An ask that was stopped is not answered.
+
+| To ask | Use |
+|---|---|
+| from a surface's machine, where the UI shows it under way or a newer one replaces it | a state with `invoke: { src: fromAsk('bookmarks', 'GET_BOOKMARK'), input, onDone }` (`#generated/events`). `event.output` is an `Outcome`. Leaving the state stops the ask. What the handler tells it on the way arrives as `GET_BOOKMARK.progress` (`ProgressEventOf`, `@apackdev/sdk/events`) |
+| from a surface's machine, several at once | `spawnChild` the same `fromAsk` logic with an id, and handle `xstate.done.actor.<id>` |
+| from a component | `useAsk((name: string) => ask('bookmarks', { type: 'RENAME_BOOKMARK', id, name }))` (`@apackdev/sdk/fe`), which follows `pending` and the last `outcome` |
+| from backend code | `await ask(name, event, { signal?, heard? })` (`#generated/events`), resolving to an `Outcome` |
+
+A surface's machine does not handle an answer as an event: the ask it invoked or spawned takes it.
+
+A machine that spawns asks and needs to know whether one is under way — to ignore a second click, to show a spinner —
+keeps `asking: AsksUnderWay` in its context, starting as `noAsks()`, and spawns and stops through `enqueueAsks` and
+`stopAsks` (`@apackdev/sdk/fe`), which keep it. `askUnderWay(context.asking, id)` then answers in a guard, an action
+and a component alike. `askId(kind)` gives an id for one of several asks of a kind, and `endedAsk(event)` the id of
+the ask a done event ends.
+
+A spec driving the whole system asks with `app.ask(system, event, { client?, signal?, heard? })`, which resolves to
+the `Outcome`. The `ask-answers` pack rule refuses an `ASK_ANSWERED`, `ASK_FAILED` or `ASK_PROGRESS` written by hand
+in a pack's source: they are how an answer travels, and never a pack's to write.
 
 ### Logging and errors
 

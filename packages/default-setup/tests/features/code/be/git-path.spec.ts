@@ -8,8 +8,8 @@ import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
 import { featureSettings } from '#generated/settings.ts';
 import { resolveGitPath } from '#features/code/be/utils/resolve-cli.ts';
+import { refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -18,7 +18,7 @@ afterEach(async () => {
   resetTestData();
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 
 it('says there is no git where the user set it, and what to do about it', async () => {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-git-path-')));
@@ -31,9 +31,9 @@ it('says there is no git where the user set it, and what to do about it', async 
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const asked = await app.send('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
+  const asked = app.ask('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
 
-  const { data } = await app.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: asked });
+  const data = await refused(asked);
   expect(data).toMatchObject({ code: 'git-not-found' });
   expect((data as { message: string }).message).toContain(nowhere);
   expect((data as { message: string }).message).toContain('Settings, CLI providers');

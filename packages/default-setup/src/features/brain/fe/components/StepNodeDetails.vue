@@ -125,7 +125,7 @@ import DataRenderer from '@apackdev/ui/components/DataRenderer';
 import { openSurface } from '#generated/fe.ts';
 
 interface Props {
-  /** The run node, with where its blueprint is when it has one (the brain's RUN_NODE_DETAILS) */
+  /** The run node, with where its blueprint is when it has one (the brain's answer to GET_RUN_NODE_DETAILS) */
   node?: RunNode & { revealIn?: { flowId: EntityId; nodeId: EntityId } };
 }
 

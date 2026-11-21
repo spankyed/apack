@@ -99,10 +99,6 @@ export interface EventReceived {
 export type BrainSettings = import('#generated/settings.ts').SettingsOf<'brain'>;
 
 export type IncomingBrainEvents =
-  | { type: 'OPEN_RUN_NODE'; runNodeId: string }
-  | { type: 'GO_BACK_RUN_NODE'; currentFlowRunNodeId?: string }
-  | { type: 'REQUEST_SURFACE_DATA'; flowRunNodeId?: string }
-  | { type: 'GET_RUN_NODE_DETAILS'; runNodeId: string }
   | { type: 'TOGGLE_INSPECT' }
   | { type: 'START_BRAIN' }
   | { type: 'KILL_BRAIN' }
@@ -121,19 +117,34 @@ export type BrainInternalEvents =
   | { type: 'RUN_NODE_UPDATED'; data: RunNodeUpdate }
   | { type: 'CHILD_COMPLETED'; stepId?: EARS.EntityId; runNodeId?: RunNodeId; stepLabel?: string; result?: any; final?: boolean; eventRunNodeId?: RunNodeId; isFlow?: boolean }
 
+/** A flow run a window opens: its tree, and where it sits among the flows that ran it */
+export type OpenedRun = { runNodeId: EARS.EntityId; data: FlowRunNodeData };
+
 /**
- * What the brain system sends the Brain surface. A run's tree and a run node's details are in the run history, which no
- * view can watch, so they are answers to the window that asked (\`REQUEST_SURFACE_DATA\`, \`OPEN_RUN_NODE\`,
- * \`GO_BACK_RUN_NODE\`, \`GET_RUN_NODE_DETAILS\`). The rest is news for every window: the brain's state, an event's
- * pulse, and the run's live feed, which patches the tree a window holds as streaming tokens patch a message.
+ * What the brain system answers. A run's tree and a run node's details are in the run history, which no view can
+ * watch, so a window asks for them.
+ */
+export type BrainAsks = {
+  /** The tree of the root run, or of the flow run a window shows, with the brain's state, which a window just started has not heard yet */
+  REQUEST_SURFACE_DATA: { args: { flowRunNodeId?: string }; answer: { data: FlowRunNodeData; state: BrainStateEvent } };
+  OPEN_RUN_NODE: { args: { runNodeId: string }; answer: OpenedRun; refuses: { 'not-a-flow': {} } };
+  /** The flow that ran the one a window shows, or the root run's when it shows the root */
+  GO_BACK_RUN_NODE: { args: { currentFlowRunNodeId?: string }; answer: OpenedRun };
+  /** A run node, or null for one the history no longer holds */
+  GET_RUN_NODE_DETAILS: { args: { runNodeId: string }; answer: { runNodeId: RunNodeId; details: RunNodeDetails | null } };
+};
+
+/** What the brain's state is, as every window hears it */
+export type BrainStateEvent = Extract<OutgoingBrainEvents, { type: 'BRAIN_STATE' }>;
+
+/**
+ * What the brain system sends every window: the brain's state, an event's pulse, and the run's live feed, which patches
+ * the tree a window holds as streaming tokens patch a message.
  */
 export type OutgoingBrainEvents =
-  | { type: 'RECEIVE_SURFACE_DATA'; data: FlowRunNodeData }
-  | { type: 'RUN_NODE_OPENED'; runNodeId: EARS.EntityId; data: FlowRunNodeData }
   | { type: 'RUN_NODE_SPAWNED'; runNode: RunNode; parentId?: EARS.EntityId; eventRunNodeId?: RunNodeId; flowRunNodeId: EARS.EntityId }
   | { type: 'RUN_NODE_UPDATED'; data: RunNodeUpdate }
   | { type: 'EVENT_PULSE'; eventType: string }
-  | { type: 'RUN_NODE_DETAILS'; runNodeId: RunNodeId; details: RunNodeDetails | null }
   | { type: 'BRAIN_RUNTIME_ERROR'; error: StepRuntimeError }
   | { type: 'INSPECT_TOGGLED'; enabled: boolean }
   /** The brain stopped; `startError` says why it couldn't start, while it stays stopped for that reason */

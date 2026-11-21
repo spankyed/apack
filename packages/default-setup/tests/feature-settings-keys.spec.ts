@@ -34,8 +34,8 @@ describe('feature settings identities', () => {
       type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'threads' }, path: ['sort'], value: 'oldest',
     }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
-    expect(await app.nextEmit('host/settings', 'SETTINGS_REFUSED', { answering: call }))
-      .toMatchObject({ problems: [expect.stringContaining('settings target')] });
+    expect(await app.nextEmit('host/settings', 'ASK_FAILED', { answering: call }))
+      .toMatchObject({ failure: { kind: 'refused', problems: [expect.stringContaining('settings target')] } });
     expect(takeSystemErrors()).toEqual([]);
     expect(stored()).toBeUndefined();
   });

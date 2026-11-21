@@ -1,9 +1,7 @@
-import type { Reply } from '@apackdev/sdk/events';
-import { answer } from '../answer.ts';
 import { broadcastToSurface } from '#generated/events.ts';
 import { EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
-import type { BlockConfig, BlockResponse, MessageEntity, OutgoingThreadsEvents, ThreadCreateData, MessageReferences, ToolActivityEntry } from '#features/threads/be/types.ts';
+import type { BlockConfig, BlockResponse, MessageEntity, ThreadCreateData, MessageReferences, ToolActivityEntry } from '#features/threads/be/types.ts';
 
 import { readMediaBuffer } from '@apackdev/sdk/utils';
 import * as threadsService from './threads.ts';
@@ -456,15 +454,12 @@ export function createThread(
 }
 
 /**
- * Open a thread in the chat: visited (`visitThread`), and the chat told to show it — the window that asked, or, from an action, which has no asker, every
- * window, as `answer` decides.
+ * Open a thread in the chat of every window: visited (`visitThread`), and the chat told to show it. For an action, which
+ * no window is waiting on; a window that asks to open a thread is answered instead, and opens it itself.
  */
-export function showThread(
-  threadId: EARS.EntityId,
-  options: { restore?: boolean; reply?: Reply<OutgoingThreadsEvents> } = {},
-): void {
+export function showThread(threadId: EARS.EntityId, options: { restore?: boolean } = {}): void {
   visitThread(threadId, options);
-  answer(options.reply, { type: 'SHOW_THREAD', threadId, ...(options.restore && { restore: options.restore }) });
+  broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId, ...(options.restore && { restore: options.restore }) });
 }
 
 /**

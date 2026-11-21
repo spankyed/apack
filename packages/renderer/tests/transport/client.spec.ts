@@ -58,10 +58,10 @@ it('announces a connected shell only after a fresh validated settings snapshot o
       const message = mutate.mock.calls.at(-1)![0] as import('@apackdev/sdk/events').Message;
       expect(message.event.type).toBe('GET_SETTINGS');
       handlers.onData({ to: 'host/settings', answering: message.call, event: {
-        type: 'SETTINGS_LOADED', snapshot: {
+        type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot: {
           runId, revision: 0, status: 'ready', values: { app: { hotkeys: {}, personal: {}, projects: [] }, packs: {}, features: {} },
           catalog: { revision: 0, app: { schema: { type: 'object' }, defaults: {} }, packs: {}, features: {}, dependencies: {} },
-        },
+        } },
       } });
       await vi.waitFor(() => expect(onConnected).toHaveBeenCalledTimes(runId === 'first' ? 1 : 2));
       if (runId === 'first') {

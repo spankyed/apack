@@ -1,6 +1,6 @@
-import { entityIs } from '@apackdev/sdk/fe'
+import { askId, endedAsk, entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
-import { and, assign, setup, type ActorRefFrom } from 'xstate'
+import { and, assign, enqueueActions, setup, stopChild, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import {
@@ -9,10 +9,11 @@ import {
   type TrailClickEvent,
 } from '@apackdev/sdk/fe'
 import type { Contract, ActionsContext, ActionsInboxEvent } from './contract.ts'
-import type { OutgoingActionEvents } from '#features/actions/be/types.ts'
+import type { UntypedAskOutcome } from '@apackdev/sdk/events'
+import { outcomeOf } from '@apackdev/sdk/helpers'
 import type { ActionEntity, ActionParameter } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
-import { sendToSystem } from '#generated/events.ts'
+import { fromAsk } from '#generated/events.ts'
 import { Trash2 } from 'lucide-vue-next'
 import { contextMenuFn } from '@apackdev/sdk/fe'
 
@@ -26,6 +27,7 @@ export type ActionsState = ActorRefFrom<typeof actionsState>
 export const ACTIONS_PAGE_SIZE = 20
 
 type UIEvent =
+  | { type: 'CLEAR_WRITE_ERROR' }
   | ActionsInboxEvent
   | { type: 'ACTION.SAVE' }
   /**
@@ -46,19 +48,24 @@ type UIEvent =
   | { type: 'TOGGLE_METADATA_SECTION'; show: boolean }
   | { type: 'FILTER.TOGGLE_CATEGORY'; categoryName: string }
   | { type: 'FILTER.CLEAR' }
-  // Import/Export events
-  | { type: 'ACTIONS.IMPORT'; actions: any[] }
-  | { type: 'ACTIONS.RESET_IMPORT_STATUS' }
-  | { type: 'ACTIONS.EXPORT'; directory: string }
-  | { type: 'ACTIONS.RESET_EXPORT_STATUS' }
 
-export type ActionsEvents = OpenEntity | UIEvent | OutgoingActionEvents | TrailClickEvent
+/** One of this window's writes ended: the done event of the ask spawned for it, which says whether it was refused */
+type WriteEnded = { type: `xstate.done.actor.write.${number}`; output: UntypedAskOutcome; actorId: string }
+
+export type ActionsEvents = OpenEntity | UIEvent | TrailClickEvent | WriteEnded
+
 const typeOf = safeEvents<ActionsEvents>()
 
 const actionsState = setup({
   types: {
     context: {} as ActionsContext,
     events: {} as ActionsEvents,
+  },
+  actors: {
+    // This window's writes. Each is asked on its own, so one refused says so whatever else is under way
+    createAction: fromAsk('actions', 'CREATE_ACTION'),
+    updateAction: fromAsk('actions', 'UPDATE_ACTION'),
+    deleteAction: fromAsk('actions', 'DELETE_ACTION'),
   },
   actions: {
     // The list shows no action, so reopening one fills its form afresh from what its view reads then
@@ -105,61 +112,37 @@ const actionsState = setup({
       formFor: undefined,
     }),
 
-    sendSaveAction: ({ context }) => {
-      // Determine if creating or updating based on selectedActionId
-      const isCreating = !context.selectedActionId;
+    sendSaveAction: enqueueActions(({ context, enqueue }) => {
+      // Creating or updating, by whether one is open
+      if (!context.selectedActionId) enqueue.spawnChild('createAction', { id: askId('write'), input: context.formData })
+      else enqueue.spawnChild('updateAction', { id: askId('write'), input: { actionId: context.selectedActionId, ...context.formData } })
+    }),
 
-      if (isCreating) {
-        // Create new action
-        sendToSystem(id, {
-          type: 'CREATE_ACTION',
-          ...context.formData,
-        })
-      } else {
-        // Update existing action
-        sendToSystem(id, {
-          type: 'UPDATE_ACTION',
-          actionId: context.selectedActionId!,
-          ...context.formData,
-        })
-      }
-    },
-
-    sendDeleteAction: ({ event }) => {
+    sendDeleteAction: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.DELETE', event);
-      sendToSystem(id, {
-        type: 'DELETE_ACTION',
-        actionId: ev.actionId,
-      });
-    },
+      enqueue.spawnChild('deleteAction', { id: askId('write'), input: { actionId: ev.actionId } })
+    }),
 
-    updateActionInput: ({ event }) => {
+    updateActionInput: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.UPDATE_INPUT', event);
-      sendToSystem(id, {
-        type: 'UPDATE_ACTION',
-        actionId: ev.actionId,
-        input: ev.input,
-      });
-    },
+      enqueue.spawnChild('updateAction', { id: askId('write'), input: { actionId: ev.actionId, input: ev.input } })
+    }),
 
-    createActionInline: ({ event }) => {
+    createActionInline: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.CREATE_INLINE', event);
-      sendToSystem(id, {
-        type: 'CREATE_ACTION',
-        label: ev.label,
-        actionFn: ev.actionFn,
-        input: ev.input,
-      });
-    },
+      enqueue.spawnChild('createAction', { id: askId('write'), input: { label: ev.label, actionFn: ev.actionFn, input: ev.input } })
+    }),
 
-    updateActionLabel: ({ event }) => {
+    updateActionLabel: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.UPDATE_LABEL', event);
-      sendToSystem(id, {
-        type: 'UPDATE_ACTION',
-        actionId: ev.actionId,
-        label: ev.label,
-      });
-    },
+      enqueue.spawnChild('updateAction', { id: askId('write'), input: { actionId: ev.actionId, label: ev.label } })
+    }),
+
+    /** A write this window asked for and did not get, shown until dismissed */
+    showRefusal: assign(({ event }) => {
+      const output = outcomeOf<UntypedAskOutcome>(event)
+      return output.ok ? {} : { writeError: output.failure.message }
+    }),
 
     /* ── form updates ────────────────────────────────────── */
     updateFormLabel: assign(({ event, context }) => {
@@ -252,92 +235,6 @@ const actionsState = setup({
       };
     }),
 
-    /* ── Actions Import actions ────────────────────────────── */
-    setImportingActions: assign(({ context }) => ({
-      actionsImport: {
-        ...context.actionsImport,
-        status: 'importing' as const,
-      },
-    })),
-
-    sendImportActions: ({ event }) => {
-      const ev = typeOf('ACTIONS.IMPORT', event);
-      sendToSystem(id, {
-        type: 'IMPORT_ACTIONS',
-        actions: ev.actions,
-      });
-    },
-
-    handleActionsImported: assign(({ event }) => {
-      const ev = typeOf('ACTIONS_IMPORTED', event);
-      return {
-        actionsImport: {
-          status: 'success' as const,
-          errors: ev.errors || [],
-          importedCount: ev.count,
-        },
-      };
-    }),
-
-    handleActionsImportFailed: assign(({ event }) => {
-      const ev = typeOf('ACTIONS_IMPORT_FAILED', event);
-      return {
-        actionsImport: {
-          status: 'error' as const,
-          errors: ev.errors,
-          importedCount: 0,
-        },
-      };
-    }),
-
-    resetImportActionsStatus: assign({
-      actionsImport: { status: 'idle' as const, errors: [], importedCount: 0 },
-    }),
-
-    /* ── Actions Export actions ────────────────────────────── */
-    setExportingActions: assign(({ context }) => ({
-      actionsExport: {
-        ...context.actionsExport,
-        status: 'exporting' as const,
-      },
-    })),
-
-    sendExportActions: ({ event }) => {
-      const ev = typeOf('ACTIONS.EXPORT', event);
-      sendToSystem(id, {
-        type: 'EXPORT_ACTIONS',
-        directory: ev.directory,
-      });
-    },
-
-    handleActionsExported: assign(({ event }) => {
-      const ev = typeOf('ACTIONS_EXPORTED', event);
-      return {
-        actionsExport: {
-          status: 'success' as const,
-          errors: [],
-          filePath: ev.filePath,
-          actionCount: ev.actionCount,
-        },
-      };
-    }),
-
-    handleActionsExportFailed: assign(({ event }) => {
-      const ev = typeOf('ACTIONS_EXPORT_FAILED', event);
-      return {
-        actionsExport: {
-          status: 'error' as const,
-          errors: ev.errors,
-          filePath: '',
-          actionCount: 0,
-        },
-      };
-    }),
-
-    resetExportActionsStatus: assign({
-      actionsExport: { status: 'idle' as const, errors: [], filePath: '', actionCount: 0 },
-    }),
-
     /* ── the list ─────────────────────────────────────────── */
     showMore: assign(({ context }) => ({ listLimit: context.listLimit + ACTIONS_PAGE_SIZE })),
 
@@ -361,9 +258,9 @@ const actionsState = setup({
   guards: { entityIs: entityIs<Contract['opens']>,
     targetIs,
     /** Whether what was loaded is the action open now, rather than one the user has since moved on from */
-    loadsSelected: ({ context, event }) => (event as { actionId?: string }).actionId === context.selectedActionId,
+    loadsSelected: ({ context, event }) => typeOf('ACTION.LOADED', event).actionId === context.selectedActionId,
     /** Whether the open action is gone */
-    loadsNothing: ({ event }) => (event as { action?: unknown }).action === null,
+    loadsNothing: ({ event }) => typeOf('ACTION.LOADED', event).action === null,
   },
 }).createMachine({
   id,
@@ -373,18 +270,8 @@ const actionsState = setup({
     selectedLabel: undefined,
     formFor: undefined,
     listLimit: ACTIONS_PAGE_SIZE,
+    writeError: null,
     selectedCategories: [], // Filter state
-    actionsImport: {
-      status: 'idle',
-      errors: [],
-      importedCount: 0,
-    },
-    actionsExport: {
-      status: 'idle',
-      errors: [],
-      filePath: '',
-      actionCount: 0,
-    },
     formData: {
       label: '',
       description: '',
@@ -395,6 +282,9 @@ const actionsState = setup({
     },
   },
   on: {
+    // What a write changed reaches every window through the views, so a landed one needs nothing here
+    'xstate.done.actor.write.*': { actions: ['showRefusal', stopChild(({ event }) => endedAsk(event))] },
+    CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Action' } }, target: '.detail', actions: 'selectAction' },
     'ACTION.SELECT': { target: '.detail', actions: 'selectAction' },
     'VIEW_LIST': {
@@ -406,32 +296,6 @@ const actionsState = setup({
     'ACTIONS.LOAD_MORE': { actions: 'showMore' },
     'FILTER.TOGGLE_CATEGORY': { actions: 'toggleCategoryFilter' },
     'FILTER.CLEAR': { actions: 'clearCategoryFilters' },
-    // Import events
-    'ACTIONS.IMPORT': {
-      actions: ['setImportingActions', 'sendImportActions'],
-    },
-    'ACTIONS.RESET_IMPORT_STATUS': {
-      actions: 'resetImportActionsStatus',
-    },
-    ACTIONS_IMPORTED: {
-      actions: 'handleActionsImported',
-    },
-    ACTIONS_IMPORT_FAILED: {
-      actions: 'handleActionsImportFailed',
-    },
-    // Export events
-    'ACTIONS.EXPORT': {
-      actions: ['setExportingActions', 'sendExportActions'],
-    },
-    'ACTIONS.RESET_EXPORT_STATUS': {
-      actions: 'resetExportActionsStatus',
-    },
-    ACTIONS_EXPORTED: {
-      actions: 'handleActionsExported',
-    },
-    ACTIONS_EXPORT_FAILED: {
-      actions: 'handleActionsExportFailed',
-    },
     'ACTION.UPDATE_INPUT': { actions: 'updateActionInput' },
     'ACTION.CREATE_INLINE': { actions: 'createActionInline' },
     'ACTION.UPDATE_LABEL': { actions: 'updateActionLabel' },

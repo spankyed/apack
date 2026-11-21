@@ -7,8 +7,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -74,9 +74,8 @@ async function changed(change: object, make: () => unknown) {
   await announcedSince(mark, change);
 }
 async function diffOf(file: string, staged: boolean) {
-  const call = await app!.send('code', { type: 'commit.GET_GIT_DIFF', path: file, staged }, { sender: CODE, client: 'c-main' });
-  const answer = await app!.nextEmit('code', 'commit.DIFF_RECEIVED', { answering: call });
-  const { originalContent, modifiedContent } = answer.data as { originalContent?: string; modifiedContent?: string };
+  const call = app!.ask('code', { type: 'commit.GET_GIT_DIFF', path: file, staged }, { client: 'c-main' });
+  const { originalContent, modifiedContent } = await answered(call) as { originalContent?: string; modifiedContent?: string };
   return { originalContent, modifiedContent };
 }
 

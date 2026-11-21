@@ -94,25 +94,41 @@
         </button>
       </div>
     </div>
+    <ToastNotification ref="toast" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import ToastNotification from '@apackdev/ui/design/ToastNotification'
+import { askUnderWay, useSurface } from '@apackdev/sdk/fe'
 
 import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDrag'
 import { useSelector } from '@xstate/vue'
 import { type CodeState, type OpenFile, setEditorSelectionGetter, isEditableDiff } from '../state.ts'
 import { GitCompare, FileCode, Terminal } from 'lucide-vue-next'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
 import FileEditor from '#features/code/fe/canvas/FileEditor.vue'
 import QuickOpenPalette from '#features/code/fe/canvas/QuickOpenPalette.vue'
 import { reorderTabs } from '../utils/tab-management.ts'
 import { panelChild } from '../features/children.ts';
+import { HUNK } from '../features/commit/state.ts'
 
 const actor: CodeState = useSurface()
 const explorerActor = panelChild(actor, 'explorer')
 const terminalActor = panelChild(actor, 'terminal')
+
+// A terminal ask of this window's that was not done is told here, the one place drawn whenever the surface is: the
+// system answers it to this window alone. One that ended while the surface was not shown is told as it is shown.
+// Telling and saying so are one step, run once the toast is drawn: the machine drops exactly the failures told, so
+// none is told twice and one noted meanwhile is told by the next run
+const toast = ref<InstanceType<typeof ToastNotification>>()
+const terminalFailures = useSelector(terminalActor, (state) => state?.context.failures ?? [])
+watchPostEffect(() => {
+  const told = terminalFailures.value
+  if (!toast.value || told.length === 0) return
+  for (const failure of told) toast.value.error('Terminal error', failure.message)
+  terminalActor?.send({ type: 'terminal.FAILURES_TOLD', told })
+})
 const commitActor = panelChild(actor, 'commit')
 
 // State selectors
@@ -120,7 +136,7 @@ const openFiles = useSelector(actor, (state) => state.context.openFiles)
 const activeFilePath = useSelector(actor, (state) => state.context.activeFilePath)
 const baseDirectory = useSelector(actor, (state) => state.context.baseDirectory)
 const tabGroups = useSelector(actor, (state) => state.context.tabGroups)
-const isApplyingHunk = useSelector(commitActor, (state) => state?.context.isApplyingHunk === true)
+const isApplyingHunk = useSelector(commitActor, (state) => state !== undefined && askUnderWay(state.context.asking, HUNK))
 // The pieces staged from the diff on screen: the commit panel keeps them per diff tab
 const appliedHunksByTab = useSelector(commitActor, (state) => state?.context.appliedHunks ?? {})
 const appliedHunks = computed(() => appliedHunksByTab.value[activeFilePath.value ?? ''] ?? [])

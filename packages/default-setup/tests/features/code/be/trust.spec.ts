@@ -8,8 +8,8 @@ import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
 import { featureSettings } from '#generated/settings.ts';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -21,7 +21,7 @@ afterEach(async () => {
 
 const git = (cwd: string, ...args: string[]) =>
   execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 
 /** The code system over a repository whose configuration names a file monitor, which says it ran by making a file */
 async function codeOverARepositoryThatRunsAProgram() {
@@ -44,14 +44,14 @@ async function codeOverARepositoryThatRunsAProgram() {
   await app.settle();
   return { directory, program, ran: () => fs.existsSync(ran), repository: path.join(directory, '.git') };
 }
-const askForStatus = () => app!.send('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
+const askForStatus = () => app!.ask('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
 
 it('tells the window what the repository would have git run, having run none of it', async () => {
   const { directory, program, ran, repository } = await codeOverARepositoryThatRunsAProgram();
 
-  const asked = await askForStatus();
+  const asked = askForStatus();
 
-  expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: asked })).data).toMatchObject({
+  expect(await refused(asked)).toMatchObject({
     code: 'untrusted',
     trust: { repository, asks: [{ kind: 'setting', key: 'core.fsmonitor', value: program, file: path.join(directory, '.git', 'config') }] },
   });
@@ -60,12 +60,12 @@ it('tells the window what the repository would have git run, having run none of 
 
 it('reads the repository once the window trusts it, and remembers that in the code settings', async () => {
   const { ran, repository } = await codeOverARepositoryThatRunsAProgram();
-  await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: await askForStatus() });
+  await refused(askForStatus());
 
-  const trusted = await app!.send('code', { type: 'commit.TRUST_REPOSITORY', repository }, asWindow);
-  expect((await app!.nextEmit('code', 'commit.REPOSITORY_TRUSTED', { answering: trusted })).data).toEqual({ repository });
+  const trusted = app!.ask('code', { type: 'commit.TRUST_REPOSITORY', repository }, asWindow);
+  expect(await answered(trusted)).toEqual({ repository });
 
-  const status = (await app!.nextEmit('code', 'commit.STATUS_RECEIVED', { answering: await askForStatus() })).data as { files: { path: string }[] };
+  const status = await answered(askForStatus()) as { files: { path: string }[] };
   expect(status.files.map(file => file.path)).toEqual(['a.txt']);
   expect(ran(), 'git runs what the repository names, as it does in a terminal').toBe(true);
   expect(featureSettings.forFeature('code').get().trustedRepositories).toEqual([repository]);
@@ -75,12 +75,12 @@ it('reads the repository once the window trusts it, and remembers that in the co
 it('does not trust a repository other than the one it is showing', async () => {
   const { ran } = await codeOverARepositoryThatRunsAProgram();
 
-  const trusted = await app!.send('code', { type: 'commit.TRUST_REPOSITORY', repository: '/somewhere/else/.git' }, asWindow);
+  const trusted = app!.ask('code', { type: 'commit.TRUST_REPOSITORY', repository: '/somewhere/else/.git' }, asWindow);
 
-  expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: trusted })).data).toMatchObject({
+  expect(await refused(trusted)).toMatchObject({
     message: 'That is not the repository this panel is showing',
   });
   expect(featureSettings.forFeature('code').get().trustedRepositories).toEqual([]);
-  expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: await askForStatus() })).data).toMatchObject({ code: 'untrusted' });
+  expect(await refused(askForStatus())).toMatchObject({ code: 'untrusted' });
   expect(ran()).toBe(false);
 });

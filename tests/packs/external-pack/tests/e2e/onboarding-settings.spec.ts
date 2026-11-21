@@ -38,11 +38,10 @@ test('real onboarding writes app and feature preferences without a settings asse
         threads: query.all().withRole('assistant_birth').pick(['context', 'topic'])
       };` });
     });
-    // The component's useSurface send supplies the reply address. Sending a raw actor event from
-    // evaluate would bypass that delivery context and leave the query without an asker.
     await appPage.getByRole('button', { name: 'Execute', exact: true }).click();
-    await expect.poll(() => appPage.evaluate(() => (window as any).applicationState.system
-      .get('default-setup/database').getSnapshot().context.pendingQueryCall)).toBeNull();
+    // The query is an ask the surface spawned as `query`, which it holds for as long as the ask is under way
+    await expect.poll(() => appPage.evaluate(() => 'query' in (window as any).applicationState.system
+      .get('default-setup/database').getSnapshot().children)).toBe(false);
     const result = await appPage.evaluate(() => {
       const context = (window as any).applicationState.system.get('default-setup/database').getSnapshot().context;
       return { value: context.queryResult, error: context.error };

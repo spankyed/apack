@@ -984,9 +984,12 @@ import { whatCanBeDone, type Availability, type UnavailableReason } from '@apack
 
 import { computed, ref, nextTick, watch } from 'vue'
 import { useSelector } from '@xstate/vue'
-import { useSurface, useShell } from '@apackdev/sdk/fe'
+import { askUnderWay, useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
-import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
+import {
+  MOVE_OPERATION, PULL, PUSH, SIGN_IN, SPEED_UP, START_OPERATION, STASH, STATUS_SHOWN, checkoutUnderWay, commitUnderWay,
+  worktreeChangeUnderWay, type GitStatusFile,
+} from '#features/code/fe/features/commit/state.ts'
 import type { CommitTrailer, ConflictKind, OperationMove, ProgressDuring } from '#features/code/be/types.ts'
 import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText, GitPullRequestArrow, Pencil, Tag, Upload, Archive } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
@@ -1026,7 +1029,7 @@ const gitBranch = useSelector(commitActor, (state) => state.context.gitBranch)
 const gitError = useSelector(commitActor, (state) => state.context.gitError)
 /** The hook of the repository's that refused the last command, whose output is shown as its own */
 const refusingHook = useSelector(commitActor, (state) => state.context.gitFailure?.hook ?? null)
-const isGitLoading = useSelector(commitActor, (state) => state.context.isGitLoading)
+const isGitLoading = useSelector(commitActor, (state) => askUnderWay(state.context.asking, STATUS_SHOWN))
 const selectedGitFile = useSelector(commitActor, (state) => state.context.selectedGitFile)
 const commitMessage = useSelector(commitActor, (state) => state.context.commitMessage)
 const trailers = useSelector(commitActor, (state) => state.context.trailers)
@@ -1060,13 +1063,13 @@ const pullTitle = computed(() => {
 const branchStanding = useSelector(commitActor, (state) => state.context.branchStanding)
 const tags = useSelector(commitActor, (state) => state.context.tags)
 const branchInput = useSelector(commitActor, (state) => state.context.branchInput)
-const isCheckingOutBranch = useSelector(commitActor, (state) => state.context.isCheckingOutBranch)
+const isCheckingOutBranch = useSelector(commitActor, (state) => checkoutUnderWay(state.context.asking))
 const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
 const isStatusTruncated = useSelector(commitActor, (state) => state.context.isStatusTruncated)
 const isWatchingRepository = useSelector(commitActor, (state) => state.context.isWatchingRepository)
 const isWatchSilent = useSelector(commitActor, (state) => state.context.isWatchSilent)
 const slowStatus = useSelector(commitActor, (state) => state.context.slowStatus)
-const isSpeedingUpStatus = useSelector(commitActor, (state) => state.context.isSpeedingUpStatus)
+const isSpeedingUpStatus = useSelector(commitActor, (state) => askUnderWay(state.context.asking, SPEED_UP))
 /** What turning the speed-ups on would turn on, of those that are off */
 const slowStatusRemedy = computed(() => {
   const off = [
@@ -1078,7 +1081,7 @@ const slowStatusRemedy = computed(() => {
 const operation = useSelector(commitActor, (state) => state.context.operation)
 const isFetchSuspended = useSelector(commitActor, (state) => state.context.isFetchSuspended)
 const fetchSignIn = useSelector(commitActor, (state) => state.context.fetchSignIn)
-const isSettingUpSignIn = useSelector(commitActor, (state) => state.context.isSettingUpSignIn)
+const isSettingUpSignIn = useSelector(commitActor, (state) => askUnderWay(state.context.asking, SIGN_IN))
 // The help belongs to the error it came with, and goes when that error does
 const missingBranch = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.missingBranch ?? null : null))
 const errorSignIn = useSelector(commitActor, (state) => (state.context.gitError ? state.context.gitFailure?.signIn ?? null : null))
@@ -1088,8 +1091,8 @@ const ownershipRequest = useSelector(commitActor, (state) => (state.context.gitE
 /** The failures for which git read nothing, so the panel says nothing of the working tree */
 const NOTHING_READ = new Set(['untrusted', 'unsafe-ownership', 'git-not-found', 'developer-tools-missing', 'git-too-old'])
 const gitNeverRan = useSelector(commitActor, (state) => !!state.context.gitError && NOTHING_READ.has(state.context.gitFailure?.code ?? ''))
-const isMovingOperation = useSelector(commitActor, (state) => state.context.isMovingOperation)
-const isStartingOperation = useSelector(commitActor, (state) => state.context.isStartingOperation)
+const isMovingOperation = useSelector(commitActor, (state) => askUnderWay(state.context.asking, MOVE_OPERATION))
+const isStartingOperation = useSelector(commitActor, (state) => askUnderWay(state.context.asking, START_OPERATION))
 const mergePreview = useSelector(commitActor, (state) => state.context.mergePreview)
 /** What merging a branch in would do, said before the click once it is known */
 const mergeTitle = (branch: string): string => {
@@ -1109,16 +1112,16 @@ const startOperation = (kind: 'merge' | 'rebase', target: string) => {
 }
 const commitsAhead = useSelector(commitActor, (state) => state.context.commitsAhead)
 const commitsBehind = useSelector(commitActor, (state) => state.context.commitsBehind)
-const isPushing = useSelector(commitActor, (state) => state.context.isPushing)
+const isPushing = useSelector(commitActor, (state) => askUnderWay(state.context.asking, PUSH))
 const pushStopped = useSelector(commitActor, (state) => state.context.pushStopped)
-const isPulling = useSelector(commitActor, (state) => state.context.isPulling)
+const isPulling = useSelector(commitActor, (state) => askUnderWay(state.context.asking, PULL))
 const isGeneratingMessage = useSelector(commitActor, (state) => state.context.isGeneratingMessage)
 const stashList = useSelector(commitActor, (state) => state.context.stashList)
 const lineCounts = useSelector(commitActor, (state) => state.context.lineCounts)
 const stashFiles = useSelector(commitActor, (state) => state.context.stashFiles)
-const isStashing = useSelector(commitActor, (state) => state.context.isStashing)
+const isStashing = useSelector(commitActor, (state) => askUnderWay(state.context.asking, STASH))
 const worktreeList = useSelector(commitActor, (state) => state.context.worktreeList)
-const isWorktreeLoading = useSelector(commitActor, (state) => state.context.isWorktreeLoading)
+const isWorktreeLoading = useSelector(commitActor, (state) => worktreeChangeUnderWay(state.context.asking))
 const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)
 
 // Local state
@@ -1254,7 +1257,7 @@ const reasonOf = (availability: Availability) => (availability.possible ? null :
 const whyNot = computed(() => ({ commit: reasonOf(canBeDone.value.commit), push: reasonOf(canBeDone.value.push), pull: reasonOf(canBeDone.value.pull) }))
 const syncTitle = computed(() => (commitsAhead.value > 0 ? whyNot.value.push ?? 'Push' : whyNot.value.pull ?? pullTitle.value))
 
-const isCommitting = useSelector(commitActor, (state) => state.context.isCommitting)
+const isCommitting = useSelector(commitActor, (state) => commitUnderWay(state.context.asking))
 const canCommit = computed(() => !!commitMessage.value.trim() && stagedFiles.value.length > 0 && canBeDone.value.commit.possible && !isCommitting.value)
 
 const isNoDirectoryError = computed(() => {

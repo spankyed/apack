@@ -50,7 +50,7 @@ export { Ears }
 
 // @public
 export interface FeClient {
-    send(message: Message): void;
+    send(message: Message, refused?: () => void): void;
     watchView(request: ViewRequest, observer: (update: ViewUpdate) => void): () => void;
 }
 

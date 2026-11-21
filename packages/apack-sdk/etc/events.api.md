@@ -5,6 +5,15 @@
 ```ts
 
 import { EARS } from '@elmdb/ears';
+import { PromiseActorLogic } from 'xstate';
+
+// @internal
+export const _answered: (asked: string, answer: unknown) => AskAnswered;
+
+// @public
+export type AnswerPayload<D> = D extends {
+    answer: infer Answer;
+} ? Answer : void;
 
 // @public
 export const answersCall: (event: {
@@ -12,17 +21,36 @@ export const answersCall: (event: {
 }, outstanding: string | null | undefined) => boolean;
 
 // @public
-export function answerWith<E extends {
-    type: string;
-}>(reply: Reply<E> | undefined, work: () => E | PromiseLike<E>, options: AnswerWithOptions<E>): Promise<void>;
+export const ASK_ANSWER_TYPES: readonly ["ASK_ANSWERED", "ASK_FAILED", "ASK_PROGRESS"];
 
 // @public
-export interface AnswerWithOptions<E extends {
-    type: string;
-}> {
-    readonly failed: (error: unknown) => E;
-    readonly unasked?: (error: unknown) => void;
+export const ASK_CANCELLED = "ASK_CANCELLED";
+
+// @public
+export type AskAnswered<K extends string = string, A = unknown> = {
+    type: 'ASK_ANSWERED';
+    asked: K;
+    answer: A;
+};
+
+// @public
+export interface AskDeclaration {
+    answer?: unknown;
+    args?: object;
+    progress?: unknown;
+    refuses?: Record<string, object>;
 }
+
+// @public
+export interface _AskDelivery {
+    // (undocumented)
+    readonly kinds: readonly string[];
+    // (undocumented)
+    taken: boolean;
+}
+
+// @internal
+export const _askEnded: (call: string | undefined) => void;
 
 // @internal
 export type _Asker =
@@ -43,6 +71,91 @@ export type _Asker =
     ref: string;
 };
 
+// @public
+export class AskError extends Error {
+    constructor(kind: string, message: string, data?: object | undefined);
+    // (undocumented)
+    readonly data?: object | undefined;
+    // (undocumented)
+    readonly kind: string;
+}
+
+// @public
+export type AskEventOf<C, K extends AskName<C>> = {
+    type: K;
+} & AskPayload<ContractAsks<C>[K]>;
+
+// @public
+export type AskEventsOf<C> = {
+    [K in AskName<C>]: AskEventOf<C, K>;
+}[AskName<C>];
+
+// @public
+export type AskFailed<K extends string = string, F extends {
+    kind: string;
+} = AskFailure> = {
+    type: 'ASK_FAILED';
+    asked: K;
+    failure: F;
+};
+
+// @public
+export type AskFailure<D = {}> = {
+    [K in DeclaredFailureKind<D>]: {
+        readonly kind: K;
+        readonly message: string;
+    } & Omit<DeclaredFailures<D>[K], 'kind' | 'message'>;
+}[DeclaredFailureKind<D>] | {
+    readonly kind: StandardFailureKind;
+    readonly message: string;
+};
+
+// @internal
+export function _askFailureOf(error: unknown, declared?: readonly string[]): {
+    kind: string;
+    message: string;
+};
+
+// @public
+export type AskName<C> = keyof ContractAsks<C> & string;
+
+// @internal
+export function _askOnConnection(client: string, to: string, event: {
+    type: string;
+    [key: string]: unknown;
+}, options?: AskOptions): Promise<UntypedAskOutcome>;
+
+// @public
+export interface AskOptions<P = unknown> {
+    heard?: (update: P) => void;
+    signal?: AbortSignal;
+}
+
+// @public
+export type AskOutcome<D> = Outcome<AnswerPayload<D>, AskFailure<D>>;
+
+// @public
+export type AskPayload<D> = D extends {
+    args: infer Payload;
+} ? Payload : {};
+
+// @public
+export type AskProgressed<K extends string = string, P = unknown> = {
+    type: 'ASK_PROGRESS';
+    asked: K;
+    update: P;
+};
+
+// @public
+export type AsksEvents<A> = {
+    [K in keyof A & string]: {
+        type: K;
+    } & AskPayload<A[K]>;
+}[keyof A & string];
+
+// @internal
+export function _askSignal(call: string | undefined, client: string | undefined): AbortSignal;
+
 // @internal
 export const _CALL_KEY = "_call";
 
@@ -62,7 +175,18 @@ export interface CallOptions {
 }
 
 // @internal
+export function _cancelAsk(message: Pick<Message, 'answering' | 'event'>): boolean;
+
+// @internal
 export function _clientOf(delivery: _Delivery | undefined): string | undefined;
+
+// @internal
+export function _connectionSignal(client: string | undefined): AbortSignal;
+
+// @public
+export type ContractAsks<C> = C extends {
+    asks: infer Asks;
+} ? Asks : {};
 
 // @public
 export function createSends(input?: SendBinding): {
@@ -82,16 +206,30 @@ export function createSends(input?: SendBinding): {
         type: string;
         [key: string]: unknown;
     }, options?: CallOptions): string;
+    ask(to: SystemTarget, event: {
+        type: string;
+        [key: string]: unknown;
+    }, options?: AskOptions): Promise<UntypedAskOutcome>;
+    fromAsk(to: SystemTarget, type: string): PromiseActorLogic<UntypedAskOutcome, object | undefined>;
 };
 
 // @internal
 export function _currentDelivery(): _Delivery | undefined;
 
 // @public
-export function defineEvents<P extends SurfaceEvents, S extends SystemEventMap>(packId: string): TypedEvents<P, S>;
+export type DeclaredFailureKind<D> = keyof DeclaredFailures<D> & string;
+
+// @public
+export type DeclaredFailures<D> = D extends {
+    refuses: infer Fails;
+} ? Fails : {};
+
+// @public
+export function defineEvents<P extends SurfaceEvents, S extends SystemEventMap, A extends SystemAskMap = {}>(packId: string): TypedEvents<P, S, A>;
 
 // @internal
 export interface _Delivery {
+    ask?: _AskDelivery;
     asker?: _Asker;
     call?: string;
     event?: object;
@@ -104,6 +242,15 @@ export const eventTypes: <E extends {
 }>() => <const T extends readonly TypeOfEvent<E>[]>(...types: T & ([Missing<E, T>] extends [never] ? unknown : {
     missing: Missing<E, T>;
 })) => T;
+
+// @internal
+export const _failedAnswer: (asked: string, failure: {
+    kind: string;
+    message: string;
+}) => AskFailed<string, {
+    kind: string;
+    message: string;
+}>;
 
 // @public
 export type FeatureSettingsUpdated = {
@@ -162,6 +309,9 @@ export type HostSurfaceEvents = {
 };
 
 // @public
+export type HostSystemAsks = {};
+
+// @public
 export type HostSystemEvents = {
     'host/bus': {
         type: 'PACK_CHANGED';
@@ -174,6 +324,14 @@ export type HostSystemEvents = {
 
 // @public
 export type IncomingEventsOf<C> = ContractIncoming<C>;
+
+// @public
+export const isAskAnswer: (event: {
+    type: string;
+}) => event is AskAnswered | AskFailed;
+
+// @internal
+export const _isPendingAsk: (call: string | undefined) => boolean;
 
 // @public
 export interface Message {
@@ -214,6 +372,20 @@ export type OpenEntity = {
 // @public
 export type OutgoingEventsOf<C> = ContractOutgoing<C>;
 
+// @internal
+export const _progressed: (asked: string, update: unknown) => AskProgressed;
+
+// @public
+export type ProgressEventOf<C, K extends AskName<C>> = {
+    type: `${K}.progress`;
+    update: ProgressPayload<ContractAsks<C>[K]>;
+};
+
+// @public
+export type ProgressPayload<D> = D extends {
+    progress: infer Progress;
+} ? Progress : never;
+
 // @public
 export type PublicSurfaceInboxOf<C> = C extends {
     inbox: {
@@ -230,6 +402,12 @@ export type Qualified<PackId extends string, M> = {
 
 // @public
 export const recordCall: <T>(pending: Record<string, T>, call: string, value: T) => Record<string, T>;
+
+// @internal
+export const _refuse: (kind: string, message: string, data?: object) => AskError;
+
+// @public
+export type RefuseOf<D> = <K extends DeclaredFailureKind<D>>(kind: K, message: string, ...data: {} extends DeclaredFailures<D>[K] ? [data?: DeclaredFailures<D>[K]] : [data: DeclaredFailures<D>[K]]) => AskError;
 
 // @public
 export type Reply<E extends {
@@ -261,6 +439,9 @@ export function _sendToLocalSurface(ref: string, event: {
     [key: string]: unknown;
 }): void;
 
+// @internal
+export function _settleAsk(message: Pick<Message, 'answering' | 'event'>): boolean;
+
 // @public
 export const settleCall: <T>(pending: Record<string, T>, event: {
     [key: string]: unknown;
@@ -270,7 +451,10 @@ export const settleCall: <T>(pending: Record<string, T>, event: {
 };
 
 // @public
-export const SURFACE_EVENT_TYPES: readonly ["FEATURE_SETTINGS_UPDATED", "OPEN_ENTITY"];
+export type StandardFailureKind = 'failed' | 'unavailable';
+
+// @public
+export const SURFACE_EVENT_TYPES: readonly ["FEATURE_SETTINGS_UPDATED", "OPEN_ENTITY", "ASK_ANSWERED", "ASK_FAILED", "ASK_PROGRESS"];
 
 // @public
 export type SurfaceEvents = {
@@ -287,6 +471,13 @@ export type SurfaceInboxOf<C> = C extends {
 }> : never;
 
 // @public
+export type SystemAskMap = {
+    [system: string]: {
+        [ask: string]: AskDeclaration;
+    };
+};
+
+// @public
 export type SystemEventMap = {
     [system: string]: {
         type: string;
@@ -299,13 +490,28 @@ export type SystemTarget = string | {
 };
 
 // @public
-export interface TypedEvents<P extends SurfaceEvents, S extends SystemEventMap> {
+export type TypedAsk<A extends SystemAskMap> = (<Id extends keyof A & string, K extends keyof A[Id] & string>(system: Id, event: {
+    type: K;
+} & AskPayload<A[Id][K]>, options?: AskOptions<ProgressPayload<A[Id][K]>>) => Promise<AskOutcome<A[Id][K]>>) & ((target: {
+    role: string;
+}, event: {
+    type: string;
+    [key: string]: unknown;
+}, options?: AskOptions) => Promise<UntypedAskOutcome>);
+
+// @public
+export interface TypedEvents<P extends SurfaceEvents, S extends SystemEventMap, A extends SystemAskMap = {}> {
+    ask: TypedAsk<A>;
     broadcastToSurface: TypedSendToSurface<P>;
+    fromAsk: TypedFromAsk<A>;
     sendToSurface: TypedSendToSurface<P>;
     // (undocumented)
     sendToSystem: TypedSendToSystem<S>;
     sendToWindow: TypedSendToWindow<P>;
 }
+
+// @public
+export type TypedFromAsk<A extends SystemAskMap> = <Id extends keyof A & string, K extends keyof A[Id] & string>(system: Id, type: K) => PromiseActorLogic<AskOutcome<A[Id][K]>, AskPayload<A[Id][K]>>;
 
 // @public
 export type TypedSendToSurface<M extends SurfaceEvents> = (<P extends keyof M & string>(surface: P, event: OneSend<IsUnion<P>, M[P]['type'], M[P]>) => void) & ((surface: FeatureRef, event: FeatureSettingsUpdated) => void);
@@ -327,6 +533,27 @@ export type TypedSendToWindow<M extends SurfaceEvents> = (<P extends keyof M & s
 export type TypeOfEvent<E> = E extends {
     type: infer K extends string;
 } ? K : never;
+
+// @internal
+export const _unavailable: (asked: string, message: string) => AskFailed<string, {
+    kind: string;
+    message: string;
+}>;
+
+// @public
+export function untypedAsk(to: SystemTarget, event: {
+    type: string;
+    [key: string]: unknown;
+}, options?: AskOptions): Promise<UntypedAskOutcome>;
+
+// @public
+export type UntypedAskOutcome = {
+    readonly ok: true;
+    readonly value: unknown;
+} | {
+    readonly ok: false;
+    readonly failure: AskFailure;
+};
 
 // @public
 export function untypedBroadcastToSurface(to: string, event: {

@@ -638,6 +638,18 @@ export async function generatePackFiles(
     }
   }
 
+  /** A feature's system's declared asks, each with the failure kinds its contract gives it */
+  function askKinds(feature: PackFeature): Record<string, string[]> {
+    const contract = contractTarget(feature, 'system');
+    if (!contract) return {};
+    try {
+      return moduleReader().askKindsOf(contract.file, contract.exportName);
+    } catch (err) {
+      (err as Error).message = `Feature "${feature.id}": ${(err as Error).message}`;
+      throw err;
+    }
+  }
+
   /** The event types a feature's system sends, read from its contract */
   function sentEventTypes(feature: PackFeature): string[] {
     return contractTypes(feature, 'system', outgoingEventTypesOf);
@@ -652,11 +664,16 @@ export async function generatePackFiles(
   function eventContracts(): PackEventContracts {
     return compiledEvents ??= Object.fromEntries(packFeatures(manifest)
       .filter(feature => feature.system || feature.surface).map(feature => [feature.id, {
-        ...(feature.system && { system: {
-          incoming: [...new Set([...contractTypes(feature, 'system', (file, name) => moduleReader().incomingEventTypesOf(file, name)),
-            ...(feature.system.events?.incoming ?? [])])].sort(),
-          outgoing: [...new Set(sentEventTypes(feature))].sort(),
-        } }),
+        ...(feature.system && { system: (() => {
+          const asks = askKinds(feature);
+          return {
+            // An ask is an event the system receives, so its name is among what a sender may send it
+            incoming: [...new Set([...contractTypes(feature, 'system', (file, name) => moduleReader().incomingEventTypesOf(file, name)),
+              ...(feature.system.events?.incoming ?? []), ...Object.keys(asks)])].sort(),
+            outgoing: [...new Set(sentEventTypes(feature))].sort(),
+            ...(Object.keys(asks).length > 0 && { asks }),
+          };
+        })() }),
         ...(feature.surface && { surface: { receives: receivedEventTypes(feature) } }),
       }]));
   }
@@ -1705,9 +1722,11 @@ ${views ? views.code : ''}`;
       return `  '${f.id}': ${[...ownSystem, `__accepts_${f.id}`].join(' | ')};`;
     }).join('\n');
     const systemEntries = systemFeatures.map(f => `  '${f.id}': IncomingEventsOf<__SystemContracts['${f.id}']>;`).join('\n');
+    const askEntries = systemFeatures.map(f => `  '${f.id}': ContractAsks<__SystemContracts['${f.id}']>;`).join('\n');
     const pack = `'${manifest.id}'`;
     const depSurfaces = depTypeImports('PackSurfaceEvents');
     const depSystems = depTypeImports('PackSystemEvents');
+    const depAsks = depTypeImports('PackSystemAsks');
     // Every map keyed by ref; the maps pack code sends with name the pack's own features by bare id instead (`WithOwnNames`)
     const qualifiedSurfaces = [
       `Qualified<${pack}, OwnSurfaceEvents>`,
@@ -1719,9 +1738,14 @@ ${views ? views.code : ''}`;
       ...depIds.map((depId) => `Qualified<'${depId}', ${depAlias(depId, 'PackSystemEvents')}>`),
       'HostSystemEvents',
     ].join(' & ');
+    const qualifiedAsks = [
+      `Qualified<${pack}, PackSystemAsks>`,
+      ...depIds.map((depId) => `Qualified<'${depId}', ${depAlias(depId, 'PackSystemAsks')}>`),
+      'HostSystemAsks',
+    ].join(' & ');
     return `${HEADER}
-import { defineEvents, type HostSurfaceEvents, type HostSystemEvents, type IncomingEventsOf${outgoingAliases ? ', type OutgoingEventsOf' : ''}${contracts.size > 0 ? ', type SurfaceInboxOf, type PublicSurfaceInboxOf' : ''}, type Qualified, type WithOwnNames } from '@apackdev/sdk/events';
-${hasSystems ? `import type { SystemContracts as __SystemContracts } from './system-specs.ts';\n` : ''}${acceptsImports ? `${acceptsImports}\n` : ''}${[...depSurfaces.imports, ...depSystems.imports].join('\n')}
+import { defineEvents, type ContractAsks, type HostSurfaceEvents, type HostSystemAsks, type HostSystemEvents, type IncomingEventsOf${outgoingAliases ? ', type OutgoingEventsOf' : ''}${contracts.size > 0 ? ', type SurfaceInboxOf, type PublicSurfaceInboxOf' : ''}, type Qualified, type WithOwnNames } from '@apackdev/sdk/events';
+${hasSystems ? `import type { SystemContracts as __SystemContracts } from './system-specs.ts';\n` : ''}${acceptsImports ? `${acceptsImports}\n` : ''}${[...depSurfaces.imports, ...depSystems.imports, ...depAsks.imports].join('\n')}
 ${[outgoingAliases, acceptsAliases].filter(Boolean).join('\n')}
 
 /**
@@ -1747,6 +1771,11 @@ export type PackSystemEvents = {
 ${systemEntries}
 };
 
+/** Feature id → the asks this pack's system for that feature answers, by name (dependents name it \`${manifest.id}/<feature>\`). */
+export type PackSystemAsks = {
+${askEntries}
+};
+
 /**
  * Every surface this pack's code can send to, by ref: its own, its dependencies' and the host's. A surface owned
  * elsewhere takes the inbox its own pack declares — a pack widens only its own. Actions (\`services.emitter\`)
@@ -1763,7 +1792,13 @@ export type SendableSurfaceEvents = WithOwnNames<${pack}, QualifiedSurfaceEvents
 /** The systems this pack's code sends to: \`QualifiedSystemEvents\`, with its own named by feature id instead of ref */
 export type SendableSystemEvents = WithOwnNames<${pack}, QualifiedSystemEvents>;
 
-export const { broadcastToSurface, sendToWindow, sendToSurface, sendToSystem } = /*#__PURE__*/ defineEvents<SendableSurfaceEvents, SendableSystemEvents>('${manifest.id}');
+/** Every system this pack's code can ask, by ref, with the asks each answers: its own, its dependencies' and the host's. */
+export type QualifiedSystemAsks = ${qualifiedAsks};
+
+/** The systems this pack's code asks: \`QualifiedSystemAsks\`, with its own named by feature id instead of ref */
+export type SendableSystemAsks = WithOwnNames<${pack}, QualifiedSystemAsks>;
+
+export const { broadcastToSurface, sendToWindow, sendToSurface, sendToSystem, ask, fromAsk } = /*#__PURE__*/ defineEvents<SendableSurfaceEvents, SendableSystemEvents, SendableSystemAsks>('${manifest.id}');
 `;
   }
 
@@ -1987,7 +2022,7 @@ export const contentRuntime: ContentRuntime = {
     const hasSurfaces = publishesSurfaceState(manifest, manifest.id);
     return `${HEADER}
 export type { PackShapes as PackEntityShapes, PackStepNodes } from './ears.ts';
-export type { PackSurfaceEvents, PackSystemEvents } from './events.ts';
+export type { PackSurfaceEvents, PackSystemAsks, PackSystemEvents } from './events.ts';
 ${hasSurfaces ? "export type { PackSurfaceState } from './fe.ts';\n" : ''}export type { Services } from './services.ts';
 export type { Repositories } from './repository.ts';
 export type { PackFeatureSettings, PackGroupSettings } from './settings.ts';

@@ -248,7 +248,15 @@ function checkFrontendClaims(frontend: FrontendDeclaration | undefined, ctx: z.R
 const PackVersionSchema = z.string().regex(_PACK_VERSION_PATTERN, 'Must be a complete SemVer version').refine(_validPackVersion, 'Must be a complete SemVer version');
 const EventNamesSchema = z.array(z.string().min(1)).refine(names => new Set(names).size === names.length, 'Event names must be unique');
 export const _EventContractsSchema = declarationRecord(z.string().regex(FEATURE_ID_PATTERN), z.object({
-  system: z.object({ incoming: EventNamesSchema, outgoing: EventNamesSchema }).strict().optional(),
+  system: z.object({
+    incoming: EventNamesSchema,
+    outgoing: EventNamesSchema,
+    // Each declared ask, with the failure kinds its contract gives it: an ask is an event the system receives
+    asks: declarationRecord(z.string().min(1), EventNamesSchema).optional(),
+  }).strict().refine(
+    system => Object.keys(system.asks ?? {}).every(ask => system.incoming.includes(ask)),
+    'Every ask must be among the incoming events',
+  ).optional(),
   surface: z.object({ receives: EventNamesSchema }).strict().optional(),
 }).strict());
 

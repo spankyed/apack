@@ -1,9 +1,10 @@
-// Opening a thread reaches the window that opened it, and only a flow's reaches every window.
+// A thread that was started is news every window hears; a thread a window opens is that window's alone.
 //
 // A window opening a thread shows it already: what the system does is mark it visited, and every window's recent
-// list follows through its view. So it answers nothing. The thread a window's first message starts, or a fork, is the
-// system's to name, and it names it to that window alone (`SHOW_THREAD`); a thread a flow opens has no window to
-// answer, so every window is told. Put the window's answer back on a broadcast and the first case here fails.
+// list follows through its view. The thread a first message starts, a fork, and a thread a flow opens are the
+// system's to name, and it tells every window (`SHOW_THREAD`) whoever asked — the system does not learn whether a
+// window did. The window that sent the message is answered with the thread as well, which is its answer and not the
+// news.
 import { beforeEach, describe, expect, it } from 'vitest'
 import { testRootEvents } from '@apackdev/sdk/testing'
 import { startApp } from '@apackdev/testing/harness'
@@ -11,7 +12,7 @@ import { repository } from '#generated/repository.ts'
 import { chatService } from '#features/threads/be/services/chat.ts'
 
 const THREADS = 'default-setup/threads'
-/** The connection an ask arrived on, which is what makes it a window's rather than an action's */
+/** The connection a window's ask arrives on */
 const MAIN = 'c-main'
 
 /**
@@ -34,21 +35,41 @@ beforeEach(() => {
 const clientsFor = (type: string) => sent.filter((m) => m.type === type).map((m) => m.client)
 
 describe('opening a thread', () => {
-  it('shows the thread a first message started to the window that sent it, and no other', async () => {
+  it('answers the window whose first message started a thread, and tells no other window to show it', async () => {
     const app = await startApp({ systems: ['threads'] })
     await app.connect()
 
-    await app.send('threads', { type: 'USER_MSG', text: 'Start something' }, { sender: THREADS, client: MAIN })
+    expect(await app.ask('threads', { type: 'USER_MSG', text: 'Start something' }, { client: MAIN }))
+      .toMatchObject({ ok: true, value: { started: true, threadId: expect.any(String) } })
+    await app.settle()
+
+    expect(clientsFor('SHOW_THREAD'), 'the asker opens it from its answer').toEqual([])
+  })
+
+  it('shows no window a thread for a message sent to one that exists', async () => {
+    const app = await startApp({ systems: ['threads'] })
+    await app.connect()
+    const { id } = repository.threadCommands.create({ topic: 'Under way', instructions: '' })
+
+    expect(await app.ask('threads', { type: 'USER_MSG', text: 'More', threadId: id }, { client: MAIN }))
+      .toMatchObject({ ok: true, value: { started: false, threadId: id } })
+    await app.settle()
+
+    expect(clientsFor('SHOW_THREAD')).toEqual([])
+  })
+
+  it('shows every window the thread a message nobody asked about started', async () => {
+    const app = await startApp({ systems: ['threads'] })
+    await app.connect()
+
+    await app.send('threads', { type: 'USER_MSG', text: 'Sent by a flow' })
     await app.nextEmit('threads', 'SHOW_THREAD')
     await app.settle()
 
-    expect(clientsFor('SHOW_THREAD'), 'one connection, not every window').toEqual([MAIN])
+    expect(clientsFor('SHOW_THREAD'), 'absent means every connection').toEqual([undefined])
   })
 
-  /**
-   * The fallback, and why it is reply-*or*-broadcast rather than a bare `reply?.()`: a thread a flow opens —
-   * onboarding, a session restore, a summarise — has no window waiting on it, and every window should follow.
-   */
+  /** A thread a flow opens — onboarding, a session restore, a summarise — which every window should follow */
   it('shows a thread a flow opens to every window', async () => {
     const app = await startApp({ systems: ['threads'] })
     await app.connect()
@@ -71,9 +92,9 @@ describe('opening a thread', () => {
     const topics = (update: { ok: boolean; value?: unknown }) => (update.value as Array<{ topic: string }>).map((t) => t.topic)
     expect(topics(await recent.next())[0]).toBe('Newer')
 
-    await app.send('threads', { type: 'OPEN_THREAD_CHAT', threadId: older }, { sender: THREADS, client: MAIN })
+    expect(await app.ask('threads', { type: 'OPEN_THREAD_CHAT', threadId: older }, { client: MAIN })).toEqual({ ok: true, value: undefined })
     expect(topics(await recent.next())[0], 'the visited thread first, in every window').toBe('Older')
     await app.settle()
-    expect(sent, 'and nothing sent back').toEqual([])
+    expect(sent, 'and nothing sent to any window').toEqual([])
   })
 })

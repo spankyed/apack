@@ -3,8 +3,9 @@
 import { describe, expect, it } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
 import { recordingBroker } from './_support/recording-broker.ts'
+import { answered } from './_support/answered.ts'
+import type { TerminalInfo } from '#features/code/be/types.ts'
 
-const CODE = 'default-setup/code'
 const WINDOW = 'c-main'
 
 describe('a bell is identified where it is emitted', () => {
@@ -12,10 +13,9 @@ describe('a bell is identified where it is emitted', () => {
     const broker = recordingBroker({ pidBase: 4242 })
     const app = await startApp({ systems: ['code'] })
     await app.connect()
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { sender: CODE, client: WINDOW })
-    const opened = await app.nextEmit('code', 'terminal.OPENED')
+    const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { client: WINDOW }))
     await app.settle()
-    const terminalId = (opened as unknown as { data: { id: string } }).data.id
+    const terminalId = opened.id
     const session = broker.opened[0]!.id
 
     broker.happens(session, { kind: 'bell' })

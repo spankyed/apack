@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findNodePtyImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable, findClockedDeadlinesInSource, findSyncSpawnsInSpecs } from '../../../scripts/check-import-specifiers.ts';
+import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findNodePtyImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findHandWrittenAnswers, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable, findClockedDeadlinesInSource, findSyncSpawnsInSpecs } from '../../../scripts/check-import-specifiers.ts';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packFixture as buildPackFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
@@ -634,6 +634,11 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
   findRawTransport: () => {
     packFixture({ 'src/f.ts': '_rootEvents.emitOutgoing(event);' });
     return findRawTransport(PACK_SRC, root);
+  },
+  findHandWrittenAnswers: () => {
+    // An ask's answer built by the pack rather than by its system's answers table
+    packFixture({ 'src/f.ts': "export const done = { type: 'ASK_ANSWERED', asked: 'SAVE', answer: 1 };" });
+    return findHandWrittenAnswers(PACK_SRC, root);
   },
   findReservedEventKeys: () => {
     // The key a delivery door writes, written by the pack instead — where it is overwritten on the way in

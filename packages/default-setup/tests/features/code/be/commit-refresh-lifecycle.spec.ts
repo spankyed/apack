@@ -1,10 +1,20 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { takeSystemErrors } from '@apackdev/sdk/testing';
+import type { ActorRefFrom, EventFrom } from 'xstate';
 import { commitSystem } from '../../../../src/features/code/be/features/commit.ts';
 
 const actors: Array<{ stop(): void }> = [];
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { actors.splice(0).forEach(actor => actor.stop()); vi.useRealTimers(); });
+/**
+ * A window's ask as it reaches the commit child, which the code system forwards it to: the child answers it over the
+ * repository it holds. Nobody waits here, so what the ask did is read off the repository and the announcements
+ */
+function windowAsks(commit: ActorRefFrom<typeof commitSystem>, ask: EventFrom<typeof commitSystem>) {
+  commit.send(ask);
+}
+
 function start() {
   const announced = vi.fn();
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
@@ -36,17 +46,17 @@ it('cancels a pending refresh when the commit actor stops', async () => {
 // is sent a listing it did not ask for
 it('announces a write as the repository changing, and lists nothing itself', async () => {
   const announced = vi.fn();
-  const listed = vi.fn();
-  const gitRepository = { whenFetchDue: () => {}, stashDrop: async () => {}, refreshSnapshot: async () => NOTHING } as never;
-  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced, stashList: listed } }),
+  const stashDrop = vi.fn(async () => {});
+  const gitRepository = { whenFetchDue: () => {}, stashDrop, undoables: async () => [], refreshSnapshot: async () => NOTHING } as never;
+  const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
     { input: { baseDirectory: '/repo', gitRepository } }).start();
   actors.push(actor);
 
-  actor.send({ type: 'commit.STASH_DROP', index: 0 });
+  windowAsks(actor, { type: 'commit.STASH_DROP', index: 0 });
   await vi.advanceTimersByTimeAsync(150);
 
+  expect(stashDrop).toHaveBeenCalledWith(0);
   expect(announced).toHaveBeenCalledTimes(1);
-  expect(listed).not.toHaveBeenCalled();
 });
 
 const NOTHING = { status: false, diffs: false, history: false, stashes: false, worktrees: false };
@@ -154,15 +164,18 @@ it('announces a write as its status changing and whatever else git says did, aft
 it('tells the pull requests only when the history changed', async () => {
   let found = NOTHING;
   const code = { send: vi.fn() };
+  const gitRepository = { whenFetchDue: () => {}, refreshSnapshot: async () => found, isGitRepository: async () => false }
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: () => {} } }),
-    { input: { baseDirectory: '/repo', gitRepository: { whenFetchDue: () => {}, refreshSnapshot: async () => found, isGitRepository: async () => false } as never, code: code as never } }).start();
+    { input: { baseDirectory: '/repo', gitRepository: gitRepository as never, code: code as never } }).start();
   actors.push(actor);
 
   // A write made here that moved no commit, as staging a file is
   // A window showing the repository asks for its status each time it is told that changed
   const aWindowAsks = async () => {
-    actor.send({ type: 'commit.GET_GIT_STATUS' });
+    windowAsks(actor, { type: 'commit.GET_GIT_STATUS' });
     await vi.advanceTimersByTimeAsync(0);
+    // The stand-in is no repository, so the status is refused, which is reported since nobody waits to be told
+    takeSystemErrors();
   };
   actor.send({ type: 'commit.GIT_STATUS_CHANGED' });
   await vi.advanceTimersByTimeAsync(150);
@@ -188,10 +201,13 @@ function overAChangingRepository() {
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: () => {} } }),
     { input: { baseDirectory: '/repo', gitRepository: gitRepository as never } }).start();
   actors.push(actor);
-  const after = async (event: Parameters<typeof actor.send>[0]) => {
+  const after = async (event: Parameters<typeof actor.send>[0] | typeof WINDOW_ASKS) => {
     refreshSnapshot.mockClear();
-    actor.send(event);
+    if (event.type === 'commit.GET_GIT_STATUS') windowAsks(actor, event);
+    else actor.send(event);
     await vi.advanceTimersByTimeAsync(0);
+    // The stand-in is no repository, so a status asked of it is refused, which is reported since nobody waits to be told
+    takeSystemErrors();
     return refreshSnapshot.mock.calls.map(([reading, options]) => `${reading}${options?.refreshIndex ? ', may write the index' : ''}`);
   };
   return after;

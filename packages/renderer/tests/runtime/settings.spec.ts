@@ -25,7 +25,7 @@ const flush = async () => { for (let index = 0; index < 6; index++) await Promis
 async function connect() {
   const ready = connectWindowSettings();
   await flush();
-  windowSettings.receive({ to: 'host/settings', answering: send.mock.calls.at(-1)![0].call, event: { type: 'SETTINGS_LOADED', snapshot } });
+  windowSettings.receive({ to: 'host/settings', answering: send.mock.calls.at(-1)![0].call, event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot } } });
   expect(await ready).toBe(true);
 }
 
@@ -49,7 +49,7 @@ it('writes directly through the transport and resolves only the correlated resul
   const request = send.mock.calls.at(-1)![0];
   expect(request).toMatchObject({ to: 'host/settings', sender: 'host/settings', event: { type: 'UPDATE_SETTINGS', target: { kind: 'app' }, path: ['personal', 'name'], value: 'Grace' } });
   expect(request.settingsCredential).toBe('host-access');
-  windowSettings.receive({ to: 'host/settings', answering: request.call, event: { type: 'SETTINGS_REFUSED', problems: ['invalid'] } });
+  windowSettings.receive({ to: 'host/settings', answering: request.call, event: { type: 'ASK_FAILED', asked: 'UPDATE_SETTINGS', failure: { kind: 'refused', message: 'refused', problems: ['invalid'] } } });
   expect(await write).toEqual({ status: 'refused', problems: ['invalid'] });
   expect(settingsPort.get({ kind: 'app' })).toEqual(snapshot.values.app);
 });
@@ -65,7 +65,7 @@ it('issues loader-bound pack access from accepted identities and sends its crede
   const request = send.mock.calls.at(-1)![0];
   expect(request.settingsCredential).toBe('pack-access');
   expect(request.event).not.toHaveProperty('settingsCredential');
-  windowSettings.receive({ to: 'host/settings', answering: request.call, event: { type: 'SETTINGS_SAVED', snapshot: windowSettings.getSnapshot() } });
+  windowSettings.receive({ to: 'host/settings', answering: request.call, event: { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: windowSettings.getSnapshot() } } });
   expect(await write).toEqual({ status: 'saved' });
   binding.dispose(); binding.dispose();
   expect(close).toHaveBeenCalledTimes(1);
@@ -100,10 +100,10 @@ it('keeps bootstrap pending until a validated correlated snapshot arrives', asyn
   expect(settled).toBe(false);
   expect(openHost).toHaveBeenCalledOnce();
   const call = send.mock.calls.at(-1)![0].call;
-  windowSettings.receive({ to: 'host/settings', answering: 'other-read', event: { type: 'SETTINGS_LOADED', snapshot } });
+  windowSettings.receive({ to: 'host/settings', answering: 'other-read', event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot } } });
   await flush();
   expect(settled).toBe(false);
-  windowSettings.receive({ to: 'host/settings', answering: call, event: { type: 'SETTINGS_LOADED', snapshot } });
+  windowSettings.receive({ to: 'host/settings', answering: call, event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot } } });
   expect(await ready).toBe(true);
 });
 

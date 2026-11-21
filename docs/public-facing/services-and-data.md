@@ -587,9 +587,9 @@ const surface = setup({
 
 `untypedFromView(ref, view, read)` from `@apackdev/sdk/fe` is its escape hatch.
 
-**What a view cannot read is fetched, and its answer is replied.** A file on disk, the run history and a walk over the
-whole store are not views: the first two are outside the engine, and the third would re-run on every commit anyone
-makes. A surface asks for them and its system answers it with `reply`. A surface asks for what it starts from when the
+**What a view cannot read is asked for.** A file on disk, the run history and a walk over the whole store are not
+views: the first two are outside the engine, and the third would re-run on every commit anyone makes. The system
+declares an ask for each in its contract and answers it from its `answers` table ([asks](features.md#asks)). A surface asks for what it starts from when the
 shell hands it `SURFACE_STARTED` (`SurfaceLifecycleEvent`, `@apackdev/sdk/fe`), which arrives in a delivery naming the
 surface; a send from the machine's own entry is in none, carries no sender, and so cannot be answered.
 

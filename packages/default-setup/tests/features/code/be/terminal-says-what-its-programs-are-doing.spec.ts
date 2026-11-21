@@ -11,13 +11,13 @@ import { EARS, newId } from '#generated/ears.ts'
 import { defaultShell } from '#features/code/be/services/known-shells.ts'
 import type { TerminalStatus } from '#features/code/be/types.ts'
 import { recordingBroker } from './_support/recording-broker.ts'
-import { aTerminal, CODE, lastTold, record, running, stopsAfterEach, WINDOW } from './_support/terminal-statuses.ts'
+import { answered } from './_support/answered.ts'
+import { aTerminal, lastTold, record, running, stopsAfterEach, WINDOW } from './_support/terminal-statuses.ts'
 
 stopsAfterEach()
 
 const listed = async (terminalId: string) => {
-  await running.app!.send('code', { type: 'terminal.REFRESH_LIST' }, { sender: CODE, client: WINDOW })
-  const terminals = (await running.app!.nextEmit('code', 'terminal.TERMINALS_LISTED')).data as Array<{ id: string; statuses?: TerminalStatus[] }>
+  const terminals = answered<Array<{ id: string; statuses?: TerminalStatus[] }>>(await running.app!.ask('code', { type: 'terminal.REFRESH_LIST' }, { client: WINDOW }))
   return terminals.find(terminal => terminal.id === terminalId)
 }
 
@@ -58,7 +58,7 @@ describe("what a terminal's programs say they are doing", () => {
     await running.app!.settle()
     expect(lastTold()?.statuses[0]?.seen).toBe(false)
 
-    await running.app!.send('code', { type: 'terminal.STATUS_SEEN', terminalId }, { sender: CODE, client: WINDOW })
+    await running.app!.send('code', { type: 'terminal.STATUS_SEEN', terminalId }, { client: WINDOW })
     await running.app!.settle()
     expect(lastTold()?.statuses[0]?.seen).toBe(true)
     expect(repository.terminalQueries.byId(terminalId as EARS.EntityId))
@@ -66,7 +66,7 @@ describe("what a terminal's programs say they are doing", () => {
 
     // Looking again at nothing new tells nobody
     const told = running.app!.emitted('code').filter(event => event.type === 'terminal.STATUS').length
-    await running.app!.send('code', { type: 'terminal.STATUS_SEEN', terminalId }, { sender: CODE, client: WINDOW })
+    await running.app!.send('code', { type: 'terminal.STATUS_SEEN', terminalId }, { client: WINDOW })
     await running.app!.settle()
     expect(running.app!.emitted('code').filter(event => event.type === 'terminal.STATUS')).toHaveLength(told)
 
@@ -84,7 +84,7 @@ describe("what a terminal's programs say they are doing", () => {
     await running.app!.settle()
     expect((await listed(terminalId))?.statuses, 'still there to be looked at').toEqual([expect.objectContaining({ id: 'build', state: 'done' })])
 
-    await running.app!.send('code', { type: 'terminal.RESTART_TERMINAL', terminalId }, { sender: CODE, client: WINDOW })
+    answered(await running.app!.ask('code', { type: 'terminal.RESTART_TERMINAL', terminalId }, { client: WINDOW }))
     await running.app!.nextEmit('code', 'terminal.RESTARTED')
     expect(await listed(terminalId), 'the new shell has said nothing').not.toHaveProperty('statuses')
   })

@@ -14,9 +14,9 @@ import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
 import { AppGitRepository } from '#features/code/be/services/app-git-repository.ts';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -77,13 +77,13 @@ it('checks out a branch and pulls it only when asked to', async () => {
   const { clone, here, theirs } = await cloneBehind();
   const app = await code(clone);
 
-  const checkout = await app.send('code', { type: 'commit.CHECKOUT_BRANCH', branchName: 'main' }, asWindow);
-  await app.nextEmit('code', 'commit.BRANCH_CHECKOUT_SUCCESS', { answering: checkout });
+  const checkout = app.ask('code', { type: 'commit.CHECKOUT_BRANCH', branchName: 'main' }, asWindow);
+  await answered(checkout);
   expect(await git(clone, 'rev-parse', 'HEAD'), 'a checkout pulls nothing').toBe(here);
 
   await git(clone, 'checkout', '--quiet', 'side');
-  const pulled = await app.send('code', { type: 'commit.CHECKOUT_BRANCH', branchName: 'main', pull: true }, asWindow);
-  await app.nextEmit('code', 'commit.BRANCH_CHECKOUT_SUCCESS', { answering: pulled });
+  const pulled = app.ask('code', { type: 'commit.CHECKOUT_BRANCH', branchName: 'main', pull: true }, asWindow);
+  await answered(pulled);
   expect(await git(clone, 'rev-parse', 'HEAD'), '"Checkout & Pull Base" pulls').toBe(theirs);
 });
 
@@ -91,12 +91,12 @@ it('answers a branch no one has with its name, makes nothing, and makes it when 
   const directory = await repository();
   const app = await code(directory);
 
-  const checkout = await app.send('code', { type: 'commit.CHECKOUT_BRANCH', branchName: 'topic' }, asWindow);
-  expect((await app.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: checkout })).data).toMatchObject({ code: 'unknown-ref', missingBranch: 'topic' });
+  const checkout = app.ask('code', { type: 'commit.CHECKOUT_BRANCH', branchName: 'topic' }, asWindow);
+  expect(await refused(checkout)).toMatchObject({ code: 'unknown-ref', missingBranch: 'topic' });
   expect(await git(directory, 'branch', '--list', 'topic')).toBe('');
 
-  const created = await app.send('code', { type: 'commit.CREATE_BRANCH', branchName: 'topic' }, asWindow);
-  expect((await app.nextEmit('code', 'commit.BRANCH_CHECKOUT_SUCCESS', { answering: created })).data).toEqual({ branchName: 'topic' });
+  const created = app.ask('code', { type: 'commit.CREATE_BRANCH', branchName: 'topic' }, asWindow);
+  expect(await answered(created)).toEqual({ branchName: 'topic' });
   expect(await git(directory, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('topic');
 });
 
@@ -108,9 +108,9 @@ it('answers a commit refused in an untrusted repository with what it would run, 
   await git(directory, 'config', 'core.fsmonitor', program);
   const app = await code(directory);
 
-  const committed = await app.send('code', { type: 'commit.COMMIT', message: 'second' }, asWindow);
+  const committed = app.ask('code', { type: 'commit.COMMIT', message: 'second' }, asWindow);
 
-  expect((await app.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: committed })).data).toMatchObject({
+  expect(await refused(committed)).toMatchObject({
     code: 'untrusted', trust: { repository: path.join(directory, '.git') },
   });
 });
@@ -121,15 +121,15 @@ it('answers a stash applied as that, keeping it, and one popped over a conflict 
   await git(directory, 'stash', 'push', '--quiet');
   const app = await code(directory);
 
-  const applied = await app.send('code', { type: 'commit.STASH_APPLY', index: 0 }, asWindow);
-  expect((await app.nextEmit('code', 'commit.STASH_APPLIED', { answering: applied })).data).toEqual({ index: 0, popped: false });
+  const applied = app.ask('code', { type: 'commit.STASH_APPLY', index: 0 }, asWindow);
+  expect(await answered(applied)).toEqual({ index: 0, popped: false });
   expect(await git(directory, 'stash', 'list')).not.toBe('');
 
   await git(directory, 'commit', '--quiet', '-am', 'another change to the same line');
   fs.writeFileSync(path.join(directory, 'a.txt'), 'conflicting\n');
   await git(directory, 'commit', '--quiet', '-am', 'conflicting');
-  const popped = await app.send('code', { type: 'commit.STASH_POP', index: 0 }, asWindow);
-  expect((await app.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: popped })).data).toMatchObject({ code: 'conflict' });
+  const popped = app.ask('code', { type: 'commit.STASH_POP', index: 0 }, asWindow);
+  expect(await refused(popped)).toMatchObject({ code: 'conflict' });
 });
 
 it('takes a file renamed in the index and edited since out of what is staged whole', async () => {
@@ -140,8 +140,8 @@ it('takes a file renamed in the index and edited since out of what is staged who
 
   // The status lists the staged row of the rename before the unstaged row of the edit; the lookup is for the staged
   // row whichever comes first, and this fails if it took the edit's row while the edit's row came first
-  const unstaged = await app.send('code', { type: 'commit.UNSTAGE_FILES', paths: ['b.txt'] }, asWindow);
-  await app.nextEmit('code', 'commit.FILES_UNSTAGED', { answering: unstaged });
+  const unstaged = app.ask('code', { type: 'commit.UNSTAGE_FILES', paths: ['b.txt'] }, asWindow);
+  await answered(unstaged);
 
   expect(await git(directory, 'diff', '--cached', '--name-status'), 'neither the new path nor the old one is staged').toBe('');
 });
@@ -149,9 +149,9 @@ it('takes a file renamed in the index and edited since out of what is staged who
 it('answers the repository picker with nothing when no folder is open', async () => {
   const app = await code();
 
-  const listed = await app.send('code', { type: 'LIST_REPOSITORIES' }, asWindow);
+  const listed = app.ask('code', { type: 'commit.LIST_REPOSITORIES' }, asWindow);
 
-  expect((await app.nextEmit('code', 'commit.REPOSITORIES_RECEIVED', { answering: listed })).data).toMatchObject({ repositories: [], truncated: false });
+  expect(await answered(listed)).toMatchObject({ repositories: [], truncated: false });
 });
 
 it('closes the repository a new folder replaces', async () => {

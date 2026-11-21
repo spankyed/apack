@@ -3,11 +3,10 @@
 // is written and taken out of it when asked.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
-import { sentCall } from '../../../../../_support/calls.ts';
+import { askUnderWay } from '@apackdev/sdk/fe';
+import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -15,24 +14,27 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   getParentContext: vi.fn(() => ({})),
 }));
 
-const { commitState } = await import('#features/code/fe/features/commit/state.ts');
+const { commitState, AMEND, PUSH, commitUnderWay } = await import('#features/code/fe/features/commit/state.ts');
 
-beforeEach(() => sendToSystem.mockReset());
-const sent = (type: string) => sendToSystem.mock.calls.filter(([, event]) => event.type === type);
+beforeEach(resetAsks);
+const sent = (type: string) => asksOf(type).map(ask => ask.event);
 
-it('says a push that was stopped was stopped, and a push run again starts over', () => {
+it('says a push that was stopped was stopped, and a push run again starts over', async () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.PUSH_BRANCH' });
-  actor.send({ type: 'commit.PUSH_STOPPED' });
-  expect(actor.getSnapshot().context).toMatchObject({ isPushing: false, pushStopped: true });
+  actor.send({ type: 'commit.STOP_PUSH' });
+  expect(latestAsk('commit.PUBLISH_BRANCH').stopped, 'which ends git on the backend').toBe(true);
+  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(false);
+  expect(actor.getSnapshot().context.pushStopped).toBe(true);
 
   actor.send({ type: 'commit.PUSH_BRANCH' });
   expect(actor.getSnapshot().context.pushStopped).toBe(false);
-  actor.send({ type: 'commit.BRANCH_PUSHED', data: { branchName: 'main' } });
-  expect(actor.getSnapshot().context).toMatchObject({ isPushing: false, pushStopped: false });
+  await latestAsk('commit.PUBLISH_BRANCH').answer({ branchName: 'main' });
+  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(false);
+  expect(actor.getSnapshot().context.pushStopped).toBe(false);
 });
 
-it('asks for one commit at a time, and for another once the first is answered', () => {
+it('asks for one commit at a time, and for another once the first is answered', async () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'Fix it' });
 
@@ -42,27 +44,29 @@ it('asks for one commit at a time, and for another once the first is answered', 
   expect(sent('commit.COMMIT'), 'the second click, and an amend, wait for the first').toHaveLength(1);
   expect(sent('commit.AMEND')).toHaveLength(0);
 
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.COMMIT'), { type: 'commit.ERROR_RECEIVED', data: { message: 'The hook refused it' } }));
-  expect(actor.getSnapshot().context.isCommitting).toBe(false);
+  await latestAsk('commit.COMMIT').refuse('The hook refused it', { kind: 'git' });
+  expect(commitUnderWay(actor.getSnapshot().context.asking)).toBe(false);
 
   actor.send({ type: 'commit.COMMIT' });
   expect(sent('commit.COMMIT')).toHaveLength(2);
-  actor.send({ type: 'commit.COMMIT_SUCCESS', message: 'Fix it' });
-  expect(actor.getSnapshot().context).toMatchObject({ isCommitting: false, commitMessage: '' });
+  await latestAsk('commit.COMMIT').answer({ message: 'Fix it' });
+  expect(commitUnderWay(actor.getSnapshot().context.asking)).toBe(false);
+  expect(actor.getSnapshot().context.commitMessage).toBe('');
 });
 
-it('holds an amend as a commit until it is answered, by its amend or by the question it needs', () => {
+it('holds an amend as a commit until it is answered, by its amend or by the question it needs', async () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.AMEND' });
-  expect(actor.getSnapshot().context.isCommitting).toBe(true);
-  actor.send({ type: 'commit.REWRITE_NEEDS_CONFIRMATION', data: { message: 'The last commit is already pushed.' } });
-  expect(actor.getSnapshot().context.isCommitting, 'the user is asked').toBe(false);
+  expect(askUnderWay(actor.getSnapshot().context.asking, AMEND)).toBe(true);
+  await latestAsk('commit.AMEND').refuse('The last commit is already pushed.', { kind: 'published' });
+  expect(commitUnderWay(actor.getSnapshot().context.asking), 'the user is asked').toBe(false);
+  expect(actor.getSnapshot().context.rewriteConfirmation?.message).toBe('The last commit is already pushed.');
 
   actor.send({ type: 'commit.CONFIRM_REWRITE' });
-  expect(sent('commit.AMEND').at(-1)?.[1]).toMatchObject({ evenIfPublished: true });
-  expect(actor.getSnapshot().context.isCommitting).toBe(true);
-  actor.send({ type: 'commit.AMENDED' });
-  expect(actor.getSnapshot().context.isCommitting).toBe(false);
+  expect(sent('commit.AMEND').at(-1)).toMatchObject({ evenIfPublished: true });
+  expect(askUnderWay(actor.getSnapshot().context.asking, AMEND)).toBe(true);
+  await latestAsk('commit.AMEND').answer({});
+  expect(commitUnderWay(actor.getSnapshot().context.asking)).toBe(false);
 });
 
 it('asks for a commit of the message as written, its trailers included, which the system leaves out as the settings say', () => {
@@ -71,12 +75,12 @@ it('asks for a commit of the message as written, its trailers included, which th
 
   actor.send({ type: 'commit.COMMIT' });
 
-  expect(sent('commit.COMMIT').map(([, event]) => event.message)).toEqual(['feat: a thing\n\nCo-Authored-By: Someone <someone@example.com>']);
+  expect(sent('commit.COMMIT').map(event => event.message)).toEqual(['feat: a thing\n\nCo-Authored-By: Someone <someone@example.com>']);
 });
 
-it("asks for a message's trailers once its last paragraph changes, and never for a message of one paragraph", () => {
+it("asks for a message's trailers once its last paragraph changes, and never for a message of one paragraph", async () => {
   const actor = createActor(commitState).start();
-  const asked = () => sent('commit.READ_TRAILERS').map(([, event]) => event.message);
+  const asked = () => sent('commit.READ_TRAILERS').map(event => event.message);
 
   for (const message of ['f', 'fe', 'feat', 'feat\n', 'feat\n\n']) actor.send({ type: 'commit.UPDATE_MESSAGE', message });
   expect(asked(), 'a subject has no trailers').toEqual([]);
@@ -85,65 +89,65 @@ it("asks for a message's trailers once its last paragraph changes, and never for
   actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat: a thing\n\nCo-authored-by: A' });
   expect(asked(), 'typing in the subject asks nothing again').toEqual(['feat\n\nCo-authored-by: A']);
 
-  actor.send({ type: 'commit.TRAILERS_READ', data: { message: 'feat\n\nCo-authored-by: A', trailers: [{ key: 'Co-authored-by', value: 'A' }] } });
+  await latestAsk('commit.READ_TRAILERS').answer({ message: 'feat\n\nCo-authored-by: A', trailers: [{ key: 'Co-authored-by', value: 'A' }] });
   expect(actor.getSnapshot().context.trailers).toEqual([{ key: 'Co-authored-by', value: 'A' }]);
 
   actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat: a thing' });
   expect(actor.getSnapshot().context.trailers, 'one paragraph left has none').toEqual([]);
 });
 
-it('takes trailers read of a paragraph the message no longer ends with for none', () => {
+it('takes trailers read of a paragraph the message no longer ends with for none', async () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat\n\nCo-authored-by: A' });
   actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat\n\nCo-authored-by: AB' });
 
-  actor.send({ type: 'commit.TRAILERS_READ', data: { message: 'feat\n\nCo-authored-by: A', trailers: [{ key: 'Co-authored-by', value: 'A' }] } });
+  await asksOf('commit.READ_TRAILERS')[0]!.answer({ message: 'feat\n\nCo-authored-by: A', trailers: [{ key: 'Co-authored-by', value: 'A' }] });
 
   expect(actor.getSnapshot().context.trailers).toEqual([]);
 });
 
-it('takes a trailer out of the message as it still is, and asks again what it ends with', () => {
+it('takes a trailer out of the message as it still is, and asks again what it ends with', async () => {
   const actor = createActor(commitState).start();
   const message = 'feat\n\nCo-authored-by: A\nSigned-off-by: B';
   actor.send({ type: 'commit.UPDATE_MESSAGE', message });
 
   actor.send({ type: 'commit.REMOVE_TRAILER', trailer: { key: 'Co-authored-by', value: 'A' } });
-  expect(sent('commit.REMOVE_TRAILER').map(([, event]) => event)).toEqual([{ type: 'commit.REMOVE_TRAILER', message, trailer: { key: 'Co-authored-by', value: 'A' } }]);
+  expect(sent('commit.REMOVE_TRAILER')).toEqual([{ type: 'commit.REMOVE_TRAILER', message, trailer: { key: 'Co-authored-by', value: 'A' } }]);
 
-  actor.send({ type: 'commit.TRAILER_REMOVED', data: { message, without: 'feat\n\nSigned-off-by: B' } });
+  await latestAsk('commit.REMOVE_TRAILER').answer({ message, without: 'feat\n\nSigned-off-by: B' });
   expect(actor.getSnapshot().context.commitMessage).toBe('feat\n\nSigned-off-by: B');
-  expect(sent('commit.READ_TRAILERS').map(([, event]) => event.message).at(-1)).toBe('feat\n\nSigned-off-by: B');
+  expect(sent('commit.READ_TRAILERS').map(event => event.message).at(-1)).toBe('feat\n\nSigned-off-by: B');
 });
 
-it('leaves a message changed since a trailer was asked to be taken out of it as it was changed', () => {
+it('leaves a message changed since a trailer was asked to be taken out of it as it was changed', async () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat\n\nCo-authored-by: A' });
   actor.send({ type: 'commit.REMOVE_TRAILER', trailer: { key: 'Co-authored-by', value: 'A' } });
   actor.send({ type: 'commit.UPDATE_MESSAGE', message: 'feat: more\n\nCo-authored-by: A' });
 
-  actor.send({ type: 'commit.TRAILER_REMOVED', data: { message: 'feat\n\nCo-authored-by: A', without: 'feat' } });
+  await latestAsk('commit.REMOVE_TRAILER').answer({ message: 'feat\n\nCo-authored-by: A', without: 'feat' });
 
   expect(actor.getSnapshot().context.commitMessage).toBe('feat: more\n\nCo-authored-by: A');
 });
 
-it('holds a tag pushed or deleted busy until its own answer, and keeps the tag last pushed', () => {
+it('holds a tag pushed or deleted busy until its own answer, and keeps the tag last pushed', async () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.PUSH_TAG', name: 'v1' });
   expect(actor.getSnapshot().context.tagBusy).toEqual({ name: 'v1', action: 'push' });
 
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.PUSH_TAG'), { type: 'commit.TAG_PUSHED', data: { name: 'v1' } }));
+  await latestAsk('commit.PUSH_TAG').answer({ name: 'v1' });
   expect(actor.getSnapshot().context).toMatchObject({ tagBusy: null, tagPushed: { name: 'v1' } });
 
   actor.send({ type: 'commit.DELETE_TAG', name: 'v1' });
-  actor.send(answerTo(sentCall(sendToSystem, 'commit.DELETE_TAG'), { type: 'commit.ERROR_RECEIVED', data: { message: 'no such tag' } }));
+  await latestAsk('commit.DELETE_TAG').refuse('no such tag', { kind: 'git' });
   expect(actor.getSnapshot().context.tagBusy, 'refused: no longer busy').toBeNull();
 });
 
-it('holds a reset busy until it is answered', () => {
+it('holds a reset busy until it is answered', async () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.RESET_TO_COMMIT', hash: 'abc1234' });
   expect(actor.getSnapshot().context.resettingTo).toBe('abc1234');
 
-  actor.send({ type: 'commit.RESET_COMMIT_SUCCESS', data: { hash: 'abc1234' } });
+  await latestAsk('commit.RESET_TO_COMMIT').answer({ hash: 'abc1234' });
   expect(actor.getSnapshot().context.resettingTo).toBeNull();
 });

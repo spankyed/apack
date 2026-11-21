@@ -1,60 +1,39 @@
-import { answer } from '../answer.ts'
 import { featureSettings } from '#generated/settings.ts';
-import type { OutgoingTerminalEvents } from '../contract.ts'
+import type { OutgoingTerminalEvents, TerminalAsks } from '../contract.ts'
 
 import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
-import { setup, assign, fromPromise } from 'xstate'
+import { safeEvents } from '@apackdev/sdk/helpers';
+import { setup, assign, fromPromise, waitFor, type AnyActorRef } from 'xstate'
 
 import { terminalService } from '../services/terminal.ts'
-import type { TerminalInfo } from '../types.ts'
 import { cwdAsReported } from '../utils/osc-cwd.ts'
 import { statusMoves } from '../utils/terminal-status.ts'
 import type { TerminalEvent } from '@apackdev/sdk/services'
 import { createLogger, reportError } from '@apackdev/sdk/logger';
-import { onConnectionEnded } from '@apackdev/sdk/events';
-import type { Reply } from '@apackdev/sdk/events';
-import type { OutgoingCodeEvents } from '../contract.ts'
+import { onConnectionEnded, type AsksEvents } from '@apackdev/sdk/events';
 
 const logger = createLogger('terminal');
 
 const surfaceId = 'code' as const
 
-// Incoming events from frontend
-
-// Outgoing events to frontend
-
 export interface CodeTerminalSystemContext {
   baseDirectory: string | null
 }
 
+/** What the terminal child handles: a window's input that nobody answers, the code system's own, and the asks */
 export type Event =
-  | { type: 'terminal.CREATE_TERMINAL';
-      title?: string;
-      cwd?: string;
-      shell?: string;
-      cols?: number;
-      rows?: number;
-      target?: string;
-    }
-  | { type: 'terminal.CLOSE_TERMINAL'; terminalId: string }
-  | { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
   | { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
-  | { type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number; cellWidth?: number; cellHeight?: number }
   | { type: 'terminal.STOPPED_FITTING'; terminalId: string }
-  | { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
-  | { type: 'terminal.OPENED'; data: TerminalInfo }
-  | { type: 'terminal.REFRESH_LIST' }
-  | { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
-  | { type: 'terminal.KEEP_TERMINAL'; terminalId: string; kept: boolean }
   | { type: 'terminal.STATUS_SEEN'; terminalId: string }
-  | { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
-  | { type: 'terminal.REWIND_SEEK'; session: string; at: number }
   | { type: 'terminal.REWIND_CLOSE'; session: string }
   /** The window looking back through a recording measured how many cells fit where it draws it */
   | { type: 'terminal.REWIND_RESIZE'; session: string; cols: number; rows: number }
   | { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
-  | { type: 'GET_CODE_START' };
+  // The terminal asks, which the code system forwards here to be answered
+  | AsksEvents<TerminalAsks>
+
+const typeOf = safeEvents<Event>();
 
 /** A terminal's news, for every window showing the code surface: what its process did, never a listing */
 type TerminalNewsType = 'terminal.CWD_CHANGED' | 'terminal.CLIPBOARD' | 'terminal.BELL' | 'terminal.NOTIFIED'
@@ -91,15 +70,15 @@ export function startTerminalSizing(): () => void {
 }
 
 /**
- * Where a terminal's news and its exit go — **given to the service before the session exists**, not
- * registered after it returns, so nothing a shell does first has nowhere to go.
- */
-/**
  * The bells this backend process has emitted. The id is unique within a run, which is all a bell's identity needs:
  * the main process forgets a shown id within a minute, and no terminal keeps its id across a restart.
  */
 let bellCount = 0
 
+/**
+ * Where a terminal's news and its exit go — **given to the service before the session exists**, not
+ * registered after it returns, so nothing a shell does first has nowhere to go.
+ */
 const terminalHandlers = {
   onEvent(terminalId: string, event: TerminalEvent) {
     switch (event.kind) {
@@ -181,30 +160,126 @@ const terminalHandlers = {
 }
 
 /**
- * A terminal failure: reported to the user, and answered to whoever asked.
- *
- * `terminal.ERROR` settles the ask it answers — the surface keeps one entry per outstanding open — so it
- * still travels. What it never did was reach the user: the surface wrote the message to a context field that
- * nothing rendered, so every terminal failure was silent. `reportError` is the mechanism that reaches them,
- * the app turning a system error into a toast, and it needs no new published API — `HostShell` exposes no
- * `notify`, and adding one for this would publish a second way to say the same thing.
- *
- * A failure nobody asked for is reported and not broadcast. An error is not news: every window would raise
- * it, including the ones whose user did nothing.
+ * A failure of something nobody asked for, reported to the user: keystrokes for a terminal that is not there.
+ * `reportError` is what reaches them, the app turning a system error into a toast. An ask's failure is not
+ * reported here: it is its asker's, which the ask's answer tells
  */
-const failTerminal = (
-  reply: Reply<OutgoingCodeEvents> | undefined,
-  operation: string,
-  error: unknown,
-  terminalId?: string,
-) => {
-  const message = error instanceof Error ? error.message : String(error)
+const failTerminal = (operation: string, error: unknown): void => {
   reportError({ error, title: 'Terminal error', source: 'terminal', operation })
-  answer(reply, { type: 'terminal.ERROR', data: { message, ...(terminalId ? { terminalId } : {}) } })
 }
 
-/** Hands each handler the answer for the message it is handling — see `defineHandlers` */
+/** A terminal's title, for saying which one was not found */
+const nameOf = (terminalId: string) => terminalService.get(terminalId)?.info.title ?? 'Terminal'
+
+/**
+ * The terminals as restored: an ask about them waits until this machine has taken up what the last run left, rather
+ * than being answered from a list that is still being filled
+ */
+async function restored(self: AnyActorRef): Promise<void> {
+  await waitFor(self, snapshot => snapshot.value === 'idle')
+}
+
+/** Hands each handler the connection the message it handles arrived on — see `defineHandlers` */
 const handlers = defineHandlers<CodeTerminalSystemContext, Event>();
+
+/**
+ * The terminal asks, answered here. One that fails is refused with what it failed with, which is its asker's to
+ * show; one nobody asked for is reported by the answer itself
+ */
+const answers = handlers.answers<TerminalAsks>({
+  // **The answer waits for the session**, because the process is the broker's and a socket away
+  'terminal.CREATE_TERMINAL': async ({ args, context, self }) => {
+    await restored(self)
+    const cwd = args.cwd || context.baseDirectory
+    const terminalInfo = await terminalService.create({
+      title: args.title,
+      cwd: cwd && cwd.trim() ? cwd : undefined,
+      shell: args.shell,
+      cols: args.cols || 80,
+      rows: args.rows || 24,
+      target: args.target,
+    }, terminalHandlers)
+    // Every window's list grows, and only the window that asked opens it. A terminal's id is minted here, so
+    // nothing the asker sent could have identified it
+    emitToFrontend({ type: 'terminal.CREATED', data: { terminalId: terminalInfo.id } })
+    return terminalInfo
+  },
+
+  'terminal.RESTART_TERMINAL': async ({ args: { terminalId }, self }) => {
+    await restored(self)
+    const info = await terminalService.restart(terminalId, terminalHandlers)
+    if (!info) throw new Error(`No terminal ${terminalId}`)
+    // Every window showing this terminal has a new shell under it; the one that asked hears it too, which is why
+    // this is news rather than the answer — a restart is not private to the window that clicked it
+    emitToFrontend({ type: 'terminal.RESTARTED', data: info })
+  },
+
+  'terminal.CLOSE_TERMINAL': async ({ args: { terminalId }, self }) => {
+    await restored(self)
+    const terminalName = nameOf(terminalId)
+    const outcome = await terminalService.kill(terminalId, terminalHandlers)
+    // Only one of these is a terminal that was not there. A broker that would not end the session closed the
+    // terminal all the same, so the user is told what happened rather than that they asked about something
+    // that does not exist
+    if (outcome === 'unknown') throw new Error(`${terminalName} not found`)
+    if (outcome === 'refused') throw new Error(`The broker would not end ${terminalName}; it is closed here`)
+  },
+
+  'terminal.RESIZE_TERMINAL': async ({ args, client }) => {
+    // One cell in pixels, where the window measured one: what a program asking for the size in pixels is told
+    const cell = args.cellWidth && args.cellHeight ? { width: args.cellWidth, height: args.cellHeight } : undefined
+    const terminalName = nameOf(args.terminalId)
+    // **Every window's fit is recorded, and the pty runs at the smallest** (`TerminalService.resize`): a pty has
+    // one `(cols, rows)`, and the smallest fit is the one every window showing it can draw whole. `client` names
+    // the connection the ask arrived on, which the API stamps and nobody can forge.
+    const accepted = await terminalService.resize(args.terminalId, args.cols, args.rows, client, cell)
+    if (!accepted) throw new Error(`${terminalName} not found`)
+    const grid = { terminalId: args.terminalId, cols: accepted.cols, rows: accepted.rows }
+    // **The grid moved, so every window showing this terminal needs it** — each renders the accepted one rather
+    // than whatever it fitted for itself, which is what stops a second window drawing at a size nothing agreed to
+    if (accepted.changed) emitToFrontend({ type: 'terminal.RESIZED', data: grid })
+    // The asker that did not get what it asked for is told by its answer, which is its business and nobody else's
+    return accepted.cols !== args.cols || accepted.rows !== args.rows ? grid : null
+  },
+
+  'terminal.RENAME_TERMINAL': ({ args: { terminalId, customTitle } }) => {
+    if (!terminalService.rename(terminalId, customTitle)) throw new Error(`${nameOf(terminalId)} not found`)
+    broadcastToSurface(surfaceId, { type: 'terminal.RENAMED', data: { terminalId, customTitle } })
+  },
+
+  'terminal.REFRESH_LIST': async ({ self }) => {
+    await restored(self)
+    return terminalService.list()
+  },
+
+  'terminal.OPEN_TERMINAL_TAB': async ({ args: { terminalId }, self }) => {
+    await restored(self)
+    const terminal = terminalService.list().find(t => t.id === terminalId)
+    if (!terminal) throw new Error('Terminal not found')
+    return terminal
+  },
+
+  /** Every window showing the terminal marks it as one that keeps running, which is news rather than the answer */
+  'terminal.KEEP_TERMINAL': async ({ args: { terminalId, kept }, self }) => {
+    await restored(self)
+    if (!await terminalService.keep(terminalId, kept)) throw new Error(`No running terminal ${terminalId}`)
+    emitToFrontend({ type: 'terminal.KEPT', data: { terminalId, kept } })
+  },
+
+  /** A recording is opened for the window that asked to look, and nobody else is looking */
+  'terminal.REWIND': async ({ args: { terminalId, cols, rows }, client, self }) => {
+    await restored(self)
+    const opened = await terminalService.rewind(terminalId, { cols, rows }, client)
+    if (!opened) throw new Error(`No terminal ${terminalId}`)
+    return opened
+  },
+
+  'terminal.REWIND_SEEK': async ({ args: { session, at }, self }) => {
+    await restored(self)
+    const sought = await terminalService.seekRewind(session, at)
+    return sought === null ? null : { session, at: sought }
+  },
+})
 
 export const terminalSystem = setup({
   types: {
@@ -225,143 +300,28 @@ export const terminalSystem = setup({
       await terminalService.endUnclaimedKept()
     })
   },
-  actions: handlers.actions({
-    /** The running terminals, answered to the window that asked as it starts */
-    sendConnectedData: ({ reply }) => {
-      answer(reply, { type: 'terminal.TERMINALS_LISTED', data: terminalService.list() })
-    },
-
-    createTerminal: ({ event, context, reply }) => {
-      const ev = event as {
-        type: 'terminal.CREATE_TERMINAL';
-        title?: string;
-        cwd?: string;
-        shell?: string;
-        cols?: number;
-        rows?: number;
-        target?: string;
-      }
-      const cwd = ev.cwd || context.baseDirectory
-      // **The answer waits for the session**, because the process is the broker's and a socket away. `reply`
-      // is bound to the delivery this handler was entered in, so it still answers the window that asked
-      // after an await — an answer a handler holds keeps working wherever it is called.
-      void terminalService.create({
-        title: ev.title,
-        cwd: cwd && cwd.trim() ? cwd : undefined,
-        shell: ev.shell,
-        cols: ev.cols || 80,
-        rows: ev.rows || 24,
-        target: ev.target,
-      }, terminalHandlers).then(terminalInfo => {
-        // The two halves of what used to be one event: every window's list grows, and only the window that
-        // asked opens it. A terminal's id is minted here, so nothing the asker sent could have identified it
-        emitToFrontend({ type: 'terminal.CREATED', data: { terminalId: terminalInfo.id } })
-        reply?.({ type: 'terminal.OPENED', data: terminalInfo })
-      }).catch(error => failTerminal(reply, 'create', error))
-    },
-
-    restartTerminal: ({ event, reply }) => {
-      const ev = event as { type: 'terminal.RESTART_TERMINAL'; terminalId: string }
-      void terminalService.restart(ev.terminalId, terminalHandlers).then(info => {
-        if (!info) {
-          failTerminal(reply, 'restart', new Error(`No terminal ${ev.terminalId}`))
-          return
-        }
-        // Every window showing this terminal has a new shell under it; the one that asked hears it too,
-        // which is why this is news rather than a reply — a restart is not private to the window that
-        // clicked it
-        emitToFrontend({ type: 'terminal.RESTARTED', data: info })
-      }).catch(error => failTerminal(reply, 'restart', error))
-    },
-
-    closeTerminal: ({ event, reply }) => {
-      const ev = event as { type: 'terminal.CLOSE_TERMINAL'; terminalId: string }
-      try {
-        const terminal = terminalService.get(ev.terminalId)
-        const terminalName = terminal ? terminal.info.title : 'Terminal'
-        // **Awaited, not checked for truth.** The service answers a promise now, and `if (!promise)` is
-        // never true — the refusal below was dead the moment the broker owned the process.
-        void terminalService.kill(ev.terminalId, terminalHandlers)
-          .then(outcome => {
-            // Only one of these is a terminal that was not there. A broker that would not end the session
-            // closed the terminal all the same, so the user is told what happened rather than that they
-            // asked about something that does not exist
-            if (outcome === 'unknown') failTerminal(reply, 'close', `${terminalName} not found`, ev.terminalId)
-            else if (outcome === 'refused') {
-              failTerminal(reply, 'close', `The broker would not end ${terminalName}; it is closed here`, ev.terminalId)
-            }
-          })
-          .catch(error => failTerminal(reply, 'close', error, ev.terminalId))
-      } catch (error) {
-        failTerminal(reply, 'close', error, ev.terminalId)
-      }
-    },
-
-    sendTerminalInput: ({ event, reply }) => {
-      const ev = event as { type: 'terminal.TERMINAL_INPUT'; terminalId: string; data: string }
-      try {
-        const terminal = terminalService.get(ev.terminalId)
-        const terminalName = terminal ? terminal.info.title : 'Terminal'
-        // **Awaited, not checked for truth.** The service answers a promise now, and `if (!promise)` is
-        // never true — the refusal below was dead the moment the broker owned the process.
-        void terminalService.write(ev.terminalId, ev.data)
-          .then(found => {
-            if (!found) failTerminal(reply, 'input', `${terminalName} not found`, ev.terminalId)
-          })
-          .catch(error => failTerminal(reply, 'input', error, ev.terminalId))
-      } catch (error) {
-        failTerminal(reply, 'input', error, ev.terminalId)
-      }
-    },
-
-    resizeTerminal: ({ event, reply, client }) => {
-      const ev = event as {
-        type: 'terminal.RESIZE_TERMINAL'; terminalId: string; cols: number; rows: number
-        cellWidth?: number; cellHeight?: number
-      }
-      // One cell in pixels, where the window measured one: what a program asking for the size in pixels is told
-      const cell = ev.cellWidth && ev.cellHeight ? { width: ev.cellWidth, height: ev.cellHeight } : undefined
-      try {
-        const terminal = terminalService.get(ev.terminalId)
-        const terminalName = terminal ? terminal.info.title : 'Terminal'
-        // **Every window's fit is recorded, and the pty runs at the smallest** (`TerminalService.resize`):
-        // a pty has one `(cols, rows)`, and the smallest fit is the one every window showing it can draw
-        // whole. `client` names the connection the message arrived on, which the API stamps and nobody
-        // can forge.
-        void terminalService.resize(ev.terminalId, ev.cols, ev.rows, client, cell)
-          .then(accepted => {
-            if (!accepted) {
-              failTerminal(reply, 'resize', `${terminalName} not found`, ev.terminalId)
-              return
-            }
-            const grid = { terminalId: ev.terminalId, cols: accepted.cols, rows: accepted.rows }
-            // **The grid moved, so every window showing this terminal needs it** — each renders the accepted
-            // one rather than whatever it fitted for itself, which is what stops a second window drawing at
-            // a size nothing agreed to.
-            if (accepted.changed) {
-              emitToFrontend({ type: 'terminal.RESIZED', data: grid })
-              return
-            }
-            // **Nothing moved, so this is not news** — but if the asker did not get what it asked for, that
-            // is the asker's business and nobody else's, so it is replied rather than broadcast.
-            if (accepted.cols !== ev.cols || accepted.rows !== ev.rows) {
-              reply?.({ type: 'terminal.RESIZED', data: grid })
-            }
-          })
-          .catch(error => failTerminal(reply, 'resize', error, ev.terminalId))
-      } catch (error) {
-        failTerminal(reply, 'resize', error, ev.terminalId)
-      }
+  actions: {
+    ...answers.actions,
+    ...handlers.actions({
+    /** Keystrokes: a terminal that is not there is reported, and nothing is answered */
+    sendTerminalInput: ({ event }) => {
+      const ev = typeOf('terminal.TERMINAL_INPUT', event)
+      const terminalName = nameOf(ev.terminalId)
+      void terminalService.write(ev.terminalId, ev.data)
+        .then(found => {
+          if (!found) failTerminal('input', new Error(`${terminalName} not found`))
+        })
+        .catch(error => failTerminal('input', error))
     },
 
     /**
      * A window has stopped showing a terminal, so the grid may rise for the windows that still are.
      *
-     * Broadcast and never replied: the asker is the window that just stopped drawing it, and the windows
+     * Broadcast and never answered: the sender is the window that just stopped drawing it, and the windows
      * that need the new grid are the others.
      */
     stoppedFitting: ({ event, client }) => {
-      const ev = event as { type: 'terminal.STOPPED_FITTING'; terminalId: string }
+      const ev = typeOf('terminal.STOPPED_FITTING', event)
       if (client === undefined) return
       void terminalService.stoppedFitting(ev.terminalId, client)
         .then(accepted => {
@@ -371,131 +331,43 @@ export const terminalSystem = setup({
         .catch(error => { logger.error(`Could not release ${ev.terminalId}'s fit`, { error }) })
     },
 
-    renameTerminal: ({ event, reply }) => {
-      const ev = event as { type: 'terminal.RENAME_TERMINAL'; terminalId: string; customTitle: string }
-      try {
-        const terminal = terminalService.get(ev.terminalId)
-        const terminalName = terminal ? terminal.info.title : 'Terminal'
-        const success = terminalService.rename(ev.terminalId, ev.customTitle)
-        if (!success) {
-          failTerminal(reply, 'rename', `${terminalName} not found`, ev.terminalId)
-        } else {
-          // Emit success event
-          broadcastToSurface(surfaceId, {
-            type: 'terminal.RENAMED',
-            data: { terminalId: ev.terminalId, customTitle: ev.customTitle }
-          })
-        }
-      } catch (error) {
-        failTerminal(reply, 'rename', error, ev.terminalId)
-      }
-    },
-
-    listTerminals: ({ reply }) => {
-      try {
-        const terminals = terminalService.list()
-        answer(reply, {
-          type: 'terminal.TERMINALS_LISTED',
-          data: terminals
-        })
-      } catch (error) {
-        failTerminal(reply, 'list', error)
-      }
-    },
-
-    openTerminalTab: ({ event, reply }) => {
-      const ev = event as { type: 'terminal.OPEN_TERMINAL_TAB'; terminalId: string }
-      try {
-        const terminals = terminalService.list()
-        const terminal = terminals.find(t => t.id === ev.terminalId)
-
-        if (terminal) {
-          answer(reply, {
-            type: 'terminal.TERMINAL_TAB_OPENED',
-            data: terminal
-          })
-        } else {
-          failTerminal(reply, 'open-tab', 'Terminal not found', ev.terminalId)
-        }
-      } catch (error) {
-        failTerminal(reply, 'open-tab', error, ev.terminalId)
-      }
-    },
-
-    /** News rather than a reply: every window showing the terminal marks it as one that keeps running */
-    keepTerminal: ({ event, reply }) => {
-      const ev = event as { type: 'terminal.KEEP_TERMINAL'; terminalId: string; kept: boolean }
-      void terminalService.keep(ev.terminalId, ev.kept).then(info => {
-        if (!info) {
-          failTerminal(reply, 'keep', new Error(`No running terminal ${ev.terminalId}`), ev.terminalId)
-          return
-        }
-        emitToFrontend({ type: 'terminal.KEPT', data: { terminalId: ev.terminalId, kept: ev.kept } })
-      }).catch(error => failTerminal(reply, 'keep', error, ev.terminalId))
-    },
-
-    /** News rather than a reply: what one window's person has looked at, every window stops marking */
+    /** News: what one window's person has looked at, every window stops marking */
     markStatusSeen: ({ event }) => {
-      const ev = event as { type: 'terminal.STATUS_SEEN'; terminalId: string }
+      const ev = typeOf('terminal.STATUS_SEEN', event)
       const statuses = terminalService.statusesSeen(ev.terminalId)
       if (statuses) emitToFrontend({ type: 'terminal.STATUS', data: { terminalId: ev.terminalId, statuses } })
     },
 
-    /** Replied: a recording is opened for the window that asked to look, and nobody else is looking */
-    rewindTerminal: ({ event, reply, client }) => {
-      const ev = event as { type: 'terminal.REWIND'; terminalId: string; cols: number; rows: number }
-      void terminalService.rewind(ev.terminalId, { cols: ev.cols, rows: ev.rows }, client).then(opened => {
-        if (!opened) {
-          failTerminal(reply, 'rewind', new Error(`No terminal ${ev.terminalId}`), ev.terminalId)
-          return
-        }
-        answer(reply, { type: 'terminal.REWOUND', data: opened })
-      }).catch(error => failTerminal(reply, 'rewind', error, ev.terminalId))
-    },
-
-    seekRewind: ({ event, reply }) => {
-      const ev = event as { type: 'terminal.REWIND_SEEK'; session: string; at: number }
-      void terminalService.seekRewind(ev.session, ev.at).then(at => {
-        if (at !== null) answer(reply, { type: 'terminal.REWIND_SOUGHT', data: { session: ev.session, at } })
-      }).catch(error => failTerminal(reply, 'rewind', error))
-    },
-
     resizeRewind: ({ event }) => {
-      const ev = event as { type: 'terminal.REWIND_RESIZE'; session: string; cols: number; rows: number }
+      const ev = typeOf('terminal.REWIND_RESIZE', event)
       void terminalService.resizeRewind(ev.session, ev.cols, ev.rows).catch(error => { logger.error('Could not resize a recording', { error }) })
     },
 
     closeRewind: ({ event }) => {
-      const ev = event as { type: 'terminal.REWIND_CLOSE'; session: string }
+      const ev = typeOf('terminal.REWIND_CLOSE', event)
       void terminalService.closeRewind(ev.session).catch(error => { logger.error('Could not close a recording', { error }) })
     },
 
     updateBaseDirectory: assign({
-      baseDirectory: ({ event }) => {
-        const ev = event as { type: 'terminal.UPDATE_BASE_DIRECTORY'; path: string }
-        return ev.path
-      }
+      baseDirectory: ({ event }) => typeOf('terminal.UPDATE_BASE_DIRECTORY', event).path
     })
-  })
+  }),
+  },
 }).createMachine({
   id: 'terminal',
   initial: 'initializing',
   context: ({ input }: { input?: { baseDirectory: string | null } }) => ({
     baseDirectory: input?.baseDirectory || null
   }),
-  // Stateless handlers safe during initialization
+  // Stateless handlers safe during initialization. The asks are taken in every state: those about the terminals
+  // the restore takes up wait for it (`restored`), so they are answered from the list as restored
   on: {
+    ...answers.on,
     'terminal.TERMINAL_INPUT': {
       actions: 'sendTerminalInput'
     },
-    'terminal.RESIZE_TERMINAL': {
-      actions: 'resizeTerminal'
-    },
     'terminal.STOPPED_FITTING': {
       actions: 'stoppedFitting'
-    },
-    'terminal.RENAME_TERMINAL': {
-      actions: 'renameTerminal'
     },
     'terminal.UPDATE_BASE_DIRECTORY': {
       actions: 'updateBaseDirectory'
@@ -507,12 +379,10 @@ export const terminalSystem = setup({
         src: 'restoreTerminalsActor',
         onDone: {
           target: 'idle',
-          actions: 'sendConnectedData'
         },
-        // **A rejection here used to stop the terminal system for the session** (L1), in silence: with no
-        // `onError` the machine stays in `initializing`, where it handles nothing, so every later
-        // `terminal.CREATE_TERMINAL` and every `GET_CODE_START` went nowhere and the surface showed an
-        // empty list for ever. Restoring is best-effort — what it restores is a convenience, and the
+        // **A rejection with no `onError` stops the terminal system for the session** (L1), in silence: the
+        // machine stays in `initializing`, so every ask waiting for the restore waits for ever and the
+        // surface shows an empty list. Restoring is best-effort — what it restores is a convenience, and the
         // previous run's processes are gone either way — so a failure is reported and the system goes on.
         //
         // **Nothing fires this branch today, and all three ways in are closed** — checked 2026-11-08, so
@@ -536,48 +406,20 @@ export const terminalSystem = setup({
           actions: [
             ({ event }) => {
               reportError({
-                error: (event as { error?: unknown }).error,
+                error: event.error,
                 title: 'Could not restore terminals',
                 source: 'terminal',
                 operation: 'restore',
               })
             },
-            'sendConnectedData',
           ],
         }
       }
     },
     idle: {
       on: {
-        'GET_CODE_START': {
-          actions: 'sendConnectedData'
-        },
-        'terminal.CREATE_TERMINAL': {
-          actions: 'createTerminal'
-        },
-        'terminal.CLOSE_TERMINAL': {
-          actions: 'closeTerminal'
-        },
-        'terminal.RESTART_TERMINAL': {
-          actions: 'restartTerminal'
-        },
-        'terminal.REFRESH_LIST': {
-          actions: 'listTerminals'
-        },
-        'terminal.OPEN_TERMINAL_TAB': {
-          actions: 'openTerminalTab'
-        },
-        'terminal.KEEP_TERMINAL': {
-          actions: 'keepTerminal'
-        },
         'terminal.STATUS_SEEN': {
           actions: 'markStatusSeen'
-        },
-        'terminal.REWIND': {
-          actions: 'rewindTerminal'
-        },
-        'terminal.REWIND_SEEK': {
-          actions: 'seekRewind'
         },
         'terminal.REWIND_CLOSE': {
           actions: 'closeRewind'

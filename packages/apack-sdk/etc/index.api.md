@@ -325,26 +325,30 @@ export type SystemEvents =
 */
 | {
     type: 'DATA_CHANGED_ELSEWHERE';
+}
+/**
+* How the answers to this system's own asks of another system travel. The ask that was made takes them (`ask`), and
+* no machine handles one: every system may ask, so every system receives them
+*/
+| AskAnswered | AskFailed | AskProgressed
+/** An asker stopping an ask of this system's. The bus takes it, and the ask's handler's `signal` aborts */
+| {
+    type: typeof ASK_CANCELLED;
 };
 
 // @public
-export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>, Extract<ContractOutgoing<C>, {
-    type: string;
-}>> {
+export interface SystemSpec<C extends SystemContract> extends Omit<Handlers<ContractContext<C>, MachineEvents<C>>, 'answers'> {
     actions<P extends ActionParams>(defs: {
         [K in keyof P]: (args: SystemArgs<C> & {
-            reply?: Reply<Extract<ContractOutgoing<C>, {
-                type: string;
-            }>>;
             client?: string;
         }, params: P[K]) => void;
     }): {
         [K in keyof P]: (args: SystemArgs<C>, params: P[K]) => void;
     };
+    answers<Elsewhere extends AskName<C> = never>(defs: {
+        readonly [K in Exclude<AskName<C>, Elsewhere>]: AnswerHandler<C, K>;
+    }): Answers<C, Exclude<AskName<C>, Elsewhere>>;
     input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & {
-        reply?: Reply<Extract<ContractOutgoing<C>, {
-            type: string;
-        }>>;
         client?: string;
     }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
     // (undocumented)
