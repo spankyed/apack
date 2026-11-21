@@ -121,7 +121,7 @@ with what it takes, what it answers with and the kinds it may fail as, and answe
 and the window that asked hears it and no other. `docs/public-facing/features.md#asks` is the reference; the library
 is the worked example of a read, notes of writes, threads of commands.
 
-- **A refusal the asker can act on has a kind**, declared under `fails` and thrown with `failure(kind, message, data)`,
+- **A refusal the asker can act on has a kind**, declared under `refuses` and thrown with `refuse(kind, message, data)`,
   and a surface branches on `failure.kind`, never on the wording: the library closes an editor whose document is
   `not-found`, the settings form shows a change's `refused` problems. Anything else a handler throws is `failed`, and
   an ask nothing took — the system is not running, or its state does not take the ask — is `unavailable`, which the

@@ -60,18 +60,18 @@ export type NotesSettings = import('#generated/settings.ts').SettingsOf<'notes'>
  * note it made, for the window that asked to open; an import or an export answers with what it did.
  */
 export type NoteAsks = {
-  CREATE_NOTE: { ask: { title: string; content?: string; icon?: string | null; parentId?: string; skipContentSync?: boolean; noteType?: 'document' | 'tasklist' | 'task'; completed?: boolean; displayOrder?: number }; answer: { note?: NoteSummary } }
-  UPDATE_NOTE: { ask: { id: string; title?: string; content?: string; icon?: string | null; completed?: boolean; hideCompletedChildren?: boolean; favorite?: boolean } }
-  DELETE_NOTE: { ask: { id: string } }
-  SOFT_DELETE_NOTE: { ask: { id: string } }
-  RESTORE_NOTE: { ask: { id: string } }
-  MOVE_NOTE: { ask: { ids: string[]; newParentId: string | null } }
-  REORDER_NOTE: { ask: { id: string; newParentId: string | null; newIndex: number } }
-  PERMANENTLY_DELETE_NOTE: { ask: { id: string } }
+  CREATE_NOTE: { args: { title: string; content?: string; icon?: string | null; parentId?: string; skipContentSync?: boolean; noteType?: 'document' | 'tasklist' | 'task'; completed?: boolean; displayOrder?: number }; answer: { note?: NoteSummary } }
+  UPDATE_NOTE: { args: { id: string; title?: string; content?: string; icon?: string | null; completed?: boolean; hideCompletedChildren?: boolean; favorite?: boolean } }
+  DELETE_NOTE: { args: { id: string } }
+  SOFT_DELETE_NOTE: { args: { id: string } }
+  RESTORE_NOTE: { args: { id: string } }
+  MOVE_NOTE: { args: { ids: string[]; newParentId: string | null } }
+  REORDER_NOTE: { args: { id: string; newParentId: string | null; newIndex: number } }
+  PERMANENTLY_DELETE_NOTE: { args: { id: string } }
   EMPTY_TRASH: {}
-  EXPORT_NOTES: { ask: { directory: string; format: 'markdown' | 'json' }; answer: { filePath: string; itemCount: number } }
+  EXPORT_NOTES: { args: { directory: string; format: 'markdown' | 'json' }; answer: { filePath: string; itemCount: number } }
   /** Imported with what could not be, unless nothing could, which fails */
-  IMPORT_NOTES: { ask: { directory: string }; answer: { count: number; errors?: string[] } }
+  IMPORT_NOTES: { args: { directory: string }; answer: { count: number; errors?: string[] } }
 }
 
 /** What a window tells the notes system and is not answered for */

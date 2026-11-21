@@ -15,14 +15,14 @@ import type { Outcome } from '../helpers/outcome.ts';
 /** One ask a system answers, as its contract declares it under `asks` */
 export interface AskDeclaration {
   /** The fields an asker sends beside `type`. None when absent */
-  ask?: object;
+  args?: object;
   /** What the handler answers with. Absent, or `void`, for an ask whose answer is only that it was done */
   answer?: unknown;
   /**
    * The ways it may fail that an asker can act on, each with the data its failure carries beside its kind and
    * message: `{ 'name-taken': { existingId: string } }`. `failed` and `unavailable` are every ask's, and not declared
    */
-  fails?: Record<string, object>;
+  refuses?: Record<string, object>;
 }
 
 /** The two answers an ask gets, as values: every surface and every system receives them */
@@ -38,13 +38,13 @@ export type ContractAsks<C> = C extends { asks: infer Asks } ? Asks : {};
 export type AskName<C> = keyof ContractAsks<C> & string;
 
 /** The fields an ask takes beside `type` */
-export type AskPayload<D> = D extends { ask: infer Payload } ? Payload : {};
+export type AskPayload<D> = D extends { args: infer Payload } ? Payload : {};
 
 /** What an ask is answered with: `void` for one that is only done */
 export type AnswerPayload<D> = D extends { answer: infer Answer } ? Answer : void;
 
 /** The failures an ask declares, by kind, with what each carries */
-export type DeclaredFailures<D> = D extends { fails: infer Fails } ? Fails : {};
+export type DeclaredFailures<D> = D extends { refuses: infer Fails } ? Fails : {};
 
 /** The kinds an ask declares it may fail as, beside the standard two */
 export type DeclaredFailureKind<D> = keyof DeclaredFailures<D> & string;
@@ -87,7 +87,7 @@ export type SystemAskMap = { [system: string]: { [ask: string]: AskDeclaration }
 
 /**
  * A refusal a handler throws, for a reason its asker can act on: one of the kinds the ask declares, the message to
- * show, and the data the kind carries. Built by the `failure` a handler is handed, which the compiler holds to the
+ * show, and the data the kind carries. Built by the `refuse` a handler is handed, which the compiler holds to the
  * ask's declaration; anything else a handler throws is answered as `failed`.
  */
 export class AskError extends Error {
@@ -98,20 +98,20 @@ export class AskError extends Error {
 }
 
 /**
- * What a handler is handed to refuse its ask with: `throw failure('not-found', 'Document not found')`. The data a
+ * What a handler is handed to refuse its ask with: `throw refuse('not-found', 'Document not found')`. The data a
  * kind declares is required when the declaration has required fields, and refused when it declares none.
  *
  * It returns the error rather than throwing it, so a handler writes `throw`: TypeScript narrows after a `throw`, and
  * does not after a call it cannot see never returns.
  */
-export type FailureOf<D> = <K extends DeclaredFailureKind<D>>(
+export type RefuseOf<D> = <K extends DeclaredFailureKind<D>>(
   kind: K,
   message: string,
   ...data: {} extends DeclaredFailures<D>[K] ? [data?: DeclaredFailures<D>[K]] : [data: DeclaredFailures<D>[K]]
 ) => AskError;
 
-/** @internal The `failure` a handler is handed: one implementation, typed per ask where it is handed */
-export const _failure = (kind: string, message: string, data?: object): AskError => new AskError(kind, message, data);
+/** @internal The `refuse` a handler is handed: one implementation, typed per ask where it is handed */
+export const _refuse = (kind: string, message: string, data?: object): AskError => new AskError(kind, message, data);
 
 /**
  * The kinds an error from the disk is, for an ask that declares them: a file or folder that is not there, or one

@@ -126,12 +126,12 @@ export type OpenedRun = { runNodeId: EARS.EntityId; data: FlowRunNodeData };
  */
 export type BrainAsks = {
   /** The tree of the root run, or of the flow run a window shows, with the brain's state, which a window just started has not heard yet */
-  REQUEST_SURFACE_DATA: { ask: { flowRunNodeId?: string }; answer: { data: FlowRunNodeData; state: BrainStateEvent } };
-  OPEN_RUN_NODE: { ask: { runNodeId: string }; answer: OpenedRun; fails: { 'not-a-flow': {} } };
+  REQUEST_SURFACE_DATA: { args: { flowRunNodeId?: string }; answer: { data: FlowRunNodeData; state: BrainStateEvent } };
+  OPEN_RUN_NODE: { args: { runNodeId: string }; answer: OpenedRun; refuses: { 'not-a-flow': {} } };
   /** The flow that ran the one a window shows, or the root run's when it shows the root */
-  GO_BACK_RUN_NODE: { ask: { currentFlowRunNodeId?: string }; answer: OpenedRun };
+  GO_BACK_RUN_NODE: { args: { currentFlowRunNodeId?: string }; answer: OpenedRun };
   /** A run node, or null for one the history no longer holds */
-  GET_RUN_NODE_DETAILS: { ask: { runNodeId: string }; answer: { runNodeId: RunNodeId; details: RunNodeDetails | null } };
+  GET_RUN_NODE_DETAILS: { args: { runNodeId: string }; answer: { runNodeId: RunNodeId; details: RunNodeDetails | null } };
 };
 
 /** What the brain's state is, as every window hears it */

@@ -5,15 +5,15 @@ import { EARS } from '#generated/ears.ts'
 
 /** The asks about a prompt's template, answered by the code system (`answers`, `system.ts`) */
 export const promptsAnswers: AnswersTo<PromptsAsks> = {
-  'codePrompts.OPEN_PROMPT': ({ ask: { promptId }, failure }) => {
+  'codePrompts.OPEN_PROMPT': ({ args: { promptId }, refuse }) => {
     const prompt = repository.promptQueries.byId(promptId as EARS.EntityId)
-    if (!prompt) throw failure('not-found', `Prompt ${promptId} not found`)
+    if (!prompt) throw refuse('not-found', `Prompt ${promptId} not found`)
     return { ...prompt, templateFnContent: prompt.templateFn }
   },
-  'codePrompts.SAVE_PROMPT': ({ ask: { promptId, templateFn }, failure }) => {
+  'codePrompts.SAVE_PROMPT': ({ args: { promptId, templateFn }, refuse }) => {
     repository.promptCommands.update(promptId as EARS.EntityId, { templateFn })
     const updated = repository.promptQueries.byId(promptId as EARS.EntityId)
-    if (!updated) throw failure('not-found', `Prompt ${promptId} not found`)
+    if (!updated) throw refuse('not-found', `Prompt ${promptId} not found`)
     return updated
   },
 }

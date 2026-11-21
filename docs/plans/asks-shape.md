@@ -54,7 +54,7 @@ to `tell` and `broadcast`. They touch other files than asks do and would double 
 
 | # | Package | State |
 |---|---|---|
-| 1 | One vocabulary | not started |
+| 1 | One vocabulary | done |
 | 2 | Progress is part of an ask | not started |
 | 3 | Cancelling reaches the handler | not started |
 | 4 | No `waiting` | not started |

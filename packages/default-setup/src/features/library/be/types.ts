@@ -142,29 +142,29 @@ type OnDisk = { 'not-found': {}; 'no-access': {} }
  * (`FOLDER_CHANGED`).
  */
 export type LibraryAsks = {
-  CREATE_DOCUMENT: { ask: { name: string; content: ContentSection[]; tags: string[]; collectionId?: EARS.EntityId; documentType?: string }; fails: OnDisk }
-  UPDATE_DOCUMENT: { ask: { id: EARS.EntityId; name: string; content: ContentSection[]; tags: string[] }; fails: OnDisk }
-  DELETE_DOCUMENT: { ask: { id: EARS.EntityId } }
+  CREATE_DOCUMENT: { args: { name: string; content: ContentSection[]; tags: string[]; collectionId?: EARS.EntityId; documentType?: string }; refuses: OnDisk }
+  UPDATE_DOCUMENT: { args: { id: EARS.EntityId; name: string; content: ContentSection[]; tags: string[] }; refuses: OnDisk }
+  DELETE_DOCUMENT: { args: { id: EARS.EntityId } }
   /** A document, read from disk when it is a file under a symlinked folder */
-  GET_DOCUMENT: { ask: { id: EARS.EntityId }; answer: { document: DocumentDTO }; fails: OnDisk }
+  GET_DOCUMENT: { args: { id: EARS.EntityId }; answer: { document: DocumentDTO }; refuses: OnDisk }
   /** Answered with the folder it made in the library, for the window that asked to name; one on disk is only made */
-  CREATE_COLLECTION: { ask: { name: string; description?: string; parentId?: EARS.EntityId }; answer: { collection?: CollectionDTO }; fails: OnDisk }
-  UPDATE_COLLECTION: { ask: { id: EARS.EntityId; name: string; description?: string } }
-  DELETE_COLLECTION: { ask: { id: EARS.EntityId } }
-  MOVE_DOCUMENT: { ask: { documentId: EARS.EntityId; collectionId?: EARS.EntityId } }
+  CREATE_COLLECTION: { args: { name: string; description?: string; parentId?: EARS.EntityId }; answer: { collection?: CollectionDTO }; refuses: OnDisk }
+  UPDATE_COLLECTION: { args: { id: EARS.EntityId; name: string; description?: string } }
+  DELETE_COLLECTION: { args: { id: EARS.EntityId } }
+  MOVE_DOCUMENT: { args: { documentId: EARS.EntityId; collectionId?: EARS.EntityId } }
   /** A folder's contents, read from disk when it is a symlinked folder or one inside one */
-  GET_FOLDER_CONTENTS: { ask: { folderId: EARS.EntityId | null }; answer: FolderContents; fails: OnDisk }
+  GET_FOLDER_CONTENTS: { args: { folderId: EARS.EntityId | null }; answer: FolderContents; refuses: OnDisk }
   /** Which of these symlinked collections no longer reach their folder on disk */
-  CHECK_SYMLINKS: { ask: { ids: EARS.EntityId[] }; answer: { ids: EARS.EntityId[]; broken: EARS.EntityId[] } }
-  RENAME_ITEM: { ask: { id: EARS.EntityId; name: string; itemType: 'document' | 'folder' }; fails: OnDisk }
-  DELETE_ITEMS: { ask: { ids: EARS.EntityId[] }; fails: OnDisk }
-  MOVE_ITEMS: { ask: { ids: EARS.EntityId[]; targetFolderId: EARS.EntityId | null }; fails: OnDisk }
-  CREATE_SYMLINK_COLLECTION: { ask: { name: string; symlinkPath: string; parentId?: EARS.EntityId }; answer: { collection: CollectionDTO } }
+  CHECK_SYMLINKS: { args: { ids: EARS.EntityId[] }; answer: { ids: EARS.EntityId[]; broken: EARS.EntityId[] } }
+  RENAME_ITEM: { args: { id: EARS.EntityId; name: string; itemType: 'document' | 'folder' }; refuses: OnDisk }
+  DELETE_ITEMS: { args: { ids: EARS.EntityId[] }; refuses: OnDisk }
+  MOVE_ITEMS: { args: { ids: EARS.EntityId[]; targetFolderId: EARS.EntityId | null }; refuses: OnDisk }
+  CREATE_SYMLINK_COLLECTION: { args: { name: string; symlinkPath: string; parentId?: EARS.EntityId }; answer: { collection: CollectionDTO } }
   /** Refused as `not-found` for a path that is no folder */
-  UPDATE_SYMLINK_PATH: { ask: { collectionId: EARS.EntityId; newPath: string }; fails: { 'not-found': {} } }
-  EXPORT_LIBRARY: { ask: { directory: string; format: 'markdown' | 'json' }; answer: { filePath: string; itemCount: number } }
+  UPDATE_SYMLINK_PATH: { args: { collectionId: EARS.EntityId; newPath: string }; refuses: { 'not-found': {} } }
+  EXPORT_LIBRARY: { args: { directory: string; format: 'markdown' | 'json' }; answer: { filePath: string; itemCount: number } }
   /** Imported with what could not be, unless nothing could, which fails */
-  IMPORT_LIBRARY: { ask: { directory: string }; answer: { count: number; errors?: string[] } }
+  IMPORT_LIBRARY: { args: { directory: string }; answer: { count: number; errors?: string[] } }
 }
 
 /**

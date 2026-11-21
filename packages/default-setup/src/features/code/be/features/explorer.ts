@@ -155,9 +155,9 @@ async function overFiles<T>(code: AnyActorRef, path: string | undefined, run: (r
 
 /** The explorer asks, answered by the code system (`answers`, `system.ts`) over the explorer's folder */
 export const explorerAnswers: AnswersTo<ExplorerAsks> = {
-  'explorer.LIST_FILES': ({ ask, self }) => overFiles(self, ask.path, (repository, explorer) =>
-    repository.listDirectory(ask.path || explorer.getSnapshot().context.baseDirectory || '')),
-  'explorer.READ_FILE': ({ ask: { path }, self }) => overFiles(self, path, async (repository, explorer) => {
+  'explorer.LIST_FILES': ({ args, self }) => overFiles(self, args.path, (repository, explorer) =>
+    repository.listDirectory(args.path || explorer.getSnapshot().context.baseDirectory || '')),
+  'explorer.READ_FILE': ({ args: { path }, self }) => overFiles(self, path, async (repository, explorer) => {
     // Watched from before it is read, so a change made while it is being read is one to what the editor holds
     openFiles(explorer)?.send({ type: 'OPEN', path })
     try {
@@ -167,29 +167,29 @@ export const explorerAnswers: AnswersTo<ExplorerAsks> = {
       throw error
     }
   }),
-  'explorer.WRITE_FILE': ({ ask: { path, content }, self }) => overFiles(self, path, async (repository) => {
+  'explorer.WRITE_FILE': ({ args: { path, content }, self }) => overFiles(self, path, async (repository) => {
     await repository.writeFile(path, content)
     return { path }
   }),
-  'explorer.CREATE_FILE': ({ ask: { path, content }, self }) => overFiles(self, path, async (repository) => {
+  'explorer.CREATE_FILE': ({ args: { path, content }, self }) => overFiles(self, path, async (repository) => {
     await repository.writeFile(path, content || '')
     return { path }
   }),
-  'explorer.DELETE_FILE': ({ ask: { path }, self }) => overFiles(self, path, async (repository) => {
+  'explorer.DELETE_FILE': ({ args: { path }, self }) => overFiles(self, path, async (repository) => {
     await repository.deleteFile(path)
     return { path }
   }),
-  'explorer.RENAME_FILE': ({ ask: { oldPath, newPath }, self }) => overFiles(self, oldPath, async (repository) => {
+  'explorer.RENAME_FILE': ({ args: { oldPath, newPath }, self }) => overFiles(self, oldPath, async (repository) => {
     await repository.renameFile(oldPath, newPath)
     return { oldPath, newPath }
   }),
-  'explorer.CREATE_DIRECTORY': ({ ask: { path }, self }) => overFiles(self, path, async (repository) => {
+  'explorer.CREATE_DIRECTORY': ({ args: { path }, self }) => overFiles(self, path, async (repository) => {
     await repository.createDirectory(path)
     return { path }
   }),
-  'explorer.GET_FILE_INFO': ({ ask: { path }, self }) => overFiles(self, path, repository => repository.getFileInfo(path)),
-  'explorer.QUICK_OPEN_SEARCH': ({ ask: { baseDirectory }, self }) => overFiles(self, baseDirectory, repository => repository.getAllFiles(baseDirectory)),
-  'explorer.MOVE_FILES': ({ ask: { sourcePaths, targetDir }, self }) => overFiles(self, targetDir, async (repository, explorer) => {
+  'explorer.GET_FILE_INFO': ({ args: { path }, self }) => overFiles(self, path, repository => repository.getFileInfo(path)),
+  'explorer.QUICK_OPEN_SEARCH': ({ args: { baseDirectory }, self }) => overFiles(self, baseDirectory, repository => repository.getAllFiles(baseDirectory)),
+  'explorer.MOVE_FILES': ({ args: { sourcePaths, targetDir }, self }) => overFiles(self, targetDir, async (repository, explorer) => {
     const movedPaths: string[] = []
     for (const sourcePath of sourcePaths) {
       movedPaths.push(await repository.moveFile(sourcePath, targetDir))
@@ -198,7 +198,7 @@ export const explorerAnswers: AnswersTo<ExplorerAsks> = {
     }
     return { sourcePaths, targetDir, movedPaths }
   }),
-  'explorer.COPY_FILES': ({ ask: { sourcePaths, targetDir }, self }) => overFiles(self, targetDir, async (repository) => {
+  'explorer.COPY_FILES': ({ args: { sourcePaths, targetDir }, self }) => overFiles(self, targetDir, async (repository) => {
     const copiedPaths: string[] = []
     for (const sourcePath of sourcePaths) copiedPaths.push(await repository.copyFileInto(sourcePath, targetDir))
     return { targetDir, copiedPaths }

@@ -433,7 +433,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
     }
   },
 
-  'commit.GET_GIT_DIFF': ({ ask: ev, context }) => git(async () => {
+  'commit.GET_GIT_DIFF': ({ args: ev, context }) => git(async () => {
     const repository = gitRepositoryOf(context)
     const isImage = ev.path ? repository.isImageFile(ev.path) : false
     const getContent = isImage
@@ -506,13 +506,13 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
     }
   }),
 
-  'commit.STAGE_FILES': ({ ask: { paths }, context, self }) => git(async () => {
+  'commit.STAGE_FILES': ({ args: { paths }, context, self }) => git(async () => {
     await gitRepositoryOf(context).stageFiles(paths)
     written(self)
     return { paths }
   }),
 
-  'commit.UNSTAGE_FILES': ({ ask: { paths }, context, self }) => git(async () => {
+  'commit.UNSTAGE_FILES': ({ args: { paths }, context, self }) => git(async () => {
     const repository = gitRepositoryOf(context)
     const status = await repository.readStatus()
     const allPaths = new Set(paths)
@@ -528,33 +528,33 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
     return { paths }
   }),
 
-  'commit.REVERT_FILE': ({ ask: { path }, context, self }) => git(async () => {
+  'commit.REVERT_FILE': ({ args: { path }, context, self }) => git(async () => {
     const kept = await gitRepositoryOf(context).revertFile(path)
     written(self)
     filesChanged([path])
     return { path, kept }
   }),
 
-  'commit.REVERT_FILES': ({ ask: { paths }, context, self }) => git(async () => {
+  'commit.REVERT_FILES': ({ args: { paths }, context, self }) => git(async () => {
     const kept = await gitRepositoryOf(context).revertFiles(paths)
     written(self)
     filesChanged(paths)
     return { paths, kept }
   }),
 
-  'commit.RESOLVE_CONFLICT': ({ ask: { path, strategy }, context, self }) => git(async () => {
+  'commit.RESOLVE_CONFLICT': ({ args: { path, strategy }, context, self }) => git(async () => {
     await gitRepositoryOf(context).resolveConflict(path, strategy)
     written(self)
     return { path }
   }),
 
-  'commit.MARK_RESOLVED': ({ ask: { path }, context, self }) => git(async () => {
+  'commit.MARK_RESOLVED': ({ args: { path }, context, self }) => git(async () => {
     await gitRepositoryOf(context).stageFiles([path])
     written(self)
     return { path }
   }),
 
-  'commit.RESOLVE_ALL_CONFLICTS': ({ ask: { strategy }, context, self }) => git(async () => {
+  'commit.RESOLVE_ALL_CONFLICTS': ({ args: { strategy }, context, self }) => git(async () => {
     const repository = gitRepositoryOf(context)
     const status = await repository.readStatus()
     for (const f of status.filter(f => f.status === 'unmerged')) {
@@ -567,7 +567,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
    * Carries on with what git is in the middle of, leaves out the commit a rebase stopped at, or gives it up.
    * Whether it could or not, the repository may be somewhere else afterwards, so it is checked either way
    */
-  'commit.MOVE_OPERATION': ({ ask: { move }, context, self }) => git(async () => {
+  'commit.MOVE_OPERATION': ({ args: { move }, context, self }) => git(async () => {
     const repository = gitRepositoryOf(context)
     try {
       await repository.moveOperation(move)
@@ -577,7 +577,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
     return { move }
   }),
 
-  'commit.AMEND': ({ ask: { message, evenIfPublished }, context, self }) => git(async () => {
+  'commit.AMEND': ({ args: { message, evenIfPublished }, context, self }) => git(async () => {
     const repository = gitRepositoryOf(context)
     const committed = message === undefined ? undefined : await asCommitted(repository, message)
     await repository.amend({ message: committed, evenIfPublished }).catch((error: unknown) => { throw published(error) ?? error })
@@ -585,16 +585,16 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
     return undoableAfter(repository)
   }),
 
-  'commit.GET_COMMIT_MESSAGE': ({ ask: { hash }, context }) => git(async () => ({ hash, message: await gitRepositoryOf(context).commitMessage(hash) })),
+  'commit.GET_COMMIT_MESSAGE': ({ args: { hash }, context }) => git(async () => ({ hash, message: await gitRepositoryOf(context).commitMessage(hash) })),
 
-  'commit.READ_TRAILERS': ({ ask: { message }, context }) => git(async () => ({ message, trailers: await gitRepositoryOf(context).trailersIn(message) })),
+  'commit.READ_TRAILERS': ({ args: { message }, context }) => git(async () => ({ message, trailers: await gitRepositoryOf(context).trailersIn(message) })),
 
-  'commit.REMOVE_TRAILER': ({ ask: { message, trailer }, context }) => git(async () => ({
+  'commit.REMOVE_TRAILER': ({ args: { message, trailer }, context }) => git(async () => ({
     message,
     without: await gitRepositoryOf(context).withoutTrailers(message, ({ key, value }) => key === trailer.key && value === trailer.value),
   })),
 
-  'commit.REWRITE_COMMIT': ({ ask: { hash, action, message, evenIfPublished }, context, self }) => git(async () => {
+  'commit.REWRITE_COMMIT': ({ args: { hash, action, message, evenIfPublished }, context, self }) => git(async () => {
     const repository = gitRepositoryOf(context)
     const { base, steps } = await rewriteOf(repository, hash, action, message)
     await repository.rewrite(base, steps, { evenIfPublished }).catch((error: unknown) => { throw published(error) ?? error })
@@ -602,7 +602,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
     return { hash, action, ...await undoableAfter(repository) }
   }),
 
-  'commit.START_OPERATION': ({ ask: { kind, target }, context, self }) => {
+  'commit.START_OPERATION': ({ args: { kind, target }, context, self }) => {
     const repository = gitRepositoryOf(context)
     return git(async () => {
       const { operation } = await repository.readSnapshot()
@@ -617,14 +617,14 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
     }).finally(() => written(self))
   },
 
-  'commit.PREVIEW_MERGE': ({ ask: { target }, context }) => git(async () => ({ target, preview: await gitRepositoryOf(context).previewMerge(target) })),
+  'commit.PREVIEW_MERGE': ({ args: { target }, context }) => git(async () => ({ target, preview: await gitRepositoryOf(context).previewMerge(target) })),
 
-  'commit.COMMIT': ({ ask, context, self }) => {
+  'commit.COMMIT': ({ args, context, self }) => {
     const repository = gitRepositoryOf(context)
     return (async () => {
       const stagedFiles = await repository.readStagedFiles()
       if (stagedFiles.length === 0) throw new Error('No files staged for commit. Please stage files before committing.')
-      const message = await asCommitted(repository, ask.message)
+      const message = await asCommitted(repository, args.message)
       await repository.commit(message)
       written(self)
       return { message, ...await undoableAfter(repository) }
@@ -655,7 +655,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
    * branch has is refused with the name, which the panel offers to make; a pull that fails after the checkout is
    * refused as the pull's failure, the checkout having happened
    */
-  'commit.CHECKOUT_BRANCH': async ({ ask: { branchName, pull }, context, self, client }) => {
+  'commit.CHECKOUT_BRANCH': async ({ args: { branchName, pull }, context, self, client }) => {
     const repository = gitRepositoryOf(context)
     try {
       await repository.checkoutBranch(branchName, progressTo(client, 'checkout'))
@@ -676,7 +676,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
   },
 
   /** Makes a branch at what is checked out and checks it out: answered as a checkout of it */
-  'commit.CREATE_BRANCH': ({ ask: { branchName }, context, self }) => git(async () => {
+  'commit.CREATE_BRANCH': ({ args: { branchName }, context, self }) => git(async () => {
     await gitRepositoryOf(context).createBranch(branchName)
     written(self)
     return { branchName }
@@ -736,7 +736,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
   }),
 
   /** Which of what discarding these rows would remove is too large to keep a copy of, for the window about to ask */
-  'commit.PREVIEW_DISCARD': ({ ask: { paths }, context }) => git(async () => ({ paths, notKept: await gitRepositoryOf(context).discardNotKept(paths) })),
+  'commit.PREVIEW_DISCARD': ({ args: { paths }, context }) => git(async () => ({ paths, notKept: await gitRepositoryOf(context).discardNotKept(paths) })),
 
   /**
    * Adds the repository the panel is over to the user's safe.directory, when git refuses it for who owns it.
@@ -763,7 +763,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
    * Remembers that the user trusts this repository, after which git runs there as it does anywhere. Only the
    * repository the panel is over: the path arrives from a window, and trust is not handed out by name
    */
-  'commit.TRUST_REPOSITORY': ({ ask: { repository: named }, context, self }) => git(async () => {
+  'commit.TRUST_REPOSITORY': ({ args: { repository: named }, context, self }) => git(async () => {
     const { repository } = await gitRepositoryOf(context).readTrust()
     if (!repository || repository !== named) throw new Error('That is not the repository this panel is showing')
     trustRepository(repository)
@@ -774,7 +774,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
   }),
 
   /** Takes back the last write the engine made here, refused as `published` for a commit a remote branch already holds */
-  'commit.UNDO_LAST': ({ ask: { evenIfPublished }, context, self }) => git(async () => {
+  'commit.UNDO_LAST': ({ args: { evenIfPublished }, context, self }) => git(async () => {
     const repository = gitRepositoryOf(context)
     const entry = await repository.undo({ evenIfPublished }).catch((error: unknown) => { throw published(error) ?? error })
     written(self)
@@ -782,7 +782,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
   }),
 
   /** Puts back what a discard kept: a write like the discard it undoes, announced the same way */
-  'commit.RESTORE_DISCARDED': ({ ask: { id }, context, self }) => git(async () => {
+  'commit.RESTORE_DISCARDED': ({ args: { id }, context, self }) => git(async () => {
     const restored = await gitRepositoryOf(context).restoreDiscarded(id)
     written(self)
     filesChanged(restored.restored)
@@ -790,10 +790,10 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
   }),
 
   /** The files in an untracked folder the panel lists as one row, for the window that opened it */
-  'commit.LIST_UNTRACKED': ({ ask: { path: folder }, context }) => git(async () => ({ path: folder, ...await gitRepositoryOf(context).listUntracked(folder) })),
+  'commit.LIST_UNTRACKED': ({ args: { path: folder }, context }) => git(async () => ({ path: folder, ...await gitRepositoryOf(context).listUntracked(folder) })),
 
   /** Stages one piece of a file's change, or takes one back out of what is staged: a write like staging the file */
-  'commit.APPLY_HUNK': ({ ask: { path: file, staged, hunk }, context, self }) => git(async () => {
+  'commit.APPLY_HUNK': ({ args: { path: file, staged, hunk }, context, self }) => git(async () => {
     try {
       await gitRepositoryOf(context).applyHunk(file, staged, hunk)
     } catch (error) {
@@ -811,7 +811,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
    * gives every git run that sign-in), so fetching starts again and the window runs again what was refused. The
    * host arrives from the window, so it is held to a host name, and to GitHub's
    */
-  'commit.SET_UP_SIGN_IN': ({ ask: { host, during: asked }, context, self }) => {
+  'commit.SET_UP_SIGN_IN': ({ args: { host, during: asked }, context, self }) => {
     // The push or the pull that was refused, which the answer carries back: whoever asked runs it again
     // once git can sign in, and what they held of it may have been cleared while this ran
     const during = asked === 'push' || asked === 'pull' ? { during: asked } : {}
@@ -825,28 +825,28 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
     return { host, ...during }
   },
 
-  'commit.STASH_PUSH': ({ ask: { message, stagedOnly, paths }, context, self }) => git(async () => {
+  'commit.STASH_PUSH': ({ args: { message, stagedOnly, paths }, context, self }) => git(async () => {
     const result = await gitRepositoryOf(context).stashPush(message, stagedOnly, paths)
     written(self)
     return { message: result }
   }),
 
-  'commit.CREATE_TAG': ({ ask: { name, commit, message }, context }) => git(async () => {
+  'commit.CREATE_TAG': ({ args: { name, commit, message }, context }) => git(async () => {
     await gitRepositoryOf(context).createTag(name, { commit, message })
     return { name }
   }),
 
-  'commit.DELETE_TAG': ({ ask: { name }, context }) => git(async () => {
+  'commit.DELETE_TAG': ({ args: { name }, context }) => git(async () => {
     await gitRepositoryOf(context).deleteTag(name)
     return { name }
   }),
 
-  'commit.PUSH_TAG': ({ ask: { name }, context }) => git(async () => {
+  'commit.PUSH_TAG': ({ args: { name }, context }) => git(async () => {
     await gitRepositoryOf(context).pushTag(name)
     return { name }
   }),
 
-  'commit.RENAME_BRANCH': ({ ask: { name, to }, context, self }) => git(async () => {
+  'commit.RENAME_BRANCH': ({ args: { name, to }, context, self }) => git(async () => {
     await gitRepositoryOf(context).renameBranch(name, to)
     written(self)
     return { name, to }
@@ -865,7 +865,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
    * Applies a stash, or with `STASH_POP` applies and drops it. A stash that conflicts is refused as the conflict, and
    * the repository is checked either way, so the status shows the conflicted files (and a popped one is kept)
    */
-  'commit.STASH_APPLY': ({ ask: { index }, context, self }) => git(async () => {
+  'commit.STASH_APPLY': ({ args: { index }, context, self }) => git(async () => {
     await gitRepositoryOf(context).stashApply(index).catch((error: unknown) => {
       if (error instanceof StashConflictError) written(self)
       throw error
@@ -874,7 +874,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
     return { index, popped: false }
   }),
 
-  'commit.STASH_POP': ({ ask: { index }, context, self }) => git(async () => {
+  'commit.STASH_POP': ({ args: { index }, context, self }) => git(async () => {
     await gitRepositoryOf(context).stashPop(index).catch((error: unknown) => {
       if (error instanceof StashConflictError) written(self)
       throw error
@@ -884,13 +884,13 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
   }),
 
   /** The files a stash holds, read without applying it */
-  'commit.GET_STASH_CHANGES': ({ ask: { index }, context }) => git(async () => ({ index, files: await gitRepositoryOf(context).readStashChanges(index) })),
+  'commit.GET_STASH_CHANGES': ({ args: { index }, context }) => git(async () => ({ index, files: await gitRepositoryOf(context).readStashChanges(index) })),
 
   /**
    * Who last changed each line of a file, leaving out the commits the repository lists to be ignored. One the window
    * asked for again before it was read is refused as `stopped`, which nobody shows
    */
-  'commit.GET_BLAME': ({ ask: { path: file }, context, client }) => git(async () => {
+  'commit.GET_BLAME': ({ args: { path: file }, context, client }) => git(async () => {
     const repository = gitRepositoryOf(context)
     const read = windowRead(client, 'blame')
     try {
@@ -903,7 +903,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
     }
   }),
 
-  'commit.STASH_DROP': ({ ask: { index }, context, self }) => git(async () => {
+  'commit.STASH_DROP': ({ args: { index }, context, self }) => git(async () => {
     const repository = gitRepositoryOf(context)
     await repository.stashDrop(index)
     written(self)
@@ -918,7 +918,7 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
   }),
 
   /** A page of history. One the window asked for again before it was read is refused as `stopped`, which nobody shows */
-  'commit.LOG_LIST': ({ ask: { cursor, path: file }, context, client }) => git(async () => {
+  'commit.LOG_LIST': ({ args: { cursor, path: file }, context, client }) => git(async () => {
     const repository = gitRepositoryOf(context)
     // The window takes the answer to its latest ask of the log alone, whichever history that ask was of
     const read = windowRead(client, 'history')
@@ -947,19 +947,19 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
    * Brings a submodule to the commit the repository records for it, setting it up first if it is not: what makes a
    * submodule's row that says it is on another commit go away, short of committing the commit it is on
    */
-  'commit.UPDATE_SUBMODULE': ({ ask: { path: submodule }, context, self, client }) => git(async () => {
+  'commit.UPDATE_SUBMODULE': ({ args: { path: submodule }, context, self, client }) => git(async () => {
     await gitRepositoryOf(context).updateSubmodules([submodule], { onProgress: progressTo(client, 'submodule') })
     written(self)
     return { path: submodule }
   }),
 
-  'commit.REVERT_COMMIT': ({ ask: { hash }, context, self }) => git(async () => {
+  'commit.REVERT_COMMIT': ({ args: { hash }, context, self }) => git(async () => {
     await gitRepositoryOf(context).revertCommit(hash)
     written(self)
     return { hash }
   }),
 
-  'commit.RESET_TO_COMMIT': ({ ask: { hash }, context, self }) => git(async () => {
+  'commit.RESET_TO_COMMIT': ({ args: { hash }, context, self }) => git(async () => {
     const repository = gitRepositoryOf(context)
     await repository.resetToCommit(hash)
     written(self)
@@ -968,13 +968,13 @@ export const commitAnswers: AnswersTo<CommitAsks> = {
 
   'commit.WORKTREE_LIST': ({ context }) => git(async () => ({ worktrees: await gitRepositoryOf(context).worktreeList() })),
 
-  'commit.WORKTREE_ADD': ({ ask: { path, branch, createBranch }, context, self }) => git(async () => {
+  'commit.WORKTREE_ADD': ({ args: { path, branch, createBranch }, context, self }) => git(async () => {
     await gitRepositoryOf(context).worktreeAdd(path, branch, createBranch)
     written(self)
     return { path, branch: branch || '' }
   }),
 
-  'commit.WORKTREE_REMOVE': ({ ask: { path, force }, context, self }) => git(async () => {
+  'commit.WORKTREE_REMOVE': ({ args: { path, force }, context, self }) => git(async () => {
     await gitRepositoryOf(context).worktreeRemove(path, force)
     written(self)
     return { path }

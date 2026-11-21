@@ -201,12 +201,12 @@ export type Contract = {
   asks: {
     // What it takes beside `type`, what it answers with, and the ways it may fail that an asker can act on
     RENAME_BOOKMARK: {
-      ask: { id: string; name: string };
+      args: { id: string; name: string };
       answer: { name: string };
-      fails: { 'name-taken': { existingId: string } };
+      refuses: { 'name-taken': { existingId: string } };
     };
     // No `answer`: answered only that it was done
-    DELETE_BOOKMARK: { ask: { id: string } };
+    DELETE_BOOKMARK: { args: { id: string } };
   };
 };
 ```
@@ -218,13 +218,13 @@ leave the asker waiting:
 ```typescript
 // be/system.ts
 export const answers = bookmarksSpec.answers({
-  RENAME_BOOKMARK: ({ ask, failure }) => {
-    const existing = repository.bookmarkQueries.byName(ask.name);
-    if (existing) throw failure('name-taken', 'Another bookmark has that name', { existingId: existing.id });
-    repository.bookmarkCommands.rename(ask.id, ask.name);
-    return { name: ask.name };
+  RENAME_BOOKMARK: ({ args, refuse }) => {
+    const existing = repository.bookmarkQueries.byName(args.name);
+    if (existing) throw refuse('name-taken', 'Another bookmark has that name', { existingId: existing.id });
+    repository.bookmarkCommands.rename(args.id, args.name);
+    return { name: args.name };
   },
-  DELETE_BOOKMARK: ({ ask }) => { repository.bookmarkCommands.delete(ask.id); },
+  DELETE_BOOKMARK: ({ args }) => { repository.bookmarkCommands.delete(args.id); },
 });
 
 export const bookmarksSystem = setup({
@@ -235,7 +235,7 @@ export const bookmarksSystem = setup({
 
 `answers.on` goes where the asks are taken: at the root for a system that takes them in every state, or one by one
 under a state (`DELETE_BOOKMARK: answers.on.DELETE_BOOKMARK`) for one that takes them only there. A handler is handed
-`ask`, `context`, `self`, `failure`, `client` (the asking window's connection, absent for another system's ask),
+`args`, `context`, `self`, `refuse`, `client` (the asking window's connection, absent for another system's ask),
 `waiting` (whether anyone waits for the answer: false for an ask sent from an action or a timer, whose outcome a
 handler that must still be heard broadcasts itself) and `signal`, which aborts when the window that asked goes.
 

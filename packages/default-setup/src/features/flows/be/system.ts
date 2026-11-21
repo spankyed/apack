@@ -78,41 +78,41 @@ export const answers = flowsSpec.answers({
     // Only the window that asked opens it; every window's list has it through the list view
     return { flowId: flow.id };
   },
-  UPDATE_FLOW_LABEL: ({ ask }) => { repository.flowsCommands.updateFlowLabel(ask.flowId as EARS.EntityId, ask.label); },
-  DELETE_FLOW: ({ ask }) => {
-    repository.flowsCommands.deleteFlow(ask.flowId as EARS.EntityId);
-    logger.info('Deleted a flow', { flowId: ask.flowId });
+  UPDATE_FLOW_LABEL: ({ args }) => { repository.flowsCommands.updateFlowLabel(args.flowId as EARS.EntityId, args.label); },
+  DELETE_FLOW: ({ args }) => {
+    repository.flowsCommands.deleteFlow(args.flowId as EARS.EntityId);
+    logger.info('Deleted a flow', { flowId: args.flowId });
   },
-  CREATE_NODE: ({ ask }) => {
-    const node = repository.flowsCommands.createNode(ask.flowId as EARS.EntityId, ask.nodeData);
-    return { tempId: ask.tempId, nodeId: node.id, node };
+  CREATE_NODE: ({ args }) => {
+    const node = repository.flowsCommands.createNode(args.flowId as EARS.EntityId, args.nodeData);
+    return { tempId: args.tempId, nodeId: node.id, node };
   },
-  UPDATE_NODE: ({ ask }) => { repository.flowsCommands.updateNode(ask.nodeId as EARS.EntityId, ask.nodeData); },
-  DELETE_NODE: ({ ask }) => { repository.flowsCommands.deleteNode(ask.nodeId as EARS.EntityId); },
-  CREATE_EDGE: ({ ask }) => {
-    const { sourceId, targetId, sourceHandle, targetHandle } = ask;
+  UPDATE_NODE: ({ args }) => { repository.flowsCommands.updateNode(args.nodeId as EARS.EntityId, args.nodeData); },
+  DELETE_NODE: ({ args }) => { repository.flowsCommands.deleteNode(args.nodeId as EARS.EntityId); },
+  CREATE_EDGE: ({ args }) => {
+    const { sourceId, targetId, sourceHandle, targetHandle } = args;
     const { relId } = repository.flowsCommands.createEdge(sourceId as EARS.EntityId, targetId as EARS.EntityId, { sourceHandle, targetHandle });
     return { sourceId: sourceId as EARS.EntityId, targetId: targetId as EARS.EntityId, relId, sourceHandle, targetHandle };
   },
-  DELETE_EDGE: ({ ask }) => { repository.flowsCommands.deleteEdge(ask.edgeId as EARS.RelationId); },
-  UPDATE_EDGE: ({ ask }) => {
-    repository.flowsCommands.updateEdge(ask.edgeId as EARS.RelationId, {
-      source: ask.source as EARS.EntityId,
-      target: ask.target as EARS.EntityId,
-      sourceHandle: ask.sourceHandle,
-      targetHandle: ask.targetHandle,
+  DELETE_EDGE: ({ args }) => { repository.flowsCommands.deleteEdge(args.edgeId as EARS.RelationId); },
+  UPDATE_EDGE: ({ args }) => {
+    repository.flowsCommands.updateEdge(args.edgeId as EARS.RelationId, {
+      source: args.source as EARS.EntityId,
+      target: args.target as EARS.EntityId,
+      sourceHandle: args.sourceHandle,
+      targetHandle: args.targetHandle,
     });
   },
-  REINDEX_HANDLES: ({ ask }) => { repository.flowsCommands.reindexHandles(ask.nodeId as EARS.EntityId, ask.prefix, ask.index, ask.direction); },
-  SET_ROOT_FLOW: ({ ask }) => {
+  REINDEX_HANDLES: ({ args }) => { repository.flowsCommands.reindexHandles(args.nodeId as EARS.EntityId, args.prefix, args.index, args.direction); },
+  SET_ROOT_FLOW: ({ args }) => {
     const previous = repository.flowsQueries.rootFlow();
-    if ((ask.flowId ?? undefined) === previous) return;
-    logger.info('Changing the root flow', { previousRootFlowId: previous, rootFlowId: ask.flowId });
-    if (ask.flowId) repository.flowsCommands.grantRootFlowRole(ask.flowId as EARS.EntityId);
+    if ((args.flowId ?? undefined) === previous) return;
+    logger.info('Changing the root flow', { previousRootFlowId: previous, rootFlowId: args.flowId });
+    if (args.flowId) repository.flowsCommands.grantRootFlowRole(args.flowId as EARS.EntityId);
     else if (previous) repository.flowsCommands.revokeRootFlowRole(previous);
   },
   // Refused, naming every reference it could not resolve, unless every one resolves against the actions and prompts
-  IMPORT_DSL: ({ ask: { dsl } }) => {
+  IMPORT_DSL: ({ args: { dsl } }) => {
     logger.info('Importing DSL flows', { flowCount: Object.keys(dsl || {}).length });
 
     const actions = repository.actionQueries.all();
@@ -138,7 +138,7 @@ export const answers = flowsSpec.answers({
     logger.info('DSL import complete', { flowIds });
     return { flowIds };
   },
-  EXPORT_DSL: ({ ask: { directory, flowId } }) => {
+  EXPORT_DSL: ({ args: { directory, flowId } }) => {
     logger.info('Exporting flows to DSL', { directory, flowId });
     const { filePath, flowCount, skipped } = exportFlowsToDSL(directory, {
       rootFlowRole: EARS.RoleKind.ROOT_FLOW,

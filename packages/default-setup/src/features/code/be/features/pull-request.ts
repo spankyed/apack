@@ -229,7 +229,7 @@ function autofillOf(currentBranch: string, commits: { subject: string; body: str
 export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
   'pr.GET_SMART_BASE_BRANCH': async ({ context }) => ({ branch: await gitRepositoryOf(context).getPRBaseBranch() }),
 
-  'pr.GET_BRANCH_DIFF': async ({ ask: { baseBranch: asked, headBranch, prNumber }, context, self }) => {
+  'pr.GET_BRANCH_DIFF': async ({ args: { baseBranch: asked, headBranch, prNumber }, context, self }) => {
     const repo = gitRepositoryOf(context)
     const baseBranch = asked ?? await repo.findBaseBranch({ preferUpstream: false })
     const comparisonAsk = { baseBranch, headBranch, prNumber }
@@ -239,38 +239,38 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
     return { files, baseBranch, headBranch }
   },
 
-  'pr.GET_BRANCH_FILE_DIFF': async ({ ask, context, self, failure }) => {
+  'pr.GET_BRANCH_FILE_DIFF': async ({ args, context, self, refuse }) => {
     const repo = gitRepositoryOf(context)
-    const where = { path: ask.path, baseBranch: ask.baseBranch, headBranch: ask.headBranch, ...(ask.prNumber && { prNumber: ask.prNumber }) }
+    const where = { path: args.path, baseBranch: args.baseBranch, headBranch: args.headBranch, ...(args.prNumber && { prNumber: args.prNumber }) }
     const read = async () => {
       // The comparison its file list was read from, which is fetched again only when that list is asked for
       const comparisons = comparisonsOf(self)
-      const key = comparisonKey(ask)
-      const comparison = comparisons.get(key) ?? await compare(repo, ask)
+      const key = comparisonKey(args)
+      const comparison = comparisons.get(key) ?? await compare(repo, args)
       comparisons.set(key, comparison)
-      const isImage = repo.isImageFile(ask.path)
+      const isImage = repo.isImageFile(args.path)
       const getContent = isImage
         ? (p: string, b: string) => repo.getFileContentFromBranchAsDataUrl(p, b)
         : (p: string, b: string) => repo.readFileContentFromBranch(p, b)
       // A side that is missing reads as empty, which is right for a file one branch does not have and wrong
       // for a branch that is not there: that is an error, said as one
       if (!await repo.commitsExist(comparison.original, comparison.head)) {
-        throw new Error(`Failed to get file diff between branches: ${ask.baseBranch} or ${ask.headBranch ?? 'HEAD'} is not a commit here`)
+        throw new Error(`Failed to get file diff between branches: ${args.baseBranch} or ${args.headBranch ?? 'HEAD'} is not a commit here`)
       }
       // The editor draws the change from the file's two sides, so those are what is read: no patch is made. The
       // original is the file where the head left the base, so what the base changed since is not shown as undone
       const [originalContent, modifiedContent] = await Promise.all([
-        getContent(ask.path, comparison.original),
-        getContent(ask.path, comparison.head),
+        getContent(args.path, comparison.original),
+        getContent(args.path, comparison.head),
       ])
       return { originalContent, modifiedContent, isImage }
     }
     try {
-      const { originalContent, modifiedContent, isImage } = await (ask.fetchMissing ? repo.fetchingMissing(read) : read())
-      return { path: ask.path, staged: false, originalContent, modifiedContent, isImage, baseBranch: ask.baseBranch, headBranch: ask.headBranch }
+      const { originalContent, modifiedContent, isImage } = await (args.fetchMissing ? repo.fetchingMissing(read) : read())
+      return { path: args.path, staged: false, originalContent, modifiedContent, isImage, baseBranch: args.baseBranch, headBranch: args.headBranch }
     } catch (error) {
       throw (error as { code?: string } | null)?.code === 'content-missing'
-        ? failure('content-missing', `${ask.path} needs content this clone was not given`, where)
+        ? refuse('content-missing', `${args.path} needs content this clone was not given`, where)
         : error
     }
   },
@@ -289,8 +289,8 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
     }
   },
 
-  'pr.LIST_PRS': ({ ask, context, failure }) => onGitHub(context, failure,
-    github => github.listPRs({ state: ask.state, ...(ask.query && { query: ask.query }), ...(ask.after && { after: ask.after }) })),
+  'pr.LIST_PRS': ({ args, context, refuse }) => onGitHub(context, refuse,
+    github => github.listPRs({ state: args.state, ...(args.query && { query: args.query }), ...(args.after && { after: args.after }) })),
 
   /**
    * Checks out the pull request's head as a branch here. A head on the checkout's own remote is that remote's
@@ -299,8 +299,8 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
    * following nothing, since nothing here can push to it. A branch already here is moved only forward
    * (`checkoutBranchAt`). Every window is shown the checkout, as after any write here
    */
-  'pr.CHECKOUT_PR': async ({ ask: { number }, context, self, failure }) => {
-    const { branch, checkout } = await onGitHub(context, failure, async (github, repo, remotes): Promise<{ branch: string; checkout: PRBranchCheckout }> => {
+  'pr.CHECKOUT_PR': async ({ args: { number }, context, self, refuse }) => {
+    const { branch, checkout } = await onGitHub(context, refuse, async (github, repo, remotes): Promise<{ branch: string; checkout: PRBranchCheckout }> => {
       const { branch, headInRemote } = await github.readHead(number)
       if (headInRemote) {
         const ref = await fetchSide(repo, branch, remotes.remote, 'head')
@@ -314,12 +314,12 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
     return { number, branch, checkout }
   },
 
-  'pr.SELECT_PR': ({ ask: { number }, context, failure }) => onGitHub(context, failure, github => settledDetails(github, number)),
+  'pr.SELECT_PR': ({ args: { number }, context, refuse }) => onGitHub(context, refuse, github => settledDetails(github, number)),
 
-  'pr.CREATE_PR': ({ ask, context, failure }) => onGitHub(context, failure,
+  'pr.CREATE_PR': ({ args, context, refuse }) => onGitHub(context, refuse,
     async (github, repo, remotes) => {
       const head = await headBranchOf(repo, remotes)
-      const { comments: _comments, ...pr } = await github.createPR({ title: ask.title, body: ask.body, base: ask.base, head, draft: ask.draft })
+      const { comments: _comments, ...pr } = await github.createPR({ title: args.title, body: args.body, base: args.base, head, draft: args.draft })
       return { pr }
     },
     async repo => { if (await onNoBranch(repo)) throw new Error(DETACHED); return undefined },
@@ -329,27 +329,27 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
    * A refused merge carries the pull request read again, so the panel reflects the check, review and mergeability
    * state the user is actually facing rather than whatever stale data led to the click
    */
-  'pr.MERGE_PR': async ({ ask: { number, method, sha }, context, self, failure }) => {
+  'pr.MERGE_PR': async ({ args: { number, method, sha }, context, self, refuse }) => {
     const repo = gitRepositoryOf(context)
-    const { github } = await gitHubOf(repo).catch(refusedBy(failure))
+    const { github } = await gitHubOf(repo).catch(refusedBy(refuse))
     try {
       await github.mergePR(number, method, sha)
     } catch (error) {
       if (!(error instanceof GitHubApiError)) throw error
       const details = await detailsIfRead(github, number)
-      throw failure('github', error.message, { reason: error.reason, ...(details && { details }) })
+      throw refuse('github', error.message, { reason: error.reason, ...(details && { details }) })
     }
     // GitHub moved the base: it is fetched, and every window shown what moved
     void fetchAndAnnounce(repo, self)
     return { number }
   },
 
-  'pr.CLOSE_PR': async ({ ask: { number }, context, failure }) => {
-    await onGitHub(context, failure, github => github.closePR(number))
+  'pr.CLOSE_PR': async ({ args: { number }, context, refuse }) => {
+    await onGitHub(context, refuse, github => github.closePR(number))
     return { number }
   },
 
-  'pr.TOGGLE_DRAFT': ({ ask: { number, isDraft }, context, failure }) => onGitHub(context, failure, async github => {
+  'pr.TOGGLE_DRAFT': ({ args: { number, isDraft }, context, refuse }) => onGitHub(context, refuse, async github => {
     // `isDraft` is what it is now, so true = draft → ready, false = ready → draft.
     if (!isDraft) {
       await github.markDraft(number)
@@ -362,9 +362,9 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
     return { number, isDraft: false, ...(details && { details }) }
   }),
 
-  'pr.CHECK_BRANCH_PR': async ({ context, failure }) => {
+  'pr.CHECK_BRANCH_PR': async ({ context, refuse }) => {
     if (!context.gitRepository) return { pr: null }
-    const pr = await onGitHub(context, failure,
+    const pr = await onGitHub(context, refuse,
       async (github, repo, remotes) => {
         const pr = await github.findPRForBranch(await headBranchOf(repo, remotes))
         return pr && shown(github, pr)
@@ -385,7 +385,7 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
     }
   },
 
-  'pr.UPDATE_PR': ({ ask: { number, title, body, base }, context, failure }) => onGitHub(context, failure, async github => {
+  'pr.UPDATE_PR': ({ args: { number, title, body, base }, context, refuse }) => onGitHub(context, refuse, async github => {
     await github.updatePR(number, { title, body, base })
     // Base changes cause GitHub to recompute mergeability asynchronously — its details are read once settled so the
     // Merge button settles correctly. Title / body edits don't affect mergeability, so skip the extra round-trip
@@ -395,24 +395,24 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
 
   // --- Comments ---
 
-  'pr.CREATE_COMMENT': async ({ ask: { number, body }, context, failure }) => {
-    await onGitHub(context, failure, github => github.createPRComment(number, body))
+  'pr.CREATE_COMMENT': async ({ args: { number, body }, context, refuse }) => {
+    await onGitHub(context, refuse, github => github.createPRComment(number, body))
     return { number }
   },
 
-  'pr.EDIT_COMMENT': async ({ ask: { commentId, body }, context, failure }) => {
-    await onGitHub(context, failure, github => github.editPRComment(commentId, body))
+  'pr.EDIT_COMMENT': async ({ args: { commentId, body }, context, refuse }) => {
+    await onGitHub(context, refuse, github => github.editPRComment(commentId, body))
     return { commentId }
   },
 
-  'pr.DELETE_COMMENT': async ({ ask: { commentId }, context, failure }) => {
-    await onGitHub(context, failure, github => github.deletePRComment(commentId))
+  'pr.DELETE_COMMENT': async ({ args: { commentId }, context, refuse }) => {
+    await onGitHub(context, refuse, github => github.deletePRComment(commentId))
     return { commentId }
   },
 
   /** The discussion read again after a write: the panel shows no error for it, the write itself having landed */
-  'pr.GET_COMMENTS': async ({ ask: { number }, context, failure }) => {
-    const comments = await onGitHub(context, failure, async github => {
+  'pr.GET_COMMENTS': async ({ args: { number }, context, refuse }) => {
+    const comments = await onGitHub(context, refuse, async github => {
       const comments = await github.getPRComments(number)
       for (const comment of comments) await shown(github, comment)
       return comments
@@ -423,31 +423,31 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
     return { number, comments }
   },
 
-  'pr.GET_REVIEW_THREADS': async ({ ask: { number }, context, failure }) =>
-    ({ threads: await onGitHub(context, failure, github => github.getReviewThreads(number)) }),
+  'pr.GET_REVIEW_THREADS': async ({ args: { number }, context, refuse }) =>
+    ({ threads: await onGitHub(context, refuse, github => github.getReviewThreads(number)) }),
 
-  'pr.REPLY_TO_THREAD': async ({ ask: { prNumber, commentId, body }, context, failure }) => {
-    await onGitHub(context, failure, github => github.replyToReviewThread(prNumber, commentId, body))
+  'pr.REPLY_TO_THREAD': async ({ args: { prNumber, commentId, body }, context, refuse }) => {
+    await onGitHub(context, refuse, github => github.replyToReviewThread(prNumber, commentId, body))
     return { prNumber }
   },
 
-  'pr.RESOLVE_THREAD': async ({ ask: { threadId }, context, failure }) => {
-    await onGitHub(context, failure, github => github.resolveReviewThread(threadId))
+  'pr.RESOLVE_THREAD': async ({ args: { threadId }, context, refuse }) => {
+    await onGitHub(context, refuse, github => github.resolveReviewThread(threadId))
     return { threadId }
   },
 
-  'pr.UNRESOLVE_THREAD': async ({ ask: { threadId }, context, failure }) => {
-    await onGitHub(context, failure, github => github.unresolveReviewThread(threadId))
+  'pr.UNRESOLVE_THREAD': async ({ args: { threadId }, context, refuse }) => {
+    await onGitHub(context, refuse, github => github.unresolveReviewThread(threadId))
     return { threadId }
   },
 
-  'pr.EDIT_REVIEW_COMMENT': async ({ ask: { commentId, body }, context, failure }) => {
-    await onGitHub(context, failure, github => github.editReviewComment(commentId, body))
+  'pr.EDIT_REVIEW_COMMENT': async ({ args: { commentId, body }, context, refuse }) => {
+    await onGitHub(context, refuse, github => github.editReviewComment(commentId, body))
     return { commentId }
   },
 
-  'pr.DELETE_REVIEW_COMMENT': async ({ ask: { commentId }, context, failure }) => {
-    await onGitHub(context, failure, github => github.deleteReviewComment(commentId))
+  'pr.DELETE_REVIEW_COMMENT': async ({ args: { commentId }, context, refuse }) => {
+    await onGitHub(context, refuse, github => github.deleteReviewComment(commentId))
     return { commentId }
   },
 
@@ -456,8 +456,8 @@ export const pullRequestAnswers: AnswersTo<PullRequestAsks> = {
    * remote names — another repository's is not this checkout's to delete — that no other open pull request is
    * from. One GitHub already deleted, on merge say, is deleted
    */
-  'pr.DELETE_BRANCH': async ({ ask: { number }, context, self, failure }) => {
-    const branch = await onGitHub(context, failure, async (github, repo, { remote }) => {
+  'pr.DELETE_BRANCH': async ({ args: { number }, context, self, refuse }) => {
+    const branch = await onGitHub(context, refuse, async (github, repo, { remote }) => {
       const { branch, headInRemote } = await github.readHead(number)
       if (!headInRemote) throw new Error(`#${number} is from a branch of another repository, a fork, which is not this checkout's to delete.`)
       const others = (await github.openPRsFromBranch(branch)).filter(other => other !== number)

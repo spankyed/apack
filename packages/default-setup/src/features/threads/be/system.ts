@@ -63,7 +63,7 @@ function reported<T>(refused: (error: unknown) => void, write: () => T): T {
 
 export const answers = threadsSpec.answers({
   // The thread and its parent's link are one unit, so a refused link leaves no thread behind
-  CREATE_THREAD: ({ ask: thread }) => reported((error) => reportThreadOperationError('create', error), () => transact(() => {
+  CREATE_THREAD: ({ args: thread }) => reported((error) => reportThreadOperationError('create', error), () => transact(() => {
     const { id } = repository.threadCommands.create({
       topic: thread.topic,
       instructions: thread.instructions,
@@ -75,7 +75,7 @@ export const answers = threadsSpec.answers({
     }
     return { id };
   })),
-  UPDATE_THREAD_FIELD: ({ ask: { key, value, threadId } }) => {
+  UPDATE_THREAD_FIELD: ({ args: { key, value, threadId } }) => {
     const operation =
       key === 'archived' ? (value ? 'archive' : 'unarchive') :
       key === 'pinned' ? (value ? 'pin' : 'unpin') :
@@ -87,7 +87,7 @@ export const answers = threadsSpec.answers({
       reportThreadOperationError(operation, error, threadId);
     }, () => { repository.threadCommands.update(threadId as EARS.EntityId, { [key]: value }); });
   },
-  UPDATE_THREAD_STATUS: ({ ask: { threadId, status } }) => {
+  UPDATE_THREAD_STATUS: ({ args: { threadId, status } }) => {
     reported((error) => {
       logger.warn('Failed to update thread status', { threadId, status, error });
       reportThreadOperationError('status', error, threadId);
@@ -99,13 +99,13 @@ export const answers = threadsSpec.answers({
       payload: { threadId, status, userInduced: true },
     });
   },
-  SET_THREAD_PARENT: ({ ask: { childIds, parentId } }) => reported((error) => {
+  SET_THREAD_PARENT: ({ args: { childIds, parentId } }) => reported((error) => {
     logger.warn('Failed to set thread parent', { childIds, parentId, error });
     reportThreadOperationError('parent', error, parentId);
   }, () => {
     repository.threadCommands.setParent(parentId as EARS.EntityId, childIds.map(id => id as EARS.EntityId));
   }),
-  DELETE_THREAD: ({ ask: { threadId } }) => {
+  DELETE_THREAD: ({ args: { threadId } }) => {
     // Stop active processes before hard-deleting the thread.
     runThreadTeardown(threadId);
     reported((error) => {
@@ -113,24 +113,24 @@ export const answers = threadsSpec.answers({
       reportThreadOperationError('delete', error, threadId);
     }, () => { repository.threadCommands.delete(threadId as EARS.EntityId); });
   },
-  EXPORT_THREADS: ({ ask: { directory } }) => exportThreads(directory),
-  IMPORT_THREADS: ({ ask: { directory } }) => {
+  EXPORT_THREADS: ({ args: { directory } }) => exportThreads(directory),
+  IMPORT_THREADS: ({ args: { directory } }) => {
     const result = importThreads(directory);
     if (result.created === 0 && result.errors.length > 0) throw new Error(result.errors.join('\n'));
     return { count: result.created, ...(result.errors.length > 0 ? { errors: result.errors } : {}) };
   },
   GET_CHAT_START: () => repository.chatQueries.chatStart(),
-  OPEN_THREAD_CHAT: ({ ask: { threadId, restore }, failure }) => {
+  OPEN_THREAD_CHAT: ({ args: { threadId, restore }, refuse }) => {
     try {
       services.chat.visitThread(threadId as EARS.EntityId, { restore });
     } catch (err) {
       logger.warn('Thread not found for chat open, skipping', { threadId });
-      throw failure('not-found', errorMessage(err), { threadId });
+      throw refuse('not-found', errorMessage(err), { threadId });
     }
   },
-  USER_MSG: ({ ask, waiting }) => {
+  USER_MSG: ({ args, waiting }) => {
       try {
-        const { text, mode, phase, threadId: providedThreadId, references, cwdOverride, forceDirectoryPicker } = ask;
+        const { text, mode, phase, threadId: providedThreadId, references, cwdOverride, forceDirectoryPicker } = args;
 
         const sanitizedRefs = references ? {
           ...references,
@@ -188,9 +188,9 @@ export const answers = threadsSpec.answers({
         throw err;
       }
   },
-  USER_COMMAND: ({ ask, waiting }) => {
+  USER_COMMAND: ({ args, waiting }) => {
       try {
-      const { command, text, mode, phase, threadId: providedThreadId, references, cwdOverride } = ask;
+      const { command, text, mode, phase, threadId: providedThreadId, references, cwdOverride } = args;
 
       const sanitizedRefs = references ? {
         ...references,
@@ -251,8 +251,8 @@ export const answers = threadsSpec.answers({
         throw err;
       }
   },
-  FORK_THREAD: ({ ask, waiting }) => {
-      const { messageId, threadId, threadTopic } = ask;
+  FORK_THREAD: ({ args, waiting }) => {
+      const { messageId, threadId, threadTopic } = args;
       if (!threadId) throw new Error('There is no thread to fork from');
 
       let result: { id: EARS.EntityId } | undefined;

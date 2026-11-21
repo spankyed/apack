@@ -32,19 +32,19 @@ type FileFailure = { file: Omit<CodeSystemError, 'message'> }
 
 /** What a window asks the explorer, answered by the code system (`explorerAnswers`) over the explorer's folder */
 export type ExplorerAsks = {
-  'explorer.LIST_FILES': { ask: { path: string }; answer: DirectoryContent; fails: FileFailure }
+  'explorer.LIST_FILES': { args: { path: string }; answer: DirectoryContent; refuses: FileFailure }
   /** A file's content for an editor, which is watched from then on until the editor closes it (`explorer.CLOSE_FILE`) */
-  'explorer.READ_FILE': { ask: { path: string }; answer: FileContent; fails: FileFailure }
-  'explorer.WRITE_FILE': { ask: { path: string; content: string }; answer: { path: string }; fails: FileFailure }
-  'explorer.CREATE_FILE': { ask: { path: string; content?: string }; answer: { path: string }; fails: FileFailure }
-  'explorer.DELETE_FILE': { ask: { path: string }; answer: { path: string }; fails: FileFailure }
-  'explorer.RENAME_FILE': { ask: { oldPath: string; newPath: string }; answer: { oldPath: string; newPath: string }; fails: FileFailure }
-  'explorer.CREATE_DIRECTORY': { ask: { path: string }; answer: { path: string }; fails: FileFailure }
-  'explorer.GET_FILE_INFO': { ask: { path: string }; answer: FileInfo; fails: FileFailure }
+  'explorer.READ_FILE': { args: { path: string }; answer: FileContent; refuses: FileFailure }
+  'explorer.WRITE_FILE': { args: { path: string; content: string }; answer: { path: string }; refuses: FileFailure }
+  'explorer.CREATE_FILE': { args: { path: string; content?: string }; answer: { path: string }; refuses: FileFailure }
+  'explorer.DELETE_FILE': { args: { path: string }; answer: { path: string }; refuses: FileFailure }
+  'explorer.RENAME_FILE': { args: { oldPath: string; newPath: string }; answer: { oldPath: string; newPath: string }; refuses: FileFailure }
+  'explorer.CREATE_DIRECTORY': { args: { path: string }; answer: { path: string }; refuses: FileFailure }
+  'explorer.GET_FILE_INFO': { args: { path: string }; answer: FileInfo; refuses: FileFailure }
   /** Every file under a folder, for quick open */
-  'explorer.QUICK_OPEN_SEARCH': { ask: { baseDirectory: string }; answer: QuickOpenResult[]; fails: FileFailure }
-  'explorer.MOVE_FILES': { ask: { sourcePaths: string[]; targetDir: string }; answer: { sourcePaths: string[]; targetDir: string; movedPaths: string[] }; fails: FileFailure }
-  'explorer.COPY_FILES': { ask: { sourcePaths: string[]; targetDir: string }; answer: { targetDir: string; copiedPaths: string[] }; fails: FileFailure }
+  'explorer.QUICK_OPEN_SEARCH': { args: { baseDirectory: string }; answer: QuickOpenResult[]; refuses: FileFailure }
+  'explorer.MOVE_FILES': { args: { sourcePaths: string[]; targetDir: string }; answer: { sourcePaths: string[]; targetDir: string; movedPaths: string[] }; refuses: FileFailure }
+  'explorer.COPY_FILES': { args: { sourcePaths: string[]; targetDir: string }; answer: { targetDir: string; copiedPaths: string[] }; refuses: FileFailure }
 }
 
 // ── search ─────────────────────────────────────────────────────────
@@ -62,9 +62,9 @@ export type OutgoingSearchEvents =
 export type SearchAsks = {
   /** Every match, once the search ends; one stopped by another search or a cancel is refused as `superseded` */
   'search.SEARCH_FILES': {
-    ask: { query: string; path: string; includePattern?: string; excludePattern?: string; caseSensitive?: boolean; wholeWord?: boolean; useRegex?: boolean; maxResults?: number }
+    args: { query: string; path: string; includePattern?: string; excludePattern?: string; caseSensitive?: boolean; wholeWord?: boolean; useRegex?: boolean; maxResults?: number }
     answer: { results: SearchResult[]; totalMatches: number }
-    fails: { superseded: {} }
+    refuses: { superseded: {} }
   }
 }
 
@@ -119,116 +119,116 @@ export type CommitAsks = {
    * of anything. `fetchSuspended` says fetching by itself has stopped, the remote having asked for a sign-in
    * nobody was there to give: how far the branch is from its upstream is then as of the last fetch that worked
    */
-  'commit.GET_GIT_STATUS': { answer: CommitStatus; fails: GitFails }
-  'commit.GET_GIT_DIFF': { ask: { path?: string; staged?: boolean }; answer: GitDiff; fails: GitFails }
-  'commit.STAGE_FILES': { ask: { paths: string[] }; answer: { paths: string[] }; fails: GitFails }
-  'commit.UNSTAGE_FILES': { ask: { paths: string[] }; answer: { paths: string[] }; fails: GitFails }
+  'commit.GET_GIT_STATUS': { answer: CommitStatus; refuses: GitFails }
+  'commit.GET_GIT_DIFF': { args: { path?: string; staged?: boolean }; answer: GitDiff; refuses: GitFails }
+  'commit.STAGE_FILES': { args: { paths: string[] }; answer: { paths: string[] }; refuses: GitFails }
+  'commit.UNSTAGE_FILES': { args: { paths: string[] }; answer: { paths: string[] }; refuses: GitFails }
   /** Commits what is staged, answered with the message as committed */
-  'commit.COMMIT': { ask: { message: string }; answer: { message: string } & UndoableAfter; fails: GitFails }
-  'commit.GET_CURRENT_BRANCH': { answer: { branch: string }; fails: GitFails }
-  'commit.REVERT_FILE': { ask: { path: string }; answer: { path: string; kept: DiscardKept }; fails: GitFails }
-  'commit.REVERT_FILES': { ask: { paths: string[] }; answer: { paths: string[]; kept: DiscardKept }; fails: GitFails }
+  'commit.COMMIT': { args: { message: string }; answer: { message: string } & UndoableAfter; refuses: GitFails }
+  'commit.GET_CURRENT_BRANCH': { answer: { branch: string }; refuses: GitFails }
+  'commit.REVERT_FILE': { args: { path: string }; answer: { path: string; kept: DiscardKept }; refuses: GitFails }
+  'commit.REVERT_FILES': { args: { paths: string[] }; answer: { paths: string[]; kept: DiscardKept }; refuses: GitFails }
   /** Which of what discarding these rows would remove cannot be brought back, for the window about to ask */
-  'commit.PREVIEW_DISCARD': { ask: { paths: string[] }; answer: { paths: string[]; notKept: string[] }; fails: GitFails }
+  'commit.PREVIEW_DISCARD': { args: { paths: string[] }; answer: { paths: string[]; notKept: string[] }; refuses: GitFails }
   /** Puts back what a discard kept, by the id its answer carried */
-  'commit.RESTORE_DISCARDED': { ask: { id: string }; answer: { id: string } & DiscardRestored; fails: GitFails }
+  'commit.RESTORE_DISCARDED': { args: { id: string }; answer: { id: string } & DiscardRestored; refuses: GitFails }
   /** The user trusts the repository to have git run what its own configuration and hooks name */
-  'commit.TRUST_REPOSITORY': { ask: { repository: string }; answer: { repository: string }; fails: GitFails }
+  'commit.TRUST_REPOSITORY': { args: { repository: string }; answer: { repository: string }; refuses: GitFails }
   /** The user trusts the repository git refused for who owns it: added to their safe.directory */
-  'commit.TRUST_OWNERSHIP': { answer: { directory: string }; fails: GitFails }
+  'commit.TRUST_OWNERSHIP': { answer: { directory: string }; refuses: GitFails }
   /** The branches, and how each local one stands against what it follows, by its name */
-  'commit.GET_ALL_BRANCHES': { answer: { branches: string[]; standing?: Record<string, BranchStandingOf>; tags?: { name: string; commit: string }[] }; fails: GitFails }
+  'commit.GET_ALL_BRANCHES': { answer: { branches: string[]; standing?: Record<string, BranchStandingOf>; tags?: { name: string; commit: string }[] }; refuses: GitFails }
   /** Checks out a branch there is, and with `pull` pulls it from what it follows once it is checked out */
-  'commit.CHECKOUT_BRANCH': { ask: { branchName: string; pull?: boolean }; answer: { branchName: string }; fails: GitFails }
+  'commit.CHECKOUT_BRANCH': { args: { branchName: string; pull?: boolean }; answer: { branchName: string }; refuses: GitFails }
   /** Makes a branch at what is checked out, and checks it out */
-  'commit.CREATE_BRANCH': { ask: { branchName: string }; answer: { branchName: string }; fails: GitFails }
+  'commit.CREATE_BRANCH': { args: { branchName: string }; answer: { branchName: string }; refuses: GitFails }
   /** Pushes what is checked out; `stopped` when the user stopped it (`commit.STOP_PUSH`), which is no failure */
-  'commit.PUBLISH_BRANCH': { answer: { branchName: string; stopped: boolean }; fails: GitFails }
-  'commit.PULL_BRANCH': { answer: { branchName: string }; fails: GitFails }
+  'commit.PUBLISH_BRANCH': { answer: { branchName: string; stopped: boolean }; refuses: GitFails }
+  'commit.PULL_BRANCH': { answer: { branchName: string }; refuses: GitFails }
   /**
    * Hands the changes to the flow that writes a commit message, answered once it has them: the flow tells the asking
    * window what it made (`commit.MESSAGE_GENERATED`) or why it made none
    */
-  'commit.GENERATE_MESSAGE': { fails: GitFails }
+  'commit.GENERATE_MESSAGE': { refuses: GitFails }
   /** Stash what is changed: only what is staged, or only `paths`, when asked. Answered with the stash's message */
-  'commit.STASH_PUSH': { ask: { message?: string; stagedOnly?: boolean; paths?: string[] }; answer: { message: string }; fails: GitFails }
+  'commit.STASH_PUSH': { args: { message?: string; stagedOnly?: boolean; paths?: string[] }; answer: { message: string }; refuses: GitFails }
   /** Make a tag at `commit` (what is checked out when none), annotated when `message` is given */
-  'commit.CREATE_TAG': { ask: { name: string; commit?: string; message?: string }; answer: { name: string }; fails: GitFails }
-  'commit.DELETE_TAG': { ask: { name: string }; answer: { name: string }; fails: GitFails }
+  'commit.CREATE_TAG': { args: { name: string; commit?: string; message?: string }; answer: { name: string }; refuses: GitFails }
+  'commit.DELETE_TAG': { args: { name: string }; answer: { name: string }; refuses: GitFails }
   /** Push a tag to the remote */
-  'commit.PUSH_TAG': { ask: { name: string }; answer: { name: string }; fails: GitFails }
-  'commit.RENAME_BRANCH': { ask: { name: string; to: string }; answer: { name: string; to: string }; fails: GitFails }
+  'commit.PUSH_TAG': { args: { name: string }; answer: { name: string }; refuses: GitFails }
+  'commit.RENAME_BRANCH': { args: { name: string; to: string }; answer: { name: string; to: string }; refuses: GitFails }
   /**
    * Turn on git's own file monitor and untracked cache here, which the user clicked for: it writes the repository's
    * config. Answered with which of the two were turned on: the file monitor only where git has one for this system
    */
-  'commit.SPEED_UP_STATUS': { answer: { fileMonitor: boolean; untrackedCache: boolean }; fails: GitFails }
-  'commit.STASH_LIST': { answer: { stashes: StashEntry[] }; fails: GitFails }
+  'commit.SPEED_UP_STATUS': { answer: { fileMonitor: boolean; untrackedCache: boolean }; refuses: GitFails }
+  'commit.STASH_LIST': { answer: { stashes: StashEntry[] }; refuses: GitFails }
   /** A stash applied without a conflict; one that conflicts is refused, and the status shows the conflict */
-  'commit.STASH_APPLY': { ask: { index: number }; answer: { index: number; popped: boolean }; fails: GitFails }
+  'commit.STASH_APPLY': { args: { index: number }; answer: { index: number; popped: boolean }; refuses: GitFails }
   /** A stash applied and dropped without a conflict; one that conflicts is refused and kept */
-  'commit.STASH_POP': { ask: { index: number }; answer: { index: number; popped: boolean }; fails: GitFails }
-  'commit.STASH_DROP': { ask: { index: number }; answer: UndoableAfter; fails: GitFails }
-  'commit.STASH_CLEAR': { answer: UndoableAfter; fails: GitFails }
+  'commit.STASH_POP': { args: { index: number }; answer: { index: number; popped: boolean }; refuses: GitFails }
+  'commit.STASH_DROP': { args: { index: number }; answer: UndoableAfter; refuses: GitFails }
+  'commit.STASH_CLEAR': { answer: UndoableAfter; refuses: GitFails }
   /** The files a stash holds, to look into before applying it */
-  'commit.GET_STASH_CHANGES': { ask: { index: number }; answer: { index: number; files: ChangedFile[] }; fails: GitFails }
+  'commit.GET_STASH_CHANGES': { args: { index: number }; answer: { index: number; files: ChangedFile[] }; refuses: GitFails }
   /**
    * Who last changed each line of a file, from the top of the folder, for the editor's gutter. `stopped` when the
    * same window asked for blame again before this was read, which nobody shows
    */
-  'commit.GET_BLAME': { ask: { path: string }; answer: { path: string; lines: BlameLine[] }; fails: GitFails & { stopped: {} } }
+  'commit.GET_BLAME': { args: { path: string }; answer: { path: string; lines: BlameLine[] }; refuses: GitFails & { stopped: {} } }
   /** Bring a submodule to the commit the repository records for it, setting it up first if it is not */
-  'commit.UPDATE_SUBMODULE': { ask: { path: string }; answer: { path: string }; fails: GitFails }
+  'commit.UPDATE_SUBMODULE': { args: { path: string }; answer: { path: string }; refuses: GitFails }
   /**
    * Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already
    * pushed. Refused as `published` when the commit is already on a remote branch, undone only once the user says so
    */
-  'commit.UNDO_LAST': { ask: { evenIfPublished?: boolean }; answer: { id: string; summary: string } & UndoableAfter; fails: GitFails & { published: {} } }
-  'commit.WORKTREE_LIST': { answer: { worktrees: WorktreeEntry[] }; fails: GitFails }
-  'commit.WORKTREE_ADD': { ask: { path: string; branch?: string; createBranch?: boolean }; answer: { path: string; branch: string }; fails: GitFails }
-  'commit.WORKTREE_REMOVE': { ask: { path: string; force?: boolean }; answer: { path: string }; fails: GitFails }
-  'commit.RESOLVE_CONFLICT': { ask: { path: string; strategy: 'ours' | 'theirs' }; answer: { path: string }; fails: GitFails }
-  'commit.MARK_RESOLVED': { ask: { path: string }; answer: { path: string }; fails: GitFails }
-  'commit.RESOLVE_ALL_CONFLICTS': { ask: { strategy: 'ours' | 'theirs' }; fails: GitFails }
+  'commit.UNDO_LAST': { args: { evenIfPublished?: boolean }; answer: { id: string; summary: string } & UndoableAfter; refuses: GitFails & { published: {} } }
+  'commit.WORKTREE_LIST': { answer: { worktrees: WorktreeEntry[] }; refuses: GitFails }
+  'commit.WORKTREE_ADD': { args: { path: string; branch?: string; createBranch?: boolean }; answer: { path: string; branch: string }; refuses: GitFails }
+  'commit.WORKTREE_REMOVE': { args: { path: string; force?: boolean }; answer: { path: string }; refuses: GitFails }
+  'commit.RESOLVE_CONFLICT': { args: { path: string; strategy: 'ours' | 'theirs' }; answer: { path: string }; refuses: GitFails }
+  'commit.MARK_RESOLVED': { args: { path: string }; answer: { path: string }; refuses: GitFails }
+  'commit.RESOLVE_ALL_CONFLICTS': { args: { strategy: 'ours' | 'theirs' }; refuses: GitFails }
   /**
    * Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up. Where that
    * leaves the repository is in its status
    */
-  'commit.MOVE_OPERATION': { ask: { move: OperationMove }; answer: { move: OperationMove }; fails: GitFails }
+  'commit.MOVE_OPERATION': { args: { move: OperationMove }; answer: { move: OperationMove }; refuses: GitFails }
   /** Merge a branch in, rebase onto one, or pick a commit onto what is checked out: `stopped` on a conflict, which the status describes as in progress */
-  'commit.START_OPERATION': { ask: { kind: StartableOperation; target: string }; answer: { kind: StartableOperation; target: string; stopped: boolean } & UndoableAfter; fails: GitFails }
+  'commit.START_OPERATION': { args: { kind: StartableOperation; target: string }; answer: { kind: StartableOperation; target: string; stopped: boolean } & UndoableAfter; refuses: GitFails }
   /**
    * Amend the last commit with what is staged, and `message` in place of its own when given. Refused as `published`
    * when a remote branch already holds it: done only once the user says to go on
    */
-  'commit.AMEND': { ask: { message?: string; evenIfPublished?: boolean }; answer: UndoableAfter; fails: GitFails & { published: {} } }
+  'commit.AMEND': { args: { message?: string; evenIfPublished?: boolean }; answer: UndoableAfter; refuses: GitFails & { published: {} } }
   /** A commit's whole message, for rewording it */
-  'commit.GET_COMMIT_MESSAGE': { ask: { hash: string }; answer: { hash: string; message: string }; fails: GitFails }
+  'commit.GET_COMMIT_MESSAGE': { args: { hash: string }; answer: { hash: string; message: string }; refuses: GitFails }
   /** The trailers git reads at the end of the message being written, with the message they were read of */
-  'commit.READ_TRAILERS': { ask: { message: string }; answer: { message: string; trailers: CommitTrailer[] }; fails: GitFails }
+  'commit.READ_TRAILERS': { args: { message: string }; answer: { message: string; trailers: CommitTrailer[] }; refuses: GitFails }
   /** The message being written without one of its trailers, each line of it: `without` is `message` when it had no such trailer */
-  'commit.REMOVE_TRAILER': { ask: { message: string; trailer: CommitTrailer }; answer: { message: string; without: string }; fails: GitFails }
+  'commit.REMOVE_TRAILER': { args: { message: string; trailer: CommitTrailer }; answer: { message: string; without: string }; refuses: GitFails }
   /**
    * Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it.
    * Refused as `published` when a remote branch already holds commits it would change
    */
-  'commit.REWRITE_COMMIT': { ask: { hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }; answer: { hash: string; action: RewriteAction } & UndoableAfter; fails: GitFails & { published: {} } }
+  'commit.REWRITE_COMMIT': { args: { hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }; answer: { hash: string; action: RewriteAction } & UndoableAfter; refuses: GitFails & { published: {} } }
   /** What merging a branch in would do, before it is done */
-  'commit.PREVIEW_MERGE': { ask: { target: string }; answer: { target: string; preview: MergePreview }; fails: GitFails }
+  'commit.PREVIEW_MERGE': { args: { target: string }; answer: { target: string; preview: MergePreview }; refuses: GitFails }
   /** The files in an untracked folder that is listed as one row */
-  'commit.LIST_UNTRACKED': { ask: { path: string }; answer: { path: string; files: string[]; truncated: boolean }; fails: GitFails }
+  'commit.LIST_UNTRACKED': { args: { path: string }; answer: { path: string; files: string[]; truncated: boolean }; refuses: GitFails }
   /** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
-  'commit.APPLY_HUNK': { ask: { path: string; staged: boolean; hunk: string }; answer: { path: string; staged: boolean; hunk: string }; fails: GitFails }
+  'commit.APPLY_HUNK': { args: { path: string; staged: boolean; hunk: string }; answer: { path: string; staged: boolean; hunk: string }; refuses: GitFails }
   /** Git can sign in to this host now the app is signed in to GitHub: fetching starts again, and the window runs again what was refused */
-  'commit.SET_UP_SIGN_IN': { ask: { host: string; during?: 'push' | 'pull' }; answer: { host: string; during?: 'push' | 'pull' }; fails: GitFails }
+  'commit.SET_UP_SIGN_IN': { args: { host: string; during?: 'push' | 'pull' }; answer: { host: string; during?: 'push' | 'pull' }; refuses: GitFails }
   /**
    * A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history.
    * The answer says which file's it is and whether it goes on from a cursor; `cursor` for the next. `stopped` when
    * the same window asked for the history again before this was read, which nobody shows
    */
-  'commit.LOG_LIST': { ask: { cursor?: string; path?: string }; answer: { commits: HistoryCommit[]; cursor?: string; path?: string; continued?: boolean }; fails: GitFails & { stopped: {} } }
-  'commit.REVERT_COMMIT': { ask: { hash: string }; answer: { hash: string }; fails: GitFails }
-  'commit.RESET_TO_COMMIT': { ask: { hash: string }; answer: { hash: string } & UndoableAfter; fails: GitFails }
+  'commit.LOG_LIST': { args: { cursor?: string; path?: string }; answer: { commits: HistoryCommit[]; cursor?: string; path?: string; continued?: boolean }; refuses: GitFails & { stopped: {} } }
+  'commit.REVERT_COMMIT': { args: { hash: string }; answer: { hash: string }; refuses: GitFails }
+  'commit.RESET_TO_COMMIT': { args: { hash: string }; answer: { hash: string } & UndoableAfter; refuses: GitFails }
 }
 
 // ── pull-request ─────────────────────────────────────────────────────────
@@ -257,33 +257,33 @@ type GitHubRefused = { github: { reason: GitHubApiFailure } }
 /** What a window asks of the pull requests, answered by the code system (`pullRequestAnswers`) */
 export type PullRequestAsks = {
   /** `prNumber` reads the head from what GitHub keeps of that pull request, which outlives its branch */
-  'pr.GET_BRANCH_DIFF': { ask: { baseBranch?: string; headBranch?: string; prNumber?: number }; answer: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
+  'pr.GET_BRANCH_DIFF': { args: { baseBranch?: string; headBranch?: string; prNumber?: number }; answer: { files: GitStatusFile[]; baseBranch: string; headBranch?: string } }
   /**
    * `fetchMissing`: content a partial clone was not given is fetched for this diff, where it is otherwise refused as
    * `content-missing`, which is fetched only when the user asks
    */
   'pr.GET_BRANCH_FILE_DIFF': {
-    ask: PRFileDiffWhere & { fetchMissing?: boolean }
+    args: PRFileDiffWhere & { fetchMissing?: boolean }
     answer: GitDiff & { baseBranch: string; headBranch?: string }
-    fails: { 'content-missing': PRFileDiffWhere }
+    refuses: { 'content-missing': PRFileDiffWhere }
   }
   /** A page of the pull requests in `state`, newest first, from `after` (the last page's `next`), by `query` where there is one; `next` is `null` on the last */
-  'pr.LIST_PRS': { ask: { state: PRListState; query?: string; after?: string }; answer: { prs: GhPullRequest[]; next: string | null }; fails: GitHubRefused }
+  'pr.LIST_PRS': { args: { state: PRListState; query?: string; after?: string }; answer: { prs: GhPullRequest[]; next: string | null }; refuses: GitHubRefused }
   /** Checks out the pull request's head as a branch here: the branch it became, and what that did to a branch already there */
-  'pr.CHECKOUT_PR': { ask: { number: number }; answer: { number: number; branch: string; checkout: PRBranchCheckout }; fails: GitHubRefused }
+  'pr.CHECKOUT_PR': { args: { number: number }; answer: { number: number; branch: string; checkout: PRBranchCheckout }; refuses: GitHubRefused }
   /** The pull request's details */
-  'pr.SELECT_PR': { ask: { number: number }; answer: PRDetails; fails: GitHubRefused }
-  'pr.CREATE_PR': { ask: { title: string; body: string; base?: string; draft?: boolean }; answer: { pr: GhPullRequest }; fails: GitHubRefused }
+  'pr.SELECT_PR': { args: { number: number }; answer: PRDetails; refuses: GitHubRefused }
+  'pr.CREATE_PR': { args: { title: string; body: string; base?: string; draft?: boolean }; answer: { pr: GhPullRequest }; refuses: GitHubRefused }
   /**
    * `sha` is the head shown: GitHub merges nothing where the head has moved since (`head-moved`). A refused merge
    * carries the pull request read again, where it could be, so the panel shows what refused it
    */
-  'pr.MERGE_PR': { ask: { number: number; method?: 'merge' | 'squash' | 'rebase'; sha?: string }; answer: { number: number }; fails: { github: { reason: GitHubApiFailure; details?: PRDetails } } }
-  'pr.CLOSE_PR': { ask: { number: number }; answer: { number: number }; fails: GitHubRefused }
+  'pr.MERGE_PR': { args: { number: number; method?: 'merge' | 'squash' | 'rebase'; sha?: string }; answer: { number: number }; refuses: { github: { reason: GitHubApiFailure; details?: PRDetails } } }
+  'pr.CLOSE_PR': { args: { number: number }; answer: { number: number }; refuses: GitHubRefused }
   /** `isDraft` is what it is now. Marked ready, its details once GitHub has worked out whether it can merge */
-  'pr.TOGGLE_DRAFT': { ask: { number: number; isDraft: boolean }; answer: { number: number; isDraft: boolean; details?: PRDetails }; fails: GitHubRefused }
+  'pr.TOGGLE_DRAFT': { args: { number: number; isDraft: boolean }; answer: { number: number; isDraft: boolean; details?: PRDetails }; refuses: GitHubRefused }
   /** The current branch's own pull request, `null` where it has none */
-  'pr.CHECK_BRANCH_PR': { answer: { pr: GhPullRequest | null }; fails: GitHubRefused }
+  'pr.CHECK_BRANCH_PR': { answer: { pr: GhPullRequest | null }; refuses: GitHubRefused }
   /** Whether the app's GitHub sign-in can work with the pull requests of the repository the remote names: `ok`, or why not, with what to tell the user */
   'pr.CHECK_GITHUB_ACCESS': { answer: { access: 'ok' | GitHubApiFailure; message?: string } }
   /** A title and a body for a new pull request, from the branch's commits: empty where they cannot be read */
@@ -294,19 +294,19 @@ export type PullRequestAsks = {
    * Deletes the pull request's branch on GitHub: refused for a fork's branch, and for one another open pull request
    * is from. Answered with the branch deleted, or one already gone
    */
-  'pr.DELETE_BRANCH': { ask: { number: number }; answer: { branch: string }; fails: GitHubRefused }
+  'pr.DELETE_BRANCH': { args: { number: number }; answer: { branch: string }; refuses: GitHubRefused }
   /** A base moved brings the details once GitHub has worked out whether it can merge */
-  'pr.UPDATE_PR': { ask: { number: number; title?: string; body?: string; base?: string }; answer: { number: number; title?: string; body?: string; base?: string; details?: PRDetails }; fails: GitHubRefused }
-  'pr.CREATE_COMMENT': { ask: { number: number; body: string }; answer: { number: number }; fails: GitHubRefused }
-  'pr.EDIT_COMMENT': { ask: { commentId: number; body: string }; answer: { commentId: number }; fails: GitHubRefused }
-  'pr.DELETE_COMMENT': { ask: { commentId: number }; answer: { commentId: number }; fails: GitHubRefused }
-  'pr.GET_COMMENTS': { ask: { number: number }; answer: { number: number; comments: GhPRComment[] }; fails: GitHubRefused }
-  'pr.GET_REVIEW_THREADS': { ask: { number: number }; answer: { threads: GhReviewThread[] }; fails: GitHubRefused }
-  'pr.REPLY_TO_THREAD': { ask: { prNumber: number; commentId: number; body: string }; answer: { prNumber: number }; fails: GitHubRefused }
-  'pr.RESOLVE_THREAD': { ask: { threadId: string }; answer: { threadId: string }; fails: GitHubRefused }
-  'pr.UNRESOLVE_THREAD': { ask: { threadId: string }; answer: { threadId: string }; fails: GitHubRefused }
-  'pr.EDIT_REVIEW_COMMENT': { ask: { commentId: number; body: string }; answer: { commentId: number }; fails: GitHubRefused }
-  'pr.DELETE_REVIEW_COMMENT': { ask: { commentId: number }; answer: { commentId: number }; fails: GitHubRefused }
+  'pr.UPDATE_PR': { args: { number: number; title?: string; body?: string; base?: string }; answer: { number: number; title?: string; body?: string; base?: string; details?: PRDetails }; refuses: GitHubRefused }
+  'pr.CREATE_COMMENT': { args: { number: number; body: string }; answer: { number: number }; refuses: GitHubRefused }
+  'pr.EDIT_COMMENT': { args: { commentId: number; body: string }; answer: { commentId: number }; refuses: GitHubRefused }
+  'pr.DELETE_COMMENT': { args: { commentId: number }; answer: { commentId: number }; refuses: GitHubRefused }
+  'pr.GET_COMMENTS': { args: { number: number }; answer: { number: number; comments: GhPRComment[] }; refuses: GitHubRefused }
+  'pr.GET_REVIEW_THREADS': { args: { number: number }; answer: { threads: GhReviewThread[] }; refuses: GitHubRefused }
+  'pr.REPLY_TO_THREAD': { args: { prNumber: number; commentId: number; body: string }; answer: { prNumber: number }; refuses: GitHubRefused }
+  'pr.RESOLVE_THREAD': { args: { threadId: string }; answer: { threadId: string }; refuses: GitHubRefused }
+  'pr.UNRESOLVE_THREAD': { args: { threadId: string }; answer: { threadId: string }; refuses: GitHubRefused }
+  'pr.EDIT_REVIEW_COMMENT': { args: { commentId: number; body: string }; answer: { commentId: number }; refuses: GitHubRefused }
+  'pr.DELETE_REVIEW_COMMENT': { args: { commentId: number }; answer: { commentId: number }; refuses: GitHubRefused }
 }
 
 // ── terminal ─────────────────────────────────────────────────────────
@@ -385,32 +385,32 @@ export type TerminalAsks = {
    * Answered with the terminal *you* asked for: its id does not exist until it is created, so nothing the asker sent
    * could identify it. Every window hears `terminal.CREATED` as well, and none of them opens it
    */
-  'terminal.CREATE_TERMINAL': { ask: { title?: string; cwd?: string; shell?: string; cols?: number; rows?: number; target?: string }; answer: TerminalInfo }
-  'terminal.CLOSE_TERMINAL': { ask: { terminalId: string } }
+  'terminal.CREATE_TERMINAL': { args: { title?: string; cwd?: string; shell?: string; cols?: number; rows?: number; target?: string }; answer: TerminalInfo }
+  'terminal.CLOSE_TERMINAL': { args: { terminalId: string } }
   /** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
-  'terminal.RESTART_TERMINAL': { ask: { terminalId: string } }
+  'terminal.RESTART_TERMINAL': { args: { terminalId: string } }
   /**
    * This window's fit. Answered with the grid the pty runs at when that is not the one asked for — another window's
    * smaller fit holds it — and `null` when it took
    */
-  'terminal.RESIZE_TERMINAL': { ask: { terminalId: string; cols: number; rows: number; cellWidth?: number; cellHeight?: number }; answer: { terminalId: string; cols: number; rows: number } | null }
-  'terminal.RENAME_TERMINAL': { ask: { terminalId: string; customTitle: string } }
+  'terminal.RESIZE_TERMINAL': { args: { terminalId: string; cols: number; rows: number; cellWidth?: number; cellHeight?: number }; answer: { terminalId: string; cols: number; rows: number } | null }
+  'terminal.RENAME_TERMINAL': { args: { terminalId: string; customTitle: string } }
   /** The running terminals */
   'terminal.REFRESH_LIST': { answer: TerminalInfo[] }
   /** A running terminal, to open as a tab */
-  'terminal.OPEN_TERMINAL_TAB': { ask: { terminalId: string }; answer: TerminalInfo }
+  'terminal.OPEN_TERMINAL_TAB': { args: { terminalId: string }; answer: TerminalInfo }
   /** Whether that terminal's shell goes on running when the app is not, to be taken up again at the next start */
-  'terminal.KEEP_TERMINAL': { ask: { terminalId: string; kept: boolean } }
+  'terminal.KEEP_TERMINAL': { args: { terminalId: string; kept: boolean } }
   /**
    * Open that terminal's recording to look back through, drawn at this size, for the window that asked: `session` is
    * what its view is drawn from, and it runs between `first` and `last`, in milliseconds since the Unix epoch
    */
-  'terminal.REWIND': { ask: { terminalId: string; cols: number; rows: number }; answer: { terminalId: string; session: string; first: number; last: number } }
+  'terminal.REWIND': { args: { terminalId: string; cols: number; rows: number }; answer: { terminalId: string; session: string; first: number; last: number } }
   /**
    * Show an open recording as it was at `at`, in milliseconds since the Unix epoch. Answered with the moment it
    * shows now, `null` where the recording is not open
    */
-  'terminal.REWIND_SEEK': { ask: { session: string; at: number }; answer: { session: string; at: number } | null }
+  'terminal.REWIND_SEEK': { args: { session: string; at: number }; answer: { session: string; at: number } | null }
 }
 
 // ── actions ─────────────────────────────────────────────────────────
@@ -418,9 +418,9 @@ export type TerminalAsks = {
 /** What a window asks of an action's code, answered by the code system (`actionsAnswers`) */
 export type ActionsAsks = {
   /** The action, with its code to edit in a tab */
-  'codeActions.OPEN_ACTION': { ask: { actionId: string }; answer: ActionEntity & { actionFnContent?: string }; fails: { 'not-found': {} } }
+  'codeActions.OPEN_ACTION': { args: { actionId: string }; answer: ActionEntity & { actionFnContent?: string }; refuses: { 'not-found': {} } }
   /** Saves the tab's code into the action, answered with the action as it is now */
-  'codeActions.SAVE_ACTION': { ask: { actionId: string; actionFn: string }; answer: ActionEntity; fails: { 'not-found': {} } }
+  'codeActions.SAVE_ACTION': { args: { actionId: string; actionFn: string }; answer: ActionEntity; refuses: { 'not-found': {} } }
 }
 
 // ── prompts ─────────────────────────────────────────────────────────
@@ -428,9 +428,9 @@ export type ActionsAsks = {
 /** What a window asks of a prompt's template, answered by the code system (`promptsAnswers`) */
 export type PromptsAsks = {
   /** The prompt, with its template to edit in a tab */
-  'codePrompts.OPEN_PROMPT': { ask: { promptId: string }; answer: PromptEntity & { templateFnContent?: string }; fails: { 'not-found': {} } }
+  'codePrompts.OPEN_PROMPT': { args: { promptId: string }; answer: PromptEntity & { templateFnContent?: string }; refuses: { 'not-found': {} } }
   /** Saves the tab's template into the prompt, answered with the prompt as it is now */
-  'codePrompts.SAVE_PROMPT': { ask: { promptId: string; templateFn: string }; answer: PromptEntity; fails: { 'not-found': {} } }
+  'codePrompts.SAVE_PROMPT': { args: { promptId: string; templateFn: string }; answer: PromptEntity; refuses: { 'not-found': {} } }
 }
 
 // ── github ─────────────────────────────────────────────────────────
@@ -458,7 +458,7 @@ export type GitHubAsks = {
    */
   'github.SIGN_IN': {
     answer: { userCode: string; verificationUri: string; expiresAt: number }
-    fails: { unconfigured: {}; denied: {}; expired: {}; cancelled: {} }
+    refuses: { unconfigured: {}; denied: {}; expired: {}; cancelled: {} }
   }
 }
 
@@ -510,7 +510,7 @@ export type CodeSystemAsks = {
    * Moves the code surface to one of the repository's worktrees, answered with the folder it is over now. A path the
    * repository does not list as a worktree is refused, and the folder stays where it is
    */
-  'commit.WORKTREE_SWITCH': { ask: { path: string }; answer: { path: string } }
+  'commit.WORKTREE_SWITCH': { args: { path: string }; answer: { path: string } }
 }
 
 /**

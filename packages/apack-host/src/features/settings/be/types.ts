@@ -11,7 +11,7 @@ export type IncomingSettingsEvents = { type: 'RESET_APP' };
 export type SettingsRead = { snapshot: SettingsSnapshot } | { recovery: SettingsRecovery };
 
 /** A change refused, and why: the store's reasons, each the user's to fix, and nothing was stored */
-type Refusable = { fails: { refused: { problems: string[] } } };
+type Refusable = { refuses: { refused: { problems: string[] } } };
 
 /** A change that was stored answers with the settings as they now are */
 type Stored = { answer: { snapshot: SettingsSnapshot } } & Refusable;
@@ -22,11 +22,11 @@ type Stored = { answer: { snapshot: SettingsSnapshot } } & Refusable;
  */
 export type SettingsAsks = {
   GET_SETTINGS: { answer: SettingsRead };
-  RECOVER_SETTINGS: { ask: { request: SettingsRecoveryRequest }; answer: { recovery: SettingsRecovery } } & Refusable;
-  UPDATE_SETTINGS: { ask: { target: SettingsTarget; path: string[]; value: unknown; condition?: SettingsWriteCondition } } & Stored;
-  RESET_SETTINGS: { ask: { target: SettingsTarget } } & Stored;
+  RECOVER_SETTINGS: { args: { request: SettingsRecoveryRequest }; answer: { recovery: SettingsRecovery } } & Refusable;
+  UPDATE_SETTINGS: { args: { target: SettingsTarget; path: string[]; value: unknown; condition?: SettingsWriteCondition } } & Stored;
+  RESET_SETTINGS: { args: { target: SettingsTarget } } & Stored;
   RESET_ALL_SETTINGS: Stored;
-  REPLACE_SETTINGS: { ask: { data: unknown; condition?: SettingsWriteCondition } } & Stored;
+  REPLACE_SETTINGS: { args: { data: unknown; condition?: SettingsWriteCondition } } & Stored;
 };
 
 /** A change to the settings, as a window asks for one */

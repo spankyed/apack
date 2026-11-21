@@ -69,8 +69,8 @@ function brainState(context: BrainContext, paused: boolean): Extract<OutgoingBra
 const openedRun = (runNodeId: RunNodeId) => ({ runNodeId, data: repository.brainQueries.extendedRunNodeData(runNodeId) });
 
 export const answers = brainSpec.answers({
-  REQUEST_SURFACE_DATA: ({ context, ask, self }) => {
-    const flowId = ask.flowRunNodeId ? ask.flowRunNodeId as RunNodeId : undefined;
+  REQUEST_SURFACE_DATA: ({ context, args, self }) => {
+    const flowId = args.flowRunNodeId ? args.flowRunNodeId as RunNodeId : undefined;
     let data: FlowRunNodeData;
     try {
       data = flowId
@@ -82,21 +82,21 @@ export const answers = brainSpec.answers({
     }
     return { data, state: brainState(context, self.getSnapshot().matches({ running: 'paused' })) };
   },
-  OPEN_RUN_NODE: ({ ask, failure }) => {
-    const runNodeId = ask.runNodeId as RunNodeId;
-    if (repository.brainQueries.runNodeById(runNodeId)?.kind !== 'flow') throw failure('not-a-flow', 'Only a flow run opens');
+  OPEN_RUN_NODE: ({ args, refuse }) => {
+    const runNodeId = args.runNodeId as RunNodeId;
+    if (repository.brainQueries.runNodeById(runNodeId)?.kind !== 'flow') throw refuse('not-a-flow', 'Only a flow run opens');
     return openedRun(runNodeId);
   },
-  GO_BACK_RUN_NODE: ({ context, ask }) => {
-    const current = ask.currentFlowRunNodeId as RunNodeId | undefined;
+  GO_BACK_RUN_NODE: ({ context, args }) => {
+    const current = args.currentFlowRunNodeId as RunNodeId | undefined;
     const parentFlow = current ? repository.brainQueries.parentFlowOf(current) : undefined;
     const data = parentFlow
       ? repository.brainQueries.extendedRunNodeData(parentFlow.id)
       : repository.brainQueries.rootData(context.rootRunId);
     return { runNodeId: data.flowRunNodeId, data };
   },
-  GET_RUN_NODE_DETAILS: ({ ask }) => {
-    const runNodeId = ask.runNodeId as RunNodeId;
+  GET_RUN_NODE_DETAILS: ({ args }) => {
+    const runNodeId = args.runNodeId as RunNodeId;
     const runNode = repository.brainQueries.runNodeById(runNodeId);
     const revealIn = repository.brainQueries.revealIn(runNodeId);
     // Said as JSON, where a missing run node has to be: null

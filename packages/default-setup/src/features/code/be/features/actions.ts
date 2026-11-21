@@ -5,15 +5,15 @@ import { EARS } from '#generated/ears.ts'
 
 /** The asks about an action's code, answered by the code system (`answers`, `system.ts`) */
 export const actionsAnswers: AnswersTo<ActionsAsks> = {
-  'codeActions.OPEN_ACTION': ({ ask: { actionId }, failure }) => {
+  'codeActions.OPEN_ACTION': ({ args: { actionId }, refuse }) => {
     const action = repository.actionQueries.byId(actionId as EARS.EntityId)
-    if (!action) throw failure('not-found', `Action ${actionId} not found`)
+    if (!action) throw refuse('not-found', `Action ${actionId} not found`)
     return { ...action, actionFnContent: action.actionFn }
   },
-  'codeActions.SAVE_ACTION': ({ ask: { actionId, actionFn }, failure }) => {
+  'codeActions.SAVE_ACTION': ({ args: { actionId, actionFn }, refuse }) => {
     repository.actionCommands.update(actionId as EARS.EntityId, { actionFn })
     const updated = repository.actionQueries.byId(actionId as EARS.EntityId)
-    if (!updated) throw failure('not-found', `Action ${actionId} not found`)
+    if (!updated) throw refuse('not-found', `Action ${actionId} not found`)
     return updated
   },
 }

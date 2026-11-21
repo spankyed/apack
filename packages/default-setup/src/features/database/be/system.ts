@@ -40,9 +40,9 @@ const replaced = () => broadcastToSurface('database', { type: 'DATABASE_REPLACED
  * for by the envelope's call, so two in flight from one console answer two requests, and the console tells its own.
  */
 export const answers = databaseSpec.answers({
-  EXECUTE_QUERY: ({ ask }) => ran('Query execution', () => executeQuery(ask.code)),
+  EXECUTE_QUERY: ({ args }) => ran('Query execution', () => executeQuery(args.code)),
   // The window that ran it asks for the schema again; every other one shows the schema it last asked for
-  EXECUTE_TRANSACTION: ({ ask }) => ran('Transaction execution', () => executeTransaction(ask.code)),
+  EXECUTE_TRANSACTION: ({ args }) => ran('Transaction execution', () => executeTransaction(args.code)),
   GET_FLOW_RUNS: () => {
     try {
       // A session's root and every subflow it ran, newest first
@@ -54,8 +54,8 @@ export const answers = databaseSpec.answers({
       return { flows: [] };
     }
   },
-  GET_FLOW_EVENTS: ({ ask }) => {
-    const { flowId, offset = 0, limit = 50 } = ask;
+  GET_FLOW_EVENTS: ({ args }) => {
+    const { flowId, offset = 0, limit = 50 } = args;
     try {
       // The events a flow run heard are its children: a page of them, newest first, each with what it ran. The
       // index is asked for no more than the page and one beyond it, which says whether there is more
@@ -68,19 +68,19 @@ export const answers = databaseSpec.answers({
       return { flowId, events: [], hasMore: false, offset };
     }
   },
-  GET_NODE_DETAILS: ({ ask }) => {
+  GET_NODE_DETAILS: ({ args }) => {
     try {
-      const details = services.runHistory.get(ask.nodeId as RunNodeId) ?? null;
-      logger.info('Retrieved node details', { nodeId: ask.nodeId });
-      return { nodeId: ask.nodeId, details };
+      const details = services.runHistory.get(args.nodeId as RunNodeId) ?? null;
+      logger.info('Retrieved node details', { nodeId: args.nodeId });
+      return { nodeId: args.nodeId, details };
     } catch (error: unknown) {
-      logger.error('Failed to get node details:', { error: errorMessage(error), nodeId: ask.nodeId });
-      return { nodeId: ask.nodeId, details: null };
+      logger.error('Failed to get node details:', { error: errorMessage(error), nodeId: args.nodeId });
+      return { nodeId: args.nodeId, details: null };
     }
   },
-  GET_BACKUP_INFO: async ({ ask }) => {
+  GET_BACKUP_INFO: async ({ args }) => {
     try {
-      return { info: await services.appData.readBackupSummary(ask.path) };
+      return { info: await services.appData.readBackupSummary(args.path) };
     } catch (error: unknown) {
       logger.error('Failed to get backup info:', { error: errorMessage(error) });
       return { info: null };
@@ -91,7 +91,7 @@ export const answers = databaseSpec.answers({
    * `db-transaction`), which sends it to the asking window by its connection. A flow run is no delivery, so the brain
    * event carries that connection for the action to answer.
    */
-  GENERATE_AI_QUERY: ({ ask: { prompt, mode }, client }) => {
+  GENERATE_AI_QUERY: ({ args: { prompt, mode }, client }) => {
     if (!prompt?.trim()) throw new Error('Please provide a valid prompt');
 
     const threadsSettings = featureSettings.forFeature('threads').get();
@@ -103,7 +103,7 @@ export const answers = databaseSpec.answers({
       payload: { prompt: prompt.trim(), mode: mode ?? 'query', provider, ...(client && { client }) },
     });
   },
-  EXPORT_DATABASE: async ({ ask: { path, name, databases } }) => {
+  EXPORT_DATABASE: async ({ args: { path, name, databases } }) => {
     try {
       return { path: await services.appData.exportBackup(path, name, databases) };
     } catch (error: unknown) {
@@ -114,7 +114,7 @@ export const answers = databaseSpec.answers({
   // Replaces stored data and reloads memory from it; on failure the previous data is restored and reloaded. The
   // settings come in with the rest, and the import's migrations write them: run through the settings' writer, it
   // tells the settings system a replacement is running, so nothing is told a change until it ends
-  IMPORT_DATABASE: async ({ ask: { path, skipUnknownDatabases }, failure }) => {
+  IMPORT_DATABASE: async ({ args: { path, skipUnknownDatabases }, refuse }) => {
     let imported;
     try {
       imported = await services.appData.importBackup(path, { skipUnknownDatabases });
@@ -122,7 +122,7 @@ export const answers = databaseSpec.answers({
       logger.error('Failed to import database:', { error: errorMessage(error) });
       // The user decides whether to import a newer apack's backup without what this one can't hold
       if (error instanceof UnknownBackupDatabasesError) {
-        throw failure('unknown-databases', errorMessage(error), { unknownDatabases: error.databases });
+        throw refuse('unknown-databases', errorMessage(error), { unknownDatabases: error.databases });
       }
       throw error;
     }

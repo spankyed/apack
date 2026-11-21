@@ -11,12 +11,12 @@ export type PromptsSettings = import('#generated/settings.ts').SettingsOf<'promp
  * reaches every window through the views.
  */
 export type PromptAsks = {
-  CREATE_PROMPT: { ask: { label: string; inputs: Record<string, any>; templateFn: string; outputSchema?: any; description?: string; category?: string } }
-  UPDATE_PROMPT: { ask: { promptId: string; label?: string; inputs?: Record<string, any>; templateFn?: string; outputSchema?: any; description?: string; category?: string } }
-  DELETE_PROMPT: { ask: { promptId: string } }
+  CREATE_PROMPT: { args: { label: string; inputs: Record<string, any>; templateFn: string; outputSchema?: any; description?: string; category?: string } }
+  UPDATE_PROMPT: { args: { promptId: string; label?: string; inputs?: Record<string, any>; templateFn?: string; outputSchema?: any; description?: string; category?: string } }
+  DELETE_PROMPT: { args: { promptId: string } }
   /** Imported with what could not be, unless nothing could, which fails */
-  IMPORT_PROMPTS: { ask: { prompts: any }; answer: { count: number; errors?: string[] } }
-  EXPORT_PROMPTS: { ask: { directory: string }; answer: { filePath: string; promptCount: number } }
+  IMPORT_PROMPTS: { args: { prompts: any }; answer: { count: number; errors?: string[] } }
+  EXPORT_PROMPTS: { args: { directory: string }; answer: { filePath: string; promptCount: number } }
 }
 
 /** The prompts system sends no window anything of its own: the prompts are its views, and each ask is answered */

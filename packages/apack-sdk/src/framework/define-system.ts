@@ -1,7 +1,7 @@
 import { _withPerformanceEvent } from '../runtime/performance.ts';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
-import { _answered, _askFailureOf, _clientOf, _connectionSignal, _currentDelivery, _failedAnswer, _failure, _replyTo, ASK_ANSWER_TYPES, type AnswerPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskFailed, type AskName, type AskEventsOf, type ContractAsks, type FailureOf } from '../events/index.ts';
+import { _answered, _askFailureOf, _clientOf, _connectionSignal, _currentDelivery, _failedAnswer, _refuse, _replyTo, ASK_ANSWER_TYPES, type AnswerPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskFailed, type AskName, type AskEventsOf, type ContractAsks, type RefuseOf } from '../events/index.ts';
 import { reportError } from '../logger/report-error.ts';
 import type { ArrayChanges } from '../utils/change-detection.ts';
 import { eventTypes } from '../events/event-types.ts';
@@ -81,7 +81,7 @@ export interface SystemContract {
   incoming?: { type: string };
   /**
    * The asks it answers, by name: each an event an asker sends (`{ type: name, ...ask }`), answered exactly once
-   * with `answer` or with a failure of one of the kinds `fails` declares (`AskDeclaration`). Answered by the
+   * with `answer` or with a failure of one of the kinds `refuses` declares (`AskDeclaration`). Answered by the
    * table `defineSystem`'s `answers` builds, which has to cover every one.
    */
   asks?: Record<string, AskDeclaration>;
@@ -215,7 +215,7 @@ export function defineHandlers<TContext extends MachineContext, TEvent extends E
 /** What one of a system's ask handlers is handed */
 export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
   /** The ask, as the asker sent it */
-  readonly ask: AskEventOf<C, K>;
+  readonly args: AskEventOf<C, K>;
   /** The system's context as the ask arrived: a handler reads it, and changes it by sending its machine an event */
   readonly context: ContractContext<C>;
   /** The system's own actor, to send it an event — a state the answer moves it into */
@@ -230,7 +230,7 @@ export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
    */
   readonly waiting: boolean;
   /** Builds a refusal of one of the kinds the ask declares, for the handler to throw */
-  readonly failure: FailureOf<ContractAsks<C>[K]>;
+  readonly refuse: RefuseOf<ContractAsks<C>[K]>;
 }
 
 /** One of a system's ask handlers: it returns the answer, or a promise of it, and throws a refusal */
@@ -274,9 +274,9 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
    *
    * ```ts
    * export const answers = librarySpec.answers({
-   *   GET_DOCUMENT: async ({ ask, signal, failure }) => {
-   *     const document = await libraryService.find(ask.id, { signal })
-   *     if (!document) throw failure('not-found', 'Document not found')
+   *   GET_DOCUMENT: async ({ args, signal, refuse }) => {
+   *     const document = await libraryService.find(args.id, { signal })
+   *     if (!document) throw refuse('not-found', 'Document not found')
    *     return { document }
    *   },
    * })
@@ -287,7 +287,7 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
    *
    * Whoever asked is answered whichever way the handler ends, which is the point: a window that asked shows nothing
    * until it is answered, and an answer a handler has to remember on its failure path is one a new handler forgets.
-   * What it returns is `ASK_ANSWERED`'s `answer`; what it throws is `ASK_FAILED`, of the kind `failure` named, or
+   * What it returns is `ASK_ANSWERED`'s `answer`; what it throws is `ASK_FAILED`, of the kind `refuse` named, or
    * for an error from the disk the kind it is where the ask declares it (`not-found`, `no-access`), or else
    * `failed`. The work runs whether or not anybody asked, and a failure nobody asked about is reported, since no
    * window shows it. An ask the machine's current state does not take is answered `unavailable` by the bus.
@@ -353,7 +353,7 @@ function answer(asked: string, handler: (args: object) => unknown, args: { event
   };
   let made: unknown;
   try {
-    made = handler({ ask: args.event, context: args.context, self: args.self, signal: _connectionSignal(client), failure: _failure, waiting: reply !== undefined, ...(client === undefined ? {} : { client }) });
+    made = handler({ args: args.event, context: args.context, self: args.self, signal: _connectionSignal(client), refuse: _refuse, waiting: reply !== undefined, ...(client === undefined ? {} : { client }) });
   } catch (error) {
     refused(error);
     return;

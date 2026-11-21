@@ -13,9 +13,9 @@ type Contract = {
   incoming: { type: 'TOLD' };
   outgoing: { type: 'NOTE_CHANGED' };
   asks: {
-    GET_NOTE: { ask: { id: string }; answer: { text: string }; fails: { 'not-found': {} } };
-    DELETE_NOTE: { ask: { id: string } };
-    RENAME_NOTE: { ask: { id: string; name: string }; answer: { name: string }; fails: { 'name-taken': { existing: string } } };
+    GET_NOTE: { args: { id: string }; answer: { text: string }; refuses: { 'not-found': {} } };
+    DELETE_NOTE: { args: { id: string } };
+    RENAME_NOTE: { args: { id: string; name: string }; answer: { name: string }; refuses: { 'name-taken': { existing: string } } };
   };
 };
 
@@ -31,11 +31,11 @@ const notes: Record<string, () => Promise<string>> = {
 const deleted: string[] = [];
 
 const answers = spec.answers({
-  GET_NOTE: async ({ ask }) => ({ text: await notes[ask.id]!() }),
-  DELETE_NOTE: ({ ask }) => { deleted.push(ask.id); },
-  RENAME_NOTE: ({ ask, failure }) => {
-    if (ask.name === 'taken') throw failure('name-taken', 'Another note has that name', { existing: 'note-2' });
-    return { name: ask.name };
+  GET_NOTE: async ({ args }) => ({ text: await notes[args.id]!() }),
+  DELETE_NOTE: ({ args }) => { deleted.push(args.id); },
+  RENAME_NOTE: ({ args, refuse }) => {
+    if (args.name === 'taken') throw refuse('name-taken', 'Another note has that name', { existing: 'note-2' });
+    return { name: args.name };
   },
 });
 
@@ -129,24 +129,24 @@ export function contractIsHeld(): void {
   // @ts-expect-error -- RENAME_NOTE has no handler: the table covers every ask
   spec.answers({ GET_NOTE: async () => ({ text: '' }), DELETE_NOTE: () => {} });
   spec.answers({
-    GET_NOTE: ({ failure }) => {
+    GET_NOTE: ({ refuse }) => {
       // @ts-expect-error -- `misplaced` is no kind GET_NOTE declares
-      throw failure('misplaced', 'nowhere to be found');
+      throw refuse('misplaced', 'nowhere to be found');
     },
     DELETE_NOTE: () => {},
     // @ts-expect-error -- `name-taken` carries `existing`, which is required
-    RENAME_NOTE: ({ failure }) => { throw failure('name-taken', 'Taken'); },
+    RENAME_NOTE: ({ refuse }) => { throw refuse('name-taken', 'Taken'); },
   });
   spec.answers({
     // @ts-expect-error -- the answer is the declared payload, not another shape
     GET_NOTE: () => ({ body: 'wrong field' }),
     DELETE_NOTE: () => {},
-    RENAME_NOTE: ({ ask }) => ({ name: ask.name }),
+    RENAME_NOTE: ({ args }) => ({ name: args.name }),
   });
   spec.answers({
     GET_NOTE: async () => ({ text: '' }),
     DELETE_NOTE: () => {},
-    RENAME_NOTE: ({ ask }) => ({ name: ask.name }),
+    RENAME_NOTE: ({ args }) => ({ name: args.name }),
     // @ts-expect-error -- SAVE_NOTE is no ask this system declares
     SAVE_NOTE: () => {},
   });

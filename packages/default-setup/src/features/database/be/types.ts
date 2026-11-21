@@ -43,25 +43,25 @@ type Ran = { result: any; executionTime: number }
  * and generating a query with only that it started: the query comes from the flow it starts.
  */
 export type DatabaseAsks = {
-  EXECUTE_QUERY: { ask: { code: string }; answer: Ran }
-  EXECUTE_TRANSACTION: { ask: { code: string }; answer: Ran }
+  EXECUTE_QUERY: { args: { code: string }; answer: Ran }
+  EXECUTE_TRANSACTION: { args: { code: string }; answer: Ran }
   GET_FLOW_RUNS: { answer: { flows: RunNode[] } }
   /** A page of a flow run's events: \`offset\` is which page, which tells two pages of one flow apart */
-  GET_FLOW_EVENTS: { ask: { flowId: string; offset?: number; limit?: number }; answer: { flowId: string; events: RunTree[]; hasMore: boolean; offset: number } }
-  GET_NODE_DETAILS: { ask: { nodeId: string }; answer: { nodeId: string; details: RunNode | null } }
-  GET_BACKUP_INFO: { ask: { path: string }; answer: { info: { timestamp: number; databases: string[]; size: number; hasMedia?: boolean } | null } }
+  GET_FLOW_EVENTS: { args: { flowId: string; offset?: number; limit?: number }; answer: { flowId: string; events: RunTree[]; hasMore: boolean; offset: number } }
+  GET_NODE_DETAILS: { args: { nodeId: string }; answer: { nodeId: string; details: RunNode | null } }
+  GET_BACKUP_INFO: { args: { path: string }; answer: { info: { timestamp: number; databases: string[]; size: number; hasMedia?: boolean } | null } }
   /** Refused for an empty prompt; otherwise the flow that writes the query has started */
-  GENERATE_AI_QUERY: { ask: { prompt: string; mode?: 'query' | 'transaction' } }
+  GENERATE_AI_QUERY: { args: { prompt: string; mode?: 'query' | 'transaction' } }
   /** Answered with the backup's path */
-  EXPORT_DATABASE: { ask: { path: string; name?: string; databases: ('lmdb' | 'runHistory')[] }; answer: { path: string } }
+  EXPORT_DATABASE: { args: { path: string; name?: string; databases: ('lmdb' | 'runHistory')[] }; answer: { path: string } }
   /**
    * Answered with what to tell the user. A backup holding databases this app cannot is refused as
    * `unknown-databases`, naming them, for the user to decide whether to import it without them
    */
   IMPORT_DATABASE: {
-    ask: { path: string; skipUnknownDatabases?: boolean }
+    args: { path: string; skipUnknownDatabases?: boolean }
     answer: { message: string }
-    fails: { 'unknown-databases': { unknownDatabases: string[] } }
+    refuses: { 'unknown-databases': { unknownDatabases: string[] } }
   }
   RESET_DATABASE: { answer: { message: string } }
 }

@@ -75,25 +75,25 @@ export const answers = settingsSpec.answers({
     const recovery = preferences().getRecovery();
     return recovery ? { recovery } : stored();
   },
-  RECOVER_SETTINGS: ({ ask, context, waiting }) => change("The settings weren't repaired", context.busy, waiting, () => {
-    settingsRequestAdmin(ask).recover(ask.request);
+  RECOVER_SETTINGS: ({ args, context, waiting }) => change("The settings weren't repaired", context.busy, waiting, () => {
+    settingsRequestAdmin(args).recover(args.request);
     return { recovery: preferences().getRecovery()! };
   }),
   // A surface's settings are keyed by its ref, which the frontend resolves before sending and the store checks
-  UPDATE_SETTINGS: ({ ask, context, waiting }) => change("The settings weren't saved", context.busy, waiting, () => {
-    settingsRequestAccess(ask).service.set(ask.target, ask.path, ask.value, ask.condition);
+  UPDATE_SETTINGS: ({ args, context, waiting }) => change("The settings weren't saved", context.busy, waiting, () => {
+    settingsRequestAccess(args).service.set(args.target, args.path, args.value, args.condition);
     return stored();
   }),
-  REPLACE_SETTINGS: ({ ask, context, waiting }) => change("The settings weren't replaced", context.busy, waiting, () => {
-    settingsRequestAdmin(ask).replaceAll(ask.data, ask.condition);
+  REPLACE_SETTINGS: ({ args, context, waiting }) => change("The settings weren't replaced", context.busy, waiting, () => {
+    settingsRequestAdmin(args).replaceAll(args.data, args.condition);
     return stored();
   }),
-  RESET_SETTINGS: ({ ask, context, waiting }) => change("The settings weren't reset", context.busy, waiting, () => {
-    settingsRequestAccess(ask).service.reset(ask.target);
+  RESET_SETTINGS: ({ args, context, waiting }) => change("The settings weren't reset", context.busy, waiting, () => {
+    settingsRequestAccess(args).service.reset(args.target);
     return stored();
   }),
-  RESET_ALL_SETTINGS: ({ ask, context, waiting }) => change("The settings weren't reset", context.busy, waiting, () => {
-    settingsRequestAdmin(ask).resetAll();
+  RESET_ALL_SETTINGS: ({ args, context, waiting }) => change("The settings weren't reset", context.busy, waiting, () => {
+    settingsRequestAdmin(args).resetAll();
     return stored();
   }),
 });

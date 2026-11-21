@@ -360,9 +360,9 @@ export function createModuleExports(packRoot: string, files: string[], sources: 
       return Object.fromEntries(names(asks).sort().map((ask) => {
         const declaration = propertyType(asks, ask)!;
         checkResolved(declaration, file, `${name}'s ask "${ask}"`);
-        const fails = propertyType(declaration, 'fails');
-        if (fails) checkResolved(fails, file, `${name}'s ask "${ask}"'s fails`);
-        return [ask, fails ? names(fails).sort() : []];
+        const refuses = propertyType(declaration, 'refuses');
+        if (refuses) checkResolved(refuses, file, `${name}'s ask "${ask}"'s refuses`);
+        return [ask, refuses ? names(refuses).sort() : []];
       }));
     },
     outgoingEventTypesOf(file, name) {

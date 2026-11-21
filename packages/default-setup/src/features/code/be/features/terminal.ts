@@ -196,16 +196,16 @@ async function restored(self: AnyActorRef): Promise<void> {
 /** The terminal asks, answered by the code system (`answers`, `system.ts`) */
 export const terminalAnswers: AnswersTo<TerminalAsks> = {
   // **The answer waits for the session**, because the process is the broker's and a socket away
-  'terminal.CREATE_TERMINAL': async ({ ask, context, self, waiting }) => {
+  'terminal.CREATE_TERMINAL': async ({ args, context, self, waiting }) => {
     await restored(self)
-    const cwd = ask.cwd || context.baseDirectory
+    const cwd = args.cwd || context.baseDirectory
     const terminalInfo = await reported('create', waiting, () => terminalService.create({
-      title: ask.title,
+      title: args.title,
       cwd: cwd && cwd.trim() ? cwd : undefined,
-      shell: ask.shell,
-      cols: ask.cols || 80,
-      rows: ask.rows || 24,
-      target: ask.target,
+      shell: args.shell,
+      cols: args.cols || 80,
+      rows: args.rows || 24,
+      target: args.target,
     }, terminalHandlers))
     // Every window's list grows, and only the window that asked opens it. A terminal's id is minted here, so
     // nothing the asker sent could have identified it
@@ -213,7 +213,7 @@ export const terminalAnswers: AnswersTo<TerminalAsks> = {
     return terminalInfo
   },
 
-  'terminal.RESTART_TERMINAL': async ({ ask: { terminalId }, self, waiting }) => {
+  'terminal.RESTART_TERMINAL': async ({ args: { terminalId }, self, waiting }) => {
     await restored(self)
     const info = await reported('restart', waiting, async () => {
       const restarted = await terminalService.restart(terminalId, terminalHandlers)
@@ -225,7 +225,7 @@ export const terminalAnswers: AnswersTo<TerminalAsks> = {
     emitToFrontend({ type: 'terminal.RESTARTED', data: info })
   },
 
-  'terminal.CLOSE_TERMINAL': async ({ ask: { terminalId }, self, waiting }) => {
+  'terminal.CLOSE_TERMINAL': async ({ args: { terminalId }, self, waiting }) => {
     await restored(self)
     await reported('close', waiting, async () => {
       const terminalName = nameOf(terminalId)
@@ -238,24 +238,24 @@ export const terminalAnswers: AnswersTo<TerminalAsks> = {
     })
   },
 
-  'terminal.RESIZE_TERMINAL': ({ ask, client, waiting }) => reported('resize', waiting, async () => {
+  'terminal.RESIZE_TERMINAL': ({ args, client, waiting }) => reported('resize', waiting, async () => {
     // One cell in pixels, where the window measured one: what a program asking for the size in pixels is told
-    const cell = ask.cellWidth && ask.cellHeight ? { width: ask.cellWidth, height: ask.cellHeight } : undefined
-    const terminalName = nameOf(ask.terminalId)
+    const cell = args.cellWidth && args.cellHeight ? { width: args.cellWidth, height: args.cellHeight } : undefined
+    const terminalName = nameOf(args.terminalId)
     // **Every window's fit is recorded, and the pty runs at the smallest** (`TerminalService.resize`): a pty has
     // one `(cols, rows)`, and the smallest fit is the one every window showing it can draw whole. `client` names
     // the connection the ask arrived on, which the API stamps and nobody can forge.
-    const accepted = await terminalService.resize(ask.terminalId, ask.cols, ask.rows, client, cell)
+    const accepted = await terminalService.resize(args.terminalId, args.cols, args.rows, client, cell)
     if (!accepted) throw new Error(`${terminalName} not found`)
-    const grid = { terminalId: ask.terminalId, cols: accepted.cols, rows: accepted.rows }
+    const grid = { terminalId: args.terminalId, cols: accepted.cols, rows: accepted.rows }
     // **The grid moved, so every window showing this terminal needs it** — each renders the accepted one rather
     // than whatever it fitted for itself, which is what stops a second window drawing at a size nothing agreed to
     if (accepted.changed) emitToFrontend({ type: 'terminal.RESIZED', data: grid })
     // The asker that did not get what it asked for is told by its answer, which is its business and nobody else's
-    return accepted.cols !== ask.cols || accepted.rows !== ask.rows ? grid : null
+    return accepted.cols !== args.cols || accepted.rows !== args.rows ? grid : null
   }),
 
-  'terminal.RENAME_TERMINAL': ({ ask: { terminalId, customTitle }, waiting }) => reported('rename', waiting, () => {
+  'terminal.RENAME_TERMINAL': ({ args: { terminalId, customTitle }, waiting }) => reported('rename', waiting, () => {
     if (!terminalService.rename(terminalId, customTitle)) throw new Error(`${nameOf(terminalId)} not found`)
     broadcastToSurface(surfaceId, { type: 'terminal.RENAMED', data: { terminalId, customTitle } })
   }),
@@ -265,7 +265,7 @@ export const terminalAnswers: AnswersTo<TerminalAsks> = {
     return reported('list', waiting, () => terminalService.list())
   },
 
-  'terminal.OPEN_TERMINAL_TAB': async ({ ask: { terminalId }, self, waiting }) => {
+  'terminal.OPEN_TERMINAL_TAB': async ({ args: { terminalId }, self, waiting }) => {
     await restored(self)
     return reported('open-tab', waiting, () => {
       const terminal = terminalService.list().find(t => t.id === terminalId)
@@ -275,7 +275,7 @@ export const terminalAnswers: AnswersTo<TerminalAsks> = {
   },
 
   /** Every window showing the terminal marks it as one that keeps running, which is news rather than the answer */
-  'terminal.KEEP_TERMINAL': async ({ ask: { terminalId, kept }, self, waiting }) => {
+  'terminal.KEEP_TERMINAL': async ({ args: { terminalId, kept }, self, waiting }) => {
     await restored(self)
     await reported('keep', waiting, async () => {
       if (!await terminalService.keep(terminalId, kept)) throw new Error(`No running terminal ${terminalId}`)
@@ -284,7 +284,7 @@ export const terminalAnswers: AnswersTo<TerminalAsks> = {
   },
 
   /** A recording is opened for the window that asked to look, and nobody else is looking */
-  'terminal.REWIND': async ({ ask: { terminalId, cols, rows }, client, self, waiting }) => {
+  'terminal.REWIND': async ({ args: { terminalId, cols, rows }, client, self, waiting }) => {
     await restored(self)
     return reported('rewind', waiting, async () => {
       const opened = await terminalService.rewind(terminalId, { cols, rows }, client)
@@ -293,7 +293,7 @@ export const terminalAnswers: AnswersTo<TerminalAsks> = {
     })
   },
 
-  'terminal.REWIND_SEEK': async ({ ask: { session, at }, self, waiting }) => {
+  'terminal.REWIND_SEEK': async ({ args: { session, at }, self, waiting }) => {
     await restored(self)
     return reported('rewind', waiting, async () => {
       const sought = await terminalService.seekRewind(session, at)

@@ -665,20 +665,20 @@ export type MessageSent = { threadId: EARS.EntityId; started: boolean };
  * asks, answered to the window that made them.
  */
 export type ThreadsAsks = {
-  CREATE_THREAD: { ask: { topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }; answer: { id: EARS.EntityId } };
-  UPDATE_THREAD_STATUS: { ask: { threadId: string; status: string } };
-  UPDATE_THREAD_FIELD: { ask: { threadId: string; key: string; value: any } };
-  DELETE_THREAD: { ask: { threadId: string } };
-  SET_THREAD_PARENT: { ask: { childIds: string[]; parentId: string } };
-  EXPORT_THREADS: { ask: { directory: string }; answer: { filePath: string; threadCount: number } };
+  CREATE_THREAD: { args: { topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }; answer: { id: EARS.EntityId } };
+  UPDATE_THREAD_STATUS: { args: { threadId: string; status: string } };
+  UPDATE_THREAD_FIELD: { args: { threadId: string; key: string; value: any } };
+  DELETE_THREAD: { args: { threadId: string } };
+  SET_THREAD_PARENT: { args: { childIds: string[]; parentId: string } };
+  EXPORT_THREADS: { args: { directory: string }; answer: { filePath: string; threadCount: number } };
   /** Imported with what could not be, unless nothing could, which fails */
-  IMPORT_THREADS: { ask: { directory: string }; answer: { count: number; errors?: string[] } };
+  IMPORT_THREADS: { args: { directory: string }; answer: { count: number; errors?: string[] } };
   /** A thread opened in the chat, and marked visited; one that is gone fails, naming it */
-  OPEN_THREAD_CHAT: { ask: { threadId: string; restore?: boolean }; fails: { 'not-found': { threadId: string } } };
-  USER_MSG: { ask: UserMessage; answer: MessageSent };
-  USER_COMMAND: { ask: UserCommand; answer: MessageSent };
+  OPEN_THREAD_CHAT: { args: { threadId: string; restore?: boolean }; refuses: { 'not-found': { threadId: string } } };
+  USER_MSG: { args: UserMessage; answer: MessageSent };
+  USER_COMMAND: { args: UserCommand; answer: MessageSent };
   /** A thread forked from a message, which the window that asked opens */
-  FORK_THREAD: { ask: { messageId: string; threadId?: string; threadTopic?: string }; answer: { threadId: EARS.EntityId } };
+  FORK_THREAD: { args: { messageId: string; threadId?: string; threadTopic?: string }; answer: { threadId: EARS.EntityId } };
   /** What a window's chat starts from */
   GET_CHAT_START: { answer: ChatStart };
 };

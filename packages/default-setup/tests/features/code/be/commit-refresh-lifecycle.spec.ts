@@ -10,10 +10,10 @@ afterEach(() => { actors.splice(0).forEach(actor => actor.stop()); vi.useRealTim
  * The code system's answer to a window's ask, over a stand-in repository, reaching `commit` as its commit child: the
  * system answers every commit ask, and tells its child what the ask did
  */
-function windowAsks<K extends keyof typeof commitAnswers>(commit: AnyActorRef, gitRepository: unknown, ask: Parameters<(typeof commitAnswers)[K]>[0]['ask']) {
+function windowAsks<K extends keyof typeof commitAnswers>(commit: AnyActorRef, gitRepository: unknown, ask: Parameters<(typeof commitAnswers)[K]>[0]['args']) {
   const code = { getSnapshot: () => ({ children: { commit } }), send: () => {} };
   const handler = commitAnswers[ask.type as K] as (args: object) => unknown;
-  return Promise.resolve(handler({ ask, context: { gitRepository }, self: code })).catch(() => undefined);
+  return Promise.resolve(handler({ args: ask, context: { gitRepository }, self: code })).catch(() => undefined);
 }
 
 function start() {

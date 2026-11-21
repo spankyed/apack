@@ -97,7 +97,7 @@ export const answers = codeSpec.answers({
     const { repositories, truncated } = await AppGitRepository.repositoriesUnder(folder).catch(() => none)
     return { repositories, truncated, current: context.baseDirectory }
   },
-  'commit.WORKTREE_SWITCH': async ({ ask: { path }, context, self }) => {
+  'commit.WORKTREE_SWITCH': async ({ args: { path }, context, self }) => {
     const repository = repositoryOf(context.gitRepository)
     if (!repository) throw new Error('No repository is open to switch worktrees in.')
     const worktrees = await repository.worktreeList()

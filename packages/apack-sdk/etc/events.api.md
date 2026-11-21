@@ -49,8 +49,8 @@ export type AskAnswered<K extends string = string, A = unknown> = {
 // @public
 export interface AskDeclaration {
     answer?: unknown;
-    ask?: object;
-    fails?: Record<string, object>;
+    args?: object;
+    refuses?: Record<string, object>;
 }
 
 // @public
@@ -144,7 +144,7 @@ export type AskOutcome<D> = Outcome<AnswerPayload<D>, AskFailure<D>>;
 
 // @public
 export type AskPayload<D> = D extends {
-    ask: infer Payload;
+    args: infer Payload;
 } ? Payload : {};
 
 // @internal
@@ -209,7 +209,7 @@ export type DeclaredFailureKind<D> = keyof DeclaredFailures<D> & string;
 
 // @public
 export type DeclaredFailures<D> = D extends {
-    fails: infer Fails;
+    refuses: infer Fails;
 } ? Fails : {};
 
 // @public
@@ -239,12 +239,6 @@ export const _failedAnswer: (asked: string, failure: {
     kind: string;
     message: string;
 }>;
-
-// @internal
-export const _failure: (kind: string, message: string, data?: object) => AskError;
-
-// @public
-export type FailureOf<D> = <K extends DeclaredFailureKind<D>>(kind: K, message: string, ...data: {} extends DeclaredFailures<D>[K] ? [data?: DeclaredFailures<D>[K]] : [data: DeclaredFailures<D>[K]]) => AskError;
 
 // @public
 export type FeatureSettingsUpdated = {
@@ -387,6 +381,12 @@ export type Qualified<PackId extends string, M> = {
 
 // @public
 export const recordCall: <T>(pending: Record<string, T>, call: string, value: T) => Record<string, T>;
+
+// @internal
+export const _refuse: (kind: string, message: string, data?: object) => AskError;
+
+// @public
+export type RefuseOf<D> = <K extends DeclaredFailureKind<D>>(kind: K, message: string, ...data: {} extends DeclaredFailures<D>[K] ? [data?: DeclaredFailures<D>[K]] : [data: DeclaredFailures<D>[K]]) => AskError;
 
 // @public
 export type Reply<E extends {

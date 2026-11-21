@@ -23,32 +23,32 @@ export const promptsSpec = defineSystem<Contract>();
  * it could not be done
  */
 export const answers = promptsSpec.answers({
-  CREATE_PROMPT: ({ ask }) => {
+  CREATE_PROMPT: ({ args }) => {
     repository.promptCommands.create({
-      label: ask.label,
-      inputs: ask.inputs,
-      templateFn: ask.templateFn,
-      outputSchema: ask.outputSchema,
-      description: ask.description,
-      category: ask.category
+      label: args.label,
+      inputs: args.inputs,
+      templateFn: args.templateFn,
+      outputSchema: args.outputSchema,
+      description: args.description,
+      category: args.category
     });
   },
-  UPDATE_PROMPT: ({ ask }) => {
+  UPDATE_PROMPT: ({ args }) => {
     const updates: Record<string, any> = {};
 
-    if (ask.label !== undefined) updates.label = ask.label;
-    if (ask.inputs !== undefined) updates.inputs = ask.inputs;
-    if (ask.templateFn !== undefined) updates.templateFn = ask.templateFn;
-    if (ask.outputSchema !== undefined) updates.outputSchema = ask.outputSchema;
-    if (ask.description !== undefined) updates.description = ask.description;
-    if (ask.category !== undefined) updates.category = ask.category;
+    if (args.label !== undefined) updates.label = args.label;
+    if (args.inputs !== undefined) updates.inputs = args.inputs;
+    if (args.templateFn !== undefined) updates.templateFn = args.templateFn;
+    if (args.outputSchema !== undefined) updates.outputSchema = args.outputSchema;
+    if (args.description !== undefined) updates.description = args.description;
+    if (args.category !== undefined) updates.category = args.category;
 
-    repository.promptCommands.update(ask.promptId as EARS.EntityId, updates);
+    repository.promptCommands.update(args.promptId as EARS.EntityId, updates);
   },
-  DELETE_PROMPT: ({ ask }) => {
-    repository.promptCommands.delete(ask.promptId as EARS.EntityId);
+  DELETE_PROMPT: ({ args }) => {
+    repository.promptCommands.delete(args.promptId as EARS.EntityId);
   },
-  IMPORT_PROMPTS: ({ ask: { prompts: importData } }) => {
+  IMPORT_PROMPTS: ({ args: { prompts: importData } }) => {
     logger.info('Importing prompts', { count: Array.isArray(importData) ? importData.length : 0 });
 
     if (!Array.isArray(importData)) throw new Error('Invalid import data: expected an array of prompts');
@@ -83,7 +83,7 @@ export const answers = promptsSpec.answers({
     logger.info('Prompts import complete', { count, errors: errors.length });
     return { count, ...(errors.length > 0 ? { errors } : {}) };
   },
-  EXPORT_PROMPTS: ({ ask: { directory } }) => {
+  EXPORT_PROMPTS: ({ args: { directory } }) => {
     logger.info('Exporting prompts', { directory });
     const exported = exportPrompts(directory);
     logger.info('Prompts export complete', exported);

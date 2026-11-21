@@ -191,7 +191,7 @@ export const githubAnswers: AnswersTo<GitHubAsks> = {
    * the answer: one that ends signed in is news for every window (`github.ACCOUNT_CHANGED`), and one that ends
    * without an account is told to the window that asked, naming the code it was given
    */
-  'github.SIGN_IN': async ({ self, client, failure }) => {
+  'github.SIGN_IN': async ({ self, client, refuse }) => {
     const held = githubOf(self)?.getSnapshot().context.held ?? {}
     held.signIn?.abort()
     const controller = new AbortController()
@@ -210,7 +210,7 @@ export const githubAnswers: AnswersTo<GitHubAsks> = {
       code = await services.github.fetchDeviceCode(signal)
     } catch (error) {
       const why = ended(error)
-      throw why.reason === 'failed' ? new Error(why.message) : failure(why.reason, why.message)
+      throw why.reason === 'failed' ? new Error(why.message) : refuse(why.reason, why.message)
     }
 
     void (async () => {

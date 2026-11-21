@@ -89,7 +89,7 @@ export const searchAnswers: AnswersTo<SearchAsks> = {
    * Answered with every match once the search ends, and told as it goes to the window that asked: how far it is, and
    * each file's matches as they are found. A search asked for while it runs stops it, which is refused as superseded
    */
-  'search.SEARCH_FILES': async ({ ask, self, client, failure }) => {
+  'search.SEARCH_FILES': async ({ args, self, client, refuse }) => {
     const search = searchOf(self)
     const repository = search?.getSnapshot().context.repository
     if (!search || !repository) throw new Error('No directory selected. Please select a directory first.')
@@ -101,14 +101,14 @@ export const searchAnswers: AnswersTo<SearchAsks> = {
     }
     try {
       const options: SearchOptions = {
-        query: ask.query,
-        path: ask.path,
-        includePattern: ask.includePattern,
-        excludePattern: ask.excludePattern,
-        caseSensitive: ask.caseSensitive,
-        wholeWord: ask.wholeWord,
-        useRegex: ask.useRegex,
-        maxResults: ask.maxResults,
+        query: args.query,
+        path: args.path,
+        includePattern: args.includePattern,
+        excludePattern: args.excludePattern,
+        caseSensitive: args.caseSensitive,
+        wholeWord: args.wholeWord,
+        useRegex: args.useRegex,
+        maxResults: args.maxResults,
       }
       let totalMatches = 0
       const results = await repository.searchFiles(
@@ -124,7 +124,7 @@ export const searchAnswers: AnswersTo<SearchAsks> = {
         if (controller.signal.aborted) return undefined
         throw error
       })
-      if (!results || controller.signal.aborted) throw failure('superseded', 'Another search was asked for, or this one was cancelled')
+      if (!results || controller.signal.aborted) throw refuse('superseded', 'Another search was asked for, or this one was cancelled')
       return { results, totalMatches }
     } finally {
       search.send({ type: 'search.CLEAR_SEARCH_CONTROLLER', controller })

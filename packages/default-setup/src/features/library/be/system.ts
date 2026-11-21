@@ -48,65 +48,65 @@ function resolveHomePath(inputPath: string): string {
  * under a symlinked folder is answered as the kind it is (`not-found`, `no-access`) where the ask declares it.
  */
 export const answers = librarySpec.answers({
-  CREATE_DOCUMENT: async ({ ask }) => {
+  CREATE_DOCUMENT: async ({ args }) => {
     await libraryService.create({
-      name: ask.name,
-      content: ask.content,
-      tags: ask.tags,
-      parentId: ask.collectionId,
-      documentType: ask.documentType,
+      name: args.name,
+      content: args.content,
+      tags: args.tags,
+      parentId: args.collectionId,
+      documentType: args.documentType,
     })
-    if (ask.collectionId && repository.libraryQueries.isDiskFolder(ask.collectionId)) diskChanged(ask.collectionId)
+    if (args.collectionId && repository.libraryQueries.isDiskFolder(args.collectionId)) diskChanged(args.collectionId)
   },
-  UPDATE_DOCUMENT: async ({ ask }) => {
-    await libraryService.update({ id: ask.id, name: ask.name, content: ask.content, tags: ask.tags })
-    if (repository.libraryQueries.isDiskDocument(ask.id)) diskChanged(diskParentOf(ask.id))
+  UPDATE_DOCUMENT: async ({ args }) => {
+    await libraryService.update({ id: args.id, name: args.name, content: args.content, tags: args.tags })
+    if (repository.libraryQueries.isDiskDocument(args.id)) diskChanged(diskParentOf(args.id))
   },
-  DELETE_DOCUMENT: ({ ask }) => { repository.libraryCommands.deleteDocument(ask.id) },
-  GET_DOCUMENT: async ({ ask, failure }) => {
-    const document = await libraryService.find(ask.id)
-    if (!document) throw failure('not-found', 'Document not found')
+  DELETE_DOCUMENT: ({ args }) => { repository.libraryCommands.deleteDocument(args.id) },
+  GET_DOCUMENT: async ({ args, refuse }) => {
+    const document = await libraryService.find(args.id)
+    if (!document) throw refuse('not-found', 'Document not found')
     return { document }
   },
-  CREATE_COLLECTION: async ({ ask }) => {
-    if (ask.parentId && repository.libraryQueries.isDiskFolder(ask.parentId)) {
-      await libraryService.createFolder({ name: ask.name, parentId: ask.parentId })
-      diskChanged(ask.parentId)
+  CREATE_COLLECTION: async ({ args }) => {
+    if (args.parentId && repository.libraryQueries.isDiskFolder(args.parentId)) {
+      await libraryService.createFolder({ name: args.name, parentId: args.parentId })
+      diskChanged(args.parentId)
       return {}
     }
     // Only the window that asked names it; every window's folder shows it through the folder view
-    return { collection: repository.libraryCommands.createCollection(ask.name, ask.description, ask.parentId) }
+    return { collection: repository.libraryCommands.createCollection(args.name, args.description, args.parentId) }
   },
-  UPDATE_COLLECTION: ({ ask }) => { repository.libraryCommands.updateCollection(ask.id, ask.name, ask.description) },
-  DELETE_COLLECTION: ({ ask }) => { repository.libraryCommands.deleteCollection(ask.id) },
-  MOVE_DOCUMENT: ({ ask }) => { repository.libraryCommands.moveDocument(ask.documentId, ask.collectionId) },
+  UPDATE_COLLECTION: ({ args }) => { repository.libraryCommands.updateCollection(args.id, args.name, args.description) },
+  DELETE_COLLECTION: ({ args }) => { repository.libraryCommands.deleteCollection(args.id) },
+  MOVE_DOCUMENT: ({ args }) => { repository.libraryCommands.moveDocument(args.documentId, args.collectionId) },
   // File browser
-  GET_FOLDER_CONTENTS: ({ ask }) => repository.libraryQueries.getFolderContents(ask.folderId),
-  CHECK_SYMLINKS: async ({ ask }) => ({ ids: ask.ids, broken: await repository.libraryQueries.brokenSymlinks(ask.ids) }),
-  RENAME_ITEM: async ({ ask }) => {
-    if (symlink.isSymlinkId(ask.id)) {
+  GET_FOLDER_CONTENTS: ({ args }) => repository.libraryQueries.getFolderContents(args.folderId),
+  CHECK_SYMLINKS: async ({ args }) => ({ ids: args.ids, broken: await repository.libraryQueries.brokenSymlinks(args.ids) }),
+  RENAME_ITEM: async ({ args }) => {
+    if (symlink.isSymlinkId(args.id)) {
       // Worked out before the rename, while the path still resolves
-      const parent = diskParentOf(ask.id)
-      await libraryService.rename(ask.id, ask.name)
+      const parent = diskParentOf(args.id)
+      await libraryService.rename(args.id, args.name)
       diskChanged(parent)
       return
     }
-    repository.libraryCommands.renameItem(ask.id, ask.name, ask.itemType)
+    repository.libraryCommands.renameItem(args.id, args.name, args.itemType)
   },
-  DELETE_ITEMS: async ({ ask }) => {
-    await libraryService.remove(ask.ids)
-    if (ask.ids.some(symlink.isSymlinkId)) diskChanged(null)
+  DELETE_ITEMS: async ({ args }) => {
+    await libraryService.remove(args.ids)
+    if (args.ids.some(symlink.isSymlinkId)) diskChanged(null)
   },
-  MOVE_ITEMS: async ({ ask }) => {
-    await libraryService.move(ask.ids, ask.targetFolderId)
-    if (ask.ids.some(symlink.isSymlinkId) || repository.libraryQueries.isDiskFolder(ask.targetFolderId)) diskChanged(null)
+  MOVE_ITEMS: async ({ args }) => {
+    await libraryService.move(args.ids, args.targetFolderId)
+    if (args.ids.some(symlink.isSymlinkId) || repository.libraryQueries.isDiskFolder(args.targetFolderId)) diskChanged(null)
   },
   // Symlinked folders
-  CREATE_SYMLINK_COLLECTION: ({ ask }) => ({
-    collection: repository.libraryCommands.createSymlinkCollection(ask.name, resolveHomePath(ask.symlinkPath), ask.parentId),
+  CREATE_SYMLINK_COLLECTION: ({ args }) => ({
+    collection: repository.libraryCommands.createSymlinkCollection(args.name, resolveHomePath(args.symlinkPath), args.parentId),
   }),
-  UPDATE_SYMLINK_PATH: async ({ ask, failure }) => {
-    const resolvedPath = resolveHomePath(ask.newPath)
+  UPDATE_SYMLINK_PATH: async ({ args, refuse }) => {
+    const resolvedPath = resolveHomePath(args.newPath)
     // A folder to link has to be one: missing, or a file, is refused
     let isDirectory = false
     try {
@@ -114,13 +114,13 @@ export const answers = librarySpec.answers({
     } catch {
       // Missing: refused below
     }
-    if (!isDirectory) throw failure('not-found', `Path does not exist: ${resolvedPath}`)
-    repository.libraryCommands.updateSymlinkPath(ask.collectionId, resolvedPath)
-    diskChanged(ask.collectionId)
+    if (!isDirectory) throw refuse('not-found', `Path does not exist: ${resolvedPath}`)
+    repository.libraryCommands.updateSymlinkPath(args.collectionId, resolvedPath)
+    diskChanged(args.collectionId)
   },
-  EXPORT_LIBRARY: ({ ask: { directory, format } }) => exportLibrary(directory, format),
+  EXPORT_LIBRARY: ({ args: { directory, format } }) => exportLibrary(directory, format),
   // What an import stored reaches every window through the library's views, a part way import's included
-  IMPORT_LIBRARY: ({ ask: { directory } }) => {
+  IMPORT_LIBRARY: ({ args: { directory } }) => {
     const result = importLibrary(directory)
     if (result.created === 0 && result.errors.length > 0) throw new Error(result.errors.join('\n'))
     return { count: result.created, ...(result.errors.length > 0 ? { errors: result.errors } : {}) }

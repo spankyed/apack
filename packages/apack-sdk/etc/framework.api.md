@@ -21,10 +21,10 @@ import { z } from 'zod';
 
 // @public
 export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
-    readonly ask: AskEventOf<C, K>;
+    readonly args: AskEventOf<C, K>;
     readonly client?: string;
     readonly context: ContractContext<C>;
-    readonly failure: FailureOf<ContractAsks<C>[K]>;
+    readonly refuse: RefuseOf<ContractAsks<C>[K]>;
     readonly self: SystemArgs<C>['self'];
     readonly signal: AbortSignal;
     readonly waiting: boolean;

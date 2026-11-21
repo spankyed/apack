@@ -12,12 +12,12 @@ export type ActionsSettings = import('#generated/settings.ts').SettingsOf<'actio
  * reaches every window through the views.
  */
 export type ActionAsks = {
-  CREATE_ACTION: { ask: { label: string; input: Record<string, any>; actionFn: string; output?: any; description?: string; category?: string } }
-  UPDATE_ACTION: { ask: { actionId: string; label?: string; input?: Record<string, any>; actionFn?: string; output?: any; description?: string; category?: string } }
-  DELETE_ACTION: { ask: { actionId: string } }
+  CREATE_ACTION: { args: { label: string; input: Record<string, any>; actionFn: string; output?: any; description?: string; category?: string } }
+  UPDATE_ACTION: { args: { actionId: string; label?: string; input?: Record<string, any>; actionFn?: string; output?: any; description?: string; category?: string } }
+  DELETE_ACTION: { args: { actionId: string } }
   /** Imported with what could not be, unless nothing could, which fails */
-  IMPORT_ACTIONS: { ask: { actions: any }; answer: { count: number; errors?: string[] } }
-  EXPORT_ACTIONS: { ask: { directory: string }; answer: { filePath: string; actionCount: number } }
+  IMPORT_ACTIONS: { args: { actions: any }; answer: { count: number; errors?: string[] } }
+  EXPORT_ACTIONS: { args: { directory: string }; answer: { filePath: string; actionCount: number } }
 }
 
 /** The actions system sends no window anything of its own: the actions are its views, and each ask is answered */

@@ -26,7 +26,7 @@ import { z } from 'zod';
  */
 type ActionAsks = {
     CREATE_ACTION: {
-        ask: {
+        args: {
             label: string;
             input: Record<string, any>;
             actionFn: string;
@@ -36,7 +36,7 @@ type ActionAsks = {
         };
     };
     UPDATE_ACTION: {
-        ask: {
+        args: {
             actionId: string;
             label?: string;
             input?: Record<string, any>;
@@ -47,13 +47,13 @@ type ActionAsks = {
         };
     };
     DELETE_ACTION: {
-        ask: {
+        args: {
             actionId: string;
         };
     };
     /** Imported with what could not be, unless nothing could, which fails */
     IMPORT_ACTIONS: {
-        ask: {
+        args: {
             actions: any;
         };
         answer: {
@@ -62,7 +62,7 @@ type ActionAsks = {
         };
     };
     EXPORT_ACTIONS: {
-        ask: {
+        args: {
             directory: string;
         };
         answer: {
@@ -109,24 +109,24 @@ interface ActionTab {
 type ActionsAsks = {
     /** The action, with its code to edit in a tab */
     'codeActions.OPEN_ACTION': {
-        ask: {
+        args: {
             actionId: string;
         };
         answer: ActionEntity & {
             actionFnContent?: string;
         };
-        fails: {
+        refuses: {
             'not-found': {};
         };
     };
     /** Saves the tab's code into the action, answered with the action as it is now */
     'codeActions.SAVE_ACTION': {
-        ask: {
+        args: {
             actionId: string;
             actionFn: string;
         };
         answer: ActionEntity;
-        fails: {
+        refuses: {
             'not-found': {};
         };
     };
@@ -431,7 +431,7 @@ interface Bookmark {
 type BrainAsks = {
     /** The tree of the root run, or of the flow run a window shows, with the brain's state, which a window just started has not heard yet */
     REQUEST_SURFACE_DATA: {
-        ask: {
+        args: {
             flowRunNodeId?: string;
         };
         answer: {
@@ -440,24 +440,24 @@ type BrainAsks = {
         };
     };
     OPEN_RUN_NODE: {
-        ask: {
+        args: {
             runNodeId: string;
         };
         answer: OpenedRun;
-        fails: {
+        refuses: {
             'not-a-flow': {};
         };
     };
     /** The flow that ran the one a window shows, or the root run's when it shows the root */
     GO_BACK_RUN_NODE: {
-        ask: {
+        args: {
             currentFlowRunNodeId?: string;
         };
         answer: OpenedRun;
     };
     /** A run node, or null for one the history no longer holds */
     GET_RUN_NODE_DETAILS: {
-        ask: {
+        args: {
             runNodeId: string;
         };
         answer: {
@@ -940,7 +940,7 @@ type CodeSystemAsks = {
      * repository does not list as a worktree is refused, and the folder stays where it is
      */
     'commit.WORKTREE_SWITCH': {
-        ask: {
+        args: {
             path: string;
         };
         answer: {
@@ -1037,107 +1037,107 @@ type CommitAsks = {
      */
     'commit.GET_GIT_STATUS': {
         answer: CommitStatus;
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.GET_GIT_DIFF': {
-        ask: {
+        args: {
             path?: string;
             staged?: boolean;
         };
         answer: GitDiff;
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.STAGE_FILES': {
-        ask: {
+        args: {
             paths: string[];
         };
         answer: {
             paths: string[];
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.UNSTAGE_FILES': {
-        ask: {
+        args: {
             paths: string[];
         };
         answer: {
             paths: string[];
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Commits what is staged, answered with the message as committed */
     'commit.COMMIT': {
-        ask: {
+        args: {
             message: string;
         };
         answer: {
             message: string;
         } & UndoableAfter;
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.GET_CURRENT_BRANCH': {
         answer: {
             branch: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.REVERT_FILE': {
-        ask: {
+        args: {
             path: string;
         };
         answer: {
             path: string;
             kept: DiscardKept;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.REVERT_FILES': {
-        ask: {
+        args: {
             paths: string[];
         };
         answer: {
             paths: string[];
             kept: DiscardKept;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Which of what discarding these rows would remove cannot be brought back, for the window about to ask */
     'commit.PREVIEW_DISCARD': {
-        ask: {
+        args: {
             paths: string[];
         };
         answer: {
             paths: string[];
             notKept: string[];
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Puts back what a discard kept, by the id its answer carried */
     'commit.RESTORE_DISCARDED': {
-        ask: {
+        args: {
             id: string;
         };
         answer: {
             id: string;
         } & DiscardRestored;
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** The user trusts the repository to have git run what its own configuration and hooks name */
     'commit.TRUST_REPOSITORY': {
-        ask: {
+        args: {
             repository: string;
         };
         answer: {
             repository: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** The user trusts the repository git refused for who owns it: added to their safe.directory */
     'commit.TRUST_OWNERSHIP': {
         answer: {
             directory: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** The branches, and how each local one stands against what it follows, by its name */
     'commit.GET_ALL_BRANCHES': {
@@ -1149,28 +1149,28 @@ type CommitAsks = {
                 commit: string;
             }[];
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Checks out a branch there is, and with `pull` pulls it from what it follows once it is checked out */
     'commit.CHECKOUT_BRANCH': {
-        ask: {
+        args: {
             branchName: string;
             pull?: boolean;
         };
         answer: {
             branchName: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Makes a branch at what is checked out, and checks it out */
     'commit.CREATE_BRANCH': {
-        ask: {
+        args: {
             branchName: string;
         };
         answer: {
             branchName: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Pushes what is checked out; `stopped` when the user stopped it (`commit.STOP_PUSH`), which is no failure */
     'commit.PUBLISH_BRANCH': {
@@ -1178,24 +1178,24 @@ type CommitAsks = {
             branchName: string;
             stopped: boolean;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.PULL_BRANCH': {
         answer: {
             branchName: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /**
      * Hands the changes to the flow that writes a commit message, answered once it has them: the flow tells the asking
      * window what it made (`commit.MESSAGE_GENERATED`) or why it made none
      */
     'commit.GENERATE_MESSAGE': {
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Stash what is changed: only what is staged, or only `paths`, when asked. Answered with the stash's message */
     'commit.STASH_PUSH': {
-        ask: {
+        args: {
             message?: string;
             stagedOnly?: boolean;
             paths?: string[];
@@ -1203,11 +1203,11 @@ type CommitAsks = {
         answer: {
             message: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Make a tag at `commit` (what is checked out when none), annotated when `message` is given */
     'commit.CREATE_TAG': {
-        ask: {
+        args: {
             name: string;
             commit?: string;
             message?: string;
@@ -1215,29 +1215,29 @@ type CommitAsks = {
         answer: {
             name: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.DELETE_TAG': {
-        ask: {
+        args: {
             name: string;
         };
         answer: {
             name: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Push a tag to the remote */
     'commit.PUSH_TAG': {
-        ask: {
+        args: {
             name: string;
         };
         answer: {
             name: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.RENAME_BRANCH': {
-        ask: {
+        args: {
             name: string;
             to: string;
         };
@@ -1245,7 +1245,7 @@ type CommitAsks = {
             name: string;
             to: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /**
      * Turn on git's own file monitor and untracked cache here, which the user clicked for: it writes the repository's
@@ -1256,97 +1256,97 @@ type CommitAsks = {
             fileMonitor: boolean;
             untrackedCache: boolean;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.STASH_LIST': {
         answer: {
             stashes: StashEntry[];
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** A stash applied without a conflict; one that conflicts is refused, and the status shows the conflict */
     'commit.STASH_APPLY': {
-        ask: {
+        args: {
             index: number;
         };
         answer: {
             index: number;
             popped: boolean;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** A stash applied and dropped without a conflict; one that conflicts is refused and kept */
     'commit.STASH_POP': {
-        ask: {
+        args: {
             index: number;
         };
         answer: {
             index: number;
             popped: boolean;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.STASH_DROP': {
-        ask: {
+        args: {
             index: number;
         };
         answer: UndoableAfter;
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.STASH_CLEAR': {
         answer: UndoableAfter;
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** The files a stash holds, to look into before applying it */
     'commit.GET_STASH_CHANGES': {
-        ask: {
+        args: {
             index: number;
         };
         answer: {
             index: number;
             files: ChangedFile[];
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /**
      * Who last changed each line of a file, from the top of the folder, for the editor's gutter. `stopped` when the
      * same window asked for blame again before this was read, which nobody shows
      */
     'commit.GET_BLAME': {
-        ask: {
+        args: {
             path: string;
         };
         answer: {
             path: string;
             lines: BlameLine[];
         };
-        fails: GitFails & {
+        refuses: GitFails & {
             stopped: {};
         };
     };
     /** Bring a submodule to the commit the repository records for it, setting it up first if it is not */
     'commit.UPDATE_SUBMODULE': {
-        ask: {
+        args: {
             path: string;
         };
         answer: {
             path: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /**
      * Takes back the last write the engine made here; `evenIfPublished` once the user said to for a commit already
      * pushed. Refused as `published` when the commit is already on a remote branch, undone only once the user says so
      */
     'commit.UNDO_LAST': {
-        ask: {
+        args: {
             evenIfPublished?: boolean;
         };
         answer: {
             id: string;
             summary: string;
         } & UndoableAfter;
-        fails: GitFails & {
+        refuses: GitFails & {
             published: {};
         };
     };
@@ -1354,10 +1354,10 @@ type CommitAsks = {
         answer: {
             worktrees: WorktreeEntry[];
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.WORKTREE_ADD': {
-        ask: {
+        args: {
             path: string;
             branch?: string;
             createBranch?: boolean;
@@ -1366,59 +1366,59 @@ type CommitAsks = {
             path: string;
             branch: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.WORKTREE_REMOVE': {
-        ask: {
+        args: {
             path: string;
             force?: boolean;
         };
         answer: {
             path: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.RESOLVE_CONFLICT': {
-        ask: {
+        args: {
             path: string;
             strategy: 'ours' | 'theirs';
         };
         answer: {
             path: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.MARK_RESOLVED': {
-        ask: {
+        args: {
             path: string;
         };
         answer: {
             path: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.RESOLVE_ALL_CONFLICTS': {
-        ask: {
+        args: {
             strategy: 'ours' | 'theirs';
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /**
      * Carry on with what git is in the middle of, leave out the commit a rebase stopped at, or give it up. Where that
      * leaves the repository is in its status
      */
     'commit.MOVE_OPERATION': {
-        ask: {
+        args: {
             move: OperationMove;
         };
         answer: {
             move: OperationMove;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Merge a branch in, rebase onto one, or pick a commit onto what is checked out: `stopped` on a conflict, which the status describes as in progress */
     'commit.START_OPERATION': {
-        ask: {
+        args: {
             kind: StartableOperation;
             target: string;
         };
@@ -1427,47 +1427,47 @@ type CommitAsks = {
             target: string;
             stopped: boolean;
         } & UndoableAfter;
-        fails: GitFails;
+        refuses: GitFails;
     };
     /**
      * Amend the last commit with what is staged, and `message` in place of its own when given. Refused as `published`
      * when a remote branch already holds it: done only once the user says to go on
      */
     'commit.AMEND': {
-        ask: {
+        args: {
             message?: string;
             evenIfPublished?: boolean;
         };
         answer: UndoableAfter;
-        fails: GitFails & {
+        refuses: GitFails & {
             published: {};
         };
     };
     /** A commit's whole message, for rewording it */
     'commit.GET_COMMIT_MESSAGE': {
-        ask: {
+        args: {
             hash: string;
         };
         answer: {
             hash: string;
             message: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** The trailers git reads at the end of the message being written, with the message they were read of */
     'commit.READ_TRAILERS': {
-        ask: {
+        args: {
             message: string;
         };
         answer: {
             message: string;
             trailers: CommitTrailer[];
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** The message being written without one of its trailers, each line of it: `without` is `message` when it had no such trailer */
     'commit.REMOVE_TRAILER': {
-        ask: {
+        args: {
             message: string;
             trailer: CommitTrailer;
         };
@@ -1475,14 +1475,14 @@ type CommitAsks = {
             message: string;
             without: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /**
      * Reword a commit of what is checked out, fold it into the one before it, or drop it, keeping those after it.
      * Refused as `published` when a remote branch already holds commits it would change
      */
     'commit.REWRITE_COMMIT': {
-        ask: {
+        args: {
             hash: string;
             action: RewriteAction;
             message?: string;
@@ -1492,24 +1492,24 @@ type CommitAsks = {
             hash: string;
             action: RewriteAction;
         } & UndoableAfter;
-        fails: GitFails & {
+        refuses: GitFails & {
             published: {};
         };
     };
     /** What merging a branch in would do, before it is done */
     'commit.PREVIEW_MERGE': {
-        ask: {
+        args: {
             target: string;
         };
         answer: {
             target: string;
             preview: MergePreview;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** The files in an untracked folder that is listed as one row */
     'commit.LIST_UNTRACKED': {
-        ask: {
+        args: {
             path: string;
         };
         answer: {
@@ -1517,11 +1517,11 @@ type CommitAsks = {
             files: string[];
             truncated: boolean;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Stage one piece of a file's change, or with `staged` take one piece out of what is staged */
     'commit.APPLY_HUNK': {
-        ask: {
+        args: {
             path: string;
             staged: boolean;
             hunk: string;
@@ -1531,11 +1531,11 @@ type CommitAsks = {
             staged: boolean;
             hunk: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /** Git can sign in to this host now the app is signed in to GitHub: fetching starts again, and the window runs again what was refused */
     'commit.SET_UP_SIGN_IN': {
-        ask: {
+        args: {
             host: string;
             during?: 'pull' | 'push';
         };
@@ -1543,7 +1543,7 @@ type CommitAsks = {
             host: string;
             during?: 'pull' | 'push';
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     /**
      * A page of history: from what is checked out, or from where `cursor` left off; with `path`, that file's history.
@@ -1551,7 +1551,7 @@ type CommitAsks = {
      * the same window asked for the history again before this was read, which nobody shows
      */
     'commit.LOG_LIST': {
-        ask: {
+        args: {
             cursor?: string;
             path?: string;
         };
@@ -1561,27 +1561,27 @@ type CommitAsks = {
             path?: string;
             continued?: boolean;
         };
-        fails: GitFails & {
+        refuses: GitFails & {
             stopped: {};
         };
     };
     'commit.REVERT_COMMIT': {
-        ask: {
+        args: {
             hash: string;
         };
         answer: {
             hash: string;
         };
-        fails: GitFails;
+        refuses: GitFails;
     };
     'commit.RESET_TO_COMMIT': {
-        ask: {
+        args: {
             hash: string;
         };
         answer: {
             hash: string;
         } & UndoableAfter;
-        fails: GitFails;
+        refuses: GitFails;
     };
 };
 
@@ -1905,13 +1905,13 @@ interface CreateNode extends NodeBase {
  */
 type DatabaseAsks = {
     EXECUTE_QUERY: {
-        ask: {
+        args: {
             code: string;
         };
         answer: Ran;
     };
     EXECUTE_TRANSACTION: {
-        ask: {
+        args: {
             code: string;
         };
         answer: Ran;
@@ -1923,7 +1923,7 @@ type DatabaseAsks = {
     };
     /** A page of a flow run's events: \`offset\` is which page, which tells two pages of one flow apart */
     GET_FLOW_EVENTS: {
-        ask: {
+        args: {
             flowId: string;
             offset?: number;
             limit?: number;
@@ -1936,7 +1936,7 @@ type DatabaseAsks = {
         };
     };
     GET_NODE_DETAILS: {
-        ask: {
+        args: {
             nodeId: string;
         };
         answer: {
@@ -1945,7 +1945,7 @@ type DatabaseAsks = {
         };
     };
     GET_BACKUP_INFO: {
-        ask: {
+        args: {
             path: string;
         };
         answer: {
@@ -1959,14 +1959,14 @@ type DatabaseAsks = {
     };
     /** Refused for an empty prompt; otherwise the flow that writes the query has started */
     GENERATE_AI_QUERY: {
-        ask: {
+        args: {
             prompt: string;
             mode?: 'query' | 'transaction';
         };
     };
     /** Answered with the backup's path */
     EXPORT_DATABASE: {
-        ask: {
+        args: {
             path: string;
             name?: string;
             databases: ('lmdb' | 'runHistory')[];
@@ -1980,14 +1980,14 @@ type DatabaseAsks = {
      * `unknown-databases`, naming them, for the user to decide whether to import it without them
      */
     IMPORT_DATABASE: {
-        ask: {
+        args: {
             path: string;
             skipUnknownDatabases?: boolean;
         };
         answer: {
             message: string;
         };
-        fails: {
+        refuses: {
             'unknown-databases': {
                 unknownDatabases: string[];
             };
@@ -2350,51 +2350,51 @@ interface ExecOnceResult {
 /** What a window asks the explorer, answered by the code system (`explorerAnswers`) over the explorer's folder */
 type ExplorerAsks = {
     'explorer.LIST_FILES': {
-        ask: {
+        args: {
             path: string;
         };
         answer: DirectoryContent;
-        fails: FileFailure;
+        refuses: FileFailure;
     };
     /** A file's content for an editor, which is watched from then on until the editor closes it (`explorer.CLOSE_FILE`) */
     'explorer.READ_FILE': {
-        ask: {
+        args: {
             path: string;
         };
         answer: FileContent;
-        fails: FileFailure;
+        refuses: FileFailure;
     };
     'explorer.WRITE_FILE': {
-        ask: {
+        args: {
             path: string;
             content: string;
         };
         answer: {
             path: string;
         };
-        fails: FileFailure;
+        refuses: FileFailure;
     };
     'explorer.CREATE_FILE': {
-        ask: {
+        args: {
             path: string;
             content?: string;
         };
         answer: {
             path: string;
         };
-        fails: FileFailure;
+        refuses: FileFailure;
     };
     'explorer.DELETE_FILE': {
-        ask: {
+        args: {
             path: string;
         };
         answer: {
             path: string;
         };
-        fails: FileFailure;
+        refuses: FileFailure;
     };
     'explorer.RENAME_FILE': {
-        ask: {
+        args: {
             oldPath: string;
             newPath: string;
         };
@@ -2402,34 +2402,34 @@ type ExplorerAsks = {
             oldPath: string;
             newPath: string;
         };
-        fails: FileFailure;
+        refuses: FileFailure;
     };
     'explorer.CREATE_DIRECTORY': {
-        ask: {
+        args: {
             path: string;
         };
         answer: {
             path: string;
         };
-        fails: FileFailure;
+        refuses: FileFailure;
     };
     'explorer.GET_FILE_INFO': {
-        ask: {
+        args: {
             path: string;
         };
         answer: FileInfo;
-        fails: FileFailure;
+        refuses: FileFailure;
     };
     /** Every file under a folder, for quick open */
     'explorer.QUICK_OPEN_SEARCH': {
-        ask: {
+        args: {
             baseDirectory: string;
         };
         answer: QuickOpenResult$1[];
-        fails: FileFailure;
+        refuses: FileFailure;
     };
     'explorer.MOVE_FILES': {
-        ask: {
+        args: {
             sourcePaths: string[];
             targetDir: string;
         };
@@ -2438,10 +2438,10 @@ type ExplorerAsks = {
             targetDir: string;
             movedPaths: string[];
         };
-        fails: FileFailure;
+        refuses: FileFailure;
     };
     'explorer.COPY_FILES': {
-        ask: {
+        args: {
             sourcePaths: string[];
             targetDir: string;
         };
@@ -2449,7 +2449,7 @@ type ExplorerAsks = {
             targetDir: string;
             copiedPaths: string[];
         };
-        fails: FileFailure;
+        refuses: FileFailure;
     };
 };
 
@@ -2537,19 +2537,19 @@ type FlowsAsks = {
         };
     };
     DELETE_FLOW: {
-        ask: {
+        args: {
             flowId: string;
         };
     };
     UPDATE_FLOW_LABEL: {
-        ask: {
+        args: {
             flowId: string;
             label: string;
         };
     };
     /** Answered with the node made, for the editor to put in place of the one it added under `tempId` */
     CREATE_NODE: {
-        ask: {
+        args: {
             flowId: string;
             tempId: string;
             nodeData: any;
@@ -2561,21 +2561,21 @@ type FlowsAsks = {
         };
     };
     UPDATE_NODE: {
-        ask: {
+        args: {
             flowId: string;
             nodeId: string;
             nodeData: any;
         };
     };
     DELETE_NODE: {
-        ask: {
+        args: {
             flowId: string;
             nodeId: string;
         };
     };
     /** Answered with the relation made, for the editor to give the edge it drew */
     CREATE_EDGE: {
-        ask: {
+        args: {
             flowId: string;
             sourceId: string;
             targetId: string;
@@ -2591,13 +2591,13 @@ type FlowsAsks = {
         };
     };
     DELETE_EDGE: {
-        ask: {
+        args: {
             flowId: string;
             edgeId: string;
         };
     };
     UPDATE_EDGE: {
-        ask: {
+        args: {
             flowId: string;
             edgeId: string;
             source: string;
@@ -2607,7 +2607,7 @@ type FlowsAsks = {
         };
     };
     REINDEX_HANDLES: {
-        ask: {
+        args: {
             flowId: string;
             nodeId: string;
             prefix: string;
@@ -2617,13 +2617,13 @@ type FlowsAsks = {
     };
     /** Makes a flow the root flow the brain runs (its root role), or, with null, leaves no flow the root */
     SET_ROOT_FLOW: {
-        ask: {
+        args: {
             flowId: string | null;
         };
     };
     /** Answered with the flows it made; refused, with every reference it could not resolve, when one does not */
     IMPORT_DSL: {
-        ask: {
+        args: {
             dsl: any;
         };
         answer: {
@@ -2632,7 +2632,7 @@ type FlowsAsks = {
     };
     /** Every flow, or the one named, written to a file in `directory` */
     EXPORT_DSL: {
-        ask: {
+        args: {
             directory: string;
             flowId?: string;
         };
@@ -2908,7 +2908,7 @@ type GitHubAsks = {
             verificationUri: string;
             expiresAt: number;
         };
-        fails: {
+        refuses: {
             unconfigured: {};
             denied: {};
             expired: {};
@@ -3206,42 +3206,42 @@ interface LLMNode extends NodeBase {
  */
 type LibraryAsks = {
     CREATE_DOCUMENT: {
-        ask: {
+        args: {
             name: string;
             content: ContentSection[];
             tags: string[];
             collectionId?: EARS.EntityId;
             documentType?: string;
         };
-        fails: OnDisk;
+        refuses: OnDisk;
     };
     UPDATE_DOCUMENT: {
-        ask: {
+        args: {
             id: EARS.EntityId;
             name: string;
             content: ContentSection[];
             tags: string[];
         };
-        fails: OnDisk;
+        refuses: OnDisk;
     };
     DELETE_DOCUMENT: {
-        ask: {
+        args: {
             id: EARS.EntityId;
         };
     };
     /** A document, read from disk when it is a file under a symlinked folder */
     GET_DOCUMENT: {
-        ask: {
+        args: {
             id: EARS.EntityId;
         };
         answer: {
             document: DocumentDTO;
         };
-        fails: OnDisk;
+        refuses: OnDisk;
     };
     /** Answered with the folder it made in the library, for the window that asked to name; one on disk is only made */
     CREATE_COLLECTION: {
-        ask: {
+        args: {
             name: string;
             description?: string;
             parentId?: EARS.EntityId;
@@ -3249,37 +3249,37 @@ type LibraryAsks = {
         answer: {
             collection?: CollectionDTO;
         };
-        fails: OnDisk;
+        refuses: OnDisk;
     };
     UPDATE_COLLECTION: {
-        ask: {
+        args: {
             id: EARS.EntityId;
             name: string;
             description?: string;
         };
     };
     DELETE_COLLECTION: {
-        ask: {
+        args: {
             id: EARS.EntityId;
         };
     };
     MOVE_DOCUMENT: {
-        ask: {
+        args: {
             documentId: EARS.EntityId;
             collectionId?: EARS.EntityId;
         };
     };
     /** A folder's contents, read from disk when it is a symlinked folder or one inside one */
     GET_FOLDER_CONTENTS: {
-        ask: {
+        args: {
             folderId: EARS.EntityId | null;
         };
         answer: FolderContents;
-        fails: OnDisk;
+        refuses: OnDisk;
     };
     /** Which of these symlinked collections no longer reach their folder on disk */
     CHECK_SYMLINKS: {
-        ask: {
+        args: {
             ids: EARS.EntityId[];
         };
         answer: {
@@ -3288,28 +3288,28 @@ type LibraryAsks = {
         };
     };
     RENAME_ITEM: {
-        ask: {
+        args: {
             id: EARS.EntityId;
             name: string;
             itemType: 'document' | 'folder';
         };
-        fails: OnDisk;
+        refuses: OnDisk;
     };
     DELETE_ITEMS: {
-        ask: {
+        args: {
             ids: EARS.EntityId[];
         };
-        fails: OnDisk;
+        refuses: OnDisk;
     };
     MOVE_ITEMS: {
-        ask: {
+        args: {
             ids: EARS.EntityId[];
             targetFolderId: EARS.EntityId | null;
         };
-        fails: OnDisk;
+        refuses: OnDisk;
     };
     CREATE_SYMLINK_COLLECTION: {
-        ask: {
+        args: {
             name: string;
             symlinkPath: string;
             parentId?: EARS.EntityId;
@@ -3320,16 +3320,16 @@ type LibraryAsks = {
     };
     /** Refused as `not-found` for a path that is no folder */
     UPDATE_SYMLINK_PATH: {
-        ask: {
+        args: {
             collectionId: EARS.EntityId;
             newPath: string;
         };
-        fails: {
+        refuses: {
             'not-found': {};
         };
     };
     EXPORT_LIBRARY: {
-        ask: {
+        args: {
             directory: string;
             format: 'json' | 'markdown';
         };
@@ -3340,7 +3340,7 @@ type LibraryAsks = {
     };
     /** Imported with what could not be, unless nothing could, which fails */
     IMPORT_LIBRARY: {
-        ask: {
+        args: {
             directory: string;
         };
         answer: {
@@ -3675,7 +3675,7 @@ interface NormalizedRunNodeTree {
  */
 type NoteAsks = {
     CREATE_NOTE: {
-        ask: {
+        args: {
             title: string;
             content?: string;
             icon?: string | null;
@@ -3690,7 +3690,7 @@ type NoteAsks = {
         };
     };
     UPDATE_NOTE: {
-        ask: {
+        args: {
             id: string;
             title?: string;
             content?: string;
@@ -3701,41 +3701,41 @@ type NoteAsks = {
         };
     };
     DELETE_NOTE: {
-        ask: {
+        args: {
             id: string;
         };
     };
     SOFT_DELETE_NOTE: {
-        ask: {
+        args: {
             id: string;
         };
     };
     RESTORE_NOTE: {
-        ask: {
+        args: {
             id: string;
         };
     };
     MOVE_NOTE: {
-        ask: {
+        args: {
             ids: string[];
             newParentId: string | null;
         };
     };
     REORDER_NOTE: {
-        ask: {
+        args: {
             id: string;
             newParentId: string | null;
             newIndex: number;
         };
     };
     PERMANENTLY_DELETE_NOTE: {
-        ask: {
+        args: {
             id: string;
         };
     };
     EMPTY_TRASH: {};
     EXPORT_NOTES: {
-        ask: {
+        args: {
             directory: string;
             format: 'json' | 'markdown';
         };
@@ -3746,7 +3746,7 @@ type NoteAsks = {
     };
     /** Imported with what could not be, unless nothing could, which fails */
     IMPORT_NOTES: {
-        ask: {
+        args: {
             directory: string;
         };
         answer: {
@@ -4601,7 +4601,7 @@ type ProgressDuring = 'checkout' | 'pull' | 'push' | 'submodule';
  */
 type PromptAsks = {
     CREATE_PROMPT: {
-        ask: {
+        args: {
             label: string;
             inputs: Record<string, any>;
             templateFn: string;
@@ -4611,7 +4611,7 @@ type PromptAsks = {
         };
     };
     UPDATE_PROMPT: {
-        ask: {
+        args: {
             promptId: string;
             label?: string;
             inputs?: Record<string, any>;
@@ -4622,13 +4622,13 @@ type PromptAsks = {
         };
     };
     DELETE_PROMPT: {
-        ask: {
+        args: {
             promptId: string;
         };
     };
     /** Imported with what could not be, unless nothing could, which fails */
     IMPORT_PROMPTS: {
-        ask: {
+        args: {
             prompts: any;
         };
         answer: {
@@ -4637,7 +4637,7 @@ type PromptAsks = {
         };
     };
     EXPORT_PROMPTS: {
-        ask: {
+        args: {
             directory: string;
         };
         answer: {
@@ -4682,24 +4682,24 @@ interface PromptTab {
 type PromptsAsks = {
     /** The prompt, with its template to edit in a tab */
     'codePrompts.OPEN_PROMPT': {
-        ask: {
+        args: {
             promptId: string;
         };
         answer: PromptEntity & {
             templateFnContent?: string;
         };
-        fails: {
+        refuses: {
             'not-found': {};
         };
     };
     /** Saves the tab's template into the prompt, answered with the prompt as it is now */
     'codePrompts.SAVE_PROMPT': {
-        ask: {
+        args: {
             promptId: string;
             templateFn: string;
         };
         answer: PromptEntity;
-        fails: {
+        refuses: {
             'not-found': {};
         };
     };
@@ -4767,7 +4767,7 @@ type PromptsInboxEvent = {
 type PullRequestAsks = {
     /** `prNumber` reads the head from what GitHub keeps of that pull request, which outlives its branch */
     'pr.GET_BRANCH_DIFF': {
-        ask: {
+        args: {
             baseBranch?: string;
             headBranch?: string;
             prNumber?: number;
@@ -4783,20 +4783,20 @@ type PullRequestAsks = {
      * `content-missing`, which is fetched only when the user asks
      */
     'pr.GET_BRANCH_FILE_DIFF': {
-        ask: PRFileDiffWhere & {
+        args: PRFileDiffWhere & {
             fetchMissing?: boolean;
         };
         answer: GitDiff & {
             baseBranch: string;
             headBranch?: string;
         };
-        fails: {
+        refuses: {
             'content-missing': PRFileDiffWhere;
         };
     };
     /** A page of the pull requests in `state`, newest first, from `after` (the last page's `next`), by `query` where there is one; `next` is `null` on the last */
     'pr.LIST_PRS': {
-        ask: {
+        args: {
             state: PRListState;
             query?: string;
             after?: string;
@@ -4805,11 +4805,11 @@ type PullRequestAsks = {
             prs: GhPullRequest[];
             next: string | null;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     /** Checks out the pull request's head as a branch here: the branch it became, and what that did to a branch already there */
     'pr.CHECKOUT_PR': {
-        ask: {
+        args: {
             number: number;
         };
         answer: {
@@ -4817,18 +4817,18 @@ type PullRequestAsks = {
             branch: string;
             checkout: PRBranchCheckout;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     /** The pull request's details */
     'pr.SELECT_PR': {
-        ask: {
+        args: {
             number: number;
         };
         answer: PRDetails;
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.CREATE_PR': {
-        ask: {
+        args: {
             title: string;
             body: string;
             base?: string;
@@ -4837,14 +4837,14 @@ type PullRequestAsks = {
         answer: {
             pr: GhPullRequest;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     /**
      * `sha` is the head shown: GitHub merges nothing where the head has moved since (`head-moved`). A refused merge
      * carries the pull request read again, where it could be, so the panel shows what refused it
      */
     'pr.MERGE_PR': {
-        ask: {
+        args: {
             number: number;
             method?: 'merge' | 'rebase' | 'squash';
             sha?: string;
@@ -4852,7 +4852,7 @@ type PullRequestAsks = {
         answer: {
             number: number;
         };
-        fails: {
+        refuses: {
             github: {
                 reason: GitHubApiFailure;
                 details?: PRDetails;
@@ -4860,17 +4860,17 @@ type PullRequestAsks = {
         };
     };
     'pr.CLOSE_PR': {
-        ask: {
+        args: {
             number: number;
         };
         answer: {
             number: number;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     /** `isDraft` is what it is now. Marked ready, its details once GitHub has worked out whether it can merge */
     'pr.TOGGLE_DRAFT': {
-        ask: {
+        args: {
             number: number;
             isDraft: boolean;
         };
@@ -4879,14 +4879,14 @@ type PullRequestAsks = {
             isDraft: boolean;
             details?: PRDetails;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     /** The current branch's own pull request, `null` where it has none */
     'pr.CHECK_BRANCH_PR': {
         answer: {
             pr: GhPullRequest | null;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     /** Whether the app's GitHub sign-in can work with the pull requests of the repository the remote names: `ok`, or why not, with what to tell the user */
     'pr.CHECK_GITHUB_ACCESS': {
@@ -4913,17 +4913,17 @@ type PullRequestAsks = {
      * is from. Answered with the branch deleted, or one already gone
      */
     'pr.DELETE_BRANCH': {
-        ask: {
+        args: {
             number: number;
         };
         answer: {
             branch: string;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     /** A base moved brings the details once GitHub has worked out whether it can merge */
     'pr.UPDATE_PR': {
-        ask: {
+        args: {
             number: number;
             title?: string;
             body?: string;
@@ -4936,58 +4936,58 @@ type PullRequestAsks = {
             base?: string;
             details?: PRDetails;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.CREATE_COMMENT': {
-        ask: {
+        args: {
             number: number;
             body: string;
         };
         answer: {
             number: number;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.EDIT_COMMENT': {
-        ask: {
+        args: {
             commentId: number;
             body: string;
         };
         answer: {
             commentId: number;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.DELETE_COMMENT': {
-        ask: {
+        args: {
             commentId: number;
         };
         answer: {
             commentId: number;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.GET_COMMENTS': {
-        ask: {
+        args: {
             number: number;
         };
         answer: {
             number: number;
             comments: GhPRComment[];
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.GET_REVIEW_THREADS': {
-        ask: {
+        args: {
             number: number;
         };
         answer: {
             threads: GhReviewThread[];
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.REPLY_TO_THREAD': {
-        ask: {
+        args: {
             prNumber: number;
             commentId: number;
             body: string;
@@ -4995,44 +4995,44 @@ type PullRequestAsks = {
         answer: {
             prNumber: number;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.RESOLVE_THREAD': {
-        ask: {
+        args: {
             threadId: string;
         };
         answer: {
             threadId: string;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.UNRESOLVE_THREAD': {
-        ask: {
+        args: {
             threadId: string;
         };
         answer: {
             threadId: string;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.EDIT_REVIEW_COMMENT': {
-        ask: {
+        args: {
             commentId: number;
             body: string;
         };
         answer: {
             commentId: number;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
     'pr.DELETE_REVIEW_COMMENT': {
-        ask: {
+        args: {
             commentId: number;
         };
         answer: {
             commentId: number;
         };
-        fails: GitHubRefused;
+        refuses: GitHubRefused;
     };
 };
 
@@ -5365,7 +5365,7 @@ interface ScheduleNode extends NodeBase {
 type SearchAsks = {
     /** Every match, once the search ends; one stopped by another search or a cancel is refused as `superseded` */
     'search.SEARCH_FILES': {
-        ask: {
+        args: {
             query: string;
             path: string;
             includePattern?: string;
@@ -5379,7 +5379,7 @@ type SearchAsks = {
             results: SearchResult[];
             totalMatches: number;
         };
-        fails: {
+        refuses: {
             superseded: {};
         };
     };
@@ -5630,7 +5630,7 @@ type TerminalAsks = {
      * could identify it. Every window hears `terminal.CREATED` as well, and none of them opens it
      */
     'terminal.CREATE_TERMINAL': {
-        ask: {
+        args: {
             title?: string;
             cwd?: string;
             shell?: string;
@@ -5641,13 +5641,13 @@ type TerminalAsks = {
         answer: TerminalInfo;
     };
     'terminal.CLOSE_TERMINAL': {
-        ask: {
+        args: {
             terminalId: string;
         };
     };
     /** Start a new shell under a terminal that already exists, keeping its id and everything attached to it */
     'terminal.RESTART_TERMINAL': {
-        ask: {
+        args: {
             terminalId: string;
         };
     };
@@ -5656,7 +5656,7 @@ type TerminalAsks = {
      * smaller fit holds it — and `null` when it took
      */
     'terminal.RESIZE_TERMINAL': {
-        ask: {
+        args: {
             terminalId: string;
             cols: number;
             rows: number;
@@ -5670,7 +5670,7 @@ type TerminalAsks = {
         } | null;
     };
     'terminal.RENAME_TERMINAL': {
-        ask: {
+        args: {
             terminalId: string;
             customTitle: string;
         };
@@ -5681,14 +5681,14 @@ type TerminalAsks = {
     };
     /** A running terminal, to open as a tab */
     'terminal.OPEN_TERMINAL_TAB': {
-        ask: {
+        args: {
             terminalId: string;
         };
         answer: TerminalInfo;
     };
     /** Whether that terminal's shell goes on running when the app is not, to be taken up again at the next start */
     'terminal.KEEP_TERMINAL': {
-        ask: {
+        args: {
             terminalId: string;
             kept: boolean;
         };
@@ -5698,7 +5698,7 @@ type TerminalAsks = {
      * what its view is drawn from, and it runs between `first` and `last`, in milliseconds since the Unix epoch
      */
     'terminal.REWIND': {
-        ask: {
+        args: {
             terminalId: string;
             cols: number;
             rows: number;
@@ -5715,7 +5715,7 @@ type TerminalAsks = {
      * shows now, `null` where the recording is not open
      */
     'terminal.REWIND_SEEK': {
-        ask: {
+        args: {
             session: string;
             at: number;
         };
@@ -6080,7 +6080,7 @@ type ThreadViewData = Simplify<ThreadCreateData & {
  */
 type ThreadsAsks = {
     CREATE_THREAD: {
-        ask: {
+        args: {
             topic: string;
             tags?: string[];
             instructions: string;
@@ -6095,31 +6095,31 @@ type ThreadsAsks = {
         };
     };
     UPDATE_THREAD_STATUS: {
-        ask: {
+        args: {
             threadId: string;
             status: string;
         };
     };
     UPDATE_THREAD_FIELD: {
-        ask: {
+        args: {
             threadId: string;
             key: string;
             value: any;
         };
     };
     DELETE_THREAD: {
-        ask: {
+        args: {
             threadId: string;
         };
     };
     SET_THREAD_PARENT: {
-        ask: {
+        args: {
             childIds: string[];
             parentId: string;
         };
     };
     EXPORT_THREADS: {
-        ask: {
+        args: {
             directory: string;
         };
         answer: {
@@ -6129,7 +6129,7 @@ type ThreadsAsks = {
     };
     /** Imported with what could not be, unless nothing could, which fails */
     IMPORT_THREADS: {
-        ask: {
+        args: {
             directory: string;
         };
         answer: {
@@ -6139,27 +6139,27 @@ type ThreadsAsks = {
     };
     /** A thread opened in the chat, and marked visited; one that is gone fails, naming it */
     OPEN_THREAD_CHAT: {
-        ask: {
+        args: {
             threadId: string;
             restore?: boolean;
         };
-        fails: {
+        refuses: {
             'not-found': {
                 threadId: string;
             };
         };
     };
     USER_MSG: {
-        ask: UserMessage;
+        args: UserMessage;
         answer: MessageSent;
     };
     USER_COMMAND: {
-        ask: UserCommand;
+        args: UserCommand;
         answer: MessageSent;
     };
     /** A thread forked from a message, which the window that asked opens */
     FORK_THREAD: {
-        ask: {
+        args: {
             messageId: string;
             threadId?: string;
             threadTopic?: string;

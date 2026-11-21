@@ -26,30 +26,30 @@ export const actionsSpec = defineSystem<Contract>();
  * it could not be done
  */
 export const answers = actionsSpec.answers({
-  CREATE_ACTION: ({ ask }) => {
+  CREATE_ACTION: ({ args }) => {
     repository.actionCommands.create({
-      label: ask.label,
-      input: ask.input,
-      actionFn: ask.actionFn,
-      output: ask.output,
-      description: ask.description,
-      category: ask.category
+      label: args.label,
+      input: args.input,
+      actionFn: args.actionFn,
+      output: args.output,
+      description: args.description,
+      category: args.category
     });
   },
-  UPDATE_ACTION: ({ ask }) => {
-    repository.actionCommands.update(ask.actionId as EARS.EntityId, {
-      label: ask.label,
-      input: ask.input,
-      actionFn: ask.actionFn,
-      output: ask.output,
-      description: ask.description,
-      category: ask.category
+  UPDATE_ACTION: ({ args }) => {
+    repository.actionCommands.update(args.actionId as EARS.EntityId, {
+      label: args.label,
+      input: args.input,
+      actionFn: args.actionFn,
+      output: args.output,
+      description: args.description,
+      category: args.category
     });
   },
-  DELETE_ACTION: ({ ask }) => {
-    repository.actionCommands.delete(ask.actionId as EARS.EntityId);
+  DELETE_ACTION: ({ args }) => {
+    repository.actionCommands.delete(args.actionId as EARS.EntityId);
   },
-  IMPORT_ACTIONS: ({ ask: { actions: importData } }) => {
+  IMPORT_ACTIONS: ({ args: { actions: importData } }) => {
     logger.info('Importing actions', { count: Array.isArray(importData) ? importData.length : 0 });
 
     if (!Array.isArray(importData)) throw new Error('Invalid import data: expected an array of actions');
@@ -84,7 +84,7 @@ export const answers = actionsSpec.answers({
     logger.info('Actions import complete', { count, errors: errors.length });
     return { count, ...(errors.length > 0 ? { errors } : {}) };
   },
-  EXPORT_ACTIONS: ({ ask: { directory } }) => {
+  EXPORT_ACTIONS: ({ args: { directory } }) => {
     logger.info('Exporting actions', { directory });
     const exported = exportActions(directory);
     logger.info('Actions export complete', exported);
