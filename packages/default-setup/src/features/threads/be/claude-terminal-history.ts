@@ -22,7 +22,9 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
     return { uuid: source.uuid, sessionId: entry.sessionId, sender: 'system', text, blocks: [],
       ...(Number.isFinite(timestamp) ? { timestamp } : {}),
       context: { cliUuid: source.uuid, claudeTerminalMessage: { uuid: source.uuid, sessionId: entry.sessionId },
-        claudeNativeCompaction: compaction } }
+        claudeNativeCompaction: compaction,
+        ...(compaction === 'summary' && typeof source.parentUuid === 'string'
+          ? { claudeNativeCompactionAnchor: source.parentUuid } : {}) } }
   }
   // Original ui.log persists a transcript-only informational notice, outside model messages.
   if (source.type === 'system' && source.subtype === 'informational' && source.level === 'notice') {

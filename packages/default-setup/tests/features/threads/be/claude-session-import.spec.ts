@@ -57,3 +57,21 @@ it('restores native-owned history by original time and stable same-session order
  const page=repository.chatQueries.chatPage(thread.id,1)!;
  expect(page.messageIds.map(id=>repository.chatQueries.messageById(id)?.text)).toEqual(['Assistant','Queued']);expect(page.hasMore).toBe(true)
 })
+
+
+it('shows a compact summary after its original boundary even if Claude created it first', () => {
+ const sessionId='11111111-1111-4111-8111-111111111111';
+ const thread=repository.threadCommands.create({topic:'Compacted history',instructions:'',tags:['imported']});
+ repository.threadCommands.update(thread.id,{context:{claudeCode:{sessionId}}});
+ const boundary={sessionId,uuid:'22222222-2222-4222-8222-222222222222',type:'system',subtype:'compact_boundary',
+  timestamp:'2026-11-21T06:41:55.407Z',content:'Conversation compacted'};
+ const summary={sessionId,uuid:'33333333-3333-4333-8333-333333333333',parentUuid:boundary.uuid,type:'user',isCompactSummary:true,
+  timestamp:'2026-11-21T06:41:55.380Z',message:{content:'Recovered native context'}};
+ expect(importClaudeSessionMessages({threadId:thread.id,sessionId,transcript:[boundary,summary]})).toBe(2);
+ const rows=repository.chatQueries.threadData(thread.id)!.messages!;
+ expect(rows.map(row=>row.text)).toEqual(['Conversation compacted','Recovered native context']);
+ expect(rows[1]).toMatchObject({sender:'system',timestamp:Date.parse(summary.timestamp),
+  context:{claudeNativeCompactionAnchor:boundary.uuid}});
+ const latest=repository.chatQueries.chatPage(thread.id,1)!;
+ expect(latest.messageIds).toEqual([rows[1].id]);expect(latest.hasMore).toBe(true);
+})

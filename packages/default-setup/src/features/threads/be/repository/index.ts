@@ -853,11 +853,32 @@ function readsAsRestoredClaudeThread(threadId: EARS.EntityId): boolean {
 function orderClaudeSessionMessages(messages: Partial<MessageEntity>[], restored: boolean) {
   if (!restored) return messages;
   const native = (message: Partial<MessageEntity>) => message.context?.claudeTerminalMessage as { sessionId?: string; timestamp?: number; order?: number } | undefined;
+  const boundaries = new Map<string, Partial<MessageEntity>>();
+  for (const message of messages) {
+    if (message.context?.claudeNativeCompaction !== 'boundary') continue;
+    const session = native(message)?.sessionId, uuid = message.context.cliUuid;
+    if (session && typeof uuid === 'string') boundaries.set(JSON.stringify([session, uuid]), message);
+  }
+  const adjusted = new Map<Partial<MessageEntity>, { time: number; order: number }>();
+  for (const message of messages) {
+    const anchor = message.context?.claudeNativeCompactionAnchor;
+    const session = native(message)?.sessionId;
+    if (message.context?.claudeNativeCompaction !== 'summary' || !session || typeof anchor !== 'string') continue;
+    const boundary = boundaries.get(JSON.stringify([session, anchor]));
+    if (!boundary) continue;
+    const time = native(boundary)?.timestamp ?? boundary.timestamp ?? 0;
+    if ((native(message)?.timestamp ?? message.timestamp ?? 0) <= time) {
+      // Claude constructs the summary before the boundary, then journals it as the boundary's child.
+      adjusted.set(message, { time, order: native(boundary)?.order ?? 0 });
+    }
+  }
   return messages.sort((a, b) => {
-    const left = native(a), right = native(b);
-    const time = (left?.timestamp ?? a.timestamp ?? 0) - (right?.timestamp ?? b.timestamp ?? 0);
+    const left = native(a), right = native(b), adjustedLeft = adjusted.get(a), adjustedRight = adjusted.get(b);
+    const time = (adjustedLeft?.time ?? left?.timestamp ?? a.timestamp ?? 0)
+      - (adjustedRight?.time ?? right?.timestamp ?? b.timestamp ?? 0);
     if (time || !left?.sessionId || left.sessionId !== right?.sessionId) return time;
-    return (left.order ?? 0) - (right.order ?? 0);
+    const order = (adjustedLeft?.order ?? left.order ?? 0) - (adjustedRight?.order ?? right.order ?? 0);
+    return order || Number(!!adjustedLeft) - Number(!!adjustedRight);
   });
 }
 
