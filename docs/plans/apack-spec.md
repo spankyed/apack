@@ -740,8 +740,14 @@ projects. Each would loosen the fit to this app.
 ## Not built
 
 - **The Vue binding in the app.** `useState` is built and renders, in a check. No component of the app uses it, and
-  nothing has been measured in a window. 439 `useSelector` sites wait on
-  it.
+  439 `useSelector` sites wait on it. Two things about it are not known, and neither can be found out here:
+  - **What the first paint of a large state costs.** A mirror copies a state once, when its first reader arrives,
+    and the checks hold states of a few hundred small items. What that copy costs for a state the size the app
+    holds, in a window, at the moment a surface opens, needs the app's own data and a paint to time. If it shows,
+    the copy can be made as each part is first read and not all at once.
+  - **Devtools.** Pinia shows its stores in Vue's devtools, with what changed them and when. A step is already that
+    record here: its cause, the handlers that ran, the places that changed. Giving it to the devtools belongs with
+    the step log (What to build around it), and is worth doing only against the components people will inspect.
 - **Roles**: `tell({ role: 'brain' }, …)`.
 - **A write nobody waits for**, which appliers and migrations make today.
 - **Window-to-window sends**, the app's `sendToSurface`.
