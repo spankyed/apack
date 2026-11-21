@@ -102,6 +102,7 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
       ["globalThis.sessionStorage.removeItem('draft');\n", 'src/f.ts:1: sessionStorage'],
     ],
   },
+  'machine-selectors': { onFile: [["import { useSelector } from '@xstate/vue';\n", 'src/f.ts:1: @xstate/vue']] },
   'backend-console': { elsewhere: 'backend-console fires under a backend path and not under a frontend one' },
   // A `_`-prefixed import from an @apackdev package, which needs no pack fixture to be offending
   'internal-package-imports': { elsewhere: 'internal-package-imports' },
@@ -623,6 +624,8 @@ describe('when several rules are right about one site', () => {
       // component-sends sits beside untyped-sends: both answer "which send, from where"
       // window-storage sits beside backend-console: both say which API to reach for instead of a global
       'untyped-sends', 'component-sends', 'raw-transport', 'backend-console', 'window-storage',
+      // machine-selectors is one more "which API to reach for": the SDK's reader instead of the machine library's
+      'machine-selectors',
       'repository-casts',
       // ask-answers and reserved-event-keys contest nothing: no other rule reads an object's properties
       'ask-answers',

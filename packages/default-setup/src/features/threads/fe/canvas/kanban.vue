@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, reactive, computed, watch } from 'vue'
 import { ArrangeableList, type MovingItem } from 'vue-arrange'
-import { useSelector } from '@xstate/vue'
 import { threadsFromStore, type ThreadsState, type ThreadListItem } from '#features/threads/fe/state.ts'
 import ThreadsHeader from './components/ThreadsHeader.vue'
 import { SquarePen } from 'lucide-vue-next'
@@ -11,13 +10,10 @@ import { SquarePen } from 'lucide-vue-next'
 // import type { ThreadsSettings } from '#generated/types.ts'
 
 const actor: ThreadsState = useSurface()
-const threadMap = useSelector(actor, s => s.context.threadMap)
-const threadIds = useSelector(actor, s => s.context.threadIds)
-const threads = computed(() => threadsFromStore(threadMap.value, threadIds.value))
-const filters = useSelector(actor, s => s.context.filters)
-const settings = useSelector(actor, s => s.context.settings)
-const chatStates = useSelector(actor, s => s.context.chatStates)
-const chatStateOverrides = useSelector(actor, s => s.context.chatStateOverrides)
+const { state: machine, send } = useState(actor)
+const threads = computed(() => threadsFromStore(machine.value.data.threadMap, machine.value.data.threadIds))
+const filters = computed(() => machine.value.data.filters)
+const settings = computed(() => machine.value.data.settings)
 
 /* -------------------------------------------------------------------------- */
 /*  Types                                                                     */
@@ -97,10 +93,10 @@ function initializeItems() {
   if (filters.value.chatStates.length > 0) {
     const now = Date.now()
     source = source.filter(t => {
-      const override = chatStateOverrides.value[t.id]
+      const override = machine.value.data.chatStateOverrides[t.id]
       const effectiveState = (override && override.expiresAt > now)
         ? override.id
-        : (chatStates.value[t.id] || 'idle')
+        : (machine.value.data.chatStates[t.id] || 'idle')
       return filters.value.chatStates.includes(effectiveState)
     })
   }
@@ -197,7 +193,7 @@ const arrangeableOptions = {
 /* -------------------------------------------------------------------------- */
 
 function onCardClick(item: WorkItem) {
-  actor.send({ type: 'OPEN_THREAD_CHAT', threadId: item.id })
+  send({ type: 'OPEN_THREAD_CHAT', threadId: item.id })
 }
 
 async function dropItem<T extends KanbanList | WorkItem>(moving: MovingItem<T>) {
@@ -231,7 +227,7 @@ async function dropItem<T extends KanbanList | WorkItem>(moving: MovingItem<T>) 
       droppingItem = true
 
       // Send status update event
-      actor.send({
+      send({
         type: 'UPDATE_THREAD_STATUS',
         id: workItem.id,
         status: newStatus,
@@ -293,7 +289,7 @@ async function dropItem<T extends KanbanList | WorkItem>(moving: MovingItem<T>) 
                 <SquarePen
                   class="flex-shrink-0 w-3.5 h-3.5 text-neutral-400 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:text-blue-400 rounded pointer-events-auto cursor-pointer"
                   title="Edit details"
-                  @click.stop="actor.send({ type: 'SELECT_THREAD', id: card.id })"
+                  @click.stop="send({ type: 'SELECT_THREAD', id: card.id })"
                 />
               </div>
               <!-- <div class="flex items-center gap-2 mt-2">

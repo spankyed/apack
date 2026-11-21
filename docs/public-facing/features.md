@@ -303,7 +303,7 @@ Discovery reads these declarations without loading the machine or component modu
 | isPinned | no | Initial pinned placement |
 | hotkeys | no | `{ action, global? }` per shortcut action |
 | options | no | `{ headerClass?: string }` |
-| fallbackPanel | no | `{ label, toggle: { type }, isShown: "path#exportName" }`; the predicate executes only at runtime |
+| fallbackPanel | no | `{ label, toggle: { type }, isShown: "path#exportName" }`; the predicate is handed the surface as `useState` gives it, `{ at, data }`, and executes only at runtime |
 | contract | no | Leaf module/type export for published state and inbox |
 | default | no | Startup default claim |
 | defaultVisible | no | Initial navigation visibility before the user's override |
@@ -338,6 +338,33 @@ const bookmarksState = setup({
 
 export default bookmarksState;
 ```
+
+### Reading the machine in a component
+
+```vue
+<script setup lang="ts">
+import { useState } from '@apackdev/sdk/fe';
+import type { BookmarksState } from './state.ts';
+
+// With no argument: the surface this component is drawn in. Or pass an actor, or a getter for one
+const { state: bookmarks, send } = useState<BookmarksState>();
+</script>
+
+<template>
+  <p v-if="bookmarks.at === 'idle'">{{ bookmarks.data.items.length }} bookmarks</p>
+  <button @click="send({ type: 'BOOKMARK_CREATED', bookmark })">Add</button>
+</template>
+```
+
+`state.data` is the machine's context and `state.at` is the state it is in, as a path (`'thread.sending'` for a state
+inside another). Whatever reads a field — a template, a `computed`, a `watch(() => bookmarks.value.data.items, …)` —
+runs again when the machine replaces that field, and for no other change. A field's value is the machine's own
+object, never a copy: sent back in an event, it is the one the machine compares with. The fields are read-only, so
+a field is shown with `:value` and changed by sending, not with `v-model`.
+
+Given a getter, `useState(() => maybeActor)` follows the actor as it is replaced, and `state` is `undefined` while
+there is none. A machine is followed once however many components read it. The `machine-selectors` pack rule refuses
+`@xstate/vue` in a pack's source: a `useSelector` is a subscription of its own that runs on every snapshot.
 
 ### Useful SDK utilities
 

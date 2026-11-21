@@ -4,11 +4,11 @@
       :active-mode="activeMode"
       @update:active-mode="$emit('update:activeMode', $event)"
       :is-loading="isLoading"
-      :current-query="currentQuery"
-      :error="error"
+      :current-query="database.data.currentQuery"
+      :error="database.data.error"
       :success-message="successMessage"
-      :mode="mode"
-      :execute-query="settings?.hotkeys?.executeQuery ?? undefined"
+      :mode="database.data.mode"
+      :execute-query="database.data.settings?.hotkeys?.executeQuery ?? undefined"
       :is-ai-prompt-open="showAiPrompt"
       @execute="handleExecute"
       @clear="handleClear"
@@ -55,7 +55,7 @@
         :function-body="true"
         dsl-type="database"
         :actions="['executeCode']"
-        :execute-keybinding="settings?.hotkeys?.executeQuery || undefined"
+        :execute-keybinding="database.data.settings?.hotkeys?.executeQuery || undefined"
         @execute="handleExecute"
         class="h-full"
       />
@@ -73,13 +73,13 @@
         leave-to-class="opacity-0"
       >
         <div
-          v-if="isAiQueryLoading && activeMode === 'query'"
+          v-if="database.data.isAiQueryLoading && activeMode === 'query'"
           class="absolute inset-0 flex items-center justify-center bg-neutral-900/80 backdrop-blur-sm z-10"
         >
           <div class="flex flex-col items-center space-y-3">
             <div class="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin"></div>
             <div class="text-sm text-neutral-300">
-              Generating {{ mode === 'transaction' ? 'transaction' : 'query' }} from prompt...
+              Generating {{ database.data.mode === 'transaction' ? 'transaction' : 'query' }} from prompt...
             </div>
           </div>
         </div>
@@ -89,22 +89,17 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
-import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
-import { useSelector } from '@xstate/vue';
+import { computed, ref, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { isRunningCode, type DatabaseState } from '../state.ts';
 import QueryEditorHeader from './query-editor/QueryEditorHeader.vue';
 import SimpleMonacoEditor from '@apackdev/ui/components/SimpleMonacoEditor';
 import QueryEditorExamples from './query-editor/QueryEditorExamples.vue';
 
 const actor: DatabaseState = useSurface();
-const currentQuery = useSelector(actor, (state) => state.context.currentQuery);
-const isLoading = useSelector(actor, isRunningCode);
-const error = useSelector(actor, (state) => state.context.error);
-const mode = useSelector(actor, (state) => state.context.mode);
-const settings = useSelector(actor, (state) => state.context.settings);
-const isAiQueryLoading = useSelector(actor, (state) => state.context.isAiQueryLoading);
+const { state: database, send } = useState(actor);
+const isLoading = computed(() => isRunningCode({ context: database.value.data }));
 
 // Props and emits
 defineProps<{
@@ -121,15 +116,15 @@ const showAiPrompt = ref(false);
 const aiPrompt = ref('');
 const aiPromptInput = ref<HTMLTextAreaElement | null>(null);
 const aiPromptContainer = ref<HTMLElement | null>(null);
-const editorQuery = ref(currentQuery.value);
+const editorQuery = ref(database.value.data.currentQuery);
 
 // Sync editor query with state
-watch(currentQuery, (newQuery) => {
+watch(() => database.value.data.currentQuery, (newQuery) => {
   editorQuery.value = newQuery;
 });
 
 watch(editorQuery, (newQuery) => {
-  actor.send({
+  send({
     type: 'QUERY.UPDATE',
     code: newQuery
   });
@@ -156,7 +151,7 @@ onMounted(() => document.addEventListener('mousedown', handleOutsideClick));
 onUnmounted(() => document.removeEventListener('mousedown', handleOutsideClick));
 
 // Close prompt bar when generation starts
-watch(isAiQueryLoading, (loading) => {
+watch(() => database.value.data.isAiQueryLoading, (loading) => {
   if (loading) {
     showAiPrompt.value = false;
   }
@@ -172,14 +167,14 @@ const SUCCESS_MESSAGE_TIMEOUT = 3000;
 
 function handleExecute() {
   if (!isLoading.value && editorQuery.value.trim()) {
-    actor.send({
-      type: mode.value === 'query' ? 'QUERY.EXECUTE' : 'TRANSACTION.EXECUTE',
+    send({
+      type: database.value.data.mode === 'query' ? 'QUERY.EXECUTE' : 'TRANSACTION.EXECUTE',
       code: editorQuery.value
     });
 
     setTimeout(() => {
-      if (!error.value) {
-        successMessage.value = SUCCESS_MESSAGES[mode.value];
+      if (!database.value.data.error) {
+        successMessage.value = SUCCESS_MESSAGES[database.value.data.mode];
       }
     }, SUCCESS_MESSAGE_DELAY);
   }
@@ -201,10 +196,10 @@ function toggleAiPrompt() {
 function submitAiPrompt() {
   const prompt = aiPrompt.value.trim();
   if (!prompt) return;
-  actor.send({
+  send({
     type: 'AI_QUERY.GENERATE',
     prompt,
-    mode: mode.value,
+    mode: database.value.data.mode,
   });
   aiPrompt.value = '';
 }
@@ -230,7 +225,7 @@ function handleExampleSelect(query: string) {
 }
 
 function handleToggleMode() {
-  actor.send({
+  send({
     type: 'MODE.TOGGLE'
   });
 }

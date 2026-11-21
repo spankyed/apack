@@ -8,7 +8,7 @@
   />
 
   <!-- Commits Section -->
-  <div v-if="commitLog.length > 0 || logPath" class="flex-shrink-0 border-t border-neutral-800">
+  <div v-if="commitLog.length > 0 || git.data.logPath" class="flex-shrink-0 border-t border-neutral-800">
     <div class="flex items-center justify-between p-3 px-5 cursor-pointer hover:bg-neutral-800/60 transition-colors" @click="toggleCommitsExpanded">
       <div class="flex items-center gap-1 text-xs font-medium text-neutral-400">
         <ChevronRight v-if="!isCommitsExpanded" class="w-3 h-3" />
@@ -45,9 +45,9 @@
         </div>
       </div>
       <!-- A file's history, followed across its renames, until it is cleared -->
-      <div v-if="logPath" class="flex items-center gap-2 pl-5 pr-3 mb-1.5 text-[11px] text-neutral-400" data-testid="file-history">
-        <span class="flex-1 truncate" :title="logPath">History of {{ logPath }}</span>
-        <button class="px-1.5 py-0.5 rounded hover:bg-neutral-700" @click="commitActor.send({ type: 'commit.CLEAR_FILE_HISTORY' })">Whole history</button>
+      <div v-if="git.data.logPath" class="flex items-center gap-2 pl-5 pr-3 mb-1.5 text-[11px] text-neutral-400" data-testid="file-history">
+        <span class="flex-1 truncate" :title="git.data.logPath">History of {{ git.data.logPath }}</span>
+        <button class="px-1.5 py-0.5 rounded hover:bg-neutral-700" @click="send({ type: 'commit.CLEAR_FILE_HISTORY' })">Whole history</button>
       </div>
       <div class="space-y-0.5 pl-3">
         <div
@@ -67,27 +67,27 @@
             </div>
             <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
               <template v-if="inCheckout.has(entry.hash) && entry.parents.length === 1">
-                <button data-testid="reword-commit" @click.stop="commitActor.send({ type: 'commit.START_REWORD', hash: entry.hash })" class="p-0.5 hover:bg-neutral-700 rounded" title="Reword this commit">
+                <button data-testid="reword-commit" @click.stop="send({ type: 'commit.START_REWORD', hash: entry.hash })" class="p-0.5 hover:bg-neutral-700 rounded" title="Reword this commit">
                   <Pencil class="w-3 h-3 text-neutral-400" />
                 </button>
-                <button data-testid="squash-commit" @click.stop="commitActor.send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'squash' })" class="p-0.5 hover:bg-neutral-700 rounded" title="Fold this commit into the one before it, keeping that one's message">
+                <button data-testid="squash-commit" @click.stop="send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'squash' })" class="p-0.5 hover:bg-neutral-700 rounded" title="Fold this commit into the one before it, keeping that one's message">
                   <FoldVertical class="w-3 h-3 text-neutral-400" />
                 </button>
-                <button data-testid="drop-commit" @click.stop="commitActor.send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'drop' })" class="p-0.5 hover:bg-neutral-700 rounded" title="Drop this commit, keeping those after it">
+                <button data-testid="drop-commit" @click.stop="send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'drop' })" class="p-0.5 hover:bg-neutral-700 rounded" title="Drop this commit, keeping those after it">
                   <Trash2 class="w-3 h-3 text-neutral-400" />
                 </button>
               </template>
               <button data-testid="tag-commit" @click.stop="startTag(entry.hash)" class="p-0.5 hover:bg-neutral-700 rounded" title="Tag this commit">
                 <Tag class="w-3 h-3 text-neutral-400" />
               </button>
-              <button v-if="!inCheckout.has(entry.hash)" data-testid="cherry-pick" @click.stop="commitActor.send({ type: 'commit.START_OPERATION', kind: 'cherry-pick', target: entry.hash })" class="p-0.5 hover:bg-neutral-700 rounded" title="Pick this commit onto what is checked out">
+              <button v-if="!inCheckout.has(entry.hash)" data-testid="cherry-pick" @click.stop="send({ type: 'commit.START_OPERATION', kind: 'cherry-pick', target: entry.hash })" class="p-0.5 hover:bg-neutral-700 rounded" title="Pick this commit onto what is checked out">
                 <Cherry class="w-3 h-3 text-neutral-400" />
               </button>
               <button @click.stop="openRevertCommitDialog(entry)" class="p-0.5 hover:bg-neutral-700 rounded" title="Revert this commit">
                 <Undo2 class="w-3 h-3 text-neutral-400" />
               </button>
-              <Loader2 v-if="resettingTo === entry.hash" data-testid="reset-busy" class="w-3 h-3 animate-spin text-neutral-400" />
-              <button v-else data-testid="reset-to-commit" :disabled="!!resettingTo" @click.stop="pendingReset = entry" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40" title="Reset to this commit">
+              <Loader2 v-if="git.data.resettingTo === entry.hash" data-testid="reset-busy" class="w-3 h-3 animate-spin text-neutral-400" />
+              <button v-else data-testid="reset-to-commit" :disabled="!!git.data.resettingTo" @click.stop="pendingReset = entry" class="p-0.5 hover:bg-neutral-700 rounded disabled:opacity-40" title="Reset to this commit">
                 <RotateCw class="w-3 h-3 text-neutral-400" />
               </button>
               <button @click.stop="copyCommitHash(entry)" class="p-0.5 hover:bg-neutral-700 rounded" title="Copy commit hash">
@@ -110,30 +110,30 @@
             <button data-testid="tag-save" :disabled="!tagName.trim()" class="px-2 py-0.5 text-[11px] rounded text-neutral-200 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-40" @click="createTag(entry.hash)">Tag</button>
           </div>
           <!-- A reword, over the commit's whole message once it is read -->
-          <div v-if="rewording?.hash === entry.hash" class="mt-1.5 ml-5 flex flex-col gap-1">
+          <div v-if="git.data.rewording?.hash === entry.hash" class="mt-1.5 ml-5 flex flex-col gap-1">
             <textarea
-              v-if="rewording.message !== null"
+              v-if="git.data.rewording.message !== null"
               data-testid="reword-message"
-              :value="rewording.message"
+              :value="git.data.rewording.message"
               @input="rewordText = ($event.target as HTMLTextAreaElement).value"
-              @keydown.escape="commitActor.send({ type: 'commit.CANCEL_REWORD' })"
+              @keydown.escape="send({ type: 'commit.CANCEL_REWORD' })"
               rows="3"
               class="w-full px-2 py-1 text-xs bg-neutral-900 border border-neutral-700 rounded text-neutral-200 resize-y"
             />
             <div v-else class="text-[11px] text-neutral-500">Reading its message…</div>
             <div class="flex gap-1 justify-end">
-              <button class="px-2 py-0.5 text-[11px] rounded text-neutral-400 hover:bg-neutral-800" @click="commitActor.send({ type: 'commit.CANCEL_REWORD' })">Cancel</button>
+              <button class="px-2 py-0.5 text-[11px] rounded text-neutral-400 hover:bg-neutral-800" @click="send({ type: 'commit.CANCEL_REWORD' })">Cancel</button>
               <button
                 data-testid="reword-save"
-                :disabled="rewording.message === null || !(rewordText ?? rewording.message).trim()"
+                :disabled="git.data.rewording.message === null || !(rewordText ?? git.data.rewording.message).trim()"
                 class="px-2 py-0.5 text-[11px] rounded text-neutral-200 bg-neutral-700 hover:bg-neutral-600 disabled:opacity-40"
-                @click="commitActor.send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'reword', message: rewordText ?? rewording.message! })"
+                @click="send({ type: 'commit.REWRITE_COMMIT', hash: entry.hash, action: 'reword', message: rewordText ?? git.data.rewording.message! })"
               >Reword</button>
             </div>
           </div>
         </div>
       </div>
-      <button v-if="logCursor && !commitSearchQuery.trim()" data-testid="load-more-log" class="ml-5 mt-1 px-2 py-0.5 text-[11px] rounded text-neutral-400 hover:bg-neutral-800" @click="commitActor.send({ type: 'commit.LOAD_MORE_LOG' })">Load more</button>
+      <button v-if="git.data.logCursor && !commitSearchQuery.trim()" data-testid="load-more-log" class="ml-5 mt-1 px-2 py-0.5 text-[11px] rounded text-neutral-400 hover:bg-neutral-800" @click="send({ type: 'commit.LOAD_MORE_LOG' })">Load more</button>
     </div>
   </div>
 
@@ -162,10 +162,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, computed, nextTick, watch } from 'vue'
-import { useSelector } from '@xstate/vue'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { CommitLogEntry } from '#features/code/fe/features/commit/state.ts'
 import { ChevronDown, ChevronRight, RefreshCw, Undo2, RotateCw, Copy, Search, X, Cherry, Pencil, FoldVertical, Trash2, Tag, Loader2 } from 'lucide-vue-next'
@@ -182,8 +181,8 @@ const props = defineProps<{
 const codeActor: CodeState = useSurface()
 const commitActor = panelChild(codeActor, 'commit')!
 
-const commitLog = useSelector(commitActor, (state) => state.context.commitLog) as import('vue').Ref<CommitLogEntry[]>
-const logCursor = useSelector(commitActor, (state) => state.context.logCursor)
+const { state: git, send } = useState(commitActor)
+const commitLog = computed(() => git.value.data.commitLog as CommitLogEntry[])
 /** The commit a tag is being made at, and the name typed for it */
 const tagging = ref<string | null>(null)
 const tagName = ref('')
@@ -196,14 +195,13 @@ const startTag = (hash: string) => {
 const createTag = (hash: string) => {
   const name = tagName.value.trim()
   if (!name) return
-  commitActor.send({ type: 'commit.CREATE_TAG', name, commit: hash })
+  send({ type: 'commit.CREATE_TAG', name, commit: hash })
   tagging.value = null
 }
-const rewording = useSelector(commitActor, (state) => state.context.rewording)
+
 /** The reword's text as edited, until it is saved or another commit is reworded */
 const rewordText = ref<string | null>(null)
-watch(() => rewording.value?.hash, () => { rewordText.value = null })
-const logPath = useSelector(commitActor, (state) => state.context.logPath)
+watch(() => git.value.data.rewording?.hash, () => { rewordText.value = null })
 const lanes = computed(() => laneRows(commitLog.value))
 /** The commits shown that what is checked out already holds, which there is nothing to pick from: children come first */
 const inCheckout = computed(() => {
@@ -243,7 +241,7 @@ const toggleCommitsExpanded = () => {
 }
 
 const refreshCommitLog = () => {
-  commitActor?.send({ type: 'commit.LOG_LIST' })
+  send({ type: 'commit.LOG_LIST' })
 }
 
 const openRevertCommitDialog = (entry: CommitLogEntry) => {
@@ -254,7 +252,7 @@ const openRevertCommitDialog = (entry: CommitLogEntry) => {
 
 const confirmRevertCommit = () => {
   if (pendingCommitHash.value) {
-    commitActor?.send({ type: 'commit.REVERT_COMMIT', hash: pendingCommitHash.value })
+    send({ type: 'commit.REVERT_COMMIT', hash: pendingCommitHash.value })
   }
   showRevertCommitDialog.value = false
   pendingCommitHash.value = null
@@ -267,13 +265,12 @@ const cancelRevertCommit = () => {
   pendingCommitShortHash.value = ''
 }
 
-const resettingTo = useSelector(commitActor, (state) => state.context.resettingTo)
 /** The commit a reset waits on the user's yes to go back to */
 const pendingReset = ref<CommitLogEntry | null>(null)
 const confirmReset = () => {
   const entry = pendingReset.value
   pendingReset.value = null
-  if (entry) commitActor?.send({ type: 'commit.RESET_TO_COMMIT', hash: entry.hash })
+  if (entry) send({ type: 'commit.RESET_TO_COMMIT', hash: entry.hash })
 }
 
 const copyCommitHash = (entry: CommitLogEntry) => {

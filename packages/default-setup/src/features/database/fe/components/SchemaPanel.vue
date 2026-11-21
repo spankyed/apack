@@ -132,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, computed } from 'vue';
 import { 
@@ -146,11 +146,10 @@ import {
   Search, 
   X,
   FoldVertical,} from 'lucide-vue-next';
-import { useSelector } from '@xstate/vue';
 import { type DatabaseState } from '../state.ts';
 
 const actor: DatabaseState = useSurface()
-const schema = useSelector(actor, (state) => state.context.schema);
+const { state: database, send } = useState(actor);
 
 const searchQuery = ref('');
 const expandedItems = ref<string[]>([]);
@@ -174,7 +173,7 @@ const treeCategories = computed<TreeCategory[]>(() => [
   {
     id: 'entities',
     label: 'Entities',
-    children: schema.value.entities.map(entity => ({
+    children: database.value.data.schema.entities.map(entity => ({
       id: `entity:${entity.type}`,
       label: entity.type,
       type: 'entity' as const,
@@ -184,7 +183,7 @@ const treeCategories = computed<TreeCategory[]>(() => [
   {
     id: 'attributes',
     label: 'Attributes',
-    children: schema.value.attributes.map(attr => ({
+    children: database.value.data.schema.attributes.map(attr => ({
       id: `attribute:${attr.kind}`,
       label: attr.kind,
       type: 'attribute' as const,
@@ -194,7 +193,7 @@ const treeCategories = computed<TreeCategory[]>(() => [
   {
     id: 'relations',
     label: 'Relations',
-    children: schema.value.relations.map(rel => ({
+    children: database.value.data.schema.relations.map(rel => ({
       id: `relation:${rel.kind}`,
       label: rel.kind,
       type: 'relation' as const,
@@ -273,7 +272,7 @@ function getItemIcon(categoryId: string) {
 function selectItem(item: TreeItem) {
   selectedItemId.value = item.id;
   
-  actor.send({
+  send({
     type: 'SCHEMA.SELECT',
     itemType: item.type,
     value: item.value

@@ -9,14 +9,14 @@
     </div>
 
     <!-- How keys are protected -->
-    <div v-if="status" class="mb-6 flex items-start gap-2 rounded-md border px-3 py-2 text-xs" :class="protectionClass" data-testid="secrets-protection">
-      <ShieldCheck v-if="status.protection === 'os-keystore'" class="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+    <div v-if="settings.data.secretsStatus" class="mb-6 flex items-start gap-2 rounded-md border px-3 py-2 text-xs" :class="protectionClass" data-testid="secrets-protection">
+      <ShieldCheck v-if="settings.data.secretsStatus.protection === 'os-keystore'" class="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
       <ShieldAlert v-else class="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
       <div class="flex-1">
-        <template v-if="status.protection === 'os-keystore'">Keys are encrypted, with their key held by {{ status.backend }}.</template>
-        <template v-else-if="status.protection === 'unprotected'">Keys are encrypted with a key kept in a file on this system, which anyone who can read your files can use.</template>
+        <template v-if="settings.data.secretsStatus.protection === 'os-keystore'">Keys are encrypted, with their key held by {{ settings.data.secretsStatus.backend }}.</template>
+        <template v-else-if="settings.data.secretsStatus.protection === 'unprotected'">Keys are encrypted with a key kept in a file on this system, which anyone who can read your files can use.</template>
         <template v-else>
-          {{ status.backend }} isn't available on this system, so keys can't be stored securely.
+          {{ settings.data.secretsStatus.backend }} isn't available on this system, so keys can't be stored securely.
           <button class="ml-1 underline hover:text-white" data-testid="secrets-allow-unprotected" @click="allowUnprotected">Store keys unprotected</button>
         </template>
       </div>
@@ -105,9 +105,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { useSelector } from '@xstate/vue'
 import { ExternalLink, ShieldAlert, ShieldCheck } from 'lucide-vue-next'
-import { openLink, secretsClient, useSurface } from '@apackdev/sdk/fe'
+import { openLink, secretsClient, useState, useSurface } from '@apackdev/sdk/fe'
 import { providerLabels } from '@apackdev/sdk/models'
 import type { SecretMetadata, SecretProvider } from '@apackdev/sdk/services'
 import { API_KEY_URLS, REQUIRED_PROVIDERS } from '@/views/settings/constants'
@@ -118,8 +117,7 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 import type { SettingsState } from '@apackdev/host/fe'
 
 const settingsActor: SettingsState = useSurface()
-const secrets = useSelector(settingsActor, (state) => state.context.secrets)
-const status = useSelector(settingsActor, (state) => state.context.secretsStatus)
+const { state: settings } = useState(settingsActor)
 const error = ref<string | null>(null)
 
 const descriptions: Record<keyof typeof providerLabels, string> = {
@@ -139,9 +137,9 @@ const standardProviders = (Object.keys(providerLabels) as Array<keyof typeof pro
   priority: (REQUIRED_PROVIDERS as readonly string[]).includes(key) ? 'required' : key === 'google' ? 'recommended' : undefined,
 }))
 
-const keysFor = (provider: SecretProvider) => (secrets.value ?? []).filter((secret) => secret.provider === provider)
+const keysFor = (provider: SecretProvider) => (settings.value.data.secrets ?? []).filter((secret) => secret.provider === provider)
 
-const protectionClass = computed(() => status.value?.protection === 'os-keystore'
+const protectionClass = computed(() => settings.value.data.secretsStatus?.protection === 'os-keystore'
   ? 'border-emerald-500/20 bg-emerald-500/5 text-emerald-300/90'
   : 'border-amber-500/30 bg-amber-500/10 text-amber-200')
 

@@ -10,24 +10,24 @@
             <div class="relative w-96">
               <Search :size="16" class="absolute -translate-y-1/2 left-3 top-1/2 text-neutral-500" />
               <!-- <input
-                :value="searchTerm"
+                :value="logsMachine.data.filter.search"
                 @input="setSearch"
                 type="text"
                 placeholder="Search logs..."
                 class="w-full py-2 pl-10 pr-3 text-sm transition-colors border rounded-lg outline-none bg-neutral-800 placeholder-neutral-500"
-                :class="searchTerm ? 'border-neutral-600 bg-neutral-800/70' : 'border-neutral-700 focus:border-neutral-600 focus:bg-neutral-800/50'"
+                :class="logsMachine.data.filter.search ? 'border-neutral-600 bg-neutral-800/70' : 'border-neutral-700 focus:border-neutral-600 focus:bg-neutral-800/50'"
               /> -->
               <input
-                :value="searchTerm"
+                :value="logsMachine.data.filter.search"
                 @input="setSearch"
                 type="text"
                 placeholder="Filter logs by message, level, or source..."
                 class="w-full py-2 pl-10 pr-3 text-sm transition-colors border rounded-lg outline-none bg-neutral-900 placeholder-neutral-500"
-                :class="searchTerm ? 'border-neutral-600' : 'border-neutral-700 focus:border-neutral-600'"
+                :class="logsMachine.data.filter.search ? 'border-neutral-600' : 'border-neutral-700 focus:border-neutral-600'"
               />
               <!-- Clear search button -->
               <button
-                v-if="searchTerm"
+                v-if="logsMachine.data.filter.search"
                 @click="clearSearch"
                 class="absolute p-1 transition-colors -translate-y-1/2 right-2 top-1/2 text-neutral-500 hover:text-neutral-300"
               >
@@ -40,15 +40,15 @@
               <button
                 @click="setFilterLevelDirect('all')"
                 class="px-3 py-1 text-sm font-medium transition-colors rounded"
-                :class="filterLevel === 'all'
+                :class="logsMachine.data.filter.level === 'all'
                   ? 'bg-neutral-800 text-neutral-100'
                   : 'text-neutral-400 hover:text-neutral-200'"
               >
                 All
                 <span class="ml-1 text-sm opacity-60">
-                  {{ (filterLevel !== 'all' || searchTerm) && filteredLogs.length !== logs.length
-                    ? `${filteredLogs.length}/${logs.length}`
-                    : logs.length
+                  {{ (logsMachine.data.filter.level !== 'all' || logsMachine.data.filter.search) && filteredLogs.length !== logsMachine.data.logs.length
+                    ? `${filteredLogs.length}/${logsMachine.data.logs.length}`
+                    : logsMachine.data.logs.length
                   }}
                 </span>
               </button>
@@ -57,48 +57,48 @@
                 v-if="debugCount > 0"
                 @click="setFilterLevelDirect('debug')"
                 class="flex items-center gap-1 px-3 py-1 text-sm font-medium transition-colors rounded"
-                :class="filterLevel === 'debug'
+                :class="logsMachine.data.filter.level === 'debug'
                   ? 'bg-neutral-700 text-neutral-100'
                   : 'text-neutral-500 hover:text-neutral-300'"
               >
                 <Bug :size="14" />
-                {{ filterLevel === 'debug' && searchTerm ? filteredLogs.length : debugCount }}
+                {{ logsMachine.data.filter.level === 'debug' && logsMachine.data.filter.search ? filteredLogs.length : debugCount }}
               </button>
 
               <button
                 v-if="infoCount > 0"
                 @click="setFilterLevelDirect('info')"
                 class="flex items-center gap-1 px-3 py-1 text-sm font-medium transition-colors rounded"
-                :class="filterLevel === 'info'
+                :class="logsMachine.data.filter.level === 'info'
                   ? 'bg-blue-500/20 text-blue-400'
                   : 'text-blue-400/60 hover:text-blue-400'"
               >
                 <Info :size="14" />
-                {{ filterLevel === 'info' && searchTerm ? filteredLogs.length : infoCount }}
+                {{ logsMachine.data.filter.level === 'info' && logsMachine.data.filter.search ? filteredLogs.length : infoCount }}
               </button>
 
               <button
                 v-if="warnCount > 0"
                 @click="setFilterLevelDirect('warn')"
                 class="flex items-center gap-1 px-3 py-1 text-sm font-medium transition-colors rounded"
-                :class="filterLevel === 'warn'
+                :class="logsMachine.data.filter.level === 'warn'
                   ? 'bg-yellow-500/20 text-yellow-400'
                   : 'text-yellow-400/60 hover:text-yellow-400'"
               >
                 <AlertTriangle :size="14" />
-                {{ filterLevel === 'warn' && searchTerm ? filteredLogs.length : warnCount }}
+                {{ logsMachine.data.filter.level === 'warn' && logsMachine.data.filter.search ? filteredLogs.length : warnCount }}
               </button>
 
               <button
                 v-if="errorCount > 0"
                 @click="setFilterLevelDirect('error')"
                 class="flex items-center gap-1 px-3 py-1 text-sm font-medium transition-colors rounded"
-                :class="filterLevel === 'error'
+                :class="logsMachine.data.filter.level === 'error'
                   ? 'bg-red-500/20 text-red-400'
                   : 'text-red-400/60 hover:text-red-400'"
               >
                 <AlertCircle :size="14" />
-                {{ filterLevel === 'error' && searchTerm ? filteredLogs.length : errorCount }}
+                {{ logsMachine.data.filter.level === 'error' && logsMachine.data.filter.search ? filteredLogs.length : errorCount }}
               </button>
             </div>
 
@@ -106,10 +106,10 @@
             <button
               @click="toggleShowAppEvents"
               class="flex items-center gap-1.5 px-3 py-1 text-sm font-medium rounded transition-colors"
-              :class="settings.showAppEvents
+              :class="logsMachine.data.settings.showAppEvents
                 ? 'bg-neutral-800 text-neutral-100'
                 : 'text-neutral-500 hover:text-neutral-300'"
-              :title="settings.showAppEvents ? 'Hide app-events logs' : 'Show app-events logs'"
+              :title="logsMachine.data.settings.showAppEvents ? 'Hide app-events logs' : 'Show app-events logs'"
             >
               <Radio :size="14" />
               <span>app-events</span>
@@ -117,14 +117,14 @@
 
             <!-- Excluded sources indicator -->
             <button
-              v-if="settings.excludedSources && settings.excludedSources.length > 0"
+              v-if="logsMachine.data.settings.excludedSources && logsMachine.data.settings.excludedSources.length > 0"
               @click="goToExcludedSourcesSettings"
               class="flex items-center gap-1.5 px-3 py-1.5 bg-amber-900/20 border border-amber-700/30 rounded-lg hover:bg-amber-900/30 transition-colors cursor-pointer"
               title="Click to manage excluded sources"
             >
               <AlertTriangle :size="14" class="text-amber-500" />
               <span class="text-sm text-amber-400">
-                {{ settings.excludedSources.length }} source{{ settings.excludedSources.length !== 1 ? 's' : '' }} excluded
+                {{ logsMachine.data.settings.excludedSources.length }} source{{ logsMachine.data.settings.excludedSources.length !== 1 ? 's' : '' }} excluded
               </span>
             </button>
           </div>
@@ -163,24 +163,24 @@
         <div class="text-center">
           <div class="inline-flex items-center justify-center w-16 h-16 mb-4 rounded-full bg-neutral-800">
             <component
-              :is="logs.length === 0 ? Terminal : Search"
+              :is="logsMachine.data.logs.length === 0 ? Terminal : Search"
               :size="24"
               class="text-neutral-500"
             />
           </div>
 
           <h3 class="mb-2 text-lg font-medium text-neutral-300">
-            {{ logs.length === 0 ? 'No logs yet' : 'No matching logs' }}
+            {{ logsMachine.data.logs.length === 0 ? 'No logs yet' : 'No matching logs' }}
           </h3>
 
           <p class="max-w-sm text-sm text-neutral-500">
-            {{ logs.length === 0
+            {{ logsMachine.data.logs.length === 0
               ? 'Logs from your backend will appear here.'
               : 'Try adjusting your search or filters.'
             }}
           </p>
 
-          <div v-if="logs.length > 0" class="mt-4">
+          <div v-if="logsMachine.data.logs.length > 0" class="mt-4">
             <button
               @click="() => { setFilterLevelDirect('all'); clearSearch(); }"
               class="px-4 py-2 text-sm font-medium transition-colors rounded-lg text-neutral-300 bg-neutral-800 hover:bg-neutral-700"
@@ -220,7 +220,7 @@
               <!-- Message -->
               <div class="flex-1 min-w-0">
                 <p class="text-sm break-words text-neutral-200">
-                  <span v-if="searchTerm" v-html="highlightSearchTermWrapper(log.message)"></span>
+                  <span v-if="logsMachine.data.filter.search" v-html="highlightSearchTermWrapper(log.message)"></span>
                   <span v-else>{{ log.message }}</span>
                 </p>
               </div>
@@ -230,7 +230,7 @@
                 <!-- Source Badge (if exists) -->
                 <span
                   v-if="log.source"
-                  @contextmenu.prevent="(e) => openContextMenu(e, log.source)"
+                  @contextmenu.prevent="(e) => openContextMenu(e, log.source!)"
                   class="px-2 py-0.5 text-[11px] font-mono bg-neutral-800 text-neutral-400 rounded cursor-pointer hover:bg-neutral-700 transition-colors"
                   :title="`Right-click to exclude '${log.source}' from logs`"
                 >
@@ -322,12 +322,12 @@
           <button
             @click="() => excludeSource(contextMenu.source)"
             class="w-full flex items-center gap-2 px-3 py-2 text-sm rounded text-neutral-50 hover:bg-neutral-700 transition-colors text-left"
-            :disabled="settings.excludedSources.includes(contextMenu.source)"
+            :disabled="logsMachine.data.settings.excludedSources.includes(contextMenu.source)"
           >
             <X :size="14" class="text-red-400" />
             <span class="flex-1">Exclude '{{ contextMenu.source }}'</span>
           </button>
-          <div v-if="!settings.excludedSources.includes(contextMenu.source)" class="px-3 py-1 text-xs text-neutral-500">
+          <div v-if="!logsMachine.data.settings.excludedSources.includes(contextMenu.source)" class="px-3 py-1 text-xs text-neutral-500">
             Hide all logs from this source
           </div>
           <div v-else class="px-3 py-1 text-xs text-amber-500">
@@ -340,11 +340,10 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState } from '@apackdev/sdk/fe'
 import { computed, ref, reactive, watch, onMounted, onUnmounted } from 'vue';
 import { Search, ChevronRight, AlertCircle, Info, AlertTriangle, Bug, FileWarning, Terminal, X, Trash, Radio, Copy, Check } from 'lucide-vue-next';
 import type { LogsState, LogEntry } from './state.ts';
-import { useSelector } from '@xstate/vue';
 import DataRenderer from '@apackdev/ui/components/DataRenderer';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
 import { resolveName } from '@apackdev/sdk/ids'
@@ -398,23 +397,19 @@ const contextMenu = reactive({
   source: ''
 });
 
-const actor: LogsState = useSurface()
-const logs = useSelector(actor, (s) => (s as any).context.logs);
-const filterLevel = useSelector(actor, (s) => (s as any).context.filter.level);
-const searchTerm = useSelector(actor, (s) => (s as any).context.filter.search);
-const settings = useSelector(actor, (s) => (s as any).context.settings);
+const { state: logsMachine, send } = useState<LogsState>()
 
 const filteredLogs = computed(() => {
-  let filtered = logs.value;
+  let filtered = logsMachine.value.data.logs;
 
   // Filter by level
-  if (filterLevel.value !== 'all') {
-    filtered = filtered.filter((log: LogEntry) => log.level === filterLevel.value);
+  if (logsMachine.value.data.filter.level !== 'all') {
+    filtered = filtered.filter((log: LogEntry) => log.level === logsMachine.value.data.filter.level);
   }
 
   // Filter by search term using the search utility
-  if (searchTerm.value && searchTerm.value.trim()) {
-    const filter = parseSearchTerm(searchTerm.value);
+  if (logsMachine.value.data.filter.search && logsMachine.value.data.filter.search.trim()) {
+    const filter = parseSearchTerm(logsMachine.value.data.filter.search);
     filtered = filtered.filter((log: LogEntry) => searchLog(log, filter));
   }
 
@@ -433,27 +428,27 @@ watch(filteredLogs, () => {
 const sentinel = ref<HTMLElement>();
 let observer: IntersectionObserver | null = null;
 
-const errorCount = computed(() => logs.value.filter((log: LogEntry) => log.level === 'error').length);
-const warnCount = computed(() => logs.value.filter((log: LogEntry) => log.level === 'warn').length);
-const infoCount = computed(() => logs.value.filter((log: LogEntry) => log.level === 'info').length);
-const debugCount = computed(() => logs.value.filter((log: LogEntry) => log.level === 'debug').length);
+const errorCount = computed(() => logsMachine.value.data.logs.filter((log: LogEntry) => log.level === 'error').length);
+const warnCount = computed(() => logsMachine.value.data.logs.filter((log: LogEntry) => log.level === 'warn').length);
+const infoCount = computed(() => logsMachine.value.data.logs.filter((log: LogEntry) => log.level === 'info').length);
+const debugCount = computed(() => logsMachine.value.data.logs.filter((log: LogEntry) => log.level === 'debug').length);
 
 
 const setFilterLevelDirect = (level: 'all' | 'debug' | 'info' | 'warn' | 'error') => {
-  actor.send({ type: 'SET_FILTER_LEVEL', level });
+  send({ type: 'SET_FILTER_LEVEL', level });
 };
 
 const setSearch = (e: Event) => {
   const target = e.target as HTMLInputElement;
-  actor.send({ type: 'SET_SEARCH', search: target.value });
+  send({ type: 'SET_SEARCH', search: target.value });
 };
 
 const clearSearch = () => {
-  actor.send({ type: 'SET_SEARCH', search: '' });
+  send({ type: 'SET_SEARCH', search: '' });
 };
 
 const clearLogs = () => {
-  actor.send({ type: 'CLEAR_LOGS' });
+  send({ type: 'CLEAR_LOGS' });
 };
 
 const copied = ref(false);
@@ -492,7 +487,7 @@ const goToExcludedSourcesSettings = () => {
 
 // Wrapper for the imported highlight function
 const highlightSearchTermWrapper = (text: string): string => {
-  return highlightSearchTerm(text, searchTerm.value);
+  return highlightSearchTerm(text, logsMachine.value.data.filter.search);
 };
 
 const formatTime = (timestamp: number) => {
@@ -629,15 +624,15 @@ const closeContextMenu = () => {
 };
 
 const toggleShowAppEvents = () => {
-  const next = !settings.value.showAppEvents;
+  const next = !logsMachine.value.data.settings.showAppEvents;
 
   void preferences.set({ path: ['showAppEvents'], value: next });
 };
 
 const excludeSource = (source: string) => {
-  if (!settings.value.excludedSources.includes(source)) {
+  if (!logsMachine.value.data.settings.excludedSources.includes(source)) {
     // Get current excluded sources
-    const currentExcludedSources = settings.value.excludedSources || [];
+    const currentExcludedSources = logsMachine.value.data.settings.excludedSources || [];
 
     // Add the new source
     const updatedSources = [...currentExcludedSources, source];

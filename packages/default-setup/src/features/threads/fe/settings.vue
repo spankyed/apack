@@ -579,22 +579,22 @@
           </button>
 
           <!-- Success message -->
-          <div v-if="importStatus === 'success'" class="p-4 bg-emerald-900/20 border border-emerald-700/50 rounded-lg">
+          <div v-if="threads.data.threadsImport.status === 'success'" class="p-4 bg-emerald-900/20 border border-emerald-700/50 rounded-lg">
             <div class="flex items-start gap-3">
               <CheckCircle class="w-5 h-5 text-emerald-500 mt-0.5" />
               <div class="flex-1">
                 <h4 class="text-sm font-medium text-emerald-400 mb-1">
-                  Successfully imported {{ importedCount }} thread{{ importedCount !== 1 ? 's' : '' }}
+                  Successfully imported {{ threads.data.threadsImport.importedCount }} thread{{ threads.data.threadsImport.importedCount !== 1 ? 's' : '' }}
                 </h4>
-                <ul v-if="applyErrors.length" class="text-sm text-neutral-400 list-disc list-inside">
-                  <li v-for="(error, idx) in applyErrors" :key="idx">{{ error }}</li>
+                <ul v-if="threads.data.threadsImport.errors.length" class="text-sm text-neutral-400 list-disc list-inside">
+                  <li v-for="(error, idx) in threads.data.threadsImport.errors" :key="idx">{{ error }}</li>
                 </ul>
               </div>
             </div>
           </div>
 
           <!-- Error message -->
-          <div v-if="importStatus === 'error'" class="p-4 bg-red-900/20 border border-red-700/50 rounded-lg">
+          <div v-if="threads.data.threadsImport.status === 'error'" class="p-4 bg-red-900/20 border border-red-700/50 rounded-lg">
             <div class="flex items-start gap-3">
               <XCircle class="w-5 h-5 text-red-500 mt-0.5" />
               <div class="flex-1">
@@ -602,7 +602,7 @@
                   Import failed
                 </h4>
                 <ul class="text-sm text-neutral-400 list-disc list-inside">
-                  <li v-for="(error, idx) in applyErrors" :key="idx">{{ error }}</li>
+                  <li v-for="(error, idx) in threads.data.threadsImport.errors" :key="idx">{{ error }}</li>
                 </ul>
               </div>
             </div>
@@ -648,20 +648,20 @@
           </button>
 
           <!-- Success message -->
-          <div v-if="exportStatus === 'success'" class="p-4 bg-emerald-900/20 border border-emerald-700/50 rounded-lg">
+          <div v-if="threads.data.threadsExport.status === 'success'" class="p-4 bg-emerald-900/20 border border-emerald-700/50 rounded-lg">
             <div class="flex items-start gap-3">
               <CheckCircle class="w-5 h-5 text-emerald-500 mt-0.5" />
               <div class="flex-1">
                 <h4 class="text-sm font-medium text-emerald-400 mb-1">
-                  Successfully exported {{ exportedThreadCount }} thread{{ exportedThreadCount !== 1 ? 's' : '' }}
+                  Successfully exported {{ threads.data.threadsExport.threadCount }} thread{{ threads.data.threadsExport.threadCount !== 1 ? 's' : '' }}
                 </h4>
-                <p class="text-sm text-neutral-400">{{ exportedFilePath }}</p>
+                <p class="text-sm text-neutral-400">{{ threads.data.threadsExport.filePath }}</p>
               </div>
             </div>
           </div>
 
           <!-- Error message -->
-          <div v-if="exportStatus === 'error'" class="p-4 bg-red-900/20 border border-red-700/50 rounded-lg">
+          <div v-if="threads.data.threadsExport.status === 'error'" class="p-4 bg-red-900/20 border border-red-700/50 rounded-lg">
             <div class="flex items-start gap-3">
               <XCircle class="w-5 h-5 text-red-500 mt-0.5" />
               <div class="flex-1">
@@ -669,7 +669,7 @@
                   Export failed
                 </h4>
                 <ul class="text-sm text-neutral-400 list-disc list-inside">
-                  <li v-for="(error, idx) in exportErrors" :key="idx">{{ error }}</li>
+                  <li v-for="(error, idx) in threads.data.threadsExport.errors" :key="idx">{{ error }}</li>
                 </ul>
               </div>
             </div>
@@ -685,7 +685,7 @@
 <script setup lang="ts">
 import { TooltipProvider, TooltipRoot, TooltipTrigger, TooltipPortal, TooltipContent } from 'reka-ui'
 import { Plus, X, Upload, Download, FolderOpen, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-vue-next'
-import { useSettingsDraft, useSurface } from '@apackdev/sdk/fe'
+import { useSettingsDraft, useState, useSurface } from '@apackdev/sdk/fe'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
 import { ref, computed, nextTick, type Directive } from 'vue'
@@ -695,7 +695,6 @@ import KeyboardShortcutInput from '@apackdev/ui/components/KeyboardShortcutInput
 import ColorPicker, { DEFAULT_COLORS } from '@apackdev/ui/design/ColorPicker'
 
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
-import { useSelector } from '@xstate/vue'
 import type { ThreadsState } from './state.ts'
 import type { ThreadStatusOption, ThreadTagOption, AgentPhase } from '#generated/types.ts'
 
@@ -1008,24 +1007,18 @@ const removeTag = (index: number) => {
 
 // Get threads actor for import/export state
 const threadsActor: ThreadsState = useSurface()
+const { state: threads, send } = useState(threadsActor)
 
 // Import state
-const isImporting = useSelector(threadsActor, (state) => state.context.threadsImport.status === 'importing')
-const importStatus = useSelector(threadsActor, (state) => state.context.threadsImport.status)
-const applyErrors = useSelector(threadsActor, (state) => state.context.threadsImport.errors)
-const importedCount = useSelector(threadsActor, (state) => state.context.threadsImport.importedCount)
+const isImporting = computed(() => threads.value.data.threadsImport.status === 'importing')
 
 // Export state
 const exportDirectory = ref<string>('')
-const isExporting = useSelector(threadsActor, (state) => state.context.threadsExport.status === 'exporting')
-const exportStatus = useSelector(threadsActor, (state) => state.context.threadsExport.status)
-const exportErrors = useSelector(threadsActor, (state) => state.context.threadsExport.errors)
-const exportedFilePath = useSelector(threadsActor, (state) => state.context.threadsExport.filePath)
-const exportedThreadCount = useSelector(threadsActor, (state) => state.context.threadsExport.threadCount)
+const isExporting = computed(() => threads.value.data.threadsExport.status === 'exporting')
 
 // Import - directory picker and send to state machine
 const selectAndImportThreads = async () => {
-  threadsActor.send({ type: 'THREADS.RESET_IMPORT_STATUS' })
+  send({ type: 'THREADS.RESET_IMPORT_STATUS' })
 
   const directory = await window.electronAPI?.fileUtils.selectPath({
     type: 'directory'
@@ -1033,7 +1026,7 @@ const selectAndImportThreads = async () => {
 
   if (!directory || Array.isArray(directory)) return
 
-  threadsActor.send({
+  send({
     type: 'THREADS.IMPORT',
     directory,
   })
@@ -1047,7 +1040,7 @@ const selectExportDirectory = async () => {
 
 const exportThreadsToFile = () => {
   if (!exportDirectory.value) return
-  threadsActor.send({ type: 'THREADS.RESET_EXPORT_STATUS' })
-  threadsActor.send({ type: 'THREADS.EXPORT', directory: exportDirectory.value })
+  send({ type: 'THREADS.RESET_EXPORT_STATUS' })
+  send({ type: 'THREADS.EXPORT', directory: exportDirectory.value })
 }
 </script>

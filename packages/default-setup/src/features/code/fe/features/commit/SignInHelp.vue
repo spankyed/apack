@@ -2,9 +2,9 @@
   <!-- What can be done about a remote that asked for a sign-in git does not have -->
   <div class="text-xs text-neutral-300" data-testid="sign-in-help">
     <template v-if="help.kind === 'github'">
-      <template v-if="account">
+      <template v-if="github.data.account">
         <p>
-          GitHub refused the app's sign-in as {{ account.login }} for this repository: it may need access the sign-in
+          GitHub refused the app's sign-in as {{ github.data.account.login }} for this repository: it may need access the sign-in
           lacks, or an organisation's single sign-on. Sign out and in again in Settings → Code, then try again.
         </p>
         <button
@@ -36,8 +36,7 @@
 
 <script setup lang="ts">
 import { watch } from 'vue'
-import { useSelector } from '@xstate/vue'
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 import type { SignInHelp } from '#features/code/be/types.ts'
 import type { CodeState } from '#features/code/fe/state.ts'
 import GitHubAccount from '../github/GitHubAccount.vue'
@@ -47,11 +46,10 @@ const props = defineProps<{ help: SignInHelp; busy: boolean }>()
 const emit = defineEmits<{ 'sign-in': [host: string] }>()
 
 const surface: CodeState = useSurface()
-const github = panelChild(surface, 'github')!
-const account = useSelector(github, (state) => state.context.account)
+const { state: github } = useState(panelChild(surface, 'github')!)
 
 // Signing in here is git's sign-in too, so what was refused runs again as soon as there is one
-watch(account, (now, before) => {
+watch(() => github.value.data.account, (now, before) => {
   if (now && !before && props.help.kind === 'github') emit('sign-in', props.help.host)
 })
 </script>

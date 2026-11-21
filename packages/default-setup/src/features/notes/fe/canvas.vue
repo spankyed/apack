@@ -17,9 +17,9 @@
       </div>
     </div>
     <!-- Welcome State -->
-    <div v-if="state.hasTag('welcome')" class="flex flex-col h-full overflow-y-auto">
+    <div v-if="notesMachine.at === 'welcome'" class="flex flex-col h-full overflow-y-auto">
       <!-- Empty state: no notes at all -->
-      <template v-if="notes.length === 0">
+      <template v-if="notesMachine.data.notes.length === 0">
         <div class="flex flex-col items-center pt-10 h-full gap-4 text-neutral-400">
           <NotebookText :size="48" class="text-neutral-600" />
           <p class="text-lg">Create your first note</p>
@@ -191,7 +191,7 @@
 
     <!-- Editor State -->
     <div
-      v-else-if="state.hasTag('editor') && currentNote"
+      v-else-if="notesMachine.at === 'editor' && notesMachine.data.currentNote"
       :class="['flex h-full', notesSettings.tasklistPanelPosition === 'right' && 'flex-row-reverse']"
     >
       <!-- Task List Panel (left side for tasklists) -->
@@ -199,30 +199,30 @@
         v-if="isTaskList"
         :tasks="taskChildren"
         :all-notes="taskDescendants"
-        :selected-task-id="selectedTaskId"
-        :expanded-node-ids="taskExpandedNodeIds"
-        :current-note-id="currentNote.id"
-        :current-note-title="currentNote.title"
-        :current-note-icon="currentNote.icon"
-        :show-completed="!(currentNote?.hideCompletedChildren ?? false)"
+        :selected-task-id="notesMachine.data.selectedTaskId"
+        :expanded-node-ids="notesMachine.data.taskExpandedNodeIds"
+        :current-note-id="notesMachine.data.currentNote.id"
+        :current-note-title="notesMachine.data.currentNote.title"
+        :current-note-icon="notesMachine.data.currentNote.icon"
+        :show-completed="!(notesMachine.data.currentNote?.hideCompletedChildren ?? false)"
         :panel-position="notesSettings.tasklistPanelPosition"
         :show-collapse-icon="notesSettings.showCollapseIcon"
-        @toggle-hide-completed="(nodeId: string) => actor.send({ type: 'TASK.TOGGLE_HIDE_COMPLETED_CHILDREN', nodeId })"
-        @select-task="(taskId: string) => actor.send({ type: 'TASK.SELECT', taskId })"
-        @deselect-task="actor.send({ type: 'TASK.DESELECT' })"
-        @create-task="actor.send({ type: 'TASK.CREATE', parentId: currentNote.id })"
-        @create-task-child="(parentId: string) => actor.send({ type: 'TASK.CREATE', parentId })"
-        @create-subnote="(parentId: string) => actor.send({ type: 'NOTE.CREATE', parentId })"
-        @delete-task="(taskId: string) => actor.send({ type: 'TASK.DELETE', taskId })"
-        @toggle-complete="(taskId: string) => actor.send({ type: 'TASK.TOGGLE_COMPLETE', taskId })"
-        @toggle-show-completed="actor.send({ type: 'TASK.TOGGLE_SHOW_COMPLETED' })"
-        @toggle-expand="(nodeId: string) => actor.send({ type: 'TASK.TOGGLE_EXPAND', nodeId })"
-        @move-task="(noteIds: string[], newParentId: string | null) => actor.send({ type: 'NOTE.MOVE', noteIds, newParentId })"
-        @reorder-task="(noteId: string, newParentId: string | null, newIndex: number) => actor.send({ type: 'NOTE.REORDER', noteId, newParentId, newIndex })"
-        @update-icon="(noteId: string, icon: string | null) => actor.send({ type: 'NOTE.UPDATE_ICON', noteId, icon })"
-        @open-note="(noteId: string) => actor.send({ type: 'NOTE.OPEN', noteId })"
-        @delete-tasklist="actor.send({ type: 'NOTE.DELETE', noteId: currentNote.id })"
-        @toggle-favorite="(noteId: string) => actor.send({ type: 'NOTE.TOGGLE_FAVORITE', noteId })"
+        @toggle-hide-completed="(nodeId: string) => send({ type: 'TASK.TOGGLE_HIDE_COMPLETED_CHILDREN', nodeId })"
+        @select-task="(taskId: string) => send({ type: 'TASK.SELECT', taskId })"
+        @deselect-task="send({ type: 'TASK.DESELECT' })"
+        @create-task="send({ type: 'TASK.CREATE', parentId: notesMachine.data.currentNote.id })"
+        @create-task-child="(parentId: string) => send({ type: 'TASK.CREATE', parentId })"
+        @create-subnote="(parentId: string) => send({ type: 'NOTE.CREATE', parentId })"
+        @delete-task="(taskId: string) => send({ type: 'TASK.DELETE', taskId })"
+        @toggle-complete="(taskId: string) => send({ type: 'TASK.TOGGLE_COMPLETE', taskId })"
+        @toggle-show-completed="send({ type: 'TASK.TOGGLE_SHOW_COMPLETED' })"
+        @toggle-expand="(nodeId: string) => send({ type: 'TASK.TOGGLE_EXPAND', nodeId })"
+        @move-task="(noteIds: string[], newParentId: string | null) => send({ type: 'NOTE.MOVE', noteIds, newParentId })"
+        @reorder-task="(noteId: string, newParentId: string | null, newIndex: number) => send({ type: 'NOTE.REORDER', noteId, newParentId, newIndex })"
+        @update-icon="(noteId: string, icon: string | null) => send({ type: 'NOTE.UPDATE_ICON', noteId, icon })"
+        @open-note="(noteId: string) => send({ type: 'NOTE.OPEN', noteId })"
+        @delete-tasklist="send({ type: 'NOTE.DELETE', noteId: notesMachine.data.currentNote.id })"
+        @toggle-favorite="(noteId: string) => send({ type: 'NOTE.TOGGLE_FAVORITE', noteId })"
       />
 
       <!-- Editor area -->
@@ -293,13 +293,12 @@
 <script setup lang="ts">
 import { ref, computed, watch, provide, nextTick, onMounted } from 'vue'
 import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDrag'
-import { useSelector } from '@xstate/vue'
 import type { NoteSummary } from '#generated/types.ts'
 import { useView } from '#generated/fe.ts'
 import { useSettings } from '#generated/settings-fe.ts'
 import { type NotesState } from './state.ts'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
-import { EXTRA_BLOCK_ITEMS_KEY, type BlockItem, useSurface } from '@apackdev/sdk/fe'
+import { EXTRA_BLOCK_ITEMS_KEY, type BlockItem, useState, useSurface } from '@apackdev/sdk/fe'
 import { NotebookText, FileText, ListChecks, CircleCheck, Search, Clock, ChevronLeft, ChevronRight, Star, Plus } from 'lucide-vue-next'
 import EmojiPicker from '@apackdev/ui/design/EmojiPicker'
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
@@ -311,32 +310,26 @@ import ImageLightbox from '@apackdev/ui/design/ImageLightbox'
 import TiptapSearchBar from '@apackdev/ui/components/tiptap/TiptapSearchBar'
 
 const actor: NotesState = useSurface()
-const state = useSelector(actor, (s) => s)
-const currentNote = useSelector(actor, (s) => s.context.currentNote)
-const notes = useSelector(actor, (s) => s.context.notes)
-const selectedTaskId = useSelector(actor, (s) => s.context.selectedTaskId)
-const selectedTask = useSelector(actor, (s) => s.context.selectedTask)
-const currentNoteId = useSelector(actor, (s) => s.context.currentNoteId)
+const { state: notesMachine, send } = useState(actor)
 const settings = useSettings('notes')
 const notesSettings = computed(() => settings.value.value ?? { tasklistPanelPosition: 'left' as const, showCollapseIcon: false })
-const isTaskList = computed(() => currentNote.value?.noteType === 'tasklist')
-const editingNote = computed(() => selectedTask.value ?? currentNote.value!)
-const contents = useSelector(actor, (s) => s.context.contents)
-const editingContent = computed(() => (editingNote.value ? contents.value[editingNote.value.id] ?? '' : ''))
+const isTaskList = computed(() => notesMachine.value.data.currentNote?.noteType === 'tasklist')
+const editingNote = computed(() => notesMachine.value.data.selectedTask ?? notesMachine.value.data.currentNote!)
+const editingContent = computed(() => (editingNote.value ? notesMachine.value.data.contents[editingNote.value.id] ?? '' : ''))
 
 // The tree, and the text of the open note and of the selected task: each its view's result, which the machine applies,
 // or holds behind this window's own writes until they're answered. It reads them again when the machine asks.
 const tree = useView('notes', 'tree')
-const openNote = useView('notes', 'note', () => (currentNoteId.value ? { id: currentNoteId.value as never } : null))
-const openTask = useView('notes', 'note', () => (selectedTaskId.value ? { id: selectedTaskId.value as never } : null))
-watch(() => tree.data, (notes) => { if (notes) actor.send({ type: 'NOTES.READ', notes }) }, { immediate: true })
-for (const [view, id] of [[openNote, currentNoteId], [openTask, selectedTaskId]] as const) {
+const openNote = useView('notes', 'note', () => (notesMachine.value.data.currentNoteId ? { id: notesMachine.value.data.currentNoteId as never } : null))
+const openTask = useView('notes', 'note', () => (notesMachine.value.data.selectedTaskId ? { id: notesMachine.value.data.selectedTaskId as never } : null))
+watch(() => tree.data, (notes) => { if (notes) send({ type: 'NOTES.READ', notes }) }, { immediate: true })
+for (const [view, id] of [[openNote, () => notesMachine.value.data.currentNoteId], [openTask, () => notesMachine.value.data.selectedTaskId]] as const) {
   watch(() => [view.status, view.data] as const, ([status, note]) => {
-    if (status === 'ready' && id.value) actor.send({ type: 'NOTE.READ', noteId: id.value, note: note ?? null })
+    const noteId = id()
+    if (status === 'ready' && noteId) send({ type: 'NOTE.READ', noteId, note: note ?? null })
   })
 }
-const refreshes = useSelector(actor, (s) => s.context.writes.refreshes)
-watch(refreshes, () => { tree.refresh(); openNote.refresh(); openTask.refresh() })
+watch(() => notesMachine.value.data.writes.refreshes, () => { tree.refresh(); openNote.refresh(); openTask.refresh() })
 
 const localTitle = ref(editingNote.value?.title ?? '')
 
@@ -345,19 +338,18 @@ const scrollContainerRef = useNoteScroll(actor, () => editingNote.value?.id)
 watch(() => editingNote.value?.id, () => {
   localTitle.value = editingNote.value?.title ?? ''
 })
-const taskExpandedNodeIds = useSelector(actor, (s) => s.context.taskExpandedNodeIds)
 const taskChildren = computed(() =>
-  notes.value
-    .filter(n => n.parentId === currentNote.value?.id)
+  notesMachine.value.data.notes
+    .filter(n => n.parentId === notesMachine.value.data.currentNote?.id)
 )
 const taskDescendants = computed(() => {
-  if (!currentNote.value) return []
-  const rootId = currentNote.value.id
-  const result: NoteSummary[] = [currentNote.value]
+  if (!notesMachine.value.data.currentNote) return []
+  const rootId = notesMachine.value.data.currentNote.id
+  const result: NoteSummary[] = [notesMachine.value.data.currentNote]
   const queue = [rootId]
   while (queue.length > 0) {
     const parentId = queue.shift()!
-    for (const n of notes.value) {
+    for (const n of notesMachine.value.data.notes) {
       if (n.parentId === parentId) {
         result.push(n)
         queue.push(n.id)
@@ -393,7 +385,7 @@ function formatRelativeTime(timestamp: number): string {
 }
 
 // What the welcome page lists, read only while it shows: its view reads when each note changed, which typing moves
-const recent = useView('notes', 'recent', () => (state.value.hasTag('welcome') ? { limit: 20 } : null))
+const recent = useView('notes', 'recent', () => (notesMachine.value.at === 'welcome' ? { limit: 20 } : null))
 const recentNotes = computed(() => recent.data?.recent ?? [])
 const favoriteNotes = computed(() => recent.data?.favorites ?? [])
 
@@ -455,7 +447,7 @@ function scrollFavCarousel(direction: -1 | 1) {
 
 watch(recentNotes, () => nextTick(updateScrollState))
 watch(favoriteNotes, () => nextTick(updateFavScrollState))
-watch(() => state.value.hasTag('welcome'), (isWelcome) => {
+watch(() => notesMachine.value.at === 'welcome', (isWelcome) => {
   if (isWelcome) nextTick(() => { updateScrollState(); updateFavScrollState() })
 })
 onMounted(() => nextTick(() => { updateScrollState(); updateFavScrollState() }))
@@ -467,16 +459,16 @@ useSubDocumentInsert(actor, editorRef, editingNote)
 // Debounced handlers
 const SAVE_DEBOUNCE_MS = 150
 const { debounced: debouncedUpdateContent, flush: flushContentUpdate } = useDebounce((noteId: string, content: string) => {
-  actor.send({ type: 'NOTE.UPDATE_CONTENT', noteId, content })
+  send({ type: 'NOTE.UPDATE_CONTENT', noteId, content })
 }, SAVE_DEBOUNCE_MS)
 const { debounced: debouncedUpdateTitle, flush: flushTitleUpdate } = useDebounce((noteId: string, title: string) => {
-  actor.send({ type: 'NOTE.UPDATE_TITLE', noteId, title })
+  send({ type: 'NOTE.UPDATE_TITLE', noteId, title })
 }, SAVE_DEBOUNCE_MS)
 const { debounced: debouncedUpdateTaskContent, flush: flushTaskContentUpdate } = useDebounce((taskId: string, content: string) => {
-  actor.send({ type: 'TASK.UPDATE_CONTENT', taskId, content })
+  send({ type: 'TASK.UPDATE_CONTENT', taskId, content })
 }, SAVE_DEBOUNCE_MS)
 const { debounced: debouncedUpdateTaskTitle, flush: flushTaskTitleUpdate } = useDebounce((taskId: string, title: string) => {
-  actor.send({ type: 'TASK.UPDATE_TITLE', taskId, title })
+  send({ type: 'TASK.UPDATE_TITLE', taskId, title })
 }, SAVE_DEBOUNCE_MS)
 
 // Flush pending debounced updates when the edited note/task changes (covers deletion, switching, deselection)
@@ -496,7 +488,7 @@ const documentBlockItem: BlockItem[] = [
       const noteId = editingNote.value?.id
       if (!noteId) return
       const cursorPos = editor.state.selection.from
-      actor.send({ type: 'NOTE.REQUEST_DOCUMENT_INSERT', parentId: noteId, cursorPos })
+      send({ type: 'NOTE.REQUEST_DOCUMENT_INSERT', parentId: noteId, cursorPos })
     },
   },
 ]
@@ -510,11 +502,11 @@ function focusTitleEnd() {
 }
 
 function handleSelectNote(noteId: string) {
-  actor.send({ type: 'NOTE.SELECT', noteId })
+  send({ type: 'NOTE.SELECT', noteId })
 }
 
 function handleCreateNote(parentId?: string) {
-  actor.send({ type: 'NOTE.CREATE', parentId })
+  send({ type: 'NOTE.CREATE', parentId })
 }
 
 // File drag-and-drop
@@ -535,7 +527,7 @@ function processDroppedFiles(event: DragEvent) {
     reader.onload = () => {
       const content = reader.result as string
       const title = file.name.replace(/\.(md|txt)$/i, '')
-      actor.send({ type: 'NOTE.CREATE', title, content })
+      send({ type: 'NOTE.CREATE', title, content })
     }
     reader.readAsText(file)
   }
@@ -552,8 +544,8 @@ function handleContentUpdate(content: string) {
   if (!note) return
   if (content === editingContent.value) return
   if (isSyncingSubDocumentLinks.value) return
-  if (selectedTask.value) {
-    debouncedUpdateTaskContent(selectedTask.value.id, content)
+  if (notesMachine.value.data.selectedTask) {
+    debouncedUpdateTaskContent(notesMachine.value.data.selectedTask.id, content)
   } else {
     debouncedUpdateContent(note.id, content)
   }
@@ -561,23 +553,23 @@ function handleContentUpdate(content: string) {
 
 function handleTitleInput() {
   const title = localTitle.value
-  if (selectedTask.value) {
-    debouncedUpdateTaskTitle(selectedTask.value.id, title)
-  } else if (currentNote.value) {
-    debouncedUpdateTitle(currentNote.value.id, title)
+  if (notesMachine.value.data.selectedTask) {
+    debouncedUpdateTaskTitle(notesMachine.value.data.selectedTask.id, title)
+  } else if (notesMachine.value.data.currentNote) {
+    debouncedUpdateTitle(notesMachine.value.data.currentNote.id, title)
   }
 }
 
 function handleNoteLinkClick(noteId: string) {
-  actor.send({ type: 'NOTE.LINK_CLICKED', noteId })
+  send({ type: 'NOTE.LINK_CLICKED', noteId })
 }
 
 function handleSubDocumentLinkDeleted(noteId: string) {
-  actor.send({ type: 'NOTE.SOFT_DELETE', noteId })
+  send({ type: 'NOTE.SOFT_DELETE', noteId })
 }
 
 function handleSubDocumentLinkRestored(noteId: string) {
-  actor.send({ type: 'NOTE.RESTORE', noteId })
+  send({ type: 'NOTE.RESTORE', noteId })
 }
 
 function handleTitleRight(event: KeyboardEvent) {
@@ -597,7 +589,7 @@ function handleTitleEnter() {
 function handleEditorKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === 'f') {
     e.preventDefault()
-    actor.send({ type: 'NOTE.TOGGLE_PANEL_SEARCH' })
+    send({ type: 'NOTE.TOGGLE_PANEL_SEARCH' })
     return
   }
   if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
@@ -609,20 +601,20 @@ function handleEditorKeydown(e: KeyboardEvent) {
 function handleIconUpdate(icon: string | null) {
   const note = editingNote.value
   if (!note) return
-  actor.send({ type: 'NOTE.UPDATE_ICON', noteId: note.id, icon })
+  send({ type: 'NOTE.UPDATE_ICON', noteId: note.id, icon })
 }
 
 // Clear search when leaving welcome state
-watch(() => state.value.hasTag('welcome'), (isWelcome) => {
+watch(() => notesMachine.value.at === 'welcome', (isWelcome) => {
   if (!isWelcome) searchQuery.value = ''
 })
 
 // Sync sub-document link node attrs (title/icon) when child notes change
 watch(
-  notes,
+  () => notesMachine.value.data.notes,
   (allNotes) => {
     const editor = editorRef.value?.editor
-    if (!editor || !currentNote.value) return
+    if (!editor || !notesMachine.value.data.currentNote) return
 
     // Collect all needed changes first (positions are from the current document)
     const changes: { pos: number; attrs: Record<string, any> }[] = []

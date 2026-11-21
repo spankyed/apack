@@ -6,7 +6,7 @@
       <ResultStates 
         v-if="currentState !== 'data'"
         :state="currentState"
-        :error="error"
+        :error="database.data.error"
       />
 
       <!-- Data displays -->
@@ -51,16 +51,15 @@
       :result-type="resultType"
       :result-count="resultCount"
       :is-array-of-primitives="isArrayOfPrimitives"
-      :execution-time="executionTime"
+      :execution-time="database.data.executionTime"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { computed } from 'vue';
-import { useSelector } from '@xstate/vue';
 import { useResultAnalysis } from './composables/useResultAnalysis.ts';
 import ResultsInfoBar from './components/ResultsInfoBar.vue';
 import ResultStates from './components/ResultStates.vue';
@@ -74,10 +73,9 @@ import { isRunningCode, type DatabaseState } from '../../state.ts'
 
 // State Management
 const actor: DatabaseState = useSurface();
-const queryResult = useSelector(actor, (state) => state.context.queryResult);
-const isLoading = useSelector(actor, isRunningCode);
-const error = useSelector(actor, (state) => state.context.error);
-const executionTime = useSelector(actor, (state) => state.context.executionTime);
+const { state: database, send } = useState(actor);
+const queryResult = computed(() => database.value.data.queryResult);
+const isLoading = computed(() => isRunningCode({ context: database.value.data }));
 
 // Result Analysis
 const { 
@@ -91,7 +89,7 @@ const {
 // Computed Properties
 const currentState = computed(() => {
   if (isLoading.value) return 'loading';
-  if (error.value) return 'error';
+  if (database.value.data.error) return 'error';
   if (!queryResult.value) return 'no-results';
   if (resultType.value === 'array' && resultCount.value === 0) return 'empty-array';
   return 'data';
@@ -100,7 +98,7 @@ const currentState = computed(() => {
 // Event Handlers
 function handleDeleteEntity(entityId: string) {
   // Send delete event to the database state machine
-  actor.send({ type: 'ENTITY.DELETE', entityId });
+  send({ type: 'ENTITY.DELETE', entityId });
 }
 </script>
 

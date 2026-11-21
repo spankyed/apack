@@ -49,10 +49,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, computed, watch, onMounted, onUnmounted, shallowRef } from 'vue';
-import { useSelector } from '@xstate/vue';
 import { Graph } from '@antv/g6';
 import type { GraphData, NodeData, EdgeData } from '@antv/g6';
 import { useGraphInstance } from './composables/useGraphInstance.ts';
@@ -76,7 +75,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 // State Management
 const actor: DatabaseState = useSurface();
-const queryResult = useSelector(actor, (state) => state.context.queryResult);
+const { state: database } = useState(actor);
 
 // Component State
 const graphContainer = ref<HTMLElement>();
@@ -89,9 +88,9 @@ const isLoading = ref(false);
 const isDragging = ref(false);
 
 // Computed Properties
-const hasData = computed(() => queryResult.value.nodes.length > 0);
-const nodeCount = computed(() => queryResult.value.nodes.length);
-const edgeCount = computed(() => queryResult.value.edges.length);
+const hasData = computed(() => database.value.data.queryResult.nodes.length > 0);
+const nodeCount = computed(() => database.value.data.queryResult.nodes.length);
+const edgeCount = computed(() => database.value.data.queryResult.edges.length);
 
 // Composables
 const { 
@@ -140,7 +139,7 @@ async function setupGraph() {
 }
 
 function transformQueryData(): GraphData {
-  const nodes: NodeData[] = queryResult.value.nodes.map((node: any) => ({
+  const nodes: NodeData[] = database.value.data.queryResult.nodes.map((node: any) => ({
     id: node.id,
     data: {
       type: node.type,
@@ -150,7 +149,7 @@ function transformQueryData(): GraphData {
   }));
   
   const nodeIdSet = new Set(nodes.map(n => n.id));
-  const edges: EdgeData[] = queryResult.value.edges
+  const edges: EdgeData[] = database.value.data.queryResult.edges
     .filter((edge: any) => nodeIdSet.has(edge.source) && nodeIdSet.has(edge.target))
     .map((edge: any, index: number) => ({
       id: `edge-${index}`,
@@ -241,7 +240,7 @@ function handleKeyboard(e: KeyboardEvent) {
 }
 
 // Watchers
-watch(queryResult, async () => {
+watch(() => database.value.data.queryResult, async () => {
   if (!hasData.value) {
     await destroyGraph();
     return;

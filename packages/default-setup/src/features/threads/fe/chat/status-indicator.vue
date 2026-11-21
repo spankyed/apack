@@ -30,10 +30,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { computed, ref } from 'vue'
-import { useSelector } from '@xstate/vue'
 import { type ThreadsState } from '#features/threads/fe/state.ts';
 import { useAnchorTracking } from './composables/useAnchorTracking.ts'
 
@@ -42,17 +41,14 @@ const props = defineProps<{
 }>()
 
 const actor: ThreadsState = useSurface();
-const settings = useSelector(actor, (state) => state.context.settings);
-const chatStates = useSelector(actor, (state) => state.context.chatStates);
-const overrides = useSelector(actor, (state) => state.context.chatStateOverrides);
-const currentThread = useSelector(actor, (state) => state.context.currentThread);
+const { state: threads } = useState(actor);
 
-const chatState = computed(() => chatStates.value[currentThread.value?.id ?? ''] || 'idle');
+const chatState = computed(() => threads.value.data.chatStates[threads.value.data.currentThread?.id ?? ''] || 'idle');
 
 const stateConfig = computed(() => {
-  const configs = settings.value?.chatStates;
-  const threadId = currentThread.value?.id ?? '';
-  const override = overrides.value[threadId];
+  const configs = threads.value.data.settings?.chatStates;
+  const threadId = threads.value.data.currentThread?.id ?? '';
+  const override = threads.value.data.chatStateOverrides[threadId];
   const activeId = (override && override.expiresAt > Date.now()) ? override.id : chatState.value;
   return configs?.find(c => c.id === activeId);
 });

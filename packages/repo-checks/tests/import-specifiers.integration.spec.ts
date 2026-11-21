@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findNodePtyImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findHandWrittenAnswers, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable, findClockedDeadlinesInSource, findSyncSpawnsInSpecs } from '../../../scripts/check-import-specifiers.ts';
+import { CHECKS, findAppImportsInPackTests, findEmulatorImports, findNodePtyImports, findMachineLibraryVueImports, findContractLeafImports, findCrossCheckoutResolution, findCrossFeatureImports, findExtensionlessOwnModules, findHostImports, findJsSpecifiers, findCompilerRunsInFastSpecs, findLiveWatchersInIntegrationSpecs, findMissingSourceConditions, findPackageScriptImports, findPackBackendConsole, findPackWindowStorage, findPackMachineSelectors, findComponentSends, findPackOwnAliases, findRawGitListings, findRawPackHelpers, findRawTransport, findRawWatchesInBuild, findReservedEventKeys, findHandWrittenAnswers, findInternalPackageImports, findElmdbImports, findRepositoryCasts, findSchemeRegistrations, findSharedPackageLists, findUpwardImports, jsSpecifierFixes, LAYERS, UNLAYERED_BY_DESIGN, repoRootDir, findUnimportedDependencies, ELMDB_RULES, MANIFEST_FIELDS, packOwnModuleFixes, packageSourceDirs, CHECK_IDS, type CoveredRuleId, DECLARES_SOURCE_BY_DESIGN, type ImportRuleId, SHARED_LIST_CONSUMERS, sourceConditionPackages, SOURCE_CONDITION, checkedDirs, type ImportRule, packCodeDirs, packDirs, packRule, packRuleProblems, ruleRows, ruleTable, findClockedDeadlinesInSource, findSyncSpawnsInSpecs } from '../../../scripts/check-import-specifiers.ts';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { packFixture as buildPackFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
@@ -648,6 +648,10 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     packFixture({ 'src/features/memos/fe/state.ts': "const raw = localStorage.getItem('open-tabs');" });
     return findPackWindowStorage(PACK_SRC, root);
   },
+  findPackMachineSelectors: () => {
+    packFixture({ 'src/features/memos/fe/canvas.ts': "import { useSelector } from '@xstate/vue';" });
+    return findPackMachineSelectors(PACK_SRC, root);
+  },
   findHostImports: () => {
     packFixture({ 'src/f.ts': "import { edgeStore } from '@apackdev/host/ears';" });
     return findHostImports(PACK_SRC, root);
@@ -687,6 +691,10 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     const rules = ELMDB_RULES.map((rule) => ({ ...rule, dirs: rule.dirs.map((dir) => `src/${dir}`) }));
     write('packages/apack-host/src/services/run-history.ts', "import { Database } from 'elmdb';");
     return findElmdbImports(rules, root);
+  },
+  findMachineLibraryVueImports: () => {
+    writeAt('packages/renderer/src/views/Panel.vue', "<script setup lang=\"ts\">\nimport { useSelector } from '@xstate/vue';\n</script>\n");
+    return findMachineLibraryVueImports(['packages/renderer/src'], root);
   },
   findNodePtyImports: () => {
     packFixture({ 'src/f.ts': "import { spawn } from 'node-pty';" });
@@ -817,6 +825,10 @@ const COVERED_BY: Record<CoveredRuleId, { files: Record<string, string>; finding
   findElmdbImports: {
     files: { 'src/f.ts': "import { Database } from 'elmdb';\n" },
     finding: 'packages/demo-pack/src/f.ts:1: elmdb',
+  },
+  findMachineLibraryVueImports: {
+    files: { 'src/f.ts': "import { useSelector } from '@xstate/vue';\n" },
+    finding: 'packages/demo-pack/src/f.ts:1: @xstate/vue',
   },
   // Its config route, which reads the pack root's own listing — so the config goes there, not under a subdirectory
   findMissingSourceConditions: {

@@ -1,8 +1,8 @@
 <template>
   <!-- Show Backup/Restore UI when in backup state -->
-  <BackupRestore v-if="isInBackupState" />
+  <BackupRestore v-if="database.at === 'backup'" />
   <!-- The run history viewer or the database, by viewMode -->
-  <RunHistoryViewer v-else-if="viewMode === 'runs'" />
+  <RunHistoryViewer v-else-if="database.data.viewMode === 'runs'" />
   <div v-else class="flex w-full h-full overflow-hidden bg-neutral-800">
     <!-- Schema Panel -->
     <div 
@@ -50,10 +50,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, onUnmounted } from 'vue'
-import { useSelector } from '@xstate/vue'
 import type { DatabaseState } from './state.ts'
 
 import SimpleTable from './components/simple-table/SimpleTable.vue'
@@ -63,8 +62,7 @@ import RunHistoryViewer from './components/runs/RunHistoryViewer.vue'
 import BackupRestore from './components/BackupRestore.vue'
 
 const databaseActor: DatabaseState = useSurface()
-const viewMode = useSelector(databaseActor, (state) => state.context.viewMode)
-const isInBackupState = useSelector(databaseActor, (state) => state.matches('backup'))
+const { state: database } = useState(databaseActor)
 
 // Active mode for query editor
 const activeMode = ref<'query' | 'examples'>('query')

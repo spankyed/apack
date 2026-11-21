@@ -1,19 +1,19 @@
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
-import { useSelector } from '@xstate/vue'
+import { useState } from '@apackdev/sdk/fe'
 import type { NotesState } from '../state.ts'
 
 export function useNoteScroll(actor: NotesState, getNoteId: () => string | undefined) {
   const scrollContainerRef = ref<HTMLElement | null>(null)
-  const scrollPositions = useSelector(actor, (s) => s.context.noteScrollPositions)
+  const { state: notes, send } = useState(actor)
 
   const save = (noteId: string) => {
     const el = scrollContainerRef.value
     if (!el) return
-    actor.send({ type: 'NOTE.SAVE_SCROLL', noteId, scrollTop: el.scrollTop })
+    send({ type: 'NOTE.SAVE_SCROLL', noteId, scrollTop: el.scrollTop })
   }
 
   const restore = (noteId: string) => {
-    const target = scrollPositions.value[noteId] ?? 0
+    const target = notes.value.data.noteScrollPositions[noteId] ?? 0
     const attempt = (retries: number) => {
       const el = scrollContainerRef.value
       if (!el) return

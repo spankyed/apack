@@ -164,8 +164,7 @@ import {
   History,
   UserPen
 } from 'lucide-vue-next'
-import { useSurface } from '@apackdev/sdk/fe'
-import { useSelector } from '@xstate/vue'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import { panelChild } from '#features/code/fe/features/children.ts'
 import type { OpenFile, TerminalTab, TabGroup as TabGroupType } from '#features/code/fe/state.ts'
@@ -184,17 +183,17 @@ function showFileHistory() {
   codeActor.send({ type: 'SELECT_PANEL', panel: 'commit' })
 }
 const commitActor = panelChild(codeActor, 'commit')
-const blame = useSelector(commitActor!, (state) => state.context.blame)
+const { state: git, send } = useState(commitActor!)
 /** The tab's path from the top of the folder, as git names it */
 const relativePath = () => {
   const base = codeActor.getSnapshot().context.baseDirectory as string | null
   return base && props.tab.path.startsWith(`${base}/`) ? props.tab.path.slice(base.length + 1) : props.tab.path
 }
-const blamed = computed(() => blame.value?.path === relativePath())
+const blamed = computed(() => git.value.data.blame?.path === relativePath())
 
 /** Shows who last changed each line of the file in the editor, or stops showing it */
 function toggleBlame() {
-  commitActor?.send(blamed.value ? { type: 'commit.CLEAR_BLAME' } : { type: 'commit.SHOW_BLAME', path: relativePath() })
+  send(blamed.value ? { type: 'commit.CLEAR_BLAME' } : { type: 'commit.SHOW_BLAME', path: relativePath() })
 }
 
 const props = defineProps<{
