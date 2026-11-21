@@ -255,6 +255,12 @@ interface Port {
 interface Link { open: boolean }
 const PORT = Symbol('port')
 
+/**
+ * What changed in one running state in one step: whether it is somewhere else now, and each place in its data that
+ * changed, as a path. `['messages', 'THR-1', '3']` is the fourth message of one thread, and nothing else.
+ */
+export interface Changes { readonly moved: boolean; readonly paths: ReadonlyArray<ReadonlyArray<string>> }
+
 export interface System {
   start<S extends Shape, E extends AnyEvent, A extends Asks>(ref: string, made: State<S, E, A>): Handle<Value<S>, E, A>
   send<E extends AnyEvent>(to: Handle<unknown, E, Asks>, event: E): void
@@ -263,7 +269,7 @@ export interface System {
   /** Every running state here, as of the last commit. */
   snapshot(): Record<string, unknown>
   /** Called once per step that changed anything, after it has committed. */
-  subscribe(listener: (changed: readonly string[], fields: Readonly<Record<string, readonly string[]>>) => void): void
+  subscribe(listener: (changed: readonly string[], fields: Readonly<Record<string, readonly string[]>>, changes: Readonly<Record<string, Changes>>) => void): void
   /** From a window: joins it to its backend. Closing the link is the window going away. */
   connect(backend: System): { close(): void }
   stop(): void
@@ -289,7 +295,19 @@ export function system(host: {
   /** For each running state that changed in this step, the fields of its data that did. */
   const fields = new Map<string, Set<string>>()
   const touch = (ref: string, field: string): void => { changed.add(ref); fields.set(ref, (fields.get(ref) ?? new Set()).add(field)) }
-  const listeners: Array<(changed: readonly string[], fields: Readonly<Record<string, readonly string[]>>) => void> = []
+  /** The same, to the place: what a reader of one part of the data needs, to know whether it is the part that changed. */
+  const places = new Map<string, { moved: boolean; paths: string[][] }>()
+  const placesOf = (ref: string) => places.get(ref) ?? places.set(ref, { moved: false, paths: [] }).get(ref)!
+  const touchAt = (ref: string, path: readonly string[]): void => { touch(ref, path[0]!); placesOf(ref).paths.push([...path]) }
+  /** A move can add and remove fields as states are left and entered: each one that differs afterwards changed. */
+  const moved = (top: Running, was: Plain): void => {
+    changed.add(top.ref)
+    placesOf(top.ref).moved = true
+    for (const field of new Set([...Object.keys(was), ...Object.keys(top.data)])) {
+      if (field in was !== field in top.data || !Object.is(was[field], top.data[field])) touchAt(top.ref, [field])
+    }
+  }
+  const listeners: Array<(changed: readonly string[], fields: Readonly<Record<string, readonly string[]>>, changes: Readonly<Record<string, Changes>>) => void> = []
   let committed: Record<string, unknown> = {}
   let stepping = false
 
@@ -462,16 +480,16 @@ export function system(host: {
       try { made = produce(before, data) } catch (error) { trace(`DEFECT: ${top.ref}: ${error instanceof Error ? error.message : String(error)}`); return }
       const { value, touched } = made
       const kept = Object.fromEntries(Object.keys(before).map((field) => [field, field in value ? value[field] : before[field]]))
-      for (const [field] of touched) { if (field! in before && field! in value) touch(top.ref, field!); else trace(`DEFECT: ${top.ref} has no field ${field} to change`) }
+      for (const path of touched) { const field = path[0]!; if (field in before && field in value) touchAt(top.ref, path); else trace(`DEFECT: ${top.ref} has no field ${field} to change`) }
       top.data = touched.length ? kept : before
       for (const field of fields.get(top.ref) ?? []) large(top, field)
-      if (at !== undefined) { go(top, at, {}); changed.add(top.ref) }
+      if (at !== undefined) { const was = top.data; go(top, at, {}); moved(top, was) }
       return
     }
-    if (at !== undefined) { go(top, at, data); changed.add(top.ref) }
+    if (at !== undefined) { const was = top.data; go(top, at, data); moved(top, was) }
     for (const [field, value] of Object.entries(data)) {
       if (!(field in top.data)) continue
-      if (!Object.is(top.data[field], value)) touch(top.ref, field)
+      if (!Object.is(top.data[field], value)) touchAt(top.ref, [field])
       top.data = { ...top.data, [field]: value }
     }
   }
@@ -519,7 +537,9 @@ export function system(host: {
       committed = Object.fromEntries([...running].map(([ref, top]) => [ref, valueOf(top)]))
       const which = Object.fromEntries([...fields].map(([ref, touched]) => [ref, [...touched]]))
       fields.clear()
-      leaving.push(() => { for (const listener of listeners) listener(refs, which) })
+      const where = Object.fromEntries(places)
+      places.clear()
+      leaving.push(() => { for (const listener of listeners) listener(refs, which, where) })
     }
     for (const leave of leaving.splice(0)) leave()
   }

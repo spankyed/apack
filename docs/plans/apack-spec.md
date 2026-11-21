@@ -142,6 +142,13 @@ streamed search results and streamed message text are where the app does exactly
 1. **Progress arrives as a list, at most once a frame.** However fast a handler calls `progress`, whoever asked hears
    what was made since it last heard, in one call. A window's frame is `requestAnimationFrame`; elsewhere it is a turn
    of the event loop. What was gathered is handed over before the answer, so the answer is never ahead of its progress.
+   **A hidden window's frame is a turn too.** A browser gives a hidden window no frames, so progress gathered for the
+   next one would wait, and grow, until the window was shown. A hidden window paints nothing and has no reason to wait
+   for a paint; and what was already waiting for one when the window was hidden is handed over then
+   (`window-frame.mts`).
+   **The sender gathers as well, one hop earlier.** What a backend sends a window within one turn should cross the
+   socket as one frame, not one per item. In the app that is spankyed/apack#592, made at the socket under tRPC so it
+   holds for every message whatever sent it; the kernel's link sits on it and has nothing of its own to add.
 2. **One change per batch.** `(d) => { d.searchResults.push(...results) }` copies the list once for the whole batch.
    Nothing reads a state faster than a frame, so nothing is lost.
 3. **A large collection belongs in a view.** State data is what a surface is working with, not a store. The kernel
@@ -153,6 +160,23 @@ Text needs nothing: the engine joins strings without copying them, and 100,000 a
 finding and the figures are not: appending 100,000 results one change each took 21.6 s, and 0.26 s at 100 per change.
 Streamed through an ask from a backend to a window, 100,000 results arrived as 199 changes in 0.12 s, with the size
 report raised once.
+
+### What a component reads
+
+The kernel tells a subscriber, for each step, the exact places in a state's data that changed, as paths:
+`['messages', 'THR-1', '3']` is the fourth message of one thread and nothing else. `mirror` writes just those places
+into a reactive copy of the state, and Vue's own dependency tracking does the rest: whatever read a place that changed
+runs again, and nothing else does. A component showing one thread does not re-render when another thread gets a
+message.
+
+```ts
+const threads = mirror(system, handle)
+threads.value.at                              // reactive
+threads.value.data.messages[threadId]         // read again only when that thread's messages change
+```
+
+There is no selector to write and nothing to compare, which is what the 439 `useSelector` sites do today. The copy is
+the mirror's own: a reactive object is written to in place, and the kernel's values are shared and never mutated.
 
 ### Following a view
 
@@ -199,6 +223,8 @@ batch, and this repo's own `transact` followed by `watch`.
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
 | An ask does not change data by returning | Considered and declined: every change then has one shape, the extractor stays complete, and no real port needed it. To revisit if ports show many ask-plus-event pairs; the form would be an explicit `change((data) => …)` |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
+| A component reads a reactive copy that is written to only where the state changed | A selector and a comparison per reader, as `useSelector` has: every reader runs its selector on every change to decide whether it cares. And replacing the copy whole per step, which re-renders everything that read anything |
+| A hidden window's frame is the next turn | `requestAnimationFrame` always. A hidden window gets none, so what was gathered for it grew without bound until it was shown |
 | Progress is heard as a list, once a frame | One call per update. It made a change, a notice and a copy of the growing list per item: fine at 10,000, unusable at 100,000. A persistent vector would make appends cheap, but its values are not plain arrays, which the snapshot, the wire and the templates all assume. Chunked lists stay plain but push the chunking onto every reader |
 | A nested change is an edit to a draft, built here | Spreads at every level (`{ ...data.titles, [id]: title }`), which get worse with depth. Immer and Mutative were considered; a state's data is plain by rule, so most of what they handle cannot occur, the kernel wants the changed fields in its own shape, and the kernel is meant to have no dependencies. To revisit, in favour of Mutative, if the draft grows special cases |
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
@@ -207,7 +233,7 @@ batch, and this repo's own `transact` followed by `watch`.
 ## What the prototype proves
 
 Everything below is in [`apack-spec/prototype/`](apack-spec/prototype/) and runs from the repo root; its README has the
-commands. Types and kernel together are about 580 lines, and the draft 139.
+commands. Types and kernel together are about 600 lines, and the draft 139.
 
 - **Two real features are ported.** The code search, backend and surface (`search.mts`), runs: results stream, a second
   search aborts the first on the backend, and cancel works. About 167 and 192 non-blank lines become about 39 and 77.
@@ -222,6 +248,11 @@ commands. Types and kernel together are about 580 lines, and the draft 139.
 - **A surface follows views** (`views.mts`), modelled on the threads surface: one for as long as the surface runs, one
   only while a thread is open, and one per open tab. Opening another thread stops the last one's view; closing a tab
   stops its view; stopping the surface stops the rest.
+- **A reader runs again only for the place it read** (`mirror.mts`, `binding-check.mts`, 9 checks, with
+  `@vue/reactivity`'s `effect` standing for a component's render): a message in one thread runs only that thread's
+  reader, a rename only that title's, a move only the reader of where the state is; removing from a list and deleting
+  a key reach their readers; and the state's own value is never written to. The same file checks a window's frame:
+  the next paint while it shows, the next turn while it is hidden, and what was waiting handed over once when it hides.
 - **Progress gathered into batches** (`append-cost.mts`): the measurement above, and the search and threads examples,
   which now make one change per batch.
 - **A draft** (`draft.mts`, 139 lines; `draft-check.mts`, 18 checks) for what a hand-built one gets wrong: the old
@@ -345,8 +376,9 @@ The design is the smaller half of the value. In the order they would pay:
    if (within(thread, 'thread')) thread.data.threadId
    ```
 
-   `within` exists, and the kernel tells a subscriber which fields of a state changed in a step, which is what
-   per-field reactivity needs. `useState` and the reactivity itself do not exist.
+   `within` exists, and so does what the reading rests on: `mirror`, under What a component reads. What is left is
+   `useState` itself, a composable that finds the state by name, mirrors it for the component's lifetime and stops with
+   it, and the port of real components onto it.
 2. **Tests that replay interleavings.** The risk in this design is ordering: a result that arrives after its state was
    left. A kernel with an injectable scheduler can run every ordering of a scenario, or a seeded one, and replay a
    failure exactly. This is the strongest reason to own the kernel.
@@ -369,7 +401,8 @@ projects. Each would loosen the fit to this app.
 
 ## Not built
 
-- **The Vue binding.** Nothing renders. 439 `useSelector` sites depend on it. Sketched under What to build around it.
+- **The Vue binding's last step.** `mirror` and `within` exist; `useState`, the composable a component calls, does not,
+  and nothing renders. 439 `useSelector` sites depend on it.
 - **Roles**: `tell({ role: 'brain' }, …)`.
 - **A write nobody waits for**, which appliers and migrations make today.
 - **Window-to-window sends**, the app's `sendToSurface`.
