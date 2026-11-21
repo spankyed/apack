@@ -2,7 +2,6 @@
 // nothing to show as an error.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { askUnderWay } from '@apackdev/sdk/fe';
 import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 
 vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
@@ -13,7 +12,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   getParentContext: vi.fn(() => ({})),
 }));
 
-const { commitState, PUSH } = await import('#features/code/fe/features/commit/state.ts');
+const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 
 beforeEach(resetAsks);
 
@@ -32,11 +31,11 @@ it('stops the push running by no longer waiting on it, and stops nothing when no
 it('leaves pushing once the push is stopped, with no error to show', () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.PUSH_BRANCH' });
-  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(true);
+  expect(actor.getSnapshot().context.making.push).toBe(true);
   latestAsk('commit.PUBLISH_BRANCH').tell({ during: 'push', stage: 'Writing objects', percent: 42 });
 
   actor.send({ type: 'commit.STOP_PUSH' });
 
-  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(false);
+  expect(actor.getSnapshot().context.making.push).toBe(false);
   expect(actor.getSnapshot().context).toMatchObject({ pushStopped: true, gitError: null, progress: null });
 });

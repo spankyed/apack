@@ -4,7 +4,6 @@
 // status read reports, never a write's.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { askUnderWay } from '@apackdev/sdk/fe';
 import { latestAsk, resetAsks } from '../../_support/asks.ts';
 
 vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
@@ -15,7 +14,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   getParentContext: vi.fn(() => ({})),
 }));
 
-const { commitState, CHECKOUT, PUSH, SPEED_UP, STASH, STATUS_SHOWN, WORKTREE_ADD, WORKTREE_SWITCH, worktreeChangeUnderWay } = await import('#features/code/fe/features/commit/state.ts');
+const { commitState, worktreeChangeUnderWay } = await import('#features/code/fe/features/commit/state.ts');
 
 beforeEach(resetAsks);
 
@@ -29,13 +28,13 @@ it('ends a running push only on its own failure, not on a failed blame', async (
 
   await latestAsk('commit.GET_BLAME').refuse('no such path in HEAD', { kind: 'git' });
 
-  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH), 'the push goes on').toBe(true);
+  expect(actor.getSnapshot().context.making.push, 'the push goes on').toBe(true);
   expect(actor.getSnapshot().context, 'the blame is let go of').toMatchObject({
     blame: null, progress: { during: 'push' }, gitError: 'no such path in HEAD',
   });
 
   await latestAsk('commit.PUBLISH_BRANCH').refuse('Failed to push', { kind: 'git' });
-  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(false);
+  expect(actor.getSnapshot().context.making.push).toBe(false);
   expect(actor.getSnapshot().context).toMatchObject({ progress: null, gitError: 'Failed to push' });
 });
 
@@ -46,25 +45,25 @@ it('shows a failure of another ask, and ends nothing else with it', async () => 
 
   await latestAsk('commit.STASH_DROP').refuse('something else failed', { kind: 'git' });
 
-  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(true);
+  expect(actor.getSnapshot().context.making.push).toBe(true);
   expect(actor.getSnapshot().context.gitError).toBe('something else failed');
 });
 
 it.each([
-  ['a stash', { type: 'commit.STASH_PUSH' }, 'commit.STASH_PUSH', STASH],
-  ['a worktree added', { type: 'commit.WORKTREE_ADD', path: '/work/two', branch: 'two' }, 'commit.WORKTREE_ADD', WORKTREE_ADD],
-  ['a worktree switch', { type: 'commit.WORKTREE_SWITCH', path: '/work/two' }, 'commit.WORKTREE_SWITCH', WORKTREE_SWITCH],
-  ['speeding the status up', { type: 'commit.SPEED_UP_STATUS' }, 'commit.SPEED_UP_STATUS', SPEED_UP],
-  ['a checkout', { type: 'commit.CHECKOUT_BRANCH' }, 'commit.CHECKOUT_BRANCH', CHECKOUT],
+  ['a stash', { type: 'commit.STASH_PUSH' }, 'commit.STASH_PUSH', 'stash'],
+  ['a worktree added', { type: 'commit.WORKTREE_ADD', path: '/work/two', branch: 'two' }, 'commit.WORKTREE_ADD', 'worktreeAdd'],
+  ['a worktree switch', { type: 'commit.WORKTREE_SWITCH', path: '/work/two' }, 'commit.WORKTREE_SWITCH', 'worktreeSwitch'],
+  ['speeding the status up', { type: 'commit.SPEED_UP_STATUS' }, 'commit.SPEED_UP_STATUS', 'speedUp'],
+  ['a checkout', { type: 'commit.CHECKOUT_BRANCH' }, 'commit.CHECKOUT_BRANCH', 'checkout'],
 ] as const)('is no longer busy with %s once it fails', async (_what, ask, sent, busy) => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.UPDATE_BRANCH_INPUT', input: 'two' });
   actor.send(ask);
-  expect(askUnderWay(actor.getSnapshot().context.asking, busy)).toBe(true);
+  expect(actor.getSnapshot().context.making[busy]).toBe(true);
 
   await latestAsk(sent).refuse('git refused', { kind: 'git' });
 
-  expect(askUnderWay(actor.getSnapshot().context.asking, busy)).toBe(false);
+  expect(actor.getSnapshot().context.making[busy]).toBe(false);
   expect(actor.getSnapshot().context.gitError).toBe('git refused');
 });
 
@@ -83,7 +82,7 @@ it('is no longer busy with a worktree switch once the backend says it switched',
 
   await latestAsk('commit.WORKTREE_SWITCH').answer({ path: '/work/two' });
 
-  expect(worktreeChangeUnderWay(actor.getSnapshot().context.asking)).toBe(false);
+  expect(worktreeChangeUnderWay(actor.getSnapshot().context.making)).toBe(false);
 });
 
 /** Asks for the status, and hands back the ask to end */
@@ -107,7 +106,7 @@ it('clears the status read\'s own failure once a status is read', async () => {
   const actor = createActor(commitState).start();
   await statusAsked(actor).refuse('Not a git repository', { kind: 'git' });
   expect(actor.getSnapshot().context.gitError).toBe('Not a git repository');
-  expect(askUnderWay(actor.getSnapshot().context.asking, STATUS_SHOWN), 'no longer shown as loading').toBe(false);
+  expect(actor.getSnapshot().context.making.statusShown, 'no longer shown as loading').toBe(false);
 
   await statusAsked(actor).answer(STATUS);
 
@@ -135,5 +134,5 @@ it('holds no ask once each has ended, whether it was done or refused', async () 
   await latestAsk('commit.STAGE_FILES').answer({ paths: ['a.txt'] });
   await latestAsk('commit.GET_GIT_STATUS').answer(STATUS);
 
-  expect(actor.getSnapshot().context.asking).toEqual({});
+  expect(actor.getSnapshot().context.making).toEqual(createActor(commitState).getSnapshot().context.making);
 });

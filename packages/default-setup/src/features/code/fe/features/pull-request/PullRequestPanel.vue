@@ -292,7 +292,7 @@ import PRInfo from '#features/code/fe/features/pull-request/PRInfo.vue'
 import PRComments from '#features/code/fe/features/pull-request/PRComments.vue'
 import PRActionBar from '#features/code/fe/features/pull-request/PRActionBar.vue'
 import GitHubAccount from '#features/code/fe/features/github/GitHubAccount.vue'
-import { PUSH, type GitStatusFile } from '#features/code/fe/features/commit/state.ts'
+import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { TreeNode } from './types.ts'
 import { panelChild } from '../children.ts';
 
@@ -323,7 +323,7 @@ watch(() => github.value.data.account, (now, before) => {
   send({ type: 'pr.REFRESH_STATUS' })
 })
 const isLoadingDetails = computed(() => askUnderWay(pullRequest.value.data.asking, DETAILS))
-const isPushing = computed(() => askUnderWay(git.value.data.asking, PUSH))
+const isPushing = computed(() => git.value.data.making.push)
 
 // Computed
 const isNoGitRepoError = computed(() =>

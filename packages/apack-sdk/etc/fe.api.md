@@ -4,6 +4,7 @@
 
 ```ts
 
+import { AnyActorLogic } from 'xstate';
 import type { AnyActorRef } from 'xstate';
 import { AnyEventObject } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
@@ -23,8 +24,10 @@ import type { EventFrom } from 'xstate';
 import { EventObject } from 'xstate';
 import { ExtractPropTypes } from 'vue';
 import type { InjectionKey } from 'vue';
+import { InputFrom } from 'xstate';
 import { MachineContext } from 'xstate';
 import { MaybeRefOrGetter } from 'vue';
+import { OutputFrom } from 'xstate';
 import { ParameterizedObject } from 'xstate';
 import { PublicProps } from 'vue';
 import { Ref } from 'vue';
@@ -186,6 +189,12 @@ export function createHotkeyProcessor<const TMap extends Record<string, string>,
 export function createNavHistory<T>(initial: T): NavHistory<T>;
 
 // @public
+export interface EachMade<TLogic extends AnyActorLogic> {
+    readonly kind: 'each';
+    readonly logic: TLogic;
+}
+
+// @public
 export function endedAsk(event: {
     type: string;
 }): string;
@@ -222,6 +231,9 @@ export interface FeSettingsHandle<T> extends ReadonlyFeSettingsHandle<T> {
     // (undocumented)
     set(update: SettingUpdate<T>): Promise<SettingsWriteResult>;
 }
+
+// @public
+export const freshKey: () => string;
 
 // @public
 export function getArtifactBinding(type: string): ArtifactFrontendBinding | undefined;
@@ -573,6 +585,42 @@ export interface MachineState<TActor extends AnyActorRef> {
 }
 
 // @public
+export type MadeEvent<TMakes> = TMakes extends Makes<infer M> ? EndedOf<M> | {
+    type: `xstate.done.actor.made.${string}`;
+    actorId: string;
+    output: unknown;
+} : never;
+
+// @public
+export interface Makes<M extends Declarations> {
+    readonly actors: {
+        readonly [N in keyof M & string as `made.${N}`]: LogicOf<M[N]>;
+    };
+    readonly done: 'xstate.done.actor.made.*';
+    drop(enqueue: MakesEnqueue, context: {
+        making: MakingOf<M>;
+    }, name: keyof M & string, key?: string): void;
+    make<N extends OneNames<M>>(enqueue: MakesEnqueue, name: N, input: InputFrom<LogicOf<M[N]>>): void;
+    make<N extends EachNames<M>>(enqueue: MakesEnqueue, name: N, key: string, input: InputFrom<LogicOf<M[N]>>): void;
+    readonly names: readonly (keyof M & string)[];
+    none(): MakingOf<M>;
+    settle<TContext extends MachineContext, TExpressionEvent extends EventObject, TEvent extends EventObject>(): ReturnType<typeof enqueueActions<TContext, TExpressionEvent, ParameterizedObject['params'] | undefined, TEvent, never, never, never, never, never>>;
+}
+
+// @public
+export function makes<const M extends Declarations>(declare: (the: typeof helpers) => M): Makes<M>;
+
+// @public
+export interface MakesEnqueue {
+    assign: (...given: never[]) => unknown;
+    spawnChild: (...given: never[]) => unknown;
+    stopChild: (...given: never[]) => unknown;
+}
+
+// @public
+export type Making<TMakes> = TMakes extends Makes<infer M> ? MakingOf<M> : never;
+
+// @public
 export function matchesHotkey(event: HotkeyEvent, config: KeyboardShortcut, cmdIsMeta?: boolean): boolean;
 
 // @public (undocumented)
@@ -588,6 +636,12 @@ export const noAsks: () => AsksUnderWay;
 
 // @public
 export function onDslDeclarationsChanged(listener: () => void): () => void;
+
+// @public
+export interface OneMade<TLogic extends AnyActorLogic> {
+    readonly kind: 'one';
+    readonly logic: TLogic;
+}
 
 // @public (undocumented)
 export function onMenuOpenChange(open: boolean): void;
