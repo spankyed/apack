@@ -75,7 +75,7 @@ type UIEvent =
   | { type: 'NAVIGATE_BACK' }
   | { type: 'NAVIGATE_FORWARD' }
 
-export type NotesEvents = OpenEntity | UIEvent | CreateEnded | WriteEnded | TrailClickEvent
+export type NotesEvents = OpenEntity | UIEvent | CreateEnded | WriteEnded | TrailClickEvent<string>
 const typeOf = safeEvents<NotesEvents>()
 
 function findNearestTaskList(notes: NoteSummary[], noteId: string): NoteSummary | null {
@@ -764,7 +764,7 @@ const notesState = setup({
         target: '.editor',
         actions: [
           assign(({ event, context }) => {
-            const noteId = (event as TrailClickEvent<string>).info
+            const noteId = typeOf('TRAIL_CLICK', event).info
             if (!noteId) return {}
             const note = context.notes.find(n => n.id === noteId) || null
 

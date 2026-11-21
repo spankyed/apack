@@ -110,7 +110,7 @@ export const brainSystem = setup({
     ...answers.actions,
     ...brainSpec.actions({
     logError: ({ event }) => {
-      logger.error('Brain system error', { error: (event as any).error });
+      logger.error('Brain system error', { error: 'error' in event ? event.error : undefined });
     },
     startBrain: enqueueActions(({ context, enqueue }) => {
       // Defensive: clear stale flow actor references before starting new brain.

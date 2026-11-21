@@ -19,6 +19,7 @@ export { surfaceIsRunning, readUntypedSurfaceState, useUntypedSurfaceState } fro
 export { untypedUseView, type UseViewOptions, type ViewState } from './views.ts'
 export { useAsk, type AskState } from './use-ask.ts'
 export { untypedFromView } from './view-actor.ts'
+export { askUnderWay, enqueueAsks, noAsks, stopAsks, type AsksUnderWay } from './asks-under-way.ts'
 export { viewRead, viewWrites, writeEnded, writeSent, writing, type ViewWrites } from './view-writes.ts'
 export type { ViewDiagnostics, ViewRequest, ViewUpdate } from '../framework/views.ts'
 export { useShell, type Shell, type HostShell, type HostShellEvent, type HostShellSnapshot, type HostShellState, type ShellPanelSizes } from './shell.ts'

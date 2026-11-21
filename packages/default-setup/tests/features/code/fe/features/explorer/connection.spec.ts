@@ -61,6 +61,15 @@ it('takes each listing asked for at once into its own folder, and holds none of 
   expect(Object.keys(actor.getSnapshot().children), 'an ask that ended is no longer a child').toEqual([]);
 });
 
+it('stops showing a folder as loading when its listing is refused, whether or not the refusal names it', async () => {
+  actor.send({ type: 'explorer.EXPAND_DIRECTORY', path: '/work/a' });
+  actor.send({ type: 'explorer.EXPAND_DIRECTORY', path: '/work/b' });
+  await asksOf('explorer.LIST_FILES')[0]!.refuse('Permission denied', { kind: 'file', code: 'PERMISSION_DENIED', path: '/work/a' });
+  expect([...actor.getSnapshot().context.loadingDirs]).toEqual(['/work/b']);
+  await asksOf('explorer.LIST_FILES')[1]!.refuse('The code system is not running', { kind: 'unavailable' });
+  expect([...actor.getSnapshot().context.loadingDirs]).toEqual([]);
+});
+
 it('shows why a file ask was not done, and drops the tab of a file that has gone', async () => {
   actor.send({ type: 'explorer.OPEN_FILE', path: '/work/locked' });
   await latestAsk('explorer.READ_FILE').refuse('Permission denied', { kind: 'file', code: 'PERMISSION_DENIED', path: '/work/locked' });

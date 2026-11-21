@@ -17,7 +17,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   getParentContext: vi.fn(() => parent),
 }));
 
-const { commitState } = await import('#features/code/fe/features/commit/state.ts');
+const { commitState, HUNK, PUSH, STASH, WORKTREE_SWITCH } = await import('#features/code/fe/features/commit/state.ts');
 
 beforeEach(() => {
   resetAsks();
@@ -40,7 +40,10 @@ it('leaves nothing busy and no write outstanding when the surface starts over an
   parent.baseDirectory = '/work/two';
   actor.send({ type: 'CODE_STARTED' });
 
-  expect(actor.getSnapshot().value).toMatchObject({ push: 'idle', stash: 'idle', worktree: 'idle', hunk: 'idle' });
+  for (const ask of ['commit.PUBLISH_BRANCH', 'commit.STASH_PUSH', 'commit.WORKTREE_SWITCH', 'commit.APPLY_HUNK']) {
+    expect(latestAsk(ask).stopped, `${ask} is waited on by nobody`).toBe(true);
+  }
+  expect(Object.keys(actor.getSnapshot().children).filter(id => [PUSH, STASH, WORKTREE_SWITCH, HUNK].includes(id))).toEqual([]);
   expect(latestAsk('commit.STAGE_FILES').stopped, 'the write made of the folder before is waited on by nobody').toBe(true);
   // The new folder's status is shown: no write of the folder before is waited on
   await latestAsk('commit.GET_GIT_STATUS').answer({ files: [{ path: 'b.txt', status: 'modified' as const, staged: false }], truncated: false, branch: 'main', hasUpstream: true, commitsAhead: 0, commitsBehind: 0, watching: true });

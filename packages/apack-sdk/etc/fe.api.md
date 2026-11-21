@@ -17,16 +17,20 @@ import { DefineComponent } from 'vue';
 import { EARS as EARS_2 } from '@apackdev/ears';
 import type { Editor } from '@tiptap/vue-3';
 import type { EditorState } from '@tiptap/pm/state';
+import { enqueueActions } from 'xstate';
 import { entityTypeOf } from '@apackdev/ears';
 import { EventObject } from 'xstate';
 import { ExtractPropTypes } from 'vue';
 import type { InjectionKey } from 'vue';
+import { MachineContext } from 'xstate';
 import { MaybeRefOrGetter } from 'vue';
+import { ParameterizedObject } from 'xstate';
 import { PublicProps } from 'vue';
 import { Ref } from 'vue';
 import { RendererElement } from 'vue';
 import { RendererNode } from 'vue';
 import type { SnapshotFrom } from 'xstate';
+import { stopChild } from 'xstate';
 import { VNode } from 'vue';
 import { z } from 'zod';
 
@@ -42,6 +46,15 @@ export interface AskState<Args extends unknown[], O> {
     readonly outcome: O | undefined;
     readonly pending: boolean;
 }
+
+// @public
+export interface AsksUnderWay {
+    // (undocumented)
+    readonly [id: string]: true;
+}
+
+// @public
+export const askUnderWay: (asking: AsksUnderWay, ...ids: string[]) => boolean;
 
 // @public (undocumented)
 export type BlockFrontendBinding = ViewerFrontendBinding<BlockDeclaration, BlockDefinition>;
@@ -167,6 +180,9 @@ export function createHotkeyProcessor<const TMap extends Record<string, string>,
 
 // @public (undocumented)
 export function createNavHistory<T>(initial: T): NavHistory<T>;
+
+// @public
+export const enqueueAsks: typeof enqueueActions;
 
 // @public
 export function entityIs<E extends string>(input: {
@@ -551,6 +567,9 @@ export interface NavHistory<T> {
 }
 
 // @public
+export const noAsks: () => AsksUnderWay;
+
+// @public
 export function onDslDeclarationsChanged(listener: () => void): () => void;
 
 // @public (undocumented)
@@ -776,6 +795,9 @@ export interface StepFrontendBinding {
     readonly packId: string;
     readonly registrationId?: string;
 }
+
+// @public
+export function stopAsks<TContext extends MachineContext, TExpressionEvent extends EventObject, TParams extends ParameterizedObject['params'] | undefined, TEvent extends EventObject>(...ids: string[]): ReturnType<typeof stopChild<TContext, TExpressionEvent, TParams, TEvent>>;
 
 // @public
 export interface Surface {

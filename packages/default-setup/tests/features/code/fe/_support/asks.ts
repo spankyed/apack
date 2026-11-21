@@ -9,7 +9,7 @@ import { fromPromise } from 'xstate';
 export interface MadeAsk {
   /** The ask as the system would receive it: its type, and the fields it was made with */
   event: { type: string; [field: string]: unknown };
-  /** Whether the machine stopped waiting on it: the state that invoked it was left, or entered again */
+  /** Whether the machine stopped waiting on it: it stopped the actor the ask ran as */
   stopped: boolean;
   /** Ends it with its answer, and waits for the machine to have taken it */
   answer(value: unknown): Promise<void>;

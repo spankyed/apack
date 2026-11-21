@@ -120,8 +120,8 @@ export interface CodeTerminalContext {
    */
   statusNotified: Record<string, true>
   /**
-   * The last of this window's asks that was not done, for the panel to tell the person: a terminal that is not
-   * there, a shell that would not start. A new object for each, so two failures with one message are two
+   * The last of this window's asks that was not done, held until the canvas has told the person: a terminal that is
+   * not there, a shell that would not start. A new object for each, so two failures with one message are two
    */
   failure: { message: string } | null
 }
@@ -184,6 +184,8 @@ export type Event =
   | { type: 'terminal.STATUS'; data: { terminalId: string; statuses: TerminalStatus[] } }
   /** The person is looking at that terminal: what was waiting for them to is no longer */
   | { type: 'terminal.SEEN'; terminalId: string }
+  // The person was told of the failure held: the canvas says so once it has shown it
+  | { type: 'terminal.FAILURE_TOLD' }
   /** The machine's own timers: a bell's flash ends, and its window closes. Not sent by anything else. */
   | { type: 'terminal.BELL_FLASH_ENDED'; terminalId: string }
   | { type: 'terminal.BELL_WINDOW_ENDED'; terminalId: string }
@@ -272,7 +274,7 @@ export const terminalState = setup({
     }),
 
     /**
-     * An ask of this window's that was not done, kept for the panel to tell the person. The window that asked is the
+     * An ask of this window's that was not done, kept for the canvas to tell the person. The window that asked is the
      * one that shows it: the system answers a failure to its asker and tells nobody else
      */
     noteAskFailure: assign(({ event }) => {
@@ -937,6 +939,7 @@ export const terminalState = setup({
     'terminal.TITLED': { actions: 'noteActivity' },
     'terminal.STATUS': { actions: ['notifyStatus', 'takeStatuses'] },
     'terminal.SEEN': { actions: ['markSeen', 'tellStatusSeen'] },
+    'terminal.FAILURE_TOLD': { actions: assign({ failure: null }) },
     'terminal.KEEP': { actions: 'keepTerminal' },
     'terminal.KEPT': { actions: ['markKept', 'describeTerminal'] },
     'terminal.REWIND': { actions: 'askForRewind' },

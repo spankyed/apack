@@ -48,6 +48,8 @@ export interface CodeExplorerContext {
   expandedDirs: Set<string>
   dirContents: Record<string, FileInfo[]>
   loadingDirs: Set<string>
+  /** The folder each listing under way was asked for, by the id its ask was spawned under */
+  listings: Record<string, string>
   selectedPaths: string[]
   revealPath: string | null
   pendingEditorMode: Map<string, 'richText' | 'plainText'>
@@ -55,7 +57,7 @@ export interface CodeExplorerContext {
 
 function emptyTreeState(): CodeExplorerContext {
   return {
-    rootFiles: [], expandedDirs: new Set(), dirContents: {}, loadingDirs: new Set(),
+    rootFiles: [], expandedDirs: new Set(), dirContents: {}, loadingDirs: new Set(), listings: {},
     selectedPaths: [], revealPath: null, pendingEditorMode: new Map(),
   }
 }
@@ -130,6 +132,10 @@ const typeOf = safeEvents<Event>();
 let spawned = 0;
 const askId = <Name extends keyof SpawnedAsks>(name: Name): `${Name}.${number}` => `${name}.${++spawned}`;
 
+/** Records the folder a listing spawned under `id` was asked for */
+const listingAsked = (id: string, path: string) => ({ context }: { context: CodeExplorerContext }) =>
+  ({ listings: { ...context.listings, [id]: path } })
+
 /** How the spawned ask an event ends ended; throws for an event that ends none, which is an action on the wrong transition */
 function outcomeIn(event: Event): AskEnded['output'] {
   if (!('output' in event)) throw new Error(`Expected the end of an ask, got ${event.type}`)
@@ -172,6 +178,19 @@ export const explorerState = setup({
     },
 
     /** An ask that ended is no longer this machine's child */
+    /**
+     * A listing ended: it is no longer one under way, and one that was not done leaves its folder unmarked as loading,
+     * as an answered one does. The folder is the one it was asked for, since a failure need not name a path
+     */
+    listingEnded: assign(({ context, event }) => {
+      if (!('actorId' in event) || !(event.actorId in context.listings)) return {}
+      const { [event.actorId]: path, ...listings } = context.listings
+      if (outcomeIn(event).ok || !context.loadingDirs.has(path!)) return { listings }
+      const loadingDirs = new Set(context.loadingDirs)
+      loadingDirs.delete(path!)
+      return { listings, loadingDirs }
+    }),
+
     forgetAsk: enqueueActions(({ enqueue, event }) => {
       if ('actorId' in event) enqueue.stopChild(event.actorId)
     }),
@@ -308,7 +327,7 @@ export const explorerState = setup({
     },
 
     listFiles: enqueueActions(({ event, enqueue }) => {
-      enqueue.spawnChild('list', { id: askId('list'), input: { path: typeOf('explorer.LIST_FILES', event).path } })
+      { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: typeOf('explorer.LIST_FILES', event).path } }); enqueue.assign(listingAsked(id, typeOf('explorer.LIST_FILES', event).path)) }
     }),
 
     assignFiles: assign(({ event, context, self }) => {
@@ -358,10 +377,10 @@ export const explorerState = setup({
     handleCodeConnected: enqueueActions(({ event, self, enqueue }) => {
       const ev = typeOf('CODE_STARTED', event)
       updateParentState(self, { baseDirectory: ev.data.baseDirectory })
-      if (ev.data.baseDirectory) {
-        enqueue.spawnChild('list', { id: askId('list'), input: { path: ev.data.baseDirectory } })
-      }
       enqueue.assign(emptyTreeState())
+      if (ev.data.baseDirectory) {
+        { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: ev.data.baseDirectory } }); enqueue.assign(listingAsked(id, ev.data.baseDirectory)) }
+      }
     }),
 
     openFile: enqueueActions(({ event, context, enqueue }) => {
@@ -404,12 +423,12 @@ export const explorerState = setup({
       if (!baseDirectory) return
 
       // Re-fetch base directory
-      enqueue.spawnChild('list', { id: askId('list'), input: { path: baseDirectory } })
+      { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: baseDirectory } }); enqueue.assign(listingAsked(id, baseDirectory)) }
 
       // Re-fetch all currently expanded directories
       for (const dir of context.expandedDirs) {
         if (dir !== baseDirectory) {
-          enqueue.spawnChild('list', { id: askId('list'), input: { path: dir } })
+          { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: dir } }); enqueue.assign(listingAsked(id, dir)) }
         }
       }
 
@@ -437,7 +456,7 @@ export const explorerState = setup({
       // Otherwise, fetch contents
       const newLoading = new Set(context.loadingDirs)
       newLoading.add(ev.path)
-      enqueue.spawnChild('list', { id: askId('list'), input: { path: ev.path } })
+      { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: ev.path } }); enqueue.assign(listingAsked(id, ev.path)) }
 
       enqueue.assign({
         expandedDirs: newExpanded,
@@ -464,7 +483,7 @@ export const explorerState = setup({
     }),
 
     handleFilesCopied: enqueueActions(({ event, enqueue }) => {
-      enqueue.spawnChild('list', { id: askId('list'), input: { path: answerIn('copy', event).targetDir } })
+      { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: answerIn('copy', event).targetDir } }); enqueue.assign(listingAsked(id, answerIn('copy', event).targetDir)) }
       enqueue.assign({ selectedPaths: [] })
     }),
 
@@ -472,12 +491,12 @@ export const explorerState = setup({
       const moved = answerIn('move', event)
 
       // Refresh the target directory
-      enqueue.spawnChild('list', { id: askId('list'), input: { path: moved.targetDir } })
+      { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: moved.targetDir } }); enqueue.assign(listingAsked(id, moved.targetDir)) }
 
       // Refresh all unique source parent directories
       const sourceParentDirs = new Set(moved.sourcePaths.map(getParentDir))
       sourceParentDirs.forEach(dir => {
-        enqueue.spawnChild('list', { id: askId('list'), input: { path: dir } })
+        { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: dir } }); enqueue.assign(listingAsked(id, dir)) }
       })
 
       // Clear selection
@@ -490,7 +509,7 @@ export const explorerState = setup({
 
       // Refresh the parent directory of the deleted file
       const parentDir = getParentDir(ev.data.path)
-      enqueue.spawnChild('list', { id: askId('list'), input: { path: parentDir } })
+      { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: parentDir } }); enqueue.assign(listingAsked(id, parentDir)) }
 
       // Remove from open files if it's open
       if (parentContext?.openFiles?.find((f: any) => f.path === ev.data.path)) {
@@ -510,12 +529,12 @@ export const explorerState = setup({
 
       // Refresh the parent directory of the renamed file
       const parentDir = getParentDir(ev.data.oldPath)
-      enqueue.spawnChild('list', { id: askId('list'), input: { path: parentDir } })
+      { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: parentDir } }); enqueue.assign(listingAsked(id, parentDir)) }
 
       // If renamed to a different directory, also refresh that
       const newParentDir = getParentDir(ev.data.newPath)
       if (newParentDir !== parentDir) {
-        enqueue.spawnChild('list', { id: askId('list'), input: { path: newParentDir } })
+        { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: newParentDir } }); enqueue.assign(listingAsked(id, newParentDir)) }
       }
 
       // Update open files if renamed file is open
@@ -543,7 +562,7 @@ export const explorerState = setup({
 
       // Refresh the parent directory to show the new directory
       const parentDir = getParentDir(ev.data.path)
-      enqueue.spawnChild('list', { id: askId('list'), input: { path: parentDir } })
+      { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: parentDir } }); enqueue.assign(listingAsked(id, parentDir)) }
 
       // Expand parent so the new folder is visible, select it, and mark for rename
       const newExpanded = new Set(context.expandedDirs)
@@ -585,7 +604,7 @@ export const explorerState = setup({
         newExpanded.add(dir)
         if (!context.dirContents[dir]) {
           newLoading.add(dir)
-          enqueue.spawnChild('list', { id: askId('list'), input: { path: dir } })
+          { const id = askId('list'); enqueue.spawnChild('list', { id, input: { path: dir } }); enqueue.assign(listingAsked(id, dir)) }
         }
       }
 
@@ -664,8 +683,8 @@ export const explorerState = setup({
     },
     // How each spawned ask ended: its answer taken, or its failure shown
     'xstate.done.actor.list.*': [
-      { guard: 'answered', actions: ['assignFiles', 'forgetAsk'] },
-      { actions: ['handleCodeError', 'forgetAsk'] },
+      { guard: 'answered', actions: ['assignFiles', 'listingEnded', 'forgetAsk'] },
+      { actions: ['handleCodeError', 'listingEnded', 'forgetAsk'] },
     ],
     'xstate.done.actor.read.*': [
       { guard: 'answered', actions: ['handleFileContent', 'forgetAsk'] },
