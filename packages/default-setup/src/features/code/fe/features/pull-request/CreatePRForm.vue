@@ -86,7 +86,7 @@ const props = defineProps<{
   baseBranch: string
   defaultBaseBranch: string
   headBranch: string
-  branches: string[]
+  branches: readonly string[]
   isCreating: boolean
 }>()
 

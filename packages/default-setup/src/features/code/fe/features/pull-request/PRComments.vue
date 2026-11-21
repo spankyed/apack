@@ -291,8 +291,8 @@ import { getCommentDatabaseId } from './comment-id.ts'
 import type { WriteAnswer } from './state.ts'
 
 const props = defineProps<{
-  comments: GhPRComment[]
-  reviewThreads: GhReviewThread[]
+  comments: readonly GhPRComment[]
+  reviewThreads: readonly GhReviewThread[]
   tab: 'discussion' | 'reviews'
   prNumber: number
   isOpen: boolean

@@ -40,7 +40,7 @@ defineProps<{
   dotColor: string | undefined
   isBusy: boolean
   groupId: string | undefined
-  tabGroups: ThreadTabGroup[]
+  tabGroups: readonly ThreadTabGroup[]
 }>()
 
 const emit = defineEmits<{

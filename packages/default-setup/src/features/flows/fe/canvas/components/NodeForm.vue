@@ -40,7 +40,7 @@ interface Props {
   selectedNode?: NodeEntity | null
   actions?: ActionEntity[]
   flows?: FlowEntity[]
-  models?: ModelCatalogEntry[]
+  models?: readonly ModelCatalogEntry[]
   prompts?: PromptEntity[]
   edges?: { id: string; source: string; target: string; sourceHandle?: string }[]
 }

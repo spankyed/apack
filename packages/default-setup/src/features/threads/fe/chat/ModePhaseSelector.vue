@@ -143,7 +143,7 @@ import ContextMenuPopup from '@apackdev/ui/design/ContextMenuPopup'
 import { useContextMenu, type MenuItem } from '@apackdev/ui/composables/useContextMenu'
 
 const props = defineProps<{
-  modes: AgentMode[]
+  modes: readonly AgentMode[]
   currentMode: string
   currentPhase?: string
   /** Forced mode name for special threads. */

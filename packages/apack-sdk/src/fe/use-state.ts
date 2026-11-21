@@ -28,12 +28,49 @@ import { computed, getCurrentScope, onScopeDispose, shallowReactive, shallowRead
 import type { AnyActorRef, EventFrom, SnapshotFrom } from 'xstate'
 import { useSurface } from './actor-system.ts'
 
+/** What has nothing inside it to write. Asked first, so that a string marked as a kind of id, which is a string and an object at once, stays the string it is */
+type Whole = string | number | bigint | boolean | symbol | null | undefined
+
+/**
+ * A machine's context as a component reads it. No field of it can be assigned, at any depth, and a field that is a
+ * list, a map or a set cannot be changed in place. A list further in than a field is typed as it was declared.
+ *
+ * Each half goes as far as it costs nothing. A read-only object is taken wherever a writable one is expected, so
+ * read-only fields at every depth ask nothing of a helper that takes the object. A read-only list is refused where a
+ * writable one is expected, which is the one thing TypeScript holds a caller to: said of a field's own list it is
+ * kept across a call, and said of every list inside an entity it would refuse the entity wherever its declared type
+ * is asked for. So a prop or a parameter that takes a field's list says `readonly Item[]`.
+ */
+export type Read<T> =
+  T extends Whole ? T
+  : T extends (...given: never[]) => unknown ? T
+  : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Key, ReadInside<Held>>
+  : T extends ReadonlySet<infer Item> ? ReadonlySet<Item>
+  : T extends object ? { readonly [K in keyof T]: ReadHeld<T[K]> }
+  : T
+/** What a field holds, as it is read: a list, a map or a set that cannot be changed in place, and an object whose fields cannot be assigned */
+type ReadHeld<T> =
+  T extends Whole ? T
+  : T extends (...given: never[]) => unknown ? T
+  : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Key, ReadInside<Held>>
+  : T extends ReadonlySet<infer Item> ? ReadonlySet<Item>
+  : T extends object ? { readonly [K in keyof T]: ReadInside<T[K]> }
+  : T
+/** What is further in than a field: an object's fields cannot be assigned, at any depth, and a list, a map or a set is as it was declared */
+type ReadInside<T> =
+  T extends Whole ? T
+  : T extends (...given: never[]) => unknown ? T
+  : T extends ReadonlyMap<unknown, unknown> | ReadonlySet<unknown> ? T
+  : T extends readonly unknown[] ? { [K in keyof T]: ReadInside<T[K]> }
+  : T extends object ? { readonly [K in keyof T]: ReadInside<T[K]> }
+  : T
+
 /** A machine as a component has it: the state it is at, as a path, and its context */
 export interface MachineState<TActor extends AnyActorRef> {
   /** Where it is: `'idle'`, or `'thread.sending'` for a state inside another */
   readonly at: string
   /** What it holds, each field the machine's own value. Whatever reads a field runs again when the machine replaces it */
-  readonly data: SnapshotFrom<TActor> extends { context: infer Context } ? Context : never
+  readonly data: SnapshotFrom<TActor> extends { context: infer Context } ? Read<Context> : never
 }
 
 /** What `useState` hands a component */

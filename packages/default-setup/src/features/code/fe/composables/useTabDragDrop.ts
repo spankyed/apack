@@ -7,11 +7,11 @@ type Tab = OpenFile | TerminalTab | ActionTab | PromptTab
 type Context = 'pinned' | 'ungrouped' | string
 
 interface UseTabDragDropOptions {
-  tabs: Ref<Tab[]>
+  tabs: Ref<readonly Tab[]>
   pinnedTabs: Ref<Tab[]>
   ungroupedTabs: Ref<Tab[]>
   getTabsForGroup: (groupId: string) => Tab[]
-  tabGroups: Ref<TabGroup[]>
+  tabGroups: Ref<readonly TabGroup[]>
   pinnedContainer: Ref<HTMLElement | null>
   mainContainer: Ref<HTMLElement | null>
   onPinTab: (path: string) => void

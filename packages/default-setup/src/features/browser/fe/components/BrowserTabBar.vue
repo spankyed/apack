@@ -145,9 +145,9 @@ const MENU_ITEM_CLASS = 'flex items-center gap-2 px-3 py-2 text-sm transition-co
 const failedFavicons = reactive(new Set<number>());
 
 const props = defineProps<{
-  tabs: BrowserTab[];
+  tabs: readonly BrowserTab[];
   activeTabId: number | null;
-  tabGroups: TabGroup[];
+  tabGroups: readonly TabGroup[];
 }>();
 
 defineEmits<{

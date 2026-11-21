@@ -203,10 +203,10 @@ import { panelChild } from '#features/code/fe/features/children.ts'
 
 // Props
 const props = defineProps<{
-  openFiles: (OpenFile | TerminalTab | ActionTab | PromptTab)[]
+  openFiles: readonly (OpenFile | TerminalTab | ActionTab | PromptTab)[]
   activeFilePath: string | null
   baseDirectory?: string
-  tabGroups: TabGroup[]
+  tabGroups: readonly TabGroup[]
   /** Whether git was asked to stage or unstage one piece of a change and has not answered */
   isApplyingHunk?: boolean
   /** The pieces staged or unstaged since the open diff was read, which it still lists */

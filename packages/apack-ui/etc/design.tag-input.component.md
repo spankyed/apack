@@ -4,7 +4,7 @@
 
 ```ts
 props {
-  availableTags: TagOption[];
+  availableTags: readonly TagOption[];
   modelValue: string[];
   onUpdate:modelValue?: ((value: string[]) => any) | undefined;
 }

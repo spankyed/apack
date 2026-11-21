@@ -103,7 +103,7 @@ const props = defineProps<{
   isArchived: boolean;
   copyText: string;
   groupId?: string;
-  tabGroups?: ThreadTabGroup[];
+  tabGroups?: readonly ThreadTabGroup[];
 }>();
 
 defineEmits<{

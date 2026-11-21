@@ -124,7 +124,7 @@ import type { ActionEntity, EARS } from '@apackdev/sdk'
 interface Props {
   actions: ActionEntity[]
   categories: Category[]
-  selectedCategories: string[]
+  selectedCategories: readonly string[]
   hasActions: boolean
   hasMore: boolean
   loadingMore: boolean

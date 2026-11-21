@@ -553,7 +553,7 @@ export interface MachineState<TActor extends AnyActorRef> {
     readonly at: string;
     readonly data: SnapshotFrom<TActor> extends {
         context: infer Context;
-    } ? Context : never;
+    } ? Read<Context> : never;
 }
 
 // @public
@@ -672,6 +672,11 @@ export function processHotkeys<const T extends Record<string, string>, H = unkno
 
 // @public (undocumented)
 export function pushNavHistory<T>(history: NavHistory<T>, entry: T): NavHistory<T>;
+
+// @public
+export type Read<T> = T extends Whole ? T : T extends (...given: never[]) => unknown ? T : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Key, ReadInside<Held>> : T extends ReadonlySet<infer Item> ? ReadonlySet<Item> : T extends object ? {
+    readonly [K in keyof T]: ReadHeld<T[K]>;
+} : T;
 
 // @public
 export interface ReadonlyFeSettingsHandle<T> {

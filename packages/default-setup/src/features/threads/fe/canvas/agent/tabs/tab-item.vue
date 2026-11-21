@@ -119,7 +119,7 @@ const props = defineProps<{
   isActive: boolean;
   isPinned: boolean;
   groupId?: string;
-  tabGroups: ThreadTabGroup[];
+  tabGroups: readonly ThreadTabGroup[];
   isDragging?: boolean;
 }>();
 

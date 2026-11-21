@@ -91,7 +91,7 @@ useTrackedMenuOpen(menuOpen)
 
 interface Props {
   label: string
-  breadcrumbs?: BreadcrumbItem[]
+  breadcrumbs?: readonly BreadcrumbItem[]
   menuItems?: ContextMenuItemType[]
   headerClass?: string
   headerOnly?: boolean

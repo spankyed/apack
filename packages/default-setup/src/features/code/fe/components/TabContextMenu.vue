@@ -198,7 +198,7 @@ function toggleBlame() {
 
 const props = defineProps<{
   tab: TabType
-  tabGroups: TabGroupType[]
+  tabGroups: readonly TabGroupType[]
   groupId?: string
 }>()
 

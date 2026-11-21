@@ -189,7 +189,7 @@ function positionsToRanges(positions: number[]): Array<[number, number]> {
  */
 export function fuzzySearch<T>(
   pattern: string,
-  items: T[],
+  items: readonly T[],
   getText: (item: T) => string,
   maxResults: number = 100,
   getFilename?: (item: T) => string

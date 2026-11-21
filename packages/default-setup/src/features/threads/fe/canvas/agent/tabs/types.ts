@@ -11,7 +11,7 @@ export interface ThreadTabGroup {
   isPinned?: boolean
 }
 
-export function getNextAvailableColor(tabGroups: ThreadTabGroup[], isPinned: boolean): TabGroupColor {
+export function getNextAvailableColor(tabGroups: readonly ThreadTabGroup[], isPinned: boolean): TabGroupColor {
   const sameRowGroups = tabGroups.filter(g => (g.isPinned || false) === isPinned)
   const lastColor = sameRowGroups[sameRowGroups.length - 1]?.color
   const nextIndex = tabGroups.length % ALL_COLORS.length

@@ -5,11 +5,11 @@ import type { ThreadTabGroup } from './types.ts'
 type Context = 'pinned' | 'ungrouped' | string
 
 interface UseTabDragDropOptions {
-  tabs: Ref<Tab[]>
+  tabs: Ref<readonly Tab[]>
   pinnedTabs: Ref<Tab[]>
   ungroupedTabs: Ref<Tab[]>
   getTabsForGroup: (groupId: string) => Tab[]
-  tabGroups: Ref<ThreadTabGroup[]>
+  tabGroups: Ref<readonly ThreadTabGroup[]>
   pinnedContainer: Ref<HTMLElement | null>
   mainContainer: Ref<HTMLElement | null>
   onPinTab: (tabId: string) => void
