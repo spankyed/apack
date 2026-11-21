@@ -760,10 +760,10 @@ followed are `docs/plans/asks-shape.md` on that branch. Read against the tables 
 | Leaving the asker's state aborts the handler | Done: the asker's abort reaches the handler's `signal`, and a stopped ask is not answered |
 | `waiting` | Gone from a handler's arguments |
 | A loading flag is a state that invokes the ask | Done where an ask was touched |
-| `tell` and `broadcast` | Not done: still `sendToSystem` and `broadcastToSurface` |
+| `tell` and `broadcast` | Done after it, in spankyed/apack#600 |
 | Handlers as tables beside the machine | Not done, on purpose: an ask is taken by the state that lists it (`answers.on`), which is this design's `asks` per state. A child machine answers its own asks |
-| A component reads state with `useState` | Not done: `useSelector` on an actor stands |
-| A component does not ask | Not done: `useAsk` is in the SDK and components call it |
+| A component reads state with `useState` | Done after it, in spankyed/apack#596 |
+| A component does not ask | Done after it, in spankyed/apack#599: `useAsk` is gone |
 | A machine is defined through the SDK; no `xstate` import in a pack | Taken out of the seams (above) |
 | A spec drives a feature at its boundary | Partly: specs of asks ask, and many still read an actor's context |
 
@@ -785,37 +785,52 @@ a component reads it. There is no id, no list kept by hand, and no event for how
 slice of that surface written this way. So this record is not extended to new code, and nothing new is built on `asking`, `askId` or `endedAsk`. It
 goes when its surface is ported.
 
-**Where the next work starts: cleaning up `master`, on XState.** The aim is that code written now reads as it will
-after the move, and that what #593 added is replaced and not only left alone. Each of these is its own PR on
-`master`, and each can be checked and merged on its own:
+**The cleanup of `master`, on XState, is four PRs.** The aim was that code written now reads as it will after the
+move, and that what #593 added is replaced and not only left alone.
 
-1. **`useState` in the SDK, over an XState actor**, in the shape it is to keep: `const { state, send } = useState(…)`,
-   with `state` holding `{ at, data }`. A rendering spec holds it, and `CommitPanel.vue`, which has 63 `useSelector`
-   lines, is the proof. Under it is one mirror of an actor shared by everything that reads it, written to only where
-   the context changed. Today each `useSelector` is a subscription of its own that runs its selector again on every
-   snapshot, so what a change costs grows with how many lines read the actor and not with what changed. What does
-   not carry over to XState: a machine's context is one type whatever state it is in, so data is not narrowed by
-   where the state is.
-2. **The other `useSelector` sites onto it**, 407 in all, and a pack rule that refuses `useSelector` on a surface's
-   actor.
-3. **`makes` on XState**, proven on the commit surface. Its 40 writes are declared once and made by name, and which
-   are under way is `making`, kept by the helper and read through `useState`. The panel stops importing the ids of
-   asks. This begins with a spike: it needs one transition that takes how any made ask ended, which XState's
-   wildcard event names should allow and which has not been tried.
-4. **`makes` through the other surfaces**, and the four settings forms. All eight `useAsk` calls are an import or an
-   export in the settings form of actions, library, notes and prompts, and each becomes a write its surface makes.
-   `useAsk` leaves the SDK.
-5. **Reads.** Spike `awaits` on XState, which has no natural place for "ask again when a field changes", and either
-   roll it out or leave reads as they are until their surface is ported. Then `asks-under-way.ts` is deleted, with
-   pack rules that refuse `askId`, `enqueueAsks`, a transition on `xstate.done.actor`, and `useAsk`.
-6. Rename to `tell` and `broadcast`.
+1. **spankyed/apack#596: every component reads its machine with `useState`**, in the shape it is to keep:
+   `const { state, send } = useState(…)`, with `state` holding `{ at, data }`. About 350 `useSelector` calls in 75
+   files moved, and the `machine-selectors` pack rule refuses `@xstate/vue` in a pack. One `useSelector` is left, in
+   the renderer: a surface's `fallbackPanel.isShown` is handed a whole snapshot, as that contract takes it.
+2. **spankyed/apack#597: `makes`, proven on the commit surface.** Its 54 asks are declared once and made by name;
+   which are under way is `making`, read through `useState`, and the panel imports no id. The spike held: one
+   transition on `xstate.done.actor.made.*` takes how every made ask ended, clears it from `making`, and raises
+   `made.<name>`, which a guard and a target are written for like any event. The machine went from 1,778 lines to
+   about 1,620, and lost three fields that tracked asks by id.
+3. **spankyed/apack#599: `makes` through the other twelve machines**, and the four settings forms, whose import and
+   export are asks their surface makes. `useAsk` and `asks-under-way.ts` left the SDK, and two pack rules hold it:
+   `ask-ends` refuses a transition on `xstate.done.actor`, and `swallowed-ask-ends` a `'*'` transition written
+   without the one that settles asks beside it. A contract names the asks it publishes with their kinds
+   (`MakingOf<{ export: 'one'; nodeDetails: 'each' }>`), which is this design's `makes` in the shape.
+4. **spankyed/apack#600: `sendToSystem` is `tell` and `broadcastToSurface` is `broadcast`.**
+
+What that taught, which changes this plan:
+
+- **A mirror hands out the state's own values, or it breaks identity.** The first `useState` copied the context
+  into a deep reactive mirror written in place, as `mirror.mts` does, to render per nested key. Moving real
+  components onto it showed what a copy costs. A machine that drops told failures with `includes` never matched the
+  copies sent back. `structuredClone` refused a proxy. The shell's `Surface` holds component definitions, which were
+  copied. A toast watching a result did not run when the result was replaced by an equal one. A mirrored object sent
+  in an event put the mirror's own storage into the machine's context. What shipped holds each field as the
+  machine's own value, neither copied nor made reactive, and writes a field when the machine replaced it, which is
+  what a `useSelector` over the field did. The cost is that two components reading different keys inside one field
+  both render when it is replaced. **[What a component reads](#what-a-component-reads) is written for the copy, and
+  is open again** (Not built).
+- **A read made on an event is a `makes`.** The helper does not tell a read from a write, so the reads moved with
+  the writes and `asks-under-way.ts` could go without `awaits`. What was not built on XState is a read that asks
+  again when a field changes.
+- **A read asked again replaces the one before, by construction.** Where a machine kept a map from an ask's id to
+  what it was about, the ask is keyed by that and the map is gone. Several reads whose answers used to race are now
+  one at a time.
+- **XState's wildcard is the one thing that can break it silently.** A state's `'*'` is tried before its parent's
+  transitions, so it takes an ask's end and the ask stays under way for good. A rule holds it. This design has no
+  such fall-through to guard.
 
 `makes` and `useState` are helpers a machine and a component use. They are not a way of defining a machine, which
 stays XState's ([the seam that was taken out](#what-the-two-should-share)).
 
-Not now: taking apart the commit and pull-request machines by concern. That carries over one for one, a state for
-each concern, and done on XState first it is done twice. They are split as they are ported, and are a good deal
-smaller after step 3.
+Not done: taking apart the commit and pull-request machines by concern. That carries over one for one, a state for
+each concern, and done on XState first it is done twice. They are split as they are ported.
 
 Then step 2 of the order of work.
 
@@ -824,7 +839,8 @@ Then step 2 of the order of work.
 The design is the smaller half of the value. In the order they would pay:
 
 1. **The Vue binding, on the app's own components.** `useState` exists and is checked by rendering (What a component
-   reads). What is left is what a check cannot say: the 439 `useSelector` sites moved onto it, in components written
+   reads), and on XState the app's components read through it. What is left is the binding over this design's own
+   kernel, which is to be decided again (Not built), and what a check cannot say of it, in components written
    as the app writes them, in a window. Templates read it without `.value` and `within` narrows inside a `v-if`,
    which a compiled template and `vue-tsc` now show. What is not known is what the first paint of a large state
    costs, since a mirror copies a state once when its first reader arrives, and what the step log would give Vue's
@@ -881,8 +897,12 @@ projects. Each would loosen the fit to this app.
 
 ## Not built
 
-- **The Vue binding in the app.** `useState` is built and renders, in a check. No component of the app uses it, and
-  439 `useSelector` sites wait on it. Two things about it are not known, and neither can be found out here:
+- **The Vue binding, decided again.** On XState every component of the app reads through `useState`
+  (spankyed/apack#596), and what that showed is that the reactive copy this design mirrors a state into breaks
+  identity ([what the cleanup taught](#what-591-delivered)). The kernel knows which places a step changed, which
+  XState does not, so it can do better than a field at a time, but only while what a component is handed is the
+  state's own value: a reader that tracks the path it read and is handed the kernel's object at the end of it, with
+  whatever a component sends unwrapped on the way back. That is not built or checked. Two more things are not known:
   - **What the first paint of a large state costs.** A mirror copies a state once, when its first reader arrives,
     and the checks hold states of a few hundred small items. What that copy costs for a state the size the app
     holds, in a window, at the moment a surface opens, needs the app's own data and a paint to time. If it shows,
