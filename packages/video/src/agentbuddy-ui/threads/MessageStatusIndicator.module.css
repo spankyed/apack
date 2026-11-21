@@ -1,0 +1,35 @@
+.MessageStatusIndicator_root {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+  padding: 0 0.25rem;
+  color: rgb(163 163 163);
+  font-size: 12px;
+}
+
+.MessageStatusIndicator_root[data-status="cancelled"] {
+  color: rgb(115 115 115);
+}
+
+.MessageStatusIndicator_dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgb(245 158 11);
+}
+
+.MessageStatusIndicator_root[data-status="queued"] .MessageStatusIndicator_dot {
+  animation: MessageStatusIndicator_pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.MessageStatusIndicator_root[data-status="cancelled"] .MessageStatusIndicator_dot {
+  background: rgb(115 115 115);
+}
+
+@keyframes MessageStatusIndicator_pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

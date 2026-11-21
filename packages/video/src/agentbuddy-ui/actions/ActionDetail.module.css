@@ -1,0 +1,126 @@
+.ActionDetail_root {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background: rgb(23 23 23);
+}
+
+.ActionDetail_nameInput {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  color: rgb(245 245 245);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 200ms ease;
+}
+
+.ActionDetail_categorySelect {
+  flex-shrink: 0;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  color: rgb(245 245 245);
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+  transition: border-color 200ms ease;
+}
+
+.ActionDetail_contentScroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-color: #525252 #171717;
+  scrollbar-width: thin;
+}
+
+.ActionDetail_content {
+  max-width: 896px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.ActionDetail_sectionFirst {
+  padding-top: 8px;
+}
+
+.ActionDetail_section {
+  margin-top: 24px;
+  border-top: 1px solid rgb(38 38 38);
+  padding-top: 24px;
+}
+
+.ActionDetail_functionLabelRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.ActionDetail_functionLabelRow label {
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ActionDetail_functionLabelRow label span {
+  color: rgb(248 113 113);
+}
+
+.ActionDetail_openEditorButton {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(115 115 115);
+  padding: 2px 6px;
+  font-size: 12px;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.ActionDetail_servicesInfo {
+  margin: 0 0 16px;
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.ActionDetail_descriptionBox {
+  width: 100%;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  color: rgb(245 245 245);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  resize: vertical;
+}
+
+.ActionDetail_descriptionBox {
+  padding: 12px 16px;
+}
+
+.ActionDetail_metadata {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 20px;
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.ActionDetail_metadata span span {
+  color: rgb(163 163 163);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}

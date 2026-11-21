@@ -1,0 +1,144 @@
+.LibraryPluginSettings_root {
+  max-width: 768px;
+}
+
+.LibraryPluginSettings_copy {
+  margin: 0 0 16px;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.LibraryPluginSettings_stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.LibraryPluginSettings_tagGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.LibraryPluginSettings_stack > .LibraryPluginSettings_secondaryButton {
+  align-self: flex-start;
+}
+
+.LibraryPluginSettings_tagRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.LibraryPluginSettings_colorSwatch {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+}
+
+.LibraryPluginSettings_input,
+.LibraryPluginSettings_directoryInput {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: white;
+  font-size: 14px;
+  outline: none;
+}
+
+.LibraryPluginSettings_input {
+  flex: 1;
+  padding: 8px 12px;
+}
+
+.LibraryPluginSettings_directoryInput {
+  flex: 1;
+  padding: 8px 12px;
+}
+
+.LibraryPluginSettings_input::placeholder,
+.LibraryPluginSettings_directoryInput::placeholder {
+  color: rgb(82 82 82);
+}
+
+.LibraryPluginSettings_iconButton,
+.LibraryPluginSettings_secondaryButton,
+.LibraryPluginSettings_addButton,
+.LibraryPluginSettings_segmentButton {
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  font: inherit;
+}
+
+.LibraryPluginSettings_iconButton,
+.LibraryPluginSettings_secondaryButton {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+  font-size: 14px;
+}
+
+.LibraryPluginSettings_iconButton {
+  padding: 8px 12px;
+  color: rgb(163 163 163);
+}
+
+.LibraryPluginSettings_iconButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.LibraryPluginSettings_secondaryButton {
+  gap: 8px;
+  padding: 8px 16px;
+  font-weight: 500;
+}
+
+.LibraryPluginSettings_secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.LibraryPluginSettings_addButton {
+  align-self: flex-start;
+  gap: 6px;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.LibraryPluginSettings_segmentedControl {
+  display: flex;
+  width: fit-content;
+  align-items: center;
+  gap: 4px;
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  padding: 4px;
+}
+
+.LibraryPluginSettings_segmentButton {
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.LibraryPluginSettings_segmentButton[data-active='true'] {
+  background: rgb(64 64 64);
+  color: white;
+  font-weight: 500;
+}
+
+.LibraryPluginSettings_directoryRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

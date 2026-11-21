@@ -1,0 +1,37 @@
+{
+  "name": "@app/video",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio src/index.ts",
+    "render": "tsx scripts/render.ts AgentBuddyFilm out/agentbuddy-film-landscape.mp4",
+    "render:square": "tsx scripts/render.ts AgentBuddyFilmSquare out/agentbuddy-film-square.mp4",
+    "render:composition": "tsx scripts/render.ts",
+    "render:component": "tsx scripts/render.ts NotesSurfaceDemo out/notes-surface-demo.mp4",
+    "render:demos": "node scripts/render-component-demos.js",
+    "review:snapshots": "node scripts/extract-review-snapshots.js",
+    "audit:film-action": "tsx scripts/audit-film-action.ts",
+    "audit:fidelity": "node scripts/audit-fidelity.js",
+    "audit:fidelity:strict": "REQUIRE_ACTUAL_APP_SCREENSHOTS=1 node scripts/audit-fidelity.js",
+    "verify": "npm run audit:fidelity && npm run audit:film-action && npm run typecheck",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.465",
+    "@remotion/cli": "4.0.465",
+    "@remotion/renderer": "4.0.465",
+    "lucide-react": "^0.503.0",
+    "monaco-editor": "^0.52.2",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "remotion": "4.0.465"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.17",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

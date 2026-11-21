@@ -1,0 +1,51 @@
+.PersonalSettings_cardHeader {
+  margin-bottom: 24px;
+}
+
+.PersonalSettings_addressStack {
+  display: grid;
+  gap: 16px;
+}
+
+.PersonalSettings_fieldLg {
+  max-width: 512px;
+}
+
+.PersonalSettings_fieldSm {
+  max-width: 384px;
+}
+
+.PersonalSettings_fieldXs {
+  max-width: 320px;
+}
+
+.PersonalSettings_optional {
+  margin-left: 4px;
+  color: rgb(82 82 82);
+  font-weight: 400;
+  text-transform: none;
+}
+
+.PersonalSettings_cityRow {
+  display: grid;
+  max-width: 512px;
+  grid-template-columns: 2fr 120px 140px;
+  gap: 16px;
+}
+
+.PersonalSettings_select {
+  box-sizing: border-box;
+  width: 100%;
+  appearance: none;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background-color: rgb(38 38 38 / 50%);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+  color: white;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  padding: 10px 40px 10px 16px;
+}

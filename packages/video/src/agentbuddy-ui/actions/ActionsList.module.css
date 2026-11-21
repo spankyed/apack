@@ -1,0 +1,233 @@
+.ActionsList_root {
+  container-type: inline-size;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  background: rgb(23 23 23);
+}
+
+.ActionsList_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid rgb(38 38 38);
+  padding: 12px 24px;
+}
+
+.ActionsList_headerTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.ActionsList_headerTitle p {
+  margin: 0;
+}
+
+.ActionsList_headerIcon {
+  color: rgb(115 115 115);
+}
+
+.ActionsList_tableRegion {
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+}
+
+.ActionsList_scrollArea {
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-color: #525252 #171717;
+  scrollbar-width: thin;
+}
+
+.ActionsList_table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ActionsList_tableHead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: rgb(23 23 23);
+}
+
+.ActionsList_tableHead tr {
+  border-bottom: 1px solid rgb(38 38 38);
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.ActionsList_table th {
+  padding: 12px 24px;
+}
+
+.ActionsList_table th.ActionsList_categoryFilterCell {
+  padding: 0;
+}
+
+.ActionsList_actionsColumn {
+  text-align: right;
+}
+
+.ActionsList_row {
+  cursor: pointer;
+  transition: background-color 200ms ease;
+}
+
+.ActionsList_row:hover {
+  background: rgb(38 38 38);
+}
+
+.ActionsList_row td {
+  padding: 6px 24px;
+}
+
+.ActionsList_labelCell {
+  white-space: nowrap;
+  color: rgb(245 245 245);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ActionsList_descriptionCell {
+  min-width: 200px;
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.ActionsList_descriptionCell span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+.ActionsList_categoryBadge,
+.ActionsList_emptyCategory {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ActionsList_categoryBadge {
+  border: 1px solid;
+}
+
+.ActionsList_emptyCategory {
+  color: rgb(115 115 115);
+}
+
+.ActionsList_inputBadges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.ActionsList_inputBadge,
+.ActionsList_moreBadge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ActionsList_inputBadge {
+  border: 1px solid rgb(64 64 64);
+  background: rgb(38 38 38 / 50%);
+  color: rgb(163 163 163);
+}
+
+.ActionsList_moreBadge {
+  background: rgb(38 38 38 / 30%);
+  color: rgb(115 115 115);
+}
+
+.ActionsList_noneText,
+.ActionsList_loadingMore {
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.ActionsList_rowActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ActionsList_deleteButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 6px;
+  transition: background-color 200ms ease, color 200ms ease, transform 120ms ease;
+}
+
+.ActionsList_deleteButton:hover {
+  background: rgb(248 113 113 / 10%);
+  color: rgb(248 113 113);
+}
+
+.ActionsList_loadingMore {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.ActionsList_emptyState {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 40px;
+  text-align: center;
+}
+
+.ActionsList_emptyIcon {
+  margin-bottom: 16px;
+  color: rgb(82 82 82);
+}
+
+.ActionsList_emptyState h3 {
+  margin: 0 0 8px;
+  color: rgb(212 212 212);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.ActionsList_emptyState p {
+  margin: 0 0 16px;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.ActionsList_emptyButton {
+  justify-self: center;
+}
+
+@container (max-width: 900px) {
+  .ActionsList_inputsColumn {
+    display: none;
+  }
+}

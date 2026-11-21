@@ -1,0 +1,68 @@
+.ButtonGroupBlock_root {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ButtonGroupBlock_responseHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.ButtonGroupBlock_responseHeader svg {
+  color: rgb(34 197 94);
+}
+
+.ButtonGroupBlock_responseValue {
+  border: 1px solid rgb(37 99 235 / 0.3);
+  border-radius: 0.5rem;
+  background: rgb(37 99 235 / 0.15);
+  color: rgb(96 165 250);
+  font-size: 14px;
+  padding: 0.5rem 0.75rem;
+}
+
+.ButtonGroupBlock_buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ButtonGroupBlock_button {
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  color: rgb(229 229 229);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 0.625rem 1rem;
+}
+
+.ButtonGroupBlock_primary {
+  background: rgb(37 99 235);
+  color: white;
+}
+
+.ButtonGroupBlock_secondary {
+  border-color: rgb(82 82 91);
+  background: rgb(64 64 64);
+  color: rgb(229 229 229);
+}
+
+.ButtonGroupBlock_success {
+  background: rgb(22 163 74);
+  color: white;
+}
+
+.ButtonGroupBlock_danger {
+  background: rgb(220 38 38);
+  color: white;
+}
+
+.ButtonGroupBlock_disabled {
+  border-color: rgb(63 63 70);
+  background: rgb(63 63 70 / 0.3);
+  color: rgb(113 113 122);
+}

@@ -1,0 +1,128 @@
+.CreatePRForm_root {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow: hidden;
+  padding: 0.75rem;
+}
+
+.CreatePRForm_field {
+  min-width: 0;
+}
+
+.CreatePRForm_bodyField {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.CreatePRForm_field label,
+.CreatePRForm_bodyField label {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: rgb(163 163 163);
+  font-size: 12px;
+}
+
+.CreatePRForm_input,
+.CreatePRForm_editor,
+.CreatePRForm_select {
+  width: 100%;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.25rem;
+  background: rgb(38 38 38);
+  color: rgb(229 229 229);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.CreatePRForm_input {
+  height: 30px;
+  padding: 0 0.5rem;
+}
+
+.CreatePRForm_editor {
+  min-height: 88px;
+  flex: 1;
+  overflow: hidden;
+  line-height: 1.5;
+  padding: 0.375rem 0.5rem;
+  white-space: pre-line;
+}
+
+.CreatePRForm_mergeRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.CreatePRForm_branchPill {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.25rem;
+  background: rgb(38 38 38 / 60%);
+  color: rgb(212 212 212);
+  font-size: 12px;
+  padding: 0.375rem 0.5rem;
+}
+
+.CreatePRForm_branchPill span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.CreatePRForm_select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 0.5rem;
+}
+
+.CreatePRForm_actions {
+  display: flex;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+.CreatePRForm_primary,
+.CreatePRForm_secondary {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 12px;
+}
+
+.CreatePRForm_primary {
+  flex: 1;
+  border: 0;
+  background: rgb(37 99 235);
+  color: white;
+  font-weight: 500;
+}
+
+.CreatePRForm_secondary {
+  border: 1px solid rgb(64 64 64);
+  background: transparent;
+  color: rgb(212 212 212);
+  padding: 0 0.75rem;
+}
+
+.CreatePRForm_primary svg {
+  animation: CreatePRForm_spin 900ms linear infinite;
+}
+
+@keyframes CreatePRForm_spin {
+  to { transform: rotate(360deg); }
+}

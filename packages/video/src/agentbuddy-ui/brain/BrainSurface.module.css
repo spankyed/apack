@@ -1,0 +1,120 @@
+.BrainSurface_root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  overflow: hidden;
+  background: rgb(23 23 23);
+}
+
+.BrainSurface_leftPanel {
+  display: flex;
+  width: 288px;
+  flex-shrink: 0;
+  flex-direction: column;
+  border-right: 1px solid rgb(38 38 38 / 50%);
+  background: rgb(23 23 23);
+}
+
+.BrainSurface_leftHeader {
+  border-bottom: 1px solid rgb(38 38 38 / 50%);
+  background: rgb(23 23 23 / 30%);
+  padding: 14px 20px;
+}
+
+.BrainSurface_leftHeaderInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.BrainSurface_leftTitle {
+  color: rgb(115 115 115);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.BrainSurface_leftCount {
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.BrainSurface_paused {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  border-bottom: 1px solid rgb(180 83 9 / 50%);
+  background: rgb(120 53 15 / 80%);
+  color: rgb(253 230 138);
+  font-size: 12px;
+  padding: 6px 16px;
+}
+
+.BrainSurface_resume {
+  border: 0;
+  border-radius: 4px;
+  background: rgb(180 83 9 / 60%);
+  color: rgb(254 243 199);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+}
+
+.BrainSurface_stopped {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(23 23 23 / 60%);
+  backdrop-filter: blur(1px);
+}
+
+.BrainSurface_stoppedCard {
+  text-align: center;
+}
+
+.BrainSurface_stoppedIcon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  place-items: center;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 999px;
+  background: rgb(38 38 38 / 80%);
+  color: rgb(163 163 163);
+}
+
+.BrainSurface_stoppedTitle {
+  color: rgb(212 212 216);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.BrainSurface_stoppedCopy {
+  margin-top: 4px;
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.BrainSurface_startButton {
+  margin-top: 16px;
+  border: 0;
+  border-radius: 8px;
+  background: rgb(22 163 74);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 16px;
+}

@@ -1,0 +1,78 @@
+.PullRequestPanel_root {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  background: rgb(23 23 23);
+}
+
+.PullRequestPanel_topRow {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(38 38 38 / 50%);
+  padding: 0.5rem 0.75rem;
+}
+
+.PullRequestPanel_publishButton,
+.PullRequestPanel_createButton {
+  display: inline-flex;
+  height: 30px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.25rem;
+  color: white;
+  font-size: 13px;
+  padding: 0 0.625rem;
+}
+
+.PullRequestPanel_publishButton {
+  background: rgb(37 99 235);
+}
+
+.PullRequestPanel_createButton {
+  background: rgb(22 163 74 / 85%);
+}
+
+.PullRequestPanel_publishWarning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgb(113 63 18 / 45%);
+  background: rgb(113 63 18 / 20%);
+  color: rgb(250 204 21);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  padding: 0.625rem 0.75rem;
+}
+
+.PullRequestPanel_publishWarning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.PullRequestPanel_backRow {
+  display: flex;
+  height: 42px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-bottom: 1px solid rgb(38 38 38);
+  background: rgb(38 38 38 / 50%);
+  color: rgb(115 115 115);
+  font-size: 13px;
+  padding: 0 0.75rem;
+  text-align: left;
+}
+
+.PullRequestPanel_backRow span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}

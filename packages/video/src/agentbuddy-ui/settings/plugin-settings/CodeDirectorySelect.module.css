@@ -1,0 +1,37 @@
+.CodeDirectorySelect_root {
+  position: relative;
+}
+
+.CodeDirectorySelect_trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 12px;
+  text-align: left;
+  transition: border-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+.CodeDirectorySelect_trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.CodeDirectorySelect_selectedLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.CodeDirectorySelect_chevron {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  color: rgb(212 212 212);
+}

@@ -1,0 +1,121 @@
+.ModePhaseSelector_root {
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+  overflow: visible;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 0.5rem;
+  background: rgb(38 38 38);
+  transition: all 0.2s ease;
+}
+
+.ModePhaseSelector_mode,
+.ModePhaseSelector_phase {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 28px;
+  border: 0;
+  color: rgb(212 212 216);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 0.5rem 0.75rem;
+  transition: background-color 140ms ease;
+}
+
+.ModePhaseSelector_mode {
+  background: transparent;
+}
+
+.ModePhaseSelector_mode:hover {
+  background: rgb(47 47 47);
+}
+
+.ModePhaseSelector_phase {
+  background: rgb(37 99 235 / 20%);
+}
+
+.ModePhaseSelector_phase:hover {
+  background: rgb(37 99 235 / 26%);
+}
+
+.ModePhaseSelector_mode:disabled,
+.ModePhaseSelector_phase:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ModePhaseSelector_mode:disabled:hover {
+  background: transparent;
+}
+
+.ModePhaseSelector_phase:disabled:hover {
+  filter: none;
+}
+
+.ModePhaseSelector_divider {
+  width: 1px;
+  background: rgb(64 64 64 / 50%);
+}
+
+.ModePhaseSelector_chevronDown {
+  color: rgb(163 163 163);
+  transition: transform 140ms ease;
+}
+
+.ModePhaseSelector_chevronUp {
+  color: rgb(163 163 163);
+  transform: rotate(180deg);
+  transition: transform 140ms ease;
+}
+
+.ModePhaseSelector_modeMenu,
+.ModePhaseSelector_phaseMenu {
+  position: absolute;
+  z-index: 20;
+  bottom: calc(100% + 0.5rem);
+  min-width: 140px;
+  overflow: hidden;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 0.5rem;
+  background: rgb(23 23 23);
+  box-shadow: 0 16px 36px rgb(0 0 0 / 38%);
+  padding: 0.25rem 0;
+}
+
+.ModePhaseSelector_modeMenu {
+  left: 0;
+}
+
+.ModePhaseSelector_phaseMenu {
+  right: 0;
+}
+
+.ModePhaseSelector_menuItem,
+.ModePhaseSelector_menuItemActive,
+.ModePhaseSelector_menuItemDisabled {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 34px;
+  color: rgb(229 229 229);
+  font-size: 14px;
+  padding: 0.5rem 0.75rem;
+}
+
+.ModePhaseSelector_menuItemActive {
+  background: rgb(38 38 38 / 50%);
+}
+
+.ModePhaseSelector_menuItemDisabled {
+  color: rgb(115 115 115);
+  opacity: 0.5;
+}
+
+.ModePhaseSelector_check {
+  color: rgb(96 165 250);
+  flex-shrink: 0;
+}

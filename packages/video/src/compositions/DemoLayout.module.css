@@ -1,0 +1,67 @@
+.DemoLayout_slot {
+  position: absolute;
+}
+
+.DemoLayout_bottom {
+  left: 0;
+  right: 0;
+  bottom: 80px;
+}
+
+.DemoLayout_leftPanel {
+  left: 96px;
+  top: 96px;
+  bottom: 96px;
+}
+
+.DemoLayout_rightPanel {
+  right: 96px;
+  top: 96px;
+  bottom: 96px;
+}
+
+.DemoLayout_framedArea {
+  inset: 96px;
+  overflow: hidden;
+  border: 1px solid rgb(38 38 38);
+}
+
+.DemoLayout_tallFramedArea {
+  inset: 28px 96px;
+  overflow: hidden;
+  border: 1px solid rgb(38 38 38);
+}
+
+.DemoLayout_framedRightPanel {
+  height: 100%;
+  margin-left: auto;
+}
+
+.DemoLayout_headerArea {
+  left: 96px;
+  right: 96px;
+  top: 120px;
+  border: 1px solid rgb(38 38 38);
+  background: rgb(23 23 23);
+}
+
+.DemoLayout_boardArea {
+  inset: 96px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgb(38 38 38);
+  background: rgb(23 23 23);
+}
+
+.DemoLayout_stack,
+.DemoLayout_stackCompact {
+  display: grid;
+}
+
+.DemoLayout_stack {
+  gap: 14px;
+}
+
+.DemoLayout_stackCompact {
+  gap: 12px;
+}

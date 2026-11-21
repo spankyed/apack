@@ -1,0 +1,157 @@
+.ContextUsageBlock_root {
+  min-width: 30rem;
+  overflow: hidden;
+  border: 1px solid rgb(38 38 38);
+  border-radius: 0.5rem;
+  background: rgb(24 24 27);
+}
+
+.ContextUsageBlock_header {
+  padding: 1rem 1rem 0.75rem;
+}
+
+.ContextUsageBlock_topLine,
+.ContextUsageBlock_limits,
+.ContextUsageBlock_categoryRow,
+.ContextUsageBlock_detailRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.ContextUsageBlock_model {
+  color: rgb(115 115 115);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.ContextUsageBlock_percentage {
+  color: rgb(229 229 229);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ContextUsageBlock_percentageWarn {
+  color: rgb(250 204 21);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ContextUsageBlock_percentageDanger {
+  color: rgb(248 113 113);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ContextUsageBlock_stack {
+  display: flex;
+  height: 0.5rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(38 38 38);
+  margin-top: 0.75rem;
+}
+
+.ContextUsageBlock_segment {
+  height: 100%;
+}
+
+.ContextUsageBlock_limits {
+  color: rgb(115 115 115);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.375rem;
+}
+
+.ContextUsageBlock_breakdown {
+  padding: 0.25rem 1rem 1rem;
+}
+
+.ContextUsageBlock_breakdownTitle,
+.ContextUsageBlock_detailsTitle {
+  color: rgb(115 115 115);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.625rem;
+  text-transform: uppercase;
+}
+
+.ContextUsageBlock_category {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.625rem;
+}
+
+.ContextUsageBlock_categoryName {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: rgb(212 212 216);
+  font-size: 12px;
+}
+
+.ContextUsageBlock_swatch {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 0.125rem;
+}
+
+.ContextUsageBlock_categoryStats {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.ContextUsageBlock_tokens {
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ContextUsageBlock_categoryPercent {
+  width: 2.5rem;
+  color: rgb(82 82 91);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ContextUsageBlock_bar {
+  height: 0.25rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(38 38 38);
+}
+
+.ContextUsageBlock_barFill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.ContextUsageBlock_details {
+  border-top: 1px solid rgb(38 38 38);
+  padding: 0.625rem 1rem 0.75rem;
+}
+
+.ContextUsageBlock_detailRow {
+  color: rgb(163 163 163);
+  font-size: 12px;
+  margin-top: 0.375rem;
+}
+
+.ContextUsageBlock_detailType {
+  width: 3.5rem;
+  flex-shrink: 0;
+  color: rgb(115 115 115);
+}
+
+.ContextUsageBlock_detailName {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

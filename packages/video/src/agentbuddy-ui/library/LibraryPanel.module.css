@@ -1,0 +1,131 @@
+.LibraryPanel_root {
+  height: 100%;
+  overflow: auto;
+  background: rgb(23 23 23);
+  padding: 24px;
+  color: rgb(229 229 229);
+}
+
+.LibraryPanel_heading {
+  margin: 0 0 12px;
+  color: rgb(245 245 245);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.LibraryPanel_statStack,
+.LibraryPanel_detailStack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.LibraryPanel_statRow,
+.LibraryPanel_detailRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.LibraryPanel_detailRow[data-align-top='true'] {
+  align-items: flex-start;
+}
+
+.LibraryPanel_statRow span {
+  color: rgb(163 163 163);
+  font-size: 14px;
+}
+
+.LibraryPanel_statRow strong {
+  color: rgb(229 229 229);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.LibraryPanel_section {
+  margin-top: 24px;
+  border-top: 1px solid rgb(38 38 38);
+  padding-top: 24px;
+}
+
+.LibraryPanel_detailRow span {
+  flex-shrink: 0;
+  color: rgb(163 163 163);
+  font-size: 12px;
+}
+
+.LibraryPanel_detailRow strong {
+  color: rgb(229 229 229);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: right;
+}
+
+.LibraryPanel_detailRow strong[data-code='true'] {
+  color: rgb(96 165 250);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
+.LibraryPanel_tagsBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.LibraryPanel_tagsBlock h4 {
+  margin: 0;
+  color: rgb(163 163 163);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.LibraryPanel_tagList,
+.LibraryPanel_allTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.LibraryPanel_selectedTag,
+.LibraryPanel_allTag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.LibraryPanel_selectedTag {
+  border: 1px solid rgb(59 130 246 / 30%);
+  background: rgb(59 130 246 / 20%);
+  color: rgb(96 165 250);
+  padding: 2px 8px;
+}
+
+.LibraryPanel_allTag {
+  border: 0;
+  padding: 4px 10px;
+  font-weight: 500;
+}
+
+.LibraryPanel_allTag[data-tone='blue'] {
+  background: rgb(59 130 246 / 20%);
+  color: rgb(96 165 250);
+}
+
+.LibraryPanel_allTag[data-tone='purple'] {
+  background: rgb(168 85 247 / 20%);
+  color: rgb(192 132 252);
+}
+
+.LibraryPanel_allTag[data-tone='green'] {
+  background: rgb(34 197 94 / 20%);
+  color: rgb(74 222 128);
+}
+
+.LibraryPanel_empty {
+  margin: 0;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}

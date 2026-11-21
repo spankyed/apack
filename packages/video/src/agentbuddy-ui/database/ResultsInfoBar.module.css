@@ -1,0 +1,47 @@
+.DatabaseResultsInfoBar_root {
+  border-top: 1px solid rgb(38 38 38);
+  background: rgb(23 23 23);
+}
+
+.DatabaseResultsInfoBar_inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+}
+
+.DatabaseResultsInfoBar_left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.DatabaseResultsInfoBar_count,
+.DatabaseResultsInfoBar_type,
+.DatabaseResultsInfoBar_time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.DatabaseResultsInfoBar_count {
+  color: rgb(163 163 163);
+}
+
+.DatabaseResultsInfoBar_count strong {
+  color: rgb(245 245 245);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.DatabaseResultsInfoBar_type {
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.DatabaseResultsInfoBar_time {
+  color: rgb(74 222 128);
+  font-size: 14px;
+  font-weight: 500;
+}

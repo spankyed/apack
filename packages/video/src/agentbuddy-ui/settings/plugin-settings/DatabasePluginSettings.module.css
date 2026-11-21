@@ -1,0 +1,74 @@
+.DatabasePluginSettings_root {
+  max-width: 768px;
+}
+
+.DatabasePluginSettings_copy {
+  color: rgb(115 115 115);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 16px;
+}
+
+.DatabasePluginSettings_hint {
+  color: rgb(82 82 82);
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+.DatabasePluginSettings_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.DatabasePluginSettings_button:hover {
+  border-color: rgb(82 82 82);
+  background: rgb(64 64 64);
+  color: white;
+}
+
+.DatabasePluginSettings_danger {
+  border: 1px solid rgb(127 29 29 / 50%);
+  border-radius: 8px;
+  background: rgb(127 29 29 / 20%);
+  padding: 16px;
+}
+
+.DatabasePluginSettings_dangerTitle {
+  color: rgb(254 202 202);
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.DatabasePluginSettings_dangerCopy {
+  color: rgb(252 165 165);
+  font-size: 12px;
+  line-height: 1.45;
+  margin: 0 0 16px;
+}
+
+.DatabasePluginSettings_dangerButton {
+  border: 0;
+  border-radius: 6px;
+  background: rgb(220 38 38);
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  transition: background-color 150ms ease;
+}
+
+.DatabasePluginSettings_dangerButton:hover {
+  background: rgb(185 28 28);
+}

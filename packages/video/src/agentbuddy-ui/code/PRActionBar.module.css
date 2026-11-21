@@ -1,0 +1,59 @@
+.PRActionBar_root {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-top: 1px solid rgb(38 38 38);
+  background: rgb(38 38 38 / 30%);
+  padding: 0.5rem 0.75rem;
+}
+
+.PRActionBar_mergeGroup {
+  display: flex;
+}
+
+.PRActionBar_merge,
+.PRActionBar_chevron,
+.PRActionBar_draft,
+.PRActionBar_close {
+  display: inline-flex;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  border: 0;
+  font-size: 12px;
+}
+
+.PRActionBar_merge {
+  border-radius: 0.25rem 0 0 0.25rem;
+  background: rgb(21 128 61 / 80%);
+  color: white;
+  font-weight: 500;
+  padding: 0 0.5rem;
+}
+
+.PRActionBar_chevron {
+  width: 24px;
+  border-left: 1px solid rgb(22 101 52);
+  border-radius: 0 0.25rem 0.25rem 0;
+  background: rgb(21 128 61 / 80%);
+  color: white;
+}
+
+.PRActionBar_draft {
+  border-radius: 0.25rem;
+  background: rgb(64 64 64 / 60%);
+  color: rgb(212 212 212);
+  padding: 0 0.5rem;
+}
+
+.PRActionBar_spacer {
+  flex: 1;
+}
+
+.PRActionBar_close {
+  border-radius: 0.25rem;
+  background: transparent;
+  color: rgb(248 113 113);
+  padding: 0 0.5rem;
+}

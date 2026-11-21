@@ -1,0 +1,117 @@
+.CategoryImportExportSettings_root {
+  max-width: 768px;
+}
+
+.CategoryImportExportSettings_copy {
+  margin: 0 0 16px;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.CategoryImportExportSettings_stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.CategoryImportExportSettings_stack > .CategoryImportExportSettings_secondaryButton {
+  align-self: flex-start;
+}
+
+.CategoryImportExportSettings_categoryGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.CategoryImportExportSettings_categoryRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.CategoryImportExportSettings_colorSwatch {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+}
+
+.CategoryImportExportSettings_input,
+.CategoryImportExportSettings_directoryInput {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: white;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.CategoryImportExportSettings_input {
+  flex: 1;
+  padding: 8px 12px;
+  font-weight: 500;
+}
+
+.CategoryImportExportSettings_directoryInput {
+  flex: 1;
+  padding: 8px 12px;
+}
+
+.CategoryImportExportSettings_input::placeholder,
+.CategoryImportExportSettings_directoryInput::placeholder {
+  color: rgb(82 82 82);
+}
+
+.CategoryImportExportSettings_iconButton,
+.CategoryImportExportSettings_secondaryButton,
+.CategoryImportExportSettings_addButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  font: inherit;
+}
+
+.CategoryImportExportSettings_iconButton,
+.CategoryImportExportSettings_secondaryButton {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+  font-size: 14px;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.CategoryImportExportSettings_iconButton {
+  padding: 8px 12px;
+  color: rgb(163 163 163);
+}
+
+.CategoryImportExportSettings_iconButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.CategoryImportExportSettings_secondaryButton {
+  padding: 8px 16px;
+  font-weight: 500;
+}
+
+.CategoryImportExportSettings_addButton {
+  align-self: flex-start;
+  border-radius: 8px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 6px 12px;
+  font-size: 14px;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.CategoryImportExportSettings_directoryRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

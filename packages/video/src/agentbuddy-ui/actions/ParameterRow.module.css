@@ -1,0 +1,101 @@
+.ActionsParameterRow_root {
+  overflow: hidden;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38 / 50%);
+  transition: border-color 200ms ease, background-color 200ms ease;
+}
+
+.ActionsParameterRow_mainRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+}
+
+.ActionsParameterRow_expandButton,
+.ActionsParameterRow_removeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgb(163 163 163);
+  padding: 4px;
+}
+
+.ActionsParameterRow_expandIcon {
+  transition: transform 200ms ease;
+}
+
+.ActionsParameterRow_collapsedIcon {
+  transform: rotate(-90deg);
+}
+
+.ActionsParameterRow_keyInput,
+.ActionsParameterRow_descriptionInput {
+  min-width: 0;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  color: rgb(245 245 245);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 200ms ease;
+}
+
+.ActionsParameterRow_keyInput {
+  flex: 1;
+  padding: 6px 12px;
+}
+
+.ActionsParameterRow_descriptionInput {
+  width: 100%;
+  padding: 6px 12px;
+}
+
+.ActionsParameterRow_typeSelect {
+  border: 0;
+  border-radius: 4px;
+  background: rgb(64 64 64);
+  color: rgb(212 212 212);
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 12px;
+  outline: none;
+}
+
+.ActionsParameterRow_requiredLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: rgb(163 163 163);
+  cursor: pointer;
+  font-size: 12px;
+  user-select: none;
+}
+
+.ActionsParameterRow_requiredLabel input {
+  width: 14px;
+  height: 14px;
+  accent-color: rgb(59 130 246);
+}
+
+.ActionsParameterRow_removeButton svg {
+  color: rgb(163 163 163);
+}
+
+.ActionsParameterRow_descriptionRow {
+  border-top: 1px solid rgb(64 64 64 / 50%);
+  background: rgb(23 23 23 / 30%);
+  padding: 4px 16px 12px;
+}
+
+.ActionsParameterRow_descriptionRow label {
+  display: block;
+  margin-bottom: 4px;
+  color: rgb(115 115 115);
+  font-size: 12px;
+  font-weight: 500;
+}

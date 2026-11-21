@@ -1,0 +1,110 @@
+.BrainPluginSettings_root {
+  max-width: 768px;
+}
+
+.BrainPluginSettings_card {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(23 23 23 / 50%);
+  padding: 16px;
+}
+
+.BrainPluginSettings_statusRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.BrainPluginSettings_statusTitle {
+  color: rgb(74 222 128);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.BrainPluginSettings_statusCopy {
+  color: rgb(163 163 163);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.BrainPluginSettings_copy {
+  color: rgb(115 115 115);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.BrainPluginSettings_lowerBlock {
+  border-top: 1px solid rgb(64 64 64 / 30%);
+  margin-top: 16px;
+  padding-top: 12px;
+}
+
+.BrainPluginSettings_caution {
+  color: rgb(115 115 115);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.BrainPluginSettings_actions {
+  display: flex;
+  gap: 8px;
+}
+
+.BrainPluginSettings_button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  color: white;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+}
+
+.BrainPluginSettings_button[data-tone="warning"] {
+  background: rgb(217 119 6);
+}
+
+.BrainPluginSettings_button[data-tone="warning"]:hover {
+  background: rgb(180 83 9);
+}
+
+.BrainPluginSettings_button[data-tone="danger"] {
+  background: rgb(220 38 38);
+}
+
+.BrainPluginSettings_button[data-tone="danger"]:hover {
+  background: rgb(185 28 28);
+}
+
+.BrainPluginSettings_toggleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.BrainPluginSettings_toggleLabel {
+  min-width: 120px;
+  color: rgb(212 212 216);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.BrainPluginSettings_toggle {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(163 163 163);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 12px;
+}

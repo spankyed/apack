@@ -1,0 +1,100 @@
+.CliProviderRow_root {
+  max-width: 480px;
+  border: 1px solid rgb(38 38 38 / 80%);
+  border-radius: 8px;
+  background: rgb(23 23 23 / 30%);
+  padding: 12px;
+}
+
+.CliProviderRow_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.CliProviderRow_labelWrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.CliProviderRow_label {
+  color: rgb(229 229 229);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.CliProviderRow_successIcon {
+  color: rgb(74 222 128);
+}
+
+.CliProviderRow_errorIcon {
+  color: rgb(248 113 113);
+}
+
+.CliProviderRow_testButton {
+  display: grid;
+  min-width: 44px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  color: rgb(212 212 216);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+}
+
+.CliProviderRow_testButton[data-status="testing"] {
+  border-color: transparent;
+  color: rgb(115 115 115);
+  cursor: not-allowed;
+}
+
+.CliProviderRow_spinner {
+  animation: CliProviderRow_spin 1s linear infinite;
+}
+
+.CliProviderRow_input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 6px;
+  background: rgb(38 38 38 / 60%);
+  color: white;
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+.CliProviderRow_input::placeholder {
+  color: rgb(82 82 82);
+}
+
+.CliProviderRow_helper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: rgb(115 115 115);
+  font-size: 12px;
+}
+
+.CliProviderRow_command {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 4px;
+  background: rgb(38 38 38 / 70%);
+  color: rgb(163 163 163);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  padding: 2px 6px;
+}
+
+@keyframes CliProviderRow_spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

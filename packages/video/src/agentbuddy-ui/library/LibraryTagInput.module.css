@@ -1,0 +1,30 @@
+.LibraryTagInput_root {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.LibraryTagInput_tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 6px;
+  background: rgb(38 38 38);
+  color: rgb(163 163 163);
+  font-size: 13px;
+  padding: 4px 8px;
+}
+
+.LibraryTagInput_tag[data-selected='true'] {
+  border-color: rgb(59 130 246 / 35%);
+  background: rgb(59 130 246 / 18%);
+  color: rgb(147 197 253);
+}
+
+.LibraryTagInput_dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 999px;
+}

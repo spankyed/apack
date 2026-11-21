@@ -1,0 +1,82 @@
+.HelpSettingsTab_root {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+}
+
+.HelpSettingsTab_scroll {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 32px;
+}
+
+.HelpSettingsTab_inner {
+  max-width: 672px;
+  margin: 0 auto;
+}
+
+.HelpSettingsTab_title {
+  color: white;
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0 0 32px;
+  text-align: center;
+}
+
+.HelpSettingsTab_list {
+  display: grid;
+  gap: 12px;
+}
+
+.HelpSettingsTab_item {
+  overflow: hidden;
+  border: 1px solid rgb(64 64 64);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+}
+
+.HelpSettingsTab_question {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+  color: rgb(212 212 216);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 16px 20px;
+  text-align: left;
+}
+
+.HelpSettingsTab_question[data-expanded="true"] {
+  background: rgb(64 64 64 / 50%);
+  color: white;
+}
+
+.HelpSettingsTab_answer {
+  color: rgb(163 163 163);
+  font-size: 13px;
+  line-height: 1.55;
+  padding: 4px 20px 16px;
+}
+
+.HelpSettingsTab_footer {
+  flex-shrink: 0;
+  background: rgb(23 23 23);
+  color: rgb(115 115 115);
+  font-size: 12px;
+  padding: 16px;
+  text-align: center;
+}
+
+.HelpSettingsTab_footer p {
+  margin: 0 0 8px;
+}
+
+.HelpSettingsTab_link {
+  color: rgb(163 163 163);
+  text-decoration: underline;
+}

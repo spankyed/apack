@@ -1,0 +1,27 @@
+.CliProvidersSettings_root {
+  margin-bottom: 32px;
+}
+
+.CliProvidersSettings_header {
+  margin-bottom: 16px;
+}
+
+.CliProvidersSettings_title {
+  color: rgb(212 212 216);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.CliProvidersSettings_description {
+  color: rgb(115 115 115);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.CliProvidersSettings_list {
+  display: grid;
+  gap: 8px;
+}

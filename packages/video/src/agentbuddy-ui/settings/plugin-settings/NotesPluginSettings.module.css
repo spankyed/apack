@@ -1,0 +1,117 @@
+.NotesPluginSettings_root {
+  max-width: 768px;
+}
+
+.NotesPluginSettings_copy {
+  margin: 0 0 16px;
+  color: rgb(115 115 115);
+  font-size: 14px;
+}
+
+.NotesPluginSettings_stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.NotesPluginSettings_row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.NotesPluginSettings_label {
+  min-width: 120px;
+  color: rgb(212 212 212);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.NotesPluginSettings_segmented {
+  display: flex;
+  gap: 4px;
+}
+
+.NotesPluginSettings_segment {
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(163 163 163);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 6px 12px;
+}
+
+.NotesPluginSettings_segment[data-active='true'] {
+  border-color: rgb(37 99 235);
+  background: rgb(37 99 235);
+  color: white;
+}
+
+.NotesPluginSettings_formatToggle {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  padding: 4px;
+}
+
+.NotesPluginSettings_formatButton {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(163 163 163);
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 12px;
+}
+
+.NotesPluginSettings_formatButton[data-active='true'] {
+  background: rgb(64 64 64);
+  color: white;
+  font-weight: 500;
+}
+
+.NotesPluginSettings_directoryRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.NotesPluginSettings_directoryInput {
+  flex: 1;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: white;
+  font-size: 14px;
+  outline: none;
+  padding: 8px 12px;
+}
+
+.NotesPluginSettings_directoryInput::placeholder {
+  color: rgb(82 82 82);
+}
+
+.NotesPluginSettings_secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 8px;
+  border: 1px solid rgb(64 64 64 / 50%);
+  border-radius: 8px;
+  background: rgb(38 38 38);
+  color: rgb(212 212 212);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+}
+
+.NotesPluginSettings_secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
