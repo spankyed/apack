@@ -4,7 +4,9 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/makes-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
+import { effect } from '@vue/reactivity'
 import { rest, run, system } from './checks.mts'
+import { mirror } from './mirror.mts'
 import { commit, git, type CommitEvent } from './commit.mts'
 import { explore, sample, type Schedule } from './schedule.mts'
 import { reaching } from './state.mts'
@@ -115,7 +117,7 @@ const wired = () => {
   const it = sys.start('jobs', jobs)
   const steps: Array<{ making: boolean; data: boolean }> = []
   sys.subscribe((_, fields, changes) => { const mine = changes.jobs; if (mine) steps.push({ making: mine.making, data: (fields.jobs ?? []).length > 0 }) })
-  return { did, defects, steps, send: (event: JobsEvent): void => sys.send(it, event), now: () => sys.read(it).data, making: () => sys.read(it).making }
+  return { sys, it, did, defects, steps, send: (event: JobsEvent): void => sys.send(it, event), now: () => sys.read(it).data, making: () => sys.read(it).making }
 }
 
 const checks: Array<[string, () => Promise<void>]> = [
@@ -126,7 +128,29 @@ const checks: Array<[string, () => Promise<void>]> = [
     deepStrictEqual(making(), { run: { a: true, b: true }, save: false })
     await rest()
     deepStrictEqual(making(), { run: {}, save: false })
-    deepStrictEqual({ done: now().done.sort(), did }, { done: ['a done', 'b done'], did: ['run a', 'run b'] })
+    deepStrictEqual({ done: [...now().done].sort(), did }, { done: ['a done', 'b done'], did: ['run a', 'run b'] })
+  }],
+  ['a reader of whether one is under way runs for that one, and not for another or for the data', async () => {
+    const { sys, it, send } = wired()
+    const held = mirror(sys, it)
+    const runs = { a: 0, b: 0, save: 0, done: 0 }
+    effect(() => { runs.a++; void held.value.making.run.a })
+    effect(() => { runs.b++; void held.value.making.run.b })
+    effect(() => { runs.save++; void held.value.making.save })
+    effect(() => { runs.done++; void held.value.data.done })
+    const since = { ...runs }
+    const ran = (): string[] => { const names = (Object.keys(runs) as Array<keyof typeof runs>).filter((name) => runs[name] !== since[name]); Object.assign(since, runs); return names }
+    send({ type: 'ADD', id: 'a' })
+    deepStrictEqual(ran(), ['a'])
+    send({ type: 'SAVE' })
+    deepStrictEqual(ran(), ['save'])
+    send({ type: 'ADD', id: 'b' })
+    deepStrictEqual(ran(), ['b'])
+    await rest()
+    // Each ended: its reader ran again, and so did the reader of what the runs left in the data.
+    deepStrictEqual(ran(), ['a', 'b', 'save', 'done'])
+    strictEqual(held.value.making.run.a, undefined)
+    held.stop()
   }],
   ['what is under way is not data: making one changes none of it', async () => {
     const { send, now, steps } = wired()
@@ -230,7 +254,7 @@ const staging = (schedule: Schedule): (() => void) => {
   const it = repository(schedule)
   schedule.does('the user', ['stages a', () => it.send({ type: 'commit.STAGE_FILE', path: 'a.ts' })], ['stages b', () => it.send({ type: 'commit.STAGE_FILE', path: 'b.ts' })])
   return () => {
-    deepStrictEqual(it.held().staged.sort(), ['a.ts', 'b.ts'])
+    deepStrictEqual([...it.held().staged].sort(), ['a.ts', 'b.ts'])
     deepStrictEqual({ making: it.making(), error: it.now().gitError }, { making: { stage: {}, unstage: {}, push: false }, error: null })
     // What is shown is what the repository holds: the last read was made after the last write.
     deepStrictEqual({ ...it.now().gitStatus, staged: [...it.now().gitStatus!.staged].sort() }, { staged: ['a.ts', 'b.ts'], unstaged: ['c.ts'], ahead: 2 })

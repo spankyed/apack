@@ -540,7 +540,7 @@ const PORT = Symbol('port')
  * What changed in one running state in one step: whether it is somewhere else now, and each place in its data that
  * changed, as a path. `['messages', 'THR-1', '3']` is the fourth message of one thread, and nothing else.
  */
-export interface Changes { readonly moved: boolean; readonly paths: ReadonlyArray<ReadonlyArray<string>>; /** Whether what it is making changed. */ readonly making: boolean }
+export interface Changes { readonly moved: boolean; /** Whether what it is making changed. */ readonly making: boolean }
 
 export interface System {
   start<S extends Shape, E extends AnyEvent, A extends Asks>(ref: string, made: State<S, E, A>): Handle<Value<S>, E, A, AllStarts<S>>
@@ -630,18 +630,17 @@ export function system(host: {
     if (field === undefined) stale.set(ref, 'all'); else if (now !== 'all') stale.set(ref, (now ?? new Set<string>()).add(field))
   }
   const touch = (ref: string, field: string): void => { mark(ref, field); fields.set(ref, (fields.get(ref) ?? new Set()).add(field)) }
-  /** The same, to the place: what a reader of one part of the data needs, to know whether it is the part that changed. */
-  const places = new Map<string, { moved: boolean; paths: string[][]; making: boolean }>()
-  const placesOf = (ref: string) => places.get(ref) ?? places.set(ref, { moved: false, paths: [], making: false }).get(ref)!
+  /** Whether each moved, and whether what it is making changed, in this step. */
+  const places = new Map<string, { moved: boolean; making: boolean }>()
+  const placesOf = (ref: string) => places.get(ref) ?? places.set(ref, { moved: false, making: false }).get(ref)!
   /** What a state is making changed. That is not its data, so nothing it starts, follows or awaits is looked at again. */
   const madeChanged = (top: Running): void => { changed.add(top.ref); placesOf(top.ref).making = true }
-  const touchAt = (ref: string, path: readonly string[]): void => { touch(ref, path[0]!); placesOf(ref).paths.push([...path]) }
   /** A move can add and remove fields as states are left and entered: each one that differs afterwards changed. */
   const moved = (top: Running, was: Plain): void => {
     mark(top.ref)
     placesOf(top.ref).moved = true
     for (const field of new Set([...Object.keys(was), ...Object.keys(top.data)])) {
-      if (field in was !== field in top.data || !Object.is(was[field], top.data[field])) touchAt(top.ref, [field])
+      if (field in was !== field in top.data || !Object.is(was[field], top.data[field])) touch(top.ref, field)
     }
   }
   const listeners: Array<(changed: readonly string[], fields: Readonly<Record<string, readonly string[]>>, changes: Readonly<Record<string, Changes>>) => void> = []
@@ -654,11 +653,26 @@ export function system(host: {
   const down = new Set<{ link: Link; port: Port }>()
   const carry = (link: Link, way: 'up' | 'down', across: () => void): void => { later(link[way], () => { if (link.open) across() }) }
 
+  /**
+   * What a state holds is a value: once it is the state's, nothing changes it but a handler, which makes another.
+   * So it is frozen, all the way down, and a write to it throws on the line that tried. A component is handed these
+   * very objects, and so is whatever a handler passes on. Freezing stops at what is frozen already, which is all of
+   * what a step did not change, and leaves alone what is not plain data: a class instance, a component, a map.
+   */
+  const frozen = <T,>(value: T): T => {
+    if (typeof value !== 'object' || value === null || Object.isFrozen(value)) return value
+    const prototype = Object.getPrototypeOf(value)
+    if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) return value
+    Object.freeze(value)
+    for (const inner of Array.isArray(value) ? value : Object.values(value)) frozen(inner)
+    return value
+  }
+
   const innermost = (top: Running): Active => { let active = top.root; while (active.inside) active = active.inside; return active }
   const valueOf = (top: Running): Plain => {
     const at = innermost(top).path
-    const value: Plain = at ? { at, data: { ...top.data } } : { data: { ...top.data } }
-    if (!top.makes.size) return value
+    const value: Plain = at ? { at, data: frozen({ ...top.data }) } : { data: frozen({ ...top.data }) }
+    if (!top.makes.size) return Object.freeze(value)
     // Which of the asks it can be told to make are under way, in the states that are the case.
     const making: Plain = Object.fromEntries([...top.makes].map(([name, kind]) => [name, kind === 'each' ? {} : false]))
     for (let active: Active | undefined = top.root; active; active = active.inside) {
@@ -667,7 +681,7 @@ export function system(host: {
         if (cut < 0) making[id] = true; else (making[id.slice(0, cut)] as Plain)[id.slice(cut + 1)] = true
       }
     }
-    return { ...value, making }
+    return Object.freeze({ ...value, making: frozen(making) })
   }
   const refOf = (to: string | { ref: string }): string => (typeof to === 'string' ? to : to.ref)
 
@@ -1019,6 +1033,7 @@ export function system(host: {
     const top: Running = { ref, data: {}, root: undefined as unknown as Active, starter, makes }
     running.set(ref, top)
     descend(enter(top, def, '', undefined, entering), [], {})
+    top.data = frozen(top.data)
     return { ref }
   }
 
@@ -1038,7 +1053,11 @@ export function system(host: {
     trace(`LARGE: ${top.ref} holds ${held.length} items in ${field}. A collection this size belongs in a view`)
   }
 
+  /** Makes a change, and freezes what the state holds afterwards, however the change went. */
   const apply = (active: Active, next: unknown, mayRefuse = false): void => {
+    try { change(active, next, mayRefuse) } finally { active.top.data = frozen(active.top.data) }
+  }
+  const change = (active: Active, next: unknown, mayRefuse: boolean): void => {
     if (next === undefined || next === null || active.controller.signal.aborted) return
     const { at, data = {} } = next as { at?: string; data?: Plain | ((draft: Plain) => void) }
     const top = active.top
@@ -1059,7 +1078,7 @@ export function system(host: {
         return
       }
       const { value, touched } = made
-      for (const path of touched) touchAt(top.ref, path)
+      for (const path of touched) touch(top.ref, path[0]!)
       top.data = touched.length ? value : before
       for (const field of fields.get(top.ref) ?? []) large(top, field)
       if (at !== undefined) { const was = top.data; go(top, at, {}); moved(top, was) }
@@ -1074,7 +1093,7 @@ export function system(host: {
     // Data first, then the move: the work of a state that is entered reads the data as the handler left it.
     for (const [field, value] of Object.entries(data)) {
       if (!(field in top.data)) continue
-      if (!Object.is(top.data[field], value)) touchAt(top.ref, [field])
+      if (!Object.is(top.data[field], value)) touch(top.ref, field)
       top.data = { ...top.data, [field]: value }
     }
     if (at !== undefined) { const was = top.data; go(top, at, data); moved(top, was) }

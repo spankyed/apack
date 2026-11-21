@@ -1,14 +1,14 @@
 // What the kernel does with a change to data. Each check drives a running state and reads what came of it.
 //
 //   npx tsx docs/plans/apack-spec/prototype/kernel-check.mts
-import { deepStrictEqual, ok, strictEqual } from 'node:assert'
+import { deepStrictEqual, ok, strictEqual, throws } from 'node:assert'
 import { run as runChecks, system } from './checks.mts'
 import { given, reaching } from './state.mts'
 
 class Repository { constructor(public directory: string) {} }
 
 type Shape = {
-  data: { titles: Record<string, string>; messages: Record<string, string[]>; count: number; repository: Repository }
+  data: { titles: Record<string, string>; messages: Record<string, string[]>; count: number; repository: Repository; kept: { n: number } | null }
   states: {
     list: {}
     thread: { data: { threadId: string } }
@@ -24,6 +24,8 @@ type Event =
   | { type: 'RETURNS_A_VALUE' }
   | { type: 'IS_ASYNC' }
   | { type: 'EDITS_AN_INSTANCE' }
+  | { type: 'WRITES_IN_PLACE' }
+  | { type: 'KEEP'; item: { n: number } }
   | { type: 'REMOVES_A_FIELD' }
   | { type: 'ONE_BAD_WRITE' }
   | { type: 'GIVES_A_STRAY_FIELD' }
@@ -34,7 +36,7 @@ type Event =
 
 const state = reaching()
 const made = state<Shape, Event>()({
-  data: { titles: {}, messages: {}, count: 0, repository: new Repository('/a') },
+  data: { titles: {}, messages: {}, count: 0, repository: new Repository('/a'), kept: null },
   start: 'list',
   on: {
     ADD:     ({ id, title }) => ({ data: (d) => { d.titles[id] = title; d.messages[id] = []; d.count++ } }),
@@ -47,6 +49,9 @@ const made = state<Shape, Event>()({
     RETURNS_A_VALUE:   () => ({ data: ((d: Shape['data']) => ({ ...d, count: 99 })) as (d: Shape['data']) => void }),
     IS_ASYNC:          () => ({ data: (async (d: Shape['data']) => { await null; d.count = 99 }) as (d: Shape['data']) => void }),
     EDITS_AN_INSTANCE: () => ({ data: (d) => { d.repository.directory = '/b' } }),
+    // Writes to what the state holds, where it should return a change.
+    WRITES_IN_PLACE:   (_, { data }) => { (data.titles as Record<string, string>).written = 'in place' },
+    KEEP:              ({ item }) => ({ data: { kept: item } }),
     REMOVES_A_FIELD:   () => ({ data: (d) => { delete (d as Partial<Shape['data']>).count } }),
     // A good write, then a bad one: neither is made.
     ONE_BAD_WRITE:     () => ({ data: (d) => { d.count = 5; (d as Record<string, unknown>).extra = 1 } }),
@@ -171,6 +176,30 @@ const checks: Array<[string, () => void]> = [
     it.send({ type: 'IS_ASYNC' })
     strictEqual(it.data().count, 0)
     ok(it.defects.some((line) => line.includes('cannot be async')))
+  }],
+  ['what a state holds is frozen all the way down, and what is not plain data is left as it is', () => {
+    const it = run()
+    it.send({ type: 'ADD', id: 'a', title: 'A' })
+    ok(Object.isFrozen(it.data()))
+    ok(Object.isFrozen(it.data().titles))
+    ok(Object.isFrozen(it.data().messages.a))
+    strictEqual(Object.isFrozen(it.data().repository), false)
+  }],
+  ['a handler that writes to what the state holds, where it should return a change, changes nothing and is reported', () => {
+    const it = run()
+    const before = it.notices.length
+    it.send({ type: 'WRITES_IN_PLACE' })
+    deepStrictEqual(it.data().titles, {})
+    strictEqual(it.notices.length, before)
+    ok(it.defects.some((line) => line.includes('threw handling WRITES_IN_PLACE')), it.defects.join(' / '))
+  }],
+  ["an object a state is handed is the state's from then on: whoever kept it can no longer write to it", () => {
+    const it = run()
+    const item = { n: 1 }
+    it.send({ type: 'KEEP', item })
+    strictEqual(it.data().kept, item)
+    throws(() => { item.n = 2 }, TypeError)
+    strictEqual(it.data().kept!.n, 1)
   }],
   ['editing a value that is not plain is reported and the value is untouched', () => {
     const it = run()

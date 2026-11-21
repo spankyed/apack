@@ -1,16 +1,20 @@
-// What the Vue binding rests on: a reader runs again only when the place it read changed, and a hidden window still
-// hears. `effect` here stands for a component's render.
+// What the Vue binding rests on. A reader is handed the state's own values, a field at a time, and runs again when
+// the state replaces a field it read. `effect` here stands for a component's render.
 //
 //   npx tsx docs/plans/apack-spec/prototype/binding-check.mts
-import { deepStrictEqual, strictEqual } from 'node:assert'
-import { effect } from '@vue/reactivity'
+import { deepStrictEqual, ok, strictEqual, throws } from 'node:assert'
+import { computed, effect } from '@vue/reactivity'
 import { mirror } from './mirror.mts'
 import { run, system } from './checks.mts'
 import { given, reaching, type Each, type Value } from './state.mts'
 import { windowFrame } from './window-frame.mts'
 
+/** Not plain data: handed over as it is, and never frozen. */
+class Repository { constructor(public directory: string) {} where(): string { return this.directory } }
+interface Item { id: string }
+
 type Shape = {
-  data: { titles: Record<string, string>; messages: Record<string, string[]>; count: number }
+  data: { titles: Record<string, string>; messages: Record<string, string[]>; count: number; known: Item[]; result: { ok: boolean }; repository: Repository }
   states: { list: {}; thread: { data: { threadId: string } } }
 }
 type Event =
@@ -22,10 +26,13 @@ type Event =
   | { type: 'OPEN'; id: string }
   | { type: 'CLOSE' }
   | { type: 'COUNT' }
+  | { type: 'KNOW'; item: Item }
+  | { type: 'DROP'; item: Item }
+  | { type: 'RESULT' }
 
 const state = reaching()
 const threads = state<Shape, Event>()({
-  data: { titles: {}, messages: {}, count: 0 },
+  data: { titles: {}, messages: {}, count: 0, known: [], result: { ok: true }, repository: new Repository('/a') },
   start: 'list',
   on: {
     ADD:    ({ id, title }) => ({ data: (d) => { d.titles[id] = title; d.messages[id] = [] } }),
@@ -36,11 +43,16 @@ const threads = state<Shape, Event>()({
     OPEN:   ({ id })        => ({ at: 'thread', data: { threadId: id } }),
     CLOSE:  ()              => ({ at: 'list' }),
     COUNT:  (_, { data })   => ({ data: { count: data.count + 1 } }),
+    KNOW:   ({ item }, { data }) => ({ data: { known: [...data.known, item] } }),
+    // Drops the very one it is handed, as code that keeps a list of what it was told does.
+    DROP:   ({ item }, { data }) => ({ data: { known: data.known.filter((each) => each !== item) } }),
+    // A result that is the same as the one before, and is another.
+    RESULT: ()              => ({ data: { result: { ok: true } } }),
   },
   states: { list: {}, thread: { data: { threadId: given } } },
 })
 
-/** A running state, mirrored, with four readers that each count how often they ran. */
+/** A running state, mirrored, with readers that each count how often they ran. */
 const watched = () => {
   const sys = system({ side: 'window' })
   const handle = sys.start('threads', threads)
@@ -48,13 +60,22 @@ const watched = () => {
   send({ type: 'ADD', id: 'a', title: 'A' })
   send({ type: 'ADD', id: 'b', title: 'B' })
   const held = mirror<Value<Shape>>(sys, handle)
-  const runs = { messagesOfA: 0, messagesOfB: 0, titleOfA: 0, where: 0, count: 0 }
+  const runs = { messagesOfA: 0, messagesOfB: 0, titleOfA: 0, where: 0, count: 0, result: 0, partA: 0, partB: 0, partTitleA: 0 }
   const seen: { messagesOfA?: string[]; where?: string } = {}
   effect(() => { runs.messagesOfA++; seen.messagesOfA = [...(held.value.data.messages.a ?? [])] })
   effect(() => { runs.messagesOfB++; void held.value.data.messages.b?.length })
   effect(() => { runs.titleOfA++; void held.value.data.titles.a })
   effect(() => { runs.where++; seen.where = held.value.at })
   effect(() => { runs.count++; void held.value.data.count })
+  effect(() => { runs.result++; void held.value.data.result })
+  // A reader of one part of a field, through a computed: what the part is is worked out again when the field is
+  // replaced, and the reader runs only if it came out another.
+  const partA = computed(() => held.value.data.messages.a)
+  const partB = computed(() => held.value.data.messages.b)
+  const partTitleA = computed(() => held.value.data.titles.a)
+  effect(() => { runs.partA++; void partA.value })
+  effect(() => { runs.partB++; void partB.value })
+  effect(() => { runs.partTitleA++; void partTitleA.value })
   const since = { ...runs }
   /** Which readers ran since the last time this was asked */
   const ran = (): string[] => { const names = (Object.keys(runs) as Array<keyof typeof runs>).filter((name) => runs[name] !== since[name]); Object.assign(since, runs); return names }
@@ -112,20 +133,24 @@ const boarded = () => {
 }
 
 const checks: Array<[string, () => void]> = [
-  ['a message in one thread runs only the reader of that thread', () => {
+  ['a change inside a field runs every reader of that field, and no reader of another', () => {
     const it = watched()
     it.send({ type: 'SAY', id: 'a', text: 'hello' })
-    deepStrictEqual(it.ran(), ['messagesOfA'])
+    deepStrictEqual(it.ran(), ['messagesOfA', 'messagesOfB', 'partA'])
     deepStrictEqual(it.seen.messagesOfA, ['hello'])
-    it.send({ type: 'SAY', id: 'b', text: 'other' })
-    deepStrictEqual(it.ran(), ['messagesOfB'])
-  }],
-  ['a rename runs only the reader of that title', () => {
-    const it = watched()
-    it.send({ type: 'RENAME', id: 'a', title: 'A2' })
-    deepStrictEqual(it.ran(), ['titleOfA'])
     it.send({ type: 'RENAME', id: 'b', title: 'B2' })
-    deepStrictEqual(it.ran(), [])
+    deepStrictEqual(it.ran(), ['titleOfA'])
+  }],
+  ['a reader of one part, through a computed, runs only when that part was replaced', () => {
+    const it = watched()
+    it.send({ type: 'SAY', id: 'a', text: 'hello' })
+    deepStrictEqual(it.ran().filter((name) => name.startsWith('part')), ['partA'])
+    it.send({ type: 'SAY', id: 'b', text: 'other' })
+    deepStrictEqual(it.ran().filter((name) => name.startsWith('part')), ['partB'])
+    it.send({ type: 'RENAME', id: 'b', title: 'B2' })
+    deepStrictEqual(it.ran().filter((name) => name.startsWith('part')), [])
+    it.send({ type: 'RENAME', id: 'a', title: 'A2' })
+    deepStrictEqual(it.ran().filter((name) => name.startsWith('part')), ['partTitleA'])
   }],
   ['a field replaced whole runs only its reader', () => {
     const it = watched()
@@ -153,12 +178,56 @@ const checks: Array<[string, () => void]> = [
     deepStrictEqual(it.seen.messagesOfA, [])
     strictEqual('a' in it.held.value.data.titles, false)
   }],
-  ['the mirror is a copy: what the state itself holds is never written to', () => {
+
+  // ── what a reader is handed ──────────────────────────────────────────────────────────────────────────────────────
+
+  ["a reader is handed the state's own values, and what a change did not touch is the same object after it", () => {
     const it = watched()
-    const before = it.sys.read(it.handle).data.messages
+    const titles = it.held.value.data.titles
+    strictEqual(titles, it.sys.read(it.handle).data.titles)
     it.send({ type: 'SAY', id: 'a', text: 'hello' })
-    deepStrictEqual(before, { a: [], b: [] })
-    deepStrictEqual(it.sys.read(it.handle).data, JSON.parse(JSON.stringify(it.held.value.data)))
+    strictEqual(it.held.value.data.titles, titles)
+    strictEqual(it.held.value.data.messages, it.sys.read(it.handle).data.messages)
+  }],
+  ['an object read from a state is the one the state finds when it is sent back', () => {
+    const it = watched()
+    it.send({ type: 'KNOW', item: { id: 'one' } })
+    it.send({ type: 'KNOW', item: { id: 'two' } })
+    const first = it.held.value.data.known[0]!
+    ok(it.sys.read(it.handle).data.known.includes(first))
+    it.send({ type: 'DROP', item: first })
+    deepStrictEqual(it.held.value.data.known, [{ id: 'two' }])
+  }],
+  ['what is read can be cloned', () => {
+    const it = watched()
+    it.send({ type: 'SAY', id: 'a', text: 'hello' })
+    deepStrictEqual(structuredClone(it.held.value.data.messages), { a: ['hello'], b: [] })
+  }],
+  ['a value that is not plain data is handed over as it is, and is not frozen', () => {
+    const it = watched()
+    const repository = it.held.value.data.repository
+    ok(repository instanceof Repository)
+    strictEqual(repository.where(), '/a')
+    strictEqual(Object.isFrozen(repository), false)
+    strictEqual(repository, it.sys.read(it.handle).data.repository)
+  }],
+  ['a field replaced by a value equal to the one before runs its reader: replaced is changed', () => {
+    const it = watched()
+    it.send({ type: 'RESULT' })
+    deepStrictEqual(it.ran(), ['result'])
+    it.send({ type: 'RESULT' })
+    deepStrictEqual(it.ran(), ['result'])
+  }],
+  ['nothing a reader is handed can be written: a field is not set, and a write inside one throws', () => {
+    const it = watched()
+    const warn = console.warn
+    console.warn = () => {}
+    try { (it.held.value.data as { count: number }).count = 99 } finally { console.warn = warn }
+    strictEqual(it.held.value.data.count, 0)
+    strictEqual(it.sys.read(it.handle).data.count, 0)
+    throws(() => { (it.held.value.data.messages.a as string[]).push('written') }, TypeError)
+    throws(() => { (it.held.value.data.titles as Record<string, string>).a = 'written' }, TypeError)
+    deepStrictEqual(it.sys.read(it.handle).data.messages, { a: [], b: [] })
   }],
 
   // ── a frame, in a window ──────────────────────────────────────────────────────────────────────────────────────────
