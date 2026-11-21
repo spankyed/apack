@@ -4,8 +4,8 @@
 // anything is installed. The checkout is `APACK_GIT_DIR`, or `~/Develop/Projects/apack/apack-git`.
 //
 // **npm resolves through this link** to the one npm package in that checkout: the built-in pack depends on
-// `apack-git` at `file:../../vendor/apack-git`, the engine that runs git for the code feature and keeps the
-// picture of a working tree.
+// `@apackdev/git`, which the root's `overrides` maps to `file:./vendor/apack-git`, the engine that runs git for
+// the code feature and keeps the picture of a working tree.
 //
 // **What the package's entries name is built, so this builds it.** The engine is TypeScript and what a
 // consumer bundles is its `dist/`, which is not tracked: a pack build resolving a link to a checkout that had
@@ -73,8 +73,8 @@ export function linkApackGit(root, checkout = apackGitCheckout()) {
   const rev = fs.readFileSync(revFile, 'utf8').trim();
   let name;
   try { name = JSON.parse(fs.readFileSync(path.join(checkout, 'package.json'), 'utf8')).name; } catch { name = undefined; }
-  if (name !== 'apack-git') {
-    throw new Error(`${checkout} isn't an apack-git checkout (no package.json naming apack-git). Clone it there, or set APACK_GIT_DIR`);
+  if (name !== '@apackdev/git') {
+    throw new Error(`${checkout} isn't an apack-git checkout (no package.json naming @apackdev/git). Clone it there, or set APACK_GIT_DIR`);
   }
   try {
     execFileSync('git', ['-C', checkout, 'merge-base', '--is-ancestor', rev, 'HEAD'], { stdio: 'ignore' });

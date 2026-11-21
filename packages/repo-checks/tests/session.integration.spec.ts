@@ -44,7 +44,7 @@ beforeEach(async () => {
   apackTerminal = path.join(dir, 'apack-terminal');
   fs.mkdirSync(path.join(apackTerminal, 'view', 'dist'), { recursive: true });
   fs.writeFileSync(path.join(apackTerminal, 'Cargo.toml'), '[package]\nname = "apack-terminal"\n');
-  fs.writeFileSync(path.join(apackTerminal, 'view', 'package.json'), JSON.stringify({ name: 'apack-terminal-view' }));
+  fs.writeFileSync(path.join(apackTerminal, 'view', 'package.json'), JSON.stringify({ name: '@apackdev/terminal-view' }));
   await git(apackTerminal, 'init', '-b', 'main');
   await git(apackTerminal, 'add', '.');
   await git(apackTerminal, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'apack-terminal');
@@ -53,7 +53,7 @@ beforeEach(async () => {
   // The apack-git checkout, the third: a manifest naming it, and a `dist/` newer than what it is built from
   apackGit = path.join(dir, 'apack-git');
   fs.mkdirSync(path.join(apackGit, 'dist'), { recursive: true });
-  fs.writeFileSync(path.join(apackGit, 'package.json'), JSON.stringify({ name: 'apack-git' }));
+  fs.writeFileSync(path.join(apackGit, 'package.json'), JSON.stringify({ name: '@apackdev/git' }));
   await git(apackGit, 'init', '-b', 'main');
   await git(apackGit, 'add', '.');
   await git(apackGit, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'apack-git');

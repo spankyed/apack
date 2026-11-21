@@ -49,7 +49,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import parse, { type Node as SpdxNode } from 'spdx-expression-parse';
 import satisfies from 'spdx-satisfies';
-import { bundledPackages, installedPackage, type BundledPackage } from '@apackdev/host/build/bundled-packages';
+import { bundledPackages, installedPackage, isFirstParty, type BundledPackage } from '@apackdev/host/build/bundled-packages';
 import { PACK_BUILD_STAGING_DIR } from '@apackdev/host/build/pack-workdir';
 
 /** A license, licence, notice or copying file, in any case and with any extension, the word anywhere in the name */
@@ -143,10 +143,6 @@ export const OVERRIDES: Readonly<Record<string, Override>> = {
   '@ai-sdk/provider-utils': {
     files: ['vercel-ai-LICENSE', 'Apache-2.0.txt'],
     why: "ships no license file; its repository's (vercel/ai) is Apache-2.0's notice, and the license is its full text",
-  },
-  'apack-terminal': {
-    files: ['apack-terminal-LICENSE-MIT'],
-    why: "the terminal broker's protocol package, whose license files are at its repository's root, outside it",
   },
   '@napi-rs/lzma-linux-x64-gnu': {
     files: ['napi-rs-lzma-LICENSE'],
@@ -323,7 +319,6 @@ function packagesIn(nodeModules: string): string[] {
     .filter((dir) => fs.existsSync(path.join(dir, 'package.json')));
 }
 
-const firstParty = (name: string) => name === 'apack' || name.startsWith('@app/') || name.startsWith('@apackdev/');
 
 function manifestOf(dir: string): { name: string; version?: string; license?: unknown; licenses?: unknown; repository?: unknown; author?: unknown } {
   return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
@@ -338,7 +333,7 @@ export function shippedPackages(appDir: string): NoticePackage[] {
   while (queue.length) {
     for (const dir of packagesIn(queue.pop()!)) {
       const manifest = manifestOf(dir);
-      if (!firstParty(manifest.name)) found.push({ name: manifest.name, version: manifest.version ?? '0.0.0', dir, carried: 'files' });
+      if (!isFirstParty(manifest.name)) found.push({ name: manifest.name, version: manifest.version ?? '0.0.0', dir, carried: 'files' });
       queue.push(path.join(dir, 'node_modules'));
     }
   }
@@ -429,7 +424,7 @@ export function packBundledPackages(packDir: string): { packages: NoticePackage[
     fromModules = [...bundledPackages(ids, packDir, injected), installedPackage('esbuild', installedPackage('vite', packDir).dir)];
   } catch (error) { problems.push((error as Error).message); }
   const found = new Map([...fromModules, ...named.values()].map((pkg) => [pkg.dir, pkg]));
-  const packages = [...found.values()].filter((pkg) => !firstParty(pkg.name)).map((pkg) => ({ ...pkg, carried: 'inlined' as const }));
+  const packages = [...found.values()].filter((pkg) => !isFirstParty(pkg.name)).map((pkg) => ({ ...pkg, carried: 'inlined' as const }));
   return { packages, problems };
 }
 

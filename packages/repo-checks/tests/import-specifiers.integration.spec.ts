@@ -349,6 +349,16 @@ describe('findUpwardImports', () => {
     expect(findUpwardImports(layers, root)).toEqual([problem]);
   });
 
+  // `@apackdev/git` and the terminal's two are another repository's, mapped to vendor/ by the root's `overrides`:
+  // they share the scope and are no layer, so a layer imports and declares them as any outside package
+  it("reads an @apackdev package the root's overrides vendor as an outside one, and only that one", () => {
+    allowed();
+    writeAt('package.json', JSON.stringify({ name: 'root', overrides: { '@apackdev/terminal': 'file:./vendor/apack-terminal/node', '@apackdev/ui': '^1' } }));
+    writeAt('layers/host/src/broker.ts', "import type { Event } from '@apackdev/terminal';\nimport Button from '@apackdev/ui/design/button';\n");
+    rewriteAt('layers/host/package.json', JSON.stringify({ name: 'x', dependencies: { '@elmdb/ears': '*', '@apackdev/sdk': '*', '@apackdev/terminal': '0.1.0' } }));
+    expect(findUpwardImports(layers, root)).toEqual(['layers/host/src/broker.ts:2: @apackdev/ui/design/button']);
+  });
+
   it.each([
     ['api', { devDependencies: { '@elmdb/ears': '*', '@apackdev/sdk': '*' } }, 'layers/api/package.json: undeclared: @apackdev/host'],
     ['renderer', { dependencies: { '@apackdev/host': '*', '@apackdev/sdk': '*' } }, 'layers/renderer/package.json: undeclared: @apackdev/ui'],
@@ -679,7 +689,7 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     return findNodePtyImports(PACK_SRC, root);
   },
   findEmulatorImports: () => {
-    packFixture({ 'src/view.ts': "import { TerminalView } from 'apack-terminal-view';" });
+    packFixture({ 'src/view.ts': "import { TerminalView } from '@apackdev/terminal-view';" });
     return findEmulatorImports(PACK_SRC, root);
   },
   findSchemeRegistrations: () => {
@@ -1924,9 +1934,9 @@ describe('findNodePtyImports', () => {
 
 describe('findEmulatorImports', () => {
   it('reports a pack file reaching the emulator outside the seam', () => {
-    packFixture({ 'src/panel.vue.ts': "import type { ViewOptions } from 'apack-terminal-view';" });
+    packFixture({ 'src/panel.vue.ts': "import type { ViewOptions } from '@apackdev/terminal-view';" });
     expect(findEmulatorImports(PACK_SRC, root)).toEqual([
-      `${PACK_FIXTURE}/src/panel.vue.ts:1: apack-terminal-view`,
+      `${PACK_FIXTURE}/src/panel.vue.ts:1: @apackdev/terminal-view`,
     ]);
   });
 

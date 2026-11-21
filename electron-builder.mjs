@@ -115,7 +115,7 @@ export default /** @type import('electron-builder').Configuration */
         file: path.join(context.outDir, `${releasePrefix}-${metadata.version}-${os}-${Arch[context.arch]}.cdx.json`),
         app: {name: productName, version: metadata.version},
         // The vendored checkouts' packages, by the repository each is pinned from, which no registry publishes
-        identity: sbomIdentity(projectDir, {elmdb: 'elmdb#crates/elmdb-node', 'apack-git': 'apack-git', 'apack-terminal': 'apack-terminal#node', 'apack-terminal-view': 'apack-terminal#view'}),
+        identity: sbomIdentity(projectDir, {elmdb: 'elmdb#crates/elmdb-node', '@elmdb/ears': 'elmdb#packages/ears', '@apackdev/git': 'apack-git', '@apackdev/terminal': 'apack-terminal#node', '@apackdev/terminal-view': 'apack-terminal#view'}),
         // The runtime the app ships, with the Chromium and FFmpeg inside it, and the broker with its release's files
         others: [electronSbomComponent(electronVersion), ...(broker ? [brokerSbomComponent(brokerPin, brokerPlatform)] : [])].filter(Boolean),
       },

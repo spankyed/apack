@@ -128,9 +128,9 @@ function vendoredCheckout(dir, name, variable, fallback) {
 
 /** A cold checkout needs API declarations and pack codegen before typechecks or a built app launch. @param {string} dir */
 async function setup(dir) {
-  // **Every vendored checkout, because `npm ci` will not say one is missing.** A `file:` dependency whose
+  // **Every vendored checkout, because `npm ci` will not say one is missing.** A `file:` override whose
   // target is absent installs as a dangling symlink and exits 0, so a worktree without these links fails
-  // later and elsewhere: `apack-terminal` is a declared dependency of `@apackdev/host` and the API, and
+  // later and elsewhere: `@apackdev/terminal` is a declared dependency of `@apackdev/host` and the API, and
   // without it `typecheck:host` cannot resolve the broker's protocol types — which is the first leg of the
   // strict chain `session:check` runs, on every branch. The view the built-in pack draws a terminal with is
   // a package of that same checkout, which its linker builds; without it the pack does not build. The pack's

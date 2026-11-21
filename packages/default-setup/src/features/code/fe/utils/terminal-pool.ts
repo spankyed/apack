@@ -1,4 +1,4 @@
-import { BrokerViews, TerminalView, xtermPalette, type Command, type CursorShape, type Detector, type LinkPreview, type Theme } from 'apack-terminal-view'
+import { BrokerViews, TerminalView, xtermPalette, type Command, type CursorShape, type Detector, type LinkPreview, type Theme } from '@apackdev/terminal-view'
 
 /** A command the shell marked, as the view holds it: a host draws its command blocks from these without importing the view */
 export type { Command }
@@ -8,7 +8,7 @@ import { TERMINAL_COLORS, TERMINAL_THEME } from '../../be/terminal-colors.ts'
 
 /**
  * **The feature's seam to what draws its terminals.** Every view the code surface has is here, and this is
- * the only module that imports `apack-terminal-view` at all — the hosts that show a terminal hold a
+ * the only module that imports `@apackdev/terminal-view` at all — the hosts that show a terminal hold a
  * `TerminalAttachment` and a container, which is the whole of their reach into one.
  *
  * **A window interprets nothing.** The terminal's broker reads what a program writes and keeps its screen

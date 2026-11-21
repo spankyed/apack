@@ -5,8 +5,8 @@ import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
-import { GitError, GitUnusableError, HookRefusedError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from 'apack-git'
-import type { HistoryCommit, HistoryPage, RewriteStep } from 'apack-git'
+import { GitError, GitUnusableError, HookRefusedError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from '@apackdev/git'
+import type { HistoryCommit, HistoryPage, JournalEntry, RewriteStep } from '@apackdev/git'
 import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { storedSignIn } from './github.ts'
 import { isHostName } from '../services/sign-in.ts'
@@ -127,8 +127,16 @@ function answerRewrite(rewrite: Promise<void>, reply: Parameters<typeof answer>[
   })
 }
 
+/**
+ * The newest write the panel's undo takes back: the engine lists every write it can (`undoables`), discards among
+ * them, and a discard is put back from the change it removed (`restoreDiscarded`), not from the panel's undo
+ */
+async function lastUndoable(repo: AppGitRepository): Promise<JournalEntry | undefined> {
+  return (await repo.undoables()).find(({ entry }) => entry.operation !== 'discard')?.entry
+}
+
 function answerUndoable(repo: AppGitRepository, reply: Parameters<typeof answer>[0]): Promise<void> {
-  return repo.lastUndoable().then(
+  return lastUndoable(repo).then(
     entry => answer(reply, { type: 'commit.UNDOABLE_RECEIVED', data: entry ? { id: entry.id, summary: entry.summary } : null }),
     () => {},
   )
@@ -968,7 +976,8 @@ export const commitSystem = setup({
       const { evenIfPublished } = event as { type: 'commit.UNDO_LAST'; evenIfPublished?: boolean }
       if (!requireGitRepository(context, reply)) return
       const repo = context.gitRepository
-      repo.undo({ evenIfPublished }).then((entry) => {
+      // With none, the engine's own refusal of an id it does not hold, `nothing-to-undo`
+      lastUndoable(repo).then(entry => repo.undo(entry?.id ?? '', { evenIfPublished })).then(({ entry }) => {
         answer(reply, { type: 'commit.UNDONE', data: { id: entry.id, summary: entry.summary } })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
         return answerUndoable(repo, reply)
@@ -983,7 +992,9 @@ export const commitSystem = setup({
       const { id } = event as { type: 'commit.RESTORE_DISCARDED'; id: string }
       if (!requireGitRepository(context, reply)) return
 
-      context.gitRepository.restoreDiscarded(id).then((restored) => {
+      // A discard is in the engine's journal, and undoing it is what puts it back
+      context.gitRepository.undo(id).then(({ discard }) => {
+        const restored = discard ?? { restored: [], left: [] }
         answer(reply, { type: 'commit.DISCARD_RESTORED', data: { id, ...restored } })
         self.send({ type: 'commit.GIT_STATUS_CHANGED' })
         for (const path of restored.restored) {

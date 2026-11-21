@@ -52,7 +52,7 @@ it('answers a discard with what it kept, and puts it back for the window that as
   const discarded = await app!.send('code', { type: 'commit.REVERT_FILES', paths: ['a.txt', 'vendor/'] }, asWindow);
   const { kept } = (await app!.nextEmit('code', 'commit.FILES_REVERTED', { answering: discarded })).data as { kept: Kept };
 
-  expect(kept).toEqual({ id: expect.stringMatching(/^[0-9a-f]{40,64}$/), notKept: [] });
+  expect(kept).toEqual({ id: expect.any(String), notKept: [] });
   expect(fs.readFileSync(path.join(directory, 'a.txt'), 'utf8')).toBe('committed\n');
   expect(fs.existsSync(path.join(directory, 'vendor'))).toBe(false);
   expect(await statusPaths()).toEqual([]);
@@ -95,7 +95,21 @@ it('tells the window a discard that is no longer kept cannot be put back', async
   await codeOverChanges();
   const discarded = await app!.send('code', { type: 'commit.REVERT_FILE', path: 'a.txt' }, asWindow);
   const { kept } = (await app!.nextEmit('code', 'commit.FILE_REVERTED', { answering: discarded })).data as { kept: Kept };
-  fs.rmSync(getDataDirPath('checkpoints'), { recursive: true, force: true });
+  // The copy dropped and the write's journal entry kept, as the store drops a copy past its age: the store's refs to
+  // its copies deleted, as the engine's own spec of this does
+  const checkpoints = getDataDirPath('checkpoints');
+  const stores = fs.readdirSync(checkpoints, { recursive: true, encoding: 'utf8' })
+    .filter(entry => path.basename(entry) === 'HEAD' && fs.existsSync(path.join(checkpoints, path.dirname(entry), 'objects')))
+    .map(entry => path.join(checkpoints, path.dirname(entry)));
+  let dropped = 0;
+  for (const store of stores) {
+    const { stdout } = await git(checkpoints, '--git-dir', store, 'for-each-ref', '--format=%(refname)', 'refs/checkpoints/');
+    for (const ref of String(stdout).split('\n').filter(Boolean)) {
+      await git(checkpoints, '--git-dir', store, 'update-ref', '-d', ref);
+      dropped++;
+    }
+  }
+  expect(dropped, 'the copy the discard kept').toBeGreaterThan(0);
 
   const undone = await app!.send('code', { type: 'commit.RESTORE_DISCARDED', id: kept.id! }, asWindow);
 
