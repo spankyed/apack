@@ -4,7 +4,7 @@ import type { Contract } from './contract.ts';
 import { setup } from 'xstate'
 import { defineSystem } from '@apackdev/sdk/framework'
 // [SEARCH_INDEX_FF] import type { SearchIndex } from './search-index/types/search-index'
-import { broadcastToSurface } from '#generated/events.ts'
+import { broadcast } from '#generated/events.ts'
 import { repository } from '#generated/repository.ts';
 import * as path from 'path'
 import * as os from 'os'
@@ -21,7 +21,7 @@ export const librarySpec = defineSystem<Contract>();
  * Tells every window that something on disk under a symlinked folder changed, which no view can see: `folderId`'s
  * contents, or with `null`, a symlinked folder's not known. A notification — whoever is showing one fetches it again.
  */
-const diskChanged = (folderId: string | null) => broadcastToSurface('library', { type: 'FOLDER_CHANGED', folderId })
+const diskChanged = (folderId: string | null) => broadcast('library', { type: 'FOLDER_CHANGED', folderId })
 
 /** The folder on disk an item on disk sits in, or `null` when that can't be worked out */
 function diskParentOf(id: string): string | null {
@@ -137,7 +137,7 @@ export const librarySystem = setup({
     //   const indices = await searchIndexRepo.getSearchIndicesForFolder(
     //     ev.folderId ? ev.folderId as EARS.EntityId : null
     //   )
-    //   broadcastToSurface('library', { type: 'SEARCH_INDICES_LOADED', data: { indices } })
+    //   broadcast('library', { type: 'SEARCH_INDICES_LOADED', data: { indices } })
     // },
     // createSearchIndex: async ({ system, event }) => {
     //   const ev = event as { type: 'CREATE_SEARCH_INDEX'; config: any; folderId: string | null }
@@ -146,7 +146,7 @@ export const librarySystem = setup({
     //     ev.config,
     //     ev.folderId ? ev.folderId as EARS.EntityId : null
     //   )
-    //   broadcastToSurface('library', { type: 'SEARCH_INDEX_CREATED', data: { index } })
+    //   broadcast('library', { type: 'SEARCH_INDEX_CREATED', data: { index } })
     //   await searchIndexRepo.embedIndexedDocs()
     // },
     // updateSearchIndex: async ({ system, event }) => {
@@ -156,14 +156,14 @@ export const librarySystem = setup({
     //     ev.id as EARS.EntityId,
     //     ev.config
     //   )
-    //   broadcastToSurface('library', { type: 'SEARCH_INDEX_UPDATED', data: { index } })
+    //   broadcast('library', { type: 'SEARCH_INDEX_UPDATED', data: { index } })
     //   await searchIndexRepo.embedIndexedDocs()
     // },
     // deleteSearchIndex: async ({ system, event }) => {
     //   const ev = event as { type: 'DELETE_SEARCH_INDEX'; id: string }
     //   const searchIndexRepo = await import('./search-index/repository')
     //   await searchIndexRepo.deleteSearchIndex(ev.id as EARS.EntityId)
-    //   broadcastToSurface('library', { type: 'SEARCH_INDEX_DELETED', data: { indexId: ev.id } })
+    //   broadcast('library', { type: 'SEARCH_INDEX_DELETED', data: { indexId: ev.id } })
     // },
     // searchInIndex: async ({ system, event }) => {
     //   const ev = event as { type: 'SEARCH_IN_INDEX'; indexId: string; query: string; limit?: number }
@@ -173,7 +173,7 @@ export const librarySystem = setup({
     //     ev.query,
     //     ev.limit
     //   )
-    //   broadcastToSurface('library', { type: 'SEARCH_RESULTS', data: { results } })
+    //   broadcast('library', { type: 'SEARCH_RESULTS', data: { results } })
     // },
     handleSettingsUpdate: ({ event }) => {
       const { changes } = librarySpec.typeOf('FEATURE_SETTINGS_UPDATED', event)

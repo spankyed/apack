@@ -13,7 +13,7 @@
 // Read with the compiler rather than matched in the text, for the reason `check:specifiers`' own reader
 // records: a specifier inside a comment or a template literal is not one, and no regex over the text can
 // tell. In-pack precedent for building a program over this pack's own source:
-// `tests/send-to-system-diagnostics.spec.ts`.
+// `tests/tell-diagnostics.spec.ts`.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import ts from 'typescript';

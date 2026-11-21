@@ -2,7 +2,7 @@
 // token is this pack's own secret (`services.secrets.own`): another pack cannot read it, and it is in no setting
 // and no log. Which account it signs in as is kept beside it, so showing it asks GitHub nothing.
 import type { GitHubAsks, OutgoingGitHubEvents } from '../contract.ts'
-import { broadcastToSurface } from '#generated/events.ts'
+import { broadcast } from '#generated/events.ts'
 import { services } from '#generated/services.ts'
 import { defineHandlers } from '@apackdev/sdk/framework'
 import type { AsksEvents } from '@apackdev/sdk/events'
@@ -144,7 +144,7 @@ function signedIn(repo: GitHubRepo, head: GitHubRepo = repo): GitHubApi {
   return createGitHubApi({ endpoints: services.github.endpoints, token: signIn.token, repo, head })
 }
 
-const accountChanged = (account: GitHubAccount | null) => broadcastToSurface('code', { type: 'github.ACCOUNT_CHANGED', account } satisfies OutgoingGitHubEvents)
+const accountChanged = (account: GitHubAccount | null) => broadcast('code', { type: 'github.ACCOUNT_CHANGED', account } satisfies OutgoingGitHubEvents)
 
 /** Why a sign-in ended without an account, as GitHub's sign-in service says it */
 const signInFailureOf = (error: unknown): GitHubSignInError =>

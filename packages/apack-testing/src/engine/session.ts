@@ -394,7 +394,7 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
    * to an unknown system comes back as a refusal rather than being dropped silently in the renderer, and why
    * `/query` works while the window's own subscription is broken.
    */
-  const sendToSystem = (to: string, event: Record<string, unknown>, call?: string): Promise<unknown> =>
+  const tell = (to: string, event: Record<string, unknown>, call?: string): Promise<unknown> =>
     api.send({ to, event, sender: DRIVE_REF, ...(call === undefined ? {} : { call }) }).then(() => null);
 
   /**
@@ -549,7 +549,7 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
 
     // No call: this is the fire-and-forget verb, so nothing here waits for an answer and there is nothing to
     // match one against. A system that replies to it answers a call nobody is holding, which the bus drops
-    system: (to, event) => attempt('system', () => sendToSystem(to, event)),
+    system: (to, event) => attempt('system', () => tell(to, event)),
 
     query: (code) => attempt('query', () => runCode('EXECUTE_QUERY', code)),
     transact: (code) => attempt('transact', () => runCode('EXECUTE_TRANSACTION', code)),

@@ -1,7 +1,7 @@
 // A query's result goes to the view that ran it, not to every window.
 //
 // Two windows each show the Database surface with their own editor and their own pending request, and a
-// `broadcastToSurface` reached both. An ask is answered to its sender, on the connection it came from — so a person querying in one window and an agent driving in another stop seeing each other's
+// `broadcast` reached both. An ask is answered to its sender, on the connection it came from — so a person querying in one window and an agent driving in another stop seeing each other's
 // results.
 //
 // What this file cannot check is the *delivery narrowing*: the harness has one client, so `emitted` sees

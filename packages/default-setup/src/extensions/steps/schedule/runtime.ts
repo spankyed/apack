@@ -7,7 +7,7 @@ export function register(node: TriggerRuntimeNode, ctx: TriggerRuntimeContext): 
     `${ctx.flowRunNodeId}:${node.id}`,
     node.cronExpression as string,
     () => {
-      ctx.sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', 
+      ctx.tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', 
         eventType: `schedule.${node.id}`,
         targetFlowId: ctx.flowRunNodeId,
       });

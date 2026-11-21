@@ -77,9 +77,9 @@ export function _captureHostServices(): {
     forAction(sender: ActionSender): {
         logger: Logger;
         emitter: {
-            broadcastToSurface: typeof untypedBroadcastToSurface;
+            broadcast: typeof untypedBroadcast;
             sendToWindow: typeof untypedSendToWindow;
-            sendToSystem: typeof untypedSendToSystem;
+            tell: typeof untypedTell;
         };
     };
     get(name: string): unknown;
@@ -222,9 +222,9 @@ export interface FlowRunNode extends RunNodeBase {
 export interface HostServices {
     appData: AppDataService;
     emitter: {
-        broadcastToSurface: typeof untypedBroadcastToSurface;
+        broadcast: typeof untypedBroadcast;
         sendToWindow: typeof untypedSendToWindow;
-        sendToSystem: typeof untypedSendToSystem;
+        tell: typeof untypedTell;
     };
     filesystem: FilesystemService;
     inference: InferenceService;

@@ -1,6 +1,6 @@
 import { featureSettings } from '#generated/settings.ts';
 
-import { broadcastToSurface } from '#generated/events.ts';
+import { broadcast } from '#generated/events.ts';
 import { assign, setup, enqueueActions, raise } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
 
@@ -47,7 +47,7 @@ function stopWithoutRootFlow({ clientConnected }: BrainContext): Partial<BrainCo
   const startError = noRootFlowError();
   if (!startError) logger.warn('No flow to run; start the brain once a flow exists');
   else if (clientConnected) reportStartError(startError);
-  broadcastToSurface('brain', { type: 'BRAIN_KILLED', startError: startError?.message });
+  broadcast('brain', { type: 'BRAIN_KILLED', startError: startError?.message });
   return { brainActor: undefined, runningRootFlowId: undefined, rootRunId: undefined, startError, startErrorReported: clientConnected };
 }
 
@@ -154,7 +154,7 @@ export const brainSystem = setup({
       // News for every window, each of which asks for the new run's tree
       enqueue(({ context }) => {
         if (context.brainActor && context.runningRootFlowId) {
-          broadcastToSurface('brain', {
+          broadcast('brain', {
             type: 'BRAIN_STARTED',
             rootFlowId: context.runningRootFlowId,
           });
@@ -208,7 +208,7 @@ export const brainSystem = setup({
         clearFlowActorRegistry();
 
         // Send BRAIN_KILLED event
-        broadcastToSurface('brain', {
+        broadcast('brain', {
             type: 'BRAIN_KILLED'
         });
 
@@ -259,7 +259,7 @@ export const brainSystem = setup({
         });
 
         // News for every window, each of which asks for the new run's tree
-        broadcastToSurface('brain', {
+        broadcast('brain', {
           type: 'BRAIN_STARTED',
           rootFlowId: currentRootFlowId,
         });
@@ -277,7 +277,7 @@ export const brainSystem = setup({
     }),
     /** The brain's state, for every window whenever it is asked to publish: none of it is a row */
     publishBrainState: ({ context, self }) => {
-      broadcastToSurface('brain', brainState(context, self.getSnapshot().matches({ running: 'paused' })));
+      broadcast('brain', brainState(context, self.getSnapshot().matches({ running: 'paused' })));
     },
     toggleInspect: () => {
       const currentState = isDebugEnabled('brain');
@@ -288,7 +288,7 @@ export const brainSystem = setup({
       featureSettings.forFeature('brain').set({ path: ['inspectEnabled'], value: newState });
 
       // Send confirmation back to frontend
-      broadcastToSurface('brain', {
+      broadcast('brain', {
         type: 'INSPECT_TOGGLED',
         enabled: newState
       });
@@ -315,7 +315,7 @@ export const brainSystem = setup({
       const { eventType, payload, targetFlowId } = ev;
 
       // Pulse the event in UI
-      broadcastToSurface('brain', {
+      broadcast('brain', {
         type: 'EVENT_PULSE',
         eventType: eventType
       });
@@ -441,13 +441,13 @@ export const brainSystem = setup({
           RUN_NODE_SPAWNED: {
             actions: ({ event }) => {
               // Forward to frontend
-              broadcastToSurface('brain', event);
+              broadcast('brain', event);
             }
           },
           RUN_NODE_UPDATED: {
             actions: ({ event }) => {
               // Forward to frontend
-              broadcastToSurface('brain', event);
+              broadcast('brain', event);
             }
           },
         },
@@ -467,7 +467,7 @@ export const brainSystem = setup({
                 target: 'paused',
                 actions: () => {
                   setBrainPausedState(true);
-                  broadcastToSurface('brain', { type: 'BRAIN_PAUSED' });
+                  broadcast('brain', { type: 'BRAIN_PAUSED' });
                 },
               },
             },
@@ -492,7 +492,7 @@ export const brainSystem = setup({
                   },
                   'replayQueuedEvents',
                   () => {
-                    broadcastToSurface('brain', { type: 'BRAIN_RESUMED' });
+                    broadcast('brain', { type: 'BRAIN_RESUMED' });
                   },
                 ],
               },

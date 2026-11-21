@@ -200,7 +200,7 @@ import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import { openSurface } from '#generated/fe.ts'
 import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts';
 import type { MessageEntity, MessageSearchResult, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
-import { sendToSystem } from '#generated/events.ts'
+import { tell } from '#generated/events.ts'
 import { useSettings } from '#generated/settings-fe.ts';
 
 const threadsSettings = useSettings('threads')
@@ -553,7 +553,7 @@ function doSummarize(messageId: string) {
 }
 
 function handleToggleCompacted(markerId: string, compacted: boolean) {
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'TOGGLE_COMPACTED',
     markerId,
     compacted,

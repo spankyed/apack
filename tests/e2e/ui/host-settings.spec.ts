@@ -94,8 +94,8 @@ test('an open editor follows installed pack activation without losing its draft'
     return { component, root, exposed, updates };
   });
   const toggle = () => appPage.evaluate(async () => {
-    const { untypedSendToSystem } = await import('@apackdev/sdk/events');
-    untypedSendToSystem('host/packs', { type: 'TOGGLE_PACK_ENABLED', packId: 'default-setup' });
+    const { untypedTell } = await import('@apackdev/sdk/events');
+    untypedTell('host/packs', { type: 'TOGGLE_PACK_ENABLED', packId: 'default-setup' });
   });
   try {
     await expect(appPage.locator('#live-contribution-editor .reference-pill')).toHaveText('Saved memo');
@@ -193,8 +193,8 @@ test('cold Monaco documents follow source-free declarations and share worker lib
     fs.writeFileSync(installedPacksFile, JSON.stringify({ packs }));
   };
   const refresh = () => appPage.evaluate(async () => {
-    const { untypedSendToSystem } = await import('@apackdev/sdk/events');
-    untypedSendToSystem('host/packs', { type: 'GET_INSTALLED_PACKS' });
+    const { untypedTell } = await import('@apackdev/sdk/events');
+    untypedTell('host/packs', { type: 'GET_INSTALLED_PACKS' });
   });
   const mounted = await appPage.evaluateHandle(async () => {
     const { createApp, h, ref } = await import('vue');

@@ -462,7 +462,7 @@ export interface TriggerFacet {
 export interface TriggerRuntimeContext {
     // (undocumented)
     flowRunNodeId: EARS.EntityId;
-    sendToSystem: (target: {
+    tell: (target: {
         role: string;
     }, event: {
         type: string;

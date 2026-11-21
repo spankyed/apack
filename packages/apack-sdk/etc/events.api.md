@@ -190,7 +190,7 @@ export type ContractAsks<C> = C extends {
 
 // @public
 export function createSends(input?: SendBinding): {
-    broadcastToSurface(name: string, event: {
+    broadcast(name: string, event: {
         type: string;
         [key: string]: unknown;
     }): void;
@@ -202,7 +202,7 @@ export function createSends(input?: SendBinding): {
         type: string;
         [key: string]: unknown;
     }): void;
-    sendToSystem(to: SystemTarget, event: {
+    tell(to: SystemTarget, event: {
         type: string;
         [key: string]: unknown;
     }, options?: CallOptions): string;
@@ -502,12 +502,12 @@ export type TypedAsk<A extends SystemAskMap> = (<Id extends keyof A & string, K 
 // @public
 export interface TypedEvents<P extends SurfaceEvents, S extends SystemEventMap, A extends SystemAskMap = {}> {
     ask: TypedAsk<A>;
-    broadcastToSurface: TypedSendToSurface<P>;
+    broadcast: TypedSendToSurface<P>;
     fromAsk: TypedFromAsk<A>;
     sendToSurface: TypedSendToSurface<P>;
-    // (undocumented)
-    sendToSystem: TypedSendToSystem<S>;
     sendToWindow: TypedSendToWindow<P>;
+    // (undocumented)
+    tell: TypedTell<S>;
 }
 
 // @public
@@ -517,7 +517,10 @@ export type TypedFromAsk<A extends SystemAskMap> = <Id extends keyof A & string,
 export type TypedSendToSurface<M extends SurfaceEvents> = (<P extends keyof M & string>(surface: P, event: OneSend<IsUnion<P>, M[P]['type'], M[P]>) => void) & ((surface: FeatureRef, event: FeatureSettingsUpdated) => void);
 
 // @public
-export type TypedSendToSystem<S extends SystemEventMap> = (<Id extends keyof S & string, Type extends S[Id]['type']>(system: Id, event: OneSend<IsUnion<Id> | IsUnion<Type>, Type, {
+export type TypedSendToWindow<M extends SurfaceEvents> = (<P extends keyof M & string>(client: string, surface: P, event: OneSend<IsUnion<P>, M[P]['type'], M[P]>) => void) & ((client: string, surface: FeatureRef, event: FeatureSettingsUpdated) => void);
+
+// @public
+export type TypedTell<S extends SystemEventMap> = (<Id extends keyof S & string, Type extends S[Id]['type']>(system: Id, event: OneSend<IsUnion<Id> | IsUnion<Type>, Type, {
     type: Type;
 } & WithoutType<EventsOfType<S[Id], Type>>>, options?: CallOptions) => string) & ((target: {
     role: string;
@@ -525,9 +528,6 @@ export type TypedSendToSystem<S extends SystemEventMap> = (<Id extends keyof S &
     type: string;
     [key: string]: unknown;
 }, options?: CallOptions) => string) & ((system: FeatureRef, event: SystemEvents, options?: CallOptions) => string);
-
-// @public
-export type TypedSendToWindow<M extends SurfaceEvents> = (<P extends keyof M & string>(client: string, surface: P, event: OneSend<IsUnion<P>, M[P]['type'], M[P]>) => void) & ((client: string, surface: FeatureRef, event: FeatureSettingsUpdated) => void);
 
 // @public
 export type TypeOfEvent<E> = E extends {
@@ -556,22 +556,22 @@ export type UntypedAskOutcome = {
 };
 
 // @public
-export function untypedBroadcastToSurface(to: string, event: {
+export function untypedBroadcast(to: string, event: {
     type: string;
     [key: string]: unknown;
 }): void;
-
-// @public
-export function untypedSendToSystem(to: SystemTarget, event: {
-    type: string;
-    [key: string]: unknown;
-}, options?: CallOptions): string;
 
 // @public
 export function untypedSendToWindow(client: string, to: string, event: {
     type: string;
     [key: string]: unknown;
 }): void;
+
+// @public
+export function untypedTell(to: SystemTarget, event: {
+    type: string;
+    [key: string]: unknown;
+}, options?: CallOptions): string;
 
 // @public
 export type WithOwnNames<PackId extends string, M> = {

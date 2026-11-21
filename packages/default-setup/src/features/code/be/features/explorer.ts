@@ -2,7 +2,7 @@ import type { ExplorerAsks } from '../contract.ts'
 import { AskError, type AsksEvents } from '@apackdev/sdk/events'
 import { defineHandlers } from '@apackdev/sdk/framework'
 import { safeEvents } from '@apackdev/sdk/helpers'
-import { broadcastToSurface } from '#generated/events.ts';
+import { broadcast } from '#generated/events.ts';
 import { assign, fromCallback, setup, type AnyActorRef } from 'xstate'
 
 import { FileSystemRepository } from '../services/filesystem.ts'
@@ -134,7 +134,7 @@ export const explorerSystem = setup({
     },
 
     handleFileChange: ({ event }) => {
-      broadcastToSurface(surfaceId, {
+      broadcast(surfaceId, {
         type: 'explorer.FILE_CHANGED_EXTERNALLY',
         data: typeOf('explorer.FILE_CHANGE_CALLBACK', event).change
       })

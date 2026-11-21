@@ -10,7 +10,7 @@ import {
 import type { NoteDTO, NoteSummary } from '#generated/types.ts'
 import type { Contract, NotesContext, NotesInboxEvent } from './contract.ts'
 import type { NoteSummary as CreatedNote } from '#features/notes/be/types.ts'
-import { fromAsk, sendToSystem } from '#generated/events.ts'
+import { fromAsk, tell } from '#generated/events.ts'
 import { Trash2 } from 'lucide-vue-next'
 import { contextMenuFn } from '@apackdev/sdk/fe'
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe'
@@ -257,7 +257,7 @@ const notesState = setup({
     sendViewNote: ({ context }) => {
       const noteId = context.viewedNoteId ?? context.currentNoteId
       if (noteId) {
-        sendToSystem(id, {
+        tell(id, {
           type: 'VIEW_NOTE',
           id: noteId,
         })

@@ -58,7 +58,7 @@ import { setup } from 'xstate';
 export default setup({}).createMachine({});`);
   write(root, 'tests/memos-system.ts', `
 import { setup } from 'xstate';
-import { untypedBroadcastToSurface } from '@apackdev/sdk/events';
+import { untypedBroadcast } from '@apackdev/sdk/events';
 import { reportError } from '@apackdev/sdk/logger';
 import { defineSystem } from '@apackdev/sdk/framework';
 export type Contract = {
@@ -67,9 +67,9 @@ export type Contract = {
 };
 const spec = defineSystem<Contract>();
 const machine = setup({ types: spec.types }).createMachine({
-  entry: () => untypedBroadcastToSurface('dependent-pack/memos', { type: 'MEMOS_STARTED' }),
+  entry: () => untypedBroadcast('dependent-pack/memos', { type: 'MEMOS_STARTED' }),
   on: {
-    NOTIFY: { actions: () => untypedBroadcastToSurface('dependent-pack/memos', { type: 'MEMOS_NOTIFIED' }) },
+    NOTIFY: { actions: () => untypedBroadcast('dependent-pack/memos', { type: 'MEMOS_NOTIFIED' }) },
     SAVE: { actions: () => reportError({ error: new Error('lost memo'), source: 'memos' }) },
   },
 });

@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mockInference, mockService, startApp } from '@apackdev/testing/harness';
 import { services } from '#generated/services.ts';
-import { sendToSystem } from '#generated/events.ts';
+import { tell } from '#generated/events.ts';
 
 const scripted = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
@@ -57,7 +57,7 @@ describe('a stopped test app', () => {
 describe('events sent before a client connects', () => {
   it('reach the systems, while what they send to surfaces is dropped until a client connects', async () => {
     const app = await startApp({ systems: ['memos'] });
-    sendToSystem('memos', { type: 'ADD_MEMO', text: 'before any client' });
+    tell('memos', { type: 'ADD_MEMO', text: 'before any client' });
     await app.settle();
 
     expect(app.emitted('memos')).toEqual([]);

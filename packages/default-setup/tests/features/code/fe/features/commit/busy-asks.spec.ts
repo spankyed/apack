@@ -6,7 +6,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import { latestAsk, resetAsks } from '../../_support/asks.ts';
 
-vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),

@@ -2,7 +2,7 @@ import type { OpenEntity } from '@apackdev/sdk/events';
 import type { Contract, MemosContext, MemosInbox } from './contract.ts';
 import { setup, assign, type ActorRefFrom } from 'xstate';
 import { entityIs, safeEvents } from '@apackdev/sdk/fe';
-import { sendToSystem } from '#generated/events.ts';
+import { tell } from '#generated/events.ts';
 import type { OutgoingMemosEvents } from '../be/types.ts';
 
 export const id = 'memos' as const;
@@ -31,7 +31,7 @@ const memosState = setup({
       },
     }),
     sendAdd: ({ event }) => {
-      sendToSystem('memos', { type: 'ADD_MEMO', text: typeOf('MEMOS.ADD', event).text });
+      tell('memos', { type: 'ADD_MEMO', text: typeOf('MEMOS.ADD', event).text });
     },
     addNote: assign({
       notes: ({ context, event }) => {
@@ -40,7 +40,7 @@ const memosState = setup({
       },
     }),
     sendAddNote: ({ event }) => {
-      sendToSystem('memos', { type: 'ADD_MEMO_NOTE', text: typeOf('MEMOS.ADD_NOTE', event).text });
+      tell('memos', { type: 'ADD_MEMO_NOTE', text: typeOf('MEMOS.ADD_NOTE', event).text });
     },
     highlight: assign({
       highlighted: ({ event }) => typeOf('MEMO.HIGHLIGHT', event).memoId,

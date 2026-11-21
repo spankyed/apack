@@ -18,7 +18,7 @@ import { featureSettings } from '#generated/settings.ts';
 import type { Contract, CommitAsks, SearchAsks, ActionsAsks, PromptsAsks, PullRequestAsks, GitHubAsks, ExplorerAsks, TerminalAsks } from './contract.ts';
 import type { AppSettings } from '@apackdev/sdk/types';
 import { services } from '#generated/services.ts';
-import { broadcastToSurface, sendToWindow } from '#generated/events.ts';
+import { broadcast, sendToWindow } from '#generated/events.ts';
 import { clearCliPathCache, isCliName, testCli } from './utils/resolve-cli.ts';
 import { terminalService } from './services/terminal.ts';
 import { createLogger, setDebugEnabled } from '@apackdev/sdk/logger';
@@ -226,7 +226,7 @@ export const systemMachine = setup({
       child(self, 'terminal')?.send({ type: 'terminal.UPDATE_BASE_DIRECTORY', path: newPath });
 
       // News for every window; each asks again for what it shows of the new directory
-      broadcastToSurface('code', { type: 'BASE_DIRECTORY_CHANGED', baseDirectory: newPath });
+      broadcast('code', { type: 'BASE_DIRECTORY_CHANGED', baseDirectory: newPath });
     },
 
     /**
@@ -238,7 +238,7 @@ export const systemMachine = setup({
       // The Settings view of the window that asked; with no window, the Settings view in every window
       const answer = (result: { success: boolean; error?: string; resolvedPath?: string }) => {
         const tested = { type: 'CLI_TEST_RESULT' as const, provider, ...result };
-        if (client) sendToWindow(client, 'host/settings', tested); else broadcastToSurface('host/settings', tested);
+        if (client) sendToWindow(client, 'host/settings', tested); else broadcast('host/settings', tested);
       };
 
       if (!isCliName(provider)) return answer({ success: false, error: `Unknown CLI provider: ${provider}` });

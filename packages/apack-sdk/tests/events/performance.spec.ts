@@ -1,7 +1,7 @@
 import { _parseStartupPerformance } from '../../src/runtime/performance.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { startFeTestRuntime, stopFeTestRuntime } from '../../src/testing/fe-runtime.ts';
-import { untypedSendToSystem, type Message } from '../../src/events/index.ts';
+import { untypedTell, type Message } from '../../src/events/index.ts';
 import { _performanceEnvelope, _performanceCarrier, _withPerformanceCarrier, _withPerformanceDelivery, _withPerformanceEvent, type PerformanceExecution } from '../../src/runtime/performance.ts';
 
 afterEach(stopFeTestRuntime);
@@ -14,7 +14,7 @@ it('carries diagnostic context on the envelope without changing business event d
   };
   startFeTestRuntime({ diagnostics, client: { send: message => messages.push(message) } });
   const event = { type: 'PING', value: 'business data' };
-  untypedSendToSystem('pack/system', event);
+  untypedTell('pack/system', event);
   expect(messages[0]).toMatchObject({ to: 'pack/system', diagnostics: diagnostics.capture() });
   expect(messages[0]!.event).toBe(event);
   expect(event).toEqual({ type: 'PING', value: 'business data' });
@@ -23,7 +23,7 @@ it('carries diagnostic context on the envelope without changing business event d
 it('does not add diagnostic metadata when recording is unavailable', () => {
   const send = vi.fn();
   startFeTestRuntime({ client: { send } });
-  untypedSendToSystem('pack/system', { type: 'PING' });
+  untypedTell('pack/system', { type: 'PING' });
   expect(send.mock.calls[0]![0]).not.toHaveProperty('diagnostics');
 });
 

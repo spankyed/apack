@@ -421,7 +421,7 @@ export function createStreamConsumer(
     });
 
     // Notify flow
-    services.emitter.sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', 
+    services.emitter.tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', 
       eventType: 'cdx.stream.paused',
       payload: { threadId, method, requestId },
     });
@@ -480,7 +480,7 @@ export function createStreamConsumer(
       },
     });
 
-    services.emitter.sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', 
+    services.emitter.tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', 
       eventType: 'cdx.stream.paused',
       payload: { threadId, method: 'plan/approval', requestId: -1 },
     });
@@ -539,7 +539,7 @@ export function createStreamConsumer(
       void replayQueuedMessage(services, threadId, queued, log);
     }
 
-    services.emitter.sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', 
+    services.emitter.tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', 
       eventType: 'cdx.stream.completed',
       payload: {
         threadId, text, usage, hadErrors,

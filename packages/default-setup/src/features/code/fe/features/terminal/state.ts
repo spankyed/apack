@@ -1,5 +1,5 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import { safeEvents } from '@apackdev/sdk/helpers';
 import { freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe';
 import { terminalPool } from '../../utils/terminal-pool.ts';
@@ -315,11 +315,11 @@ export const terminalState = setup({
 
     sendTerminalInput: ({ event }) => {
       const ev = typeOf('terminal.INPUT', event)
-      sendToSystem('code', { type: 'terminal.TERMINAL_INPUT', terminalId: ev.terminalId, data: ev.data })
+      tell('code', { type: 'terminal.TERMINAL_INPUT', terminalId: ev.terminalId, data: ev.data })
     },
 
     releaseTerminalFit: ({ event }) => {
-      sendToSystem('code', { type: 'terminal.STOPPED_FITTING', terminalId: typeOf('terminal.DETACHED', event).terminalId })
+      tell('code', { type: 'terminal.STOPPED_FITTING', terminalId: typeOf('terminal.DETACHED', event).terminalId })
     },
 
     resizeTerminal: enqueueActions(({ event, enqueue }) => {
@@ -663,7 +663,7 @@ export const terminalState = setup({
         enqueue.assign({ statusNotified: rest })
       }
       if (needsLooking(context.terminals.find(terminal => terminal.id === id)?.statuses)) {
-        sendToSystem('code', { type: 'terminal.STATUS_SEEN', terminalId: id })
+        tell('code', { type: 'terminal.STATUS_SEEN', terminalId: id })
       }
     }),
 
@@ -705,7 +705,7 @@ export const terminalState = setup({
 
     resizeRewind: ({ context, event }) => {
       const ev = typeOf('terminal.REWIND_RESIZE', event)
-      if (context.rewind) sendToSystem('code', { type: 'terminal.REWIND_RESIZE', session: context.rewind.session, cols: ev.cols, rows: ev.rows })
+      if (context.rewind) tell('code', { type: 'terminal.REWIND_RESIZE', session: context.rewind.session, cols: ev.cols, rows: ev.rows })
     },
 
     seekRewind: enqueueActions(({ context, event, enqueue }) => {
@@ -720,7 +720,7 @@ export const terminalState = setup({
 
     closeRewind: assign(({ context }) => {
       if (context.rewind) {
-        sendToSystem('code', { type: 'terminal.REWIND_CLOSE', session: context.rewind.session })
+        tell('code', { type: 'terminal.REWIND_CLOSE', session: context.rewind.session })
         terminalPool.dispose(rewindViewId(context.rewind.session))
       }
       return { rewind: null }
@@ -764,7 +764,7 @@ export const terminalState = setup({
         // Run pending command if set. **Ended the way this shell ends a line** (X6): a window cannot know
         // which shell is on the other end, so the descriptor carries it
         if (command) {
-          sendToSystem('code', {
+          tell('code', {
             type: 'terminal.TERMINAL_INPUT',
             terminalId: terminalInfo.id,
             // A descriptor from before this field existed, or from a backend mid-reload, must not put the

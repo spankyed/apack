@@ -3,7 +3,7 @@ import { boundEars as ears } from '@apackdev/sdk/ears';
 import * as os from 'node:os';
 import { describe, expect, it, vi } from 'vitest';
 import { entityIds, dropAttribute, resetTestData, startTestRuntime, takeSystemErrors, testRootEvents } from '../../src/testing/index.ts';
-import { untypedBroadcastToSurface, untypedSendToSystem } from '../../src/events/index.ts';
+import { untypedBroadcast, untypedTell } from '../../src/events/index.ts';
 import { testPacks, testPacksView } from '../../src/testing/packs.ts';
 import { getAppVersion } from '../../src/env/index.ts';
 import { createLogger, reportError } from '../../src/logger/index.ts';
@@ -17,15 +17,15 @@ process.env.APACK_USER_DATA_DIR ??= os.tmpdir();
 startTestRuntime({ entityTypes: ['Memo'] });
 
 describe('the test host', () => {
-  it('binds testRootEvents as the bus untypedBroadcastToSurface and untypedSendToSystem send on, which _rootEvents is', () => {
+  it('binds testRootEvents as the bus untypedBroadcast and untypedTell send on, which _rootEvents is', () => {
     const toSurfaces: unknown[] = [];
     const incoming: unknown[] = [];
     const stop = [testRootEvents.onSurfaceSend((e) => toSurfaces.push(e)), testRootEvents.onIncoming((e) => incoming.push(e))];
     testPacks.designations.set('brain', 'brain-system');
     try {
-      untypedBroadcastToSurface('memos', { type: 'MEMO_ADDED' });
-      untypedSendToSystem('memos', { type: 'ADD_MEMO' });
-      untypedSendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'user.message' });
+      untypedBroadcast('memos', { type: 'MEMO_ADDED' });
+      untypedTell('memos', { type: 'ADD_MEMO' });
+      untypedTell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'user.message' });
       _rootEvents.emitIncoming({ to: 'memos', event: { type: 'PING' } });
     } finally {
       stop.forEach((unsubscribe) => unsubscribe());

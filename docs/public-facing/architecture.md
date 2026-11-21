@@ -301,7 +301,7 @@ secrets and filesystem require `consumes.services` declarations. Onboarding is s
 Reset clears stored data and keys, then runs `onInit`, app-line migrations, pack-line migrations and
 content application in dependency order, as startup does. Failed app-line migrations stop later stages.
 
-Sends, logging and error reports are SDK code over the bound bus: `sendToSystem` emits an incoming event, `broadcastToSurface` (and `services.emitter.broadcastToSurface`) goes through the bus actor, which drops it until a client connects, like a system's `emit`, and `createLogger` emits log events, which the API prints once and streams to the logs surface (with nothing bound, as in the CLI, a logger writes to the console). In the renderer, `bindFeHost` binds the application actor, the secrets client behind `secretsClient` (the Settings → Secrets procedures) and a transport that sends to systems over the API client. Using the port with nothing bound throws, naming `bindHost` or `bindFeHost`.
+Sends, logging and error reports are SDK code over the bound bus: `tell` emits an incoming event, `broadcast` (and `services.emitter.broadcast`) goes through the bus actor, which drops it until a client connects, like a system's `emit`, and `createLogger` emits log events, which the API prints once and streams to the logs surface (with nothing bound, as in the CLI, a logger writes to the console). In the renderer, `bindFeHost` binds the application actor, the secrets client behind `secretsClient` (the Settings → Secrets procedures) and a transport that sends to systems over the API client. Using the port with nothing bound throws, naming `bindHost` or `bindFeHost`.
 
 A pack can't register a service under a host service's name.
 
@@ -345,7 +345,7 @@ A flow run is not in the app's database: no unit (`transact`) on the app's engin
 | `ref.ts` | `ref(name)`: the ref (`<packId>/<featureId>`) a name in this pack's code stands for, its own features by id and any other by ref, bound to the pack so its code never passes its own pack id |
 | `fe.ts` | `openSurface(name, event?)`, taking the names pack code writes, and the `SurfaceName` type, which lists exactly those names (the pack's own surfaces by feature id, its dependencies' by `<packId>/<featureId>`). Only packs with surfaces get it |
 | `system-specs.ts` | Type-only: `specs`, the events each system receives and sends, keyed by feature id, read from its entry's spec. `events.ts` imports it; only packs with systems get it |
-| `events.ts` | `SendableSurfaceEvents` (surface ID -> the events it receives: its own feature's system's, plus the inbox that surface's `Contract` declares), `PackSystemEvents`, and the typed `broadcastToSurface` (backend, every window), `sendToSurface` (renderer, this window) and `sendToSystem` |
+| `events.ts` | `SendableSurfaceEvents` (surface ID -> the events it receives: its own feature's system's, plus the inbox that surface's `Contract` declares), `PackSystemEvents`, and the typed `broadcast` (backend, every window), `sendToSurface` (renderer, this window) and `tell` |
 | `types.ts` | Type barrel: each feature's `types` and step node types |
 | `entity-destinations.json` / `event-contracts.json` | Build-checked entity destinations and event contracts, readable without executing pack modules |
 | `settings.ts` / `settings-fe.ts` | Typed, owner-bound settings handles and frontend settings binding |

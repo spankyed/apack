@@ -20,7 +20,7 @@ export type { OpenFile, TerminalTab, QuickOpenResult, PanelType } from './contra
 export type { CodeContext } from './contract.ts';
 import type { OutgoingCodeEvents } from '#features/code/be/contract.ts';
 import type { CodeConnectedData, GitDiff } from '#features/code/be/types.ts';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import { safeEvents } from '@apackdev/sdk/helpers';
 
 // Import child state machines
@@ -393,7 +393,7 @@ const codeState = setup({
      * never delivered is made up for here.
      */
     externalChanges: fromCallback(() => {
-      const check = () => { sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' }) };
+      const check = () => { tell('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' }) };
       window.addEventListener('focus', check);
       return () => window.removeEventListener('focus', check);
     }),

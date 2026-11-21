@@ -1,4 +1,4 @@
-import { sendToSystem } from '#generated/events.ts';
+import { tell } from '#generated/events.ts';
 import { untypedQuery } from '@apackdev/sdk/ears';
 import { services as appServices, servicesForAction as ownServicesForAction } from '#generated/services.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
@@ -311,7 +311,7 @@ export function createFlowNodeSystem(
             if (!triggerFacet?.register) continue;
             const hasSteps = repository.brainQueries.eventAllSteps(sn.id as EARS.EntityId).length > 0;
             if (!hasSteps) continue;
-            triggerFacet.register(sn as any, { flowRunNodeId, sendToSystem });
+            triggerFacet.register(sn as any, { flowRunNodeId, tell });
           }
         },
         unregisterFlowActor: () => {

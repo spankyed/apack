@@ -133,7 +133,7 @@ import { type BrainState } from '#features/brain/fe/state.ts';
 import RunNodeGraph from './components/RunNodeGraph.vue';
 import EventsList from './components/EventsList.vue';
 import StepNodeDetails from './components/StepNodeDetails.vue';
-import { sendToSystem } from '#generated/events.ts';
+import { tell } from '#generated/events.ts';
 
 const { state: brain, send } = useState<BrainState>();
 
@@ -159,7 +159,7 @@ const handleBackClick = () => {
 };
 
 const handleStart = () => {
-  sendToSystem('brain', {
+  tell('brain', {
     type: 'START_BRAIN',
   });
 };

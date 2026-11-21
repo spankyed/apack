@@ -115,7 +115,7 @@ export interface PackRule {
 }
 
 /** Ref-taking sends a pack gets as name-taking ones from `#generated/events`, whichever module exports them */
-const EVENT_SENDS = ['untypedBroadcastToSurface', 'untypedSendToSystem', '_sendToLocalSurface'];
+const EVENT_SENDS = ['untypedBroadcast', 'untypedTell', '_sendToLocalSurface'];
 
 /**
  * A feature's own component, which is where `useSurface()` is available and so where a cross-surface send has an
@@ -314,7 +314,7 @@ const RULE_LIST = [
   },
   {
     key: 'untyped-sends',
-    rule: 'Pack code uses the typed facades: broadcastToSurface, sendToSurface and sendToSystem from '
+    rule: 'Pack code uses the typed facades: broadcast, sendToSurface and tell from '
       + '#generated/events',
     check(view, place) {
       if (place.generated) return [];
@@ -346,7 +346,7 @@ const RULE_LIST = [
   },
   {
     key: 'raw-transport',
-    rule: 'Pack code sends with broadcastToSurface, sendToSurface and sendToSystem from #generated/events, and '
+    rule: 'Pack code sends with broadcast, sendToSurface and tell from #generated/events, and '
       + 'subscribes with onConnected and onIncoming from @apackdev/sdk/events',
     check(view, _place) {
       return view.visit((node) => {

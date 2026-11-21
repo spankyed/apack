@@ -29,7 +29,7 @@ describe('logs system', () => {
     expect(toSurface).toEqual([{
       to: 'default-setup/logs',
       call: expect.any(String),
-      // The pack that sent it, stamped by this pack's generated broadcastToSurface
+      // The pack that sent it, stamped by this pack's generated broadcast
       from: 'default-setup',
       event: expect.objectContaining({
         type: 'LOG_ADDED',

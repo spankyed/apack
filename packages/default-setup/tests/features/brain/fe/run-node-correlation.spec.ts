@@ -14,7 +14,7 @@ const asks = vi.hoisted(() => [] as Array<{ type: string; input: { runNodeId?: s
 vi.mock('#generated/events.ts', async () => {
   const { fromPromise } = await import('xstate');
   return {
-    sendToSystem: vi.fn(),
+    tell: vi.fn(),
     fromAsk: (_to: string, type: string) => fromPromise(({ input, signal }) => new Promise((resolve) => {
       const ask = { type, input: input as { runNodeId?: string }, stopped: false, answer: (value: unknown) => resolve({ ok: true, value }) };
       signal.addEventListener('abort', () => { ask.stopped = true; });

@@ -20,7 +20,7 @@ const invoked = vi.hoisted(() => [] as string[])
 vi.mock('#generated/events.ts', async () => {
   const { fromPromise } = await import('xstate')
   return {
-    sendToSystem: vi.fn(), broadcastToSurface: vi.fn(), sendToSurface: vi.fn(),
+    tell: vi.fn(), broadcast: vi.fn(), sendToSurface: vi.fn(),
     fromAsk: (_to: string, type: string) => fromPromise(() => new Promise((resolve) => { invoked.push(type); if (type === 'GET_CODE_START') starts.push(resolve) })),
   }
 })
@@ -376,9 +376,9 @@ describe("the feature's settings reaching the terminals", () => {
 
 describe('starting over a folder', () => {
   it('has each panel ask about the folder the start names, which is the surface\'s by the time they ask', async () => {
-    const { sendToSystem } = await import('#generated/events.ts')
+    const { tell } = await import('#generated/events.ts')
     const actor = started()
-    vi.mocked(sendToSystem).mockClear()
+    vi.mocked(tell).mockClear()
     invoked.length = 0
 
     await startOver(actor, { baseDirectory: '/work' })

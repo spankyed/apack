@@ -72,7 +72,7 @@ describe('internal-package-imports', () => {
 const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; elsewhere?: string }> = {
   'own-modules': {
     onFile: [
-      ["import { sendToSystem } from '#generated/events';\n",
+      ["import { tell } from '#generated/events';\n",
         "src/f.ts:1: '#generated/events' names no file — write '#generated/events.ts'"],
       // The `.js` form is this rule's too, not a second rule's: one offence, one message, and this one names the fix
       ["import { sibling } from './sibling.js';\n",
@@ -85,8 +85,8 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
   'host-imports': { onFile: [["import { edgeStore } from '@apackdev/host/ears';\n", 'src/f.ts:1: @apackdev/host/ears']] },
   'elmdb-imports': { onFile: [["import { Database } from 'elmdb';\n", 'src/f.ts:1: elmdb']] },
   'untyped-sends': {
-    onFile: [["import { untypedSendToSystem } from '@apackdev/sdk/events';\n",
-      'src/f.ts:1: untypedSendToSystem from @apackdev/sdk/events']],
+    onFile: [["import { untypedTell } from '@apackdev/sdk/events';\n",
+      'src/f.ts:1: untypedTell from @apackdev/sdk/events']],
   },
   'raw-transport': {
     onFile: [['export const send = () => _rootEvents.emitOutgoing(event);\n', 'src/f.ts:1: _rootEvents']],
@@ -357,7 +357,7 @@ describe('every rule', () => {
    */
   it('reports an offence two rules word differently under one rule, not two', () => {
     const dir = completePack({
-      'src/features/memos/fe/contract.ts': "import { sendToSystem } from '#generated/events';\nexport type Contract = { state: {} };\n",
+      'src/features/memos/fe/contract.ts': "import { tell } from '#generated/events';\nexport type Contract = { state: {} };\n",
     });
     const reported = [...packRuleProblems(dir)].filter(([, found]) => found.some((line) => line.includes('#generated/events')));
     expect(reported.map(([key]) => key), 'one import, told to a pack author under more than one rule').toEqual(['contract-leaves']);
@@ -382,14 +382,14 @@ describe('every rule', () => {
   it('claims the offence a whole-pack rule named, not the whole line it sat on', () => {
     const dir = completePack({
       'src/features/memos/fe/contract.ts':
-        "import type { T } from '../../calendar/fe/state.ts'; import { untypedSendToSystem } from '@apackdev/sdk/events';\n"
-        + 'export type Contract = { state: { t: T; send: typeof untypedSendToSystem } };\n',
+        "import type { T } from '../../calendar/fe/state.ts'; import { untypedTell } from '@apackdev/sdk/events';\n"
+        + 'export type Contract = { state: { t: T; send: typeof untypedTell } };\n',
       'src/features/memos/fe/surface.ts': 'export type P = { id: string };\n',
       'src/features/calendar/fe/state.ts': 'export type T = { id: string };\n',
     });
     expect(problems(dir, 'contract-leaves')).toEqual(['src/features/memos/fe/contract.ts:1: ../../calendar/fe/state.ts']);
     expect(problems(dir, 'untyped-sends'), 'the second offence on that line went with the first')
-      .toEqual(['src/features/memos/fe/contract.ts:1: untypedSendToSystem from @apackdev/sdk/events']);
+      .toEqual(['src/features/memos/fe/contract.ts:1: untypedTell from @apackdev/sdk/events']);
   });
 
   it('names a case that exists for each rule covered elsewhere', () => {
@@ -518,8 +518,8 @@ describe('when several rules are right about one site', () => {
   });
 
   it('gives an untyped send from the raw transport to the send rule', () => {
-    expect(offender("import { untypedSendToSystem } from '@apackdev/sdk/rpc/client';\n")).toEqual([
-      'untyped-sends: src/extensions/steps/x.ts:1: untypedSendToSystem from @apackdev/sdk/rpc/client',
+    expect(offender("import { untypedTell } from '@apackdev/sdk/rpc/client';\n")).toEqual([
+      'untyped-sends: src/extensions/steps/x.ts:1: untypedTell from @apackdev/sdk/rpc/client',
     ]);
   });
 
@@ -529,7 +529,7 @@ describe('when several rules are right about one site', () => {
    * separately — each rule's own early return — and nothing said the site changes hands.
    */
   it('hands that site to the transport rule inside generated code, which exempts nothing', () => {
-    expect(offenderIn('src/__generated__/x.ts', "import { untypedSendToSystem } from '@apackdev/sdk/rpc/client';\n"))
+    expect(offenderIn('src/__generated__/x.ts', "import { untypedTell } from '@apackdev/sdk/rpc/client';\n"))
       .toEqual(['raw-transport: src/__generated__/x.ts:1: @apackdev/sdk/rpc/client']);
   });
 

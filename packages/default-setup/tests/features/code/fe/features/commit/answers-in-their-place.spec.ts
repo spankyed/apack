@@ -9,7 +9,7 @@ import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 const parent = vi.hoisted(() => ({ baseDirectory: '/work/one', openFiles: [] as object[] }));
 const sendEventToParent = vi.hoisted(() => vi.fn());
 const addTabToParent = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent,
   updateParentState: vi.fn(),

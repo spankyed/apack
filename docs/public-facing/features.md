@@ -69,8 +69,8 @@ export type OutgoingBookmarksEvents =
 // src/features/bookmarks/be/system.ts
 import { setup } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
-// broadcastToSurface is typed with the events each of this pack's surfaces receives
-import { broadcastToSurface } from '#generated/events.ts';
+// broadcast is typed with the events each of this pack's surfaces receives
+import { broadcast } from '#generated/events.ts';
 import type { Contract } from './contract.ts';
 
 // The spec types the machine from the same contract. Its identity is its feature's, from apack.json
@@ -81,7 +81,7 @@ export const bookmarksSystem = setup({
   types: bookmarksSpec.types,
   actions: {
     sendConnectedData: () => {
-      broadcastToSurface('bookmarks', {
+      broadcast('bookmarks', {
         type: 'BOOKMARKS_CONNECTED',
         data: [],
       });
@@ -125,7 +125,7 @@ The contract is a **declared type**, not a value, and it lives in a leaf module 
 |---|---|
 | `incoming` | what anything outside the system sends it: another system, a surface, a dependent pack. Required unless the system only broadcasts |
 | `internal` | what the system's own children send it (a `fromCallback` child telling its parent). These reach the machine's event union and nothing a dependent pack can see, so they can't be sent from outside. Optional |
-| `outgoing` | every event the system sends to surfaces, and the one place they're declared: the build types `broadcastToSurface` from it and lists what each surface receives. Required |
+| `outgoing` | every event the system sends to surfaces, and the one place they're declared: the build types `broadcast` from it and lists what each surface receives. Required |
 | `asks` | what the system answers — a read, a write, a command — each with what it takes, what it answers with and how it may fail (see [Asks](#asks)). Optional |
 | `context` | the machine's context, `{}` when omitted |
 
@@ -143,7 +143,7 @@ The spec it returns:
 - **Always handle `SEND_STATE`, and usually nothing else** — the app asks every system for its state whenever anything could have changed what it holds: a frontend connected, a pack was installed, updated, enabled, disabled, uninstalled or rebuilt while the app runs, its content were imported from Settings, or the data was reset or restored from a backup. Answer by broadcasting the full state your surface starts from; the surface doesn't need to ask for it. Because the ask is the same whatever caused it, you write it once and stay correct as new causes are added — including ones that didn't exist when your pack was written. An installed pack with frontend code (an FE entry or surfaces) is asked once each window has tried loading that frontend, at startup, on activation and when the window reconnects, whether the load added surfaces or failed; every system of the pack is asked, those without a surface too. Every open window receives what you send, not only the one that asked.
 - **Derive rows with a projection, not a fact handler.** `defineProjections` (`features.<id>.projections`) runs in the write's own unit and catches up on what other processes commit, so it holds whoever wrote the row. `apply` and `rebuild` hold the write lock, so keep them quick.
 - **Handle a fact only for what publishing cannot fix** — `CLIENT_CONNECTED`, `PACK_CHANGED { packId }`, `DATA_REPLACED` and `DATA_CHANGED_ELSEWHERE` are delivered before the ask that follows them, for work that re-sending data cannot do: tearing down something held over rows that are gone, or tracking whether a client is attached. If your answer to one of them would be "send my data again", delete it and handle `SEND_STATE` instead.
-- **Use `broadcastToSurface()` to send to the frontend** — `broadcastToSurface(name, event)`, in a system's actions or anywhere else (services, callbacks), routes the event through the bus to the surface that name stands for, in **every** window showing it (a surface runs once per window). The renderer's own `sendToSurface(name, event)`, from the same module, goes to one window's actor instead. It's dropped while no client is connected, which is also why the app doesn't ask a system to publish until one is. It comes from `#generated/events` and accepts only the events that surface receives. Don't import it from `@apackdev/sdk/events`, whose untyped version accepts any event. Only features that have a `surface` are named there: a feature with a system and no surface has nothing to receive events, so it gets no key. A surface that should also take events from another feature or another pack declares them itself, in the `inbox` half of its `Contract` — the receiver says what it handles, so a pack widens only its own surfaces.
+- **Use `broadcast()` to send to the frontend** — `broadcast(name, event)`, in a system's actions or anywhere else (services, callbacks), routes the event through the bus to the surface that name stands for, in **every** window showing it (a surface runs once per window). The renderer's own `sendToSurface(name, event)`, from the same module, goes to one window's actor instead. It's dropped while no client is connected, which is also why the app doesn't ask a system to publish until one is. It comes from `#generated/events` and accepts only the events that surface receives. Don't import it from `@apackdev/sdk/events`, whose untyped version accepts any event. Only features that have a `surface` are named there: a feature with a system and no surface has nothing to receive events, so it gets no key. A surface that should also take events from another feature or another pack declares them itself, in the `inbox` half of its `Contract` — the receiver says what it handles, so a pack widens only its own surfaces.
 - **An event arrives exactly as you sent it** — where it goes travels beside it (`{ to, event }`), so any field name is yours to use, `surfaceId` included.
 
 ### Communication patterns
@@ -152,10 +152,10 @@ Your code names features: your own by id (`'bookmarks'`), and every other as `<p
 
 | To | Use |
 |---|---|
-| send to a surface from a system | `broadcastToSurface(name, event)` (`#generated/events`) — every window |
+| send to a surface from a system | `broadcast(name, event)` (`#generated/events`) — every window |
 | send to a surface from the frontend | `sendToSurface(name, event)` (`#generated/events`) — this window |
-| send to a system, from a surface or from another system | `sendToSystem(name, event)` (`#generated/events`), typed with the events that system declares |
-| send to whichever system plays a role | `sendToSystem({ role }, event)`: `sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType })` fires a flow event |
+| send to a system, from a surface or from another system | `tell(name, event)` (`#generated/events`), typed with the events that system declares |
+| send to whichever system plays a role | `tell({ role }, event)`: `tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType })` fires a flow event |
 | reach your surface's actor from its components | `useSurface<MyActor>()` (`@apackdev/sdk/fe`): the app renders a surface's canvas, panel, chat and settings as part of it. Name your machine's actor type — which surface a component belongs to is where it is rendered, so nothing at the call site can infer it, and an unnamed one would read a context field your machine dropped and still compile |
 | read another surface's state | `useSurfaceState(name, selector)` from `#generated/fe` in a component's setup or an effect scope, and `readSurfaceState(name, selector)` once, outside one (a machine's action). The selector takes that surface's published state, not an XState snapshot. Your own pack's surfaces are always running, so the value is never `undefined`; a dependency's frontend may still be loading, so reading one of its surfaces gives `undefined` until it arrives, and fills in when it does. For a ref that arrives as data, `useUntypedSurfaceState`/`readUntypedSurfaceState` (`@apackdev/sdk/fe`) are the untyped escape hatch |
 | declare what other surfaces may send yours | the `inbox` half of your surface's `Contract`, a declared type in a leaf module `apack.json` names at `features.<id>.surface.contract`: `export type Contract = { state: MyContext; inbox: SurfaceInbox<{ public: MyInbox }> }`. Your own feature's system needs no declaration — its outgoing events are already your surface's. The `public` half is what a pack that depends on yours may send, and what types `sendToSurface` and `openSurface`. The leaf imports no machine, so codegen can read the contract without resolving one |
@@ -164,26 +164,26 @@ Your code names features: your own by id (`'bookmarks'`), and every other as `<p
 | open a surface a piece of data names (a link's target) | `untypedOpenSurface(ref, event?)` (`@apackdev/sdk/fe`). It throws for a string that isn't a `<packId>/<featureId>`; otherwise the app opens the surface, waiting while the pack that provides it is still loading, and tells the user if no installed pack provides it |
 
 ```typescript
-import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
+import { broadcast, tell } from '#generated/events.ts';
 
 // System -> Surface (via bus)
-broadcastToSurface('bookmarks', { type: 'BOOKMARK_CREATED', bookmark });
+broadcast('bookmarks', { type: 'BOOKMARK_CREATED', bookmark });
 
 // System -> System (via bus), checked against what the tags system declares it receives
-sendToSystem('tags', { type: 'SOME_EVENT' });
+tell('tags', { type: 'SOME_EVENT' });
 ```
 
-Frontend code (and backend code) sends events to systems with `sendToSystem` from `#generated/events`:
+Frontend code (and backend code) sends events to systems with `tell` from `#generated/events`:
 
 ```typescript
-import { sendToSystem } from '#generated/events.ts';
+import { tell } from '#generated/events.ts';
 
 // Surface -> System: this pack's systems by feature id, a dependency's as <dependency>/<feature>
-sendToSystem('bookmarks', { type: 'CREATE_BOOKMARK', url, title });
-sendToSystem('default-setup/notes', { type: 'EMPTY_TRASH' });
+tell('bookmarks', { type: 'CREATE_BOOKMARK', url, title });
+tell('default-setup/notes', { type: 'EMPTY_TRASH' });
 ```
 
-`sendToSystem` accepts only systems of your pack and its dependencies, and only the events each one declares (its contract's `incoming`); a missing field is reported against the event its `type` names. Each send names one system and one event type: a `systemId` or `type` typed as a union is rejected. A bare name is your own feature (`'bookmarks'` is `my-pack/bookmarks`). A dependency's system is always named with the dependency's id, so a feature of yours may share its name: `'notes'` is your own, `'default-setup/notes'` default-setup's. The app checks target and event-name membership against the accepted endpoint contract. The generated system inbox contains the contract's `incoming`, explicit `system.events.incoming` additions, and shared SDK lifecycle events. Private machine handlers do not define a public inbox; backend event diagnostics do not validate payloads or authorize senders.
+`tell` accepts only systems of your pack and its dependencies, and only the events each one declares (its contract's `incoming`); a missing field is reported against the event its `type` names. Each send names one system and one event type: a `systemId` or `type` typed as a union is rejected. A bare name is your own feature (`'bookmarks'` is `my-pack/bookmarks`). A dependency's system is always named with the dependency's id, so a feature of yours may share its name: `'notes'` is your own, `'default-setup/notes'` default-setup's. The app checks target and event-name membership against the accepted endpoint contract. The generated system inbox contains the contract's `incoming`, explicit `system.events.incoming` additions, and shared SDK lifecycle events. Private machine handlers do not define a public inbox; backend event diagnostics do not validate payloads or authorize senders.
 
 Backend code that needs the connection or every incoming event subscribes with `onConnected(callback)` and `onIncoming(callback)` from `@apackdev/sdk/events`; each returns an unsubscribe function. Log entries arrive through `onLog(callback)` from `@apackdev/sdk/logger`.
 
@@ -508,7 +508,7 @@ Other feature fields:
 | `types` | Types module re-exported from `#generated/types`; explicit pack-root-relative module path; no inferred default |
 | `references` | Inline type/category declarations and explicit function exports; see [reference declarations](manifest.md#reference-declarations) |
 
-A feature that fills a role other packs look up (`getDesignated('<role>')`, or `sendToSystem({ role }, event)`) sets `"designation"` to that role. A role is not a name: a feature `inbox` can play `notes`. `apack pack add feature bookmarks --description "Save and organize bookmarks." --designation bookmarks` writes it. One feature plays a role: `apack pack validate` reports two features of a pack claiming the same one, and the app refuses a pack claiming a role another pack plays. `apack pack validate` also reports a `settings.form`, `system.entry` or `surface.state` and component-target file that doesn't exist.
+A feature that fills a role other packs look up (`getDesignated('<role>')`, or `tell({ role }, event)`) sets `"designation"` to that role. A role is not a name: a feature `inbox` can play `notes`. `apack pack add feature bookmarks --description "Save and organize bookmarks." --designation bookmarks` writes it. One feature plays a role: `apack pack validate` reports two features of a pack claiming the same one, and the app refuses a pack claiming a role another pack plays. `apack pack validate` also reports a `settings.form`, `system.entry` or `surface.state` and component-target file that doesn't exist.
 
 ## Types dependents see
 

@@ -3,7 +3,7 @@ import type { ProgressEventOf } from '@apackdev/sdk/events';
 import { safeEvents } from '@apackdev/sdk/helpers';
 import { freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe';
 import type { CommitStatus, Contract as CodeSystemContract, GitFailure } from '#features/code/be/contract.ts';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
 import { diffTab, diffTabPath } from '../../utils/diff-tabs.ts';
 import { withStaged, withUnstaged } from 'apack-git/staging';
@@ -1091,7 +1091,7 @@ export const commitState = setup({
     'commit.UNDO_LAST': { actions: 'undoLast' },
     'commit.DISMISS_UNDO': { actions: assign({ lastUndoable: null, undoConfirmation: null }) },
     'commit.SELECT_REPOSITORY': {
-      actions: ({ event }) => { sendToSystem('code', { type: 'SELECT_REPOSITORY', path: event.path }) },
+      actions: ({ event }) => { tell('code', { type: 'SELECT_REPOSITORY', path: event.path }) },
     },
     'commit.TOGGLE_STASH_FILES': { actions: 'toggleStashFiles' },
     'commit.UNDO_DISCARD': { actions: 'undoDiscard' },

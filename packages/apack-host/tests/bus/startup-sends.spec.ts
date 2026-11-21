@@ -3,7 +3,7 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // events before it starts any system, so nothing a system sends while starting is lost.
 import { afterEach, expect, it } from 'vitest';
 import { assign, createActor, setup, type AnyActorRef } from 'xstate';
-import { untypedSendToSystem } from '@apackdev/sdk/events';
+import { untypedTell } from '@apackdev/sdk/events';
 import { startTestRuntime } from '@apackdev/sdk/testing';
 import { createAppBus } from '../../src/bus/index.ts';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
@@ -11,7 +11,7 @@ import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
 const registry = createNativePackTestRegistry();
 startTestRuntime({ entityTypes: HOST_ENTITY_TYPES, packs: registry });
 
-const sender = setup({}).createMachine({ entry: () => untypedSendToSystem('boot-pack/receiver', { type: 'PING' }) });
+const sender = setup({}).createMachine({ entry: () => untypedTell('boot-pack/receiver', { type: 'PING' }) });
 const receiver = setup({ types: { context: {} as { pings: number } } }).createMachine({
   context: { pings: 0 },
   on: { PING: { actions: assign({ pings: ({ context }) => context.pings + 1 }) } },

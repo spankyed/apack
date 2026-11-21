@@ -1799,7 +1799,7 @@ export type QualifiedSystemAsks = ${qualifiedAsks};
 /** The systems this pack's code asks: \`QualifiedSystemAsks\`, with its own named by feature id instead of ref */
 export type SendableSystemAsks = WithOwnNames<${pack}, QualifiedSystemAsks>;
 
-export const { broadcastToSurface, sendToWindow, sendToSurface, sendToSystem, ask, fromAsk } = /*#__PURE__*/ defineEvents<SendableSurfaceEvents, SendableSystemEvents, SendableSystemAsks>('${manifest.id}');
+export const { broadcast, sendToWindow, sendToSurface, tell, ask, fromAsk } = /*#__PURE__*/ defineEvents<SendableSurfaceEvents, SendableSystemEvents, SendableSystemAsks>('${manifest.id}');
 `;
   }
 
@@ -1883,7 +1883,7 @@ import type { z } from 'zod';
 import type { EARS } from '@apackdev/ears';
 import type { HostServices, PackServiceAccess } from '@apackdev/sdk/services';
 import { runtimeServices } from './runtime-services.ts';
-import type { TypedSendToSurface, TypedSendToWindow, TypedSendToSystem } from '@apackdev/sdk/events';
+import type { TypedSendToSurface, TypedSendToWindow, TypedTell } from '@apackdev/sdk/events';
 import type { Repositories } from './repository.ts';
 import type { QualifiedSurfaceEvents, QualifiedSystemEvents } from './events.ts';
 ${imports.join('\n')}
@@ -1903,10 +1903,10 @@ ${entries.join('\n')}
  * feature, or nothing — where a ref that no longer fits is wrong visibly, and is refused at the bus rather
  * than doing something else.
  */
-export type PackEmitter = Omit<HostServices['emitter'], 'broadcastToSurface' | 'sendToWindow' | 'sendToSystem'> & {
-  broadcastToSurface: TypedSendToSurface<QualifiedSurfaceEvents>;
+export type PackEmitter = Omit<HostServices['emitter'], 'broadcast' | 'sendToWindow' | 'tell'> & {
+  broadcast: TypedSendToSurface<QualifiedSurfaceEvents>;
   sendToWindow: TypedSendToWindow<QualifiedSurfaceEvents>;
-  sendToSystem: TypedSendToSystem<QualifiedSystemEvents>;
+  tell: TypedTell<QualifiedSystemEvents>;
 };
 
 /**

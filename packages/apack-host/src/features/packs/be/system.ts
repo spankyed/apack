@@ -3,7 +3,7 @@ import type { Contract } from './contract.ts';
 import * as path from 'path';
 import { setup } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
-import { broadcastToSurface, sendToSystem } from '../../../events.ts';
+import { broadcast, tell } from '../../../events.ts';
 import { getAppVersion, resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { HOST_PACK_ID, PACK_ID_PATTERN, resolveName } from '@apackdev/sdk/ids';
@@ -122,7 +122,7 @@ function toInstalledPackSummaries(registry: PackRegistry): InstalledPackSummary[
  */
 function publishPacksList(registry: PackRegistry) {
   const catalog = registry.catalog.getSnapshot();
-  broadcastToSurface('packs', { type: 'PACKS_LIST' as const, packs: toInstalledPackSummaries(registry),
+  broadcast('packs', { type: 'PACKS_LIST' as const, packs: toInstalledPackSummaries(registry),
     appPackSources: catalog.appPackSources.map(source => ({ id: source.id, name: source.snapshot.manifest.name,
       version: source.snapshot.manifest.version, sourceRevision: source.sourceRevision })),
     appPackSourceProblems: catalog.appPackSourceProblems.map(({ id, message }) => ({ id, message })),
@@ -158,9 +158,9 @@ export function createPacksSystem(registry: PackRegistry) {
     previewPackContent: ({ event }) => {
       const ev = packsSpec.typeOf('PREVIEW_PACK_CONTENT', event);
       try {
-        broadcastToSurface('settings', { type: 'PACK_CONTENT_PREVIEW', preview: previewPackContent(ev.directory) });
+        broadcast('settings', { type: 'PACK_CONTENT_PREVIEW', preview: previewPackContent(ev.directory) });
       } catch (err) {
-        broadcastToSurface('settings', { type: 'PACK_CONTENT_PREVIEW_FAILED', error: errorMessage(err) });
+        broadcast('settings', { type: 'PACK_CONTENT_PREVIEW_FAILED', error: errorMessage(err) });
       }
     },
 
@@ -186,12 +186,12 @@ export function createPacksSystem(registry: PackRegistry) {
         appliedContent.record(packId, { wrote: record.written });
         // Appliers report records they couldn't write in their counts rather than throwing
         const errors = Object.entries(result).flatMap(([key, counts]) => (counts.errors ?? []).map((error) => `${key}: ${error}`));
-        broadcastToSurface('settings', { type: 'PACK_CONTENT_IMPORTED', result, errors });
+        broadcast('settings', { type: 'PACK_CONTENT_IMPORTED', result, errors });
         // The running systems read what the apply changed (the chat's slash commands, the library's documents)
-        sendToSystem('bus', { type: 'PACK_CHANGED', packId });
-        if (ev.restartBrain) sendToSystem({ role: 'brain' }, { type: 'RESTART_BRAIN' });
+        tell('bus', { type: 'PACK_CHANGED', packId });
+        if (ev.restartBrain) tell({ role: 'brain' }, { type: 'RESTART_BRAIN' });
       } catch (err) {
-        broadcastToSurface('settings', { type: 'PACK_CONTENT_IMPORT_FAILED', error: errorMessage(err) });
+        broadcast('settings', { type: 'PACK_CONTENT_IMPORT_FAILED', error: errorMessage(err) });
       }
     },
 
@@ -257,7 +257,7 @@ export function createPacksSystem(registry: PackRegistry) {
            */
           if (record.written.has(ev.key)) appliedContent.resolveOffer(ev.packId, ev.key, { choice: 'taken' });
           // The running systems read what the write changed (the brain's flows, the chat's slash commands)
-          sendToSystem('bus', { type: 'PACK_CHANGED', packId: ev.packId });
+          tell('bus', { type: 'PACK_CHANGED', packId: ev.packId });
         } catch (err) {
           reportError({ source: 'packs', operation: 'restoreContentItem', severity: 'error', error: err });
         }
@@ -288,7 +288,7 @@ export function createPacksSystem(registry: PackRegistry) {
           // pack registered a `remove` writer is removed the way that pack removes one
           if (entity) removeContentEntity(item!.entityType!, entity.id);
           appliedContent.resolveOffer(ev.packId, ev.key, { choice: 'deleted' });
-          sendToSystem('bus', { type: 'PACK_CHANGED', packId: ev.packId });
+          tell('bus', { type: 'PACK_CHANGED', packId: ev.packId });
         } catch (err) {
           reportError({ source: 'packs', operation: 'deleteContentItem', severity: 'error', error: err });
         }
@@ -301,12 +301,12 @@ export function createPacksSystem(registry: PackRegistry) {
 
         // Reserve the source while downloading, then the resolved owner before publication.
         if (!registry.claimPackOperation(packSlug)) {
-          broadcastToSurface('packs', { type: 'PACK_INSTALL_FAILED' as const, packSlug, error: operationInProgress(packSlug) });
+          broadcast('packs', { type: 'PACK_INSTALL_FAILED' as const, packSlug, error: operationInProgress(packSlug) });
           return;
         }
         console.log(`[packs] Install requested: ${packSlug} (source kind: ${ev.sourceKind ?? 'default'})`);
 
-        broadcastToSurface('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug });
+        broadcast('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug });
 
         const isGitHub = resolveInstallSourceKind(packSlug, ev.sourceKind) === 'github';
         let installingId: string | undefined;
@@ -348,7 +348,7 @@ export function createPacksSystem(registry: PackRegistry) {
           finally { activated = startAccepted!(); }
           const problem = activationProblem(registry, result.id, activated);
           if (problem) {
-            broadcastToSurface('packs', {
+            broadcast('packs', {
               type: 'PACK_INSTALL_FAILED' as const,
               packSlug,
               error: `${result.name} was installed but ${problem}`,
@@ -357,19 +357,19 @@ export function createPacksSystem(registry: PackRegistry) {
             return;
           }
 
-          broadcastToSurface('packs', {
+          broadcast('packs', {
             type: 'PACK_INSTALL_COMPLETE' as const,
             packSlug,
             packId: result.id,
             packName: result.name,
             version: result.version,
           });
-          broadcastToSurface('packs', { type: 'PACK_ACTIVATED' as const, packId: result.id });
+          broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId: result.id });
           emitPacksList(registry);
         }).catch(err => {
           const message = errorMessage(err);
           console.error(`[packs] Install failed for ${packSlug}:`, message);
-          broadcastToSurface('packs', {
+          broadcast('packs', {
             type: 'PACK_INSTALL_FAILED' as const,
             packSlug,
             error: message,
@@ -382,7 +382,7 @@ export function createPacksSystem(registry: PackRegistry) {
 
       restorePack: ({ system, event }) => {
         const { packId, sourceRevision } = packsSpec.typeOf('RESTORE_PACK', event);
-        const fail = (error: unknown) => broadcastToSurface('packs', {
+        const fail = (error: unknown) => broadcast('packs', {
           type: 'PACK_INSTALL_FAILED' as const, packSlug: packId, error: errorMessage(error),
         });
         if (packId === HOST_PACK_ID || !PACK_ID_PATTERN.test(packId)) {
@@ -393,7 +393,7 @@ export function createPacksSystem(registry: PackRegistry) {
           fail(new Error(operationInProgress(packId)));
           return;
         }
-        broadcastToSurface('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug: packId });
+        broadcast('packs', { type: 'PACK_INSTALL_STARTED' as const, packSlug: packId });
         let startAccepted: (() => boolean) | undefined;
         Promise.resolve().then(() => {
           registry.refreshCatalog();
@@ -417,9 +417,9 @@ export function createPacksSystem(registry: PackRegistry) {
           const problem = activationProblem(registry, packId, activated);
           if (problem) fail(new Error(`${result.name} was restored but ${problem}`));
           else {
-            broadcastToSurface('packs', { type: 'PACK_INSTALL_COMPLETE' as const, packSlug: packId,
+            broadcast('packs', { type: 'PACK_INSTALL_COMPLETE' as const, packSlug: packId,
               packId, packName: result.name, version: result.version });
-            broadcastToSurface('packs', { type: 'PACK_ACTIVATED' as const, packId });
+            broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
           }
           emitPacksList(registry);
         }).catch(fail).finally(() => { registry.releasePackOperation(packId); });
@@ -429,17 +429,17 @@ export function createPacksSystem(registry: PackRegistry) {
         const ev = packsSpec.typeOf('UNINSTALL_PACK', event);
         const packId = ev.packId;
         if (packId === HOST_PACK_ID) {
-          broadcastToSurface('packs', { type: 'PACK_UNINSTALL_FAILED' as const, packId, error: `"${packId}" is part of apack, so it can't be uninstalled` });
+          broadcast('packs', { type: 'PACK_UNINSTALL_FAILED' as const, packId, error: `"${packId}" is part of apack, so it can't be uninstalled` });
           return;
         }
         // The id names the directory the uninstall deletes, so only an installed pack's own is taken
         if (!isInstalled(packId)) {
-          broadcastToSurface('packs', { type: 'PACK_UNINSTALL_FAILED' as const, packId, error: `"${packId}" is not an installed pack` });
+          broadcast('packs', { type: 'PACK_UNINSTALL_FAILED' as const, packId, error: `"${packId}" is not an installed pack` });
           return;
         }
 
         if (!registry.claimPackOperation(packId)) {
-          broadcastToSurface('packs', { type: 'PACK_UNINSTALL_FAILED' as const, packId, error: operationInProgress(packId) });
+          broadcast('packs', { type: 'PACK_UNINSTALL_FAILED' as const, packId, error: operationInProgress(packId) });
           return;
         }
         console.log(`[packs] Uninstall requested: ${packId}`);
@@ -450,9 +450,9 @@ export function createPacksSystem(registry: PackRegistry) {
           return runUninstall(packId, undefined, { installedPacksFile: resolveAppEnvironment().installedPacksFile });
         }).then(() => teardownPack(registry, packId, system.get(HOST.bus))).then(() => {
           clearPackRequireCache(cacheDir);
-          broadcastToSurface('packs', { type: 'PACK_DEACTIVATED' as const, packId });
+          broadcast('packs', { type: 'PACK_DEACTIVATED' as const, packId });
 
-          broadcastToSurface('packs', {
+          broadcast('packs', {
             type: 'PACK_UNINSTALL_COMPLETE' as const,
             packId,
           });
@@ -460,7 +460,7 @@ export function createPacksSystem(registry: PackRegistry) {
         }).catch(err => {
           const message = errorMessage(err);
           console.error(`[packs] Uninstall failed for ${packId}:`, message);
-          broadcastToSurface('packs', {
+          broadcast('packs', {
             type: 'PACK_UNINSTALL_FAILED' as const,
             packId,
             error: message,
@@ -472,7 +472,7 @@ export function createPacksSystem(registry: PackRegistry) {
 
       updateAppPack: ({ system, event }) => {
         const { packId, sourceRevision } = packsSpec.typeOf('UPDATE_APP_PACK', event);
-        const fail = (error: unknown) => broadcastToSurface('packs', {
+        const fail = (error: unknown) => broadcast('packs', {
           type: 'PACK_UPDATE_FAILED' as const, packId, error: errorMessage(error),
         });
         if (!registry.claimPackOperation(packId)) {
@@ -503,8 +503,8 @@ export function createPacksSystem(registry: PackRegistry) {
           const problem = enabled ? activationProblem(registry, packId, activated) : undefined;
           if (problem) fail(new Error(`${result.name} was updated but ${problem}`));
           else {
-            broadcastToSurface('packs', { type: 'PACK_UPDATE_COMPLETE' as const, packId, version: result.version });
-            if (activated) broadcastToSurface('packs', { type: 'PACK_ACTIVATED' as const, packId });
+            broadcast('packs', { type: 'PACK_UPDATE_COMPLETE' as const, packId, version: result.version });
+            if (activated) broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
           }
           emitPacksList(registry);
         }).catch(error => { fail(error); emitPacksList(registry); }).finally(() => { registry.releasePackOperation(packId); });
@@ -515,7 +515,7 @@ export function createPacksSystem(registry: PackRegistry) {
         const packId = ev.packId;
         const entry = packRecord(packId);
         if (entry.updatesWith === 'app' || !entry.installedFrom) {
-          broadcastToSurface('packs', {
+          broadcast('packs', {
             type: 'PACK_UPDATE_FAILED' as const,
             packId,
             error: entry.updatesWith === 'app' ? 'Use the selected app-source update for an app-managed pack' : 'Pack has no update source',
@@ -524,7 +524,7 @@ export function createPacksSystem(registry: PackRegistry) {
         }
 
         if (!registry.claimPackOperation(packId)) {
-          broadcastToSurface('packs', { type: 'PACK_UPDATE_FAILED' as const, packId, error: operationInProgress(packId) });
+          broadcast('packs', { type: 'PACK_UPDATE_FAILED' as const, packId, error: operationInProgress(packId) });
           return;
         }
 
@@ -556,7 +556,7 @@ export function createPacksSystem(registry: PackRegistry) {
           }
           const problem = entry.enabled ? activationProblem(registry, packId, activated) : undefined;
           if (problem) {
-            broadcastToSurface('packs', {
+            broadcast('packs', {
               type: 'PACK_UPDATE_FAILED' as const,
               packId,
               error: `Updated to ${result.version} but ${problem}`,
@@ -565,17 +565,17 @@ export function createPacksSystem(registry: PackRegistry) {
             return;
           }
 
-          broadcastToSurface('packs', {
+          broadcast('packs', {
             type: 'PACK_UPDATE_COMPLETE' as const,
             packId,
             version: result.version,
           });
-          if (activated) broadcastToSurface('packs', { type: 'PACK_ACTIVATED' as const, packId });
+          if (activated) broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
           emitPacksList(registry);
         }).catch(err => {
           const message = errorMessage(err);
           console.error(`[packs] Update failed for ${packId}:`, message);
-          broadcastToSurface('packs', {
+          broadcast('packs', {
             type: 'PACK_UPDATE_FAILED' as const,
             packId,
             error: message,
@@ -610,7 +610,7 @@ export function createPacksSystem(registry: PackRegistry) {
           // Refused as every operation on a busy pack is, and said so: each window shows the state that holds
           reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(operationInProgress(packId)) });
           if (isInstalled(packId)) {
-            broadcastToSurface('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: packRecord(packId).enabled });
+            broadcast('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: packRecord(packId).enabled });
           }
           return;
         }
@@ -632,7 +632,7 @@ export function createPacksSystem(registry: PackRegistry) {
             }
           } catch (error) {
             reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error', error: new Error(errorMessage(error)) });
-            broadcastToSurface('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: entry.enabled });
+            broadcast('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: entry.enabled });
             return;
           }
 
@@ -640,20 +640,20 @@ export function createPacksSystem(registry: PackRegistry) {
             reportError({ source: 'packs', operation: 'setPackEnabled', severity: 'error',
               error: new Error(`Couldn't save that ${packId} is ${newEnabled ? 'enabled' : 'disabled'}; the current state is unchanged.`),
             });
-            broadcastToSurface('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: entry.enabled });
+            broadcast('packs', { type: 'PACK_ENABLED_CHANGED' as const, packId, enabled: entry.enabled });
             return;
           }
 
           if (!newEnabled) {
             tearingDown = teardownPack(registry, packId, system.get(HOST.bus));
-            broadcastToSurface('packs', { type: 'PACK_DEACTIVATED' as const, packId });
+            broadcast('packs', { type: 'PACK_DEACTIVATED' as const, packId });
           } else {
             if (activatePack(registry, packId, system.get(HOST.bus))) {
-              broadcastToSurface('packs', { type: 'PACK_ACTIVATED' as const, packId });
+              broadcast('packs', { type: 'PACK_ACTIVATED' as const, packId });
             }
           }
 
-          broadcastToSurface('packs', {
+          broadcast('packs', {
             type: 'PACK_ENABLED_CHANGED' as const,
             packId,
             enabled: newEnabled,

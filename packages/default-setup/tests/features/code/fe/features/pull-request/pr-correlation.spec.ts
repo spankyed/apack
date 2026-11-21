@@ -14,8 +14,8 @@ import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 import type { GhPullRequest } from '#generated/types.ts';
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+const tell = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 
 // `addTabToParent` is how a file diff reaches the UI, and the only observable effect of that handler — it
 // guards on `self._parent`, so a standalone actor would silently open nothing and prove nothing
@@ -71,7 +71,7 @@ const selectPR = async (actor: ReturnType<typeof started>, which: GhPullRequest)
 };
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  tell.mockReset();
   resetAsks();
   addTabToParent.mockReset();
 });

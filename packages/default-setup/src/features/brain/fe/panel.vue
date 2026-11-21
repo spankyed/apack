@@ -86,7 +86,7 @@ import { computed, ref, watch } from 'vue'
 import type { BrainState } from '#features/brain/fe/state.ts'
 import RunNodeListItem from '@apackdev/ui/components/RunNodeListItem'
 import type { RunTree } from '@apackdev/sdk/steps'
-import { sendToSystem } from '#generated/events.ts'
+import { tell } from '#generated/events.ts'
 
 const { state: brain } = useState<BrainState>();
 
@@ -134,7 +134,7 @@ const onScroll = (e: Event) => {
 
 // Start brain method
 const startBrain = () => {
-  sendToSystem('brain', {
+  tell('brain', {
     type: 'START_BRAIN',
   });
 };

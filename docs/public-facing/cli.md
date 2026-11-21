@@ -480,7 +480,7 @@ Checks:
 | `internal-package-imports` | an `@apackdev` export named `_x`: it is `@internal`, the app's own, and an app update is free to rename it | no |
 | `host-imports` | `@apackdev/host`, which is not installed for a pack | no |
 | `elmdb-imports` | `elmdb` or `@apackdev/ears/lmdb`: your data comes through the engine the app installs | no |
-| `untyped-sends` | `untypedBroadcastToSurface`, `untypedSendToSystem` — use the typed facades from `#generated/events` | yes |
+| `untyped-sends` | `untypedBroadcast`, `untypedTell` — use the typed facades from `#generated/events` | yes |
 | `raw-transport` | `_rootEvents`, `trpc.bus`, `@apackdev/sdk/rpc` | yes |
 | `backend-console` | `console.*` under `features/*/be/`, `migrations/` or `extensions/` — use `createLogger` from `@apackdev/sdk/logger` | yes |
 | `component-sends` | `sendToSurface` from a feature's `.vue`. A component runs in no delivery, so the send carries no `Message.sender` and the surface it reaches cannot answer it — emit to your own surface with `useSurface()` and let its machine send. An extension's component is exempt: it is rendered in no surface scope and by no single surface, so it addresses a surface by ref and `sendToSurface` is that route's send | no |

@@ -14,7 +14,7 @@ const { boundHost } = await import('@apackdev/sdk/runtime/internals');
 const { getAppVersion } = await import('@apackdev/sdk/env');
 const { createActionEmitter } = await import('@apackdev/sdk/services');
 const { services } = boundHost();
-const { untypedSendToSystem } = await import('@apackdev/sdk/events');
+const { untypedTell } = await import('@apackdev/sdk/events');
 const { boundEars } = await import('@apackdev/sdk/ears');
 const { repository } = await import('@apackdev/sdk/services');
 const { registerPack, unregisterPack } = packs;
@@ -54,8 +54,8 @@ describe('the bound app', () => {
     const stop = rootEvents.onIncoming((event) => { incoming.push(event); });
     try {
       expect(boundHost().packs.getRegisteredServices().memoService).toBe(memoService);
-      createActionEmitter().sendToSystem('bound-pack/memos', { type: 'PING' });
-      untypedSendToSystem('bound-pack/memos', { type: 'PING' });
+      createActionEmitter().tell('bound-pack/memos', { type: 'PING' });
+      untypedTell('bound-pack/memos', { type: 'PING' });
     } finally {
       stop();
       unregisterPack('bound-pack');

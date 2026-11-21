@@ -6,7 +6,7 @@
 // could send to it.
 //
 // A claim closes that with no new address grammar. `host/drive` is spelled like any other feature ref, so
-// `splitRef`, `resolveName` and every gate that reads one keep working untaught, and `sendToSystem('host/drive',
+// `splitRef`, `resolveName` and every gate that reads one keep working untaught, and `tell('host/drive',
 // …)` resolves the way the rest do. What differs is only where the answer comes from: the registry for a pack's
 // features, this for a claimed name.
 //

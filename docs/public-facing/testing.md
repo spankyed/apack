@@ -108,7 +108,7 @@ it('stores a memo a client adds and sends it back', async () => {
   await app.connect();                                             // CLIENT_CONNECTED then SEND_STATE, as a client connecting
   expect(await app.nextEmit('memos', 'MEMOS_CONNECTED')).toMatchObject({ memos: [] });
 
-  await app.send('memos', { type: 'ADD_MEMO', text: 'hello' });   // as a client's sendToSystem does
+  await app.send('memos', { type: 'ADD_MEMO', text: 'hello' });   // as a client's tell does
   expect(await app.nextEmit('memos', 'MEMO_ADDED')).toMatchObject({ memo: { text: 'hello' } });
   expect(repository.memoQueries.all()).toHaveLength(1);
 });
@@ -117,9 +117,9 @@ it('stores a memo a client adds and sends it back', async () => {
 | Member | What it does |
 |---|---|
 | `startApp({ systems })` | Starts the named systems in registration order; `'*'` starts all. A bare id is tried as given, then as your pack's `<packId>/<featureId>`: use your feature ids, a built-in dependency's feature ids (default-setup's `notes`), or an external dependency's full bus id (`<depId>.<featureId>`) |
-| `connect()` | Sends `CLIENT_CONNECTED` and then `SEND_STATE`, which reach every running app, as a client connecting does. Every running system gets them (the harness has no client that loads pack frontends later), and sends to frontend surfaces are delivered from then on. Events for systems don't wait for it: client events, and the events systems, steps and schedules send (`sendToSystem`, `fire`, schedule ticks), reach them from `startApp`, as in the app |
+| `connect()` | Sends `CLIENT_CONNECTED` and then `SEND_STATE`, which reach every running app, as a client connecting does. Every running system gets them (the harness has no client that loads pack frontends later), and sends to frontend surfaces are delivered from then on. Events for systems don't wait for it: client events, and the events systems, steps and schedules send (`tell`, `fire`, schedule ticks), reach them from `startApp`, as in the app |
 | `send(systemId, event)` | Sends a system an event, connected or not |
-| `emitted(surfaceId?)` | Events sent to frontend surfaces (`broadcastToSurface`). Both go through the bus, as in the app, so one sent before `connect()` is dropped and never appears here (systems send their startup data once a client connects, so `connect()` first) |
+| `emitted(surfaceId?)` | Events sent to frontend surfaces (`broadcast`). Both go through the bus, as in the app, so one sent before `connect()` is dropped and never appears here (systems send their startup data once a client connects, so `connect()` first) |
 | `nextEmit(surfaceId, type, { answering?, timeoutMs? })` | The next such event no earlier call returned, waiting for it for as long as the test's processes keep working. `timeoutMs` waits on the clock instead, for a case asserting an event does not come |
 | `settle()` | Resolves once the systems have no work left |
 | `system(systemId)` | A running system's actor |

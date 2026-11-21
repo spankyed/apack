@@ -12,7 +12,7 @@ const asks = vi.hoisted(() => [] as { type: string; end(outcome: Outcome): void 
 vi.mock('#generated/events.ts', async () => {
   const { fromPromise } = await import('xstate');
   return {
-    sendToSystem: vi.fn(),
+    tell: vi.fn(),
     fromAsk: (_to: string, type: string) => fromPromise(() => new Promise<Outcome>((end) => { asks.push({ type, end }); })),
   };
 });

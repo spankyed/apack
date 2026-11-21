@@ -28,7 +28,7 @@ export type TestSettingsAccess =
 
 export interface StartAppOptions {
   /**
-   * Registered systems to run, named as `sendToSystem` names them: the pack's own by feature id, a
+   * Registered systems to run, named as `tell` names them: the pack's own by feature id, a
    * dependency's as `<packId>/<featureId>` (full bus ids work too), or `'*'` for all.
    */
   systems: readonly string[] | '*';
@@ -95,7 +95,7 @@ export interface TestApp {
    */
   endConnection(client: string): Promise<void>;
   /**
-   * Sends a system an event, as a client's `sendToSystem` does (the pack's own by feature id, a dependency's as
+   * Sends a system an event, as a client's `tell` does (the pack's own by feature id, a dependency's as
    * `<packId>/<featureId>`); the bus routes it whether or not a client connected.
    *
    * `sender` is who the system should answer, and a handler that calls `reply` needs it: a real send carries one
@@ -112,7 +112,7 @@ export interface TestApp {
    * is refused because it would claim a connection while naming none.
    *
    * `call` is the call to ask under, and **the returned value is the call this ask was sent under** — given
-   * one it is that, given none it is the one minted here, exactly as `sendToSystem` behaves. Pass it to
+   * one it is that, given none it is the one minted here, exactly as `tell` behaves. Pass it to
    * `nextEmit`'s `answering` to wait for the answer to *this* ask, which is what a correlation spec asserts;
    * a test with one ask in flight can ignore both and read the answer by type alone.
    */
@@ -129,7 +129,7 @@ export interface TestApp {
    */
   ask(systemId: string, event: { type: string; [key: string]: unknown }, options?: { client?: string; signal?: AbortSignal; heard?: (update: unknown) => void }): Promise<UntypedAskOutcome>;
   /**
-   * The events delivered to one frontend surface (by `broadcastToSurface`, once connected), in order, exactly as
+   * The events delivered to one frontend surface (by `broadcast`, once connected), in order, exactly as
    * sent; the surface named as the pack names it (its own by feature id, any other as `<packId>/<featureId>`).
    * Readable after `stop`
    */
@@ -168,7 +168,7 @@ export interface TestApp {
   /** A running system's actor */
   system(systemId: string): AnyActorRef;
   /**
-   * Subscribes to a feature's view as a window does (`useView`), the feature named as `sendToSystem` names a
+   * Subscribes to a feature's view as a window does (`useView`), the feature named as `tell` names a
    * system. Each call is its own subscriber, so two of them stand in for two windows; subscribers asking for the
    * same view with the same arguments share one watch, as the app's do. Ended when the app stops.
    */
@@ -282,12 +282,12 @@ function shutDownPacks(): void {
   if (failures.length > 0) throw new Error(`A pack's lifecycle.onShutdown failed when the test app stopped:\n  ${failures.join('\n  ')}`);
 }
 
-/** The registered system a name stands for, as the pack under test's `sendToSystem` resolves it */
+/** The registered system a name stands for, as the pack under test's `tell` resolves it */
 const resolveSystemId = (name: string, registered: ReadonlyMap<string, AnyStateMachine>): string =>
   resolveRegistered('system', name, { packId, registered: [...registered.keys()] });
 
 /**
- * The registered surface a name stands for, as the pack under test's own `broadcastToSurface` resolves it. A name no
+ * The registered surface a name stands for, as the pack under test's own `broadcast` resolves it. A name no
  * surface is registered under throws at once, rather than leaving a wait for its events to time out.
  */
 const resolveSurfaceId = (name: string): string =>

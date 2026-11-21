@@ -15,7 +15,7 @@ src/
     ears.ts                # EARS entity/relation registry, generated from apack.json
     ref.ts                 # ref(name): the ref a name in this pack's code stands for, bound to the pack
     fe.ts                  # openSurface(name, event?), SurfaceName: the surfaces this pack's code can name
-    events.ts              # SendableSurfaceEvents/PackSystemEvents + typed broadcastToSurface/sendToSurface/sendToSystem
+    events.ts              # SendableSurfaceEvents/PackSystemEvents + typed broadcast/sendToSurface/tell
     system-specs.ts        # Type-only: the events each system receives and sends, read by events.ts and types.ts
     types.ts               # Type barrel (per-feature types; a surface imports its system's events from be/contract.ts)
     services.ts            # Selected services, types and the lifetime-bound servicesForAction factory
@@ -77,7 +77,7 @@ Frontend components don't render untrusted text as markup: script injected into 
 
 Backend systems wired via `__generated__/pack-entry.ts`, each feature's with `packSystem()` from the SDK. Each system file default-exports a `SystemEntry` (the manifest names only the path, not an export name). The logs system is the bus's like any other: what the in-app viewer shows is what `onLog` delivers from the moment the bus starts it, so the boot lines before that — the boot reading, each `onInit`, the migrations, the content — reach stdout and the log file only.
 
-Code names a system by feature id, and reaches another system with the typed `sendToSystem(name, event)` from `__generated__/events`, never its actor. Each system file defines its events with `defineSystem()`; its identity is its feature's, from `apack.json`. A feature's designation comes only from `apack.json` `features.<id>.designation`. It is a role, not a name: it need not equal the feature id, and every one default-setup declares happens to.
+Code names a system by feature id, and reaches another system with the typed `tell(name, event)` from `__generated__/events`, never its actor. Each system file defines its events with `defineSystem()`; its identity is its feature's, from `apack.json`. A feature's designation comes only from `apack.json` `features.<id>.designation`. It is a role, not a name: it need not equal the feature id, and every one default-setup declares happens to.
 
 ## What a system sends a surface: data is a view, a result is an ask's answer, news is a broadcast
 
@@ -89,7 +89,7 @@ navigated every window, six features announced an import to windows that had not
 |---|---|---|
 | **data** — what the feature stores, as a window shows it | a **view** (`useView`, `fromView`) | none: it is the window's own subscription |
 | a **result** — the answer to one window's read, write or command | an **ask** (`asks` in the contract, answered by `answers`) | the envelope's call, which every send already carries |
-| **news** — something happened that every window should know | `broadcastToSurface` | none, and guarding one is a category error |
+| **news** — something happened that every window should know | `broadcast` | none, and guarding one is a category error |
 
 **Data is a view.** A feature declares its reads (`be/views.ts`, `apack.json` `features.<id>.views`); a window
 subscribes with its arguments and is sent each changed result, and nothing that writes says who is looking. No
@@ -354,7 +354,7 @@ Import `EARS` from `#generated/ears` by default. The SDK's `EARS` (`@apackdev/sd
 
 Typed facades (no module augmentation):
 - `__generated__/ears.ts` — `PackShapes` (entity type → attribute interface; a numbered entity's shape gains the `shortCode` the engine writes, typed from its `apack.json` entry, so `ThreadEntity` declares none), `ShortCodeOf<E>` (a numbered entity's code type, `ShortCodeOf<'Thread'>` is `` `THR-${number}` ``), `EntityName`, and the typed `query`/`create`/`upsert`/`write`/`transact`/`newId`/`getAttr` helpers built with `defineEars`. Feature code imports its writes from here; migrations write with the unchecked `untypedCreate`/`untypedUpsert`/`untypedWrite` from `@apackdev/ears`, as does the Database console's transaction code (which exposes them to console code as `create`, `upsert` and `write`), which runs through `@apackdev/sdk/database-console` (`features/database/be/execute/`)
-- `__generated__/events.ts` — `SendableSurfaceEvents` (receiving surface ID → the events it gets: its own system's, plus the inbox that surface's `Contract` declares — the flows surface takes the three action events it handles, the logs surface `LOG_ADDED` from any pack), `PackSystemEvents` (system → the events it receives), and typed `broadcastToSurface`/`sendToSurface`/`sendToSystem` built with `defineEvents`. Frontend state machines and systems send to systems with `sendToSystem` (to the brain's role with `{ role: 'brain' }`); backend code sends to surfaces with `broadcastToSurface`, which reaches every window, and frontend code with `sendToSurface`, which reaches this window's actor. Don't import these from `@apackdev/sdk/events`; a surface that takes events from anywhere but its own system declares them in its `Contract`'s `inbox` (`fe/contract.ts`). Subscriptions (`onConnected`, `onIncoming`) come from `@apackdev/sdk/events`, `onLog` from `@apackdev/sdk/logger`. A system answers whoever asked through its `answers` table, which is the only way an ask is answered; `ask` and `fromAsk`, from the same module, ask one of the pack's or its dependencies' systems and resolve to its `Outcome`
+- `__generated__/events.ts` — `SendableSurfaceEvents` (receiving surface ID → the events it gets: its own system's, plus the inbox that surface's `Contract` declares — the flows surface takes the three action events it handles, the logs surface `LOG_ADDED` from any pack), `PackSystemEvents` (system → the events it receives), and typed `broadcast`/`sendToSurface`/`tell` built with `defineEvents`. Frontend state machines and systems send to systems with `tell` (to the brain's role with `{ role: 'brain' }`); backend code sends to surfaces with `broadcast`, which reaches every window, and frontend code with `sendToSurface`, which reaches this window's actor. Don't import these from `@apackdev/sdk/events`; a surface that takes events from anywhere but its own system declares them in its `Contract`'s `inbox` (`fe/contract.ts`). Subscriptions (`onConnected`, `onIncoming`) come from `@apackdev/sdk/events`, `onLog` from `@apackdev/sdk/logger`. A system answers whoever asked through its `answers` table, which is the only way an ask is answered; `ask` and `fromAsk`, from the same module, ask one of the pack's or its dependencies' systems and resolve to its `Outcome`
 - `__generated__/services.ts` — the `services` proxy typed as `Services` (with `services.repository` typed as `Repositories`, and `services.emitter`'s sends typed with the pack's events; actions name systems `default-setup/<feature>`)
 - `__generated__/repository.ts` — `repository`, typed with every repository in `features.<id>.repositories`
 
@@ -438,8 +438,8 @@ whole point of an artifact: a new type is a definition and a component, never a 
   backend's is read, the user's in-progress edit is held.
 - **Read another surface's state with `useSurfaceState`** (`#generated/fe`), which is a value and not an actor, so
   it follows that surface arriving and reloading.
-- **Raise what the user did as an event, with `sendToSystem` to the feature hosting you** —
-  `sendToSystem('threads', { type: 'FORWARD_BRAIN_EVENT', eventType, payload })`. The threads system forwards
+- **Raise what the user did as an event, with `tell` to the feature hosting you** —
+  `tell('threads', { type: 'FORWARD_BRAIN_EVENT', eventType, payload })`. The threads system forwards
   any `eventType` to the brain and a flow listens for it, so the decision travels without threads knowing what
   a todo is.
 
