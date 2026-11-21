@@ -113,9 +113,57 @@ describe('packageIdentity', () => {
     'package-lock.json': '{}',
   };
 
-  it('is the same for a registry install and a linked checkout of the same package', () => {
+  it('is the same for a linked checkout and an unpacked copy of what it ships, when no lockfile records either', () => {
     expect(packageIdentity(tmp(checkout))).toEqual(packageIdentity(tmp(shipped)));
     expect(packageIdentity(tmp(shipped))).toMatchObject({ name: 'lib', version: '1.0.0', hash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+  });
+
+  /** A project whose lockfile records `entry` for the package installed at `key` (`node_modules/…`) */
+  function installed(key: string, entry: object, files: Record<string, string | object> = shipped) {
+    const root = tmp({ 'package.json': pkg('project'), 'package-lock.json': { lockfileVersion: 3, packages: { '': {}, [key]: entry } } });
+    for (const [file, body] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(root, key, file)), { recursive: true });
+      fs.writeFileSync(path.join(root, key, file), typeof body === 'string' ? body : JSON.stringify(body));
+    }
+    return { root, dir: path.join(root, key) };
+  }
+  const registry = { version: '1.0.0', resolved: 'https://registry.npmjs.org/lib/-/lib-1.0.0.tgz', integrity: 'sha512-locked' };
+
+  it("is a registry install's lockfile integrity, without reading what it ships", () => {
+    const { dir } = installed('node_modules/lib', registry);
+    expect(packageIdentity(dir)).toEqual({ name: 'lib', version: '1.0.0', hash: 'sha512-locked' });
+    fs.appendFileSync(path.join(dir, 'dist/index.js'), 'changed');
+    expect(packageIdentity(dir).hash).toBe('sha512-locked');
+  });
+
+  it('keys a nested install and a workspace\'s install by their path from the governing lockfile', () => {
+    expect(packageIdentity(installed('node_modules/a/node_modules/lib', registry).dir).hash).toBe('sha512-locked');
+    expect(packageIdentity(installed('packages/x/node_modules/lib', registry).dir).hash).toBe('sha512-locked');
+  });
+
+  it('reads the files where the lockfile has no registry integrity: a file: or git dependency, a link, another version', () => {
+    const files = packageIdentity(tmp(shipped)).hash;
+    for (const entry of [
+      { ...registry, resolved: 'file:../lib-1.0.0.tgz' },
+      { version: '1.0.0', resolved: 'git+ssh://git@github.com/x/lib.git#abc' },
+      { ...registry, link: true },
+      { ...registry, version: '0.9.0' },
+      { ...registry, integrity: undefined },
+    ]) expect(packageIdentity(installed('node_modules/lib', entry).dir).hash, JSON.stringify(entry)).toBe(files);
+  });
+
+  it('reads a linked package by its files, as the checkout it points at', () => {
+    const { root } = installed('node_modules/other', registry, { 'package.json': pkg('other') });
+    const checkout = tmp(shipped);
+    fs.symlinkSync(checkout, path.join(root, 'node_modules', 'lib'), 'dir');
+    expect(packageIdentity(path.join(root, 'node_modules', 'lib')).hash).toBe(packageIdentity(checkout).hash);
+  });
+
+  it('reads the lockfile again when it changes', () => {
+    const { root, dir } = installed('node_modules/lib', registry);
+    expect(packageIdentity(dir).hash).toBe('sha512-locked');
+    fs.writeFileSync(path.join(root, 'package-lock.json'), JSON.stringify({ lockfileVersion: 3, packages: { 'node_modules/lib': { ...registry, integrity: 'sha512-relocked-and-longer' } } }));
+    expect(packageIdentity(dir).hash).toBe('sha512-relocked-and-longer');
   });
 
   it.each(Object.keys(shipped))('moves when shipped file %s changes', (file) => {
