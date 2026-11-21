@@ -51,6 +51,21 @@ it('shows original native detail values, failed status and explicit shortened pr
   expect(f.root.textContent).toContain('Prompt preview shortened.'); expect(f.root.querySelector('[role="alert"]')?.textContent).toContain('Native failure')
 })
 
+it('shows the native compaction boundary and collapses the summary in the inline Agent preview', async () => {
+  const f = await fixture()
+  f.state.value.details!.messages = [
+    { role: 'system', uuid: 'boundary', compaction: 'boundary', text: '' },
+    { role: 'system', uuid: 'summary', compaction: 'summary', text: 'Earlier worker context' },
+  ]
+  await nextTick()
+  const conversation = f.root.querySelector('[aria-label="Agent conversation"]')!
+  expect(conversation.textContent).toContain('Conversation compacted')
+  const details = conversation.querySelector('details')!
+  expect(details.open).toBe(false)
+  expect(details.querySelector('summary')?.textContent).toBe('Compact summary')
+  expect(details.textContent).toContain('Earlier worker context')
+})
+
 it('uses human replies when supported and clears only their exact queued receipt', async () => {
   const f = await fixture(); f.state.value.details!.canInput = true; await nextTick()
   expect(f.input.getAttribute('aria-label')).toBe('Reply to this Agent')

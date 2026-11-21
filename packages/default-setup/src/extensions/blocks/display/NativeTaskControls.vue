@@ -16,8 +16,17 @@
       <NativeAgentDetails :details="state.details" />
       <p v-if="!workflow && !state.details.messages.length" class="text-neutral-500">No conversation messages are available yet.</p>
       <article v-for="message in state.details.messages" :key="message.uuid" class="mb-3 last:mb-0">
-        <div class="mb-1 text-[10px] uppercase text-neutral-500">{{ message.role }}</div>
-        <pre class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-neutral-300">{{ message.text }}</pre>
+        <template v-if="message.role === 'system'">
+          <p v-if="message.compaction === 'boundary'" class="text-neutral-400">Conversation compacted</p>
+          <details v-else>
+            <summary class="cursor-pointer text-neutral-300">Compact summary</summary>
+            <p class="mt-1 whitespace-pre-wrap [overflow-wrap:anywhere] text-neutral-300">{{ message.text }}</p>
+          </details>
+        </template>
+        <template v-else>
+          <div class="mb-1 text-[10px] uppercase text-neutral-500">{{ message.role }}</div>
+          <pre class="m-0 whitespace-pre-wrap [overflow-wrap:anywhere] font-mono text-neutral-300">{{ message.text }}</pre>
+        </template>
       </article>
       <p v-if="state.details.truncated" class="text-neutral-500">Conversation preview shortened.</p>
       <form v-if="state.details.canInput || state.details.canMessage" class="mt-3 border-t border-white/10 pt-3" @submit.prevent="sendMessage">
