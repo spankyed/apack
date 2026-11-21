@@ -3,13 +3,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getBridgedSdkSpecifiers } from '../../../src/packs/runtime/bridge.ts';
 import { APP_UNBRIDGED, renderSharedModules } from '../../../src/build/render-sdk-modules.ts';
-import { APP_ONLY_EXPORTS, SHARED_INSTANCE_PACKAGES, sharedInstanceExports } from '../../../src/build/shared-deps.ts';
+import { SHARED_INSTANCE_PACKAGES, sharedInstanceExports } from '../../../src/build/shared-deps.ts';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..');
 /**
  * Packages whose exports the bridge must account for: the shared-instance packages, which pack code requires,
  * and the host, which it never does. Derived from the list that decides the first group rather than spelled
- * beside it — a fourth shared package would otherwise be checked by nothing here, in the spec that exists to
+ * beside it — a second shared package would otherwise be checked by nothing here, in the spec that exists to
  * notice exactly that kind of gap.
  */
 const ACCOUNTED_FOR: readonly string[] = [...SHARED_INSTANCE_PACKAGES, '@apackdev/host'];
@@ -24,8 +24,6 @@ const RUNTIME_ENTRY = path.join(REPO_ROOT, 'packages', 'default-setup', 'dist', 
 const UNBRIDGED_BY_POLICY = new Map<string, string>([
   // Shared-instance exports the bridge leaves out (the Content DSL, test tooling), with their reasons
   ...Object.entries(APP_UNBRIDGED),
-  // Shared-instance exports only the app's composition root loads (the elmdb databases)
-  ...Object.entries(APP_ONLY_EXPORTS),
   // Redaction's host side: only the secrets store registers the values logs must mask, and a pack must not
   // The bound runtimes and unbinding: a pack could otherwise unbind the app or reach its raw services
   ['@apackdev/sdk/runtime/internals', 'host-only — a pack could otherwise unbind the app or take over its services'],
@@ -115,7 +113,6 @@ const UNBRIDGED_BY_POLICY = new Map<string, string>([
   ['@apackdev/host/logs', "the app's log files, appended to by main and the API"],
   // Metadata: tooling reads them, code never requires them.
   ['@apackdev/sdk/package.json', 'package metadata, not code'],
-  ['@elmdb/ears/package.json', 'package metadata, not code'],
   ['@apackdev/sdk/apack.schema.json', 'manifest JSON schema, not code'],
 ]);
 
@@ -155,7 +152,7 @@ function concreteExports(): string[] {
 
 describe('SDK bridge drift', () => {
   /**
-   * Two of the three come from `SHARED_INSTANCE_PACKAGES` and move with it; `@apackdev/host` is written here,
+   * The SDK comes from `SHARED_INSTANCE_PACKAGES` and moves with it; `@apackdev/host` is written here,
    * and its manifest is read from the tree by path rather than resolved, because the host is private.
    *
    * So a rename or a move does not report a stale entry — it throws inside `exportsMap`, and every case

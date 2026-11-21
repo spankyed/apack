@@ -5,7 +5,6 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { packInputFiles, packInputsHash } from '@apackdev/host/build/pack-inputs';
 import { dependencyClosure, packageIdentity } from '@apackdev/host/build/package-identity';
-import { SHARED_INSTANCE_PACKAGES } from '@apackdev/host/build/shared-deps';
 
 function packageRoot(entry: string): string {
   let root = path.dirname(entry);
@@ -22,9 +21,9 @@ function packageRoot(entry: string): string {
  *
  * The CLI's own code is read as a directory: `src` run from a checkout, `dist` once bundled, and in a checkout the
  * host's and SDK's `src` too, which it runs from source. Every other package it scopes is read by its identity
- * (`packageIdentity`: name, version and the files it ships), never by a folder guessed inside it: in a checkout the
- * shared-instance packages the SDK brings (`@elmdb/ears`, linked from elmdb's checkout at version 0.0.0), and beside
- * a published CLI the installed SDK, whose declarations the bundled code reads.
+ * (`packageIdentity`: name, version and the files it ships), never by a folder guessed inside it: in a checkout what
+ * the SDK links from another checkout (`@elmdb/ears`, from elmdb's at version 0.0.0), and beside a published CLI the
+ * installed SDK, whose declarations the bundled code reads.
  */
 export function buildToolHash(moduleUrl = import.meta.url): string {
   const entry = fs.realpathSync.native(fileURLToPath(moduleUrl));
@@ -45,8 +44,11 @@ export function buildToolHash(moduleUrl = import.meta.url): string {
         : path.dirname(require.resolve(`${name}/package.json`));
       scopes.push({ name, root: owner, directory: 'src' });
     }
-    const brought = dependencyClosure('@apackdev/sdk', root);
-    for (const name of SHARED_INSTANCE_PACKAGES.filter((pkg) => pkg !== '@apackdev/sdk')) {
+    // What the SDK links from a checkout (`file:`, EARS from elmdb's) changes without its version or the lockfile
+    // moving, so it is scoped by what it ships; what the SDK has from the registry moves with the lockfile
+    const [sdk, ...brought] = dependencyClosure('@apackdev/sdk', root);
+    for (const [name, range] of Object.entries(sdk!.manifest.dependencies ?? {})) {
+      if (!range.startsWith('file:')) continue;
       const pkg = brought.find((member) => member.name === name);
       if (pkg === undefined) throw new Error(`Missing build tool implementation: ${name} isn't among @apackdev/sdk's dependencies`);
       identities.push(identityLine(pkg.directory));

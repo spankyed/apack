@@ -525,8 +525,8 @@ describe('findElmdbImports', () => {
 describe('findSharedPackageLists', () => {
   it.each([
     ["const EXTERNALS = ['@apackdev/sdk', '@apackdev/sdk/*'];", ['"@apackdev/sdk"', '"@apackdev/sdk/*"']],
-    ["if (source.startsWith('@elmdb/ears/')) return;", ['"@elmdb/ears/"']],
-    ['bridge({ bridgedPackages: [`@elmdb/ears`] });', ['"@elmdb/ears"']],
+    ["if (source.startsWith('@apackdev/sdk/')) return;", ['"@apackdev/sdk/"']],
+    ['bridge({ bridgedPackages: [`@apackdev/sdk`] });', ['"@apackdev/sdk"']],
   ])('flags a shared package named outside an import: %s', (code, found) => {
     write('consumer.ts', code);
     expect(findSharedPackageLists(['src/consumer.ts'], root)).toEqual(found.map((what) => `src/consumer.ts:1: ${what}`));

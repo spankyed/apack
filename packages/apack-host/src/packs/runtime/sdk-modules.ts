@@ -27,7 +27,6 @@ import * as _apackdev_sdk_types from '@apackdev/sdk/types';
 import * as _apackdev_sdk_utils from '@apackdev/sdk/utils';
 import * as _apackdev_sdk_utils_compare_versions from '@apackdev/sdk/utils/compare-versions';
 import * as _apackdev_sdk_utils_pure from '@apackdev/sdk/utils/pure';
-import * as _elmdb_ears from '@elmdb/ears';
 
 /** Every shared-instance export pack runtime code can require, keyed by specifier */
 export const SHARED_INSTANCE_MODULES: Readonly<Record<string, unknown>> = {
@@ -58,5 +57,4 @@ export const SHARED_INSTANCE_MODULES: Readonly<Record<string, unknown>> = {
   '@apackdev/sdk/utils': _apackdev_sdk_utils,
   '@apackdev/sdk/utils/compare-versions': _apackdev_sdk_utils_compare_versions,
   '@apackdev/sdk/utils/pure': _apackdev_sdk_utils_pure,
-  '@elmdb/ears': _elmdb_ears,
 };

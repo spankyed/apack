@@ -3,24 +3,38 @@ import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { APP_ONLY_EXPORTS, SHARED_DEPS, getSharedBeDeps, getSharedFeDeps, getSdkFeModules, getUiFeModules, sharedFeModules, unresolvedSubpathPackages, sharedInstanceExports, sharedInstanceSpecifiers } from '../../src/build/shared-deps.ts';
+import { APP_ONLY_EXPORTS, SHARED_DEPS, SHARED_INSTANCE_PACKAGES, THROUGH_SDK, getSharedBeDeps, getSharedFeDeps, getSdkFeModules, getUiFeModules, sharedFeModules, sharedInstancePackage, unresolvedSubpathPackages, sharedInstanceExports } from '../../src/build/shared-deps.ts';
+import { createRequire } from 'node:module';
+import { readPackageManifest } from '../../src/build/package-identity.ts';
+import { packageName } from '../../src/build/specifiers.ts';
 import { appBridgedSpecifiers } from '../../src/build/render-sdk-modules.ts';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '..', '..', '..', '..');
 
 describe('APP_ONLY_EXPORTS', () => {
-  it('names exports @elmdb/ears has', () => {
-    const exported = sharedInstanceExports('@elmdb/ears', import.meta.filename);
+  it('names exports their packages have', () => {
     for (const specifier of Object.keys(APP_ONLY_EXPORTS)) {
-      expect(Object.keys(exported)).toContain(`.${specifier.replace('@elmdb/ears', '')}`);
+      const pkg = packageName(specifier);
+      const exported = readPackageManifest(path.dirname(createRequire(import.meta.filename).resolve(`${pkg}/package.json`))) as { exports?: Record<string, unknown> };
+      expect(Object.keys(exported.exports ?? {})).toContain(`.${specifier.slice(pkg.length)}`);
     }
   });
 
-  it('leaves them out of the shared specifiers the harness bridges and the app bridge', () => {
-    const specifiers = sharedInstanceSpecifiers('@elmdb/ears', sharedInstanceExports('@elmdb/ears', import.meta.filename));
-    expect(specifiers).toContain('@elmdb/ears');
-    expect(specifiers).not.toContain('@elmdb/ears/database');
-    expect(appBridgedSpecifiers(import.meta.filename)).not.toContain('@elmdb/ears/database');
+  it('are none of what the app bridges for pack code', () => {
+    const bridged = appBridgedSpecifiers(import.meta.filename);
+    for (const specifier of Object.keys(APP_ONLY_EXPORTS)) expect(bridged).not.toContain(specifier);
+  });
+});
+
+describe('SHARED_INSTANCE_PACKAGES', () => {
+  // A pack reaches EARS only through the SDK, so sharing the SDK shares the EARS it loads: EARS on the list would be a
+  // second route to it, which is what the `ears-imports` pack rule and the facade's rewrite take away
+  it('shares the SDK alone, and every package a pack reaches through it is reached through one of its entries', () => {
+    expect([...SHARED_INSTANCE_PACKAGES]).toEqual(['@apackdev/sdk']);
+    for (const [pkg, entry] of Object.entries(THROUGH_SDK)) {
+      expect(sharedInstancePackage(pkg), pkg).toBeUndefined();
+      expect(sharedInstancePackage(entry), entry).toBe('@apackdev/sdk');
+    }
   });
 });
 
@@ -30,19 +44,13 @@ describe('sharedInstanceExports', () => {
     fs.writeFileSync(path.join(root, file), JSON.stringify(body));
   };
 
-  it('reads the EARS the SDK brings for a pack that names only the SDK, and the pack\'s own where it has one', () => {
+  it("reads the exports map of the copy Node gives the file's directory, and refuses one that doesn't resolve", () => {
     const pack = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-instance-'));
     try {
       write(pack, 'package.json', { name: 'pack', dependencies: { '@apackdev/sdk': '*' } });
-      write(pack, 'node_modules/@apackdev/sdk/package.json', { name: '@apackdev/sdk', dependencies: { '@elmdb/ears': '*' }, exports: { '.': './sdk.js' } });
-      // npm nested the SDK's EARS under it: nothing above the pack holds one
-      write(pack, 'node_modules/@apackdev/sdk/node_modules/@elmdb/ears/package.json', { name: '@elmdb/ears', exports: { './brought': './x.js' } });
-      expect(sharedInstanceExports('@elmdb/ears', path.join(pack, 'index.ts'))).toEqual({ './brought': './x.js' });
-      write(pack, 'node_modules/@elmdb/ears/package.json', { name: '@elmdb/ears', exports: { './own': './x.js' } });
-      expect(sharedInstanceExports('@elmdb/ears', path.join(pack, 'index.ts'))).toEqual({ './own': './x.js' });
-      fs.rmSync(path.join(pack, 'node_modules/@elmdb'), { recursive: true });
-      fs.rmSync(path.join(pack, 'node_modules/@apackdev/sdk/node_modules'), { recursive: true });
-      expect(() => sharedInstanceExports('@elmdb/ears', path.join(pack, 'index.ts'))).toThrow('@elmdb/ears, declared by @apackdev/sdk');
+      expect(() => sharedInstanceExports('@apackdev/sdk', path.join(pack, 'index.ts'))).toThrow("@apackdev/sdk doesn't resolve from");
+      write(pack, 'node_modules/@apackdev/sdk/package.json', { name: '@apackdev/sdk', exports: { './own': './x.js' } });
+      expect(sharedInstanceExports('@apackdev/sdk', path.join(pack, 'index.ts'))).toEqual({ './own': './x.js' });
     } finally {
       fs.rmSync(pack, { recursive: true, force: true });
     }

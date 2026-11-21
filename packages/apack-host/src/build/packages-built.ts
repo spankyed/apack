@@ -165,21 +165,22 @@ function compiled(at: CheckoutPaths, pkg: string, ...extraInputs: string[]): Bui
 }
 
 /**
- * What a bundle **inlines** of each shared-instance package: the SDK's source in this checkout, and EARS' built
- * `dist` in the elmdb checkout `vendor/elmdb` links to (in CI, the clone at the pin), with each one's manifest.
+ * What a bundle **inlines** of each shared-instance package and what it links from another checkout
+ * (`scripts/bundle-package.ts`): the SDK's source in this checkout, and EARS' built `dist` in the elmdb checkout
+ * `vendor/elmdb` links to (in CI, the clone at the pin), with each one's manifest.
  *
- * Keyed by the list of what is inlined, so a third shared-instance package fails to compile until it says where
- * its code comes from.
+ * Keyed by at least the list of what is shared, so a second shared-instance package fails to compile until it says
+ * where its code comes from.
  */
-const INLINED_FROM: Record<(typeof SHARED_INSTANCE_PACKAGES)[number], (at: CheckoutPaths) => string[]> = {
+const INLINED_FROM = {
   '@apackdev/sdk': ({ pkgFile }) => [pkgFile('apack-sdk', 'src'), pkgFile('apack-sdk', 'package.json')],
   '@elmdb/ears': ({ repoFile }) => [repoFile('vendor', 'elmdb', 'packages', 'ears', 'dist'),
     repoFile('vendor', 'elmdb', 'packages', 'ears', 'package.json')],
-};
+} satisfies Record<(typeof SHARED_INSTANCE_PACKAGES)[number], (at: CheckoutPaths) => string[]> & Record<string, (at: CheckoutPaths) => string[]>;
 
 /**
- * A package esbuild bundles into `dist/package/`, inlining @apackdev/host and the shared-instance packages
- * (scripts/bundle-package.ts): the host and the SDK from source, EARS from its built `dist`.
+ * A package esbuild bundles into `dist/package/`, inlining @apackdev/host, the shared-instance packages and what they
+ * link (scripts/bundle-package.ts): the host and the SDK from source, EARS from its built `dist`.
  *
  * **It declares every source it inlines, which is the whole of what it reads.** `apack-host/src` was there
  * and the shared-instance packages' were not, so an edit to `@apackdev/sdk/src` left the `@apackdev/cli` and
@@ -197,7 +198,7 @@ function bundled(at: CheckoutPaths, pkg: string, ...copiedPaths: string[]): Buil
       repoFile('LICENSE'),
       pkgFile(pkg, 'src'), pkgFile(pkg, 'package.json'), pkgFile(pkg, 'tsconfig.json'),
       pkgFile('apack-host', 'src'), pkgFile('apack-host', 'package.json'),
-      ...SHARED_INSTANCE_PACKAGES.flatMap((name) => INLINED_FROM[name](at))],
+      ...Object.values(INLINED_FROM).flatMap((inlined) => inlined(at))],
     outputs: [pkgFile(pkg, 'dist', 'package', 'package.json'), pkgFile(pkg, 'dist', 'package', 'dist'),
       pkgFile(pkg, 'dist', 'package', 'LICENSE'),
       ...copiedPaths.map(file => pkgFile(pkg, 'dist', 'package', file))],

@@ -1,6 +1,6 @@
 // A memo kept as a default-setup note. It's written with the SDK's untyped engine operations (@apackdev/sdk/ears),
 // not the generated facade, and read back through the SDK's services with default-setup's repository: the pack, the SDK and its
-// dependency's runtime share one engine (SHARED_INSTANCE_PACKAGES).
+// dependency's runtime share one engine, the one SDK's (SHARED_INSTANCE_PACKAGES).
 import { untypedCreate } from '@apackdev/sdk/ears';
 import { services } from '#generated/services.ts';
 
