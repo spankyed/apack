@@ -8,8 +8,8 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
-import { useSelector } from '@xstate/vue'
+import { useState, useSurface } from '@apackdev/sdk/fe'
+import { computed } from 'vue'
 import { type CodeState } from '#features/code/fe/state.ts'
 import { panelChild } from '../children.ts'
 import TerminalActivityBadge from './TerminalActivityBadge.vue'
@@ -19,9 +19,10 @@ const props = defineProps<{ terminalId: string }>()
 
 const codeActor: CodeState = useSurface()
 const terminalActor = panelChild(codeActor, 'terminal')!
-const activity = useSelector(terminalActor, (state) => state.context.activity[props.terminalId])
-const status = useSelector(terminalActor, (state) =>
-  statusToShow(state.context.terminals.find(terminal => terminal.id === props.terminalId)?.statuses))
-const kept = useSelector(terminalActor, (state) =>
-  state.context.terminals.find(terminal => terminal.id === props.terminalId)?.kept === true)
+const { state: terminals } = useState(terminalActor)
+const activity = computed(() => terminals.value.data.activity[props.terminalId])
+const status = computed(() =>
+  statusToShow(terminals.value.data.terminals.find(terminal => terminal.id === props.terminalId)?.statuses))
+const kept = computed(() =>
+  terminals.value.data.terminals.find(terminal => terminal.id === props.terminalId)?.kept === true)
 </script>

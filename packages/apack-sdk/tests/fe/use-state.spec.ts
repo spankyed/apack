@@ -118,23 +118,22 @@ describe('useState', () => {
     expect(mount().shows()).toBe('Board | list | - | - | ab | /a');
   });
 
-  it('renders only the components that read the place that changed', async () => {
+  it('renders only the components that read the field that changed', async () => {
     const it = mount();
     it.send({ type: 'RETITLE', title: 'Another' });
     expect(await it.ran()).toEqual(['title']);
     it.send({ type: 'SAY', id: 'a', text: 'hello' });
-    expect(await it.ran()).toEqual(['a']);
-    it.send({ type: 'SAY', id: 'b', text: 'other' });
-    expect(await it.ran()).toEqual(['b']);
-    expect(it.shows()).toBe('Another | list | hello | other | ab | /a');
+    expect(await it.ran()).toEqual(['a', 'b', 'which']);
+    it.send({ type: 'MOVE', directory: '/b' });
+    expect(await it.ran()).toEqual(['folder']);
+    expect(it.shows()).toBe('Another | list | hello | - | ab | /b');
   });
 
-  it('renders the readers of which keys there are when one is added or taken away, and no reader of another key', async () => {
+  it('follows a field as its keys come and go', async () => {
     const it = mount();
     it.send({ type: 'ADD', id: 'c' });
-    expect(await it.ran()).toEqual(['which']);
     it.send({ type: 'FORGET', id: 'a' });
-    expect(await it.ran()).toEqual(['a', 'which']);
+    await it.ran();
     expect(it.shows()).toBe('Board | list | - | - | bc | /a');
   });
 
@@ -153,11 +152,28 @@ describe('useState', () => {
     expect(await it.ran()).toEqual([]);
   });
 
-  it('replaces whole a value that is not plain data, and never looks inside it', async () => {
+  it("hands a component the machine's own values: the object it reads is the one the machine holds", async () => {
+    const it = mount(['title']);
+    let mine: UsedState<Board>['state'] | undefined;
+    const app = createApp(defineComponent(() => { mine = useState<Board>(it.actor).state; return () => h('p', mine!.value.data.title); }));
+    app.mount(node('page'));
+    const held = () => it.actor.getSnapshot().context;
+    expect(mine!.value.data.messages).toBe(held().messages);
+    // What is not plain data is handed over as it is, an instance of its own class
+    expect(mine!.value.data.repository).toBe(held().repository);
+    expect(mine!.value.data.repository).toBeInstanceOf(Repository);
+    it.send({ type: 'SAY', id: 'a', text: 'hello' });
+    await nextTick();
+    expect(mine!.value.data.messages).toBe(held().messages);
+    expect(mine!.value.data.messages.b).toBe(held().messages.b);
+    expect(() => structuredClone(mine!.value.data.messages)).not.toThrow();
+    app.unmount();
+  });
+
+  it('renders the reader of a field the machine replaced, though with a value equal to the one before', async () => {
     const it = mount();
-    it.send({ type: 'MOVE', directory: '/b' });
+    it.send({ type: 'MOVE', directory: '/a' });
     expect(await it.ran()).toEqual(['folder']);
-    expect(it.shows()).toBe('Board | list | - | - | ab | /b');
   });
 
   it('renders once for many changes made before Vue renders', async () => {
@@ -165,7 +181,7 @@ describe('useState', () => {
     for (let said = 0; said < 50; said++) it.send({ type: 'SAY', id: 'a', text: `${said}` });
     it.send({ type: 'RETITLE', title: 'One' });
     it.send({ type: 'RETITLE', title: 'Two' });
-    expect(await it.ran()).toEqual(['a', 'title']);
+    expect(await it.ran()).toEqual(['a', 'b', 'title', 'which']);
     expect(it.shows().startsWith('Two | list | 0,1,2')).toBe(true);
   });
 
@@ -180,30 +196,35 @@ describe('useState', () => {
     expect(_mirrored()).toBe(0);
   });
 
-  it('never writes into what the machine holds', async () => {
-    const it = mount();
-    it.send({ type: 'SAY', id: 'a', text: 'hello' });
-    await it.ran();
-    // What the machine held then, kept: the machine makes a new list for the next message and leaves this one be.
-    const then = it.actor.getSnapshot().context.messages.a;
-    it.send({ type: 'SAY', id: 'a', text: 'again' });
-    await it.ran();
-    expect(then).toEqual(['hello']);
-    expect(it.actor.getSnapshot().context.messages.a).toEqual(['hello', 'again']);
+  it('goes on following a machine for the readers left when one has gone', async () => {
+    const it = mount(['title']);
+    const other = createApp(defineComponent(() => { const { state } = useState<Board>(it.actor); return () => h('p', state.value.data.title); }));
+    const root = node('page');
+    other.mount(root);
+    const third = createApp(defineComponent(() => { const { state } = useState<Board>(it.actor); return () => h('p', state.value.data.title); }));
+    third.mount(node('page'));
+    third.unmount();
+    it.unmount();
+    it.send({ type: 'RETITLE', title: 'Still read' });
+    await nextTick();
+    expect(shown(root)).toBe('Still read');
+    expect(_mirrored()).toBe(1);
+    other.unmount();
+    expect(_mirrored()).toBe(0);
   });
 
-  it('hands a component something it cannot write into: a write changes nothing, for it or for any other reader', async () => {
-    const it = mount(['title']);
+  it('hands a component fields it cannot write: a write changes nothing, for it or for any other reader', async () => {
+    const it = mount();
     const warned = vi.spyOn(console, 'warn').mockImplementation(() => {});
     let mine: UsedState<Board>['state'] | undefined;
     const app = createApp(defineComponent(() => { mine = useState<Board>(it.actor).state; return () => h('p', mine!.value.data.title); }));
     const root = node('page');
     app.mount(root);
     (mine!.value.data as { title: string }).title = 'Written by a component';
-    mine!.value.data.messages.a!.push('written');
+    (mine!.value as { at: string }).at = 'elsewhere';
     expect(await it.ran()).toEqual([]);
-    expect([shown(root), it.shows()]).toEqual(['Board', 'Board']);
-    expect(it.actor.getSnapshot().context.messages.a).toEqual([]);
+    expect([shown(root), it.shows()]).toEqual(['Board', 'Board | list | - | - | ab | /a']);
+    expect(it.actor.getSnapshot().context.title).toBe('Board');
     // It goes on following the machine
     it.send({ type: 'RETITLE', title: 'From the machine' });
     await nextTick();

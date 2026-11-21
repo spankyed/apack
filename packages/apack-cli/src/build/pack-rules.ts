@@ -400,6 +400,19 @@ const RULE_LIST = [
     },
   },
   {
+    key: 'machine-selectors',
+    rule: 'A component reads a machine with useState from @apackdev/sdk/fe, which mirrors it once for every '
+      + 'component that reads it and writes only what changed. A useSelector from @xstate/vue is a subscription of '
+      + 'its own that runs its selector on every snapshot, and it hands a component the machine library the pack '
+      + 'runs on rather than the state it reads',
+    check(view, place) {
+      // Source only. A pack's test may drive an actor however it likes: it renders no surface a user sees.
+      if (place.packRelative.startsWith('tests/')) return [];
+      return view.specifiers.filter(({ text }) => text === '@xstate/vue')
+        .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
+    },
+  },
+  {
     key: 'repository-casts',
     rule: "Read repositories through their owner's exports — a pack through `repository` from "
       + "#generated/repository, which types its own and its dependencies' — never through a cast of the engine's "

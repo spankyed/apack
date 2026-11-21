@@ -8,11 +8,11 @@
       <template #actions>
         <button
           @click="refreshStatus()"
-          :disabled="isPrLoading"
+          :disabled="pullRequest.data.isPrLoading"
           class="p-0 transition-colors rounded text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
           title="Refresh PR changes"
         >
-          <RefreshCw :size="16" :class="{ 'animate-spin': isPrLoading }" />
+          <RefreshCw :size="16" :class="{ 'animate-spin': pullRequest.data.isPrLoading }" />
         </button>
       </template>
     </CodePanelHeader>
@@ -26,37 +26,37 @@
     />
 
     <!-- No directory -->
-    <NoDirectoryState v-else-if="!baseDirectory" />
+    <NoDirectoryState v-else-if="!code.data.baseDirectory" />
 
     <!-- Main content -->
     <template v-else>
       <!-- Not signed in to GitHub: the sign-in itself, here where it is needed -->
       <div
-        v-if="githubAccess === 'signed-out' && !isPrLoading"
+        v-if="pullRequest.data.githubAccess === 'signed-out' && !pullRequest.data.isPrLoading"
         class="px-3 py-3 text-xs border-b border-neutral-800"
       >
-        <p class="mb-2 text-neutral-400">{{ githubAccessMessage }}</p>
+        <p class="mb-2 text-neutral-400">{{ pullRequest.data.githubAccessMessage }}</p>
         <GitHubAccount />
       </div>
 
       <!-- Signed in, but GitHub will not show this repository's pull requests to it, or the remote is elsewhere -->
       <div
-        v-else-if="githubAccess && githubAccess !== 'ok' && !isPrLoading"
+        v-else-if="pullRequest.data.githubAccess && pullRequest.data.githubAccess !== 'ok' && !pullRequest.data.isPrLoading"
         class="flex items-start gap-2 px-3 py-2 text-xs text-yellow-400 bg-yellow-900/20 border-b border-yellow-800/30"
       >
         <AlertTriangle :size="12" class="shrink-0 mt-0.5" />
         <div class="flex-1">
-          <span>{{ githubAccessMessage }}</span>
+          <span>{{ pullRequest.data.githubAccessMessage }}</span>
           <button
-            v-if="githubAccess !== 'not-github'"
-            @click="prActor?.send({ type: 'pr.NAVIGATE_TO_HELP' })"
+            v-if="pullRequest.data.githubAccess !== 'not-github'"
+            @click="send({ type: 'pr.NAVIGATE_TO_HELP' })"
             class="ml-1 underline text-yellow-300 hover:text-yellow-200 transition-colors"
           >Learn more</button>
         </div>
       </div>
 
       <!-- Top action row (always rendered to prevent layout shift, hidden in PR view) -->
-      <div v-if="topRowStatus !== 'hidden'" class="flex items-center gap-1.5 px-4 py-2 border-b border-neutral-800 bg-neutral-800/50" :class="{ 'hidden': viewMode === 'pr' }">
+      <div v-if="topRowStatus !== 'hidden'" class="flex items-center gap-1.5 px-4 py-2 border-b border-neutral-800 bg-neutral-800/50" :class="{ 'hidden': pullRequest.data.viewMode === 'pr' }">
         <!-- Checking spinner (replaces selector while checking) -->
         <button
           v-if="topRowStatus === 'checking'"
@@ -81,14 +81,14 @@
 
           <!-- PR Selector — always shown when not checking -->
           <PRSelector
-            :list="prList"
+            :list="pullRequest.data.prList"
             :reading="prListReading"
             :selectedPR="selectedPR"
             @select-pr="handleSelectPRFromDropdown"
-            @shown="prActor?.send({ type: 'pr.LIST_SHOWN' })"
-            @set-state="(state) => prActor?.send({ type: 'pr.SET_LIST_STATE', state })"
-            @set-query="(query) => prActor?.send({ type: 'pr.SET_LIST_QUERY', query })"
-            @load-more="prActor?.send({ type: 'pr.LOAD_MORE_PRS' })"
+            @shown="send({ type: 'pr.LIST_SHOWN' })"
+            @set-state="(state) => send({ type: 'pr.SET_LIST_STATE', state })"
+            @set-query="(query) => send({ type: 'pr.SET_LIST_QUERY', query })"
+            @load-more="send({ type: 'pr.LOAD_MORE_PRS' })"
           />
         </template>
 
@@ -137,10 +137,10 @@
 
       <template v-else>
       <!-- PR view (create form or info) -->
-      <template v-if="viewMode === 'pr'">
+      <template v-if="pullRequest.data.viewMode === 'pr'">
         <!-- Back to files bar -->
         <div
-          @click="prActor?.send({ type: 'pr.SET_VIEW_MODE', mode: 'files' })"
+          @click="send({ type: 'pr.SET_VIEW_MODE', mode: 'files' })"
           class="flex items-center px-3 border-b border-neutral-800 bg-neutral-800/50 cursor-pointer text-neutral-500 hover:text-neutral-300 transition-colors h-[42px]"
         >
           <div class="flex items-center gap-1.5 text-sm">
@@ -161,13 +161,13 @@
         <!-- No PR → create form -->
         <CreatePRForm
           v-if="!selectedPR"
-          :title="createTitle"
-          :body="createBody"
-          :baseBranch="createBaseBranch"
-          :defaultBaseBranch="prBaseBranch"
-          :headBranch="currentBranch"
-          :branches="availableBranches"
-          :isCreating="isCreating"
+          :title="pullRequest.data.createTitle"
+          :body="pullRequest.data.createBody"
+          :baseBranch="pullRequest.data.createBaseBranch"
+          :defaultBaseBranch="pullRequest.data.prBaseBranch"
+          :headBranch="git.data.gitBranch"
+          :branches="git.data.availableBranches"
+          :isCreating="pullRequest.data.isCreating"
           @update-field="handleUpdateField"
           @submit="handleSubmitCreate"
           @submit-draft="handleSubmitDraft"
@@ -177,48 +177,48 @@
         <template v-else>
           <PRInfo
             :pr="selectedPR"
-            :comments="prComments"
-            :branches="availableBranches"
+            :comments="pullRequest.data.prComments"
+            :branches="git.data.availableBranches"
             :isLoading="isLoadingDetails"
-            :isUpdating="isUpdatingPR"
-            :answered="lastWriteAnswer"
+            :isUpdating="pullRequest.data.isUpdatingPR"
+            :answered="pullRequest.data.lastWriteAnswer"
             @save="handleSavePR"
-            @start-editing="commitActor?.send({ type: 'commit.GET_ALL_BRANCHES' })"
+            @start-editing="sendCommit({ type: 'commit.GET_ALL_BRANCHES' })"
           >
             <PRComments
-              :comments="prComments"
-              :reviewThreads="reviewThreads"
-              :tab="commentTab"
+              :comments="pullRequest.data.prComments"
+              :reviewThreads="pullRequest.data.reviewThreads"
+              :tab="pullRequest.data.commentTab"
               :prNumber="selectedPR.number"
               :isOpen="selectedPR.state === 'OPEN'"
               :isSubmitting="isSubmittingComment"
-              :answered="lastWriteAnswer"
-              @set-tab="(tab) => prActor?.send({ type: 'pr.SET_COMMENT_TAB', tab })"
-              @create-comment="(body) => prActor?.send({ type: 'pr.CREATE_COMMENT', number: selectedPR!.number, body })"
-              @edit-comment="(id, body) => prActor?.send({ type: 'pr.EDIT_COMMENT', commentId: id, body })"
-              @delete-comment="(id) => prActor?.send({ type: 'pr.DELETE_COMMENT', commentId: id })"
-              @reply-thread="(prNum, commentId, body) => prActor?.send({ type: 'pr.REPLY_TO_THREAD', prNumber: prNum, commentId, body })"
-              @resolve-thread="(id) => prActor?.send({ type: 'pr.RESOLVE_THREAD', threadId: id })"
-              @unresolve-thread="(id) => prActor?.send({ type: 'pr.UNRESOLVE_THREAD', threadId: id })"
-              @edit-review-comment="(id, body) => prActor?.send({ type: 'pr.EDIT_REVIEW_COMMENT', commentId: id, body })"
-              @delete-review-comment="(id) => prActor?.send({ type: 'pr.DELETE_REVIEW_COMMENT', commentId: id })"
+              :answered="pullRequest.data.lastWriteAnswer"
+              @set-tab="(tab) => send({ type: 'pr.SET_COMMENT_TAB', tab })"
+              @create-comment="(body) => send({ type: 'pr.CREATE_COMMENT', number: selectedPR!.number, body })"
+              @edit-comment="(id, body) => send({ type: 'pr.EDIT_COMMENT', commentId: id, body })"
+              @delete-comment="(id) => send({ type: 'pr.DELETE_COMMENT', commentId: id })"
+              @reply-thread="(prNum, commentId, body) => send({ type: 'pr.REPLY_TO_THREAD', prNumber: prNum, commentId, body })"
+              @resolve-thread="(id) => send({ type: 'pr.RESOLVE_THREAD', threadId: id })"
+              @unresolve-thread="(id) => send({ type: 'pr.UNRESOLVE_THREAD', threadId: id })"
+              @edit-review-comment="(id, body) => send({ type: 'pr.EDIT_REVIEW_COMMENT', commentId: id, body })"
+              @delete-review-comment="(id) => send({ type: 'pr.DELETE_REVIEW_COMMENT', commentId: id })"
             />
           </PRInfo>
           <PRActionBar
             :pr="selectedPR"
-            :isMerging="isMerging"
-            :isClosing="isClosing"
-            :isTogglingDraft="isTogglingDraft"
-            :isDeletingBranch="isDeletingBranch"
+            :isMerging="pullRequest.data.isMerging"
+            :isClosing="pullRequest.data.isClosing"
+            :isTogglingDraft="pullRequest.data.isTogglingDraft"
+            :isDeletingBranch="pullRequest.data.isDeletingBranch"
             :canDeleteBranch="branchDeletable(selectedPR)"
-            :isCheckingOut="isCheckingOut"
+            :isCheckingOut="pullRequest.data.isCheckingOut"
             :isCheckedOut="isOnPRBranch"
-            @checkout="prActor?.send({ type: 'pr.CHECKOUT' })"
+            @checkout="send({ type: 'pr.CHECKOUT' })"
             @merge="handleMerge"
             @close="handleClose"
             @toggle-draft="handleToggleDraft"
             @delete-branch="handleDeleteBranch"
-            @checkout-base="prActor?.send({ type: 'pr.CHECKOUT_BASE' })"
+            @checkout-base="send({ type: 'pr.CHECKOUT_BASE' })"
           />
         </template>
       </template>
@@ -227,24 +227,24 @@
       <PRComparison
         v-else
         :files="prFiles"
-        :baseBranch="prBaseBranch"
+        :baseBranch="pullRequest.data.prBaseBranch"
         :currentBranch="displayBranch"
-        :isLoading="isPrLoading"
-        :baseDirectory="baseDirectory"
+        :isLoading="pullRequest.data.isPrLoading"
+        :baseDirectory="code.data.baseDirectory"
         @select-file="handleFileSelect"
         @open-file="handleOpenFile"
       />
         <!-- A diff that needs content this partial clone was not given: downloaded only when asked -->
         <div
-          v-if="missingFileDiff"
+          v-if="pullRequest.data.missingFileDiff"
           data-testid="pr-content-missing"
           class="flex items-center gap-2 px-3 py-1.5 text-xs text-amber-300 bg-amber-900/20 border-t border-amber-800/30 mt-auto"
         >
           <AlertCircle :size="12" class="shrink-0" />
-          <span class="flex-1">This repository was cloned without every version of its files, and {{ missingFileDiff.path }} needs one it does not have.</span>
+          <span class="flex-1">This repository was cloned without every version of its files, and {{ pullRequest.data.missingFileDiff.path }} needs one it does not have.</span>
           <button
             data-testid="pr-fetch-missing"
-            @click="prActor?.send({ type: 'pr.FETCH_MISSING_DIFF' })"
+            @click="send({ type: 'pr.FETCH_MISSING_DIFF' })"
             class="px-2 py-0.5 rounded text-amber-200 hover:text-amber-100 hover:bg-amber-900/40 transition-colors shrink-0"
           >
             Download it
@@ -252,13 +252,13 @@
         </div>
         <!-- Non-fatal error banner (dismissible, pinned to bottom) -->
         <div
-          v-if="prError && !isNoGitRepoError && !isNoBaseBranchError"
+          v-if="pullRequest.data.prError && !isNoGitRepoError && !isNoBaseBranchError"
           class="flex items-center gap-2 px-3 py-1.5 text-xs text-red-400 bg-red-900/20 border-t border-red-800/30 mt-auto"
         >
           <AlertCircle :size="12" class="shrink-0" />
-          <span class="flex-1">{{ prError }}</span>
+          <span class="flex-1">{{ pullRequest.data.prError }}</span>
           <button
-            @click="prActor?.send({ type: 'pr.CLEAR_ERROR' })"
+            @click="send({ type: 'pr.CLEAR_ERROR' })"
             class="p-0.5 rounded text-red-500 hover:text-red-300 hover:bg-red-900/30 transition-colors shrink-0"
           >
             <X :size="12" />
@@ -275,8 +275,7 @@
 import { computed, ref, watch } from 'vue'
 import type { PRBranchCheckout } from '#generated/types.ts'
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
-import { useSelector } from '@xstate/vue'
-import { askUnderWay, useSurface, useShell } from '@apackdev/sdk/fe'
+import { askUnderWay, useState, useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
 import { branchDeletable, refKey, DETAILS, LIST, LIST_MORE } from '#features/code/fe/features/pull-request/state.ts'
 import {
@@ -304,69 +303,41 @@ const codeActor: CodeState = useSurface()
 const prActor = panelChild(codeActor, 'pr')!
 const commitActor = panelChild(codeActor, 'commit')!
 
-// State selectors
+const { state: code } = useState(codeActor)
+const { state: pullRequest, send } = useState(prActor)
+const { state: git, send: sendCommit } = useState(commitActor)
+
 // The comparison this view is on, read from the slot keyed by it (`refKey`): an answer for any other PR
 // lands in its own key and is never read here, which is what replaced a staleness guard
-const prFiles = useSelector(prActor, (state) =>
-  state.context.diffsByRef[refKey(state.context.prBaseBranch, state.context.selectedPR?.headRefName)] ?? [])
-const prBaseBranch = useSelector(prActor, (state) => state.context.prBaseBranch)
-const prError = useSelector(prActor, (state) => state.context.prError)
-const missingFileDiff = useSelector(prActor, (state) => state.context.missingFileDiff)
-const isPrLoading = useSelector(prActor, (state) => state.context.isPrLoading)
-const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)
-const prList = useSelector(prActor, (state) => state.context.prList)
+const prFiles = computed(() =>
+  pullRequest.value.data.diffsByRef[refKey(pullRequest.value.data.prBaseBranch, pullRequest.value.data.selectedPR?.headRefName)] ?? [])
 // Which page of the list is being read: its first, which starts it again, or the one after those read
-const prListReading = useSelector(prActor, (state) => askUnderWay(state.context.asking, LIST) ? 'first' : askUnderWay(state.context.asking, LIST_MORE) ? 'more' : null)
-const isCheckingOut = useSelector(prActor, (state) => state.context.isCheckingOut)
-const lastCheckout = useSelector(prActor, (state) => state.context.lastCheckout)
-const selectedPR = useSelector(prActor, (state) => state.context.selectedPR)
-const prComments = useSelector(prActor, (state) => state.context.prComments)
-const reviewThreads = useSelector(prActor, (state) => state.context.reviewThreads)
-const commentTab = useSelector(prActor, (state) => state.context.commentTab)
-const isSubmittingComment = useSelector(prActor, (state) => state.context.inflightMutations > 0)
-const viewMode = useSelector(prActor, (state) => state.context.viewMode)
-const githubAccess = useSelector(prActor, (state) => state.context.githubAccess)
-const githubAccessMessage = useSelector(prActor, (state) => state.context.githubAccessMessage)
-const isCheckingBranchPR = useSelector(prActor, (state) => state.context.isCheckingBranchPR)
+const prListReading = computed(() => askUnderWay(pullRequest.value.data.asking, LIST) ? 'first' : askUnderWay(pullRequest.value.data.asking, LIST_MORE) ? 'more' : null)
+const selectedPR = computed(() => pullRequest.value.data.selectedPR)
+const isSubmittingComment = computed(() => pullRequest.value.data.inflightMutations > 0)
 // Signing in or out anywhere changes what this repository's pull requests answer, so ask again
-const githubActor = panelChild(codeActor, 'github')!
-const githubAccount = useSelector(githubActor, (state) => state.context.account)
-watch(githubAccount, (now, before) => {
+const { state: github } = useState(panelChild(codeActor, 'github')!)
+watch(() => github.value.data.account, (now, before) => {
   if (before === undefined) return
-  prActor?.send({ type: 'pr.CHECK_GITHUB_ACCESS' })
-  prActor?.send({ type: 'pr.REFRESH_STATUS' })
+  send({ type: 'pr.CHECK_GITHUB_ACCESS' })
+  send({ type: 'pr.REFRESH_STATUS' })
 })
-const branchPRCheckFailed = useSelector(prActor, (state) => state.context.branchPRCheckFailed)
-const createTitle = useSelector(prActor, (state) => state.context.createTitle)
-const createBody = useSelector(prActor, (state) => state.context.createBody)
-const createBaseBranch = useSelector(prActor, (state) => state.context.createBaseBranch)
-
-const isCreating = useSelector(prActor, (state) => state.context.isCreating)
-const isMerging = useSelector(prActor, (state) => state.context.isMerging)
-const isClosing = useSelector(prActor, (state) => state.context.isClosing)
-const isTogglingDraft = useSelector(prActor, (state) => state.context.isTogglingDraft)
-const isDeletingBranch = useSelector(prActor, (state) => state.context.isDeletingBranch)
-const isUpdatingPR = useSelector(prActor, (state) => state.context.isUpdatingPR)
-const isLoadingDetails = useSelector(prActor, (state) => askUnderWay(state.context.asking, DETAILS))
-const lastWriteAnswer = useSelector(prActor, (state) => state.context.lastWriteAnswer)
-const hasUpstream = useSelector(commitActor, (state) => state.context.hasUpstream)
-const isPushing = useSelector(commitActor, (state) => askUnderWay(state.context.asking, PUSH))
-const currentBranch = useSelector(commitActor, (state) => state.context.gitBranch)
-const availableBranches = useSelector(commitActor, (state) => state.context.availableBranches)
+const isLoadingDetails = computed(() => askUnderWay(pullRequest.value.data.asking, DETAILS))
+const isPushing = computed(() => askUnderWay(git.value.data.asking, PUSH))
 
 // Computed
 const isNoGitRepoError = computed(() =>
-  prError.value?.includes('not a git repository') ||
-  prError.value?.includes('Not a git repository')
+  pullRequest.value.data.prError?.includes('not a git repository') ||
+  pullRequest.value.data.prError?.includes('Not a git repository')
 )
 
 const isNoBaseBranchError = computed(() =>
-  prError.value?.includes('Could not determine PR base branch') ||
-  prError.value?.includes('Could not determine base branch')
+  pullRequest.value.data.prError?.includes('Could not determine PR base branch') ||
+  pullRequest.value.data.prError?.includes('Could not determine base branch')
 )
 
 const displayBranch = computed(() =>
-  selectedPR.value?.headRefName ?? currentBranch.value
+  selectedPR.value?.headRefName ?? git.value.data.gitBranch
 )
 
 /**
@@ -376,7 +347,7 @@ const displayBranch = computed(() =>
 const isOnPRBranch = computed(() => {
   const pr = selectedPR.value
   if (!pr) return false
-  return currentBranch.value === (pr.headInRemote === false ? `pr/${pr.number}` : pr.headRefName)
+  return git.value.data.gitBranch === (pr.headInRemote === false ? `pr/${pr.number}` : pr.headRefName)
 })
 
 const isViewingOtherPR = computed(() => !!selectedPR.value && !isOnPRBranch.value)
@@ -388,36 +359,36 @@ const CHECKOUT_SAID: Record<PRBranchCheckout, (branch: string) => string> = {
   'fast-forwarded': branch => `${branch} is checked out, moved forward to the pull request's head`,
   'kept': branch => `${branch} is checked out as it was: it has commits the pull request does not, so it was not moved`,
 }
-watch(lastCheckout, (done) => {
+watch(() => pullRequest.value.data.lastCheckout, (done) => {
   if (done) toast.value?.success(`Checked out #${done.number}`, CHECKOUT_SAID[done.checkout](done.branch))
 })
 
 const isBaseBranch = computed(() => {
-  const branch = currentBranch.value
+  const branch = git.value.data.gitBranch
   if (!branch) return false
-  if (prBaseBranch.value && branch === prBaseBranch.value) return true
+  if (pullRequest.value.data.prBaseBranch && branch === pullRequest.value.data.prBaseBranch) return true
   return ['main', 'master', 'develop'].includes(branch)
 })
 
 const topRowStatus = computed(() => {
-  if (isCheckingBranchPR.value) return 'checking' as const
-  if (githubAccess.value !== 'ok') return 'hidden' as const
+  if (pullRequest.value.data.isCheckingBranchPR) return 'checking' as const
+  if (pullRequest.value.data.githubAccess !== 'ok') return 'hidden' as const
   if (isBaseBranch.value) return 'base-branch' as const
-  if (!hasUpstream.value) return 'publish' as const
+  if (!git.value.data.hasUpstream) return 'publish' as const
   if (selectedPR.value) return 'has-pr' as const
-  if (branchPRCheckFailed.value) return 'check-failed' as const
+  if (pullRequest.value.data.branchPRCheckFailed) return 'check-failed' as const
   return 'no-pr' as const
 })
 
 // Actions
 const refreshStatus = () => {
-  prActor?.send({ type: 'pr.REFRESH_STATUS' })
+  send({ type: 'pr.REFRESH_STATUS' })
 }
 
 const handleOpenFile = (file: TreeNode) => {
   if (file.type !== 'file' || !file.status) return
   shell.restoreChat()
-  prActor?.send({
+  send({
     type: 'pr.OPEN_FILE',
     file: { path: file.path, status: file.status, staged: false }
   })
@@ -427,70 +398,70 @@ const handleFileSelect = (file: TreeNode) => {
   if (file.type !== 'file' || !file.status) return
   shell.restoreChat()
   const gitFile: GitStatusFile = { path: file.path, status: file.status, staged: false }
-  prActor?.send({ type: 'pr.SELECT_FILE', file: gitFile })
-  prActor?.send({ type: 'pr.VIEW_DIFF', path: file.path })
+  send({ type: 'pr.SELECT_FILE', file: gitFile })
+  send({ type: 'pr.VIEW_DIFF', path: file.path })
 }
 
 const handleSelectPRFromDropdown = (number: number) => {
-  prActor?.send({ type: 'pr.SELECT_PR_BY_NUMBER', number })
+  send({ type: 'pr.SELECT_PR_BY_NUMBER', number })
 }
 
 const handleCreatePR = () => {
-  prActor?.send({ type: 'pr.NEW_PR' })
+  send({ type: 'pr.NEW_PR' })
   // Ensure branches are loaded for the base branch select
-  commitActor?.send({ type: 'commit.GET_ALL_BRANCHES' })
+  sendCommit({ type: 'commit.GET_ALL_BRANCHES' })
 }
 
 const handleRefreshPR = () => {
   if (selectedPR.value) {
-    prActor?.send({ type: 'pr.REFRESH_PR', number: selectedPR.value.number })
+    send({ type: 'pr.REFRESH_PR', number: selectedPR.value.number })
   }
 }
 
 // The machine reads the discussion when the one it holds is another pull request's
 const handleViewPRInfo = () => {
-  prActor?.send({ type: 'pr.SET_VIEW_MODE', mode: 'pr' })
+  send({ type: 'pr.SET_VIEW_MODE', mode: 'pr' })
 }
 
 const handleBackToBranch = () => {
-  prActor?.send({ type: 'pr.BACK_TO_BRANCH' })
+  send({ type: 'pr.BACK_TO_BRANCH' })
 }
 
 const handleUpdateField = (field: string, value: any) => {
-  prActor?.send({ type: 'pr.UPDATE_CREATE_FIELD', field, value })
+  send({ type: 'pr.UPDATE_CREATE_FIELD', field, value })
 }
 
 const handleSubmitCreate = () => {
-  prActor?.send({ type: 'pr.SUBMIT_CREATE' })
+  send({ type: 'pr.SUBMIT_CREATE' })
 }
 
 const handleSubmitDraft = () => {
-  prActor?.send({ type: 'pr.SUBMIT_CREATE_DRAFT' })
+  send({ type: 'pr.SUBMIT_CREATE_DRAFT' })
 }
 
 const handlePublishBranch = () => {
-  commitActor?.send({ type: 'commit.PUSH_BRANCH' })
+  sendCommit({ type: 'commit.PUSH_BRANCH' })
 }
 
 const handleMerge = (method: 'merge' | 'squash' | 'rebase') => {
-  prActor?.send({ type: 'pr.MERGE', method })
+  send({ type: 'pr.MERGE', method })
 }
 
 const handleClose = () => {
-  prActor?.send({ type: 'pr.CLOSE' })
+  send({ type: 'pr.CLOSE' })
 }
 
 const handleToggleDraft = () => {
-  prActor?.send({ type: 'pr.TOGGLE_DRAFT' })
+  send({ type: 'pr.TOGGLE_DRAFT' })
 }
 
 const handleDeleteBranch = () => {
-  prActor?.send({ type: 'pr.DELETE_BRANCH' })
+  send({ type: 'pr.DELETE_BRANCH' })
 }
 
 const handleSavePR = (data: { title?: string; body?: string; base?: string }) => {
   if (selectedPR.value) {
-    prActor?.send({ type: 'pr.UPDATE_PR', number: selectedPR.value.number, ...data })
+    send({ type: 'pr.UPDATE_PR', number: selectedPR.value.number, ...data })
   }
 }
 </script>

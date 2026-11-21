@@ -13,12 +13,18 @@
 // read in its template without `.value`.
 //
 // A machine is mirrored once, however many components read it, from the first reader until the last has gone, and
-// its actor is subscribed to once. On each snapshot only the places of the context that changed are written into
-// the mirror, so a component renders again for the fields it read and for no others. What a component is handed is
-// read-only: `v-model` on a field of it does nothing, and a field is shown with `:value` and changed by sending. A `useSelector` is a
+// its actor is subscribed to once. On each snapshot the fields of the context that are another value are written
+// into the mirror, so a component renders again for the fields it read and for no others. A `useSelector` is a
 // subscription of its own that runs its selector again on every snapshot, so a component with sixty of them does
 // sixty selectors' work for a change to one field.
-import { computed, getCurrentScope, markRaw, onScopeDispose, reactive, readonly, shallowRef, toValue, watch, type ComputedRef, type MaybeRefOrGetter } from 'vue'
+//
+// What a field holds is the machine's own value, never a copy and never made reactive: a machine makes a new object
+// for what it changes and keeps the rest, so a value is the same one for as long as the machine holds it. An object a
+// component reads is the one the machine compares with when it is sent back, a watch on a field runs when the
+// machine replaced it, and what is not plain data (a component, an actor, a class instance) is handed over as it is.
+//
+// The fields are read-only: `v-model` on one does nothing, and a field is shown with `:value` and changed by sending.
+import { computed, getCurrentScope, onScopeDispose, shallowReactive, shallowReadonly, shallowRef, toValue, watch, type ComputedRef, type MaybeRefOrGetter } from 'vue'
 import type { AnyActorRef, EventFrom, SnapshotFrom } from 'xstate'
 import { useSurface } from './actor-system.ts'
 
@@ -26,7 +32,7 @@ import { useSurface } from './actor-system.ts'
 export interface MachineState<TActor extends AnyActorRef> {
   /** Where it is: `'idle'`, or `'thread.sending'` for a state inside another */
   readonly at: string
-  /** What it holds. Whatever reads a place in it runs again when that place changes */
+  /** What it holds, each field the machine's own value. Whatever reads a field runs again when the machine replaces it */
   readonly data: SnapshotFrom<TActor> extends { context: infer Context } ? Context : never
 }
 
@@ -38,59 +44,19 @@ export interface UsedState<TActor extends AnyActorRef, TState = MachineState<TAc
   send(event: EventFrom<TActor>): void
 }
 
-type Held = { at: string; data: Record<string, unknown> }
 type Snapshot = { value?: unknown; context?: unknown }
 
 /** One machine, mirrored once for everything that reads it */
 interface Mirror {
   readonly key: string
-  readonly box: { now: Held }
-  /** The context as the machine last gave it: what the next one is compared with */
-  seen: unknown
+  /** What components are handed: where the machine is, and its fields, neither of which they can write */
+  readonly shown: { readonly at: string; readonly data: Record<string, unknown> }
   readers: number
   stop(): void
 }
 
 /** A machine's mirror by the session its actor runs as, which a proxy around the actor passes through */
 const mirrors = new Map<string, Mirror>()
-
-const isPlain = (value: unknown): value is Record<string, unknown> => {
-  if (typeof value !== 'object' || value === null) return false
-  if (Array.isArray(value)) return true
-  const prototype = Object.getPrototypeOf(value) as unknown
-  return prototype === Object.prototype || prototype === null
-}
-
-/**
- * A copy the mirror owns. A reactive object is written to in place, and a machine's context is its own, so the
- * mirror never holds the context's objects. What is not plain data — an actor, a class instance, a Map — is held
- * as it is and not made reactive: it is replaced whole, never looked inside.
- */
-const owned = (value: unknown): unknown => {
-  if (!isPlain(value)) return typeof value === 'object' && value !== null ? markRaw(value) : value
-  if (Array.isArray(value)) return value.map(owned)
-  return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, owned(inner)]))
-}
-
-/**
- * Writes into the mirror the places where the context differs from the one before. A machine makes a new object for
- * what it changes and keeps the rest, so two values that are the same object are the same all the way down, and are
- * not looked into.
- */
-function write(into: Record<string, unknown>, was: Record<string, unknown>, now: Record<string, unknown>): void {
-  const merged = (key: string): unknown => {
-    const before = was[key]
-    const after = now[key]
-    const held = into[key]
-    const alike = isPlain(before) && isPlain(after) && isPlain(held) && Array.isArray(before) === Array.isArray(after)
-    if (!alike) return owned(after)
-    write(held, before, after)
-    return held
-  }
-  for (const key of Object.keys(now)) if (was[key] !== now[key] || !(key in into)) into[key] = merged(key)
-  if (Array.isArray(now)) { if ((into as unknown as unknown[]).length !== now.length) (into as unknown as unknown[]).length = now.length; return }
-  for (const key of Object.keys(into)) if (!(key in now)) delete into[key]
-}
 
 /** Where a machine is, as a path: `{ thread: 'sending' }` is `thread.sending` */
 function placeOf(value: unknown): string {
@@ -109,23 +75,18 @@ function acquire(actor: AnyActorRef): Mirror {
   let mirror = mirrors.get(key)
   if (!mirror) {
     const first = actor.getSnapshot() as Snapshot
-    const made: Mirror = {
-      key,
-      box: reactive({ now: { at: placeOf(first.value), data: owned(first.context ?? {}) as Record<string, unknown> } }),
-      seen: first.context ?? {},
-      readers: 0,
-      stop: () => {},
-    }
+    // Shallow on purpose: a field's value is the machine's own object, which is never written to and so has nothing
+    // to track inside it
+    const data = shallowReactive<Record<string, unknown>>({ ...(first.context as Record<string, unknown> | undefined) })
+    const held = shallowReactive({ at: placeOf(first.value), data: shallowReadonly(data) })
     const subscription = actor.subscribe((snapshot: Snapshot) => {
-      const held = made.box.now
       const at = placeOf(snapshot.value)
       if (held.at !== at) held.at = at
-      const now = snapshot.context ?? {}
-      if (now === made.seen) return
-      write(held.data, made.seen as Record<string, unknown>, now as Record<string, unknown>)
-      made.seen = now
+      const now = (snapshot.context ?? {}) as Record<string, unknown>
+      // A machine's context gains fields and never loses one: an assignment is merged into it
+      for (const field of Object.keys(now)) if (!Object.is(data[field], now[field])) data[field] = now[field]
     })
-    made.stop = () => subscription.unsubscribe()
+    const made: Mirror = { key, shown: shallowReadonly(held), readers: 0, stop: () => subscription.unsubscribe() }
     mirrors.set(key, made)
     mirror = made
   }
@@ -176,9 +137,9 @@ export function useState(actor?: MaybeRefOrGetter<AnyActorRef | undefined>): Use
   onScopeDispose(() => { if (held) release(held); held = undefined })
 
   return {
-    // Read-only: a mirror is shared by every component that reads its machine, so one that wrote into it would
+    // Read-only: a mirror is shared by every component that reads its machine, so one that wrote a field would
     // change what all the others see, and nothing would have told the machine. To change it, `send`.
-    state: computed(() => mirror.value && readonly(mirror.value.box.now)),
+    state: computed(() => mirror.value?.shown),
     send: (event) => { current.value?.send(event) },
   }
 }

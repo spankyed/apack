@@ -21,7 +21,7 @@
   <ContextMenuItem
     v-if="live?.active && (live.recorded || live.target)"
     data-terminal-menu="keep"
-    @select="terminalActor.send({ type: 'terminal.KEEP', terminalId: terminalId, kept: !live.kept })"
+    @select="send({ type: 'terminal.KEEP', terminalId: terminalId, kept: !live.kept })"
     :class="MENU_ITEM_CLASS"
   >
     <component :is="live.kept ? PinOff : Pin" class="w-4 h-4" />
@@ -34,9 +34,8 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
-import { useSelector } from '@xstate/vue'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useState, useSurface } from '@apackdev/sdk/fe'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ContextMenuItem, ContextMenuSeparator } from 'reka-ui'
 import { ClipboardCopy, History, Pin, PinOff, Search } from 'lucide-vue-next'
 import { MENU_ITEM_CLASS, MENU_SEPARATOR_CLASS } from '#features/code/fe/features/explorer/constants.ts'
@@ -52,8 +51,9 @@ const props = defineProps<{
 
 const codeActor: CodeState = useSurface()
 const terminalActor = panelChild(codeActor, 'terminal')!
+const { state: terminals, send } = useState(terminalActor)
 /** The terminal as the list has it now, which a tab's copy of it is not */
-const live = useSelector(terminalActor, (state) => state.context.terminals.find(terminal => terminal.id === props.terminalId))
+const live = computed(() => terminals.value.data.terminals.find(terminal => terminal.id === props.terminalId))
 
 // This is mounted when the menu opens, which is the moment the question is about
 const hasCommands = ref(false)
@@ -64,6 +64,6 @@ const copyLastOutput = () => { void props.attachment()?.copyLastOutput() }
 
 const lookBack = () => {
   const terminal = live.value
-  if (terminal) terminalActor.send({ type: 'terminal.REWIND', terminalId: terminal.id, cols: terminal.cols, rows: terminal.rows })
+  if (terminal) send({ type: 'terminal.REWIND', terminalId: terminal.id, cols: terminal.cols, rows: terminal.rows })
 }
 </script>

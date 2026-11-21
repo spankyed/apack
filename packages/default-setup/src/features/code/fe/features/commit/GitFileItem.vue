@@ -56,10 +56,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { computed } from 'vue'
-import { useSelector } from '@xstate/vue'
 import type { CodeState } from '#features/code/fe/state.ts'
 import type { GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import { File, Copy } from 'lucide-vue-next'
@@ -80,7 +79,7 @@ defineEmits<{
 }>()
 
 const codeActor: CodeState = useSurface()
-const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)
+const { state: code } = useState(codeActor)
 
 const fileDisplay = computed(() => {
   // A folder's row is named by the folder, with the `/` git ends it with
@@ -132,7 +131,7 @@ const copyPath = async (path: string) => {
 
 const copyRelativePath = async (path: string) => {
   try {
-    const base = baseDirectory.value
+    const base = code.value.data.baseDirectory
     let rel = path
     if (base && rel.startsWith(base)) {
       rel = rel.slice(base.length)

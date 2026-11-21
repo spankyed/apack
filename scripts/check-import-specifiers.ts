@@ -188,6 +188,14 @@ export function findPackWindowStorage(dirs: readonly string[] = PACK_SOURCE_DIRS
   return packRule('window-storage', dirs, root);
 }
 
+/**
+ * `file:line: @xstate/vue` for each pack source reading a machine through the machine library's own Vue
+ * bindings, which a component reads with `useState` from `@apackdev/sdk/fe` instead.
+ */
+export function findPackMachineSelectors(dirs: readonly string[] = PACK_SOURCE_DIRS, root = repoRoot): string[] {
+  return packRule('machine-selectors', dirs, root);
+}
+
 /** `file:line: ASK_ANSWERED:` for each answer to an ask a pack writes by hand rather than through its `answers` table */
 export function findHandWrittenAnswers(dirs: readonly string[] = PACK_SOURCE_DIRS, root = repoRoot): string[] {
   return packRule('ask-answers', dirs, root);
@@ -992,6 +1000,7 @@ const RULE_LIST = [
   backed('findRawTransport', 'raw-transport', findRawTransport, PACK_SOURCE_DIRS),
   backed('findPackBackendConsole', 'backend-console', findPackBackendConsole, PACK_SOURCE_DIRS),
   backed('findPackWindowStorage', 'window-storage', findPackWindowStorage, PACK_SOURCE_DIRS),
+  backed('findPackMachineSelectors', 'machine-selectors', findPackMachineSelectors, PACK_SOURCE_DIRS),
   backed('findHostImports', 'host-imports', findHostImports, PACK_CODE_DIRS),
   backed('findPackOwnAliases', 'pack-own-aliases', findPackOwnAliases, PACK_CODE_DIRS),
   backed('findExtensionlessOwnModules', 'own-modules', findExtensionlessOwnModules, PACK_CODE_DIRS),

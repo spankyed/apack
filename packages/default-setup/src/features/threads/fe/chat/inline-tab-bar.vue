@@ -1,7 +1,7 @@
 <template>
   <div v-if="visible" class="shrink-0 bg-neutral-900" :class="$style.wrapper">
     <div class="flex items-center">
-      <TabBar class="flex-1 min-w-0" :tabs="tabs" :activeTabId="activeTabId" :tabGroups="tabGroups" />
+      <TabBar class="flex-1 min-w-0" :tabs="threads.data.tabs" :activeTabId="threads.data.activeTabId" :tabGroups="threads.data.tabGroups" />
       <div class="shrink-0 relative flex items-center self-stretch" :class="$style.closeContainer">
         <div class="absolute top-0 bottom-0 right-full w-16 bg-gradient-to-l from-neutral-900 to-transparent pointer-events-none z-10" />
         <button
@@ -18,10 +18,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { X } from 'lucide-vue-next';
-import { useSelector } from '@xstate/vue';
 import type { ThreadsState } from '#features/threads/fe/state.ts';
 import TabBar from '#features/threads/fe/canvas/agent/tabs/tab-bar.vue';
 
@@ -35,9 +34,7 @@ defineEmits<{
 
 const actor: ThreadsState = useSurface();
 
-const tabs = useSelector(actor, (state) => state.context.tabs);
-const activeTabId = useSelector(actor, (state) => state.context.activeTabId);
-const tabGroups = useSelector(actor, (state) => state.context.tabGroups);
+const { state: threads } = useState(actor);
 </script>
 
 <style module>

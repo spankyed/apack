@@ -14,20 +14,19 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { computed } from 'vue';
-import { useSelector } from '@xstate/vue';
 import type { DatabaseState } from '../../state.ts';
 import ExampleCard from './ExampleCard.vue';
 import { queryExamples } from './query-examples.ts';
 import { transactionExamples } from './transaction-examples.ts';
 
 const actor: DatabaseState = useSurface();
-const mode = useSelector(actor, (state) => state.context.mode);
+const { state: database } = useState(actor);
 
 const examples = computed(() => 
-  mode.value === 'query' ? queryExamples : transactionExamples
+  database.value.data.mode === 'query' ? queryExamples : transactionExamples
 );
 
 defineEmits<{

@@ -1,5 +1,5 @@
 import { watch, type Ref } from 'vue'
-import { useSelector } from '@xstate/vue'
+import { useState } from '@apackdev/sdk/fe'
 import type { NotesState } from '../state.ts'
 import type { NoteSummary } from '#generated/types.ts'
 import type TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
@@ -9,10 +9,10 @@ export function useSubDocumentInsert(
   editorRef: Ref<InstanceType<typeof TiptapEditor> | null>,
   editingNote: Ref<NoteSummary | null>,
 ) {
-  const pendingSubDocumentInsert = useSelector(actor, (s) => s.context.pendingSubDocumentInsert)
+  const { state: notesMachine, send } = useState(actor)
 
   watch(
-    () => pendingSubDocumentInsert.value,
+    () => notesMachine.value.data.pendingSubDocumentInsert,
     (newVal, oldVal) => {
       // When pendingSubDocumentInsert transitions from non-null to null, the child was created
       if (!oldVal || newVal) return
@@ -36,9 +36,9 @@ export function useSubDocumentInsert(
         .run()
 
       const content = (editor.storage as any).markdown.getMarkdown()
-      actor.send({ type: 'NOTE.UPDATE_CONTENT', noteId, content })
+      send({ type: 'NOTE.UPDATE_CONTENT', noteId, content })
 
-      actor.send({ type: 'NOTE.SELECT', noteId: newChild.id })
+      send({ type: 'NOTE.SELECT', noteId: newChild.id })
     }
   )
 }

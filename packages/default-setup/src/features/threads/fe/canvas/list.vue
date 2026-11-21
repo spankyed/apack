@@ -19,19 +19,19 @@
               v-for="thread in visibleThreads"
               :key="thread.id"
               :thread="thread"
-              :available-tags="availableTags"
-              :settings="settings"
-              :chat-states="chatStates"
-              :chat-state-overrides="chatStateOverrides"
-              :is-selected="selectedThreadIds.includes(thread.id)"
+              :available-tags="machine.data.availableTags"
+              :settings="machine.data.settings"
+              :chat-states="machine.data.chatStates"
+              :chat-state-overrides="machine.data.chatStateOverrides"
+              :is-selected="machine.data.selectedThreadIds.includes(thread.id)"
               :drag-class="getRowClass(thread.id)"
-              :show-archived="showArchived"
-              @select="actor.send({ type: 'SELECT_THREAD', id: $event })"
+              :show-archived="machine.data.showArchived"
+              @select="send({ type: 'SELECT_THREAD', id: $event })"
               @multi-select="(id, event) => selectItem(thread, filteredThreads, event)"
-              @status-change="(id, status) => actor.send({ type: 'UPDATE_THREAD_STATUS', id, status })"
-              @chat-click="(threadId) => actor.send({ type: 'OPEN_THREAD_CHAT', threadId })"
+              @status-change="(id, status) => send({ type: 'UPDATE_THREAD_STATUS', id, status })"
+              @chat-click="(threadId) => send({ type: 'OPEN_THREAD_CHAT', threadId })"
               @archive-click="handleArchiveThread"
-              @unarchive-click="(threadId) => actor.send({ type: 'UNARCHIVE_THREAD', threadId })"
+              @unarchive-click="(threadId) => send({ type: 'UNARCHIVE_THREAD', threadId })"
               @delete-click="handleDeleteThread"
               @unpin-click="handleUnpinThread"
               :renaming-name="renamingThreadId === thread.id ? renamingName : null"
@@ -62,7 +62,7 @@
           <p class="mb-6 text-sm text-neutral-400">
             Try adjusting your filters or search
           </p>
-          <Button @click="actor.send({ type: 'CLEAR_FILTERS' })" variant="transparent">
+          <Button @click="send({ type: 'CLEAR_FILTERS' })" variant="transparent">
             <span>Clear filters</span>
           </Button>
         </div>
@@ -70,7 +70,7 @@
 
       <!-- Archive Empty State -->
       <div
-        v-else-if="showArchived"
+        v-else-if="machine.data.showArchived"
         class="flex flex-col items-center pt-10 h-full"
       >
         <div class="flex flex-col items-center max-w-sm text-center">
@@ -97,7 +97,7 @@
           <p class="mb-6 text-sm text-neutral-400">
             Create your first thread to start a conversation
           </p>
-          <Button @click="actor.send({ type: 'SHOW_CREATE_FORM' })" variant="primary">
+          <Button @click="send({ type: 'SHOW_CREATE_FORM' })" variant="primary">
             <Plus class="w-4 h-4" />
             <span>New Thread</span>
           </Button>
@@ -109,11 +109,10 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, computed, watch } from 'vue'
 import { Archive, MessageCircleMore, Plus, SearchX } from 'lucide-vue-next'
-import { useSelector } from '@xstate/vue'
 import Button from '@apackdev/ui/design/button'
 import ThreadRow from './list/thread-row.vue'
 import ThreadsHeader from './components/ThreadsHeader.vue'
@@ -122,26 +121,20 @@ import { useThreadSelection } from '#features/threads/fe/composables/useThreadSe
 import { useThreadDragDrop } from '#features/threads/fe/composables/useThreadDragDrop.ts'
 
 const actor: ThreadsState = useSurface()
-const threadMap = useSelector(actor, s => s.context.threadMap)
-const threadIds = useSelector(actor, s => s.context.threadIds)
-const threads = computed(() => threadsFromStore(threadMap.value, threadIds.value))
-const filters = useSelector(actor, s => s.context.filters)
-const settings = useSelector(actor, s => s.context.settings)
-const showArchived = useSelector(actor, s => s.context.showArchived)
-const availableTags = useSelector(actor, s => s.context.availableTags)
-const selectedThreadIds = useSelector(actor, s => s.context.selectedThreadIds)
-const chatStates = useSelector(actor, s => s.context.chatStates)
-const chatStateOverrides = useSelector(actor, s => s.context.chatStateOverrides)
+const { state: machine, send } = useState(actor)
+const threads = computed(() => threadsFromStore(machine.value.data.threadMap, machine.value.data.threadIds))
+const filters = computed(() => machine.value.data.filters)
+const selectedThreadIds = computed(() => machine.value.data.selectedThreadIds)
 
 const { selectItem, clearSelection } = useThreadSelection(
   () => filteredThreads.value,
   () => selectedThreadIds.value,
-  (itemIds) => actor.send({ type: 'SELECT_THREAD_ITEMS', itemIds })
+  (itemIds) => send({ type: 'SELECT_THREAD_ITEMS', itemIds })
 )
 
 const { handleDragStart, handleDragOver, handleDragLeave, handleDrop, handleDragEnd, getRowClass } = useThreadDragDrop({
   selectedItems: selectedThreadIds,
-  onReparent: (childIds, parentId) => actor.send({ type: 'SET_THREAD_PARENT', childIds, parentId })
+  onReparent: (childIds, parentId) => send({ type: 'SET_THREAD_PARENT', childIds, parentId })
 })
 
 const BATCH_SIZE = 20
@@ -174,10 +167,10 @@ const filteredThreads = computed(() => {
   if (filters.value.chatStates.length > 0) {
     const now = Date.now()
     result = result.filter(t => {
-      const override = chatStateOverrides.value[t.id]
+      const override = machine.value.data.chatStateOverrides[t.id]
       const effectiveState = (override && override.expiresAt > now)
         ? override.id
-        : (chatStates.value[t.id] || 'idle')
+        : (machine.value.data.chatStates[t.id] || 'idle')
       return filters.value.chatStates.includes(effectiveState)
     })
   }
@@ -231,16 +224,16 @@ const handleArchiveThread = (threadId: string) => {
   const confirmed = confirm(`Archive thread "${thread.topic || 'Untitled'}"? It will be hidden from all lists.`);
 
   if (confirmed) {
-    actor.send({ type: 'ARCHIVE_THREAD', threadId });
+    send({ type: 'ARCHIVE_THREAD', threadId });
   }
 };
 
 const handleUnpinThread = (threadId: string) => {
-  actor.send({ type: 'UNPIN_THREAD', threadId });
+  send({ type: 'UNPIN_THREAD', threadId });
 };
 
 const handlePinThread = (threadId: string) => {
-  actor.send({ type: 'PIN_THREAD', threadId });
+  send({ type: 'PIN_THREAD', threadId });
 };
 
 const renamingThreadId = ref<string | null>(null)
@@ -256,7 +249,7 @@ const handleRenameThread = (threadId: string) => {
 const handleRenameConfirm = (threadId: string) => {
   const trimmed = renamingName.value.trim();
   if (trimmed && renamingThreadId.value) {
-    actor.send({ type: 'RENAME_THREAD', threadId, topic: trimmed });
+    send({ type: 'RENAME_THREAD', threadId, topic: trimmed });
   }
   renamingThreadId.value = null;
   renamingName.value = '';
@@ -274,7 +267,7 @@ const handleDeleteThread = (threadId: string) => {
   const confirmed = confirm(`Are you sure you want to delete thread "${thread.topic || 'Untitled'}"? This will permanently delete all messages and other data associated .`);
 
   if (confirmed) {
-    actor.send({ type: 'DELETE_THREAD', threadId });
+    send({ type: 'DELETE_THREAD', threadId });
   }
 };
 </script>

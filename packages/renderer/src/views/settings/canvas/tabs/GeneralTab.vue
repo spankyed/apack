@@ -9,7 +9,7 @@
           @click="selectNavItem(item.id)"
           :class="[
             'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors mb-0.5',
-            generalNavItem === item.id
+            settings.data.generalNavItem === item.id
               ? 'bg-blue-500/20 text-blue-400'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800'
           ]"
@@ -25,7 +25,7 @@
           @click="selectNavItem(item.id)"
           :class="[
             'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors mb-0.5',
-            generalNavItem === item.id
+            settings.data.generalNavItem === item.id
               ? 'bg-blue-500/20 text-blue-400'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800'
           ]"
@@ -39,9 +39,9 @@
     <!-- Content Area -->
     <div class="flex-1 p-8 overflow-auto">
       <component
-        :is="componentMap[generalNavItem]"
+        :is="componentMap[settings.data.generalNavItem]"
         :settings="currentSettings"
-        v-bind="generalNavItem === 'personal' ? { saveSetting: handleUpdateSetting } : {}"
+        v-bind="settings.data.generalNavItem === 'personal' ? { saveSetting: handleUpdateSetting } : {}"
         @update-setting="handleUpdateSetting"
       />
 
@@ -63,21 +63,20 @@
 
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
-import { useSelector } from '@xstate/vue'
 import { User, Key, Settings, CheckCircle, Briefcase, FileJson } from 'lucide-vue-next'
 import PersonalInfo from '../components/GeneralSettings/PersonalInfo.vue'
 import Secrets from '../components/GeneralSettings/Secrets.vue'
 import App from '../components/GeneralSettings/App.vue'
 import Projects from '../components/GeneralSettings/Projects.vue'
 import SettingsJsonEditor from '../components/GeneralSettings/SettingsJsonEditor.vue'
-import { useAppSettings, useSurface } from '@apackdev/sdk/fe'
+import { useAppSettings, useState, useSurface } from '@apackdev/sdk/fe'
 import { useSettingsSaveStatus } from '@/views/settings/save'
 import type { SettingsState } from '@apackdev/host/fe'
 import type { SettingUpdate } from '@apackdev/sdk/fe'
 
 const actor: SettingsState = useSurface()
 
-const generalNavItem = useSelector(actor, (state) => state.context.generalNavItem)
+const { state: settings, send } = useState(actor)
 const appSettings = useAppSettings()
 
 // Use the settings save status composable
@@ -95,7 +94,7 @@ const currentSettings = computed(() => {
     application: { hotkeys: app.hotkeys }
   }
 
-  return settingsMap[generalNavItem.value as keyof typeof settingsMap]
+  return settingsMap[settings.value.data.generalNavItem as keyof typeof settingsMap]
 })
 
 // Component mapping
@@ -119,7 +118,7 @@ const bottomNavItems = [
 ]
 
 const selectNavItem = (itemId: string) => {
-  actor.send({ type: 'GENERAL_NAV.SELECT', item: itemId as 'personal' | 'secrets' | 'projects' | 'application' | 'json' })
+  send({ type: 'GENERAL_NAV.SELECT', item: itemId as 'personal' | 'secrets' | 'projects' | 'application' | 'json' })
 }
 
 // Handle update events from child components
@@ -131,12 +130,12 @@ const handleUpdateSetting = (event: SettingUpdate) => {
     application: 'application'
   } as const
 
-  const currentNavItem = generalNavItem.value as keyof typeof labelMap
+  const currentNavItem = settings.value.data.generalNavItem as keyof typeof labelMap
   const backendLabel = labelMap[currentNavItem]
 
   // Defensive check to prevent undefined labels
   if (!backendLabel) {
-    console.error(`[GeneralTab] Invalid generalNavItem value: "${generalNavItem.value}". Expected one of: ${Object.keys(labelMap).join(', ')}`)
+    console.error(`[GeneralTab] Invalid generalNavItem value: "${settings.value.data.generalNavItem}". Expected one of: ${Object.keys(labelMap).join(', ')}`)
     console.error('[GeneralTab] Skipping settings update to prevent data corruption')
     return Promise.resolve({ status: 'refused' as const, problems: ['This settings form is no longer selected.'] })
   }

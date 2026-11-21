@@ -18,7 +18,7 @@
       </button>
     </div>
 
-    <div v-else-if="signingIn" class="space-y-2">
+    <div v-else-if="github.at === 'signingIn'" class="space-y-2">
       <template v-if="code">
         <p class="text-sm text-neutral-200">
           The code is copied, and
@@ -41,7 +41,7 @@
         <p class="text-xs text-neutral-600">
           {{ account === undefined ? 'Reading the sign-in…' : 'Sign in to open and review pull requests, and to push to GitHub over HTTPS.' }}
         </p>
-        <p v-if="failure" class="mt-1 text-xs text-red-400">{{ failure.message }}</p>
+        <p v-if="github.data.failure" class="mt-1 text-xs text-red-400">{{ github.data.failure.message }}</p>
       </div>
       <button
         :disabled="account === undefined"
@@ -55,20 +55,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
-import { useSelector } from '@xstate/vue'
-import { useSurface } from '@apackdev/sdk/fe'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
-import { panelChild, type PanelChild } from '../children.ts'
+import { panelChild } from '../children.ts'
 
 const surface: CodeState = useSurface()
-const github = panelChild(surface, 'github')!
-const send = (event: Parameters<PanelChild<'github'>['send']>[0]) => github.send(event)
+const { state: github, send } = useState(panelChild(surface, 'github')!)
 
-const account = useSelector(github, (state) => state.context.account)
-const signingIn = useSelector(github, (state) => state.matches('signingIn'))
-const code = useSelector(github, (state) => state.context.code)
-const failure = useSelector(github, (state) => state.context.failure)
+const account = computed(() => github.value.data.account)
+const code = computed(() => github.value.data.code)
 
 /** Whether the code shown now was copied: a new code is not, until it is */
 const copied = ref(false)

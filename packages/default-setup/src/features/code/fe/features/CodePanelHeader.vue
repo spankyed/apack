@@ -16,10 +16,10 @@
       </div>
       <div class="flex items-center gap-1 shrink-0">
         <BaseDirectoryMenu
-          v-if="baseDirectory && showDirectoryMenu"
-          :base-directory="baseDirectory"
+          v-if="code.data.baseDirectory && showDirectoryMenu"
+          :base-directory="code.data.baseDirectory"
           @open-directory="handleDirectorySelect"
-          @open-terminal="terminalActor?.send({ type: 'terminal.CREATE', cwd: baseDirectory })"
+          @open-terminal="terminalActor?.send({ type: 'terminal.CREATE', cwd: code.data.baseDirectory })"
           @open-project-directory="handleProjectDirectorySelect"
           @refresh="explorerActor?.send({ type: 'explorer.REFRESH_TREE' })"
         />
@@ -41,7 +41,7 @@
           @click="selectPanel(panel.id)"
           :class="[
             'relative p-1.5 rounded transition-colors',
-            selectedPanel === panel.id
+            code.data.selectedPanel === panel.id
               ? 'bg-primary-700 text-neutral-100'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800'
           ]"
@@ -62,7 +62,7 @@
           @click="selectPanel(panel.id)"
           :class="[
             'p-1.5 rounded transition-colors',
-            selectedPanel === panel.id
+            code.data.selectedPanel === panel.id
               ? 'bg-primary-700 text-neutral-100'
               : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800'
           ]"
@@ -79,9 +79,8 @@
 
 import type { Component } from 'vue'
 import { computed } from 'vue'
-import { useSelector } from '@xstate/vue'
 import { type CodeState } from '#features/code/fe/state.ts'
-import { isAnyMenuOpen, useSurface } from '@apackdev/sdk/fe'
+import { isAnyMenuOpen, useState, useSurface } from '@apackdev/sdk/fe'
 import BaseDirectoryMenu from '#features/code/fe/features/explorer/components/BaseDirectoryMenu.vue'
 import { panelChild } from './children.ts';
 import {
@@ -108,14 +107,14 @@ const explorerActor = panelChild(actor, 'explorer')!
 const terminalActor = panelChild(actor, 'terminal')!
 const commitActor = panelChild(actor, 'commit')!
 
-const changeCount = useSelector(commitActor, (state) => state.context.gitStatus?.length ?? 0)
+const { state: code, send } = useState(actor)
+const { state: git } = useState(commitActor)
 
-const selectedPanel = useSelector(actor, (state) => state.context.selectedPanel)
-const baseDirectory = useSelector(actor, (state) => state.context.baseDirectory)
+const changeCount = computed(() => git.value.data.gitStatus?.length ?? 0)
 
 const directoryMenuPanels = ['explorer', 'commit', 'pr', 'search'] as const
 const showDirectoryMenu = computed(() =>
-  directoryMenuPanels.includes(selectedPanel.value as any)
+  directoryMenuPanels.includes(code.value.data.selectedPanel as any)
 )
 
 const handleDirectorySelect = async () => {
@@ -125,7 +124,7 @@ const handleDirectorySelect = async () => {
   }
   try {
     const directoryPath = await window.electronAPI.fileUtils.selectDirectory()
-    if (directoryPath && directoryPath !== baseDirectory.value) {
+    if (directoryPath && directoryPath !== code.value.data.baseDirectory) {
       explorerActor?.send({ type: 'explorer.SET_BASE_DIRECTORY', path: directoryPath })
     }
   } catch (error) {
@@ -150,7 +149,7 @@ const internalsPanels = [
 ] as const
 
 const selectPanel = (panel: 'explorer' | 'search' | 'commit' | 'pr' | 'actions' | 'prompts') => {
-  actor.send({
+  send({
     type: 'SELECT_PANEL',
     panel
   })

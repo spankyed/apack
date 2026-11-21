@@ -1,5 +1,5 @@
 import { computed } from 'vue';
-import { useSelector } from '@xstate/vue';
+import { useState } from '@apackdev/sdk/fe';
 
 /**
  * Creates a writable computed property for managing collapsible section state
@@ -9,19 +9,18 @@ import { useSelector } from '@xstate/vue';
  * @returns A computed property that can be used with v-model
  */
 export function useCollapsibleState(actor: any, path: string[], eventType: string) {
-  // Get the reactive state from the actor
-  const state = useSelector(actor, (state: any) => {
-    // Navigate through the path to get the value
-    let value: any = state.context;
-    for (const key of path) {
-      value = value?.[key];
-    }
-    return Boolean(value);
-  });
-  
+  const { state: machine, send } = useState(actor);
+
   // Return a computed property that can be used with v-model
   return computed({
-    get: () => state.value,
-    set: (value: boolean) => actor.send({ type: eventType, show: value })
+    get: () => {
+      // Navigate through the path to get the value
+      let value: any = machine.value?.data;
+      for (const key of path) {
+        value = value?.[key];
+      }
+      return Boolean(value);
+    },
+    set: (value: boolean) => send({ type: eventType, show: value } as any)
   });
 }

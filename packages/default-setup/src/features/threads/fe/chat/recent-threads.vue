@@ -264,7 +264,7 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 import { useAppSettings } from '#generated/settings-fe.ts'
 import { ref, onMounted, onUnmounted, computed, watch, nextTick, type CSSProperties } from 'vue'
 import { Archive, History, ChevronUp, ChevronRight, Plus, PanelLeft, FileText, Pin, Trash2, FolderOpen, GitBranchPlus } from 'lucide-vue-next'
@@ -281,7 +281,6 @@ import {
   ContextMenuSubTrigger,
   ContextMenuSubContent,
 } from 'reka-ui'
-import { useSelector } from '@xstate/vue'
 import type { ThreadsState } from '#features/threads/fe/state.ts'
 import ThreadContextMenu from '#features/threads/fe/canvas/components/thread-context-menu.vue'
 import { getThreadDotColor, isThreadBusy } from './thread-status.ts'
@@ -323,16 +322,14 @@ watch(isOpen, async (open) => {
 
 // Get threads from the threads surface state
 const threadsActor: ThreadsState = useSurface()
-const chatStates = useSelector(threadsActor, (state) => state.context.chatStates)
-const chatStateOverrides = useSelector(threadsActor, (state) => state.context.chatStateOverrides)
-const settings = useSelector(threadsActor, (state) => state.context.settings)
+const { state: threads, send } = useState(threadsActor)
 
 function getThreadDotColorLocal(threadId: string): string | undefined {
-  return getThreadDotColor(threadId, chatStates.value, chatStateOverrides.value, settings.value)
+  return getThreadDotColor(threadId, threads.value.data.chatStates, threads.value.data.chatStateOverrides, threads.value.data.settings)
 }
 
 function isThreadBusyLocal(threadId: string): boolean {
-  return isThreadBusy(threadId, chatStates.value, chatStateOverrides.value, settings.value)
+  return isThreadBusy(threadId, threads.value.data.chatStates, threads.value.data.chatStateOverrides, threads.value.data.settings)
 }
 
 const recentThreads = computed(() => props.recentThreads)
@@ -445,7 +442,7 @@ const confirmRename = () => {
   if (!threadId) return
   const trimmed = editingName.value.trim()
   if (trimmed) {
-    threadsActor.send({ type: 'RENAME_THREAD', threadId, topic: trimmed })
+    send({ type: 'RENAME_THREAD', threadId, topic: trimmed })
   }
   editingThreadId.value = null
 }
@@ -471,7 +468,7 @@ const confirmTitleBarRename = () => {
   if (!threadId) return
   const trimmed = editingName.value.trim()
   if (trimmed) {
-    threadsActor.send({ type: 'RENAME_THREAD', threadId, topic: trimmed })
+    send({ type: 'RENAME_THREAD', threadId, topic: trimmed })
   }
   editingTitleBar.value = false
 }
@@ -482,19 +479,19 @@ const cancelTitleBarRename = () => {
 
 const handleArchiveThread = (id: string | undefined) => {
   if (!id) return
-  if (settings.value?.skipArchiveConfirm || confirm('Archive this thread? It will be hidden from all lists.')) {
-    threadsActor.send({ type: 'ARCHIVE_THREAD', threadId: id })
+  if (threads.value.data.settings?.skipArchiveConfirm || confirm('Archive this thread? It will be hidden from all lists.')) {
+    send({ type: 'ARCHIVE_THREAD', threadId: id })
   }
 }
 
 const handleUnpinThread = (id: string | undefined) => {
   if (!id) return
-  threadsActor.send({ type: 'UNPIN_THREAD', threadId: id })
+  send({ type: 'UNPIN_THREAD', threadId: id })
 }
 
 const handlePinThread = (id: string | undefined) => {
   if (!id) return
-  threadsActor.send({ type: 'PIN_THREAD', threadId: id })
+  send({ type: 'PIN_THREAD', threadId: id })
 }
 
 const handleDeleteThread = (id: string | undefined) => {
@@ -502,7 +499,7 @@ const handleDeleteThread = (id: string | undefined) => {
   const thread = recentThreads.value.find(t => t.id === id)
   const confirmed = confirm(`Permanently delete thread "${thread?.topic || 'Untitled'}"? This cannot be undone.`)
   if (confirmed) {
-    threadsActor.send({ type: 'DELETE_THREAD', threadId: id })
+    send({ type: 'DELETE_THREAD', threadId: id })
   }
 }
 
