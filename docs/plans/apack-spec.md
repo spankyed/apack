@@ -4,9 +4,10 @@ Status: proposed, 2026-11-21, in Claude Code session `c6ebd24e-7b7d-4f7d-b520-92
 `packages/` is changed: what exists is a prototype under [`apack-spec/prototype/`](apack-spec/prototype/) and this
 record of the design it reached and the work it implies.
 
-Related: [answers-in-the-contract.md](answers-in-the-contract.md) and spankyed/apack#583 move the app toward asks while
-staying on XState. [Alongside results-are-asks](#alongside-results-are-asks) says what this design takes from that
-work, what it leaves, and what the two should share so that one leads to the other.
+Related: [answers-in-the-contract.md](answers-in-the-contract.md) and spankyed/apack#583 moved the app toward asks
+while staying on XState, and spankyed/apack#591 replaced #583 with the asking side this design wants.
+[Alongside results-are-asks](#alongside-results-are-asks) says what this design takes from that work, what it leaves,
+what the two share, and [what #591 delivered](#what-591-delivered), which is where the next work starts.
 
 ## Why
 
@@ -300,6 +301,37 @@ than renaming again here.
 What does not carry over is authoring in this design's syntax on XState's runtime. A handler here chooses where to go
 when it runs, and XState's targets are fixed in the machine's config.
 
+### What #591 delivered
+
+spankyed/apack#591 is step 1 of the [order of work](#order-of-work), on XState. Its work list and the recipe it
+followed are `docs/plans/asks-shape.md` on that branch. Read against the tables above:
+
+| Shared item | State after #591 |
+|---|---|
+| `{ args, answer, refuses, progress }`, `refuse(...)`, `progress(...)`, the handler's `signal` | Done, in the SDK and every contract |
+| An asker awaits: no `ASK_ANSWERED` or `ASK_FAILED` handled by a surface | Done. A state invokes `fromAsk`, an ask is spawned and handled where it ends, or a component awaits `ask`/`useAsk` |
+| A feed beside the answer | Gone: the search and the git transfers say `progress` |
+| Leaving the asker's state aborts the handler | Done: the asker's abort reaches the handler's `signal`, and a stopped ask is not answered |
+| `waiting` | Gone from a handler's arguments |
+| A loading flag is a state that invokes the ask | Done where an ask was touched |
+| `tell` and `broadcast` | Not done: still `sendToSystem` and `broadcastToSurface` |
+| Handlers as tables beside the machine | Not done, on purpose: an ask is taken by the state that lists it (`answers.on`), which is this design's `asks` per state. A child machine answers its own asks |
+| A component reads state through the SDK | Not done: `useSelector` on an actor stands |
+| A machine is defined through the SDK; no `xstate` import in a pack | Not done |
+| A spec drives a feature at its boundary | Partly: specs of asks ask, and many still read an actor's context |
+
+Two things #591 left that this design does not want, both listed in its "Left open":
+
+- The commit and pull-request surfaces of the code feature became `type: 'parallel'`, a region per ask that can be
+  under way at once. The fix on XState is to spawn those asks, as the flows, brain and GitHub surfaces do; here each is
+  an awaited `ask` in a handler.
+- A spawned ask is found again by its id (`xstate.done.actor.<kind>.*`). That is XState's shape for "several of one
+  ask at once", and it is what [collections that grow](#collections-that-grow) replaces.
+
+**Where the next work starts.** The remaining seams of step 1, each its own PR on `master` once #591 is merged: spawn
+the asks of the commit and pull-request surfaces; rename to `tell` and `broadcast`; state read through the SDK in
+components; machines defined through the SDK with a pack rule against `xstate`. Then step 2.
+
 ## What to build around it
 
 The design is the smaller half of the value. In the order they would pay:
@@ -366,11 +398,12 @@ projects. Each would loosen the fit to this app.
 
 ## Order of work
 
-No step is started. Each is a decision point.
+Step 1 is under way; no later step is started. Each is a decision point.
 
-1. **Bring the XState code to the shared vocabulary and seams** ([Alongside results-are-asks](#alongside-results-are-asks)),
-   stacked on spankyed/apack#583. It is worth doing whether or not anything after it is: it removes the event path
-   for answers, and leaves pack code that does not name XState.
+1. **Bring the XState code to the shared vocabulary and seams** ([Alongside results-are-asks](#alongside-results-are-asks)).
+   spankyed/apack#591 did the vocabulary and the asking side, which removes the event path for answers.
+   [What #591 delivered](#what-591-delivered) lists the seams still to do, which are what leave pack code that does not
+   name XState.
 2. **Settle the open design** that the first real ports will hit: the Vue binding, and a write nobody waits for.
 3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The kernel
    takes an injectable scheduler so interleavings can be replayed.
