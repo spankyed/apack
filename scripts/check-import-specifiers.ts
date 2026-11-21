@@ -18,6 +18,7 @@ import {
   SOURCE_EXTENSIONS,
 } from './lib/import-populations.ts';
 import { DIR_BY_PACKAGE, RUNTIME_ONLY_DEPS } from './lib/workspace-deps.ts';
+import { repositoryOf } from './lib/external-packages.mjs';
 import {
   DECLARES_SOURCE_BY_DESIGN, findMissingSourceConditions, RESOLVES_DIST_BY_DESIGN, sourceConditionPackages,
 } from './lib/import-source-conditions.ts';
@@ -312,17 +313,11 @@ export const UNLAYERED_BY_DESIGN = new Map<string, string>([
 const apackPackage = (specifier: string) => specifier.match(/^@apackdev\/[^/]+/)?.[0];
 
 /**
- * The `@apackdev` packages another repository publishes (`@apackdev/git`, `@apackdev/terminal`, ...): the ones the
- * root's `overrides` takes from a release's tarball, or from a local checkout (`npm run deps:local`). They share the
- * scope and are no layer of this repository, so the layer rule reads them as any other outside dependency. A root
- * with no manifest, as a fixture tree is, has none
+ * Whether an `@apackdev` package is one another repository publishes (`@apackdev/git`, `@apackdev/terminal`, ...),
+ * which the root's `overrides` take from its release (`lib/external-packages.mjs`). They share the scope and are no
+ * layer of this repository, so the layer rule reads them as any other outside dependency
  */
-const externalPackages = (root: string): Set<string> => {
-  const manifestFile = path.join(root, 'package.json');
-  if (!fs.existsSync(manifestFile)) return new Set();
-  const overrides = readJsonFile<{ overrides?: Record<string, unknown> }>(manifestFile).overrides ?? {};
-  return new Set(Object.entries(overrides).filter(([, spec]) => typeof spec === 'string' && /^(https:|file:)/.test(spec)).map(([name]) => name));
-};
+const isExternal = (pkg: string): boolean => repositoryOf(pkg) !== undefined;
 
 /**
  * Every workspace with something for the layer rule to read, by the same three directories it reads.
@@ -373,10 +368,9 @@ export function findUpwardImports(layers = LAYERS, root = repoRoot, unlayered = 
       problems.push(`${dir}: listed in UNLAYERED_BY_DESIGN (${reason}) but it holds no code, or is gone`);
     }
   }
-  const external = externalPackages(root);
   const layerPackage = (specifier: string) => {
     const pkg = apackPackage(specifier);
-    return pkg !== undefined && !external.has(pkg) ? pkg : undefined;
+    return pkg !== undefined && !isExternal(pkg) ? pkg : undefined;
   };
   for (const { name, dir, allowed, forbidden } of layers) {
     const permitted = new Set([name, ...allowed]);

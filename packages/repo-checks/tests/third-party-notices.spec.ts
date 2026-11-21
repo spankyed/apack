@@ -644,11 +644,11 @@ describe("the app's SBOM", () => {
         'node_modules/unversioned': { integrity: 'sha512-unversioned' },
       } }),
     });
-    const { purls, integrity } = sbomIdentity(root, { elmdb: 'elmdb#crates/elmdb-node', '@apackdev/terminal': 'apack-terminal', '@apackdev/git': 'apack-git' });
+    const { purls, integrity } = sbomIdentity(root);
     // A local checkout's package (`npm run deps:local`) is from no release, so it has no purl here
     expect(purls).toEqual({
       elmdb: `pkg:github/spankyed/elmdb@${elmdb}#crates/elmdb-node`,
-      '@apackdev/terminal': `pkg:github/spankyed/apack-terminal@${terminal}`,
+      '@apackdev/terminal': `pkg:github/spankyed/apack-terminal@${terminal}#node`,
     });
     // The first copy of a release is the one hashed; an entry without a version or an integrity is not hashed at all
     expect(Object.fromEntries(integrity)).toStrictEqual({

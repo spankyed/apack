@@ -349,15 +349,10 @@ describe('findUpwardImports', () => {
     expect(findUpwardImports(layers, root)).toEqual([problem]);
   });
 
-  // `@apackdev/git` and the terminal's two are another repository's, which the root's `overrides` take from its
-  // release or a local checkout: they share the scope and are no layer, so a layer imports and declares them as any
-  // outside package
-  it.each([
-    'https://github.com/spankyed/apack-terminal/releases/download/bin-abc/apackdev-terminal-0.1.0.tgz',
-    'file:../apack-terminal/node',
-  ])("reads an @apackdev package the root's overrides take from %s as an outside one, and only that one", (spec) => {
+  // `@apackdev/git` and the terminal's two are another repository's (`scripts/lib/external-packages.mjs`): they share
+  // the scope and are no layer, so a layer imports and declares them as any outside package
+  it("reads an @apackdev package another repository publishes as an outside one, and only that one", () => {
     allowed();
-    writeAt('package.json', JSON.stringify({ name: 'root', overrides: { '@apackdev/terminal': spec, '@apackdev/ui': '^1' } }));
     writeAt('layers/host/src/broker.ts', "import type { Event } from '@apackdev/terminal';\nimport Button from '@apackdev/ui/design/button';\n");
     rewriteAt('layers/host/package.json', JSON.stringify({ name: 'x', dependencies: { '@elmdb/ears': '*', '@apackdev/sdk': '*', '@apackdev/terminal': '0.1.0' } }));
     expect(findUpwardImports(layers, root)).toEqual(['layers/host/src/broker.ts:2: @apackdev/ui/design/button']);

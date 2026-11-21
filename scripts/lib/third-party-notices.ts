@@ -51,6 +51,7 @@ import parse, { type Node as SpdxNode } from 'spdx-expression-parse';
 import satisfies from 'spdx-satisfies';
 import { bundledPackages, installedPackage, isFirstParty, type BundledPackage } from '@apackdev/host/build/bundled-packages';
 import { PACK_BUILD_STAGING_DIR } from '@apackdev/host/build/pack-workdir';
+import { OWNER, REPOSITORIES, releaseOf } from './external-packages.mjs';
 
 /** A license, licence, notice or copying file, in any case and with any extension, the word anywhere in the name */
 export const LICENSE_FILE = /(licen[cs]e|notice|copying)/i;
@@ -642,8 +643,8 @@ export function downloadedBinaries(packages: readonly NoticePackage[]): SbomComp
   return [...found.values()];
 }
 
-/** The commit a release tarball was packed from, as its URL names it (`pkg-<commit>`, `bin-<commit>`) */
-const releaseCommit = (resolved: string | undefined) => resolved?.match(/\/releases\/download\/[a-z]+-([0-9a-f]{40})\//)?.[1];
+/** The commit a release tarball was packed from, as its URL names it (`external-packages.mjs`'s `releaseOf`) */
+const releaseCommit = (resolved: string | undefined) => (resolved === undefined ? undefined : releaseOf(resolved)?.commit);
 
 /**
  * The terminal broker as an SBOM component, from the platform package that carries it in the app (`brokerDirectory`):
@@ -660,26 +661,27 @@ export function brokerSbomComponent(repoRoot: string, appDir: string, platform: 
   const binary = files.find((name) => name === 'apack-terminal' || name === 'apack-terminal.exe');
   return {
     type: 'application', name: 'apack-terminal', license: 'MIT OR Apache-2.0',
-    ...(commit ? { version: commit, purl: `pkg:github/spankyed/apack-terminal@${commit}` } : {}),
+    ...(commit ? { version: commit, purl: `pkg:github/${OWNER}/apack-terminal@${commit}` } : {}),
     ...(binary ? { sha256: sha256(binary) } : {}),
     components: files.filter((name) => name !== binary).map((name) => ({ type: 'file' as const, name, sha256: sha256(name) })),
   };
 }
 
 /**
- * The SBOM's identity for the packages of a repository: those another of ours publishes as a release's tarball, by
- * the packages each provides (`repositories`, `<repo>` or `<repo>#<directory>` for a package in a directory of its
- * repository, the purl's subpath, so two from one repository are told apart), as GitHub purls at the commit the
- * lockfile's URL for each names; and the lockfile's integrity of every package it holds one for, which those
- * tarballs have as a registry's packages do. A package installed from elsewhere, a local checkout's, has no purl here
+ * The SBOM's identity for the packages of a repository: those another of ours publishes as a release's tarball
+ * (`external-packages.mjs`), as GitHub purls at the commit the lockfile's URL for each names, with the package's
+ * directory in its repository as the purl's subpath, so two from one repository are told apart; and the lockfile's
+ * integrity of every package it holds one for, which those tarballs have as a registry's packages do. A package
+ * installed from elsewhere, a local checkout's, has no purl here
  */
-export function sbomIdentity(repoRoot: string, repositories: Readonly<Record<string, string>>): SbomIdentity {
+export function sbomIdentity(repoRoot: string): SbomIdentity {
   const lock = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8')) as { packages: Record<string, { version?: string; integrity?: string; name?: string; resolved?: string }> };
   const purls: Record<string, string> = {};
-  for (const [name, where] of Object.entries(repositories)) {
-    const [repo, subpath] = where.split('#');
-    const commit = releaseCommit(lock.packages[`node_modules/${name}`]?.resolved);
-    if (commit) purls[name] = `pkg:github/spankyed/${repo}@${commit}${subpath ? `#${subpath}` : ''}`;
+  for (const [repo, { packages }] of Object.entries(REPOSITORIES)) {
+    for (const [name, { dir }] of Object.entries(packages)) {
+      const commit = releaseCommit(lock.packages[`node_modules/${name}`]?.resolved);
+      if (commit) purls[name] = `pkg:github/${OWNER}/${repo}@${commit}${dir === '.' ? '' : `#${dir}`}`;
+    }
   }
   const integrity = new Map<string, string>();
   for (const [key, entry] of Object.entries(lock.packages)) {
