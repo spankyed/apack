@@ -124,10 +124,26 @@ type Leaves<S> = [Names<S>] extends [never] ? never : { [K in Names<S>]: [Names<
 type Below<S, P> = P extends `${infer H}.${infer T}` ? DataOf<Sub<S, H>> & Below<Sub<S, H>, T> : DataOf<Sub<S, P>>
 type DataAt<S, P extends string> = P extends '' ? DataOf<S> : DataOf<S> & Below<S, P>
 
+/**
+ * A value as it is read: nothing in it can be written, at any depth. What a state holds is frozen, and this is the
+ * compiler saying so before it is run. It catches a write to a field and a list changed in place, which is most of
+ * what goes wrong. It does not catch everything: TypeScript lets a read-only object be passed where one that will
+ * be written to is expected, so freezing is still what holds. A function is left as it is.
+ */
+export type Immutable<T> =
+  T extends (...given: never[]) => unknown ? T
+  : T extends ReadonlyArray<infer Item> ? ReadonlyArray<Immutable<Item>>
+  : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Immutable<Key>, Immutable<Held>>
+  : T extends ReadonlySet<infer Item> ? ReadonlySet<Immutable<Item>>
+  : T extends object ? { readonly [K in keyof T]: Immutable<T[K]> }
+  : T
+/** What a field may be given: its own type, or that read from somewhere it cannot be written. */
+type Givable<D> = { [K in keyof D]: D[K] | Immutable<D[K]> }
+
 /** A state as it is read: where it is, and the data there. */
 export type Value<S> = ([Names<S>] extends [never]
-  ? { readonly data: Readonly<DataOf<S>> }
-  : { [L in Leaves<S>]: { readonly at: L; readonly data: Readonly<DataAt<S, L>> } }[Leaves<S>])
+  ? { readonly data: Immutable<DataOf<S>> }
+  : { [L in Leaves<S>]: { readonly at: L; readonly data: Immutable<DataAt<S, L>> } }[Leaves<S>])
   // What it has been told to make and has not yet ended. The kernel keeps this, and nothing else writes it.
   & ([keyof AllMakes<S>] extends [never] ? {} : { readonly making: MakingOf<AllMakes<S>> })
 
@@ -152,12 +168,12 @@ type Gained<S, H, T> = T extends `${infer TH}.${infer TT}`
  * A move that has nothing to give may edit a draft too: the draft is the data where the handler sits, edited before
  * the move. A move that enters a state needing data says it as fields, since those fields are what it gives.
  */
-type Change<D> = Partial<D> | ((draft: D) => void)
+type Change<D> = Partial<Givable<D>> | ((draft: D) => void)
 
 /** What happens next, in the shape of the value: where to be, and what data changes. */
 type Next<R, H extends string> =
   | { at?: never; data: Change<DataAt<R, H>> }
-  | { [T in Paths<R>]: {} extends Gained<R, H, T> ? { at: T; data?: Partial<DataAt<R, T>> | ((draft: DataAt<R, H>) => void) } : { at: T; data: Gained<R, H, T> & Partial<DataAt<R, T>> } }[Paths<R>]
+  | { [T in Paths<R>]: {} extends Gained<R, H, T> ? { at: T; data?: Partial<Givable<DataAt<R, T>>> | ((draft: DataAt<R, H>) => void) } : { at: T; data: Givable<Gained<R, H, T>> & Partial<Givable<DataAt<R, T>>> } }[Paths<R>]
 
 /** A state this one started. Only its starter holds it: it can be told, asked and read, never written. */
 export interface Handle<V, E extends AnyEvent, A extends Asks, C = {}> { readonly ref: string; readonly _?: { v: V; e: (event: E) => void; a: A; c: C } }
@@ -172,7 +188,7 @@ type AskOf<N extends Net, K extends SystemsOf<N>, Q extends keyof N['systems'][K
 
 export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
   /** The data that exists here: this state's own and that of every state around it. */
-  readonly data: Readonly<DataAt<R, H>>
+  readonly data: Immutable<DataAt<R, H>>
   /** The whole value, as it is now. */
   readonly snapshot: Value<R>
   /** Aborted when this state stops being the case. For an ask, also when whoever asked has gone. */
@@ -182,16 +198,16 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
    * Tells this running state an event: one only it sends itself, which its `internal` handlers take, or one that
    * others may send it too.
    */
-  send(event: E | InternalOf<R>): void
+  send(event: Immutable<E | InternalOf<R>>): void
 
   /** Tells a backend system, or a state this one started, an event. Nobody waits. */
-  tell<K extends SystemsOf<N>>(to: K, event: N['systems'][K]['events']): void
-  tell<E2 extends AnyEvent>(to: Handle<unknown, E2, Asks>, event: E2): void
+  tell<K extends SystemsOf<N>>(to: K, event: Immutable<N['systems'][K]['events']>): void
+  tell<E2 extends AnyEvent>(to: Handle<unknown, E2, Asks>, event: Immutable<E2>): void
   /**
    * From a window: tells another surface in this window an event that surface says it takes. A surface and a
    * backend system can be called the same, so a surface is named as one. From the backend a surface is broadcast to.
    */
-  tell<K extends keyof N['surfaces'] & string>(to: { readonly surface: K }, event: N['surfaces'][K]['events']): void
+  tell<K extends keyof N['surfaces'] & string>(to: { readonly surface: K }, event: Immutable<N['surfaces'][K]['events']>): void
 
   /**
    * Asks a backend system, or a state this one started. `heard` is called with the progress made since it was last
@@ -199,20 +215,20 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
    * ten thousand is a few dozen changes and not ten thousand.
    */
   ask<K extends SystemsOf<N>, Q extends keyof N['systems'][K]['asks'] & string>(
-    of: K, name: Q, args: AskOf<N, K, Q>['args'], heard?: (updates: ReadonlyArray<ProgressOf<AskOf<N, K, Q>>>) => void,
+    of: K, name: Q, args: Immutable<AskOf<N, K, Q>['args']>, heard?: (updates: ReadonlyArray<ProgressOf<AskOf<N, K, Q>>>) => void,
   ): Promise<OutcomeOf<AskOf<N, K, Q>>>
   ask<A2 extends Asks, Q extends keyof A2 & string>(
-    of: Handle<unknown, never, A2>, name: Q, args: A2[Q]['args'], heard?: (updates: ReadonlyArray<ProgressOf<A2[Q]>>) => void,
+    of: Handle<unknown, never, A2>, name: Q, args: Immutable<A2[Q]['args']>, heard?: (updates: ReadonlyArray<ProgressOf<A2[Q]>>) => void,
   ): Promise<OutcomeOf<A2[Q]>>
 
   /** From the backend: tells that surface, in every window, an event. */
-  broadcast<K extends keyof N['surfaces'] & string>(to: K, event: N['surfaces'][K]['events']): void
+  broadcast<K extends keyof N['surfaces'] & string>(to: K, event: Immutable<N['surfaces'][K]['events']>): void
 
   /**
    * Tells the state that started this one something. It arrives there as an event, with `from` saying which state
    * told it: its key, where it is one of many. Only its starter hears, as only whoever asked hears an ask's progress.
    */
-  report(event: ReportsOf<R>): void
+  report(event: Immutable<ReportsOf<R>>): void
 
   /**
    * Has an ask this state declares under `makes` made, once. It is made when the step commits, with the data as the
@@ -248,7 +264,7 @@ export interface AskScope<R, H extends string, E extends AnyEvent, N extends Net
    */
   refuse<K extends Refuses<A>>(kind: K, message: string, ...data: RefusalData<Refusals<A>[K]>): Error
   /** Tells whoever asked something before the answer. Only they hear it. */
-  progress(update: ProgressOf<A>): void
+  progress(update: Immutable<ProgressOf<A>>): void
 }
 
 /** Events: synchronous. What a handler returns is what happens next. */
@@ -281,8 +297,8 @@ type NextAfterAwait<R, H extends string> =
  */
 type Answering<R, H extends string, E extends AnyEvent, A extends Asks, N extends Net> =
   { [Q in keyof A]?: (args: A[Q]['args'], scope: AskScope<R, H, E, N, A[Q]>) =>
-    | A[Q]['answer'] | Answered<A[Q]['answer'], Next<R, H>>
-    | Promise<A[Q]['answer'] | Answered<A[Q]['answer'], NextAfterAwait<R, H>>> }
+    | Immutable<A[Q]['answer']> | Answered<Immutable<A[Q]['answer']>, Next<R, H>>
+    | Promise<Immutable<A[Q]['answer']> | Answered<Immutable<A[Q]['answer']>, NextAfterAwait<R, H>>> }
 
 /**
  * Where a state goes when its work fails: what `run` threw, and what happens next. It is an event's handler in every
@@ -352,13 +368,13 @@ export interface State<S extends Shape, E extends AnyEvent, A extends Asks, G ex
 type GivenIn<D> = D extends { data: infer X } ? { [K in keyof X]: X[K] extends Given ? K : never }[keyof X] & string : never
 
 /** What a started state has to be given: the fields of its own data that it marks `given`. */
-type RootGiven<X> = X extends State<infer S2, any, any, infer G> ? Pick<DataOf<S2>, G & keyof DataOf<S2>> : never
+type RootGiven<X> = X extends State<infer S2, any, any, infer G> ? Givable<Pick<DataOf<S2>, G & keyof DataOf<S2>>> : never
 type NeedsGiven<X> = X extends State<any, any, any, infer G> ? ([G] extends [never] ? false : true) : false
 
 /** One state for each key of a field, each given its data from its key and the starter's data. */
-export interface EachOf<D, X> { readonly each: KeysField<D>; readonly state: X; readonly given: (key: string, data: Readonly<D>) => RootGiven<X> }
+export interface EachOf<D, X> { readonly each: KeysField<D>; readonly state: X; readonly given: (key: string, data: Immutable<D>) => RootGiven<X> }
 /** One state, given its data from the starter's data. */
-export interface OneOf<D, X> { readonly state: X; readonly given: (data: Readonly<D>) => RootGiven<X> }
+export interface OneOf<D, X> { readonly state: X; readonly given: (data: Immutable<D>) => RootGiven<X> }
 
 // ── one grammar for what a state starts, follows and awaits ─────────────────────────────────────────────────────────
 //
@@ -378,12 +394,12 @@ export interface OneOf<D, X> { readonly state: X; readonly given: (data: Readonl
  * what the state is given as it starts, once.
  */
 export interface Start<D> {
-  <X extends AnyState>(state: X, options: { each: KeysField<D>; given: (key: string, data: Readonly<D>) => RootGiven<X> }): EachOf<D, X>
-  <X extends AnyState>(state: X, options: { given: (data: Readonly<D>) => RootGiven<X> }): OneOf<D, X>
+  <X extends AnyState>(state: X, options: { each: KeysField<D>; given: (key: string, data: Immutable<D>) => RootGiven<X> }): EachOf<D, X>
+  <X extends AnyState>(state: X, options: { given: (data: Immutable<D>) => RootGiven<X> }): OneOf<D, X>
 }
 
 /** What `args` is given: the key, for one of many, or the fields it named. */
-type Given_<R, H extends string, K extends string, Many> = [Many] extends [string] ? string : Readonly<Pick<DataAt<R, H>, K & keyof DataAt<R, H>>>
+type Given_<R, H extends string, K extends string, Many> = [Many] extends [string] ? string : Immutable<Pick<DataAt<R, H>, K & keyof DataAt<R, H>>>
 /** What a handler of one of many is given beside its scope: which one it is. */
 type Keyed<Many> = [Many] extends [string] ? { readonly key: string } : {}
 
@@ -416,13 +432,13 @@ export interface MadeOne<R, H extends string, E extends AnyEvent, N extends Net>
 export interface MadeEach<R, H extends string, E extends AnyEvent, N extends Net> { readonly kind: 'each'; readonly of: string; readonly ask: string; readonly args: Function; readonly ended: Function; readonly heard?: Function; readonly _?: { r: R; h: H; e: E; n: N } }
 /** Makes an ask to make one at a time. What it is asked for is worked out from the data when it is made. */
 export type MakeOne<R, H extends string, E extends AnyEvent, N extends Net> = <S extends SystemsOf<N>, Q extends keyof N['systems'][S]['asks'] & string>(of: S, ask: Q, options: {
-  args: (data: Readonly<DataAt<R, H>>) => AskOf<N, S, Q>['args']
+  args: (data: Immutable<DataAt<R, H>>) => AskOf<N, S, Q>['args']
   ended: (outcome: OutcomeOf<AskOf<N, S, Q>>, scope: EventScope<R, H, E, N>) => Next<R, H> | void
   heard?: (updates: ReadonlyArray<ProgressOf<AskOf<N, S, Q>>>, scope: EventScope<R, H, E, N>) => Next<R, H> | void
 }) => MadeOne<R, H, E, N>
 /** Makes an ask to make for each of many keys. What each is asked for is worked out from its key when it is made. */
 export type MakeEach<R, H extends string, E extends AnyEvent, N extends Net> = <S extends SystemsOf<N>, Q extends keyof N['systems'][S]['asks'] & string>(of: S, ask: Q, options: {
-  args: (key: string, data: Readonly<DataAt<R, H>>) => AskOf<N, S, Q>['args']
+  args: (key: string, data: Immutable<DataAt<R, H>>) => AskOf<N, S, Q>['args']
   ended: (outcome: OutcomeOf<AskOf<N, S, Q>>, scope: EventScope<R, H, E, N> & { readonly key: string }) => Next<R, H> | void
   heard?: (updates: ReadonlyArray<ProgressOf<AskOf<N, S, Q>>>, scope: EventScope<R, H, E, N> & { readonly key: string }) => Next<R, H> | void
 }) => MadeEach<R, H, E, N>
@@ -568,8 +584,8 @@ export interface System {
    * how something outside a handler reaches one: a component reading one card of many.
    */
   child<C, K extends keyof C & string>(of: Handle<unknown, any, any, C>, name: K, ...key: C[K] extends Each<any> ? [key: string] : []): HandleOf<C[K]>
-  send<E extends AnyEvent>(to: Handle<unknown, E, Asks>, event: E): void
-  ask<A extends Asks, Q extends keyof A & string>(of: Handle<unknown, never, A>, name: Q, args: A[Q]['args'], heard?: (updates: ReadonlyArray<ProgressOf<A[Q]>>) => void): Promise<OutcomeOf<A[Q]>>
+  send<E extends AnyEvent>(to: Handle<unknown, E, Asks>, event: Immutable<E>): void
+  ask<A extends Asks, Q extends keyof A & string>(of: Handle<unknown, never, A>, name: Q, args: Immutable<A[Q]['args']>, heard?: (updates: ReadonlyArray<ProgressOf<A[Q]>>) => void): Promise<OutcomeOf<A[Q]>>
   read<V>(of: Started<V, never, Asks, any>): V | undefined
   read<V>(of: Handle<V, never, Asks>): V
   /** Every running state here, as of the last commit. */

@@ -26,6 +26,7 @@ type Event =
   | { type: 'EDITS_AN_INSTANCE' }
   | { type: 'WRITES_IN_PLACE' }
   | { type: 'KEEP'; item: { n: number } }
+  | { type: 'WRITES_THROUGH_A_HELPER' }
   | { type: 'REMOVES_A_FIELD' }
   | { type: 'ONE_BAD_WRITE' }
   | { type: 'GIVES_A_STRAY_FIELD' }
@@ -33,6 +34,9 @@ type Event =
   | { type: 'MOVES_NOWHERE' }
   | { type: 'MOVES_WITHOUT_WHAT_IT_NEEDS' }
   | { type: 'EDITS_AND_MOVES_NOWHERE' }
+
+/** A helper that writes to what it is given, and says so in its type. */
+const bump = (item: { n: number }): void => { item.n++ }
 
 const state = reaching()
 const made = state<Shape, Event>()({
@@ -52,6 +56,8 @@ const made = state<Shape, Event>()({
     // Writes to what the state holds, where it should return a change.
     WRITES_IN_PLACE:   (_, { data }) => { (data.titles as Record<string, string>).written = 'in place' },
     KEEP:              ({ item }) => ({ data: { kept: item } }),
+    // The compiler lets a read-only object be passed where one to write to is expected. Freezing is what stops it.
+    WRITES_THROUGH_A_HELPER: (_, { data }) => { if (data.kept) bump(data.kept) },
     REMOVES_A_FIELD:   () => ({ data: (d) => { delete (d as Partial<Shape['data']>).count } }),
     // A good write, then a bad one: neither is made.
     ONE_BAD_WRITE:     () => ({ data: (d) => { d.count = 5; (d as Record<string, unknown>).extra = 1 } }),
@@ -201,6 +207,13 @@ const checks: Array<[string, () => void]> = [
     throws(() => { item.n = 2 }, TypeError)
     strictEqual(it.data().kept!.n, 1)
   }],
+  ['a write the compiler cannot see, through a helper that takes what it is given as writable, still changes nothing', () => {
+    const it = run()
+    it.send({ type: 'KEEP', item: { n: 1 } })
+    it.send({ type: 'WRITES_THROUGH_A_HELPER' })
+    strictEqual(it.data().kept!.n, 1)
+    ok(it.defects.some((line) => line.includes('threw handling WRITES_THROUGH_A_HELPER')), it.defects.join(' / '))
+  }],
   ['editing a value that is not plain is reported and the value is untouched', () => {
     const it = run()
     it.send({ type: 'EDITS_AN_INSTANCE' })
@@ -208,5 +221,59 @@ const checks: Array<[string, () => void]> = [
     ok(it.defects.some((line) => line.includes('repository is not plain data')))
   }],
 ]
+
+// What must not compile: what a handler is handed, and what is read from a state, cannot be written at any depth.
+state<Shape, Event>()({
+  data: { titles: {}, messages: {}, count: 0, repository: new Repository('/a'), kept: null },
+  start: 'list',
+  on: {
+    // @ts-expect-error a field is changed by returning a change
+    NOTHING: (_, { data }) => { data.count = 1 },
+    // @ts-expect-error and so is what a field holds
+    ADD: ({ id, title }, { data }) => { data.titles[id] = title },
+    // @ts-expect-error a list is not changed in place
+    RENAME: ({ id }, { data }) => { data.messages[id]?.push('renamed') },
+    // A draft is where to write: it is the data to edit, and a new value is made from the edits.
+    OPEN: ({ id }) => ({ at: 'thread', data: { threadId: id } }),
+  },
+  states: { list: {}, thread: { data: { threadId: given } } },
+})
+{
+  const read = undefined as unknown as import('./state.mts').Value<Shape>
+  // @ts-expect-error what is read from a state cannot be written
+  if (false) read.data.count = 1
+  // @ts-expect-error at any depth
+  if (false) read.data.messages.a!.sort()
+}
+
+// What is read can be handed on as it is: sent, told, reported as progress, given as an answer, and given back as a
+// change. None of these is a write, so none asks for a copy. Nothing here is run: it has to compile.
+{
+  type Shelf = { data: { items: string[]; picked: string[] }; internal: { type: 'TAKEN'; items: string[] } }
+  type ShelfEvent = { type: 'TAKE'; items: string[] } | { type: 'PASS_ON' }
+  type ShelfAsks = { LIST: { args: {}; progress: string[]; answer: string[] }; LIST_LATER: { args: {}; answer: string[] } }
+  state<Shelf, ShelfEvent, ShelfAsks>()({
+    data: { items: [], picked: [] },
+    on: {
+      TAKE: ({ items }) => ({ data: { picked: items } }),
+      PASS_ON: (_, { data, send }) => {
+        send({ type: 'TAKE', items: data.items })
+        send({ type: 'TAKEN', items: data.items })
+        return { data: { picked: data.items } }
+      },
+    },
+    internal: {
+      // The one place a read value is not taken as it is: a field of a draft, which is typed as what may be written
+      // to. It would be safe, since what is read is the state's own and frozen. TypeScript cannot give a field one
+      // type to read and another to assign, so here it is copied, or given as a field as `PASS_ON` does.
+      // @ts-expect-error a draft's field is typed writable, and what is read is not
+      TAKEN: (_, { data }) => ({ data: (d) => { d.picked = data.items } }),
+    },
+    asks: {
+      LIST: (_, { data, progress }) => { progress(data.items); return data.items },
+      LIST_LATER: async (_, { data }) => data.items,
+    },
+  })
+}
 
 await runChecks(checks)
