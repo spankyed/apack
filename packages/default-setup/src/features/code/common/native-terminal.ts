@@ -71,6 +71,8 @@ export interface ClaudeNativeTerminalState {
   continuation?: import('../be/services/claude-code/terminal-session.ts').ClaudeNativeContinuation
   preview?: { turnId: string; output: string }
   busy: boolean
+  /** Original turn accepted cancellation and is still settling. */
+  endingTurnId?: string
   /** Native pending-work counts, independent of prompt submission readiness. */
   activity?: { pendingAgents: number; pendingWorkflows: number }
   focus?: ClaudeNativeFocusProjection

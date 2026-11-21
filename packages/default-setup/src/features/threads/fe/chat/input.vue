@@ -46,6 +46,12 @@
         <p v-if="nativeDecisionPending" role="status" class="px-5 pt-3 text-xs text-neutral-400">Choose how to continue above. Your draft is kept here.</p>
         <p v-if="disabled && disabledReason" role="status" class="px-5 pt-3 text-xs text-neutral-400">{{ disabledReason }}</p>
 
+        <div v-if="nativePauseRequested" class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-white/10 px-5 py-2 text-xs">
+          <p role="status" class="text-neutral-300">Pause requested. Claude is still working.</p>
+          <button type="button" class="rounded text-neutral-200 underline underline-offset-2 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+            @click="emit('native-session-controls')">Session controls</button>
+        </div>
+
         <!-- Editor container -->
         <div ref="editorAreaRef" class="relative w-full min-h-[88px] overflow-y-auto" data-testid="composer-editor-area" @keydown.capture="handleComposerNativeHotkey" :class="{ 'pointer-events-none': isDraggingFile }">
           <TiptapEditor
@@ -62,7 +68,7 @@
             @history-prev="onHistoryPrev"
             @history-next="onHistoryNext"
             @clear-input="onClearInput"
-            @pause="emit('pause')"
+            @pause="pauseWork"
             @open-revert-menu="openRevertMenu"
           />
           <p v-if="submissionProblem || nativePromptProblem" class="px-3 text-xs text-neutral-500" role="status">{{ submissionProblem || nativePromptProblem }}</p>
@@ -183,14 +189,13 @@
 
             <!-- Right side buttons -->
             <div class="flex items-center gap-2 flex-shrink-0">
-              <!-- Pause button (only while busy) -->
               <Button
-                v-if="isBusy"
+                v-if="isBusy && !nativePauseRequested"
                 title="Pause agent work"
                 type="button"
                 variant="secondary"
                 class="px-2 @lg:px-4"
-                @click.stop="emit('pause')"
+                @click.stop="pauseWork"
               >
                 <span class="hidden @lg:inline">Pause</span>
                 <PauseIcon :size="22" />
@@ -280,6 +285,7 @@ const props = defineProps<{
   prefillReferences?: MessageReferences
   /** Whether the current thread is in the user-marked "busy" chat state. Controls Pause button visibility. */
   isBusy?: boolean
+  nativePauseRequested?: boolean
   /** Max duration (in minutes) for a single voice-input session. */
   recordingLimitMinutes?: number
   /** CWD label shown in the attached session strip. */
@@ -310,6 +316,7 @@ const emit = defineEmits<{
   (e: 'attach-file'): void
   (e: 'voice-input'): void
   (e: 'pause'): void
+  (e: 'native-session-controls'): void
   (e: 'mode-change', mode: string): void
   (e: 'phase-change', phase: string): void
   (e: 'set-default-mode', mode: string): void
@@ -698,6 +705,10 @@ const handleVoiceKeyup = (e: KeyboardEvent) => {
 // Global ESC handling (works regardless of which element has focus):
 //   1. pause available (streaming) → single ESC pauses
 //   2. empty input, double-ESC → open revert menu
+function pauseWork() {
+  if (!props.nativePauseRequested) emit('pause')
+}
+
 let lastGlobalEscTime = 0
 const handleGlobalEsc = (e: KeyboardEvent) => {
   if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented) return
@@ -709,7 +720,7 @@ const handleGlobalEsc = (e: KeyboardEvent) => {
   // Single ESC pauses when streaming
   if (props.isBusy) {
     lastGlobalEscTime = 0
-    emit('pause')
+    pauseWork()
     return
   }
 

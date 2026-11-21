@@ -841,10 +841,11 @@ async function control(request,abort){
   if(request.include_main_status_cache===true)helperState.cachedMainStatus=nativeMainStatusCache(n,binding.toolContext(abort),sessionId,helperState.statusCommand);
   if(request.include_main_status_observation===true)helperState.mainStatusObservation=nativeHelperObservationReader?.()??null;
   const activityContext=binding.toolContext(abort),activity=n.toolRendering.bDe({tasks:activityContext.taskRegistry.all(),queuedCommands:activityContext.messageQueue.getCommandQueueSnapshot()});
-  const preview=await nativeStreamingPreview(n,facts,n.runtime.lpe());
+  const activeTurn=n.runtime.lpe();
+  const preview=await nativeStreamingPreview(n,facts,activeTurn);
   const limits=await import('/$bunfs/root/chunk-2bb0j573.js');
   const billing=limits.xme()?{info:limits.ha(),observedAt:limits.HFs()}:null;
-  if(request.policy_only===true)return {...facts,privateHooksSuppressed,preview,billing,transcriptPath:n.runtime.Cf(sessionId),activity,managedTasks:nativeManagedTasks(activityContext.taskRegistry),mcpTasks:nativeMcpTasks(n,activityContext.taskRegistry),shells:nativeShellTasks(activityContext.taskRegistry),workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,...helperState};
+  if(request.policy_only===true)return {...facts,privateHooksSuppressed,preview,billing,endingTurnId:activeTurn?.cancelled()?activeTurn.turnId:null,transcriptPath:n.runtime.Cf(sessionId),activity,managedTasks:nativeManagedTasks(activityContext.taskRegistry),mcpTasks:nativeMcpTasks(n,activityContext.taskRegistry),shells:nativeShellTasks(activityContext.taskRegistry),workflows:nativeWorkflowTasks(n,activityContext.taskRegistry),focus:nativeFocusProjection(n,facts)??null,...helperState};
   const context=binding.toolContext(abort),messages=binding.messages(),usage=await n.runtime.Hco({},'apack native owner');
   // Frozen native $.session.turns/her semantics include interruption envelopes, unlike person-message history.
   const turns=messages.filter(row=>row.type==='user'&&row.isMeta!==true&&row.isVirtual!==true&&!(Array.isArray(row.message?.content)&&row.message.content.some(block=>block.type==='tool_result'))).length;
@@ -1419,8 +1420,8 @@ const ownerTimer=setInterval(async()=>{
   if((refreshView||previewKey!==reportedPreview)&&await ownerPost('/native-preview',{sessionId:gate.sessionId,pid:process.pid,sequence:++previewSequence,viewRevision:gate.sequence,preview:gate.preview}))reportedPreview=previewKey;
   const focusKey=JSON.stringify([gate.sessionId,gate.sequence,gate.focus]);
   if(refreshView||focusKey!==reportedFocus){await ownerPost('/native-focus',{sessionId:gate.sessionId,pid:process.pid,sequence:++focusSequence,viewRevision:gate.sequence,focus:gate.focus});reportedFocus=focusKey;}
-  const activityKey=JSON.stringify([gate.sessionId,gate.activity,gate.workflows,gate.shells,gate.mcpTasks,gate.managedTasks]);
-  if(refreshView||activityKey!==reportedActivity){await ownerPost('/native-activity',{sessionId:gate.sessionId,pid:process.pid,sequence:++activitySequence,activity:gate.activity,workflows:gate.workflows,shells:gate.shells,mcpTasks:gate.mcpTasks,managedTasks:gate.managedTasks});reportedActivity=activityKey;}
+  const activityKey=JSON.stringify([gate.sessionId,gate.activity,gate.workflows,gate.shells,gate.mcpTasks,gate.managedTasks,gate.endingTurnId]);
+  if(refreshView||activityKey!==reportedActivity){await ownerPost('/native-activity',{sessionId:gate.sessionId,pid:process.pid,sequence:++activitySequence,activity:gate.activity,workflows:gate.workflows,shells:gate.shells,mcpTasks:gate.mcpTasks,managedTasks:gate.managedTasks,endingTurnId:gate.endingTurnId});reportedActivity=activityKey;}
   const transcriptKey=JSON.stringify([gate.sessionId,gate.transcriptPath]);
   if(transcriptKey!==reportedTranscript&&await ownerPost('/transcript',{sessionId:gate.sessionId,path:gate.transcriptPath}))reportedTranscript=transcriptKey;
   if(gate.privateHooksSuppressed||gate.policy.allowManagedHooksOnly||gate.policy.disableAllHooks||gate.hooksDisabled)ownerIndependent=true;

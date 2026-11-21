@@ -155,6 +155,8 @@
               :prefill-text="prefillText"
               :prefill-references="prefillReferences"
               :is-busy="isBusy"
+              :native-pause-requested="nativePauseRequested"
+              @native-session-controls="nativeSession?.open()"
               :modes="modes"
               :default-mode="settings?.defaultMode"
               :hotkeys="hotkeys"
@@ -346,6 +348,12 @@ const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerm
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => !nativeSessionBackgrounded.value && nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
+const nativePauseRequested = computed(() => {
+  const owner = nativeComposerOwner.value
+  const thread = currentThread.value
+  return !!owner?.endingTurnId && owner.view?.kind === 'main'
+    && nativeComposerView.value?.threadId === thread?.id && owner.sessionId === thread?.context?.claudeCode?.sessionId
+})
 const nativePermissionMode = computed(() => {
   const owner = nativeComposerOwner.value
   return owner?.view?.kind === 'main' && nativeComposerView.value?.threadId === currentThread.value?.id && owner.sessionId === currentThread.value?.context?.claudeCode?.sessionId ? owner.session?.permissionMode : undefined
