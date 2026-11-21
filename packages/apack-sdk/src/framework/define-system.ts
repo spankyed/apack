@@ -357,6 +357,8 @@ function answer(asked: string, handler: (args: object) => unknown, args: { event
   const signal = _askSignal(call, client);
   const refused = (error: unknown) => {
     _askEnded(call);
+    // Stopped by whoever asked, or their window went: nobody waits, and stopping is what the work was told to do
+    if (signal.aborted) return;
     const failure = _askFailureOf(error, delivery?.ask?.kinds);
     if (reply) reply(_failedAnswer(asked, failure));
     // Nobody asked, so no window shows it: work a handler does for an applier, a migration or a timer
@@ -374,7 +376,7 @@ function answer(asked: string, handler: (args: object) => unknown, args: { event
     return;
   }
   // Two handlers rather than a `catch` after: a throw from answering is the bus's, not the work's, and is not answered again
-  const answered = (value: unknown) => { _askEnded(call); reply?.(_answered(asked, value)); };
+  const answered = (value: unknown) => { _askEnded(call); if (!signal.aborted) reply?.(_answered(asked, value)); };
   if (isThenable(made)) Promise.resolve(made).then(answered, refused);
   else answered(made);
 }

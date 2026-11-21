@@ -12,7 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
 import type { OpenFile } from '#features/code/fe/contract.ts'
 
-vi.mock('#generated/events.ts', () => ({ sendToSystem: vi.fn(), broadcastToSurface: vi.fn(), sendToSurface: vi.fn() }))
+// An ask a machine invokes stands in as one that is never answered: these cases start no search
+vi.mock('#generated/events.ts', async () => {
+  const { fromPromise } = await import('xstate')
+  return { sendToSystem: vi.fn(), broadcastToSurface: vi.fn(), sendToSurface: vi.fn(), fromAsk: () => fromPromise(() => new Promise(() => {})) }
+})
 vi.mock('#features/code/fe/utils/terminal-pool.ts', async (importOriginal) => ({
   // The real `viewSettingsOf` is the mapping under test; only the pool is replaced
   ...(await importOriginal<typeof import('#features/code/fe/utils/terminal-pool.ts')>()),

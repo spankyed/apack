@@ -55,12 +55,12 @@ to `tell` and `broadcast`. They touch other files than asks do and would double 
 | # | Package | State |
 |---|---|---|
 | 1 | One vocabulary | done |
-| 2 | Progress is part of an ask | not started |
-| 3 | Cancelling reaches the handler | not started |
+| 2 | Progress is part of an ask | the mechanism and the search are done; a push's progress is not |
+| 3 | Cancelling reaches the handler | done: the mechanism, and the search, which was its one user |
 | 4 | No `waiting` | not started |
 | 5 | Asks are answered beside the machine | not started |
-| 6 | An asker awaits | not started |
-| 7 | A loading flag is a state | not started |
+| 6 | An asker awaits | the search is done; every other feature is not |
+| 7 | A loading flag is a state | the search's `isSearching` is done |
 | 8 | Events are handled by a typed table | not started |
 | 9 | A code child answers its own asks | not started |
 | 10 | Close out | not started |

@@ -125,6 +125,8 @@ export interface TestApp {
         [key: string]: unknown;
     }, options?: {
         client?: string;
+        signal?: AbortSignal;
+        heard?: (update: unknown) => void;
     }): Promise<UntypedAskOutcome>;
     connect(): Promise<void>;
     emitted(surface: string): SurfaceEvent[];

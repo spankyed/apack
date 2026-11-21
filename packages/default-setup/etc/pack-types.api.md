@@ -3030,7 +3030,7 @@ type IncomingBrowserEvents = {
     bookmarks: SavedBookmark[];
 };
 
-type IncomingCodeEvents = IncomingExplorerEvents | IncomingSearchEvents | IncomingCommitEvents | IncomingTerminalEvents | IncomingGitHubEvents | {
+type IncomingCodeEvents = IncomingExplorerEvents | IncomingCommitEvents | IncomingTerminalEvents | IncomingGitHubEvents | {
     type: 'SET_BASE_DIRECTORY';
     path: string;
     fromUserNavigation?: boolean;
@@ -3092,12 +3092,6 @@ type IncomingLogEvents = {
 type IncomingNoteEvents = {
     type: 'VIEW_NOTE';
     id: string;
-};
-
-type IncomingSearchEvents = 
-/** Stops the search under way, whose ask is refused as superseded */
-{
-    type: 'search.CANCEL_SEARCH';
 };
 
 type IncomingTerminalEvents = 
@@ -3956,7 +3950,7 @@ type OutgoingBrainEvents = {
 /** The browser system sends its surface nothing it was not asked for */
 type OutgoingBrowserEvents = never;
 
-type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingSearchEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingGitHubEvents
+type OutgoingCodeEvents = OutgoingExplorerEvents | OutgoingCommitEvents | OutgoingPullRequestEvents | OutgoingTerminalEvents | OutgoingGitHubEvents
 /**
  * The code surface's directory moved, for every window, which all show the one directory: each asks again for what
  * it starts from and for what its panels show. News, with no listing on it.
@@ -4098,18 +4092,6 @@ type OutgoingPullRequestEvents =
     data: {
         timestamp: Date;
     };
-};
-
-type OutgoingSearchEvents = 
-/** A file's matches, as the search finds them: a feed to the window that asked for the search */
-{
-    type: 'search.RESULT';
-    data: SearchResult;
-}
-/** How far the search is, for the window that asked for it */
- | {
-    type: 'search.PROGRESS';
-    data: SearchProgress;
 };
 
 type OutgoingTerminalEvents = 
@@ -5363,7 +5345,10 @@ interface ScheduleNode extends NodeBase {
 
 /** What a window asks the search, answered by the code system (`searchAnswers`) */
 type SearchAsks = {
-    /** Every match, once the search ends; one stopped by another search or a cancel is refused as `superseded` */
+    /**
+     * Every match, once the search ends. As it goes it tells whoever asked how far it is and each file's matches as
+     * they are found. Whoever asked stops it by no longer waiting: a search panel that starts another, or cancels
+     */
     'search.SEARCH_FILES': {
         args: {
             query: string;
@@ -5375,12 +5360,14 @@ type SearchAsks = {
             useRegex?: boolean;
             maxResults?: number;
         };
+        progress: {
+            progress: SearchProgress;
+        } | {
+            result: SearchResult;
+        };
         answer: {
             results: SearchResult[];
             totalMatches: number;
-        };
-        refuses: {
-            superseded: {};
         };
     };
 };

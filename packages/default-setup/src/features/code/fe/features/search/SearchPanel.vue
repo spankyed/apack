@@ -205,7 +205,7 @@ const searchActor = panelChild(codeActor, 'search')!
 // State selectors
 const searchQuery = ref('')
 const searchResults = useSelector(searchActor, (state) => state.context.searchResults)
-const isSearching = useSelector(searchActor, (state) => state.context.isSearching)
+const isSearching = useSelector(searchActor, (state) => state.matches('searching'))
 const searchError = useSelector(searchActor, (state) => state.context.searchError)
 const searchProgress = useSelector(searchActor, (state) => state.context.searchProgress)
 const searchOptions = useSelector(searchActor, (state) => state.context.searchOptions)

@@ -674,8 +674,8 @@ function askVia(to: string, event: { type: string; [key: string]: unknown }, lab
  * @internal Asks as a window on connection `client` would, for the pack test harness, which stands in for one: no
  * process but the API's sets a connection, and the harness is that process for a test.
  */
-export function _askOnConnection(client: string, to: string, event: { type: string; [key: string]: unknown }): Promise<UntypedAskOutcome> {
-  return askVia(to, event, {}, undefined, client);
+export function _askOnConnection(client: string, to: string, event: { type: string; [key: string]: unknown }, options?: AskOptions): Promise<UntypedAskOutcome> {
+  return askVia(to, event, {}, options, client);
 }
 
 /**

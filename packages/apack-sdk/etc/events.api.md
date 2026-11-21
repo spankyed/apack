@@ -139,7 +139,7 @@ export type AskName<C> = keyof ContractAsks<C> & string;
 export function _askOnConnection(client: string, to: string, event: {
     type: string;
     [key: string]: unknown;
-}): Promise<UntypedAskOutcome>;
+}, options?: AskOptions): Promise<UntypedAskOutcome>;
 
 // @public
 export interface AskOptions<P = unknown> {

@@ -127,7 +127,7 @@ export interface TestApp {
    * answered `unavailable`. With `client`, the ask arrives on that connection, as a window's does, and its handler is
    * handed it; without, it arrives as another system's would.
    */
-  ask(systemId: string, event: { type: string; [key: string]: unknown }, options?: { client?: string }): Promise<UntypedAskOutcome>;
+  ask(systemId: string, event: { type: string; [key: string]: unknown }, options?: { client?: string; signal?: AbortSignal; heard?: (update: unknown) => void }): Promise<UntypedAskOutcome>;
   /**
    * The events delivered to one frontend surface (by `broadcastToSurface`, once connected), in order, exactly as
    * sent; the surface named as the pack names it (its own by feature id, any other as `<packId>/<featureId>`).
@@ -527,7 +527,8 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
     ask: (systemId, event, options) => call(async () => {
       if (options?.client === '') throw new Error("app.ask was given client: '', which names no connection. Pass any non-empty name, or leave it out to ask as a system would.");
       const to = resolveSystemId(systemId, systems);
-      return options?.client === undefined ? untypedAsk(to, event) : _askOnConnection(options.client, to, event);
+      const { client, ...asking } = options ?? {};
+      return client === undefined ? untypedAsk(to, event, asking) : _askOnConnection(client, to, event, asking);
     }),
     emitted(surface) {
       const id = resolveSurfaceId(surface);
