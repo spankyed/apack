@@ -9,17 +9,15 @@ import type { OpenEntity } from '@apackdev/sdk/events'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe';
 import { targetIs, type TrailClickEvent } from '@apackdev/sdk/fe';
 import { safeEvents } from '@apackdev/sdk/fe';
-import { setup, assign, enqueueActions, fromCallback, spawnChild, stopChild, type AnyEventObject, type DoneActorEvent } from 'xstate';
+import { setup, assign, enqueueActions, fromCallback, spawnChild, stopChild, type AnyEventObject } from 'xstate';
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe';
 import type { ActorRefFrom } from 'xstate';
 import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, ThreadsSettings, MessageEntity, AgentThreadData, Tab, AgentSettings, AgentMode as AgentModeConfig, MessageReferences, BlockResponse, ChatPage, ChatStart, MessageSearchResult, ThreadDetailView, ThreadExtended, ThreadTabView } from '#generated/types.ts';
-import { askId, endedAsk, viewRead, viewWrites, writeEnded, writeSent, writing, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
+import { freshKey, makes, viewRead, viewWrites, writeEnded, writeSent, writing, type MadeEvent, type Making, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import { fromView } from '#generated/fe.ts';
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
-import type { OutgoingThreadsEvents, ThreadsAsks } from '#features/threads/be/types.ts';
+import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts';
 import { fromAsk, sendToSystem } from '#generated/events.ts';
-import type { AskOutcome } from '@apackdev/sdk/events';
-import { outcomeOf } from '@apackdev/sdk/helpers';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
@@ -155,29 +153,36 @@ const defaultChatThread: AgentThreadData = {
 // ---- Event types ----
 
 /**
- * What the machine asks the threads system, by the kind of ask it is to the machine: each is spawned under
- * `<kind>.<n>` (`askId`), so any number of a kind are under way at once and one transition, `xstate.done.actor.<kind>.*`, takes
- * how each ended.
+ * What the machine asks the threads system, each under the name it is made by. Any number of each are under way at
+ * once, every one under a key of its own (`freshKey`), so every one asked for is done and answered.
  */
-type AskKinds = {
-  chatStart: 'GET_CHAT_START'
-  created: 'CREATE_THREAD'
-  opened: 'OPEN_THREAD_CHAT'
-  /** A message or a command, which may have started a thread */
-  sent: 'USER_MSG' | 'USER_COMMAND'
-  forked: 'FORK_THREAD'
-  imported: 'IMPORT_THREADS'
-  exported: 'EXPORT_THREADS'
-  /** Every write whose answer is only that it was done */
-  write: 'UPDATE_THREAD_STATUS' | 'UPDATE_THREAD_FIELD' | 'DELETE_THREAD' | 'SET_THREAD_PARENT'
-}
+const made = makes(({ each }) => ({
+  chatStart: each(fromAsk(id, 'GET_CHAT_START')),
+  created: each(fromAsk(id, 'CREATE_THREAD')),
+  opened: each(fromAsk(id, 'OPEN_THREAD_CHAT')),
+  /** A message, which may have started a thread */
+  sent: each(fromAsk(id, 'USER_MSG')),
+  /** A command, which may have started a thread */
+  sentCommand: each(fromAsk(id, 'USER_COMMAND')),
+  forked: each(fromAsk(id, 'FORK_THREAD')),
+  imported: each(fromAsk(id, 'IMPORT_THREADS')),
+  exported: each(fromAsk(id, 'EXPORT_THREADS')),
+  // The writes whose answer is only that it was done
+  statusWrite: each(fromAsk(id, 'UPDATE_THREAD_STATUS')),
+  fieldWrite: each(fromAsk(id, 'UPDATE_THREAD_FIELD')),
+  deleteWrite: each(fromAsk(id, 'DELETE_THREAD')),
+  parentWrite: each(fromAsk(id, 'SET_THREAD_PARENT')),
+}))
 
-/** How the asks of each kind end: the done event of the ask spawned under that kind's id */
-type AskEnded = { [Kind in keyof AskKinds]: DoneActorEvent<AskOutcome<ThreadsAsks[AskKinds[Kind]]>, `${Kind}.${number}`> }
+/** The asks that are writes the views are held behind: each is recorded in `writes` under the key it is made with */
+const WRITES = ['made.created', 'made.statusWrite', 'made.fieldWrite', 'made.deleteWrite', 'made.parentWrite'] as const
+
+/** The surface's context, and which of the asks the machine makes (`made`) are under way */
+type MachineContext = ThreadsContext & { making: Making<typeof made> }
 
 type SystemEvent =
   | OutgoingThreadsEvents
-  | AskEnded[keyof AskKinds]
+  | MadeEvent<typeof made>
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: ThreadsSettings }
   | SurfaceLifecycleEvent
 
@@ -297,7 +302,7 @@ const typeOf = safeEvents<ThreadEvents>()
 
 /** The thread this window asked to open and the system found gone, where that is how the ask ended */
 function goneOnOpen(event: ThreadEvents): string | undefined {
-  const outcome = outcomeOf<AskEnded['opened']['output']>(event)
+  const { outcome } = typeOf('made.opened', event)
   return !outcome.ok && outcome.failure.kind === 'not-found' ? outcome.failure.threadId : undefined
 }
 
@@ -429,20 +434,9 @@ const newThreadFlagTimer = (threadId: string) => `clear-new-thread-flag-${thread
 const chatStateOverrideTimer = (threadId: string) => `clear-expired-override-${threadId}`;
 
 const threadsState = setup({
-  types: { context: {} as ThreadsContext, events: {} as ThreadEvents },
+  types: { context: {} as MachineContext, events: {} as ThreadEvents },
   actors: {
-    GET_CHAT_START: fromAsk(id, 'GET_CHAT_START'),
-    CREATE_THREAD: fromAsk(id, 'CREATE_THREAD'),
-    OPEN_THREAD_CHAT: fromAsk(id, 'OPEN_THREAD_CHAT'),
-    USER_MSG: fromAsk(id, 'USER_MSG'),
-    USER_COMMAND: fromAsk(id, 'USER_COMMAND'),
-    FORK_THREAD: fromAsk(id, 'FORK_THREAD'),
-    IMPORT_THREADS: fromAsk(id, 'IMPORT_THREADS'),
-    EXPORT_THREADS: fromAsk(id, 'EXPORT_THREADS'),
-    UPDATE_THREAD_STATUS: fromAsk(id, 'UPDATE_THREAD_STATUS'),
-    UPDATE_THREAD_FIELD: fromAsk(id, 'UPDATE_THREAD_FIELD'),
-    DELETE_THREAD: fromAsk(id, 'DELETE_THREAD'),
-    SET_THREAD_PARENT: fromAsk(id, 'SET_THREAD_PARENT'),
+    ...made.actors,
     /**
      * Follows the pointer for as long as this surface runs, and takes its listener back when it stops.
      *
@@ -482,11 +476,9 @@ const threadsState = setup({
   },
   actions: {
     // ---- Following the views ----
-    /** An ask that ended is done with: a spawned actor stays among the machine's children until it is stopped */
-    forgetAsk: stopChild(({ event }) => endedAsk(event)),
     /** Asks for what the chat starts from, and follows the list, as the shell starts the surface */
     startSurface: enqueueActions(({ enqueue }) => {
-      enqueue.spawnChild('GET_CHAT_START', { id: askId('chatStart'), input: {} });
+      made.make(enqueue, 'chatStart', freshKey(), {});
       enqueue('followList');
     }),
     followList: enqueueActions(({ enqueue }) => {
@@ -561,8 +553,7 @@ const threadsState = setup({
     }),
     /** One of this window's writes ended */
     settleWrite: enqueueActions(({ context, event, enqueue }) => {
-      const ask = endedAsk(event);
-      const outcome = outcomeOf<AskEnded[keyof AskKinds]['output']>(event);
+      const { key: ask, outcome } = typeOf(WRITES, event);
       const writes = writeEnded(context.writes, ask, !outcome.ok);
       enqueue.assign({ writes });
       if (context.linkSave !== null && context.linkSave === ask) {
@@ -796,7 +787,7 @@ const threadsState = setup({
       const { threadId, restore } = typeOf(['OPEN_THREAD_CHAT', 'SHOW_THREAD'], event);
       enqueue(() => self.send({ type: 'VIEW_DASHBOARD' }));
       if (event.type === 'OPEN_THREAD_CHAT') {
-        enqueue.spawnChild('OPEN_THREAD_CHAT', { id: askId('opened'), input: { threadId, ...(restore && { restore }) } });
+        made.make(enqueue, 'opened', freshKey(), { threadId, ...(restore && { restore }) });
       }
       const known = context.threadMap[threadId];
       const label = known?.topic || context.tabs.find(t => t.id === threadId)?.label || `Thread ${known?.shortCode || ''}`.trim();
@@ -842,15 +833,15 @@ const threadsState = setup({
      */
     /** A message, command or fork of this window's that was not done, kept for the chat to tell the person */
     noteSendFailure: assign(({ context, event }) => {
-      const outcome = outcomeOf<AskEnded['sent' | 'forked']['output']>(event);
+      const { outcome } = typeOf(['made.sent', 'made.sentCommand', 'made.forked'], event);
       return outcome.ok ? {} : { sendFailures: [...context.sendFailures, { message: outcome.failure.message }] };
     }),
     showStartedThread: enqueueActions(({ event, enqueue }) => {
-      const outcome = outcomeOf<AskEnded['sent']['output']>(event);
+      const { outcome } = typeOf(['made.sent', 'made.sentCommand'], event);
       if (outcome.ok && outcome.value.started) enqueue.raise({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
     }),
     showFork: enqueueActions(({ event, enqueue }) => {
-      const outcome = outcomeOf<AskEnded['forked']['output']>(event);
+      const { outcome } = typeOf('made.forked', event);
       if (outcome.ok) enqueue.raise({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
     }),
     /**
@@ -858,7 +849,7 @@ const threadsState = setup({
      * clears
      */
     threadCreated: enqueueActions(({ event, enqueue }) => {
-      const outcome = outcomeOf<AskEnded['created']['output']>(event);
+      const { outcome } = typeOf('made.created', event);
       enqueue('settleWrite');
       if (!outcome.ok) return;
       const created: string = outcome.value.id;
@@ -868,18 +859,19 @@ const threadsState = setup({
     }),
     /** The thread this window created: marked new in the list, for its animation, and the form emptied */
     markCreated: assign(({ context, event }) => {
-      const outcome = outcomeOf<AskEnded['created']['output']>(event);
+      const { outcome } = typeOf('made.created', event);
       if (!outcome.ok) return {};
       const freshThreadIds = [...context.freshThreadIds, outcome.value.id];
       return { freshThreadIds, create: defaultThread, ...threadStore({ ...context, freshThreadIds }, context.lists) };
     }),
-    sendCreateThread: assign(({ context, spawn }) => {
+    sendCreateThread: enqueueActions(({ context, enqueue }) => {
       const { parentThread: _parentThread, ...createData } = context.create;
-      const write = spawn('CREATE_THREAD', { id: askId('created'), input: {
+      const write = freshKey();
+      made.make(enqueue, 'created', write, {
         ...createData,
         parentThreadId: context.create.parentThreadId,
-      } }).id;
-      return { writes: writeSent(context.writes, write) };
+      });
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
     recordThreadNavigation: assign(({ context, event }) => ({
       navHistory: pushNavHistory(context.navHistory, `view:${typeOf(['SELECT_THREAD', 'OPEN_ENTITY'], event).id}`),
@@ -960,34 +952,37 @@ const threadsState = setup({
       const clearId = typeOf('CLEAR_NEW_THREAD_FLAG', event).id;
       return { ...patchThread(context, clearId, { isNew: false }), freshThreadIds: context.freshThreadIds.filter(fresh => fresh !== clearId) };
     }),
-    updateThreadStatus: assign(({ context, event, spawn }) => {
+    updateThreadStatus: enqueueActions(({ context, event, enqueue }) => {
       const typedEvent = typeOf('UPDATE_THREAD_STATUS', event);
-      const write = spawn('UPDATE_THREAD_STATUS', { id: askId('write'), input: {
+      const write = freshKey();
+      made.make(enqueue, 'statusWrite', write, {
         threadId: typedEvent.id,
         status: typedEvent.status,
-      } }).id;
-      return { writes: writeSent(context.writes, write) };
+      });
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
-    sendUpdateThreadField: assign(({ event, context, spawn }) => {
+    sendUpdateThreadField: enqueueActions(({ event, context, enqueue }) => {
       const { key, value } = typeOf('UPDATE_THREAD_FIELD', event);
-      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: {
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, {
         threadId: context.view.id,
         key,
         value,
-      } }).id;
-      return {
+      });
+      enqueue.assign({
         writes: writeSent(context.writes, write),
         ...(key === 'linkedThreads' && { linkSave: write, linkRefusal: null }),
-      };
+      });
     }),
-    renameThread: assign(({ event, context, spawn }) => {
+    renameThread: enqueueActions(({ event, context, enqueue }) => {
       const { threadId, topic } = typeOf('RENAME_THREAD', event);
-      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: { threadId, key: 'topic', value: topic } }).id;
-      return optimisticFieldUpdate(context, write, threadId, 'topic', topic);
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'topic', value: topic });
+      enqueue.assign(optimisticFieldUpdate(context, write, threadId, 'topic', topic));
     }),
     /** The feature's settings: the ones the chat starts from, or the ones they were changed to */
     setThreadsSettings: assign(({ event }) => {
-      const start = event.type === 'FEATURE_SETTINGS_UPDATED' ? undefined : outcomeOf<AskEnded['chatStart']['output']>(event);
+      const start = event.type === 'FEATURE_SETTINGS_UPDATED' ? undefined : typeOf('made.chatStart', event).outcome;
       if (start && !start.ok) return {};
       const settings = start ? start.value.settings : typeOf('FEATURE_SETTINGS_UPDATED', event).settings;
       const chat = (settings as any)?.chat as AgentSettings | undefined;
@@ -997,34 +992,39 @@ const threadsState = setup({
         ...(chat ? extractChatSettings(chat) : {}),
       };
     }),
-    deleteThread: assign(({ context, event, spawn }) => {
+    deleteThread: enqueueActions(({ context, event, enqueue }) => {
       const { threadId } = typeOf('DELETE_THREAD', event);
-      const write = spawn('DELETE_THREAD', { id: askId('write'), input: { threadId } }).id;
-      return { writes: writeSent(context.writes, write) };
+      const write = freshKey();
+      made.make(enqueue, 'deleteWrite', write, { threadId });
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
-    archiveThread: assign(({ context, event, spawn }) => {
+    archiveThread: enqueueActions(({ context, event, enqueue }) => {
       const { threadId } = typeOf('ARCHIVE_THREAD', event);
-      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: { threadId, key: 'archived', value: true } }).id;
-      return { writes: writeSent(context.writes, write) };
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'archived', value: true });
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
-    unpinThread: assign(({ event, context, spawn }) => {
+    unpinThread: enqueueActions(({ event, context, enqueue }) => {
       const { threadId } = typeOf('UNPIN_THREAD', event);
-      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: { threadId, key: 'pinned', value: false } }).id;
-      return optimisticFieldUpdate(context, write, threadId, 'pinned', false);
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'pinned', value: false });
+      enqueue.assign(optimisticFieldUpdate(context, write, threadId, 'pinned', false));
     }),
-    pinThread: assign(({ event, context, spawn }) => {
+    pinThread: enqueueActions(({ event, context, enqueue }) => {
       const { threadId } = typeOf('PIN_THREAD', event);
-      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: { threadId, key: 'pinned', value: true } }).id;
-      return optimisticFieldUpdate(context, write, threadId, 'pinned', true);
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'pinned', value: true });
+      enqueue.assign(optimisticFieldUpdate(context, write, threadId, 'pinned', true));
     }),
     toggleViewArchive: assign(({ context }) => {
       const next = { ...context, showArchived: !context.showArchived };
       return { showArchived: next.showArchived, ...threadStore(next, context.lists) };
     }),
-    unarchiveThread: assign(({ context, event, spawn }) => {
+    unarchiveThread: enqueueActions(({ context, event, enqueue }) => {
       const { threadId } = typeOf('UNARCHIVE_THREAD', event);
-      const write = spawn('UPDATE_THREAD_FIELD', { id: askId('write'), input: { threadId, key: 'archived', value: false } }).id;
-      return { writes: writeSent(context.writes, write) };
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'archived', value: false });
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
     removeUnarchivedThread: assign(({ event, context }) => {
       const { threadId } = typeOf('UNARCHIVE_THREAD', event);
@@ -1049,13 +1049,12 @@ const threadsState = setup({
     setImportingThreads: assign(({ context }) => ({
       threadsImport: { ...context.threadsImport, status: 'importing' as const },
     })),
-    sendImportThreads: spawnChild('IMPORT_THREADS', {
-      id: () => askId('imported'),
-      input: ({ event }) => ({ directory: typeOf('THREADS.IMPORT', event).directory }),
+    sendImportThreads: enqueueActions(({ event, enqueue }) => {
+      made.make(enqueue, 'imported', freshKey(), { directory: typeOf('THREADS.IMPORT', event).directory });
     }),
     /** An import's answer is its status */
     handleThreadsImportEnded: assign(({ event }) => {
-      const outcome = outcomeOf<AskEnded['imported']['output']>(event)
+      const { outcome } = typeOf('made.imported', event)
       return {
         threadsImport: outcome.ok
           ? { status: 'success' as const, errors: outcome.value.errors || [], importedCount: outcome.value.count }
@@ -1070,13 +1069,12 @@ const threadsState = setup({
     setExportingThreads: assign(({ context }) => ({
       threadsExport: { ...context.threadsExport, status: 'exporting' as const },
     })),
-    sendExportThreads: spawnChild('EXPORT_THREADS', {
-      id: () => askId('exported'),
-      input: ({ event }) => ({ directory: typeOf('THREADS.EXPORT', event).directory }),
+    sendExportThreads: enqueueActions(({ event, enqueue }) => {
+      made.make(enqueue, 'exported', freshKey(), { directory: typeOf('THREADS.EXPORT', event).directory });
     }),
     /** An export's answer is its status */
     handleThreadsExportEnded: assign(({ event }) => {
-      const outcome = outcomeOf<AskEnded['exported']['output']>(event)
+      const { outcome } = typeOf('made.exported', event)
       return {
         threadsExport: outcome.ok
           ? { status: 'success' as const, errors: [] as string[], filePath: outcome.value.filePath, threadCount: outcome.value.threadCount }
@@ -1123,10 +1121,11 @@ const threadsState = setup({
     toggleRootOnlyFilter: assign(({ context }) => ({
       filters: { ...context.filters, showRootOnly: !context.filters.showRootOnly },
     })),
-    sendSetThreadParent: assign(({ context, event, spawn }) => {
+    sendSetThreadParent: enqueueActions(({ context, event, enqueue }) => {
       const { childIds, parentId } = typeOf('SET_THREAD_PARENT', event);
-      const write = spawn('SET_THREAD_PARENT', { id: askId('write'), input: { childIds, parentId } }).id;
-      return { writes: writeSent(context.writes, write) };
+      const write = freshKey();
+      made.make(enqueue, 'parentWrite', write, { childIds, parentId });
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
 
     // ---- Chat/agent actions ----
@@ -1161,7 +1160,7 @@ const threadsState = setup({
     },
     sendMessage: enqueueActions(({ enqueue, context, event }) => {
       const { text, references } = typeOf('SEND_MESSAGE', event);
-      enqueue.spawnChild('USER_MSG', { id: askId('sent'), input: {
+      made.make(enqueue, 'sent', freshKey(), {
         text,
         mode: context.mode,
         phase: context.phase,
@@ -1169,14 +1168,14 @@ const threadsState = setup({
         ...(references && { references }),
         ...(context.pendingThreadCwd && { cwdOverride: context.pendingThreadCwd }),
         ...(context.pendingForceDirectoryPicker && { forceDirectoryPicker: true }),
-      } });
+      });
       if (context.pendingThreadCwd || context.pendingForceDirectoryPicker) {
         enqueue.assign({ pendingThreadCwd: undefined, pendingForceDirectoryPicker: undefined });
       }
     }),
     sendCommand: enqueueActions(({ enqueue, context, event }) => {
       const { command, text, references } = typeOf('SEND_COMMAND', event);
-      enqueue.spawnChild('USER_COMMAND', { id: askId('sent'), input: {
+      made.make(enqueue, 'sentCommand', freshKey(), {
         command,
         text,
         mode: context.mode,
@@ -1184,7 +1183,7 @@ const threadsState = setup({
         threadId: context.currentThread?.id,
         ...(references && { references }),
         ...(context.pendingThreadCwd && { cwdOverride: context.pendingThreadCwd }),
-      } });
+      });
       if (context.pendingThreadCwd) {
         enqueue.assign({ pendingThreadCwd: undefined });
       }
@@ -1240,7 +1239,7 @@ const threadsState = setup({
      * the ones this window kept and the ones every window opens — and the thread to open
      */
     startChat: enqueueActions(({ enqueue, context, event, self }) => {
-      const outcome = outcomeOf<AskEnded['chatStart']['output']>(event);
+      const { outcome } = typeOf('made.chatStart', event);
       if (!outcome.ok) return;
       const start: ChatStart = outcome.value;
       const extracted = extractChatSettings(start.settings?.chat || { modes: [], hotkeys: {} });
@@ -1549,12 +1548,9 @@ const threadsState = setup({
       if (context.messagePagination.hasMore) enqueue('loadMoreMessages');
       else enqueue.assign({ focusMessage: null });
     }),
-    forkThread: spawnChild('FORK_THREAD', {
-      id: () => askId('forked'),
-      input: ({ event }) => {
-        const { messageId, threadId, threadTopic } = typeOf('FORK_THREAD', event);
-        return { messageId, threadId, threadTopic };
-      },
+    forkThread: enqueueActions(({ event, enqueue }) => {
+      const { messageId, threadId, threadTopic } = typeOf('FORK_THREAD', event);
+      made.make(enqueue, 'forked', freshKey(), { messageId, threadId, threadTopic });
     }),
     revertThread: ({ event }) => {
       const { messageId, threadId, restoreFiles, userCliUuid } = typeOf('REVERT_THREAD', event);
@@ -1651,6 +1647,7 @@ const threadsState = setup({
     tabsRead: [],
     openedThreadId: null,
     freshThreadIds: [],
+    making: made.none(),
     writes: viewWrites(),
     linkSave: null,
     linkRefusal: null,
@@ -1680,21 +1677,23 @@ const threadsState = setup({
       { guard: 'tabGone', actions: 'dropThread' },
       { actions: 'readTab' },
     ],
-    // How each of this window's asks ended, by its kind (`AskKinds`): its writes settle, and a thread a message or a
-    // fork made opens
-    'xstate.done.actor.chatStart.*': { actions: ['forgetAsk', 'startChat'] },
-    'xstate.done.actor.created.*': { actions: ['forgetAsk', 'threadCreated'] },
-    'xstate.done.actor.opened.*': [
-      { guard: 'openedGone', actions: ['forgetAsk', 'dropThread'] },
-      { actions: 'forgetAsk' },
-    ],
-    'xstate.done.actor.sent.*': { actions: ['forgetAsk', 'noteSendFailure', 'showStartedThread'] },
-    'xstate.done.actor.forked.*': { actions: ['forgetAsk', 'noteSendFailure', 'showFork'] },
+    [made.done]: { actions: made.settle() },
+    // How each of this window's asks ended, by the name it was made under (`made`): its writes settle, and a thread a
+    // message or a fork made opens
+    'made.chatStart': { actions: 'startChat' },
+    'made.created': { actions: 'threadCreated' },
+    'made.opened': { guard: 'openedGone', actions: 'dropThread' },
+    'made.sent': { actions: ['noteSendFailure', 'showStartedThread'] },
+    'made.sentCommand': { actions: ['noteSendFailure', 'showStartedThread'] },
+    'made.forked': { actions: ['noteSendFailure', 'showFork'] },
     // The chat told the person of these, so they are held no longer
     'CHAT.FAILURES_TOLD': { actions: assign(({ context, event }) => ({ sendFailures: context.sendFailures.filter(failure => !event.told.includes(failure)) })) },
-    'xstate.done.actor.imported.*': { actions: ['forgetAsk', 'handleThreadsImportEnded'] },
-    'xstate.done.actor.exported.*': { actions: ['forgetAsk', 'handleThreadsExportEnded'] },
-    'xstate.done.actor.write.*': { actions: ['forgetAsk', 'settleWrite'] },
+    'made.imported': { actions: 'handleThreadsImportEnded' },
+    'made.exported': { actions: 'handleThreadsExportEnded' },
+    'made.statusWrite': { actions: 'settleWrite' },
+    'made.fieldWrite': { actions: 'settleWrite' },
+    'made.deleteWrite': { actions: 'settleWrite' },
+    'made.parentWrite': { actions: 'settleWrite' },
     SHOW_THREAD: { actions: 'openThread' },
     // Thread management events
     SHOW_CREATE_FORM: {

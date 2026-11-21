@@ -5,7 +5,6 @@
 // a pull request is checked out once at a time.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { askUnderWay } from '@apackdev/sdk/fe';
 import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 import type { GhPullRequest } from '#generated/types.ts';
 
@@ -19,7 +18,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   sendEventToParent: vi.fn(),
 }));
 
-const { pullRequestState, branchDeletable, LIST, LIST_MORE } = await import('#features/code/fe/features/pull-request/state.ts');
+const { pullRequestState, branchDeletable } = await import('#features/code/fe/features/pull-request/state.ts');
 
 type Actor = ReturnType<typeof started>;
 const started = () => createActor(pullRequestState).start();
@@ -97,16 +96,16 @@ it('reads the list when it is opened, a page at a time, each pull request once',
 
   actor.send({ type: 'pr.LIST_SHOWN' });
   expect(asked('pr.LIST_PRS')).toEqual([{ type: 'pr.LIST_PRS', state: 'open' }]);
-  expect(askUnderWay(actor.getSnapshot().context.asking, LIST)).toBe(true);
+  expect(actor.getSnapshot().context.making.list).toBe(true);
   await answer('pr.LIST_PRS', listed([pr(9), pr(8)], 'C1'));
   expect(context(actor).prList).toMatchObject({ next: 'C1', read: true });
-  expect(askUnderWay(actor.getSnapshot().context.asking, LIST)).toBe(false);
+  expect(actor.getSnapshot().context.making.list).toBe(false);
 
   actor.send({ type: 'pr.LOAD_MORE_PRS' });
   actor.send({ type: 'pr.LOAD_MORE_PRS' });
   expect(asked('pr.LIST_PRS'), 'one page at a time').toHaveLength(2);
   expect(asked('pr.LIST_PRS')[1]).toEqual({ type: 'pr.LIST_PRS', state: 'open', after: 'C1' });
-  expect(askUnderWay(actor.getSnapshot().context.asking, LIST_MORE)).toBe(true);
+  expect(actor.getSnapshot().context.making.listMore).toBe(true);
   // One opened between the two pages moved #8 onto the second
   await answer('pr.LIST_PRS', listed([pr(8), pr(7)], null));
   expect(context(actor).prList.prs.map(p => p.number)).toEqual([9, 8, 7]);
@@ -137,7 +136,7 @@ it("takes only the page asked for what the list shows: a filter or search change
 
   actor.send({ type: 'pr.SET_LIST_QUERY', query: 'other' });
   await refuse('pr.LIST_PRS', 'GitHub could not be reached');
-  expect(askUnderWay(actor.getSnapshot().context.asking, LIST), 'a refused page is no longer being asked for').toBe(false);
+  expect(actor.getSnapshot().context.making.list, 'a refused page is no longer being asked for').toBe(false);
 });
 
 it('merges the head shown, by its commit', async () => {

@@ -34,7 +34,6 @@ import { Ref } from 'vue';
 import { RendererElement } from 'vue';
 import { RendererNode } from 'vue';
 import type { SnapshotFrom } from 'xstate';
-import { stopChild } from 'xstate';
 import { VNode } from 'vue';
 import { z } from 'zod';
 
@@ -43,25 +42,6 @@ export const ALL_COLORS: readonly ["blue", "orange", "purple", "green", "red", "
 
 // @public (undocumented)
 export type ArtifactFrontendBinding = ViewerFrontendBinding<ArtifactDeclaration, ArtifactDefinition>;
-
-// @public
-export const askId: <Kind extends string>(kind: Kind) => `${Kind}.${number}`;
-
-// @public
-export interface AskState<Args extends unknown[], O> {
-    ask(...args: Args): Promise<O>;
-    readonly outcome: O | undefined;
-    readonly pending: boolean;
-}
-
-// @public
-export interface AsksUnderWay {
-    // (undocumented)
-    readonly [id: string]: true;
-}
-
-// @public
-export const askUnderWay: (asking: AsksUnderWay, ...ids: string[]) => boolean;
 
 // @public (undocumented)
 export type BlockFrontendBinding = ViewerFrontendBinding<BlockDeclaration, BlockDefinition>;
@@ -193,14 +173,6 @@ export interface EachMade<TLogic extends AnyActorLogic> {
     readonly kind: 'each';
     readonly logic: TLogic;
 }
-
-// @public
-export function endedAsk(event: {
-    type: string;
-}): string;
-
-// @public
-export const enqueueAsks: typeof enqueueActions;
 
 // @public
 export function entityIs<E extends string>(input: {
@@ -632,9 +604,6 @@ export interface NavHistory<T> {
 }
 
 // @public
-export const noAsks: () => AsksUnderWay;
-
-// @public
 export function onDslDeclarationsChanged(listener: () => void): () => void;
 
 // @public
@@ -868,9 +837,6 @@ export interface StepFrontendBinding {
 }
 
 // @public
-export function stopAsks<TContext extends MachineContext, TExpressionEvent extends EventObject, TParams extends ParameterizedObject['params'] | undefined, TEvent extends EventObject>(...ids: string[]): ReturnType<typeof stopChild<TContext, TExpressionEvent, TParams, TEvent>>;
-
-// @public
 export interface Surface {
     // (undocumented)
     canvas?: Component | RouteComponents;
@@ -1080,9 +1046,6 @@ export function useAppSettings(): Readonly<Ref<AppSettings | undefined>>;
 
 // @public
 export function useArtifactDeclarations(): ComputedRef<readonly ArtifactCatalogEntry[]>;
-
-// @public
-export function useAsk<Args extends unknown[], O>(run: (...args: Args) => Promise<O>): AskState<Args, O>;
 
 // @public
 export function useBlockDeclarations(): ComputedRef<readonly BlockCatalogEntry[]>;

@@ -429,12 +429,26 @@ const RULE_LIST = [
     key: 'ask-answers',
     rule: "A system answers its declared asks with its `answers` table (defineSystem's `answers`), whose handler "
       + 'returns the answer and throws the refusal: an `ASK_ANSWERED` or `ASK_FAILED` written by hand is an answer '
-      + 'a failure path can forget and a wrong ask can take. An asker takes the answer as a value (`ask`, `fromAsk`, '
-      + '`useAsk`), so its machine has no transition for one either. A spec driving an asking machine builds its answers '
+      + 'a failure path can forget and a wrong ask can take. An asker takes the answer as a value (`ask`, `fromAsk`), '
+      + 'so its machine has no transition for one either. A spec driving an asking machine builds its answers '
       + 'with askAnswered and askFailed from @apackdev/sdk/testing',
     check(view, place) {
       if (place.packRelative.startsWith('tests/')) return [];
       return view.visit(handWrittenAnswer);
+    },
+  },
+  {
+    key: 'ask-ends',
+    rule: 'A machine declares the asks it makes with makes from @apackdev/sdk/fe, and how one ended reaches it as '
+      + "`made.<name>`. A transition on `xstate.done.actor.<id>` is that bookkeeping kept by hand: an id to spawn "
+      + 'under, a child to stop in every such transition, and a record of which are under way that a component then '
+      + 'reads by importing the id. An actor that is not an ask is invoked, and its end taken with `onDone`',
+    check(view, place) {
+      if (place.packRelative.startsWith('tests/')) return [];
+      return view.visit((node) => {
+        const text = ts.isStringLiteralLike(node) ? node.text : ts.isTemplateExpression(node) ? node.head.text : undefined;
+        return text?.startsWith('xstate.done.actor') ? ['xstate.done.actor'] : undefined;
+      });
     },
   },
   {

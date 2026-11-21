@@ -75,7 +75,7 @@ import { isRunningCode, type DatabaseState } from '../../state.ts'
 const actor: DatabaseState = useSurface();
 const { state: database, send } = useState(actor);
 const queryResult = computed(() => database.value.data.queryResult);
-const isLoading = computed(() => isRunningCode({ context: database.value.data }));
+const isLoading = computed(() => isRunningCode(database.value.data.making));
 
 // Result Analysis
 const { 

@@ -1,16 +1,22 @@
 import type { PromptTab } from '../../contract.ts';
 export type { PromptTab } from '../../contract.ts';
-import { setup, enqueueActions, type ActorRefFrom, type AnyActorRef, type DoneActorEvent, type OutputFrom } from 'xstate';
+import { setup, enqueueActions, type ActorRefFrom, type AnyActorRef, type OutputFrom } from 'xstate';
 import { sendToSurface, fromAsk } from '#generated/events.ts';
 import { safeEvents } from '@apackdev/sdk/helpers';
-import { askId, endedAsk } from '@apackdev/sdk/fe';
+import { freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe';
 import { showTabInParent, updateTabsInParent } from '../../utils/parent-tabs.ts';
 import type { EARS } from '#generated/ears.ts';
 
-// The asks about a prompt's template. Several run at once, one per tab opening or saving, so each is spawned under
-// an id of its own (`open.<n>`, `save.<n>`) and its outcome arrives as that actor's done event
+// The asks about a prompt's template. Several run at once, one per tab opening or saving, so each is made under a key
+// of its own
 const openPrompt = fromAsk('code', 'codePrompts.OPEN_PROMPT');
 const savePrompt = fromAsk('code', 'codePrompts.SAVE_PROMPT');
+const made = makes(({ each }) => ({ open: each(openPrompt), save: each(savePrompt) }));
+
+export interface CodePromptsContext {
+  /** Which of the asks the machine makes (`made`) are under way */
+  making: Making<typeof made>
+}
 
 /** The prompt opens in a tab. One that could not be opened opens none */
 function showOpenedPrompt(self: AnyActorRef, output: OutputFrom<typeof openPrompt>): void {
@@ -39,8 +45,7 @@ export type Event =
   | { type: 'codePrompts.OPEN_PROMPT'; promptId: string }
   | { type: 'codePrompts.SAVE_PROMPT'; promptId: string; content: string }
   // How an ask about a prompt's template ended
-  | DoneActorEvent<OutputFrom<typeof openPrompt>, `open.${number}`>
-  | DoneActorEvent<OutputFrom<typeof savePrompt>, `save.${number}`>
+  | MadeEvent<typeof made>
   // Tab restoration
   | { type: 'codePrompts.OPEN_TABS'; promptIds: string[] }
   /**
@@ -63,25 +68,19 @@ const typeOf = safeEvents<Event>();
 
 export const promptsState = setup({
   types: {
-    context: {} as Record<string, never>,
+    context: {} as CodePromptsContext,
     events: {} as Event
   },
-  actors: { openPrompt, savePrompt },
+  actors: made.actors,
   actions: {
     openPrompt: enqueueActions(({ enqueue, event }) => {
       const { promptId } = typeOf('codePrompts.OPEN_PROMPT', event)
-      enqueue.spawnChild('openPrompt', { id: askId('open'), input: { promptId } })
+      made.make(enqueue, 'open', freshKey(), { promptId })
     }),
 
     savePrompt: enqueueActions(({ enqueue, event }) => {
       const ev = typeOf('codePrompts.SAVE_PROMPT', event)
-      enqueue.spawnChild('savePrompt', { id: askId('save'), input: { promptId: ev.promptId, templateFn: ev.content } })
-    }),
-
-    /** An ask that ended stops being this machine's child */
-    forgetAsk: enqueueActions(({ enqueue, event }) => {
-      const id = endedAsk(event)
-      enqueue.stopChild(id)
+      made.make(enqueue, 'save', freshKey(), { promptId: ev.promptId, templateFn: ev.content })
     }),
 
     // The panel's asks of the prompts surface, forwarded from here so each one carries a sender
@@ -108,14 +107,14 @@ export const promptsState = setup({
     /** The tabs a restore had open: one ask for each prompt */
     openPromptTabs: enqueueActions(({ enqueue, event }) => {
       for (const promptId of typeOf('codePrompts.OPEN_TABS', event).promptIds) {
-        enqueue.spawnChild('openPrompt', { id: askId('open'), input: { promptId } })
+        made.make(enqueue, 'open', freshKey(), { promptId })
       }
     })
   }
 }).createMachine({
   id: 'codePrompts',
   initial: 'idle',
-  context: {},
+  context: { making: made.none() },
   on: {
     'codePrompts.OPEN_PROMPT': {
       actions: 'openPrompt'
@@ -127,8 +126,9 @@ export const promptsState = setup({
       actions: 'openPromptTabs'
     },
     // How its asks ended
-    'xstate.done.actor.open.*': { actions: [({ event, self }) => showOpenedPrompt(self, event.output), 'forgetAsk'] },
-    'xstate.done.actor.save.*': { actions: [({ event, self }) => takeSavedPrompt(self, event.output), 'forgetAsk'] },
+    [made.done]: { actions: made.settle() },
+    'made.open': { actions: ({ event, self }) => showOpenedPrompt(self, event.outcome) },
+    'made.save': { actions: ({ event, self }) => takeSavedPrompt(self, event.outcome) },
     // The panel's asks of the prompts surface
     'codePrompts.UPDATE_INPUTS': { actions: 'updatePromptInputs' },
     'codePrompts.UPDATE_LABEL': { actions: 'updatePromptLabel' },

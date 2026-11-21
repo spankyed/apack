@@ -248,17 +248,40 @@ about is reported to the user; a success nobody asked about goes nowhere. An ask
 | To ask | Use |
 |---|---|
 | from a surface's machine, where the UI shows it under way or a newer one replaces it | a state with `invoke: { src: fromAsk('bookmarks', 'GET_BOOKMARK'), input, onDone }` (`#generated/events`). `event.output` is an `Outcome`. Leaving the state stops the ask. What the handler tells it on the way arrives as `GET_BOOKMARK.progress` (`ProgressEventOf`, `@apackdev/sdk/events`) |
-| from a surface's machine, several at once | `spawnChild` the same `fromAsk` logic with an id, and handle `xstate.done.actor.<id>` |
-| from a component | `useAsk((name: string) => ask('bookmarks', { type: 'RENAME_BOOKMARK', id, name }))` (`@apackdev/sdk/fe`), which follows `pending` and the last `outcome` |
+| from a surface's machine, on an event | declare it with `makes` and make it by name (`@apackdev/sdk/fe`, below) |
+| from a component | send the surface an event, and let its machine make the ask: the component reads `making` and what the machine kept of the answer through `useState` |
 | from backend code | `await ask(name, event, { signal?, heard? })` (`#generated/events`), resolving to an `Outcome` |
 
 A surface's machine does not handle an answer as an event: the ask it invoked or spawned takes it.
 
-A machine that spawns asks and needs to know whether one is under way — to ignore a second click, to show a spinner —
-keeps `asking: AsksUnderWay` in its context, starting as `noAsks()`, and spawns and stops through `enqueueAsks` and
-`stopAsks` (`@apackdev/sdk/fe`), which keep it. `askUnderWay(context.asking, id)` then answers in a guard, an action
-and a component alike. `askId(kind)` gives an id for one of several asks of a kind, and `endedAsk(event)` the id of
-the ask a done event ends.
+A machine declares the asks it makes on events once, and makes each by name:
+
+```ts
+const made = makes(({ one, each }) => ({
+  rename: one(fromAsk('bookmarks', 'RENAME_BOOKMARK')),   // one under way at a time
+  open: each(fromAsk('bookmarks', 'GET_BOOKMARK')),       // one under way per key
+}))
+
+setup({
+  types: {} as { context: { making: Making<typeof made> }; events: MyEvent | MadeEvent<typeof made> },
+  actors: made.actors,
+}).createMachine({
+  context: { making: made.none() },
+  on: {
+    [made.done]: { actions: made.settle() },
+    RENAME: { actions: enqueueActions(({ enqueue, event }) => made.make(enqueue, 'rename', { id: event.id, name: event.name })) },
+    OPEN: { actions: enqueueActions(({ enqueue, event }) => made.make(enqueue, 'open', event.id, { id: event.id })) },
+    'made.rename': { actions: … },   // event.outcome is the Outcome
+    'made.open': { actions: … },     // event.key says which
+  },
+})
+```
+
+Which are under way is `making` in the context — `making.rename`, `making.open[id]` — which a guard, an action and a
+component read alike, so a spinner or a second click ignored names no id. Making one that is under way gives up the
+one before; `made.drop(enqueue, context, name, key?)` gives one up; `freshKey()` keys one of several that have
+nothing of their own to be told apart by. The `ask-ends` pack rule refuses a transition written on
+`xstate.done.actor.<id>`.
 
 A spec driving the whole system asks with `app.ask(system, event, { client?, signal?, heard? })`, which resolves to
 the `Outcome`. The `ask-answers` pack rule refuses an `ASK_ANSWERED`, `ASK_FAILED` or `ASK_PROGRESS` written by hand

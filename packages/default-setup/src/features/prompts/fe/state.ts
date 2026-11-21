@@ -1,6 +1,6 @@
-import { askId, endedAsk, entityIs } from '@apackdev/sdk/fe'
+import { entityIs, freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
-import { and, assign, enqueueActions, setup, stopChild, type ActorRefFrom } from 'xstate'
+import { and, assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import {
@@ -9,8 +9,6 @@ import {
   type TrailClickEvent,
 } from '@apackdev/sdk/fe'
 import type { Contract, PromptsContext, PromptsInboxEvent } from './contract.ts'
-import type { UntypedAskOutcome } from '@apackdev/sdk/events'
-import { outcomeOf } from '@apackdev/sdk/helpers'
 import type { PromptEntity, TemplateInput } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
 import { fromAsk } from '#generated/events.ts'
@@ -49,25 +47,47 @@ type UIEvent =
   | { type: 'TOGGLE_METADATA_SECTION'; show: boolean }
   | { type: 'FILTER.TOGGLE_CATEGORY'; categoryName: string }
   | { type: 'FILTER.CLEAR' }
+  /** The settings form's import and export, and the result of each no longer shown */
+  | { type: 'PROMPTS.IMPORT'; prompts: unknown }
+  | { type: 'PROMPTS.FORGET_IMPORT' }
+  | { type: 'PROMPTS.EXPORT'; directory: string }
+  | { type: 'PROMPTS.FORGET_EXPORT' }
 
-/** One of this window's writes ended: the done event of the ask spawned for it, which says whether it was refused */
-type WriteEnded = { type: `xstate.done.actor.write.${number}`; output: UntypedAskOutcome; actorId: string }
+/**
+ * The asks this window makes. Each write is asked on its own, so one refused says so whatever else is under way; an
+ * import and an export are one at a time
+ */
+const made = makes(({ one, each }) => ({
+  createPrompt: each(fromAsk('prompts', 'CREATE_PROMPT')),
+  updatePrompt: each(fromAsk('prompts', 'UPDATE_PROMPT')),
+  deletePrompt: each(fromAsk('prompts', 'DELETE_PROMPT')),
+  importPrompts: one(fromAsk('prompts', 'IMPORT_PROMPTS')),
+  exportPrompts: one(fromAsk('prompts', 'EXPORT_PROMPTS')),
+}))
 
-export type PromptsEvents = OpenEntity | UIEvent | TrailClickEvent | WriteEnded
+/** How an ask the machine made ended */
+type Made = MadeEvent<typeof made>
+
+/** What the machine holds: what the surface publishes, the asks under way, and how the last import and export ended */
+type PromptsMachineContext = PromptsContext & {
+  /** Which of the asks the machine makes (`made`) are under way */
+  making: Making<typeof made>
+  /** How the last import ended, until another file is picked */
+  imported?: Extract<Made, { type: 'made.importPrompts' }>['outcome']
+  /** How the last export ended, until another is made */
+  exported?: Extract<Made, { type: 'made.exportPrompts' }>['outcome']
+}
+
+export type PromptsEvents = OpenEntity | UIEvent | TrailClickEvent | Made
 
 const typeOf = safeEvents<PromptsEvents>()
 
 const promptsState = setup({
   types: {
-    context: {} as PromptsContext,
+    context: {} as PromptsMachineContext,
     events: {} as PromptsEvents,
   },
-  actors: {
-    // This window's writes. Each is asked on its own, so one refused says so whatever else is under way
-    createPrompt: fromAsk('prompts', 'CREATE_PROMPT'),
-    updatePrompt: fromAsk('prompts', 'UPDATE_PROMPT'),
-    deletePrompt: fromAsk('prompts', 'DELETE_PROMPT'),
-  },
+  actors: made.actors,
   actions: {
     // The list shows no prompt, so reopening one fills its form afresh from what its view reads then
     clearSelectedPrompt: assign({ selectedPromptId: undefined, selectedLabel: undefined, formFor: undefined }),
@@ -115,34 +135,45 @@ const promptsState = setup({
 
     sendSavePrompt: enqueueActions(({ context, enqueue }) => {
       // Creating or updating, by whether one is open
-      if (!context.selectedPromptId) enqueue.spawnChild('createPrompt', { id: askId('write'), input: context.formData })
-      else enqueue.spawnChild('updatePrompt', { id: askId('write'), input: { promptId: context.selectedPromptId, ...context.formData } })
+      if (!context.selectedPromptId) made.make(enqueue, 'createPrompt', freshKey(), context.formData)
+      else made.make(enqueue, 'updatePrompt', freshKey(), { promptId: context.selectedPromptId, ...context.formData })
     }),
 
     sendDeletePrompt: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.DELETE', event);
-      enqueue.spawnChild('deletePrompt', { id: askId('write'), input: { promptId: ev.promptId } })
+      made.make(enqueue, 'deletePrompt', freshKey(), { promptId: ev.promptId })
     }),
 
     updatePromptInputs: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.UPDATE_INPUTS', event);
-      enqueue.spawnChild('updatePrompt', { id: askId('write'), input: { promptId: ev.promptId, inputs: ev.inputs } })
+      made.make(enqueue, 'updatePrompt', freshKey(), { promptId: ev.promptId, inputs: ev.inputs })
     }),
 
     createPromptInline: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.CREATE_INLINE', event);
-      enqueue.spawnChild('createPrompt', { id: askId('write'), input: { label: ev.label, templateFn: ev.templateFn, inputs: ev.inputs } })
+      made.make(enqueue, 'createPrompt', freshKey(), { label: ev.label, templateFn: ev.templateFn, inputs: ev.inputs })
     }),
 
     updatePromptLabel: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.UPDATE_LABEL', event);
-      enqueue.spawnChild('updatePrompt', { id: askId('write'), input: { promptId: ev.promptId, label: ev.label } })
+      made.make(enqueue, 'updatePrompt', freshKey(), { promptId: ev.promptId, label: ev.label })
     }),
 
     /** A write this window asked for and did not get, shown until dismissed */
     showRefusal: assign(({ event }) => {
-      const output = outcomeOf<UntypedAskOutcome>(event)
-      return output.ok ? {} : { writeError: output.failure.message }
+      const { outcome } = typeOf(['made.createPrompt', 'made.updatePrompt', 'made.deletePrompt'], event)
+      return outcome.ok ? {} : { writeError: outcome.failure.message }
+    }),
+
+    /* ── import and export ───────────────────────────────── */
+    importPrompts: enqueueActions(({ event, enqueue }) => {
+      enqueue.assign({ imported: undefined })
+      made.make(enqueue, 'importPrompts', { prompts: typeOf('PROMPTS.IMPORT', event).prompts })
+    }),
+
+    exportPrompts: enqueueActions(({ event, enqueue }) => {
+      enqueue.assign({ exported: undefined })
+      made.make(enqueue, 'exportPrompts', { directory: typeOf('PROMPTS.EXPORT', event).directory })
     }),
 
     /* ── form updates ────────────────────────────────────── */
@@ -272,6 +303,7 @@ const promptsState = setup({
     formFor: undefined,
     listLimit: PROMPTS_PAGE_SIZE,
     writeError: null,
+    making: made.none(),
     selectedCategories: [], // Filter state
     formData: {
       label: '',
@@ -284,7 +316,16 @@ const promptsState = setup({
   },
   on: {
     // What a write changed reaches every window through the views, so a landed one needs nothing here
-    'xstate.done.actor.write.*': { actions: ['showRefusal', stopChild(({ event }) => endedAsk(event))] },
+    [made.done]: { actions: made.settle() },
+    'made.createPrompt': { actions: 'showRefusal' },
+    'made.updatePrompt': { actions: 'showRefusal' },
+    'made.deletePrompt': { actions: 'showRefusal' },
+    'PROMPTS.IMPORT': { actions: 'importPrompts' },
+    'PROMPTS.FORGET_IMPORT': { actions: assign({ imported: undefined }) },
+    'made.importPrompts': { actions: assign(({ event }) => ({ imported: event.outcome })) },
+    'PROMPTS.EXPORT': { actions: 'exportPrompts' },
+    'PROMPTS.FORGET_EXPORT': { actions: assign({ exported: undefined }) },
+    'made.exportPrompts': { actions: assign(({ event }) => ({ exported: event.outcome })) },
     CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Prompt' } }, target: '.detail', actions: 'selectPrompt' },
     'PROMPT.SELECT': { target: '.detail', actions: 'selectPrompt' },

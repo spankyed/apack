@@ -99,7 +99,7 @@ import QueryEditorExamples from './query-editor/QueryEditorExamples.vue';
 
 const actor: DatabaseState = useSurface();
 const { state: database, send } = useState(actor);
-const isLoading = computed(() => isRunningCode({ context: database.value.data }));
+const isLoading = computed(() => isRunningCode(database.value.data.making));
 
 // Props and emits
 defineProps<{

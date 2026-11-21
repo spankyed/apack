@@ -129,6 +129,12 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
     elsewhere: "ask-answers leaves a pack's tests and its reads of an answer alone",
   },
   // Both spellings of the reserved key, since a property name is the same key written two ways
+  'ask-ends': {
+    onFile: [
+      ["export const on = { 'xstate.done.actor.push': { actions: 'pushed' } };\n", 'src/f.ts:1: xstate.done.actor'],
+      ["export const on = { [`xstate.done.actor.${PUSH}`]: { actions: 'pushed' } };\n", 'src/f.ts:1: xstate.done.actor'],
+    ],
+  },
   'reserved-event-keys': {
     onFile: [
       ["export const answer = { type: 'DONE', _call: mine };\n", 'src/f.ts:1: _call:'],
@@ -628,6 +634,8 @@ describe('when several rules are right about one site', () => {
       'repository-casts',
       // ask-answers and reserved-event-keys contest nothing: no other rule reads an object's properties
       'ask-answers',
+      // ask-ends reads a string, which no other rule does
+      'ask-ends',
       // reserved-event-keys is last and contests nothing: no other rule reads a property name, so where it
       // sits is free, and a convention belongs after the rules about what a module imports
       'reserved-event-keys',

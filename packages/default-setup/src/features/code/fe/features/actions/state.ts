@@ -1,16 +1,22 @@
 import type { ActionTab } from '../../contract.ts';
 export type { ActionTab } from '../../contract.ts';
-import { setup, enqueueActions, type ActorRefFrom, type AnyActorRef, type DoneActorEvent, type OutputFrom } from 'xstate';
+import { setup, enqueueActions, type ActorRefFrom, type AnyActorRef, type OutputFrom } from 'xstate';
 import { sendToSurface, fromAsk } from '#generated/events.ts';
 import { safeEvents } from '@apackdev/sdk/helpers';
-import { askId, endedAsk } from '@apackdev/sdk/fe';
+import { freshKey, makes, type MadeEvent, type Making } from '@apackdev/sdk/fe';
 import { showTabInParent, updateTabsInParent } from '../../utils/parent-tabs.ts';
 import type { EARS } from '#generated/ears.ts';
 
-// The asks about an action's code. Several run at once, one per tab opening or saving, so each is spawned under
-// an id of its own (`open.<n>`, `save.<n>`) and its outcome arrives as that actor's done event
+// The asks about an action's code. Several run at once, one per tab opening or saving, so each is made under a key
+// of its own
 const openAction = fromAsk('code', 'codeActions.OPEN_ACTION');
 const saveAction = fromAsk('code', 'codeActions.SAVE_ACTION');
+const made = makes(({ each }) => ({ open: each(openAction), save: each(saveAction) }));
+
+export interface CodeActionsContext {
+  /** Which of the asks the machine makes (`made`) are under way */
+  making: Making<typeof made>
+}
 
 /** The action opens in a tab. One that could not be opened opens none */
 function showOpenedAction(self: AnyActorRef, output: OutputFrom<typeof openAction>): void {
@@ -39,8 +45,7 @@ export type Event =
   | { type: 'codeActions.OPEN_ACTION'; actionId: string }
   | { type: 'codeActions.SAVE_ACTION'; actionId: string; content: string }
   // How an ask about an action's code ended
-  | DoneActorEvent<OutputFrom<typeof openAction>, `open.${number}`>
-  | DoneActorEvent<OutputFrom<typeof saveAction>, `save.${number}`>
+  | MadeEvent<typeof made>
   // Tab restoration
   | { type: 'codeActions.OPEN_TABS'; actionIds: string[] }
   /**
@@ -63,25 +68,19 @@ const typeOf = safeEvents<Event>();
 
 export const actionsState = setup({
   types: {
-    context: {} as Record<string, never>,
+    context: {} as CodeActionsContext,
     events: {} as Event
   },
-  actors: { openAction, saveAction },
+  actors: made.actors,
   actions: {
     openAction: enqueueActions(({ enqueue, event }) => {
       const { actionId } = typeOf('codeActions.OPEN_ACTION', event)
-      enqueue.spawnChild('openAction', { id: askId('open'), input: { actionId } })
+      made.make(enqueue, 'open', freshKey(), { actionId })
     }),
 
     saveAction: enqueueActions(({ enqueue, event }) => {
       const ev = typeOf('codeActions.SAVE_ACTION', event)
-      enqueue.spawnChild('saveAction', { id: askId('save'), input: { actionId: ev.actionId, actionFn: ev.content } })
-    }),
-
-    /** An ask that ended stops being this machine's child */
-    forgetAsk: enqueueActions(({ enqueue, event }) => {
-      const id = endedAsk(event)
-      enqueue.stopChild(id)
+      made.make(enqueue, 'save', freshKey(), { actionId: ev.actionId, actionFn: ev.content })
     }),
 
     // The panel's asks of the actions surface, forwarded from here so each one carries a sender
@@ -109,14 +108,14 @@ export const actionsState = setup({
     /** The tabs a restore had open: one ask for each action */
     openActionTabs: enqueueActions(({ enqueue, event }) => {
       for (const actionId of typeOf('codeActions.OPEN_TABS', event).actionIds) {
-        enqueue.spawnChild('openAction', { id: askId('open'), input: { actionId } })
+        made.make(enqueue, 'open', freshKey(), { actionId })
       }
     })
   }
 }).createMachine({
   id: 'codeActions',
   initial: 'idle',
-  context: {},
+  context: { making: made.none() },
   on: {
     'codeActions.OPEN_ACTION': {
       actions: 'openAction'
@@ -128,8 +127,9 @@ export const actionsState = setup({
       actions: 'openActionTabs'
     },
     // How its asks ended
-    'xstate.done.actor.open.*': { actions: [({ event, self }) => showOpenedAction(self, event.output), 'forgetAsk'] },
-    'xstate.done.actor.save.*': { actions: [({ event, self }) => takeSavedAction(self, event.output), 'forgetAsk'] },
+    [made.done]: { actions: made.settle() },
+    'made.open': { actions: ({ event, self }) => showOpenedAction(self, event.outcome) },
+    'made.save': { actions: ({ event, self }) => takeSavedAction(self, event.outcome) },
     // The panel's asks of the actions surface
     'codeActions.UPDATE_INPUT': { actions: 'updateActionInput' },
     'codeActions.UPDATE_LABEL': { actions: 'updateActionLabel' },
