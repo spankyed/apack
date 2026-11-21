@@ -2,7 +2,7 @@
 // it; they learn whether the user onboarded through services.onboarding, and the renderer through the
 // application surface's CLIENT_CONNECTED. Resetting the user's settings doesn't touch it; resetting the
 // app (appData.reset()) empties it with everything else.
-import { type Ears } from '@apackdev/ears';
+import { type Ears } from '@elmdb/ears';
 import { untypedUpsert, untypedQuery } from '@apackdev/sdk/ears';
 import type { EARS } from '@apackdev/sdk';
 import { SETTINGS_ENTITY } from '../features/settings/be/store.ts';

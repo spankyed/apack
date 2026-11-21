@@ -35,7 +35,6 @@ export { workspacePackList } from '@apackdev/host/build/published-manifest';
  * into a fixture. `tests/published-manifest-paths.spec.ts` checks every packed package is one the build builds.
  */
 export const PACKED_PACKAGES: Record<string, string> = {
-  ears: publishedTreeDirs()['apack-ears']!,
   sdk: publishedTreeDirs()['apack-sdk']!,
   ui: publishedTreeDirs()['apack-ui']!,
 };
@@ -60,8 +59,9 @@ export const CONSUMER_MATRIX = (Object.keys(TSC_VERSIONS) as TscVersion[])
 export const PACKAGES_BUILT = packagesBuiltOrRefuse('npm run packages:build (or npm test -w @app/publish-checks, which builds them)');
 
 /**
- * A directory whose node_modules has the npm-packed @apackdev/ears, @apackdev/sdk and @apackdev/ui installed, as a
- * pack gets them from the registry, and links to the monorepo's copies of everything else.
+ * A directory whose node_modules has the npm-packed @apackdev/sdk and @apackdev/ui installed, as a pack gets them
+ * from the registry, and links to the monorepo's copies of everything else: `@elmdb/ears` among them, the build
+ * elmdb's checkout holds, which is the package as elmdb publishes it (its form is elmdb's to test).
  */
 export function installPublishedPackages(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-published-'));

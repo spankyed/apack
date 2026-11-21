@@ -1,4 +1,4 @@
-// The pack-facing replacements for @apackdev/host in pack code: relation reads in @apackdev/ears,
+// The pack-facing replacements for @apackdev/host in pack code: relation reads in @elmdb/ears,
 // and the host-implemented services.appData, as the API's host init registers it.
 import * as fs from 'node:fs';
 import * as os from 'node:os';

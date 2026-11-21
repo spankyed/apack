@@ -574,7 +574,7 @@ describe('outlierIn', () => {
   const peers = [row('apack-host', 'tests/write-lock.spec.ts', 4900),
     row('apack-cli', 'tests/run-install.spec.ts', 4000),
     row('apack-host', 'tests/published-manifest.spec.ts', 3400),
-    row('apack-ears', 'tests/store.spec.ts', 3300)];
+    row('apack-ui', 'tests/store.spec.ts', 3300)];
 
   it('reports one file standing above its half, with the ratio the caller prints', () => {
     const found = outlierIn([row('apack-sdk', 'tests/generate-entries.spec.ts', 18_300), ...peers], 'fast')!;

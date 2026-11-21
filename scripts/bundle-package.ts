@@ -1,7 +1,7 @@
 // Builds a publishable copy of a workspace package that ships as a bundle (@apackdev/cli,
 // @apackdev/testing) into <package>/dist/package. The shared-instance packages (SHARED_INSTANCE_PACKAGES)
-// and the private @apackdev/host are inlined from source, so the published package can use host-only
-// modules; every other package stays external and becomes a dependency at the version the workspace uses.
+// and the private @apackdev/host are inlined, the host and the SDK from source and EARS from its built `dist`,
+// so the published package can use host-only modules; every other package stays external and becomes a dependency at the version the workspace uses.
 //
 //   tsx scripts/bundle-package.ts packages/apack-cli
 import * as fs from 'node:fs';
@@ -231,9 +231,10 @@ async function main(): Promise<void> {
   // observation and never a key: see `bundleReadsFile`.
   //
   // **Repo-relative, which the metafile's paths are not**: esbuild reports them relative to its working
-  // directory, so an inlined workspace package arrives as `../apack-ears/src/x.ts` — which is why the first
+  // directory, so an inlined workspace package arrives as `../apack-sdk/src/x.ts` — which is why the first
   // version of this recorded zero of the files it exists to record. A dependency under a real `node_modules`
-  // is left out: those are covered by `package-lock.json`, which every unit declares.
+  // is left out: those are covered by `package-lock.json`, which every unit declares. So is a read outside the
+  // checkout, which is EARS' `dist` where `vendor/elmdb` is a link (a clone at the pin, in CI, is inside it).
   const repoRelative = (input: string): string => path.relative(repoRoot, path.resolve(pkgDir, input));
   recordBundleReads(pkg.name, [...new Set([
     ...Object.keys(result.metafile.inputs), ...Object.keys(sharedExternal?.metafile?.inputs ?? {}), ...Object.keys(commonjs?.metafile?.inputs ?? {}),
@@ -315,7 +316,7 @@ async function main(): Promise<void> {
   // @apackdev/testing's harness and was found by reading the built file rather than by any check.
   if (config.declarations) {
     // Reachable from the exports map, not every file tsc emitted. `build-package.ts` walks the whole tree
-    // because for @apackdev/ears and /sdk every dist module is an export; a bundled package has three entries
+    // because for @apackdev/sdk every dist module is an export; a bundled package has three entries
     // and tsc writes a declaration per module it compiled, so walking everything reports a module a consumer
     // cannot name — `checkout-freshness.d.ts` takes a host type in an options bag only this package's own
     // spec passes, and no entry's declaration mentions it.

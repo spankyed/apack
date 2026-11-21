@@ -114,7 +114,7 @@ const UNBRIDGED_BY_POLICY = new Map<string, string>([
   ['@apackdev/host/logs', "the app's log files, appended to by main and the API"],
   // Metadata: tooling reads them, code never requires them.
   ['@apackdev/sdk/package.json', 'package metadata, not code'],
-  ['@apackdev/ears/package.json', 'package metadata, not code'],
+  ['@elmdb/ears/package.json', 'package metadata, not code'],
   ['@apackdev/sdk/apack.schema.json', 'manifest JSON schema, not code'],
 ]);
 

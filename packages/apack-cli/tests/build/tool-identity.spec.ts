@@ -19,7 +19,7 @@ function tool(source: boolean) {
   write('bin/apack.mjs', 'import "../dist/cli.js";');
   const entry = source ? 'src/build/tool-identity.ts' : 'dist/shared.js';
   write(entry, 'export const identity = 1;');
-  for (const name of source ? ['host', 'sdk', 'ears'] : ['sdk']) {
+  for (const name of source ? ['host', 'sdk'] : ['sdk']) {
     write(`node_modules/@apackdev/${name}/package.json`, JSON.stringify({ name: `@apackdev/${name}`, version: '1.0.0',
       exports: { '.': './entry.js', './package.json': './package.json',
         './build': source ? './entry.js' : './dist/helper.ts', './build/shared-deps': './entry.js' } }));
@@ -27,10 +27,17 @@ function tool(source: boolean) {
     write(`node_modules/@apackdev/${name}/${source ? 'src' : 'dist'}/helper.ts`, 'export const helper = 1;');
     if (!source) write(`node_modules/@apackdev/${name}/dist/package.json`, JSON.stringify({ name: `@apackdev/${name}` }));
   }
+  // EARS, linked from elmdb's checkout, is its built `dist` in a checkout too
+  if (source) {
+    write('node_modules/@elmdb/ears/package.json', JSON.stringify({ name: '@elmdb/ears', version: '0.0.0',
+      exports: { '.': './dist/index.js', './package.json': './package.json' } }));
+    write('node_modules/@elmdb/ears/dist/index.js', 'export const helper = 1;');
+  }
   return { root, write, hash: () => buildToolHash(pathToFileURL(path.join(root, entry)).href) };
 }
 
-it.each(['src/commands/generate.ts', 'src/utils.ts', ...['host', 'sdk', 'ears'].map(name => `node_modules/@apackdev/${name}/src/helper.ts`)])(
+it.each(['src/commands/generate.ts', 'src/utils.ts', ...['host', 'sdk'].map(name => `node_modules/@apackdev/${name}/src/helper.ts`),
+  'node_modules/@elmdb/ears/dist/index.js'])(
   'includes workspace helper %s without relying on a version change', file => {
     const scope = tool(true);
     scope.write(file, 'export const helper = 1;');

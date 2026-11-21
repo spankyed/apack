@@ -254,14 +254,14 @@ Pack code never imports `@apackdev/host`, the app's private package: `apack pack
 
 EARS is a graph database on elmdb, a Rust engine over LMDB, which keeps no copy of the data in memory. Packs declare entity types and relation kinds in the manifest, and use the repository pattern for data access.
 
-The engine is its own package, `@apackdev/ears`, which `@apackdev/sdk` depends on: a pack names only the SDK, and the app shares one instance of the engine with every pack, as it does `@apackdev/sdk`. Import from:
+The engine is its own package, `@elmdb/ears`, which `@apackdev/sdk` depends on: a pack names only the SDK, and the app shares one instance of the engine with every pack, as it does `@apackdev/sdk`. Import from:
 
 | Module | What |
 |---|---|
 | `#generated/ears` | Your pack's `EARS` constants and the typed `query`, `create`, `upsert`, `write`, `transact`, `newId` and `getAttr` (checked against your, your dependencies' and the SDK's shapes). Use these by default |
 | `#generated/repository` | `repository`, typed with your and your dependencies' repositories |
 | `@apackdev/sdk/ears` | The app's engine, untyped: `untypedQuery`, `untypedCreate`, `untypedUpsert`, `untypedWrite`, `transact`, and the relation and role reads; and the engine's own types and helpers: `BaseEntity`, `QueryBuilder`, `WriteBuilder`, `QueryExplanation`, the relation reads' `RelationRow`, `RelationMatch` and `RelationStats`, `RESERVED_ATTRIBUTES`, and `defineEars`, which `#generated/ears` binds to the app's engine |
-| `@apackdev/ears` | The engine itself, which the SDK brings: `createEarsEngine` and `EarsError`, for tests and tooling that hold an engine of their own. A pack's own code needs none of it |
+| `@elmdb/ears` | The engine itself, which the SDK brings: `createEarsEngine` and `EarsError`, for tests and tooling that hold an engine of their own. A pack's own code needs none of it |
 | `@apackdev/sdk/repositories` | The SDK entities' repositories, and `RepositoryError` (`NOT_FOUND`, `VALIDATION_ERROR`, `OPERATION_FAILED`), which a repository throws to refuse |
 | `@apackdev/sdk/types` | What the SDK adds to the engine's types: its `EARS` (with the SDK's entities and relation kinds) and the SDK entity shapes |
 | `@apackdev/sdk/repositories` | The SDK entities' repositories |
@@ -668,10 +668,10 @@ What trashing means beyond the mark stays with your feature: trashing an entity'
 
 Each app has one EARS engine, which the app creates at startup. Everything above (`query`, `create`, `write`, the helpers from `#generated/ears` and `@apackdev/sdk/ears`) acts on the engine the app *bound*; a pack never creates or replaces it in the app.
 
-Unit tests and tooling create their own with `createEarsEngine` from `@apackdev/ears`. A new engine is empty, and shares nothing with the app's or with other engines:
+Unit tests and tooling create their own with `createEarsEngine` from `@elmdb/ears`. A new engine is empty, and shares nothing with the app's or with other engines:
 
 ```typescript
-import { createEarsEngine } from '@apackdev/ears';
+import { createEarsEngine } from '@elmdb/ears';
 
 const engine = createEarsEngine({
   isEntityType: (name) => ['Bookmark', 'Tag'].includes(name),
@@ -713,7 +713,7 @@ The shapes (yours, your dependencies' and the SDK's) type the query helpers that
 Rows are a query's: the row with an id is `query.ids(id).pickOne()`, rows of a type `query(type).pickAll()`, and of a type
 with a field's value `query(type).where(field, value).pickAll()`; a write reads its entity back with `row()`.
 A query reads live entities; `getAttr(id, field)` (one field) and `getRow(id)` (the whole row, from `@apackdev/sdk/ears`)
-read an entity by id as it is stored, the trash included, answering `undefined` for nothing there. `@apackdev/ears` exports the
+read an entity by id as it is stored, the trash included, answering `undefined` for nothing there. `@elmdb/ears` exports the
 writes unchecked, as `untypedCreate`, `untypedUpsert` and `untypedWrite`, and `transact`. The `find*` helpers leave out rows in the trash, as every query does. A shape the build can't find (a missing module or exported TypeScript type) fails the build. It also
 exports the types `EntityShape<E>` (one entity type's shape), `OwnEntityShapes` (this pack's
 declared shapes), `PackShapes` (the SDK's, the dependencies' and this pack's), `EntityName`, and

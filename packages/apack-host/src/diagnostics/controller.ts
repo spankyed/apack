@@ -1,4 +1,4 @@
-import type { EarsAdmin } from '@apackdev/ears';
+import type { EarsAdmin } from '@elmdb/ears';
 import type { PerformanceExecution } from '@apackdev/sdk/runtime';
 import type { ContextManager } from '@opentelemetry/api';
 import { createTraceSession, type RecordingMode } from './session.ts';

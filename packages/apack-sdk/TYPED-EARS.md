@@ -4,12 +4,12 @@ The typed EARS helpers are the main way pack authors touch data, so their types 
 
 ## Files covered
 
-The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK keeps the names and shapes it adds, and codegen the pack's.
+The engine's types are `@elmdb/ears`' (elmdb's `packages/ears`, changed there and reaching apack when `vendor/elmdb.rev` moves); the SDK keeps the names and shapes it adds, and codegen the pack's.
 
 
-- `packages/apack-ears/src/entities.ts`: the core `EARS` namespace (`EARS.EntityId`), `BaseEntity`, `ShapeOf`, `EntityNameArg`
-- `packages/apack-ears/src/runtime.ts`: `QueryBuilder`, `WriteBuilder`, `FieldValue`, `FieldValues`
-- `packages/apack-ears/src/typed.ts`: `defineEars` and the `Typed*` helper signatures behind `#generated/ears` (the functions it returns act on the engine its getter returns, `boundEars` for a pack; `src/engine.ts`'s `Ears` is untyped)
+- elmdb's `packages/ears/src/entities.ts`: the core `EARS` namespace (`EARS.EntityId`), `BaseEntity`, `ShapeOf`, `EntityNameArg`
+- elmdb's `packages/ears/src/runtime.ts`: `QueryBuilder`, `WriteBuilder`, `FieldValue`, `FieldValues`
+- elmdb's `packages/ears/src/typed.ts`: `defineEars` and the `Typed*` helper signatures behind `#generated/ears` (the functions it returns act on the engine its getter returns, `boundEars` for a pack; `src/engine.ts`'s `Ears` is untyped)
 - `packages/apack-sdk/src/types/entities.ts`: the SDK's `EARS`, aliasing the engine's types and adding the SDK's entity types and relation kinds
 - `packages/apack-sdk/src/types/sdk-entities.ts`: `SdkEntityShapes` and the SDK-owned entity shapes (the flow model: Flow, Node, Action, Prompt, and the document model: Document, Collection; a flow run is a run-history record, not an entity). Preferences use the host settings contract, without a pack-owned `Settings` entity; the host's `AppState` isn't in any pack's `EntityName`
 - `packages/apack-sdk/src/build/generate-entries.ts` (`generateEars`): the generated `PackShapes`, `EntityName` and `Node` override
@@ -127,7 +127,7 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
 - `QueryBuilder<E = string, D = UntypedSchema>` and `WriteBuilder<E = string, D = UntypedSchema>` keep the untyped operations (`untypedQuery`, `untypedWrite`, … from `@apackdev/sdk/ears`, and an engine's own) unchecked.
 
 **Compatibility.**
-- `@apackdev/ears` and `@apackdev/sdk` support TypeScript 5.7 and later (`packages/typescript-floor`). These types keep their `NoInferType` workaround from when the floor was 5.3.
+- `@elmdb/ears` and `@apackdev/sdk` support TypeScript 5.7 and later (`packages/typescript-floor`). These types keep their `NoInferType` workaround from when the floor was 5.3.
 
 ## Before changing any of these types
 
@@ -141,7 +141,7 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
    - the untyped twins (`untypedQuery`, `untypedCreate`, `untypedUpsert`, `untypedWrite`)
 2. **Run the type tests** that pin the contract:
    - default-setup: `tests/typed-query-builder.spec.ts`, `branded-entity-id.spec.ts`, `entity-shape-registry.spec.ts`, `sdk-type-safety.spec.ts`, and `npm run typecheck:pack`
-   - `@apackdev/cli`: `packages/apack-cli/tests/build/facade-typing.integration.spec.ts` (a real dependent pack under bundler and node16, against both the workspace source and the packed `@apackdev/ears` and `@apackdev/sdk`) and `packages/publish-checks/tests/published-sdk-any.integration.spec.ts`
+   - `@apackdev/cli`: `packages/apack-cli/tests/build/facade-typing.integration.spec.ts` (a real dependent pack under bundler and node16, against both the workspace source and the packed `@elmdb/ears` and `@apackdev/sdk`) and `packages/publish-checks/tests/published-sdk-any.integration.spec.ts`
 3. **Mutation-check every rule you touch.** Break it on purpose and confirm a test fails.
 4. **Check editor completions and error messages.** `packages/apack-cli/tests/build/facade-typing.integration.spec.ts` in `@apackdev/cli` checks the positions below with the TypeScript language service, under both module resolutions and against the published package. Extend it when you add a field or name parameter, and still look at anything it doesn't cover.
    - Field positions should list the entity's fields: `query(EARS.Entity.X).pick(['|'])`, `.where('|')`, , `.orderBy('|')` and `getAttr(id, '|')`.
@@ -153,7 +153,7 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
    - A created row should list the shape's fields and the identity it may bring, never the engine's other fields: `create(type, { | })`.
    - A typo (`where('titel')`) should produce an error that lists the valid fields.
    - Compare against the previous version with the TypeScript language service (`getCompletionsAtPosition`), not just by compiling.
-5. **Update the API reports** (`npm run api:update` in `packages/apack-ears` and `packages/apack-sdk`) and review the `apack-ears/etc/index.api.md` and `apack-sdk/etc/types.api.md` diffs as part of the change.
+5. **Update the API reports** (EARS' in elmdb, `npm run api:update` in `packages/apack-sdk` here) and review elmdb's `packages/ears/etc/index.api.md` and `apack-sdk/etc/types.api.md` diffs as part of the change.
 
 ## Incidents
 
@@ -180,7 +180,7 @@ The engine's types moved to `@apackdev/ears` (`packages/apack-ears`); the SDK ke
     where a tagged one is expected, casts still work, `'user-note'` is rejected. **17 type errors** in the
     repo: `id === 'TNode-Root'` comparisons (`database/be/repository/trace-query.ts`,
     `database/fe/state.ts`), literal ids passed in `browser/be/repository/commands.ts`, and an array cast
-    in `apack-ears/tests/engine/persistence.spec.ts`. All correct code.
+    in elmdb's `packages/ears/tests/engine/persistence.spec.ts`. All correct code.
   - **Conclusion: there is no type-level fix that leaves current behaviour unchanged.** Anything that
     stops `'user-note'` being an id also stops `'TNode-Root'` being one.
   - **The design that gets both properties** is to stop overloading, and that is what landed

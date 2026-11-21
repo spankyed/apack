@@ -506,8 +506,8 @@ describe('when several rules are right about one site', () => {
   });
 
   it('gives an @internal name from the store to the rule about the store', () => {
-    expect(offender("import { _x } from '@apackdev/ears/lmdb';\n")).toEqual([
-      'elmdb-imports: src/extensions/steps/x.ts:1: @apackdev/ears/lmdb',
+    expect(offender("import { _x } from '@elmdb/ears/database';\n")).toEqual([
+      'elmdb-imports: src/extensions/steps/x.ts:1: @elmdb/ears/database',
     ]);
   });
 

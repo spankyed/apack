@@ -237,28 +237,37 @@ it('refuses phase reuse when a previously consumed external input changes withou
 describe('apackScope', () => {
   const manifest = (name: string) => JSON.stringify({ name, version: '0.1.0' });
 
-  it("takes @apackdev/ears from the pack's SDK, which a pack that names only the SDK can't resolve itself", () => {
+  it("takes @elmdb/ears from the pack's SDK, which a pack that names only the SDK can't resolve itself", () => {
     // npm nested the SDK's EARS under it: nothing above the pack holds one
     const pack = tmp({
       'package.json': manifest('pack'),
       'node_modules/@apackdev/sdk/package.json': manifest('@apackdev/sdk'),
-      'node_modules/@apackdev/sdk/node_modules/@apackdev/ears/package.json': manifest('@apackdev/ears'),
+      'node_modules/@apackdev/sdk/node_modules/@elmdb/ears/package.json': manifest('@elmdb/ears'),
       'node_modules/@apackdev/ui/package.json': manifest('@apackdev/ui'),
     });
     const real = fs.realpathSync(pack);
     expect(apackScope(pack)).toEqual({ dirs: [
-      path.join(real, 'node_modules/@apackdev/sdk/node_modules/@apackdev/ears/dist'),
+      path.join(real, 'node_modules/@apackdev/sdk/node_modules/@elmdb/ears/dist'),
       path.join(real, 'node_modules/@apackdev/sdk/dist'),
       path.join(real, 'node_modules/@apackdev/ui/dist'),
     ] });
   });
 
-  it('names what it cannot find rather than leave it out of the scope', () => {
+  it('names an @apackdev package it cannot find rather than leave it out of the scope', () => {
+    const pack = tmp({
+      'package.json': manifest('pack'),
+      'node_modules/@apackdev/sdk/package.json': manifest('@apackdev/sdk'),
+    });
+    expect(apackScope(pack)).toEqual({ missing: ['@apackdev/ui'] });
+  });
+
+  it("leaves EARS to the SDK that brings it: the scope is the SDK's and the UI's without one", () => {
     const pack = tmp({
       'package.json': manifest('pack'),
       'node_modules/@apackdev/sdk/package.json': manifest('@apackdev/sdk'),
       'node_modules/@apackdev/ui/package.json': manifest('@apackdev/ui'),
     });
-    expect(apackScope(pack)).toEqual({ missing: ['@apackdev/ears'] });
+    const real = fs.realpathSync(pack);
+    expect(apackScope(pack)).toEqual({ dirs: [path.join(real, 'node_modules/@apackdev/sdk/dist'), path.join(real, 'node_modules/@apackdev/ui/dist')] });
   });
 });

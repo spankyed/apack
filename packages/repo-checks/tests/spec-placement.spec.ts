@@ -369,8 +369,8 @@ describe('a spec is collected by some config', () => {
    * The roots a config's `include` or `exclude` arrays name, read as text.
    *
    * Text rather than an import, for `suite-timeouts.spec.ts`' reason: importing a pack's config creates a
-   * temp data dir. The cost is that every array under the key is collected, `@apackdev/ears`' nested
-   * `benchmark.include` among them — so the included set is a little wider than the test runner's, and the
+   * temp data dir. The cost is that every array under the key is collected, a nested
+   * `benchmark.include` among them — so the included set can be a little wider than the test runner's, and the
    * direction of that error is a spec under `bench/` going unreported. Narrowing it means parsing the
    * nesting, which means importing.
    */
@@ -406,14 +406,10 @@ describe('a spec is collected by some config', () => {
     return found;
   };
 
-  /** A sibling config a config builds on (`@apackdev/ears`' own, `vitest.ears.config.ts`), whose globs are its too */
-  const SIBLING_CONFIG = /from '\.\/(vitest\.[\w-]+\.config\.ts)'/;
-
   const rootsOf = (file: string, key: 'include' | 'exclude'): string[] => {
     const own = fs.readFileSync(path.join(REPO_ROOT, file), 'utf-8');
     const delegate = Object.entries(DELEGATES).find(([name]) => own.includes(name))?.[1];
-    const sibling = SIBLING_CONFIG.exec(own)?.[1];
-    const text = [own, ...[delegate, sibling && path.join(path.dirname(file), sibling)]
+    const text = [own, ...[delegate]
       .filter((other) => other !== undefined)
       .map((other) => fs.readFileSync(path.join(REPO_ROOT, other), 'utf-8'))].join('\n');
     const found: string[] = [];

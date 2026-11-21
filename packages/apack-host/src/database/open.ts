@@ -1,8 +1,8 @@
 // Opening an app's database: the one composition of the elmdb database and the engine, which the API's boot and tools
 // (apack db) share, so both open a data dir the same way
-import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears, type EarsWarning } from '@apackdev/ears';
+import { createEarsEngine, type EarsAdmin, type EarsDatabase, type EarsEngine, type Ears, type EarsWarning } from '@elmdb/ears';
 import { _bindEars, _EARS_CALL_SITES } from '@apackdev/sdk/ears';
-import { openDatabase as openElmdb, type DatabaseOptions } from '@apackdev/ears/lmdb';
+import { openDatabase as openElmdb, type DatabaseOptions } from '@elmdb/ears/database';
 import { _RUN_HISTORY_SCHEMA } from '@apackdev/sdk/services';
 import { resolveAppEnvironment, type AppEnv } from '@apackdev/sdk/env';
 import type { _AppDataPaths } from '@apackdev/sdk/utils';

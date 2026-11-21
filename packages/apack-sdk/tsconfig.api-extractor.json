@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "esnext",
     "moduleResolution": "bundler",
-    // @apackdev/ears resolves to its published declarations, not its source: API Extractor analyses
+    // Dependencies resolve to their published declarations, not their source: API Extractor analyses
     // .d.ts files, and a dependency read as source is followed into it instead of being reported as
     // an import. Run npm run packages:build first.
     "allowImportingTsExtensions": true,

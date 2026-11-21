@@ -43,7 +43,6 @@ export const UNIT_SUITES: readonly UnitSuite[] = [
   { workspace: '@apackdev/host', dir: 'apack-host', kind: 'host' },
   { workspace: '@app/api', dir: 'api', kind: 'host' },
   { workspace: '@app/repo-checks', dir: 'repo-checks', kind: 'host' },
-  { workspace: '@apackdev/ears', dir: 'apack-ears', kind: 'host' },
   { workspace: '@app/renderer', dir: 'renderer', kind: 'host' },
   { workspace: '@app/main', dir: 'main', kind: 'host' },
   { workspace: '@app/preload', dir: 'preload', kind: 'host' },

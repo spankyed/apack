@@ -9,7 +9,7 @@ import { compilerReadOptions, readPackCompilerConfiguration } from './compiler-c
 import { isBuiltin } from 'node:module';
 import type { CompilationInputs } from './compilation-inputs.ts';
 
-/** A package specifier (`vue`, `@apackdev/ears`), not a relative path or a pack's own `#` subpath */
+/** A package specifier (`vue`, `@elmdb/ears`), not a relative path or a pack's own `#` subpath */
 export function isPackageSpecifier(id: string): boolean {
   return !id.startsWith('.') && !path.isAbsolute(id) && !id.startsWith('#') && !id.startsWith('\0');
 }

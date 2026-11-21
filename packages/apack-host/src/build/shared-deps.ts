@@ -9,11 +9,11 @@ import { SOURCE_CONDITION } from './source-resolution.ts';
  * instance of each (the SDK's registries, the EARS engine's data). Every bundler external list, the
  * host pack loader's bridge, the pack test harness's bridge and bundle-package derive from this list.
  * The frontend shares only the SDK modules below (SDK_FE_MODULES): it keeps no EARS data, so a pack
- * frontend inlines what it imports from @apackdev/ears (constants and pure helpers). What a pack's
+ * frontend inlines what it imports from @elmdb/ears (constants and pure helpers). What a pack's
  * frontend may leave to the host is `sharedFeModules` below, which is those plus the shared deps and
  * @apackdev/ui's exports.
  */
-export const SHARED_INSTANCE_PACKAGES = ['@apackdev/sdk', '@apackdev/ears'] as const;
+export const SHARED_INSTANCE_PACKAGES = ['@apackdev/sdk', '@elmdb/ears'] as const;
 
 /** The shared-instance package a specifier belongs to (`@apackdev/sdk/repositories` → `@apackdev/sdk`), if any */
 export function sharedInstancePackage(specifier: string): string | undefined {
@@ -30,7 +30,7 @@ export function sharedInstanceExternals(): string[] {
  * requires them, so neither the pack loader's bridge nor the test harness's provides them.
  */
 export const APP_ONLY_EXPORTS: Readonly<Record<string, string>> = {
-  '@apackdev/ears/lmdb': "the app's elmdb databases; it loads elmdb, which only the app installs",
+  '@elmdb/ears/database': "the app's elmdb databases; it loads elmdb, which only the app installs",
 };
 
 /**

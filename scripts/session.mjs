@@ -141,8 +141,9 @@ async function setup(dir) {
   // its pin, or that the pin is not pushed — is said here, since the session is then not the code CI tests.
   try {
     const elmdb = vendoredCheckout(dir, 'elmdb', 'ELMDB_DIR', elmdbCheckout());
-    // The one linker that builds nothing: a binding is a release Rust build, minutes rather than seconds, so it
-    // refuses one that is missing. A worktree made at the pin has none yet, and this command is the one making it
+    // The one linker that builds no binding: a binding is a release Rust build, minutes rather than seconds, so it
+    // refuses one that is missing (EARS' dist, seconds, it builds). A worktree made at the pin has none yet, and this
+    // command is the one making it; elmdb's `npm run build` builds the binding and then EARS
     const binding = path.join(elmdb, 'crates', 'elmdb-node');
     if (existsSync(binding) && !readdirSync(binding).some((file) => file.endsWith('.node'))) {
       console.log(`Building elmdb's binding in ${elmdb}`);

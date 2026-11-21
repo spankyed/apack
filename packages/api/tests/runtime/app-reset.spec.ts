@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@elmdb/ears';
 import { createActor } from 'xstate';
 
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'api-app-reset-'));

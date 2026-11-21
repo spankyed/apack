@@ -1,7 +1,7 @@
 // apack db runs: the flow runs in a data dir's run history, newest first, or one run's whole tree
 import * as fs from 'node:fs';
 import { _appDataPaths } from '@apackdev/sdk/utils';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@elmdb/ears';
 import { _createRunHistory, type RunNode, type RunNodeId } from '@apackdev/sdk/services';
 import { findRunningApp, openRunHistory } from '@apackdev/host/database';
 import { toJSON } from './output';

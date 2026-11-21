@@ -124,7 +124,7 @@ const ALLOWED = [
   "import { untypedBroadcastToSurface, untypedSendToSystem } from '#generated/events';",
   "import { onConnected, onIncoming } from '@apackdev/sdk/events';",
   "import { emit as emitEvent } from 'xstate';",
-  "import * as ears from '@apackdev/ears';",
+  "import * as ears from '@elmdb/ears';",
   "import { x } from '@apackdev/sdk/rpcx';",
   'const { busId } = trpc; trpc.buses.list();',
   "logger.info('saved');",
@@ -296,23 +296,22 @@ function layer(dir: string, manifest: Record<string, unknown>, files: Record<str
 }
 
 describe('findUpwardImports', () => {
-  // The five rows the fixture below builds a directory for. These cases are about the mechanism, so a row with
-  // no tree behind it would only make the manifest read throw; the real twelve are covered by `holds for the
+  // The four rows the fixture below builds a directory for. These cases are about the mechanism, so a row with
+  // no tree behind it would only make the manifest read throw; the real ones are covered by `holds for the
   // repo` and the two coverage cases at the end of this block.
-  const modelled = ['apack-ears', 'apack-sdk', 'apack-host', 'api', 'renderer'];
+  const modelled = ['apack-sdk', 'apack-host', 'api', 'renderer'];
   const layers = LAYERS.filter((l) => modelled.includes(path.basename(l.dir)))
     .map((l) => ({ ...l, dir: `layers/${path.basename(l.dir).replace(/^apack-/, '')}` }));
   const allowed = () => {
-    layer('layers/ears', {}, { 'src/index.ts': "import { x } from './x.ts';\nimport ts from 'typescript';\n" });
-    layer('layers/sdk', { dependencies: { '@apackdev/ears': '^0.1.0', yaml: '*' } }, {
-      'src/index.ts': "import { untypedWrite } from '@apackdev/sdk/ears';\nexport type { Q } from '@apackdev/ears/lmdb';\nexport * from '@apackdev/sdk/events';\n",
+    layer('layers/sdk', { dependencies: { '@elmdb/ears': '^0.1.0', yaml: '*' } }, {
+      'src/index.ts': "import { untypedWrite } from '@apackdev/sdk/ears';\nexport type { Q } from '@elmdb/ears/database';\nexport * from '@apackdev/sdk/events';\n",
     });
-    layer('layers/host', { dependencies: { '@apackdev/ears': '*', '@apackdev/sdk': '*' } }, {
+    layer('layers/host', { dependencies: { '@elmdb/ears': '*', '@apackdev/sdk': '*' } }, {
       'src/index.ts': "import { createActionEmitter } from '@apackdev/sdk/services';\nimport { untypedQuery } from '@apackdev/sdk/ears';\nimport { x } from '../x.ts';\n",
-      'tests/a.spec.ts': "vi.mock('@apackdev/ears');\n",
+      'tests/a.spec.ts': "vi.mock('@elmdb/ears');\n",
     });
-    layer('layers/api', { devDependencies: { '@apackdev/ears': '*', '@apackdev/host': '*', '@apackdev/sdk': '*' } }, {
-      'src/setup/backend.ts': "import { openLmdbStore } from '@apackdev/ears/lmdb';\nimport { createHostRuntime } from '@apackdev/host/services';\nimport { bindHost } from '@apackdev/sdk/runtime';\n",
+    layer('layers/api', { devDependencies: { '@elmdb/ears': '*', '@apackdev/host': '*', '@apackdev/sdk': '*' } }, {
+      'src/setup/backend.ts': "import { openLmdbStore } from '@elmdb/ears/database';\nimport { createHostRuntime } from '@apackdev/host/services';\nimport { bindHost } from '@apackdev/sdk/runtime';\n",
     });
     layer('layers/renderer', { dependencies: { '@apackdev/host': '*', '@apackdev/sdk': '*', '@apackdev/ui': '*' } }, {
       'src/main.ts': "import { createFePackRegistry } from '@apackdev/host/fe';\nimport { bindFeHost } from '@apackdev/sdk/runtime';\n",
@@ -326,8 +325,6 @@ describe('findUpwardImports', () => {
   });
 
   it.each([
-    ['ears', 'src/query.ts', "import { EARS } from '@apackdev/sdk';", 'layers/ears/src/query.ts:1: @apackdev/sdk'],
-    ['ears', 'tests/query.spec.ts', "const { startTestRuntime } = await import('@apackdev/sdk/testing');", 'layers/ears/tests/query.spec.ts:1: @apackdev/sdk/testing'],
     ['sdk', 'src/services/app.ts', "import { createHostRuntime } from '@apackdev/host/services';", 'layers/sdk/src/services/app.ts:1: @apackdev/host/services'],
     ['sdk', 'src/fe/ui.ts', "export type { Button } from '@apackdev/ui/design/button';", 'layers/sdk/src/fe/ui.ts:1: @apackdev/ui/design/button'],
     ['host', 'src/bus/app.ts', "import { rootEvents } from '@app/api/core/router/bus-emitter';", 'layers/host/src/bus/app.ts:1: @app/api/core/router/bus-emitter'],
@@ -335,7 +332,7 @@ describe('findUpwardImports', () => {
     ['host', 'src/bus/app.ts', "import { logger } from '@/core/shared/debug/logger';", 'layers/host/src/bus/app.ts:1: @/core/shared/debug/logger'],
     ['host', 'scripts/x.ts', "import { cli } from '@apackdev/cli';", 'layers/host/scripts/x.ts:1: @apackdev/cli'],
     ['api', 'src/router.ts', "import Button from '@apackdev/ui/design/button';", 'layers/api/src/router.ts:1: @apackdev/ui/design/button'],
-    ['renderer', 'src/store.ts', "import { openLmdbStore } from '@apackdev/ears/lmdb';", 'layers/renderer/src/store.ts:1: @apackdev/ears/lmdb'],
+    ['renderer', 'tests/store.spec.ts', "const { startTestRuntime } = await import('@apackdev/testing');", 'layers/renderer/tests/store.spec.ts:1: @apackdev/testing'],
   ])('flags an upward import in %s: %s', (pkg, file, code, problem) => {
     allowed();
     writeAt(path.join('layers', pkg, file), code);
@@ -343,9 +340,9 @@ describe('findUpwardImports', () => {
   });
 
   it.each([
-    ['ears', { peerDependencies: { '@apackdev/sdk': '*' } }, 'layers/ears/package.json: peerDependencies: @apackdev/sdk'],
-    ['sdk', { dependencies: { '@apackdev/ears': '*', '@apackdev/host': '*' } }, 'layers/sdk/package.json: dependencies: @apackdev/host'],
-    ['host', { dependencies: { '@apackdev/ears': '*', '@apackdev/sdk': '*' }, devDependencies: { '@apackdev/cli': '*' } }, 'layers/host/package.json: devDependencies: @apackdev/cli'],
+    ['sdk', { peerDependencies: { '@apackdev/ui': '*' } }, 'layers/sdk/package.json: peerDependencies: @apackdev/ui'],
+    ['sdk', { dependencies: { '@elmdb/ears': '*', '@apackdev/host': '*' } }, 'layers/sdk/package.json: dependencies: @apackdev/host'],
+    ['host', { dependencies: { '@elmdb/ears': '*', '@apackdev/sdk': '*' }, devDependencies: { '@apackdev/cli': '*' } }, 'layers/host/package.json: devDependencies: @apackdev/cli'],
   ])("flags an @apackdev package %s's manifest may not declare", (pkg, manifest, problem) => {
     allowed();
     rewriteAt(path.join('layers', pkg, 'package.json'), JSON.stringify({ name: 'x', ...manifest }));
@@ -353,9 +350,9 @@ describe('findUpwardImports', () => {
   });
 
   it.each([
-    ['api', { devDependencies: { '@apackdev/ears': '*', '@apackdev/sdk': '*' } }, 'layers/api/package.json: undeclared: @apackdev/host'],
+    ['api', { devDependencies: { '@elmdb/ears': '*', '@apackdev/sdk': '*' } }, 'layers/api/package.json: undeclared: @apackdev/host'],
     ['renderer', { dependencies: { '@apackdev/host': '*', '@apackdev/sdk': '*' } }, 'layers/renderer/package.json: undeclared: @apackdev/ui'],
-    ['host', { dependencies: { '@apackdev/sdk': '*' } }, 'layers/host/package.json: undeclared: @apackdev/ears'],
+    ['host', { dependencies: { '@elmdb/ears': '*' } }, 'layers/host/package.json: undeclared: @apackdev/sdk'],
   ])('flags an @apackdev package %s imports without declaring it', (pkg, manifest, problem) => {
     allowed();
     rewriteAt(path.join('layers', pkg, 'package.json'), JSON.stringify({ name: 'x', ...manifest }));
@@ -402,9 +399,9 @@ describe('findUpwardImports', () => {
   it('reports a reason for a permission that is now used', () => {
     allowed();
     const WHY = 'kept for the packaged app rather than for an import';
-    const runtimeOnly = new Map([['layers/api @apackdev/ears', WHY]]);
+    const runtimeOnly = new Map([['layers/api @apackdev/host', WHY]]);
     expect(findUpwardImports(layers, root, UNLAYERED_BY_DESIGN, runtimeOnly))
-      .toEqual([`layers/api: imports @apackdev/ears, so its unusedBecause ("${WHY}") no longer applies`]);
+      .toEqual([`layers/api: imports @apackdev/host, so its unusedBecause ("${WHY}") no longer applies`]);
   });
 
   // The third clause the sibling exemption lists carry too: an entry whose
@@ -479,24 +476,14 @@ describe('filesUnder', () => {
 
 describe('findElmdbImports', () => {
   // The rules with their directories under the temp root's src/
-  const rules = ELMDB_RULES.map((rule) => ({
-    ...rule,
-    dirs: rule.dirs.map((dir) => `src/${dir}`),
-    except: rule.except && `src/${rule.except}`,
-  }));
+  const rules = ELMDB_RULES.map((rule) => ({ ...rule, dirs: rule.dirs.map((dir) => `src/${dir}`) }));
   const allowed = () => {
-    write('packages/apack-ears/src/lmdb/database.ts', "import { Database } from 'elmdb';\nimport type { EarsDatabase } from '../database.ts';\n");
-    write('packages/apack-ears/src/index.ts', "export { untypedWrite } from './write.ts';\n");
-    // Types from elmdb's generated protocol, which erase: by declaration, re-exported, and as an import() type
-    write('packages/apack-ears/src/database.ts', "import type { Op } from 'elmdb/protocol/Op.js';\n"
-      + "export type { Schema } from 'elmdb/protocol/Schema.js';\n"
-      + "export type Batch = import('elmdb/protocol/Batch.js').Batch;\n");
-    write('packages/apack-host/src/services/app-data.ts', "import type { DatabaseOptions } from '@apackdev/ears/lmdb';\n");
-    write('packages/api/src/setup/backend.ts', "import { openDatabase } from '@apackdev/ears/lmdb';\n");
+    write('packages/apack-host/src/services/app-data.ts', "import type { DatabaseOptions } from '@elmdb/ears/database';\n");
+    write('packages/api/src/setup/backend.ts', "import { openDatabase } from '@elmdb/ears/database';\n");
     write('packages/default-setup/src/features/notes/be/system.ts', "import { untypedWrite } from '@apackdev/sdk/ears';\n");
   };
 
-  it('allows @apackdev/ears/lmdb to load elmdb, and the host and the API to open a database through it', () => {
+  it('allows @elmdb/ears/database to load elmdb, and the host and the API to open a database through it', () => {
     allowed();
     expect(findElmdbImports(rules, root)).toEqual([]);
   });
@@ -506,15 +493,7 @@ describe('findElmdbImports', () => {
     ['packages/apack-host/tests/store.spec.ts', "const elmdb = await import('elmdb');"],
     ['packages/api/src/setup/backend.ts', "import type { Database } from 'elmdb';"],
     ['packages/api/scripts/db/fix.ts', "const { Database } = require('elmdb/index.js');"],
-    ['packages/apack-ears/src/index.ts', "export { openDatabase } from './lmdb/index.ts';"],
-    ['packages/apack-ears/src/engine.ts', "import type { DatabaseOptions } from './lmdb/database.ts';"],
-    ['packages/apack-ears/src/query.ts', "import { Database } from 'elmdb';"],
-    // A type from elmdb's root rather than its protocol, and a protocol type whose declaration stays and loads it
-    ['packages/apack-ears/src/write.ts', "import type { Database } from 'elmdb';"],
-    ['packages/apack-ears/src/write.ts', "import { type Op } from 'elmdb/protocol/Op.js';"],
-    ['packages/apack-ears/src/schema.ts', "import * as fs from 'node:fs';"],
-    ['packages/apack-ears/src/schema.ts', "import { EventEmitter } from 'events';"],
-    ['packages/default-setup/src/features/notes/be/system.ts', "import { openDatabase } from '@apackdev/ears/lmdb';"],
+    ['packages/default-setup/src/features/notes/be/system.ts', "import { openDatabase } from '@elmdb/ears/database';"],
     ['tests/packs/external-pack/tests/unit/memos.spec.ts', "vi.mock('elmdb');"],
   ])('flags %s', (file, code) => {
     allowed();
@@ -546,8 +525,8 @@ describe('findElmdbImports', () => {
 describe('findSharedPackageLists', () => {
   it.each([
     ["const EXTERNALS = ['@apackdev/sdk', '@apackdev/sdk/*'];", ['"@apackdev/sdk"', '"@apackdev/sdk/*"']],
-    ["if (source.startsWith('@apackdev/ears/')) return;", ['"@apackdev/ears/"']],
-    ['bridge({ bridgedPackages: [`@apackdev/ears`] });', ['"@apackdev/ears"']],
+    ["if (source.startsWith('@elmdb/ears/')) return;", ['"@elmdb/ears/"']],
+    ['bridge({ bridgedPackages: [`@elmdb/ears`] });', ['"@elmdb/ears"']],
   ])('flags a shared package named outside an import: %s', (code, found) => {
     write('consumer.ts', code);
     expect(findSharedPackageLists(['src/consumer.ts'], root)).toEqual(found.map((what) => `src/consumer.ts:1: ${what}`));
@@ -675,12 +654,12 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
   },
   findUpwardImports: () => {
     // Only the rows this tree builds a directory for: one with no tree behind it makes the manifest read throw
-    const modelled = ['apack-ears', 'apack-sdk', 'apack-host', 'api', 'renderer'];
+    const modelled = ['apack-sdk', 'apack-host', 'api', 'renderer'];
     const layers = LAYERS.filter((l) => modelled.includes(path.basename(l.dir)))
       .map((l) => ({ ...l, dir: `layers/${path.basename(l.dir).replace(/^apack-/, '')}` }));
     // Every layer has to be there, since the rule walks all of them; only the lowest one imports upward
-    const upward = { 'src/index.ts': "import { createActionEmitter } from '@apackdev/sdk/services';\n" };
-    for (const { dir } of layers) layer(dir, {}, dir === 'layers/ears' ? upward : {});
+    const upward = { 'src/index.ts': "import { createHostRuntime } from '@apackdev/host/services';\n" };
+    for (const { dir } of layers) layer(dir, {}, dir === 'layers/sdk' ? upward : {});
     return findUpwardImports(layers, root);
   },
   findUnimportedDependencies: () => {
@@ -691,11 +670,7 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     return findUnimportedDependencies(root, new Map());
   },
   findElmdbImports: () => {
-    const rules = ELMDB_RULES.map((rule) => ({
-      ...rule,
-      dirs: rule.dirs.map((dir) => `src/${dir}`),
-      except: rule.except && `src/${rule.except}`,
-    }));
+    const rules = ELMDB_RULES.map((rule) => ({ ...rule, dirs: rule.dirs.map((dir) => `src/${dir}`) }));
     write('packages/apack-host/src/services/run-history.ts', "import { Database } from 'elmdb';");
     return findElmdbImports(rules, root);
   },
@@ -2016,7 +1991,7 @@ describe('findRepositoryCasts', () => {
 
   it("checks every package's src/", () => {
     expect(packageSourceDirs()).toEqual(expect.arrayContaining([
-      'packages/apack-ears/src', 'packages/apack-sdk/src', 'packages/apack-host/src', 'packages/apack-testing/src',
+      'packages/apack-sdk/src', 'packages/apack-host/src', 'packages/apack-testing/src',
       'packages/api/src', 'packages/default-setup/src', 'packages/renderer/src',
     ]));
     writeAt('packages/new-package/src/index.ts', 'export const x = (repository as unknown as Repos).x;');
@@ -2094,7 +2069,7 @@ describe('findMissingSourceConditions', () => {
     // @apackdev/testing is not among them: its entries resolve its built bundle whoever loads them, so a
     // config importing it selects nothing and needs no condition
     // The API participates for TypeScript; its runtime entry still resolves the compiled server.
-    expect(sourceConditionPackages()).toEqual(['@apackdev/ears', '@apackdev/sdk', '@apackdev/ui', '@app/api']);
+    expect(sourceConditionPackages()).toEqual(['@apackdev/sdk', '@apackdev/ui', '@app/api']);
   });
 
   // Every config-file name the check recognises, with the option each kind declares the condition in

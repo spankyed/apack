@@ -65,7 +65,7 @@ In this folder (all exported from `index.ts`):
 |------|---------|
 | `loader.ts` | Built-in and external loading, `registerExternalPacks`, `clearPackRequireCache` |
 | `bridge.ts` | The SDK bridge map (`SDK_BRIDGE`: `sdk-modules.ts`), `withHostResolution()`, `getBridgedSdkSpecifiers()` |
-|  `sdk-modules.ts` | Generated (`npm run sdk-modules:update -w @apackdev/host`, from `../../build/render-sdk-modules.ts`): a static import of every export of the `SHARED_INSTANCE_PACKAGES` (`@apackdev/sdk`, `@apackdev/ears`) pack runtime code can require, so the app bundle carries them |
+|  `sdk-modules.ts` | Generated (`npm run sdk-modules:update -w @apackdev/host`, from `../../build/render-sdk-modules.ts`): a static import of every export of the `SHARED_INSTANCE_PACKAGES` (`@apackdev/sdk`, `@elmdb/ears`) pack runtime code can require, so the app bundle carries them |
 | `lifecycle.ts` | `activatePack()` and `teardownPack()` for install, uninstall, enable/disable and update at runtime |
 | `reload.ts` | `reloadPackById()` for the API's `POST /dev/reload` (`transport/websocket.ts`): the caller names a pack, and the registry says which directory it was loaded from |
 | `dev-install.ts` | `installDevPack()` for the API's `POST /dev/install`: copies the build in a pack's source directory into `packs/<id>/` as the user's own copy and starts it, under the registry's claim on the pack id |
@@ -180,10 +180,10 @@ checks are `registration.spec.ts`, `replacement.spec.ts`, `registered-lookups.sp
 ## Host resolution for pack runtime code
 
 `withHostResolution(fn)` in `bridge.ts` calls `withModuleBridge()` (`../module-bridge.ts`) with:
-- `SDK_BRIDGE` — the loader's own instances (in the app, the API bundle's, which inlines `@apackdev/sdk`, `@apackdev/ears` and `@apackdev/host`) of the shared-instance packages' subpaths (`sdk-modules.ts`, built from each package's exports map minus `APP_UNBRIDGED` and the app-only `@apackdev/ears/lmdb`). They go into the require cache (under a bridge key and the real resolved path) and `Module._resolveFilename` resolves those specifiers to them, so pack code shares the bundle's bound app (its registered packs and EARS engine) instead of loading a separate SDK copy. Pack code never requires `@apackdev/host`, so no host module is bridged.
+- `SDK_BRIDGE` — the loader's own instances (in the app, the API bundle's, which inlines `@apackdev/sdk`, `@elmdb/ears` and `@apackdev/host`) of the shared-instance packages' subpaths (`sdk-modules.ts`, built from each package's exports map minus `APP_UNBRIDGED` and the app-only `@elmdb/ears/database`). They go into the require cache (under a bridge key and the real resolved path) and `Module._resolveFilename` resolves those specifiers to them, so pack code shares the bundle's bound app (its registered packs and EARS engine) instead of loading a separate SDK copy. Pack code never requires `@apackdev/host`, so no host module is bridged.
 - `getSharedBeDeps()` (`xstate`, `zod`, and every subpath they export: a bundled dependency may require `zod/v4`) — resolved from `import.meta.url` (the API's `dist/server.js` in the app), since an installed pack has no `node_modules`.
 - `bridgedPackages: SHARED_INSTANCE_PACKAGES` — a pack requiring a shared-instance module the map lacks fails with "isn't provided by this apack: rebuild the pack".
-- `appOnly: APP_ONLY_EXPORTS` — a pack requiring `@apackdev/ears/lmdb` fails saying only the app loads it (`apack pack build` already rejects the import).
+- `appOnly: APP_ONLY_EXPORTS` — a pack requiring `@elmdb/ears/database` fails saying only the app loads it (`apack pack build` already rejects the import).
 
 The resolver patch is restored in a `finally`; the bridged cache entries stay, so lazy requires get them too. `tests/packs/runtime/sdk-bridge-drift.spec.ts` guards the list via `getBridgedSdkSpecifiers()` and fails when  `sdk-modules.ts` is stale. The pack test harness calls `withModuleBridge()` with the pack's own SDK.
 

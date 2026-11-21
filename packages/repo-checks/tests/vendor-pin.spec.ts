@@ -126,4 +126,45 @@ describe('what a vendored pin is worth saying about', () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('not at the pinned');
   });
+
+  describe('a checkout that ships more than one package', () => {
+    // elmdb ships the binding and EARS, and a checkout past its pin may differ from it in either, both or neither
+    const PACKAGES = ['crates/elmdb-node', 'packages/ears'];
+    const warnFor = (answers: Record<string, string>) =>
+      pinWarnings({ name: 'elmdb', rev: PIN, checkout: '/checkout', run: fakeGit(answers).run, packages: PACKAGES });
+    const pushed = { [`branch -r --contains ${PIN}`]: '  origin/main', 'status --porcelain -- crates/elmdb-node': '', 'status --porcelain -- packages/ears': '' };
+
+    it('names which of them differ from the pin', () => {
+      const warnings = warnFor({
+        ...pushed,
+        'rev-parse HEAD': AHEAD,
+        [`rev-list --count ${PIN}..HEAD`]: '4',
+        [`diff --name-only ${PIN} HEAD -- crates/elmdb-node`]: '',
+        [`diff --name-only ${PIN} HEAD -- packages/ears`]: 'packages/ears/src/query.ts\n',
+      });
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('packages/ears differ');
+      expect(warnings[0]).not.toContain('crates/elmdb-node');
+    });
+
+    it('says when neither differs, since the commits past the pin are then elsewhere', () => {
+      const warnings = warnFor({
+        ...pushed,
+        'rev-parse HEAD': AHEAD,
+        [`rev-list --count ${PIN}..HEAD`]: '1',
+        [`diff --name-only ${PIN} HEAD -- crates/elmdb-node`]: '',
+        [`diff --name-only ${PIN} HEAD -- packages/ears`]: '',
+      });
+
+      expect(warnings[0]).toContain('crates/elmdb-node and packages/ears are the same at both');
+    });
+
+    it('reports changes not committed in one of them, on the pin itself', () => {
+      const warnings = warnFor({ ...pushed, 'rev-parse HEAD': PIN, 'status --porcelain -- packages/ears': ' M packages/ears/src/write.ts\n' });
+
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain('changes not committed in packages/ears');
+    });
+  });
 });

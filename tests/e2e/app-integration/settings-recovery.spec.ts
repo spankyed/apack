@@ -6,7 +6,7 @@ import { launchApp, waitForAppReady, type LaunchedApp } from '@apackdev/testing'
 import { readSettingsOverrides } from '@apackdev/host/database';
 import { installPackFromLocal } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
-import { type EARS } from '@apackdev/ears';
+import { type EARS } from '@elmdb/ears';
 import { untypedCreate } from '@apackdev/sdk/ears';
 import { writeData } from '../../../packages/apack-host/tests/database/fixtures.ts';
 

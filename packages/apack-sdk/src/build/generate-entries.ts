@@ -21,7 +21,7 @@ import { createModuleExports, type ModuleExport, type ModuleExports } from './mo
 import { hasOwn } from '../utils/shared.ts';
 import { compareVersions } from '../utils/compare-versions.ts';
 import type { StepDefinition } from '../steps/types.ts';
-import type { RowRules } from '@apackdev/ears';
+import type { RowRules } from '@elmdb/ears';
 import type { ComponentTarget } from '../framework/surface-declaration.ts';
 import type { PackEventContracts } from '../framework/event-contracts.ts';
 

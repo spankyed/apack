@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EarsDatabase, OpenReport } from '@apackdev/ears';
+import type { EarsDatabase, OpenReport } from '@elmdb/ears';
 import { openRunHistory, type RunsDatabase } from '../../src/database/open.ts';
 
 const fake = vi.hoisted(() => ({
@@ -14,8 +14,8 @@ const fake = vi.hoisted(() => ({
   warnings: [] as string[],
 }));
 
-vi.mock('@apackdev/ears/lmdb', async (importOriginal) => {
-  const real = await importOriginal<typeof import('@apackdev/ears/lmdb')>();
+vi.mock('@elmdb/ears/database', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@elmdb/ears/database')>();
   return {
     ...real,
     openDatabase: (options: Parameters<typeof real.openDatabase>[0]): EarsDatabase => new Proxy(real.openDatabase(options), {

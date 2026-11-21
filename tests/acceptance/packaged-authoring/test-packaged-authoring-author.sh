@@ -8,7 +8,7 @@
 #
 # Phases, and the end state they establish for outside pack authors
 # (docs/archive/goals/goal-external-pack-authoring.md):
-#   1. install @apackdev/cli + @apackdev/sdk (which brings @apackdev/ears) from tarballs
+#   1. install @apackdev/cli + @apackdev/sdk (which brings @elmdb/ears) from tarballs
 #   2. apack pack init -> add feature -> a flow using keepAlive from default-setup -> content from a format with a
 #      .ts compiler module, default-setup's notes format, and the SDK's documents key -> an llm flow and a
 #      service calling services.inference
@@ -31,32 +31,33 @@ WORK="$(newWorkDir)"
 echo "Work dir: $WORK"
 useWorkDir "$WORK"
 
-step "Pack @apackdev/ears, @apackdev/sdk, @apackdev/ui, @apackdev/cli and @apackdev/testing"
+step "Pack @apackdev/sdk, @apackdev/ui, @apackdev/cli and @apackdev/testing, and elmdb's EARS and binding"
 # ensure, not build: it needs the tarballs to match the sources, which is what ensure guarantees, and it
-# rewrites nothing when they already do. packages:build rebuilt all five unconditionally, which deleted and
+# rewrites nothing when they already do. packages:build rebuilt all four unconditionally, which deleted and
 # rewrote the dist/ that anything running beside this reads.
 (cd "$ROOT" && npm run packages:ensure >/dev/null)
-for dir in apack-ears/publish apack-sdk/publish apack-ui/publish apack-cli/dist/package apack-testing/dist/package; do
+for dir in apack-sdk/publish apack-ui/publish apack-cli/dist/package apack-testing/dist/package; do
   (cd "$ROOT/packages/$dir" && npm pack --silent --pack-destination "$WORK" >/dev/null)
 done
-EARS_TGZ="$(ls "$WORK"/apackdev-ears-*.tgz)"
 SDK_TGZ="$(ls "$WORK"/apackdev-sdk-*.tgz)"
 UI_TGZ="$(ls "$WORK"/apackdev-ui-*.tgz)"
 CLI_TGZ="$(ls "$WORK"/apackdev-cli-*.tgz)"
 TESTING_TGZ="$(ls "$WORK"/apackdev-testing-*.tgz)"
-# elmdb, which @apackdev/ears depends on, isn't published either: its tarball, binding built for this machine, stands
-# in for the registry through npm's overrides, as no pack depends on it but through @apackdev/ears. So does EARS'
-# own, which a pack names nowhere: it arrives as @apackdev/sdk's dependency
+# EARS and elmdb, its peer, are elmdb's packages and aren't published: each one's tarball, packed from the elmdb
+# checkout the link points at (EARS' dist built by `npm run link:elmdb`, the binding for this machine), stands in for
+# the registry through npm's overrides, as no pack names either: EARS arrives as @apackdev/sdk's dependency
+(cd "$ROOT/vendor/elmdb/packages/ears" && npm pack --silent --pack-destination "$WORK" >/dev/null)
+EARS_TGZ="$(ls "$WORK"/elmdb-ears-*.tgz)"
 (cd "$ROOT/vendor/elmdb/crates/elmdb-node" && npm pack --silent --pack-destination "$WORK" >/dev/null)
-ELMDB_TGZ="$(ls "$WORK"/elmdb-*.tgz)"
+ELMDB_TGZ="$(ls "$WORK"/elmdb-0*.tgz)"
 
 step "1. Install @apackdev/cli + @apackdev/sdk from the tarballs"
 # Every install revalidates npm's cached metadata, as a pack author's does: under `--prefer-offline`, metadata cached
 # before a dependency's latest release names no such version, and npm skips an optional native package it can't find
 # without an error (rollup's), so the build fails later for want of it
 mkdir "$WORK/tools"
-# The SDK's @apackdev/ears comes from its tarball too
-(cd "$WORK/tools" && npm init -y >/dev/null && npm pkg set "overrides.elmdb=file:$ELMDB_TGZ" "overrides.@apackdev/ears=file:$EARS_TGZ" && npm install --loglevel=error --no-audit --no-fund "$SDK_TGZ" "$CLI_TGZ")
+# The SDK's @elmdb/ears comes from its tarball too
+(cd "$WORK/tools" && npm init -y >/dev/null && npm pkg set "overrides.elmdb=file:$ELMDB_TGZ" "overrides.@elmdb/ears=file:$EARS_TGZ" && npm install --loglevel=error --no-audit --no-fund "$SDK_TGZ" "$CLI_TGZ")
 APACK="$WORK/tools/node_modules/.bin/apack"
 "$APACK" --version
 
@@ -65,9 +66,9 @@ cd "$WORK"
 "$APACK" pack init demo-pack >/dev/null
 PACK="$WORK/demo-pack"
 cd "$PACK"
-# The tarballs stand in for the npm registry. The scaffold names no @apackdev/ears: a pack has the SDK's
-[ "$(npm pkg get dependencies.@apackdev/ears devDependencies.@apackdev/ears)" = "{}" ] || fail "apack pack init added @apackdev/ears to the pack"
-npm pkg set "dependencies.@apackdev/sdk=file:$SDK_TGZ" "devDependencies.@apackdev/cli=file:$CLI_TGZ" "devDependencies.@apackdev/testing=file:$TESTING_TGZ" "overrides.elmdb=file:$ELMDB_TGZ" "overrides.@apackdev/ears=file:$EARS_TGZ"
+# The tarballs stand in for the npm registry. The scaffold names no @elmdb/ears: a pack has the SDK's
+[ "$(npm pkg get dependencies.@elmdb/ears devDependencies.@elmdb/ears)" = "{}" ] || fail "apack pack init added @elmdb/ears to the pack"
+npm pkg set "dependencies.@apackdev/sdk=file:$SDK_TGZ" "devDependencies.@apackdev/cli=file:$CLI_TGZ" "devDependencies.@apackdev/testing=file:$TESTING_TGZ" "overrides.elmdb=file:$ELMDB_TGZ" "overrides.@elmdb/ears=file:$EARS_TGZ"
 npm install --loglevel=error --no-audit --no-fund
 # @apackdev/sdk carries the platform API only; the component library and its editors come with @apackdev/ui
 for lib in @tiptap highlight.js lowlight @guolao/vue-monaco-editor; do

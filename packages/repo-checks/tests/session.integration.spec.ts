@@ -22,11 +22,17 @@ beforeEach(async () => {
   await git(repo, 'init', '-b', 'main');
   await git(repo, 'config', 'user.name', 'Session test');
   await git(repo, 'config', 'user.email', 'session@example.invalid');
-  // The elmdb checkout a session links: one commit, a manifest naming elmdb and a built binding
+  // The elmdb checkout a session links: one commit, a manifest naming elmdb, a built binding, the workspace's link to
+  // it, and EARS' `dist-current.mjs`, which answers that its dist is current
   elmdb = path.join(dir, 'elmdb');
   fs.mkdirSync(path.join(elmdb, 'crates', 'elmdb-node'), { recursive: true });
   fs.writeFileSync(path.join(elmdb, 'crates', 'elmdb-node', 'package.json'), JSON.stringify({ name: 'elmdb' }));
   fs.writeFileSync(path.join(elmdb, 'crates', 'elmdb-node', 'elmdb.node'), '');
+  fs.mkdirSync(path.join(elmdb, 'packages', 'ears', 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(elmdb, 'packages', 'ears', 'scripts', 'dist-current.mjs'), '');
+  fs.writeFileSync(path.join(elmdb, '.gitignore'), 'node_modules\n');
+  fs.mkdirSync(path.join(elmdb, 'node_modules'));
+  fs.symlinkSync(path.join('..', 'crates', 'elmdb-node'), path.join(elmdb, 'node_modules', 'elmdb'), 'dir');
   await git(elmdb, 'init', '-b', 'main');
   await git(elmdb, 'add', '.');
   await git(elmdb, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'elmdb');
