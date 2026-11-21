@@ -58,7 +58,7 @@ export const promptsState = setup({
 
     // An ask that ended is no longer this machine's child
     forgetAsk: enqueueActions(({ enqueue, event }) => {
-      enqueue.stopChild((event as DoneActorEvent).actorId)
+      if ('actorId' in event) enqueue.stopChild(event.actorId)
     }),
 
     // The prompt opens in a tab. One that could not be opened opens none

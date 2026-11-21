@@ -94,11 +94,13 @@
         </button>
       </div>
     </div>
+    <ToastNotification ref="toast" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import ToastNotification from '@apackdev/ui/design/ToastNotification'
+import { askUnderWay, useSurface } from '@apackdev/sdk/fe'
 
 import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDrag'
 import { useSelector } from '@xstate/vue'
@@ -109,10 +111,22 @@ import FileEditor from '#features/code/fe/canvas/FileEditor.vue'
 import QuickOpenPalette from '#features/code/fe/canvas/QuickOpenPalette.vue'
 import { reorderTabs } from '../utils/tab-management.ts'
 import { panelChild } from '../features/children.ts';
+import { HUNK } from '../features/commit/state.ts'
 
 const actor: CodeState = useSurface()
 const explorerActor = panelChild(actor, 'explorer')
 const terminalActor = panelChild(actor, 'terminal')
+
+// A terminal ask of this window's that was not done is told here, the one place drawn whenever the surface is: the
+// system answers it to this window alone. One that ended while the surface was not shown is told as it is shown
+const toast = ref<InstanceType<typeof ToastNotification>>()
+const terminalFailure = useSelector(terminalActor, (state) => state?.context.failure ?? null)
+watch(terminalFailure, async (failed) => {
+  if (!failed) return
+  await nextTick()
+  toast.value?.error('Terminal error', failed.message)
+  terminalActor?.send({ type: 'terminal.FAILURE_TOLD' })
+}, { immediate: true })
 const commitActor = panelChild(actor, 'commit')
 
 // State selectors
@@ -120,7 +134,7 @@ const openFiles = useSelector(actor, (state) => state.context.openFiles)
 const activeFilePath = useSelector(actor, (state) => state.context.activeFilePath)
 const baseDirectory = useSelector(actor, (state) => state.context.baseDirectory)
 const tabGroups = useSelector(actor, (state) => state.context.tabGroups)
-const isApplyingHunk = useSelector(commitActor, (state) => state?.matches({ hunk: 'applying' }) === true)
+const isApplyingHunk = useSelector(commitActor, (state) => state !== undefined && askUnderWay(state, HUNK))
 // The pieces staged from the diff on screen: the commit panel keeps them per diff tab
 const appliedHunksByTab = useSelector(commitActor, (state) => state?.context.appliedHunks ?? {})
 const appliedHunks = computed(() => appliedHunksByTab.value[activeFilePath.value ?? ''] ?? [])

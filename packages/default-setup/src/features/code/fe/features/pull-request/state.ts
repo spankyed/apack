@@ -1,13 +1,13 @@
 import type { GitHubApiFailure, PRListState } from '#features/code/be/services/github-api.ts'
-import { setup, assign, type ActorRefFrom } from 'xstate';
+import { setup, assign, spawnChild, stopChild, type ActorRefFrom, type DoneActorEvent } from 'xstate';
 import type { AskOutcome } from '@apackdev/sdk/events';
 import { safeEvents } from '@apackdev/sdk/helpers';
-import type { PRDetails, PRFileDiffWhere, PullRequestAsks } from '#features/code/be/contract.ts';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import type { Contract as CodeSystemContract, PRDetails, PRFileDiffWhere, PullRequestAsks } from '#features/code/be/contract.ts';
+import { fromAsk } from '#generated/events.ts';
 import type { GitStatusFile, GitDiff } from '../commit/state.ts';
 import type { GhPullRequest, GhPRComment, GhReviewThread, PRBranchCheckout } from '#generated/types.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
-import { untypedOpenSurface } from '@apackdev/sdk/fe'
+import { askUnderWay, untypedOpenSurface } from '@apackdev/sdk/fe'
 import { resolveName } from '@apackdev/sdk/ids'
 
 const HOST_SETTINGS = resolveName('settings', 'host');
@@ -221,7 +221,7 @@ const folderStart = (): Omit<CodePullRequestContext, 'commentTab'> => ({
 /**
  * The pull request list the dropdown shows: what it is filtered and searched by, and the pages read of it so far.
  * Read when the dropdown opens and whenever its filter or search changes; nobody sees it shut. Whether a page is
- * being read is the machine's `list` state
+ * being read is whether the machine holds the read of its first page (`LIST`) or of the page after (`LIST_MORE`)
  */
 export interface PRList {
   state: PRListState
@@ -354,6 +354,27 @@ export interface CodePullRequestContext {
   latestPrDetailsFetchedAt: Record<number, number>
 }
 
+/**
+ * The asks the panel has one of at a time, each a child of the machine under the id here for as long as it is under
+ * way (`askUnderWay`): asking a read again stops the one before, and stopping one stops waiting on its answer
+ */
+export const DETAILS = 'details'
+const COMMENTS = 'comments'
+const THREADS = 'threads'
+const BRANCH_PR = 'branchPR'
+const SMART_BASE = 'smartBase'
+const ACCESS = 'access'
+const AUTOFILL = 'autofill'
+/** The list's first page for the filter and search shown */
+export const LIST = 'list'
+/** The page after those read */
+export const LIST_MORE = 'listMore'
+/** The checkout of the base branch of the pull request shown */
+const CHECKOUT_BASE = 'checkoutBase'
+
+/** Every read: what a folder opening stops waiting on */
+const READS = [DETAILS, COMMENTS, THREADS, BRANCH_PR, SMART_BASE, ACCESS, AUTOFILL, LIST, LIST_MORE] as const
+
 export type Event =
   // Branch comparison
   | { type: 'pr.REFRESH_STATUS' }
@@ -398,7 +419,7 @@ export type Event =
   | { type: 'pr.REFRESH_PR'; number: number }
   | { type: 'pr.BACK_TO_BRANCH' }
   | { type: 'pr.CLEAR_ERROR' }
-  // What the machine tells itself: a read to ask for, which its region takes, and reads no longer waited on
+  // What the machine tells itself: a read to ask for, and reads no longer waited on
   | { type: 'pr.read.DETAILS'; number: number; unlessAsking?: true }
   | { type: 'pr.read.COMMENTS'; number: number }
   | { type: 'pr.read.THREADS'; number: number }
@@ -407,11 +428,17 @@ export type Event =
   | { type: 'pr.read.AUTOFILL' }
   | { type: 'pr.ask.DIFF'; baseBranch: string; headBranch?: string; prNumber?: number }
   | ({ type: 'pr.ask.FILE_DIFF'; fetchMissing?: boolean } & PRFileDiffWhere)
-  // How each read ended, which its region takes as it leaves `asking`
-  | ReadDone<'details', 'pr.SELECT_PR'>
-  | ReadDone<'branchPR', 'pr.CHECK_BRANCH_PR'>
-  | ReadDone<'smartBase', 'pr.GET_SMART_BASE_BRANCH'>
-  | ReadDone<'list' | 'listMore', 'pr.LIST_PRS'>
+  // How each read ended, and the checkout of the base
+  | ReadDone<typeof DETAILS, 'pr.SELECT_PR'>
+  | ReadDone<typeof COMMENTS, 'pr.GET_COMMENTS'>
+  | ReadDone<typeof THREADS, 'pr.GET_REVIEW_THREADS'>
+  | ReadDone<typeof BRANCH_PR, 'pr.CHECK_BRANCH_PR'>
+  | ReadDone<typeof SMART_BASE, 'pr.GET_SMART_BASE_BRANCH'>
+  | ReadDone<typeof ACCESS, 'pr.CHECK_GITHUB_ACCESS'>
+  | ReadDone<typeof AUTOFILL, 'pr.GET_PR_AUTOFILL'>
+  | ReadDone<typeof LIST, 'pr.LIST_PRS'>
+  | ReadDone<typeof LIST_MORE, 'pr.LIST_PRS'>
+  | DoneActorEvent<AskOutcome<CodeSystemContract['asks']['commit.CHECKOUT_BRANCH']>, typeof CHECKOUT_BASE>
   | { type: 'pr.DETAILS_LEFT' }
   | { type: 'pr.DISCUSSION_LEFT' }
   | { type: 'pr.READS_LEFT' }
@@ -428,8 +455,8 @@ export type Event =
   | SpawnedAskDone<'comment', 'pr.CREATE_COMMENT' | 'pr.EDIT_COMMENT' | 'pr.DELETE_COMMENT'>
   | SpawnedAskDone<'thread', 'pr.REPLY_TO_THREAD' | 'pr.RESOLVE_THREAD' | 'pr.UNRESOLVE_THREAD' | 'pr.EDIT_REVIEW_COMMENT' | 'pr.DELETE_REVIEW_COMMENT'>;
 
-/** The event the read invoked as `Id` ends with */
-type ReadDone<Id extends string, K extends keyof PullRequestAsks> = { type: `xstate.done.actor.${Id}`; output: AskOutcome<PullRequestAsks[K]> }
+/** The event the read spawned as `Id` ends with */
+type ReadDone<Id extends string, K extends keyof PullRequestAsks> = DoneActorEvent<AskOutcome<PullRequestAsks[K]>, Id>
 
 /** The event a spawned ask ends with: `actorId` is the id it ran as, `<prefix>.<n>`, and `output` how it ended */
 type SpawnedAskDone<P extends string, K extends keyof PullRequestAsks> = {
@@ -563,7 +590,7 @@ const machine = setup({
     events: {} as Event
   },
   actors: {
-    // The reads, each a state of its own region: the latest ask of one is the one waited on
+    // The reads, each spawned under its own id: the latest ask of one is the one waited on
     readDetails: fromAsk('code', 'pr.SELECT_PR'),
     readComments: fromAsk('code', 'pr.GET_COMMENTS'),
     readThreads: fromAsk('code', 'pr.GET_REVIEW_THREADS'),
@@ -572,6 +599,7 @@ const machine = setup({
     readAccess: fromAsk('code', 'pr.CHECK_GITHUB_ACCESS'),
     readAutofill: fromAsk('code', 'pr.GET_PR_AUTOFILL'),
     readList: fromAsk('code', 'pr.LIST_PRS'),
+    checkoutBranch: fromAsk('code', 'commit.CHECKOUT_BRANCH'),
     // The asks spawned beside others of their kind: a diff per comparison, a diff per file, and each write
     readDiff: fromAsk('code', 'pr.GET_BRANCH_DIFF'),
     readFileDiff: fromAsk('code', 'pr.GET_BRANCH_FILE_DIFF'),
@@ -748,6 +776,40 @@ export const pullRequestState = machine.extend({
     navigateToHelp: () => {
       untypedOpenSurface(HOST_SETTINGS, [{ type: 'TAB.SELECT', tab: 'help' }]);
     },
+
+    /** Reads a pull request's details in place of the read under way; the pull request's page asks only where none is */
+    askDetails: enqueueActions(({ enqueue, event, self }) => {
+      const ask = typeOf(['pr.read.DETAILS', 'pr.REFRESH_PR'], event)
+      if (ask.type === 'pr.read.DETAILS' && ask.unlessAsking && askUnderWay(self.getSnapshot(), DETAILS)) return
+      enqueue.stopChild(DETAILS)
+      enqueue.spawnChild('readDetails', { id: DETAILS, input: { number: ask.number } })
+    }),
+
+    /** Reads a pull request's discussion in place of the read under way */
+    askComments: enqueueActions(({ enqueue, event }) => {
+      enqueue.stopChild(COMMENTS)
+      enqueue.spawnChild('readComments', { id: COMMENTS, input: { number: typeOf('pr.read.COMMENTS', event).number } })
+    }),
+
+    /** Reads a pull request's review threads in place of the read under way */
+    askThreads: enqueueActions(({ enqueue, event }) => {
+      enqueue.stopChild(THREADS)
+      enqueue.spawnChild('readThreads', { id: THREADS, input: { number: typeOf('pr.read.THREADS', event).number } })
+    }),
+
+    /** Reads the list's first page for the filter and search shown, in place of any page being read */
+    askList: enqueueActions(({ enqueue, context: { prList } }) => {
+      enqueue.stopChild(LIST)
+      enqueue.stopChild(LIST_MORE)
+      enqueue.spawnChild('readList', { id: LIST, input: { state: prList.state, ...(prList.query.trim() && { query: prList.query.trim() }) } })
+    }),
+
+    /** Reads the page after those read, where there is one and no page is being read */
+    askListMore: enqueueActions(({ enqueue, context: { prList }, self }) => {
+      const snapshot = self.getSnapshot()
+      if (prList.next === null || askUnderWay(snapshot, LIST) || askUnderWay(snapshot, LIST_MORE)) return
+      enqueue.spawnChild('readList', { id: LIST_MORE, input: { state: prList.state, ...(prList.query.trim() && { query: prList.query.trim() }), after: prList.next } })
+    }),
 
     /** The details asked for, shown; or why they could not be read */
     takeDetailsRead: enqueueActions(({ enqueue, context, event }) => {
@@ -937,13 +999,21 @@ export const pullRequestState = machine.extend({
       enqueue.spawnChild('checkoutPR', { id, input: { number: pr.number } })
     }),
 
-    checkoutBase: ({ context, self }) => {
-      if (!context.selectedPR?.baseRefName) return
-      updateParentState(self, { selectedPanel: 'commit' })
-      // "Checkout & Pull Base": the pull is asked for, a checkout pulling nothing by itself. The commit panel, shown
-      // by now, is where its answer is taken
-      sendToSystem('code', { type: 'commit.CHECKOUT_BRANCH', branchName: context.selectedPR.baseRefName, pull: true })
-    },
+    /** "Checkout & Pull Base", once at a time: the pull is asked for, a checkout pulling nothing by itself */
+    checkoutBase: enqueueActions(({ enqueue, context, self }) => {
+      const branchName = context.selectedPR?.baseRefName
+      if (!branchName || askUnderWay(self.getSnapshot(), CHECKOUT_BASE)) return
+      enqueue.assign({ prError: null })
+      enqueue.spawnChild('checkoutBranch', { id: CHECKOUT_BASE, input: { branchName, pull: true } })
+    }),
+
+    /** The base checked out is shown in the commit panel; a refusal is shown here, where it was asked for */
+    takeBaseCheckedOut: enqueueActions(({ enqueue, event, self }) => {
+      const { output } = typeOf('xstate.done.actor.checkoutBase', event)
+      enqueue.stopChild(CHECKOUT_BASE)
+      if (output.ok) enqueue(() => updateParentState(self, { selectedPanel: 'commit' }))
+      else enqueue.assign(failureShown(output.failure))
+    }),
 
     /** Shows the files or the pull request; the pull request's discussion is read when the one held is another's */
     setViewMode: enqueueActions(({ enqueue, event, context }) => {
@@ -1118,7 +1188,6 @@ export const pullRequestState = machine.extend({
   }
 }).createMachine({
   id: 'pr',
-  type: 'parallel',
   context: { ...folderStart(), commentTab: 'discussion' },
   on: {
     'pr.REFRESH_STATUS': { actions: 'refreshStatus' },
@@ -1171,212 +1240,83 @@ export const pullRequestState = machine.extend({
     'pr.SET_COMMENT_TAB': { actions: assign({ commentTab: ({ event }) => event.tab }) },
     'pr.BACK_TO_BRANCH': { actions: 'backToBranch' },
     'pr.CLEAR_ERROR': { actions: assign({ prError: null }) },
-  },
-  // One region per read. Each is `asking` for exactly as long as its latest ask is under way: asking again enters it
-  // again, which stops the ask before, and leaving it stops waiting on the answer
-  states: {
-    details: {
-      initial: 'idle',
-      on: {
-        'pr.read.DETAILS': { target: '.asking', reenter: true },
-        'pr.REFRESH_PR': { target: '.asking', reenter: true },
-        'pr.DETAILS_LEFT': { target: '.idle' },
-        'pr.READS_LEFT': { target: '.idle' },
-      },
-      states: {
-        idle: {},
-        asking: {
-          invoke: {
-            id: 'details',
-            src: 'readDetails',
-            input: ({ event }) => ({ number: typeOf(['pr.read.DETAILS', 'pr.REFRESH_PR'], event).number }),
-            onDone: { target: 'idle', actions: 'takeDetailsRead' },
-          },
-          on: {
-            // The pull request's page asks only where its details are not already on their way
-            'pr.read.DETAILS': [
-              { guard: ({ event }) => event.unlessAsking === true },
-              { target: 'asking', reenter: true },
-            ],
-          },
-        },
-      },
+    [`xstate.done.actor.${CHECKOUT_BASE}`]: { actions: 'takeBaseCheckedOut' },
+
+    // The reads, one of each at a time: asking one again stops the one before, and its end is taken here
+    'pr.read.DETAILS': { actions: 'askDetails' },
+    'pr.REFRESH_PR': { actions: 'askDetails' },
+    [`xstate.done.actor.${DETAILS}`]: { actions: [stopChild(DETAILS), 'takeDetailsRead'] },
+    'pr.read.COMMENTS': { actions: 'askComments' },
+    [`xstate.done.actor.${COMMENTS}`]: {
+      actions: [
+        stopChild(COMMENTS),
+        // The discussion read again after a write that landed: shown with the comment writes still unanswered
+        // laid over it. A read that failed is no error of the write's to show
+        assign(({ context, event }) => event.output.ok
+          ? { ...withWrites(context, context.writes, { comments: event.output.value.comments }), commentsFor: event.output.value.number }
+          : {}),
+      ],
     },
-    comments: {
-      initial: 'idle',
-      on: {
-        'pr.read.COMMENTS': { target: '.asking', reenter: true },
-        'pr.DISCUSSION_LEFT': { target: '.idle' },
-        'pr.READS_LEFT': { target: '.idle' },
-      },
-      states: {
-        idle: {},
-        asking: {
-          invoke: {
-            src: 'readComments',
-            input: ({ event }) => ({ number: typeOf('pr.read.COMMENTS', event).number }),
-            onDone: {
-              target: 'idle',
-              // The discussion read again after a write that landed: shown with the comment writes still unanswered
-              // laid over it. A read that failed is no error of the write's to show
-              actions: assign(({ context, event }) => event.output.ok
-                ? { ...withWrites(context, context.writes, { comments: event.output.value.comments }), commentsFor: event.output.value.number }
-                : {}),
-            },
-          },
-        },
-      },
+    'pr.read.THREADS': { actions: 'askThreads' },
+    [`xstate.done.actor.${THREADS}`]: {
+      actions: [
+        stopChild(THREADS),
+        // The review threads read again: shown with the thread writes still unanswered laid over them
+        assign(({ context, event }) => event.output.ok
+          ? withWrites(context, context.writes, { threads: event.output.value.threads })
+          : failureShown(event.output.failure)),
+      ],
     },
-    threads: {
-      initial: 'idle',
-      on: {
-        'pr.read.THREADS': { target: '.asking', reenter: true },
-        'pr.DISCUSSION_LEFT': { target: '.idle' },
-        'pr.READS_LEFT': { target: '.idle' },
-      },
-      states: {
-        idle: {},
-        asking: {
-          invoke: {
-            src: 'readThreads',
-            input: ({ event }) => ({ number: typeOf('pr.read.THREADS', event).number }),
-            onDone: {
-              target: 'idle',
-              // The review threads read again: shown with the thread writes still unanswered laid over them
-              actions: assign(({ context, event }) => event.output.ok
-                ? withWrites(context, context.writes, { threads: event.output.value.threads })
-                : failureShown(event.output.failure)),
-            },
-          },
-        },
-      },
+    'pr.read.BRANCH_PR': { actions: [stopChild(BRANCH_PR), spawnChild('readBranchPR', { id: BRANCH_PR, input: {} })] },
+    [`xstate.done.actor.${BRANCH_PR}`]: { actions: [stopChild(BRANCH_PR), 'takeBranchPR'] },
+    'pr.read.SMART_BASE': { actions: [stopChild(SMART_BASE), spawnChild('readSmartBase', { id: SMART_BASE, input: {} })] },
+    [`xstate.done.actor.${SMART_BASE}`]: { actions: [stopChild(SMART_BASE), 'takeSmartBase'] },
+    'pr.CHECK_GITHUB_ACCESS': { actions: [stopChild(ACCESS), spawnChild('readAccess', { id: ACCESS, input: {} })] },
+    [`xstate.done.actor.${ACCESS}`]: {
+      actions: [
+        stopChild(ACCESS),
+        assign(({ event }) => event.output.ok
+          ? { githubAccess: event.output.value.access, githubAccessMessage: event.output.value.message ?? null }
+          : failureShown(event.output.failure)),
+      ],
     },
-    branchPR: {
-      initial: 'idle',
-      on: {
-        'pr.read.BRANCH_PR': { target: '.asking', reenter: true },
-        'pr.READS_LEFT': { target: '.idle' },
-      },
-      states: {
-        idle: {},
-        asking: {
-          invoke: {
-            id: 'branchPR',
-            src: 'readBranchPR',
-            input: {},
-            onDone: { target: 'idle', actions: 'takeBranchPR' },
-          },
-        },
-      },
+    'pr.read.AUTOFILL': { actions: [stopChild(AUTOFILL), spawnChild('readAutofill', { id: AUTOFILL, input: {} })] },
+    [`xstate.done.actor.${AUTOFILL}`]: {
+      actions: [
+        stopChild(AUTOFILL),
+        // What the user has typed meanwhile is kept
+        assign(({ context, event }) => event.output.ok
+          ? { createTitle: context.createTitle || event.output.value.title, createBody: context.createBody || event.output.value.body }
+          : failureShown(event.output.failure)),
+      ],
     },
-    smartBase: {
-      initial: 'idle',
-      on: {
-        'pr.read.SMART_BASE': { target: '.asking', reenter: true },
-        'pr.READS_LEFT': { target: '.idle' },
-      },
-      states: {
-        idle: {},
-        asking: {
-          invoke: {
-            id: 'smartBase',
-            src: 'readSmartBase',
-            input: {},
-            onDone: { target: 'idle', actions: 'takeSmartBase' },
-          },
-        },
-      },
+
+    // The list the dropdown shows: its first page is read for the filter and search shown, which a change to either
+    // starts again, and the page after those read is read where no page is being read
+    'pr.LIST_SHOWN': { actions: 'askList' },
+    'pr.SET_LIST_STATE': {
+      guard: ({ context, event }) => event.state !== context.prList.state,
+      actions: [
+        assign({ prList: ({ context, event }) => ({ ...context.prList, state: event.state, prs: [], next: null, read: false }) }),
+        'askList',
+      ],
     },
-    access: {
-      initial: 'idle',
-      on: {
-        'pr.CHECK_GITHUB_ACCESS': { target: '.asking', reenter: true },
-        'pr.READS_LEFT': { target: '.idle' },
-      },
-      states: {
-        idle: {},
-        asking: {
-          invoke: {
-            src: 'readAccess',
-            input: {},
-            onDone: {
-              target: 'idle',
-              actions: assign(({ event }) => event.output.ok
-                ? { githubAccess: event.output.value.access, githubAccessMessage: event.output.value.message ?? null }
-                : failureShown(event.output.failure)),
-            },
-          },
-        },
-      },
+    'pr.SET_LIST_QUERY': {
+      guard: ({ context, event }) => event.query.trim() !== context.prList.query.trim(),
+      actions: [
+        assign({ prList: ({ context, event }) => ({ ...context.prList, query: event.query, prs: [], next: null, read: false }) }),
+        'askList',
+      ],
     },
-    autofill: {
-      initial: 'idle',
-      on: {
-        'pr.read.AUTOFILL': { target: '.asking', reenter: true },
-        'pr.READS_LEFT': { target: '.idle' },
-      },
-      states: {
-        idle: {},
-        asking: {
-          invoke: {
-            src: 'readAutofill',
-            input: {},
-            onDone: {
-              target: 'idle',
-              // What the user has typed meanwhile is kept
-              actions: assign(({ context, event }) => event.output.ok
-                ? { createTitle: context.createTitle || event.output.value.title, createBody: context.createBody || event.output.value.body }
-                : failureShown(event.output.failure)),
-            },
-          },
-        },
-      },
-    },
-    // The list the dropdown shows: `reading` its first page for the filter and search shown, which starts it again,
-    // or `readingMore` the page after those read
-    list: {
-      initial: 'idle',
-      on: {
-        'pr.LIST_SHOWN': { target: '.reading', reenter: true },
-        'pr.SET_LIST_STATE': {
-          guard: ({ context, event }) => event.state !== context.prList.state,
-          target: '.reading',
-          reenter: true,
-          actions: assign({ prList: ({ context, event }) => ({ ...context.prList, state: event.state, prs: [], next: null, read: false }) }),
-        },
-        'pr.SET_LIST_QUERY': {
-          guard: ({ context, event }) => event.query.trim() !== context.prList.query.trim(),
-          target: '.reading',
-          reenter: true,
-          actions: assign({ prList: ({ context, event }) => ({ ...context.prList, query: event.query, prs: [], next: null, read: false }) }),
-        },
-        'pr.READS_LEFT': { target: '.idle' },
-      },
-      states: {
-        idle: {
-          on: {
-            // The page after those read, where there is one
-            'pr.LOAD_MORE_PRS': { guard: ({ context }) => context.prList.next !== null, target: 'readingMore' },
-          },
-        },
-        reading: {
-          invoke: {
-            id: 'list',
-            src: 'readList',
-            input: ({ context: { prList } }) => ({ state: prList.state, ...(prList.query.trim() && { query: prList.query.trim() }) }),
-            onDone: { target: 'idle', actions: 'takeListPage' },
-          },
-        },
-        readingMore: {
-          invoke: {
-            id: 'listMore',
-            src: 'readList',
-            input: ({ context: { prList } }) => ({ state: prList.state, ...(prList.query.trim() && { query: prList.query.trim() }), ...(prList.next && { after: prList.next }) }),
-            onDone: { target: 'idle', actions: 'takeListPage' },
-          },
-        },
-      },
-    },
+    'pr.LOAD_MORE_PRS': { actions: 'askListMore' },
+    [`xstate.done.actor.${LIST}`]: { actions: [stopChild(LIST), 'takeListPage'] },
+    [`xstate.done.actor.${LIST_MORE}`]: { actions: [stopChild(LIST_MORE), 'takeListPage'] },
+
+    // Reads stopped: their answers are no longer waited on
+    'pr.DETAILS_LEFT': { actions: stopChild(DETAILS) },
+    'pr.DISCUSSION_LEFT': { actions: [stopChild(COMMENTS), stopChild(THREADS)] },
+    // A folder opening leaves every read, and the checkout asked of the folder before
+    'pr.READS_LEFT': { actions: [...READS.map(id => stopChild(id)), stopChild(CHECKOUT_BASE)] },
   },
 });
 

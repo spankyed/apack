@@ -406,7 +406,7 @@ export const terminalSystem = setup({
           actions: [
             ({ event }) => {
               reportError({
-                error: (event as { error?: unknown }).error,
+                error: event.error,
                 title: 'Could not restore terminals',
                 source: 'terminal',
                 operation: 'restore',

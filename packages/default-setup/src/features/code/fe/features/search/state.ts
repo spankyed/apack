@@ -1,6 +1,7 @@
 import { setup, assign , type ActorRefFrom } from 'xstate';
 import { fromAsk } from '#generated/events.ts';
 import type { ProgressEventOf } from '@apackdev/sdk/events';
+import { safeEvents } from '@apackdev/sdk/helpers';
 import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { getParentContext } from '../../utils/parent-communication.ts';
 
@@ -50,6 +51,8 @@ export type Event =
   // What the search asked for says as it runs: how far it is, and each file's matches
   | ProgressEventOf<CodeSystemContract, 'search.SEARCH_FILES'>;
 
+const typeOf = safeEvents<Event>()
+
 export const searchState = setup({
   types: {
     context: {} as CodeSearchContext,
@@ -60,7 +63,7 @@ export const searchState = setup({
   },
   actions: {
     assignSearchQuery: assign({
-      searchQuery: ({ event }) => (event as { type: 'search.START'; query: string }).query,
+      searchQuery: ({ event }) => typeOf('search.START', event).query,
       searchError: null,
       searchResults: []
     }),
@@ -82,13 +85,13 @@ export const searchState = setup({
 
     updateSearchOptions: assign({
       searchOptions: ({ context, event }) => {
-        const ev = event as { type: 'search.UPDATE_OPTIONS'; options: Partial<CodeSearchContext['searchOptions']> }
+        const ev = typeOf('search.UPDATE_OPTIONS', event)
         return { ...context.searchOptions, ...ev.options }
       }
     }),
 
     handleDirectoryChanged: ({ self, context, event }) => {
-      const ev = event as { type: 'search.DIRECTORY_CHANGED'; baseDirectory: string }
+      const ev = typeOf('search.DIRECTORY_CHANGED', event)
       // Clear the "No directory selected" error when a directory is selected
       if (context.searchError?.includes('No directory selected') && ev.baseDirectory) {
         self.send({ type: 'search.CLEAR_ERROR' })

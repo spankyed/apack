@@ -2,6 +2,7 @@
 // before, an error ends only the ask or write it answers, and nothing of one folder or pull request is left on
 // the next.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { askUnderWay } from '@apackdev/sdk/fe';
 import { createActor } from 'xstate';
 import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 import type { GhPullRequest, GhPRComment, GhReviewThread } from '#generated/types.ts';
@@ -9,14 +10,15 @@ import type { GhPullRequest, GhPRComment, GhReviewThread } from '#generated/type
 const sendToSystem = vi.hoisted(() => vi.fn());
 vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 const parent = vi.hoisted(() => ({ baseDirectory: '/repo' as string | null, selectedPanel: 'pr' }));
+const updateParentState = vi.hoisted(() => vi.fn());
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
-  updateParentState: vi.fn(),
+  updateParentState,
   getParentContext: vi.fn(() => parent),
   sendEventToParent: vi.fn(),
 }));
 
-const { pullRequestState } = await import('#features/code/fe/features/pull-request/state.ts');
+const { pullRequestState, DETAILS } = await import('#features/code/fe/features/pull-request/state.ts');
 
 type Actor = ReturnType<typeof started>;
 const started = () => createActor(pullRequestState).start();
@@ -58,6 +60,7 @@ const onBranchPR = async (actor: Actor, which: GhPullRequest | null) => {
 
 beforeEach(() => {
   sendToSystem.mockReset();
+  updateParentState.mockReset();
   resetAsks();
   parent.baseDirectory = '/repo';
   parent.selectedPanel = 'pr';
@@ -122,7 +125,7 @@ describe('an error ends the ask or write it answers, and no other', () => {
     await refuse('pr.MERGE_PR', 'not mergeable');
 
     expect(context(actor).isMerging).toBe(false);
-    expect(actor.getSnapshot().matches({ details: 'asking' })).toBe(true);
+    expect(askUnderWay(actor.getSnapshot(), DETAILS)).toBe(true);
   });
 });
 
@@ -253,7 +256,7 @@ describe('another folder', () => {
       inflightMutations: 0,
       writes: {},
     });
-    expect(actor.getSnapshot().matches({ details: 'idle' }), 'and its details are no longer waited on').toBe(true);
+    expect(askUnderWay(actor.getSnapshot(), DETAILS), 'and its details are no longer waited on').toBe(false);
 
     await onBranchPR(actor, pr(11));
     expect(context(actor).selectedPR?.number).toBe(11);
@@ -326,6 +329,17 @@ describe('"Checkout & Pull Base"', () => {
 
     actor.send({ type: 'pr.CHECKOUT_BASE' });
 
-    expect(sendToSystem.mock.calls.at(-1)?.[1]).toEqual({ type: 'commit.CHECKOUT_BRANCH', branchName: 'develop', pull: true });
+    expect(asked('commit.CHECKOUT_BRANCH')).toEqual([{ type: 'commit.CHECKOUT_BRANCH', branchName: 'develop', pull: true }]);
+  });
+
+  it('shows why the base was not checked out, on the panel that asked', async () => {
+    const actor = started();
+    await pick(actor, pr(7, { baseRefName: 'develop' }));
+    actor.send({ type: 'pr.CHECKOUT_BASE' });
+
+    await refuse('commit.CHECKOUT_BRANCH', 'Your local changes would be overwritten by checkout');
+
+    expect(context(actor).prError).toBe('Your local changes would be overwritten by checkout');
+    expect(updateParentState, 'the commit panel is not shown for a checkout that did not happen').not.toHaveBeenCalled();
   });
 });

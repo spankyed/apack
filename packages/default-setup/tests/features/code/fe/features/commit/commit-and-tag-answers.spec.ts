@@ -3,6 +3,7 @@
 // is written and taken out of it when asked.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { askUnderWay } from '@apackdev/sdk/fe';
 import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 
 vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
@@ -13,7 +14,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   getParentContext: vi.fn(() => ({})),
 }));
 
-const { commitState } = await import('#features/code/fe/features/commit/state.ts');
+const { commitState, AMEND, PUSH, commitUnderWay } = await import('#features/code/fe/features/commit/state.ts');
 
 beforeEach(resetAsks);
 const sent = (type: string) => asksOf(type).map(ask => ask.event);
@@ -23,13 +24,13 @@ it('says a push that was stopped was stopped, and a push run again starts over',
   actor.send({ type: 'commit.PUSH_BRANCH' });
   actor.send({ type: 'commit.STOP_PUSH' });
   expect(latestAsk('commit.PUBLISH_BRANCH').stopped, 'which ends git on the backend').toBe(true);
-  expect(actor.getSnapshot().matches({ push: 'idle' })).toBe(true);
+  expect(askUnderWay(actor.getSnapshot(), PUSH)).toBe(false);
   expect(actor.getSnapshot().context.pushStopped).toBe(true);
 
   actor.send({ type: 'commit.PUSH_BRANCH' });
   expect(actor.getSnapshot().context.pushStopped).toBe(false);
   await latestAsk('commit.PUBLISH_BRANCH').answer({ branchName: 'main' });
-  expect(actor.getSnapshot().matches({ push: 'idle' })).toBe(true);
+  expect(askUnderWay(actor.getSnapshot(), PUSH)).toBe(false);
   expect(actor.getSnapshot().context.pushStopped).toBe(false);
 });
 
@@ -44,28 +45,28 @@ it('asks for one commit at a time, and for another once the first is answered', 
   expect(sent('commit.AMEND')).toHaveLength(0);
 
   await latestAsk('commit.COMMIT').refuse('The hook refused it', { kind: 'git' });
-  expect(actor.getSnapshot().matches({ committing: 'idle' })).toBe(true);
+  expect(commitUnderWay(actor.getSnapshot())).toBe(false);
 
   actor.send({ type: 'commit.COMMIT' });
   expect(sent('commit.COMMIT')).toHaveLength(2);
   await latestAsk('commit.COMMIT').answer({ message: 'Fix it' });
-  expect(actor.getSnapshot().matches({ committing: 'idle' })).toBe(true);
+  expect(commitUnderWay(actor.getSnapshot())).toBe(false);
   expect(actor.getSnapshot().context.commitMessage).toBe('');
 });
 
 it('holds an amend as a commit until it is answered, by its amend or by the question it needs', async () => {
   const actor = createActor(commitState).start();
   actor.send({ type: 'commit.AMEND' });
-  expect(actor.getSnapshot().matches({ committing: 'amending' })).toBe(true);
+  expect(askUnderWay(actor.getSnapshot(), AMEND)).toBe(true);
   await latestAsk('commit.AMEND').refuse('The last commit is already pushed.', { kind: 'published' });
-  expect(actor.getSnapshot().matches({ committing: 'idle' }), 'the user is asked').toBe(true);
+  expect(commitUnderWay(actor.getSnapshot()), 'the user is asked').toBe(false);
   expect(actor.getSnapshot().context.rewriteConfirmation?.message).toBe('The last commit is already pushed.');
 
   actor.send({ type: 'commit.CONFIRM_REWRITE' });
   expect(sent('commit.AMEND').at(-1)).toMatchObject({ evenIfPublished: true });
-  expect(actor.getSnapshot().matches({ committing: 'amending' })).toBe(true);
+  expect(askUnderWay(actor.getSnapshot(), AMEND)).toBe(true);
   await latestAsk('commit.AMEND').answer({});
-  expect(actor.getSnapshot().matches({ committing: 'idle' })).toBe(true);
+  expect(commitUnderWay(actor.getSnapshot())).toBe(false);
 });
 
 it('asks for a commit of the message as written, its trailers included, which the system leaves out as the settings say', () => {

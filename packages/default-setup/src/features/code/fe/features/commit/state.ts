@@ -1,6 +1,7 @@
-import { setup, assign, enqueueActions, stateIn, type ActorRefFrom } from 'xstate';
+import { setup, assign, enqueueActions, type ActorRefFrom, type DoneActorEvent } from 'xstate';
 import type { AnswerPayload, AskOutcome, ContractAsks, ProgressEventOf } from '@apackdev/sdk/events';
 import { safeEvents } from '@apackdev/sdk/helpers';
+import { askUnderWay } from '@apackdev/sdk/fe';
 import type { CommitStatus, Contract as CodeSystemContract, GitFailure } from '#features/code/be/contract.ts';
 import { fromAsk, sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
@@ -246,8 +247,8 @@ export interface CommitLogEntry {
 type Asks = ContractAsks<CodeSystemContract>
 
 /**
- * The asks this panel makes, each as logic a state invokes or the machine spawns: the commit ones, and the code
- * system's own picker and worktree switch
+ * The asks this panel makes, each as logic the machine spawns: the commit ones, and the code system's own picker
+ * and worktree switch
  */
 const asks = {
   'commit.GET_GIT_STATUS': fromAsk('code', 'commit.GET_GIT_STATUS'),
@@ -308,7 +309,7 @@ const asks = {
 
 /**
  * The asks the machine spawns, several of which may be under way at once, each under an id of its own (`askId`):
- * how one ended arrives as `xstate.done.actor.<id>`. Every other ask is invoked by the state that is busy with it
+ * how one ended arrives as `xstate.done.actor.<id>`. Every other ask is one of a kind (`ONE_OF_A_KIND`)
  */
 const SPAWNED = [
   'commit.GET_GIT_DIFF', 'commit.STAGE_FILES', 'commit.UNSTAGE_FILES', 'commit.REWRITE_COMMIT', 'commit.READ_TRAILERS',
@@ -342,6 +343,91 @@ function diffRefresh(refreshes: Record<string, string>, file: { path: string; st
   const others = Object.fromEntries(Object.entries(refreshes).filter(([, asked]) => asked !== tab))
   return { id, before, refreshes: { ...others, [id]: tab }, input: { path: file.path, staged: file.staged } }
 }
+
+/**
+ * The asks of which one of a kind is under way at a time, each spawned under the id here: the machine holds the ask
+ * as its child until it ends or is stopped, so whether one is under way is read off a snapshot
+ * (`askUnderWay(snapshot, PUSH)`), and stopping the child gives the ask up on the backend
+ */
+
+/** The status read the user asked for, which the panel shows as loading */
+export const STATUS_SHOWN = 'statusShown'
+/** A status read behind what is shown, which stays as it is until the answer */
+export const STATUS_BEHIND = 'statusBehind'
+export const LOG = 'log'
+export const BRANCHES = 'branches'
+export const STASHES = 'stashes'
+export const WORKTREES = 'worktrees'
+export const PUSH = 'push'
+export const PULL = 'pull'
+export const CHECKOUT = 'checkout'
+export const CREATE_BRANCH = 'createBranch'
+export const SUBMODULE = 'submodule'
+export const COMMIT = 'commit'
+export const AMEND = 'amend'
+export const STASH = 'stash'
+export const WORKTREE_ADD = 'worktreeAdd'
+export const WORKTREE_REMOVE = 'worktreeRemove'
+export const WORKTREE_SWITCH = 'worktreeSwitch'
+export const SPEED_UP = 'speedUp'
+export const SIGN_IN = 'signIn'
+export const HUNK = 'hunk'
+export const MOVE_OPERATION = 'moveOperation'
+export const START_OPERATION = 'startOperation'
+export const BLAME = 'blame'
+export const REWORD = 'reword'
+export const TAG_PUSH = 'tagPush'
+export const TAG_DELETE = 'tagDelete'
+export const RESET = 'reset'
+
+/** Every id an ask of one kind runs under: what the machine stops when the folder they were asked of is left */
+const ONE_OF_A_KIND = [
+  STATUS_SHOWN, STATUS_BEHIND, LOG, BRANCHES, STASHES, WORKTREES, PUSH, PULL, CHECKOUT, CREATE_BRANCH, SUBMODULE, COMMIT,
+  AMEND, STASH, WORKTREE_ADD, WORKTREE_REMOVE, WORKTREE_SWITCH, SPEED_UP, SIGN_IN, HUNK, MOVE_OPERATION, START_OPERATION,
+  BLAME, REWORD, TAG_PUSH, TAG_DELETE, RESET,
+] as const
+
+/** How the ask of one kind spawned under `Id` ended */
+type Done<K extends keyof Asks, Id extends string> = DoneActorEvent<AskOutcome<Asks[K]>, Id>
+
+/** How each ask of one kind ended, by the id it ran under */
+type OneOfAKindDone =
+  | Done<'commit.GET_GIT_STATUS', typeof STATUS_SHOWN | typeof STATUS_BEHIND>
+  | Done<'commit.LOG_LIST', typeof LOG>
+  | Done<'commit.GET_ALL_BRANCHES', typeof BRANCHES>
+  | Done<'commit.STASH_LIST', typeof STASHES>
+  | Done<'commit.WORKTREE_LIST', typeof WORKTREES>
+  | Done<'commit.PUBLISH_BRANCH', typeof PUSH>
+  | Done<'commit.PULL_BRANCH', typeof PULL>
+  | Done<'commit.CHECKOUT_BRANCH', typeof CHECKOUT>
+  | Done<'commit.CREATE_BRANCH', typeof CREATE_BRANCH>
+  | Done<'commit.UPDATE_SUBMODULE', typeof SUBMODULE>
+  | Done<'commit.COMMIT', typeof COMMIT>
+  | Done<'commit.AMEND', typeof AMEND>
+  | Done<'commit.STASH_PUSH', typeof STASH>
+  | Done<'commit.WORKTREE_ADD', typeof WORKTREE_ADD>
+  | Done<'commit.WORKTREE_REMOVE', typeof WORKTREE_REMOVE>
+  | Done<'commit.WORKTREE_SWITCH', typeof WORKTREE_SWITCH>
+  | Done<'commit.SPEED_UP_STATUS', typeof SPEED_UP>
+  | Done<'commit.SET_UP_SIGN_IN', typeof SIGN_IN>
+  | Done<'commit.APPLY_HUNK', typeof HUNK>
+  | Done<'commit.MOVE_OPERATION', typeof MOVE_OPERATION>
+  | Done<'commit.START_OPERATION', typeof START_OPERATION>
+  | Done<'commit.GET_BLAME', typeof BLAME>
+  | Done<'commit.GET_COMMIT_MESSAGE', typeof REWORD>
+  | Done<'commit.PUSH_TAG', typeof TAG_PUSH>
+  | Done<'commit.DELETE_TAG', typeof TAG_DELETE>
+  | Done<'commit.RESET_TO_COMMIT', typeof RESET>
+
+/** Whether a commit or an amend is under way: another is not asked for until it is answered */
+export const commitUnderWay = (snapshot: { children: object }): boolean => askUnderWay(snapshot, COMMIT) || askUnderWay(snapshot, AMEND)
+
+/** Whether a branch is being checked out or made */
+export const checkoutUnderWay = (snapshot: { children: object }): boolean => askUnderWay(snapshot, CHECKOUT) || askUnderWay(snapshot, CREATE_BRANCH)
+
+/** Whether a worktree is being added or removed, or the code surface moved to one */
+export const worktreeChangeUnderWay = (snapshot: { children: object }): boolean =>
+  askUnderWay(snapshot, WORKTREE_ADD) || askUnderWay(snapshot, WORKTREE_REMOVE) || askUnderWay(snapshot, WORKTREE_SWITCH)
 
 /** Why an ask was not done, as the panel shows it: git's failure carries what can be done about it, any other only its message */
 type Refusal = { message: string } & Partial<GitFailure>
@@ -465,8 +551,6 @@ export type Event =
   | { type: 'commit.REVERT_COMMIT'; hash: string }
   | { type: 'commit.RESET_TO_COMMIT'; hash: string }
   | { type: 'CODE_STARTED' }
-  /** The code surface started over another folder: whatever the panel was busy asking the one before is left */
-  | { type: 'commit.FOLDER_LEFT' }
   /** The flow writing a commit message for this window made none, and says why */
   | { type: 'commit.MESSAGE_NOT_GENERATED'; data: { message: string } }
   | { type: 'commit.REPOSITORY_CHANGED'; changed: RepositoryChange }
@@ -474,8 +558,9 @@ export type Event =
   | { type: 'commit.HIDDEN' }
   // How far along the push, the pull, the checkout or the submodule update asked for is, as its ask says while it runs
   | ProgressEventOf<CodeSystemContract, 'commit.PUBLISH_BRANCH' | 'commit.PULL_BRANCH' | 'commit.CHECKOUT_BRANCH' | 'commit.UPDATE_SUBMODULE'>
-  // How each spawned ask ended
-  | AskDone;
+  // How each ask ended
+  | AskDone
+  | OneOfAKindDone;
 
 const typeOf = safeEvents<Event>();
 
@@ -484,7 +569,7 @@ type RewriteRequest =
   | { type: 'commit.AMEND'; message?: string; evenIfPublished?: boolean }
   | { type: 'commit.REWRITE_COMMIT'; hash: string; action: RewriteAction; message?: string; evenIfPublished?: boolean }
 
-/** Why a spawned ask was not done, where the event is one that ended that way */
+/** Why an ask was not done, where the event is one that ended that way */
 const refusalIn = (event: Event): Refusal | undefined => ('output' in event && !event.output.ok ? event.output.failure : undefined)
 
 /** The answer to a spawned ask, off the done event of one that was answered: throws for any other event */
@@ -557,10 +642,9 @@ type OfOneFolder =
  * repository git is not run in, because it is not trusted, reads nothing, and would otherwise sit under the
  * branch and the commits of the folder open before it.
  *
- * What it waits on goes with it: the asks made of the folder before are stopped, and every state that was busy
- * with one is left (`commit.FOLDER_LEFT`), so an answer from that folder is taken for none and nothing stays
- * busy. The open diffs' refreshes are not among them: they belong to tabs, and their answers only ever bring a tab
- * up to date.
+ * What it waits on goes with it: the asks made of the folder before are stopped, so an answer from that folder is
+ * taken for none and nothing stays busy. The open diffs' refreshes are not among them: they belong to tabs, and
+ * their answers only ever bring a tab up to date.
  */
 const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   gitStatus: [],
@@ -615,15 +699,6 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   logCursor: null,
   logPath: null,
 })
-
-/**
- * The parts of the panel that wait on one ask at a time, each a region of the machine that is `idle` or in the
- * state that invokes the ask: a component reads whether one is busy off the state (`matches({ push: 'pushing' })`)
- */
-const REGIONS = [
-  'status', 'log', 'branches', 'stashes', 'worktrees', 'push', 'pull', 'checkout', 'submodule', 'committing', 'stash',
-  'worktree', 'speedUp', 'signIn', 'hunk', 'moveOperation', 'startOperation', 'blame', 'reword', 'tag', 'reset',
-] as const
 
 /** Shows why a spawned ask was not done, in place of what its answer would have done */
 const REFUSED = { guard: 'refused', actions: 'showFailure' } as const
@@ -1027,8 +1102,8 @@ export const commitState = setup({
       const directory: string = getParentContext(self)?.baseDirectory || ''
       if (directory !== context.directory) {
         for (const id of Object.keys(self.getSnapshot().children)) if (ofOneFolder(id)) enqueue.stopChild(id)
+        for (const id of ONE_OF_A_KIND) enqueue.stopChild(id)
         enqueue.assign({ directory, ...ofNoFolder() })
-        enqueue.raise({ type: 'commit.FOLDER_LEFT' })
       }
       if (!directory) return
       enqueue.raise({ type: 'commit.REFRESH_STATUS' })
@@ -1083,7 +1158,6 @@ export const commitState = setup({
   }
 }).createMachine({
   id: 'commit',
-  type: 'parallel',
   context: {
     diffRefreshes: {},
     commitMessage: '',
@@ -1096,9 +1170,8 @@ export const commitState = setup({
     isGeneratingMessage: false,
     ...ofNoFolder(),
   },
-  // What the panel takes whatever it is busy with. None of these has a target but
-  // `commit.FOLDER_LEFT`: a transition of the whole machine to one of its states leaves every region, and so stops every
-  // ask a state is busy with
+  // The machine has no states: what the panel is busy with is the asks it holds as children, and every event is
+  // taken whatever those are
   on: {
     'commit.TOGGLE_FOLDER': { actions: 'toggleFolder' },
     'commit.DISMISS_ERROR': { actions: 'dismissError' },
@@ -1126,10 +1199,19 @@ export const commitState = setup({
     'commit.MARK_RESOLVED': { actions: 'markResolved' },
     'commit.RESOLVE_ALL_CONFLICTS': { actions: 'resolveAllConflicts' },
     'commit.REWRITE_COMMIT': { actions: 'requestRewrite' },
-    'commit.CONFIRM_REWRITE': {
-      guard: ({ context }) => context.rewriteConfirmation?.request.type === 'commit.REWRITE_COMMIT',
-      actions: 'confirmRewrite',
-    },
+    'commit.CONFIRM_REWRITE': [
+      { guard: ({ context }) => context.rewriteConfirmation?.request.type === 'commit.REWRITE_COMMIT', actions: 'confirmRewrite' },
+      // The user said to go on with an amend a remote branch holds the commit of
+      {
+        guard: ({ context }) => context.rewriteConfirmation?.request.type === 'commit.AMEND',
+        actions: enqueueActions(({ context, enqueue, self }) => {
+          const request = context.rewriteConfirmation?.request
+          if (request?.type !== 'commit.AMEND' || commitUnderWay(self.getSnapshot())) return
+          enqueue.assign({ pendingRewrite: { ...request, evenIfPublished: true }, rewriteConfirmation: null })
+          enqueue.spawnChild('commit.AMEND', { id: AMEND, input: { message: request.message, evenIfPublished: true } })
+        }),
+      },
+    ],
     'commit.DISMISS_REWRITE': { actions: assign({ rewriteConfirmation: null, pendingRewrite: null }) },
     'commit.PREVIEW_MERGE': { actions: 'previewMerge' },
     'commit.CLEAR_DIFF': { actions: 'clearGitDiff' },
@@ -1147,9 +1229,6 @@ export const commitState = setup({
     'commit.STASH_CLEAR': { actions: 'stashClear' },
     'commit.REVERT_COMMIT': { actions: 'revertCommit' },
     'CODE_STARTED': { actions: 'handleCodeStartup' },
-    // The one transition of the whole machine: every region is left for its `idle`, which stops what each was busy
-    // asking the folder before
-    'commit.FOLDER_LEFT': { target: REGIONS.map(region => `.${region}.idle`) },
     // The repository changed, on disk or by a write from any window: ask again for the parts of it that did
     'commit.REPOSITORY_CHANGED': { actions: 'followRepositoryChange' },
     'commit.SHOWN': {
@@ -1210,619 +1289,512 @@ export const commitState = setup({
       REFUSED,
       { actions: assign({ repositories: ({ event }) => answerTo('commit.LIST_REPOSITORIES', event).repositories }) },
     ],
-  },
-  states: {
+
     // The status the panel shows. A read asked for while one is under way replaces it: the one under way is of the
     // repository before whatever asked for this one
-    status: {
-      initial: 'idle',
-      on: {
-        'commit.REFRESH_STATUS': { target: '.reading.shown' },
-        // A read behind one the user asked for is still the user's, which the panel shows as loading until it is answered
-        'commit.READ_STATUS': [
-          { guard: stateIn({ status: { reading: 'shown' } }), target: '.reading.shown' },
-          { target: '.reading' },
-        ],
-      },
-      states: {
-        idle: {},
-        reading: {
-          invoke: {
-            src: 'commit.GET_GIT_STATUS',
-            input: {},
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ context, event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign({ ...failureShown(event.output.failure), statusFailed: true })
-                enqueue.assign(statusShown(context, event.output.value))
-                enqueue('followOpenFolders')
-              }),
-            },
-          },
-          initial: 'behind',
-          states: {
-            // Read behind what is shown, which stays as it is until the answer
-            behind: {},
-            // The read the user asked for, which the panel shows as loading
-            shown: {},
-          },
-        },
-      },
+    'commit.REFRESH_STATUS': {
+      actions: enqueueActions(({ enqueue }) => {
+        enqueue.stopChild(STATUS_BEHIND)
+        enqueue.stopChild(STATUS_SHOWN)
+        enqueue.spawnChild('commit.GET_GIT_STATUS', { id: STATUS_SHOWN, input: {} })
+      }),
     },
-    // The history the log shows, a page at a time. A page asked for while one is being read replaces it, which stops
-    // git walking the one nobody waits for
-    log: {
-      initial: 'idle',
-      on: {
-        'commit.LOG_LIST': { target: '.reading' },
-        'commit.LOAD_MORE_LOG': { guard: ({ context }) => context.logCursor !== null, target: '.reading' },
-        'commit.SHOW_FILE_HISTORY': {
-          target: '.reading',
-          actions: assign({ logPath: ({ event }) => event.path, commitLog: [], logCursor: null }),
-        },
-        'commit.CLEAR_FILE_HISTORY': { target: '.reading', actions: assign({ logPath: null, commitLog: [], logCursor: null }) },
-      },
-      states: {
-        idle: {},
-        reading: {
-          invoke: {
-            src: 'commit.LOG_LIST',
-            // The history the log shows, a file's while it shows one: from its start, or on from the page shown
-            input: ({ context, event }) => ({
-              ...(event.type === 'commit.LOAD_MORE_LOG' && context.logCursor && { cursor: context.logCursor }),
-              ...(context.logPath && { path: context.logPath }),
-            }),
-            onDone: {
-              target: 'idle',
-              // A page is added on to the log when it goes on from a cursor, and takes its place otherwise
-              actions: assign(({ context, event }) => {
-                if (!event.output.ok) return failureShown(event.output.failure)
-                const page = event.output.value
-                return { commitLog: page.continued ? [...context.commitLog, ...page.commits] : page.commits, logCursor: page.cursor ?? null }
-              }),
-            },
-          },
-        },
-      },
+    // A read behind one the user asked for is still the user's, which the panel shows as loading until it is answered
+    'commit.READ_STATUS': {
+      actions: enqueueActions(({ enqueue, self }) => {
+        const id = askUnderWay(self.getSnapshot(), STATUS_SHOWN) ? STATUS_SHOWN : STATUS_BEHIND
+        enqueue.stopChild(STATUS_BEHIND)
+        enqueue.stopChild(STATUS_SHOWN)
+        enqueue.spawnChild('commit.GET_GIT_STATUS', { id, input: {} })
+      }),
     },
+    [`xstate.done.actor.${STATUS_SHOWN}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(STATUS_SHOWN)
+        if (!event.output.ok) return enqueue.assign({ ...failureShown(event.output.failure), statusFailed: true })
+        enqueue.assign(statusShown(context, event.output.value))
+        enqueue('followOpenFolders')
+      }),
+    },
+    [`xstate.done.actor.${STATUS_BEHIND}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(STATUS_BEHIND)
+        if (!event.output.ok) return enqueue.assign({ ...failureShown(event.output.failure), statusFailed: true })
+        enqueue.assign(statusShown(context, event.output.value))
+        enqueue('followOpenFolders')
+      }),
+    },
+
+    // The history the log shows, a page at a time: a file's while it shows one, from its start or on from the page
+    // shown. A page asked for while one is being read replaces it, which stops git walking the one nobody waits for
+    'commit.LOG_LIST': {
+      actions: enqueueActions(({ context, enqueue }) => {
+        enqueue.stopChild(LOG)
+        enqueue.spawnChild('commit.LOG_LIST', { id: LOG, input: { ...(context.logPath && { path: context.logPath }) } })
+      }),
+    },
+    'commit.LOAD_MORE_LOG': {
+      guard: ({ context }) => context.logCursor !== null,
+      actions: enqueueActions(({ context, enqueue }) => {
+        enqueue.stopChild(LOG)
+        enqueue.spawnChild('commit.LOG_LIST', {
+          id: LOG,
+          input: { ...(context.logCursor && { cursor: context.logCursor }), ...(context.logPath && { path: context.logPath }) },
+        })
+      }),
+    },
+    'commit.SHOW_FILE_HISTORY': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(LOG)
+        enqueue.assign({ logPath: event.path, commitLog: [], logCursor: null })
+        enqueue.spawnChild('commit.LOG_LIST', { id: LOG, input: { ...(event.path && { path: event.path }) } })
+      }),
+    },
+    'commit.CLEAR_FILE_HISTORY': {
+      actions: enqueueActions(({ enqueue }) => {
+        enqueue.stopChild(LOG)
+        enqueue.assign({ logPath: null, commitLog: [], logCursor: null })
+        enqueue.spawnChild('commit.LOG_LIST', { id: LOG, input: {} })
+      }),
+    },
+    [`xstate.done.actor.${LOG}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(LOG)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        // A page is added on to the log when it goes on from a cursor, and takes its place otherwise
+        const page = event.output.value
+        enqueue.assign({ commitLog: page.continued ? [...context.commitLog, ...page.commits] : page.commits, logCursor: page.cursor ?? null })
+      }),
+    },
+
     // The branches and tags, the stashes and the worktrees: each list is read again when asked for, in place of a
     // read of it still under way
-    branches: {
-      initial: 'idle',
-      on: { 'commit.GET_ALL_BRANCHES': { target: '.reading' } },
-      states: {
-        idle: {},
-        reading: {
-          invoke: {
-            src: 'commit.GET_ALL_BRANCHES',
-            input: {},
-            onDone: {
-              target: 'idle',
-              actions: assign(({ event }) => {
-                if (!event.output.ok) return failureShown(event.output.failure)
-                const { tags, standing, branches } = event.output.value
-                return { tags: tags ?? [], branchStanding: standing ?? {}, availableBranches: branches }
-              }),
-            },
-          },
-        },
-      },
+    'commit.GET_ALL_BRANCHES': {
+      actions: enqueueActions(({ enqueue }) => {
+        enqueue.stopChild(BRANCHES)
+        enqueue.spawnChild('commit.GET_ALL_BRANCHES', { id: BRANCHES, input: {} })
+      }),
     },
-    stashes: {
-      initial: 'idle',
-      on: { 'commit.STASH_LIST': { target: '.reading' } },
-      states: {
-        idle: {},
-        reading: {
-          invoke: {
-            src: 'commit.STASH_LIST',
-            input: {},
-            onDone: {
-              target: 'idle',
-              // A stash's files are of the stash at its index when they were read: once the list moves, the stash at
-              // that index is another, so the files open go and the asks for them are stopped
-              actions: enqueueActions(({ context, event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                const { stashes } = event.output.value
-                if (sameStashes(context.stashList, stashes)) return enqueue.assign({ stashList: stashes })
-                for (const id of Object.keys(context.stashFileAsks)) enqueue.stopChild(id)
-                enqueue.assign({ stashList: stashes, stashFiles: {}, stashFileAsks: {} })
-              }),
-            },
-          },
-        },
-      },
+    [`xstate.done.actor.${BRANCHES}`]: {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(BRANCHES)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        const { tags, standing, branches } = event.output.value
+        enqueue.assign({ tags: tags ?? [], branchStanding: standing ?? {}, availableBranches: branches })
+      }),
     },
-    worktrees: {
-      initial: 'idle',
-      on: { 'commit.WORKTREE_LIST': { target: '.reading' } },
-      states: {
-        idle: {},
-        reading: {
-          invoke: {
-            src: 'commit.WORKTREE_LIST',
-            input: {},
-            onDone: {
-              target: 'idle',
-              actions: assign(({ event }) => (event.output.ok ? { worktreeList: event.output.value.worktrees } : failureShown(event.output.failure))),
-            },
-          },
-        },
-      },
+    'commit.STASH_LIST': {
+      actions: enqueueActions(({ enqueue }) => {
+        enqueue.stopChild(STASHES)
+        enqueue.spawnChild('commit.STASH_LIST', { id: STASHES, input: {} })
+      }),
     },
-    // A push is under way for exactly as long as `pushing` is: stopping it leaves the state, which ends git and what
-    // it started on the backend
-    push: {
-      initial: 'idle',
-      states: {
-        idle: {
-          on: { 'commit.PUSH_BRANCH': { target: 'pushing', actions: assign({ pushStopped: false }) } },
-        },
-        pushing: {
-          invoke: {
-            src: 'commit.PUBLISH_BRANCH',
-            input: {},
-            onDone: { target: 'idle', actions: assign(({ event }) => (event.output.ok ? {} : failureShown(event.output.failure))) },
-          },
-          exit: assign(({ context }) => progressUnless(context, 'push')),
-          on: {
-            'commit.PUBLISH_BRANCH.progress': { actions: 'hearProgress' },
-            // Stopped by the user rather than done, which the panel says instead of "Pushed"
-            'commit.STOP_PUSH': { target: 'idle', actions: assign({ pushStopped: true }) },
-          },
-        },
-      },
+    [`xstate.done.actor.${STASHES}`]: {
+      // A stash's files are of the stash at its index when they were read: once the list moves, the stash at that
+      // index is another, so the files open go and the asks for them are stopped
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(STASHES)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        const { stashes } = event.output.value
+        if (sameStashes(context.stashList, stashes)) return enqueue.assign({ stashList: stashes })
+        for (const id of Object.keys(context.stashFileAsks)) enqueue.stopChild(id)
+        enqueue.assign({ stashList: stashes, stashFiles: {}, stashFileAsks: {} })
+      }),
     },
-    pull: {
-      initial: 'idle',
-      states: {
-        idle: {
-          on: { 'commit.PULL_BRANCH': { target: 'pulling' } },
-        },
-        pulling: {
-          invoke: {
-            src: 'commit.PULL_BRANCH',
-            input: {},
-            onDone: { target: 'idle', actions: assign(({ event }) => (event.output.ok ? {} : failureShown(event.output.failure))) },
-          },
-          exit: assign(({ context }) => progressUnless(context, 'pull')),
-          on: { 'commit.PULL_BRANCH.progress': { actions: 'hearProgress' } },
-        },
-      },
+    'commit.WORKTREE_LIST': {
+      actions: enqueueActions(({ enqueue }) => {
+        enqueue.stopChild(WORKTREES)
+        enqueue.spawnChild('commit.WORKTREE_LIST', { id: WORKTREES, input: {} })
+      }),
     },
-    // Checking out the branch typed, or making it: a checkout that found no branch offers to
-    checkout: {
-      initial: 'idle',
-      on: {
-        'commit.CHECKOUT_BRANCH': { guard: ({ context }) => context.branchInput.trim() !== '', target: '.checkingOut' },
-        'commit.CREATE_BRANCH': {
-          guard: ({ event }) => event.branchName.trim() !== '',
-          target: '.creating',
-          actions: assign({ gitError: null, gitFailure: null }),
-        },
-      },
-      states: {
-        idle: {},
-        checkingOut: {
-          invoke: {
-            src: 'commit.CHECKOUT_BRANCH',
-            input: ({ context }) => ({ branchName: context.branchInput.trim() }),
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                enqueue.assign({ branchInput: '' })
-                enqueue.raise({ type: 'commit.GET_ALL_BRANCHES' })
-              }),
-            },
-          },
-          exit: assign(({ context }) => progressUnless(context, 'checkout')),
-          on: { 'commit.CHECKOUT_BRANCH.progress': { actions: 'hearProgress' } },
-        },
-        creating: {
-          invoke: {
-            src: 'commit.CREATE_BRANCH',
-            input: ({ event }) => ({ branchName: typeOf('commit.CREATE_BRANCH', event).branchName.trim() }),
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                enqueue.assign({ branchInput: '' })
-                enqueue.raise({ type: 'commit.GET_ALL_BRANCHES' })
-              }),
-            },
-          },
-        },
-      },
+    [`xstate.done.actor.${WORKTREES}`]: {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(WORKTREES)
+        enqueue.assign(event.output.ok ? { worktreeList: event.output.value.worktrees } : failureShown(event.output.failure))
+      }),
     },
-    // Bringing a submodule to the commit the repository records for it, one at a time
-    submodule: {
-      initial: 'idle',
-      states: {
-        idle: {
-          on: {
-            'commit.UPDATE_SUBMODULE': {
-              target: 'updating',
-              actions: assign({ updatingSubmodule: ({ event }) => event.path, gitError: null, gitFailure: null }),
-            },
-          },
-        },
-        updating: {
-          invoke: {
-            src: 'commit.UPDATE_SUBMODULE',
-            input: ({ event }) => ({ path: typeOf('commit.UPDATE_SUBMODULE', event).path }),
-            onDone: { target: 'idle', actions: assign(({ event }) => (event.output.ok ? {} : failureShown(event.output.failure))) },
-          },
-          exit: assign(({ context }) => ({ updatingSubmodule: null, ...progressUnless(context, 'submodule') })),
-          on: { 'commit.UPDATE_SUBMODULE.progress': { actions: 'hearProgress' } },
-        },
-      },
+
+    // A push is under way for exactly as long as the machine holds its ask: one asked for meanwhile is not made, and
+    // stopping it stops the ask, which ends git and what it started on the backend
+    'commit.PUSH_BRANCH': {
+      actions: enqueueActions(({ enqueue, self }) => {
+        if (askUnderWay(self.getSnapshot(), PUSH)) return
+        enqueue.assign({ pushStopped: false })
+        enqueue.spawnChild('commit.PUBLISH_BRANCH', { id: PUSH, input: {} })
+      }),
     },
-    // A commit or an amend, one at a time: another is not asked for until the one under way is answered
-    committing: {
-      initial: 'idle',
-      states: {
-        idle: {
-          on: {
-            // Of the message as written: what the settings say to leave out of it (`trailersRemovedOnCommit`) is left
-            // out by the system, which reads its trailers as git does
-            'commit.COMMIT': { guard: ({ context }) => context.commitMessage.trim() !== '', target: 'committing' },
-            // Kept until it is answered, so the user can go on with it if a remote branch holds the commit
-            'commit.AMEND': {
-              target: 'amending',
-              actions: assign({ pendingRewrite: ({ event }) => event, rewriteConfirmation: null, gitError: null }),
-            },
-            // The user said to go on with an amend a remote branch holds the commit of
-            'commit.CONFIRM_REWRITE': {
-              guard: ({ context }) => context.rewriteConfirmation?.request.type === 'commit.AMEND',
-              target: 'amending',
-              actions: assign(({ context }) => ({
-                pendingRewrite: context.rewriteConfirmation ? { ...context.rewriteConfirmation.request, evenIfPublished: true } : null,
-                rewriteConfirmation: null,
-              })),
-            },
-          },
-        },
-        committing: {
-          invoke: {
-            src: 'commit.COMMIT',
-            input: ({ context }) => ({ message: context.commitMessage.trim() }),
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ context, event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                enqueue.assign({ commitMessage: '', selectedGitFile: null, ...undoableAfter(context, event.output.value) })
-                enqueue('followTrailers')
-                enqueue.raise({ type: 'commit.READ_STATUS' })
-              }),
-            },
-          },
-        },
-        amending: {
-          invoke: {
-            src: 'commit.AMEND',
-            input: ({ context }) => {
-              const request = context.pendingRewrite
-              return request?.type === 'commit.AMEND' ? { message: request.message, evenIfPublished: request.evenIfPublished } : {}
-            },
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ context, event, enqueue }) => {
-                if (!event.output.ok) {
-                  const { failure } = event.output
-                  // A remote branch already holds the commit: amended only once the user says to go on
-                  if (failure.kind === 'published') return enqueue.assign({ rewriteConfirmation: context.pendingRewrite ? { message: failure.message, request: context.pendingRewrite } : null })
-                  return enqueue.assign(failureShown(failure))
-                }
-                enqueue.assign({ pendingRewrite: null, commitMessage: '', ...undoableAfter(context, event.output.value) })
-                enqueue('followTrailers')
-                enqueue.raise({ type: 'commit.LOG_LIST' })
-              }),
-            },
-          },
-        },
-      },
+    'commit.PUBLISH_BRANCH.progress': { actions: 'hearProgress' },
+    // Stopped by the user rather than done, which the panel says instead of "Pushed"
+    'commit.STOP_PUSH': {
+      actions: enqueueActions(({ context, enqueue, self }) => {
+        if (!askUnderWay(self.getSnapshot(), PUSH)) return
+        enqueue.stopChild(PUSH)
+        enqueue.assign({ pushStopped: true, ...progressUnless(context, 'push') })
+      }),
     },
-    stash: {
-      initial: 'idle',
-      on: {
-        'commit.STASH_PUSH': {
-          target: '.stashing',
-          // A stash named with the message typed for the commit takes it; one named otherwise leaves it
-          actions: assign({ stashTakesMessage: ({ context, event }) => !!event.message && event.message === context.commitMessage }),
-        },
-      },
-      states: {
-        idle: {},
-        stashing: {
-          invoke: {
-            src: 'commit.STASH_PUSH',
-            input: ({ event }) => {
-              const { message, stagedOnly, paths } = typeOf('commit.STASH_PUSH', event)
-              return { message, stagedOnly, ...(paths && { paths }) }
-            },
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ context, event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                enqueue.assign({ commitMessage: context.stashTakesMessage ? '' : context.commitMessage, stashTakesMessage: false })
-                enqueue('followTrailers')
-                enqueue.raise({ type: 'commit.READ_STATUS' })
-              }),
-            },
-          },
-        },
-      },
+    [`xstate.done.actor.${PUSH}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(PUSH)
+        enqueue.assign({ ...progressUnless(context, 'push'), ...(event.output.ok ? {} : failureShown(event.output.failure)) })
+      }),
     },
-    // A worktree being added or removed, or the code surface being moved to one
-    worktree: {
-      initial: 'idle',
-      on: {
-        'commit.WORKTREE_ADD': { target: '.adding' },
-        'commit.WORKTREE_REMOVE': { target: '.removing' },
-        'commit.WORKTREE_SWITCH': { target: '.switching' },
-      },
-      states: {
-        idle: {},
-        adding: {
-          invoke: {
-            src: 'commit.WORKTREE_ADD',
-            input: ({ event }) => {
-              const { path, branch, createBranch } = typeOf('commit.WORKTREE_ADD', event)
-              return { path, branch, createBranch }
-            },
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                enqueue.raise({ type: 'commit.WORKTREE_LIST' })
-              }),
-            },
-          },
-        },
-        removing: {
-          invoke: {
-            src: 'commit.WORKTREE_REMOVE',
-            input: ({ event }) => {
-              const { path, force } = typeOf('commit.WORKTREE_REMOVE', event)
-              return { path, force }
-            },
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                enqueue.raise({ type: 'commit.WORKTREE_LIST' })
-              }),
-            },
-          },
-        },
-        // The folder the surface is over moves with the switch, which the surface hears of as its start
-        switching: {
-          invoke: {
-            src: 'commit.WORKTREE_SWITCH',
-            input: ({ event }) => ({ path: typeOf('commit.WORKTREE_SWITCH', event).path }),
-            onDone: { target: 'idle', actions: assign(({ event }) => (event.output.ok ? {} : failureShown(event.output.failure))) },
-          },
-        },
-      },
+    'commit.PULL_BRANCH': {
+      actions: enqueueActions(({ enqueue, self }) => {
+        if (!askUnderWay(self.getSnapshot(), PULL)) enqueue.spawnChild('commit.PULL_BRANCH', { id: PULL, input: {} })
+      }),
     },
-    speedUp: {
-      initial: 'idle',
-      on: { 'commit.SPEED_UP_STATUS': { target: '.speedingUp' } },
-      states: {
-        idle: {},
-        speedingUp: {
-          invoke: {
-            src: 'commit.SPEED_UP_STATUS',
-            input: {},
-            // The status that follows says whether it is still slow
-            onDone: { target: 'idle', actions: assign(({ event }) => (event.output.ok ? { slowStatus: null } : failureShown(event.output.failure))) },
-          },
-        },
-      },
+    'commit.PULL_BRANCH.progress': { actions: 'hearProgress' },
+    [`xstate.done.actor.${PULL}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(PULL)
+        enqueue.assign({ ...progressUnless(context, 'pull'), ...(event.output.ok ? {} : failureShown(event.output.failure)) })
+      }),
     },
-    // Telling the backend git can sign in to the host that asked, now the app is signed in to GitHub
-    signIn: {
-      initial: 'idle',
-      on: { 'commit.SET_UP_SIGN_IN': { target: '.settingUp' } },
-      states: {
-        idle: {},
-        settingUp: {
-          invoke: {
-            src: 'commit.SET_UP_SIGN_IN',
-            // The push or the pull that was refused goes with the ask and comes back with its answer: what is held
-            // of it here is cleared by the next status, which can arrive while the sign-in is being set up
-            input: ({ context, event }) => {
-              const during = context.gitFailure?.during
-              return { host: typeOf('commit.SET_UP_SIGN_IN', event).host, ...(during ? { during } : {}) }
-            },
-            onDone: {
-              target: 'idle',
-              // Git can sign in now, so the push or the pull that was refused is run again: it is what the user was doing
-              actions: enqueueActions(({ event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                const { during } = event.output.value
-                enqueue.assign({ gitError: null, gitFailure: null })
-                if (during === 'push') enqueue.raise({ type: 'commit.PUSH_BRANCH' })
-                if (during === 'pull') enqueue.raise({ type: 'commit.PULL_BRANCH' })
-              }),
-            },
-          },
-        },
-      },
+
+    // Checking out the branch typed, or making it, in place of either still under way: a checkout that found no
+    // branch offers to make it
+    'commit.CHECKOUT_BRANCH': {
+      guard: ({ context }) => context.branchInput.trim() !== '',
+      actions: enqueueActions(({ context, enqueue }) => {
+        enqueue.stopChild(CHECKOUT)
+        enqueue.stopChild(CREATE_BRANCH)
+        enqueue.assign(progressUnless(context, 'checkout'))
+        enqueue.spawnChild('commit.CHECKOUT_BRANCH', { id: CHECKOUT, input: { branchName: context.branchInput.trim() } })
+      }),
     },
+    'commit.CHECKOUT_BRANCH.progress': { actions: 'hearProgress' },
+    'commit.CREATE_BRANCH': {
+      guard: ({ event }) => event.branchName.trim() !== '',
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(CHECKOUT)
+        enqueue.stopChild(CREATE_BRANCH)
+        enqueue.assign({ gitError: null, gitFailure: null, ...progressUnless(context, 'checkout') })
+        enqueue.spawnChild('commit.CREATE_BRANCH', { id: CREATE_BRANCH, input: { branchName: event.branchName.trim() } })
+      }),
+    },
+    [`xstate.done.actor.${CHECKOUT}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(CHECKOUT)
+        enqueue.assign(progressUnless(context, 'checkout'))
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        enqueue.assign({ branchInput: '' })
+        enqueue.raise({ type: 'commit.GET_ALL_BRANCHES' })
+      }),
+    },
+    [`xstate.done.actor.${CREATE_BRANCH}`]: {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(CREATE_BRANCH)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        enqueue.assign({ branchInput: '' })
+        enqueue.raise({ type: 'commit.GET_ALL_BRANCHES' })
+      }),
+    },
+
+    // Bringing a submodule to the commit the repository records for it, one at a time: `updatingSubmodule` names it
+    // until that is answered
+    'commit.UPDATE_SUBMODULE': {
+      actions: enqueueActions(({ event, enqueue, self }) => {
+        if (askUnderWay(self.getSnapshot(), SUBMODULE)) return
+        enqueue.assign({ updatingSubmodule: event.path, gitError: null, gitFailure: null })
+        enqueue.spawnChild('commit.UPDATE_SUBMODULE', { id: SUBMODULE, input: { path: event.path } })
+      }),
+    },
+    'commit.UPDATE_SUBMODULE.progress': { actions: 'hearProgress' },
+    [`xstate.done.actor.${SUBMODULE}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(SUBMODULE)
+        enqueue.assign({ updatingSubmodule: null, ...progressUnless(context, 'submodule'), ...(event.output.ok ? {} : failureShown(event.output.failure)) })
+      }),
+    },
+
+    // A commit or an amend, one at a time: another is not asked for until the one under way is answered. The commit
+    // is of the message as written: what the settings say to leave out of it (`trailersRemovedOnCommit`) is left out
+    // by the system, which reads its trailers as git does
+    'commit.COMMIT': {
+      guard: ({ context }) => context.commitMessage.trim() !== '',
+      actions: enqueueActions(({ context, enqueue, self }) => {
+        if (!commitUnderWay(self.getSnapshot())) enqueue.spawnChild('commit.COMMIT', { id: COMMIT, input: { message: context.commitMessage.trim() } })
+      }),
+    },
+    // Kept until it is answered, so the user can go on with it if a remote branch holds the commit
+    'commit.AMEND': {
+      actions: enqueueActions(({ event, enqueue, self }) => {
+        if (commitUnderWay(self.getSnapshot())) return
+        enqueue.assign({ pendingRewrite: event, rewriteConfirmation: null, gitError: null })
+        enqueue.spawnChild('commit.AMEND', { id: AMEND, input: { message: event.message, evenIfPublished: event.evenIfPublished } })
+      }),
+    },
+    [`xstate.done.actor.${COMMIT}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(COMMIT)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        enqueue.assign({ commitMessage: '', selectedGitFile: null, ...undoableAfter(context, event.output.value) })
+        enqueue('followTrailers')
+        enqueue.raise({ type: 'commit.READ_STATUS' })
+      }),
+    },
+    [`xstate.done.actor.${AMEND}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(AMEND)
+        if (!event.output.ok) {
+          const { failure } = event.output
+          // A remote branch already holds the commit: amended only once the user says to go on
+          if (failure.kind === 'published') return enqueue.assign({ rewriteConfirmation: context.pendingRewrite ? { message: failure.message, request: context.pendingRewrite } : null })
+          return enqueue.assign(failureShown(failure))
+        }
+        enqueue.assign({ pendingRewrite: null, commitMessage: '', ...undoableAfter(context, event.output.value) })
+        enqueue('followTrailers')
+        enqueue.raise({ type: 'commit.LOG_LIST' })
+      }),
+    },
+
+    // A stash named with the message typed for the commit takes it; one named otherwise leaves it
+    'commit.STASH_PUSH': {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        const { message, stagedOnly, paths } = event
+        enqueue.stopChild(STASH)
+        enqueue.assign({ stashTakesMessage: !!message && message === context.commitMessage })
+        enqueue.spawnChild('commit.STASH_PUSH', { id: STASH, input: { message, stagedOnly, ...(paths && { paths }) } })
+      }),
+    },
+    [`xstate.done.actor.${STASH}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(STASH)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        enqueue.assign({ commitMessage: context.stashTakesMessage ? '' : context.commitMessage, stashTakesMessage: false })
+        enqueue('followTrailers')
+        enqueue.raise({ type: 'commit.READ_STATUS' })
+      }),
+    },
+
+    // A worktree being added or removed, or the code surface being moved to one: each in place of whichever of the
+    // three is still under way
+    'commit.WORKTREE_ADD': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        const { path, branch, createBranch } = event
+        for (const id of [WORKTREE_ADD, WORKTREE_REMOVE, WORKTREE_SWITCH]) enqueue.stopChild(id)
+        enqueue.spawnChild('commit.WORKTREE_ADD', { id: WORKTREE_ADD, input: { path, branch, createBranch } })
+      }),
+    },
+    'commit.WORKTREE_REMOVE': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        const { path, force } = event
+        for (const id of [WORKTREE_ADD, WORKTREE_REMOVE, WORKTREE_SWITCH]) enqueue.stopChild(id)
+        enqueue.spawnChild('commit.WORKTREE_REMOVE', { id: WORKTREE_REMOVE, input: { path, force } })
+      }),
+    },
+    // The folder the surface is over moves with the switch, which the surface hears of as its start
+    'commit.WORKTREE_SWITCH': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        for (const id of [WORKTREE_ADD, WORKTREE_REMOVE, WORKTREE_SWITCH]) enqueue.stopChild(id)
+        enqueue.spawnChild('commit.WORKTREE_SWITCH', { id: WORKTREE_SWITCH, input: { path: event.path } })
+      }),
+    },
+    [`xstate.done.actor.${WORKTREE_ADD}`]: {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(WORKTREE_ADD)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        enqueue.raise({ type: 'commit.WORKTREE_LIST' })
+      }),
+    },
+    [`xstate.done.actor.${WORKTREE_REMOVE}`]: {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(WORKTREE_REMOVE)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        enqueue.raise({ type: 'commit.WORKTREE_LIST' })
+      }),
+    },
+    [`xstate.done.actor.${WORKTREE_SWITCH}`]: {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(WORKTREE_SWITCH)
+        if (!event.output.ok) enqueue.assign(failureShown(event.output.failure))
+      }),
+    },
+
+    'commit.SPEED_UP_STATUS': {
+      actions: enqueueActions(({ enqueue }) => {
+        enqueue.stopChild(SPEED_UP)
+        enqueue.spawnChild('commit.SPEED_UP_STATUS', { id: SPEED_UP, input: {} })
+      }),
+    },
+    [`xstate.done.actor.${SPEED_UP}`]: {
+      // The status that follows says whether it is still slow
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(SPEED_UP)
+        enqueue.assign(event.output.ok ? { slowStatus: null } : failureShown(event.output.failure))
+      }),
+    },
+
+    // Telling the backend git can sign in to the host that asked, with the app signed in to GitHub. The push or the
+    // pull that was refused goes with the ask and comes back with its answer: what is held of it here is cleared by
+    // the next status, which can arrive while the sign-in is being set up
+    'commit.SET_UP_SIGN_IN': {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        const during = context.gitFailure?.during
+        enqueue.stopChild(SIGN_IN)
+        enqueue.spawnChild('commit.SET_UP_SIGN_IN', { id: SIGN_IN, input: { host: event.host, ...(during ? { during } : {}) } })
+      }),
+    },
+    [`xstate.done.actor.${SIGN_IN}`]: {
+      // Git can sign in, so the push or the pull that was refused is run again: it is what the user was doing
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(SIGN_IN)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        const { during } = event.output.value
+        enqueue.assign({ gitError: null, gitFailure: null })
+        if (during === 'push') enqueue.raise({ type: 'commit.PUSH_BRANCH' })
+        if (during === 'pull') enqueue.raise({ type: 'commit.PULL_BRANCH' })
+      }),
+    },
+
     // Git staging one piece of a file's change, or taking one back out of what is staged
-    hunk: {
-      initial: 'idle',
-      on: { 'commit.APPLY_HUNK': { target: '.applying', actions: assign({ gitError: null, gitFailure: null }) } },
-      states: {
-        idle: {},
-        applying: {
-          invoke: {
-            src: 'commit.APPLY_HUNK',
-            input: ({ event }) => {
-              const { path, staged, hunk } = typeOf('commit.APPLY_HUNK', event)
-              return { path, staged, hunk }
-            },
-            onDone: {
-              target: 'idle',
-              // The tab still shows the piece until its diff is read again, and git no longer cuts it
-              actions: assign(({ context, event }) => {
-                if (!event.output.ok) return failureShown(event.output.failure)
-                const applied = event.output.value
-                const tab = diffTabPath(applied)
-                return { appliedHunks: { ...context.appliedHunks, [tab]: [...(context.appliedHunks[tab] ?? []), applied.hunk] } }
-              }),
-            },
-          },
-        },
-      },
+    'commit.APPLY_HUNK': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        const { path, staged, hunk } = event
+        enqueue.stopChild(HUNK)
+        enqueue.assign({ gitError: null, gitFailure: null })
+        enqueue.spawnChild('commit.APPLY_HUNK', { id: HUNK, input: { path, staged, hunk } })
+      }),
     },
+    [`xstate.done.actor.${HUNK}`]: {
+      // The tab still shows the piece until its diff is read again, and git cuts it no more
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(HUNK)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        const applied = event.output.value
+        const tab = diffTabPath(applied)
+        enqueue.assign({ appliedHunks: { ...context.appliedHunks, [tab]: [...(context.appliedHunks[tab] ?? []), applied.hunk] } })
+      }),
+    },
+
     // Git carrying on with what it is in the middle of, skipping the commit a rebase stopped at, or giving it up.
     // Where that leaves the repository is in its status, which the backend announces as changed
-    moveOperation: {
-      initial: 'idle',
-      on: { 'commit.MOVE_OPERATION': { target: '.moving', actions: assign({ gitError: null }) } },
-      states: {
-        idle: {},
-        moving: {
-          invoke: {
-            src: 'commit.MOVE_OPERATION',
-            input: ({ event }) => ({ move: typeOf('commit.MOVE_OPERATION', event).move }),
-            onDone: { target: 'idle', actions: assign(({ event }) => (event.output.ok ? {} : failureShown(event.output.failure))) },
-          },
-        },
-      },
+    'commit.MOVE_OPERATION': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(MOVE_OPERATION)
+        enqueue.assign({ gitError: null })
+        enqueue.spawnChild('commit.MOVE_OPERATION', { id: MOVE_OPERATION, input: { move: event.move } })
+      }),
+    },
+    [`xstate.done.actor.${MOVE_OPERATION}`]: {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(MOVE_OPERATION)
+        if (!event.output.ok) enqueue.assign(failureShown(event.output.failure))
+      }),
     },
     // Git merging a branch in, rebasing onto one or picking a commit: one that stops on a conflict shows as in progress
-    startOperation: {
-      initial: 'idle',
-      on: { 'commit.START_OPERATION': { target: '.starting', actions: assign({ gitError: null }) } },
-      states: {
-        idle: {},
-        starting: {
-          invoke: {
-            src: 'commit.START_OPERATION',
-            input: ({ event }) => {
-              const { kind, target } = typeOf('commit.START_OPERATION', event)
-              return { kind, target }
-            },
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ context, event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                enqueue.assign(undoableAfter(context, event.output.value))
-                enqueue.raise({ type: 'commit.LOG_LIST' })
-              }),
-            },
-          },
-        },
-      },
+    'commit.START_OPERATION': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        const { kind, target } = event
+        enqueue.stopChild(START_OPERATION)
+        enqueue.assign({ gitError: null })
+        enqueue.spawnChild('commit.START_OPERATION', { id: START_OPERATION, input: { kind, target } })
+      }),
     },
+    [`xstate.done.actor.${START_OPERATION}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(START_OPERATION)
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        enqueue.assign(undoableAfter(context, event.output.value))
+        enqueue.raise({ type: 'commit.LOG_LIST' })
+      }),
+    },
+
     // Who last changed each line of the file the editor shows blame for. Asking for another file's, or clearing it,
-    // leaves the read under way, which stops git reading it
-    blame: {
-      initial: 'idle',
-      on: {
-        'commit.SHOW_BLAME': { target: '.reading', actions: assign({ blame: ({ event }) => ({ path: event.path, lines: [] }) }) },
-        'commit.CLEAR_BLAME': { target: '.idle', actions: assign({ blame: null }) },
-      },
-      states: {
-        idle: {},
-        reading: {
-          invoke: {
-            src: 'commit.GET_BLAME',
-            input: ({ event }) => ({ path: typeOf('commit.SHOW_BLAME', event).path }),
-            onDone: {
-              target: 'idle',
-              actions: assign(({ event }) => (event.output.ok ? { blame: event.output.value } : { blame: null, ...failureShown(event.output.failure) })),
-            },
-          },
-        },
-      },
+    // stops the read under way, which stops git reading it
+    'commit.SHOW_BLAME': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(BLAME)
+        enqueue.assign({ blame: { path: event.path, lines: [] } })
+        enqueue.spawnChild('commit.GET_BLAME', { id: BLAME, input: { path: event.path } })
+      }),
     },
+    'commit.CLEAR_BLAME': {
+      actions: enqueueActions(({ enqueue }) => {
+        enqueue.stopChild(BLAME)
+        enqueue.assign({ blame: null })
+      }),
+    },
+    [`xstate.done.actor.${BLAME}`]: {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(BLAME)
+        enqueue.assign(event.output.ok ? { blame: event.output.value } : { blame: null, ...failureShown(event.output.failure) })
+      }),
+    },
+
     // The whole message of the commit being reworded in the history, read as the rewording starts
-    reword: {
-      initial: 'idle',
-      on: {
-        'commit.START_REWORD': { target: '.reading', actions: assign({ rewording: ({ event }) => ({ hash: event.hash, message: null }) }) },
-        'commit.CANCEL_REWORD': { target: '.idle', actions: assign({ rewording: null }) },
-      },
-      states: {
-        idle: {},
-        reading: {
-          invoke: {
-            src: 'commit.GET_COMMIT_MESSAGE',
-            input: ({ event }) => ({ hash: typeOf('commit.START_REWORD', event).hash }),
-            onDone: {
-              target: 'idle',
-              actions: assign(({ event }) => (event.output.ok ? { rewording: event.output.value } : { rewording: null, ...failureShown(event.output.failure) })),
-            },
-          },
-        },
-      },
+    'commit.START_REWORD': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(REWORD)
+        enqueue.assign({ rewording: { hash: event.hash, message: null } })
+        enqueue.spawnChild('commit.GET_COMMIT_MESSAGE', { id: REWORD, input: { hash: event.hash } })
+      }),
     },
-    // The tag being pushed or deleted, which `tagBusy` names until that is answered
-    tag: {
-      initial: 'idle',
-      on: {
-        'commit.PUSH_TAG': { target: '.pushing', actions: assign({ tagBusy: ({ event }) => ({ name: event.name, action: 'push' as const }) }) },
-        'commit.DELETE_TAG': { target: '.deleting', actions: assign({ tagBusy: ({ event }) => ({ name: event.name, action: 'delete' as const }) }) },
-      },
-      states: {
-        idle: {},
-        pushing: {
-          invoke: {
-            src: 'commit.PUSH_TAG',
-            input: ({ event }) => ({ name: typeOf('commit.PUSH_TAG', event).name }),
-            onDone: {
-              target: 'idle',
-              // The tag last pushed, a new object each time, which the panel says it pushed
-              actions: assign(({ event }) => (event.output.ok ? { tagPushed: { name: event.output.value.name } } : failureShown(event.output.failure))),
-            },
-          },
-          exit: assign({ tagBusy: null }),
-        },
-        deleting: {
-          invoke: {
-            src: 'commit.DELETE_TAG',
-            input: ({ event }) => ({ name: typeOf('commit.DELETE_TAG', event).name }),
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                enqueue.raise({ type: 'commit.GET_ALL_BRANCHES' })
-                enqueue.raise({ type: 'commit.LOG_LIST' })
-              }),
-            },
-          },
-          exit: assign({ tagBusy: null }),
-        },
-      },
+    'commit.CANCEL_REWORD': {
+      actions: enqueueActions(({ enqueue }) => {
+        enqueue.stopChild(REWORD)
+        enqueue.assign({ rewording: null })
+      }),
     },
+    [`xstate.done.actor.${REWORD}`]: {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(REWORD)
+        enqueue.assign(event.output.ok ? { rewording: event.output.value } : { rewording: null, ...failureShown(event.output.failure) })
+      }),
+    },
+
+    // The tag being pushed or deleted, which `tagBusy` names until that is answered: each in place of either still
+    // under way
+    'commit.PUSH_TAG': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(TAG_PUSH)
+        enqueue.stopChild(TAG_DELETE)
+        enqueue.assign({ tagBusy: { name: event.name, action: 'push' } })
+        enqueue.spawnChild('commit.PUSH_TAG', { id: TAG_PUSH, input: { name: event.name } })
+      }),
+    },
+    'commit.DELETE_TAG': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(TAG_PUSH)
+        enqueue.stopChild(TAG_DELETE)
+        enqueue.assign({ tagBusy: { name: event.name, action: 'delete' } })
+        enqueue.spawnChild('commit.DELETE_TAG', { id: TAG_DELETE, input: { name: event.name } })
+      }),
+    },
+    [`xstate.done.actor.${TAG_PUSH}`]: {
+      // The tag last pushed, a new object each time, which the panel says it pushed
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(TAG_PUSH)
+        enqueue.assign({ tagBusy: null, ...(event.output.ok ? { tagPushed: { name: event.output.value.name } } : failureShown(event.output.failure)) })
+      }),
+    },
+    [`xstate.done.actor.${TAG_DELETE}`]: {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(TAG_DELETE)
+        enqueue.assign({ tagBusy: null })
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        enqueue.raise({ type: 'commit.GET_ALL_BRANCHES' })
+        enqueue.raise({ type: 'commit.LOG_LIST' })
+      }),
+    },
+
     // The branch being reset to a commit, which `resettingTo` names until that is answered
-    reset: {
-      initial: 'idle',
-      on: { 'commit.RESET_TO_COMMIT': { target: '.resetting', actions: assign({ resettingTo: ({ event }) => event.hash }) } },
-      states: {
-        idle: {},
-        resetting: {
-          invoke: {
-            src: 'commit.RESET_TO_COMMIT',
-            input: ({ event }) => ({ hash: typeOf('commit.RESET_TO_COMMIT', event).hash }),
-            onDone: {
-              target: 'idle',
-              actions: enqueueActions(({ context, event, enqueue }) => {
-                if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-                enqueue.assign(undoableAfter(context, event.output.value))
-                enqueue.raise({ type: 'commit.READ_STATUS' })
-                enqueue.raise({ type: 'commit.LOG_LIST' })
-              }),
-            },
-          },
-          exit: assign({ resettingTo: null }),
-        },
-      },
+    'commit.RESET_TO_COMMIT': {
+      actions: enqueueActions(({ event, enqueue }) => {
+        enqueue.stopChild(RESET)
+        enqueue.assign({ resettingTo: event.hash })
+        enqueue.spawnChild('commit.RESET_TO_COMMIT', { id: RESET, input: { hash: event.hash } })
+      }),
+    },
+    [`xstate.done.actor.${RESET}`]: {
+      actions: enqueueActions(({ context, event, enqueue }) => {
+        enqueue.stopChild(RESET)
+        enqueue.assign({ resettingTo: null })
+        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
+        enqueue.assign(undoableAfter(context, event.output.value))
+        enqueue.raise({ type: 'commit.READ_STATUS' })
+        enqueue.raise({ type: 'commit.LOG_LIST' })
+      }),
     },
   },
 });

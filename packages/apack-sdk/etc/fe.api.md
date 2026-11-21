@@ -43,6 +43,11 @@ export interface AskState<Args extends unknown[], O> {
     readonly pending: boolean;
 }
 
+// @public
+export const askUnderWay: (snapshot: {
+    children: object;
+}, id: string) => boolean;
+
 // @public (undocumented)
 export type BlockFrontendBinding = ViewerFrontendBinding<BlockDeclaration, BlockDefinition>;
 

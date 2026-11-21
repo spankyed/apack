@@ -2,6 +2,7 @@ import type { SearchAsks } from '../contract.ts'
 import { defineHandlers } from '@apackdev/sdk/framework'
 import type { AsksEvents } from '@apackdev/sdk/events'
 import { assign, setup } from 'xstate'
+import { safeEvents } from '@apackdev/sdk/helpers'
 
 import { FileSystemRepository } from '../services/filesystem.ts'
 import type { SearchOptions } from '../types.ts'
@@ -51,6 +52,8 @@ const answers = handlers.answers<SearchAsks>({
   },
 });
 
+const typeOf = safeEvents<Event>()
+
 export const searchSystem = setup({
   types: {
     context: {} as CodeSearchSystemContext,
@@ -60,7 +63,7 @@ export const searchSystem = setup({
   actions: {
     ...answers.actions,
     updateBaseDirectory: assign({
-      repository: ({ event }) => new FileSystemRepository((event as { type: 'search.UPDATE_BASE_DIRECTORY'; path: string }).path)
+      repository: ({ event }) => new FileSystemRepository(typeOf('search.UPDATE_BASE_DIRECTORY', event).path)
     }),
   },
 }).createMachine({

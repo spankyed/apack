@@ -1,6 +1,6 @@
 # Asks, in the shape they are meant to keep
 
-Status: done but for what "Left open" lists, on `session/asks-shape`, which starts from spankyed/apack#583 (results are asks) and replaces it.
+Status: done, on `session/asks-shape` and `session/asks-left-open` stacked on it. The first starts from spankyed/apack#583 (results are asks) and replaces it.
 This file is the work list: what each package changes, what it removes, how it is checked, and what is done.
 
 ## Why
@@ -94,22 +94,20 @@ resolves the invoked ask. A spec's mock of `#generated/events` that a machine's 
 | 5 | Asks are answered beside the machine | dropped, see above |
 | 6 | An asker awaits | done in every feature. `isAnswered`, `answerOf` and `AnswersOf` are gone from the SDK, and no surface handles `ASK_ANSWERED` or `ASK_FAILED` |
 | 7 | A loading flag is a state | done where package 6 touched one |
-| 8 | An event is narrowed, not cast | done in the files package 6 touched; the casts elsewhere stand |
-| 9 | A code child answers its own asks | done for the search; the code system still answers for its other children |
+| 8 | An event is narrowed, not cast | done |
+| 9 | A code child answers its own asks | done: the code system answers only what is its own |
 | 10 | Close out | docs, API and facade reports done |
 
 ## Left open
 
-- **The commit and pull-request surfaces of the code feature are `type: 'parallel'`.** Each has about ten asks that
-  can be under way at once (branches, stashes, worktrees, a push), and each became a region with an `idle` and an
-  asking state. The design aimed at has no parallel states. The way out is the recipe's third form: an ask that
-  nothing replaces is spawned under `<kind>.<n>` and handled on `xstate.done.actor.<kind>.*`, as the flows surface
-  does, and only an ask whose progress or cancelling the UI shows (a push) keeps a state.
-- The pull-request surface's `checkoutBase` sends `commit.CHECKOUT_BRANCH` as an event, so a refused checkout is not
-  shown there.
-- A terminal ask that is refused is shown by the panel's terminal section, and so only while that is mounted.
-- The explorer does not clear a folder's loading mark when its listing is refused.
-- Not checked by hand in the running app: this branch was verified by the type check, the unit pools and `npm run chain -- --no-native`, which runs the e2e suites.
+Nothing from this list of packages. No machine in the pack is `type: 'parallel'`: an ask that can be under way beside
+others is spawned under an id and handled where it ends, and whether it is under way is read off the snapshot with
+`askUnderWay` (`@apackdev/sdk/fe`).
+
+- Not checked by hand in the running app: verified by the type check, the unit pools and `npm run chain -- --no-native`,
+  which runs the e2e suites.
+- A guard that reads `askUnderWay(self.getSnapshot(), …)` sees the children from before the event being handled. No
+  event today is raised in the step that spawns or stops the ask it asks about.
 
 ## When it lands
 
