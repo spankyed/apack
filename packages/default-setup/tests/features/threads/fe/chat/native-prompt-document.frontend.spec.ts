@@ -577,6 +577,27 @@ it('keeps a newer browser caret when a native acknowledgement arrives before sel
 })
 
 
+it('settles an unchanged native acknowledgement without redrawing the editor selection', async () => {
+  editor.commands.setContent('worker draft')
+  editor.commands.setTextSelection({ from: 3, to: 6 })
+  const send = vi.fn(), bridge = bindClaudePromptEditor(editor, send, vi.fn())
+  const transaction = vi.fn()
+  editor.on('transaction', transaction)
+  try {
+    const request = send.mock.lastCall![0], before = editor.state.selection
+    const result = bridge.settle()
+    bridge.receive({ revision: request.revision, status: 'applied',
+      frame: { text: request.text, cursor: request.cursor, decorations: [] } })
+    expect(await result).toBe(true)
+    expect(editor.state.selection).toBe(before)
+    expect(transaction).not.toHaveBeenCalled()
+  } finally {
+    editor.off('transaction', transaction)
+    bridge.dispose()
+  }
+})
+
+
 it('does not adopt a pending browser selection because an unrelated native reply arrived', () => {
   editor.commands.setContent('worker draft')
   document.body.append(editor.view.dom)

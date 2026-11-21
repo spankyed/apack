@@ -257,10 +257,15 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
         if (next.doc !== snapshot.doc || reply.frame.cursor !== snapshot.cursor) tr.setSelection(TextSelection.create(tr.doc, next.position)).setStoredMarks(next.storedMarks ?? null)
         // Native app adoption returns only text/cursor. It acknowledges this fill, not a new edit.
         const drawn = reply.frame.decorations ? drawClaudePromptDecorations(tr.doc, reply.frame.decorations, serialize, next.sourcePositions, next.sourceOffsets) : fillPaint?.revision === reply.revision && fillPaint.text === reply.frame.text ? fillPaint.drawn : drawClaudePromptDecorations(tr.doc, [], serialize)
-        tr.setMeta(decorations.key, drawn)
+        const currentPaint = decorations.key.getState(editor.state)
         fillPaint = next.normalized ? { revision: revision + 1, text: serialize(tr.doc), drawn } : undefined
-        if (next.doc.firstChild?.type.name === 'claudePromptSource' && editor.isFocused && dom.ownerDocument.hasFocus()) tr.scrollIntoView()
-        editor.view.dispatch(tr)
+        // An acknowledgement without document, selection or paint changes needs no transaction. Redrawing during a key sequence
+        // can restore the model selection before Chromium delivers its latest selectionchange.
+        if (tr.docChanged || tr.selectionSet || drawn !== currentPaint) {
+          tr.setMeta(decorations.key, drawn)
+          if (next.doc.firstChild?.type.name === 'claudePromptSource' && editor.isFocused && dom.ownerDocument.hasFocus()) tr.scrollIntoView()
+          editor.view.dispatch(tr)
+        }
         if (fillPaint) fillPaint = { ...fillPaint, text: serialize(editor.state.doc), drawn: decorations.key.getState(editor.state) ?? drawn }
         onProblem(undefined)
         finishPending(true)
