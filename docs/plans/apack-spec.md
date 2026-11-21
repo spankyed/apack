@@ -407,7 +407,9 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   the case, stops when it is left and starts anew when it is entered again; it is given its data once, as it starts;
   a key the field gains starts its state in that step, given what the data holds for it; one started part-way
   through a step is there for what comes next in that step; a key the field loses stops its state, lets go of what it
-  held and abandons what it was answering; a key that stays leaves its state as it is whatever else changes; which
+  held and abandons what it was answering; a key that stays leaves its state as it is whatever else changes; a key taken out and put back within a step is a key that
+  stayed, by one handler or by two events; a key put in and taken out within a step starts nothing, and what was
+  sent to it reaches nothing; which
   there are is looked at again only when that field changes; a started state reports to its starter, which hears
   which one it was; a state that is not running answers `unavailable`; a key holding a slash is reported and starts
   nothing; and stopping stops everything, the last started first. Under both orderings of two asks that add the same
