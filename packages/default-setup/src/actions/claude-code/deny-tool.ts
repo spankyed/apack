@@ -26,5 +26,14 @@ export async function action(
   killTurn(services, threadId);
   updateChatState(services, threadId as EntityId, 'idle');
 
+  // Move thread to "Open" on denial — idle isn't in the chatState→status
+  // map so the sync in updateChatState won't fire for this case.
+  services.emitter.sendToSystem('threads', {
+    type: 'UPDATE_THREAD_STATUS',
+    threadId,
+    status: 'Open',
+    userInduced: false,
+  } as any);
+
   return { success: true };
 }

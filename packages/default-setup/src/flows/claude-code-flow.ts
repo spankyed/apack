@@ -419,5 +419,35 @@ export default {
       ]],
       "Thread forked",
     ),
+    // ─── Kanban → start work ────────────────────────────────────────────
+    // When a user drags a thread to "In Progress", kick off a Claude Code
+    // turn using the thread's instructions. The `userInduced` guard prevents
+    // system-initiated status syncs from re-triggering.
+    on(
+      "thread.status.changed",
+      [[
+        branch([
+          {
+            if: "$.event.data.payload.userInduced == true",
+            steps: [
+              branch([
+                {
+                  if: "$.event.data.payload.status == 'In Progress'",
+                  steps: [
+                    action("CC: Start From Status", {
+                      label: "start-from-status",
+                      map: {
+                        threadId: "$.event.data.payload.threadId",
+                      },
+                    }),
+                  ],
+                },
+              ], undefined, "Status Gate"),
+            ],
+          },
+        ], undefined, "User Induced Gate"),
+      ]],
+      "Kanban → start work",
+    ),
   ],
 } satisfies FlowDSL;
