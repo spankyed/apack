@@ -1,4 +1,4 @@
-import { cancelPendingElicitation } from './_helpers/thread-context.ts';
+import { cancelPendingControlRequest, cancelPendingElicitation } from './_helpers/thread-context.ts';
 /**
  * CC: Reconcile State — clears stale Claude Code run-state left over from a previous process.
  *
@@ -33,19 +33,31 @@ export async function action(_params: Record<string, any>, services: Services) {
   for (const thread of threads) {
     const cc = thread.context?.claudeCode;
     const isPaused = thread.chatState === 'paused';
+    const pending = cc?.pendingControlRequest;
+    const native = pending?.nativeTerminal;
+    const terminal = native ? services.cli.claudeCode.getNativeTerminal(thread.id)?.state : undefined;
+    const liveNativeDecision = native && terminal?.status === 'live'
+      && terminal.ownerId === native.ownerId && terminal.sessionId === native.sessionId;
+    // A paused native dialog cannot outlive the process that owns its callback.
+    const retiredNativeDecision = native && !liveNativeDecision
+      && cancelPendingControlRequest(services, thread.id, pending.requestId);
+
     const elicitation = cc?.pendingElicitation;
     const owner = elicitation ? services.cli.claudeCode.getConversation(thread.id)?.owner : undefined;
-    if (elicitation && owner?.handle.pid === elicitation.ownerPid && owner?.hasPendingElicitation(elicitation.requestId)) continue;
-    if (elicitation) cancelPendingElicitation(services, thread.id, elicitation.requestId);
+    const liveElicitation = elicitation && owner?.handle.pid === elicitation.ownerPid
+      && owner?.hasPendingElicitation(elicitation.requestId);
+    if (elicitation && !liveElicitation) cancelPendingElicitation(services, thread.id, elicitation.requestId);
+    if (liveElicitation || liveNativeDecision) continue;
 
+    const clearPendingControl = !isPaused || retiredNativeDecision;
     const needsContextRepair = cc && (
       cc.pendingElicitation !== undefined ||
       cc.isRunning === true ||
       cc.autoAcceptEdits !== undefined ||
       cc.queuedMessage !== undefined ||
-      (!isPaused && cc.pendingControlRequest !== undefined)
+      (clearPendingControl && pending !== undefined)
     );
-    const staleChatState = thread.chatState === 'working' || !!elicitation && isPaused && !cc?.pendingControlRequest;
+    const staleChatState = thread.chatState === 'working' || isPaused && (retiredNativeDecision || !!elicitation && !pending);
 
     if (!needsContextRepair && !staleChatState) continue;
 
@@ -58,7 +70,7 @@ export async function action(_params: Record<string, any>, services: Services) {
         pendingElicitation: undefined,
         autoAcceptEdits: undefined,
         queuedMessage: undefined,
-        ...(!isPaused && { pendingControlRequest: undefined }),
+        ...(clearPendingControl && { pendingControlRequest: undefined }),
       };
       updates.context = { ...thread.context, claudeCode: nextCc };
     }
