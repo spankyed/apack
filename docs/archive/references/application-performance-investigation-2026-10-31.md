@@ -141,7 +141,7 @@ XState events are not certified. Capture integrity does not certify universal in
 regression tests fail when their respective defects are restored. Manual strict checkpoint
 [41150926172](https://github.com/spankyed/apack/actions/runs/41150926172), `d391acfaef`: producers,
 integration-2 and native-2 passed. App-and-rest passed 6,063 tests and failed two catalogue checks because
-`performance-qualification.spec.ts` lacked its required row in `packages/repo-checks/CLAUDE.md`.
+`performance-qualification.spec.ts` lacked its required row in `packages/internal-repo-checks/CLAUDE.md`.
 Adding that row passes all 115 focused catalogue/runner checks; six documentation checks also pass.
 Both integration shards and both native shards subsequently passed.
 The queued `e0d1a0e3a4` run was cancelled before repeating this diagnosed catalogue omission.

@@ -447,7 +447,7 @@ const markerReachLines = (marked: ReadonlyMap<string, Map<string, string>>, widt
  * parsing what it printed, so there is nothing to keep in step with vitest.
  *
  * The half's total comes first because it is the number a ranking cannot give: measured 2026-10-05, the
- * five slowest files hold 46% of `repo-checks`' fast half and 97% of `apack-sdk`'s, and the shape no
+ * five slowest files hold 46% of `internal-repo-checks`' fast half and 97% of `apack-sdk`'s, and the shape no
  * top-five can show at all is many files each creeping a little — 349 of 388 fast-half files are under
  * 500ms and total 24.1s between them.
  *

@@ -192,7 +192,7 @@ other mode asks `npm pack --dry-run` for the file list, which is a subprocess fo
 tarball (0.4s against 0.1s, interleaved, paired over 5 at 83% idle, 2026-10-08), and the same rules run either
 way: both of publint's input kinds converge on one `core()` with a different virtual filesystem. It is not the
 dangling-published-path check, which publint cannot be — it skips any target behind a custom condition, which
-is how 99 published paths named files no tarball held. `@app/publish-checks`' `published-manifest-paths` is
+is how 99 published paths named files no tarball held. `@app/internal-publish-checks`' `published-manifest-paths` is
 that one.
 **Three kinds of recorded file, and the question to ask of a new one is which it is.** A
 **derivation** re-takes its answer on every run and compares (`schema:check`, `exports:check`,

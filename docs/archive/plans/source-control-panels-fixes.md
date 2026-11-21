@@ -81,7 +81,7 @@ code surface to tell the panel it is hidden, as it tells the commit panel.
 
 Driven in the app on the branch: a failed push's error stayed through the status refresh an edit caused, and a
 worktree switch moved the surface and left the list usable. The chain's one failure was outside this change:
-`repo-checks/tests/bounded-spawn.integration.spec.ts` fails under the machine's load (average 28–50 from other
+`internal-repo-checks/tests/bounded-spawn.integration.spec.ts` fails under the machine's load (average 28–50 from other
 sessions), on different cases each run.
 
 ## Phase 2 — the pull request backend
@@ -144,7 +144,7 @@ Seen while driving, outside this change:
   The rest of that hook does not run.
 - A pull request's diff tab is labelled as an unstaged change (`README.md (unstaged)`).
 
-The chain passed apart from three of `repo-checks`' tooling specs (`bounded-spawn`, `progress-guard`,
+The chain passed apart from three of `internal-repo-checks`' tooling specs (`bounded-spawn`, `progress-guard`,
 `spec-durations-reporter`), which fail under the machine's load and touch nothing here.
 
 ## Phase 3 — the commit backend and the engine

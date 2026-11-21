@@ -45,7 +45,7 @@ export interface ChainStep {
   readonly outputs?: readonly string[];
   /**
    * Generated trees inside `inputs` that this step declares the parent of and never reads. Every gitignored
-   * input has to be accounted for — `packages/repo-checks/tests/chain-inputs.spec.ts` fails one that is neither a step's
+   * input has to be accounted for — `packages/internal-repo-checks/tests/chain-inputs.spec.ts` fails one that is neither a step's
    * output you depend on nor listed here — because an unaccounted one is either an undeclared dependency
    * (a race) or churn that stops the step ever caching. Each entry is a claim that the step reads around
    * the tree, so it belongs with evidence.
@@ -408,7 +408,7 @@ const workspace = (pkg: string): string[] => WORKSPACE_PARTS.map((part) => `pack
 /**
  * What a *suite* reads, which is the workspace plus its guide. A fingerprint skips prose (see `READS_MARKDOWN`
  * in `packages-built.ts`), so for all but one package this adds a path and no bytes — and that one is
- * `packages/repo-checks/CLAUDE.md`, whose "What is here" table `spec-plan.spec.ts` asserts. Here and not in
+ * `packages/internal-repo-checks/CLAUDE.md`, whose "What is here" table `spec-plan.spec.ts` asserts. Here and not in
  * `WORKSPACE_PARTS`, so `typecheck`, which compiles the repo and reads no guide, does not take it on.
  */
 const suiteWorkspace = (pkg: string): string[] => [...workspace(pkg), `packages/${pkg}/CLAUDE.md`];
@@ -661,9 +661,9 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   // `inputs: ['docs']`: `doc-links` resolves every relative link between the repo's documents, and a
   // dead link fails nothing on its own — so the tree it reads has to be in this step's key or the check
   // caches over a move. Only here, since a typo in a guide should not re-run `typecheck`.
-  'repo-checks': { packages: true, repo: true, inputs: ['docs'], integrationInputs: FIXTURE_OUTPUTS },
+  'internal-repo-checks': { packages: true, repo: true, inputs: ['docs'], integrationInputs: FIXTURE_OUTPUTS },
   // `pretest: ensure-packages-built`; it npm-packs the built packages into a consumer and compiles it
-  'publish-checks': { packages: true },
+  'internal-publish-checks': { packages: true },
 };
 
 
@@ -697,13 +697,13 @@ export const STEP_TABLES = ['scripts/lib/chain-steps.ts', 'scripts/lib/typecheck
  * `publish` trees, `bin/`, `env.d.ts`, `eslint.config.ts` — the same breadth the typecheck legs' 0-21% is
  * mostly made of (`scripts/lib/dep-files.ts`).
  *
- * **The one project that never benefits is `repo-checks`**, stale in 154 of 154 — it declares `EVERY_SOURCE`
+ * **The one project that never benefits is `internal-repo-checks`**, stale in 154 of 154 — it declares `EVERY_SOURCE`
  * below, because six of its specs ask git what the repo holds, and that is a rule rather than an oversight
  * (`fingerprint-scope.spec.ts`: a suite holding a guard over the whole repo declares the whole repo).
  * Splitting those six out so the other seventeen cache separately was costed and declined: they are specs
  * about this repo's tooling, so they are stale whenever `scripts/` moves — 97 of the same 200 commits — and
  * would re-run anyway. Worth revisiting if that suite's cost grows or its repo-wide specs stop dominating
- * it. The sample is this branch's own work, so `scripts/` and `repo-checks/tests` lead it by construction;
+ * it. The sample is this branch's own work, so `scripts/` and `internal-repo-checks/tests` lead it by construction;
  * re-take it over a stretch of feature work before reading the per-project ranking as general.
  */
 export function suiteInputs(suite: UnitSuite, half: Half): string[] {
@@ -877,7 +877,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   //
   // Not the dangling-path check, and the difference matters: publint skips any target behind a custom
   // condition (`hasCustomCondition`) and attw resolves standard conditions only, which is how 99 published
-  // paths named files no tarball held. `@app/publish-checks`' `published-manifest-paths` is that check.
+  // paths named files no tarball held. `@app/internal-publish-checks`' `published-manifest-paths` is that check.
   //
   // It reads the published trees, which `PACKAGE_BUILD_OUTPUTS` covers along with the `dist` they are staged
   // from — the same constant `packages:ensure` declares as its outputs, so every input here is an ancestor's

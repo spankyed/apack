@@ -82,7 +82,7 @@ being true (`c6b59447b`). The archived guides were renamed to the current vocabu
 
 | Phase | Commit | Evidence for its "Done when" |
 |---|---|---|
-| 1 — the guard | `8addf2299` | Live in `@app/repo-checks`. Each of the five names its condition lists was planted on its own and fails the scan alone: `pluginId`, `usePlugin`, `sendToPlugin`, `getRegisteredPlugins` as a one-line module, `features[].plugin` as an `apack.json`. Also: unparked it reported 2128 violations; adding `TiptapPlugin` to a group failed the kept-spellings case; a stale `ALLOWED` entry was named |
+| 1 — the guard | `8addf2299` | Live in `@app/internal-repo-checks`. Each of the five names its condition lists was planted on its own and fails the scan alone: `pluginId`, `usePlugin`, `sendToPlugin`, `getRegisteredPlugins` as a one-line module, `features[].plugin` as an `apack.json`. Also: unparked it reported 2128 violations; adding `TiptapPlugin` to a group failed the kept-spellings case; a stale `ALLOWED` entry was named |
 | 2 — the concept | `8fe89f39a` | `typecheck` 17/17, `api:check`, `schema:check`, `test:unit` 5689, `build:default-setup`, and `npm run test:external-pack` run directly, exit 0 — `:contract` 38 tests over 11 files, `:fork`, `:app` 27 + 5 specs |
 | 3 — the wire | `17504b901` | `npm test -w @apackdev/host` 1746 passed / 135 files, including `tests/bus/outgoing-events.spec.ts` and `tests/packs/event-validation-map.spec.ts`; `test:smoke` 16.1s in the chain. Mutation, at the site the condition names — a `pluginId` left in the **renderer's** routing (`features/application/fe/connection.ts`, looking the surface up by the field the transport used to stamp): **5 of 110** renderer routing specs fail, in `plugin-reply` and `send-scope`. Smoke still passes, so of the condition's two candidates only the event specs catch it. The bus's own lookup was mutated too and failed **23** specs across `outgoing-events` and `event-validation-map` |
 | 4 — stored state | `c7f16a507`, and the migration removed after | Renamed outright. `npm test -w @apackdev/host`; `tests/fe/window-storage.spec.ts` holds the runner's cases around an empty list |
@@ -288,10 +288,10 @@ The word is in the product, not only the code, and it goes too — nothing is le
 **Deliverable.** The vocabulary in `CLAUDE.md` and `packages/renderer/CLAUDE.md` — a backend actor is a
 system, a frontend actor is a surface, `plugin` belongs to the groups above — and a guard that holds it.
 
-The guard lives in `@app/repo-checks`, modelled on `packages/repo-checks/tests/identity-guard.spec.ts`:
+The guard lives in `@app/internal-repo-checks`, modelled on `packages/internal-repo-checks/tests/identity-guard.spec.ts`:
 patterns with per-pattern allowances carrying a reason, and a staleness case that fails an entry which
 no longer fires. It cannot live in `@apackdev/host` — a guard over the whole repo has to sit in a suite
-that declares the whole repo (`SUITE_READS`' `repo`), which `repo-checks`' `fingerprint-scope` and
+that declares the whole repo (`SUITE_READS`' `repo`), which `internal-repo-checks`' `fingerprint-scope` and
 `chain-inputs` enforce.
 
 **Dependencies.** None.

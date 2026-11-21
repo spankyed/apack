@@ -55,7 +55,7 @@
     "typecheck:host": "npm run typecheck --workspace @apackdev/host && echo '\u2705 Host type check passed'",
     "typecheck:ui": "npm run typecheck --workspace @apackdev/ui && echo '\u2705 UI type check passed'",
     "typecheck:cli": "npm run typecheck --workspace @apackdev/cli --workspace @apackdev/testing && echo '\u2705 CLI + testing type check passed'",
-    "typecheck:scripts": "tsc -p scripts && tsc -p tests && tsc -p packages/repo-checks && tsc -p packages/publish-checks && echo '\u2705 Scripts, repo and publish checks, and E2E type check passed'",
+    "typecheck:scripts": "tsc -p scripts && tsc -p tests && tsc -p packages/internal-repo-checks && tsc -p packages/internal-publish-checks && echo '\u2705 Scripts, repo and publish checks, and E2E type check passed'",
     "lint:check": "npm run lint:check -ws --if-present && oxlint . -D correctness --ignore-path .gitignore --ignore-pattern 'docs/**' --ignore-pattern 'packages/apack-cli/templates/**'",
     "lint:fix": "npm run lint:fix -ws --if-present && oxlint . -D correctness --ignore-path .gitignore --ignore-pattern 'docs/**' --ignore-pattern 'packages/apack-cli/templates/**' --fix",
     "check:specifiers": "tsx scripts/check-import-specifiers.ts",

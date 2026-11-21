@@ -164,7 +164,7 @@ Warm chain **0.9s**, below the 1.5s base, and no stamp was invalidated to get th
 
 Not an input-observation item; it is the other half of the Background table's second row, which the goal
 measured and did not fix. `test:integration` ran one `vitest` over all three projects whenever any of them
-was stale, so a `repo-checks` edit paid 44s for 6s of work.
+was stale, so a `internal-repo-checks` edit paid 44s for 6s of work.
 
 It is now the same runner as the two unit pools (`scripts/test-unit-pool.ts` over `POOLS` in
 `scripts/lib/unit-pool.ts`), which is the point: **the integration half being special was itself the
@@ -177,7 +177,7 @@ cache at all. `poolStampFor(suite, half)` fixes it, `unit-pool.spec.ts` holds th
 checked by setting the integration pool's half to `fast`: two cases fire), and the runner prunes the stamps
 no pool would write, since the rename left one dead file per suite.
 
-Measured 2026-10-01: a `repo-checks` edit runs 6 files in **5.8s** against all 26 in **43.6s**. The asymmetry
+Measured 2026-10-01: a `internal-repo-checks` edit runs 6 files in **5.8s** against all 26 in **43.6s**. The asymmetry
 is why it pays — `apack-cli`'s half alone is 227.5s of the 276.7s of file time, so any edit that does not
 touch it skips 82% of the pool's work.
 

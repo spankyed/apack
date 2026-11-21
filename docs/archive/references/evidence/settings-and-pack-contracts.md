@@ -190,7 +190,7 @@ from earlier compiler checkpoints found by the existing input-coverage guard.
 Evidence: 78 source-resolution, selector, nested-bootstrap and graph checks pass in 2.45s. Native Node
 executes a preload whose path contains repeated spaces while selecting built SDK exports after source
 condition removal. A real captured compiler worker executes that preload and emits its observable value
-(27.34s). Required package prerequisites build successfully; host, CLI, scripts and repo-checks typechecks,
+(27.34s). Required package prerequisites build successfully; host, CLI, scripts and internal-repo-checks typechecks,
 scoped lint, import-specifier and tier checks pass. Initial npm static-check invocations hit the sandbox's
 tsx IPC restriction; the same scripts pass through `node --import tsx`. Logs:
 `/private/tmp/apack-node-options-{focused-final,worker,packages,cli-types-final,host-types,scripts-types,
@@ -7700,7 +7700,7 @@ Source `268533807` adds the existing `PACK_OUTPUTS` to the author's inputs. The 
 orders the producer first and fingerprints its output for authoring reuse. No new scheduling rule,
 timeout change or dependency fallback is added. A regression against `dependsOn(author)` fails
 before the repair, reporting only `packages:ensure`; afterward all 68 tests across authoring output,
-chain graph and scheduling pass in 978ms. Repo-checks and scripts typechecks, focused correctness
+chain graph and scheduling pass in 978ms. internal-repo-checks and scripts typechecks, focused correctness
 lint and `git diff --check` pass. Actual hosted authoring/app and converged acceptance remain pending.
 
 Failure log: `/private/tmp/apack-strict-39163655338.log`. The run retains the chain log and per-step
@@ -7727,7 +7727,7 @@ files are now disposed in all command exit paths. No timeout or validation asser
 
 All 115 focused facade/graph/input cases pass in 2.14s, including real sealed filesystem data, throwing
 runtime bytes, changed authored/generated inputs, changed generated-directory membership, output
-integrity, CLI dispatch and conflicting flags. CLI, scripts and repo-checks typechecks and focused
+integrity, CLI dispatch and conflicting flags. CLI, scripts and internal-repo-checks typechecks and focused
 correctness lint pass. An attempted wider `chain-table` run hits the existing daily-Mac guard when it
 imports the compiler integration configuration; this is not bypassed or claimed passing. Existing real
 facade integration coverage now also checks the read-only command and poisoned output, but its hosted
@@ -7782,7 +7782,7 @@ checks remain intact. Each producer retains the existing suite class; neither it
 build/archive operation limits increased. The new non-gating cost estimate explicitly borrows the
 existing shipped-build estimate; it is not a completed fork-duration measurement.
 
-Validation: all 120 focused graph/input/scheduler cases pass (2.37s); scripts, repo-checks and E2E
+Validation: all 120 focused graph/input/scheduler cases pass (2.37s); scripts, internal-repo-checks and E2E
 TypeScript checks pass; affected-file lint, shell syntax, tier checks and diff checks pass. Restoring
 the old combined producer call makes the new regression fail; original bytes restored afterward
 (`/private/tmp/apack-fork-producer-mutation.log`). The dry chain recognizes the independent producer
@@ -7851,7 +7851,7 @@ then archives it serially. It now shares the existing `PACK_BUILD_WIDTH` reserva
 `build:default-setup`; this borrows that build's measured reservation, not a new fork CPU measurement.
 A regression fails against the previous declaration (one versus two) and confirms the real scheduler
 keeps fork preparation separate from another step on a two-core budget. All **84** focused scheduler,
-graph and core-budget cases pass in 962ms; scripts/repo-checks types, focused lint, dry scheduling and
+graph and core-budget cases pass in 962ms; scripts/internal-repo-checks types, focused lint, dry scheduling and
 diff checks pass. The dry plan reports the fork as two cores. No timeout class or deadline changes.
 The in-progress strict run remains pinned to `d0ab6dd6b`; its cause/results remain unproven until
 retained output is available. This correction does not attribute that run's elapsed time to contention.

@@ -78,7 +78,7 @@ historical: these specs once imported the API's EARS and repository modules too.
 | apack-host | 77 | 0 | ✓ |
 | apack-cli | 65 | 0 | ✓ |
 | apack-sdk | 56 | 0 | ✓ |
-| repo-checks | 16 | 0 | ✓ |
+| internal-repo-checks | 16 | 0 | ✓ |
 | api | 15 | 0 | ✓ |
 | apack-ears | 9 | 0 | ✓ |
 | renderer | 8 | 0 | ✓ |
@@ -110,7 +110,7 @@ components name, the renderer applies it rather than copying it, a built pack sh
 would lose the chain, so it stays and becomes the first recorded exception to Phase 3's guard.
 
 This is the same class as the `scripts/` hole that
-[`goal-one-job-pool.md`](goal-one-job-pool.md) closed by creating `@app/repo-checks`, and it fails louder:
+[`goal-one-job-pool.md`](goal-one-job-pool.md) closed by creating `@app/internal-repo-checks`, and it fails louder:
 
 ```
 $ npm run spec -- packages/apack-testing/src/launch-env.ts
@@ -174,7 +174,7 @@ that needs a config line to avoid silence is one where the next file will be sil
 `@apackdev/cli` holds twelve specs whose subject is the published `@apackdev` packages rather than the CLI —
 30.2s of that suite's 190.8s. They are the same defect as Finding 1 at four times the size, and unlike the
 other five findings they have **no obvious right answer**: their subject belongs to no single package, the
-family is already split (two of them live in `@app/repo-checks`), and the packing fixture they share is also
+family is already split (two of them live in `@app/internal-repo-checks`), and the packing fixture they share is also
 used by three specs that legitimately belong in the CLI. That needs a decision rather than a move, so it is
 [`goal-published-package-checks.md`](goal-published-package-checks.md), to be done after this one — its
 Phase 2 depends on the `@apackdev/testing` suite this goal's Phase 2 creates, and its Phase 4 extends this
@@ -187,7 +187,7 @@ the CLI, so the record cannot be read as a CLI number.
 
 [`test-inventory.md`](../plans/test-inventory.md) was written 2026-09-19 against
 `AS/package-boundaries` at `1dd69172e` and has not been touched since. Its numbers are out — 279 spec
-files and 2,211 tests against 364 and roughly 2,654 — it predates `@app/repo-checks`, the CLI suite's two
+files and 2,211 tests against 364 and roughly 2,654 — it predates `@app/internal-repo-checks`, the CLI suite's two
 halves and the cost records, and its per-file references are stale. Checked at this base:
 
 | Its candidate | State now |
@@ -274,7 +274,7 @@ lighter.
 
 ### Phase 3 — the guards that keep placement true
 
-In `@app/repo-checks`, beside `repo-check-boundary.spec.ts` which is the precedent:
+In `@app/internal-repo-checks`, beside `repo-check-boundary.spec.ts` which is the precedent:
 
 - a package with a `src/` has a suite, or an entry in a recorded list with a reason, with the usual
   stale-entry check;

@@ -63,7 +63,7 @@ describe('publishedManifest', () => {
 
   /**
    * With no scripts there is no lifecycle hook to add, so a published manifest cannot become something that runs
-   * on install or rewrites itself at pack time. `@app/publish-checks` asserts the absence rather than a list of
+   * on install or rewrites itself at pack time. `@app/internal-publish-checks` asserts the absence rather than a list of
    * hook names, which npm is free to grow.
    */
   it('drops scripts and devDependencies', () => {

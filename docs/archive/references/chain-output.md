@@ -11,7 +11,7 @@ typed by hand. The `--dry` block is from `79e3fe1e8`; the rest from `a06509364`,
 
 **It is a snapshot, and nothing checks it stays true.** No step declares `docs/`, so editing the chain's
 output will not fail anything here. Treat a difference between this file and your terminal as this file
-being old. The two things that *are* checked are the columns (`repo-checks/tests/chain-output.spec.ts`)
+being old. The two things that *are* checked are the columns (`internal-repo-checks/tests/chain-output.spec.ts`)
 and the report's line shapes (the `staleLines` cases in the same file).
 
 ## `npm run chain --dry`

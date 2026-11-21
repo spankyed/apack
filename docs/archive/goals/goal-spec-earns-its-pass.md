@@ -74,12 +74,12 @@ Finished when:
 - No target naming a file that exists can exit 0 having run no spec. A source file nothing covers says
   so, names what would cover it where that is known, and exits non-zero.
 - The two edges no module graph can see — a pack's content sources to its goldens, and apack.json to the
-  generated tree — are declared routes in scripts/lib/spec-plan.ts, asserted by repo-checks'
+  generated tree — are declared routes in scripts/lib/spec-plan.ts, asserted by internal-repo-checks'
   spec-plan.spec.ts, and named in the root CLAUDE.md beside the other spec commands.
 - A failing run stops the plan instead of paying for the runs behind it.
 - `npm run spec:dry` prints the plan, the specs it would run and what the record says they cost,
   running nothing.
-- Checks: npm run typecheck; npm test -w @app/repo-checks; npm run spec-cost:check; npm run chain once
+- Checks: npm run typecheck; npm test -w @app/internal-repo-checks; npm run spec-cost:check; npm run chain once
   at the end.
 - A final summary: phase -> done/deferred, evidence, the conventional choices made, and the measured
   cost of the collection Phase 4 adds.
@@ -115,7 +115,7 @@ source file through the module graph: one root `vitest related` over every host 
 `@apackdev/sdk` runs the 104 specs that cover it rather than the one package it lives in.
 [`goal-pack-test-config.md`](goal-pack-test-config.md) closed the pack side, so a pack's own
 source walks the pack's graph instead of running its whole 89-spec suite. `scripts/lib/spec-plan.ts` is the
-routing as data and `packages/repo-checks/tests/spec-plan.spec.ts` asserts it in 33 cases.
+routing as data and `packages/internal-repo-checks/tests/spec-plan.spec.ts` asserts it in 33 cases.
 
 What is left is the honesty of the answer. Three things, all reproducible at this commit.
 
@@ -229,8 +229,8 @@ What the record holds, re-summed from the twelve per-package files at `af694db4f
 | Suite | Specs | Recorded file-time | of which the integration half |
 |---|---|---|---|
 | `apack-cli` | 56 | 182.9s | 167.9s |
-| `repo-checks` | 30 | 43.1s | 34.2s |
-| `publish-checks` | 9 | 32.6s | 30.6s |
+| `internal-repo-checks` | 30 | 43.1s | 34.2s |
+| `internal-publish-checks` | 9 | 32.6s | 30.6s |
 | `apack-host` | 79 | 21.7s | — |
 | `default-setup` | 94 | 13.4s | — |
 | `apack-sdk` | 59 | 13.4s | — |
@@ -417,7 +417,7 @@ otherwise go looking:
 `npm run spec -- packages/apack-sdk/src/fe/settings.ts` still passes and exits 0; `npm run spec --
 docs/goals/README.md` exits 0 and no longer claims to run every spec covering it; a change set of nothing but
 a doc exits 0; a `-t` pattern matching no case still exits 0 (it is a filter, not a claim). New cases in
-`packages/repo-checks/tests/spec-plan.spec.ts` assert which routes carry the claim and the verdict for each
+`packages/internal-repo-checks/tests/spec-plan.spec.ts` assert which routes carry the claim and the verdict for each
 of the three outcomes. Mutation: dropping the claim from the root route makes the empty case pass again, and
 the new case fails.
 
@@ -511,7 +511,7 @@ file removed reports one unpriced spec by name rather than a smaller total.
   check (`docs/goals/README.md`, and the root `CLAUDE.md` on a check that may have looked at nothing).
 - Recorded artifacts move only through their `:update` half: `packages/*/etc/spec-cost.json` through
   `spec-cost:update`, never by hand.
-- Keep the loop fast: the narrow checks during the work (`npm test -w @app/repo-checks -- spec-plan`, the
+- Keep the loop fast: the narrow checks during the work (`npm test -w @app/internal-repo-checks -- spec-plan`, the
   package's `tsc --noEmit`), the chain once at the end of a phase.
 
 ## Outcome

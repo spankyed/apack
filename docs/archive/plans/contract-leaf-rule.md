@@ -40,7 +40,7 @@ this rule as the guard), and `manifest-schema.ts:130` and `:138` (the `.describe
 | # | Line | Forbids | Covered elsewhere? |
 |---|---|---|---|
 | 1 | `:764` (`viaLeaf`) | the leaf importing any `#generated/*` but `types` and `ears` | **nothing**, in a warm tree |
-| 2 | `:764` (closure) | any module the leaf reaches importing one of the five generated modules a contract is behind (`GENERATED_BEHIND_A_CONTRACT`, derived by `repo-checks/tests/generated-behind-contract.spec.ts`) | the reader, **only where the collapse lands in a position it reads** — see below |
+| 2 | `:764` (closure) | any module the leaf reaches importing one of the five generated modules a contract is behind (`GENERATED_BEHIND_A_CONTRACT`, derived by `internal-repo-checks/tests/generated-behind-contract.spec.ts`) | the reader, **only where the collapse lands in a position it reads** — see below |
 | 3 | `:771` | the leaf importing *any* other feature, `be/` included | **nothing** |
 | 4 | `:775` | anything in the closure reaching a declared `surface.entry`/`system.entry` | **nothing** |
 | 5 | `:780` | the leaf importing a file named `state`/`system` | **nothing** outside the rule |
@@ -200,11 +200,11 @@ signal is an external pack author, and no check here runs for them — that is t
 
 ## Verification
 
-Per phase above, plus: `npm run typecheck`; `npm run test:integration -w @app/repo-checks` (the 61-case
+Per phase above, plus: `npm run typecheck`; `npm run test:integration -w @app/internal-repo-checks` (the 61-case
 `import-specifiers.integration.spec.ts`, 9 of them this rule's); `npx vitest run --root packages/apack-sdk
 tests/build/declared-type-of.spec.ts`; `npm run test:external-pack:contract`; `npm run chain`.
 
-`spec-cost` bookkeeping if a spec's cost crosses 1.5s/2.5s: `npm run spec-cost:update -- --suite repo-checks` or
+`spec-cost` bookkeeping if a spec's cost crosses 1.5s/2.5s: `npm run spec-cost:update -- --suite internal-repo-checks` or
 `-- --suite apack-sdk`, on an idle machine.
 
 ## What was verified, and what was not

@@ -271,7 +271,7 @@ on the next runner. No global timeout class or compiler implementation changes.
 
 A regression checks the sum of the producer's actual operation bounds against its chain deadline; it
 fails before the repair (1,320s of phases under 600s), passes afterward (900s under 900s). All 68 graph
-and scheduler cases pass, as do scripts/repo-checks typechecking and focused correctness lint. Before
+and scheduler cases pass, as do scripts/internal-repo-checks typechecking and focused correctness lint. Before
 another strict run, validate this producer and the restored-fork app case together on disposable macOS.
 
 ## Fork acceptance passed: 39420977378
@@ -362,7 +362,7 @@ reviewed: harness/setup cases exercise their actual authoring boundary and alrea
 they do not select arbitrary product suites for a generic reporter assertion.
 
 All eleven reporter cases pass in 3.4s of test time locally, including actual npm/node/npx invocations.
-Repo-checks typechecking and correctness lint pass. All fifteen wait/subprocess-guard cases pass separately
+internal-repo-checks typechecking and correctness lint pass. All fifteen wait/subprocess-guard cases pass separately
 before another normal/strict acceptance run. The required remaining coverage is the rest of normal
 integration and the smoke, external-app and packaged-authoring gates; completed results remain retained.
 

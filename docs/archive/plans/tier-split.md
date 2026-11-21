@@ -137,11 +137,11 @@ sizes none. One `const` and one interpolation, trivially restored if someone mis
 | `scripts/check-test-tiers.ts` | branches on `needsApp`; gains the inputs check beside the scan |
 | `scripts/chain.ts` | four sites become one — the row prefix, now a marker on app steps |
 | `scripts/spec.ts`, `scripts/lib/spec-dry.ts` | the `[tier N]` label |
-| `packages/repo-checks/tests/suite-timeouts.spec.ts` | reads `size`, drops the `spec -> step` hop |
-| `packages/repo-checks/tests/{chain-graph,chain-output}.spec.ts` | tier assertions |
+| `packages/internal-repo-checks/tests/suite-timeouts.spec.ts` | reads `size`, drops the `spec -> step` hop |
+| `packages/internal-repo-checks/tests/{chain-graph,chain-output}.spec.ts` | tier assertions |
 | `packages/apack-testing/src/vitest.ts` | the comment only |
 
-Plus the tier tables in the root `CLAUDE.md` and `packages/repo-checks/CLAUDE.md`.
+Plus the tier tables in the root `CLAUDE.md` and `packages/internal-repo-checks/CLAUDE.md`.
 
 ## Sequencing
 

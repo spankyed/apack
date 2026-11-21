@@ -81,7 +81,7 @@ that was always meant to stay.
 |---|---|---|
 | `scripts/lib/build-reads.ts:134` | `isBuiltIn` is "the one thing here whose subject this goal deletes" | **gone**, Phase 1 |
 | `apack-cli/src/build/build-reads.ts:28` | the first of two reasons the read record is keyed by phase | **the sentence goes**, Phase 1; the keying stays on the second reason |
-| `repo-checks/tests/dep-files.integration.spec.ts:400` | the two-kind evidence loop, needing a built-in pack *and* an external one | **gone**, Phase 1 — one record then carries all nine phases and the loop collapses into the case above it |
+| `internal-repo-checks/tests/dep-files.integration.spec.ts:400` | the two-kind evidence loop, needing a built-in pack *and* an external one | **gone**, Phase 1 — one record then carries all nine phases and the loop collapses into the case above it |
 | `scripts/lib/chain-steps.ts:1083` | `build:app` declares `PACK_SOURCES` because the renderer compiles the pack's frontend | **gone**, Phase 3 — the comment says so itself: *"this comes back out with it"* |
 | `apack-cli/tests/build/fe-bundler-dev-server.integration.spec.ts:19` | why the `pack://` page-reload ceiling is the reason a dev-only source import exists | **stays** — it explains Phase 3's design, and is still true afterwards |
 
@@ -390,7 +390,7 @@ makes default-setup record the `runtime` and `fe` phases like any other pack. Ea
   the command that rebuilds a pack's record, and with one kind of pack the path answers that, as it already
   does for a fixture pack. These two outlive Phase 1: the branch still picks `npm run compile` over `apack
   build` for default-setup, and `manifest.builtIn` is not gone until Phase 6.
-- the two-kind evidence guard in `repo-checks/tests/dep-files.integration.spec.ts` — the nine bundling phases
+- the two-kind evidence guard in `internal-repo-checks/tests/dep-files.integration.spec.ts` — the nine bundling phases
   take a built-in pack *and* an external one to observe between them, precisely because a built-in pack
   records neither of those two. Afterwards one record carries all nine and the guard collapses into the case
   above it, which asks only whether a record exists.
@@ -427,7 +427,7 @@ a deliberate `chain --all --record --forget --step compile`, on the machine the 
 **Files:** `apack-cli/src/commands/build.ts`, `packages/default-setup/dev-build.mjs`,
 `packages/dev-mode.js`, `packages/default-setup/package.json`, `scripts/lib/build-reads.ts`,
 `apack-cli/src/build/build-reads.ts`, `apack-host/src/packs/layout.ts`, `scripts/lib/chain-steps.ts`,
-`repo-checks/tests/dep-files.integration.spec.ts`.
+`internal-repo-checks/tests/dep-files.integration.spec.ts`.
 
 **Why first:** it is what makes a shipped pack a *complete* pack on disk, which every later step assumes, and
 it is the only step that deletes a mechanism no other pack has.
@@ -435,7 +435,7 @@ it is the only step that deletes a mechanism no other pack has.
 **Done when:** `npm run compile` leaves `packages/default-setup/dist/runtime/index.cjs` **and**
 `runtime/fe.js`; `dev-build.mjs` holds no esbuild call; `npm start` still hot-reloads a backend edit, with
 the first compile still gating the API boot; `apack-cli/tests/build/*` and
-`repo-checks/tests/dep-files.integration.spec.ts` pass with the two-kind evidence guard collapsed into the
+`internal-repo-checks/tests/dep-files.integration.spec.ts` pass with the two-kind evidence guard collapsed into the
 case above it. Mutation: put the gate back and the `compile` observation count drops from nine phases to
 seven.
 
@@ -776,7 +776,7 @@ own text keeps as axis 1.
 |---|---|---|
 | 1 | done | `apack build --watch` replaces `dev-build.mjs`; `RESOLVED_AT_RUNTIME` named. The watch rebuilds the runtime alone — 40ms against the full build's 23.7s |
 | 2 | done | `partitionPolicy` gone; `appPartitionPolicy()` is a constant in `database/open.ts` |
-| 3 | done | `npm run start` alone gives frontend and backend hot reload for every workspace pack, `tests/packs/external-pack` included, with no `apack run`. Held by `repo-checks`' `dev-pack-hmr` |
+| 3 | done | `npm run start` alone gives frontend and backend hot reload for every workspace pack, `tests/packs/external-pack` included, with no `apack run`. Held by `internal-repo-checks`' `dev-pack-hmr` |
 | 4 | done | `earlySystem` deleted, not widened |
 | 5 | done | one `applyPacks`, one `packContentRevisions`/`packContentDeps`, one policy for every pack |
 | 6 | done | install replaces publish; `publishHostPackOutput`, `pruneHostPackOutputs`, `hostPacksDir`, `loadBuiltInPacks`, `discoverBuiltInPacks`, the `publishing` staging kind and `schema.ts`'s `degraded` branch are gone |
@@ -824,7 +824,7 @@ answered freshness rather than integrity, and `be-bundler.ts`'s comment claimed 
 **What was not done, and why**
 
 - **`grep -rn goal-one-kind-of-pack packages scripts` returns 3, not 1.** The dev-server spec's, plus
-  Phase 3's acceptance spec (`dev-pack-hmr`) and the `repo-checks` table row describing it — neither
+  Phase 3's acceptance spec (`dev-pack-hmr`) and the `internal-repo-checks` table row describing it — neither
   existed when that line was written, and a spec whose whole subject is this goal's devex requirement is
   the right place to cite it.
 - **`chain --record` was not run.** `compile` grew 13s → 31s and `test:smoke` 9s → 25s, both real: the

@@ -214,7 +214,7 @@ materialises a pack to use.
 **Not a workspace of its own**, which is the obvious-looking move and was tried: a private `@app/pack-fixtures`
 costs seven files and six registration points for one function, and the premise that bought it — that living in
 the SDK means living in the reviewed published surface — is false, because of the paragraph above. A workspace
-per helper is also the precedent that gets you twelve of them. `packages/repo-checks/CLAUDE.md` has the
+per helper is also the precedent that gets you twelve of them. `packages/internal-repo-checks/CLAUDE.md` has the
 guardrail that keeps this the only way to write one.
 
 **The condition that would make it public API** is a published pack-reading API. Every consumer of a pack

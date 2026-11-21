@@ -17,7 +17,7 @@ The engine's types are `@elmdb/ears`' (elmdb's `packages/ears`, changed there an
 ## The contract
 
 **No `any`.**
-- Nothing pack-facing exposes `any`. `published-sdk-any.integration.spec.ts` in `@app/publish-checks` enforces it.
+- Nothing pack-facing exposes `any`. `published-sdk-any.integration.spec.ts` in `@app/internal-publish-checks` enforces it.
 - An entity type without a declared shape reads as `BaseEntity & Record<string, unknown>`, so its values need narrowing.
 
 **Shapes.**
@@ -127,7 +127,7 @@ The engine's types are `@elmdb/ears`' (elmdb's `packages/ears`, changed there an
 - `QueryBuilder<E = string, D = UntypedSchema>` and `WriteBuilder<E = string, D = UntypedSchema>` keep the untyped operations (`untypedQuery`, `untypedWrite`, … from `@apackdev/sdk/ears`, and an engine's own) unchecked.
 
 **Compatibility.**
-- `@elmdb/ears` and `@apackdev/sdk` support TypeScript 5.7 and later (`packages/typescript-floor`). These types keep their `NoInferType` workaround from when the floor was 5.3.
+- `@elmdb/ears` and `@apackdev/sdk` support TypeScript 5.7 and later (`packages/internal-typescript-floor`). These types keep their `NoInferType` workaround from when the floor was 5.3.
 
 ## Before changing any of these types
 
@@ -141,7 +141,7 @@ The engine's types are `@elmdb/ears`' (elmdb's `packages/ears`, changed there an
    - the untyped twins (`untypedQuery`, `untypedCreate`, `untypedUpsert`, `untypedWrite`)
 2. **Run the type tests** that pin the contract:
    - default-setup: `tests/typed-query-builder.spec.ts`, `branded-entity-id.spec.ts`, `entity-shape-registry.spec.ts`, `sdk-type-safety.spec.ts`, and `npm run typecheck:pack`
-   - `@apackdev/cli`: `packages/apack-cli/tests/build/facade-typing.integration.spec.ts` (a real dependent pack under bundler and node16, against both the workspace source and the packed `@elmdb/ears` and `@apackdev/sdk`) and `packages/publish-checks/tests/published-sdk-any.integration.spec.ts`
+   - `@apackdev/cli`: `packages/apack-cli/tests/build/facade-typing.integration.spec.ts` (a real dependent pack under bundler and node16, against both the workspace source and the packed `@elmdb/ears` and `@apackdev/sdk`) and `packages/internal-publish-checks/tests/published-sdk-any.integration.spec.ts`
 3. **Mutation-check every rule you touch.** Break it on purpose and confirm a test fails.
 4. **Check editor completions and error messages.** `packages/apack-cli/tests/build/facade-typing.integration.spec.ts` in `@apackdev/cli` checks the positions below with the TypeScript language service, under both module resolutions and against the published package. Extend it when you add a field or name parameter, and still look at anything it doesn't cover.
    - Field positions should list the entity's fields: `query(EARS.Entity.X).pick(['|'])`, `.where('|')`, , `.orderBy('|')` and `getAttr(id, '|')`.

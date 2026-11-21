@@ -32,7 +32,7 @@ A pack's Playwright configs are calls to a helper, not copies of one — the sam
 gives for vitest, for the same reason. There were six copies (the repo's own E2E config, the one
 `apack pack init-tests` scaffolds, both fixture packs', and the drive layer's pair), and the repo's own had
 already drifted to a `use` block giving it screenshots and traces the three packs' lacked. Nobody decided
-that; it is what six copies do. `@app/repo-checks`' `playwright-config.spec.ts` is the gate.
+that; it is what six copies do. `@app/internal-repo-checks`' `playwright-config.spec.ts` is the gate.
 
 `definePackE2EConfig` runs one worker per three cores (`e2eWorkers`): each worker launches its own app on its
 own temporary data dir, and the app's single-instance lock is scoped by data dir, so workers do not contend.
@@ -90,7 +90,7 @@ wall time and leaves its CPU alone, so a slow test is never failed for it. Each 
 `meta.cpuMs`, which the repo's reporter reads. The guard reads the worker's own CPU from `process.cpuUsage()` and
 its children's from `ps`, the reading `boundedSpawn` takes, and holds the budget at ten times its size under `APACK_CEILING=loose`.
 `cpuBudget` is a function rather than a typed `meta` field because vitest declares `TaskMeta` in `@vitest/runner`,
-which this package does not depend on. `@app/repo-checks`' `progress-guard.integration.spec.ts` is the guard over
+which this package does not depend on. `@app/internal-repo-checks`' `progress-guard.integration.spec.ts` is the guard over
 a real run.
 
 **Git in a test reads none of the machine's config** (`src/vitest-git-config.ts`, in `isolatedDataDir`'s setup files
@@ -126,7 +126,7 @@ carries no comments.
 | # | Door | Covers | Where |
 |---|---|---|---|
 | 1 | `npm run packages:ensure &&` in a root script | a repo command: `test`, `test:headed`, `test:explorer`, `test:external-pack`, `typecheck`, `typecheck:pack`, `build:default-setup`, `api:update` | root `package.json` |
-| 2 | that workspace's `pretest` | `npm test -w @apackdev/cli`, `-w @app/default-setup` and `-w @app/repo-checks` run directly, which no root script wraps | each package's `package.json` |
+| 2 | that workspace's `pretest` | `npm test -w @apackdev/cli`, `-w @app/default-setup` and `-w @app/internal-repo-checks` run directly, which no root script wraps | each package's `package.json` |
 | 3 | `ensureCheckoutPackages(packRoot)` | `apack pack build`, `apack pack test`, `apack pack dev`, `dev:drive` — from any directory, for a pack whose packages are a checkout's — and every watched rebuild, which an edit to a unit's input triggers | `apack-cli/src/build/checkout-packages.ts`, called from `build/build-process.ts`, `commands/test.ts` and `commands/drive.ts` |
 | 4 | the `Build publishable packages` step | CI, whose typecheck step already built them through `typecheck:pack` | `.github/workflows/ci.yml` |
 
@@ -136,7 +136,7 @@ mid-run would be wrong. All they can do is fail, and say what to run.
 | # | Door | Covers | Where |
 |---|---|---|---|
 | 5 | `assertCheckoutPackagesFresh()` | a pack author's bare `npx vitest` or `npx playwright test`, with no CLI in front of it | `src/checkout-freshness.ts`, called from `setupPackTests` and the `electronApp` fixture |
-| 6 | a throw while the module loads | a spec that reads the built packages run without its `pretest` (`npx vitest`, a watch run): `@app/publish-checks`' specs and `@app/repo-checks`' `published-sdk-peers` | `packagesBuiltOrRefuse()` in `@apackdev/host/build/packages-built`, called from `apack-cli/tests/helpers/published-packages.ts` and the spec |
+| 6 | a throw while the module loads | a spec that reads the built packages run without its `pretest` (`npx vitest`, a watch run): `@app/internal-publish-checks`' specs and `@app/internal-repo-checks`' `published-sdk-peers` | `packagesBuiltOrRefuse()` in `@apackdev/host/build/packages-built`, called from `apack-cli/tests/helpers/published-packages.ts` and the spec |
 | 7 | the same throw, in a report generator | `api:check`, which reads the built declarations and is a chain step — so it must not rebuild them, where `api:update` is a command a user runs and carries door 1's prefix | `scripts/api-reports.ts` |
 | 8 | the same throw, in a verification step | `packages:check`, which reads the five staged trees and is a chain step, so it must not rebuild them either. Every caller already builds first — the chain orders it after `packages:ensure` through the outputs it declares, and both workflows build in the step before — so what this catches is a by-hand run against a tree the sources have moved past, which the guides already told the reader to build first. A gate that reports the published packages fine about a tree it did not verify is the silent green `ALLOW_UNBUILT`'s comment records | `scripts/packages-check.ts` |
 

@@ -15,8 +15,8 @@ full `npm run chain` and then passed on its own, which is the shape that rule de
 | `apack-terminal` `broker::killing_a_session_takes_the_whole_tree_with_it` | a killed session's children are gone | *"the grandchild 55017 outlived the session it belonged to"* | passes in **2.08s**, having taken **9.97s** in the failing run |
 | `apack-terminal` `channel::a_saturating_producer_reports_that_it_was_throttled_rather_than_losing_output` | back-pressure is reported rather than output dropped | timed out at **60s** | **47s** and passed in the run before, so it sits on its deadline |
 | `@apackdev/sdk` `tests/progress/progress.spec.ts` › *reads a worker thread's own CPU from the first reading* | a busy worker's CPU grows | `expected 105.321 to be greater than 200` | 32 of 32, at a load average of **99** |
-| `@app/repo-checks` `tests/bounded-spawn.integration.spec.ts` › *kills the whole group* | a bounded spawn takes its group | *"nothing is proven if the grandchild never started: expected 0 to be greater than 0"* | 13 of 13 |
-| `@app/repo-checks` `tests/spec-durations-reporter.integration.spec.ts` › *records a test that spent more CPU than its budget* | an over-budget test is reported | `expected [] to deeply equal [{ name: 'costly', … }]` | 15 of 15, at a load average of **114** |
+| `@app/internal-repo-checks` `tests/bounded-spawn.integration.spec.ts` › *kills the whole group* | a bounded spawn takes its group | *"nothing is proven if the grandchild never started: expected 0 to be greater than 0"* | 13 of 13 |
+| `@app/internal-repo-checks` `tests/spec-durations-reporter.integration.spec.ts` › *records a test that spent more CPU than its budget* | an over-budget test is reported | `expected [] to deeply equal [{ name: 'costly', … }]` | 15 of 15, at a load average of **114** |
 
 ## Why they are one finding and not five
 

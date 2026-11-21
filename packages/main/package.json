@@ -24,7 +24,7 @@
     "get-port": "^7.1.0"
   },
   "devDependencies": {
-    "@app/electron-versions": "*",
+    "@app/internal-electron-versions": "*",
     "typescript": "5.8.3",
     "vite": "7.3.7",
     "vite-plugin-static-copy": "^3.1.2",

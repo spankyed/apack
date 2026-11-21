@@ -23,7 +23,7 @@ Defect 1 is the one that matters: **a plan whose premise is a prediction is the 
 ## What the evidence does support
 
 Re-measuring found the real vector, and it is not empty walks. **30 conditional skips across 22 spec files, and
-14 of them skip on `!PACKAGES_BUILT`** — nine of those thirteen files being the whole of `@app/publish-checks`.
+14 of them skip on `!PACKAGES_BUILT`** — nine of those thirteen files being the whole of `@app/internal-publish-checks`.
 
 `packagesBuiltOrRefuse` (`packages/apack-host/src/build/packages-built.ts:629`) throws on unbuilt packages **only
 under `process.env.CI`**, and this repo's CI is off by design — `.github/workflows/ci.yml` has its triggers
@@ -71,7 +71,7 @@ collapsed here were still the load-bearing ones. The weak shape has already cost
 
 - `apack-cli/tests/build/pack-rules.spec.ts` carries three shapes, one an `apack.json` written inline because
   neither of the other two could express a contract leaf.
-- `repo-checks/tests/import-specifiers.integration.spec.ts` records what it cost: *"there used to be two and the
+- `internal-repo-checks/tests/import-specifiers.integration.spec.ts` records what it cost: *"there used to be two and the
   difference was invisible … `own-modules` and `contract-leaves` cannot fire there at all — measured. Half the
   sweep's fixtures were that shape, so for those rows those two rules' 'and no other rule claims it' said nothing:
   they were not able to claim."*
@@ -133,14 +133,14 @@ Each is a mutation, per the repo's rule that breaking it on purpose proves more 
 
 | | |
 |---|---|
-| the skip is gone | clear `node_modules/.cache/apack-packages-build` and remove one `dist`, then run `npm test -w @app/publish-checks`: it must fail naming the build command, where today nine files report green |
+| the skip is gone | clear `node_modules/.cache/apack-packages-build` and remove one `dist`, then run `npm test -w @app/internal-publish-checks`: it must fail naming the build command, where today nine files report green |
 | the opt-out works | the same run with `APACK_ALLOW_UNBUILT=1` skips as before |
 | nothing gated changed | `npm run chain` — `packages:ensure` precedes every step that reads a built package, so no step may newly refuse |
 | the fixture bites | delete the manifest from `packFixture`'s default: the `contract-leaves` cases must fail. Today two of the three shapes cannot make that rule speak at all |
 | ~~the floor is preserved~~ | **This row was unrunnable, and the floor it defends was the wrong shape. See "As shipped" below.** |
 | `population` bites | call it on `[]`: throws naming the subject |
 | the merged table bites | delete a key from the `Record`: a compile error, not a test failure |
-| nothing else moved | `npm test -w @apackdev/cli`, `npm run test:integration -w @app/repo-checks -w @app/publish-checks`, expectations unedited |
+| nothing else moved | `npm test -w @apackdev/cli`, `npm run test:integration -w @app/internal-repo-checks -w @app/internal-publish-checks`, expectations unedited |
 | the gate | `npm run check:specifiers`, `npm run typecheck`, `npm run chain` |
 
 ## Risks
@@ -169,7 +169,7 @@ Each is a mutation, per the repo's rule that breaking it on purpose proves more 
 ## Added for coordination (2026-09-28, another session)
 
 Five concrete instances of this class landed and were removed in `1300e85a0`, in
-`packages/repo-checks/tests/chain-output.spec.ts` — 32 cases to 27. They are a **different vector** from the
+`packages/internal-repo-checks/tests/chain-output.spec.ts` — 32 cases to 27. They are a **different vector** from the
 conditional skips above: every one of them *ran*, and passed, and could not fail. They do not contradict the
 condition in "Not done"; none was green over a population it had not read.
 

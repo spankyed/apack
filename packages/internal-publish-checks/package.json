@@ -1,0 +1,26 @@
+{
+  "name": "@app/internal-publish-checks",
+  "version": "0.0.0",
+  "private": true,
+  "description": "What a consumer gets when they install the published @apackdev packages, and the fixture that finds out",
+  "type": "module",
+  "main": "./src/published-packages.ts",
+  "exports": {
+    ".": "./src/published-packages.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "pretest": "tsx ../../scripts/ensure-packages-built.ts",
+    "test": "vitest run",
+    "pretest:integration": "tsx ../../scripts/ensure-packages-built.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "devDependencies": {
+    "@apackdev/host": "*",
+    "@apackdev/sdk": "*",
+    "tsx": "^4.23.15",
+    "typescript": "^5.8.3",
+    "vite": "^7.3.7",
+    "vitest": "^4.1.12"
+  }
+}

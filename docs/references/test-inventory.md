@@ -26,11 +26,11 @@ are in the [test placement guide](../../tests/README.md).
 | `@apackdev/host` | 76 | 18.7s | — | 18.7s |
 | `@apackdev/sdk` | 56 | 15.1s | — | 15.1s |
 | `@apackdev/cli` | 53 | 13.5s | 157.2s | **170.8s** |
-| `@app/repo-checks` | 18 | 2.9s | 9.8s | 12.7s |
+| `@app/internal-repo-checks` | 18 | 2.9s | 9.8s | 12.7s |
 | `@app/api` | 15 | 5.6s | — | 5.6s |
 | `@apackdev/ears` | 9 | 2.4s | — | 2.4s |
 | `@app/renderer` | 8 | 0.1s | — | 0.1s |
-| `@app/publish-checks` | 8 | 0.0s | 28.0s | 28.1s |
+| `@app/internal-publish-checks` | 8 | 0.0s | 28.0s | 28.1s |
 | `@apackdev/testing` | 4 | 0.1s | — | 0.1s |
 | `@app/main` | 3 | 0.2s | — | 0.2s |
 | `@apackdev/ui` | 2 | 0.1s | — | 0.1s |
@@ -41,19 +41,19 @@ One of default-setup's is recorded as skipped rather than costed (every test in 
 measured ones.
 
 `@apackdev/cli` is still 63% of the file time, and now legitimately: the eight specs whose subject was the
-published packages are `@app/publish-checks`, so its record can be read as a CLI number. It has moved
+published packages are `@app/internal-publish-checks`, so its record can be read as a CLI number. It has moved
 190.8s → 200.8s → 170.8s across recordings that removed twelve specs; the middle figure was a contended
 measurement, which is the kind of noise the deleted cost record needed a band to absorb.
 
-`packages/preload` has source but neither specs nor a `test` script; `@app/electron-versions` and
-`@app/typescript-floor` hold no source. Every other package has a suite —
+`packages/preload` has source but neither specs nor a `test` script; `@app/internal-electron-versions` and
+`@app/internal-typescript-floor` hold no source. Every other package has a suite —
 `@apackdev/testing` and `@apackdev/ui` gained theirs in `goal-test-placement.md` Phase 2, having had none.
 
 ## Where a spec lives
 
 **A spec's path under `tests/` mirrors the source path it covers.** `src/features/brain/be/trigger-dedupe.ts`
 is covered by `tests/features/brain/be/trigger-dedupe.spec.ts`. Exactly, rather than collapsed, because
-exact is checkable and collapsing is a judgement call per file — `repo-checks/tests/spec-placement.spec.ts`
+exact is checkable and collapsing is a judgement call per file — `internal-repo-checks/tests/spec-placement.spec.ts`
 fails a directory under `tests/` that names no directory under `src/`.
 
 Three consequences worth stating, because each was once decided the other way:
@@ -72,7 +72,7 @@ No package colocates. `@app/default-setup` had six specs under `src/` with an in
 colocated spec would never run, and the walk is what makes it show up in `spec:dry`'s listing rather than
 vanishing twice over.
 
-Three suites have an expensive half: `@apackdev/cli`, `@app/repo-checks` and `@app/publish-checks`, each with
+Three suites have an expensive half: `@apackdev/cli`, `@app/internal-repo-checks` and `@app/internal-publish-checks`, each with
 a `vitest.integration.config.ts` over `tests/**/*.integration.spec.ts`. What a spec gets there is a 60s
 per-test budget instead of 15s, a worker pool capped at half the cores, and separation from the per-change
 loop.
@@ -100,7 +100,7 @@ Seven kinds are actually distinguishable in the tree. The tier is what a check m
 | **Package unit** | most of every `tests/` | 1 | its own package's source, the in-memory runtime, fakes |
 | **Contract over build output** | `apack-cli/tests/build/`, `default-setup/tests/content/` | 2 | the built `@apackdev` packages, a pack's `dist` |
 | **Command / process** | `apack-cli/tests/commands/`, `tests/harness/` | 2 | runs real builds, installs and child processes |
-| **Repo tooling** | `@app/repo-checks` | 1–2 | the chain table, the cost records, `scripts/` |
+| **Repo tooling** | `@app/internal-repo-checks` | 1–2 | the chain table, the cost records, `scripts/` |
 | **App runtime** | `api/tests/runtime/` | 1 | boots the composed runtime over a temp data dir |
 | **Fixture pack** | `tests/packs/*` | 2 and 3 | a pack built and tested as a third party would |
 | **E2E** | `tests/e2e/` | 3 | the built app, real Electron |
@@ -170,7 +170,7 @@ because its subject belongs to no single package.
 | 3 | ~~`secrets.spec.ts` mocks host's vault by relative path~~ — **resolved** in Phase 4: `@apackdev/host` publishes `./secrets/vault`, so it is a specifier. The mock stays: host's own suite covers the vault, this covers what a renderer learns, and Decision 10's sentence now says so | done |
 | 4 | `@apackdev/ui` has 33 recorded component contracts and no behavioural test; exactly one spec in the repo mounts a Vue component | coverage gap |
 | 5 | ~~`@app/default-setup` is the only package with colocated specs~~ — **resolved** in Phase 5: the six moved under `tests/`, the `src/**` include and the `__tests__/` variant are gone | done |
-| 6 | ~~twelve specs in `@apackdev/cli` are about the published `@apackdev` packages~~ — **resolved**: eight moved to `@app/publish-checks` with the packing fixture, one to `@apackdev/ui`; `package-freshness`, `checkout-packages` and `verify-node-modules` stay, their subjects being host's stamp rule, a CLI command and the packaging script | done |
+| 6 | ~~twelve specs in `@apackdev/cli` are about the published `@apackdev` packages~~ — **resolved**: eight moved to `@app/internal-publish-checks` with the packing fixture, one to `@apackdev/ui`; `package-freshness`, `checkout-packages` and `verify-node-modules` stay, their subjects being host's stamp rule, a CLI command and the packaging script | done |
 
 `pack-protocol.spec.ts` was a seventh, resolved in Phase 6: it sat in `@apackdev/host` while `PackProtocol.ts`
 lives in `@app/main`, and both its describes asserted against copies declared in the test. It moved, and its
@@ -182,9 +182,9 @@ extracted as an export, which is a product change and stays deferred.
 ## Guards that hold placement
 
 A guard is what makes a rule survive the next refactor; prose does not. These fail when a placement rule
-breaks, and all of them live in `@app/repo-checks`:
+breaks, and all of them live in `@app/internal-repo-checks`:
 
-- **`repo-check-boundary.spec.ts`** — a spec whose subject is a repo script lives in `@app/repo-checks`, and
+- **`repo-check-boundary.spec.ts`** — a spec whose subject is a repo script lives in `@app/internal-repo-checks`, and
   that package holds nothing else.
 - **`suite-split.spec.ts`** — every spec is recorded and in the half its cost implies.
 - **`suite-timeouts.spec.ts`** — no config or test buys itself more time than its tier allows.

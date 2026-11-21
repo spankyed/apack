@@ -38,7 +38,7 @@ Finished when:
   basis for that caller is either re-measured or recorded as inherited with its reason (Decision 4).
 - The chain's drift report says whether one step or the body moved, and names a remedy that fits the
   case it reports (Decision 5).
-- npm run typecheck; npm run spec over every file touched; npm test -w @app/repo-checks;
+- npm run typecheck; npm run spec over every file touched; npm test -w @app/internal-repo-checks;
   npm run chain. `npm run spec-cost:check` (or its replacement) passes on a deliberately busy box.
 - A final summary: phase -> done/deferred, evidence, and the conventional choices made.
 - The doc is in `docs/archive/goals/`, with its status blockquote and an Outcome section, committed.
@@ -64,13 +64,13 @@ Never:
 
 ## Background (2026-10-05, at `a531211b0` on `master`)
 
-Surveyed at `e111c0ba4` on `AS/drive-vocabulary`, and the base is `master` because every file cited below is byte-identical at `a531211b0`: `scripts/lib/{spec-cost,measure,spec-dry,unit-pool,chain-steps}.ts`, `scripts/{spec-cost,chain,test-unit-pool}.ts` and `packages/repo-checks/tests/suite-split.spec.ts`. That branch's commits touched the Playwright configs and the drive engine, none of which this goal reads — so the survey is true at master's tip and the line numbers below are the same there. Checked with `git diff master..HEAD -- <each path>`.
+Surveyed at `e111c0ba4` on `AS/drive-vocabulary`, and the base is `master` because every file cited below is byte-identical at `a531211b0`: `scripts/lib/{spec-cost,measure,spec-dry,unit-pool,chain-steps}.ts`, `scripts/{spec-cost,chain,test-unit-pool}.ts` and `packages/internal-repo-checks/tests/suite-split.spec.ts`. That branch's commits touched the Playwright configs and the drive engine, none of which this goal reads — so the survey is true at master's tip and the line numbers below are the same there. Checked with `git diff master..HEAD -- <each path>`.
 
 `packages/*/etc/spec-cost.json` records what every spec file costs in milliseconds. `scripts/lib/spec-cost.ts` is 1,233 lines and `scripts/spec-cost.ts` 584, and between them they hold a window of up to three readings per spec (`WINDOW`, `spec-cost.ts:220`), a median with a deliberate length-two rule (`costOf`, `:247`), an agree-band (`disagrees`, `:367`; `worthKeeping`, `:390`), two idle floors, a contention refusal, a `machine` field, a path for a record measured on another box, and a body-drift report.
 
 **What consumes a recorded cost.** Two things, and neither is the test runner:
 
-1. **The audit.** `packages/repo-checks/tests/suite-split.spec.ts` fails when a spec is in the wrong half, has no recorded cost, or is recorded and gone.
+1. **The audit.** `packages/internal-repo-checks/tests/suite-split.spec.ts` fails when a spec is in the wrong half, has no recorded cost, or is recorded and gone.
 2. **An advisory total.** `scripts/lib/spec-dry.ts`'s `priceSpecs` (`:52`) prints `npm run spec:dry`'s estimate. Its own header (`:11`) says the total "is deliberately allowed to sit up to `DRIFT_SHARE` from the truth", and the command prints `measuredAt` because the figure is a band rather than a number.
 
 **Placement does not come from the cost.** `halfOfPath` (`spec-cost.ts:455`) reads the filename — `.integration.spec.ts` means the integration half — and the pool runner uses that half (`CONFIG_BY_HALF`, `scripts/lib/unit-pool.ts:16`). No runner reads a millisecond. `halfFor` (`:458`) compares a cost against `INTEGRATION_ABOVE_MS` (2,500) and `FAST_BELOW_MS` (1,000) to answer one question: *is this spec filed in the wrong half?*
@@ -88,7 +88,7 @@ So the millisecond is an intermediate value. The record stores it and re-derives
 
 **The body-drift report, and why it is in this goal.** `bodyDrift` (`measure.ts:190`) compares the sum of a run's measurements against the sum recorded, and `drifted` (`:202`) raises it past `DRIFT_SHARE = 0.15` (`:199`). Its premise is in its own doc comment: *"Random jitter does not bias a sum — the lags fall both ways and cancel, which is why a spec suite's total moved 0.4%, 6.5% and 9.9% between idle runs while its members moved 10-18% each."*
 
-That was measured on `@app/repo-checks`' fast half. Measured 2026-10-05 across all twelve records, five suites have a single spec at 64% or more of their body, so there is nothing for its jitter to cancel against:
+That was measured on `@app/internal-repo-checks`' fast half. Measured 2026-10-05 across all twelve records, five suites have a single spec at 64% or more of their body, so there is nothing for its jitter to cancel against:
 
 | suite | specs | top spec's share of the body |
 |---|---|---|
@@ -97,9 +97,9 @@ That was measured on `@app/repo-checks`' fast half. Measured 2026-10-05 across a
 | `apack-sdk` | 61 | 86% |
 | `apack-ears` | 9 | 79% |
 | `apack-testing` | 10 | 64% |
-| `repo-checks` | 46 | 12% — where the threshold was measured |
+| `internal-repo-checks` | 46 | 12% — where the threshold was measured |
 
-`measure.ts:120-131`'s own table records the worst single spec moving 74% between two *quiet* runs. At 93% concentration that is ~69% body movement from noise, four and a half times `DRIFT_SHARE`: the report cannot avoid false-firing on those suites. Observed on 2026-10-05 — `@apackdev/testing` reported +16% and `@app/repo-checks` −14% on one run, opposite directions, which is the signature of jitter rather than the correlated drift the report exists to catch.
+`measure.ts:120-131`'s own table records the worst single spec moving 74% between two *quiet* runs. At 93% concentration that is ~69% body movement from noise, four and a half times `DRIFT_SHARE`: the report cannot avoid false-firing on those suites. Observed on 2026-10-05 — `@apackdev/testing` reported +16% and `@app/internal-repo-checks` −14% on one run, opposite directions, which is the signature of jitter rather than the correlated drift the report exists to catch.
 
 **The remedy it prints does not fit the case that fires.** `spec-cost.ts:327` prints `--all --forget` on every branch, while that flag's own documentation calls it *"for a change you know about — a bundler bump, a policy change — and not to chase a drift you do not"*. For spec costs the report only prints: `drifted()` there is a `console.log`, and `spec-cost.ts:1100` records that a drift **gate** on the write already existed and was already removed (*"It replaced `rewritesEveryRow`, which was `all && drifted(body)` — a drift gate on a write"*). So the standing cost is a misleading sentence, not a blocked workflow.
 
@@ -129,9 +129,9 @@ The three pools print three different line shapes, all of which `FILE_LINE` alre
 
 | spec | quiet | busy 1 | busy 2 |
 |---|---|---|---|
-| `publish-checks/.../published-manifest-paths.spec.ts` | 2443 ms (fast) | 3532 ms (integration) | 3326 ms (integration) |
-| `repo-checks/tests/spec-waits.spec.ts` | 1658 ms (fast) | 2509 ms (integration) | 2920 ms (integration) |
-| `repo-checks/tests/suite-reads.spec.ts` | 1537 ms (fast) | 2530 ms (integration) | 2614 ms (integration) |
+| `internal-publish-checks/.../published-manifest-paths.spec.ts` | 2443 ms (fast) | 3532 ms (integration) | 3326 ms (integration) |
+| `internal-repo-checks/tests/spec-waits.spec.ts` | 1658 ms (fast) | 2509 ms (integration) | 2920 ms (integration) |
+| `internal-repo-checks/tests/suite-reads.spec.ts` | 1537 ms (fast) | 2530 ms (integration) | 2614 ms (integration) |
 
 Busy/quiet ratio over the 103 specs above 50 ms: **median 1.27x, p90 2.03x, max 3.29x.**
 
@@ -148,7 +148,7 @@ What the data does support is a **margin against the edge rather than repetition
 - a package with two vitest configs gets **`misplaced`** — the spec is in the wrong half and a rename is the remedy;
 - a package with one config gets **`outgrown`** — the spec costs more than a fast half allows and there is nowhere to move it, so the entry records *what makes it expensive* instead. Explicitly "not a queue of packages to split".
 
-Only three packages have a split (`@apackdev/cli`, `@app/repo-checks`, `@app/publish-checks`), so nine of twelve suites can only ever produce `outgrown`. `generate-entries.spec.ts` at 17.7 s passes because it is `outgrown` with a recorded reason, not a misplacement.
+Only three packages have a split (`@apackdev/cli`, `@app/internal-repo-checks`, `@app/internal-publish-checks`), so nine of twelve suites can only ever produce `outgrown`. `generate-entries.spec.ts` at 17.7 s passes because it is `outgrown` with a recorded reason, not a misplacement.
 
 A second effect Q4 exposes: the recorded costs were measured by `measure()` running one `npx vitest` **per package**, while specs actually run pooled across eleven projects. `generate-entries` is recorded at 11 308 ms and reads 17 745 ms pooled. Decision 2 already says a spec should be timed in the pool it runs in; the gap is larger than the doc assumed.
 
@@ -207,10 +207,10 @@ Throwaway work on a branch or worktree; nothing from it is reused verbatim. Answ
 ### Phase 2 — The record holds a streak
 
 - New record shape in `scripts/lib/spec-cost.ts`: membership plus a per-spec streak. Keep `halfOfPath`, `halfFor`, `INTEGRATION_ABOVE_MS`, `FAST_BELOW_MS`, `unrecorded` and `PLACEMENT_GUARD`; delete what Decision 6 names.
-- `packages/repo-checks/tests/suite-split.spec.ts` asserts on the streak: a spec is misfiled when its streak reaches N, and a streak below N is reported as provisional rather than acted on.
+- `packages/internal-repo-checks/tests/suite-split.spec.ts` asserts on the streak: a spec is misfiled when its streak reaches N, and a streak below N is reported as provisional rather than acted on.
 - Rewrite the twelve `packages/*/etc/spec-cost.json` files into the new shape. These are test expectations, not user data, so they are rewritten rather than migrated — but **not by hand**: the command writes them.
 
-**Done when:** `npm test -w @app/repo-checks` passes; no record holds a millisecond or a `machine` field; `npm run spec -- spec-cost` passes. Mutation: set one spec's streak to N and `suite-split` names that spec; set it to N−1 and the run reports it as provisional and passes.
+**Done when:** `npm test -w @app/internal-repo-checks` passes; no record holds a millisecond or a `machine` field; `npm run spec -- spec-cost` passes. Mutation: set one spec's streak to N and `suite-split` names that spec; set it to N−1 and the run reports it as provisional and passes.
 
 ### Phase 3 — The suite run is the measurement
 
@@ -225,7 +225,7 @@ Needs Open decision 1 settled.
 ### Phase 4 — The docs catch up
 
 - Root `CLAUDE.md`: the "three kinds of recorded artifact" passage (Decision 8), the `spec-cost:check`/`spec-cost:update` entries in Commands, and the `check:idle` entry's claim about which commands refuse.
-- `packages/apack-cli/CLAUDE.md`'s "Tests" section states the 2.5 s/1.5 s band and that `spec-cost:update` records a measured cost; `packages/repo-checks/CLAUDE.md` has the row for `suite-split`.
+- `packages/apack-cli/CLAUDE.md`'s "Tests" section states the 2.5 s/1.5 s band and that `spec-cost:update` records a measured cost; `packages/internal-repo-checks/CLAUDE.md` has the row for `suite-split`.
 - Any doc naming a deleted flag.
 
 **Done when:** `npm run spec -- doc-links` passes and `grep -rn "spec-cost:update -- --all\|RECORD_IDLE_FLOOR" docs/ packages/*/CLAUDE.md CLAUDE.md` finds nothing that describes the old behaviour. Docs outside `docs/archive/` describe the code as it is.
@@ -250,7 +250,7 @@ Landed on `AS/spec-placement-without-milliseconds`, cut from `master` at `bab40b
 | 1 — Spike | **done** | `4c0001457`. Four answers in Spike results above, with commands and machine |
 | 2 — The record holds a streak | **not done, refuted** | Q3: three specs' verdicts flipped in both loaded runs, so no consecutive-count N works |
 | 3 — The suite run is the measurement | **not done, falls with it** | Measuring on every run, loaded or not, is worse than measuring deliberately on a quiet box — see Corrections |
-| 2' — No body-drift report for spec costs | **done** (replaces 2) | `2510f5400`. `drifted()` has one caller; `spec-cost:check` ✅ 415 specs; repo-checks 948/948 |
+| 2' — No body-drift report for spec costs | **done** (replaces 2) | `2510f5400`. `drifted()` has one caller; `spec-cost:check` ✅ 415 specs; internal-repo-checks 948/948 |
 | 5 — The chain's drift report | **done** | `d1ecc6eef`. `driftVerdict` + 6 cases, both named mutations fire only on their cases |
 | 4 — Docs | **done** | `d15f0c898`. Three passages in root `CLAUDE.md`; `doc-links` 6/6 |
 
@@ -283,7 +283,7 @@ Landed on `AS/spec-placement-without-milliseconds`, cut from `master` at `bab40b
 | Check | Result |
 |---|---|
 | `npm run typecheck` | ✅ all legs |
-| `npm test -w @app/repo-checks` | 948/948 |
+| `npm test -w @app/internal-repo-checks` | 948/948 |
 | `npm run spec -- measure.spec.ts` | 49/49, both mutations fire only on their cases |
 | `npm run spec-cost:check` | ✅ 415 specs across 12 suites |
 | `npm run spec-cost:update -- --dry` | every record current |

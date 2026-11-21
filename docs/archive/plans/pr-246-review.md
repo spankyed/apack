@@ -46,7 +46,7 @@ Measured from the net diff on 2026-10-19. Line counts are added plus removed, so
 | 7 | Service consumption | SDK `services/`, `framework/service-consumption.ts`; host `packs/service-binding.ts`, `services/` | ~1k src |
 | 8 | Migrations, backup and app data | host `migrations/`, `backup/`, `services/app-data.ts` | ~0.7k src |
 | 9 | default-setup's migration to the new contracts | `packages/default-setup/src` (173 files), `tests/` | ~6.5k |
-| 10 | Tooling, CI and tests | `.github/workflows`, `.github/scripts`, `scripts/lib`, `tests/scripts`, `packages/repo-checks` | ~2.5k |
+| 10 | Tooling, CI and tests | `.github/workflows`, `.github/scripts`, `scripts/lib`, `tests/scripts`, `packages/internal-repo-checks` | ~2.5k |
 
 Areas 3 and 9 are big enough to split in two if a single reviewer cannot hold them: area 3 into host
 inputs and CLI native compilation, area 9 by feature.

@@ -374,7 +374,7 @@ Phase 4's pack slice (Decision 6). It may land before Phase 1: it reads what onl
 - Delete the SDK's `src/ears` engine files. `@apackdev/sdk/ears` exports only the SDK's additions (Decision 4), and `@apackdev/sdk/ears/internals` is removed; its users import `@apackdev/ears/internals`.
 - Regenerate `#generated/ears` from `generate-entries` with the new imports, and update default-setup, the fixture pack and the scaffold.
 - Add `SHARED_INSTANCE_PACKAGES` and derive every consumer listed in Background from it, with the guard test.
-- Build and publish configuration: `packages:build`, `packages:check`, API reports for `@apackdev/ears`, `published-*` specs cover `@apackdev/ears`, changesets fixed group, `typescript-floor`.
+- Build and publish configuration: `packages:build`, `packages:check`, API reports for `@apackdev/ears`, `published-*` specs cover `@apackdev/ears`, changesets fixed group, `internal-typescript-floor`.
 - Follow the TYPED-EARS checklist (type tests, mutation checks, completions, report review).
 - **Dependency direction guard:** `check:specifiers` gains rules that fail on an upward import, and each package's `package.json` declares only the allowed `@apackdev` dependencies:
   - `@apackdev/ears` imports no `@apackdev/*` package;

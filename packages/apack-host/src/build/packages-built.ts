@@ -281,7 +281,7 @@ export const NOT_A_BUILD_INPUT: Record<string, string> = {
  * under `dist/package`.
  *
  * Here rather than in `scripts/publish-packages.ts` because two callers need it and neither may import the
- * other: that script is the command over this, and `@app/publish-checks` checks what it would publish. It is
+ * other: that script is the command over this, and `@app/internal-publish-checks` checks what it would publish. It is
  * not `BUILD_UNITS` above — that is what a build reads to decide freshness, `@apackdev/host` included, which
  * nothing publishes.
  */
@@ -459,7 +459,7 @@ export interface TreeReader {
  * propagates**, which is load-bearing rather than incidental: `unitStaleReason` catches it and reports
  * `its sources could not be read (…)`, so an unreadable tree is a refusal instead of a fresh verdict.
  *
- * Tolerating the absent file is why the chain never had the bug its own checks did: `@app/repo-checks` built
+ * Tolerating the absent file is why the chain never had the bug its own checks did: `@app/internal-repo-checks` built
  * their populations from `git ls-files`, which reports a file deleted from the worktree and not yet staged, and
  * four of them died reading one. They ask `repoFiles()` now. Keep this branch.
  */
@@ -558,11 +558,11 @@ const digestOf = (contents: Buffer | null): string =>
  * content sources, compiled into entities a user gets. `templates` is the CLI's scaffold, rendered into a
  * new pack.
  * `fixtures` is test input. `docs` is the document tree `doc-links` resolves every relative link in, which
- * is why it is an input of `@app/repo-checks` rather than of every repo-scope step.
+ * is why it is an input of `@app/internal-repo-checks` rather than of every repo-scope step.
  *
  * **The condition that would make this wrong** is a check that asserts one of these files' *text*: it would
  * then be a real input, and skipping it would let that check cache over a doc that had gone stale. One
- * exists — `spec-plan.spec.ts` holds `packages/repo-checks/CLAUDE.md` to naming every spec in that package —
+ * exists — `spec-plan.spec.ts` holds `packages/internal-repo-checks/CLAUDE.md` to naming every spec in that package —
  * which `GUIDES_A_CHECK_READS` takes back. A second, and a new tree whose markdown something starts reading,
  * are both the case to come back here for; a wrong entry is *silent*, so
  * `fingerprint-scope.integration.spec.ts` holds each of these trees to being unskippable rather than
@@ -586,11 +586,11 @@ const isProse = (file: string): boolean => {
  * row could be deleted and the check that would have caught it would not run.
  *
  * Listed rather than derived, because what a spec reads at a path it builds at runtime cannot be read off
- * the source. Repo-checks' *"prose costs nothing"* holds both directions: a guide not listed here is in no
+ * the source. internal-repo-checks' *"prose costs nothing"* holds both directions: a guide not listed here is in no
  * step's fingerprint, and a guide listed here is in one — so an entry that stops applying fails rather than
  * quietly protecting nothing.
  */
-export const GUIDES_A_CHECK_READS: ReadonlySet<string> = new Set(['packages/repo-checks/CLAUDE.md']);
+export const GUIDES_A_CHECK_READS: ReadonlySet<string> = new Set(['packages/internal-repo-checks/CLAUDE.md']);
 
 /**
  * Whether a unit's `excludeSuffixes` puts this file outside its key.
@@ -1177,7 +1177,7 @@ export function waitForPackageBuild({ idleMs = HOLDER_IDLE_MS, pollMs = LOCK_POL
  *
  * The refusal above is not gated on `CI`, which is the obvious place for it and the wrong one here: this
  * repo's CI is off by design, so a CI-gated refusal never fires, and thirteen spec files — nine of them all
- * of `@app/publish-checks` — reported green having checked nothing. Every gated path (`test:unit`, `chain`,
+ * of `@app/internal-publish-checks` — reported green having checked nothing. Every gated path (`test:unit`, `chain`,
  * a package's `pretest`) runs `packages:ensure` first, so refusing costs those nothing; what it changes is a
  * bare run against an unbuilt tree, which now says so.
  */

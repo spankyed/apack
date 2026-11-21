@@ -258,7 +258,7 @@ significant — measure `npm run build:app` before and after rather than claimin
 | 5 — the numbers | **done** | below |
 
 **832 specifiers across 416 files**, and every suite's counts unchanged throughout: default-setup 87 files /
-720 tests, `@apackdev/cli` 37 / 305 and 15 / 187, `@apackdev/host` 77 / 697, repo-checks 17 / 227, the fixture
+720 tests, `@apackdev/cli` 37 / 305 and 15 / 187, `@apackdev/host` 77 / 697, internal-repo-checks 17 / 227, the fixture
 pack 10 / 32, E2E 21, `test:packaged-authoring` green.
 
 ### What went, and what replaced it

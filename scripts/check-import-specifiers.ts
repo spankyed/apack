@@ -299,8 +299,8 @@ export const LAYERS: {
   // so `@apackdev/host` here would be a finding
   { name: '@app/preload', dir: 'packages/preload', allowed: ['@apackdev/sdk'] },
   // Both check the repo rather than run in it, and reach the host for the build and freshness primitives
-  { name: '@app/repo-checks', dir: 'packages/repo-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
-  { name: '@app/publish-checks', dir: 'packages/publish-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
+  { name: '@app/internal-repo-checks', dir: 'packages/internal-repo-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
+  { name: '@app/internal-publish-checks', dir: 'packages/internal-publish-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
 ];
 
 /**
@@ -424,7 +424,7 @@ export function findUpwardImports(layers = LAYERS, root = repoRoot, unlayered = 
  * dependency. This is the direction nothing asked: a declaration no import needs, which silently widens every
  * cache key derived from it.
  *
- * Over the whole package, not just `src`/`tests`/`scripts`: `@app/electron-versions` is imported by
+ * Over the whole package, not just `src`/`tests`/`scripts`: `@app/internal-electron-versions` is imported by
  * `vite.config.js` at the package root, and a population that stopped at those three directories reported it
  * as unimported — measured, twice. `publish/` is excluded because it is a staged copy of `src`, where a
  * second reading of the same import would hide a real finding.
@@ -507,7 +507,7 @@ export function findNodePtyImports(dirs: readonly string[] = PACK_CODE_DIRS, roo
 }
 
 /** The one module that asks git what files this repo has; every other caller goes through it */
-const REPO_FILES_READER = 'packages/repo-checks/tests/_support/repo-files.ts';
+const REPO_FILES_READER = 'packages/internal-repo-checks/tests/_support/repo-files.ts';
 
 /**
  * Callers that run `git ls-files` themselves on purpose, with the reason each does.
@@ -523,7 +523,7 @@ const ASKS_GIT_DIRECTLY: Record<string, string> = {
   'packages/apack-testing/src/performance/identity.ts':
     '`--others --exclude-standard` asks only for untracked source; tracked changes come from git diff, '
     + 'so a combined tracked/untracked enumeration would misclassify clean tracked files as dirty',
-  'packages/repo-checks/tests/chain-inputs.spec.ts':
+  'packages/internal-repo-checks/tests/chain-inputs.spec.ts':
     '`--others --ignored --directory` asks which roots are gitignored — a different question, which lists '
     + 'directories and reads none of them',
 };
@@ -654,7 +654,7 @@ const specModules = (root: string): string[] => fs.readdirSync(path.join(root, '
 const SYNC_SPAWN_ALLOWED: Record<string, string> = {
   'packages/apack-host/tests/build/source-resolution.spec.ts':
     "builds the `ResolveFile` `assertSourceResolution` calls, which is synchronous: a resolver that answered later would test a different function",
-  'packages/repo-checks/tests/_support/repo-files.ts':
+  'packages/internal-repo-checks/tests/_support/repo-files.ts':
     '`git ls-files` takes milliseconds, and many fast specs read the repo\'s files synchronously at module and describe time',
 };
 
@@ -853,11 +853,11 @@ export function findRepositoryCasts(dirs: readonly string[] = packageSourceDirs(
 
 /** The export condition under which @apackdev/* workspace packages resolve their TypeScript source */
 // Re-exported rather than declared: `@apackdev/host/build/source-resolution` owns it beside the packages it
-// applies to, and repo-checks' integration spec imports the name from here
+// applies to, and internal-repo-checks' integration spec imports the name from here
 export { SOURCE_CONDITION };
 
 /** What a pack author's own `apack pack build` reports, for the spec that holds the two runners to agreeing */
-// Same reason as above: repo-checks may not reach into another package's tree, and this script is already
+// Same reason as above: internal-repo-checks may not reach into another package's tree, and this script is already
 // where it reads the rules from. The property it buys is the one this file's header claims — one rule,
 // two entry points — which nothing could check while only one of them was reachable
 export { packRuleProblems };
@@ -897,13 +897,13 @@ export { GENERATED_BEHIND_A_CONTRACT } from '../packages/apack-cli/src/build/pac
  * and a five-line directory walk.
  *
  * That is not a style point. A module under the repo's `scripts/` belongs to no package, so `npm run spec`
- * cannot route a change to it back to every spec that covers it — it sends `scripts/` to `@app/repo-checks`
+ * cannot route a change to it back to every spec that covers it — it sends `scripts/` to `@app/internal-repo-checks`
  * and nothing else. A package reaching in there is a spec that will one day not run, reported green. The
  * layer rule is the other half of it (root `CLAUDE.md`): the packages' build scripts live in the repo's
  * `scripts/` so that no package's own `scripts/` imports a package above its layer, and reaching sideways
  * into `scripts/` sidesteps that while creating the same coupling.
  *
- * `@app/repo-checks` is not exempt and needs no exemption: its specs are not a package's `scripts/`.
+ * `@app/internal-repo-checks` is not exempt and needs no exemption: its specs are not a package's `scripts/`.
  */
 export function findPackageScriptImports(root = repoRoot): string[] {
   const packagesDir = path.join(root, 'packages');

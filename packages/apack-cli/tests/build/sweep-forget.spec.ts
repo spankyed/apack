@@ -7,7 +7,7 @@ import { freshnessSweep, INPUTS_CHANGED, stampedRun, unitStaleReason, type Build
 /**
  * `freshnessSweep`'s `forget`: beside `package-freshness.spec.ts`, which covers the rest of the same module.
  *
- * It was in `@app/repo-checks` while it also held the chain's one transient writer to its mutex. Nothing
+ * It was in `@app/internal-repo-checks` while it also held the chain's one transient writer to its mutex. Nothing
  * writes transiently now (`conflictsOf`'s comment says what that would need), and what is left is a claim
  * about a host function — so it sits where that function's other spec does, which is also where
  * `npm run spec` routes a change to it.

@@ -7,7 +7,7 @@
  *
  * **It walks the filesystem, and cannot ask git.** Every function here takes a `root`, and the rules' own specs
  * pass one from `mkdtempSync` — a fixture tree that is no git repository, where `git ls-files` answers nothing.
- * So this is a different answer to "what files are there" from `repoFiles()` in `@app/repo-checks`, on purpose
+ * So this is a different answer to "what files are there" from `repoFiles()` in `@app/internal-repo-checks`, on purpose
  * rather than by accident: that one asks git because its subject is this repo, and this one cannot because its
  * subject is whatever directory it is handed. `SKIPPED_DIRS` is the price — a hand-kept partial of `.gitignore`.
  */

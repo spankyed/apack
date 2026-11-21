@@ -199,7 +199,7 @@ export const slowestFiles = (rows: readonly FileDuration[], half: Half, limit = 
  * A half's whole weight, which is the number the ranking cannot give.
  *
  * The five slowest files answer "what is worst"; they never answer "is this half getting heavy", and the
- * two come apart exactly where it matters. Measured 2026-10-05, the top five hold 46% of `repo-checks`'
+ * two come apart exactly where it matters. Measured 2026-10-05, the top five hold 46% of `internal-repo-checks`'
  * fast half and 97% of `apack-sdk`'s, so in one of those the ranking describes the suite and in the other
  * it describes one file. And the shape a ranking structurally cannot see is many specs each creeping a
  * little: 349 of 388 fast-half files are under 500ms and total 24.1s.
@@ -521,7 +521,7 @@ export interface Placement {
  * including the slowest file in it. So the question is not how many files a run needs but whether the one
  * it measured has anyone in its tail, which is the same question and is derived rather than picked: a
  * population floor would be a constant that happens to equal this, and would stop being equal to it the
- * day the quantile moved. Measured 2026-10-05, `publish-checks` alone is 4 files whose p90 is the slowest
+ * day the quantile moved. Measured 2026-10-05, `internal-publish-checks` alone is 4 files whose p90 is the slowest
  * of them, and `renderer` alone is 8.
  *
  * It matters because a pool run is partial by design — it runs the projects whose inputs moved — so a run

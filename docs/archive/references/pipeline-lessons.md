@@ -29,7 +29,7 @@ Things that waste the most time, in order:
   declares `docs/` among its inputs, so the chain agrees — `npm run chain -- --dry` after a doc edit reports
   every step cached. A `CLAUDE.md` is free wherever it sits, which took a change: five of them live inside
   a declared `src/` or `tests/` tree rather than at a package root, so a sentence of prose used to re-run
-  up to four steps, `build:default-setup` among them. `fingerprintUnit` skips them by name now, and repo-checks'
+  up to four steps, `build:default-setup` among them. `fingerprintUnit` skips them by name now, and internal-repo-checks'
   *"prose costs nothing"* holds the claim this paragraph makes. The two exceptions are a spec that asserts the text and a code fence someone will
   copy: check that one command. This is first on the list because it is the one most often ignored, and a
   full `typecheck` is 11s against a doc edit's 0s.
@@ -164,7 +164,7 @@ Rules that pay for themselves:
   workspace is, and a lint check expanded each `npm run` once and never saw the `-ws` fan-out. Neither was
   empty, so an emptiness guard says nothing about either. **Where the input is data — a pattern list, a manifest, a
   rule table — mutate it in the test**: drop the thing under test from a copy, assert the answer flips, and the
-  check proves it can fail on every run for microseconds. `repo-checks/tests/packaged-app-files.spec.ts` is the
+  check proves it can fail on every run for microseconds. `internal-repo-checks/tests/packaged-app-files.spec.ts` is the
   worked example; its two mutation cases corrected two wrong beliefs about the patterns they check on the first
   run, before the commit.
 - **A result that is partial says so, and there are four shapes for that — copy one rather than invent a
@@ -390,7 +390,7 @@ first still holds it, and both then run — the exact failure the lock exists to
 the lock. `chain-lock.spec.ts` asserts the name against `pruneStamps`' own predicate rather than against the
 string, because a case pinning `'chain.lock'` passes while the coupling rots.
 
-A spec for one of these cannot take the real lock. `repo-checks` runs inside `test:integration`, which the
+A spec for one of these cannot take the real lock. `internal-repo-checks` runs inside `test:integration`, which the
 chain runs, so a case taking `CHAIN_LOCK` is refused by the run that is running it. Take a `file` parameter
 defaulting to the real path — `withBuildLock(label, run, file = LOCK_FILE)` and `runningPackageBuild(file =
 LOCK_FILE)` already do — and assert the real path's *properties* separately.
@@ -472,7 +472,7 @@ file it runs the specs that import it. One spec file is 1-3s and a package's `ts
 the 38.6s a chain run costs after a one-package edit — **not** against the chain's floor, which is 0.9s and so
 cheaper than either. What `spec` saves is not the cost of starting the chain but the cost of what your change
 made stale. Use it while you are working, and the chain when you are done. A change to
-`scripts/` or to a vitest config counts too: it routes to `@app/repo-checks`, the package holding the
+`scripts/` or to a vitest config counts too: it routes to `@app/internal-repo-checks`, the package holding the
 specs that check the repo's own tooling.
 
 **Two answers `spec` cannot get from the module graph**, and it names both rather than passing a run that
@@ -491,7 +491,7 @@ are what every spec in the pack goes through. Both are `src -> apack pack build 
 *regenerated* tree is covered while editing what generates it reaches nothing. `npm run spec`
 names those specs beside whatever the walk did find, and `npm run spec:full` builds the pack and runs them.
 The routes are derived from the pack's own layout (`scripts/lib/spec-plan.ts`'s `packBuildEdge`), and
-repo-checks' `spec-plan.spec.ts` partitions the packs under `packages/`, so a second pack cannot arrive
+internal-repo-checks' `spec-plan.spec.ts` partitions the packs under `packages/`, so a second pack cannot arrive
 unrouted. Before them a content item source was told *"No spec covers …"*, which its goldens refute.
 
 Three things the chain cannot work out for you, because they rewrite files you commit:
@@ -539,7 +539,7 @@ The condition is the machine, which is a fact a run can check.
 - **Running anything at all after a doc or a CLAUDE.md edit.** Nothing means nothing: not
   `typecheck`, not the package's suite, not "just to be safe". No step declares `docs/` and `fingerprintUnit`
   skips every `CLAUDE.md`, so `npm run chain -- --dry` reports every step cached. A full `typecheck` is 11s
-  against a doc edit's 0s, and repo-checks' *"prose costs nothing"* holds this claim. The two exceptions are
+  against a doc edit's 0s, and internal-repo-checks' *"prose costs nothing"* holds this claim. The two exceptions are
   a spec that asserts the text and a code fence someone will copy.
   **A comment inside a source file is not one of these.** A fingerprint is over the file's content, so a
   comment moves it like any other edit and every step that reads that file runs. The spec above is about
@@ -705,7 +705,7 @@ caching moves the floor to 0.9s — and no check holds any of the three. The fig
 one sizing the choice in front of you; the one a record owns gets named so there is a single thing to
 re-measure.
 
-**A third failure, which is neither of those: a measurement a decision cites.** `@app/publish-checks`' guide
+**A third failure, which is neither of those: a measurement a decision cites.** `@app/internal-publish-checks`' guide
 kept a spec in the fast half *"on the strength of its five `npm pack --dry-run` calls costing ~1.5s"*, and
 it measured 3.74s — 2.5x out, with a placement decision resting on it. Such a figure cannot be derived and
 cannot be dropped, so it takes the third option, which is already this repo's convention for a measurement:
