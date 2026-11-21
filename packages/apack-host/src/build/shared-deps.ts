@@ -3,19 +3,33 @@ import * as path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { findPackageDirectory } from './package-inputs.ts';
-import { dependencyClosure, readPackageManifest } from './package-identity.ts';
+import { readPackageManifest } from './package-identity.ts';
 import { SOURCE_CONDITION } from './source-resolution.ts';
 
 /**
  * Packages a process must load once: pack runtimes, dependency runtimes, the app and tests share one
- * instance of each (the SDK's registries, the EARS engine's data). Every bundler external list, the
- * host pack loader's bridge, the pack test harness's bridge and bundle-package derive from this list.
- * The frontend shares only the SDK modules below (SDK_FE_MODULES): it keeps no EARS data, so a pack
- * frontend inlines what it imports from @elmdb/ears (constants and pure helpers). What a pack's
- * frontend may leave to the host is `sharedFeModules` below, which is those plus the shared deps and
- * @apackdev/ui's exports.
+ * instance of each (the SDK's registries and bound engine). Every bundler external list, the host pack
+ * loader's bridge, the pack test harness's bridge and bundle-package derive from this list. The
+ * frontend shares only the SDK modules below (SDK_FE_MODULES). What a pack's frontend may leave to the
+ * host is `sharedFeModules` below, which is those plus the shared deps and @apackdev/ui's exports.
+ *
+ * **EARS is not on it**: a pack reaches EARS only through the SDK (`THROUGH_SDK` below, the `ears-imports`
+ * pack rule), so sharing the SDK shares the EARS it loads. What the list guaranteed for EARS — one copy in
+ * the app — is a fact about the app's install rather than a bundler's, and the install checks hold it
+ * (`SINGLE_COPY_PACKAGES`, `scripts/lib/installed-dependencies.ts`).
  */
-export const SHARED_INSTANCE_PACKAGES = ['@apackdev/sdk', '@elmdb/ears'] as const;
+export const SHARED_INSTANCE_PACKAGES = ['@apackdev/sdk'] as const;
+
+/**
+ * Packages a pack reaches only through the SDK, each with the SDK entry that re-exports the whole of it. A pack depends
+ * on `@apackdev/sdk` alone, so its facade declarations, which dependents compile, may name only the SDK: a type a pack
+ * infers from one of these is written as the entry's (`apack pack build`'s declaration bundler), and the build refuses
+ * the rewrite unless the entry's declarations say `export * from '<package>'`, so it never names something the entry
+ * doesn't export. A subpath not listed here has no entry and stays as written, which the facade gate refuses.
+ */
+export const THROUGH_SDK: Readonly<Record<string, string>> = {
+  '@elmdb/ears': '@apackdev/sdk/ears',
+};
 
 /** The shared-instance package a specifier belongs to (`@apackdev/sdk/repositories` → `@apackdev/sdk`), if any */
 export function sharedInstancePackage(specifier: string): string | undefined {
@@ -28,8 +42,9 @@ export function sharedInstanceExternals(): string[] {
 }
 
 /**
- * Shared-instance exports only the app's composition root loads, with the reason. Pack code never
- * requires them, so neither the pack loader's bridge nor the test harness's provides them.
+ * Exports only the app's composition root loads, with the reason. Pack code never requires them: a pack
+ * bundle that imports one fails (`rejectHostImportsPlugin`), and the pack loader's and the test harness's
+ * bridges throw naming the reason rather than loading it.
  */
 export const APP_ONLY_EXPORTS: Readonly<Record<string, string>> = {
   '@elmdb/ears/database': "the app's elmdb databases; it loads elmdb, which only the app installs",
@@ -37,31 +52,25 @@ export const APP_ONLY_EXPORTS: Readonly<Record<string, string>> = {
 
 /**
  * The specifiers of a shared-instance package that backend code can require, read from its exports
- * map: every code export except the frontend's (`./fe`, `./fe/*`), metadata (`.json`), wildcards,
- * `APP_ONLY_EXPORTS` and exports only the monorepo resolves (an `@apackdev/source` target without a published one).
+ * map: every code export except the frontend's (`./fe`, `./fe/*`), metadata (`.json`), wildcards and
+ * exports only the monorepo resolves (an `@apackdev/source` target without a published one).
  */
 export function sharedInstanceSpecifiers(pkg: string, exportsMap: Record<string, unknown>): string[] {
   const specifier = (key: string) => (key === '.' ? pkg : `${pkg}/${key.slice(2)}`);
   return Object.entries(exportsMap)
     .filter(([key, target]) =>
       !key.includes('*')
-      && !Object.hasOwn(APP_ONLY_EXPORTS, specifier(key))
       && !key.endsWith('.json')
       && key !== './fe' && !key.startsWith('./fe/')
       && !(typeof target === 'object' && target !== null && Object.keys(target).every((condition) => condition === SOURCE_CONDITION)))
     .map(([key]) => specifier(key));
 }
 
-/**
- * The exports map of a shared-instance package as `fromFile` (a path or file URL) resolves it: the copy Node gives the
- * file's directory, or else the one `@apackdev/sdk` brings (`dependencyClosure`), which is how a pack that names only
- * the SDK has the rest.
- */
+/** The exports map of a shared-instance package as `fromFile` (a path or file URL) resolves it */
 export function sharedInstanceExports(pkg: string, fromFile: string): Record<string, unknown> {
   const fromDir = path.dirname(fromFile.startsWith('file:') ? fileURLToPath(fromFile) : fromFile);
-  const directory = findPackageDirectory(fromDir, pkg)?.directory
-    ?? dependencyClosure(SHARED_INSTANCE_PACKAGES[0], fromDir).find((member) => member.name === pkg)?.directory;
-  if (directory === undefined) throw new Error(`${pkg} doesn't resolve from ${fromDir}, and ${SHARED_INSTANCE_PACKAGES[0]} doesn't bring it`);
+  const directory = findPackageDirectory(fromDir, pkg)?.directory;
+  if (directory === undefined) throw new Error(`${pkg} doesn't resolve from ${fromDir}`);
   return (readPackageManifest(directory) as { exports?: Record<string, unknown> }).exports ?? {};
 }
 

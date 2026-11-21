@@ -106,6 +106,9 @@ const PACKS_AS_A_FIXTURE: Record<string, string> = {
   'packages/apack-cli/tests/build/types-bundler-determinism.integration.spec.ts':
     'the types bundler emits the same facade from the workspace and from the packed tarballs — the packed '
     + 'side is one of two inputs to a comparison about the bundler',
+  'packages/apack-cli/tests/build/facade-nested-consumer.integration.spec.ts':
+    "the types bundler's facade, compiled where the packed packages are installed nested — the consumer is where "
+    + 'the facade is used, and the subject is what the bundler wrote',
 };
 
 describe('a spec about the published packages lives in @app/publish-checks', () => {

@@ -811,7 +811,7 @@ export const SHARED_LIST_CONSUMERS = [
 
 /**
  * `file:line: "text"` for each string in a consumer of the shared-instance list that names one of the
- * packages (`'@apackdev/sdk'`, `'@elmdb/ears/*'`) outside an import. Specific modules
+ * packages (`'@apackdev/sdk'`, `'@apackdev/sdk/*'`) outside an import. Specific modules
  * (`'@apackdev/sdk/runtime'`) are fine: they aren't a list of what must be loaded once.
  */
 export function findSharedPackageLists(files = SHARED_LIST_CONSUMERS, root = repoRoot, packages: readonly string[] = SHARED_INSTANCE_PACKAGES): string[] {

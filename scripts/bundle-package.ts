@@ -1,7 +1,8 @@
 // Builds a publishable copy of a workspace package that ships as a bundle (@apackdev/cli,
-// @apackdev/testing) into <package>/dist/package. The shared-instance packages (SHARED_INSTANCE_PACKAGES)
-// and the private @apackdev/host are inlined, the host and the SDK from source and EARS from its built `dist`,
-// so the published package can use host-only modules; every other package stays external and becomes a dependency at the version the workspace uses.
+// @apackdev/testing) into <package>/dist/package. The shared-instance packages (SHARED_INSTANCE_PACKAGES), what
+// they link from another checkout (EARS, which no registry has) and the private @apackdev/host are inlined, the host
+// and the SDK from source and EARS from its built `dist`, so the published package can use host-only modules; every
+// other package stays external and becomes a dependency at the version the workspace uses.
 //
 //   tsx scripts/bundle-package.ts packages/apack-cli
 import * as fs from 'node:fs';
@@ -113,9 +114,16 @@ const stagedDir = path.join(pkgDir, '.temp', 'build');
 const workspaceManifestFile = (name: string) => createRequire(path.join(repoRoot, 'package.json')).resolve(`${name}/package.json`);
 const workspaceManifest = (name: string) => JSON.parse(fs.readFileSync(workspaceManifestFile(name), 'utf-8'));
 const sharedPkgs = SHARED_INSTANCE_PACKAGES.map(workspaceManifest);
+/**
+ * What the shared-instance packages link from another checkout (a `file:` dependency: EARS, from elmdb's): inlined with
+ * them, since a published package can't depend on something no registry has
+ */
+const LINKED = sharedPkgs.flatMap((shared) => Object.entries<string>(shared.dependencies ?? {})
+  .filter(([, range]) => range.startsWith('file:')).map(([name]) => name));
+const inlinedPkgs = [...SHARED_INSTANCE_PACKAGES, ...LINKED].map((name) => ({ name, manifest: workspaceManifest(name) }));
 const hostPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages', 'apack-host', 'package.json'), 'utf-8'));
 const SHARED = new Set<string>(SHARED_INSTANCE_PACKAGES);
-const INLINED = new Set([...SHARED, '@apackdev/host']);
+const INLINED = new Set([...SHARED, ...LINKED, '@apackdev/host']);
 
 const builtins = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)]);
 
@@ -134,13 +142,13 @@ function versionOf(name: string): string {
   // the manifest declaring it, is published as the version it links
   const sources: Array<[Record<string, string> | undefined, string]> = [
     [pkg.dependencies, pkgDir], [pkg.peerDependencies, pkgDir],
-    ...SHARED_INSTANCE_PACKAGES.flatMap((shared, i) => [[sharedPkgs[i].dependencies, path.dirname(workspaceManifestFile(shared))], [sharedPkgs[i].peerDependencies, path.dirname(workspaceManifestFile(shared))]] as Array<[Record<string, string> | undefined, string]>),
+    ...inlinedPkgs.flatMap(({ name, manifest }) => [[manifest.dependencies, path.dirname(workspaceManifestFile(name))], [manifest.peerDependencies, path.dirname(workspaceManifestFile(name))]] as Array<[Record<string, string> | undefined, string]>),
     [hostPkg.dependencies, path.join(repoRoot, 'packages', 'apack-host')],
   ];
   for (const [source, dir] of sources) {
     if (source?.[name]) return publishedSpec(source[name], dir);
   }
-  throw new Error(`${pkg.name} bundle imports ${name}, which neither ${pkg.name}, the shared-instance packages nor @apackdev/host declares`);
+  throw new Error(`${pkg.name} bundle imports ${name}, which neither ${pkg.name}, the inlined packages nor @apackdev/host declares`);
 }
 
 const externalizeAllButHost: Plugin = {
@@ -265,8 +273,9 @@ async function main(): Promise<void> {
       dependencies[shared.name] = shared.version;
     }
   }
-  // The private host package is inlined, never installed
+  // The private host package and what the SDK links are inlined, never installed
   delete dependencies['@apackdev/host'];
+  for (const name of LINKED) delete dependencies[name];
 
   for (const file of config.copy ?? []) {
     const from = path.join(pkgDir, file);

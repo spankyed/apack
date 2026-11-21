@@ -4,33 +4,20 @@
 
 ```ts
 
-import { BaseEntity } from '@elmdb/ears';
 import type { CallSiteNaming } from '@elmdb/ears';
 import type { Create } from '@elmdb/ears';
 import { DatabaseCatalog } from '@elmdb/ears';
-import { defineEars } from '@elmdb/ears';
 import { EARS } from '@elmdb/ears';
 import type { Ears } from '@elmdb/ears';
-import { EarsSchema } from '@elmdb/ears';
 import { EntityRow } from '@elmdb/ears';
 import type { Query } from '@elmdb/ears';
-import { QueryBuilder } from '@elmdb/ears';
-import { QueryExplanation } from '@elmdb/ears';
 import { RelationMatch } from '@elmdb/ears';
 import { RelationPatch } from '@elmdb/ears';
 import { RelationRow } from '@elmdb/ears';
-import { RelationStats } from '@elmdb/ears';
-import { RESERVED_ATTRIBUTES } from '@elmdb/ears';
 import { SchemaStats } from '@elmdb/ears';
-import { ShapeOf } from '@elmdb/ears';
-import { ShortCode } from '@elmdb/ears';
 import { UnitOptions } from '@elmdb/ears';
-import { UntypedSchema } from '@elmdb/ears';
 import type { Upsert } from '@elmdb/ears';
 import type { Write } from '@elmdb/ears';
-import { WriteBuilder } from '@elmdb/ears';
-
-export { BaseEntity }
 
 // @internal
 export function _bindEars(engine: Ears | undefined): Ears | undefined;
@@ -41,12 +28,8 @@ export function boundEars(): Ears;
 // @public (undocumented)
 export const catalog: () => DatabaseCatalog;
 
-export { defineEars }
-
 // @internal
 export const _EARS_CALL_SITES: CallSiteNaming;
-
-export { EarsSchema }
 
 // @public (undocumented)
 export const findRelations: (match?: RelationMatch) => RelationRow[];
@@ -72,24 +55,8 @@ export const nextLabel: (type: EARS.Entity, base: string) => string;
 // @public
 export const NO_ENGINE_BOUND: string;
 
-export { QueryBuilder }
-
-export { QueryExplanation }
-
-export { RelationMatch }
-
-export { RelationRow }
-
-export { RelationStats }
-
 // @public (undocumented)
 export const removeRelation: (relId: EARS.RelationId) => void;
-
-export { RESERVED_ATTRIBUTES }
-
-export { ShapeOf }
-
-export { ShortCode }
 
 // @public (undocumented)
 export const transact: <T>(fn: () => T, options?: UnitOptions) => T;
@@ -99,8 +66,6 @@ export const untypedCreate: Create;
 
 // @public
 export const untypedQuery: Query;
-
-export { UntypedSchema }
 
 // @public
 export const untypedUpsert: Upsert;
@@ -114,6 +79,7 @@ export const updateRelation: (relId: EARS.RelationId, patch: RelationPatch) => v
 // @public (undocumented)
 export const wouldCreateCycle: (source: EARS.EntityId, target: EARS.EntityId, kinds: readonly EARS.RelKind[]) => boolean;
 
-export { WriteBuilder }
+
+export * from "@elmdb/ears";
 
 ```

@@ -21,7 +21,7 @@ function tool(source: boolean) {
   write(entry, 'export const identity = 1;');
   for (const name of source ? ['host', 'sdk'] : ['sdk']) {
     write(`node_modules/@apackdev/${name}/package.json`, JSON.stringify({ name: `@apackdev/${name}`, version: '1.0.0',
-      ...(source && name === 'sdk' && { dependencies: { '@elmdb/ears': '0.0.0' } }),
+      ...(source && name === 'sdk' && { dependencies: { '@elmdb/ears': 'file:../elmdb/packages/ears' } }),
       exports: { '.': './entry.js', './package.json': './package.json',
         './build': source ? './entry.js' : './dist/helper.ts', './build/shared-deps': './entry.js' } }));
     write(`node_modules/@apackdev/${name}/entry.js`, 'export {};');
@@ -106,7 +106,7 @@ it('uses workspace ownership even when a resolved SDK output contains nested pac
   const scope = tool(true);
   scope.write('node_modules/@apackdev/sdk/dist/package.json', JSON.stringify({ name: '@apackdev/sdk' }));
   scope.write('node_modules/@apackdev/sdk/dist/helper.js', 'export {};');
-  scope.write('node_modules/@apackdev/sdk/package.json', JSON.stringify({ name: '@apackdev/sdk', dependencies: { '@elmdb/ears': '0.0.0' },
+  scope.write('node_modules/@apackdev/sdk/package.json', JSON.stringify({ name: '@apackdev/sdk', dependencies: { '@elmdb/ears': 'file:../elmdb/packages/ears' },
     exports: { './package.json': './package.json', './build': './dist/helper.js' } }));
   const before = scope.hash();
   scope.write('node_modules/@apackdev/sdk/src/helper.ts', 'export const helper = 2;');
@@ -124,4 +124,18 @@ it("refuses an SDK whose EARS doesn't resolve rather than leave it out", () => {
   const scope = tool(true);
   fs.rmSync(path.join(scope.root, 'node_modules/@elmdb'), { recursive: true });
   expect(scope.hash).toThrow(/@elmdb\/ears, declared by @apackdev\/sdk/);
+});
+
+it("leaves what the SDK has from the registry to the lockfile: a file of one isn't the tool", () => {
+  const scope = tool(true);
+  scope.write('node_modules/@apackdev/sdk/package.json', JSON.stringify({ name: '@apackdev/sdk', version: '1.0.0',
+    dependencies: { '@elmdb/ears': 'file:../elmdb/packages/ears', yaml: '^2.0.0' },
+    exports: { '.': './entry.js', './package.json': './package.json', './build': './entry.js' } }));
+  scope.write('node_modules/yaml/package.json', JSON.stringify({ name: 'yaml', version: '2.0.0' }));
+  scope.write('node_modules/yaml/index.js', 'export const helper = 1;');
+  const before = scope.hash();
+  scope.write('node_modules/yaml/index.js', 'export const helper = 2;');
+  expect(scope.hash()).toBe(before);
+  scope.write('node_modules/@elmdb/ears/dist/index.js', 'export const helper = 2;');
+  expect(scope.hash()).not.toBe(before);
 });

@@ -525,8 +525,8 @@ describe('findElmdbImports', () => {
 describe('findSharedPackageLists', () => {
   it.each([
     ["const EXTERNALS = ['@apackdev/sdk', '@apackdev/sdk/*'];", ['"@apackdev/sdk"', '"@apackdev/sdk/*"']],
-    ["if (source.startsWith('@elmdb/ears/')) return;", ['"@elmdb/ears/"']],
-    ['bridge({ bridgedPackages: [`@elmdb/ears`] });', ['"@elmdb/ears"']],
+    ["if (source.startsWith('@apackdev/sdk/')) return;", ['"@apackdev/sdk/"']],
+    ['bridge({ bridgedPackages: [`@apackdev/sdk`] });', ['"@apackdev/sdk"']],
   ])('flags a shared package named outside an import: %s', (code, found) => {
     write('consumer.ts', code);
     expect(findSharedPackageLists(['src/consumer.ts'], root)).toEqual(found.map((what) => `src/consumer.ts:1: ${what}`));
@@ -1158,6 +1158,7 @@ describe('CHECKS', () => {
   const OFFENCES: Record<string, string> = {
     'host-imports': "import { edgeStore } from '@apackdev/host/ears';",
     'elmdb-imports': "import { Database } from 'elmdb';",
+    'ears-imports': "import { defineEars } from '@elmdb/ears';",
     'internal-package-imports': "import { _getMediaPath } from '@apackdev/sdk/utils';",
     'untyped-sends': "import { untypedSendToSystem } from '@apackdev/sdk/events';",
     'raw-transport': '_rootEvents.emitOutgoing(event);',

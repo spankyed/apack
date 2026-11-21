@@ -6,6 +6,10 @@
  * from its directory, and that is the same set of files whether the directory is a registry install or a linked
  * checkout: a registry install is that set, unpacked. So a package's identity is its name, its version and a hash of
  * that set, and nothing here guesses which of its folders matter.
+ *
+ * **A registry install already carries that hash**: npm checked the tarball it unpacked against the `integrity` its
+ * lockfile records, so a package npm installed from the registry is identified by that instead of by reading its files
+ * again — which is most of the packages and nearly all of the files a pack's scope covers.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -105,14 +109,66 @@ export function dependencyClosure(name: string, fromDir: string): ClosurePackage
 export interface PackageIdentity {
   readonly name: string;
   readonly version: string;
-  /** sha256 of the files `npm pack` ships from the package's directory, each path with its bytes */
+  /**
+   * What the package holds: the `integrity` its lockfile records for a registry install (`sha512-…`), and otherwise the
+   * sha256 of the files `npm pack` ships from the package's directory, each path with its bytes
+   */
   readonly hash: string;
 }
 
-/** A package's name, version and the hash of what it ships: the same for a registry install and a linked checkout */
+/** The fields of a lockfile entry that say where a package came from and which bytes it is */
+interface LockedPackage {
+  readonly version?: string;
+  readonly resolved?: string;
+  readonly integrity?: string;
+  readonly link?: boolean;
+}
+
+/** Each lockfile read, by path, kept while its size and modification time are the ones it was read at */
+const lockfiles = new Map<string, { readonly size: number; readonly mtimeMs: number; readonly packages: Record<string, LockedPackage> }>();
+
+function lockfilePackages(file: string): Record<string, LockedPackage> | undefined {
+  const stat = fs.statSync(file, { throwIfNoEntry: false });
+  if (!stat?.isFile()) return undefined;
+  const cached = lockfiles.get(file);
+  if (cached && cached.size === stat.size && cached.mtimeMs === stat.mtimeMs) return cached.packages;
+  const packages = (JSON.parse(fs.readFileSync(file, 'utf8')) as { packages?: Record<string, LockedPackage> }).packages ?? {};
+  lockfiles.set(file, { size: stat.size, mtimeMs: stat.mtimeMs, packages });
+  return packages;
+}
+
+/**
+ * The `integrity` npm recorded for the package at `root` when it installed it from the registry, or undefined.
+ *
+ * `root` is a real directory: one under a `node_modules` is an install, and the lockfile that governs it is the nearest
+ * `package-lock.json` above it, whose `packages` key it by its path from there (`node_modules/a/node_modules/b`, or
+ * `packages/x/node_modules/b` in a workspace). Anything else has no integrity to give — a link resolves to the
+ * checkout it points at, which is under no `node_modules`; a workspace package is keyed by its own path; and a git or
+ * `file:` dependency is resolved somewhere other than a registry URL — and is read by its files. So is an entry whose
+ * version isn't the installed one: a lockfile that has moved on from what is installed says nothing about it.
+ */
+function registryIntegrity(root: string, version: string): string | undefined {
+  if (!root.split(path.sep).includes('node_modules')) return undefined;
+  for (let dir = path.dirname(root); ; dir = path.dirname(dir)) {
+    const packages = lockfilePackages(path.join(dir, 'package-lock.json'));
+    if (packages) {
+      const entry = packages[path.relative(dir, root).split(path.sep).join('/')];
+      const fromRegistry = entry !== undefined && !entry.link && /^https?:\/\//.test(entry.resolved ?? '');
+      return fromRegistry && entry.version === version && entry.integrity ? entry.integrity : undefined;
+    }
+    if (path.dirname(dir) === dir) return undefined;
+  }
+}
+
+/**
+ * A package's name, version and what it holds: for a registry install the lockfile's `integrity`, and otherwise the hash
+ * of what it ships, which is the same for a linked checkout and an install of the package it would pack
+ */
 export function packageIdentity(directory: string): PackageIdentity {
   const root = fs.realpathSync.native(directory);
   const manifest = readPackageManifest(root);
+  const integrity = registryIntegrity(root, manifest.version ?? '');
+  if (integrity !== undefined) return { name: manifest.name, version: manifest.version ?? '', hash: integrity };
   const hash = createHash('sha256');
   for (const file of packedFiles(root)) {
     const bytes = fs.readFileSync(path.join(root, file));
