@@ -1,6 +1,5 @@
-import { entityIs } from '@apackdev/sdk/fe'
+import { askId, endedAsk, entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity, UntypedAskOutcome } from '@apackdev/sdk/events'
-import { randomId } from '@apackdev/sdk/utils/pure'
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
 import type { DocumentDTO, DocumentView, FolderContents, FolderView, LibraryIndex, LibraryItem, DocumentItem } from '#generated/types.ts'
 import type { Contract, LibraryContext, LibraryInboxEvent } from './contract.ts'
@@ -237,8 +236,18 @@ type AskKind = 'contents' | 'symlinks' | 'folder' | 'write'
 /** The done event of an ask spawned as `Kind`: how it ended, and the name it was spawned under */
 type AskEnded<Kind extends AskKind, O> = { type: `xstate.done.actor.${Kind}.${string}`; output: O; actorId: string }
 
-/** A name for an ask spawned as `kind`, which its done event carries back */
-const askId = (kind: AskKind): string => `${kind}.${randomId()}`
+/** The id a fetch of a folder on disk is spawned under: one per folder, so its end names the folder it was for */
+const CONTENTS = 'contents.'
+const contentsAsk = (folderId: EARS.EntityId | null): string => `${CONTENTS}${folderId}`
+
+/** Fetches a folder on disk, in place of a fetch of the same folder under way */
+function fetchContents(
+  enqueue: { stopChild(id: string): void; spawnChild(src: 'getFolderContents', options: { id: string; input: { folderId: EARS.EntityId | null } }): void },
+  folderId: EARS.EntityId | null,
+): void {
+  enqueue.stopChild(contentsAsk(folderId))
+  enqueue.spawnChild('getFolderContents', { id: contentsAsk(folderId), input: { folderId } })
+}
 
 /** Whether an event is the done event of an ask spawned as `kind` */
 const isEnded = <Kind extends AskKind>(kind: Kind, event: LibraryEvents): event is Extract<LibraryEvents, { type: `xstate.done.actor.${Kind}.${string}` }> =>
@@ -284,7 +293,7 @@ export const librarySystem = setup({
       const { folderId, folder } = event
       if (folder.onDisk) {
         if (!context.diskFolderIds.includes(folderId)) enqueue.assign({ diskFolderIds: [...context.diskFolderIds, folderId] })
-        enqueue.spawnChild('getFolderContents', { id: askId('contents'), input: { folderId } })
+        fetchContents(enqueue, folderId)
         return
       }
       if (context.diskFolderIds.includes(folderId)) enqueue.assign({ diskFolderIds: context.diskFolderIds.filter(each => each !== folderId) })
@@ -293,7 +302,13 @@ export const librarySystem = setup({
       if (symlinks.length > 0) enqueue.spawnChild('checkSymlinks', { id: askId('symlinks'), input: { ids: symlinks } })
     }),
     folderFetched: enqueueActions(({ event, enqueue }) => {
-      if (!isEnded('contents', event) || !event.output.ok) return
+      if (!isEnded('contents', event)) return
+      if (!event.output.ok) {
+        // A folder that could not be fetched is not being loaded any more; `askEnded` says why
+        const folderId = event.actorId.slice(CONTENTS.length)
+        enqueue.assign(({ context }) => ({ loadingFolderIds: context.loadingFolderIds.filter(each => each !== folderId) }))
+        return
+      }
       const contents = event.output.value
       enqueue.assign(({ context }) => folderShown(context, contents))
       const symlinks = symlinksIn(contents)
@@ -303,7 +318,7 @@ export const librarySystem = setup({
       if (event.type !== 'FOLDER_CHANGED') return
       for (const folderId of shownFolders(context)) {
         if (!context.diskFolderIds.includes(folderId)) continue
-        if (event.folderId === null || event.folderId === folderId) enqueue.spawnChild('getFolderContents', { id: askId('contents'), input: { folderId } })
+        if (event.folderId === null || event.folderId === folderId) fetchContents(enqueue, folderId)
       }
     }),
     markBrokenSymlinks: assign(({ context, event }) => {
@@ -453,9 +468,9 @@ export const librarySystem = setup({
     }),
     /** An ask this machine spawned ended: one that was not done is shown, whichever it was, and none is kept */
     askEnded: enqueueActions(({ event, enqueue }) => {
-      if (!('actorId' in event)) return
-      if (!event.output.ok) enqueue.assign({ writeError: event.output.failure.message })
-      enqueue.stopChild(event.actorId)
+      const outcome = outcomeOf<UntypedAskOutcome>(event)
+      if (!outcome.ok) enqueue.assign({ writeError: outcome.failure.message })
+      enqueue.stopChild(endedAsk(event))
     }),
     // The folder this window made opens for naming here, and nowhere else; one made on disk is shown by fetching it
     nameCreatedFolder: assign(({ event }) => {
@@ -584,7 +599,7 @@ export const librarySystem = setup({
     // }),
     // A folder on disk, fetched again at the user's ask; a stored one is a view, and already current
     refreshFolder: enqueueActions(({ event, enqueue }) => {
-      if (event.type === 'REFRESH_FOLDER') enqueue.spawnChild('getFolderContents', { id: askId('contents'), input: { folderId: event.folderId } })
+      if (event.type === 'REFRESH_FOLDER') fetchContents(enqueue, event.folderId)
     }),
 
     // Symlink actions

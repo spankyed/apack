@@ -1,4 +1,4 @@
-import { entityIs } from '@apackdev/sdk/fe'
+import { askId, endedAsk, entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
 import { and, assign, enqueueActions, setup, stopChild, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
@@ -10,7 +10,7 @@ import {
 } from '@apackdev/sdk/fe'
 import type { Contract, ActionsContext, ActionsInboxEvent } from './contract.ts'
 import type { UntypedAskOutcome } from '@apackdev/sdk/events'
-import { randomId } from '@apackdev/sdk/utils/pure'
+import { outcomeOf } from '@apackdev/sdk/helpers'
 import type { ActionEntity, ActionParameter } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
 import { fromAsk } from '#generated/events.ts'
@@ -50,21 +50,9 @@ type UIEvent =
   | { type: 'FILTER.CLEAR' }
 
 /** One of this window's writes ended: the done event of the ask spawned for it, which says whether it was refused */
-type WriteEnded = { type: `xstate.done.actor.write.${string}`; output: UntypedAskOutcome; actorId: string }
+type WriteEnded = { type: `xstate.done.actor.write.${number}`; output: UntypedAskOutcome; actorId: string }
 
 export type ActionsEvents = OpenEntity | UIEvent | TrailClickEvent | WriteEnded
-
-/** A name for the ask one write spawns, which its done event carries back */
-const writeId = (): string => `write.${randomId()}`
-
-/** Every write's done event, as a transition names them */
-const WRITE_ENDED = 'xstate.done.actor.write.*'
-
-/** The done event of a write, for an action wired to `WRITE_ENDED` */
-function writeEnded(event: ActionsEvents): WriteEnded {
-  if (!('actorId' in event)) throw new Error(`Expected the done event of a write, got ${event.type}`)
-  return event
-}
 
 const typeOf = safeEvents<ActionsEvents>()
 
@@ -126,33 +114,33 @@ const actionsState = setup({
 
     sendSaveAction: enqueueActions(({ context, enqueue }) => {
       // Creating or updating, by whether one is open
-      if (!context.selectedActionId) enqueue.spawnChild('createAction', { id: writeId(), input: context.formData })
-      else enqueue.spawnChild('updateAction', { id: writeId(), input: { actionId: context.selectedActionId, ...context.formData } })
+      if (!context.selectedActionId) enqueue.spawnChild('createAction', { id: askId('write'), input: context.formData })
+      else enqueue.spawnChild('updateAction', { id: askId('write'), input: { actionId: context.selectedActionId, ...context.formData } })
     }),
 
     sendDeleteAction: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.DELETE', event);
-      enqueue.spawnChild('deleteAction', { id: writeId(), input: { actionId: ev.actionId } })
+      enqueue.spawnChild('deleteAction', { id: askId('write'), input: { actionId: ev.actionId } })
     }),
 
     updateActionInput: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.UPDATE_INPUT', event);
-      enqueue.spawnChild('updateAction', { id: writeId(), input: { actionId: ev.actionId, input: ev.input } })
+      enqueue.spawnChild('updateAction', { id: askId('write'), input: { actionId: ev.actionId, input: ev.input } })
     }),
 
     createActionInline: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.CREATE_INLINE', event);
-      enqueue.spawnChild('createAction', { id: writeId(), input: { label: ev.label, actionFn: ev.actionFn, input: ev.input } })
+      enqueue.spawnChild('createAction', { id: askId('write'), input: { label: ev.label, actionFn: ev.actionFn, input: ev.input } })
     }),
 
     updateActionLabel: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('ACTION.UPDATE_LABEL', event);
-      enqueue.spawnChild('updateAction', { id: writeId(), input: { actionId: ev.actionId, label: ev.label } })
+      enqueue.spawnChild('updateAction', { id: askId('write'), input: { actionId: ev.actionId, label: ev.label } })
     }),
 
     /** A write this window asked for and did not get, shown until dismissed */
     showRefusal: assign(({ event }) => {
-      const { output } = writeEnded(event)
+      const output = outcomeOf<UntypedAskOutcome>(event)
       return output.ok ? {} : { writeError: output.failure.message }
     }),
 
@@ -295,7 +283,7 @@ const actionsState = setup({
   },
   on: {
     // What a write changed reaches every window through the views, so a landed one needs nothing here
-    [WRITE_ENDED]: { actions: ['showRefusal', stopChild(({ event }) => writeEnded(event).actorId)] },
+    'xstate.done.actor.write.*': { actions: ['showRefusal', stopChild(({ event }) => endedAsk(event))] },
     CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Action' } }, target: '.detail', actions: 'selectAction' },
     'ACTION.SELECT': { target: '.detail', actions: 'selectAction' },

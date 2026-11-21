@@ -3,7 +3,7 @@ import { ref as featureRef } from '#generated/ref.ts'
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('code'))
-import { setup, type ActorRefFrom, type AnyActorRef, type DoneActorEvent, type OutputFrom, assign, enqueueActions, fromCallback } from 'xstate';
+import { setup, type ActorRefFrom, type AnyActorRef, type DoneActorEvent, type OutputFrom, assign, enqueueActions, fromCallback, stopChild } from 'xstate';
 
 import breadcrumb from '@apackdev/sdk/fe';
 import { type HotkeyEvent, type HotkeysMap, createHotkeyProcessor } from '@apackdev/sdk/fe';
@@ -1446,10 +1446,13 @@ const codeState = setup({
         },
         // The start, handed to every feature, each of which asks for what its panel shows. The saved settings reach
         // the terminals at start, as they do when they change. A start that could not be read changes nothing
-        'xstate.done.actor.codeStart': {
-          guard: ({ event }) => event.output.ok,
-          actions: ['handleCodeConnected', 'applyCopyOnSelect', 'applyViewSettings', 'broadcastToAllFeatures'],
-        },
+        'xstate.done.actor.codeStart': [
+          {
+            guard: ({ event }) => event.output.ok,
+            actions: [stopChild('codeStart'), 'handleCodeConnected', 'applyCopyOnSelect', 'applyViewSettings', 'broadcastToAllFeatures'],
+          },
+          { actions: stopChild('codeStart') },
+        ],
         // Handle settings updates
         FEATURE_SETTINGS_UPDATED: {
           actions: ['handleSettingsUpdate', 'applyCopyOnSelect', 'applyViewSettings']

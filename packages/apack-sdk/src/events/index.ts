@@ -604,7 +604,7 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
       return fromPromise<UntypedAskOutcome, object | undefined>(({ input, signal, self }) =>
         askVia(typeof to === 'string' ? resolve(to) : getDesignated(to.role), { ...input, type }, labels, {
           signal,
-          heard: (update) => { (self as unknown as { _parent?: { send(event: object): void } })._parent?.send({ type: `${type}.progress`, update }); },
+          heard: (update) => { self._parent?.send({ type: `${type}.progress`, update }); },
         }));
     },
   };

@@ -123,6 +123,7 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
     onFile: [
       ["export const done = { type: 'ASK_ANSWERED', asked: 'SAVE', answer: 1 };\n", 'src/f.ts:1: ASK_ANSWERED:'],
       ["reply({ 'type': 'ASK_FAILED', asked: 'SAVE', failure });\n", 'src/f.ts:1: ASK_FAILED:'],
+      ["export const on = { ASK_FAILED: { actions: 'showFailure' } };\n", 'src/f.ts:1: ASK_FAILED:'],
     ],
     elsewhere: "ask-answers leaves a pack's tests and its reads of an answer alone",
   },
@@ -208,13 +209,12 @@ describe('every rule', () => {
   });
 
   /**
-   * What a pack does with an answer it receives is reading one, and a spec driving an asking machine has to hand it
-   * the answers its system would: neither is an answer written in place of a system's.
+   * Telling an answer from another event is reading one, and a spec driving an asking machine has to hand it the
+   * answers its system would: neither is an answer written in place of a system's, or a transition for one.
    */
   it("ask-answers leaves a pack's tests and its reads of an answer alone", () => {
     const dir = completePack({
-      'src/reads-it.ts': "export const taken = (event: E) => event.type === 'ASK_ANSWERED' && isAnswered(event, 'SAVE');\n",
-      'src/routes-it.ts': "export const on = { ASK_FAILED: { actions: 'showFailure' } };\n",
+      'src/reads-it.ts': "export const taken = (event: E) => event.type === 'ASK_ANSWERED';\n",
       'tests/drives-a-machine.spec.ts': "actor.send({ type: 'ASK_ANSWERED', asked: 'SAVE', answer: 1 });\n",
     });
     expect(packRuleProblems(dir, ['src', 'tests']).get('ask-answers') ?? []).toEqual([]);

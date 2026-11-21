@@ -3,12 +3,14 @@
 // A leaf: no machine, no other feature, and nothing from `#generated/*` but `types` and `ears` — which is what lets
 // codegen read the contract without resolving the machine, whose imports cycle back through `#generated/events`.
 // `apack.json` names it at `features[].surface.contract`.
-import type { SurfaceInbox } from '@apackdev/sdk/fe'
+import type { AsksUnderWay, SurfaceInbox } from '@apackdev/sdk/fe'
 import type { RunTree, RunNode } from '@apackdev/sdk/steps'
 import type { DatabaseSettings } from '#generated/types.ts'
 import type { DatabaseSchemaInfo } from '../be/types.ts'
 
 export interface DatabaseContext {
+  /** The asks this window has under way, by the id each is spawned under */
+  asking: AsksUnderWay;
   schema: DatabaseSchemaInfo;
   currentQuery: string;
   queryResult: any;

@@ -1,4 +1,4 @@
-import { entityIs } from '@apackdev/sdk/fe'
+import { askId, endedAsk, entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
 import { and, assign, enqueueActions, setup, stopChild, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
@@ -10,7 +10,7 @@ import {
 } from '@apackdev/sdk/fe'
 import type { Contract, PromptsContext, PromptsInboxEvent } from './contract.ts'
 import type { UntypedAskOutcome } from '@apackdev/sdk/events'
-import { randomId } from '@apackdev/sdk/utils/pure'
+import { outcomeOf } from '@apackdev/sdk/helpers'
 import type { PromptEntity, TemplateInput } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
 import { fromAsk } from '#generated/events.ts'
@@ -51,21 +51,9 @@ type UIEvent =
   | { type: 'FILTER.CLEAR' }
 
 /** One of this window's writes ended: the done event of the ask spawned for it, which says whether it was refused */
-type WriteEnded = { type: `xstate.done.actor.write.${string}`; output: UntypedAskOutcome; actorId: string }
+type WriteEnded = { type: `xstate.done.actor.write.${number}`; output: UntypedAskOutcome; actorId: string }
 
 export type PromptsEvents = OpenEntity | UIEvent | TrailClickEvent | WriteEnded
-
-/** A name for the ask one write spawns, which its done event carries back */
-const writeId = (): string => `write.${randomId()}`
-
-/** Every write's done event, as a transition names them */
-const WRITE_ENDED = 'xstate.done.actor.write.*'
-
-/** The done event of a write, for an action wired to `WRITE_ENDED` */
-function writeEnded(event: PromptsEvents): WriteEnded {
-  if (!('actorId' in event)) throw new Error(`Expected the done event of a write, got ${event.type}`)
-  return event
-}
 
 const typeOf = safeEvents<PromptsEvents>()
 
@@ -127,33 +115,33 @@ const promptsState = setup({
 
     sendSavePrompt: enqueueActions(({ context, enqueue }) => {
       // Creating or updating, by whether one is open
-      if (!context.selectedPromptId) enqueue.spawnChild('createPrompt', { id: writeId(), input: context.formData })
-      else enqueue.spawnChild('updatePrompt', { id: writeId(), input: { promptId: context.selectedPromptId, ...context.formData } })
+      if (!context.selectedPromptId) enqueue.spawnChild('createPrompt', { id: askId('write'), input: context.formData })
+      else enqueue.spawnChild('updatePrompt', { id: askId('write'), input: { promptId: context.selectedPromptId, ...context.formData } })
     }),
 
     sendDeletePrompt: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.DELETE', event);
-      enqueue.spawnChild('deletePrompt', { id: writeId(), input: { promptId: ev.promptId } })
+      enqueue.spawnChild('deletePrompt', { id: askId('write'), input: { promptId: ev.promptId } })
     }),
 
     updatePromptInputs: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.UPDATE_INPUTS', event);
-      enqueue.spawnChild('updatePrompt', { id: writeId(), input: { promptId: ev.promptId, inputs: ev.inputs } })
+      enqueue.spawnChild('updatePrompt', { id: askId('write'), input: { promptId: ev.promptId, inputs: ev.inputs } })
     }),
 
     createPromptInline: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.CREATE_INLINE', event);
-      enqueue.spawnChild('createPrompt', { id: writeId(), input: { label: ev.label, templateFn: ev.templateFn, inputs: ev.inputs } })
+      enqueue.spawnChild('createPrompt', { id: askId('write'), input: { label: ev.label, templateFn: ev.templateFn, inputs: ev.inputs } })
     }),
 
     updatePromptLabel: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.UPDATE_LABEL', event);
-      enqueue.spawnChild('updatePrompt', { id: writeId(), input: { promptId: ev.promptId, label: ev.label } })
+      enqueue.spawnChild('updatePrompt', { id: askId('write'), input: { promptId: ev.promptId, label: ev.label } })
     }),
 
     /** A write this window asked for and did not get, shown until dismissed */
     showRefusal: assign(({ event }) => {
-      const { output } = writeEnded(event)
+      const output = outcomeOf<UntypedAskOutcome>(event)
       return output.ok ? {} : { writeError: output.failure.message }
     }),
 
@@ -296,7 +284,7 @@ const promptsState = setup({
   },
   on: {
     // What a write changed reaches every window through the views, so a landed one needs nothing here
-    [WRITE_ENDED]: { actions: ['showRefusal', stopChild(({ event }) => writeEnded(event).actorId)] },
+    'xstate.done.actor.write.*': { actions: ['showRefusal', stopChild(({ event }) => endedAsk(event))] },
     CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Prompt' } }, target: '.detail', actions: 'selectPrompt' },
     'PROMPT.SELECT': { target: '.detail', actions: 'selectPrompt' },

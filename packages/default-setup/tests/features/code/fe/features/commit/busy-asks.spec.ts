@@ -123,3 +123,17 @@ it('clears a refusal of the kind a status read reports, whichever ask it answere
 
   expect(actor.getSnapshot().context).toMatchObject({ gitError: null, gitFailure: null });
 });
+
+it('holds no ask once each has ended, whether it was done or refused', async () => {
+  const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.STAGE_FILES', paths: ['a.txt'] });
+  actor.send({ type: 'commit.PREVIEW_DISCARD', paths: ['a.txt'] });
+  actor.send({ type: 'commit.GENERATE_MESSAGE' });
+
+  await latestAsk('commit.PREVIEW_DISCARD').refuse('nothing to discard', { kind: 'git' });
+  await latestAsk('commit.GENERATE_MESSAGE').answer({});
+  await latestAsk('commit.STAGE_FILES').answer({ paths: ['a.txt'] });
+  await latestAsk('commit.GET_GIT_STATUS').answer(STATUS);
+
+  expect(actor.getSnapshot().context.asking).toEqual({});
+});

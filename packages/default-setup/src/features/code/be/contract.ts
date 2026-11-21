@@ -2,10 +2,8 @@
 // and its context. Its own module, not the feature's types barrel: `#generated/types` star-exports that,
 // and one `Contract` per feature would collide there. Codegen reads this without running anything.
 import type { ActionEntity, PromptEntity } from '@apackdev/sdk';
-import type { AskName } from '@apackdev/sdk/events';
-import type { AnswerHandler } from '@apackdev/sdk/framework';
 import type {
-  CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CommitTrailer, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent, FileInfo,
+  CodeConnectedData, RepositoryUnder, CodeSystemError, CommitFailure, CommitTrailer, CodeSystemContext, DirectoryContent, DiscardKept, DiscardRestored, FileContent,
   PRBranchCheckout, GhPRComment, GhPullRequest, GhReviewThread, GitDiff, GitProgress, GitStatusFile, ProgressDuring, OperationMove, QuickOpenResult, RepositoryChange,
   RepositoryOperation, SearchProgress, SignInHelp,
   SearchResult, StashEntry, BranchStandingOf, LineCount, ChangedFile, HistoryCommit, TerminalInfo, TerminalStatus, WorktreeEntry, BlameLine, MergePreview, StartableOperation, RewriteAction, SlowStatus,
@@ -36,11 +34,9 @@ export type ExplorerAsks = {
   /** A file's content for an editor, which is watched from then on until the editor closes it (`explorer.CLOSE_FILE`) */
   'explorer.READ_FILE': { args: { path: string }; answer: FileContent; refuses: FileFailure }
   'explorer.WRITE_FILE': { args: { path: string; content: string }; answer: { path: string }; refuses: FileFailure }
-  'explorer.CREATE_FILE': { args: { path: string; content?: string }; answer: { path: string }; refuses: FileFailure }
   'explorer.DELETE_FILE': { args: { path: string }; answer: { path: string }; refuses: FileFailure }
   'explorer.RENAME_FILE': { args: { oldPath: string; newPath: string }; answer: { oldPath: string; newPath: string }; refuses: FileFailure }
   'explorer.CREATE_DIRECTORY': { args: { path: string }; answer: { path: string }; refuses: FileFailure }
-  'explorer.GET_FILE_INFO': { args: { path: string }; answer: FileInfo; refuses: FileFailure }
   /** Every file under a folder, for quick open */
   'explorer.QUICK_OPEN_SEARCH': { args: { baseDirectory: string }; answer: QuickOpenResult[]; refuses: FileFailure }
   'explorer.MOVE_FILES': { args: { sourcePaths: string[]; targetDir: string }; answer: { sourcePaths: string[]; targetDir: string; movedPaths: string[] }; refuses: FileFailure }
@@ -48,7 +44,7 @@ export type ExplorerAsks = {
 }
 
 // ── search ─────────────────────────────────────────────────────────
-/** What a window asks the search, answered by the code system (`searchAnswers`) */
+/** What a window asks the search, answered by the code system's search child (`searchSystem`) */
 export type SearchAsks = {
   /**
    * Every match, once the search ends. As it goes it tells whoever asked how far it is and each file's matches as
@@ -115,7 +111,6 @@ export type CommitAsks = {
   'commit.UNSTAGE_FILES': { args: { paths: string[] }; answer: { paths: string[] }; refuses: GitFails }
   /** Commits what is staged, answered with the message as committed */
   'commit.COMMIT': { args: { message: string }; answer: { message: string } & UndoableAfter; refuses: GitFails }
-  'commit.GET_CURRENT_BRANCH': { answer: { branch: string }; refuses: GitFails }
   'commit.REVERT_FILE': { args: { path: string }; answer: { path: string; kept: DiscardKept }; refuses: GitFails }
   'commit.REVERT_FILES': { args: { paths: string[] }; answer: { paths: string[]; kept: DiscardKept }; refuses: GitFails }
   /** Which of what discarding these rows would remove cannot be brought back, for the window about to ask */
@@ -510,6 +505,3 @@ export type Contract = {
   outgoing: OutgoingCodeEvents
   asks: CodeAsks
 }
-
-/** The handlers of one set of the code system's asks, which its table (`answers`, `system.ts`) is assembled from */
-export type AnswersTo<Asks> = { readonly [K in keyof Asks & AskName<Contract>]: AnswerHandler<Contract, K> }

@@ -449,7 +449,6 @@ const answers = handlers.answers<CommitAsks>({
     })
   },
 
-  'commit.GET_CURRENT_BRANCH': ({ context }) => git(async () => ({ branch: await repositoryIn(context).readCurrentBranch() })),
 
   'commit.GET_ALL_BRANCHES': ({ context }) => git(async () => {
     const repo = repositoryIn(context)

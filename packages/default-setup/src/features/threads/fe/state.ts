@@ -13,7 +13,7 @@ import { setup, assign, enqueueActions, fromCallback, spawnChild, stopChild, typ
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe';
 import type { ActorRefFrom } from 'xstate';
 import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, ThreadsSettings, MessageEntity, AgentThreadData, Tab, AgentSettings, AgentMode as AgentModeConfig, MessageReferences, BlockResponse, ChatPage, ChatStart, MessageSearchResult, ThreadDetailView, ThreadExtended, ThreadTabView } from '#generated/types.ts';
-import { viewRead, viewWrites, writeEnded, writeSent, writing, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
+import { askId, endedAsk, viewRead, viewWrites, writeEnded, writeSent, writing, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import { fromView } from '#generated/fe.ts';
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
 import type { OutgoingThreadsEvents, ThreadsAsks } from '#features/threads/be/types.ts';
@@ -156,7 +156,7 @@ const defaultChatThread: AgentThreadData = {
 
 /**
  * What the machine asks the threads system, by the kind of ask it is to the machine: each is spawned under
- * `<kind>.<n>`, so any number of a kind are under way at once and one transition, `xstate.done.actor.<kind>.*`, takes
+ * `<kind>.<n>` (`askId`), so any number of a kind are under way at once and one transition, `xstate.done.actor.<kind>.*`, takes
  * how each ended.
  */
 type AskKinds = {
@@ -171,10 +171,6 @@ type AskKinds = {
   /** Every write whose answer is only that it was done */
   write: 'UPDATE_THREAD_STATUS' | 'UPDATE_THREAD_FIELD' | 'DELETE_THREAD' | 'SET_THREAD_PARENT'
 }
-
-let asked = 0
-/** The id one ask of `kind` is spawned under */
-const askId = <Kind extends keyof AskKinds>(kind: Kind): `${Kind}.${number}` => `${kind}.${++asked}`
 
 /** How the asks of each kind end: the done event of the ask spawned under that kind's id */
 type AskEnded = { [Kind in keyof AskKinds]: DoneActorEvent<AskOutcome<ThreadsAsks[AskKinds[Kind]]>, `${Kind}.${number}`> }
@@ -192,6 +188,7 @@ type ViewEvent =
   | { type: 'RECENT.READ'; threads: Partial<ThreadEntity>[] }
   | { type: 'DETAIL.READ'; id: string; detail: ThreadDetailView | null }
   | { type: 'CHAT.READ'; threadId: string; chat: ChatPage | null }
+  | { type: 'CHAT.FAILURES_TOLD'; told: readonly { readonly message: string }[] }
   | { type: 'MESSAGE.READ'; id: string; message: MessageEntity | null }
   | { type: 'MESSAGE_TEXT_APPENDED'; messageId: string; at: number; text: string; done?: true }
   | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: string; blockId: string; at: number; text: string; done?: true }
@@ -297,9 +294,6 @@ type ThreadEvents =
   | TrailClickEvent;
 
 const typeOf = safeEvents<ThreadEvents>()
-
-/** The id of the spawned ask whose end `event` is */
-const endedAsk = (event: ThreadEvents): string => 'actorId' in event ? event.actorId : ''
 
 /** The thread this window asked to open and the system found gone, where that is how the ask ended */
 function goneOnOpen(event: ThreadEvents): string | undefined {
@@ -846,6 +840,11 @@ const threadsState = setup({
      * Opens the thread this window's message or command started, or its fork: as a thread the system says to show,
      * which every window handles alike
      */
+    /** A message, command or fork of this window's that was not done, kept for the chat to tell the person */
+    noteSendFailure: assign(({ context, event }) => {
+      const outcome = outcomeOf<AskEnded['sent' | 'forked']['output']>(event);
+      return outcome.ok ? {} : { sendFailures: [...context.sendFailures, { message: outcome.failure.message }] };
+    }),
     showStartedThread: enqueueActions(({ event, enqueue }) => {
       const outcome = outcomeOf<AskEnded['sent']['output']>(event);
       if (outcome.ok && outcome.value.started) enqueue.raise({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
@@ -1655,6 +1654,7 @@ const threadsState = setup({
     writes: viewWrites(),
     linkSave: null,
     linkRefusal: null,
+    sendFailures: [],
   }),
   on: {
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation', 'followDetail'] },
@@ -1688,8 +1688,10 @@ const threadsState = setup({
       { guard: 'openedGone', actions: ['forgetAsk', 'dropThread'] },
       { actions: 'forgetAsk' },
     ],
-    'xstate.done.actor.sent.*': { actions: ['forgetAsk', 'showStartedThread'] },
-    'xstate.done.actor.forked.*': { actions: ['forgetAsk', 'showFork'] },
+    'xstate.done.actor.sent.*': { actions: ['forgetAsk', 'noteSendFailure', 'showStartedThread'] },
+    'xstate.done.actor.forked.*': { actions: ['forgetAsk', 'noteSendFailure', 'showFork'] },
+    // The chat told the person of these, so they are held no longer
+    'CHAT.FAILURES_TOLD': { actions: assign(({ context, event }) => ({ sendFailures: context.sendFailures.filter(failure => !event.told.includes(failure)) })) },
     'xstate.done.actor.imported.*': { actions: ['forgetAsk', 'handleThreadsImportEnded'] },
     'xstate.done.actor.exported.*': { actions: ['forgetAsk', 'handleThreadsExportEnded'] },
     'xstate.done.actor.write.*': { actions: ['forgetAsk', 'settleWrite'] },

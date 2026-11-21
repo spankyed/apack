@@ -150,11 +150,12 @@
     </ConfirmationDialog>
 
     <ImageLightbox v-model="lightboxOpen" :image-src="lightboxSrc" />
+    <ToastNotification ref="toast" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
+import { ref, computed, watch, watchPostEffect, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
 import { createScrollPositioning } from './scroll-positioning.ts'
 
 const quotes = [
@@ -195,6 +196,7 @@ import ImageLightbox from '@apackdev/ui/design/ImageLightbox'
 import ConfirmationDialog from '@apackdev/ui/design/ConfirmationDialog'
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
 import { useSurface, useShell } from '@apackdev/sdk/fe'
+import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import { openSurface } from '#generated/fe.ts'
 import { useSelector } from '@xstate/vue'
 import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts';
@@ -205,6 +207,17 @@ import { useSettings } from '#generated/settings-fe.ts';
 const threadsSettings = useSettings('threads')
 const shell = useShell()
 const actor: ThreadsState = useSurface();
+
+// A message, command or fork of this window's that was not done is told here, where it was sent from. Telling and
+// saying so are one step, run once the toast is drawn: the machine drops exactly the failures told
+const toast = ref<InstanceType<typeof ToastNotification>>()
+const sendFailures = useSelector(actor, (state) => state.context.sendFailures)
+watchPostEffect(() => {
+  const told = sendFailures.value
+  if (!toast.value || told.length === 0) return
+  for (const failure of told) toast.value.error('Message not sent', failure.message)
+  actor.send({ type: 'CHAT.FAILURES_TOLD', told })
+})
 const isOnboarding = shell.isOnboarding;
 const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
 const visibleMessages = computed(() => allMessages.value.filter(m => !(m as any).compacted));

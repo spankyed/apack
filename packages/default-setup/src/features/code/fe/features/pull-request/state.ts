@@ -7,11 +7,11 @@ import { fromAsk } from '#generated/events.ts';
 import type { GitStatusFile, GitDiff } from '../commit/state.ts';
 import type { GhPullRequest, GhPRComment, GhReviewThread, PRBranchCheckout } from '#generated/types.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
-import { askUnderWay, enqueueAsks, noAsks, stopAsks, untypedOpenSurface, type AsksUnderWay } from '@apackdev/sdk/fe'
+import { askId, askUnderWay, enqueueAsks, noAsks, stopAsks, untypedOpenSurface, type AsksUnderWay } from '@apackdev/sdk/fe'
 import { resolveName } from '@apackdev/sdk/ids'
+import { getCommentDatabaseId } from './comment-id.ts';
 
 const HOST_SETTINGS = resolveName('settings', 'host');
-import { getCommentDatabaseId } from './comment-id.ts';
 
 export type { GhPullRequest, GhPRComment }
 
@@ -356,10 +356,8 @@ export interface CodePullRequestContext {
   latestPrDetailsFetchedAt: Record<number, number>
 }
 
-/**
- * The asks the panel has one of at a time, each a child of the machine under the id here for as long as it is under
- * way (`askUnderWay`): asking a read again stops the one before, and stopping one stops waiting on its answer
- */
+// The asks the panel has one of at a time, each a child of the machine under the id here for as long as it is under
+// way (`askUnderWay`): asking a read again stops the one before, and stopping one stops waiting on its answer
 export const DETAILS = 'details'
 const COMMENTS = 'comments'
 const THREADS = 'threads'
@@ -481,10 +479,6 @@ function doneOf<P extends string>(prefix: P, event: Event): Extract<Event, { typ
   if (!event.type.startsWith(`xstate.done.actor.${prefix}.`)) throw new Error(`Expected the end of a ${prefix} ask, got ${event.type}`)
   return event as Extract<Event, { type: `xstate.done.actor.${P}.${string}` }>
 }
-
-let spawnedAsks = 0
-/** An id for an ask spawned beside others of its kind: its prefix names the transition its ending is taken on */
-const askId = (prefix: string): string => `${prefix}.${++spawnedAsks}`
 
 /** `asks` without the one that ran as `id`, and what was recorded for it: nothing, for an ask this machine no longer waits on */
 const settled = <T>(asks: Record<string, T>, id: string): { recorded: T | undefined; pending: Record<string, T> } => {
@@ -968,14 +962,9 @@ export const pullRequestState = machine.extend({
       if (refreshed && details) takeDetails(enqueue, context, details)
     }),
 
-    takeCommentWritten: enqueueAsks(({ enqueue, context, event }) => {
-      const { actorId, output } = doneOf('comment', event)
-      enqueue.stopChild(actorId)
-      endWrite(enqueue, context, actorId, output)
-    }),
-
-    takeThreadWritten: enqueueAsks(({ enqueue, context, event }) => {
-      const { actorId, output } = doneOf('thread', event)
+    /** A comment or thread write ended: its change is GitHub's, or is taken back with why */
+    takeDiscussionWritten: enqueueAsks(({ enqueue, context, event }) => {
+      const { actorId, output } = event.type.startsWith('xstate.done.actor.comment.') ? doneOf('comment', event) : doneOf('thread', event)
       enqueue.stopChild(actorId)
       endWrite(enqueue, context, actorId, output)
     }),
@@ -1212,8 +1201,8 @@ export const pullRequestState = machine.extend({
     'xstate.done.actor.deleteBranch.*': { actions: 'takeBranchDeleted' },
     'xstate.done.actor.checkout.*': { actions: 'takeCheckedOut' },
     'xstate.done.actor.updatePR.*': { actions: 'takeUpdated' },
-    'xstate.done.actor.comment.*': { actions: 'takeCommentWritten' },
-    'xstate.done.actor.thread.*': { actions: 'takeThreadWritten' },
+    'xstate.done.actor.comment.*': { actions: 'takeDiscussionWritten' },
+    'xstate.done.actor.thread.*': { actions: 'takeDiscussionWritten' },
 
     // User actions
     'pr.SELECT_PR_BY_NUMBER': { actions: 'selectPRAndLoadDiff' },
@@ -1316,7 +1305,7 @@ export const pullRequestState = machine.extend({
     'pr.DETAILS_LEFT': { actions: stopAsks(DETAILS) },
     'pr.DISCUSSION_LEFT': { actions: stopAsks(COMMENTS, THREADS) },
     // A folder opening leaves every read, and the checkout asked of the folder before
-    'pr.READS_LEFT': { actions: [stopAsks(...READS, CHECKOUT_BASE)] },
+    'pr.READS_LEFT': { actions: stopAsks(...READS, CHECKOUT_BASE) },
   },
 });
 

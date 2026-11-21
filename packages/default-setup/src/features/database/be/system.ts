@@ -41,7 +41,6 @@ const replaced = () => broadcastToSurface('database', { type: 'DATABASE_REPLACED
  */
 export const answers = databaseSpec.answers({
   EXECUTE_QUERY: ({ args }) => ran('Query execution', () => executeQuery(args.code)),
-  // The window that ran it asks for the schema again; every other one shows the schema it last asked for
   EXECUTE_TRANSACTION: ({ args }) => ran('Transaction execution', () => executeTransaction(args.code)),
   GET_FLOW_RUNS: () => {
     try {

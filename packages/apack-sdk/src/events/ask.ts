@@ -1,11 +1,13 @@
 // An ask: an event a system answers exactly once, with what it was asked for or with why it could not be done.
 //
-// A system's contract declares its asks (`asks`), each with the fields it takes, what it answers with and the ways
-// it may fail that an asker can act on. The system answers them with a table (`defineSystem`'s `answers`), and
-// whoever asked gets one of two standard events back, correlated by the envelope's call like any reply:
-// `ASK_ANSWERED` with the answer, or `ASK_FAILED` with a failure of a kind and a message. An asker that wants the
-// answer as a value awaits it (`ask`, or `fromAsk` for a machine to invoke), and one that fires and goes on — a
-// surface's writes over a view it shows — handles the two events.
+// A system's contract declares its asks (`asks`), each with the fields it takes, what it answers with, what it may
+// say before answering and the ways it may fail that an asker can act on. The system answers them with a table
+// (`defineSystem`'s `answers`). An asker gets how the ask ended as a value: it awaits `ask`, or its machine invokes
+// or spawns `fromAsk`.
+//
+// On the wire the answer is one of two standard messages, correlated by the envelope's call like any reply:
+// `ASK_ANSWERED` with the answer, or `ASK_FAILED` with a failure of a kind and a message, with `ASK_PROGRESS` before
+// either for what the handler said meanwhile. The ask that was made takes them, and no machine handles one.
 //
 // Two kinds every ask may fail as, whatever its contract says: `failed`, for anything its handler did not name (a
 // bug, a disk that gave out), and `unavailable`, for an ask nothing took — the system is not running, or the state
@@ -30,7 +32,7 @@ export interface AskDeclaration {
   progress?: unknown;
 }
 
-/** The two answers an ask gets, as values: every surface and every system receives them */
+/** What comes back for an ask, as message types: its progress and its two answers. Every surface and system receives them */
 export const ASK_ANSWER_TYPES = ['ASK_ANSWERED', 'ASK_FAILED', 'ASK_PROGRESS'] as const;
 
 /** What an asker sends to stop an ask it no longer waits on: the handler's `signal` aborts. Every system accepts it */

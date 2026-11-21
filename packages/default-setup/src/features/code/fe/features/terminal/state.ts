@@ -2,6 +2,7 @@ import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
 import { fromAsk, sendToSystem } from '#generated/events.ts';
 import type { AnswerPayload, AskName, AskOutcome } from '@apackdev/sdk/events';
 import { safeEvents } from '@apackdev/sdk/helpers';
+import { askId, endedAsk } from '@apackdev/sdk/fe';
 import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts';
 import { terminalPool } from '../../utils/terminal-pool.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
@@ -120,11 +121,14 @@ export interface CodeTerminalContext {
    */
   statusNotified: Record<string, true>
   /**
-   * The last of this window's asks that was not done, held until the canvas has told the person: a terminal that is
-   * not there, a shell that would not start. A new object for each, so two failures with one message are two
+   * This window's asks that were not done, each held until the canvas has told the person: a terminal that is not
+   * there, a shell that would not start. An object for each, so two failures with one message are two
    */
-  failure: { message: string } | null
+  failures: readonly TerminalAskFailure[]
 }
+
+/** An ask of this window's that was not done, as the canvas tells it */
+export interface TerminalAskFailure { message: string }
 
 /** The terminal asks of the code system */
 type TerminalAsks = { [K in Extract<AskName<CodeSystemContract>, `terminal.${string}`>]: CodeSystemContract['asks'][K] }
@@ -184,8 +188,8 @@ export type Event =
   | { type: 'terminal.STATUS'; data: { terminalId: string; statuses: TerminalStatus[] } }
   /** The person is looking at that terminal: what was waiting for them to is no longer */
   | { type: 'terminal.SEEN'; terminalId: string }
-  // The person was told of the failure held: the canvas says so once it has shown it
-  | { type: 'terminal.FAILURE_TOLD' }
+  // The person was told of these failures, which stop being held: the canvas says so as it shows them
+  | { type: 'terminal.FAILURES_TOLD'; told: readonly TerminalAskFailure[] }
   /** The machine's own timers: a bell's flash ends, and its window closes. Not sent by anything else. */
   | { type: 'terminal.BELL_FLASH_ENDED'; terminalId: string }
   | { type: 'terminal.BELL_WINDOW_ENDED'; terminalId: string }
@@ -199,10 +203,6 @@ export type Event =
   | { type: 'terminal.RESIZED'; data: TerminalGrid }
 
 const typeOf = safeEvents<Event>()
-
-/** The id the next ask of a kind is spawned under, which no other ask has */
-let spawned = 0
-const askId = <Name extends keyof SpawnedAsks>(name: Name): `${Name}.${number}` => `${name}.${++spawned}`
 
 /** How the ask an event ends ended; throws for an event that ends none, which is an action on the wrong transition */
 function outcomeIn(event: Event): AskEnded['output'] {
@@ -268,18 +268,25 @@ export const terminalState = setup({
     },
   },
   actions: {
-    /** An ask that ended is no longer this machine's child */
+    /** An ask that ended stops being this machine's child */
     forgetAsk: enqueueActions(({ enqueue, event }) => {
-      if ('actorId' in event) enqueue.stopChild(event.actorId)
+      const id = endedAsk(event)
+      enqueue.stopChild(id)
     }),
 
     /**
      * An ask of this window's that was not done, kept for the canvas to tell the person. The window that asked is the
      * one that shows it: the system answers a failure to its asker and tells nobody else
      */
-    noteAskFailure: assign(({ event }) => {
+    noteAskFailure: assign(({ context, event }) => {
       const outcome = outcomeIn(event)
-      return outcome.ok ? {} : { failure: { message: outcome.failure.message } }
+      return outcome.ok ? {} : { failures: [...context.failures, { message: outcome.failure.message }] }
+    }),
+
+    /** The failures the canvas told the person of stop being held; one noted since is still to tell */
+    forgetToldFailures: assign(({ context, event }) => {
+      const { told } = typeOf('terminal.FAILURES_TOLD', event)
+      return { failures: context.failures.filter(failure => !told.includes(failure)) }
     }),
 
     /** The intent is recorded under the id its ask is spawned under, which is what the ask's ending names */
@@ -415,9 +422,8 @@ export const terminalState = setup({
     /**
      * A shell died badly and its terminal stays.
      *
-     * **Removing it is what used to happen and is what loses the error.** A shell that exits 0 still sends
-     * `terminal.CLOSED` and the terminal still goes; this is the other case, where the screen holds the
-     * reason the user now wants to read.
+     * **Removing it would lose the error.** A shell that exits 0 sends `terminal.CLOSED` and the terminal goes;
+     * this is the other case, where the screen holds the reason the user wants to read.
      */
     markTerminalCrashed: assign({
       terminals: ({ context, event }) => {
@@ -528,8 +534,8 @@ export const terminalState = setup({
 
     /** A create that ended stops being outstanding, and what it meant goes with it */
     forgetOpen: assign(({ context, event }) => {
-      if (!('actorId' in event)) return {}
-      const { [event.actorId]: _ended, ...pendingOpens } = context.pendingOpens
+      const id = endedAsk(event)
+      const { [id]: _ended, ...pendingOpens } = context.pendingOpens
       return { pendingOpens }
     }),
 
@@ -753,7 +759,7 @@ export const terminalState = setup({
      */
     handleTerminalOpened: enqueueActions(({ enqueue, context, self, event }) => {
       const terminalInfo = answerIn('create', event)
-      const { target, command } = ('actorId' in event ? context.pendingOpens[event.actorId] : undefined) ?? { target: null, command: null }
+      const { target, command } = context.pendingOpens[endedAsk(event)] ?? { target: null, command: null }
       enqueue(() => {
         if (target === 'tab') {
           // Explicit tab target — create canvas tab
@@ -869,7 +875,7 @@ export const terminalState = setup({
     bells: {},
     notifying: {},
     statusNotified: {},
-    failure: null
+    failures: []
   },
   on: {
     'terminal.CREATE': {
@@ -907,8 +913,8 @@ export const terminalState = setup({
     CODE_STARTED: {
       target: '.listing', reenter: true
     },
-    // The news, which every window takes: the list grows and nothing else happens
-    // A terminal exists, in some window: ask for the list again, which the system answers this window alone
+    // News, which every window takes: a terminal exists, in some window. The list is asked for again, which the
+    // system answers this window alone, and nothing else happens
     'terminal.CREATED': {
       target: '.listing', reenter: true
     },
@@ -939,7 +945,7 @@ export const terminalState = setup({
     'terminal.TITLED': { actions: 'noteActivity' },
     'terminal.STATUS': { actions: ['notifyStatus', 'takeStatuses'] },
     'terminal.SEEN': { actions: ['markSeen', 'tellStatusSeen'] },
-    'terminal.FAILURE_TOLD': { actions: assign({ failure: null }) },
+    'terminal.FAILURES_TOLD': { actions: 'forgetToldFailures' },
     'terminal.KEEP': { actions: 'keepTerminal' },
     'terminal.KEPT': { actions: ['markKept', 'describeTerminal'] },
     'terminal.REWIND': { actions: 'askForRewind' },
@@ -949,7 +955,7 @@ export const terminalState = setup({
     'terminal.RESIZED': {
       actions: ['updateTerminalGrid', 'describeTerminal']
     },
-    // How each of this window's asks ended: its answer taken, or its failure kept for the panel to tell
+    // How each of this window's asks ended: its answer taken, or its failure kept for the canvas to tell
     'xstate.done.actor.create.*': [
       { guard: 'answered', actions: ['handleTerminalOpened', 'forgetOpen', 'forgetAsk'] },
       { actions: ['forgetOpen', 'noteAskFailure', 'forgetAsk'] },

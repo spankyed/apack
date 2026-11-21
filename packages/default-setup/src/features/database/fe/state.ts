@@ -1,6 +1,6 @@
-import { assign, enqueueActions, setup, type ActorRefFrom, type DoneActorEvent } from 'xstate'
+import { assign, setup, type ActorRefFrom, type DoneActorEvent } from 'xstate'
 import breadcrumb from '@apackdev/sdk/fe'
-import { contextMenu, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
+import { askUnderWay, contextMenu, enqueueAsks, noAsks, type AsksUnderWay, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import { targetIs, TRAIL_CLICK, type TrailClickEvent } from '@apackdev/sdk/fe'
 import type { AskOutcome } from '@apackdev/sdk/events'
@@ -19,10 +19,10 @@ export const id = 'database' as const;
 export type DatabaseState = ActorRefFrom<typeof databaseState>
 
 /**
- * The asks this window has under way, each a child of the surface under the id here for as long as it is: an ask of
- * one kind replaces the one before it, and its outcome arrives as `xstate.done.actor.<id>`. They are children rather
- * than states because the shell reads a surface's breadcrumbs off its top-level states, which the explorer and the
- * backup view are, and an ask outlives a move between the two.
+ * The asks this window has under way, each a child of the surface under the id here for as long as it is, and
+ * recorded in the context's `asking`: an ask of one kind replaces the one before it, and its outcome arrives as
+ * `xstate.done.actor.<id>`. They are children rather than states because the shell reads a surface's breadcrumbs off
+ * its top-level states, which the explorer and the backup view are, and an ask outlives a move between the two.
  */
 const QUERY = 'query' as const
 const TRANSACTION = 'transaction' as const
@@ -40,15 +40,14 @@ const NODE_DETAILS = 'nodeDetails' as const
 const ROW_ASKS = [QUERY, TRANSACTION, FLOW_RUNS, FLOW_EVENTS] as const
 
 /** A surface's snapshot, as far as telling which asks are under way needs it */
-type WithChildren = { children: Record<string, unknown> }
-const underWay = (snapshot: WithChildren, ask: string): boolean => snapshot.children[ask] !== undefined
+type WithAsks = { context: { asking: AsksUnderWay } }
 
 /** Whether a query or a transaction is running */
-export const isRunningCode = (snapshot: WithChildren): boolean => underWay(snapshot, QUERY) || underWay(snapshot, TRANSACTION)
+export const isRunningCode = ({ context }: WithAsks): boolean => askUnderWay(context.asking, QUERY, TRANSACTION)
 /** Whether the run history is being read: the flow runs, or a page of one's events */
-export const isLoadingRuns = (snapshot: WithChildren): boolean => underWay(snapshot, FLOW_RUNS) || underWay(snapshot, FLOW_EVENTS)
-export const isExporting = (snapshot: WithChildren): boolean => underWay(snapshot, EXPORT)
-export const isImporting = (snapshot: WithChildren): boolean => underWay(snapshot, IMPORT)
+export const isLoadingRuns = ({ context }: WithAsks): boolean => askUnderWay(context.asking, FLOW_RUNS, FLOW_EVENTS)
+export const isExporting = ({ context }: WithAsks): boolean => askUnderWay(context.asking, EXPORT)
+export const isImporting = ({ context }: WithAsks): boolean => askUnderWay(context.asking, IMPORT)
 
 /** Database replacement invalidates row results and outstanding requests, not the query editor or preferences. */
 function emptyDatabaseResults() {
@@ -163,14 +162,14 @@ const databaseState = setup({
   },
   actions: {
     /* ── the schema, followed from the shell's start, in a delivery naming the surface ── */
-    followSchema: enqueueActions(({ enqueue }) => {
+    followSchema: enqueueAsks(({ enqueue }) => {
       enqueue.stopChild(SCHEMA_VIEW);
       enqueue.spawnChild('schemaView', { id: SCHEMA_VIEW });
     }),
     setSchema: assign(({ event }) => ({ schema: typeOf('SCHEMA.READ', event).schema })),
     setSchemaError: assign(({ event }) => ({ error: typeOf('SCHEMA.FAILED', event).error })),
     /** Any window replaced the data: what this one shows names rows that may be gone, and so would what it asked for */
-    dropReplacedResults: enqueueActions(({ enqueue }) => {
+    dropReplacedResults: enqueueAsks(({ enqueue }) => {
       for (const ask of ROW_ASKS) enqueue.stopChild(ask);
       enqueue.assign(emptyDatabaseResults());
     }),
@@ -189,7 +188,7 @@ const databaseState = setup({
      * under way, so the result shown is the last one asked for. Deleting a row is a transaction that asks for the
      * current query again once it is done, which is why the two are not one ask.
      */
-    executeQuery: enqueueActions(({ context, event, enqueue }) => {
+    executeQuery: enqueueAsks(({ context, event, enqueue }) => {
       // The query typed, or the current one again after a deletion
       const code = event.type === 'QUERY.EXECUTE' ? event.code : context.currentQuery;
       enqueue.stopChild(QUERY);
@@ -197,7 +196,7 @@ const databaseState = setup({
       enqueue.spawnChild('executeQuery', { id: QUERY, input: { code } });
     }),
 
-    executeTransaction: enqueueActions(({ event, enqueue }) => {
+    executeTransaction: enqueueAsks(({ event, enqueue }) => {
       const code = event.type === 'ENTITY.DELETE'
         ? `write('${event.entityId}').destroy(); return { deleted: '${event.entityId}' };`
         : typeOf('TRANSACTION.EXECUTE', event).code;
@@ -211,7 +210,7 @@ const databaseState = setup({
       return { currentQuery: ev.code };
     }),
 
-    queryDone: enqueueActions(({ event, enqueue }) => {
+    queryDone: enqueueAsks(({ event, enqueue }) => {
       const { output } = typeOf('xstate.done.actor.query', event);
       enqueue.stopChild(QUERY);
       enqueue.assign(output.ok
@@ -219,7 +218,7 @@ const databaseState = setup({
         : { error: output.failure.message });
     }),
 
-    transactionDone: enqueueActions(({ event, enqueue }) => {
+    transactionDone: enqueueAsks(({ event, enqueue }) => {
       const { output } = typeOf('xstate.done.actor.transaction', event);
       enqueue.stopChild(TRANSACTION);
       if (!output.ok) {
@@ -238,7 +237,7 @@ const databaseState = setup({
 
     /* ── ai query ───────────────────────────────── */
     /** Answered as soon as the flow that writes the query has started: the query arrives later, from that flow */
-    generateAiQuery: enqueueActions(({ event, enqueue }) => {
+    generateAiQuery: enqueueAsks(({ event, enqueue }) => {
       const ev = typeOf('AI_QUERY.GENERATE', event);
       if (!ev.prompt?.trim()) {
         console.error('Invalid prompt provided for AI query generation');
@@ -249,7 +248,7 @@ const databaseState = setup({
     }),
 
     /** Generating a query was refused as it was asked: said where a query's error is */
-    aiQueryAsked: enqueueActions(({ event, enqueue }) => {
+    aiQueryAsked: enqueueAsks(({ event, enqueue }) => {
       const { output } = typeOf('xstate.done.actor.aiQuery', event);
       enqueue.stopChild(AI_QUERY);
       if (!output.ok) enqueue.assign({ error: output.failure.message, isAiQueryLoading: false });
@@ -291,20 +290,20 @@ const databaseState = setup({
     /* ── run history viewer actions ──────────────────────── */
     toggleViewMode: assign(({ context }) => ({ viewMode: context.viewMode === 'database' ? 'runs' as const : 'database' as const })),
 
-    requestFlowRuns: enqueueActions(({ enqueue }) => {
+    requestFlowRuns: enqueueAsks(({ enqueue }) => {
       enqueue.stopChild(FLOW_RUNS);
       enqueue.spawnChild('getFlowRuns', { id: FLOW_RUNS, input: {} });
     }),
 
     /** The page of the current flow's events at the offset the context has reached, in place of any being read */
-    requestFlowEvents: enqueueActions(({ context, enqueue }) => {
+    requestFlowEvents: enqueueAsks(({ context, enqueue }) => {
       enqueue.stopChild(FLOW_EVENTS);
       if (!context.currentFlowId) return;
       const { offset, limit } = context.runPagination;
       enqueue.spawnChild('getFlowEvents', { id: FLOW_EVENTS, input: { flowId: context.currentFlowId, offset, limit } });
     }),
 
-    flowRunsDone: enqueueActions(({ context, event, enqueue }) => {
+    flowRunsDone: enqueueAsks(({ context, event, enqueue }) => {
       const { output } = typeOf('xstate.done.actor.flowRuns', event);
       enqueue.stopChild(FLOW_RUNS);
       if (!output.ok) return;
@@ -322,15 +321,15 @@ const databaseState = setup({
     })),
 
     /** One page at a time: a page asked for while another is coming would move the offset the list is built from */
-    loadMoreEvents: enqueueActions(({ context, enqueue, self }) => {
-      if (!context.currentFlowId || !context.runPagination.hasMore || underWay(self.getSnapshot(), FLOW_EVENTS)) return;
+    loadMoreEvents: enqueueAsks(({ context, enqueue }) => {
+      if (!context.currentFlowId || !context.runPagination.hasMore || askUnderWay(context.asking, FLOW_EVENTS)) return;
       const { limit } = context.runPagination;
       const offset = context.runPagination.offset + limit;
       enqueue.assign({ runPagination: { ...context.runPagination, offset } });
       enqueue.spawnChild('getFlowEvents', { id: FLOW_EVENTS, input: { flowId: context.currentFlowId, offset, limit } });
     }),
 
-    flowEventsDone: enqueueActions(({ context, event, enqueue }) => {
+    flowEventsDone: enqueueAsks(({ context, event, enqueue }) => {
       const { output } = typeOf('xstate.done.actor.flowEvents', event);
       enqueue.stopChild(FLOW_EVENTS);
       if (!output.ok) return;
@@ -346,7 +345,7 @@ const databaseState = setup({
       });
     }),
 
-    expandNode: enqueueActions(({ event, context, enqueue, self }) => {
+    expandNode: enqueueAsks(({ event, context, enqueue }) => {
       const ev = typeOf('RUNS.EXPAND_NODE', event);
       const newExpanded = new Set(context.expandedNodes);
 
@@ -356,7 +355,7 @@ const databaseState = setup({
         newExpanded.add(ev.nodeId);
         // Its details are asked for unless they are held or already being read
         const ask = `${NODE_DETAILS}.${ev.nodeId}` as const;
-        if (!context.nodeDetails.has(ev.nodeId) && !underWay(self.getSnapshot(), ask)) {
+        if (!context.nodeDetails.has(ev.nodeId) && !askUnderWay(context.asking, ask)) {
           enqueue.spawnChild('getNodeDetails', { id: ask, input: { nodeId: ev.nodeId } });
         }
       }
@@ -366,7 +365,7 @@ const databaseState = setup({
       });
     }),
 
-    nodeDetailsDone: enqueueActions(({ event, context, enqueue }) => {
+    nodeDetailsDone: enqueueAsks(({ event, context, enqueue }) => {
       if (!isNodeDetailsDone(event)) return;
       const { output, actorId } = event;
       enqueue.stopChild(actorId);
@@ -377,36 +376,36 @@ const databaseState = setup({
     }),
 
     /* ── backup actions ─────────────────────────────────── */
-    requestBackupInfo: enqueueActions(({ event, enqueue }) => {
+    requestBackupInfo: enqueueAsks(({ event, enqueue }) => {
       enqueue.stopChild(BACKUP_INFO);
       enqueue.spawnChild('getBackupInfo', { id: BACKUP_INFO, input: { path: typeOf('BACKUP.READ_INFO', event).path } });
     }),
 
-    backupInfoDone: enqueueActions(({ event, enqueue }) => {
+    backupInfoDone: enqueueAsks(({ event, enqueue }) => {
       const { output } = typeOf('xstate.done.actor.backupInfo', event);
       enqueue.stopChild(BACKUP_INFO);
       if (output.ok) enqueue.assign({ backupInfo: output.value.info });
     }),
 
-    exportBackup: enqueueActions(({ event, enqueue }) => {
+    exportBackup: enqueueAsks(({ event, enqueue }) => {
       const { path, name, databases } = typeOf('BACKUP.EXPORT', event);
       enqueue.stopChild(EXPORT);
       enqueue.spawnChild('exportDatabase', { id: EXPORT, input: { path, name, databases } });
     }),
 
-    importBackup: enqueueActions(({ event, enqueue }) => {
+    importBackup: enqueueAsks(({ event, enqueue }) => {
       const { path, skipUnknownDatabases } = typeOf('BACKUP.IMPORT', event);
       enqueue.stopChild(IMPORT);
       enqueue.spawnChild('importDatabase', { id: IMPORT, input: { path, skipUnknownDatabases } });
     }),
 
-    exportDone: enqueueActions(({ event, enqueue }) => {
+    exportDone: enqueueAsks(({ event, enqueue }) => {
       const { output } = typeOf('xstate.done.actor.export', event);
       enqueue.stopChild(EXPORT);
       enqueue.assign({ backupResult: { operation: 'export' as const, error: output.ok ? undefined : output.failure.message } });
     }),
 
-    importDone: enqueueActions(({ event, enqueue }) => {
+    importDone: enqueueAsks(({ event, enqueue }) => {
       const { output } = typeOf('xstate.done.actor.import', event);
       enqueue.stopChild(IMPORT);
       // An import that was done replaced the data, which `dropReplacedResults` has answered before this
@@ -425,12 +424,12 @@ const databaseState = setup({
     }),
 
     /* ── reset database actions ─────────────────────────── */
-    resetDatabase: enqueueActions(({ enqueue }) => {
+    resetDatabase: enqueueAsks(({ enqueue }) => {
       enqueue.stopChild(RESET);
       enqueue.spawnChild('resetDatabase', { id: RESET, input: {} });
     }),
 
-    resetDone: enqueueActions(({ event, enqueue }) => {
+    resetDone: enqueueAsks(({ event, enqueue }) => {
       const { output } = typeOf('xstate.done.actor.reset', event);
       enqueue.stopChild(RESET);
       // A reset that was done replaced the data, which `dropReplacedResults` has answered before this
@@ -442,6 +441,7 @@ const databaseState = setup({
   initial: 'explorer',
   context: () => ({
     ...emptyDatabaseResults(),
+    asking: noAsks(),
     schema: {
       entities: [],
       attributes: [],

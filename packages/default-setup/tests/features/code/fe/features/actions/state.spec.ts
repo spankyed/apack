@@ -56,7 +56,7 @@ it('puts the saved action in its tab, unmodified, and leaves the tab as it was w
   actor.send({ type: 'codeActions.SAVE_ACTION', actionId: 'a', content: 'new' });
   expect(asks.map(ask => [ask.type, ask.input])).toEqual([['codeActions.SAVE_ACTION', { actionId: 'a', actionFn: 'new' }]]);
   end(asks[0]!, { ok: false, failure: { kind: 'not-found', message: 'Action a not found' } });
-  await new Promise<void>(resolve => setImmediate(resolve));
+  await vi.waitFor(() => expect(childIds(actor), 'the refused save ended').toEqual([]));
   expect(parent.updates, 'a refused save changes no tab').toEqual([]);
 
   actor.send({ type: 'codeActions.SAVE_ACTION', actionId: 'a', content: 'new' });

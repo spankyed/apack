@@ -106,7 +106,7 @@ import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDra
 import { useSelector } from '@xstate/vue'
 import { type CodeState, type OpenFile, setEditorSelectionGetter, isEditableDiff } from '../state.ts'
 import { GitCompare, FileCode, Terminal } from 'lucide-vue-next'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, watchPostEffect } from 'vue'
 import FileEditor from '#features/code/fe/canvas/FileEditor.vue'
 import QuickOpenPalette from '#features/code/fe/canvas/QuickOpenPalette.vue'
 import { reorderTabs } from '../utils/tab-management.ts'
@@ -118,15 +118,17 @@ const explorerActor = panelChild(actor, 'explorer')
 const terminalActor = panelChild(actor, 'terminal')
 
 // A terminal ask of this window's that was not done is told here, the one place drawn whenever the surface is: the
-// system answers it to this window alone. One that ended while the surface was not shown is told as it is shown
+// system answers it to this window alone. One that ended while the surface was not shown is told as it is shown.
+// Telling and saying so are one step, run once the toast is drawn: the machine drops exactly the failures told, so
+// none is told twice and one noted meanwhile is told by the next run
 const toast = ref<InstanceType<typeof ToastNotification>>()
-const terminalFailure = useSelector(terminalActor, (state) => state?.context.failure ?? null)
-watch(terminalFailure, async (failed) => {
-  if (!failed) return
-  await nextTick()
-  toast.value?.error('Terminal error', failed.message)
-  terminalActor?.send({ type: 'terminal.FAILURE_TOLD' })
-}, { immediate: true })
+const terminalFailures = useSelector(terminalActor, (state) => state?.context.failures ?? [])
+watchPostEffect(() => {
+  const told = terminalFailures.value
+  if (!toast.value || told.length === 0) return
+  for (const failure of told) toast.value.error('Terminal error', failure.message)
+  terminalActor?.send({ type: 'terminal.FAILURES_TOLD', told })
+})
 const commitActor = panelChild(actor, 'commit')
 
 // State selectors

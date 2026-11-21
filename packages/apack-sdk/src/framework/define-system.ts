@@ -1,7 +1,7 @@
 import { _withPerformanceEvent } from '../runtime/performance.ts';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
-import { _answered, _askEnded, _askFailureOf, _askSignal, _clientOf, _currentDelivery, _failedAnswer, _progressed, _refuse, _replyTo, ASK_ANSWER_TYPES, ASK_CANCELLED, type AnswerPayload, type ProgressPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskPayload, type AskFailed, type AskProgressed, type AskName, type AskEventsOf, type ContractAsks, type RefuseOf } from '../events/index.ts';
+import { _answered, _askEnded, _askFailureOf, _askSignal, _clientOf, _currentDelivery, _failedAnswer, _progressed, _refuse, _replyTo, ASK_ANSWER_TYPES, ASK_CANCELLED, type AnswerPayload, type ProgressPayload, type AskAnswered, type AskDeclaration, type AskPayload, type AskFailed, type AskProgressed, type AskName, type AskEventsOf, type ContractAsks, type RefuseOf } from '../events/index.ts';
 import { reportError } from '../logger/report-error.ts';
 import type { ArrayChanges } from '../utils/change-detection.ts';
 import { eventTypes } from '../events/event-types.ts';
@@ -163,8 +163,8 @@ const isCreatorResult = (value: unknown): boolean =>
 
 /**
  * Hands a handler the connection the message it handles arrived on, bound at entry so a handler that awaits or
- * stores it still has the right one: what it sends that window (`sendToWindow(client, …)`, a feed beside an
- * answer) goes there and nowhere else.
+ * stores it still has the right one: what it sends that window alone (`sendToWindow(client, …)`) goes there and
+ * nowhere else.
  */
 const handing = <F>(handler: F): F => {
   if (typeof handler !== 'function' || isCreatorResult(handler)) return handler;
@@ -216,14 +216,27 @@ export interface Handlers<TContext extends MachineContext, TEvent extends EventO
   };
 }
 
-/** What a child machine's ask handler is handed: as a system's (`AnswerArgs`), over the child's own context */
+/**
+ * What an ask's handler is handed, over the context and events of the machine that takes the ask: a system's
+ * (`AnswerArgs`), or a child's that a system forwards the ask to
+ */
 export interface ChildAnswerArgs<TContext extends MachineContext, TEvent extends EventObject, A, K extends keyof A & string> {
+  /** The ask, as the asker sent it */
   readonly args: { type: K } & AskPayload<A[K]>;
+  /** The machine's context as the ask arrived: a handler reads it, and changes it by sending its machine an event */
   readonly context: TContext;
+  /** The machine's own actor, to send it an event — a state the answer moves it into */
   readonly self: Args<TContext, TEvent>['self'];
+  /** Aborts when the window that asked goes, and when whoever asked stops the ask */
   readonly signal: AbortSignal;
+  /** The connection the ask arrived on, absent for one another system made */
   readonly client?: string;
+  /**
+   * Tells whoever asked something before the answer, as the ask declares under `progress`. Only they hear it, and
+   * nothing is told once `signal` has aborted
+   */
   readonly progress: (update: ProgressPayload<A[K]>) => void;
+  /** Builds a refusal of one of the kinds the ask declares, for the handler to throw */
   readonly refuse: RefuseOf<A[K]>;
 }
 
@@ -251,25 +264,7 @@ const answersOf = (handlers: Record<string, (args: object) => unknown>) => ({
 });
 
 /** What one of a system's ask handlers is handed */
-export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
-  /** The ask, as the asker sent it */
-  readonly args: AskEventOf<C, K>;
-  /** The system's context as the ask arrived: a handler reads it, and changes it by sending its machine an event */
-  readonly context: ContractContext<C>;
-  /** The system's own actor, to send it an event — a state the answer moves it into */
-  readonly self: SystemArgs<C>['self'];
-  /** Aborts when the window that asked goes, and when whoever asked stops the ask */
-  readonly signal: AbortSignal;
-  /** The connection the ask arrived on, absent for one another system made */
-  readonly client?: string;
-  /**
-   * Tells whoever asked something before the answer, as the ask declares under `progress`. Only they hear it, and
-   * nothing is told once `signal` has aborted
-   */
-  readonly progress: (update: ProgressPayload<ContractAsks<C>[K]>) => void;
-  /** Builds a refusal of one of the kinds the ask declares, for the handler to throw */
-  readonly refuse: RefuseOf<ContractAsks<C>[K]>;
-}
+export type AnswerArgs<C extends SystemContract, K extends AskName<C>> = ChildAnswerArgs<ContractContext<C>, MachineEvents<C>, ContractAsks<C>, K>;
 
 /** One of a system's ask handlers: it returns the answer, or a promise of it, and throws a refusal */
 export type AnswerHandler<C extends SystemContract, K extends AskName<C>> =

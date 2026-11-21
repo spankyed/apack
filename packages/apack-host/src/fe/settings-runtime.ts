@@ -17,9 +17,6 @@ export interface WindowSettingsIO {
 
 const refused = (message: string): SettingsWriteResult => ({ status: 'refused', problems: [message] });
 
-/** The settings system's asks, whose answers this runtime takes */
-const SETTINGS_ASKS: ReadonlySet<string> = new Set(['GET_SETTINGS', 'RECOVER_SETTINGS', 'UPDATE_SETTINGS', 'RESET_SETTINGS', 'RESET_ALL_SETTINGS', 'REPLACE_SETTINGS']);
-
 /** One window owns this resource; the Settings view is an ordinary subscriber. */
 export function createWindowSettingsRuntime(io: WindowSettingsIO) {
   const logger = createLogger('settings-window');
@@ -259,9 +256,10 @@ export function createWindowSettingsRuntime(io: WindowSettingsIO) {
       if (message.to !== HOST.settings) return false;
       const event = message.event;
       if (event.type === 'SETTINGS_RECOVERY') return takeRecovery((event as { recovery?: unknown }).recovery, message.answering);
-      // An answer to one of the settings system's asks is this runtime's, and goes to whichever of its asks it names
+      // An answer is this runtime's when it answers an ask this runtime is waiting on: its read, or a change. Any
+      // other is an ask somebody else in the window made, and goes on to them
       if (isAskAnswer(event)) {
-        if (!SETTINGS_ASKS.has(event.asked)) return false;
+        if (message.answering === undefined || (message.answering !== readCall && !pending.has(message.answering))) return false;
         answered(message.answering, event.type === 'ASK_ANSWERED' ? { ok: true, value: event.answer } : { ok: false, failure: event.failure as AskFailure });
         return true;
       }

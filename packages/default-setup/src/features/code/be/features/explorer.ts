@@ -80,10 +80,6 @@ const answers = handlers.answers<ExplorerAsks>({
     await repository.writeFile(path, content)
     return { path }
   }),
-  'explorer.CREATE_FILE': ({ args: { path, content }, context }) => overFiles(context, path, async (repository) => {
-    await repository.writeFile(path, content || '')
-    return { path }
-  }),
   'explorer.DELETE_FILE': ({ args: { path }, context }) => overFiles(context, path, async (repository) => {
     await repository.deleteFile(path)
     return { path }
@@ -96,7 +92,6 @@ const answers = handlers.answers<ExplorerAsks>({
     await repository.createDirectory(path)
     return { path }
   }),
-  'explorer.GET_FILE_INFO': ({ args: { path }, context }) => overFiles(context, path, repository => repository.getFileInfo(path)),
   'explorer.QUICK_OPEN_SEARCH': ({ args: { baseDirectory }, context }) => overFiles(context, baseDirectory, repository => repository.getAllFiles(baseDirectory)),
   'explorer.MOVE_FILES': ({ args: { sourcePaths, targetDir }, context, self }) => overFiles(context, targetDir, async (repository) => {
     const movedPaths: string[] = []

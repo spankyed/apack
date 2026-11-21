@@ -1,16 +1,39 @@
 import type { PromptTab } from '../../contract.ts';
 export type { PromptTab } from '../../contract.ts';
-import { setup, enqueueActions, type ActorRefFrom, type DoneActorEvent, type OutputFrom } from 'xstate';
+import { setup, enqueueActions, type ActorRefFrom, type AnyActorRef, type DoneActorEvent, type OutputFrom } from 'xstate';
 import { sendToSurface, fromAsk } from '#generated/events.ts';
 import { safeEvents } from '@apackdev/sdk/helpers';
-import { updateParentState, getParentContext, addTabToParent } from '../../utils/parent-communication.ts';
+import { askId, endedAsk } from '@apackdev/sdk/fe';
+import { showTabInParent, updateTabsInParent } from '../../utils/parent-tabs.ts';
 import type { EARS } from '#generated/ears.ts';
 
 // The asks about a prompt's template. Several run at once, one per tab opening or saving, so each is spawned under
 // an id of its own (`open.<n>`, `save.<n>`) and its outcome arrives as that actor's done event
 const openPrompt = fromAsk('code', 'codePrompts.OPEN_PROMPT');
 const savePrompt = fromAsk('code', 'codePrompts.SAVE_PROMPT');
-let asks = 0;
+
+/** The prompt opens in a tab. One that could not be opened opens none */
+function showOpenedPrompt(self: AnyActorRef, output: OutputFrom<typeof openPrompt>): void {
+  if (!output.ok) return
+  const prompt = output.value
+  const tab: PromptTab = {
+    path: `prompt:${prompt.id}`,
+    content: prompt.templateFnContent || prompt.templateFn || '',
+    modified: false,
+    isPrompt: true,
+    promptEntity: prompt,
+  }
+  showTabInParent(self, tab)
+}
+
+/** The saved prompt replaces the one its tab holds. One that could not be saved leaves the tab modified */
+function takeSavedPrompt(self: AnyActorRef, output: OutputFrom<typeof savePrompt>): void {
+  if (!output.ok) return
+  const prompt = output.value
+  updateTabsInParent(self, file => file.isPrompt && file.promptEntity.id === prompt.id
+    ? { ...file, promptEntity: prompt, modified: false }
+    : file)
+}
 
 export type Event =
   | { type: 'codePrompts.OPEN_PROMPT'; promptId: string }
@@ -23,11 +46,10 @@ export type Event =
   /**
    * What the panel asks of the **prompts surface**: its edits, which that surface sends its system.
    *
-   * The panel used to send these straight to that surface from its click handlers. Two things were wrong
-   * with that and the second is why they are here rather than merely tidier: a component is not inside any
-   * delivery, so the send carried no `Message.sender` and the prompts surface had no address to answer — a
-   * refusal or an error had nowhere to go but a toast. A send made from this machine carries the code
-   * surface's ref, because the shell names a surface while it handles anything (`notifySurfaceActor`).
+   * Sent from this machine rather than from the panel's click handlers: a component is not inside any delivery,
+   * so a send it makes carries no `Message.sender` and the prompts surface has no address to answer a refusal or
+   * an error to. A send made from this machine carries the code surface's ref, because the shell names a surface
+   * while it handles anything (`notifySurfaceActor`).
    *
    * The names match what they forward, so the hand-off reads as one; the `codePrompts.` prefix is how the
    * code surface routes an event to this child.
@@ -48,74 +70,19 @@ export const promptsState = setup({
   actions: {
     openPrompt: enqueueActions(({ enqueue, event }) => {
       const { promptId } = typeOf('codePrompts.OPEN_PROMPT', event)
-      enqueue.spawnChild('openPrompt', { id: `open.${++asks}`, input: { promptId } })
+      enqueue.spawnChild('openPrompt', { id: askId('open'), input: { promptId } })
     }),
 
     savePrompt: enqueueActions(({ enqueue, event }) => {
       const ev = typeOf('codePrompts.SAVE_PROMPT', event)
-      enqueue.spawnChild('savePrompt', { id: `save.${++asks}`, input: { promptId: ev.promptId, templateFn: ev.content } })
+      enqueue.spawnChild('savePrompt', { id: askId('save'), input: { promptId: ev.promptId, templateFn: ev.content } })
     }),
 
-    // An ask that ended is no longer this machine's child
+    /** An ask that ended stops being this machine's child */
     forgetAsk: enqueueActions(({ enqueue, event }) => {
-      if ('actorId' in event) enqueue.stopChild(event.actorId)
+      const id = endedAsk(event)
+      enqueue.stopChild(id)
     }),
-
-    // The prompt opens in a tab. One that could not be opened opens none
-    handlePromptSelected: ({ event, self }) => {
-      const { output } = event as DoneActorEvent<OutputFrom<typeof openPrompt>>
-      if (!output.ok) return
-      const data = output.value
-      const ev = { promptId: data.id as string, data }
-      const parentContext = getParentContext(self)
-      const openFiles = parentContext?.openFiles || []
-      const promptPath = `prompt:${ev.promptId}`
-
-      // Check if prompt tab already exists
-      const existingTab = openFiles.find((f: any) => f.path === promptPath)
-
-      if (existingTab) {
-        // Tab already exists, just activate it
-        updateParentState(self, {
-          activeFilePath: promptPath
-        })
-      } else {
-        // Create new prompt tab
-        const promptTab: PromptTab = {
-          path: promptPath,
-          content: ev.data.templateFnContent || ev.data.templateFn || '',
-          modified: false,
-          isPrompt: true,
-          promptEntity: ev.data
-        }
-        addTabToParent(self, promptTab, true)
-      }
-    },
-
-    // The saved prompt replaces the one its tab holds. One that could not be saved leaves the tab modified
-    updatePromptInOpenFiles: ({ event, self }) => {
-      const { output } = event as DoneActorEvent<OutputFrom<typeof savePrompt>>
-      if (!output.ok) return
-      const prompt = output.value
-      const ev = { prompt, promptId: prompt.id as string }
-      const parentContext = getParentContext(self)
-      const openFiles = parentContext?.openFiles || []
-
-      // Update the prompt entity in the open tab
-      const updatedFiles = openFiles.map((file: any) => {
-        if (file.isPrompt && file.promptEntity.id === ev.promptId) {
-          return {
-            ...file,
-            promptEntity: ev.prompt,
-            modified: false
-          }
-        }
-        return file
-      })
-
-      updateParentState(self, { openFiles: updatedFiles })
-    },
-
 
     // The panel's asks of the prompts surface, forwarded from here so each one carries a sender
     updatePromptInputs: ({ event }) => {
@@ -138,11 +105,10 @@ export const promptsState = setup({
       sendToSurface('prompts', { type: 'PROMPT.CREATE_INLINE', label: ev.label, templateFn: ev.templateFn, inputs: ev.inputs })
     },
 
-    // Handle tab restoration
+    /** The tabs a restore had open: one ask for each prompt */
     openPromptTabs: enqueueActions(({ enqueue, event }) => {
-      // Open each prompt
       for (const promptId of typeOf('codePrompts.OPEN_TABS', event).promptIds) {
-        enqueue.spawnChild('openPrompt', { id: `open.${++asks}`, input: { promptId } })
+        enqueue.spawnChild('openPrompt', { id: askId('open'), input: { promptId } })
       }
     })
   }
@@ -161,8 +127,8 @@ export const promptsState = setup({
       actions: 'openPromptTabs'
     },
     // How its asks ended
-    'xstate.done.actor.open.*': { actions: ['handlePromptSelected', 'forgetAsk'] },
-    'xstate.done.actor.save.*': { actions: ['updatePromptInOpenFiles', 'forgetAsk'] },
+    'xstate.done.actor.open.*': { actions: [({ event, self }) => showOpenedPrompt(self, event.output), 'forgetAsk'] },
+    'xstate.done.actor.save.*': { actions: [({ event, self }) => takeSavedPrompt(self, event.output), 'forgetAsk'] },
     // The panel's asks of the prompts surface
     'codePrompts.UPDATE_INPUTS': { actions: 'updatePromptInputs' },
     'codePrompts.UPDATE_LABEL': { actions: 'updatePromptLabel' },

@@ -143,7 +143,7 @@ it('opens two terminals asked for together the way each was asked for', async ()
  *
  * Without the removal on the failure path a create that failed would leave its target and command in the map for
  * the life of the surface — and the map is the one piece of state here that grows per ask. The failure is kept for
- * the panel to tell the person, since the window that asked is the only one told.
+ * the canvas to tell the person, since the window that asked is the only one told.
  */
 it('holds an intent only while its ask is outstanding, and keeps a failure to show', async () => {
   const actor = createActor(terminalState).start();
@@ -157,7 +157,7 @@ it('holds an intent only while its ask is outstanding, and keeps a failure to sh
   actor.send({ type: 'terminal.CREATE', command: 'fails' });
   await create(1).refuse('no shell');
   expect(pendingOpens(actor), 'settled by the failure too').toEqual([]);
-  expect((actor.getSnapshot().context as { failure: unknown }).failure).toEqual({ message: 'no shell' });
+  expect(actor.getSnapshot().context.failures).toEqual([{ message: 'no shell' }]);
   expect(parent.updateParentState, 'and nothing was opened for it').toHaveBeenCalledTimes(1);
   expect(Object.keys(actor.getSnapshot().children), 'an ask that ended is no longer a child').toEqual([]);
 });
@@ -170,7 +170,25 @@ it('keeps the failure of an ask that only needed doing', async () => {
   expect(latestAsk('terminal.CLOSE_TERMINAL').event).toEqual({ type: 'terminal.CLOSE_TERMINAL', terminalId: 't-gone' });
   await latestAsk('terminal.CLOSE_TERMINAL').refuse('Terminal not found');
 
-  expect((actor.getSnapshot().context as { failure: unknown }).failure).toEqual({ message: 'Terminal not found' });
+  expect(actor.getSnapshot().context.failures).toEqual([{ message: 'Terminal not found' }]);
+});
+
+/** The canvas tells what it has shown, and a failure noted while it was showing those is still to tell */
+it('holds every failure until it is told, and drops only the ones told', async () => {
+  const actor = createActor(terminalState).start();
+  const failures = () => actor.getSnapshot().context.failures;
+
+  actor.send({ type: 'terminal.CLOSE', terminalId: 't-1' });
+  actor.send({ type: 'terminal.RESTART', terminalId: 't-2' });
+  await latestAsk('terminal.CLOSE_TERMINAL').refuse('first');
+  await latestAsk('terminal.RESTART_TERMINAL').refuse('second');
+  expect(failures(), 'the second does not replace the first').toEqual([{ message: 'first' }, { message: 'second' }]);
+
+  const told = failures();
+  actor.send({ type: 'terminal.RENAME', terminalId: 't-3', customTitle: 'x' });
+  await latestAsk('terminal.RENAME_TERMINAL').refuse('third');
+  actor.send({ type: 'terminal.FAILURES_TOLD', told });
+  expect(failures()).toEqual([{ message: 'third' }]);
 });
 
 /** The list wanted is the one as it stands now: news arriving while it is asked for asks again */

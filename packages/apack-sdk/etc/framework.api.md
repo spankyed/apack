@@ -20,15 +20,7 @@ import type { SearchDeclaration } from '@apackdev/ears';
 import { z } from 'zod';
 
 // @public
-export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
-    readonly args: AskEventOf<C, K>;
-    readonly client?: string;
-    readonly context: ContractContext<C>;
-    readonly progress: (update: ProgressPayload<ContractAsks<C>[K]>) => void;
-    readonly refuse: RefuseOf<ContractAsks<C>[K]>;
-    readonly self: SystemArgs<C>['self'];
-    readonly signal: AbortSignal;
-}
+export type AnswerArgs<C extends SystemContract, K extends AskName<C>> = ChildAnswerArgs<ContractContext<C>, MachineEvents<C>, ContractAsks<C>, K>;
 
 // @public
 export type AnswerHandler<C extends SystemContract, K extends AskName<C>> = (args: AnswerArgs<C, K>) => AnswerPayload<ContractAsks<C>[K]> | PromiseLike<AnswerPayload<ContractAsks<C>[K]>>;
@@ -97,21 +89,14 @@ export type BlockDeclaration = z.infer<typeof BlockEntrySchema>;
 
 // @public
 export interface ChildAnswerArgs<TContext extends MachineContext, TEvent extends EventObject, A, K extends keyof A & string> {
-    // (undocumented)
     readonly args: {
         type: K;
     } & AskPayload<A[K]>;
-    // (undocumented)
     readonly client?: string;
-    // (undocumented)
     readonly context: TContext;
-    // (undocumented)
     readonly progress: (update: ProgressPayload<A[K]>) => void;
-    // (undocumented)
     readonly refuse: RefuseOf<A[K]>;
-    // (undocumented)
     readonly self: Args<TContext, TEvent>['self'];
-    // (undocumented)
     readonly signal: AbortSignal;
 }
 

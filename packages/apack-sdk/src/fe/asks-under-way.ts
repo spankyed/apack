@@ -18,6 +18,23 @@ export const noAsks = (): AsksUnderWay => ({})
 /** Whether any of the asks spawned under `ids` is under way */
 export const askUnderWay = (asking: AsksUnderWay, ...ids: string[]): boolean => ids.some((id) => id in asking)
 
+let spawned = 0
+
+/**
+ * The id to spawn one ask of `kind` under, where several of a kind are under way at once: `<kind>.<n>`, so one
+ * transition, `xstate.done.actor.<kind>.*`, takes how each ended. Unique in the window, whichever machine asks
+ */
+export const askId = <Kind extends string>(kind: Kind): `${Kind}.${number}` => `${kind}.${++spawned}`
+
+/**
+ * The id of the spawned ask whose end `event` is. It throws for an event that ends none, which is an action wired to
+ * a transition other than an ask's done event
+ */
+export function endedAsk(event: { type: string }): string {
+  if ('actorId' in event && typeof event.actorId === 'string') return event.actorId
+  throw new Error(`Expected the done event of a spawned ask, got ${event.type}`)
+}
+
 interface Enqueue {
   (action: unknown): void
   spawnChild(src: unknown, options?: { id?: string }): void

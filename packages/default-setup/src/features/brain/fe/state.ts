@@ -1,4 +1,4 @@
-import { assign, enqueueActions, setup, type ActorRefFrom, type DoneActorEvent } from 'xstate';
+import { assign, enqueueActions, setup, stopChild, type ActorRefFrom, type DoneActorEvent } from 'xstate';
 import type { AskOutcome } from '@apackdev/sdk/events';
 import { safeEvents } from '@apackdev/sdk/fe';
 import type { SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
@@ -49,12 +49,14 @@ type UIEvent =
 
 type SurfaceEvent = SurfaceLifecycleEvent
 
-/** How an ask for a node's details ends: the done event of the ask spawned under `details.<n>` */
-type DetailsEnded = DoneActorEvent<AskOutcome<BrainAsks['GET_RUN_NODE_DETAILS']>, `details.${number}`>
+/** The id the ask for the selected node's details is spawned under: one at a time */
+const DETAILS = 'details'
+
+/** How the ask for a node's details ends */
+type DetailsEnded = DoneActorEvent<AskOutcome<BrainAsks['GET_RUN_NODE_DETAILS']>, typeof DETAILS>
 
 export type BrainEvents = UIEvent | SystemEvent | SurfaceEvent | TrailClickEvent | DetailsEnded
 
-let detailsAsked = 0
 const typeOf = safeEvents<BrainEvents>()
 
 function brainStateContext({ rootFlowId, startError, paused, inspectEnabled }: BrainStateEvent) {
@@ -201,14 +203,12 @@ const brainState = setup({
         : firstChildNode(context);
       return nodeId ? { selectedStepNode: { id: nodeId } as any } : {};
     }),
-    /** Stops the ask for details under way, if any: the one this machine has spawned under `details.<n>` */
-    forgetDetails: enqueueActions(({ self, enqueue }) => {
-      for (const id of Object.keys(self.getSnapshot().children)) if (id.startsWith('details.')) enqueue.stopChild(id)
-    }),
+    /** Stops the ask for details, under way or ended */
+    forgetDetails: stopChild(DETAILS),
     /** Asks for the selected node's details, in place of any ask for them under way */
-    askDetails: enqueueActions(({ context, self, enqueue }) => {
-      for (const id of Object.keys(self.getSnapshot().children)) if (id.startsWith('details.')) enqueue.stopChild(id)
-      if (context.selectedStepNode) enqueue.spawnChild('runNodeDetails', { id: `details.${++detailsAsked}`, input: { runNodeId: context.selectedStepNode.id } })
+    askDetails: enqueueActions(({ context, enqueue }) => {
+      enqueue.stopChild(DETAILS)
+      if (context.selectedStepNode) enqueue.spawnChild('runNodeDetails', { id: DETAILS, input: { runNodeId: context.selectedStepNode.id } })
     }),
     closeDetails: assign({
       selectedStepNode: undefined
@@ -458,7 +458,7 @@ const brainState = setup({
         ],
         CLOSE_DETAILS: { actions: ['forgetDetails', 'closeDetails'] },
         BRAIN_KILLED: { actions: ['forgetDetails', 'setBrainKilled'] },
-        'xstate.done.actor.details.*': {
+        'xstate.done.actor.details': {
           // Details that could not be read leave the node selected by its id
           actions: ['forgetDetails', assign(({ event }) => (event.output.ok ? { selectedStepNode: event.output.value.details || undefined } : {}))],
         },

@@ -69,7 +69,7 @@ export const searchState = setup({
     }),
 
     hearSearch: assign(({ context, event }) => {
-      const { update } = event as ProgressEventOf<CodeSystemContract, 'search.SEARCH_FILES'>
+      const { update } = typeOf('search.SEARCH_FILES.progress', event)
       return 'result' in update ? { searchResults: [...context.searchResults, update.result] } : { searchProgress: update.progress }
     }),
 

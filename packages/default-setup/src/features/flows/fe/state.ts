@@ -1,4 +1,4 @@
-import { entityIs, viewRead, viewWrites, writeEnded, writeSent, writing } from '@apackdev/sdk/fe'
+import { askId, endedAsk, entityIs, viewRead, viewWrites, writeEnded, writeSent, writing } from '@apackdev/sdk/fe'
 import type { AskOutcome, OpenEntity } from '@apackdev/sdk/events'
 import { outcomeOf } from '@apackdev/sdk/helpers'
 import { and, assign, enqueueActions, setup, spawnChild, stopChild, type ActorRefFrom, type DoneActorEvent } from 'xstate'
@@ -80,7 +80,7 @@ const HANDLE_OCCUPIED_ERROR = 'This step already has an outbound connection'
 
 /**
  * What the machine asks the flows system, by the kind of ask it is to the machine: each is spawned under
- * `<kind>.<n>`, so any number of a kind are under way at once and one transition, `xstate.done.actor.<kind>.*`, takes
+ * `<kind>.<n>` (`askId`), so any number of a kind are under way at once and one transition, `xstate.done.actor.<kind>.*`, takes
  * how each ended.
  */
 type AskKinds = {
@@ -94,15 +94,8 @@ type AskKinds = {
   write: 'DELETE_FLOW' | 'UPDATE_FLOW_LABEL' | 'UPDATE_NODE' | 'DELETE_NODE' | 'DELETE_EDGE' | 'UPDATE_EDGE' | 'REINDEX_HANDLES' | 'SET_ROOT_FLOW'
 }
 
-let asked = 0
-/** The id one ask of `kind` is spawned under */
-const askId = <Kind extends keyof AskKinds>(kind: Kind): `${Kind}.${number}` => `${kind}.${++asked}`
-
 /** How the asks of each kind end: the done event of the ask spawned under that kind's id */
 type AskEnded = { [Kind in keyof AskKinds]: DoneActorEvent<AskOutcome<FlowsAsks[AskKinds[Kind]]>, `${Kind}.${number}`> }
-
-/** The id of the spawned ask whose end `event` is */
-const endedAsk = (event: FlowsEvents): string => 'actorId' in event ? event.actorId : ''
 
 /** A graph write, asked where the edit is made: its ask's id recorded in the same assignment, for its end to settle */
 const withWrite = (writes: FlowsContext['writes'], ask: string): { writes: FlowsContext['writes'] } =>

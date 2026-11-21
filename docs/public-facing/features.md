@@ -254,6 +254,12 @@ about is reported to the user; a success nobody asked about goes nowhere. An ask
 
 A surface's machine does not handle an answer as an event: the ask it invoked or spawned takes it.
 
+A machine that spawns asks and needs to know whether one is under way — to ignore a second click, to show a spinner —
+keeps `asking: AsksUnderWay` in its context, starting as `noAsks()`, and spawns and stops through `enqueueAsks` and
+`stopAsks` (`@apackdev/sdk/fe`), which keep it. `askUnderWay(context.asking, id)` then answers in a guard, an action
+and a component alike. `askId(kind)` gives an id for one of several asks of a kind, and `endedAsk(event)` the id of
+the ask a done event ends.
+
 A spec driving the whole system asks with `app.ask(system, event, { client?, signal?, heard? })`, which resolves to
 the `Outcome`. The `ask-answers` pack rule refuses an `ASK_ANSWERED`, `ASK_FAILED` or `ASK_PROGRESS` written by hand
 in a pack's source: they are how an answer travels, and never a pack's to write.

@@ -30,7 +30,7 @@ import { defineSystem } from '@apackdev/sdk/framework'
 import { AppGitRepository, GIT_COMMAND_LOG, openGitRepository, openGitWatcher, repositoryHandle, repositoryOf, watcherHandle, watcherOf } from './services/app-git-repository.ts'
 import { gitWatcherActor } from './git-watcher-actor.ts'
 
-// child systems; their events come from the contract, which is where every child's now live
+// The child systems, whose events and asks the contract declares
 import { explorerSystem } from './features/explorer.ts'
 import { searchSystem } from './features/search.ts'
 import { commitSystem } from './features/commit.ts'

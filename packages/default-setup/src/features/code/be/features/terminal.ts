@@ -70,15 +70,15 @@ export function startTerminalSizing(): () => void {
 }
 
 /**
- * Where a terminal's news and its exit go — **given to the service before the session exists**, not
- * registered after it returns, so nothing a shell does first has nowhere to go.
- */
-/**
  * The bells this backend process has emitted. The id is unique within a run, which is all a bell's identity needs:
  * the main process forgets a shown id within a minute, and no terminal keeps its id across a restart.
  */
 let bellCount = 0
 
+/**
+ * Where a terminal's news and its exit go — **given to the service before the session exists**, not
+ * registered after it returns, so nothing a shell does first has nowhere to go.
+ */
 const terminalHandlers = {
   onEvent(terminalId: string, event: TerminalEvent) {
     switch (event.kind) {
@@ -380,9 +380,9 @@ export const terminalSystem = setup({
         onDone: {
           target: 'idle',
         },
-        // **A rejection here used to stop the terminal system for the session** (L1), in silence: with no
-        // `onError` the machine stays in `initializing`, so every ask waiting for the restore waits for
-        // ever and the surface shows an empty list. Restoring is best-effort — what it restores is a convenience, and the
+        // **A rejection with no `onError` stops the terminal system for the session** (L1), in silence: the
+        // machine stays in `initializing`, so every ask waiting for the restore waits for ever and the
+        // surface shows an empty list. Restoring is best-effort — what it restores is a convenience, and the
         // previous run's processes are gone either way — so a failure is reported and the system goes on.
         //
         // **Nothing fires this branch today, and all three ways in are closed** — checked 2026-11-08, so

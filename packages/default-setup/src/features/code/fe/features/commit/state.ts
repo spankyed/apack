@@ -1,7 +1,7 @@
-import { setup, assign, type ActorRefFrom, type DoneActorEvent } from 'xstate';
+import { setup, assign, raise, type ActorRefFrom, type DoneActorEvent } from 'xstate';
 import type { AnswerPayload, AskOutcome, ContractAsks, ProgressEventOf } from '@apackdev/sdk/events';
 import { safeEvents } from '@apackdev/sdk/helpers';
-import { askUnderWay, enqueueAsks, noAsks, type AsksUnderWay } from '@apackdev/sdk/fe';
+import { askId, askUnderWay, endedAsk, enqueueAsks, noAsks, type AsksUnderWay } from '@apackdev/sdk/fe';
 import type { CommitStatus, Contract as CodeSystemContract, GitFailure } from '#features/code/be/contract.ts';
 import { fromAsk, sendToSystem } from '#generated/events.ts';
 import { updateParentState, getParentContext, addTabToParent, sendEventToParent } from '../../utils/parent-communication.ts';
@@ -326,11 +326,6 @@ type Spawned = (typeof SPAWNED)[number]
 /** How a spawned ask ended: the done event of the actor it ran as, whose id begins with the ask's name */
 type AskDone = { [K in Spawned]: { type: `xstate.done.actor.${K}.${string}`; actorId: string; output: AskOutcome<Asks[K]> } }[Spawned]
 
-let spawned = 0
-
-/** An id for a spawned ask to run under: the ask's name, which its done event is taken by, and a number of its own */
-const askId = (ask: Spawned): string => `${ask}.${++spawned}`
-
 /** Whether a child of the machine is a spawned ask that is read of one folder, which goes when the folder does */
 const ofOneFolder = (id: string): boolean => SPAWNED.some(ask => ask !== 'commit.GET_GIT_DIFF' && id.startsWith(`${ask}.`))
 
@@ -346,25 +341,23 @@ function diffRefresh(refreshes: Record<string, string>, file: { path: string; st
   return { id, before, refreshes: { ...others, [id]: tab }, input: { path: file.path, staged: file.staged } }
 }
 
-/**
- * The asks of which one of a kind is under way at a time, each spawned under the id here: the machine holds the ask
- * as its child until it ends or is stopped, so whether one is under way is read off a snapshot
- * (`askUnderWay(context.asking, PUSH)`), and stopping the child gives the ask up on the backend
- */
+// The asks of which one of a kind is under way at a time, each spawned under the id here: the machine holds the ask
+// as its child until it ends or is stopped, so whether one is under way is read off a snapshot
+// (`askUnderWay(context.asking, PUSH)`), and stopping the child gives the ask up on the backend
 
 /** The status read the user asked for, which the panel shows as loading */
 export const STATUS_SHOWN = 'statusShown'
 /** A status read behind what is shown, which stays as it is until the answer */
-export const STATUS_BEHIND = 'statusBehind'
-export const LOG = 'log'
-export const BRANCHES = 'branches'
-export const STASHES = 'stashes'
-export const WORKTREES = 'worktrees'
+const STATUS_BEHIND = 'statusBehind'
+const LOG = 'log'
+const BRANCHES = 'branches'
+const STASHES = 'stashes'
+const WORKTREES = 'worktrees'
 export const PUSH = 'push'
 export const PULL = 'pull'
 export const CHECKOUT = 'checkout'
 export const CREATE_BRANCH = 'createBranch'
-export const SUBMODULE = 'submodule'
+const SUBMODULE = 'submodule'
 export const COMMIT = 'commit'
 export const AMEND = 'amend'
 export const STASH = 'stash'
@@ -376,10 +369,10 @@ export const SIGN_IN = 'signIn'
 export const HUNK = 'hunk'
 export const MOVE_OPERATION = 'moveOperation'
 export const START_OPERATION = 'startOperation'
-export const BLAME = 'blame'
-export const REWORD = 'reword'
-export const TAG_PUSH = 'tagPush'
-export const TAG_DELETE = 'tagDelete'
+const BLAME = 'blame'
+const REWORD = 'reword'
+const TAG_PUSH = 'tagPush'
+const TAG_DELETE = 'tagDelete'
 export const RESET = 'reset'
 
 /** Every id an ask of one kind runs under: what the machine stops when the folder they were asked of is left */
@@ -427,9 +420,11 @@ export const commitUnderWay = (asking: AsksUnderWay): boolean => askUnderWay(ask
 /** Whether a branch is being checked out or made */
 export const checkoutUnderWay = (asking: AsksUnderWay): boolean => askUnderWay(asking, CHECKOUT, CREATE_BRANCH)
 
+/** A worktree being added or removed, and the code surface being moved to one: one of the three at a time */
+const WORKTREE_CHANGES = [WORKTREE_ADD, WORKTREE_REMOVE, WORKTREE_SWITCH] as const
+
 /** Whether a worktree is being added or removed, or the code surface moved to one */
-export const worktreeChangeUnderWay = (asking: AsksUnderWay): boolean =>
-  askUnderWay(asking, WORKTREE_ADD, WORKTREE_REMOVE, WORKTREE_SWITCH)
+export const worktreeChangeUnderWay = (asking: AsksUnderWay): boolean => askUnderWay(asking, ...WORKTREE_CHANGES)
 
 /** Why an ask was not done, as the panel shows it: git's failure carries what can be done about it, any other only its message */
 type Refusal = { message: string } & Partial<GitFailure>
@@ -580,9 +575,6 @@ function answerTo<K extends Spawned>(ask: K, event: Event): AnswerPayload<Asks[K
   return event.output.value as AnswerPayload<Asks[K]>
 }
 
-/** The id the spawned ask that ended ran under */
-const askOf = (event: Event): string | undefined => ('actorId' in event ? event.actorId : undefined)
-
 /** The fields of the panel's state that are read from a repository, or wait on an answer from one */
 type OfOneFolder =
   | 'gitStatus'
@@ -702,8 +694,18 @@ const ofNoFolder = (): Pick<CodeCommitContext, OfOneFolder> => ({
   logPath: null,
 })
 
-/** Shows why a spawned ask was not done, in place of what its answer would have done */
-const REFUSED = { guard: 'refused', actions: 'showFailure' } as const
+/** An ask that was not done is let go, and why is shown in place of what its answer would have done */
+const REFUSED = { guard: 'refused', actions: ['endAsk', 'showFailure'] } as const
+
+/** How an ask's end is taken: it is let go, then one that was not done shows why, and one that was does `answered` */
+const ended = <Action extends string>(...answered: Action[]) =>
+  [REFUSED, { actions: ['endAsk', ...answered] as ('endAsk' | Action)[] }]
+
+/** How a status read's end is taken: a failure is the status read's own, which the next one that succeeds clears */
+const STATUS_ENDED = [
+  { guard: 'refused', actions: ['endAsk', 'showFailure', 'markStatusFailed'] },
+  { actions: ['endAsk', 'takeStatus', 'followOpenFolders'] },
+] as const
 
 export const commitState = setup({
   types: {
@@ -720,17 +722,30 @@ export const commitState = setup({
       return refusal ? failureShown(refusal) : {}
     }),
 
-    /** What Undo would take back after the write a spawned ask made, where its answer could say */
+    /** What Undo would take back after the write an ask made, where its answer could say */
     takeUndoable: assign(({ context, event }) => {
       const answer = 'output' in event && event.output.ok ? event.output.value : undefined
       return undoableAfter(context, answer && typeof answer === 'object' && 'undoable' in answer ? { undoable: answer.undoable } : undefined)
     }),
 
-    refreshGitStatus: enqueueAsks(({ enqueue }) => { enqueue.raise({ type: 'commit.READ_STATUS' }) }),
-    requestLogList: enqueueAsks(({ enqueue }) => { enqueue.raise({ type: 'commit.LOG_LIST' }) }),
-    requestStashList: enqueueAsks(({ enqueue }) => { enqueue.raise({ type: 'commit.STASH_LIST' }) }),
-    requestWorktreeList: enqueueAsks(({ enqueue }) => { enqueue.raise({ type: 'commit.WORKTREE_LIST' }) }),
-    getAllBranches: enqueueAsks(({ enqueue }) => { enqueue.raise({ type: 'commit.GET_ALL_BRANCHES' }) }),
+    /** Lets go of the ask whose end the event is: it is under way until then */
+    endAsk: enqueueAsks(({ event, enqueue }) => {
+      const id = endedAsk(event)
+      enqueue.stopChild(id)
+    }),
+
+    refreshGitStatus: raise({ type: 'commit.READ_STATUS' }),
+    requestLogList: raise({ type: 'commit.LOG_LIST' }),
+    requestStashList: raise({ type: 'commit.STASH_LIST' }),
+    requestWorktreeList: raise({ type: 'commit.WORKTREE_LIST' }),
+    getAllBranches: raise({ type: 'commit.GET_ALL_BRANCHES' }),
+
+    takeStatus: assign(({ context, event }) => {
+      const { output } = typeOf([`xstate.done.actor.${STATUS_SHOWN}`, `xstate.done.actor.${STATUS_BEHIND}`], event)
+      return output.ok ? statusShown(context, output.value) : {}
+    }),
+
+    markStatusFailed: assign({ statusFailed: true }),
 
     /** How far along the command under way is, as its ask says */
     hearProgress: assign({ progress: ({ context, event }) => ('update' in event ? event.update : context.progress) }),
@@ -798,7 +813,7 @@ export const commitState = setup({
      * puts the file back where it is when the write was refused
      */
     settleStaging: enqueueAsks(({ context, event, enqueue }) => {
-      const writes = context.stagingWrites.filter(id => id !== askOf(event))
+      const writes = context.stagingWrites.filter(id => id !== endedAsk(event))
       enqueue.assign({ stagingWrites: writes })
       if (writes.length === 0) enqueue.raise({ type: 'commit.READ_STATUS' })
     }),
@@ -827,8 +842,8 @@ export const commitState = setup({
      * diff that was read again, so its failing is said to nobody, and the tab stays as it was
      */
     handleDiffRead: enqueueAsks(({ enqueue, self, event, context }) => {
-      const id = askOf(event)
-      const refreshed = id !== undefined && id in context.diffRefreshes
+      const id = endedAsk(event)
+      const refreshed = id in context.diffRefreshes
       if (refreshed) {
         const { [id]: _ended, ...pending } = context.diffRefreshes
         enqueue.assign({ diffRefreshes: pending })
@@ -1132,8 +1147,8 @@ export const commitState = setup({
 
     /** A stash's files, for the index its ask was made about: the list has not moved since, or the ask was stopped */
     stashFilesRead: assign(({ context, event }) => {
-      const id = askOf(event)
-      if (id === undefined || !(id in context.stashFileAsks)) return {}
+      const id = endedAsk(event)
+      if (!(id in context.stashFileAsks)) return {}
       const { [id]: index, ...pending } = context.stashFileAsks
       return { stashFileAsks: pending, ...(refusalIn(event) ? {} : { stashFiles: { ...context.stashFiles, [index!]: answerTo('commit.GET_STASH_CHANGES', event).files } }) }
     }),
@@ -1244,53 +1259,53 @@ export const commitState = setup({
     'commit.HIDDEN': { actions: assign({ isShown: false }) },
 
     // How each spawned ask ended, by the ask: one that was not done shows why, and one that was does what its answer is for
-    'xstate.done.actor.commit.GET_GIT_DIFF.*': { actions: 'handleDiffRead' },
-    'xstate.done.actor.commit.STAGE_FILES.*': { actions: ['showFailure', 'settleStaging'] },
-    'xstate.done.actor.commit.UNSTAGE_FILES.*': { actions: ['showFailure', 'settleStaging'] },
-    'xstate.done.actor.commit.LIST_UNTRACKED.*': [REFUSED, { actions: 'folderListed' }],
-    'xstate.done.actor.commit.READ_TRAILERS.*': [REFUSED, { actions: 'setTrailers' }],
-    'xstate.done.actor.commit.REMOVE_TRAILER.*': [REFUSED, { actions: ['takeMessageWithoutTrailer', 'followTrailers'] }],
-    'xstate.done.actor.commit.REVERT_FILE.*': [REFUSED, { actions: ['handleFileReverted', 'setLastDiscard', 'refreshGitStatus'] }],
-    'xstate.done.actor.commit.REVERT_FILES.*': [REFUSED, { actions: ['setLastDiscard', 'refreshGitStatus'] }],
-    'xstate.done.actor.commit.PREVIEW_DISCARD.*': [REFUSED, { actions: 'setDiscardPreview' }],
-    'xstate.done.actor.commit.RESTORE_DISCARDED.*': [REFUSED, { actions: ['handleDiscardRestored', 'refreshGitStatus'] }],
+    'xstate.done.actor.commit.GET_GIT_DIFF.*': { actions: ['endAsk', 'handleDiffRead'] },
+    'xstate.done.actor.commit.STAGE_FILES.*': { actions: ['endAsk', 'showFailure', 'settleStaging'] },
+    'xstate.done.actor.commit.UNSTAGE_FILES.*': { actions: ['endAsk', 'showFailure', 'settleStaging'] },
+    'xstate.done.actor.commit.LIST_UNTRACKED.*': ended('folderListed'),
+    'xstate.done.actor.commit.READ_TRAILERS.*': ended('setTrailers'),
+    'xstate.done.actor.commit.REMOVE_TRAILER.*': ended('takeMessageWithoutTrailer', 'followTrailers'),
+    'xstate.done.actor.commit.REVERT_FILE.*': ended('handleFileReverted', 'setLastDiscard', 'refreshGitStatus'),
+    'xstate.done.actor.commit.REVERT_FILES.*': ended('setLastDiscard', 'refreshGitStatus'),
+    'xstate.done.actor.commit.PREVIEW_DISCARD.*': ended('setDiscardPreview'),
+    'xstate.done.actor.commit.RESTORE_DISCARDED.*': ended('handleDiscardRestored', 'refreshGitStatus'),
     'xstate.done.actor.commit.UNDO_LAST.*': [
       // The commit to be undone is already on a remote branch: undone only once the user says so, and this says why
       {
         guard: ({ event }) => !event.output.ok && event.output.failure.kind === 'published',
-        actions: assign({ undoConfirmation: ({ event }) => refusalIn(event)?.message ?? null }),
+        actions: ['endAsk', assign({ undoConfirmation: ({ event }) => refusalIn(event)?.message ?? null })],
       },
       REFUSED,
-      { actions: [assign({ undoConfirmation: null }), 'takeUndoable'] },
+      { actions: ['endAsk', assign({ undoConfirmation: null }), 'takeUndoable'] },
     ],
-    'xstate.done.actor.commit.TRUST_REPOSITORY.*': [REFUSED, { actions: ['repositoryTrusted', 'refreshGitStatus'] }],
-    'xstate.done.actor.commit.TRUST_OWNERSHIP.*': [REFUSED, { actions: ['repositoryTrusted', 'refreshGitStatus'] }],
-    'xstate.done.actor.commit.RESOLVE_CONFLICT.*': [REFUSED, { actions: 'refreshGitStatus' }],
-    'xstate.done.actor.commit.MARK_RESOLVED.*': [REFUSED, { actions: 'refreshGitStatus' }],
-    'xstate.done.actor.commit.RESOLVE_ALL_CONFLICTS.*': [REFUSED, { actions: 'refreshGitStatus' }],
+    'xstate.done.actor.commit.TRUST_REPOSITORY.*': ended('repositoryTrusted', 'refreshGitStatus'),
+    'xstate.done.actor.commit.TRUST_OWNERSHIP.*': ended('repositoryTrusted', 'refreshGitStatus'),
+    'xstate.done.actor.commit.RESOLVE_CONFLICT.*': ended('refreshGitStatus'),
+    'xstate.done.actor.commit.MARK_RESOLVED.*': ended('refreshGitStatus'),
+    'xstate.done.actor.commit.RESOLVE_ALL_CONFLICTS.*': ended('refreshGitStatus'),
     'xstate.done.actor.commit.REWRITE_COMMIT.*': [
-      { guard: ({ event }) => !event.output.ok && event.output.failure.kind === 'published', actions: 'askToRewritePublished' },
+      { guard: ({ event }) => !event.output.ok && event.output.failure.kind === 'published', actions: ['endAsk', 'askToRewritePublished'] },
       REFUSED,
-      { actions: [assign({ pendingRewrite: null, rewording: null }), 'requestLogList', 'takeUndoable'] },
+      { actions: ['endAsk', assign({ pendingRewrite: null, rewording: null }), 'requestLogList', 'takeUndoable'] },
     ],
-    'xstate.done.actor.commit.PREVIEW_MERGE.*': [REFUSED, { actions: 'handleMergePreviewed' }],
+    'xstate.done.actor.commit.PREVIEW_MERGE.*': ended('handleMergePreviewed'),
     // Answered once the flow has the changes: what it makes of them arrives as `commit.MESSAGE_GENERATED`
-    'xstate.done.actor.commit.GENERATE_MESSAGE.*': {
-      guard: 'refused',
-      actions: ['showFailure', assign({ isGeneratingMessage: false })],
-    },
-    'xstate.done.actor.commit.CREATE_TAG.*': [REFUSED, { actions: ['getAllBranches', 'requestLogList'] }],
-    'xstate.done.actor.commit.RENAME_BRANCH.*': [REFUSED, { actions: ['getAllBranches', 'requestLogList'] }],
+    'xstate.done.actor.commit.GENERATE_MESSAGE.*': [
+      { guard: 'refused', actions: ['endAsk', 'showFailure', assign({ isGeneratingMessage: false })] },
+      { actions: 'endAsk' },
+    ],
+    'xstate.done.actor.commit.CREATE_TAG.*': ended('getAllBranches', 'requestLogList'),
+    'xstate.done.actor.commit.RENAME_BRANCH.*': ended('getAllBranches', 'requestLogList'),
     // A stash applied leaves the message typed as it is; one popped is gone from the list
-    'xstate.done.actor.commit.STASH_APPLY.*': [REFUSED, { actions: ['refreshGitStatus', 'requestStashList'] }],
-    'xstate.done.actor.commit.STASH_POP.*': [REFUSED, { actions: ['refreshGitStatus', 'requestStashList'] }],
-    'xstate.done.actor.commit.STASH_DROP.*': [REFUSED, { actions: 'takeUndoable' }],
-    'xstate.done.actor.commit.STASH_CLEAR.*': [REFUSED, { actions: 'takeUndoable' }],
-    'xstate.done.actor.commit.GET_STASH_CHANGES.*': { actions: ['showFailure', 'stashFilesRead'] },
-    'xstate.done.actor.commit.REVERT_COMMIT.*': [REFUSED, { actions: ['refreshGitStatus', 'requestLogList'] }],
+    'xstate.done.actor.commit.STASH_APPLY.*': ended('refreshGitStatus', 'requestStashList'),
+    'xstate.done.actor.commit.STASH_POP.*': ended('refreshGitStatus', 'requestStashList'),
+    'xstate.done.actor.commit.STASH_DROP.*': ended('takeUndoable'),
+    'xstate.done.actor.commit.STASH_CLEAR.*': ended('takeUndoable'),
+    'xstate.done.actor.commit.GET_STASH_CHANGES.*': { actions: ['endAsk', 'showFailure', 'stashFilesRead'] },
+    'xstate.done.actor.commit.REVERT_COMMIT.*': ended('refreshGitStatus', 'requestLogList'),
     'xstate.done.actor.commit.LIST_REPOSITORIES.*': [
       REFUSED,
-      { actions: assign({ repositories: ({ event }) => answerTo('commit.LIST_REPOSITORIES', event).repositories }) },
+      { actions: ['endAsk', assign({ repositories: ({ event }) => answerTo('commit.LIST_REPOSITORIES', event).repositories })] },
     ],
 
     // The status the panel shows. A read asked for while one is under way replaces it: the one under way is of the
@@ -1311,22 +1326,8 @@ export const commitState = setup({
         enqueue.spawnChild('commit.GET_GIT_STATUS', { id, input: {} })
       }),
     },
-    [`xstate.done.actor.${STATUS_SHOWN}`]: {
-      actions: enqueueAsks(({ context, event, enqueue }) => {
-        enqueue.stopChild(STATUS_SHOWN)
-        if (!event.output.ok) return enqueue.assign({ ...failureShown(event.output.failure), statusFailed: true })
-        enqueue.assign(statusShown(context, event.output.value))
-        enqueue('followOpenFolders')
-      }),
-    },
-    [`xstate.done.actor.${STATUS_BEHIND}`]: {
-      actions: enqueueAsks(({ context, event, enqueue }) => {
-        enqueue.stopChild(STATUS_BEHIND)
-        if (!event.output.ok) return enqueue.assign({ ...failureShown(event.output.failure), statusFailed: true })
-        enqueue.assign(statusShown(context, event.output.value))
-        enqueue('followOpenFolders')
-      }),
-    },
+    [`xstate.done.actor.${STATUS_SHOWN}`]: STATUS_ENDED,
+    [`xstate.done.actor.${STATUS_BEHIND}`]: STATUS_ENDED,
 
     // The history the log shows, a page at a time: a file's while it shows one, from its start or on from the page
     // shown. A page asked for while one is being read replaces it, which stops git walking the one nobody waits for
@@ -1575,44 +1576,27 @@ export const commitState = setup({
     'commit.WORKTREE_ADD': {
       actions: enqueueAsks(({ event, enqueue }) => {
         const { path, branch, createBranch } = event
-        for (const id of [WORKTREE_ADD, WORKTREE_REMOVE, WORKTREE_SWITCH]) enqueue.stopChild(id)
+        for (const id of WORKTREE_CHANGES) enqueue.stopChild(id)
         enqueue.spawnChild('commit.WORKTREE_ADD', { id: WORKTREE_ADD, input: { path, branch, createBranch } })
       }),
     },
     'commit.WORKTREE_REMOVE': {
       actions: enqueueAsks(({ event, enqueue }) => {
         const { path, force } = event
-        for (const id of [WORKTREE_ADD, WORKTREE_REMOVE, WORKTREE_SWITCH]) enqueue.stopChild(id)
+        for (const id of WORKTREE_CHANGES) enqueue.stopChild(id)
         enqueue.spawnChild('commit.WORKTREE_REMOVE', { id: WORKTREE_REMOVE, input: { path, force } })
       }),
     },
     // The folder the surface is over moves with the switch, which the surface hears of as its start
     'commit.WORKTREE_SWITCH': {
       actions: enqueueAsks(({ event, enqueue }) => {
-        for (const id of [WORKTREE_ADD, WORKTREE_REMOVE, WORKTREE_SWITCH]) enqueue.stopChild(id)
+        for (const id of WORKTREE_CHANGES) enqueue.stopChild(id)
         enqueue.spawnChild('commit.WORKTREE_SWITCH', { id: WORKTREE_SWITCH, input: { path: event.path } })
       }),
     },
-    [`xstate.done.actor.${WORKTREE_ADD}`]: {
-      actions: enqueueAsks(({ event, enqueue }) => {
-        enqueue.stopChild(WORKTREE_ADD)
-        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-        enqueue.raise({ type: 'commit.WORKTREE_LIST' })
-      }),
-    },
-    [`xstate.done.actor.${WORKTREE_REMOVE}`]: {
-      actions: enqueueAsks(({ event, enqueue }) => {
-        enqueue.stopChild(WORKTREE_REMOVE)
-        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-        enqueue.raise({ type: 'commit.WORKTREE_LIST' })
-      }),
-    },
-    [`xstate.done.actor.${WORKTREE_SWITCH}`]: {
-      actions: enqueueAsks(({ event, enqueue }) => {
-        enqueue.stopChild(WORKTREE_SWITCH)
-        if (!event.output.ok) enqueue.assign(failureShown(event.output.failure))
-      }),
-    },
+    [`xstate.done.actor.${WORKTREE_ADD}`]: ended('requestWorktreeList'),
+    [`xstate.done.actor.${WORKTREE_REMOVE}`]: ended('requestWorktreeList'),
+    [`xstate.done.actor.${WORKTREE_SWITCH}`]: [REFUSED, { actions: 'endAsk' }],
 
     'commit.SPEED_UP_STATUS': {
       actions: enqueueAsks(({ enqueue }) => {
@@ -1679,12 +1663,7 @@ export const commitState = setup({
         enqueue.spawnChild('commit.MOVE_OPERATION', { id: MOVE_OPERATION, input: { move: event.move } })
       }),
     },
-    [`xstate.done.actor.${MOVE_OPERATION}`]: {
-      actions: enqueueAsks(({ event, enqueue }) => {
-        enqueue.stopChild(MOVE_OPERATION)
-        if (!event.output.ok) enqueue.assign(failureShown(event.output.failure))
-      }),
-    },
+    [`xstate.done.actor.${MOVE_OPERATION}`]: [REFUSED, { actions: 'endAsk' }],
     // Git merging a branch in, rebasing onto one or picking a commit: one that stops on a conflict shows as in progress
     'commit.START_OPERATION': {
       actions: enqueueAsks(({ event, enqueue }) => {
@@ -1694,14 +1673,7 @@ export const commitState = setup({
         enqueue.spawnChild('commit.START_OPERATION', { id: START_OPERATION, input: { kind, target } })
       }),
     },
-    [`xstate.done.actor.${START_OPERATION}`]: {
-      actions: enqueueAsks(({ context, event, enqueue }) => {
-        enqueue.stopChild(START_OPERATION)
-        if (!event.output.ok) return enqueue.assign(failureShown(event.output.failure))
-        enqueue.assign(undoableAfter(context, event.output.value))
-        enqueue.raise({ type: 'commit.LOG_LIST' })
-      }),
-    },
+    [`xstate.done.actor.${START_OPERATION}`]: ended('takeUndoable', 'requestLogList'),
 
     // Who last changed each line of the file the editor shows blame for. Asking for another file's, or clearing it,
     // stops the read under way, which stops git reading it

@@ -41,6 +41,9 @@ export const ALL_COLORS: readonly ["blue", "orange", "purple", "green", "red", "
 export type ArtifactFrontendBinding = ViewerFrontendBinding<ArtifactDeclaration, ArtifactDefinition>;
 
 // @public
+export const askId: <Kind extends string>(kind: Kind) => `${Kind}.${number}`;
+
+// @public
 export interface AskState<Args extends unknown[], O> {
     ask(...args: Args): Promise<O>;
     readonly outcome: O | undefined;
@@ -180,6 +183,11 @@ export function createHotkeyProcessor<const TMap extends Record<string, string>,
 
 // @public (undocumented)
 export function createNavHistory<T>(initial: T): NavHistory<T>;
+
+// @public
+export function endedAsk(event: {
+    type: string;
+}): string;
 
 // @public
 export const enqueueAsks: typeof enqueueActions;

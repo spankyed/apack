@@ -4,7 +4,7 @@ import { ref as featureRef } from '#generated/ref.ts'
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('browser'))
-import { setup, assign, fromCallback, spawnChild, type ActorRefFrom, type DoneActorEvent } from 'xstate';
+import { setup, assign, fromCallback, spawnChild, stopChild, type ActorRefFrom, type DoneActorEvent } from 'xstate';
 import type { BrowserSettings } from '#generated/types.ts';
 import type { Bookmark, BrowserContext, BrowserInboxEvent, BrowserTab, BrowserTabPersistedId } from './contract.ts';
 import { autocomplete, recordVisit, updateHistoryMeta, displayUrl, type AutocompleteSuggestion } from './history.ts';
@@ -564,14 +564,15 @@ const browserState = setup({
             'navigate',
           ],
         },
-        // What the window restores, asked for when the shell starts the surface, in a delivery naming it
+        // What the window restores, asked for when the shell starts the surface, in a delivery naming it: one ask at
+        // a time, a later start's in place of one under way
         SURFACE_STARTED: {
-          actions: spawnChild('savedSession', { id: SAVED_SESSION, input: {} }),
+          actions: [stopChild(SAVED_SESSION), spawnChild('savedSession', { id: SAVED_SESSION, input: {} })],
         },
         // A session that could not be read restores nothing
         [`xstate.done.actor.${SAVED_SESSION}`]: {
-          guard: ({ event }) => event.output.ok,
           actions: [
+            stopChild(SAVED_SESSION),
             assign(({ event }) => (event.output.ok ? {
               tabGroups: loadTabGroups(storage, 'tab-groups'),
               // A page with no favicon is saved without one, which the bar shows as an empty one

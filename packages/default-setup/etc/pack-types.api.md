@@ -10,7 +10,7 @@ import { ActionEntity, ActionParameter, ContentSection, DocumentShortCode, EARS 
 import { ArtifactItem } from '@apackdev/sdk/artifacts';
 import * as _apackdev_sdk_build from '@apackdev/sdk/build';
 import { ContractAsks, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
-import { HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
+import { AsksUnderWay, HotkeysMap, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
 import * as _apackdev_sdk_repositories from '@apackdev/sdk/repositories';
@@ -1064,12 +1064,6 @@ type CommitAsks = {
         } & UndoableAfter;
         refuses: GitFails;
     };
-    'commit.GET_CURRENT_BRANCH': {
-        answer: {
-            branch: string;
-        };
-        refuses: GitFails;
-    };
     'commit.REVERT_FILE': {
         args: {
             path: string;
@@ -1989,6 +1983,8 @@ type DatabaseAsks = {
 };
 
 interface DatabaseContext {
+    /** The asks this window has under way, by the id each is spawned under */
+    asking: AsksUnderWay;
     schema: DatabaseSchemaInfo;
     currentQuery: string;
     queryResult: any;
@@ -2347,16 +2343,6 @@ type ExplorerAsks = {
         };
         refuses: FileFailure;
     };
-    'explorer.CREATE_FILE': {
-        args: {
-            path: string;
-            content?: string;
-        };
-        answer: {
-            path: string;
-        };
-        refuses: FileFailure;
-    };
     'explorer.DELETE_FILE': {
         args: {
             path: string;
@@ -2384,13 +2370,6 @@ type ExplorerAsks = {
         answer: {
             path: string;
         };
-        refuses: FileFailure;
-    };
-    'explorer.GET_FILE_INFO': {
-        args: {
-            path: string;
-        };
-        answer: FileInfo;
         refuses: FileFailure;
     };
     /** Every file under a folder, for quick open */
@@ -5259,7 +5238,7 @@ interface ScheduleNode extends NodeBase {
     cronExpression: string;
 }
 
-/** What a window asks the search, answered by the code system (`searchAnswers`) */
+/** What a window asks the search, answered by the code system's search child (`searchSystem`) */
 type SearchAsks = {
     /**
      * Every match, once the search ends. As it goes it tells whoever asked how far it is and each file's matches as
@@ -6196,6 +6175,13 @@ interface ThreadsContext {
     /** The ask the link form's last save is, by the id it was spawned under, until it ends, and why that save was refused, if it was */
     linkSave: string | null;
     linkRefusal: string | null;
+    /**
+     * The messages, commands and forks of this window's that were not done, until the chat has told the person. A new
+     * object for each, so two failures with one message are two
+     */
+    sendFailures: readonly {
+        readonly message: string;
+    }[];
 }
 
 interface ThreadsContext$1 {
