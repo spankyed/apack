@@ -27,9 +27,15 @@
       <div class="flex-1 h-px bg-neutral-700/50"></div>
     </div>
 
-    <div v-show="!isMarker" class="group max-w-full min-w-0" :class="{ 'w-full': hasNativeToolFrame }">
+    <div v-show="!isMarker" class="group max-w-full min-w-0" :class="{ 'w-full': hasNativeToolFrame || nativeCompaction }">
+      <p v-if="nativeCompaction === 'boundary'" class="flex items-center gap-3 px-4 py-1 text-xs text-neutral-400 before:h-px before:flex-1 before:bg-white/10 after:h-px after:flex-1 after:bg-white/10">{{ message.text }}</p>
+      <details v-else-if="nativeCompaction === 'summary'" class="min-w-0 rounded-lg border border-white/10 px-3 py-2 text-sm">
+        <summary class="cursor-pointer rounded text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Compact summary</summary>
+        <p class="mt-2 whitespace-pre-wrap [overflow-wrap:anywhere] text-neutral-300">{{ message.text }}</p>
+      </details>
+
       <!-- Aside: collapsed interactive message (click to expand) -->
-      <div v-if="message.autoHide && message.asideText && !expanded"
+      <div v-else-if="message.autoHide && message.asideText && !expanded"
            class="text-xs italic py-1 px-2 cursor-pointer hover:bg-neutral-800/50 rounded transition-colors"
            @click="expanded = true">
         <span class="text-neutral-400">{{ asideOutcome }}</span>
@@ -353,6 +359,10 @@ const statusIndicator = computed(() => {
 })
 const isMarker = computed(() => props.message.sender === 'marker')
 const isSystem = computed(() => props.message.sender === 'system')
+const nativeCompaction = computed(() => {
+  const kind = props.message.context?.claudeNativeCompaction
+  if (props.isClaudeCodeThread && isSystem.value && (kind === 'boundary' || kind === 'summary')) return kind
+})
 const isCollapsedAsideAsUser = computed(() =>
   props.message.autoHide && props.message.asideText && !expanded.value && props.message.asUser
 )

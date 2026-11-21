@@ -109,3 +109,22 @@ it('does not project native interruption envelopes as user bubbles but preserves
  expect(projectClaudeTerminalHistory({...entry,row:{...entry.row,origin:{kind:'human'}}})?.sender).toBe('user')
  expect(projectClaudeTerminalHistory({...entry,row:{...entry.row,message:{content:'[Request interrupted by user for tool use]'}}})?.sender).toBe('user')
 })
+
+it('projects original main-session compaction as journal-addressed system history', () => {
+  const boundary = { sessionId, uuid, type: 'system', subtype: 'compact_boundary', content: 'Conversation compacted' }
+  const summary = { sessionId, uuid, type: 'user', isCompactSummary: true, isVisibleInTranscriptOnly: true,
+    message: { content: [{ type: 'text', text: '  Recovered context  ' }] } }
+  expect(projectClaudeTerminalHistory({ sessionId, row: boundary })).toMatchObject({
+    uuid, sender: 'system', text: 'Conversation compacted',
+    context: { cliUuid: uuid, claudeNativeCompaction: 'boundary', claudeTerminalMessage: { uuid, sessionId } },
+  })
+  const projected = projectClaudeTerminalHistory({ sessionId, row: summary })
+  expect(projected).toMatchObject({ uuid, sender: 'system', text: '  Recovered context  ', blocks: [],
+    context: { cliUuid: uuid, claudeNativeCompaction: 'summary', claudeTerminalMessage: { uuid, sessionId } } })
+  expect(projected?.context.claudeNativeUserMessage).toBeUndefined()
+  for (const scope of [{ sessionId: 'foreign' }, { agentId: 'agent' }, { isSidechain: true }, { parent_tool_use_id: 'parent' }]) {
+    expect(projectClaudeTerminalHistory({ sessionId, row: { ...summary, ...scope } })).toBeUndefined()
+    expect(projectClaudeTerminalHistory({ sessionId, row: { ...boundary, ...scope } })).toBeUndefined()
+  }
+  expect(projectClaudeTerminalHistory({ sessionId, row: { ...summary, message: { content: [] } } })).toBeUndefined()
+})

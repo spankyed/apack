@@ -8,6 +8,22 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   uuid: string; sessionId: string; timestamp?: number; sender: 'user' | 'assistant' | 'system'; text: string; blocks: BlockConfig[]; references?: MessageReferences; context: Record<string, unknown>
 } | undefined {
   const source = entry.row
+  const compaction = source.type === 'system' && source.subtype === 'compact_boundary' ? 'boundary'
+    : source.type === 'user' && source.isCompactSummary === true ? 'summary' : undefined
+  if (compaction) {
+    if (source.sessionId !== entry.sessionId || source.isSidechain === true || source.agentId !== undefined || source.parent_tool_use_id
+      || typeof source.uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(source.uuid)) return
+    const content = compaction === 'boundary' ? source.content : object(source.message)?.content
+    const text = typeof content === 'string' ? content : Array.isArray(content)
+      ? content.map(object).flatMap(block => block?.type === 'text' && typeof block.text === 'string' ? [block.text] : []).join('\n')
+      : ''
+    if (!text.trim()) return
+    const timestamp = typeof source.timestamp === 'string' ? Date.parse(source.timestamp) : Number.NaN
+    return { uuid: source.uuid, sessionId: entry.sessionId, sender: 'system', text, blocks: [],
+      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+      context: { cliUuid: source.uuid, claudeTerminalMessage: { uuid: source.uuid, sessionId: entry.sessionId },
+        claudeNativeCompaction: compaction } }
+  }
   // Original ui.log persists a transcript-only informational notice, outside model messages.
   if (source.type === 'system' && source.subtype === 'informational' && source.level === 'notice') {
     if (source.sessionId !== entry.sessionId || source.entrypoint !== 'cli' || source.isSidechain === true

@@ -40,3 +40,21 @@ it('keeps ordinary Claude messages in one shared editor through native drawing r
   expect(root.querySelector('[data-message-id="second-message"] strong')?.textContent).toBe('Updated reply')
   expect(root.querySelectorAll('.ProseMirror')).toHaveLength(1)
 })
+
+it('shows the original main compaction boundary and a closed read-only summary', async () => {
+  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+  startFeTestRuntime({ packs: { textEditor: () => [], onChanged: () => () => {} } as never })
+  const root = document.createElement('div'); document.body.append(root)
+  const rows = [
+    { id: 'boundary', entityType: 'Message', sender: 'system', text: 'Conversation compacted', context: { claudeNativeCompaction: 'boundary' } },
+    { id: 'summary', entityType: 'Message', sender: 'system', text: '<tag>Literal native summary</tag>', context: { claudeNativeCompaction: 'summary' } },
+  ] as MessageEntity[]
+  app = createApp({ render: () => h('main', rows.map(message => h(ChatMessage, { message, isClaudeCodeThread: true }))) })
+  app.mount(root); await settle()
+  expect(root.querySelector('[data-message-id="boundary"] p')?.textContent).toBe('Conversation compacted')
+  const details = root.querySelector<HTMLDetailsElement>('[data-message-id="summary"] details')!
+  expect(details.open).toBe(false)
+  expect(details.querySelector('summary')?.textContent).toBe('Compact summary')
+  expect(details.querySelector('p')?.textContent).toBe('<tag>Literal native summary</tag>')
+  expect(details.querySelector('tag, [contenteditable]')).toBeNull()
+})
