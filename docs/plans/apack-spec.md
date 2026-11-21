@@ -540,6 +540,114 @@ progress, a broadcast, word to a subscriber) until the step commits. This is wha
 parallel regions: an observer never sees them disagree. The same idea is SCXML's macrostep, a Redux dispatch, a signals
 batch, and this repo's own `transact` followed by `watch`.
 
+### Rows
+
+**A step covers what a state holds. On the backend that is the small part.** What the backend holds for good is rows
+in the database, and a handler writes them as it runs, through its repository, outside anything the kernel sees. So
+every rule above about a change being whole holds for a state's data and for none of its rows: a handler that writes
+two rows and throws on the third leaves two, an ask refused after a write has written, and a window can be told of a
+change before the row it is about exists.
+
+Where the app writes, read from each file's syntax tree on `97ee092630`, 2026-11-21, by `prototype/writes-survey.mts`
+and, for the second table, `prototype/writes-shape.mts`. A call counts when it names a write the file imported from
+EARS, or a method of a repository's `…Commands`:
+
+| Where | Write calls | Files |
+|---|---|---|
+| A pack's repository, where its commands are defined | 136 | 8 |
+| A backend system and its helpers | 155 | 20 |
+| The SDK's repositories | 41 | 2 |
+| A flow action | 31 | 15 |
+| The SDK's content appliers and writers | 12 | 3 |
+| Everything else: content writers, two step runtimes, the host's app state, the database console | 11 | 6 |
+
+No surface writes. The host's stores (settings, secrets, the run history) write through an engine they are handed
+and are not counted. Outside the repositories,
+136 functions in the built-in pack write, in 192 calls:
+
+| | Backend systems | Flow actions | Other |
+|---|---|---|---|
+| Functions that write | 111 | 19 | 6 |
+| Of those, one write | 93 | 13 | 5 |
+| Several writes | 18 | 6 | 1 |
+| Several writes, all in one `transact` | 1 | 0 | 0 |
+| Functions that write after an `await` | 12, in 14 writes | 7, in 13 writes | 0 |
+| Functions that send a message and then write | 1 | 0 | 0 |
+
+Three things follow.
+
+- **Most of it is already the shape a step wants.** 165 of the 192 writes are made before the function has waited
+  for anything, in the same run of code that decides the answer. One command is one unit already: a repository
+  wraps its own in `transact`.
+- **What is torn is the handler, not the command.** 25 functions make several writes and one of them makes them as
+  a unit (`CREATE_THREAD`, whose comment says why). `FORK_THREAD` makes five, `UPDATE_NOTE` four, `USER_MSG` three.
+  Each is right on the path that works and leaves part of itself on one that throws.
+- **Only 27 writes sit next to something outside**, a file, a session, a model, since those are what a function
+  waits for. That is the part no database transaction can cover, and it is a seventh of the writes.
+
+**So a step is a transaction.** The kernel runs a step inside one `transact` of the app's database, opened at the
+step's first write and not before. It needs nothing new from elmdb: a step runs to its end without waiting, which
+is what `transact(fn)` takes, a throw undoes it, and one inside another joins it, which the app relies on today.
+
+- **A handler writes as it does now**, with its repository's commands, and reads its own writes back. The 184
+  calls to a command stay as they are.
+- **A step that is refused writes nothing.** A throw, a `refuse`, a change the kernel will not make: the rows go
+  with the data. The 24 torn handlers are whole without being touched.
+- **Nothing leaves before the rows are in.** An answer, a broadcast, progress and word to a subscriber are released
+  after the transaction commits, which is the order they already keep with a state's data. A view runs again after
+  the same commit, so a window is never told of a row it cannot yet read. This is a Durable Object's output gate
+  and the transactional outbox, with the outbox in memory.
+- **A write outside a step is refused**, by the engine a pack is handed, on the line that made it. After an
+  `await` a handler is outside one, and the rule it already has covers this: it only returns. What it returns is a
+  change, a change is made in a step, and a change's function may write as well as edit the draft:
+
+  ```ts
+  run: async ({ data, use }) => {
+    const session = await use('sessions').read(data.path)   // outside: a file
+    return (draft, { repository }) => {                     // a step: rows and data together
+      const { id } = repository.threadCommands.create({ topic: session.topic })
+      draft.imported = id
+    }
+  }
+  ```
+
+  The 27 writes after an `await` move into what is returned, and are the only ones that move.
+
+**What it does not cover, said so that nobody takes it for more:**
+
+- **Anything outside the database.** A commit made in git, a file written, a model called, a terminal started: none
+  can be undone by a transaction, and no design makes two stores change as one. The order is the one the outbox
+  pattern gives: do the outside thing first, in work the state owns, and write the row that says it happened in the
+  step its result arrives in. A crash between the two leaves the outside thing done and unrecorded, so what is
+  recorded has to be something a later look can find again: the commit by its hash, the file by its path.
+- **The run history**, which is a second database with its own engine. A run node is written beside a step and
+  not in it.
+- **A flow action.** An action is not a state: it is work the brain runs, and its 31 writes are each their own
+  unit as now, with `transact` when several belong together. Whether an action's result should carry its writes back
+  to the brain's step is settled when the brain is ported, against the actions.
+- **Durable is later than committed.** A commit is on disk within a second (group commit). An answer released after
+  a commit and before that can outlive its row through a power cut. A handler whose answer must not says
+  `durable: true`, as `transact` takes today, and its step waits.
+- **What a state holds is lost when the process ends; its rows are not.** After a restart a state is rebuilt from
+  rows and what it was given, so anything a backend state must not lose is a row, and its data is working memory.
+  Restoring a state ([Not built](#not-built)) is for a window, which has no rows.
+- **One writer.** LMDB takes one write transaction at a time, across processes. A step holds it from its first
+  write to its end, which is one run of code with no wait in it, and a step that writes nothing never takes it.
+
+**What it is modelled on.** Convex splits a mutation, which is a transaction and may not reach outside, from an
+action, which may and is not one: that is a step and a state's work. A Durable Object holds its replies until its
+writes are stored. Akka Persistence and Orleans make the stored thing the truth and the actor's memory a cache of
+it. Haskell's STM and Mnesia forbid waiting inside a transaction, which the rule about `await` is. What each of them
+declines is the same thing declined here: one transaction over two stores.
+
+**Left for after, and narrower than it first reads: one store for either kind of data.** A state's `data` could be
+kept in memory or in the database behind one interface, so that a backend state's data were rows and a window
+followed them by view. It is worth having for exactly that, a backend state with data several windows show, where
+today the state broadcasts and each window keeps a copy. It is not a way to make everything a row: a window has no
+database, a row is typed by a pack's manifest where data is typed by the state, and a write a second is what a
+draft of text costs in memory and far more in a log. It comes second because it needs the step to be a transaction
+first, and nothing above needs it.
+
 ## Decisions, and what each replaced
 
 | Decision | What was tried first, and why it was dropped |
@@ -587,6 +695,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | A component reads and sends, and cannot ask | Giving `useState` an `ask`. An ask made from a component has no owner to stop it or to say where the state goes if it fails, which is what `run` and `failed` are for |
 | No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
+| A step is one database transaction: rows, data and what is sent change together. A handler writes with its repository as now; after an `await` it returns the writes. | Writes made as the handler runs, outside the step: a refused ask had written, and 24 of 25 handlers with several writes could leave part of them. A handler returning every write as a description, dropped: a command's result (a new id) is read by the next line in most of them, and 165 of 192 writes already sit where a step is open. |
 
 ## What the prototype proves
 
@@ -1084,6 +1193,10 @@ projects. Each would loosen the fit to this app.
 - **Saving a state to disk** is not wanted. A saved state is a stored format that would then have to be kept stable.
   And restoring starts a state's work again, which is right for a search a moment after a reload and wrong for a
   message that was being sent a day ago.
+- **A step as a transaction** ([Rows](#rows)) is decided and not in the prototype, which has no database. It is
+  built with the kernel: a store the kernel opens a unit on, with the app's engine behind it and one in memory for
+  the checks, and checks that a refused step leaves no row, that nothing is sent before the commit, and that a write
+  outside a step throws.
 - **Delayed transitions and history states** are absent. The app uses one delayed transition and no history states.
   A delay, when there is one, goes through the kernel's `later` so that a schedule can choose when it fires.
 - **The kernel's own rough edge.** Reading a state that has ended throws.
@@ -1104,6 +1217,8 @@ projects. Each would loosen the fit to this app.
 - **Static analysis needs the compiler**, and is as precise as the helper types: a loosely typed helper blurs the graph.
 - **A discipline XState avoids by forbidding it.** After an `await` in `run` or an ask, code should only return. The
   kernel drops what a stale task sends through it, and cannot stop a side effect that bypasses it.
+- **A transaction ends at the database.** A step is whole over data, rows and what is sent, and over nothing
+  outside: git, files, models and the run history keep their own time ([Rows](#rows)).
 - **A check before a wait proves nothing about after it.** The change that comes with an answer can check again and
   refuse. What a handler told others or sent as progress on the strength of the earlier check has already gone, and
   no design that does not block can take that back.
@@ -1123,9 +1238,11 @@ ask is the SDK's, so what the move rewrites is the files that define a machine a
    ([What #591 delivered](#what-591-delivered)). A machine goes on naming XState until it is ported.
 2. **Build the kernel in the tree**, with no dependencies, as its own workspace, from the prototype and with its
    checks: the schedule and every ordering, the refusals, what must not compile. Not a sibling repository: its API
-   is the pack contract.
+   is the pack contract. It takes the store a step is a transaction of ([Rows](#rows)) as something it is given, so
+   that it names no database.
 3. **Port the host's bus and shell**, which everything else runs inside. Two things they need are settled here,
-   against the real ones ([Not built](#not-built)): roles, and restoring a state.
+   against the real ones ([Not built](#not-built)): roles, and restoring a state. The host gives the
+   kernel the app's engine as its store, and the engine a pack is handed refuses a write outside a step.
 4. **Put the test harness on it**, so that a feature's specs run against the kernel. From here to the end the app
    does not start, and this is how each port is known to work: a feature is across when its specs pass, unchanged in
    what they assert.
