@@ -3218,6 +3218,7 @@ interface ClaudeTerminalSubmissionState {
 
 interface ClaudeTerminalTaskState {
     ownerId: string;
+    sessionId: string;
     taskId: string;
     revision: number;
     operation: 'background' | 'foreground' | 'input' | 'inspect' | 'pause_workflow' | 'resume_workflow' | 'retry_worker' | 'send' | 'skip_worker' | 'stop';
@@ -3287,6 +3288,7 @@ type ClaudeTerminalViewRequest = {
 } | ({
     type: 'CLAUDE_TERMINAL_TASK';
     ownerId: string;
+    sessionId: string;
     revision: number;
     taskId: string;
 } & ({

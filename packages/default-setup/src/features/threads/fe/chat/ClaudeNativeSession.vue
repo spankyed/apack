@@ -225,7 +225,7 @@ const stateLabel = computed(() => {
   return state?.status === 'starting' ? 'Connecting' : state?.status === 'error' ? 'Connection error' : 'Session ended'
 })
 const selectedAgent = computed(() => { const state = view.value?.state; return state?.view?.kind === 'agent' ? state.tasks.find(task => task.id === (state.view?.kind === 'agent' ? state.view.taskId : undefined))?.name ?? state.view.taskId ?? 'Unavailable Agent' : undefined })
-const returning = ref<{ ownerId: string; revision: number }>(), returnProblem = ref<string>()
+const returning = ref<{ ownerId: string; sessionId: string; revision: number }>(), returnProblem = ref<string>()
 const stopping = ref<{ ownerId: string; afterRevision: number }>()
 watch(view, value => {
   const pending = stopping.value
@@ -236,14 +236,15 @@ function returnToConversation() {
   if (!state || ended.value) { dismissed.value = true; return }
   if (stopping.value || returning.value || view.value?.task?.status === 'pending') return
   const revision = (view.value?.task?.revision ?? 0) + 1
-  returning.value = { ownerId: state.ownerId, revision }; returnProblem.value = undefined
+  returning.value = { ownerId: state.ownerId, sessionId: state.sessionId, revision }; returnProblem.value = undefined
   const taskId = state.view?.kind === 'agent' ? state.view.taskId ?? state.view.registryId : '@main-view'
-  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...identity(), ownerId: state.ownerId, taskId, revision, operation: 'background' })
+  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...identity(), ownerId: state.ownerId, sessionId: state.sessionId, taskId, revision, operation: 'background' })
 }
 watch(view, value => {
   const request = returning.value
   if (!request) return
   if (value?.state?.ownerId !== request.ownerId || ended.value) { returning.value = undefined; returnProblem.value = 'Native owner changed'; return }
+  if (value.state.sessionId !== request.sessionId) { returning.value = undefined; returnProblem.value = 'Native conversation changed'; return }
   const result = value.task
   if (result?.revision !== request.revision || result.operation !== 'background' || result.status === 'pending') return
   returning.value = undefined

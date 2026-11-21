@@ -32,21 +32,21 @@ it('keeps the native terminal visible until the exact main-view receipt is ackno
   expect(request).toMatchObject({ operation: 'background', taskId: 'agent-a', ownerId: 'owner', revision: 1 })
   expect(f.active).toHaveBeenLastCalledWith(true)
   const main = { ...f.snapshot.state!, view: { kind: 'main' as const, revision: 3 } }
-  f.publish({ ...f.snapshot, state: main, task: { ownerId: 'owner', taskId: 'agent-a', revision: 2, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()
+  f.publish({ ...f.snapshot, state: main, task: { ownerId: 'owner', sessionId: 'session', taskId: 'agent-a', revision: 2, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()
   expect(f.active).toHaveBeenLastCalledWith(true)
-  f.publish({ ...f.snapshot, state: main, task: { ownerId: 'owner', taskId: 'agent-a', revision: 1, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()
+  f.publish({ ...f.snapshot, state: main, task: { ownerId: 'owner', sessionId: 'session', taskId: 'agent-a', revision: 1, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()
   expect(f.active).toHaveBeenLastCalledWith(false)
 })
 it('retains the native terminal and reports a rejected return instead of exposing the parent composer', async () => {
   const f = await fixture(); f.back.click(); await nextTick()
-  f.publish({ ...f.snapshot, task: { ownerId: 'owner', taskId: 'agent-a', revision: 1, operation: 'background', status: 'error', problem: 'A different native Agent is selected' } }); await nextTick()
+  f.publish({ ...f.snapshot, task: { ownerId: 'owner', sessionId: 'session', taskId: 'agent-a', revision: 1, operation: 'background', status: 'error', problem: 'A different native Agent is selected' } }); await nextTick()
   expect(f.active).toHaveBeenLastCalledWith(true)
   expect(f.root.querySelector('[role="alert"]')?.textContent).toBe('A different native Agent is selected')
 })
 
 it('allows leaving an exited native owner even if a task receipt was still pending', async () => {
   const f = await fixture()
-  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' }, task: { ownerId: 'owner', taskId: 'agent-a', revision: 1, operation: 'input', status: 'pending' } }); await nextTick()
+  f.publish({ ...f.snapshot, state: { ...f.snapshot.state!, status: 'exited' }, task: { ownerId: 'owner', sessionId: 'session', taskId: 'agent-a', revision: 1, operation: 'input', status: 'pending' } }); await nextTick()
   expect(f.back.disabled).toBe(false); f.back.click(); await nextTick()
   expect(f.active).toHaveBeenLastCalledWith(false)
 })
@@ -594,7 +594,7 @@ it('keeps a pending native open minimized after navigation, until the user expli
   expect(section.classList.contains('native-session--expanded')).toBe(false)
   Array.from(section.querySelectorAll('button')).find(button => button.textContent?.includes('Back to conversation'))!.click(); await nextTick()
   const request = actor.send.mock.calls.at(-1)![0]
-  f.publish({ ...main, task: { ownerId: 'owner', taskId: '@main-view', revision: request.revision, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()
+  f.publish({ ...main, task: { ownerId: 'owner', sessionId: 'session', taskId: '@main-view', revision: request.revision, operation: 'background', status: 'done', view: { taskId: null } } }); await nextTick()
   Array.from(section.querySelectorAll('button')).find(button => button.getAttribute('aria-label') === 'Use native interface' || button.textContent?.includes('Use native interface'))!.click(); await nextTick()
   expect(section.classList.contains('native-session--expanded')).toBe(true)
 })

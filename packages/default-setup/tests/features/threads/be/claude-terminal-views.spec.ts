@@ -153,7 +153,7 @@ it('persists accepted reference identity after the submitting view detaches', as
 
 it('admits task controls only for the leased window, exact owner, live task and fresh revision', async () => {
   const f = fixture(); f.owner.state.tasks.push({ id: 'agent-a', name: 'worker', status: 'running' })
-  const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, taskId: 'agent-a', revision: 1, operation: 'stop' } as const
+  const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, taskId: 'agent-a', revision: 1, operation: 'stop' } as const
   try {
     f.views.handle(mount, 'one', f.send)
     f.views.handle(request, 'foreign', f.send); f.views.handle({ ...request, ownerId: 'old-owner' }, 'one', f.send); f.views.handle({ ...request, taskId: 'foreign' }, 'one', f.send)
@@ -165,11 +165,59 @@ it('admits task controls only for the leased window, exact owner, live task and 
   } finally { f.views.clear() }
 })
 
+it('rejects a delayed Stop after the same owner clears while retaining the task', async () => {
+  const f = fixture()
+  f.owner.state.tasks.push({ id: 'scan', kind: 'managed', name: 'Auto mode scan', status: 'running' })
+  const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId,
+    sessionId: f.owner.state.sessionId, taskId: 'scan', revision: 1, operation: 'stop' } as const
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.owner.state.sessionId = randomUUID()
+    for (const notify of f.listeners) notify()
+    await Promise.resolve()
+    f.views.handle(request, 'one', f.send)
+    await Promise.resolve()
+    expect(f.owner.operateTask).not.toHaveBeenCalled()
+    f.views.handle({ ...request, sessionId: f.owner.state.sessionId, revision: 2 }, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].task?.status).toBe('done'))
+    expect(f.owner.operateTask).toHaveBeenCalledExactlyOnceWith('scan', 'stop')
+  } finally { f.views.clear() }
+})
+
+it('retires an in-flight task result across session reset and admits a fresh task action', async () => {
+  const f = fixture()
+  f.owner.state.tasks.push({ id: 'scan', kind: 'managed', name: 'Auto mode scan', status: 'running' })
+  let finish!: () => void
+  vi.mocked(f.owner.operateTask).mockImplementationOnce(() => new Promise(resolve => {
+    finish = () => resolve({ stopped: true })
+  }))
+  const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId,
+    sessionId: f.owner.state.sessionId, taskId: 'scan', revision: 1, operation: 'stop' } as const
+  try {
+    f.views.handle(mount, 'one', f.send)
+    f.views.handle(request, 'one', f.send)
+    await vi.waitFor(() => expect(f.owner.operateTask).toHaveBeenCalledOnce())
+    f.owner.state.sessionId = randomUUID()
+    for (const notify of f.listeners) notify()
+    await Promise.resolve()
+    expect(f.send.mock.calls.at(-1)![0].task).toBeUndefined()
+    f.views.handle({ ...request, sessionId: f.owner.state.sessionId }, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].task).toMatchObject({
+      status: 'done', sessionId: f.owner.state.sessionId,
+    }))
+    expect(f.owner.operateTask).toHaveBeenCalledTimes(2)
+    const publishes = f.send.mock.calls.length
+    finish()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    expect(f.send.mock.calls).toHaveLength(publishes)
+  } finally { f.views.clear() }
+})
+
 it.each(['send', 'input'] as const)('admits only bounded %s task input through the current lease and exact native receipt', async operation => {
   const f = fixture(); f.owner.state.tasks.push({ id: 'agent-a', name: 'worker', status: 'running' })
   const input = { messageId: randomUUID(), mode: 'queued' as const }
   vi.mocked(f.owner.operateTask).mockResolvedValue(operation === 'input' ? { input } : { sent: true })
-  const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, taskId: 'agent-a', revision: 1, operation, text: 'Keep working on this instruction' } as const
+  const request = { ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, taskId: 'agent-a', revision: 1, operation, text: 'Keep working on this instruction' } as const
   try {
     f.views.handle(mount, 'one', f.send)
     f.views.handle(request, 'foreign', f.send); f.views.handle({ ...request, text: ' ' }, 'one', f.send); f.views.handle({ ...request, text: 'x'.repeat(16385) }, 'one', f.send)
@@ -189,7 +237,7 @@ it.each([false, true])('awaits prompt host release and rechecks owner replacemen
   vi.mocked(f.owner.operateTask).mockResolvedValue({ view: { taskId: 'agent' } })
   try {
     f.views.handle(mount, 'window', f.send)
-    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, taskId: 'agent', revision: 1, operation: 'foreground' }, 'window', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, taskId: 'agent', revision: 1, operation: 'foreground' }, 'window', f.send)
     await vi.waitFor(() => expect(release).toHaveBeenCalledWith('window', 'thread'))
     expect(f.owner.operateTask).not.toHaveBeenCalled()
     if (replacement) f.setCurrent(undefined)
@@ -268,7 +316,7 @@ it.each(['foreground', 'background'] as const)('holds shared UI suspension until
   vi.mocked(f.owner.operateTask).mockImplementation(() => new Promise((_resolve, reject) => { fail = reject }))
   try {
     f.views.handle(mount, 'window', f.send)
-    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, taskId: 'agent', revision: 1, operation }, 'window', f.send)
+    f.views.handle({ ...mount, type: 'CLAUDE_TERMINAL_TASK', ownerId: f.owner.state.ownerId, sessionId: f.owner.state.sessionId, taskId: 'agent', revision: 1, operation }, 'window', f.send)
     await vi.waitFor(() => expect(f.owner.operateTask).toHaveBeenCalledOnce())
     expect(resume).not.toHaveBeenCalled()
     fail(Error('native view refused'))

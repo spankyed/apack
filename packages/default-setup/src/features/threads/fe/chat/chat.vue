@@ -621,6 +621,8 @@ watch([taskView, agentReturning, agentSelection], ([lease, returning, selecting]
     const target = { ownerId: owner.ownerId, sessionId: owner.sessionId, revision: selected.revision, taskId: selected.taskId }
     if (JSON.stringify(focusedAgent.value?.target) !== JSON.stringify(target)) focusedAgent.value = { target, name: task?.name ?? selected.taskId, statusText: task?.statusText }
     else if (focusedAgent.value) focusedAgent.value.statusText = task?.statusText
+  } else if (owner && focusedAgent.value && focusedAgent.value.target.sessionId !== owner.sessionId) {
+    focusedAgent.value = undefined
   } else if (!returning && (!owner || selected?.kind === 'main' || focusedAgent.value?.target.ownerId !== owner.ownerId)) focusedAgent.value = undefined
 }, { immediate: true })
 let taskRevision = 0
@@ -639,7 +641,7 @@ provide(claudeTaskControls, {
     const lease = taskView.value, owner = lease?.[1].state, threadId = currentThread.value?.id
     if (agentSelection.value || !lease || !owner || !threadId || owner.ownerId !== task.ownerId || owner.sessionId !== task.sessionId || !owner.tasks.some(row => row.id === task.id)) return
     const revision = taskRevision = Math.max(taskRevision, lease[1].task?.revision ?? 0) + 1
-    const request = { type: 'CLAUDE_TERMINAL_TASK' as const, threadId, mountId: lease[0], ownerId: task.ownerId, taskId: task.id, revision }
+    const request = { type: 'CLAUDE_TERMINAL_TASK' as const, threadId, mountId: lease[0], ownerId: task.ownerId, sessionId: task.sessionId, taskId: task.id, revision }
     if (operation === 'foreground') {
       if (nativeTerminalActive.value || pendingNativeSend.value || agentPending.value || owner.view?.kind !== 'main') return
       agentSelection.value = { threadId, mountId: lease[0], ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: task.id, revision }

@@ -187,14 +187,14 @@ function returnToParent() {
   if (!owner || pending.value || returning.value || stopping.value || commandActive.value) return
   returning.value = true; emit('returning', true); emit('pending', true); problem.value = undefined
   returnRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
-  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, taskId: props.target.taskId, revision: returnRevision, operation: 'background' })
+  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: props.target.taskId, revision: returnRevision, operation: 'background' })
 }
 function stopAgent() {
   const owner = selectedOwner.value
   if (!owner || selectedTask.value?.status !== 'running' || pending.value || returning.value || stopping.value || commandActive.value) return
   stopping.value = true; emit('pending', true); problem.value = undefined
   stopRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
-  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, taskId: props.target.taskId, revision: stopRevision, operation: 'stop' })
+  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: props.target.taskId, revision: stopRevision, operation: 'stop' })
 }
 watch(terminal, view => {
   const result = view?.task

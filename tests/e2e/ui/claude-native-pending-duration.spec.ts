@@ -125,7 +125,7 @@ test('mirrors original pending background Agent duration and completion', async 
     const savedResult=appPage.locator(`[data-native-tool-use-id="${toolUseId}"]`).locator('[data-native-tool-format]').last()
     await expect(savedResult).toBeVisible()
     await expect(composer).toHaveText(draft)
-    const retiredControl=await appPage.evaluate(agentId=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;const entry=Object.entries(c.nativeTerminalViews).find(([,v]:[string,any])=>v.threadId===c.currentThread.id) as [string,any];const [mountId,v]=entry;return {threadId:c.currentThread.id,mountId,ownerId:v.state.ownerId,taskId:agentId,revision:(v.task?.revision??0)+1,operation:'input',text:'RetiredAgentMustNotReceiveThis'}},agentId)
+    const retiredControl=await appPage.evaluate(agentId=>{const c=(window as any).applicationState.system.get('default-setup/threads').getSnapshot().context;const entry=Object.entries(c.nativeTerminalViews).find(([,v]:[string,any])=>v.threadId===c.currentThread.id) as [string,any];const [mountId,v]=entry;return {threadId:c.currentThread.id,mountId,ownerId:v.state.ownerId,sessionId:v.state.sessionId,taskId:agentId,revision:(v.task?.revision??0)+1,operation:'input',text:'RetiredAgentMustNotReceiveThis'}},agentId)
     const taskBefore=JSON.stringify((await context()).native.task)
     const taskEvents=async()=>{const rows=(await readFile(join(workspace!,'app-data/apack/logs/app-events.log'),'utf8')).trim().split('\n').filter(Boolean).map(line=>JSON.parse(line));return rows.filter(row=>row.meta?.event?.type==='CLAUDE_TERMINAL_TASK')}
     const deliveredBefore=(await taskEvents()).length

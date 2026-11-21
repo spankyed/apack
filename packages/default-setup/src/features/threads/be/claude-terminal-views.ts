@@ -19,7 +19,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_SUBMIT'; ownerId: string; revision: number; text: string; references?: MessageReferences; phase?: 'Plan' | 'Edit' }
   | { type: 'CLAUDE_TERMINAL_INPUT'; ownerId: string; text: string }
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number; cell?: {width:number;height:number} }
-  | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
+  | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; sessionId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
   | { type: 'CLAUDE_TERMINAL_NOTICE'; ownerId: string; notice: import('#features/code/common/native-notice.ts').ClaudeNativeNoticeResponse }
   | { type: 'CLAUDE_TERMINAL_MCP_URL'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlRequest }
   | { type: 'CLAUDE_TERMINAL_MCP_FORM'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormRequest }
@@ -32,6 +32,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
 )
 export interface ClaudeTerminalTaskState {
   ownerId: string
+  sessionId: string
   taskId: string
   revision: number
   operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background' | 'skip_worker' | 'retry_worker' | 'pause_workflow' | 'resume_workflow'
@@ -176,6 +177,8 @@ export function createClaudeTerminalViews(dependencies: {
   }
   function publish(key: string, view: View) {
     if (views.get(key) !== view) return
+    const state = view.owner?.state
+    if (view.task && view.task.sessionId !== state?.sessionId) view.task = undefined
     if (view.background?.desktop && !dependencies.desktopCurrent?.(view.threadId, view.background.desktop)) view.background.desktop = undefined
     if (view.background) {
       view.background.turn = view.background.desktop ? dependencies.backgroundTurn?.(view.threadId, view.background.desktop) : undefined
@@ -190,7 +193,7 @@ export function createClaudeTerminalViews(dependencies: {
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.backgroundInfo?.(view.threadId), canReplyBackground: dependencies.get(view.threadId) ? dependencies.get(view.threadId)?.canReplyBackground === true : !!dependencies.replyBackground && !!dependencies.continuation?.(view.threadId), threadId: view.threadId, mountId: view.mountId,
-        state: view.owner?.state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
+        state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
@@ -392,12 +395,15 @@ export function createClaudeTerminalViews(dependencies: {
         return
       }
       if (event.type === 'CLAUDE_TERMINAL_TASK') {
-        if (typeof event.taskId !== 'string' || !event.taskId || event.taskId.length > 256 || !['inspect', 'stop', 'send', 'input', 'foreground', 'background', 'skip_worker', 'retry_worker', 'pause_workflow', 'resume_workflow'].includes(event.operation) || !Number.isSafeInteger(event.revision) || event.revision <= (target.task?.revision ?? 0) || target.task?.status === 'pending' || event.operation !== 'background' && !owner.state.tasks.some(task => task.id === event.taskId)) return
+        if (event.sessionId !== owner.state.sessionId) return
+        const previous = target.task?.sessionId === event.sessionId ? target.task : undefined
+        if (typeof event.taskId !== 'string' || !event.taskId || event.taskId.length > 256 || !['inspect', 'stop', 'send', 'input', 'foreground', 'background', 'skip_worker', 'retry_worker', 'pause_workflow', 'resume_workflow'].includes(event.operation) || !Number.isSafeInteger(event.revision) || event.revision <= (previous?.revision ?? 0) || previous?.status === 'pending' || event.operation !== 'background' && !owner.state.tasks.some(task => task.id === event.taskId)) return
         if ((event.operation === 'send' || event.operation === 'input') && (typeof event.text !== 'string' || !event.text.trim() || event.text.length > 16384)) return
         if ((event.operation === 'skip_worker' || event.operation === 'retry_worker') && (typeof event.worker?.agentId !== 'string' || !event.worker.agentId || event.worker.agentId.length > 256 || typeof event.worker.token !== 'string' || !/^[a-f0-9]{64}$/.test(event.worker.token))) return
-        const task: ClaudeTerminalTaskState = { ownerId: event.ownerId, taskId: event.taskId, revision: event.revision, operation: event.operation, status: 'pending', ...(target.task?.taskId === event.taskId ? { details: target.task.details } : {}) }
+        const task: ClaudeTerminalTaskState = { ownerId: event.ownerId, sessionId: event.sessionId, taskId: event.taskId, revision: event.revision, operation: event.operation, status: 'pending', ...(previous?.taskId === event.taskId ? { details: previous.details } : {}) }
         target.task = task; publish(key, target)
-        const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner && target.task === task
+        const current = () => views.get(key) === target && target.owner === owner && dependencies.get(event.threadId) === owner
+          && owner.state.sessionId === task.sessionId && target.task === task
         void Promise.resolve().then(async () => {
           const resume = event.operation === 'foreground' || event.operation === 'background' ? await dependencies.beforeViewChange?.(target.client, event.threadId) : undefined
           try {
