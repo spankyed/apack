@@ -213,7 +213,7 @@ function readUntilAborted<T>(read: () => Promise<T>, signal: AbortSignal): Promi
   return Promise.race([read(), aborted]).finally(() => signal.removeEventListener('abort', cancel))
 }
 
-/** Explicit handoff/reopen; reservation and read-only preflight keep one session writer. */
+/** Explicit handoff/reopen; reservation and a fresh settings probe keep one session writer. */
 export async function openNativeTerminal(key: string, options: ClaudeNativeTerminalHandoffOptions, prepare: (options: ClaudeNativeTerminalOptions, backgroundObserver?: ClaudeBackgroundStatusObserver) => Promise<ClaudePreparedNativeTerminal>, readResume?: (options: ClaudeNativeLaunch & Pick<ClaudeNativeTerminalOptions, 'cliPath' | 'env' | 'signal' | 'columns' | 'rows'>) => Promise<Pick<ClaudeNativeTerminalOptions, 'settings' | 'permissionMode'>>): Promise<ClaudeNativeTerminalOwner> {
   const {resume: saved, signal, ...overrides} = options
   if (signal?.aborted) throw new Error('Native terminal startup was cancelled')

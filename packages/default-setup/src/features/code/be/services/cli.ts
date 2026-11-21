@@ -270,8 +270,10 @@ function createCliService(): CliServiceType {
       },
       getConversation,
       openNativeTerminal(key, options = {}) { return openNativeTerminal(key, options, prepareClaudeNativeTerminal, async launch => {
-        const { sessionId, columns: _columns, rows: _rows, ...queryOptions } = launch
-        const handle = await claudeCode.query({ ...queryOptions, env: await prepareClaudeEnvironment(queryOptions.env), resume: sessionId, keepStdinOpen: true, noSessionPersistence: true })
+        const { sessionId: _sessionId, columns: _columns, rows: _rows, ...queryOptions } = launch
+        // Resuming here can consume background task results even without session persistence.
+        // Read native settings in a fresh process and let the interactive owner resume the session.
+        const handle = await claudeCode.query({ ...queryOptions, env: await prepareClaudeEnvironment(queryOptions.env), keepStdinOpen: true, noSessionPersistence: true })
         try {
           const settings = await handle.getSettings(), permissionMode = await handle.getPermissionMode()
           if (!permissionMode) throw new Error('Native permission mode has not been acknowledged')

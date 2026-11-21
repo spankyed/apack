@@ -8,6 +8,7 @@ import { join } from 'node:path'
 import { mockService } from '@apackdev/testing/harness'
 import { services, type Services } from '#generated/services.ts'
 import { cliService } from '#features/code/be/services/cli.ts'
+import { claudeCode } from '#features/code/be/services/claude-code/index.ts'
 import { action } from '../../../../../src/content/actions/claude-code/cc-command.ts'
 
 let root: string
@@ -62,4 +63,26 @@ it('recognizes the original loggedIn auth status after native setup', async () =
  mockService<Services,'cli'>('cli',{claudeCode:{version:vi.fn(async()=>'2.1.302'),authStatus:vi.fn(async()=>({loggedIn:true})),readSettings:vi.fn(async()=>({}))} as never})
  const result=await action({command:'cc-stats',threadId:'fixture-thread'},services,{} as never,'fixture-flow')
  expect(result.text).toContain('Auth: authenticated')
+})
+
+
+it('reads fresh native settings without resuming the saved conversation in the probe', async () => {
+  const controller = new AbortController()
+  const close = vi.fn(async () => controller.abort())
+  const query = vi.spyOn(claudeCode, 'query').mockResolvedValue({
+    getSettings: async () => ({}),
+    getPermissionMode: async () => 'acceptEdits',
+    close,
+  } as Awaited<ReturnType<typeof claudeCode.query>>)
+  try {
+    await expect(cliService.claudeCode.openNativeTerminal('probe-parked-session', {
+      resume: { sessionId: '77d76a62-9301-47f4-adaf-cc33e402c697', cwd: root, permissionMode: 'acceptEdits' },
+      signal: controller.signal,
+    })).rejects.toThrow('changed during native terminal handoff')
+    const options = query.mock.lastCall?.[0]
+    expect(options).toMatchObject({ cwd: root, permissionMode: 'acceptEdits', keepStdinOpen: true, noSessionPersistence: true })
+    expect(options?.resume).toBeUndefined()
+    expect(options?.sessionId).toBeUndefined()
+    expect(close).toHaveBeenCalledOnce()
+  } finally { query.mockRestore() }
 })
