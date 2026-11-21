@@ -33,6 +33,7 @@
 // which an agent can act on — rather than reconnecting into a session whose claim somebody else now holds.
 
 import { API_HOST } from '@apackdev/sdk/utils/pure';
+import { splitFrame } from '@apackdev/host/wire-frames';
 
 /** A message on the app's bus, as `bus.sub` delivers it */
 export interface BusMessage {
@@ -193,8 +194,8 @@ export async function connectApiClient({ port, token, host = API_HOST }: ApiAddr
     else waiting.resolve(frame.result?.data);
   };
 
-  socket.addEventListener('message', (message: MessageEvent) => {
-    const text = String(message.data);
+  /** One message off the socket. The API sends several in a frame when it had several for one turn. */
+  const takeMessage = (text: string): void => {
     if (answeredKeepAlive(text)) return;
 
     let frame: Frame;
@@ -208,6 +209,10 @@ export async function connectApiClient({ port, token, host = API_HOST }: ApiAddr
     // API announces a reconnect, and matching neither branch is what keeps it out of the pending-call path.
     if (frame.id === SUBSCRIPTION_ID) takeSubscriptionFrame(frame);
     else if (typeof frame.id === 'number') takeCallFrame(frame.id, frame);
+  };
+
+  socket.addEventListener('message', (message: MessageEvent) => {
+    for (const text of splitFrame(String(message.data))) takeMessage(text);
   });
 
   /** Sends a frame that will be answered, and resolves when its answer arrives */

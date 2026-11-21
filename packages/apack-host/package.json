@@ -50,6 +50,7 @@
     "./secrets/vault": "./src/secrets/vault.ts",
     "./services": "./src/services/index.ts",
     "./testing": "./src/testing/pack-registry.ts",
+    "./wire-frames": "./src/wire-frames.ts",
     "./fe/testing": "./src/testing/frontend-registry.ts",
     "./settings": "./src/features/settings/be/index.ts",
     "./views": "./src/views/index.ts"
