@@ -17,8 +17,10 @@ the app: nothing imports it, and no check covers it.
 | `progress-check.mts` | That progress is gathered and nothing else is, and that what a state hears keeps the order it was sent in. Runs |
 | `schedule.mts` | A schedule given to the kernel in place of the event loop: runs a scenario under every ordering, or a seed's worth, and replays one |
 | `interleaving-check.mts` | Scenarios run under every ordering: a search over a search, a cancel, a click among progress, a window closing. Runs, for about 7 seconds |
-| `commit.mts` | A slice of the app's commit surface ported: status, diff, staging and a push, as asks the surface awaits. Runs, and checks what each step leaves |
-| `awaits-check.mts` | The asks a state awaits: a read from the fields it names, several writes from the keys of a field, one write from a field that holds it. Runs, for about 10 seconds |
+| `commit.mts` | A slice of the app's commit surface ported: its status and a diff as reads it awaits, staging and a push as writes it makes. Runs, and checks what each step leaves |
+| `awaits-check.mts` | The reads a state awaits: from the fields it names, or one for each key of a field. Runs |
+| `makes-check.mts` | The writes a state makes: said once with `make`, with which are under way kept by the kernel. Runs, for about 10 seconds |
+| `checks.mts` | What the check files run their checks with: every system a check makes is stopped however it ends, and given a limit on its steps |
 | `starts-check.mts` | The states a state starts: declared, and which of them run follows from its data. Runs |
 | `follows-check.mts` | The views a state follows: declared, and which are followed, and what each is asked for, follow from its data. Runs |
 | `answer-check.mts` | An ask that changes something as it answers: the change is there with the answer, a refused change fails the ask, nothing is lost across a wait. Runs |
@@ -97,6 +99,10 @@ npx tsx docs/plans/apack-spec/prototype/awaits-check.mts
 ```
 
 ```bash
+npx tsx docs/plans/apack-spec/prototype/makes-check.mts
+```
+
+```bash
 npx tsx docs/plans/apack-spec/prototype/follows-check.mts
 ```
 
@@ -119,5 +125,5 @@ npx tsx docs/plans/apack-spec/prototype/xstate-survey.mts "$PWD"
 Typecheck:
 
 ```bash
-npx tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --allowImportingTsExtensions --noUncheckedIndexedAccess --skipLibCheck --types node docs/plans/apack-spec/prototype/draft.mts docs/plans/apack-spec/prototype/draft-check.mts docs/plans/apack-spec/prototype/kernel-check.mts docs/plans/apack-spec/prototype/mirror.mts docs/plans/apack-spec/prototype/vue.mts docs/plans/apack-spec/prototype/vue-check.mts docs/plans/apack-spec/prototype/window-frame.mts docs/plans/apack-spec/prototype/binding-check.mts docs/plans/apack-spec/prototype/progress-check.mts docs/plans/apack-spec/prototype/leaving-check.mts docs/plans/apack-spec/prototype/failure-check.mts docs/plans/apack-spec/prototype/answer-check.mts docs/plans/apack-spec/prototype/starts-check.mts docs/plans/apack-spec/prototype/commit.mts docs/plans/apack-spec/prototype/awaits-check.mts docs/plans/apack-spec/prototype/follows-check.mts docs/plans/apack-spec/prototype/schedule.mts docs/plans/apack-spec/prototype/interleaving-check.mts docs/plans/apack-spec/prototype/append-cost.mts docs/plans/apack-spec/prototype/state.mts docs/plans/apack-spec/prototype/search.mts docs/plans/apack-spec/prototype/library.mts docs/plans/apack-spec/prototype/threads.mts docs/plans/apack-spec/prototype/views.mts
+npx tsc --noEmit --strict --target ES2022 --module ESNext --moduleResolution Bundler --allowImportingTsExtensions --noUncheckedIndexedAccess --skipLibCheck --types node docs/plans/apack-spec/prototype/draft.mts docs/plans/apack-spec/prototype/draft-check.mts docs/plans/apack-spec/prototype/kernel-check.mts docs/plans/apack-spec/prototype/mirror.mts docs/plans/apack-spec/prototype/vue.mts docs/plans/apack-spec/prototype/vue-check.mts docs/plans/apack-spec/prototype/window-frame.mts docs/plans/apack-spec/prototype/binding-check.mts docs/plans/apack-spec/prototype/progress-check.mts docs/plans/apack-spec/prototype/leaving-check.mts docs/plans/apack-spec/prototype/failure-check.mts docs/plans/apack-spec/prototype/answer-check.mts docs/plans/apack-spec/prototype/starts-check.mts docs/plans/apack-spec/prototype/commit.mts docs/plans/apack-spec/prototype/awaits-check.mts docs/plans/apack-spec/prototype/makes-check.mts docs/plans/apack-spec/prototype/checks.mts docs/plans/apack-spec/prototype/follows-check.mts docs/plans/apack-spec/prototype/schedule.mts docs/plans/apack-spec/prototype/interleaving-check.mts docs/plans/apack-spec/prototype/append-cost.mts docs/plans/apack-spec/prototype/state.mts docs/plans/apack-spec/prototype/search.mts docs/plans/apack-spec/prototype/library.mts docs/plans/apack-spec/prototype/threads.mts docs/plans/apack-spec/prototype/views.mts
 ```

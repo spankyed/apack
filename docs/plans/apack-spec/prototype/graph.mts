@@ -30,6 +30,7 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
   const starts = new Map<string, string>()
   const follows: string[] = []
   const awaits: string[] = []
+  const makes: string[] = []
   const where = (path: string, name: string): string => (path ? `${name} in ${path}` : name)
 
   /** A returned value that says `at` is a move to that path. Anything else changes data and stays. */
@@ -85,7 +86,7 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
       if (name === 'states' && made && ts.isObjectLiteralExpression(made)) {
         for (const inner of made.properties) if (ts.isPropertyAssignment(inner) && ts.isObjectLiteralExpression(inner.initializer)) declarations(inner.initializer, join(path, inner.name.getText()))
       }
-      if ((name !== 'follows' && name !== 'awaits') || !made || !ts.isArrowFunction(made)) continue
+      if ((name !== 'follows' && name !== 'awaits' && name !== 'makes') || !made || !ts.isArrowFunction(made)) continue
       let body = made.body
       while (ts.isParenthesizedExpression(body)) body = body.expression
       if (!ts.isObjectLiteralExpression(body)) continue
@@ -96,9 +97,11 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
         const option = (key: string): any => options.properties.find((each: any) => each.name?.getText() === key)
         const each = option('each')
         const from = option('from')
-        const depends = each ? `one for each key of ${text(each.initializer)}`
+        // An ask that is made is made when a handler says so: with `each` for one of many keys, with `one` for one at a time.
+        const depends = name === 'makes' ? (entry.initializer.expression.getText() === 'each' ? 'for each key it is told' : 'one at a time')
+          : each ? `one for each key of ${text(each.initializer)}`
           : from && ts.isArrayLiteralExpression(from.initializer) && from.initializer.elements.length ? `from ${from.initializer.elements.map(text).join(', ')}` : 'from nothing: once'
-        ;(name === 'follows' ? follows : awaits).push(`${entry.name.getText()}${path ? ` in ${path}` : ''}: ${text(first)} ${text(second)}, ${depends}`)
+        ;(name === 'follows' ? follows : name === 'awaits' ? awaits : makes).push(`${entry.name.getText()}${path ? ` in ${path}` : ''}: ${text(first)} ${text(second)}, ${depends}`)
         for (const hears of name === 'follows' ? ['heard'] : ['ended', 'heard']) {
           const handler = option(hears)
           const signature = handler && checker.getTypeAtLocation(handler.initializer ?? handler).getCallSignatures()[0]
@@ -141,6 +144,7 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
   if (startsStates.length) console.log(`  starts: ${startsStates.join(', ')}`)
   for (const followed of follows) console.log(`  follows ${followed}`)
   for (const awaited of awaits) console.log(`  awaits  ${awaited}`)
+  for (const made of makes) console.log(`  makes   ${made}`)
   if (reaches.length) console.log(`  reaches: ${reaches.join(', ')}`)
   const findings: string[] = []
   for (const taken of [...events, ...asks]) if (!takes.has(taken)) findings.push(`nothing takes ${taken}`)
@@ -148,7 +152,7 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
   console.log(`  findings: ${findings.length ? findings.join('; ') : 'none'}`)
 }
 
-const VERBS = new Set(['tell', 'ask', 'broadcast'])
+const VERBS = new Set(['tell', 'ask', 'broadcast', 'make', 'drop'])
 const visit = (node: any): void => {
   // state<Shape, Events, Asks>()(definition)
   if (ts.isCallExpression(node) && ts.isCallExpression(node.expression) && ts.isIdentifier(node.expression.expression)

@@ -3,7 +3,8 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/progress-check.mts
 import { deepStrictEqual, strictEqual } from 'node:assert'
-import { given, reaching, system, type State } from './state.mts'
+import { run, system } from './checks.mts'
+import { given, reaching, type State } from './state.mts'
 
 type Step = { progress: string } | { note: string }
 type StreamAsks = {
@@ -156,14 +157,4 @@ const checks: Array<[string, () => Promise<void>]> = [
   }],
 ]
 
-const unhandled: unknown[] = []
-process.on('unhandledRejection', (reason) => { unhandled.push(reason) })
-
-let failed = 0
-for (const [name, check] of checks) {
-  try { await check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 6).join(' ')}`) }
-}
-await turns(60)
-if (unhandled.length) { failed++; console.log(`  FAIL  nothing was left unhandled\n        ${String(unhandled[0])}`) } else console.log('  ok    stopping a window mid-ask left nothing unhandled')
-console.log(`\n${checks.length + 1 - failed} of ${checks.length + 1} passed`)
-if (failed) process.exitCode = 1
+await run(checks)

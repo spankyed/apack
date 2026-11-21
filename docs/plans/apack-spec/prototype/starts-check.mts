@@ -4,7 +4,8 @@
 //   npx tsx docs/plans/apack-spec/prototype/starts-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { explore, type Schedule } from './schedule.mts'
-import { answered, given, reaching, system, type Each } from './state.mts'
+import { run, system } from './checks.mts'
+import { answered, given, reaching, type Each } from './state.mts'
 
 const state = reaching()
 const turns = (count: number): Promise<void> => new Promise((resolve) => { let left = count; const tick = (): void => { if (left-- <= 0) resolve(); else setImmediate(tick) }; tick() })
@@ -320,23 +321,6 @@ state<Board, BoardEvent, BoardAsks>()({
   },
 })
 
-const unhandled: unknown[] = []
-process.on('unhandledRejection', (reason) => { unhandled.push(reason) })
-
-let failed = 0
-for (const [name, check] of checks) {
-  try { await check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 8).join(' ')}`) }
-}
-{
-  const name = 'under every ordering of two asks that add the same item after a wait, one is added, one is refused, and one card starts'
-  const found = await explore(racing)
-  try {
-    ok(!found.failure, found.failure && `${String(found.failure.error).split('\n')[0]} after: ${found.failure.taken.join(' → ')}`)
-    ok(found.complete && found.orderings > 1, `ran ${found.orderings} orderings, ${found.complete ? 'all' : 'not all'}`)
-    console.log(`  ok    ${name}  (${found.orderings} orderings, all there are)`)
-  } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n')[0]}`) }
-}
-await turns(30)
-if (unhandled.length) { failed++; console.log(`  FAIL  nothing was left unhandled\n        ${String(unhandled[0])}`) } else console.log('  ok    none of it left a rejection unhandled')
-console.log(`\n${checks.length + 2 - failed} of ${checks.length + 2} passed`)
-if (failed) process.exitCode = 1
+await run(checks, async (tally) => {
+  await tally.every('under every ordering of two asks that add the same item after a wait, one is added, one is refused, and one card starts', () => explore(racing))
+})

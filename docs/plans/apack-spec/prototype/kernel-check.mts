@@ -2,7 +2,8 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/kernel-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { given, reaching, system } from './state.mts'
+import { run as runChecks, system } from './checks.mts'
+import { given, reaching } from './state.mts'
 
 class Repository { constructor(public directory: string) {} }
 
@@ -179,9 +180,4 @@ const checks: Array<[string, () => void]> = [
   }],
 ]
 
-let failed = 0
-for (const [name, check] of checks) {
-  try { check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n')[0]}`) }
-}
-console.log(`\n${checks.length - failed} of ${checks.length} passed`)
-if (failed) process.exitCode = 1
+await runChecks(checks)

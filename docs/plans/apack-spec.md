@@ -96,7 +96,8 @@ Exactly one path is the case, so where a state is is one string, and its data is
 | `run` | What it does while it is the case. May be async. What it returns happens only if the state still is the case |
 | `starts` | The states it starts, which run while it is the case |
 | `follows` | The views it follows while it is the case, each with a handler for what it delivers |
-| `awaits` | The asks it is waiting on while it is the case, each with a handler for how it ended |
+| `awaits` | The reads it is waiting on while it is the case, each with a handler for how it ended |
+| `makes` | The writes it makes when a handler says `make`, each with a handler for how it ended |
 | `failed` | Where it goes when `run` throws, given what was thrown. Synchronous. Required when `run` is async |
 
 A handler or `run` returns the same two fields the value has: `{ at, data }`. Giving only `data` changes fields and
@@ -195,7 +196,8 @@ points at.
    if whoever asked has gone, because the work was done and the data should say so. A handler that throws because its
    `signal` aborted has stopped, and is reported as that and not as a failure.
 10. **What a state starts, follows and awaits is declared, and which of them are live follows from its data.**
-    Nothing is started, followed or asked by hand. A state declares each, and each says which fields of the data it
+    These three are standing: each goes on for as long as the data says so. Nothing is started, followed or read
+    by hand. A state declares each, and each says which fields of the data it
     depends on, in one of two ways. With `from`, there is one, and it reads the fields named: it is asked again when
     one of them changes. With `each`, there is one for each key of the field named, or each item where the field is
     a list: a key that appears starts one, and a key that goes stops it.
@@ -203,13 +205,12 @@ points at.
     ```ts
     starts:  (start)  => ({ thread: start(thread(inference), { each: 'titles', given: (threadId) => ({ threadId }) }) }),
     follows: (follow) => ({ detail: follow('threads', 'detail', { from: ['id'], args: ({ id }) => ({ id }), heard: (update) => … }) }),
-    awaits:  (asking) => ({ stage:  asking('code', 'commit.STAGE_FILES', { each: 'staging', args: (path) => ({ paths: [path] }), ended: (outcome) => … }) }),
+    awaits:  (asking) => ({ diff:   asking('code', 'commit.GET_GIT_DIFF', { from: ['selectedGitFile'], args: ({ selectedGitFile }) => selectedGitFile, ended: (outcome) => … }) }),
     ```
 
     Once a step has handled everything sent in it, the kernel makes what is live match. **So changing data is how
-    everything starts and stops**, and there is nothing to forget: opening a thread is adding its title, following
-    another thread's detail is setting `id`, staging a file is adding its path, and stopping a push is clearing the
-    field that holds it. A change that starts something has what every change has: it is one step with the answer it
+    these start and stop**, and there is nothing to forget: opening a thread is adding its title, following another
+    thread's detail is setting `id`, and reading the diff of another file is selecting it. A change that starts something has what every change has: it is one step with the answer it
     came with, it can be checked and refused where it is made, and after an `await` it is made against the data as it
     is then. What is live cannot disagree with the data, because it follows from it.
 
@@ -250,26 +251,41 @@ points at.
     **A view delivers to a handler**, `heard`, which returns what happens next as every handler does, so data still
     changes only by what a handler returns.
 
-    **An ask that is awaited is one of three things**, and which it is is how it depends on the data:
+    **An ask that is awaited is a read.** With `from`, it is asked for what `args` makes of the fields it names, and
+    asked again when one of them changes, the one before given up. Where `args` gives nothing, nothing is asked. A
+    field that only counts has it asked again. With `each`, one is asked for each key of a field, and what it found
+    stays. How one ended goes to `ended`, and what it says before that to `heard`, as a list at most once a frame.
 
-    | It is | It is declared | So |
-    |---|---|---|
-    | A read | `from` the fields it reads | It is asked again when one of them changes, and the one before is given up. Where `args` gives nothing, nothing is asked. A field that only counts has it asked again |
-    | Several writes at once | `each` key of a field | One for each. When one ends its key goes from the field, so the field holds what is under way and nothing else |
-    | One write | `from` a field that holds it | It is made while the field holds it, and given up when the field is cleared |
+    **A write is not standing, and is not declared as if it were.** The three above go on for as long as the data
+    says so. A write is made once, because a handler said so, and nothing in the data stands for it. So it is
+    declared apart, under `makes`, and made with a verb, as a state tells or broadcasts:
 
-    How one ended goes to `ended`, and what it says before that to `heard`, as a list at most once a frame. An ask
-    that is given up tells the one answering, whose `signal` aborts, and how it ended is not heard. Whether something
-    is under way is data, and a component shows it by reading the field: there is no id for an ask, no list of what
-    is under way, and no event for how one ended.
+    ```ts
+    makes: ({ one, each }) => ({
+      stage: each('code', 'commit.STAGE_FILES', { args: (path) => ({ paths: [path] }), ended: (outcome, { key }) => … }),
+      push:  one('code', 'commit.PUBLISH_BRANCH', { args: () => ({}), heard: (updates) => …, ended: (outcome) => … }),
+    }),
+    on: {
+      'commit.STAGE_FILE':  ({ path }, { make }) => { make('stage', path) },
+      'commit.STOP_PUSH':   (_, { drop }) => { drop('push') },
+    },
+    ```
 
-    This is beside a state that asks from its `run`, not in place of it. A state is for something the surface is
-    *in*, where what it takes changes, as `searching` is. An awaited ask is for a value being fetched or a write
-    being made.
+    It is made when the step commits, with the data as the handler left it. One that is under way, or under way for
+    that key, is the same one and is not made twice. `drop` gives one up: the one answering is told, and how it
+    ended is not heard. Leaving the state that declares it gives up all of its.
+
+    **Which writes are under way is the kernel's to keep**, and is read beside `at` and `data`, as `making`:
+    `making.stage[path]` for one of many, `making.push` for one at a time. Nothing else writes it. So the kernel
+    never changes a state's data, the record has one writer, and a state that is restored reads again and does not
+    write again, since what was being made is not data. There is no id for an ask, no list of what is under way kept
+    by hand, and no event for how one ended.
+
+    Both are beside a state that asks from its `run`, not in place of it. A state is for something the surface is
+    *in*, where what it takes changes, as `searching` is.
 
     **Nothing depends on itself in a circle.** This holds for a view and for an ask alike: what one delivers, or how
-    one ended, may not change a field it is itself asked from. A write that clears the field holding it is not that:
-    there is then nothing to ask for. Between views, one view may lead another: a list delivers, an
+    one ended, may not change a field it is itself asked from. Between views, one view may lead another: a list delivers, an
     item is chosen, and a detail is asked for that item. What may not happen is that the detail's delivery changes
     what the list is asked for. It would be followed again, deliver again and lead back, each round a read of the
     database, and nothing bounds that across steps. Each followed view remembers which deliveries led to it being
@@ -447,8 +463,9 @@ batch, and this repo's own `transact` followed by `watch`.
 | What says which there are is a field, by name | A function from the data to the keys, which was built first: `each((data) => Object.keys(data.titles), …)`. It could throw, so there had to be a rule for what ran when it did. It had to be run again after every change, since nothing said what it read. And the graph could not say where the keys came from. Tracking what the function reads, as a signals library does, would fix the second and not the others |
 | One grammar for what a state starts, follows and awaits: `each` a field, or `from` fields | Three spellings of one idea, which is what there was: a helper for states, an object written out for views, and for a view followed alone a function of the data that was run again after every change and its result compared. That last was the function that naming a field had replaced for states, kept by oversight for views. Elm's `subscriptions` is this idea: what is listened to is a function of the model, and the runtime starts and stops to match |
 | Each of the three is a function of the helper its entries are made with | The helpers as imports, `follow(…)` called in an object. TypeScript then has to work out the state's types backwards from where the call's result is put, and while it is doing that it cannot type a draft edit nested in a handler: `(d) => { d.tabs[key] = … }` came out untyped. Handing the helper in already typed leaves nothing to work out |
-| An ask that is not a state's work is awaited, declared from the data | Spawning it and keeping the ids of what is under way, as the app does now. And a state for each, started for each key, which is right for a thing with a life of its own and too much for a write that only has to be made. The commit surface declares 54 asks and invokes none from a state: 14 are reads and 40 are writes, and by how its machine spawns them 28 can be under way many at once and 26 one at a time. TanStack Query, SWR and RTK Query treat a read as a query keyed by its arguments for this reason |
-| When an ask for a key ends, the kernel takes the key out | Leaving that to the handler. A handler that forgot would leave the key there with nothing asked for it, and a spinner that never stops. It is the one place data changes without a handler returning it, and it is the field's meaning: what is under way |
+| A read that is not a state's work is awaited, declared from the data | Spawning it and keeping the ids of what is under way, as the app does now. The commit surface declares 54 asks and invokes none from a state: 14 are reads and 40 are writes, and by how its machine spawns them 28 can be under way many at once and 26 one at a time. TanStack Query, SWR and RTK Query treat a read as a query keyed by its arguments for this reason |
+| A write is said, with `make`, and the kernel keeps which are under way | Declaring it from the data as a read is, with one for each key of a field, which was built first. The kernel then had to take the key out when the write ended, the one place it changed a state's data; the field had two writers, the handler that put a key in and the kernel that took it out; and a state restored with a key in the field would have made the write again. A write is not something that holds for as long as the data says: it is made once. Elm keeps the two apart as subscriptions and commands, and TanStack Query as queries and mutations |
+| `make` is a verb a handler calls, not a part of what it returns | Returning it beside `at` and `data`. `tell`, `send` and `broadcast` are already one-off things a handler says, carried out when the step commits, and a write is one more. A verb that gives nothing back leaves no promise to drop, which is why an event's handler has `make` and not `ask` |
 | What runs is matched once, when a step has handled everything | Matching after each thing handled, which was built first so that a state started part-way through a step would be there for what came next. It made what ran depend on the route: a key taken out and put back by one handler kept its state, and by two events in one step lost it. Holding what is sent to a state that is not running, until the match, keeps the one thing the first way was for |
 | A started state is given its data once | Data that follows the starter's as it changes. That keeps one fact in two states and needs a rule for which of them may write it |
 | A started state reports to its starter with one verb, into the starter's own events | A table of handlers per started state, which would have been a fourth beside `on`, `asks` and `follows` |
@@ -505,21 +522,36 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   is not declared; leaving the starts out; naming a field that is neither keyed nor a list; giving a started state
   less than it marks `given`; and naming bare a state that has to be given something. `threads.mts` runs on it: a
   thread for each title, told which it is, and the composer's draft for as long as a thread is open.
-- **Several asks at once, with no ids** (`awaits-check.mts`, 17 checks; `commit.mts`, 12 comparisons). `commit.mts` is
-  a slice of the app's commit surface: its status, the diff of the selected file, staging and unstaging, and a push.
-  Two files staged at once are both under way as data and both gone from it when they end; the status is read again
-  when the repository changes; selecting another file gives up the read of the first, and the backend is told; a
-  refusal names its file; a push says how far it is, a second one while it is made is the same push, and a stopped
-  one reports no failure. The checks hold the mechanism: one ask for each key and the key gone when it ends; a key
-  already there not asked twice; a key taken out giving its ask up; how one ended putting its key back to ask again;
-  progress heard as a list; a read asked when a field it names changes and not when another does; a field that only
-  counts; nothing asked where there is nothing to ask for; only the last of two reads taken; leaving the state giving
-  up what it waited on; how a read ended not changing a field it is asked from; a write clearing the field that
-  holds it; and the keys looked at only when their field changes. Under every ordering (553), the diff shown is of
-  the file selected last. Under a seed's worth (3,000 each, of more than can all be run), two files staged at once
-  are both staged with the status shown the last one read, and a push stopped at any moment leaves none under way
-  and no failure. Six mistakes do not compile, reading a field that was not named among them. The graph lists each
-  awaited ask with what it is of and what it depends on.
+- **Reads and writes, with no ids** (`awaits-check.mts`, 12 checks; `makes-check.mts`, 14 checks; `commit.mts`, 12
+  comparisons). `commit.mts` is a slice of the app's commit surface: its status and the diff of the selected file as
+  reads, and staging, unstaging and a push as writes. Two files staged at once are both under way and both gone when
+  they end; the status is read again when the repository changes; selecting another file gives up the read of the
+  first, and the backend is told; a refusal names its file; a push says how far it is, a second one while it is made
+  is the same push, and a stopped one reports no failure.
+
+  A read: asked when a field it names changes and not when another does; a field that only counts; nothing asked
+  where there is nothing to ask for; only the last of two taken, the first given up; progress heard as a list; one
+  for each item of a list, asked once, with what it found staying; an item taken out giving its read up; leaving the
+  state giving up what it waited on, and entering it again asking afresh; how one ended not changing a field it is
+  asked from. Under every ordering (553), the diff shown is of the file selected last.
+
+  A write: one made for each key it is told to, and under way until it ends; making one changes no data; one under
+  way not made twice, and made again once it has ended; giving one up telling the one answering; how one ended having
+  it made again; progress heard as a list; made when the step commits, with the data as the handler left it; one at
+  a time under way or not; leaving the state giving up what it was making and telling whoever reads that, and
+  entering it again making nothing, where a read would be asked afresh; and a handler that throws having still said
+  what it said. Under a seed's worth (3,000 each, of more than can all be run), two files staged at once are both
+  staged with the status shown the last one read, and a push stopped at any moment leaves none under way and no
+  failure.
+
+  Thirteen mistakes do not compile across the two. The graph lists each read with what it depends on, each write,
+  and which handler says to make which.
+- **A check that fails says so, and does not hang** (`checks.mts`). The check files run their checks through one
+  runner. Every system a check makes is stopped when the check ends, however it ends, so one that fails part-way
+  leaves nothing running to keep the process alive. A system in a check is given a limit on how many steps it will
+  take, and says so when it reaches it; the app gives none, since an agent's loop is one thing leading to the next
+  for as long as it runs. A kernel changed so that a read asks itself round without end used to keep the checks from
+  ever finishing, and now fails one of them in a second.
 - **Which views are followed follows the data** (`follows-check.mts`, 15 checks; `views.mts`, 13 comparisons): a view
   is followed from the moment its state is the case; what it delivers goes to its handler; a change to what it asks
   for follows it again and stops the one before, whose later deliveries are not heard; a change to anything else
@@ -740,9 +772,10 @@ its prefix, and `endedAsk` to find which. It works, and it is the part of the as
 on `xstate.done.actor`, 407 of `useSelector`, and 8 of `useAsk`. The commit surface's machine is 1,778 lines with 183
 uses of the three; its panel has 63 `useSelector` lines and imports the ids of asks to show a spinner.
 
-Here an ask that is not a state's own work is awaited ([rule 10](#rules)): declared, with the fields it depends on,
-and under way for as long as the data says so. A component reads that data. There is no id, no list, and no event for
-how an ask ended, and `commit.mts` is a slice of that surface written this way. So this record is not extended to new code, and nothing new is built on `asking`, `askId` or `endedAsk`. It
+Here an ask that is not a state's own work is declared ([rule 10](#rules)): a read under `awaits`, with the fields
+it depends on, and a write under `makes`, made with `make`. Which writes are under way is the kernel's to keep, and
+a component reads it. There is no id, no list kept by hand, and no event for how an ask ended, and `commit.mts` is a
+slice of that surface written this way. So this record is not extended to new code, and nothing new is built on `asking`, `askId` or `endedAsk`. It
 goes when its surface is ported.
 
 **Where the next work starts.** What can be done on XState now, each its own PR on `master`:
@@ -831,8 +864,8 @@ projects. Each would loosen the fit to this app.
     the step log (What to build around it), and is worth doing only against the components people will inspect.
 - **Roles**: `tell({ role: 'brain' }, …)`.
 - **A write nobody waits for**, which appliers and migrations make today.
-- **The rest of the commit surface.** Several asks at once is built and checked on a slice of it: five of its 54
-  asks, of each kind. What the slice does not show is the other 49, and whether "a state when what the surface takes
+- **The rest of the commit surface.** Reads and writes are built and checked on a slice of it: five of its 54 asks,
+  two reads and three writes. What the slice does not show is the other 49, and whether "a state when what the surface takes
   changes, an awaited ask otherwise" stays a clear rule across them. The asks the panel reads as under way by id
   today (a commit, a checkout, a worktree change, signing in) are the ones to try it on.
 - **Window-to-window sends**, the app's `sendToSurface`.

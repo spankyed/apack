@@ -4,7 +4,8 @@
 //   npx tsx docs/plans/apack-spec/prototype/answer-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { explore, type Schedule } from './schedule.mts'
-import { answered, given, reaching, system } from './state.mts'
+import { run, system } from './checks.mts'
+import { answered, given, reaching } from './state.mts'
 
 type CounterAsks = {
   /** Reads, and changes nothing. */
@@ -206,41 +207,14 @@ state<Counter, CounterEvent, CounterAsks>()({
   },
 })
 
-const unhandled: unknown[] = []
-process.on('unhandledRejection', (reason) => { unhandled.push(reason) })
-
-let failed = 0
-for (const [name, check] of checks) {
-  try { await check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 6).join(' ')}`) }
-}
-{
-  const name = 'under every ordering of three such asks and a close, the count is exactly the answers that said they added'
-  const found = await explore(racing)
-  try {
-    ok(!found.failure, found.failure && `${String(found.failure.error).split('\n')[0]} after: ${found.failure.taken.join(' → ')}`)
-    ok(found.complete && found.orderings > 1, `ran ${found.orderings} orderings, ${found.complete ? 'all' : 'not all'}`)
-    console.log(`  ok    ${name}  (${found.orderings} orderings, all there are)`)
-  } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n')[0]}`) }
-}
-{
-  const name = 'under every ordering of a put and a remove, a put that is answered was stored, and one that was not says the id had gone'
+await run(checks, async (tally) => {
+  await tally.every('under every ordering of three such asks and a close, the count is exactly the answers that said they added', () => explore(racing))
   const seen = new Set<string>()
-  const found = await explore(putAndRemove('PUT', seen))
-  try {
-    ok(!found.failure, found.failure && `${String(found.failure.error).split('\n')[0]} after: ${found.failure.taken.join(' → ')}`)
-    ok(found.complete && found.orderings > 1, `ran ${found.orderings} orderings, ${found.complete ? 'all' : 'not all'}`)
-    // Both ways it can go were run, or the check proved only one of them.
-    deepStrictEqual([...seen].sort(), ['gone', 'put'])
-    console.log(`  ok    ${name}  (${found.orderings} orderings, all there are)`)
-  } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n')[0]}`) }
-}
-{
-  const name = 'exploring finds the ordering in which a put that checks only before its work is answered for nothing stored'
-  const found = await explore(putAndRemove('PUT_CARELESSLY', new Set()))
-  if (found.failure && String(found.failure.error).includes('true')) console.log(`  ok    ${name}  (at ordering ${found.orderings}: ${found.failure.taken.join(', then ')})`)
-  else { failed++; console.log(`  FAIL  ${name}\n        ${found.failure ? String(found.failure.error).split('\n')[0] : `no ordering failed in ${found.orderings}`}`) }
-}
-await turns(20)
-if (unhandled.length) { failed++; console.log(`  FAIL  nothing was left unhandled\n        ${String(unhandled[0])}`) } else console.log('  ok    none of it left a rejection unhandled')
-console.log(`\n${checks.length + 4 - failed} of ${checks.length + 4} passed`)
-if (failed) process.exitCode = 1
+  await tally.every('under every ordering of a put and a remove, a put that is answered was stored, and one that was not says the id had gone', () => explore(putAndRemove('PUT', seen)))
+  // Both ways it can go were run, or the check before proved only one of them.
+  await tally.check('and both ways it can go were run', () => { deepStrictEqual([...seen].sort(), ['gone', 'put']) })
+  await tally.check('exploring finds the ordering in which a put that checks only before its work is answered for nothing stored', async () => {
+    const found = await explore(putAndRemove('PUT_CARELESSLY', new Set()))
+    ok(found.failure && String(found.failure.error).includes('true'), found.failure ? String(found.failure.error).split('\n')[0] : `no ordering failed in ${found.orderings}`)
+  })
+})

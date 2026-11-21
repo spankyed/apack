@@ -3,7 +3,8 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/follows-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { reaching, system, type ViewHost, type ViewUpdate } from './state.mts'
+import { run, system } from './checks.mts'
+import { reaching, type ViewHost, type ViewUpdate } from './state.mts'
 
 type App = {
   systems: {}
@@ -297,9 +298,4 @@ state<Shop, ShopEvent>()({
   states: { browsing: {}, away: {} },
 })
 
-let failed = 0
-for (const [name, check] of checks) {
-  try { check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 8).join(' ')}`) }
-}
-console.log(`\n${checks.length - failed} of ${checks.length} passed`)
-if (failed) process.exitCode = 1
+await run(checks)

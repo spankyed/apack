@@ -3,7 +3,8 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/leaving-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { given, Left, reaching, system } from './state.mts'
+import { run, system } from './checks.mts'
+import { given, Left, reaching } from './state.mts'
 
 type SlowAsks = {
   WAIT: { args: { turns: number }; answer: string }
@@ -173,14 +174,4 @@ state<Panel, PanelEvent>()({
   states: { idle: {}, working: { data: { how: given } } },
 })
 
-const unhandled: unknown[] = []
-process.on('unhandledRejection', (reason) => { unhandled.push(reason) })
-
-let failed = 0
-for (const [name, check] of checks) {
-  try { await check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 6).join(' ')}`) }
-}
-await turns(60)
-if (unhandled.length) { failed++; console.log(`  FAIL  nothing was left unhandled\n        ${String(unhandled[0])}`) } else console.log('  ok    none of it left a rejection unhandled')
-console.log(`\n${checks.length + 1 - failed} of ${checks.length + 1} passed`)
-if (failed) process.exitCode = 1
+await run(checks)

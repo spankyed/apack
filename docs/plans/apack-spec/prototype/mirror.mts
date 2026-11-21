@@ -28,7 +28,7 @@ const owned = (value: unknown): unknown => {
   return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, owned(inner)]))
 }
 
-type Held = { at?: string; data: Record<string, unknown> }
+type Held = { at?: string; data: Record<string, unknown>; making?: unknown }
 
 /** One running state, mirrored once for everything that reads it. */
 export interface Shared { readonly ref: string; readonly box: { now: Held | undefined }; readers: number }
@@ -55,9 +55,9 @@ export function mirrors(sys: System): Mirrors {
   const byRef = new Map<string, Shared>()
   let unsubscribe: (() => void) | undefined
   const read = (ref: string): Held | undefined => sys.read({ ref } as never) as Held | undefined
-  const copied = (now: Held | undefined): Held | undefined => now && { at: now.at, data: owned(now.data) as Record<string, unknown> }
+  const copied = (now: Held | undefined): Held | undefined => now && { at: now.at, data: owned(now.data) as Record<string, unknown>, ...('making' in now ? { making: owned(now.making) } : {}) }
 
-  const onStep = (changed: readonly string[], _: unknown, changes: Readonly<Record<string, { moved: boolean; paths: ReadonlyArray<ReadonlyArray<string>> }>>): void => {
+  const onStep = (changed: readonly string[], _: unknown, changes: Readonly<Record<string, { moved: boolean; paths: ReadonlyArray<ReadonlyArray<string>>; making: boolean }>>): void => {
     for (const ref of changed) {
       const shared = byRef.get(ref)
       if (!shared) continue
@@ -68,6 +68,8 @@ export function mirrors(sys: System): Mirrors {
       const mine = changes[ref]
       if (!mine) continue
       if (mine.moved) held.at = latest.at
+      // What it is making is small and the kernel's own: it is written whole when it changes.
+      if (mine.making) held.making = owned(latest.making)
       for (const path of mine.paths) {
         // Walk to the place in both: what the state holds there now, and where in the mirror it goes.
         let from: unknown = latest.data

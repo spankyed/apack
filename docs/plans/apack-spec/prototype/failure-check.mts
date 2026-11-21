@@ -3,7 +3,9 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/failure-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
-import { given, reaching, system } from './state.mts'
+import { run, system } from './checks.mts'
+import { system as unlimited } from './state.mts'
+import { given, reaching } from './state.mts'
 
 type SlowAsks = { WAIT: { args: { turns: number }; answer: string }; BREAK: { args: {}; answer: string } }
 type App = { systems: { slow: { events: never; asks: SlowAsks } }; surfaces: {}; views: {} }
@@ -182,6 +184,15 @@ const checks: Array<[string, () => Promise<void>]> = [
     strictEqual(it.count(), spun + 1)
     it.stop()
   }],
+  ['a system given a limit takes no more steps after it, and says so once', async () => {
+    const traced: string[] = []
+    const sys = unlimited({ side: 'backend', limit: 5, trace: (line) => { if (line.startsWith('DEFECT')) traced.push(line) } })
+    const it = sys.start('panel', panel([]))
+    for (let sent = 0; sent < 20; sent++) sys.send(it, { type: 'COUNT' })
+    // Starting it was a step, so four of the twenty were taken.
+    strictEqual(sys.read(it).data.count, 4)
+    deepStrictEqual(traced, ['DEFECT: backend took 5 steps and takes no more: something leads to something else without end'])
+  }],
   ['a release that throws does not keep the others from running', async () => {
     const it = wired()
     it.send({ type: 'START', how: 'not at all' })
@@ -204,14 +215,4 @@ state<Panel, PanelEvent>()({
   },
 })
 
-const unhandled: unknown[] = []
-process.on('unhandledRejection', (reason) => { unhandled.push(reason) })
-
-let failed = 0
-for (const [name, check] of checks) {
-  try { await check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 6).join(' ')}`) }
-}
-await turns(60)
-if (unhandled.length) { failed++; console.log(`  FAIL  nothing was left unhandled\n        ${String(unhandled[0])}`) } else console.log('  ok    none of it left a rejection unhandled')
-console.log(`\n${checks.length + 1 - failed} of ${checks.length + 1} passed`)
-if (failed) process.exitCode = 1
+await run(checks)

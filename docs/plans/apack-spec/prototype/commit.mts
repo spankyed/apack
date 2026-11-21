@@ -8,13 +8,13 @@
 // Which are under way is kept in its context (`asking`), how each ended arrives as `xstate.done.actor.<id>`, and the
 // panel imports the ids to show a spinner. By what each does, 14 are reads and 40 are writes.
 //
-// Here the slice has no ids, no list of what is under way and no event for how an ask ended. What is under way is
-// the data: a path being staged is in `staging`, a push being made is in `push`, and a component reads those. The
-// asks are declared under `awaits`, and which are made follows from the data.
+// Here the slice has no ids, no list of what is under way kept by hand and no event for how an ask ended. The two
+// kinds of ask are declared apart, because they are different things:
 //
-//   a read              from the fields it reads        asked again when one of them changes, the one before given up
-//   several writes      each key of a field             one for each, and a key goes when its write ends
-//   one write           from a field that holds it      made while the field holds it, given up when it is cleared
+//   a read    `awaits`   It is there because the data says so, for as long as it does: asked from the fields it
+//                        names, and asked again when one of them changes, the one before given up.
+//   a write   `makes`    It is made once, by a handler saying `make`. Which are under way is the kernel's to keep,
+//                        and a component reads it beside the data: `making.stage[path]`, `making.push`.
 //
 // `git` at the bottom stands in for the code system's git engine, with the asks' own names.
 
@@ -64,18 +64,15 @@ export type Commit = {
     revision: number
     selectedGitFile: { path: string; staged: boolean } | null
     gitDiff: string | null
-    /** The paths being staged, and being unstaged: one write for each. */
-    staging: Record<string, true>
-    unstaging: Record<string, true>
-    /** The push being made, while one is. */
-    push: {} | null
     pushPhase: string | null
     gitError: string | null
   }
+  /** The writes it makes: staging and unstaging for each of many paths, and one push at a time. */
+  makes: { stage: 'each'; unstage: 'each'; push: 'one' }
 }
 
 export const commit = state<Commit, CommitEvent>()({
-  data: { gitStatus: null, revision: 0, selectedGitFile: null, gitDiff: null, staging: {}, unstaging: {}, push: null, pushPhase: null, gitError: null },
+  data: { gitStatus: null, revision: 0, selectedGitFile: null, gitDiff: null, pushPhase: null, gitError: null },
 
   awaits: (asking) => ({
     // Read as the surface starts, and again whenever the repository changes.
@@ -91,35 +88,34 @@ export const commit = state<Commit, CommitEvent>()({
       args: ({ selectedGitFile }) => selectedGitFile,
       ended: (outcome) => (outcome.ok ? { data: { gitDiff: outcome.value.text } } : { data: { gitDiff: null, gitError: outcome.failure.message } }),
     }),
+  }),
 
-    // One write for each path. A path is in `staging` for exactly as long as its write is under way.
-    stage: asking('code', 'commit.STAGE_FILES', {
-      each: 'staging',
+  makes: ({ one, each }) => ({
+    // Made for a path when a handler says so, and under way for that path until it ends.
+    stage: each('code', 'commit.STAGE_FILES', {
       args: (path) => ({ paths: [path] }),
       ended: (outcome, { key }) => (outcome.ok ? undefined : { data: { gitError: `Could not stage ${key}: ${outcome.failure.message}` } }),
     }),
-    unstage: asking('code', 'commit.UNSTAGE_FILES', {
-      each: 'unstaging',
+    unstage: each('code', 'commit.UNSTAGE_FILES', {
       args: (path) => ({ paths: [path] }),
       ended: (outcome, { key }) => (outcome.ok ? undefined : { data: { gitError: `Could not unstage ${key}: ${outcome.failure.message}` } }),
     }),
 
-    // Made while `push` holds one, and given up when it is cleared: that is what stopping a push is.
-    push: asking('code', 'commit.PUBLISH_BRANCH', {
-      from: ['push'],
-      args: ({ push }) => push,
+    // One at a time: a second while one is being made is the same push.
+    push: one('code', 'commit.PUBLISH_BRANCH', {
+      args: () => ({}),
       heard: (updates) => ({ data: { pushPhase: updates.at(-1)!.phase } }),
-      ended: (outcome) => ({ data: { push: null, pushPhase: null, ...(outcome.ok ? {} : { gitError: outcome.failure.message }) } }),
+      ended: (outcome) => ({ data: { pushPhase: null, ...(outcome.ok ? {} : { gitError: outcome.failure.message }) } }),
     }),
   }),
 
   on: {
-    'commit.STAGE_FILE':   ({ path }) => ({ data: (d) => { d.staging[path] = true } }),
-    'commit.UNSTAGE_FILE': ({ path }) => ({ data: (d) => { d.unstaging[path] = true } }),
+    'commit.STAGE_FILE':   ({ path }, { make }) => { make('stage', path) },
+    'commit.UNSTAGE_FILE': ({ path }, { make }) => { make('unstage', path) },
     'commit.VIEW_DIFF':    ({ path, staged }) => ({ data: { selectedGitFile: { path, staged }, gitDiff: null } }),
-    // A second push while one is being made is the same push.
-    'commit.PUSH_BRANCH':  (_, { data }) => (data.push ? undefined : { data: { push: {} } }),
-    'commit.STOP_PUSH':    () => ({ data: { push: null, pushPhase: null } }),
+    'commit.PUSH_BRANCH':  (_, { make }) => { make('push') },
+    // Giving the push up is what stopping it is: the backend is told, and how it ended is not heard.
+    'commit.STOP_PUSH':    (_, { drop }) => { drop('push'); return { data: { pushPhase: null } } },
     'commit.DISMISS_ERROR': () => ({ data: { gitError: null } }),
     'REPOSITORY_CHANGED':  (_, { data }) => ({ data: { revision: data.revision + 1 } }),
   },
@@ -211,13 +207,14 @@ if (process.argv[1]?.endsWith('commit.mts')) {
   window.connect(backend)
   const surface = window.start('commit', commit)
   window.subscribe(() => {
-    const d = window.read(surface).data
+    const { data: d, making } = window.read(surface)
     say(`    ${[d.gitStatus && `staged ${d.gitStatus.staged.join(',') || '-'} | unstaged ${d.gitStatus.unstaged.join(',') || '-'} | ahead ${d.gitStatus.ahead}`,
-      Object.keys(d.staging).length && `staging ${Object.keys(d.staging).join(',')}`, d.push && `pushing${d.pushPhase ? `: ${d.pushPhase}` : ''}`,
+      Object.keys(making.stage).length && `staging ${Object.keys(making.stage).join(',')}`, making.push && `pushing${d.pushPhase ? `: ${d.pushPhase}` : ''}`,
       d.selectedGitFile && `showing ${d.selectedGitFile.path}: ${d.gitDiff ?? '…'}`, d.gitError && `error "${d.gitError}"`].filter(Boolean).join(' | ')}`)
   })
   const send = (event: CommitEvent): void => window.send(surface, event)
   const now = () => window.read(surface).data
+  const making = () => window.read(surface).making
 
   say('the surface starts: its status is read')
   await turns(12)
@@ -226,9 +223,9 @@ if (process.argv[1]?.endsWith('commit.mts')) {
   say('two files are staged at once')
   send({ type: 'commit.STAGE_FILE', path: 'a.ts' })
   send({ type: 'commit.STAGE_FILE', path: 'b.ts' })
-  holds('both are being staged, and that is data', now().staging, { 'a.ts': true, 'b.ts': true })
+  holds('both are being staged, which is read beside the data', making().stage, { 'a.ts': true, 'b.ts': true })
   await turns(30)
-  holds('neither is being staged any longer', now().staging, {})
+  holds('neither is being staged any longer', making().stage, {})
   holds('and the status was read again, because the repository changed', now().gitStatus, { staged: ['a.ts', 'b.ts'], unstaged: ['c.ts'], ahead: 2 })
 
   say('a file is selected, and another before the first one\'s diff is read')
@@ -240,20 +237,20 @@ if (process.argv[1]?.endsWith('commit.mts')) {
   say('a file that is not there is staged: the refusal is shown, and names the file')
   send({ type: 'commit.STAGE_FILE', path: 'z.ts' });                               await turns(20)
   holds('the error names it', now().gitError, 'Could not stage z.ts: z.ts has no unstaged changes')
-  holds('and nothing is left being staged', now().staging, {})
+  holds('and nothing is left being staged', making().stage, {})
   send({ type: 'commit.DISMISS_ERROR' })
 
   say('a push, and a second while it is being made')
   send({ type: 'commit.PUSH_BRANCH' })
   send({ type: 'commit.PUSH_BRANCH' });                                            await turns(4)
-  holds('one push is being made, and says how far it is', { pushing: now().push !== null, phase: now().pushPhase }, { pushing: true, phase: 'Counting objects' })
+  holds('one push is being made, and says how far it is', { pushing: making().push, phase: now().pushPhase }, { pushing: true, phase: 'Counting objects' })
   await turns(30)
-  holds('it ended, and the status says nothing is ahead', { pushing: now().push !== null, ahead: now().gitStatus?.ahead }, { pushing: false, ahead: 0 })
+  holds('it ended, and the status says nothing is ahead', { pushing: making().push, ahead: now().gitStatus?.ahead }, { pushing: false, ahead: 0 })
 
   say('a push that is stopped')
   send({ type: 'commit.PUSH_BRANCH' });                                            await turns(3)
   send({ type: 'commit.STOP_PUSH' });                                              await turns(20)
-  holds('no push is being made, and none is reported as failed', { pushing: now().push !== null, error: now().gitError }, { pushing: false, error: null })
+  holds('no push is being made, and none is reported as failed', { pushing: making().push, error: now().gitError }, { pushing: false, error: null })
   holds('and the backend was told to give it up', said.at(-1), 'gave up the push')
 
   console.log(lines.join('\n'))

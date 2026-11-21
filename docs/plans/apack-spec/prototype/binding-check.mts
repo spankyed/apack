@@ -5,7 +5,8 @@
 import { deepStrictEqual, strictEqual } from 'node:assert'
 import { effect } from '@vue/reactivity'
 import { mirror } from './mirror.mts'
-import { given, reaching, system, type Each, type Value } from './state.mts'
+import { run, system } from './checks.mts'
+import { given, reaching, type Each, type Value } from './state.mts'
 import { windowFrame } from './window-frame.mts'
 
 type Shape = {
@@ -242,9 +243,4 @@ function fakePage() {
   }
 }
 
-let failed = 0
-for (const [name, check] of checks) {
-  try { check(); console.log(`  ok    ${name}`) } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n').slice(0, 4).join(' ')}`) }
-}
-console.log(`\n${checks.length - failed} of ${checks.length} passed`)
-if (failed) process.exitCode = 1
+await run(checks)
