@@ -35,7 +35,6 @@ export { workspacePackList } from '@apackdev/host/build/published-manifest';
  * into a fixture. `tests/published-manifest-paths.spec.ts` checks every packed package is one the build builds.
  */
 export const PACKED_PACKAGES: Record<string, string> = {
-  ears: publishedTreeDirs()['apack-ears']!,
   sdk: publishedTreeDirs()['apack-sdk']!,
   ui: publishedTreeDirs()['apack-ui']!,
 };
@@ -60,25 +59,74 @@ export const CONSUMER_MATRIX = (Object.keys(TSC_VERSIONS) as TscVersion[])
 export const PACKAGES_BUILT = packagesBuiltOrRefuse('npm run packages:build (or npm test -w @app/publish-checks, which builds them)');
 
 /**
- * A directory whose node_modules has the npm-packed @apackdev/ears, @apackdev/sdk and @apackdev/ui installed, as a
- * pack gets them from the registry, and links to the monorepo's copies of everything else.
+ * elmdb's packages the SDK brings, which no registry has: the tarball of each that this repository's root `overrides`
+ * name, elmdb's release's, standing in for the registry through npm's `overrides`, as
+ * `test-packaged-authoring-author.sh` does. A consumer names neither: they arrive as the SDK's. While the root points
+ * them at a local checkout (`npm run deps:local`), each is packed from it.
+ */
+const ELMDB_PACKAGES = ['@elmdb/ears', 'elmdb'];
+const rootOverrides = (): Record<string, string> =>
+  (JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')) as { overrides: Record<string, string> }).overrides;
+
+/** The version of `name` this repository has installed */
+function installedVersion(name: string): string {
+  return (JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'node_modules', name, 'package.json'), 'utf8')) as { version: string }).version;
+}
+
+/** A published tree's optional peer dependencies, each with the range it names */
+function optionalPeers(dir: string): Array<[string, string]> {
+  const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as {
+    peerDependencies?: Record<string, string>; peerDependenciesMeta?: Record<string, { optional?: boolean }>;
+  };
+  return Object.entries(manifest.peerDependencies ?? {}).filter(([name]) => manifest.peerDependenciesMeta?.[name]?.optional === true);
+}
+
+/** `npm <args>` in `cwd`, launched as `packTree` launches it: through npm's JS entry on Windows, where npm.cmd needs a shell */
+function npm(args: readonly string[], cwd: string): void {
+  const windows = process.platform === 'win32';
+  const entry = process.env.npm_execpath;
+  const npmArgs = windows ? [entry && path.basename(entry) === 'npm-cli.js'
+    ? entry : path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'), ...args] : [...args];
+  execFileSync(windows ? process.execPath : 'npm', npmArgs, { cwd, stdio: ['ignore', 'ignore', 'pipe'] });
+}
+
+/**
+ * A directory whose node_modules has the npm-packed @apackdev/sdk and @apackdev/ui installed as a pack gets them from
+ * the registry, and nothing else: what they declare, installed by npm.
+ *
+ * **Installed nested (`--install-strategy=nested`)**: each package's dependencies under its own `node_modules`, and only
+ * the consumer's dependencies and their peers at the top. That is the strictest layout npm writes, and the one where a
+ * published declaration naming a package its own package doesn't declare (or one only a dependency brings, like
+ * `@elmdb/ears` behind the SDK) fails to resolve — where a hoisted install, or a tree of links to this repo's
+ * `node_modules`, would resolve it by accident. Scripts are skipped (nothing here runs the packages) and the cache is
+ * preferred, so a run needs the network only for what this machine hasn't fetched.
  */
 export function installPublishedPackages(): string {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'apack-published-'));
-  const modules = path.join(root, 'node_modules');
-  fs.mkdirSync(path.join(modules, '@apackdev'), { recursive: true });
-  for (const entry of fs.readdirSync(path.join(REPO_ROOT, 'node_modules'))) {
-    if (entry === '@apackdev' || entry.startsWith('.')) continue;
-    fs.symlinkSync(path.join(REPO_ROOT, 'node_modules', entry), path.join(modules, entry), 'dir');
-  }
-  for (const [name, dir] of Object.entries(PACKED_PACKAGES)) {
-    // `packTree` rather than npm by hand: one declaration of this, shared with `packages:check`, which needs
-    // the same tarball for `attw` and must not pack it inside the tree it is checking
-    const tarball = packTree(dir, root);
-    const target = path.join(modules, '@apackdev', name);
-    fs.mkdirSync(target);
-    execFileSync('tar', ['-xzf', tarball, '-C', target, '--strip-components', '1']);
-  }
+  const tarballs = path.join(root, '.tarballs');
+  fs.mkdirSync(tarballs);
+  // `packTree` rather than npm by hand: one declaration of this, shared with `packages:check`, which needs the same
+  // tarball for `attw` and must not pack it inside the tree it is checking
+  const packed = (dir: string) => `file:${packTree(dir, tarballs)}`;
+  fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({
+    name: 'consumer', private: true, type: 'module',
+    dependencies: {
+      // Node's types, which the compiles here name (`types: ['node']`), at the version this repository compiles with
+      '@types/node': installedVersion('@types/node'),
+      // What `ai`'s `@ai-sdk/provider` declarations import (`json-schema`) and don't declare: a consumer that checks
+      // library declarations installs it, as one compiling against the AI SDK has to
+      '@types/json-schema': installedVersion('@types/json-schema'),
+      // The optional peers too, at the range each package names: declared, so a declaration may name one, and a
+      // consumer reaching the types that do has installed it
+      ...Object.fromEntries(Object.values(PACKED_PACKAGES).flatMap((dir) => optionalPeers(dir))),
+      ...Object.fromEntries(Object.entries(PACKED_PACKAGES).map(([name, dir]) => [`@apackdev/${name}`, packed(dir)])),
+    },
+    overrides: Object.fromEntries(ELMDB_PACKAGES.map((name) => {
+      const spec = rootOverrides()[name]!;
+      return [name, spec.startsWith('file:') ? packed(path.resolve(REPO_ROOT, spec.slice('file:'.length))) : spec];
+    })),
+  }));
+  npm(['install', '--install-strategy=nested', '--prefer-offline', '--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=error'], root);
   return root;
 }
 

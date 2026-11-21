@@ -11,7 +11,7 @@ import type { ContentWriter } from '../../src/content/writers.ts';
 import { _getMediaPath, applyRecord, type ApplyRecord, type ImportMode } from '../../src/utils/index.ts';
 import type { ContentItem } from '../../src/build/content/items.ts';
 import type { EARS } from '../../src/types/entities.ts';
-import { defineEars, type UntypedSchema } from '@apackdev/ears';
+import { defineEars, type UntypedSchema } from '@elmdb/ears';
 
 type Memo = { id: EARS.EntityId; name: string; body: string; pinned?: boolean; mood?: string; contentHash?: string };
 type Folder = { id: EARS.EntityId; name: string; label?: string; contentKey?: string };

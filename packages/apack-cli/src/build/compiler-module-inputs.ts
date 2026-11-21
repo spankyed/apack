@@ -30,6 +30,8 @@ export function readCompilerModuleInputs(root: string, observe?: BuildInputObser
   ancestors: ReturnType<typeof createCompilerFileView>['ancestors'];
   snapshot: ReturnType<typeof createCompilerFileView>['snapshot'];
   observations: ReturnType<typeof createCompilerFileView>['observations'];
+  /** Follow `files`' imports as the authored sources' were followed, capturing what they read */
+  traceImports(files: readonly string[]): void;
   assertCurrent(): void;
 } {
   const realRoot = fs.realpathSync.native(root);
@@ -84,19 +86,22 @@ export function readCompilerModuleInputs(root: string, observe?: BuildInputObser
     if (fileSystem.directoryExists(directory)) packages.add(fileSystem.realpath(directory));
   };
   for (const file of declarationConfiguration?.files.keys() ?? []) packageOf(file);
+  // Files outside the authored set that `traceImports` was handed, which the host reads like authored ones
+  const traced = new Set<string>();
+  const hidden = (file: string) => excluded(file) && !traced.has(path.resolve(file));
   const host = ts.createCompilerHost(options);
   const { getSourceFile } = host;
   host.readFile = file => {
     const script = scripts.get(path.resolve(file));
     if (script !== undefined) return script;
-    if (excluded(file)) return undefined;
+    if (hidden(file)) return undefined;
     const text = fileSystem.readFile(file);
     if (text !== undefined) packageOf(file);
     return text;
   };
   host.fileExists = file => {
     if (scripts.has(path.resolve(file))) return true;
-    if (excluded(file)) return false;
+    if (hidden(file)) return false;
     return fileSystem.fileExists(file);
   };
   host.directoryExists = fileSystem.directoryExists;
@@ -106,9 +111,8 @@ export function readCompilerModuleInputs(root: string, observe?: BuildInputObser
   host.getSourceFile = (file, version, onError, fresh) => {
     const script = scripts.get(path.resolve(file));
     if (script !== undefined) return ts.createSourceFile(file, script, version, true);
-    return excluded(file) ? undefined : getSourceFile(file, version, onError, fresh);
+    return hidden(file) ? undefined : getSourceFile(file, version, onError, fresh);
   };
-  const program = ts.createProgram({ rootNames, options, host });
   const globDirectories = new Set<string>();
   function captureGlobDirectory(directory: string) {
     const physical = fileSystem.realpath(directory);
@@ -117,17 +121,22 @@ export function readCompilerModuleInputs(root: string, observe?: BuildInputObser
     view.resolutionDirectory(directory);
     for (const name of fileSystem.getDirectories(directory)) captureGlobDirectory(path.join(directory, name));
   }
-  for (const source of program.getSourceFiles()) {
-    if (scripts.has(path.resolve(source.fileName))) continue;
-    packageOf(source.fileName);
-    for (const directory of compilerGlobDirectories(source)) captureGlobDirectory(directory);
-  }
+  const traceImports = (names: readonly string[]) => {
+    for (const name of names) traced.add(path.resolve(name));
+    const program = ts.createProgram({ rootNames: names, options, host });
+    for (const source of program.getSourceFiles()) {
+      if (scripts.has(path.resolve(source.fileName))) continue;
+      packageOf(source.fileName);
+      for (const directory of compilerGlobDirectories(source)) captureGlobDirectory(directory);
+    }
+  };
+  traceImports(rootNames);
   const hash = createHash('sha256').update(JSON.stringify(rootFiles)).update(view.hash());
   const assertCurrent = view.assertCurrent;
   assertCurrent();
   return { hash: hash.digest('hex'), configuration, declarationConfiguration, readBytes: view.readBytes, captureFile: view.captureFile,
     captureLocation: view.captureLocation, readDirectoryData: view.readDirectoryData, readDataBytes: view.readDataBytes, readMetadata: view.readMetadata, openDirectoryData: view.openDirectoryData, dispose: view.dispose, resolutionDirectory: view.resolutionDirectory, ancestors: view.ancestors, fileSystem, snapshot: view.snapshot,
-    observations: view.observations, captureDataLocation: view.captureDataLocation,
+    observations: view.observations, captureDataLocation: view.captureDataLocation, traceImports,
     packageDirectories: [...packages].sort((a, b) => relative(a) < relative(b) ? -1 : relative(a) > relative(b) ? 1 : 0), assertCurrent };
 
 }

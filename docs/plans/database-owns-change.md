@@ -54,7 +54,7 @@ The log starts as a pure addition. Nothing is deleted until a consumer moves ont
 
 ## Step 3: the invariant test (apack)
 
-- **A generated property test** beside `packages/apack-ears/tests/engine/model-based.spec.ts`: random writes from a real second process, kills included, then every open watch is compared with a fresh read of the same query.
+- **A generated property test** beside elmdb's `packages/ears/tests/engine/model-based.spec.ts`: random writes from a real second process, kills included, then every open watch is compared with a fresh read of the same query.
 - **At app level:** the same check for what systems publish, using `startApp` from `@apackdev/testing/harness`, extended to derived rows in step 4.
 - **Failure must name the history** so it can be replayed.
 

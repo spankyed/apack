@@ -20,7 +20,7 @@
 // unchanged: a grid that moved is news, and a fit that was not honoured is answered to its asker alone.
 import { describe, expect, it } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { answered } from './_support/answered.ts'
 import type { TerminalInfo } from '#features/code/be/types.ts'
 

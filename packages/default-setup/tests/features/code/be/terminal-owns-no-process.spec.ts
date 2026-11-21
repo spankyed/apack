@@ -3,7 +3,7 @@
 // (the terminal ownership goal's D6 and its acceptance table).
 import { describe, expect, it } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { featureSettings } from '#generated/settings.ts'
 import { repository } from '#generated/repository.ts'
 import { answered } from './_support/answered.ts'

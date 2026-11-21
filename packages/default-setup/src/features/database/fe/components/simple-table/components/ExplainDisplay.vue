@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import type { QueryExplanation } from '@apackdev/ears';
+import type { QueryExplanation } from '@apackdev/sdk/ears';
 
 defineProps<{ explanation: QueryExplanation }>();
 </script>

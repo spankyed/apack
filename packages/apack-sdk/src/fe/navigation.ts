@@ -1,5 +1,5 @@
 /// <reference lib="dom" />
-import { entityTypeOf, type EARS } from '@apackdev/ears';
+import { entityTypeOf, type EARS } from '@elmdb/ears';
 /** Canonical entity wire type, available through the frontend SDK. */
 export { entityTypeOf };
 import type { OpenEntity } from '../events/index.ts';

@@ -6,7 +6,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import type { Ears } from '@apackdev/ears';
+import type { Ears } from '@elmdb/ears';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { PACK_LAYOUT, sealPackBuild } from '@apackdev/host/packs';
 

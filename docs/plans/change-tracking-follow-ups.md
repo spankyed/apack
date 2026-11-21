@@ -22,7 +22,7 @@ A review of the stack found six things that are correct but clunkier than they n
 ## What the code says, which shapes the plan
 
 - apack reads two things from the change log: whether a commit's `origin` is another handle's
-  (`readChangedElsewhere`, `elsewhereBetween` in `packages/apack-ears/src/database.ts`), and whether the log was
+  (`readChangedElsewhere`, `elsewhereBetween` in elmdb's `packages/ears/src/database.ts`), and whether the log was
   `truncated`. It never reads `types` or `kinds`. `DATA_CHANGED_ELSEWHERE` carries no payload, and a foreign commit
   re-runs every watch (`touched: 'all'`).
 - Every commit raises the sequence by exactly one (`store/mod.rs`, `meta::SEQUENCE`).

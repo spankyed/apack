@@ -15,7 +15,7 @@ import type { BudgetClass } from './step-budgets.ts';
  * read there for the case where the names differ; this one is not, and a comment claiming otherwise would be
  * describing a failure that does not happen.
  */
-export const API_REPORT_PACKAGES = ['@apackdev/ears', '@apackdev/sdk', '@apackdev/ui', '@apackdev/testing'] as const;
+export const API_REPORT_PACKAGES = ['@apackdev/sdk', '@apackdev/ui', '@apackdev/testing'] as const;
 
 export type ApiReportPackage = (typeof API_REPORT_PACKAGES)[number];
 

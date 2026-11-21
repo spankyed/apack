@@ -40,7 +40,6 @@ const packageDirs = (): string[] =>
  * run over, and `api:update` is not where dead code is meant to surface.
  */
 const NOT_GATED: Record<string, string> = {
-  'packages/apack-ears/tsconfig.api-extractor.json': 'API Extractor\'s input, not a check',
   'packages/apack-sdk/tsconfig.api-extractor.json': 'API Extractor\'s input, not a check',
   'packages/apack-ui/tsconfig.api-extractor.json': 'API Extractor\'s input, not a check',
   'packages/apack-testing/tsconfig.api-extractor.json': 'API Extractor\'s input, not a check',

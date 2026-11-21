@@ -100,7 +100,7 @@ describe('the watched input set', () => {
   });
 
   it('covers each package build script and the configs it reads', () => {
-    for (const [pkg, unit] of [['apack-ears', '@apackdev/ears'], ['apack-sdk', '@apackdev/sdk'], ['apack-ui', '@apackdev/ui']] as const) {
+    for (const [pkg, unit] of [['apack-sdk', '@apackdev/sdk'], ['apack-ui', '@apackdev/ui']] as const) {
       const inputs = new Set(BUILD_UNITS[unit].inputs);
       for (const input of ['src', 'package.json', 'tsconfig.json', 'tsconfig.package.json']) {
         expect(inputs, `${unit}: ${input}`).toContain(path.join(REPO_ROOT, 'packages', pkg, input));
@@ -1240,7 +1240,7 @@ describe('a lock still on disk when the packages went stale', () => {
   it('prefers what the wait saw over a lock taken since', () => {
     const file = lockAt({ pid: process.pid, label: '@apackdev/ui', startedAt: new Date().toISOString() });
 
-    expect(packageWriter('pid 99 (@apackdev/ears, started then)', file)).toContain('@apackdev/ears');
+    expect(packageWriter('pid 99 (@elmdb/ears, started then)', file)).toContain('@elmdb/ears');
   });
 });
 

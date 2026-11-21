@@ -17,15 +17,15 @@ import { holdExclusiveLockWaiting, type ExclusiveLock } from '../exclusive-lock.
 // The protocol's types, generated from the broker's Rust and shipped by its package — not a copy of them.
 // There was a copy here, with a script that re-derived and compared it; a package with the file in it
 // leaves nothing to carry (`apack-terminal/node/protocol.ts`, `cargo xtask check-generated` there).
-import type { CommandOutcome, ErrorCode, Event, Request, StatusRecord } from 'apack-terminal';
+import type { CommandOutcome, ErrorCode, Event, Request, StatusRecord } from '@apackdev/terminal';
 
 /**
  * The protocol this client speaks. The broker refuses a connection that does not match.
  *
- * **It stays 1 through a change to what a message means.** The broker is pinned by commit
- * (`vendor/apack-terminal.rev`) and the two halves move in one change, so there is no app reading an older
- * shape to protect. What the handshake is for is a checkout whose link points at a build from before the
- * change: a refusal naming both numbers beats a message that means something else.
+ * **It stays 1 through a change to what a message means.** The broker is pinned by the release the lockfile
+ * installs (`npm run deps:pin`) and the two halves move in one change, so there is no app reading an older
+ * shape to protect. What the handshake is for is a local checkout (`npm run deps:local`) or `APACK_TERMINAL_BINARY`
+ * naming a build from before the change: a refusal naming both numbers beats a message that means something else.
  */
 export const PROTOCOL_VERSION = 1;
 

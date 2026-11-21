@@ -175,7 +175,7 @@ describe('host package boundaries', () => {
         .filter(entry => entry.isFile() && entry.name.endsWith('.ts'))
         .map(entry => path.join(SRC, 'features', feature.name, entry.name)));
     const reached = new Set([path.join(SRC, 'fe', 'index.ts'), ...featureContracts].flatMap(file => [...runtimeClosure(file)]));
-    const forbidden = /^(node:|fs(?:\/|$)|crypto$|lmdb(?:\/|$)|@apackdev\/ears(?:\/|$)|@trpc\/)/;
+    const forbidden = /^(node:|fs(?:\/|$)|crypto$|lmdb(?:\/|$)|@elmdb\/ears(?:\/|$)|@trpc\/)/;
     const imports = [...reached].flatMap(file => [
       ...importsOf(file).filter(imported => !imported.typeOnly && forbidden.test(imported.specifier))
         .map(imported => `${rel(file)}: ${imported.specifier}`),

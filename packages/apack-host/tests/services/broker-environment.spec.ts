@@ -115,12 +115,12 @@ describe('where the broker listens', () => {
 /**
  * **Where the binary comes from, which is the package and not a path.** A package that answers for its own
  * binary cannot be wrong about its name, which carries `.exe` on Windows, nor about which commit's build it is,
- * since `@app/terminal-broker` answers the path of the pinned commit's alone.
+ * since `@apackdev/terminal` answers the path in the platform package the lockfile pins beside it.
  */
 describe('where the broker binary comes from', () => {
-  it('is the pinned build @app/terminal-broker installed', () => {
+  it('is the build @apackdev/terminal installed', () => {
     const shipped = packagedBrokerBinary();
-    expect(shipped, 'the pinned broker is not installed: `npm run fetch:terminal-broker`').toBeTruthy();
+    expect(shipped, 'no broker is installed for this platform: `npm ci`').toBeTruthy();
 
     expect(findBrokerBinary()).toBe(shipped);
   });

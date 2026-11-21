@@ -105,10 +105,8 @@ export const manifestSchema: z.ZodObject<{
         distribution: z.ZodRecord<z.ZodString, z.ZodNumber>;
     }, z.core.$strip>;
     native: z.ZodObject<{
-        pin: z.ZodString;
-        checkoutRevision: z.ZodString;
-        dirty: z.ZodBoolean;
-        excludedUntracked: z.ZodArray<z.ZodString>;
+        resolved: z.ZodString;
+        integrity: z.ZodString;
     }, z.core.$strip>;
     runtime: z.ZodRecord<z.ZodString, z.ZodString>;
     machine: z.ZodObject<{
@@ -162,10 +160,8 @@ export function performanceIdentity(options: Pick<PerformanceManifest, 'fixture'
         distribution: Record<string, number>;
     };
     native: {
-        pin: string;
-        checkoutRevision: string;
-        dirty: boolean;
-        excludedUntracked: string[];
+        resolved: string;
+        integrity: string;
     };
     runtime: Record<string, string>;
     machine: {

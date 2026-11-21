@@ -10,7 +10,7 @@ import { repository } from '#generated/repository.ts'
 import { EARS, newId } from '#generated/ears.ts'
 import { defaultShell } from '#features/code/be/services/known-shells.ts'
 import type { TerminalStatus } from '#features/code/be/types.ts'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { answered } from './_support/answered.ts'
 import { aTerminal, lastTold, record, running, stopsAfterEach, WINDOW } from './_support/terminal-statuses.ts'
 

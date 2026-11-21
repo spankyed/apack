@@ -76,9 +76,8 @@ export const RESOLVES_DIST_BY_DESIGN = new Map<string, string>([
   // API Extractor reads the .d.ts rollup of a package's dependencies, so they must resolve to built
   // declarations; with the source condition tsc would analyse the dependency's .ts instead and report
   // diagnostics for source the report never covers.
-  ['packages/apack-sdk/tsconfig.api-extractor.json', 'API Extractor analyses .d.ts: @apackdev/ears resolves to its built declarations'],
   ['packages/apack-ui/tsconfig.api-extractor.json', 'API Extractor analyses .d.ts: @apackdev/sdk resolves to its built declarations'],
-  ['packages/apack-testing/tsconfig.api-extractor.json', 'API Extractor analyses .d.ts: @apackdev/ears, /sdk and /host resolve to their built declarations'],
+  ['packages/apack-testing/tsconfig.api-extractor.json', 'API Extractor analyses .d.ts: @apackdev/sdk and /host resolve to their built declarations'],
   // tsdown keeps every dependency and peer external (deps.neverBundle), so it never resolves
   // @apackdev/sdk at all; vue-tsc emits the declarations under tsconfig.package.json, which declares it.
   ['packages/apack-ui/tsdown.config.ts', 'every @apackdev dependency stays external (deps.neverBundle), so nothing is resolved'],

@@ -7,7 +7,7 @@ import type { PackRegistryView } from '../runtime/packs-view.ts';
 import { testPacksView } from './packs.ts';
 import type { RootEvents } from '../runtime/root-events.ts';
 import type { Message } from '../events/index.ts';
-import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
+import type { EarsDatabase, EarsEngine } from '@elmdb/ears';
 import type { LogEvent, SystemErrorEvent } from '../logger/index.ts';
 import { _createRunHistory, type RunHistory } from '../services/run-history.ts';
 import { _openTestRunHistory } from './run-history.ts';

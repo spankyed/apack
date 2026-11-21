@@ -1,6 +1,6 @@
 // The SDK's own entities typed by their shapes, as a pack's #generated/ears types the pack's: the SDK's repositories
 // and appliers read their rows through it, on the bound engine, rather than naming a row type nothing checks
-import { defineEars, type UntypedSchema } from '@apackdev/ears';
+import { defineEars, type UntypedSchema } from '@elmdb/ears';
 import type { SdkEntityShapes } from '../types/sdk-entities.ts';
 import { boundEars } from './index.ts';
 

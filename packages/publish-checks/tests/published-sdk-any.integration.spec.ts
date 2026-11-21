@@ -15,14 +15,17 @@ afterAll(() => {
 });
 
 /**
- * The published packages a pack installs and imports directly. Their declarations are ours, so `any`
+ * The published packages a pack installs, the SDK's EARS with them. Their declarations are ours, so `any`
  * in any of them is a leak and is walked wherever it's reached — including from another one's types,
- * since @apackdev/sdk's surface is largely @apackdev/ears' types. Everything else under node_modules
+ * since @apackdev/sdk's surface is largely @elmdb/ears' types. Everything else under node_modules
  * (vue, zod, ai, xstate) is a library's own business and is not walked.
  */
-const PACK_FACING_PACKAGES = ['@apackdev/ears', '@apackdev/sdk', '@apackdev/ui'];
-/** Of those, the ones whose own exports are scanned: @apackdev/ui's surface is its component reports' */
-const SCANNED_PACKAGES = ['@apackdev/sdk', '@apackdev/ears'];
+const PACK_FACING_PACKAGES = ['@elmdb/ears', '@apackdev/sdk', '@apackdev/ui'];
+/**
+ * Of those, the ones whose own exports are scanned: @apackdev/ui's surface is its component reports', and
+ * @elmdb/ears' own exports are elmdb's to hold, where EARS is built; here it is walked where the SDK reaches it
+ */
+const SCANNED_PACKAGES = ['@apackdev/sdk'];
 
 /** Where those packages are installed, as real paths, for the first-party check */
 function packFacingRoots(consumerDir: string): string[] {
@@ -135,11 +138,11 @@ function exportsWithAny(packageName: string, packageDir: string, firstPartyRoots
  * signature, `this` parameter, public members, type arguments, namespace members, conditional
  * branches, type parameter constraints or defaults, a few levels deep) contains `any` fails.
  *
- * `@apackdev/ears` and `@apackdev/sdk` are both ours and both installed by packs, so both are checked
- * and both are walked into; a third-party library's own types (xstate AnyActorRef, vue Component,
+ * `@apackdev/sdk` is checked, and walked into with `@elmdb/ears`, whose types its surface is largely made of;
+ * a third-party library's own types (xstate AnyActorRef, vue Component,
  * zod schemas) are the library's business and aren't walked. Standard library types (Array, Promise,
- * Record) are, through the type arguments we pass them. `@apackdev/ears/lmdb` is skipped with the rest
- * of `APP_ONLY_EXPORTS`: only the app's composition root loads it, never a pack.
+ * Record) are, through the type arguments we pass them. An entry in `APP_ONLY_EXPORTS` is skipped: only
+ * the app's composition root loads it, never a pack.
  */
 
 describe.skipIf(!PACKAGES_BUILT)('published pack-facing packages', () => {

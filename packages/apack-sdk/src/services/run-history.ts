@@ -1,4 +1,4 @@
-import type { Ears, EngineSchema } from '@apackdev/ears';
+import type { Ears, EngineSchema } from '@elmdb/ears';
 import type { EARS } from '../types/entities.ts';
 import { truncateResult } from '../steps/result-truncator.ts';
 import { createLogger } from '../logger/logger.ts';

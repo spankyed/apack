@@ -8,12 +8,12 @@ export { formatNodeOptions, parseNodeOptions } from './node-options.js';
  *
  * Exported because the pack rule asks the mirror-image question of a pack's own compiler
  * (`apack-cli/src/build/pack-resolution.ts`, which wants `dist` where this wants source), and two lists of the
- * same three packages could disagree about which three.
+ * same packages could disagree about which.
  */
-export const SOURCE_PACKAGES = ['@apackdev/ears', '@apackdev/sdk', '@apackdev/ui'] as const;
+export const SOURCE_PACKAGES = ['@apackdev/sdk', '@apackdev/ui'] as const;
 
 /**
- * The export condition under which the three packages above resolve their TypeScript source.
+ * The export condition under which the packages above resolve their TypeScript source.
  *
  * Here because this module is what the condition is *about*, beside `SOURCE_PACKAGES` for the same reason: the
  * packages and the condition are one fact, and two modules holding half of it each is how the list of packages
@@ -55,7 +55,7 @@ function tryResolve(resolve: ResolveFile, specifier: string): string | undefined
 }
 
 /**
- * Throws when a checkout's workspace @apackdev/ears, @apackdev/sdk or @apackdev/ui doesn't resolve to its source.
+ * Throws when a checkout's workspace @apackdev/sdk or @apackdev/ui doesn't resolve to its source.
  * Without the @apackdev/source condition a process would run the checkout's dist, which is stale
  * or missing. Installed packages (they ship no src) and packages that don't resolve pass.
  *

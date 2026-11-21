@@ -40,7 +40,7 @@ For recording contracts and the maintained diagnosis/comparison workflow, see
 [application performance recording](references/application-performance.md).
 
 A terminal's process is owned by a Rust broker outside the app, pinned as a sibling checkout: see
-[the terminal broker](references/terminal-broker.md).
+[the terminal broker](references/broker.md).
 
 ## Document lifecycle
 

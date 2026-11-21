@@ -9,9 +9,6 @@ import { execFileWhileWorking } from '@apackdev/sdk/progress';
 
 let dir: string;
 let repo: string;
-let elmdb: string;
-let apackTerminal: string;
-let apackGit: string;
 const execFileAsync = execFileWhileWorking;
 const RUN = { encoding: 'utf8', timeout: 60_000, maxBuffer: 64 * 1024 * 1024 } as const;
 const git = async (root: string, ...args: string[]) => (await execFileAsync('git', args, { cwd: root, ...RUN })).stdout.trim();
@@ -22,43 +19,8 @@ beforeEach(async () => {
   await git(repo, 'init', '-b', 'main');
   await git(repo, 'config', 'user.name', 'Session test');
   await git(repo, 'config', 'user.email', 'session@example.invalid');
-  // The elmdb checkout a session links: one commit, a manifest naming elmdb and a built binding
-  elmdb = path.join(dir, 'elmdb');
-  fs.mkdirSync(path.join(elmdb, 'crates', 'elmdb-node'), { recursive: true });
-  fs.writeFileSync(path.join(elmdb, 'crates', 'elmdb-node', 'package.json'), JSON.stringify({ name: 'elmdb' }));
-  fs.writeFileSync(path.join(elmdb, 'crates', 'elmdb-node', 'elmdb.node'), '');
-  await git(elmdb, 'init', '-b', 'main');
-  await git(elmdb, 'add', '.');
-  await git(elmdb, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'elmdb');
-  // The apack-terminal checkout a session links, beside elmdb's: one commit, a manifest naming it, and the
-  // view's package in it with a `dist/` newer than everything it is built from, which is what the linker
-  // takes for built.
-  // **Both, because `setup` links both** — a fixture holding only elmdb made every run of this spec fail on
-  // the pin it could not read, and the failure named a path rather than the checkout it was missing.
-  apackTerminal = path.join(dir, 'apack-terminal');
-  fs.mkdirSync(path.join(apackTerminal, 'view', 'dist'), { recursive: true });
-  fs.writeFileSync(path.join(apackTerminal, 'Cargo.toml'), '[package]\nname = "apack-terminal"\n');
-  fs.writeFileSync(path.join(apackTerminal, 'view', 'package.json'), JSON.stringify({ name: 'apack-terminal-view' }));
-  await git(apackTerminal, 'init', '-b', 'main');
-  await git(apackTerminal, 'add', '.');
-  await git(apackTerminal, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'apack-terminal');
-  fs.writeFileSync(path.join(apackTerminal, 'view', 'dist', 'index.js'), '');
-  fs.writeFileSync(path.join(apackTerminal, 'view', 'dist', 'index.d.ts'), '');
-  // The apack-git checkout, the third: a manifest naming it, and a `dist/` newer than what it is built from
-  apackGit = path.join(dir, 'apack-git');
-  fs.mkdirSync(path.join(apackGit, 'dist'), { recursive: true });
-  fs.writeFileSync(path.join(apackGit, 'package.json'), JSON.stringify({ name: 'apack-git' }));
-  await git(apackGit, 'init', '-b', 'main');
-  await git(apackGit, 'add', '.');
-  await git(apackGit, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'apack-git');
-  for (const file of ['index.js', 'index.d.ts', 'staging.js', 'staging.d.ts']) fs.writeFileSync(path.join(apackGit, 'dist', file), '');
   fs.writeFileSync(path.join(repo, 'base.txt'), 'base');
-  fs.mkdirSync(path.join(repo, 'vendor'));
-  fs.writeFileSync(path.join(repo, 'vendor', 'elmdb.rev'), `${await git(elmdb, 'rev-parse', 'HEAD')}\n`);
-  fs.writeFileSync(path.join(repo, 'vendor', 'apack-terminal.rev'), `${await git(apackTerminal, 'rev-parse', 'HEAD')}\n`);
-  fs.writeFileSync(path.join(repo, 'vendor', 'apack-git.rev'), `${await git(apackGit, 'rev-parse', 'HEAD')}\n`);
-  // As the repo's own does: the link is the checkout's, never a change to it
-  fs.writeFileSync(path.join(repo, '.gitignore'), 'vendor/elmdb\nvendor/apack-terminal\nvendor/apack-git\nnode_modules\n.temp\n.apack\n');
+  fs.writeFileSync(path.join(repo, '.gitignore'), 'node_modules\n.temp\n.apack\n');
   await git(repo, 'add', '.');
   await git(repo, 'commit', '-m', 'Base');
 });
@@ -102,7 +64,7 @@ if (process.argv[3] === 'chain') {
     const { stdout, stderr } = await execFileAsync(process.execPath, [path.join(REPO_ROOT, 'scripts/session.mjs'), ...args], {
       cwd: repo, ...RUN, env: {
         ...process.env, PATH: `${bin}${path.delimiter}${process.env.PATH}`,
-        SESSION_MODE: mode, SESSION_COMMANDS: path.join(dir, 'commands'), SESSION_SOURCE: repo, ELMDB_DIR: elmdb, APACK_TERMINAL_DIR: apackTerminal, APACK_GIT_DIR: apackGit,
+        SESSION_MODE: mode, SESSION_COMMANDS: path.join(dir, 'commands'), SESSION_SOURCE: repo,
       },
     });
     return { status: 0, stdout, stderr };
@@ -185,28 +147,7 @@ describe('isolated editing sessions', () => {
     expect(result.stdout).not.toContain('Ready.');
     const session = path.join(dir, 'repo-worktrees.noindex', 'review');
     expect(await git(session, 'branch', '--show-current')).toBe('session/review');
-    expect(fs.realpathSync(path.join(session, 'vendor', 'elmdb'))).toBe(fs.realpathSync(elmdb));
     expect(await git(repo, 'status', '--porcelain')).toBe('');
-  });
-
-  it('says how far past its pin a checkout named for a new session is, and links it as named', async () => {
-    fs.writeFileSync(path.join(elmdb, 'next'), 'the next bump, being prepared');
-    await git(elmdb, 'add', '.');
-    await git(elmdb, '-c', 'user.name=Session test', '-c', 'user.email=session@example.invalid', 'commit', '-m', 'next');
-    const result = await check('', ['new', 'review']);
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stderr).toMatch(/elmdb is at \w+, 1 commit past the pinned \w+ \(vendor\/elmdb\.rev\)/);
-    expect(fs.realpathSync(path.join(dir, 'repo-worktrees.noindex', 'review', 'vendor', 'elmdb'))).toBe(fs.realpathSync(elmdb));
-  });
-
-  it('retains a new session whose elmdb checkout does not hold the pinned commit, before installing anything', async () => {
-    fs.writeFileSync(path.join(repo, 'vendor', 'elmdb.rev'), `${'0'.repeat(40)}\n`);
-    await git(repo, 'commit', '-am', 'Pin a commit elmdb lacks');
-    const result = await check('', ['new', 'review']);
-    expect(result.status).toBe(1);
-    expect(result.stderr).toMatch(/doesn't hold the pinned commit 0{40}.*Checkout retained/);
-    expect(fs.existsSync(path.join(dir, 'commands'))).toBe(false);
-    expect(await git(path.join(dir, 'repo-worktrees.noindex', 'review'), 'branch', '--show-current')).toBe('session/review');
   });
 
   it('runs dependency installation and the full strict gate in the candidate', async () => {

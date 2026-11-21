@@ -3,7 +3,7 @@ import { compileSettingsCatalog } from '../features/settings/validation.ts';
 // and the one place the app's HostRuntime is assembled.
 import { secretRedaction } from '../secrets/redaction.ts';
 import { _installProjections, type HostRuntime, type RootEvents, type PerformanceExecution } from '@apackdev/sdk/runtime';
-import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
+import type { EarsDatabase, EarsEngine } from '@elmdb/ears';
 import type { PackRegistry } from '../packs/registry.ts';
 import { createAppData } from './app-data.ts';
 import { createOnboarding } from './onboarding.ts';

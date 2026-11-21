@@ -18,7 +18,7 @@ with explicit limits.
 
 ## Existing behavior to retain
 
-[EARS](../../../packages/apack-ears/CLAUDE.md) compiles a query to a plan at a terminal; it does not execute
+[EARS](https://github.com/spankyed/elmdb/blob/main/docs/architecture/ears.md) compiles a query to a plan at a terminal; it does not execute
 each builder step separately. elmdb already has indexed leading filters, streaming early termination,
 bounded top-k sorting and field projections. A JavaScript function predicate splits execution at the
 function boundary. These are existing capabilities, not missing features to implement again.

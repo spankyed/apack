@@ -1,4 +1,4 @@
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@elmdb/ears';
 // The window's client to the API as the app shell uses it: the SDK's part (sending to backend systems) and what only
 // the shell reads. The renderer implements it over its API client; tests pass a fake.
 import type { Message } from '@apackdev/sdk/events';
