@@ -13,12 +13,12 @@
 import {tmpdir} from 'node:os'
 import {prepareClaudeNativeTerminal} from '#features/code/be/services/claude-code/terminal-owner.ts'
 import {nativeSession} from '../../_support/native-terminal.ts'
-const f=vi.hoisted(()=>{vi.resetModules();return{open:vi.fn(),nativePid:2202 as number|undefined}})
+const f=vi.hoisted(()=>{vi.resetModules();return{open:vi.fn(),captureOwnership:vi.fn(),nativePid:2202 as number|undefined}})
 vi.mock('#generated/services.ts',()=>({services:{terminal:{open:f.open}}}))
-vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts',()=>({createClaudeTerminalBridge:async()=>({
+vi.mock('#features/code/be/services/claude-code/terminal-bridge.ts',()=>({createClaudeTerminalBridge:async(options:{ownsProcess:(pid:number)=>Promise<boolean>})=>{f.captureOwnership(options.ownsProcess);return{
  pluginRoot:'/private/fixture-plugin',bunOptions:'fixture-preload',close:async()=>{},ready:true,get nativePid(){return f.nativePid},
  projection:{sessionId:'11111111-1111-1111-1111-111111111111',tasks:[]},session:{metadata:{}},uiTransport:{},
-})}))
+}}}))
 /**
  * **The session's signal records and does not end it**, which is what lets a case see the escalation: the
  * real broker's SIGTERM may well be ignored by the CLI, and that is the case each of these is about.
@@ -62,4 +62,27 @@ it('signals nothing more once the terminal has already exited',async()=>{
  const sent=x.signal.mock.calls.length
  await vi.advanceTimersByTimeAsync(2000)
  expect(x.signal.mock.calls).toHaveLength(sent)
+})
+
+it('checks early preload registration once the broker returns the terminal handle', async () => {
+ const opening = Promise.withResolvers<void>()
+ const requested = Promise.withResolvers<void>()
+ const owns = vi.fn(async (pid: number) => pid === 2202)
+ f.open.mockImplementation(async (_options, listeners) => {
+  requested.resolve()
+  await opening.promise
+  return { ...nativeSession(listeners, { pid: 2201 }), owns }
+ })
+ const prepared = await prepareClaudeNativeTerminal({sessionId:'11111111-1111-1111-1111-111111111111',cwd:tmpdir(),cliPath:process.execPath,permissionMode:'default',settings:{effective:{},sources:[]}})
+ const starting = prepared.start()
+ await requested.promise
+ const check = f.captureOwnership.mock.lastCall![0]
+ const owned = check(2202)
+ const foreign = check(9999)
+ expect(owns).not.toHaveBeenCalled()
+ opening.resolve()
+ await starting
+ await expect(owned).resolves.toBe(true)
+ await expect(foreign).resolves.toBe(false)
+ expect(owns.mock.calls).toEqual([[2202], [9999]])
 })

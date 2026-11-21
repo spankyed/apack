@@ -137,6 +137,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   const ownerId = randomUUID(), listeners = new Set<() => void>()
   const output: { sequence: number; text: string }[] = []
   let sequence = 0, outputSize = 0, terminal: TerminalSession | undefined, closed = false
+  let openingTerminal: Promise<TerminalSession> | undefined
   let status: ClaudeNativeTerminalState['status'] = 'starting'
   let handoffPending = false
   let continuation: ClaudeNativeContinuation | undefined
@@ -147,7 +148,11 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
   let resolveDone!: () => void
   const done = new Promise<void>(resolve => { resolveDone = resolve })
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* isolate views */ } } }
-  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, backgroundProfile:resolveAppEnvironment().userDataDir, backgroundChildUiLaunch:{configDir:env.CLAUDE_CONFIG_DIR,secureStorageConfigDir:env.CLAUDE_SECURESTORAGE_CONFIG_DIR,executable,cwd:options.cwd,searchPath:env.PATH}, backgroundObserver, backgroundAuthority: parentSessionId => createClaudeBackgroundStatusAuthority(parentSessionId, {cwd: options.cwd, cliPath: executable, env}), backgroundTarget: () => continuation ? {parentSessionId: continuation.sessionId, sessionId: continuation.continuedInSessionId, cwd: options.cwd} : undefined, ...(options.permissionMode === 'plan' && options.prePlanMode ? {restorePlan: {sessionId: options.sessionId, mode: options.prePlanMode}} : {}), settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: async pid => (terminal ? terminal.owns(pid).catch(() => false) : false),
+  const bridge = await createClaudeTerminalBridge({ sessionId: options.sessionId, backgroundProfile:resolveAppEnvironment().userDataDir, backgroundChildUiLaunch:{configDir:env.CLAUDE_CONFIG_DIR,secureStorageConfigDir:env.CLAUDE_SECURESTORAGE_CONFIG_DIR,executable,cwd:options.cwd,searchPath:env.PATH}, backgroundObserver, backgroundAuthority: parentSessionId => createClaudeBackgroundStatusAuthority(parentSessionId, {cwd: options.cwd, cliPath: executable, env}), backgroundTarget: () => continuation ? {parentSessionId: continuation.sessionId, sessionId: continuation.continuedInSessionId, cwd: options.cwd} : undefined, ...(options.permissionMode === 'plan' && options.prePlanMode ? {restorePlan: {sessionId: options.sessionId, mode: options.prePlanMode}} : {}), settings: options.settings, bunOptions: env.BUN_OPTIONS, ownsProcess: async pid => {
+    // The CLI preload can register before the broker's spawn reply reaches this owner.
+    const session = terminal ?? await openingTerminal?.catch(() => undefined)
+    return !closed && session ? session.owns(pid).catch(() => false) : false
+  },
     // The plugin's undelivered notifications land in this session's trace, which is what reads them
     notificationsDropped: (route, count) => trace('notifications_dropped', {route, count}), changed,
     pasteImage(path) { if (closed || !terminal) throw new Error('Native terminal closed'); bestEffort(terminal.write('\x1b[200~' + path + '\x1b[201~')) },
@@ -238,7 +243,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       if (options.signal?.aborted) throw new Error('Native terminal startup was cancelled')
       // **The listeners arrive with the open**, which the contract requires: there is no window in which
       // output has nowhere to go. `TERM` is the broker's to set, so it is not named here
-      terminal = await services.terminal.open(
+      openingTerminal = services.terminal.open(
         {
           images: true,
           imageFiles: true,
@@ -275,11 +280,13 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
           },
         },
       )
+      terminal = await openingTerminal
       trace('ready', {pid:terminal.pid ?? undefined})
       options.signal?.addEventListener('abort', kill, { once: true })
       if (options.signal?.aborted) kill()
       status = 'starting'
     } catch (error) { await bridge.close(); closed = true; resolveDone(); throw error }
+    finally { openingTerminal = undefined }
     let mcpForm: import('../../../common/native-mcp-form.ts').ClaudeNativeMcpForm | undefined
     let mcpUrl: ClaudeNativeMcpUrl | undefined
     let operatingMcpForm = false, mcpFormEpoch = 0, cancellingMcpForm = false
