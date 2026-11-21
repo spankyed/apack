@@ -100,7 +100,7 @@
 
 <script setup lang="ts">
 import ToastNotification from '@apackdev/ui/design/ToastNotification'
-import { askUnderWay, useState, useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDrag'
 import { type CodeState, type OpenFile, setEditorSelectionGetter, isEditableDiff } from '../state.ts'
@@ -110,7 +110,6 @@ import FileEditor from '#features/code/fe/canvas/FileEditor.vue'
 import QuickOpenPalette from '#features/code/fe/canvas/QuickOpenPalette.vue'
 import { reorderTabs } from '../utils/tab-management.ts'
 import { panelChild } from '../features/children.ts';
-import { HUNK } from '../features/commit/state.ts'
 
 const actor: CodeState = useSurface()
 const explorerActor = panelChild(actor, 'explorer')
@@ -132,7 +131,7 @@ const commitActor = panelChild(actor, 'commit')
 
 const { state: code, send } = useState(actor)
 const { state: git, send: sendCommit } = useState(commitActor)
-const isApplyingHunk = computed(() => git.value !== undefined && askUnderWay(git.value.data.asking, HUNK))
+const isApplyingHunk = computed(() => git.value !== undefined && git.value.data.making.hunk)
 // The pieces staged from the diff on screen: the commit panel keeps them per diff tab
 const appliedHunks = computed(() => git.value?.data.appliedHunks[code.value.data.activeFilePath ?? ''] ?? [])
 const applyHunk = (path: string, staged: boolean, hunk: string) => sendCommit({ type: 'commit.APPLY_HUNK', path, staged, hunk })

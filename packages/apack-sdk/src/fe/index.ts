@@ -19,6 +19,7 @@ export { surfaceIsRunning, readUntypedSurfaceState, useUntypedSurfaceState } fro
 export { untypedUseView, type UseViewOptions, type ViewState } from './views.ts'
 export { useAsk, type AskState } from './use-ask.ts'
 export { useState, type MachineState, type UsedState } from './use-state.ts'
+export { makes, freshKey, type Makes, type Making, type MadeEvent, type OneMade, type EachMade, type MakesEnqueue } from './makes.ts'
 export { untypedFromView } from './view-actor.ts'
 export { askId, askUnderWay, endedAsk, enqueueAsks, noAsks, stopAsks, type AsksUnderWay } from './asks-under-way.ts'
 export { viewRead, viewWrites, writeEnded, writeSent, writing, type ViewWrites } from './view-writes.ts'

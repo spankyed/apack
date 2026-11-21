@@ -1,7 +1,6 @@
 // How far along a push, a pull or a checkout is: the panel holds what git last said until the command is answered
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { askUnderWay } from '@apackdev/sdk/fe';
 import { latestAsk, resetAsks, type MadeAsk } from '../../_support/asks.ts';
 
 vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
@@ -12,7 +11,7 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   getParentContext: vi.fn(() => ({})),
 }));
 
-const { commitState, PUSH } = await import('#features/code/fe/features/commit/state.ts');
+const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 
 beforeEach(resetAsks);
 
@@ -30,5 +29,5 @@ it.each([
 
   await end(latestAsk('commit.PUBLISH_BRANCH'));
   expect(actor.getSnapshot().context.progress).toBeNull();
-  expect(askUnderWay(actor.getSnapshot().context.asking, PUSH)).toBe(false);
+  expect(actor.getSnapshot().context.making.push).toBe(false);
 });

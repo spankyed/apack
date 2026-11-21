@@ -983,12 +983,9 @@
 import { whatCanBeDone, type Availability, type UnavailableReason } from 'apack-git/availability'
 
 import { computed, ref, nextTick, watch } from 'vue'
-import { askUnderWay, useState, useSurface, useShell } from '@apackdev/sdk/fe'
+import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState } from '#features/code/fe/state.ts'
-import {
-  MOVE_OPERATION, PULL, PUSH, SIGN_IN, SPEED_UP, START_OPERATION, STASH, STATUS_SHOWN, checkoutUnderWay, commitUnderWay,
-  worktreeChangeUnderWay, type GitStatusFile,
-} from '#features/code/fe/features/commit/state.ts'
+import { checkoutUnderWay, commitUnderWay, worktreeChangeUnderWay, type GitStatusFile } from '#features/code/fe/features/commit/state.ts'
 import type { CommitTrailer, ConflictKind, OperationMove, ProgressDuring } from '#features/code/be/types.ts'
 import { Folder, GitBranch, GitBranchPlus, GitCommit, GitFork, GitMerge, RefreshCw, Plus, Minus, RotateCcw, ChevronDown, ChevronRight, CheckCircle, Check, X, Sparkles, Loader2, ArrowDownToLine, ArrowUpFromLine, MoreVertical, Trash2, Copy, Search, FolderSync, Lock, FileText, GitPullRequestArrow, Pencil, Tag, Upload, Archive } from 'lucide-vue-next'
 import { ContextMenuItem } from 'reka-ui'
@@ -1030,7 +1027,7 @@ const { showMenu, menuPos, sectionMenuItems, onSectionContextMenu } = useSection
 // State selectors from commit actor
 /** The hook of the repository's that refused the last command, whose output is shown as its own */
 const refusingHook = computed(() => git.value.data.gitFailure?.hook ?? null)
-const isGitLoading = computed(() => askUnderWay(git.value.data.asking, STATUS_SHOWN))
+const isGitLoading = computed(() => git.value.data.making.statusShown)
 const hasCommits = computed(() => git.value.data.commitLog.length > 0)
 /** What discarding these rows would remove that cannot be brought back, once that has been answered for these rows */
 const notKeptOf = (paths: string[]): string[] =>
@@ -1047,8 +1044,8 @@ const pullTitle = computed(() => {
     default: return 'Pull latest'
   }
 })
-const isCheckingOutBranch = computed(() => checkoutUnderWay(git.value.data.asking))
-const isSpeedingUpStatus = computed(() => askUnderWay(git.value.data.asking, SPEED_UP))
+const isCheckingOutBranch = computed(() => checkoutUnderWay(git.value.data.making))
+const isSpeedingUpStatus = computed(() => git.value.data.making.speedUp)
 /** What turning the speed-ups on would turn on, of those that are off */
 const slowStatusRemedy = computed(() => {
   const off = [
@@ -1057,7 +1054,7 @@ const slowStatusRemedy = computed(() => {
   ]
   return off.join(' and ')
 })
-const isSettingUpSignIn = computed(() => askUnderWay(git.value.data.asking, SIGN_IN))
+const isSettingUpSignIn = computed(() => git.value.data.making.signIn)
 // The help belongs to the error it came with, and goes when that error does
 const missingBranch = computed(() => (git.value.data.gitError ? git.value.data.gitFailure?.missingBranch ?? null : null))
 const errorSignIn = computed(() => (git.value.data.gitError ? git.value.data.gitFailure?.signIn ?? null : null))
@@ -1067,8 +1064,8 @@ const ownershipRequest = computed(() => (git.value.data.gitError ? git.value.dat
 /** The failures for which git read nothing, so the panel says nothing of the working tree */
 const NOTHING_READ = new Set(['untrusted', 'unsafe-ownership', 'git-not-found', 'developer-tools-missing', 'git-too-old'])
 const gitNeverRan = computed(() => !!git.value.data.gitError && NOTHING_READ.has(git.value.data.gitFailure?.code ?? ''))
-const isMovingOperation = computed(() => askUnderWay(git.value.data.asking, MOVE_OPERATION))
-const isStartingOperation = computed(() => askUnderWay(git.value.data.asking, START_OPERATION))
+const isMovingOperation = computed(() => git.value.data.making.moveOperation)
+const isStartingOperation = computed(() => git.value.data.making.startOperation)
 /** What merging a branch in would do, said before the click once it is known */
 const mergeTitle = (branch: string): string => {
   const known = git.value.data.mergePreview?.target === branch ? git.value.data.mergePreview.preview : undefined
@@ -1085,10 +1082,10 @@ const startOperation = (kind: 'merge' | 'rebase', target: string) => {
   showBranchDropdown.value = false
   send({ type: 'commit.START_OPERATION', kind, target })
 }
-const isPushing = computed(() => askUnderWay(git.value.data.asking, PUSH))
-const isPulling = computed(() => askUnderWay(git.value.data.asking, PULL))
-const isStashing = computed(() => askUnderWay(git.value.data.asking, STASH))
-const isWorktreeLoading = computed(() => worktreeChangeUnderWay(git.value.data.asking))
+const isPushing = computed(() => git.value.data.making.push)
+const isPulling = computed(() => git.value.data.making.pull)
+const isStashing = computed(() => git.value.data.making.stash)
+const isWorktreeLoading = computed(() => worktreeChangeUnderWay(git.value.data.making))
 const baseDirectory = computed(() => code.value.data.baseDirectory)
 
 // Local state
@@ -1222,7 +1219,7 @@ const reasonOf = (availability: Availability) => (availability.possible ? null :
 const whyNot = computed(() => ({ commit: reasonOf(canBeDone.value.commit), push: reasonOf(canBeDone.value.push), pull: reasonOf(canBeDone.value.pull) }))
 const syncTitle = computed(() => (git.value.data.commitsAhead > 0 ? whyNot.value.push ?? 'Push' : whyNot.value.pull ?? pullTitle.value))
 
-const isCommitting = computed(() => commitUnderWay(git.value.data.asking))
+const isCommitting = computed(() => commitUnderWay(git.value.data.making))
 const canCommit = computed(() => !!git.value.data.commitMessage.trim() && stagedFiles.value.length > 0 && canBeDone.value.commit.possible && !isCommitting.value)
 
 const isNoDirectoryError = computed(() => {
