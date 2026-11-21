@@ -5,7 +5,7 @@ Host-only modules shared by the API, the renderer, the Electron main process, th
 ## Package basics
 
 - The package is private and has no build step. Every `exports` entry in `package.json` points at `src/*.ts`, so consumers compile or bundle it: the API's tsup build, and `scripts/bundle-package.ts` for the CLI and `@apackdev/testing`. `bundle-package.ts` inlines `@apackdev/host` and removes it from the published dependencies.
-- Relative imports name the `.ts` file (`./staging.ts`), and host modules import each other by relative path, never as `@apackdev/host/*`. The tsconfig sets `allowImportingTsExtensions` and `customConditions: ["@apackdev/source"]`, so `@apackdev/sdk` and `@elmdb/ears` resolve to their source. Host imports only those two `@apackdev` packages, and never the API (`check:specifiers`).
+- Relative imports name the `.ts` file (`./staging.ts`), and host modules import each other by relative path, never as `@apackdev/host/*`. The tsconfig sets `allowImportingTsExtensions` and `customConditions: ["@apackdev/source"]`, so `@apackdev/sdk` resolves to its source; `@elmdb/ears` is elmdb's built `dist`. Of this repository's packages host imports only the SDK, and never the API (`check:specifiers`); of the other repositories', `@elmdb/ears` and `@apackdev/terminal`.
 - `npm run check:specifiers` (`scripts/check-import-specifiers.ts`) rejects `@apackdev/host` in pack sources, pack unit tests and CLI templates. `apack pack build` also fails a pack bundle that imports it.
 - Scripts: `npm run typecheck:host` (`tsc --noEmit` over `src` and `tests`) and `npm test -w @apackdev/host` (vitest, `tests/**/*.spec.ts`, with the source condition set in `vitest.config.ts`). `npm run test:unit` includes this package.
 

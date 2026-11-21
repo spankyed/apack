@@ -25,7 +25,7 @@ function tree(files: Record<string, string>): string {
 
 const manifest = (name: string, version = '1.0.0') => JSON.stringify({ name, version });
 
-/** A repository with a workspace, two installed packages and a vendored package linked in */
+/** A repository with a workspace, two installed packages and a package linked in from another checkout */
 function repository() {
   const root = tree({
     'package.json': manifest('apack'),

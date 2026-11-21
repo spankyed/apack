@@ -111,8 +111,8 @@ export function takeForward(distDir: string, stagedDir: string, files: readonly 
  * What a pack's DSL definitions compile against beyond its own sources: `@apackdev/sdk` and `@apackdev/ui` as the
  * pack resolves them, and every package each brings (`dependencyClosure`), as one hash of their identities
  * (`packageIdentity`: name, version and the files each ships). That is workspace source in a checkout and
- * `node_modules` in an installed pack, and a linked package such as EARS is read the same way as a registry one,
- * since its version says nothing.
+ * `node_modules` in an installed pack, and a linked package (`npm run deps:local`'s EARS) is read the same way as an
+ * installed one, since its version says nothing.
  *
  * **A package it cannot find is a refusal, not an omission.** Leaving one out of the scope would mean a change to it
  * did not invalidate anything, and the build would take a bundle forward that was compiled against the one before.

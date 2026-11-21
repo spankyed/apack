@@ -22,8 +22,8 @@ function packageRoot(entry: string): string {
  * The CLI's own code is read as a directory: `src` run from a checkout, `dist` once bundled, and in a checkout the
  * host's and SDK's `src` too, which it runs from source. Every other package it scopes is read by its identity
  * (`packageIdentity`: name, version and the files it ships), never by a folder guessed inside it: in a checkout what
- * the SDK links from another checkout (`@elmdb/ears`, from elmdb's), and beside a published CLI the
- * installed SDK, whose declarations the bundled code reads.
+ * the SDK has linked from another checkout (`npm run deps:local`), and beside a published CLI the installed SDK,
+ * whose declarations the bundled code reads.
  */
 export function buildToolHash(moduleUrl = import.meta.url): string {
   const entry = fs.realpathSync.native(fileURLToPath(moduleUrl));
@@ -44,9 +44,9 @@ export function buildToolHash(moduleUrl = import.meta.url): string {
         : path.dirname(require.resolve(`${name}/package.json`));
       scopes.push({ name, root: owner, directory: 'src' });
     }
-    // What the SDK links from a checkout (EARS from elmdb's, which `npm run deps:local` maps the root's `overrides` to) changes
-    // without its version or the lockfile moving, so it is scoped by what it ships; what the SDK has from the registry
-    // moves with the lockfile. A linked package is the one whose real directory is outside every `node_modules`
+    // What the SDK has linked from a checkout (`npm run deps:local`: EARS from elmdb's) changes without its version or
+    // the lockfile moving, so it is scoped by what it ships; what it has installed moves with the lockfile. A linked
+    // package is the one whose real directory is outside every `node_modules`
     const [sdk, ...brought] = dependencyClosure('@apackdev/sdk', root);
     for (const name of Object.keys(sdk!.manifest.dependencies ?? {})) {
       const pkg = brought.find((member) => member.name === name);

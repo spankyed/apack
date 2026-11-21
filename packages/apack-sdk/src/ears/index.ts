@@ -14,7 +14,7 @@
 import type { CallSiteNaming, Create, Ears, Query, Upsert, Write } from '@elmdb/ears';
 
 // All of EARS, so that a pack names apack's SDK alone and loads the EARS that SDK was built with. A pack's facade
-// writes any EARS type it infers from here (`EARS_THROUGH_SDK`, `@apackdev/host/build/shared-deps`), which holds only
+// writes any EARS type it infers from here (`THROUGH_SDK`, `@apackdev/host/build/shared-deps`), which holds only
 // while this is `export *`: a name EARS exports and this entry doesn't would be a facade naming nothing
 export * from '@elmdb/ears';
 
