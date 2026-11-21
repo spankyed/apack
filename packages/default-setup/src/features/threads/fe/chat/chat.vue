@@ -1234,6 +1234,10 @@ const nativeViewport = useNativeTranscriptViewport({
 }
 /* Keep pending native decisions beside useful conversation space in short windows. */
 @media (max-height: 720px) {
+  /* The duration already separates its text from the reply. Keep both in view together. */
+  [data-testid="chat-transcript"] :deep([data-chat-message]:has(+ [data-native-placement-band="TurnDuration"])) {
+    padding-bottom: 0;
+  }
   /* Share short windows with the workspace before any manual split adjustment. */
   .native-chat-shell[data-native-workspace-owner] {
     min-height: min(25rem, max(20rem, calc(100vh - 18rem)));
