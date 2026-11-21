@@ -41,7 +41,7 @@
       @cancel.prevent="closeDetails">
       <div class="flex max-h-[calc(100dvh-2rem)] flex-col">
         <header class="shrink-0 border-b border-white/10 px-4 py-3">
-          <h2 class="text-sm font-semibold">{{ task.name }}</h2>
+          <h2 class="text-sm font-semibold">{{ state.details.name }}</h2>
         </header>
         <div class="min-h-0 overflow-y-auto p-4 text-xs">
           <NativeMcpTaskDetails :info="task.mcp ?? state.details.mcp" :status="task.status" />
