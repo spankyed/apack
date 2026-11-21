@@ -1,7 +1,7 @@
 import { _withPerformanceEvent } from '../runtime/performance.ts';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
-import { _answered, _askEnded, _askFailureOf, _askSignal, _clientOf, _currentDelivery, _failedAnswer, _progressed, _refuse, _replyTo, ASK_ANSWER_TYPES, ASK_CANCELLED, type AnswerPayload, type ProgressPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskFailed, type AskProgressed, type AskName, type AskEventsOf, type ContractAsks, type RefuseOf } from '../events/index.ts';
+import { _answered, _askEnded, _askFailureOf, _askSignal, _clientOf, _currentDelivery, _failedAnswer, _progressed, _refuse, _replyTo, ASK_ANSWER_TYPES, ASK_CANCELLED, type AnswerPayload, type ProgressPayload, type AskAnswered, type AskDeclaration, type AskEventOf, type AskPayload, type AskFailed, type AskProgressed, type AskName, type AskEventsOf, type ContractAsks, type RefuseOf } from '../events/index.ts';
 import { reportError } from '../logger/report-error.ts';
 import type { ArrayChanges } from '../utils/change-detection.ts';
 import { eventTypes } from '../events/event-types.ts';
@@ -198,6 +198,34 @@ export interface Handlers<TContext extends MachineContext, TEvent extends EventO
   ): { [K in keyof P]: (args: Args<TContext, TEvent>, params: P[K]) => void };
   /** See `SystemSpec.input` */
   input<I>(build: (args: InputArgs<TContext, TEvent> & { client?: string }) => I): Mapper<TContext, TEvent, I, TEvent>;
+  /**
+   * The table that answers asks this machine takes itself, for a child a system forwards them to: one handler per ask
+   * of `A`, each handed the child's own context. The system that owns the contract leaves these out of its own table
+   * (`spec.answers<…>`), and the message it forwards is still the one asked, so the child's answer reaches the asker.
+   *
+   * ```ts
+   * const answers = handlers.answers<SearchAsks>({ 'search.SEARCH_FILES': async ({ args, context, signal }) => … })
+   * setup({ actions: { ...answers.actions } }).createMachine({ on: { ...answers.on } })
+   * ```
+   */
+  answers<A extends Record<string, AskDeclaration>>(
+    defs: { readonly [K in keyof A & string]: (args: ChildAnswerArgs<TContext, TEvent, A, K>) => AnswerPayload<A[K]> | PromiseLike<AnswerPayload<A[K]>> },
+  ): {
+    readonly actions: { readonly [K in keyof A & string]: (args: Args<TContext, TEvent>, params: undefined) => void };
+    readonly on: { readonly [K in keyof A & string]: { readonly actions: K } };
+  };
+}
+
+/** What a child machine's ask handler is handed: as a system's (`AnswerArgs`), over the child's own context */
+export interface ChildAnswerArgs<TContext extends MachineContext, TEvent extends EventObject, A, K extends keyof A & string> {
+  readonly args: { type: K } & AskPayload<A[K]>;
+  readonly context: TContext;
+  readonly self: Args<TContext, TEvent>['self'];
+  readonly signal: AbortSignal;
+  readonly client?: string;
+  readonly waiting: boolean;
+  readonly progress: (update: ProgressPayload<A[K]>) => void;
+  readonly refuse: RefuseOf<A[K]>;
 }
 
 /**
@@ -212,8 +240,16 @@ export function defineHandlers<TContext extends MachineContext, TEvent extends E
       Object.entries(defs).map(([name, handler]) => [name, handing(handler)]),
     ) as never,
     input: (build) => (args) => build({ ...args, client: _clientOf(answerable(args)) }),
+    answers: (defs) => answersOf(defs as unknown as Record<string, (args: object) => unknown>) as never,
   };
 }
+
+/** The actions and transitions an asks table becomes: one action per ask, run on the ask it answers */
+const answersOf = (handlers: Record<string, (args: object) => unknown>) => ({
+  actions: Object.fromEntries(Object.keys(handlers).map((asked) => [asked, (args: { event: unknown; context: unknown; self: unknown }) =>
+    _withPerformanceEvent(args.event, () => answer(asked, handlers[asked]!, args))])),
+  on: Object.fromEntries(Object.keys(handlers).map((asked) => [asked, { actions: asked }])),
+});
 
 /** What one of a system's ask handlers is handed */
 export interface AnswerArgs<C extends SystemContract, K extends AskName<C>> {
@@ -246,13 +282,13 @@ export type AnswerHandler<C extends SystemContract, K extends AskName<C>> =
   (args: AnswerArgs<C, K>) => AnswerPayload<ContractAsks<C>[K]> | PromiseLike<AnswerPayload<ContractAsks<C>[K]>>;
 
 /** What `answers` makes: the actions to give `setup`, and the transitions that run each on the ask it answers */
-export interface Answers<C extends SystemContract> {
-  readonly actions: { readonly [K in AskName<C>]: (args: SystemArgs<C>, params: undefined) => void };
-  readonly on: { readonly [K in AskName<C>]: { readonly actions: K } };
+export interface Answers<C extends SystemContract, K extends AskName<C> = AskName<C>> {
+  readonly actions: { readonly [N in K]: (args: SystemArgs<C>, params: undefined) => void };
+  readonly on: { readonly [N in K]: { readonly actions: N } };
 }
 
 /** The definition object returned by `defineSystem()`. */
-export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>> {
+export interface SystemSpec<C extends SystemContract> extends Omit<Handlers<ContractContext<C>, MachineEvents<C>>, 'answers'> {
   types: { context: ContractContext<C>; events: MachineEvents<C> };
   typeOf: ReturnType<typeof safeEvents<MachineEvents<C>>>;
   /**
@@ -300,10 +336,13 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
    * `failed`. The work runs whether or not anybody asked, and a failure nobody asked about is reported, since no
    * window shows it. An ask the machine's current state does not take is answered `unavailable` by the bus.
    *
+   * A system whose children answer some of its asks names those as the type argument and leaves them out:
+   * `spec.answers<keyof SearchAsks>({ … })`. The child answers them with `handlers.answers`.
+   *
    * `answers.on` goes wherever the asks are taken: at the root for a system that takes them in every state, under a
    * state for one that takes them only there.
    */
-  answers(defs: { readonly [K in AskName<C>]: AnswerHandler<C, K> }): Answers<C>;
+  answers<Elsewhere extends AskName<C> = never>(defs: { readonly [K in Exclude<AskName<C>, Elsewhere>]: AnswerHandler<C, K> }): Answers<C, Exclude<AskName<C>, Elsewhere>>;
 }
 
 /**
@@ -328,15 +367,7 @@ export function defineSystem<C extends SystemContract>(): SystemSpec<C> {
     },
     typeOf: safeEvents<MachineEvents<C>>(),
     ...defineHandlers<ContractContext<C>, MachineEvents<C>>(),
-    answers: (defs) => {
-      const asks = Object.keys(defs);
-      const handlers = defs as unknown as Record<string, (args: object) => unknown>;
-      return {
-        actions: Object.fromEntries(asks.map((asked) => [asked, (args: SystemArgs<C>) =>
-          _withPerformanceEvent(args.event, () => answer(asked, handlers[asked]!, args))])),
-        on: Object.fromEntries(asks.map((asked) => [asked, { actions: asked }])),
-      } as unknown as Answers<C>;
-    },
+    answers: (defs) => answersOf(defs as unknown as Record<string, (args: object) => unknown>) as never,
   };
 }
 

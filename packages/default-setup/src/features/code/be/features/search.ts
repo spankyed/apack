@@ -1,5 +1,7 @@
-import type { AnswersTo, SearchAsks } from '../contract.ts'
-import { assign, setup, type ActorRefFrom, type AnyActorRef } from 'xstate'
+import type { SearchAsks } from '../contract.ts'
+import { defineHandlers } from '@apackdev/sdk/framework'
+import type { AsksEvents } from '@apackdev/sdk/events'
+import { assign, setup } from 'xstate'
 
 import { FileSystemRepository } from '../services/filesystem.ts'
 import type { SearchOptions } from '../types.ts'
@@ -9,46 +11,20 @@ export interface CodeSearchSystemContext {
 }
 
 export type Event =
-  | { type: 'search.UPDATE_BASE_DIRECTORY'; path: string };
+  | { type: 'search.UPDATE_BASE_DIRECTORY'; path: string }
+  // The search asks, which the code system forwards here to be answered
+  | AsksEvents<SearchAsks>;
 
-export const searchSystem = setup({
-  types: {
-    context: {} as CodeSearchSystemContext,
-    events: {} as Event,
-    input: {} as { baseDirectory: string | null },
-  },
-  actions: {
-    updateBaseDirectory: assign({
-      repository: ({ event }) => new FileSystemRepository(event.path)
-    }),
-  },
-}).createMachine({
-  id: 'search',
-  initial: 'idle',
-  context: ({ input }: { input?: { baseDirectory: string | null } }) => ({
-    repository: input?.baseDirectory ? new FileSystemRepository(input.baseDirectory) : null,
-  }),
-  states: {
-    idle: {
-      on: {
-        'search.UPDATE_BASE_DIRECTORY': {
-          actions: 'updateBaseDirectory'
-        }
-      }
-    }
-  }
-})
-/** The search, as the code system holds it: the folder searched */
-const searchOf = (code: AnyActorRef) => code.getSnapshot().children.search as ActorRefFrom<typeof searchSystem> | undefined
+const handlers = defineHandlers<CodeSearchSystemContext, Event>();
 
-/** The search asks, answered by the code system (`answers`, `system.ts`) over the search's folder */
-export const searchAnswers: AnswersTo<SearchAsks> = {
+/** The search asks, answered here over the folder this machine holds */
+const answers = handlers.answers<SearchAsks>({
   /**
    * Answered with every match once the search ends, and told as it goes to whoever asked: how far it is, and each
    * file's matches as they are found. `signal` aborts when they stop waiting, which stops the search
    */
-  'search.SEARCH_FILES': async ({ args, self, signal, progress }) => {
-    const repository = searchOf(self)?.getSnapshot().context.repository
+  'search.SEARCH_FILES': async ({ args, context, signal, progress }) => {
+    const { repository } = context
     if (!repository) throw new Error('No directory selected. Please select a directory first.')
 
     const options: SearchOptions = {
@@ -73,4 +49,34 @@ export const searchAnswers: AnswersTo<SearchAsks> = {
     )
     return { results, totalMatches }
   },
-}
+});
+
+export const searchSystem = setup({
+  types: {
+    context: {} as CodeSearchSystemContext,
+    events: {} as Event,
+    input: {} as { baseDirectory: string | null },
+  },
+  actions: {
+    ...answers.actions,
+    updateBaseDirectory: assign({
+      repository: ({ event }) => new FileSystemRepository((event as { type: 'search.UPDATE_BASE_DIRECTORY'; path: string }).path)
+    }),
+  },
+}).createMachine({
+  id: 'search',
+  initial: 'idle',
+  context: ({ input }: { input?: { baseDirectory: string | null } }) => ({
+    repository: input?.baseDirectory ? new FileSystemRepository(input.baseDirectory) : null,
+  }),
+  states: {
+    idle: {
+      on: {
+        ...answers.on,
+        'search.UPDATE_BASE_DIRECTORY': {
+          actions: 'updateBaseDirectory'
+        }
+      }
+    }
+  }
+})

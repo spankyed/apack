@@ -337,7 +337,7 @@ export type SystemEvents =
 };
 
 // @public
-export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>> {
+export interface SystemSpec<C extends SystemContract> extends Omit<Handlers<ContractContext<C>, MachineEvents<C>>, 'answers'> {
     actions<P extends ActionParams>(defs: {
         [K in keyof P]: (args: SystemArgs<C> & {
             client?: string;
@@ -345,9 +345,9 @@ export interface SystemSpec<C extends SystemContract> extends Handlers<ContractC
     }): {
         [K in keyof P]: (args: SystemArgs<C>, params: P[K]) => void;
     };
-    answers(defs: {
-        readonly [K in AskName<C>]: AnswerHandler<C, K>;
-    }): Answers<C>;
+    answers<Elsewhere extends AskName<C> = never>(defs: {
+        readonly [K in Exclude<AskName<C>, Elsewhere>]: AnswerHandler<C, K>;
+    }): Answers<C, Exclude<AskName<C>, Elsewhere>>;
     input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & {
         client?: string;
     }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;

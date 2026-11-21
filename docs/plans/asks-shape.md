@@ -31,16 +31,49 @@ Counts are text counts on #583's head, `913b15b092`, and size the work rather th
 | 2 | **Progress is part of an ask** | An ask declares `progress`; its handler is handed `progress(update)`; `ask` takes a `heard` callback and a stream actor delivers updates to a machine. Replaces the `sendToWindow` feeds of search and push | 1 |
 | 3 | **Cancelling reaches the handler** | An asker that aborts tells the backend, which aborts that handler's `signal`. Removes the search's controller, its two controller events, `CANCEL_SEARCH`, and the `superseded` refusal (21 mentions) | 1 |
 | 4 | **No `waiting`** | A handler no longer learns whether anyone asked. What every window should hear is a broadcast. Terminal (19), threads (6), settings (6) | 1 |
-| 5 | **Asks are answered beside the machine** | An asks table is registered with the system, not spread into `setup` and `createMachine` as `answers.actions` and `answers.on`. Twelve systems. An ask that depends on the machine's state is handed its snapshot | 1 |
+| 5 | ~~Asks are answered beside the machine~~ | Dropped. An ask is taken by the state that lists it, which is what the design aimed at does (`asks` is a table of a state), and what lets a state that does not list one answer `unavailable` | - |
 | 6 | **An asker awaits** | The event path goes: `isAnswered` (97), `answerOf` (101), `asked === '…'` (33), guarded `ASK_ANSWERED: [...]` arrays (27), `AnswersOf`. A component awaits `ask`; a machine state invokes `fromAsk`. By feature: code 151, database 29, threads 23, flows 20, library 17, notes 15, prompts 10, brain 10, actions 10, browser 4, logs 3, host 4, testing 4 | 2, 3 |
 | 7 | **A loading flag is a state** | Where package 6 touches a flag set in one action and cleared in two, it becomes a state that invokes the ask | 6 |
-| 8 | **Events are handled by a typed table** | `spec.handles({ EVENT: ({ event }) => … })`, each handler given its own event. Removes `event as { … }` (233) | - |
+| 8 | **An event is narrowed, not cast** | `event as { type: 'X'; … }` (233) becomes the typed narrowing the SDK has: `spec.typeOf('X', event)` or `safeEvents<Event>()` | - |
 | 9 | **A code child answers its own asks** | The code system stops reaching into `children.search` and the rest to answer for them | 5 |
 | 10 | **Close out** | The pack rule, public docs, API and facade reports, and this file | all |
 
 Not in this branch, and next after it: a component reading state through the SDK in place of `useSelector`, machines
 defined through the SDK, a pack rule against importing `xstate`, and renaming `sendToSystem` and `broadcastToSurface`
 to `tell` and `broadcast`. They touch other files than asks do and would double this diff.
+
+## The recipe, for one feature
+
+The code search is the worked example: `git show dd857efef6` (the surface and the handler) and the commit after it (the
+handler moved into the search child). Follow it.
+
+**The surface (asker).** Nothing handles `ASK_ANSWERED` or `ASK_FAILED`, and nothing calls `isAnswered` or `answerOf`.
+
+- An ask whose progress the UI shows, or that a newer one should replace, is a **state that invokes it**:
+  `actors: { x: fromAsk('<system>', '<ASK>') }`, `invoke: { src: 'x', input, onDone }`. `event.output` is an `Outcome`:
+  `ok` with `value`, or `failure` with `kind` and `message`. A flag that was set on send and cleared on the two answers
+  goes; components read `snapshot.matches('<state>')`.
+- An ask that is fire-and-forget from a click and only needs its failure shown is **awaited where it is made**: `ask`
+  from `#generated/events` in a component, or `useAsk` (`@apackdev/sdk/fe`).
+- Several of the same ask at once, each needing its own result (a diff per tab), are **spawned**: `spawnChild` the
+  `fromAsk` logic with an id, and handle `xstate.done.actor.<id>`.
+- What a handler tells its asker as it goes arrives at the invoking machine as `<ASK>.progress`
+  (`ProgressEventOf<Contract, '<ASK>'>`).
+
+**The system (answerer).**
+
+- A handler does not read `waiting`. What every window should hear is a `broadcastToSurface`, whoever asked.
+- A feed beside an answer (`sendToWindow(client, …)`) becomes the ask's declared `progress` and a call to `progress(…)`.
+- A handler that can be stopped uses the `signal` it is handed. It keeps no `AbortController` of its own.
+- In the code feature, a child's asks are answered by the child: `defineHandlers<Context, Event>()`, then
+  `handlers.answers<ChildAsks>({ … })` with `...answers.actions` and `...answers.on` in the child's machine, its `Event`
+  union including `AsksEvents<ChildAsks>`. The code system's table names them as answered elsewhere
+  (`codeSpec.answers<keyof SearchAsks | keyof …>`), and its wildcard forwards them.
+- `const ev = event as { type: 'X'; … }` becomes the file's typed narrowing: `spec.typeOf('X', event)`, or
+  `safeEvents<Event>()` from `@apackdev/sdk/helpers` for a machine with no spec.
+
+**Specs** assert the same behaviour through the new path. A spec that built an answer event by hand asks instead, or
+resolves the invoked ask. A spec's mock of `#generated/events` that a machine's `fromAsk` now needs gains one.
 
 ## How each package is checked
 
@@ -58,11 +91,11 @@ to `tell` and `broadcast`. They touch other files than asks do and would double 
 | 2 | Progress is part of an ask | the mechanism and the search are done; a push's progress is not |
 | 3 | Cancelling reaches the handler | done: the mechanism, and the search, which was its one user |
 | 4 | No `waiting` | not started |
-| 5 | Asks are answered beside the machine | not started |
+| 5 | Asks are answered beside the machine | dropped, see above |
 | 6 | An asker awaits | the search is done; every other feature is not |
 | 7 | A loading flag is a state | the search's `isSearching` is done |
-| 8 | Events are handled by a typed table | not started |
-| 9 | A code child answers its own asks | not started |
+| 8 | An event is narrowed, not cast | not started |
+| 9 | A code child answers its own asks | the mechanism and the search are done |
 | 10 | Close out | not started |
 
 ## When it lands

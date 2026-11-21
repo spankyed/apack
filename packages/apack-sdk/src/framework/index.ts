@@ -1,5 +1,5 @@
 export { _stepBackendParts } from './step-backend-declaration.ts';
-export { defineHandlers, defineSystem, SYSTEM_EVENT_TYPES, type AnswerArgs, type AnswerHandler, type Answers, type Handlers, type SystemSpec, type SystemEvents, type SystemContract, type MachineMatchesContract } from './define-system.ts';
+export { defineHandlers, defineSystem, SYSTEM_EVENT_TYPES, type AnswerArgs, type AnswerHandler, type Answers, type ChildAnswerArgs, type Handlers, type SystemSpec, type SystemEvents, type SystemContract, type MachineMatchesContract } from './define-system.ts';
 export type { ArrayChanges, DiffResult } from '../utils/change-detection.ts';
 export { packSystem, type SystemEntry } from './system-utils.ts';
 export type { PackRegistration, PackFeature, PackFeatureSystem, PackFeatureSurface, PackLifecycleHooks, PackEARS, PackMigration } from './pack-registration.ts';

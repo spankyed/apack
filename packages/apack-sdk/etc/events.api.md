@@ -162,6 +162,13 @@ export type AskProgressed<K extends string = string, P = unknown> = {
     update: P;
 };
 
+// @public
+export type AsksEvents<A> = {
+    [K in keyof A & string]: {
+        type: K;
+    } & AskPayload<A[K]>;
+}[keyof A & string];
+
 // @internal
 export function _askSignal(call: string | undefined, client: string | undefined): AbortSignal;
 

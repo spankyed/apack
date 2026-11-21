@@ -78,6 +78,9 @@ export type AskEventOf<C, K extends AskName<C>> = { type: K } & AskPayload<Contr
 /** Every ask event a contract declares: what a system receives for its asks */
 export type AskEventsOf<C> = { [K in AskName<C>]: AskEventOf<C, K> }[AskName<C>];
 
+/** The events a set of asks arrives as: what a machine that answers them lists among the events it handles */
+export type AsksEvents<A> = { [K in keyof A & string]: { type: K } & AskPayload<A[K]> }[keyof A & string];
+
 /** An ask that was done: which was asked, and its answer */
 export type AskAnswered<K extends string = string, A = unknown> = { type: 'ASK_ANSWERED'; asked: K; answer: A };
 

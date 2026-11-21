@@ -15,7 +15,7 @@ import { featureSettings } from '#generated/settings.ts';
  * Priority on startup:
  *   baseDirectory > defaultBaseDirectory > first workspace project > null
  */
-import type { Contract } from './contract.ts';
+import type { Contract, SearchAsks } from './contract.ts';
 import type { AppSettings } from '@apackdev/sdk/types';
 import { services } from '#generated/services.ts';
 import { broadcastToSurface, sendToWindow } from '#generated/events.ts';
@@ -32,7 +32,7 @@ import { gitWatcherActor } from './git-watcher-actor.ts'
 
 // child systems; their events come from the contract, which is where every child's now live
 import { explorerAnswers, explorerSystem } from './features/explorer.ts'
-import { searchAnswers, searchSystem } from './features/search.ts'
+import { searchSystem } from './features/search.ts'
 import { commitAnswers, commitSystem } from './features/commit.ts'
 import { pullRequestAnswers, pullRequestSystem } from './features/pull-request.ts'
 import { forgetHeldSignIn, githubAnswers, githubSystem } from './features/github.ts'
@@ -84,7 +84,7 @@ function resolveInitialDirectory(
  * repository changing, the directory moving, a terminal's lifecycle — is news, broadcast where it happens with no
  * listing on it, and each window asks for what it shows.
  */
-export const answers = codeSpec.answers({
+export const answers = codeSpec.answers<keyof SearchAsks>({
   GET_CODE_START: ({ context }) => ({
     baseDirectory: context.baseDirectory,
     settings: featureSettings.forFeature('code').get(),
@@ -107,7 +107,6 @@ export const answers = codeSpec.answers({
     return { path }
   },
   ...explorerAnswers,
-  ...searchAnswers,
   ...commitAnswers,
   ...pullRequestAnswers,
   ...terminalAnswers,
