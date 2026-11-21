@@ -18,9 +18,18 @@
       <div ref="transcriptContent">
       <p v-if="!state?.agent && state?.status !== 'error'" class="text-sm text-neutral-500">Loading Agent conversation…</p>
       <article v-for="message in state?.agent?.messages ?? []" :key="message.uuid" :data-native-agent-message="message.uuid" class="mb-5 min-w-0 last:mb-0">
-        <p class="mb-2 text-[10px] uppercase tracking-wider text-neutral-500">{{ message.role === 'user' ? 'You' : name }}</p>
-        <NativeTranscriptMessage v-if="frames.get(message.uuid)" :frame="frames.get(message.uuid)!" @press="press" @field="field" />
-        <TiptapEditor v-else mode="viewer" variant="chat" :model-value="message.text" />
+        <template v-if="message.role === 'system'">
+          <p v-if="message.compaction === 'boundary'" class="flex items-center gap-3 text-xs text-neutral-400 before:h-px before:flex-1 before:bg-white/10 after:h-px after:flex-1 after:bg-white/10">Conversation compacted</p>
+          <details v-else class="rounded-lg border border-white/10 px-3 py-2 text-sm">
+            <summary class="cursor-pointer rounded text-neutral-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">Compact summary</summary>
+            <p class="mt-2 whitespace-pre-wrap break-words text-neutral-300">{{ message.text }}</p>
+          </details>
+        </template>
+        <template v-else>
+          <p class="mb-2 text-[10px] uppercase tracking-wider text-neutral-500">{{ message.role === 'user' ? 'You' : name }}</p>
+          <NativeTranscriptMessage v-if="frames.get(message.uuid)" :frame="frames.get(message.uuid)!" @press="press" @field="field" />
+          <TiptapEditor v-else mode="viewer" variant="chat" :model-value="message.text" />
+        </template>
       </article>
       <NativeAgentHandback v-if="state?.agent?.handback" :report="state.agent.handback" />
       <p v-if="state?.agent?.truncated" class="text-xs text-neutral-500">Conversation preview shortened.</p>

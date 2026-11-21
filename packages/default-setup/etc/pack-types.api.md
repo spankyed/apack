@@ -2578,7 +2578,7 @@ interface ClaudeNativeTaskDetails {
         error?: string;
         errorTruncated: boolean;
     };
-    messages: {
+    messages: ({
         uuid: string;
         role: 'assistant' | 'user';
         text: string;
@@ -2590,7 +2590,12 @@ interface ClaudeNativeTaskDetails {
             asUser?: boolean;
             server?: string;
         };
-    }[];
+    } | {
+        uuid: string;
+        role: 'system';
+        text: string;
+        compaction: 'boundary' | 'summary';
+    })[];
     truncated: boolean;
 }
 
@@ -12215,8 +12220,8 @@ declare const fill: z.ZodObject<{
     text: z.ZodString;
     mode: z.ZodEnum<{
         replace: "replace";
-        insert: "insert";
         append: "append";
+        insert: "insert";
     }>;
     ifEmpty: z.ZodOptional<z.ZodLiteral<true>>;
     focus: z.ZodOptional<z.ZodLiteral<true>>;

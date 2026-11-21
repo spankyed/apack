@@ -5,7 +5,7 @@ import type { ClaudeUiTranscriptRow } from './ui-presentation.ts'
 export function selectClaudeAgentTranscriptRows(details: ClaudeNativeTaskDetails | undefined, sessionId: string): ClaudeUiTranscriptRow[] {
   const rows: ClaudeUiTranscriptRow[] = [], replies = new Set<string>()
   for (const message of details?.messages ?? []) {
-    if (message.renderText === undefined) continue
+    if (message.role === 'system' || message.renderText === undefined) continue
     const source = { messageId: message.uuid, uuid: message.uuid, sessionId, text: message.renderText, start: 0, end: message.renderText.length }
     if (message.role === 'user') rows.push({ ...source, component: 'UserMessage', origin: message.origin ?? { kind: 'unclassified' }, isExpanded: true })
     else {

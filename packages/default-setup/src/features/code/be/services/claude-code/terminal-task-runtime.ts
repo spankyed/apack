@@ -190,11 +190,18 @@ async function nativeTaskControl(n,binding,request,abort,current){
  if(rows.every(row=>typeof row.timestamp==='string'&&Number.isFinite(Date.parse(row.timestamp))))rows.sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
  let budget=131072,truncated=rows.length>100;const messages=[];
  for(const row of rows.slice(-100).reverse()){
-  if(!['user','assistant'].includes(row.type)||row.isMeta===true&&!(row.type==='user'&&['coordinator','human'].includes(row.origin?.kind))||row.isVirtual===true)continue;
+  if(row.isVirtual===true)continue;
+  if(row.type==='system'&&row.subtype==='compact_boundary'){
+   messages.unshift({uuid:row.uuid,role:'system',compaction:'boundary',text:''});
+   continue;
+  }
+  const compactSummary=row.type==='user'&&row.isCompactSummary===true;
+  if(!['user','assistant'].includes(row.type)||!compactSummary&&row.isMeta===true&&!(row.type==='user'&&['coordinator','human'].includes(row.origin?.kind)))continue;
   const content=row.message?.content;let parts=[];
   if(typeof content==='string')parts=[content];
   else if(Array.isArray(content))for(const block of content){
    if(block.type==='text'&&typeof block.text==='string')parts.push(block.text);
+   else if(compactSummary)continue;
    else if(block.type==='thinking'&&typeof block.thinking==='string')parts.push('Thinking: '+block.thinking);
    else if(block.type==='tool_use')parts.push(String(block.name)+' '+JSON.stringify(block.input));
    else if(block.type==='tool_result')parts.push(typeof block.content==='string'?block.content:JSON.stringify(block.content));
@@ -203,7 +210,9 @@ async function nativeTaskControl(n,binding,request,abort,current){
   const exactText=text.length<=budget;
   if(!exactText){text=text.slice(-budget);truncated=true;}
   const renderable=row.isMeta!==true&&(typeof content==='string'||Array.isArray(content)&&content.every(block=>block.type==='text'))&&exactText;
-  messages.unshift({uuid:row.uuid,role:row.type,text,...(renderable?{renderText:text,origin:n.runtime.Jgr(row.origin),...(typeof row.message?.id==='string'?{apiMessageId:row.message.id}:{})}:{})});budget-=text.length;if(!budget)break;
+  if(compactSummary)messages.unshift({uuid:row.uuid,role:'system',compaction:'summary',text});
+  else messages.unshift({uuid:row.uuid,role:row.type,text,...(renderable?{renderText:text,origin:n.runtime.Jgr(row.origin),...(typeof row.message?.id==='string'?{apiMessageId:row.message.id}:{})}:{})});
+  budget-=text.length;if(!budget)break;
  }
  const numeric=value=>typeof value==='number'&&Number.isFinite(value)&&value>=0?value:undefined;
  const prompt=typeof task.prompt==='string'?task.prompt:undefined,error=typeof task.error==='string'?task.error:undefined;

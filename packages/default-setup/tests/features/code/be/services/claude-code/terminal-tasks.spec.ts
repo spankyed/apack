@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import vm from 'node:vm'
 import { ClaudeNativeTaskResultSchema } from '#features/code/be/services/claude-code/terminal-tasks.ts'
 import { claudeTerminalTaskRuntime } from '#features/code/be/services/claude-code/terminal-task-runtime.ts'
+import { selectClaudeAgentTranscriptRows } from '#features/code/be/services/claude-code/ui-agent-transcript.ts'
 function fixture() {
   const tasks: { id: string; agentId: string; type: string; status: string; description: string; identity?: { agentName: string }; handbackReport?: { text: string; warning?: string } }[] = [{ id: 'registry-a', agentId: 'agent-a', type: 'local_agent', status: 'running', description: 'Worker' }]
   const registry = { get: (id: string) => tasks.find(task => task.id === id), all: () => Object.fromEntries(tasks.map(task => [task.id, task])), getTranscript: vi.fn(() => ({ messages: [{ uuid: 'live', type: 'assistant', message: { content: [{ type: 'text', text: 'Live progress' }] } }] })) }
@@ -38,6 +39,21 @@ it('reads original saved and live Agent messages without exposing hidden context
   expect(result.details.messages).toEqual([{ uuid: 'saved', role: 'user', text: 'Task instruction', renderText: 'Task instruction', origin: { kind: 'unclassified' } }, { uuid: 'live', role: 'assistant', text: 'Live progress', renderText: 'Live progress', origin: { kind: 'unclassified' } }])
   expect(f.registry.getTranscript).toHaveBeenCalledWith('registry-a'); expect(f.saved).toHaveBeenCalledWith('agent-a'); expect(f.stop).not.toHaveBeenCalled()
 })
+it('projects the original worker compact boundary and summary without person-message hooks', async () => {
+  const f = fixture()
+  f.saved.mockResolvedValue([
+    { uuid: 'worker-boundary', type: 'system', subtype: 'compact_boundary', timestamp: '2026-11-21T00:30:00.000Z' },
+    { uuid: 'worker-summary', type: 'user', isCompactSummary: true, message: { content: 'Saved worker summary' }, timestamp: '2026-11-21T00:30:00.000Z' },
+    { uuid: 'hidden-row', type: 'user', isMeta: true, message: { content: 'Unrelated model context' } },
+  ])
+  const result = ClaudeNativeTaskResultSchema.parse(await f.request('inspect')).details!
+  expect(result.messages.map(({ uuid, role }) => [uuid, role])).toEqual([
+    ['worker-boundary', 'system'], ['worker-summary', 'system'], ['live', 'assistant'],
+  ])
+  expect(result.messages[1]).toEqual({ uuid: 'worker-summary', role: 'system', compaction: 'summary', text: 'Saved worker summary' })
+  expect(selectClaudeAgentTranscriptRows(result, 'session').map(row => row.uuid)).toEqual(['live'])
+})
+
 it('refuses a reply when its native session expires during transcript loading', async () => {
   const f = fixture(); let calls = 0
   await expect(f.request('inspect', 'agent-a', () => { if (++calls > 1) throw new Error('Session changed') })).rejects.toThrow('Session changed')

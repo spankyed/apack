@@ -105,7 +105,10 @@ export interface ClaudeNativeTaskDetails {
     error?: string
     errorTruncated: boolean
   }
-  messages: { uuid: string; role: 'user' | 'assistant'; text: string; renderText?: string; apiMessageId?: string; origin?: { kind: string; name?: string; asUser?: boolean; server?: string } }[]
+  messages: (
+    | { uuid: string; role: 'user' | 'assistant'; text: string; renderText?: string; apiMessageId?: string; origin?: { kind: string; name?: string; asUser?: boolean; server?: string } }
+    | { uuid: string; role: 'system'; text: string; compaction: 'boundary' | 'summary' }
+  )[]
   truncated: boolean
 }
 

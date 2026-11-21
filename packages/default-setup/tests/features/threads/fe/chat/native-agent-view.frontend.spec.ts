@@ -69,6 +69,23 @@ it('owns Escape for native confirmation and restores the Agent editor after canc
   expect(document.activeElement).toBe(f.root.querySelector('[aria-label="Agent draft"]'))
 })
 
+it('shows original compaction as a system event and offers the worker summary as a disclosure', async () => {
+  const f = await mount()
+  context.nativeUiViews[f.ui].state.agent.messages = [
+    { uuid: 'compacted', role: 'system', compaction: 'boundary', text: '' },
+    { uuid: 'summary', role: 'system', compaction: 'summary', text: 'Earlier worker context' },
+  ]
+  await nextTick()
+  expect(f.root.querySelector('[data-native-agent-message="compacted"]')?.textContent).toBe('Conversation compacted')
+  const details = f.root.querySelector<HTMLDetailsElement>('[data-native-agent-message="summary"] details')!
+  expect(details.open).toBe(false)
+  expect(details.querySelector('summary')?.textContent).toBe('Compact summary')
+  expect(details.textContent).toContain('Earlier worker context')
+  expect(details.textContent).not.toContain('You')
+  expect(f.root.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.disabled).toBe(false)
+  expect(f.draftChange).not.toHaveBeenCalled()
+})
+
 it('renders native command output as bounded plain text outside the worker transcript', async () => {
   const f = await mount()
   context.nativeUiViews[f.ui].state.agentInput = { revision: 8, status: 'command_output', output: { messageId: 'native-result', commandName: 'reload-skills', isErrored: false, text: '<script>untrusted output</script>\nOriginal second line' } }; await nextTick()
