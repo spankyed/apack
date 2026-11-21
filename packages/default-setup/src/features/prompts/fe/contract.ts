@@ -21,19 +21,8 @@ export interface PromptsContext {
   /** How many prompts the list shows: a page more each time the user scrolls to its end */
   listLimit: number;
   selectedCategories: string[]; // Filter state
-
-  // Import/Export state
-  promptsImport: {
-    status: 'idle' | 'importing' | 'success' | 'error';
-    errors: string[];
-    importedCount: number;
-  };
-  promptsExport: {
-    status: 'idle' | 'exporting' | 'success' | 'error';
-    errors: string[];
-    filePath: string;
-    promptCount: number;
-  };
+  /** Why the last of this window's writes was refused, until the user dismisses it */
+  writeError: string | null;
 
   // Form data for create/edit
   formData: {

@@ -6,8 +6,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -44,8 +44,8 @@ async function codeOverAStoppedMerge() {
 }
 type Status = { files: Array<{ path: string; status: string; conflict?: string }>; branch: string; operation?: object };
 async function status(): Promise<Status> {
-  const call = await app!.send('code', { type: 'commit.GET_GIT_STATUS' }, { sender: CODE, client: 'c-main' });
-  return (await app!.nextEmit('code', 'commit.STATUS_RECEIVED', { answering: call })).data as Status;
+  const call = app!.ask('code', { type: 'commit.GET_GIT_STATUS' }, { client: 'c-main' });
+  return (await answered(call)) as Status;
 }
 
 it('tells the window what git is in the middle of and how each file is in conflict', async () => {
@@ -60,8 +60,8 @@ it('tells the window what git is in the middle of and how each file is in confli
 it('gives it up when the window asks, answers the window, and has nothing in progress after', async () => {
   const directory = await codeOverAStoppedMerge();
 
-  const call = await app!.send('code', { type: 'commit.MOVE_OPERATION', move: 'abort' }, { sender: CODE, client: 'c-main' });
-  expect(await app!.nextEmit('code', 'commit.OPERATION_MOVED', { answering: call })).toMatchObject({ data: { move: 'abort' } });
+  const call = app!.ask('code', { type: 'commit.MOVE_OPERATION', move: 'abort' }, { client: 'c-main' });
+  expect(await answered(call)).toMatchObject({ move: 'abort' });
 
   const after = await status();
   expect(after.operation).toBeUndefined();
@@ -72,9 +72,7 @@ it('gives it up when the window asks, answers the window, and has nothing in pro
 it('says why when it cannot be carried on with, and leaves it in progress', async () => {
   await codeOverAStoppedMerge();
 
-  const call = await app!.send('code', { type: 'commit.MOVE_OPERATION', move: 'continue' }, { sender: CODE, client: 'c-main' });
-  const refused = await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: call });
-
-  expect((refused.data as { message: string }).message).toMatch(/unmerged|conflict/i);
+  const call = app!.ask('code', { type: 'commit.MOVE_OPERATION', move: 'continue' }, { client: 'c-main' });
+  expect((await refused(call)).message).toMatch(/unmerged|conflict/i);
   expect((await status()).operation).toMatchObject({ kind: 'merge' });
 });

@@ -6,8 +6,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -38,10 +38,10 @@ async function codeOverTwoEdits() {
   return directory;
 }
 type Hunk = { newStart: number; id: string };
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 async function diffOf(staged: boolean) {
-  const call = await app!.send('code', { type: 'commit.GET_GIT_DIFF', path: 'a.txt', staged }, asWindow);
-  return (await app!.nextEmit('code', 'commit.DIFF_RECEIVED', { answering: call })).data as { hunks: Hunk[] };
+  const call = app!.ask('code', { type: 'commit.GET_GIT_DIFF', path: 'a.txt', staged }, asWindow);
+  return (await answered(call)) as { hunks: Hunk[] };
 }
 
 it('tells the window the pieces of a file\'s change with its diff', async () => {
@@ -55,9 +55,9 @@ it('stages the one piece the window asks for, answers it, and has the piece on t
   const directory = await codeOverTwoEdits();
   const [top] = (await diffOf(false)).hunks;
 
-  const call = await app!.send('code', { type: 'commit.APPLY_HUNK', path: 'a.txt', staged: false, hunk: top!.id }, asWindow);
+  const call = app!.ask('code', { type: 'commit.APPLY_HUNK', path: 'a.txt', staged: false, hunk: top!.id }, asWindow);
 
-  expect((await app!.nextEmit('code', 'commit.HUNK_APPLIED', { answering: call })).data).toEqual({ path: 'a.txt', staged: false, hunk: top!.id });
+  expect(await answered(call)).toEqual({ path: 'a.txt', staged: false, hunk: top!.id });
   expect(await git(directory, 'show', ':a.txt')).toBe(lines({ 3: 'the top edit' }));
   expect((await diffOf(false)).hunks.map(hunk => hunk.newStart), 'what is left to stage').toEqual([32]);
   expect((await diffOf(true)).hunks.map(hunk => hunk.newStart), 'and what can be taken back').toEqual([1]);
@@ -68,9 +68,9 @@ it('tells the window a piece is out of date when the file changed since it was r
   const [top] = (await diffOf(false)).hunks;
   fs.writeFileSync(path.join(directory, 'a.txt'), lines({ 3: 'edited again', 35: 'the bottom edit' }));
 
-  const call = await app!.send('code', { type: 'commit.APPLY_HUNK', path: 'a.txt', staged: false, hunk: top!.id }, asWindow);
+  const call = app!.ask('code', { type: 'commit.APPLY_HUNK', path: 'a.txt', staged: false, hunk: top!.id }, asWindow);
 
-  expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: call })).data).toMatchObject({
+  expect(await refused(call)).toMatchObject({
     message: expect.stringContaining('has changed since this change was read'),
   });
   expect(await git(directory, 'show', ':a.txt')).toBe(lines());

@@ -17,6 +17,7 @@
 </template>
 
 <script setup lang="ts">
+import type { EARS } from '#generated/ears.ts'
 import { useSurface } from '@apackdev/sdk/fe'
 
 import { computed, watch } from 'vue'
@@ -108,9 +109,9 @@ const currentEvents = computed(() => {
   const coreEvents = {
     // Document management
     CREATE_DOCUMENT: () => send({ type: 'CREATE_DOCUMENT' }),
-    EDIT_DOCUMENT: (payload: { documentId: string }) => send({ type: 'EDIT_DOCUMENT', ...payload }),
-    DELETE_DOCUMENT: (payload: { documentId: string }) => send({ type: 'DELETE_DOCUMENT', ...payload }),
-    SAVE_DOCUMENT: (payload: { name: string; content: any; tags: string[]; collectionId?: string }) =>
+    EDIT_DOCUMENT: (payload: { documentId: EARS.EntityId }) => send({ type: 'EDIT_DOCUMENT', ...payload }),
+    DELETE_DOCUMENT: (payload: { documentId: EARS.EntityId }) => send({ type: 'DELETE_DOCUMENT', ...payload }),
+    SAVE_DOCUMENT: (payload: { name: string; content: any; tags: string[]; collectionId?: EARS.EntityId }) =>
       send({ type: 'SAVE_DOCUMENT', ...payload }),
     CANCEL_EDIT: () => send({ type: 'CANCEL_EDIT' }),
     
@@ -123,7 +124,7 @@ const currentEvents = computed(() => {
     // DELETE_SEARCH_INDEX: (payload: { indexId: string }) => send({ type: 'DELETE_SEARCH_INDEX', ...payload }),
     // CANCEL_EDIT_INDEX: () => send({ type: 'CANCEL_EDIT_INDEX' }),
 
-    CREATE_COLLECTION: (payload: { name: string; description?: string; parentId?: string }) =>
+    CREATE_COLLECTION: (payload: { name: string; description?: string; parentId?: EARS.EntityId }) =>
       send({ type: 'CREATE_COLLECTION', ...payload }),
     
     // Navigation
@@ -132,45 +133,45 @@ const currentEvents = computed(() => {
   }
 
   const fileBrowserEvents = {
-    NAVIGATE_TO_FOLDER: (payload: { folderId: string | null }) => 
+    NAVIGATE_TO_FOLDER: (payload: { folderId: EARS.EntityId | null }) => 
       send({ type: 'NAVIGATE_TO_FOLDER', ...payload }),
     DOUBLE_CLICK_ITEM: (payload: { item: any }) => 
       send({ type: 'DOUBLE_CLICK_ITEM', ...payload }),
-    SELECT_ITEMS: (payload: { itemIds: string[] }) => 
+    SELECT_ITEMS: (payload: { itemIds: EARS.EntityId[] }) => 
       send({ type: 'SELECT_ITEMS', ...payload }),
     SORT_BY: (payload: { column: 'name' | 'modified' | 'size' | 'kind' }) => 
       send({ type: 'SORT_BY', ...payload }),
     CREATE_FOLDER: (payload: { name: string }) => 
       send({ type: 'CREATE_FOLDER', ...payload }),
-    RENAME_ITEM: (payload: { itemId: string; name: string }) => 
+    RENAME_ITEM: (payload: { itemId: EARS.EntityId; name: string }) => 
       send({ type: 'RENAME_ITEM', ...payload }),
     DELETE_SELECTED_ITEMS: () => 
       send({ type: 'DELETE_SELECTED_ITEMS' }),
-    BREADCRUMB_CLICK: (payload: { folderId: string | null }) =>
+    BREADCRUMB_CLICK: (payload: { folderId: EARS.EntityId | null }) =>
       send({ type: 'BREADCRUMB_CLICK', ...payload }),
     START_EDITING_ITEM: () => {
       // Clear the itemToEdit flag once editing has started
       send({ type: 'CLEAR_ITEM_TO_EDIT' })
     },
-    MOVE_ITEMS: (payload: { itemIds: string[]; targetFolderId: string | null }) => {
+    MOVE_ITEMS: (payload: { itemIds: EARS.EntityId[]; targetFolderId: EARS.EntityId | null }) => {
       send({ type: 'MOVE_ITEMS', ...payload })
     },
-    EXPAND_FOLDER: (payload: { folderId: string }) => {
+    EXPAND_FOLDER: (payload: { folderId: EARS.EntityId }) => {
       send({ type: 'EXPAND_FOLDER', ...payload })
     },
-    COLLAPSE_FOLDER: (payload: { folderId: string }) => {
+    COLLAPSE_FOLDER: (payload: { folderId: EARS.EntityId }) => {
       send({ type: 'COLLAPSE_FOLDER', ...payload })
     },
     CREATE_SYMLINK: (payload: { symlinkPath: string }) => {
       send({ type: 'CREATE_SYMLINK', ...payload })
     },
-    REFRESH_FOLDER: (payload: { folderId: string }) => {
+    REFRESH_FOLDER: (payload: { folderId: EARS.EntityId }) => {
       send({ type: 'REFRESH_FOLDER', ...payload })
     },
-    RELINK_SYMLINK: (payload: { collectionId: string; newPath: string }) => {
+    RELINK_SYMLINK: (payload: { collectionId: EARS.EntityId; newPath: string }) => {
       send({ type: 'RELINK_SYMLINK', ...payload })
     },
-    REMOVE_BROKEN_SYMLINK: (payload: { collectionId: string }) => {
+    REMOVE_BROKEN_SYMLINK: (payload: { collectionId: EARS.EntityId }) => {
       send({ type: 'REMOVE_BROKEN_SYMLINK', ...payload })
       send({ type: 'NAVIGATE_TO_FOLDER', folderId: null })
     },

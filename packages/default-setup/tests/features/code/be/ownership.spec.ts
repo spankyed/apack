@@ -7,8 +7,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 const before = { owner: process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER, global: process.env.GIT_CONFIG_GLOBAL };
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
@@ -25,7 +25,7 @@ afterEach(async () => {
 
 const git = (cwd: string, ...args: string[]) =>
   execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 
 /** The code system over a repository git takes to be another user's, with a global configuration of its own */
 async function codeOverARepositoryAnotherUserOwns() {
@@ -46,26 +46,26 @@ async function codeOverARepositoryAnotherUserOwns() {
   await app.settle();
   return { directory, global };
 }
-const askForStatus = () => app!.send('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
+const askForStatus = () => app!.ask('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
 
 it('tells the window git will not read the repository for who owns it, naming it as git does', async () => {
   const { directory } = await codeOverARepositoryAnotherUserOwns();
 
-  const asked = await askForStatus();
+  const asked = askForStatus();
 
-  const { data } = await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: asked });
+  const data = await refused(asked);
   expect(data).toMatchObject({ code: 'unsafe-ownership' });
   expect(path.resolve((data as { ownership: { directory: string } }).ownership.directory)).toBe(directory);
 });
 
 it('reads the repository once the window trusts it, having written only the user\'s safe.directory', async () => {
   const { directory, global } = await codeOverARepositoryAnotherUserOwns();
-  await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: await askForStatus() });
+  await refused(askForStatus());
 
-  const trusted = await app!.send('code', { type: 'commit.TRUST_OWNERSHIP' }, asWindow);
-  await app!.nextEmit('code', 'commit.OWNERSHIP_TRUSTED', { answering: trusted });
+  const trusted = app!.ask('code', { type: 'commit.TRUST_OWNERSHIP' }, asWindow);
+  await answered(trusted);
 
-  const status = (await app!.nextEmit('code', 'commit.STATUS_RECEIVED', { answering: await askForStatus() })).data as { files: { path: string }[] };
+  const status = await answered(askForStatus()) as { files: { path: string }[] };
   expect(status.files.map(file => file.path)).toEqual(['a.txt']);
   expect(fs.readFileSync(global, 'utf8')).toContain('[safe]');
   expect(fs.readFileSync(path.join(directory, '.git', 'config'), 'utf8')).not.toContain('safe');
@@ -75,8 +75,8 @@ it('writes nothing for a repository git already reads', async () => {
   const { global } = await codeOverARepositoryAnotherUserOwns();
   delete process.env.GIT_TEST_ASSUME_DIFFERENT_OWNER;
 
-  const trusted = await app!.send('code', { type: 'commit.TRUST_OWNERSHIP' }, asWindow);
+  const trusted = app!.ask('code', { type: 'commit.TRUST_OWNERSHIP' }, asWindow);
 
-  expect((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: trusted })).data).toMatchObject({ message: 'Git already reads this repository' });
+  expect(await refused(trusted)).toMatchObject({ message: 'Git already reads this repository' });
   expect(fs.readFileSync(global, 'utf8')).toBe('');
 });

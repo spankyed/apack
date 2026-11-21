@@ -6,8 +6,8 @@ import { testRootEvents } from '@apackdev/sdk/testing'
 import type { ProgramStatusRecord } from '@apackdev/sdk/services'
 import type { TerminalStatus } from '#features/code/be/types.ts'
 import { recordingBroker } from './terminal-broker.ts'
+import { answered } from './answered.ts'
 
-export const CODE = 'default-setup/code'
 export const WINDOW = 'c-main'
 
 /** The app the current case started, stopped and its data reset after it */
@@ -31,8 +31,7 @@ export async function aTerminal(systems: string[] = ['code']) {
   const broker = recordingBroker()
   const app = running.app = await startApp({ systems })
   await app.connect()
-  await app.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { sender: CODE, client: WINDOW })
-  const opened = (await app.nextEmit('code', 'terminal.OPENED')).data as { id: string }
+  const opened = answered<{ id: string }>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { client: WINDOW }))
   await app.settle()
   return { app, broker, terminalId: opened.id, session: broker.opened[0]!.id }
 }

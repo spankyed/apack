@@ -640,48 +640,55 @@ export interface MessageSearchResult {
 }
 
 export type IncomingThreadsEvents =
-  // Thread management events
-  | { type: 'CREATE_THREAD'; topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }
   | { type: 'VIEW_THREAD'; threadId: string }
-  | { type: 'UPDATE_THREAD_STATUS'; threadId: string; status: string }
-  | { type: 'UPDATE_THREAD_FIELD'; threadId: string; key: string; value: any }
-  | { type: 'DELETE_THREAD'; threadId: string }
-  | { type: 'SET_THREAD_PARENT'; childIds: string[]; parentId: string }
-  | { type: 'EXPORT_THREADS'; directory: string }
-  | { type: 'IMPORT_THREADS'; directory: string }
-  // Chat/agent events (merged from agent system)
-  | { type: 'USER_MSG'; text: string; mode?: string; phase?: string; threadId?: string; references?: { images?: { url: string; name: string }[]; files?: { name: string; path: string; typeLabel: string; isImage: boolean }[]; context?: { refType: 'thread' | 'document' | 'note' | 'task' | 'tasklist' | 'folder'; refId: string; shortCode: string; label: string }[] }; cwdOverride?: string; forceDirectoryPicker?: boolean }
-  | { type: 'OPEN_THREAD_CHAT'; threadId: string; restore?: boolean }
   | { type: 'PAUSE_TURN'; threadId: string }
   | { type: 'INTERACTIVE_MSG_RESPONSE'; messageId: string; threadId: string; response: any }
-  | { type: 'FORK_THREAD'; messageId: string; threadId?: string; threadTopic?: string }
   | { type: 'REVERT_THREAD'; messageId: string; threadId: string; restoreFiles?: boolean; userCliUuid?: string }
   | { type: 'SUMMARIZE_THREAD'; messageId: string; threadId: string }
-  | { type: 'USER_COMMAND'; command: string; text: string; mode?: string; phase?: string; threadId?: string; references?: { images?: { url: string; name: string }[]; files?: { name: string; path: string; typeLabel: string; isImage: boolean }[]; context?: { refType: 'thread' | 'document' | 'note' | 'task' | 'tasklist' | 'folder'; refId: string; shortCode: string; label: string }[] }; cwdOverride?: string }
   | { type: 'TOGGLE_COMPACTED'; markerId: string; compacted: boolean }
   | { type: 'DELETE_MESSAGE'; messageId: string }
   | { type: 'FORWARD_BRAIN_EVENT'; eventType: string; payload?: any }
-  /** What a window's chat starts from: answered with \`CHAT_STARTED\` */
-  | { type: 'GET_CHAT_START' }
-
   | { type: 'CLIENT_CONNECTED' }
   | { type: 'THREAD_DELETED'; threadId: string }
 
+/** A message a user sends in the chat, to a thread or to start one */
+export type UserMessage = { text: string; mode?: string; phase?: string; threadId?: string; references?: { images?: { url: string; name: string }[]; files?: { name: string; path: string; typeLabel: string; isImage: boolean }[]; context?: { refType: 'thread' | 'document' | 'note' | 'task' | 'tasklist' | 'folder'; refId: string; shortCode: string; label: string }[] }; cwdOverride?: string; forceDirectoryPicker?: boolean };
+
+/** A slash command a user runs in the chat, in a thread or to start one */
+export type UserCommand = { command: string; text: string; mode?: string; phase?: string; threadId?: string; references?: { images?: { url: string; name: string }[]; files?: { name: string; path: string; typeLabel: string; isImage: boolean }[]; context?: { refType: 'thread' | 'document' | 'note' | 'task' | 'tasklist' | 'folder'; refId: string; shortCode: string; label: string }[] }; cwdOverride?: string };
+
+/** Where a message or a command went: the thread, and whether sending it started that thread */
+export type MessageSent = { threadId: EARS.EntityId; started: boolean };
+
 /**
- * What the threads system sends. What it stores is its views (\`be/views.ts\`); what it sends is the answers to a
- * window's asks and writes, and the few notifications a flow sends a window, none of which carries a row.
+ * What the threads system answers. What it stores is its views (\`be/views.ts\`); a window's writes and commands are
+ * asks, answered to the window that made them.
+ */
+export type ThreadsAsks = {
+  CREATE_THREAD: { args: { topic: string; tags?: string[]; instructions: string; linkedThreads?: { id: string; relation: ThreadLinkRelation }[]; parentThreadId?: string }; answer: { id: EARS.EntityId } };
+  UPDATE_THREAD_STATUS: { args: { threadId: string; status: string } };
+  UPDATE_THREAD_FIELD: { args: { threadId: string; key: string; value: any } };
+  DELETE_THREAD: { args: { threadId: string } };
+  SET_THREAD_PARENT: { args: { childIds: string[]; parentId: string } };
+  EXPORT_THREADS: { args: { directory: string }; answer: { filePath: string; threadCount: number } };
+  /** Imported with what could not be, unless nothing could, which fails */
+  IMPORT_THREADS: { args: { directory: string }; answer: { count: number; errors?: string[] } };
+  /** A thread opened in the chat, and marked visited; one that is gone fails, naming it */
+  OPEN_THREAD_CHAT: { args: { threadId: string; restore?: boolean }; refuses: { 'not-found': { threadId: string } } };
+  USER_MSG: { args: UserMessage; answer: MessageSent };
+  USER_COMMAND: { args: UserCommand; answer: MessageSent };
+  /** A thread forked from a message, which every window is told to show */
+  FORK_THREAD: { args: { messageId: string; threadId?: string; threadTopic?: string }; answer: { threadId: EARS.EntityId } };
+  /** What a window's chat starts from */
+  GET_CHAT_START: { answer: ChatStart };
+};
+
+/**
+ * What the threads system sends every window: a thread to show (one a flow opened, a first message started, or a
+ * fork), the streamed reply's feed, and the few notifications a flow sends a window, none of which carries a row.
  */
 export type OutgoingThreadsEvents =
-  /** The thread a \`CREATE_THREAD\` made, for the window that asked to mark */
-  | { type: 'THREAD_CREATED'; id: EARS.EntityId }
-  /** Any other write landed */
-  | { type: 'THREAD_WRITTEN' }
-  /** A write was refused, and why */
-  | { type: 'THREAD_WRITE_FAILED'; error: string }
-  /**
-   * Open this thread in the chat: to the window that asked (a message that started a thread, a fork), or, from a flow,
-   * which has no window to answer, to every window. It names the thread; its content is the thread's views.
-   */
+  /** Open this thread in the chat, in every window: one a flow opened, a first message or command started, or a fork */
   | { type: 'SHOW_THREAD'; threadId: EARS.EntityId; restore?: boolean }
   /**
    * The next characters of a streamed reply, for every window showing that message.
@@ -703,12 +710,6 @@ export type OutgoingThreadsEvents =
    * block's label, state and re-projected lists are rewrites and travel on the row; this carries growth.
    */
   | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: EARS.EntityId; blockId: EARS.EntityId; at: number; text: string; done?: true }
-  | { type: 'CHAT_STARTED'; data: ChatStart }
-  | { type: 'THREAD_CHAT_ERROR'; threadId: string; error: string }
-  | { type: 'THREADS_EXPORTED'; filePath: string; threadCount: number }
-  | { type: 'THREADS_EXPORT_FAILED'; errors: string[] }
-  | { type: 'THREADS_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'THREADS_IMPORT_FAILED'; errors: string[] }
   // A flow's notifications to every window: what the chat's input offers, and a state flashed beside a thread
   | { type: 'SET_MODE'; mode: string }
   | { type: 'SET_PHASE'; phase: string }

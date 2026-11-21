@@ -306,7 +306,7 @@ import {
   HardDrive,
   Image as ImageIcon
 } from 'lucide-vue-next';
-import type { DatabaseState } from '../state.ts';
+import { isExporting as exportUnderWay, isImporting as importUnderWay, type DatabaseState } from '../state.ts';
 import ToastNotification from '@apackdev/ui/design/ToastNotification';
 
 const actor: DatabaseState = useSurface();
@@ -315,8 +315,8 @@ const storage = useSurfaceStorage();
 
 // Get backup info from state
 const storedBackupInfo = useSelector(actor, (state) => state.context.backupInfo);
-const isExporting = useSelector(actor, (state) => state.context.exporting);
-const isImporting = useSelector(actor, (state) => state.context.importing);
+const isExporting = useSelector(actor, exportUnderWay);
+const isImporting = useSelector(actor, importUnderWay);
 const backupResult = useSelector(actor, (state) => state.context.backupResult);
 
 // Tab state

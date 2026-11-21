@@ -10,9 +10,16 @@ import { createActor, sendTo, setup, type AnyActorRef } from 'xstate';
 
 const asks = vi.hoisted(() => [] as { type: string; insideSurfaceSend: boolean }[]);
 const insideSurfaceSend = vi.hoisted(() => ({ value: false }));
-vi.mock('#generated/events.ts', () => ({
-  sendToSystem: (_to: string, event: { type: string }) => asks.push({ type: event.type, insideSurfaceSend: insideSurfaceSend.value }),
-}));
+vi.mock('#generated/events.ts', async () => {
+  const { fromPromise } = await import('xstate');
+  return {
+    // An ask a machine invokes: recorded as it is made, and never answered, so the search stays under way
+    fromAsk: (_to: string, type: string) => fromPromise(() => {
+      asks.push({ type, insideSurfaceSend: insideSurfaceSend.value });
+      return new Promise(() => {});
+    }),
+  };
+});
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({ getParentContext: () => ({ baseDirectory: '/work' }) }));
 
 const { searchState } = await import('#features/code/fe/features/search/state.ts');
@@ -53,7 +60,7 @@ it('reads the state of the child it was asked for', () => {
   search.send({ type: 'search.START', query: 'needle' });
 
   expect(search.getSnapshot().context.searchQuery).toBe('needle');
-  expect(search.getSnapshot().context.isSearching).toBe(true);
+  expect(search.getSnapshot().matches('searching')).toBe(true);
 });
 
 it('hands back nothing for a child the surface has not spawned', () => {

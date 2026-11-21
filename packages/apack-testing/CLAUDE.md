@@ -346,7 +346,7 @@ Things worth knowing before changing it:
   `window.location.reload()`: the app blocks renderer-initiated navigation (`BlockNotAllowdOrigins`,
   `packages/main`), so that call returns having done nothing.
 - **An answer arrives addressed, and is still matched by the call its ask was sent under.** The session
-  claims `host/drive` and stamps `sender` on every bus send, so a system's `reply` comes back on this
+  claims `host/drive` and stamps `sender` on every bus send, so a system's answer comes back on this
   connection rather than to every window — which is what stops a person querying in the Database surface
   from being mistaken for the session. But addressing answers *which connection*, never *which ask*: the
   call is what tells concurrent asks apart. It rides on the envelope (`Message.call` out,
@@ -517,8 +517,8 @@ The fixture honors the CLI's resolved `APACK_HOST_EXECUTABLE` or `APACK_HOST_ROO
 | `report(name, value)` | Write `.apack/drive/results/{name}.json` and print one `[drive:report] {name} {json}` line, for a driving run whose answer is meant to be read by a program rather than watched. Returns the path |
 | `waitForState(check, ms?)` | Wait for dot-separated state path (e.g. `'running.connected'`), default 30s, the suite's assertion backstop |
 | `waitForSurface(surfaceId, ms?)` | Wait for a surface to appear in the surface list, default 30s |
-| `send(system, event)` | Send a backend system an event as this window does, the system named as the pack's code names one. Resolves once the API accepted it and rejects with its refusal. Names no return address, so a `reply` to it goes nowhere |
-| `ask(system, event)` | Send as `send` does and resolve with the event the system's `reply` answers it with, matched by the call it was sent under. Waits while the app works, not for a fixed time |
+| `send(system, event)` | Send a backend system an event as this window does, the system named as the pack's code names one. Resolves once the API accepted it and rejects with its refusal. Names no return address, so an answer to it goes nowhere |
+| `ask(system, event)` | Send as `send` does and resolve with the system's answer to it — `ASK_ANSWERED` with the answer, or `ASK_FAILED` with the failure — matched by the call it was sent under. Waits while the app works, not for a fixed time |
 
 ### `createTest(options?)`
 

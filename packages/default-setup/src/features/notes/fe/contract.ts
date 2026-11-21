@@ -31,8 +31,6 @@ export interface NotesContext {
   selectedNoteIds: string[]
   selectedTaskId: string | null
   selectedTask: NoteSummary | null
-  notesImport: { status: 'idle' | 'importing' | 'success' | 'error'; errors: string[]; importedCount: number }
-  notesExport: { status: 'idle' | 'exporting' | 'success' | 'error'; errors: string[]; filePath: string; itemCount: number }
   showTrash: boolean
   noteScrollPositions: Record<string, number>
   panelSearchActive: boolean

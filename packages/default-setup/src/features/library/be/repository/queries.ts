@@ -167,8 +167,8 @@ export const libraryQueries = {
   },
 
   /** The symlinked collections among `ids` whose folder on disk is gone */
-  async brokenSymlinks(ids: readonly string[]): Promise<string[]> {
-    const broken: string[] = []
+  async brokenSymlinks<Id extends string>(ids: readonly Id[]): Promise<Id[]> {
+    const broken: Id[] = []
     for (const id of ids) {
       const target = query.ids(id as EARS.EntityId).pickOne(['symlinkPath'])?.symlinkPath as string | undefined
       if (!target) continue

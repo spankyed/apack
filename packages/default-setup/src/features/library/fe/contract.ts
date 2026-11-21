@@ -5,33 +5,34 @@
 // `apack.json` names it at `features[].surface.contract`.
 import type { NavHistory, SurfaceInbox } from '@apackdev/sdk/fe'
 import type { BreadcrumbItem, DocumentDTO, LibraryItem, SearchIndex } from '#generated/types.ts'
+import type { EARS } from '#generated/ears.ts'
 
 export interface LibraryContext {
   // Core view state
   currentView: 'browser' | 'create' | 'edit' | 'create-index' | 'edit-index' | 'test-index'
   editingDocument?: DocumentDTO
-  editingDocumentId?: string
+  editingDocumentId?: EARS.EntityId
 
   // File browser fields
   items: LibraryItem[]
-  currentFolderId: string | null
+  currentFolderId: EARS.EntityId | null
   currentPath: string[]
-  selectedItems: string[]
+  selectedItems: EARS.EntityId[]
   selectedDocument: DocumentDTO | null
   sortBy: 'name' | 'modified' | 'size' | 'kind'
   sortDirection: 'asc' | 'desc'
   breadcrumbs: BreadcrumbItem[]
   editingItem?: LibraryItem
-  itemToEdit?: string | null
-  newItemId?: string | null
+  itemToEdit?: EARS.EntityId | null
+  newItemId?: EARS.EntityId | null
 
   // Tree view fields
-  expandedFolderIds: string[]
-  expandedFolderChildren: Record<string, LibraryItem[]>
-  loadingFolderIds: string[]
+  expandedFolderIds: EARS.EntityId[]
+  expandedFolderChildren: Record<EARS.EntityId, LibraryItem[]>
+  loadingFolderIds: EARS.EntityId[]
 
   // The folders shown whose contents are on disk, which are fetched rather than watched
-  diskFolderIds: (string | null)[]
+  diskFolderIds: (EARS.EntityId | null)[]
 
   // Search index fields
   searchIndices: SearchIndex[]
@@ -52,20 +53,16 @@ export interface LibraryContext {
   isBroken: boolean
   lastKnownPath: string | null
 
-  // Why the last of this window's writes was refused, until the user dismisses it
+  // Why the last of this window's writes or fetches was not done, until the user dismisses it
   writeError: string | null
 
-  // Import/Export
-  libraryImport: { status: 'idle' | 'importing' | 'success' | 'error'; errors: string[]; importedCount: number }
-  libraryExport: { status: 'idle' | 'exporting' | 'success' | 'error'; errors: string[]; filePath: string; itemCount: number }
-
-  navHistory: NavHistory<string | null>
+  navHistory: NavHistory<EARS.EntityId | null>
 }
 
 /** Where an editor link into the library lands */
 export type LibraryInboxEvent =
-  | { type: 'EDIT_DOCUMENT'; documentId: string }
-  | { type: 'NAVIGATE_TO_FOLDER'; folderId: string | null }
+  | { type: 'EDIT_DOCUMENT'; documentId: EARS.EntityId }
+  | { type: 'NAVIGATE_TO_FOLDER'; folderId: EARS.EntityId | null }
 
 export type Contract = {
   opens: 'Document' | 'Collection'

@@ -65,11 +65,52 @@ function brainState(context: BrainContext, paused: boolean): Extract<OutgoingBra
   };
 }
 
+/** A flow run's tree, as a window opens it */
+const openedRun = (runNodeId: RunNodeId) => ({ runNodeId, data: repository.brainQueries.extendedRunNodeData(runNodeId) });
+
+export const answers = brainSpec.answers({
+  REQUEST_SURFACE_DATA: ({ context, args, self }) => {
+    const flowId = args.flowRunNodeId ? args.flowRunNodeId as RunNodeId : undefined;
+    let data: FlowRunNodeData;
+    try {
+      data = flowId
+        ? repository.brainQueries.extendedRunNodeData(flowId)
+        : repository.brainQueries.rootData(context.rootRunId);
+    } catch {
+      // A run the history no longer holds (pruned, or the data replaced)
+      data = { flowRunNodeId: '' as EARS.EntityId, runNodeTree: [], possibleEvents: [], flowHierarchy: [] };
+    }
+    return { data, state: brainState(context, self.getSnapshot().matches({ running: 'paused' })) };
+  },
+  OPEN_RUN_NODE: ({ args, refuse }) => {
+    const runNodeId = args.runNodeId as RunNodeId;
+    if (repository.brainQueries.runNodeById(runNodeId)?.kind !== 'flow') throw refuse('not-a-flow', 'Only a flow run opens');
+    return openedRun(runNodeId);
+  },
+  GO_BACK_RUN_NODE: ({ context, args }) => {
+    const current = args.currentFlowRunNodeId as RunNodeId | undefined;
+    const parentFlow = current ? repository.brainQueries.parentFlowOf(current) : undefined;
+    const data = parentFlow
+      ? repository.brainQueries.extendedRunNodeData(parentFlow.id)
+      : repository.brainQueries.rootData(context.rootRunId);
+    return { runNodeId: data.flowRunNodeId, data };
+  },
+  GET_RUN_NODE_DETAILS: ({ args }) => {
+    const runNodeId = args.runNodeId as RunNodeId;
+    const runNode = repository.brainQueries.runNodeById(runNodeId);
+    const revealIn = repository.brainQueries.revealIn(runNodeId);
+    // Said as JSON, where a missing run node has to be: null
+    return { runNodeId, details: runNode ? { ...runNode, ...(revealIn && { revealIn }) } : null };
+  },
+});
+
 export const brainSystem = setup({
   types: brainSpec.types,
-  actions: brainSpec.actions({
+  actions: {
+    ...answers.actions,
+    ...brainSpec.actions({
     logError: ({ event }) => {
-      logger.error('Brain system error', { error: (event as any).error });
+      logger.error('Brain system error', { error: 'error' in event ? event.error : undefined });
     },
     startBrain: enqueueActions(({ context, enqueue }) => {
       // Defensive: clear stale flow actor references before starting new brain.
@@ -234,80 +275,9 @@ export const brainSystem = setup({
       });
       enqueue('notifyClientReady');
     }),
-    /**
-     * A window's ask for a run's tree — the root run's, or the flow it shows — answered to it alone with the tree and
-     * the brain's state, which a window just started has not heard yet
-     */
-    sendSurfaceData: ({ context, event, self, reply }) => {
-      if (!reply) return;
-      // Use provided flowRunNodeId or fall back to root
-      const flowId = event.type === 'REQUEST_SURFACE_DATA' && event.flowRunNodeId
-        ? event.flowRunNodeId as RunNodeId
-        : undefined;
-
-      let data: FlowRunNodeData;
-      try {
-        data = flowId
-          ? repository.brainQueries.extendedRunNodeData(flowId)
-          : repository.brainQueries.rootData(context.rootRunId);
-      } catch {
-        // A run the history no longer holds (pruned, or the data replaced)
-        data = { flowRunNodeId: '' as EARS.EntityId, runNodeTree: [], possibleEvents: [], flowHierarchy: [] };
-      }
-
-      reply({ type: 'RECEIVE_SURFACE_DATA', data });
-      reply(brainState(context, self.getSnapshot().matches({ running: 'paused' })));
-    },
     /** The brain's state, for every window whenever it is asked to publish: none of it is a row */
     publishBrainState: ({ context, self }) => {
       broadcastToSurface('brain', brainState(context, self.getSnapshot().matches({ running: 'paused' })));
-    },
-    openRunNode: ({ event, reply }) => {
-      const ev = brainSpec.typeOf('OPEN_RUN_NODE', event);
-      const runNodeId = ev.runNodeId as RunNodeId;
-
-      // Check if this is a flow RunNode before trying to get extended data
-      const runNode = repository.brainQueries.runNodeById(runNodeId);
-      if (!runNode || runNode.kind !== 'flow') {
-        // Silently ignore non-flow RunNodes
-        return;
-      }
-
-      const data = repository.brainQueries.extendedRunNodeData(runNodeId);
-
-      reply?.({
-        type: 'RUN_NODE_OPENED',
-        runNodeId,
-        data
-      });
-    },
-    goBackRunNode: ({ context, event, reply }) => {
-      const currentFlowRunNodeId = brainSpec.typeOf('GO_BACK_RUN_NODE', event).currentFlowRunNodeId as RunNodeId | undefined;
-      const parentFlow = currentFlowRunNodeId ? repository.brainQueries.parentFlowOf(currentFlowRunNodeId) : undefined;
-
-      const data = parentFlow
-        ? repository.brainQueries.extendedRunNodeData(parentFlow.id)
-        : repository.brainQueries.rootData(context.rootRunId);
-
-      reply?.({
-        type: 'RUN_NODE_OPENED',
-        runNodeId: data.flowRunNodeId,
-        data
-      });
-    },
-    getRunNodeDetails: ({ event, reply }) => {
-      const ev = brainSpec.typeOf('GET_RUN_NODE_DETAILS', event);
-      const runNodeId = ev.runNodeId as RunNodeId;
-
-      const runNode = repository.brainQueries.runNodeById(runNodeId);
-      const revealIn = repository.brainQueries.revealIn(runNodeId);
-
-      reply?.({
-        type: 'RUN_NODE_DETAILS',
-        runNodeId,
-        // An event is JSON, where a missing RunNode has to be said: null
-        details: runNode ? { ...runNode, ...(revealIn && { revealIn }) } : null
-      });
     },
     toggleInspect: () => {
       const currentState = isDebugEnabled('brain');
@@ -395,6 +365,7 @@ export const brainSystem = setup({
       notifyAdHocListeners(eventType, payload, targetFlowId);
     },
   }),
+  },
 }).createMachine(
   {
     id: 'brain',
@@ -413,9 +384,7 @@ export const brainSystem = setup({
       CLIENT_CONNECTED: {
         actions: 'setClientConnected',
       },
-      REQUEST_SURFACE_DATA: {
-        actions: 'sendSurfaceData',
-      },
+      REQUEST_SURFACE_DATA: answers.on.REQUEST_SURFACE_DATA,
       // A setting of the feature rather than of a run, so it toggles whether a flow runs or not
       TOGGLE_INSPECT: {
         actions: 'toggleInspect',
@@ -446,15 +415,10 @@ export const brainSystem = setup({
         always: { guard: ({ context }) => context.brainActor === undefined, target: 'stopped' },
         initial: 'active',
         on: {
-          OPEN_RUN_NODE: {
-            actions: 'openRunNode',
-          },
-          GO_BACK_RUN_NODE: {
-            actions: 'goBackRunNode',
-          },
-          GET_RUN_NODE_DETAILS: {
-            actions: 'getRunNodeDetails',
-          },
+          // A run is opened while the brain runs; stopped, the bus answers that nothing took the ask
+          OPEN_RUN_NODE: answers.on.OPEN_RUN_NODE,
+          GO_BACK_RUN_NODE: answers.on.GO_BACK_RUN_NODE,
+          GET_RUN_NODE_DETAILS: answers.on.GET_RUN_NODE_DETAILS,
           KILL_BRAIN: {
             actions: 'killBrain',
             target: 'stopped',

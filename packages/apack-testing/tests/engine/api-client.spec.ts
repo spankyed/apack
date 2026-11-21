@@ -204,7 +204,7 @@ describe('a refusal', () => {
 
 describe('the subscription', () => {
   it('delivers a message to its listeners', async () => {
-    const sent: BusMessage = { to: 'host/drive', event: { type: 'QUERY_RESULT', result: 7 }, sender: 'default-setup/database' };
+    const sent: BusMessage = { to: 'host/drive', event: { type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 7 } }, sender: 'default-setup/database' };
     behaviour.emit = [sent];
     await serve();
 

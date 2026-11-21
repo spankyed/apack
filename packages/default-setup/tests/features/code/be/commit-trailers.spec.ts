@@ -8,9 +8,9 @@ import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
 import { featureSettings } from '#generated/settings.ts';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -45,10 +45,10 @@ const MESSAGE = 'feat: a thing\n\nWhy it is done.\n\nCo-authored-by: Agent <agen
 it('commits without the trailers the settings name, Co-authored-by unless they say otherwise, and says what it committed', async () => {
   const { app, lastMessage } = await staged();
 
-  const committed = await app.send('code', { type: 'commit.COMMIT', message: MESSAGE }, asWindow);
+  const committed = app.ask('code', { type: 'commit.COMMIT', message: MESSAGE }, asWindow);
 
   const kept = 'feat: a thing\n\nWhy it is done.\n\nSigned-off-by: Test <test@example.com>';
-  expect((await app.nextEmit('code', 'commit.COMMIT_SUCCESS', { answering: committed })).data).toEqual({ message: kept });
+  expect((await answered(committed)).message).toBe(kept);
   expect(await lastMessage()).toBe(kept);
 });
 
@@ -56,9 +56,9 @@ it('commits every trailer when the settings name none', async () => {
   const { app, lastMessage } = await staged();
   featureSettings.forFeature('code').set({ path: ['trailersRemovedOnCommit'], value: [] });
 
-  const committed = await app.send('code', { type: 'commit.COMMIT', message: MESSAGE }, asWindow);
+  const committed = app.ask('code', { type: 'commit.COMMIT', message: MESSAGE }, asWindow);
 
-  await app.nextEmit('code', 'commit.COMMIT_SUCCESS', { answering: committed });
+  await answered(committed);
   expect(await lastMessage()).toBe(MESSAGE);
 });
 
@@ -66,9 +66,9 @@ it('amends with a message without the trailers the settings name, whatever the c
   const { app, lastMessage } = await staged();
   featureSettings.forFeature('code').set({ path: ['trailersRemovedOnCommit'], value: ['SIGNED-OFF-BY'] });
 
-  const amended = await app.send('code', { type: 'commit.AMEND', message: MESSAGE }, asWindow);
+  const amended = app.ask('code', { type: 'commit.AMEND', message: MESSAGE }, asWindow);
 
-  await app.nextEmit('code', 'commit.AMENDED', { answering: amended });
+  await answered(amended);
   expect(await lastMessage()).toBe('feat: a thing\n\nWhy it is done.\n\nCo-authored-by: Agent <agent@example.com>');
 });
 
@@ -76,14 +76,14 @@ it('tells the window the trailers of the message it names, and takes the one it 
   const { app } = await staged();
   const message = 'feat: a thing\n\nCo-authored-by: A <a@example.com>\nCo-authored-by: B <b@example.com>';
 
-  const read = await app.send('code', { type: 'commit.READ_TRAILERS', message }, asWindow);
-  expect((await app.nextEmit('code', 'commit.TRAILERS_READ', { answering: read })).data).toEqual({
+  const read = app.ask('code', { type: 'commit.READ_TRAILERS', message }, asWindow);
+  expect(await answered(read)).toEqual({
     message,
     trailers: [{ key: 'Co-authored-by', value: 'A <a@example.com>' }, { key: 'Co-authored-by', value: 'B <b@example.com>' }],
   });
 
-  const removed = await app.send('code', { type: 'commit.REMOVE_TRAILER', message, trailer: { key: 'Co-authored-by', value: 'A <a@example.com>' } }, asWindow);
-  expect((await app.nextEmit('code', 'commit.TRAILER_REMOVED', { answering: removed })).data).toEqual({
+  const removed = app.ask('code', { type: 'commit.REMOVE_TRAILER', message, trailer: { key: 'Co-authored-by', value: 'A <a@example.com>' } }, asWindow);
+  expect(await answered(removed)).toEqual({
     message,
     without: 'feat: a thing\n\nCo-authored-by: B <b@example.com>',
   });

@@ -25,7 +25,7 @@ export { fakeInference, type FakeInference, type FakeInferenceCall, type FakeInf
 export { startFeTestRuntime, stopFeTestRuntime, type FeTestRuntimeOptions } from './fe-runtime.ts';
 export { fakeSettings, type FakeSettings, type FakeSettingsUpdate } from './fake-settings.ts';
 // What a delivery door puts on an answer, for a spec that drives a machine with no door in front of it
-export { answerTo } from './answers.ts';
+export { answerTo, askAnswered, askFailed } from './answers.ts';
 
 /** What `startTestRuntime` starts the test app with */
 export interface TestRuntimeStartOptions {

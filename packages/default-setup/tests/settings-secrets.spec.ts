@@ -12,7 +12,7 @@ describe('settings and stored API keys', () => {
     expect(app.emitted('host/settings').filter((e) => e.type === 'SECRETS_UPDATED').at(-1)).toMatchObject({ secrets: [] });
 
     const work = addTestSecret('anthropic', 'Work');
-    await app.send('host/settings', { type: 'SECRETS_CHANGED' }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'SECRETS_CHANGED' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
     const updated = app.emitted('host/settings').filter((e) => e.type === 'SECRETS_UPDATED').at(-1)!;
     expect(updated).toMatchObject({ secrets: [{ id: work.id, provider: 'anthropic', label: 'Work', selected: true }], status: { protection: 'os-keystore' } });
@@ -22,7 +22,7 @@ describe('settings and stored API keys', () => {
   it("stores a CLI path override on the code surface's settings", async () => {
     const app = await startApp({ systems: ['host/settings'] });
     await app.connect();
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'default-setup/code' }, path: ['cliPaths'], value: { git: '/opt/bin/git' } }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'default-setup/code' }, path: ['cliPaths'], value: { git: '/opt/bin/git' } }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
     expect(featureSettings.forFeature('code').get()).toMatchObject({ cliPaths: { git: '/opt/bin/git' } });
   });
 
@@ -30,7 +30,7 @@ describe('settings and stored API keys', () => {
   it('tells the surface whose settings changed', async () => {
     const app = await startApp({ systems: ['host/settings'] });
     await app.connect();
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'default-setup/code' }, path: ['mdEditorDefault'], value: false }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'default-setup/code' }, path: ['mdEditorDefault'], value: false }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
     const updated = await app.nextEmit('code', 'FEATURE_SETTINGS_UPDATED');
     expect(updated).toMatchObject({ type: 'FEATURE_SETTINGS_UPDATED', settings: { mdEditorDefault: false } });
   });
@@ -40,12 +40,9 @@ describe('settings and stored API keys', () => {
   it('refuses an unqualified feature target, saving nothing', async () => {
     const app = await startApp({ systems: ['host/settings'] });
     await app.connect();
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'code' }, path: ['cliPaths'], value: { git: '/elsewhere/git' } }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'code' }, path: ['cliPaths'], value: { git: '/elsewhere/git' } }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
     // The sender's mistake to fix, which its form shows: not a system error
-    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({
-      type: 'SETTINGS_REFUSED',
-      problems: [expect.stringContaining('settings target')],
-    }));
+    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'ASK_FAILED', failure: expect.objectContaining({ kind: 'refused', problems: [expect.stringContaining('settings target')] }) }));
     expect(takeSystemErrors()).toEqual([]);
     expect(featureSettings.forFeature('code').get()).not.toMatchObject({ cliPaths: { git: '/elsewhere/git' } });
   });

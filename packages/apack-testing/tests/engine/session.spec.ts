@@ -236,11 +236,11 @@ describe('the in-page bridge', () => {
     const { session, emit } = sessionWith();
     await session.ready();
 
-    emit({ type: 'QUERY_RESULT', event: { result: 1 } });
+    emit({ type: 'ASK_ANSWERED', event: { asked: 'EXECUTE_QUERY', answer: { result: 1 } } });
     emit({ type: 'SOMETHING_ELSE', event: {} });
 
     expect(drained(session.drainEvents()).events.map((e) => e.type))
-      .toEqual(['QUERY_RESULT', 'SOMETHING_ELSE']);
+      .toEqual(['ASK_ANSWERED', 'SOMETHING_ELSE']);
     expect(drained(session.drainEvents()).events, 'read and cleared').toEqual([]);
   });
 
@@ -338,7 +338,7 @@ describe('the in-page bridge', () => {
     await settle();
     // Through the bridge, so the call is on the delivered event where a window's door put it — `answerTo`
     // builds exactly that, which is why the session reads both places into one field
-    emit({ type: 'QUERY_RESULT', event: answerTo(sentCall(send), { type: 'QUERY_RESULT', result: 'through a full buffer' }) });
+    emit({ type: 'ASK_ANSWERED', event: answerTo(sentCall(send), { type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'through a full buffer' } }) });
 
     await expect(pending).resolves.toEqual({ ok: true, value: 'through a full buffer' });
   });
@@ -441,7 +441,7 @@ describe('settings', () => {
     await settle();
     expect(lastSend(send)).toMatchObject({ to: 'host/settings', event: { type: 'GET_SETTINGS' } });
     const snapshot = { runId: 'run', revision: 1, values: { app: { personal: { name: 'Ada' } } }, catalog: { revision: 2 } };
-    answer({ type: 'SETTINGS_LOADED', snapshot }, { answering: sentCall(send) });
+    answer({ type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot } }, { answering: sentCall(send) });
 
     await expect(reading).resolves.toEqual({ ok: true, value: snapshot });
   });
@@ -465,7 +465,7 @@ describe('settings', () => {
     const { session, send, answer, api } = sessionWith();
     await session.ready();
 
-    const { sent, result } = await write(session, send, answer, { kind: 'feature', featureRef: 'default-setup/code' }, { type: 'SETTINGS_SAVED' });
+    const { sent, result } = await write(session, send, answer, { kind: 'feature', featureRef: 'default-setup/code' }, { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: {} } });
 
     expect(sent).toMatchObject({
       to: 'host/settings',
@@ -481,7 +481,7 @@ describe('settings', () => {
   ] as const)('writes settings relative to $kind ownership', async (target) => {
     const { session, send, answer } = sessionWith();
     await session.ready();
-    const { sent } = await write(session, send, answer, target, { type: 'SETTINGS_SAVED' });
+    const { sent } = await write(session, send, answer, target, { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: {} } });
     expect(sent).toMatchObject({
       to: 'host/settings',
       event: { type: 'UPDATE_SETTINGS', target, path: ['personal', 'name'], value: 'Ada' },
@@ -499,8 +499,9 @@ describe('settings', () => {
     await session.ready();
 
     const { result } = await write(session, send, answer, { kind: 'pack', packId: 'default-setup', groupId: 'missing' }, {
-      type: 'SETTINGS_REFUSED',
-      problems: ['This settings definition is unavailable'],
+      type: 'ASK_FAILED',
+      asked: 'UPDATE_SETTINGS',
+      failure: { kind: 'refused', message: 'This settings definition is unavailable', problems: ['This settings definition is unavailable'] },
     });
 
     expect(result).toEqual({
@@ -514,8 +515,9 @@ describe('settings', () => {
     await session.ready();
 
     const { result } = await write(session, send, answer, { kind: 'app' }, {
-      type: 'SETTINGS_REFUSED',
-      problems: ['first reason', 'second reason'],
+      type: 'ASK_FAILED',
+      asked: 'UPDATE_SETTINGS',
+      failure: { kind: 'refused', message: 'first reason; second reason', problems: ['first reason', 'second reason'] },
     });
 
     expect(result).toEqual({ ok: false, error: 'setSetting: first reason; second reason' });
@@ -640,7 +642,7 @@ describe('a bus round-trip', () => {
     // The field the system turns into a reply address: without it `reply` has nobody to answer
     expect(sent.sender, 'so the system can answer this session').toBe(DRIVE_REF);
 
-    answer({ type: 'QUERY_RESULT', result: 42 }, { answering: sentCall(send) });
+    answer({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 42 } }, { answering: sentCall(send) });
     await expect(pending).resolves.toEqual({ ok: true, value: 42 });
   });
 
@@ -650,12 +652,12 @@ describe('a bus round-trip', () => {
 
     const pending = session.query('return boom');
     await settle();
-    answer({ type: 'QUERY_ERROR', error: 'boom is not defined' }, { answering: sentCall(send) });
+    answer({ type: 'ASK_FAILED', asked: 'EXECUTE_QUERY', failure: { kind: 'failed', message: 'boom is not defined' } }, { answering: sentCall(send) });
 
     await expect(pending).resolves.toEqual({ ok: false, error: 'query: boom is not defined' });
   });
 
-  it('uses the transaction events for transact, not the query ones', async () => {
+  it('asks for a transaction for transact, and takes its answer', async () => {
     const { session, send, answer } = sessionWith();
     await session.ready();
 
@@ -663,11 +665,7 @@ describe('a bus round-trip', () => {
     await settle();
     expect(lastSend(send).event).toMatchObject({ type: 'EXECUTE_TRANSACTION', code: 'return write(...)' });
 
-    const call = sentCall(send);
-    // A QUERY_RESULT carrying the same id must not satisfy a transaction either: the type and the id
-    // are both part of the answer, and only one of them is enough to be wrong
-    answer({ type: 'QUERY_RESULT', result: 'wrong' }, { answering: call });
-    answer({ type: 'TRANSACTION_RESULT', result: 'right' }, { answering: call });
+    answer({ type: 'ASK_ANSWERED', asked: 'EXECUTE_TRANSACTION', answer: { result: 'right' } }, { answering: sentCall(send) });
     await expect(pending).resolves.toEqual({ ok: true, value: 'right' });
   });
 
@@ -684,7 +682,7 @@ describe('a bus round-trip', () => {
 
     const pending = session.query('return 1');
     await settle();
-    emit({ type: 'QUERY_RESULT', event: answerTo(sentCall(send), { type: 'QUERY_RESULT', result: 'through the bridge' }) });
+    emit({ type: 'ASK_ANSWERED', event: answerTo(sentCall(send), { type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'through the bridge' } }) });
 
     await expect(pending).resolves.toEqual({ ok: true, value: 'through the bridge' });
   });
@@ -730,10 +728,10 @@ describe('a bus round-trip', () => {
 
     const pending = session.query('return mine');
     await settle();
-    answer({ type: 'QUERY_RESULT', result: 'someone else' }, { answering: 'c-elsewhere' });
+    answer({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'someone else' } }, { answering: 'c-elsewhere' });
     await settle();
 
-    answer({ type: 'QUERY_RESULT', result: 'mine' }, { answering: sentCall(send) });
+    answer({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'mine' } }, { answering: sentCall(send) });
     await expect(pending).resolves.toEqual({ ok: true, value: 'mine' });
   });
 
@@ -759,10 +757,10 @@ describe('a bus round-trip', () => {
       const next = session.query('return quick');
       await vi.advanceTimersByTimeAsync(0);
       // The slow query finishes at last, with nobody waiting for it
-      answer({ type: 'QUERY_RESULT', result: 'the abandoned one' }, { answering: orphan });
+      answer({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'the abandoned one' } }, { answering: orphan });
       await vi.advanceTimersByTimeAsync(0);
 
-      answer({ type: 'QUERY_RESULT', result: 'its own' }, { answering: sentCall(send) });
+      answer({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'its own' } }, { answering: sentCall(send) });
       await expect(next).resolves.toEqual({ ok: true, value: 'its own' });
     } finally {
       vi.useRealTimers();
@@ -834,12 +832,12 @@ describe('a bus round-trip', () => {
 
     const bad = session.query('return boom');
     await settle();
-    answer({ type: 'QUERY_ERROR', error: 'nope' }, { answering: sentCall(send) });
+    answer({ type: 'ASK_FAILED', asked: 'EXECUTE_QUERY', failure: { kind: 'failed', message: 'nope' } }, { answering: sentCall(send) });
     await expect(bad).resolves.toMatchObject({ ok: false });
 
     const good = session.query('return 1');
     await settle();
-    answer({ type: 'QUERY_RESULT', result: 'still here' }, { answering: sentCall(send) });
+    answer({ type: 'ASK_ANSWERED', asked: 'EXECUTE_QUERY', answer: { result: 'still here' } }, { answering: sentCall(send) });
     await expect(good).resolves.toEqual({ ok: true, value: 'still here' });
   });
 });

@@ -19,14 +19,12 @@ it('answers the buffer to the window that asked, and broadcasts only each entry 
   try {
     createLogger('buffer-spec').info('logged once')
     await app.settle()
-    const call = await app.send('logs', { type: 'GET_LOGS' }, { sender: LOGS, client: MAIN })
-    const read = await app.nextEmit('logs', 'LOGS_READ', { answering: call }) as unknown as { logs: Array<{ message: string }> }
-    expect(read.logs.map((log) => log.message)).toContain('logged once')
+    const read = await app.ask('logs', { type: 'GET_LOGS' }, { client: MAIN })
+    expect(read.ok && (read.value as { logs: Array<{ message: string }> }).logs.map((log) => log.message)).toContain('logged once')
     await app.send('logs', { type: 'SEND_STATE' })
     await app.send('logs', { type: 'CLEAR_LOGS' })
     await app.settle()
 
-    expect(sent.filter((message) => message.type === 'LOGS_READ').map((message) => message.client), 'the asker alone').toEqual([MAIN])
     const broadcast = new Set(sent.filter((message) => message.client === undefined).map((message) => message.type))
     expect([...broadcast].sort(), 'every window hears the feed and the clear, and no buffer').toEqual(['LOGS_CLEARED', 'LOG_ADDED'])
   } finally { stop() }

@@ -1,6 +1,6 @@
-import { entityIs } from '@apackdev/sdk/fe'
+import { askId, endedAsk, entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
-import { and, assign, setup, type ActorRefFrom } from 'xstate'
+import { and, assign, enqueueActions, setup, stopChild, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
 import { safeEvents } from '@apackdev/sdk/fe'
 import {
@@ -9,10 +9,11 @@ import {
   type TrailClickEvent,
 } from '@apackdev/sdk/fe'
 import type { Contract, PromptsContext, PromptsInboxEvent } from './contract.ts'
-import type { OutgoingPromptEvents } from '#features/prompts/be/types.ts'
+import type { UntypedAskOutcome } from '@apackdev/sdk/events'
+import { outcomeOf } from '@apackdev/sdk/helpers'
 import type { PromptEntity, TemplateInput } from '@apackdev/sdk'
 import type { EARS } from '#generated/ears.ts'
-import { sendToSystem } from '#generated/events.ts'
+import { fromAsk } from '#generated/events.ts'
 import { Trash2 } from 'lucide-vue-next'
 import { contextMenuFn } from '@apackdev/sdk/fe'
 
@@ -26,6 +27,7 @@ export type PromptsState = ActorRefFrom<typeof promptsState>
 export const PROMPTS_PAGE_SIZE = 20
 
 type UIEvent =
+  | { type: 'CLEAR_WRITE_ERROR' }
   | PromptsInboxEvent
   | { type: 'PROMPT.CREATE' }
   | { type: 'PROMPT.SAVE' }
@@ -47,19 +49,24 @@ type UIEvent =
   | { type: 'TOGGLE_METADATA_SECTION'; show: boolean }
   | { type: 'FILTER.TOGGLE_CATEGORY'; categoryName: string }
   | { type: 'FILTER.CLEAR' }
-  // Import/Export events
-  | { type: 'PROMPTS.IMPORT'; prompts: any[] }
-  | { type: 'PROMPTS.RESET_IMPORT_STATUS' }
-  | { type: 'PROMPTS.EXPORT'; directory: string }
-  | { type: 'PROMPTS.RESET_EXPORT_STATUS' }
 
-export type PromptsEvents = OpenEntity | UIEvent | OutgoingPromptEvents | TrailClickEvent
+/** One of this window's writes ended: the done event of the ask spawned for it, which says whether it was refused */
+type WriteEnded = { type: `xstate.done.actor.write.${number}`; output: UntypedAskOutcome; actorId: string }
+
+export type PromptsEvents = OpenEntity | UIEvent | TrailClickEvent | WriteEnded
+
 const typeOf = safeEvents<PromptsEvents>()
 
 const promptsState = setup({
   types: {
     context: {} as PromptsContext,
     events: {} as PromptsEvents,
+  },
+  actors: {
+    // This window's writes. Each is asked on its own, so one refused says so whatever else is under way
+    createPrompt: fromAsk('prompts', 'CREATE_PROMPT'),
+    updatePrompt: fromAsk('prompts', 'UPDATE_PROMPT'),
+    deletePrompt: fromAsk('prompts', 'DELETE_PROMPT'),
   },
   actions: {
     // The list shows no prompt, so reopening one fills its form afresh from what its view reads then
@@ -106,61 +113,37 @@ const promptsState = setup({
       formFor: undefined,
     }),
 
-    sendSavePrompt: ({ context }) => {
-      // Determine if creating or updating based on selectedPromptId
-      const isCreating = !context.selectedPromptId;
+    sendSavePrompt: enqueueActions(({ context, enqueue }) => {
+      // Creating or updating, by whether one is open
+      if (!context.selectedPromptId) enqueue.spawnChild('createPrompt', { id: askId('write'), input: context.formData })
+      else enqueue.spawnChild('updatePrompt', { id: askId('write'), input: { promptId: context.selectedPromptId, ...context.formData } })
+    }),
 
-      if (isCreating) {
-        // Create new prompt
-        sendToSystem(id, {
-          type: 'CREATE_PROMPT',
-          ...context.formData,
-        })
-      } else {
-        // Update existing prompt
-        sendToSystem(id, {
-          type: 'UPDATE_PROMPT',
-          promptId: context.selectedPromptId!,
-          ...context.formData,
-        })
-      }
-    },
-
-    sendDeletePrompt: ({ event }) => {
+    sendDeletePrompt: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.DELETE', event);
-      sendToSystem(id, {
-        type: 'DELETE_PROMPT',
-        promptId: ev.promptId,
-      });
-    },
+      enqueue.spawnChild('deletePrompt', { id: askId('write'), input: { promptId: ev.promptId } })
+    }),
 
-    updatePromptInputs: ({ event }) => {
+    updatePromptInputs: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.UPDATE_INPUTS', event);
-      sendToSystem(id, {
-        type: 'UPDATE_PROMPT',
-        promptId: ev.promptId,
-        inputs: ev.inputs,
-      });
-    },
+      enqueue.spawnChild('updatePrompt', { id: askId('write'), input: { promptId: ev.promptId, inputs: ev.inputs } })
+    }),
 
-    createPromptInline: ({ event }) => {
+    createPromptInline: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.CREATE_INLINE', event);
-      sendToSystem(id, {
-        type: 'CREATE_PROMPT',
-        label: ev.label,
-        templateFn: ev.templateFn,
-        inputs: ev.inputs,
-      });
-    },
+      enqueue.spawnChild('createPrompt', { id: askId('write'), input: { label: ev.label, templateFn: ev.templateFn, inputs: ev.inputs } })
+    }),
 
-    updatePromptLabel: ({ event }) => {
+    updatePromptLabel: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('PROMPT.UPDATE_LABEL', event);
-      sendToSystem(id, {
-        type: 'UPDATE_PROMPT',
-        promptId: ev.promptId,
-        label: ev.label,
-      });
-    },
+      enqueue.spawnChild('updatePrompt', { id: askId('write'), input: { promptId: ev.promptId, label: ev.label } })
+    }),
+
+    /** A write this window asked for and did not get, shown until dismissed */
+    showRefusal: assign(({ event }) => {
+      const output = outcomeOf<UntypedAskOutcome>(event)
+      return output.ok ? {} : { writeError: output.failure.message }
+    }),
 
     /* ── form updates ────────────────────────────────────── */
     updateFormLabel: assign(({ event, context }) => {
@@ -253,92 +236,6 @@ const promptsState = setup({
       };
     }),
 
-    /* ── Prompts Import actions ────────────────────────────── */
-    setImportingPrompts: assign(({ context }) => ({
-      promptsImport: {
-        ...context.promptsImport,
-        status: 'importing' as const,
-      },
-    })),
-
-    sendImportPrompts: ({ event }) => {
-      const ev = typeOf('PROMPTS.IMPORT', event);
-      sendToSystem(id, {
-        type: 'IMPORT_PROMPTS',
-        prompts: ev.prompts,
-      });
-    },
-
-    handlePromptsImported: assign(({ event }) => {
-      const ev = typeOf('PROMPTS_IMPORTED', event);
-      return {
-        promptsImport: {
-          status: 'success' as const,
-          errors: ev.errors || [],
-          importedCount: ev.count,
-        },
-      };
-    }),
-
-    handlePromptsImportFailed: assign(({ event }) => {
-      const ev = typeOf('PROMPTS_IMPORT_FAILED', event);
-      return {
-        promptsImport: {
-          status: 'error' as const,
-          errors: ev.errors,
-          importedCount: 0,
-        },
-      };
-    }),
-
-    resetImportPromptsStatus: assign({
-      promptsImport: { status: 'idle' as const, errors: [], importedCount: 0 },
-    }),
-
-    /* ── Prompts Export actions ────────────────────────────── */
-    setExportingPrompts: assign(({ context }) => ({
-      promptsExport: {
-        ...context.promptsExport,
-        status: 'exporting' as const,
-      },
-    })),
-
-    sendExportPrompts: ({ event }) => {
-      const ev = typeOf('PROMPTS.EXPORT', event);
-      sendToSystem(id, {
-        type: 'EXPORT_PROMPTS',
-        directory: ev.directory,
-      });
-    },
-
-    handlePromptsExported: assign(({ event }) => {
-      const ev = typeOf('PROMPTS_EXPORTED', event);
-      return {
-        promptsExport: {
-          status: 'success' as const,
-          errors: [],
-          filePath: ev.filePath,
-          promptCount: ev.promptCount,
-        },
-      };
-    }),
-
-    handlePromptsExportFailed: assign(({ event }) => {
-      const ev = typeOf('PROMPTS_EXPORT_FAILED', event);
-      return {
-        promptsExport: {
-          status: 'error' as const,
-          errors: ev.errors,
-          filePath: '',
-          promptCount: 0,
-        },
-      };
-    }),
-
-    resetExportPromptsStatus: assign({
-      promptsExport: { status: 'idle' as const, errors: [], filePath: '', promptCount: 0 },
-    }),
-
     /* ── the list ─────────────────────────────────────────── */
     showMore: assign(({ context }) => ({ listLimit: context.listLimit + PROMPTS_PAGE_SIZE })),
 
@@ -362,9 +259,9 @@ const promptsState = setup({
   guards: { entityIs: entityIs<Contract['opens']>,
     targetIs,
     /** Whether what was loaded is the prompt open now, rather than one the user has since moved on from */
-    loadsSelected: ({ context, event }) => (event as { promptId?: string }).promptId === context.selectedPromptId,
+    loadsSelected: ({ context, event }) => typeOf('PROMPT.LOADED', event).promptId === context.selectedPromptId,
     /** Whether the open prompt is gone */
-    loadsNothing: ({ event }) => (event as { prompt?: unknown }).prompt === null,
+    loadsNothing: ({ event }) => typeOf('PROMPT.LOADED', event).prompt === null,
   },
 }).createMachine({
   id,
@@ -374,18 +271,8 @@ const promptsState = setup({
     selectedLabel: undefined,
     formFor: undefined,
     listLimit: PROMPTS_PAGE_SIZE,
+    writeError: null,
     selectedCategories: [], // Filter state
-    promptsImport: {
-      status: 'idle',
-      errors: [],
-      importedCount: 0,
-    },
-    promptsExport: {
-      status: 'idle',
-      errors: [],
-      filePath: '',
-      promptCount: 0,
-    },
     formData: {
       label: '',
       description: '',
@@ -396,6 +283,9 @@ const promptsState = setup({
     },
   },
   on: {
+    // What a write changed reaches every window through the views, so a landed one needs nothing here
+    'xstate.done.actor.write.*': { actions: ['showRefusal', stopChild(({ event }) => endedAsk(event))] },
+    CLEAR_WRITE_ERROR: { actions: assign({ writeError: null }) },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Prompt' } }, target: '.detail', actions: 'selectPrompt' },
     'PROMPT.SELECT': { target: '.detail', actions: 'selectPrompt' },
     'VIEW_LIST': {
@@ -407,32 +297,6 @@ const promptsState = setup({
     'PROMPTS.LOAD_MORE': { actions: 'showMore' },
     'FILTER.TOGGLE_CATEGORY': { actions: 'toggleCategoryFilter' },
     'FILTER.CLEAR': { actions: 'clearCategoryFilters' },
-    // Import events
-    'PROMPTS.IMPORT': {
-      actions: ['setImportingPrompts', 'sendImportPrompts'],
-    },
-    'PROMPTS.RESET_IMPORT_STATUS': {
-      actions: 'resetImportPromptsStatus',
-    },
-    PROMPTS_IMPORTED: {
-      actions: 'handlePromptsImported',
-    },
-    PROMPTS_IMPORT_FAILED: {
-      actions: 'handlePromptsImportFailed',
-    },
-    // Export events
-    'PROMPTS.EXPORT': {
-      actions: ['setExportingPrompts', 'sendExportPrompts'],
-    },
-    'PROMPTS.RESET_EXPORT_STATUS': {
-      actions: 'resetExportPromptsStatus',
-    },
-    PROMPTS_EXPORTED: {
-      actions: 'handlePromptsExported',
-    },
-    PROMPTS_EXPORT_FAILED: {
-      actions: 'handlePromptsExportFailed',
-    },
     'PROMPT.UPDATE_INPUTS': { actions: 'updatePromptInputs' },
     'PROMPT.CREATE_INLINE': { actions: 'createPromptInline' },
     'PROMPT.UPDATE_LABEL': { actions: 'updatePromptLabel' },

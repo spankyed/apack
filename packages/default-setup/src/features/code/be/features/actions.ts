@@ -1,90 +1,40 @@
-import { answer } from '../answer.ts'
-import { defineHandlers } from '@apackdev/sdk/framework';
+// An action's code as the code surface edits it in a tab: opened from the action, and saved back into it
+import type { ActionsAsks } from '../contract.ts'
+import { defineHandlers } from '@apackdev/sdk/framework'
+import type { AsksEvents } from '@apackdev/sdk/events'
 import { setup } from 'xstate'
-
 import { repository } from '#generated/repository.ts';
 import { EARS } from '#generated/ears.ts'
-import type { ActionEntity } from '@apackdev/sdk'
 
-// Incoming events from frontend
+// The asks about an action's code, which the code system forwards here to be answered
+export type Event = AsksEvents<ActionsAsks>;
 
-// Outgoing events to frontend
+const handlers = defineHandlers<Record<string, never>, Event>();
 
-export interface CodeActionsSystemContext {
-  // No local state needed for actions feature
-}
+/** The asks about an action's code, answered here from the actions' repository */
+const answers = handlers.answers<ActionsAsks>({
+  'codeActions.OPEN_ACTION': ({ args: { actionId }, refuse }) => {
+    const action = repository.actionQueries.byId(actionId as EARS.EntityId)
+    if (!action) throw refuse('not-found', `Action ${actionId} not found`)
+    return { ...action, actionFnContent: action.actionFn }
+  },
+  'codeActions.SAVE_ACTION': ({ args: { actionId, actionFn }, refuse }) => {
+    repository.actionCommands.update(actionId as EARS.EntityId, { actionFn })
+    const updated = repository.actionQueries.byId(actionId as EARS.EntityId)
+    if (!updated) throw refuse('not-found', `Action ${actionId} not found`)
+    return updated
+  },
+});
 
-export type Event =
-  | { type: 'codeActions.OPEN_ACTION'; actionId: string }
-  | { type: 'codeActions.SAVE_ACTION'; actionId: string; actionFn: string };
-
-/** Hands each handler the answer for the message it is handling — see `defineHandlers` */
-const handlers = defineHandlers<CodeActionsSystemContext, Event>();
-
+/** The code system's child for actions' code. It holds nothing: its id is the prefix its asks are forwarded by */
 export const actionsSystem = setup({
   types: {
-    context: {} as CodeActionsSystemContext,
+    context: {} as Record<string, never>,
     events: {} as Event,
   },
-  actions: handlers.actions({
-    openAction: ({ event, reply }) => {
-      const ev = event as { type: 'codeActions.OPEN_ACTION'; actionId: string }
-      const action = repository.actionQueries.byId(ev.actionId as EARS.EntityId)
-
-      if (action) {
-        // Include the actionFn content directly
-        const actionWithContent: ActionEntity & { actionFnContent?: string } = {
-          ...action,
-          actionFnContent: action.actionFn
-        }
-
-        answer(reply, {
-          type: 'codeActions.ACTION_SELECTED',
-          actionId: ev.actionId as EARS.EntityId,
-          data: actionWithContent
-        })
-      } else {
-        answer(reply, {
-          type: 'codeActions.CODE_ERROR',
-          data: {
-            message: `Action ${ev.actionId} not found`
-          }
-        })
-      }
-    },
-
-    saveAction: ({ event, reply }) => {
-      const ev = event as { type: 'codeActions.SAVE_ACTION'; actionId: string; actionFn: string }
-
-      // Update the action with new actionFn
-      repository.actionCommands.update(ev.actionId as EARS.EntityId, {
-        actionFn: ev.actionFn
-      })
-
-      const updatedAction = repository.actionQueries.byId(ev.actionId as EARS.EntityId)
-      if (updatedAction) {
-        answer(reply, {
-          type: 'codeActions.ACTION_UPDATED',
-          action: updatedAction,
-          actionId: updatedAction.id
-        })
-      }
-    }
-  })
+  actions: { ...answers.actions },
 }).createMachine({
   id: 'codeActions',
-  initial: 'idle',
   context: {},
-  states: {
-    idle: {
-      on: {
-        'codeActions.OPEN_ACTION': {
-          actions: 'openAction'
-        },
-        'codeActions.SAVE_ACTION': {
-          actions: 'saveAction'
-        }
-      }
-    }
-  }
+  on: { ...answers.on },
 })

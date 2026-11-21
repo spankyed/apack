@@ -62,9 +62,11 @@ test('backup import restores all settings owners and updates an open window', as
     await toggleCompanion();
     await app.navigate('default-setup/database');
     await appPage.evaluate(targetPath => {
-      const actor = (window as any).applicationState.system.get('default-setup/database');
-      actor.send({ type: 'VIEW_BACKUP' });
-      actor.send({ type: 'BACKUP.EXPORT', path: targetPath, name: 'settings', databases: ['lmdb'] });
+      // Through the shell's door, as a click is: a delivery names the surface, so the export it asks for is answered to it
+      (window as any).applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/database', events: [
+        { type: 'VIEW_BACKUP' },
+        { type: 'BACKUP.EXPORT', path: targetPath, name: 'settings', databases: ['lmdb'] },
+      ] });
     }, backups);
     try {
       await expect.poll(backupResult).toEqual({ operation: 'export' });
@@ -103,11 +105,13 @@ test('backup import restores all settings owners and updates an open window', as
     await expect(other).toHaveValue('Changed Memos');
     await app.navigate('default-setup/database');
     await appPage.evaluate(backupPath => {
-      const actor = (window as any).applicationState.system.get('default-setup/database');
-      actor.send({ type: 'VIEW_BACKUP' });
-      actor.send({ type: 'BACKUP.IMPORT', path: backupPath });
+      (window as any).applicationState.send({ type: 'SEND_TO_SURFACE', surface: 'default-setup/database', events: [
+        { type: 'VIEW_BACKUP' },
+        { type: 'BACKUP.IMPORT', path: backupPath },
+      ] });
     }, backup);
-    await expect.poll(backupResult).toMatchObject({ operation: 'import', error: undefined,
+    // Exactly this shape: an import that succeeded carries its message and no error at all
+    await expect.poll(backupResult).toEqual({ operation: 'import',
       message: expect.stringContaining('restart the brain manually') });
     await expect(other).toHaveValue('Saved Memos');
     await openJson();
@@ -256,20 +260,20 @@ shared.set({ path: ['name'], value: 2 });
     installed = true;
     const owner = await credential('bundled-ui-fixture');
     const access = await credential(id);
-    expect(await ask(owner, { type: 'UPDATE_SETTINGS', target: target('restricted'), path: ['count'], value: 3 })).toMatchObject({ type: 'SETTINGS_SAVED' });
-    const before = (await ask(access, { type: 'GET_SETTINGS' })).snapshot as SettingsSnapshot;
+    expect(await ask(owner, { type: 'UPDATE_SETTINGS', target: target('restricted'), path: ['count'], value: 3 })).toMatchObject({ type: 'ASK_ANSWERED' });
+    const before = ((await ask(access, { type: 'GET_SETTINGS' })).answer as { snapshot: SettingsSnapshot }).snapshot;
     const messageStart = connection.messages.length;
     expect(before.values.packs['bundled-ui-fixture'].restricted).toEqual({ count: 3 });
     for (const event of [
       { type: 'UPDATE_SETTINGS', target: target('restricted'), path: ['count'], value: 4, caller: 'bundled-ui-fixture' },
       { type: 'RESET_SETTINGS', target: target('restricted') },
     ]) {
-      expect(await ask(access, event)).toMatchObject({ type: 'SETTINGS_REFUSED', problems: [expect.stringContaining('Only pack "bundled-ui-fixture"')] });
+      expect(await ask(access, event)).toMatchObject({ type: 'ASK_FAILED', failure: { kind: 'refused', problems: [expect.stringContaining('Only pack "bundled-ui-fixture"')] } });
     }
     for (const event of [{ type: 'RESET_ALL_SETTINGS' }, { type: 'REPLACE_SETTINGS', data: before.values }]) {
-      expect(await ask(access, event)).toMatchObject({ type: 'SETTINGS_REFUSED', problems: [expect.stringContaining('host settings administration')] });
+      expect(await ask(access, event)).toMatchObject({ type: 'ASK_FAILED', failure: { kind: 'refused', problems: [expect.stringContaining('host settings administration')] } });
     }
-    const unchanged = (await ask(access, { type: 'GET_SETTINGS' })).snapshot as SettingsSnapshot;
+    const unchanged = ((await ask(access, { type: 'GET_SETTINGS' })).answer as { snapshot: SettingsSnapshot }).snapshot;
     try {
       expect(unchanged.values).toEqual(before.values);
       expect(unchanged.revision).toBe(before.revision);
@@ -287,12 +291,12 @@ shared.set({ path: ['name'], value: 2 });
       });
       throw error;
     }
-    expect(await ask(access, { type: 'UPDATE_SETTINGS', target: target('assistant'), path: ['name'], value: 'Dependency edit' })).toMatchObject({ type: 'SETTINGS_SAVED' });
+    expect(await ask(access, { type: 'UPDATE_SETTINGS', target: target('assistant'), path: ['name'], value: 'Dependency edit' })).toMatchObject({ type: 'ASK_ANSWERED' });
     await app.navigate('host/settings');
     await appPage.locator('[data-onboarding-id="settings-packs-tab"]').click();
     await appPage.getByText('bundled-ui-fixture/assistant', { exact: true }).click();
     await expect(appPage.getByLabel('Scribbles assistant name', { exact: true })).toHaveValue('Dependency edit');
-    expect(await ask(access, { type: 'RESET_SETTINGS', target: target('assistant') })).toMatchObject({ type: 'SETTINGS_SAVED' });
+    expect(await ask(access, { type: 'RESET_SETTINGS', target: target('assistant') })).toMatchObject({ type: 'ASK_ANSWERED' });
     await expect(appPage.getByLabel('Scribbles assistant name', { exact: true })).toHaveValue('Scribbles helper');
     const previousRuntime = (await loaded()).find(pack => pack.id === id)!;
     const toggled = () => nextEvent(event => event.type === 'PACK_ENABLED_CHANGED' && event.packId === id);
@@ -312,9 +316,9 @@ shared.set({ path: ['name'], value: 2 });
     expect(replacementRuntime.registrationId).not.toBe(previousRuntime.registrationId);
     await expect(connection.openPackSettings(previousRuntime)).rejects.toThrow('Settings access is unavailable');
     const fresh = await credential(id);
-    expect(await ask(fresh, { type: 'UPDATE_SETTINGS', target: target('assistant'), path: ['name'], value: 'Fresh' })).toMatchObject({ type: 'SETTINGS_SAVED' });
+    expect(await ask(fresh, { type: 'UPDATE_SETTINGS', target: target('assistant'), path: ['name'], value: 'Fresh' })).toMatchObject({ type: 'ASK_ANSWERED' });
     await expect(appPage.getByLabel('Scribbles assistant name', { exact: true })).toHaveValue('Fresh');
-    expect(await ask(owner, { type: 'RESET_SETTINGS', target: target('restricted') })).toMatchObject({ type: 'SETTINGS_SAVED' });
+    expect(await ask(owner, { type: 'RESET_SETTINGS', target: target('restricted') })).toMatchObject({ type: 'ASK_ANSWERED' });
   } finally {
     if (installed) await app.send('host/packs', { type: 'UNINSTALL_PACK', packId: id });
     fs.rmSync(dependent, { recursive: true, force: true });

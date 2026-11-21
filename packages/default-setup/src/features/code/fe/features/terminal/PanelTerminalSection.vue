@@ -280,6 +280,7 @@ const openFiles = useSelector(codeActor, (state) => state.context.openFiles)
 const terminals = useSelector(terminalActor, (state) => state.context.terminals)
 const activity = useSelector(terminalActor, (state) => state.context.activity)
 
+
 const featureSettings = useSettings('code')
 const storedCodeSettings = featureSettings.value
 const confirmTerminalClose = computed(() => storedCodeSettings.value?.confirmTerminalClose ?? true)

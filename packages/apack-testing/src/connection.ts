@@ -41,8 +41,8 @@ export interface AppConnection {
    */
   send(system: string, event: SystemEvent, options?: { settingsCredential?: string }): Promise<void>;
   /**
-   * Sends as `send` does and resolves with the event the system's `reply` answers it with, matched by the call it
-   * was sent under. Rejects with the API's refusal if the send is refused, and then waits for nothing.
+   * Sends as `send` does and resolves with the system's answer to it — `ASK_ANSWERED` with the answer, or `ASK_FAILED`
+   * with why not — matched by the call it was sent under. Rejects with the API's refusal if the send is refused, and then waits for nothing.
    */
   ask(system: string, event: SystemEvent, options?: { settingsCredential?: string }): Promise<SystemEvent>;
   /**

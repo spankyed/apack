@@ -7,7 +7,7 @@ import { ALLOWABLE_PACK_CHECKS, PackChecksSchema, _namingRefusedValue } from '@a
 import { ownModuleFindings, type OwnModuleSpecifier } from '@apackdev/host/build/own-module-specifiers';
 import { readSubpathImports } from '@apackdev/host/build/subpath-imports';
 // The key itself, not a copy of it: one declaration, so a rename there renames what this refuses
-import { _CALL_KEY } from '@apackdev/sdk/events';
+import { _CALL_KEY, ASK_ANSWER_TYPES } from '@apackdev/sdk/events';
 import { moduleOf, readSource, sourceFiles, type SourceView } from './pack-sources.ts';
 import { contractLeafFindings, crossFeatureFindings } from './pack-features.ts';
 import { configsNamingSourceCondition, packResolvesSource } from './pack-resolution.ts';
@@ -187,6 +187,30 @@ const reservedEventKey = (node: ts.Node): string[] | undefined => {
   const name = node.name;
   const written = ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
   return written === _CALL_KEY ? [`${written}:`] : undefined;
+};
+
+/**
+ * `ASK_ANSWERED:`, `ASK_FAILED:` or `ASK_PROGRESS:` for each object a pack writes with one of those as its `type`, and
+ * for each it writes with one as a key, which is a machine's transition for it.
+ *
+ * An ask's answer is built by the asked system's `answers` table, which answers whoever asked however its handler
+ * ends — returned, thrown, or thrown as a refusal of a declared kind — and reports a failure nobody asked about. An
+ * answer written by hand skips all of it: an action that forgets its failure path leaves the asker waiting, and one
+ * that names the wrong ask settles somebody else's. A transition for one is the other half: the ask that was made
+ * takes its answer (`ask`, `fromAsk`), so a machine that also routes it has to work out which ask it is about.
+ * Source only, since a spec driving an asking machine directly has to hand it the answers a system would.
+ */
+const handWrittenAnswer = (node: ts.Node): string[] | undefined => {
+  if (!ts.isObjectLiteralExpression(node)) return;
+  for (const property of node.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const name = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name) ? property.name.text : undefined;
+    if (name !== undefined && (ASK_ANSWER_TYPES as readonly string[]).includes(name)) return [`${name}:`];
+    if (name !== 'type' || !ts.isStringLiteralLike(property.initializer)) continue;
+    const type = property.initializer.text;
+    if ((ASK_ANSWER_TYPES as readonly string[]).includes(type)) return [`${type}:`];
+  }
+  return undefined;
 };
 
 /**
@@ -386,6 +410,18 @@ const RULE_LIST = [
       // renaming that local in codegen cannot fail every pack's build.
       if (place.generated) return [];
       return view.visit(repositoryCast);
+    },
+  },
+  {
+    key: 'ask-answers',
+    rule: "A system answers its declared asks with its `answers` table (defineSystem's `answers`), whose handler "
+      + 'returns the answer and throws the refusal: an `ASK_ANSWERED` or `ASK_FAILED` written by hand is an answer '
+      + 'a failure path can forget and a wrong ask can take. An asker takes the answer as a value (`ask`, `fromAsk`, '
+      + '`useAsk`), so its machine has no transition for one either. A spec driving an asking machine builds its answers '
+      + 'with askAnswered and askFailed from @apackdev/sdk/testing',
+    check(view, place) {
+      if (place.packRelative.startsWith('tests/')) return [];
+      return view.visit(handWrittenAnswer);
     },
   },
   {

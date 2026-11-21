@@ -1,16 +1,14 @@
 import { featureSettings } from '#generated/settings.ts';
 
-import { sendToSystem } from '#generated/events.ts';
+import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
 import { services } from '#generated/services.ts';
 import { setup } from 'xstate';
-import { answer } from './answer.ts';
 import { defineSystem } from '@apackdev/sdk/framework';
 
 import { write, transact, type EARS } from '#generated/ears.ts';
 import { repository } from '#generated/repository.ts';
 import type { Contract } from './contract.ts';
-import type { OutgoingThreadsEvents, ThreadLinkItem } from './types.ts';
-import type { Reply } from '@apackdev/sdk/events';
+import type { ThreadLinkItem } from './types.ts';
 import { type ChangeBlock, toMap, toIdentifierSet, mapScalar, mapArray } from '@apackdev/sdk/utils';
 import { exportThreads } from './export-threads.ts';
 import { importThreads } from './import-threads.ts';
@@ -23,27 +21,6 @@ import { errorMessage } from '@apackdev/sdk/utils/pure';
 
 const logger = createLogger('threads');
 export const threadsSpec = defineSystem<Contract>();
-
-/**
- * One of a window's writes to its threads, answered to whoever asked: with the thread it made, or that it landed, or
- * why it was refused, since the surface holds its views behind its own unanswered writes. The write runs whether or
- * not anybody asked. A refusal is also reported, as every thread operation's failure is.
- */
-function answerWrite(
-  reply: Reply<OutgoingThreadsEvents> | undefined,
-  refused: (error: unknown) => void,
-  write: () => OutgoingThreadsEvents | void,
-): void {
-  let outcome: OutgoingThreadsEvents;
-  try {
-    outcome = write() ?? { type: 'THREAD_WRITTEN' };
-  } catch (error) {
-    refused(error);
-    reply?.({ type: 'THREAD_WRITE_FAILED', error: errorMessage(error) });
-    return;
-  }
-  reply?.(outcome);
-}
 
 function reportThreadOperationError(
   operation: 'create' | 'update' | 'delete' | 'archive' | 'unarchive' | 'pin' | 'unpin' | 'status' | 'parent',
@@ -71,63 +48,290 @@ function reportThreadOperationError(
   });
 }
 
+/**
+ * A thread operation's failure, reported as well as answered: a window shows its own refusal, and the report is what
+ * says it anywhere else
+ */
+function reported<T>(refused: (error: unknown) => void, write: () => T): T {
+  try {
+    return write();
+  } catch (error) {
+    refused(error);
+    throw error;
+  }
+}
+
+export const answers = threadsSpec.answers({
+  // The thread and its parent's link are one unit, so a refused link leaves no thread behind
+  CREATE_THREAD: ({ args: thread }) => reported((error) => reportThreadOperationError('create', error), () => transact(() => {
+    const { id } = repository.threadCommands.create({
+      topic: thread.topic,
+      instructions: thread.instructions,
+      tags: thread.tags as string[],
+      linkedThreads: thread.linkedThreads as ThreadLinkItem[],
+    });
+    if (thread.parentThreadId) {
+      repository.threadCommands.addLinks(thread.parentThreadId as EARS.EntityId, [{ id, relation: 'parent_of' }]);
+    }
+    return { id };
+  })),
+  UPDATE_THREAD_FIELD: ({ args: { key, value, threadId } }) => {
+    const operation =
+      key === 'archived' ? (value ? 'archive' : 'unarchive') :
+      key === 'pinned' ? (value ? 'pin' : 'unpin') :
+      'update';
+    reported((error) => {
+      logger.warn('Failed to update thread field', { threadId, key, error });
+      // A link closing a loop is the form's to show, answered to it with the reason
+      if (key === 'linkedThreads' && error instanceof RepositoryError && error.code === RepositoryErrorCode.VALIDATION_ERROR) return;
+      reportThreadOperationError(operation, error, threadId);
+    }, () => { repository.threadCommands.update(threadId as EARS.EntityId, { [key]: value }); });
+  },
+  UPDATE_THREAD_STATUS: ({ args: { threadId, status } }) => {
+    reported((error) => {
+      logger.warn('Failed to update thread status', { threadId, status, error });
+      reportThreadOperationError('status', error, threadId);
+    }, () => { repository.threadCommands.update(threadId as EARS.EntityId, { status }); });
+    // Notify flows — all logic lives in the flow layer
+    sendToSystem('brain', {
+      type: 'TRIGGER_BRAIN_EVENT',
+      eventType: 'thread.status.changed',
+      payload: { threadId, status, userInduced: true },
+    });
+  },
+  SET_THREAD_PARENT: ({ args: { childIds, parentId } }) => reported((error) => {
+    logger.warn('Failed to set thread parent', { childIds, parentId, error });
+    reportThreadOperationError('parent', error, parentId);
+  }, () => {
+    repository.threadCommands.setParent(parentId as EARS.EntityId, childIds.map(id => id as EARS.EntityId));
+  }),
+  DELETE_THREAD: ({ args: { threadId } }) => {
+    // Stop active processes before hard-deleting the thread.
+    runThreadTeardown(threadId);
+    reported((error) => {
+      logger.warn('Failed to delete thread (may already be deleted)', { threadId, error });
+      reportThreadOperationError('delete', error, threadId);
+    }, () => { repository.threadCommands.delete(threadId as EARS.EntityId); });
+  },
+  EXPORT_THREADS: ({ args: { directory } }) => exportThreads(directory),
+  IMPORT_THREADS: ({ args: { directory } }) => {
+    const result = importThreads(directory);
+    if (result.created === 0 && result.errors.length > 0) throw new Error(result.errors.join('\n'));
+    return { count: result.created, ...(result.errors.length > 0 ? { errors: result.errors } : {}) };
+  },
+  GET_CHAT_START: () => repository.chatQueries.chatStart(),
+  OPEN_THREAD_CHAT: ({ args: { threadId, restore }, refuse }) => {
+    try {
+      services.chat.visitThread(threadId as EARS.EntityId, { restore });
+    } catch (err) {
+      logger.warn('Thread not found for chat open, skipping', { threadId });
+      throw refuse('not-found', errorMessage(err), { threadId });
+    }
+  },
+  USER_MSG: ({ args, client }) => {
+      try {
+        const { text, mode, phase, threadId: providedThreadId, references, cwdOverride, forceDirectoryPicker } = args;
+
+        const sanitizedRefs = references ? {
+          ...references,
+          ...(references.files && {
+            files: references.files.map(({ ...rest }: any) => rest),
+          }),
+        } : undefined;
+
+        let threadId: EARS.EntityId;
+        let started = false;
+
+        if (!providedThreadId) {
+          const result = repository.chatCommands.createThreadFromMessage(text);
+          threadId = result.threadId;
+          started = true;
+
+          logger.info('Created new thread for user message', {
+            threadId,
+            shortCode: result.threadData.shortCode,
+          });
+
+          repository.threadCommands.markAsVisited(threadId);
+        } else {
+          threadId = providedThreadId as EARS.EntityId;
+        }
+
+        const messageResult = repository.chatCommands.addMessage({
+          threadId,
+          text,
+          sender: 'user',
+          references: sanitizedRefs,
+          ...(mode ? { context: { agent: mode } } : {}),
+        });
+
+        // A window that asked opens the thread from its answer. One no window asked for (a flow's) is shown to every window
+        if (started && !client) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId });
+
+        sendToSystem('brain', {
+          type: 'TRIGGER_BRAIN_EVENT',
+          eventType: 'user.message',
+          payload: {
+            text,
+            mode,
+            phase,
+            threadId,
+            messageId: messageResult.id,
+            ...(sanitizedRefs && { references: sanitizedRefs }),
+            ...(cwdOverride && { cwdOverride }),
+            ...(forceDirectoryPicker && { forceDirectoryPicker }),
+          },
+        });
+        return { threadId, started };
+      } catch (err) {
+        logger.error('forwardUserMessage failed', { error: err });
+        throw err;
+      }
+  },
+  USER_COMMAND: ({ args, client }) => {
+      try {
+      const { command, text, mode, phase, threadId: providedThreadId, references, cwdOverride } = args;
+
+      const sanitizedRefs = references ? {
+        ...references,
+        ...(references.files && {
+          files: references.files.map(({ ...rest }: any) => rest),
+        }),
+      } : undefined;
+
+      let threadId: EARS.EntityId;
+      let started = false;
+
+      if (!providedThreadId) {
+        const topicText = text ? `/${command} ${text}` : `/${command}`;
+        const result = repository.chatCommands.createThreadFromMessage(topicText);
+        threadId = result.threadId;
+        started = true;
+
+        logger.info('Created new thread for user command', {
+          threadId,
+          command,
+          shortCode: result.threadData.shortCode,
+        });
+
+        repository.threadCommands.markAsVisited(threadId);
+      } else {
+        threadId = providedThreadId as EARS.EntityId;
+      }
+
+      const messageResult = repository.chatCommands.addMessage({
+        threadId,
+        text: text ? `/${command} ${text}` : `/${command}`,
+        sender: 'user',
+        references: sanitizedRefs,
+        isCommand: true,
+        command,
+        ...(mode ? { context: { agent: mode } } : {}),
+      });
+
+      if (started && !client) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId });
+
+      sendToSystem('brain', {
+        type: 'TRIGGER_BRAIN_EVENT',
+        eventType: 'user.command',
+        payload: {
+          command,
+          text,
+          mode,
+          phase,
+          threadId,
+          messageId: messageResult.id,
+          ...(sanitizedRefs && { references: sanitizedRefs }),
+          ...(cwdOverride && { cwdOverride }),
+        },
+      });
+      return { threadId, started };
+      } catch (err) {
+        logger.error('forwardUserCommand failed', { error: err });
+        throw err;
+      }
+  },
+  FORK_THREAD: ({ args, client }) => {
+      const { messageId, threadId, threadTopic } = args;
+      if (!threadId) throw new Error('There is no thread to fork from');
+
+      let result: { id: EARS.EntityId } | undefined;
+      const forkContext: Record<string, any> = {};
+
+      try {
+        const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
+        const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
+        const sourceUserMessagesAfterFork = sourceIndex >= 0
+          ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user').length
+          : 0;
+        const originalTopic = threadTopic || 'Untitled';
+
+        const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
+        const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
+
+        result = services.chat.createThread({ topic: forkTopic, instructions: '' });
+        if (!result) throw new Error('Failed to create thread');
+
+        repository.threadCommands.linkFork(threadId as EARS.EntityId, result.id);
+
+        repository.chatCommands.copyMessagesUpTo({
+          sourceThreadId: threadId as EARS.EntityId,
+          targetThreadId: result.id,
+          upToMessageId: messageId,
+        });
+
+        // Set forkPending on the NEW thread so chat actions queue messages
+        // until the async handle-fork actions finish persisting session state.
+        const sourceThread = repository.threadQueries.byId(threadId as EARS.EntityId);
+        const sourceContext = (sourceThread as any)?.context ?? {};
+        for (const [key, value] of Object.entries(sourceContext)) {
+          if (value && typeof value === 'object') {
+            forkContext[key] = { forkPending: true };
+          }
+        }
+        if (Object.keys(forkContext).length > 0) {
+          repository.threadCommands.update(result.id, { context: forkContext });
+        }
+
+        services.chat.visitThread(result.id);
+        // A window that asked opens the fork from its answer. One no window asked for is shown to every window
+        if (!client) broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId: result.id });
+
+        sendToSystem('brain', {
+          type: 'TRIGGER_BRAIN_EVENT',
+          eventType: 'thread.fork',
+          payload: {
+            sourceThreadId: threadId,
+            sourceMessageId: messageId,
+            newThreadId: result.id,
+            sourceUserMessagesAfterFork,
+          },
+        });
+      } catch (err) {
+        logger.error('forkThread failed', { error: err });
+        // Clear forkPending if it was set, so the thread doesn't permanently reject messages.
+        if (result && Object.keys(forkContext).length > 0) {
+          const clearContext = Object.fromEntries(
+            Object.keys(forkContext).map(key => [key, { forkPending: undefined }])
+          );
+          repository.threadCommands.update(result.id, { context: clearContext });
+        }
+        throw err;
+      }
+      return { threadId: result.id };
+  },
+});
+
 export const threadsSystem = setup({
   types: threadsSpec.types,
   actors: {
   },
-  actions: threadsSpec.actions({
+  actions: {
+    ...answers.actions,
+    ...threadsSpec.actions({
     // ---- Thread management actions ----
-    createThread: ({ event, reply }) => {
-      const thread = threadsSpec.typeOf('CREATE_THREAD', event);
-      // The thread and its parent's link are one unit, so a refused link leaves no thread behind
-      answerWrite(reply, (error) => reportThreadOperationError('create', error), () => transact(() => {
-        const { id: newThreadId } = repository.threadCommands.create({
-          topic: thread.topic,
-          instructions: thread.instructions,
-          tags: thread.tags as string[],
-          linkedThreads: thread.linkedThreads as ThreadLinkItem[],
-        });
-
-        if (thread.parentThreadId) {
-          repository.threadCommands.addLinks(thread.parentThreadId as EARS.EntityId, [{ id: newThreadId, relation: 'parent_of' }]);
-        }
-        return { type: 'THREAD_CREATED' as const, id: newThreadId };
-      }));
-    },
     visitThread: ({ event }) => {
       repository.threadCommands.markAsVisited(threadsSpec.typeOf('VIEW_THREAD', event).threadId as EARS.EntityId);
-    },
-    updateThreadField: ({ event, reply }) => {
-      const { key, value, threadId } = threadsSpec.typeOf('UPDATE_THREAD_FIELD', event);
-      const operation =
-        key === 'archived' ? (value ? 'archive' : 'unarchive') :
-        key === 'pinned' ? (value ? 'pin' : 'unpin') :
-        'update';
-      answerWrite(reply, (error) => {
-        logger.warn('Failed to update thread field', { threadId, key, error });
-        // A link closing a loop is the form's to show, answered to it with the reason
-        if (key === 'linkedThreads' && error instanceof RepositoryError && error.code === RepositoryErrorCode.VALIDATION_ERROR) return;
-        reportThreadOperationError(operation, error, threadId);
-      }, () => { repository.threadCommands.update(threadId as EARS.EntityId, { [key]: value }); });
-    },
-    updateThreadStatus: ({ event, reply }) => {
-      const { threadId, status } = threadsSpec.typeOf('UPDATE_THREAD_STATUS', event);
-      let written = false;
-      answerWrite(reply, (error) => {
-        logger.warn('Failed to update thread status', { threadId, status, error });
-        reportThreadOperationError('status', error, threadId);
-      }, () => {
-        repository.threadCommands.update(threadId as EARS.EntityId, { status });
-        written = true;
-      });
-      if (!written) return;
-
-      // Notify flows — all logic lives in the flow layer
-      sendToSystem('brain', {
-        type: 'TRIGGER_BRAIN_EVENT',
-        eventType: 'thread.status.changed',
-        payload: { threadId, status, userInduced: true },
-      });
     },
     handleSettingsUpdate: ({ event }) => {
       const firstStatusLabel = (): string | undefined =>
@@ -170,274 +374,6 @@ export const threadsSystem = setup({
               repository.threadCommands.update(th.id, patch);
             }
           }
-        }
-      }
-    },
-    setThreadParent: ({ event, reply }) => {
-      const { childIds, parentId } = threadsSpec.typeOf('SET_THREAD_PARENT', event);
-      answerWrite(reply, (error) => {
-        logger.warn('Failed to set thread parent', { childIds, parentId, error });
-        reportThreadOperationError('parent', error, parentId);
-      }, () => {
-        repository.threadCommands.setParent(parentId as EARS.EntityId, childIds.map(id => id as EARS.EntityId));
-      });
-    },
-    deleteThread: ({ event, reply }) => {
-      const { threadId } = threadsSpec.typeOf('DELETE_THREAD', event);
-
-      // Stop active processes before hard-deleting the thread.
-      runThreadTeardown(threadId);
-
-      answerWrite(reply, (error) => {
-        logger.warn('Failed to delete thread (may already be deleted)', { threadId, error });
-        reportThreadOperationError('delete', error, threadId);
-      }, () => { repository.threadCommands.delete(threadId as EARS.EntityId); });
-    },
-    exportThreadsToFile: ({ event, reply }) => {
-      const ev = event as { type: 'EXPORT_THREADS'; directory: string };
-
-      try {
-        const { filePath, threadCount } = exportThreads(ev.directory);
-
-        answer(reply, {
-          type: 'THREADS_EXPORTED',
-          filePath,
-          threadCount,
-        });
-      } catch (err) {
-        const message = errorMessage(err);
-        answer(reply, {
-          type: 'THREADS_EXPORT_FAILED',
-          errors: [message],
-        });
-      }
-    },
-    importThreadItems: ({ event, reply }) => {
-      const ev = event as { type: 'IMPORT_THREADS'; directory: string };
-
-      try {
-        const result = importThreads(ev.directory);
-
-        if (result.created === 0 && result.errors.length > 0) {
-          answer(reply, {
-            type: 'THREADS_IMPORT_FAILED',
-            errors: result.errors,
-          });
-          return;
-        }
-
-        answer(reply, {
-          type: 'THREADS_IMPORTED',
-          count: result.created,
-          ...(result.errors.length > 0 ? { errors: result.errors } : {}),
-        });
-      } catch (err) {
-        const message = errorMessage(err);
-        answer(reply, {
-          type: 'THREADS_IMPORT_FAILED',
-          errors: [message],
-        });
-      }
-    },
-
-    getChatStart: ({ reply }) => {
-      reply?.({ type: 'CHAT_STARTED', data: repository.chatQueries.chatStart() });
-    },
-    openThreadChat: ({ event, reply }) => {
-      const { threadId, restore } = threadsSpec.typeOf('OPEN_THREAD_CHAT', event);
-      try {
-        services.chat.visitThread(threadId as EARS.EntityId, { restore });
-      } catch (err) {
-        logger.warn('Thread not found for chat open, skipping', { threadId });
-        answer(reply, { type: 'THREAD_CHAT_ERROR', threadId: threadId as string, error: errorMessage(err) });
-      }
-    },
-    forwardUserMessage: ({ event, reply }) => {
-      try {
-        const { text, mode, phase, threadId: providedThreadId, references, cwdOverride, forceDirectoryPicker } = threadsSpec.typeOf('USER_MSG', event);
-
-        const sanitizedRefs = references ? {
-          ...references,
-          ...(references.files && {
-            files: references.files.map(({ ...rest }: any) => rest),
-          }),
-        } : undefined;
-
-        let threadId: EARS.EntityId;
-        let started = false;
-
-        if (!providedThreadId) {
-          const result = repository.chatCommands.createThreadFromMessage(text);
-          threadId = result.threadId;
-          started = true;
-
-          logger.info('Created new thread for user message', {
-            threadId,
-            shortCode: result.threadData.shortCode,
-          });
-
-          repository.threadCommands.markAsVisited(threadId);
-        } else {
-          threadId = providedThreadId as EARS.EntityId;
-        }
-
-        const messageResult = repository.chatCommands.addMessage({
-          threadId,
-          text,
-          sender: 'user',
-          references: sanitizedRefs,
-          ...(mode ? { context: { agent: mode } } : {}),
-        });
-
-        // The window that sent the first message of a thread shows the thread it started
-        if (started) answer(reply, { type: 'SHOW_THREAD', threadId });
-
-        sendToSystem('brain', {
-          type: 'TRIGGER_BRAIN_EVENT',
-          eventType: 'user.message',
-          payload: {
-            text,
-            mode,
-            phase,
-            threadId,
-            messageId: messageResult.id,
-            ...(sanitizedRefs && { references: sanitizedRefs }),
-            ...(cwdOverride && { cwdOverride }),
-            ...(forceDirectoryPicker && { forceDirectoryPicker }),
-          },
-        });
-      } catch (err) {
-        logger.error('forwardUserMessage failed', { error: err });
-        answer(reply, {
-          type: 'THREAD_CHAT_ERROR',
-          threadId: 'threadId' in event && typeof event.threadId === 'string' ? event.threadId : '',
-          error: errorMessage(err),
-        });
-      }
-    },
-    forwardUserCommand: ({ event, reply }) => {
-      try {
-      const { command, text, mode, phase, threadId: providedThreadId, references, cwdOverride } = threadsSpec.typeOf('USER_COMMAND', event);
-
-      const sanitizedRefs = references ? {
-        ...references,
-        ...(references.files && {
-          files: references.files.map(({ ...rest }: any) => rest),
-        }),
-      } : undefined;
-
-      let threadId: EARS.EntityId;
-      let started = false;
-
-      if (!providedThreadId) {
-        const topicText = text ? `/${command} ${text}` : `/${command}`;
-        const result = repository.chatCommands.createThreadFromMessage(topicText);
-        threadId = result.threadId;
-        started = true;
-
-        logger.info('Created new thread for user command', {
-          threadId,
-          command,
-          shortCode: result.threadData.shortCode,
-        });
-
-        repository.threadCommands.markAsVisited(threadId);
-      } else {
-        threadId = providedThreadId as EARS.EntityId;
-      }
-
-      const messageResult = repository.chatCommands.addMessage({
-        threadId,
-        text: text ? `/${command} ${text}` : `/${command}`,
-        sender: 'user',
-        references: sanitizedRefs,
-        isCommand: true,
-        command,
-        ...(mode ? { context: { agent: mode } } : {}),
-      });
-
-      if (started) answer(reply, { type: 'SHOW_THREAD', threadId });
-
-      sendToSystem('brain', {
-        type: 'TRIGGER_BRAIN_EVENT',
-        eventType: 'user.command',
-        payload: {
-          command,
-          text,
-          mode,
-          phase,
-          threadId,
-          messageId: messageResult.id,
-          ...(sanitizedRefs && { references: sanitizedRefs }),
-          ...(cwdOverride && { cwdOverride }),
-        },
-      });
-      } catch (err) {
-        logger.error('forwardUserCommand failed', { error: err });
-      }
-    },
-    forkThread: ({ event, reply }) => {
-      const { messageId, threadId, threadTopic } = threadsSpec.typeOf('FORK_THREAD', event);
-      if (!threadId) return;
-
-      let result: { id: EARS.EntityId } | undefined;
-      const forkContext: Record<string, any> = {};
-
-      try {
-        const sourceMessages = repository.chatQueries.threadData(threadId as EARS.EntityId)?.messages ?? [];
-        const sourceIndex = sourceMessages.findIndex((m: any) => m.id === messageId);
-        const sourceUserMessagesAfterFork = sourceIndex >= 0
-          ? sourceMessages.slice(sourceIndex + 1).filter((m: any) => m.sender === 'user').length
-          : 0;
-        const originalTopic = threadTopic || 'Untitled';
-
-        const forkCount = repository.threadCommands.forkCount(threadId as EARS.EntityId);
-        const forkTopic = `Fork ${forkCount + 1} - ${originalTopic}`;
-
-        result = services.chat.createThread({ topic: forkTopic, instructions: '' });
-        if (!result) throw new Error('Failed to create thread');
-
-        repository.threadCommands.linkFork(threadId as EARS.EntityId, result.id);
-
-        repository.chatCommands.copyMessagesUpTo({
-          sourceThreadId: threadId as EARS.EntityId,
-          targetThreadId: result.id,
-          upToMessageId: messageId,
-        });
-
-        // Set forkPending on the NEW thread so chat actions queue messages
-        // until the async handle-fork actions finish persisting session state.
-        const sourceThread = repository.threadQueries.byId(threadId as EARS.EntityId);
-        const sourceContext = (sourceThread as any)?.context ?? {};
-        for (const [key, value] of Object.entries(sourceContext)) {
-          if (value && typeof value === 'object') {
-            forkContext[key] = { forkPending: true };
-          }
-        }
-        if (Object.keys(forkContext).length > 0) {
-          repository.threadCommands.update(result.id, { context: forkContext });
-        }
-
-        services.chat.showThread(result.id, { reply });
-
-        sendToSystem('brain', {
-          type: 'TRIGGER_BRAIN_EVENT',
-          eventType: 'thread.fork',
-          payload: {
-            sourceThreadId: threadId,
-            sourceMessageId: messageId,
-            newThreadId: result.id,
-            sourceUserMessagesAfterFork,
-          },
-        });
-      } catch (err) {
-        logger.error('forkThread failed', { error: err });
-        // Clear forkPending if it was set, so the thread doesn't permanently reject messages.
-        if (result && Object.keys(forkContext).length > 0) {
-          const clearContext = Object.fromEntries(
-            Object.keys(forkContext).map(key => [key, { forkPending: undefined }])
-          );
-          repository.threadCommands.update(result.id, { context: clearContext });
         }
       }
     },
@@ -582,6 +518,7 @@ export const threadsSystem = setup({
       repository.chatCommands.toggleMarkerCompacted(markerId as EARS.EntityId, compacted);
     },
   }),
+  },
 }).createMachine(
   {
     id: 'threads',
@@ -592,12 +529,8 @@ export const threadsSystem = setup({
         actions: 'handleSettingsUpdate',
       },
       // Chat/agent global events
-      OPEN_THREAD_CHAT: {
-        actions: 'openThreadChat',
-      },
-      GET_CHAT_START: {
-        actions: 'getChatStart',
-      },
+      OPEN_THREAD_CHAT: answers.on.OPEN_THREAD_CHAT,
+      GET_CHAT_START: answers.on.GET_CHAT_START,
       THREAD_DELETED: {
         // Internal notification (e.g., refresh chat if active thread deleted)
       },
@@ -606,43 +539,23 @@ export const threadsSystem = setup({
       idle: {
         on: {
           // Thread management
-          CREATE_THREAD: {
-            actions: 'createThread',
-          },
+          CREATE_THREAD: answers.on.CREATE_THREAD,
           VIEW_THREAD: {
             actions: 'visitThread',
           },
-          UPDATE_THREAD_FIELD: {
-            actions: 'updateThreadField',
-          },
-          UPDATE_THREAD_STATUS: {
-            actions: 'updateThreadStatus',
-          },
-          DELETE_THREAD: {
-            actions: 'deleteThread',
-          },
-          SET_THREAD_PARENT: {
-            actions: 'setThreadParent',
-          },
-          EXPORT_THREADS: {
-            actions: 'exportThreadsToFile',
-          },
-          IMPORT_THREADS: {
-            actions: 'importThreadItems',
-          },
+          UPDATE_THREAD_FIELD: answers.on.UPDATE_THREAD_FIELD,
+          UPDATE_THREAD_STATUS: answers.on.UPDATE_THREAD_STATUS,
+          DELETE_THREAD: answers.on.DELETE_THREAD,
+          SET_THREAD_PARENT: answers.on.SET_THREAD_PARENT,
+          EXPORT_THREADS: answers.on.EXPORT_THREADS,
+          IMPORT_THREADS: answers.on.IMPORT_THREADS,
           // Chat/agent events
-          USER_MSG: {
-            actions: 'forwardUserMessage',
-          },
+          USER_MSG: answers.on.USER_MSG,
           INTERACTIVE_MSG_RESPONSE: {
             actions: 'forwardInteractiveMessageResponse',
           },
-          USER_COMMAND: {
-            actions: 'forwardUserCommand',
-          },
-          FORK_THREAD: {
-            actions: 'forkThread',
-          },
+          USER_COMMAND: answers.on.USER_COMMAND,
+          FORK_THREAD: answers.on.FORK_THREAD,
           REVERT_THREAD: {
             actions: 'revertThread',
           },

@@ -103,9 +103,14 @@ export interface ThreadsContext {
   freshThreadIds: string[];
   /** This window's thread writes, which hold the views back until they are answered */
   writes: ViewWrites;
-  /** The call the link form's last save went under, until it is answered, and why that save was refused, if it was */
+  /** The ask the link form's last save is, by the id it was spawned under, until it ends, and why that save was refused, if it was */
   linkSave: string | null;
   linkRefusal: string | null;
+  /**
+   * The messages, commands and forks of this window's that were not done, until the chat has told the person. A new
+   * object for each, so two failures with one message are two
+   */
+  sendFailures: readonly { readonly message: string }[];
 }
 
 /** What the artifact viewers, the dashboard and the tiptap command items ask of the threads surface */

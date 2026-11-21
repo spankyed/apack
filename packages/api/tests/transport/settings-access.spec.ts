@@ -73,12 +73,12 @@ it('enforces shared and owner-only policy at the actual settings action and pres
   const client = connection();
   const settingsCredential = await client.settings.openPack(stamp);
   await client.bus.send({ ...change(), settingsCredential });
-  expect(answer()).toMatchObject({ type: 'SETTINGS_SAVED', snapshot: expect.objectContaining({ status: 'ready' }) });
+  expect(answer()).toMatchObject({ type: 'ASK_ANSWERED', answer: { snapshot: expect.objectContaining({ status: 'ready' }) } });
   expect(messages.find(message => message.answering === 'change')?.client).toBe('window-one');
   expect(admin.get(target('shared'))).toEqual({ count: 2 });
   messages.length = 0;
   await client.bus.send({ ...change('private'), from: 'owner', settingsCredential });
-  expect(answer()).toMatchObject({ type: 'SETTINGS_REFUSED' });
+  expect(answer()).toMatchObject({ type: 'ASK_FAILED', failure: { kind: 'refused' } });
   expect(admin.get(target('private'))).toEqual({ count: 1 });
   expect(messages.some(message => 'settingsCredential' in message || 'settingsCredential' in message.event)).toBe(false);
 });
@@ -89,12 +89,12 @@ it('keeps a pack credential away from whole-document administration while truste
   await client.bus.send({ ...change(), settingsCredential });
   messages.length = 0;
   await client.bus.send({ ...change(), event: { type: 'RESET_ALL_SETTINGS' }, settingsCredential });
-  expect(answer()).toMatchObject({ type: 'SETTINGS_REFUSED' });
+  expect(answer()).toMatchObject({ type: 'ASK_FAILED', failure: { kind: 'refused' } });
   expect(admin.get(target('shared'))).toEqual({ count: 2 });
   messages.length = 0;
   const host = await client.settings.openHost();
   await client.bus.send({ ...change(), event: { type: 'RESET_ALL_SETTINGS' }, settingsCredential: host });
-  expect(answer()).toMatchObject({ type: 'SETTINGS_SAVED', snapshot: expect.objectContaining({ status: 'ready' }) });
+  expect(answer()).toMatchObject({ type: 'ASK_ANSWERED', answer: { snapshot: expect.objectContaining({ status: 'ready' }) } });
   expect(admin.getOverrides()).toEqual({});
 });
 
@@ -121,13 +121,13 @@ it('rechecks authority at delivery when a runtime disappeared after ingress acce
     emit(message);
   });
   await client.bus.send({ ...change(), settingsCredential });
-  expect(answer()).toMatchObject({ type: 'SETTINGS_REFUSED' });
+  expect(answer()).toMatchObject({ type: 'ASK_FAILED', failure: { kind: 'refused' } });
   expect(admin.getOverrides()).toEqual({});
 });
 
 it('refuses a backend bus write with forged host labels and no host-side authority', () => {
   testRootEvents.emitIncoming({ ...change(), from: 'host', client: 'forged-window' });
-  expect(answer()).toMatchObject({ type: 'SETTINGS_REFUSED' });
+  expect(answer()).toMatchObject({ type: 'ASK_FAILED', failure: { kind: 'refused' } });
   expect(admin.getOverrides()).toEqual({});
 });
 

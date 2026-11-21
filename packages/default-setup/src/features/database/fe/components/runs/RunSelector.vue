@@ -80,7 +80,7 @@
 import { useSurface } from '@apackdev/sdk/fe'
 
 import { useSelector } from '@xstate/vue'
-import type { DatabaseState } from '../../state.ts'
+import { isLoadingRuns as readingRuns, type DatabaseState } from '../../state.ts'
 import { GitBranch, Loader2, ArrowLeft } from 'lucide-vue-next'
 import type { RunStatus } from '@apackdev/sdk/steps'
 
@@ -89,7 +89,7 @@ const databaseActor: DatabaseState = useSurface()
 // State selectors
 const flowRuns = useSelector(databaseActor, (state) => state.context.flowRuns)
 const currentFlowId = useSelector(databaseActor, (state) => state.context.currentFlowId)
-const isLoadingRuns = useSelector(databaseActor, (state) => state.context.isLoadingRuns)
+const isLoadingRuns = useSelector(databaseActor, readingRuns)
 
 // Actions
 function selectFlow(flowId: string) {

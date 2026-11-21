@@ -35,7 +35,7 @@ async function render(settings: AppProject[], save = vi.fn()) {
   };
   const ready = connectWindowSettings();
   for (let index = 0; index < 6; index++) await Promise.resolve();
-  windowSettings.receive({ to: 'host/settings', answering: send.mock.calls.at(-1)![0].call, event: { type: 'SETTINGS_LOADED', snapshot: data } });
+  windowSettings.receive({ to: 'host/settings', answering: send.mock.calls.at(-1)![0].call, event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot: data } } });
   await ready;
   const el = document.createElement('div');
   app = createApp(Projects, { settings, 'onUpdate-setting': save });

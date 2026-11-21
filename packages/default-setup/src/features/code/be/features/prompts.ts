@@ -1,90 +1,40 @@
-import { answer } from '../answer.ts'
-import { defineHandlers } from '@apackdev/sdk/framework';
+// A prompt's template as the code surface edits it in a tab: opened from the prompt, and saved back into it
+import type { PromptsAsks } from '../contract.ts'
+import { defineHandlers } from '@apackdev/sdk/framework'
+import type { AsksEvents } from '@apackdev/sdk/events'
 import { setup } from 'xstate'
-
 import { repository } from '#generated/repository.ts';
 import { EARS } from '#generated/ears.ts'
-import type { PromptEntity } from '@apackdev/sdk'
 
-// Incoming events from frontend
+// The asks about a prompt's template, which the code system forwards here to be answered
+export type Event = AsksEvents<PromptsAsks>;
 
-// Outgoing events to frontend
+const handlers = defineHandlers<Record<string, never>, Event>();
 
-export interface CodePromptsSystemContext {
-  // No local state needed for prompts feature
-}
+/** The asks about a prompt's template, answered here from the prompts' repository */
+const answers = handlers.answers<PromptsAsks>({
+  'codePrompts.OPEN_PROMPT': ({ args: { promptId }, refuse }) => {
+    const prompt = repository.promptQueries.byId(promptId as EARS.EntityId)
+    if (!prompt) throw refuse('not-found', `Prompt ${promptId} not found`)
+    return { ...prompt, templateFnContent: prompt.templateFn }
+  },
+  'codePrompts.SAVE_PROMPT': ({ args: { promptId, templateFn }, refuse }) => {
+    repository.promptCommands.update(promptId as EARS.EntityId, { templateFn })
+    const updated = repository.promptQueries.byId(promptId as EARS.EntityId)
+    if (!updated) throw refuse('not-found', `Prompt ${promptId} not found`)
+    return updated
+  },
+});
 
-export type Event =
-  | { type: 'codePrompts.OPEN_PROMPT'; promptId: string }
-  | { type: 'codePrompts.SAVE_PROMPT'; promptId: string; templateFn: string };
-
-/** Hands each handler the answer for the message it is handling — see `defineHandlers` */
-const handlers = defineHandlers<CodePromptsSystemContext, Event>();
-
+/** The code system's child for prompts' templates. It holds nothing: its id is the prefix its asks are forwarded by */
 export const promptsSystem = setup({
   types: {
-    context: {} as CodePromptsSystemContext,
+    context: {} as Record<string, never>,
     events: {} as Event,
   },
-  actions: handlers.actions({
-    openPrompt: ({ event, reply }) => {
-      const ev = event as { type: 'codePrompts.OPEN_PROMPT'; promptId: string }
-      const prompt = repository.promptQueries.byId(ev.promptId as EARS.EntityId)
-
-      if (prompt) {
-        // Include the templateFn content directly
-        const promptWithContent: PromptEntity & { templateFnContent?: string } = {
-          ...prompt,
-          templateFnContent: prompt.templateFn
-        }
-
-        answer(reply, {
-          type: 'codePrompts.PROMPT_SELECTED',
-          promptId: ev.promptId as EARS.EntityId,
-          data: promptWithContent
-        })
-      } else {
-        answer(reply, {
-          type: 'codePrompts.CODE_ERROR',
-          data: {
-            message: `Prompt ${ev.promptId} not found`
-          }
-        })
-      }
-    },
-
-    savePrompt: ({ event, reply }) => {
-      const ev = event as { type: 'codePrompts.SAVE_PROMPT'; promptId: string; templateFn: string }
-
-      // Update the prompt with new templateFn
-      repository.promptCommands.update(ev.promptId as EARS.EntityId, {
-        templateFn: ev.templateFn
-      })
-
-      const updatedPrompt = repository.promptQueries.byId(ev.promptId as EARS.EntityId)
-      if (updatedPrompt) {
-        answer(reply, {
-          type: 'codePrompts.PROMPT_UPDATED',
-          prompt: updatedPrompt,
-          promptId: updatedPrompt.id
-        })
-      }
-    }
-  })
+  actions: { ...answers.actions },
 }).createMachine({
   id: 'codePrompts',
-  initial: 'idle',
   context: {},
-  states: {
-    idle: {
-      on: {
-        'codePrompts.OPEN_PROMPT': {
-          actions: 'openPrompt'
-        },
-        'codePrompts.SAVE_PROMPT': {
-          actions: 'savePrompt'
-        }
-      }
-    }
-  }
+  on: { ...answers.on },
 })

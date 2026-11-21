@@ -27,12 +27,13 @@ describe('the Brain surface', () => {
     await app.connect()
     const { sent, stop } = recording()
     try {
-      const call = await app.send('brain', { type: 'REQUEST_SURFACE_DATA' }, { sender: BRAIN, client: MAIN })
-      const tree = await app.nextEmit('brain', 'RECEIVE_SURFACE_DATA', { answering: call }) as unknown as { data: { runNodeTree: unknown[] } }
-      expect(tree.data.runNodeTree.length).toBeGreaterThan(0)
+      const answered = await app.ask('brain', { type: 'REQUEST_SURFACE_DATA' }, { client: MAIN })
+      if (!answered.ok) throw new Error(answered.failure.message)
+      const { data, state } = answered.value as { data: { runNodeTree: unknown[] }; state: { type: string; rootFlowId?: string } }
+      expect(data.runNodeTree.length).toBeGreaterThan(0)
+      expect(state, 'the state, not news of a start').toMatchObject({ type: 'BRAIN_STATE', rootFlowId: expect.any(String) })
       await app.settle()
-      expect(sent.map((message) => message.type), 'the state, not news of a start').toEqual(['RECEIVE_SURFACE_DATA', 'BRAIN_STATE'])
-      expect(sent.every((message) => message.client === MAIN), 'all of it to the window that asked').toBe(true)
+      expect(sent, 'and nothing to any other window').toEqual([])
     } finally { stop() }
   })
 
@@ -45,7 +46,7 @@ describe('the Brain surface', () => {
       await app.send('brain', { type: 'RESTART_BRAIN' })
       await app.send('brain', { type: 'SEND_STATE' })
       await app.settle()
-      expect(sent.filter((message) => message.type === 'RECEIVE_SURFACE_DATA'), 'nobody asked for a tree').toEqual([])
+      expect(sent.filter((message) => message.type === 'ASK_ANSWERED'), 'nobody asked for a tree').toEqual([])
       expect(sent.filter((message) => message.type === 'BRAIN_STARTED').map((message) => message.client), 'news of the restart, for every window')
         .toEqual([undefined])
       expect(sent.filter((message) => message.type === 'BRAIN_STATE').map((message) => message.client), 'the published state, for every window')

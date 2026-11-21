@@ -36,7 +36,7 @@ describe('a feature whose settings change', () => {
     const app = await startApp({ systems: ['memo-pack/memos', 'host/settings'] });
     await app.connect();
 
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/memos' }, path: ['tags'], value: [{ name: 'b' }] }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/memos' }, path: ['tags'], value: [{ name: 'b' }] }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
     expect(heardBy(app)).toEqual([{
       type: 'FEATURE_SETTINGS_UPDATED',
@@ -53,11 +53,11 @@ describe('a feature whose settings change', () => {
 
     const replacement = getTestSettings().getAll();
     replacement.features['memo-pack/board'] = { columns: 3 };
-    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data: replacement }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data: replacement }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
     expect(heardBy(app)).toEqual([]);
     expect(app.emitted('memo-pack/board')).toContainEqual({ type: 'FEATURE_SETTINGS_UPDATED', settings: { columns: 3 } });
 
-    await app.send('host/settings', { type: 'RESET_ALL_SETTINGS' }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'RESET_ALL_SETTINGS' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
     expect(app.emitted('memo-pack/board')).toContainEqual({ type: 'FEATURE_SETTINGS_UPDATED', settings: { columns: 2 } });
     expect(heardBy(app)).toEqual([]);
     // The board runs no system: its half of the event is nobody's, and nothing warns of a missing system
@@ -75,7 +75,7 @@ describe('a feature whose settings change', () => {
     await app.settle();
     expect(heardBy(app).map((e) => e.settings)).toEqual([{ tags: [{ name: 'c' }] }]);
 
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/board' }, path: ['columns'], value: 4 }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/board' }, path: ['columns'], value: 4 }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
     expect(heardBy(app)).toHaveLength(1);
   });
 
@@ -105,11 +105,11 @@ describe('a feature whose settings change', () => {
       const app = await startApp({ systems: ['memo-pack/memos', 'host/settings'] });
       await app.connect();
 
-      await app.send('host/settings', { type: 'RESET_APP' }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+      await app.send('host/settings', { type: 'RESET_APP' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
       await app.settle();
 
       expect(heardBy(app)).toEqual([{ type: 'FEATURE_SETTINGS_UPDATED', settings: { tags: [{ name: 'fresh' }] }, changes: null }]);
-      await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/board' }, path: ['columns'], value: 5 }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+      await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/board' }, path: ['columns'], value: 5 }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
       expect(heardBy(app)).toHaveLength(1);
       if (outcome === 'fails') takeSystemErrors();
     });
@@ -126,11 +126,11 @@ describe('a feature whose settings change', () => {
     const app = await startApp({ systems: ['database', 'memo-pack/memos', 'host/settings'] });
     await app.connect();
 
-    await app.send('database', { type: 'IMPORT_DATABASE', path: '/backups/1' });
+    expect(await app.ask('database', { type: 'IMPORT_DATABASE', path: '/backups/1' }, { client: 'c-window' })).toMatchObject({ ok: true });
     await app.settle();
 
     expect(heardBy(app)).toEqual([{ type: 'FEATURE_SETTINGS_UPDATED', settings: { tags: [{ name: 'imported' }] }, changes: null }]);
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/board' }, path: ['columns'], value: 6 }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/board' }, path: ['columns'], value: 6 }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
     expect(heardBy(app)).toHaveLength(1);
   });
 
@@ -154,11 +154,12 @@ describe('a feature whose settings change', () => {
       const app = await startApp({ systems: ['database', 'memo-pack/memos', 'host/settings'] });
       await app.connect();
 
-      await app.send('database', { type: 'IMPORT_DATABASE', path: '/backups/1' });
+      const imported = await app.ask('database', { type: 'IMPORT_DATABASE', path: '/backups/1' }, { client: 'c-window' });
+      expect(imported.ok).toBe(outcome === 'succeeds');
       await app.settle();
 
       expect(heardBy(app)).toEqual([{ type: 'FEATURE_SETTINGS_UPDATED', settings: { tags: [{ name: 'migrated' }] }, changes: null }]);
-      await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/board' }, path: ['columns'], value: 7 }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+      await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/board' }, path: ['columns'], value: 7 }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
       expect(heardBy(app)).toHaveLength(1);
     });
   });
@@ -168,14 +169,11 @@ describe('a feature whose settings change', () => {
     const app = await startApp({ systems: ['memo-pack/memos', 'host/settings'] });
     await app.connect();
 
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/memos' }, path: ['tags'], value: [] }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
-    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'SETTINGS_SAVED', snapshot: expect.any(Object) }));
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/memos' }, path: ['tags'], value: [] }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
+    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'ASK_ANSWERED', answer: { snapshot: expect.any(Object) } }));
 
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memos' }, path: ['tags'], value: [] }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
-    expect(app.emitted('host/settings')).toContainEqual({
-      type: 'SETTINGS_REFUSED',
-      problems: [expect.stringContaining('settings target')],
-    });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memos' }, path: ['tags'], value: [] }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
+    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'ASK_FAILED', failure: expect.objectContaining({ kind: 'refused', problems: [expect.stringContaining('settings target')] }) }));
   });
 
   // The import replaces the same stores a reset does, and a pack's defaults coming or going while it runs would be
@@ -193,7 +191,8 @@ describe('a feature whose settings change', () => {
       const done = new Promise<void>((resolve) => { finish = resolve; });
       endImport = async () => { finish(); await app.settle(); };
       mockService('appData', { importBackup: () => getTestSettings().whileReplacingData(async () => { await done; return { databases: ['lmdb'], missingDatabases: [], unknownEntityTypes: [] }; }) });
-      await app.send('database', { type: 'IMPORT_DATABASE', path: '/backups/1' });
+      // Asked as a window asks, and not waited for: the import holds until `finish`
+      await app.send('database', { type: 'IMPORT_DATABASE', path: '/backups/1' }, { sender: 'default-setup/database', client: 'c-window' });
       return { finish };
     }
 
@@ -202,7 +201,7 @@ describe('a feature whose settings change', () => {
       await app.connect();
       const { finish } = await importing(app);
 
-      await app.send('host/settings', { type: 'RESET_APP' }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+      await app.send('host/settings', { type: 'RESET_APP' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
       expect(app.emitted('host/settings')).toContainEqual({ type: 'APP_RESET_FAILED', error: 'App data is being replaced. Reset the app once it has finished.' });
       finish();
@@ -218,7 +217,7 @@ describe('a feature whose settings change', () => {
       const { finish } = await importing(app);
 
       untypedUpsert('Settings', { id: 'Settings-app' as EARS.EntityId, data: { features: { 'memo-pack/memos': { tags: [{ name: 'imported' }] } } } });
-      await app.send('host/settings', { type: 'PACK_CHANGED', packId: 'memo-pack' }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+      await app.send('host/settings', { type: 'PACK_CHANGED', packId: 'memo-pack' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
       expect(heardBy(app)).toHaveLength(heardBefore);
 
       finish();
@@ -233,12 +232,9 @@ describe('a feature whose settings change', () => {
       await app.connect();
       const { finish } = await importing(app);
 
-      await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/memos' }, path: ['tags'], value: [] }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+      await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'memo-pack/memos' }, path: ['tags'], value: [] }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
-      expect(app.emitted('host/settings')).toContainEqual({
-        type: 'SETTINGS_REFUSED',
-        problems: ['App data is being replaced. Change the settings once it has finished.'],
-      });
+      expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'ASK_FAILED', failure: expect.objectContaining({ kind: 'refused', problems: ['App data is being replaced. Change the settings once it has finished.'] }) }));
       finish();
       await app.settle();
     });
@@ -250,10 +246,10 @@ describe('a feature whose settings change', () => {
       const { finish } = await importing(app);
       const before = app.emitted('host/settings').length;
 
-      await app.send('host/settings', { type: 'GET_SETTINGS' }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+      await app.send('host/settings', { type: 'GET_SETTINGS' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
       expect(app.emitted('host/settings').slice(before)).toContainEqual(
-        expect.objectContaining({ type: 'SETTINGS_LOADED' }),
+        expect.objectContaining({ type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot: expect.any(Object) } }),
       );
       finish();
       await app.settle();
@@ -268,13 +264,10 @@ describe('a feature whose settings change', () => {
 
     const replacement = getTestSettings().getAll();
     replacement.features.memos = { tags: [] };
-    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data: replacement }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data: replacement }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
-    expect(app.emitted('host/settings')).toContainEqual({
-      type: 'SETTINGS_REFUSED',
-      problems: [expect.stringContaining(`"memos" isn't a ref`)],
-    });
-    expect(app.emitted('host/settings').map((e) => e.type)).not.toContain('SETTINGS_SAVED');
+    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'ASK_FAILED', failure: expect.objectContaining({ kind: 'refused', problems: [expect.stringContaining(`"memos" isn't a ref`)] }) }));
+    expect(app.emitted('host/settings').map((e) => e.type)).not.toContain('ASK_ANSWERED');
     expect(getTestSettings().getOverrides()).toEqual({});
     expect(heardBy(app)).toEqual([]);
   });
@@ -288,9 +281,9 @@ describe('a feature whose settings change', () => {
     const app = await startApp({ systems: ['memo-pack/memos', 'host/settings'] });
     await app.connect();
 
-    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
-    expect(app.emitted('host/settings')).toContainEqual({ type: 'SETTINGS_REFUSED', problems: expect.arrayContaining([expect.stringContaining(problem)]) });
+    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'ASK_FAILED', failure: expect.objectContaining({ kind: 'refused', problems: expect.arrayContaining([expect.stringContaining(problem)]) }) }));
     expect(getTestSettings().getOverrides()).toEqual({});
   });
 
@@ -301,10 +294,10 @@ describe('a feature whose settings change', () => {
     const inEffect = getTestSettings().getAll();
 
     const replacement = { ...inEffect, features: { ...inEffect.features, 'memo-pack/board': { columns: 5 } } };
-    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data: replacement }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data: replacement }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
     expect(getTestSettings().getOverrides()).toEqual(replacement);
-    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'SETTINGS_SAVED', snapshot: expect.any(Object) }));
+    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'ASK_ANSWERED', answer: { snapshot: expect.any(Object) } }));
   });
 
   // Its defaults leave with the pack, so the settings of its features change; their system and surface are gone,
@@ -329,15 +322,12 @@ describe('a feature whose settings change', () => {
 
     const invalid = getTestSettings().getAll();
     invalid.features['memo-pack/memo'] = { tags: [] };
-    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data: invalid }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
-    expect(app.emitted('host/settings')).toContainEqual({
-      type: 'SETTINGS_REFUSED',
-      problems: [expect.stringContaining('memo-pack/memo')],
-    });
+    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data: invalid }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
+    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'ASK_FAILED', failure: expect.objectContaining({ kind: 'refused', problems: [expect.stringContaining('memo-pack/memo')] }) }));
 
     const replacement = getTestSettings().getAll();
     replacement.features['memo-pack/board'] = { columns: 9 };
-    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data: replacement }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data: replacement }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
     expect(getTestSettings().getOverrides()).toEqual(replacement);
     expect(getTestSettings().getOverrides().features?.['gone-pack/journal']).toEqual({ font: 'serif' });
   });
@@ -356,7 +346,7 @@ describe('settings naming prototype machinery', () => {
     const app = await startApp({ systems: ['host/settings'] });
     await app.connect();
 
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', ...update, value: 'yes' }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', ...update, value: 'yes' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
     expect(Object.getPrototypeOf(getTestSettings().getAll().packs['default-setup'].assistant)).toBe(Object.prototype);
@@ -369,7 +359,7 @@ describe('settings naming prototype machinery', () => {
     // As a client's JSON arrives: "__proto__" an own key
     const data = getTestSettings().getAll();
     data.features['memo-pack/memos'] = JSON.parse('{ "tags": [], "__proto__": { "polluted": "yes" } }');
-    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'REPLACE_SETTINGS', data }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
     const memos = getTestSettings().forPack('memo-pack').get({ kind: 'feature', featureRef: 'memo-pack/memos' }) as Record<string, unknown>;
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
@@ -377,7 +367,7 @@ describe('settings naming prototype machinery', () => {
     expect(Object.getPrototypeOf(memos)).toBe(Object.prototype);
     expect(Object.hasOwn(memos, '__proto__')).toBe(true);
     expect(memos.__proto__).toEqual({ polluted: 'yes' });
-    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'SETTINGS_SAVED', snapshot: expect.any(Object) }));
+    expect(app.emitted('host/settings')).toContainEqual(expect.objectContaining({ type: 'ASK_ANSWERED', answer: { snapshot: expect.any(Object) } }));
   });
 });
 
@@ -387,8 +377,8 @@ describe('a change to an explicit settings owner', () => {
     const app = await startApp({ systems: ['host/settings'] });
     await app.connect();
 
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'app' }, path: ['projects'], value: [{ name: 'one', directories: [], color: 'blue' }] }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'pack', packId: 'default-setup', groupId: 'assistant' }, path: ['name'], value: 'Ada' }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'app' }, path: ['projects'], value: [{ name: 'one', directories: [], color: 'blue' }] }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'pack', packId: 'default-setup', groupId: 'assistant' }, path: ['name'], value: 'Ada' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
     const all = getTestSettings().getAll();
     expect(all.app.projects).toEqual([{ name: 'one', directories: [], color: 'blue' }]);
@@ -401,9 +391,9 @@ describe('a change to an explicit settings owner', () => {
     const app = await startApp({ systems: ['host/settings'] });
     await app.connect();
 
-    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'pack', packId: 'default-setup', groupId: 'missing' }, path: ['x'], value: 1 }, { settingsAccess: { kind: 'host', service: getTestSettings() } });
+    await app.send('host/settings', { type: 'UPDATE_SETTINGS', target: { kind: 'pack', packId: 'default-setup', groupId: 'missing' }, path: ['x'], value: 1 }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
-    expect(app.emitted('host/settings').map((e) => e.type)).toContain('SETTINGS_REFUSED');
+    expect(app.emitted('host/settings').map((e) => e.type)).toContain('ASK_FAILED');
     expect(getTestSettings().getOverrides()).toEqual({});
   });
 });

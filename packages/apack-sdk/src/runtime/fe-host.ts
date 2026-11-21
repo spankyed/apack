@@ -21,8 +21,11 @@ import type { PackExtensionsView } from './packs-view.ts';
  * `@apackdev/host/fe`.
  */
 export interface FeClient {
-  /** Delivers a message to a backend system */
-  send(message: Message): void;
+  /**
+   * Delivers a message to a backend system. `refused` is called when the API does not take it — no system of that
+   * name runs, or it declares no such event — which an ask needs, since nothing would ever answer it
+   */
+  send(message: Message, refused?: () => void): void;
   /**
    * Subscribes this window to a view: `observer` hears its result, and each changed result after it, until the
    * returned function is called, after which it hears nothing. A dropped connection subscribes again once it is

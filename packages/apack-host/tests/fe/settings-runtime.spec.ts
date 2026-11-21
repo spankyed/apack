@@ -19,7 +19,7 @@ async function windowRuntime(initial = snapshot()) {
   const runtime = createWindowSettingsRuntime({ send: async message => { messages.push(message); } });
   runtime.connected();
   await flush();
-  runtime.receive({ to: 'host/settings', event: { type: 'SETTINGS_LOADED', snapshot: initial }, answering: messages[0].call });
+  runtime.receive({ to: 'host/settings', event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot: initial } }, answering: messages[0].call });
   return { runtime, messages };
 }
 
@@ -45,9 +45,9 @@ it('settles concurrent changes only from their own correlated reply', async () =
   const second = runtime.port.update(target, ['personal', 'phoneNumber'], '123');
   await flush();
   expect(messages[1].call).not.toBe(messages[2].call);
-  runtime.receive({ to: 'host/settings', answering: messages[2].call, event: { type: 'SETTINGS_SAVED', snapshot: runtime.getSnapshot() } });
+  runtime.receive({ to: 'host/settings', answering: messages[2].call, event: { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: runtime.getSnapshot() } } });
   expect(await second).toEqual({ status: 'saved' });
-  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'SETTINGS_REFUSED', problems: ['invalid name'] } });
+  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'ASK_FAILED', asked: 'UPDATE_SETTINGS', failure: { kind: 'refused', message: 'refused', problems: ['invalid name'] } } });
   expect(await first).toEqual({ status: 'refused', problems: ['invalid name'] });
   runtime.dispose();
 });
@@ -57,7 +57,7 @@ it('sends a value comparison and does not treat an acknowledgement as new settin
   const write = runtime.port.update(target, ['projects'], []);
   await flush();
   expect(messages[1].event).toMatchObject({ condition: { runId: 'run-one', expected: { exists: true, value: [] } } });
-  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'SETTINGS_SAVED', snapshot: runtime.getSnapshot() } });
+  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: runtime.getSnapshot() } } });
   await write;
   expect(runtime.getSnapshot()?.revision).toBe(0);
   runtime.dispose();
@@ -74,7 +74,7 @@ it('refuses in-flight requests on disconnect and accepts a new run only under it
   await flush();
   runtime.receive({ to: 'host/settings', event: { type: 'SETTINGS_UPDATED', snapshot: snapshot('run-one', 9) } });
   expect(runtime.port.status()).toBe('loading');
-  runtime.receive({ to: 'host/settings', answering: messages.at(-1)!.call, event: { type: 'SETTINGS_LOADED', snapshot: snapshot('run-two') } });
+  runtime.receive({ to: 'host/settings', answering: messages.at(-1)!.call, event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot: snapshot('run-two') } } });
   expect(runtime.getSnapshot()?.runId).toBe('run-two');
   runtime.receive({ to: 'host/settings', event: { type: 'SETTINGS_UPDATED', snapshot: snapshot('run-one', 99) } });
   expect(runtime.getSnapshot()?.runId).toBe('run-two');
@@ -127,7 +127,7 @@ it('keeps two window outcomes independent while both follow broadcast values', a
   const second = await windowRuntime();
   const write = first.runtime.port.reset(target);
   await flush();
-  const reply = { to: 'host/settings', answering: first.messages[1].call, event: { type: 'SETTINGS_SAVED', snapshot: first.runtime.getSnapshot() } };
+  const reply = { to: 'host/settings', answering: first.messages[1].call, event: { type: 'ASK_ANSWERED', asked: 'RESET_SETTINGS', answer: { snapshot: first.runtime.getSnapshot() } } };
   second.runtime.receive(reply);
   first.runtime.receive(reply);
   expect(await write).toEqual({ status: 'saved' });
@@ -149,7 +149,7 @@ it('correlates whole-document replacement and keeps the caller draft after refus
   const write = runtime.replaceAll(draft, condition);
   await flush();
   expect(messages[1].event).toMatchObject({ type: 'REPLACE_SETTINGS', data: draft, condition });
-  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'SETTINGS_REFUSED', problems: ['stale draft'] } });
+  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'ASK_FAILED', asked: 'UPDATE_SETTINGS', failure: { kind: 'refused', message: 'refused', problems: ['stale draft'] } } });
   expect(await write).toEqual({ status: 'refused', problems: ['stale draft'] });
   expect(runtime.getSnapshot()!.values.app.personal).toEqual({});
   expect(draft.app.personal.name).toBe('Draft');
@@ -173,7 +173,7 @@ it.each([
   runtime.connected();
   await flush();
   expect(() => runtime.receive({ to: 'host/settings', answering: messages[0].call,
-    event: { type: 'SETTINGS_LOADED', snapshot: initial } })).not.toThrow();
+    event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot: initial } } })).not.toThrow();
   expect(runtime.port.status()).toBe('disconnected');
   expect(runtime.getSnapshot()).toBeUndefined();
   expect((await runtime.port.reset(target)).status).toBe('refused');
@@ -214,7 +214,7 @@ it('isolates a failed subscriber from other forms and pending request completion
   await flush();
   expect(() => runtime.receive({ to: 'host/settings', event: { type: 'SETTINGS_UPDATED', snapshot: snapshot('run-one', 1) } })).not.toThrow();
   expect(healthy).toHaveBeenCalledOnce();
-  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'SETTINGS_SAVED', snapshot: runtime.getSnapshot() } });
+  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: runtime.getSnapshot() } } });
   expect(await write).toEqual({ status: 'saved' });
   expect(() => runtime.dispose()).not.toThrow();
 });
@@ -224,13 +224,14 @@ it('settles malformed refusals and does not expose the wire array to the caller'
   for (const problems of [undefined, 'invalid', [], [12]]) {
     const write = runtime.port.reset(target);
     await flush();
-    runtime.receive({ to: 'host/settings', answering: messages.at(-1)!.call, event: { type: 'SETTINGS_REFUSED', problems } });
+    // A refusal with neither problems nor a message to show in their place
+    runtime.receive({ to: 'host/settings', answering: messages.at(-1)!.call, event: { type: 'ASK_FAILED', asked: 'RESET_SETTINGS', failure: { kind: 'refused', problems } } });
     expect(await write).toEqual({ status: 'refused', problems: ['The backend returned an invalid settings refusal.'] });
   }
   const write = runtime.port.reset(target);
   await flush();
   const problems = ['invalid'];
-  runtime.receive({ to: 'host/settings', answering: messages.at(-1)!.call, event: { type: 'SETTINGS_REFUSED', problems } });
+  runtime.receive({ to: 'host/settings', answering: messages.at(-1)!.call, event: { type: 'ASK_FAILED', asked: 'RESET_SETTINGS', failure: { kind: 'refused', message: 'refused', problems } } });
   problems.push('mutated');
   expect(await write).toEqual({ status: 'refused', problems: ['invalid'] });
   runtime.dispose();
@@ -267,7 +268,7 @@ it('terminates a refused initial read immediately', async () => {
   const runtime = createWindowSettingsRuntime({ send: async message => { messages.push(message); } });
   runtime.connected();
   await flush();
-  runtime.receive({ to: 'host/settings', answering: messages[0].call, event: { type: 'SETTINGS_REFUSED', problems: ['unavailable'] } });
+  runtime.receive({ to: 'host/settings', answering: messages[0].call, event: { type: 'ASK_FAILED', asked: 'GET_SETTINGS', failure: { kind: 'unavailable', message: 'unavailable' } } });
   expect(runtime.port.status()).toBe('disconnected');
   runtime.dispose();
 });
@@ -322,8 +323,8 @@ it('keeps pack mutation transports and pending requests separate from window adm
   expect(messages).toHaveLength(2);
   first.dispose();
   expect(await firstWrite).toMatchObject({ status: 'refused' });
-  runtime.receive({ to: 'host/settings', answering: secondMessages[0].call, event: { type: 'SETTINGS_SAVED', snapshot: runtime.getSnapshot() } });
-  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'SETTINGS_SAVED', snapshot: runtime.getSnapshot() } });
+  runtime.receive({ to: 'host/settings', answering: secondMessages[0].call, event: { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: runtime.getSnapshot() } } });
+  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: runtime.getSnapshot() } } });
   expect(await secondWrite).toEqual({ status: 'saved' });
   expect(await hostWrite).toEqual({ status: 'saved' });
   expect(first.port.get(target)).toBeUndefined();
@@ -357,7 +358,7 @@ it('disconnect invalidates accepted pack ports permanently and notifies their su
   runtime.connected();
   await flush();
   runtime.receive({ to: 'host/settings', answering: messages.at(-1)!.call,
-    event: { type: 'SETTINGS_LOADED', snapshot: snapshot('run-two') } });
+    event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { snapshot: snapshot('run-two') } } });
   expect(runtime.port.status()).toBe('ready');
   expect(binding.port.status()).toBe('disposed');
   expect((await binding.port.reset(target)).status).toBe('refused');
@@ -380,7 +381,7 @@ it('uses the committed reply snapshot for a sequential write before its broadcas
   const committed = snapshot('run-one', 1);
   committed.values.app.personal.name = 'Ada';
   runtime.receive({ to: 'host/settings', answering: messages[1].call,
-    event: { type: 'SETTINGS_SAVED', snapshot: committed } });
+    event: { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: committed } } });
   expect(await first).toEqual({ status: 'saved' });
   const second = runtime.port.update(target, ['personal', 'name'], 'Grace');
   await flush();
@@ -413,7 +414,7 @@ it('refuses a malformed save acknowledgement without discarding accepted window 
     const write = runtime.port.update(target, ['personal', 'name'], 'Ada');
     await flush();
     runtime.receive({ to: 'host/settings', answering: messages[1].call,
-      event: { type: 'SETTINGS_SAVED', snapshot: {} } });
+      event: { type: 'ASK_ANSWERED', asked: 'UPDATE_SETTINGS', answer: { snapshot: {} } } });
     expect(await write).toMatchObject({ status: 'refused', problems: [expect.stringContaining('invalid settings save snapshot')] });
     expect(runtime.port.status()).toBe('ready');
     expect(runtime.getSnapshot()).toEqual(snapshot());
@@ -427,7 +428,7 @@ it('keeps invalid settings distinct from a broken connection and supports an ack
   runtime.connected();
   await flush();
   const recovery = { version: { runId: 'run-one', revision: 0 }, problems: [{ target, path: ['projects'], message: 'must be array' }] };
-  runtime.receive({ to: 'host/settings', answering: messages[0].call, event: { type: 'SETTINGS_RECOVERY', recovery } });
+  runtime.receive({ to: 'host/settings', answering: messages[0].call, event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { recovery } } });
   expect(runtime.port.status()).toBe('loading'); // Packs never see recovery; only this window's screen does.
   expect(runtime.getSnapshot()).toBeUndefined();
   expect(runtime.port.get(target)).toBeUndefined();
@@ -443,7 +444,7 @@ it('keeps invalid settings distinct from a broken connection and supports an ack
   runtime.receive({ to: 'host/settings', event: { type: 'SETTINGS_RECOVERY', recovery: repaired } });
   await flush();
   expect(settled).not.toHaveBeenCalled(); // A broadcast can precede this request's own answer.
-  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'SETTINGS_RECOVERY', recovery: repaired } });
+  runtime.receive({ to: 'host/settings', answering: messages[1].call, event: { type: 'ASK_ANSWERED', asked: 'RECOVER_SETTINGS', answer: { recovery: repaired } } });
   expect(await write).toEqual({ status: 'saved' });
   expect(runtime.getSnapshot()).toBeUndefined();
   expect(runtime.getRecovery()).toEqual(repaired); // Relaunch still owns normal startup.
@@ -469,7 +470,7 @@ it('refuses malformed recovery responses as protocol failures rather than displa
   const runtime = createWindowSettingsRuntime({ send: async message => { messages.push(message); } });
   runtime.connected();
   await flush();
-  runtime.receive({ to: 'host/settings', answering: messages[0].call, event: { type: 'SETTINGS_RECOVERY', recovery: { problems: [] } } });
+  runtime.receive({ to: 'host/settings', answering: messages[0].call, event: { type: 'ASK_ANSWERED', asked: 'GET_SETTINGS', answer: { recovery: { problems: [] } } } });
   expect(runtime.port.status()).toBe('disconnected');
   expect(runtime.getRecovery()).toBeUndefined();
   runtime.dispose();

@@ -28,8 +28,8 @@ describe('a prompt\'s output schema', () => {
 
   it('is stored when prompts are imported', async () => {
     const app = await promptsApp()
-    await app.send('prompts', { type: 'IMPORT_PROMPTS', prompts: [{ label: 'Imported', templateFn: 'return "hi"', outputSchema: schema }] })
-    await app.nextEmit('prompts', 'PROMPTS_IMPORTED')
+    expect(await app.ask('prompts', { type: 'IMPORT_PROMPTS', prompts: [{ label: 'Imported', templateFn: 'return "hi"', outputSchema: schema }] }, { client: 'c-main' }))
+      .toEqual({ ok: true, value: { count: 1 } })
     expect(byLabel('Imported')!.outputSchema).toEqual(schema)
   })
 })

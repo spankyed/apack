@@ -129,52 +129,48 @@ export type {
   IndexSearchResult,
 } from './search-index/types/search-index.ts'
 
-export type IncomingLibraryEvents =
-  | { type: 'CREATE_DOCUMENT'; name: string; content: ContentSection[]; tags: string[]; collectionId?: string; documentType?: string }
-  | { type: 'UPDATE_DOCUMENT'; id: string; name: string; content: ContentSection[]; tags: string[]; collectionId?: string }
-  | { type: 'DELETE_DOCUMENT'; id: string }
-  /** A document on disk, which no view can watch: answered with `DOCUMENT_LOADED` */
-  | { type: 'GET_DOCUMENT'; id: string }
-  | { type: 'CREATE_COLLECTION'; name: string; description?: string; parentId?: string }
-  | { type: 'UPDATE_COLLECTION'; id: string; name: string; description?: string }
-  | { type: 'DELETE_COLLECTION'; id: string }
-  | { type: 'MOVE_DOCUMENT'; documentId: string; collectionId?: string }
-  // File browser events
-  /** A folder on disk, which no view can watch: answered with `FOLDER_CONTENTS_LOADED` */
-  | { type: 'GET_FOLDER_CONTENTS'; folderId: string | null }
-  /** Which of these symlinked collections no longer reach their folder on disk: answered with `SYMLINKS_CHECKED` */
-  | { type: 'CHECK_SYMLINKS'; ids: string[] }
-  | { type: 'RENAME_ITEM'; id: string; name: string; itemType: 'document' | 'folder' }
-  | { type: 'DELETE_ITEMS'; ids: string[] }
-  | { type: 'MOVE_ITEMS'; ids: string[]; targetFolderId: string | null }
-  // [SEARCH_INDEX_FF] Search index events — commented out
-  // Symlink events
-  | { type: 'CREATE_SYMLINK_COLLECTION'; name: string; symlinkPath: string; parentId?: string }
-  | { type: 'UPDATE_SYMLINK_PATH'; collectionId: string; newPath: string }
-  // Import/Export events
-  | { type: 'IMPORT_LIBRARY'; directory: string }
-  | { type: 'EXPORT_LIBRARY'; directory: string; format: 'markdown' | 'json' }
+/**
+ * What a write or a fetch under a symlinked folder may find on disk, beside the standard two: what it named is gone,
+ * or is closed to this user. The disk's own errors are these kinds wherever an ask declares them.
+ */
+type OnDisk = { 'not-found': {}; 'no-access': {} }
 
 /**
- * What the library system sends: the answers to a window's writes and fetches, an import's or an export's outcome,
- * and the one notification there is, a folder on disk having changed. What the library stores is its views; what is
- * on disk is fetched, since a view watches the engine and nothing else.
+ * What a window asks the library, each answered once: a write with what it made or that it landed, a fetch of what is
+ * on disk (which no view can watch) with what it read, an import or an export with what it did. What a write changed
+ * in the library itself reaches every window through the views; a write on disk, which no view sees, is told
+ * (`FOLDER_CHANGED`).
+ */
+export type LibraryAsks = {
+  CREATE_DOCUMENT: { args: { name: string; content: ContentSection[]; tags: string[]; collectionId?: EARS.EntityId; documentType?: string }; refuses: OnDisk }
+  UPDATE_DOCUMENT: { args: { id: EARS.EntityId; name: string; content: ContentSection[]; tags: string[] }; refuses: OnDisk }
+  DELETE_DOCUMENT: { args: { id: EARS.EntityId } }
+  /** A document, read from disk when it is a file under a symlinked folder */
+  GET_DOCUMENT: { args: { id: EARS.EntityId }; answer: { document: DocumentDTO }; refuses: OnDisk }
+  /** Answered with the folder it made in the library, for the window that asked to name; one on disk is only made */
+  CREATE_COLLECTION: { args: { name: string; description?: string; parentId?: EARS.EntityId }; answer: { collection?: CollectionDTO }; refuses: OnDisk }
+  UPDATE_COLLECTION: { args: { id: EARS.EntityId; name: string; description?: string } }
+  DELETE_COLLECTION: { args: { id: EARS.EntityId } }
+  MOVE_DOCUMENT: { args: { documentId: EARS.EntityId; collectionId?: EARS.EntityId } }
+  /** A folder's contents, read from disk when it is a symlinked folder or one inside one */
+  GET_FOLDER_CONTENTS: { args: { folderId: EARS.EntityId | null }; answer: FolderContents; refuses: OnDisk }
+  /** Which of these symlinked collections no longer reach their folder on disk */
+  CHECK_SYMLINKS: { args: { ids: EARS.EntityId[] }; answer: { ids: EARS.EntityId[]; broken: EARS.EntityId[] } }
+  RENAME_ITEM: { args: { id: EARS.EntityId; name: string; itemType: 'document' | 'folder' }; refuses: OnDisk }
+  DELETE_ITEMS: { args: { ids: EARS.EntityId[] }; refuses: OnDisk }
+  MOVE_ITEMS: { args: { ids: EARS.EntityId[]; targetFolderId: EARS.EntityId | null }; refuses: OnDisk }
+  CREATE_SYMLINK_COLLECTION: { args: { name: string; symlinkPath: string; parentId?: EARS.EntityId }; answer: { collection: CollectionDTO } }
+  /** Refused as `not-found` for a path that is no folder */
+  UPDATE_SYMLINK_PATH: { args: { collectionId: EARS.EntityId; newPath: string }; refuses: { 'not-found': {} } }
+  EXPORT_LIBRARY: { args: { directory: string; format: 'markdown' | 'json' }; answer: { filePath: string; itemCount: number } }
+  /** Imported with what could not be, unless nothing could, which fails */
+  IMPORT_LIBRARY: { args: { directory: string }; answer: { count: number; errors?: string[] } }
+}
+
+/**
+ * What the library system sends beside its answers: the one notification there is, a folder on disk having changed. What the library stores is its views; what is on disk is fetched.
  */
 export type OutgoingLibraryEvents =
-  /** The folder a `CREATE_COLLECTION` made, for the window that asked to name */
-  | { type: 'COLLECTION_CREATED'; data: { collection: CollectionDTO } }
-  /** Any other write landed */
-  | { type: 'LIBRARY_WRITTEN' }
-  /** A write was refused, and why */
-  | { type: 'LIBRARY_WRITE_FAILED'; error: string }
-  /** A fetch of what is on disk could not be made, and why */
-  | { type: 'LIBRARY_READ_FAILED'; error: string }
-  /** A folder on disk, as `GET_FOLDER_CONTENTS` asked */
-  | { type: 'FOLDER_CONTENTS_LOADED'; data: FolderContents }
-  /** A document on disk, as `GET_DOCUMENT` asked */
-  | { type: 'DOCUMENT_LOADED'; data: { document: DocumentDTO } }
-  /** The symlinked collections `CHECK_SYMLINKS` named whose folder is gone */
-  | { type: 'SYMLINKS_CHECKED'; ids: string[]; broken: string[] }
   /**
    * Something on disk under a symlinked folder changed — `folderId`'s contents, or, with `null`, which is not known —
    * for every window showing such a folder to fetch it again. A notification: no window asked for it.
@@ -187,8 +183,3 @@ export type OutgoingLibraryEvents =
   // | { type: 'SEARCH_INDEX_DELETED'; data: { indexId: string } }
   // | { type: 'SEARCH_RESULTS'; data: { results: any[] } }
   // | { type: 'INDEXING_PROGRESS'; data: { indexId: string; progress: number; total: number } }
-  // Import/Export events
-  | { type: 'LIBRARY_IMPORTED'; count: number; errors?: string[] }
-  | { type: 'LIBRARY_IMPORT_FAILED'; errors: string[] }
-  | { type: 'LIBRARY_EXPORTED'; filePath: string; itemCount: number }
-  | { type: 'LIBRARY_EXPORT_FAILED'; errors: string[] }

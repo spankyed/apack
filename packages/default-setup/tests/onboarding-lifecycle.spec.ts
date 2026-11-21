@@ -39,7 +39,7 @@ it('starts on readiness without keys, once across connections and preference res
   await app.connect();
   await app.connect();
   const reset = await app.send('host/settings', { type: 'RESET_ALL_SETTINGS' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
-  await app.nextEmit('host/settings', 'SETTINGS_SAVED', { answering: reset });
+  await app.nextEmit('host/settings', 'ASK_ANSWERED', { answering: reset });
   await app.settle();
   expect(initialized(app)).toHaveLength(1);
   expect(getAllFlowActorIds()).toHaveLength(rootActors + 1);
