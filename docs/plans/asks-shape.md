@@ -109,7 +109,7 @@ resolves the invoked ask. A spec's mock of `#generated/events` that a machine's 
   shown there.
 - A terminal ask that is refused is shown by the panel's terminal section, and so only while that is mounted.
 - The explorer does not clear a folder's loading mark when its listing is refused.
-- Not checked in the running app: this branch was verified by the type check and the unit pools.
+- Not checked by hand in the running app: this branch was verified by the type check, the unit pools and `npm run chain -- --no-native`, which runs the e2e suites.
 
 ## When it lands
 
