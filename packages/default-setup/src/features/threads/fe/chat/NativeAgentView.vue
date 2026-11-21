@@ -249,9 +249,10 @@ onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cance
   .native-agent-view > header > div:first-child { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
   .native-agent-view > header > div:first-child > p { margin-top: 0; }
   .native-agent-view > details { margin-bottom: 0; }
+  /* In a short split, the transcript scrolls in the space left by the composer. */
+  .native-agent-messages { min-height: 0; }
 }
 @container claude-agent-pane (max-height: 18rem) {
-  .native-agent-messages { min-height: 2rem; }
   .native-agent-messages > [role="region"] { padding-block: .25rem; }
 }
 </style>

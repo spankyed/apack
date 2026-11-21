@@ -193,7 +193,7 @@
           </div>
         </div>
         <!-- Thread bar — stays within chat column (hidden during onboarding) -->
-        <div v-if="!isOnboarding" class="flex-shrink-0 w-full">
+        <div v-if="!isOnboarding" class="flex-shrink-0 w-full" data-testid="thread-navigation">
           <RecentThreads
             :current-thread="currentThread"
             :recent-threads="recentThreads"
