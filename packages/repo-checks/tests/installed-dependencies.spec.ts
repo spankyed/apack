@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
-import { brokerDrift, lockfileDrift } from '../../../scripts/lib/installed-dependencies.ts';
+import { brokerDrift, duplicateCopies, lockfileDrift } from '../../../scripts/lib/installed-dependencies.ts';
 
 const PLATFORM = `${process.platform}-${process.arch}`;
 const COMMIT = 'c'.repeat(40);
@@ -35,6 +35,36 @@ function aCheckout(locked: Record<string, unknown>, installed?: Record<string, u
   }
   return root;
 }
+
+describe('one copy of what the app loads once', () => {
+  const linked = (target: string) => ({ resolved: target, link: true });
+
+  it('says nothing when EARS and elmdb are each one copy, however many links reach it', () => {
+    expect(duplicateCopies(aCheckout({}, {
+      'node_modules/@elmdb/ears': linked('vendor/elmdb/packages/ears'),
+      'packages/api/node_modules/@elmdb/ears': linked('vendor/elmdb/packages/ears'),
+      'node_modules/elmdb': linked('vendor/elmdb/crates/elmdb-node'),
+      'vendor/elmdb/packages/ears': { version: '0.0.0' },
+    }))).toEqual([]);
+  });
+
+  // The layout npm writes when a package pins EARS to another range than the SDK's: the lockfile pins both, so only
+  // this refusal sees it
+  it('refuses a second copy, naming the package, where each is, and the fix', () => {
+    const refusals = duplicateCopies(aCheckout({}, {
+      'node_modules/@elmdb/ears': linked('vendor/elmdb/packages/ears'),
+      'node_modules/@apackdev/testing/node_modules/@elmdb/ears': entry('0.0.1'),
+      'node_modules/elmdb': linked('vendor/elmdb/crates/elmdb-node'),
+    }));
+    expect(refusals).toEqual([expect.stringContaining(
+      '@elmdb/ears is installed 2 times (node_modules/@elmdb/ears, node_modules/@apackdev/testing/node_modules/@elmdb/ears)')]);
+    expect(refusals[0]).toContain('npm dedupe');
+  });
+
+  it('holds for this checkout', () => {
+    expect(duplicateCopies(REPO_ROOT)).toEqual([]);
+  });
+});
 
 describe('node_modules against package-lock.json', () => {
   it('says nothing when npm recorded installing what the lockfile pins', () => {

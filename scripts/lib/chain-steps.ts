@@ -459,7 +459,7 @@ const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSP
   // The drive layer's one tracked file. The driving scripts beside it are gitignored and ad-hoc, so naming
   // the directory would re-run a typecheck every time someone poked at the app
   'drive/playwright.config.ts',
-  'build/prod/verify-node-modules.mjs', 'build/prod/smoke-native.mjs',
+  'build/prod/verify-node-modules.mjs', 'build/prod/single-copy.mjs', 'build/prod/smoke-native.mjs',
   'packages/apack-cli/bin',
   'packages/api/tsup.config.ts',
   'packages/dev-mode.js', 'packages/entry-point.mjs'];

@@ -8,6 +8,7 @@
 import * as fs from 'node:fs';
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
+import { SINGLE_COPY_PACKAGES, extraCopies } from '../../build/prod/single-copy.mjs';
 
 /** One entry of a lockfile's `packages`: only the fields that say which bytes are installed, and whether it may be absent */
 interface LockedPackage {
@@ -93,9 +94,30 @@ export function brokerDrift(packageDir: string): string | undefined {
     + ` (looked for ${path.relative(process.cwd(), broker.brokerBinaryPath())}) — run \`npm run fetch:terminal-broker\``;
 }
 
+/**
+ * Whether the install holds more than one copy of a package the app loads once (`SINGLE_COPY_PACKAGES`: EARS and
+ * `elmdb`), read from npm's record of the install like `lockfileDrift`. A link and the directory it points at are one
+ * copy; two directories, or links to two, are two. The lockfile can pin two, and an install matching it is still
+ * refused: one copy is what the app needs, not what the lockfile says.
+ *
+ * Answers the refusals, none when each has one copy (or the install has no record, which `lockfileDrift` refuses).
+ */
+export function duplicateCopies(repoRoot: string): string[] {
+  const hidden = path.join(repoRoot, 'node_modules', '.package-lock.json');
+  if (!fs.existsSync(hidden)) return [];
+  const marker = 'node_modules/';
+  const copies = Object.entries(packagesOf(hidden)).flatMap(([key, entry]) => {
+    const name = key.slice(key.lastIndexOf(marker) + marker.length);
+    if (!key.includes(marker) || !SINGLE_COPY_PACKAGES.includes(name)) return [];
+    return [{ name, copy: entry.link ? entry.resolved ?? key : key, where: key }];
+  });
+  return extraCopies(copies).map((refusal) => `node_modules holds a package twice — ${refusal}`);
+}
+
 /** Every refusal this checkout's install earns: empty when it holds what it pins */
 export function installRefusals(repoRoot: string): string[] {
-  return [lockfileDrift(repoRoot), brokerDrift(brokerPackageDir(repoRoot))].filter((line) => line !== undefined);
+  return [lockfileDrift(repoRoot), ...duplicateCopies(repoRoot), brokerDrift(brokerPackageDir(repoRoot))]
+    .filter((line) => line !== undefined);
 }
 
 function packagesOf(file: string): Record<string, LockedPackage> {
