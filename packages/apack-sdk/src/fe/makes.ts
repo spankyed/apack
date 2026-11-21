@@ -30,6 +30,10 @@
 // are written for it as for any event. One transition takes the end of every ask made (`made.done`, `made.settle()`):
 // it lets the ask go, clears it from `making`, and raises that event, so `making` already reads as ended in whatever
 // handles it.
+//
+// That transition is written at the machine's root, and again in any state that has a `'*'` transition of its own: a
+// state's wildcard is tried before its parent's transitions, so it would take an ask's end and the ask would stay
+// under way for good. The `swallowed-ask-ends` pack rule refuses a wildcard written without it.
 import { enqueueActions, type AnyActorLogic, type EventObject, type InputFrom, type MachineContext, type OutputFrom, type ParameterizedObject } from 'xstate'
 
 /** An ask of which one is under way at a time */
