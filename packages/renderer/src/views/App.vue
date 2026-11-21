@@ -4,8 +4,8 @@ import SettingsRecovery from './settings/SettingsRecovery.vue';
 import { useSettingsRecovery } from '@/runtime/settings';
 import SurfacePopoutApp from './SurfacePopoutApp.vue';
 import { applicationState } from '@/main'
-import { useSelector } from '@xstate/vue';
-import { onScopeDispose, shallowRef } from 'vue';
+import { useState } from '@apackdev/sdk/fe';
+import { computed, onScopeDispose, shallowRef } from 'vue';
 import { fePacks } from '@/runtime/packs';
 
 const recovery = useSettingsRecovery();
@@ -18,8 +18,9 @@ const recovery = useSettingsRecovery();
  */
 const WelcomeComponent = shallowRef(fePacks.getAppExtension('welcome'));
 onScopeDispose(fePacks.onChanged(() => { WelcomeComponent.value = fePacks.getAppExtension('welcome'); }));
-const isWelcome = useSelector(applicationState, (s) => s.hasTag('welcome'));
-const isConnecting = useSelector(applicationState, (s) => s.hasTag('connecting'));
+const { state: shell } = useState(applicationState);
+const isWelcome = computed(() => shell.value.at === 'onboarding.letter');
+const isConnecting = computed(() => shell.value.at === 'running.connecting');
 const isSurfacePopout = new URLSearchParams(window.location.search).get('popout') === 'surface';
 </script>
 
