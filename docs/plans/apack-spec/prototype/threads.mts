@@ -11,6 +11,7 @@
 // from `inference` directly where the app goes through a brain flow. `findDocument` stands for `libraryService.find`
 // and `inference` for `services.inference`.
 
+import { deepStrictEqual } from 'node:assert'
 import { given, reaching, system, within, type AskFailure } from './state.mts'
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
@@ -334,6 +335,12 @@ if (process.argv[1]?.endsWith('threads.mts')) {
   const turns = (count: number): Promise<void> => new Promise((resolve) => { let left = count; const tick = (): void => { if (left-- <= 0) resolve(); else setImmediate(tick) }; tick() })
   const lines: string[] = []
   const say = (line: string): void => { lines.push(line) }
+  // What each step must leave behind. The lines printed at the end are for reading; these are what is checked.
+  let held = 0
+  const holds = (what: string, actual: unknown, expected: unknown): void => {
+    try { deepStrictEqual(actual, expected) } catch (error) { console.log(lines.join('\n')); throw new Error(`${what}\n${String(error)}`) }
+    held++
+  }
 
   const documents = new Map([['DOC-1', { id: 'DOC-1', name: 'Launch plan' }]])
   const inference = {
@@ -367,31 +374,50 @@ if (process.argv[1]?.endsWith('threads.mts')) {
   }
   const a = open('window A')
   const b = open('window B')
+  /** What a window shows, without the fields that are only there in some states left out. */
+  const shows = (of: typeof a) => {
+    const now = of.window.read(of.surface)
+    const d = now.data as { threadId?: string; lastReply?: string | null; unseen: string[]; problem: string | null }
+    return { at: now.at, threadId: d.threadId ?? null, lastReply: d.lastReply ?? null, unseen: d.unseen, problem: d.problem }
+  }
 
   say('A creates a thread: both windows hear THREAD_CREATED, only A opens it')
   a.window.send(a.surface, { type: 'NEW_THREAD', title: 'Plan' });                 await turns(8)
+  holds('A is in the thread it made', shows(a), { at: 'thread.idle', threadId: 'THR-1', lastReply: null, unseen: [], problem: null })
+  holds('B is still at its list', shows(b), { at: 'list', threadId: null, lastReply: null, unseen: [], problem: null })
 
   say('A types and sends: the reply streams to A only; B is told the thread changed')
   a.window.send(a.surface, { type: 'TYPE', text: 'hello' })
   a.window.send(a.surface, { type: 'SEND' });                                      await turns(20)
+  holds('A has the whole reply', shows(a), { at: 'thread.idle', threadId: 'THR-1', lastReply: 'You said: hello.', unseen: [], problem: null })
+  holds('B was told the thread changed, and heard none of the reply', shows(b), { at: 'list', threadId: null, lastReply: null, unseen: ['THR-1'], problem: null })
 
   say('A sends with an attachment the library does not have: a typed refusal')
   a.window.send(a.surface, { type: 'SEND', documentId: 'DOC-404' });               await turns(12)
+  holds('the refusal carries the document it could not attach', shows(a), { at: 'thread.idle', threadId: 'THR-1', lastReply: 'You said: hello.', unseen: [], problem: 'Could not attach DOC-404: Document not found' })
 
   say('A sends with one it does have: threads asks the library, then streams')
   a.window.send(a.surface, { type: 'SEND', documentId: 'DOC-1' });                 await turns(20)
+  holds('the reply names the document the library gave', shows(a), { at: 'thread.idle', threadId: 'THR-1', lastReply: 'You said: hello [with Launch plan].', unseen: [], problem: null })
 
   say('B opens the thread, sends, and its connection closes mid-stream')
   b.window.send(b.surface, { type: 'OPEN_THREAD', threadId: 'THR-1' })
   b.window.send(b.surface, { type: 'TYPE', text: 'anyone there' })
   b.window.send(b.surface, { type: 'SEND' });                                      await turns(5)
   b.link.close();                                                                  await turns(12)
+  holds('B is told the connection was lost', shows(b), { at: 'thread.idle', threadId: 'THR-1', lastReply: null, unseen: [], problem: 'The connection was lost while sending.' })
+  holds('and the backend stopped generating for it', lines.filter((line) => line.includes('inference aborted')).length, 1)
 
   say('from outside: ask the brain how many events it was told')
-  say(`      backend    COUNT_FIRED → ${JSON.stringify(await backend.ask(theBrain, 'COUNT_FIRED', {}))}`)
-  say(`      backend    threads holds ${JSON.stringify((backend.snapshot().threads as { data: Threads['data'] }).data.messages)}`)
+  const fired = await backend.ask(theBrain, 'COUNT_FIRED', {})
+  const messages = (backend.snapshot().threads as { data: Threads['data'] }).data.messages
+  say(`      backend    COUNT_FIRED → ${JSON.stringify(fired)}`)
+  say(`      backend    threads holds ${JSON.stringify(messages)}`)
+  holds('the brain was told of each message sent', fired, { ok: true, value: 3 })
+  holds('the thread holds what was said and answered, and nothing of the reply that was cut off', messages, { 'THR-1': ['hello', 'You said: hello.', 'hello', 'You said: hello [with Launch plan].'] })
 
   console.log(lines.join('\n'))
+  console.log(`\n${held} things held`)
   a.window.stop(); b.window.stop(); backend.stop()
 }
 

@@ -5,14 +5,17 @@
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { given, reaching, system } from './state.mts'
 
-type SlowAsks = { WAIT: { args: { turns: number }; answer: string } }
+type SlowAsks = { WAIT: { args: { turns: number }; answer: string }; BREAK: { args: {}; answer: string } }
 type App = { systems: { slow: { events: never; asks: SlowAsks } }; surfaces: {}; views: {} }
 const state = reaching<App>()
 
 const turns = (count: number): Promise<void> => new Promise((resolve) => { let left = count; const tick = (): void => { if (left-- <= 0) resolve(); else setImmediate(tick) }; tick() })
 
 const slow = state<{}, never, SlowAsks>()({
-  asks: { WAIT: async ({ turns: count }) => { await turns(count); return 'done' } },
+  asks: {
+    WAIT: async ({ turns: count }) => { await turns(count); return 'done' },
+    BREAK: async () => { await turns(2); throw new Error('the answer broke') },
+  },
 })
 
 type How = 'later' | 'at once' | 'while asking' | 'in failed too' | 'not at all'
@@ -22,6 +25,7 @@ type PanelEvent =
   | { type: 'LEAVE' }
   | { type: 'COUNT' }
   | { type: 'BREAK' }
+  | { type: 'SPIN' }
 type Panel = {
   data: { count: number; problem: string | null }
   states: {
@@ -42,6 +46,8 @@ const panel = (released: string[]) => state<Panel, PanelEvent>()({
     COUNT: (_, { data }) => ({ data: { count: data.count + 1 } }),
     // Tells itself to count, and then throws.
     BREAK: (_, { send }) => { send({ type: 'COUNT' }); throw new Error('the handler broke') },
+    // Counts, and tells itself to do it again, without end.
+    SPIN: (_, { data, send }) => { send({ type: 'SPIN' }); return { data: { count: data.count + 1 } } },
   },
   states: {
     idle: {},
@@ -73,13 +79,14 @@ const panel = (released: string[]) => state<Panel, PanelEvent>()({
 const wired = () => {
   const released: string[] = []
   const traced: string[] = []
-  const backend = system({ side: 'backend' })
-  backend.start('slow', slow)
+  const backendTraced: string[] = []
+  const backend = system({ side: 'backend', trace: (line) => { if (/failed|DEFECT/.test(line)) backendTraced.push(line) } })
+  const theSlow = backend.start('slow', slow)
   const window = system({ side: 'window', trace: (line) => { if (/failed|DEFECT/.test(line)) traced.push(line) } })
   window.connect(backend)
   const handle = window.start('panel', panel(released))
   const value = () => window.read(handle)
-  return { released, traced, send: (event: PanelEvent): void => window.send(handle, event), at: (): string => value().at, problem: (): string | null => value().data.problem, count: (): number => value().data.count, stop: (): void => { window.stop(); backend.stop() } }
+  return { released, traced, backendTraced, askBreak: () => backend.ask(theSlow, 'BREAK', {}), send: (event: PanelEvent): void => window.send(handle, event), at: (): string => value().at, problem: (): string | null => value().data.problem, count: (): number => value().data.count, stop: (): void => { window.stop(); backend.stop() } }
 }
 
 const checks: Array<[string, () => Promise<void>]> = [
@@ -156,6 +163,23 @@ const checks: Array<[string, () => Promise<void>]> = [
     ok(it.traced.some((line) => line.includes('panel in ready failed: could not set up')))
     it.send({ type: 'LEAVE' })
     strictEqual(it.at(), 'idle')
+    it.stop()
+  }],
+  ['an ask whose handler throws is answered `failed`, and where it threw is reported there', async () => {
+    const it = wired()
+    const outcome = await it.askBreak()
+    deepStrictEqual(outcome, { ok: false, failure: { kind: 'failed', message: 'the answer broke' } })
+    deepStrictEqual(it.backendTraced, ['slow failed answering BREAK: the answer broke'])
+    it.stop()
+  }],
+  ['a state that tells itself without end is cut short and reported, and takes events afterwards', async () => {
+    const it = wired()
+    it.send({ type: 'SPIN' })
+    ok(it.traced.some((line) => line.includes('a step was cut short after 10000 things, at panel')))
+    const spun = it.count()
+    ok(spun >= 10_000, `it counted ${spun}`)
+    it.send({ type: 'COUNT' })
+    strictEqual(it.count(), spun + 1)
     it.stop()
   }],
   ['a release that throws does not keep the others from running', async () => {

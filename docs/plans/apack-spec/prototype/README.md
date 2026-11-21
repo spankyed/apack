@@ -18,10 +18,10 @@ the app: nothing imports it, and no check covers it.
 | `binding-check.mts` | That a reader runs again only for the place it read, and that a hidden window still hears. Runs |
 | `kernel-check.mts` | What the kernel does with a change to data, a move that edits a draft and the refused edits included. Runs |
 | `draft-check.mts` | The checks a hand-built draft has to pass. Runs |
-| `search.mts` | The app's code search, backend and surface, ported. Runs |
+| `search.mts` | The app's code search, backend and surface, ported. Runs, and checks what each step leaves |
 | `library.mts` | The app's library system ported handler for handler. Typechecks against stand-ins for its imports; not run |
-| `threads.mts` | Three backend systems and two windows: asks, tells, a streamed reply, a broadcast, a disconnect, and a refusal that carries data. Runs |
-| `views.mts` | A surface following views, modelled on the threads surface: one always, one while a thread is open, one per tab. Runs |
+| `threads.mts` | Three backend systems and two windows: asks, tells, a streamed reply, a broadcast, a disconnect, and a refusal that carries data. Runs, and checks what each step leaves |
+| `views.mts` | A surface following views, modelled on the threads surface: one always, one while a thread is open, one per tab. Runs, and checks what is followed after each step |
 | `graph.mts` | Derives each state's graph from its types, running nothing |
 | `xstate-survey.mts` | The survey of how the app uses XState that the plan's figures come from |
 

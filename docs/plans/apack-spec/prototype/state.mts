@@ -312,6 +312,9 @@ export interface System {
   stop(): void
 }
 
+/** More than this handled in one step is states telling each other without end: the step is cut short and reported. */
+const RUNAWAY = 10_000
+
 /** A data field holding more items than this is reported: a collection that large belongs in a view. */
 const LARGE = 10_000
 
@@ -606,11 +609,15 @@ export function system(host: {
     const { name, args, question, heard, gone } = item
     const found = top && taker(top, 'asks', name)
     if (!found) { leaving.push(() => question.end(refusal('unavailable', `${item.ref} does not take ${name}`))); return }
-    const failed = (error: unknown): AnyOutcome =>
-      (error instanceof Refusal ? refusal(error.kind, error.message, error.data)
-        // The handler was itself asking, and whoever asked it went: it stopped answering, it did not fail.
-        : error instanceof Left ? refusal('abandoned', error.message)
-        : refusal('failed', error instanceof Error ? error.message : String(error)))
+    const failed = (error: unknown): AnyOutcome => {
+      if (error instanceof Refusal) return refusal(error.kind, error.message, error.data)
+      // The handler was itself asking, and whoever asked it went: it stopped answering, it did not fail.
+      if (error instanceof Left) return refusal('abandoned', error.message)
+      // Whoever asked is told it failed. Where it failed is said here, since the asker may be in another process.
+      const message = error instanceof Error ? error.message : String(error)
+      trace(`${item.ref} failed answering ${name}: ${message}`)
+      return refusal('failed', message)
+    }
     const signal = gone ? AbortSignal.any([found.of.controller.signal, gone]) : found.of.controller.signal
     try {
       const made = found.handler(args, {
@@ -644,7 +651,13 @@ export function system(host: {
     stepping = true
     try {
       first()
-      while (inside.length) handle(inside.shift()!)
+      for (let handled = 0; inside.length; handled++) {
+        const item = inside.shift()!
+        if (handled < RUNAWAY) { handle(item); continue }
+        // What it had done is committed, so that the states can be read and the report says where they got to.
+        trace(`DEFECT: a step was cut short after ${RUNAWAY} things, at ${'ref' in item ? item.ref : item.kind}: something tells something else without end`)
+        inside.length = 0
+      }
       commit()
     } finally { stepping = false }
   }

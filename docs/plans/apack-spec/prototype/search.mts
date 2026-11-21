@@ -6,6 +6,7 @@
 // The types are the app's own. `FileSystemRepository` below stands in for ../services/filesystem.ts with the same
 // `searchFiles` signature, so that the last section can run.
 
+import { deepStrictEqual } from 'node:assert'
 import { reaching, system } from './state.mts'
 
 // ── the app's types, unchanged ──────────────────────────────────────────────────────────────────────────────────────
@@ -223,23 +224,39 @@ if (process.argv[1]?.endsWith('search.mts')) {
     lines.push(`    ${now.at.padEnd(9)} "${now.data.searchQuery}" | ${now.data.searchResults.length} results${progress}${now.data.searchError ? ` | error "${now.data.searchError}"` : ''}`)
   })
   const say = (line: string): void => { lines.push(line) }
+  // What each step must leave behind. The lines printed at the end are for reading; these are what is checked.
+  let held = 0
+  const holds = (what: string, actual: unknown, expected: unknown): void => {
+    try { deepStrictEqual(actual, expected) } catch (error) { console.log(lines.join('\n')); throw new Error(`${what}\n${String(error)}`) }
+    held++
+  }
+  /** Where it is, what it searched for, and the text each result matched: a result says which search found it. */
+  const shown = () => { const now = window.read(panel); return { at: now.at, query: now.data.searchQuery, matched: now.data.searchResults.map((result) => result.matches[0]!.lineText), error: now.data.searchError } }
 
   say('search before a directory is chosen')
   window.send(panel, { type: 'START', query: 'todo' });                                   await turns(8)
+  holds('a search with no directory ends with the reason', shown(), { at: 'idle', query: 'todo', matched: [], error: 'No directory selected. Please select a directory first.' })
 
   say('choose a directory, then search')
   backend.send(theSystem, { type: 'UPDATE_BASE_DIRECTORY', path: '/repo' })
   window.send(panel, { type: 'DIRECTORY_CHANGED', baseDirectory: '/repo' })
   window.send(panel, { type: 'START', query: 'todo' });                                   await turns(20)
+  holds('a search finds every file, for what was asked', shown(), { at: 'idle', query: 'todo', matched: ['todo', 'todo', 'todo'], error: null })
 
   say('search, then search again before the first finishes')
   window.send(panel, { type: 'START', query: 'first' });                                  await turns(5)
   window.send(panel, { type: 'START', query: 'second' });                                 await turns(20)
+  holds('only the second search is shown, and it searched for the second query', shown(), { at: 'idle', query: 'second', matched: ['second', 'second', 'second'], error: null })
 
   say('search, then cancel')
   window.send(panel, { type: 'START', query: 'third' });                                  await turns(5)
-  window.send(panel, { type: 'CANCEL' });                                                 await turns(12)
+  window.send(panel, { type: 'CANCEL' })
+  const atCancel = shown()
+  await turns(12)
+  holds('a cancelled search is idle with what it had found, all of it for its own query', atCancel, { at: 'idle', query: 'third', matched: ['third'], error: null })
+  holds('and nothing arrives after the cancel', shown(), atCancel)
 
   console.log(lines.join('\n'))
+  console.log(`\n${held} things held`)
   window.stop(); backend.stop()
 }

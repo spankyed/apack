@@ -299,11 +299,18 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   It found a defect on its first run that no ordering was needed for: a move that also changed outer data started the
   entered state's `run` before the data was applied, so `run` read the old value. `search.mts` had it and its output
   did not show it.
-- **Failing goes somewhere, and breaks nothing** (`failure-check.mts`, 10 checks): work that fails later, or at once,
+- **The three examples check what they leave behind.** `search.mts`, `threads.mts` and `views.mts` print what happened
+  for reading, and after each step compare where every state is and what it holds against what it should (5, 10 and
+  13 comparisons). Before this they printed and exited 0 whatever happened, which is how the defect above ran
+  unseen. A search result carries the text it matched, so the comparison says which search found it; putting the
+  defect back in a copy of the kernel fails `search.mts` at "it searched for the second query".
+- **Failing goes somewhere, and breaks nothing** (`failure-check.mts`, 12 checks): work that fails later, or at once,
   goes where `failed` says with what it threw; a state left while asking has not failed and nothing is reported; work
   that fails after its state was left changes nothing and is reported; a handler that throws changes nothing and the
-  next event is handled; a `failed` that throws is reported; a release that throws does not stop the others; and an
-  async `run` without `failed` does not compile. Before this a `run` or a handler that threw at once escaped the step
+  next event is handled; a `failed` that throws is reported; a release that throws does not stop the others; an ask
+  whose handler throws is answered `failed` and reported where it threw, which may be another process from the asker;
+  a state that tells itself without end is cut short after ten thousand things, reported, and takes events
+  afterwards; and an async `run` without `failed` does not compile. Before this a `run` or a handler that threw at once escaped the step
   and left the kernel refusing everything after it.
 - **Leaving mid-ask unwinds, and nothing hangs or crashes** (`leaving-check.mts`, 7 checks): a `run` awaiting an ask
   when its state is left has its `finally` run and its lock released, and nothing after the ask runs; the trace says an
@@ -485,8 +492,8 @@ projects. Each would loosen the fit to this app.
 - **Window-to-window sends**, the app's `sendToSurface`.
 - **Keyed dynamic children**: a flow per run, a surface per pack, a system per registration. The brain, the bus and the
   shell need them. A keyed set of views is covered by `watch`; a keyed set of states is not.
-- **A bound on a step.** Two states that tell each other forever never commit. A schedule stops a run that has not
-  come to rest after ten thousand things; the kernel itself has no such limit.
+- **A bound across steps.** A step is cut short after ten thousand things. Two systems that tell each other across a
+  link without end are a step each, and nothing bounds that; a schedule stops a run that has not come to rest.
 - **Undoing what a handler sent before it threw.** Its change is not made, and what it told others is still told.
 - **Field names unique along a path** are assumed and not enforced.
 - **A field with a default still has to be given** when entering its state, because the types cannot see the default.
@@ -507,6 +514,10 @@ projects. Each would loosen the fit to this app.
   migration is worse than either end.
 - **No ecosystem.** No visualizer and no community knowledge; models and people know XState.
 - **Edge cases.** XState has years of fixes that a new kernel would rediscover.
+- **Compile errors are deep.** A missing `failed` is reported as the whole state not being assignable, with the line
+  that says so, "Property 'failed' is missing", third after two of printed types. Every rule the types hold is reported
+  this way. Nobody has yet met these errors while writing a feature, and the first port is where their cost shows. How
+  long the compiler takes over 49 machines' worth of these types is not measured either.
 - **Static analysis needs the compiler**, and is as precise as the helper types: a loosely typed helper blurs the graph.
 - **A discipline XState avoids by forbidding it.** After an `await` in `run` or an ask, code should only return. The
   kernel drops what a stale task sends through it, and cannot stop a side effect that bypasses it.

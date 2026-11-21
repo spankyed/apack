@@ -6,6 +6,7 @@
 // it, so it ends when that state does. `store` at the bottom stands in for the app's view host: it reads again after
 // every commit and delivers each changed result.
 
+import { deepStrictEqual } from 'node:assert'
 import { given, reaching, system, type ViewHost, type ViewUpdate } from './state.mts'
 
 interface ThreadSummary { id: string; title: string }
@@ -127,22 +128,44 @@ if (process.argv[1]?.endsWith('views.mts')) {
   const surface = window.start('threads', threadsSurface)
   window.subscribe(() => { const now = window.read(surface); if (now) lines.push(`    ${JSON.stringify(now)}`) })
   const say = (line: string): void => { lines.push(line) }
+  // What each step must leave behind. The lines printed at the end are for reading; these are what is checked.
+  let held = 0
+  const holds = (what: string, actual: unknown, expected: unknown): void => {
+    try { deepStrictEqual(actual, expected) } catch (error) { console.log(lines.join('\n')); throw new Error(`${what}\n${String(error)}`) }
+    held++
+  }
+  const watched = (): string[] => [...watches].map((each) => each.name).sort()
+  const shown = () => { const now = window.read(surface); const d = now.data as { id?: string; detail?: { messages: number } | null; tabs: Record<string, { unread: number }> }; return { at: now.at, id: d.id ?? null, messages: d.detail?.messages ?? null, tabs: Object.fromEntries(Object.entries(d.tabs).map(([id, tab]) => [id, tab.unread])) } }
 
   await turn()
+  holds('the list is followed from the start', watched(), ['list{}'])
   say('open THR-1')
   window.send(surface, { type: 'VIEW_THREAD', id: 'THR-1' });             await turn()
+  holds('an open thread is followed', watched(), ['detail{"id":"THR-1"}', 'list{}'])
+  holds('and shown', shown(), { at: 'detail', id: 'THR-1', messages: 2, tabs: {} })
   say('a message arrives in THR-1: the detail and the list are read again, and only what changed is delivered')
   commit(() => { rows.get('THR-1')!.messages = 3 });                       await turn()
+  holds('a change to what is followed arrives', shown(), { at: 'detail', id: 'THR-1', messages: 3, tabs: {} })
   say('switch to THR-2: the view of THR-1 stops')
   window.send(surface, { type: 'VIEW_THREAD', id: 'THR-2' });             await turn()
+  holds('the other thread is followed in place of the first', watched(), ['detail{"id":"THR-2"}', 'list{}'])
+  holds('and shown', shown(), { at: 'detail', id: 'THR-2', messages: 5, tabs: {} })
   say('open two tabs, then close one')
   window.send(surface, { type: 'TABS_CHANGED', open: ['THR-1', 'THR-2'] }); await turn()
+  holds('each open tab is followed', watched(), ['detail{"id":"THR-2"}', 'list{}', 'tab{"threadId":"THR-1"}', 'tab{"threadId":"THR-2"}'])
+  holds('and shown', shown().tabs, { 'THR-1': 0, 'THR-2': 1 })
   window.send(surface, { type: 'TABS_CHANGED', open: ['THR-2'] });        await turn()
+  holds('a closed tab is no longer followed', watched(), ['detail{"id":"THR-2"}', 'list{}', 'tab{"threadId":"THR-2"}'])
+  holds('or shown', shown().tabs, { 'THR-2': 1 })
   say('back to the list: the detail view stops, the list and the tab carry on')
   window.send(surface, { type: 'SHOW_LIST' });                            await turn()
+  holds('back at the list the thread is no longer followed, and the tab still is', watched(), ['list{}', 'tab{"threadId":"THR-2"}'])
   commit(() => { rows.get('THR-2')!.unread = 4 });                         await turn()
+  holds('and a change to the tab still arrives', shown(), { at: 'list', id: null, messages: null, tabs: { 'THR-2': 4 } })
   say('stop: everything still watched stops')
   window.stop()
+  holds('stopping the surface stops everything it followed', watched(), [])
 
   console.log(lines.join('\n'))
+  console.log(`\n${held} things held`)
 }
