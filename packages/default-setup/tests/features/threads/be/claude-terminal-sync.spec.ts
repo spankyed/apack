@@ -66,10 +66,15 @@ it.each([false, true])('persists the final row beyond the batch boundary on exit
 
 it.each(['journal result', 'journal error'])('retires in-flight %s when the pack is unloaded', async outcome => {
   const { disposeClaudeTerminalHistory, syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
-  const pending = Promise.withResolvers<Awaited<ReturnType<ClaudeNativeTerminalOwner['readJournal']>>>()
+  let complete!: (result: Awaited<ReturnType<ClaudeNativeTerminalOwner['readJournal']>>) => void
+  let fail!: (error: Error) => void
+  const pending = new Promise<Awaited<ReturnType<ClaudeNativeTerminalOwner['readJournal']>>>((resolve, reject) => {
+    complete = resolve
+    fail = reject
+  })
   const current = vi.fn(() => { throw new Error('Pack services are unavailable until the host accepts this runtime') })
   let release!: () => Promise<void>
-  const readJournal = vi.fn(() => pending.promise)
+  const readJournal = vi.fn(() => pending)
   const owner = {
     readJournal, beforeRelease(listener: () => Promise<void>) { release = listener },
   } as unknown as ClaudeNativeTerminalOwner
@@ -77,8 +82,8 @@ it.each(['journal result', 'journal error'])('retires in-flight %s when the pack
 
   disposeClaudeTerminalHistory()
   const released = release()
-  if (outcome === 'journal result') pending.resolve({ entries: [], pending: true, problems: [] })
-  else pending.reject(new Error('Terminal closed during the journal read'))
+  if (outcome === 'journal result') complete({ entries: [], pending: true, problems: [] })
+  else fail(new Error('Terminal closed during the journal read'))
   await expect(released).resolves.toBeUndefined()
   expect(readJournal).toHaveBeenCalledOnce()
   expect(current).not.toHaveBeenCalled()
