@@ -206,7 +206,7 @@ batch, and this repo's own `transact` followed by `watch`.
 ## What the prototype proves
 
 Everything below is in [`apack-spec/prototype/`](apack-spec/prototype/) and runs from the repo root; its README has the
-commands. Types and kernel together are about 550 lines, and the draft 139.
+commands. Types and kernel together are about 580 lines, and the draft 139.
 
 - **Two real features are ported.** The code search, backend and surface (`search.mts`), runs: results stream, a second
   search aborts the first on the backend, and cancel works. About 167 and 192 non-blank lines become about 39 and 77.
