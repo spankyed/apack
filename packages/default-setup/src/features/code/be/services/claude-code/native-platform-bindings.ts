@@ -253,7 +253,9 @@ export const claudeNativeLinuxBindings: {
       "module": "chunk-26c4qsbq.js",
       "exports": {
         "Bc": "Uc",
+        "chn": "Ygn",
         "dzo": "$Go",
+        "kbt": "_St",
         "EN": "_F",
         "gu": "gu",
         "Hzo": "d2o",
