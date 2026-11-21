@@ -167,25 +167,48 @@ points at.
    the way down, when it becomes the state's. A handler changes data by returning a change, never by writing to what
    it was handed, and one that writes throws on that line, changes nothing and is reported. A component is handed
    these same objects ([What a component reads](#what-a-component-reads)) and cannot write to them either. It costs
-   little: a step makes new objects only for what it changed, and freezing stops at what is frozen already. What is
+   little: a step makes new objects only for what it changed, and freezing stops at what is frozen already. What
+   it costs a reader is three ways of copying a list and nothing else that matters. V8 copies a frozen list by
+   `slice`, `toSpliced` or `with` an element at a time: on 5,000 rows about 0.12 ms where an unfrozen list takes under
+   a microsecond, and `filter` and `find` cost four and two times what they did. A spread, `map`, a loop, a read by
+   index and a sort of a spread copy cost the same frozen or not, and a spread is how the draft copies
+   (`frozen-cost.mts`, 2026-11-21, Node 24.16.0, each figure the least of nine rounds on a machine under load). So a
+   copy of what was read is written `[...list]`. What is
    not plain data is left as it is. And **what goes into a state is the state's from then on**: an object a handler
    stores is frozen where it stands, so whoever else kept it and writes to it later is the one that fails. A state
    that held something another could still change would change with no step, which is the fault; freezing puts the
    error at the write, in the other's code, with a message that names neither.
 
-   **The types say the same, all the way down.** What a handler is handed and what is read from a state are typed
-   so that nothing in them can be written at any depth: a field assigned to, a list pushed to or sorted in place, and
-   `v-model` on what a field holds do not compile. What is read can be handed on as it is, since handing on is not
-   writing: given back as a change, sent, told, broadcast, reported, said as progress, given as an answer or as an
-   ask's arguments. None asks for a copy or a cast. A draft is the one place a write is written, and it is typed as
-   what may be written to, apart from what is read. That leaves one place a read value is not taken as it is:
-   assigned to a field of a draft, `d.items = data.items`. It would be safe, and TypeScript cannot give a field one
-   type to read and another to assign, so there it is copied, or given as a field of the change. The types are the early
-   word and not the whole of it: TypeScript lets a read-only object be passed where one that will be written to is
-   expected, so a write made through such a helper compiles. It throws when it runs, which is what freezing is for.
-   TypeScript has a flag proposed that would refuse that, `--enforceReadonly`, and the types here are meant to pass
-   under it, so that turning it on closes the hole with nothing redesigned. Nothing holds them to that yet: the
-   compiler this was checked with, 5.9.3, does not have the flag.
+   **The types say a field at every depth, and a list where a field holds it.** What a handler is handed and what
+   is read from a state are typed so that no field can be assigned, however far in, and a list a field holds cannot
+   be changed in place: `data.count = 1`, `data.titles[id] = title`, `data.open.title = title`, `data.items.push(x)`
+   and `data.items.sort()` do not compile. What the types leave is a list further in changed in place:
+   `data.byId.a.push(x)` compiles and throws on the line that ran it. Each half goes as far as it costs nothing, and
+   the two are different because TypeScript treats them differently. A read-only object is taken wherever a writable
+   one is expected, so saying it at every depth asks nothing of a helper that takes the object as its type declares
+   it: measured on the app, it adds no error at all (Not built). The same fact means the word does not carry across a
+   call, so it refuses the write made where the value was read, which is where a handler writes. A read-only list is
+   not taken where a list that may be written is expected. Said of a field's own list, that is the word carrying
+   across a call. Said of every list inside an entity, it refuses the entity wherever its declared type is asked for,
+   which is what a type read-only at every depth cost. The flag that would have made an object's word carry too,
+   `--enforceReadonly`, was closed unmerged on 2026-03-24 (TypeScript PR 58296), and nothing here waits on it.
+   Solid took the type that is read-only at every depth off its stores for what it cost (PR 3261, 2026-09-04), Redux Toolkit declined to add it,
+   and Valtio ships it with a way out; Vue's `readonly()` and Effect type it deep. What is read can be handed on as
+   it is, since handing on is not writing: given back as a change, sent, told, broadcast, reported, said as progress,
+   given as an answer or as an ask's arguments. None asks for a copy or a cast. A draft is the one place a write is
+   written, and it is typed as what may be written to, apart from what is read. That leaves one place a read value is
+   not taken as it is: a list assigned to a field of a draft, `d.items = data.items`. It would be safe, and TypeScript
+   cannot give a field one type to read and another to assign, so there it is copied, or given as a field of the
+   change. **Freezing is the guarantee and the types are the early word.** What the types leave is a list further in
+   changed in place, and a write made through a helper typed as writable. Both throw where they are tried, and what
+   the engine says then is about a property and an object: `Cannot add property 1, object is not extensible`. So
+   wherever the kernel reports what a handler threw, such an error is followed by what happened and what to write:
+   that data is not written where it is read, and is changed by returning a change. That is the one word a write
+   through a helper can be given, since nothing that reads the code sees inside the helper. The kernel knows the
+   error by the engine's wording, which only adds to what is reported, and a check makes every kind of write and
+   fails when one is no longer worded so. Redux Toolkit and MobX do the same: the guarantee is at run time, and its
+   message is where the rule is learnt. A write made where the value was read is for a pack rule to refuse before it
+   runs (Not built).
 
    **A change is all of it or none, and what the compiler refuses the kernel refuses too.** The types already rule out
    adding or removing a field, giving a field no state has, moving to a state that does not exist, and entering a
@@ -684,7 +707,7 @@ first, and nothing above needs it.
 | An event handler is not given `ask` | `ask` everywhere. An event handler cannot await, so it could only start an ask and drop the promise, with nothing around it to take a `Left`. That floating promise is what took a process down when a check stopped a window mid-ask. Without `ask` the mistake does not compile, and the kernel still catches an ask started in `run` and never awaited |
 | A component is handed the state's own values, a field at a time | A reactive copy of the state, written to only at the places a step changed, which was built first and rendered to the key. Moving the app's components onto `useState` showed what a copy costs: a machine that drops what it is told by `includes` never matched the copies sent back, `structuredClone` refused a proxy, a component definition held in data was copied, a watch did not run when a result was replaced by an equal one, and a mirrored object sent in an event put the mirror's storage into the machine. Every one is the copy not being the state's object. And tracking the path a reader took through proxies that hand over the state's own value at the end, which only saves a value that is not an object: a list passed to a child is a proxy again. MobX, Solid's stores, Pinia and Vue's `reactive` all track that way, and each ships a way to unwrap and a list of what to watch for. Valtio hands a component a frozen snapshot with what it read tracked, which is that done soundly and is more to build; the promise above leaves room to go there, since a reader that runs less often is still one that runs when what it read changed. This is what Vue's own guide shows for an outside store, Immer or XState held in a `shallowRef`, and what the app ships |
 | What a state holds is frozen | Leaving it as it is and trusting that nothing writes to it. With a copy, a component that wrote to what it read damaged the copy. With the state's own objects it damages the state: no handler ran, nobody is told, and every earlier value that shares the object changes with it. Two of the prototype's own checks were sorting a state's list in place. Immer freezes what it makes for the same reason, and Vue leaves a frozen object unwrapped |
-| The types say read-only all the way down | Read-only at the top and freezing below it, which compiles `data.items.push(x)` and fails where it is run, on whichever path runs. Vue's `readonly()` is typed this way. Most of TypeScript's stores are not: Immer offers the type and most who use it leave it off, and Redux Toolkit, NgRx and Apollo freeze and say nothing in the types, because a read-only list is not taken where a list is expected and every helper down the way has to say what it does. That cost is what the type is for: a helper that only reads says so, and one that writes is found. What it is not is sound, since a read-only object passes for a writable one, and so it is kept beside freezing and never in place of it |
+| The types say a field read-only at every depth, and a list where a field holds it | Read-only at every depth for lists too, which is what Vue's `readonly()` and Effect type. TypeScript holds a caller to a read-only list and not to a read-only object, so a list typed read-only inside an entity refuses the entity at every helper that takes it as its type declares it: measured on the app, 125 errors in the built-in pack against 54, with no write among either (Not built). And read-only one level in only, a field and a list a field holds, which leaves `data.titles[id] = title` compiling: the commonest write there is to a record kept by id, and refusing it costs nothing, since a read-only object passes wherever a writable one is asked for. Measured, the pack and the renderer report the same errors with it as without. Solid removed the deep type from its stores, Redux Toolkit declined it, and Immer's is left off by most who use it. And no types at all, as Redux Toolkit, NgRx and Apollo have it, which gives up the one check that does carry: a list sorted or pushed to in place, the commonest write there is. Freezing is the guarantee under either |
 | A field replaced by an equal value is a change | Keeping the old object where the new one is equal to it, as TanStack Query does to render less. The app shows a toast when a result is replaced, whatever it holds, so replaced has to mean changed |
 | A hidden window's frame is the next turn | `requestAnimationFrame` always. A hidden window gets none, so what was gathered for it grew without bound until it was shown |
 | Progress is heard as a list, once a frame | One call per update. It made a change, a notice and a copy of the growing list per item: fine at 10,000, unusable at 100,000. A persistent vector would make appends cheap, but its values are not plain arrays, which the snapshot, the wire and the templates all assume. Chunked lists stay plain but push the chunking onto every reader |
@@ -776,7 +799,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   letting something begin before it acts, as in "search again before the first finishes", and the work a stand-in
   backend pretends to do. A kernel changed so that a read asks itself round without end used to keep the checks
   from ever finishing. It now fails one of them in a second, with "Still not at rest after 5000 turns".
-- **Which views are followed follows the data** (`follows-check.mts`, 15 checks; `views.mts`, 13 comparisons): a view
+- **Which views are followed follows the data** (`follows-check.mts`, 16 checks; `views.mts`, 13 comparisons): a view
   is followed from the moment its state is the case; what it delivers goes to its handler; a change to what it asks
   for follows it again and stops the one before, whose later deliveries are not heard; a change to anything else
   leaves it as it is; one is followed for each item of a list and stops when its item goes, each hearing with its own
@@ -785,7 +808,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   it asks for is refused and reported; one view may lead another, two that lead each other are refused where the
   circle closes, and a change from anywhere else follows a view again as before; and stopping stops all of it. Six mistakes do not compile. `views.mts`, the
   threads surface's three kinds of view, has no call that follows or stops following one.
-- **An answer and its change cannot disagree** (`answer-check.mts`, 12 checks): an ask that only answers changes
+- **An answer and its change cannot disagree** (`answer-check.mts`, 13 checks): an ask that only answers changes
   nothing; one that answers with a change has made it by the time the answer is had, and subscribers hear of it in
   that step, once; an answer can come with a move that gives the entered state its data; a change that is refused
   fails the ask and changes nothing; two asks that each add one after a wait both count; and an ask whose answering
@@ -824,7 +847,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   13 comparisons). Before this they printed and exited 0 whatever happened, which is how the defect above ran
   unseen. A search result carries the text it matched, so the comparison says which search found it; putting the
   defect back in a copy of the kernel fails `search.mts` at "it searched for the second query".
-- **Failing goes somewhere, and breaks nothing** (`failure-check.mts`, 12 checks): work that fails later, or at once,
+- **Failing goes somewhere, and breaks nothing** (`failure-check.mts`, 13 checks): work that fails later, or at once,
   goes where `failed` says with what it threw; a state left while asking has not failed and nothing is reported; work
   that fails after its state was left changes nothing and is reported; a handler that throws changes nothing and the
   next event is handled; a `failed` that throws is reported; a release that throws does not stop the others; an ask
@@ -880,7 +903,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   what is under way written whole.
 - **Progress gathered into batches** (`append-cost.mts`): the measurement above, and the search and threads examples,
   which now make one change per batch.
-- **A draft** (`draft.mts`, 139 lines; `draft-check.mts`, 18 checks) for what a hand-built one gets wrong: the old
+- **A draft** (`draft.mts`, 139 lines; `draft-check.mts`, 19 checks) for what a hand-built one gets wrong: the old
   value untouched, what was not edited kept as the same object, an edit that changes nothing returning the very same
   value, the same place read twice being the same draft, arrays through `push`, `splice`, `sort` and `length`, keys
   added and deleted, one part of the draft assigned to another, what is not plain handed over as it is, and a draft
@@ -1070,7 +1093,7 @@ The design is the smaller half of the value. In the order they would pay:
 1. **The Vue binding, in a window.** `useState` is the app's own, with the same things promised over either kernel
    ([What a component reads](#what-a-component-reads)), and it is checked by rendering, by a compiled template and
    by `vue-tsc`. What a check cannot say is what the step log would give Vue's devtools, as Pinia gives them its
-   stores, and whether types that are read-only all the way down can be lived with (Not built).
+   stores, and what the read-only types cost the app's components (Not built).
 2. **Tests that replay interleavings.** The risk in this design is ordering: a result that arrives after its state was
    left. The prototype has this: `schedule.mts`, under What the prototype proves. What is left is its place in the
    harness, so that a pack's spec runs a scenario under every ordering the way it runs a case today, and a reduction
@@ -1153,17 +1176,36 @@ projects. Each would loosen the fit to this app.
     - **what is saved is a state and every state it started**, each with what it held;
     - **reads are asked again and writes are not made again**, which is what `awaits` and `makes` already are.
 - **The app's components against read-only data.** A component reads through `useState` and is not rewritten in
-  the move, so it has to compile against what this kernel hands it. On `7093d9744a`, 2026-11-22, with the `data`
-  that `useState` gives typed read-only all the way down (Vue's `DeepReadonly`) and nothing else changed, the
-  typecheck of the SDK and of the host passes, and the renderer and the built-in pack report 140 errors in 30 files:
-  15 in 4 files of the renderer, 125 in 26 files of the pack, 56 of those in the threads feature and 41 in code.
-  **None is a write.** There is no assignment to a read-only field and no list changed in place among them. Every
-  one is a value read from a machine handed to something that says it may write to it: a prop, a helper's
-  parameter, a `Ref<string[]>`. 19 are a plain `string[]`, and 17 are a `Thread` as its entity type declares it,
-  whose lists are writable and whose type is not to be widened to make a caller compile
-  (`packages/apack-sdk/TYPED-EARS.md`), so what takes one to read says so in its own signature. That no write was
-  found is not that there is none: one made through a helper typed as writable is what the compiler cannot see.
-  These are to be put right as each feature is ported, by saying in a prop or a parameter that it only reads.
+  the move, so it has to compile against what this kernel hands it. Measured twice on `908a41d41b`, 2026-11-21,
+  with only the type of the `data` that `useState` gives changed. The typecheck of the SDK and of the host passes
+  either way. Typed read-only at every depth (Vue's `DeepReadonly`), the built-in pack reports 125 errors in 26 files
+  and the renderer's 44 lines in 4 files. Typed one level in, a field and a list a field holds, the pack reports 54 in
+  21 files and the renderer's 4 lines in 2 files, which are 2 errors each reported twice. Typed as the kernel types
+  it, every field at every depth as well, both report those same errors and no other: a read-only object is taken
+  wherever a writable one is asked for. **None is a write, under any of the three.** There is no assignment to a read-only field
+  and no list changed in place among them. Every one is a value read from a machine handed to something that says it
+  may write to it: a prop, a helper's parameter, a `Ref<string[]>`. Of the 58 lines that remain, most are a read-only list
+  handed where a writable one is asked for, which is the one thing TypeScript holds a caller to and the thing worth
+  saying: a prop or a parameter that only reads a list says `readonly string[]`. What the deep type added to that was
+  mostly a `Thread` handed on as its entity type declares it, whose lists are writable and whose type is not to be
+  widened to make a caller compile (`packages/apack-sdk/TYPED-EARS.md`). That no write was found is not that there
+  is none: a list further in changed in place, or a write through a helper typed as writable, is what the compiler
+  cannot see. A type that takes an object apart has to ask first whether it is a string: one marked as a kind of id
+  (`FeatureRef`) is a string and an object at once, and taken apart it is refused everywhere a string is asked for,
+  which the first measurement of this showed as 28 lines in the renderer. What remains is
+  to be put right as each feature is ported.
+- **A pack rule for a write to what was read.** The types refuse a field assigned at any depth and a field's list
+  changed in place, and a write that runs is reported with what to write. Between them is a list further in changed
+  in place, which compiles and is found only when its line runs. A rule closes the form of it that is written where
+  the value was read, and needs no types to: it refuses an assignment, a `delete` or a method that changes a list in
+  place (`push`, `pop`, `shift`, `unshift`, `splice`, `sort`, `reverse`, `fill`) whose target begins at the `data` a
+  handler is handed or at the `state.data` a component reads. `data.open.tags.push(x)` is refused; the same list
+  taken into a `const` first, or handed to a helper, is not seen, and is what the report at run time is for. It
+  belongs with the pack rules, so that `apack pack validate` and `check:specifiers` both run it, and it is written
+  when the first feature is ported (Order of work, step 5), since until then there is no handler in the tree for it
+  to read. `eslint-plugin-functional`'s `immutable-data` and unicorn's `no-array-sort`, `no-array-reverse` and
+  `no-array-splice` are the kind. Seeing through the `const` or the helper would take the types or the whole
+  program, and is not to be built: a check that runs the handler finds it, and says what to write.
 - **The Vue binding in a window.** One thing about it is not known, and cannot be found out here:
   - **Devtools.** Pinia shows its stores in Vue's devtools, with what changed them and when. A step is already that
     record here: its cause, the handlers that ran, the fields that changed. Giving it to the devtools belongs with
@@ -1251,6 +1293,8 @@ ask is the SDK's, so what the move rewrites is the files that define a machine a
    it shows here and costs one surface. On XState with `makes` its machine is about 1,620 lines; what it comes to
    here is the measure of what the kernel is worth, to be written down and not acted on. The commit and
    pull-request surfaces are taken apart by concern as they are ported, each concern a state the surface starts.
+   The pack rule for a write to what was read is written with it ([Not built](#not-built)), so that every later
+   port is held to it.
 6. **Port the rest**, the hardest of what is left each time: the brain, the surfaces with states, then the 13
    single-state surfaces and the 20 single-state backend systems, which are the least likely to surprise.
 7. **Remove XState**, start the app, run the chain, and regenerate the recorded API reports.

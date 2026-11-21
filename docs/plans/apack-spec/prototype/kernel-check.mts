@@ -3,7 +3,7 @@
 //   npx tsx docs/plans/apack-spec/prototype/kernel-check.mts
 import { deepStrictEqual, ok, strictEqual, throws } from 'node:assert'
 import { run as runChecks, system } from './checks.mts'
-import { given, reaching } from './state.mts'
+import { given, reaching, said, WROTE_TO_WHAT_WAS_READ } from './state.mts'
 
 class Repository { constructor(public directory: string) {} }
 
@@ -27,6 +27,8 @@ type Event =
   | { type: 'WRITES_IN_PLACE' }
   | { type: 'KEEP'; item: { n: number } }
   | { type: 'WRITES_THROUGH_A_HELPER' }
+  | { type: 'WRITES_FURTHER_IN'; id: string }
+  | { type: 'THROWS_ITS_OWN' }
   | { type: 'REMOVES_A_FIELD' }
   | { type: 'ONE_BAD_WRITE' }
   | { type: 'GIVES_A_STRAY_FIELD' }
@@ -58,6 +60,9 @@ const made = state<Shape, Event>()({
     KEEP:              ({ item }) => ({ data: { kept: item } }),
     // The compiler lets a read-only object be passed where one to write to is expected. Freezing is what stops it.
     WRITES_THROUGH_A_HELPER: (_, { data }) => { if (data.kept) bump(data.kept) },
+    // A list inside what a field holds is typed as it was declared, so this compiles. It is frozen all the same.
+    WRITES_FURTHER_IN: ({ id }, { data }) => { data.messages[id]?.push('written in place') },
+    THROWS_ITS_OWN:    () => { throw new TypeError('not a write at all') },
     REMOVES_A_FIELD:   () => ({ data: (d) => { delete (d as Partial<Shape['data']>).count } }),
     // A good write, then a bad one: neither is made.
     ONE_BAD_WRITE:     () => ({ data: (d) => { d.count = 5; (d as Record<string, unknown>).extra = 1 } }),
@@ -214,6 +219,49 @@ const checks: Array<[string, () => void]> = [
     strictEqual(it.data().kept!.n, 1)
     ok(it.defects.some((line) => line.includes('threw handling WRITES_THROUGH_A_HELPER')), it.defects.join(' / '))
   }],
+  ['a write to what was read is reported with what happened and what to write, from a handler or a helper', () => {
+    const it = run()
+    it.send({ type: 'ADD', id: 'a', title: 'A' })
+    it.send({ type: 'KEEP', item: { n: 1 } })
+    for (const type of ['WRITES_IN_PLACE', 'WRITES_THROUGH_A_HELPER'] as const) it.send({ type })
+    it.send({ type: 'WRITES_FURTHER_IN', id: 'a' })
+    deepStrictEqual(it.data().messages.a, [])
+    for (const type of ['WRITES_IN_PLACE', 'WRITES_THROUGH_A_HELPER', 'WRITES_FURTHER_IN']) {
+      const line = it.defects.find((defect) => defect.includes(`threw handling ${type}`))
+      ok(line?.includes(WROTE_TO_WHAT_WAS_READ), `${type}: ${line}`)
+    }
+  }],
+  ['an error that is not such a write is reported as it was thrown', () => {
+    const it = run()
+    it.send({ type: 'THROWS_ITS_OWN' })
+    const line = it.defects.find((defect) => defect.includes('threw handling THROWS_ITS_OWN'))
+    ok(line?.endsWith('not a write at all'), line)
+  }],
+  ['every kind of write to something frozen is one the kernel knows for a write', () => {
+    const writes: Array<[string, (held: { n: number; list: number[]; byId: Record<string, number> }) => void]> = [
+      ['a field assigned', (held) => { held.n = 2 }],
+      ['a key added', (held) => { held.byId.b = 2 }],
+      ['a key removed', (held) => { delete held.byId.a }],
+      ['an item assigned', (held) => { held.list[0] = 9 }],
+      ['push', (held) => { held.list.push(4) }],
+      ['unshift', (held) => { held.list.unshift(0) }],
+      ['pop', (held) => { held.list.pop() }],
+      ['shift', (held) => { held.list.shift() }],
+      ['splice', (held) => { held.list.splice(0, 1) }],
+      ['sort', (held) => { held.list.sort((a, b) => b - a) }],
+      ['reverse', (held) => { held.list.reverse() }],
+      ['fill', (held) => { held.list.fill(0) }],
+      ['a length set', (held) => { held.list.length = 0 }],
+    ]
+    for (const [name, write] of writes) {
+      const held = { n: 1, list: Object.freeze([1, 2, 3]) as number[], byId: Object.freeze({ a: 1 }) as Record<string, number> }
+      Object.freeze(held)
+      let thrown: unknown
+      try { write(held) } catch (error) { thrown = error }
+      ok(thrown instanceof TypeError, `${name} did not throw`)
+      ok(said(thrown).endsWith(WROTE_TO_WHAT_WAS_READ), `${name}: ${(thrown as Error).message}`)
+    }
+  }],
   ['editing a value that is not plain is reported and the value is untouched', () => {
     const it = run()
     it.send({ type: 'EDITS_AN_INSTANCE' })
@@ -222,28 +270,42 @@ const checks: Array<[string, () => void]> = [
   }],
 ]
 
-// What must not compile: what a handler is handed, and what is read from a state, cannot be written at any depth.
-state<Shape, Event>()({
-  data: { titles: {}, messages: {}, count: 0, repository: new Repository('/a'), kept: null },
-  start: 'list',
-  on: {
-    // @ts-expect-error a field is changed by returning a change
-    NOTHING: (_, { data }) => { data.count = 1 },
-    // @ts-expect-error and so is what a field holds
-    ADD: ({ id, title }, { data }) => { data.titles[id] = title },
-    // @ts-expect-error a list is not changed in place
-    RENAME: ({ id }, { data }) => { data.messages[id]?.push('renamed') },
-    // A draft is where to write: it is the data to edit, and a new value is made from the edits.
-    OPEN: ({ id }) => ({ at: 'thread', data: { threadId: id } }),
-  },
-  states: { list: {}, thread: { data: { threadId: given } } },
-})
+// What must not compile: a field of what a handler is handed, or of what is read from a state, cannot be assigned
+// at any depth, and a field that is a list cannot be changed in place. What the types leave is a list further in
+// changed in place: that compiles, and is what freezing is for (the checks above on a write in place, and on one
+// through a helper).
 {
-  const read = undefined as unknown as import('./state.mts').Value<Shape>
-  // @ts-expect-error what is read from a state cannot be written
+  type Shelf = { data: { items: string[]; count: number; byId: Record<string, string[]>; books: { title: string; tags: string[] }[] } }
+  type ShelfEvent = { type: 'ASSIGN' } | { type: 'PUSH' } | { type: 'SORT' } | { type: 'KEYED' } | { type: 'DEEP' } | { type: 'FURTHER_IN' }
+  state<Shelf, ShelfEvent>()({
+    data: { items: [], count: 0, byId: {}, books: [] },
+    on: {
+      // @ts-expect-error a field is changed by returning a change
+      ASSIGN: (_, { data }) => { data.count = 1 },
+      // @ts-expect-error a list a field holds is not changed in place
+      PUSH: (_, { data }) => { data.items.push('pushed') },
+      // @ts-expect-error nor sorted in place
+      SORT: (_, { data }) => { data.items.sort() },
+      // @ts-expect-error nor is an entry of a record a field holds assigned
+      KEYED: (_, { data }) => { data.byId.a = [] },
+      // @ts-expect-error nor a field of an object, however far in
+      DEEP: (_, { data }) => { const book = data.books[0]; if (book) book.title = 'renamed' },
+      // This compiles, and throws when it runs: the list is inside what a field holds, and is typed as it was declared.
+      FURTHER_IN: (_, { data }) => { data.byId.a?.push('further in') },
+    },
+  })
+  const read = undefined as unknown as import('./state.mts').Value<Shelf>
+  // What is read is handed on as its declared type wherever that only asks for an object: read-only fields ask
+  // nothing of a helper, and a string marked as a kind of id is still that string.
+  type BookId = string & { readonly book: true }
+  type Book = { id: BookId; title: string; tags: string[] }
+  const held = undefined as unknown as import('./state.mts').Value<{ data: { open: Book; byId: Record<string, Book> } }>
+  const takes = (_book: Book, _id: BookId): void => {}
+  if (false) { takes(held.data.open, held.data.open.id); takes(held.data.byId.a!, held.data.byId.a!.id) }
+  // @ts-expect-error what is read from a state cannot be assigned
   if (false) read.data.count = 1
-  // @ts-expect-error at any depth
-  if (false) read.data.messages.a!.sort()
+  // @ts-expect-error and a list it holds cannot be changed in place
+  if (false) read.data.items.sort()
 }
 
 // What is read can be handed on as it is: sent, told, reported as progress, given as an answer, and given back as a

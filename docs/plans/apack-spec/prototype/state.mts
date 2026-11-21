@@ -125,25 +125,51 @@ type Below<S, P> = P extends `${infer H}.${infer T}` ? DataOf<Sub<S, H>> & Below
 type DataAt<S, P extends string> = P extends '' ? DataOf<S> : DataOf<S> & Below<S, P>
 
 /**
- * A value as it is read: nothing in it can be written, at any depth. What a state holds is frozen, and this is the
- * compiler saying so before it is run. It catches a write to a field and a list changed in place, which is most of
- * what goes wrong. It does not catch everything: TypeScript lets a read-only object be passed where one that will
- * be written to is expected, so freezing is still what holds. A function is left as it is.
+ * A value as it is read. No field of it can be assigned, at any depth, and a field that is a list, a map or a set
+ * cannot be changed in place. A list further in than a field is typed as it was declared.
+ *
+ * Each half goes as far as it costs nothing. A read-only object is taken wherever a writable one is expected, so
+ * read-only fields at every depth ask nothing of a helper that takes the object. A read-only list is refused where a
+ * writable one is expected, which is the one thing TypeScript holds a caller to: said of a field's own list it is
+ * kept across a call, and said of every list inside an entity it would refuse the entity wherever its declared type
+ * is asked for. What holds at every depth, whatever the types say, is that the value is frozen.
  */
-export type Immutable<T> =
-  T extends (...given: never[]) => unknown ? T
-  : T extends ReadonlyArray<infer Item> ? ReadonlyArray<Immutable<Item>>
-  : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Immutable<Key>, Immutable<Held>>
-  : T extends ReadonlySet<infer Item> ? ReadonlySet<Immutable<Item>>
-  : T extends object ? { readonly [K in keyof T]: Immutable<T[K]> }
+/** What has nothing inside it to write. Asked first, so that a string marked as a kind of id, which is a string and an object at once, stays the string it is. */
+type Whole = string | number | bigint | boolean | symbol | null | undefined
+export type Read<T> =
+  T extends Whole ? T
+  : T extends (...given: never[]) => unknown ? T
+  : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Key, Inside<Held>>
+  : T extends ReadonlySet<infer Item> ? ReadonlySet<Item>
+  : T extends object ? { readonly [K in keyof T]: ReadHeld<T[K]> }
+  : T
+/** What a field holds, as it is read: a list, a map or a set that cannot be changed in place, and an object whose fields cannot be assigned. */
+type ReadHeld<T> =
+  T extends Whole ? T
+  : T extends (...given: never[]) => unknown ? T
+  : T extends ReadonlyMap<infer Key, infer Held> ? ReadonlyMap<Key, Inside<Held>>
+  : T extends ReadonlySet<infer Item> ? ReadonlySet<Item>
+  : T extends object ? { readonly [K in keyof T]: Inside<T[K]> }
+  : T
+/**
+ * What is further in than a field: an object's fields cannot be assigned, at any depth, and a list, a map or a set
+ * is as it was declared. A read-only object is taken wherever a writable one is expected, so saying it costs no
+ * caller anything. A read-only list is not, so one further in is left writable in its type, and frozen.
+ */
+type Inside<T> =
+  T extends Whole ? T
+  : T extends (...given: never[]) => unknown ? T
+  : T extends ReadonlyMap<unknown, unknown> | ReadonlySet<unknown> ? T
+  : T extends readonly unknown[] ? { [K in keyof T]: Inside<T[K]> }
+  : T extends object ? { readonly [K in keyof T]: Inside<T[K]> }
   : T
 /** What a field may be given: its own type, or that read from somewhere it cannot be written. */
-type Givable<D> = { [K in keyof D]: D[K] | Immutable<D[K]> }
+type Givable<D> = { [K in keyof D]: D[K] | Read<D[K]> }
 
 /** A state as it is read: where it is, and the data there. */
 export type Value<S> = ([Names<S>] extends [never]
-  ? { readonly data: Immutable<DataOf<S>> }
-  : { [L in Leaves<S>]: { readonly at: L; readonly data: Immutable<DataAt<S, L>> } }[Leaves<S>])
+  ? { readonly data: Read<DataOf<S>> }
+  : { [L in Leaves<S>]: { readonly at: L; readonly data: Read<DataAt<S, L>> } }[Leaves<S>])
   // What it has been told to make and has not yet ended. The kernel keeps this, and nothing else writes it.
   & ([keyof AllMakes<S>] extends [never] ? {} : { readonly making: MakingOf<AllMakes<S>> })
 
@@ -188,7 +214,7 @@ type AskOf<N extends Net, K extends SystemsOf<N>, Q extends keyof N['systems'][K
 
 export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
   /** The data that exists here: this state's own and that of every state around it. */
-  readonly data: Immutable<DataAt<R, H>>
+  readonly data: Read<DataAt<R, H>>
   /** The whole value, as it is now. */
   readonly snapshot: Value<R>
   /** Aborted when this state stops being the case. For an ask, also when whoever asked has gone. */
@@ -198,16 +224,16 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
    * Tells this running state an event: one only it sends itself, which its `internal` handlers take, or one that
    * others may send it too.
    */
-  send(event: Immutable<E | InternalOf<R>>): void
+  send(event: Read<E | InternalOf<R>>): void
 
   /** Tells a backend system, or a state this one started, an event. Nobody waits. */
-  tell<K extends SystemsOf<N>>(to: K, event: Immutable<N['systems'][K]['events']>): void
-  tell<E2 extends AnyEvent>(to: Handle<unknown, E2, Asks>, event: Immutable<E2>): void
+  tell<K extends SystemsOf<N>>(to: K, event: Read<N['systems'][K]['events']>): void
+  tell<E2 extends AnyEvent>(to: Handle<unknown, E2, Asks>, event: Read<E2>): void
   /**
    * From a window: tells another surface in this window an event that surface says it takes. A surface and a
    * backend system can be called the same, so a surface is named as one. From the backend a surface is broadcast to.
    */
-  tell<K extends keyof N['surfaces'] & string>(to: { readonly surface: K }, event: Immutable<N['surfaces'][K]['events']>): void
+  tell<K extends keyof N['surfaces'] & string>(to: { readonly surface: K }, event: Read<N['surfaces'][K]['events']>): void
 
   /**
    * Asks a backend system, or a state this one started. `heard` is called with the progress made since it was last
@@ -215,20 +241,20 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
    * ten thousand is a few dozen changes and not ten thousand.
    */
   ask<K extends SystemsOf<N>, Q extends keyof N['systems'][K]['asks'] & string>(
-    of: K, name: Q, args: Immutable<AskOf<N, K, Q>['args']>, heard?: (updates: ReadonlyArray<ProgressOf<AskOf<N, K, Q>>>) => void,
+    of: K, name: Q, args: Read<AskOf<N, K, Q>['args']>, heard?: (updates: ReadonlyArray<ProgressOf<AskOf<N, K, Q>>>) => void,
   ): Promise<OutcomeOf<AskOf<N, K, Q>>>
   ask<A2 extends Asks, Q extends keyof A2 & string>(
-    of: Handle<unknown, never, A2>, name: Q, args: Immutable<A2[Q]['args']>, heard?: (updates: ReadonlyArray<ProgressOf<A2[Q]>>) => void,
+    of: Handle<unknown, never, A2>, name: Q, args: Read<A2[Q]['args']>, heard?: (updates: ReadonlyArray<ProgressOf<A2[Q]>>) => void,
   ): Promise<OutcomeOf<A2[Q]>>
 
   /** From the backend: tells that surface, in every window, an event. */
-  broadcast<K extends keyof N['surfaces'] & string>(to: K, event: Immutable<N['surfaces'][K]['events']>): void
+  broadcast<K extends keyof N['surfaces'] & string>(to: K, event: Read<N['surfaces'][K]['events']>): void
 
   /**
    * Tells the state that started this one something. It arrives there as an event, with `from` saying which state
    * told it: its key, where it is one of many. Only its starter hears, as only whoever asked hears an ask's progress.
    */
-  report(event: Immutable<ReportsOf<R>>): void
+  report(event: Read<ReportsOf<R>>): void
 
   /**
    * Has an ask this state declares under `makes` made, once. It is made when the step commits, with the data as the
@@ -264,7 +290,7 @@ export interface AskScope<R, H extends string, E extends AnyEvent, N extends Net
    */
   refuse<K extends Refuses<A>>(kind: K, message: string, ...data: RefusalData<Refusals<A>[K]>): Error
   /** Tells whoever asked something before the answer. Only they hear it. */
-  progress(update: Immutable<ProgressOf<A>>): void
+  progress(update: Read<ProgressOf<A>>): void
 }
 
 /** Events: synchronous. What a handler returns is what happens next. */
@@ -297,8 +323,8 @@ type NextAfterAwait<R, H extends string> =
  */
 type Answering<R, H extends string, E extends AnyEvent, A extends Asks, N extends Net> =
   { [Q in keyof A]?: (args: A[Q]['args'], scope: AskScope<R, H, E, N, A[Q]>) =>
-    | Immutable<A[Q]['answer']> | Answered<Immutable<A[Q]['answer']>, Next<R, H>>
-    | Promise<Immutable<A[Q]['answer']> | Answered<Immutable<A[Q]['answer']>, NextAfterAwait<R, H>>> }
+    | Read<A[Q]['answer']> | Answered<Read<A[Q]['answer']>, Next<R, H>>
+    | Promise<Read<A[Q]['answer']> | Answered<Read<A[Q]['answer']>, NextAfterAwait<R, H>>> }
 
 /**
  * Where a state goes when its work fails: what `run` threw, and what happens next. It is an event's handler in every
@@ -372,9 +398,9 @@ type RootGiven<X> = X extends State<infer S2, any, any, infer G> ? Givable<Pick<
 type NeedsGiven<X> = X extends State<any, any, any, infer G> ? ([G] extends [never] ? false : true) : false
 
 /** One state for each key of a field, each given its data from its key and the starter's data. */
-export interface EachOf<D, X> { readonly each: KeysField<D>; readonly state: X; readonly given: (key: string, data: Immutable<D>) => RootGiven<X> }
+export interface EachOf<D, X> { readonly each: KeysField<D>; readonly state: X; readonly given: (key: string, data: Read<D>) => RootGiven<X> }
 /** One state, given its data from the starter's data. */
-export interface OneOf<D, X> { readonly state: X; readonly given: (data: Immutable<D>) => RootGiven<X> }
+export interface OneOf<D, X> { readonly state: X; readonly given: (data: Read<D>) => RootGiven<X> }
 
 // ── one grammar for what a state starts, follows and awaits ─────────────────────────────────────────────────────────
 //
@@ -394,12 +420,12 @@ export interface OneOf<D, X> { readonly state: X; readonly given: (data: Immutab
  * what the state is given as it starts, once.
  */
 export interface Start<D> {
-  <X extends AnyState>(state: X, options: { each: KeysField<D>; given: (key: string, data: Immutable<D>) => RootGiven<X> }): EachOf<D, X>
-  <X extends AnyState>(state: X, options: { given: (data: Immutable<D>) => RootGiven<X> }): OneOf<D, X>
+  <X extends AnyState>(state: X, options: { each: KeysField<D>; given: (key: string, data: Read<D>) => RootGiven<X> }): EachOf<D, X>
+  <X extends AnyState>(state: X, options: { given: (data: Read<D>) => RootGiven<X> }): OneOf<D, X>
 }
 
 /** What `args` is given: the key, for one of many, or the fields it named. */
-type Given_<R, H extends string, K extends string, Many> = [Many] extends [string] ? string : Immutable<Pick<DataAt<R, H>, K & keyof DataAt<R, H>>>
+type Given_<R, H extends string, K extends string, Many> = [Many] extends [string] ? string : Read<Pick<DataAt<R, H>, K & keyof DataAt<R, H>>>
 /** What a handler of one of many is given beside its scope: which one it is. */
 type Keyed<Many> = [Many] extends [string] ? { readonly key: string } : {}
 
@@ -432,13 +458,13 @@ export interface MadeOne<R, H extends string, E extends AnyEvent, N extends Net>
 export interface MadeEach<R, H extends string, E extends AnyEvent, N extends Net> { readonly kind: 'each'; readonly of: string; readonly ask: string; readonly args: Function; readonly ended: Function; readonly heard?: Function; readonly _?: { r: R; h: H; e: E; n: N } }
 /** Makes an ask to make one at a time. What it is asked for is worked out from the data when it is made. */
 export type MakeOne<R, H extends string, E extends AnyEvent, N extends Net> = <S extends SystemsOf<N>, Q extends keyof N['systems'][S]['asks'] & string>(of: S, ask: Q, options: {
-  args: (data: Immutable<DataAt<R, H>>) => AskOf<N, S, Q>['args']
+  args: (data: Read<DataAt<R, H>>) => AskOf<N, S, Q>['args']
   ended: (outcome: OutcomeOf<AskOf<N, S, Q>>, scope: EventScope<R, H, E, N>) => Next<R, H> | void
   heard?: (updates: ReadonlyArray<ProgressOf<AskOf<N, S, Q>>>, scope: EventScope<R, H, E, N>) => Next<R, H> | void
 }) => MadeOne<R, H, E, N>
 /** Makes an ask to make for each of many keys. What each is asked for is worked out from its key when it is made. */
 export type MakeEach<R, H extends string, E extends AnyEvent, N extends Net> = <S extends SystemsOf<N>, Q extends keyof N['systems'][S]['asks'] & string>(of: S, ask: Q, options: {
-  args: (key: string, data: Immutable<DataAt<R, H>>) => AskOf<N, S, Q>['args']
+  args: (key: string, data: Read<DataAt<R, H>>) => AskOf<N, S, Q>['args']
   ended: (outcome: OutcomeOf<AskOf<N, S, Q>>, scope: EventScope<R, H, E, N> & { readonly key: string }) => Next<R, H> | void
   heard?: (updates: ReadonlyArray<ProgressOf<AskOf<N, S, Q>>>, scope: EventScope<R, H, E, N> & { readonly key: string }) => Next<R, H> | void
 }) => MadeEach<R, H, E, N>
@@ -493,6 +519,23 @@ export class Left extends Error {
   constructor(what: string) { super(`${what} was left before this ask was answered`); this.name = 'Left' }
 }
 
+/**
+ * What the engine says of a write to something frozen: assigning a field, adding or removing one, and what a list's
+ * `push`, `pop`, `sort` and the like come to. `kernel-check.mts` makes each kind of write and fails when one of them
+ * is no longer said this way, which is what a change of engine would do.
+ */
+const WRITE_TO_FROZEN = /^Cannot (assign to read only property|add property|delete property|define property|redefine property)\b/
+/** What is added to such an error, since what the engine says names neither the mistake nor what to do. */
+export const WROTE_TO_WHAT_WAS_READ = 'That is what a write to data read from a state throws. Data is not written where it is read: it is changed by returning a change, `{ data: (d) => { … } }`, and `d` is what may be written to'
+/**
+ * An error as the kernel reports it. A write to what a state holds throws where it was tried, in a handler or in a
+ * helper the handler passed the value to, and the engine's words for it are about a property and an object. So
+ * they are followed by what happened and what to write, wherever the kernel reports what was thrown.
+ */
+export const said = (error: unknown): string => {
+  if (!(error instanceof Error)) return String(error)
+  return error instanceof TypeError && WRITE_TO_FROZEN.test(error.message) ? `${error.message}. ${WROTE_TO_WHAT_WAS_READ}` : error.message
+}
 class Refusal extends Error { constructor(readonly kind: string, message: string, readonly data?: object) { super(message) } }
 class Question {
   settled = false
@@ -584,8 +627,8 @@ export interface System {
    * how something outside a handler reaches one: a component reading one card of many.
    */
   child<C, K extends keyof C & string>(of: Handle<unknown, any, any, C>, name: K, ...key: C[K] extends Each<any> ? [key: string] : []): HandleOf<C[K]>
-  send<E extends AnyEvent>(to: Handle<unknown, E, Asks>, event: Immutable<E>): void
-  ask<A extends Asks, Q extends keyof A & string>(of: Handle<unknown, never, A>, name: Q, args: Immutable<A[Q]['args']>, heard?: (updates: ReadonlyArray<ProgressOf<A[Q]>>) => void): Promise<OutcomeOf<A[Q]>>
+  send<E extends AnyEvent>(to: Handle<unknown, E, Asks>, event: Read<E>): void
+  ask<A extends Asks, Q extends keyof A & string>(of: Handle<unknown, never, A>, name: Q, args: Read<A[Q]['args']>, heard?: (updates: ReadonlyArray<ProgressOf<A[Q]>>) => void): Promise<OutcomeOf<A[Q]>>
   read<V>(of: Started<V, never, Asks, any>): V | undefined
   read<V>(of: Handle<V, never, Asks>): V
   /** Every running state here, as of the last commit. */
@@ -644,7 +687,7 @@ export function system(host: {
   const frame = host.frame ?? ((run: () => void): void => later(frames, run))
   /** Code that is not the kernel's, called where its throwing must not stop the step it is in. */
   const safely = (what: string, call: () => void): void => {
-    try { call() } catch (error) { trace(`DEFECT: ${what} threw: ${error instanceof Error ? error.message : String(error)}`) }
+    try { call() } catch (error) { trace(`DEFECT: ${what} threw: ${said(error)}`) }
   }
   const running = new Map<string, Running>()
   const outside: Item[] = []
@@ -893,7 +936,6 @@ export function system(host: {
     return found
   }
   const keysOf = (held: unknown): string[] => [...new Set(Array.isArray(held) ? held as string[] : Object.keys((held ?? {}) as object))]
-  const said = (error: unknown): string => (error instanceof Error ? error.message : String(error))
   /** Where an error was thrown, outside the kernel and the draft: the line of the handler that did it. */
   const whereOf = (error: unknown): string => {
     const frames = error instanceof Error && error.stack ? error.stack.split('\n').slice(1) : []
@@ -1148,9 +1190,8 @@ export function system(host: {
   const fail = (active: Active, error: unknown): void => {
     if (error instanceof Left) return
     const where = `${active.top.ref}${active.path ? ` in ${active.path}` : ''}`
-    const said = error instanceof Error ? error.message : String(error)
-    if (active.controller.signal.aborted) { trace(`${where} failed after it was left: ${said}`); return }
-    trace(`${where} failed: ${said}`)
+    if (active.controller.signal.aborted) { trace(`${where} failed after it was left: ${said(error)}`); return }
+    trace(`${where} failed: ${said(error)}`)
     const failed = active.def.failed
     if (!failed) { trace(`DEFECT: ${where} says nowhere to go when its work fails, and stays as it is`); return }
     const { ask: _, ...scope } = scopeOf(active)
@@ -1276,7 +1317,7 @@ export function system(host: {
       const { ask: _, ...scope } = scopeOf(found.of)
       // A handler that throws changes nothing: the state is as it was before the event, which it could handle.
       try { apply(found.of, found.handler(item.event, scope)) } catch (error) {
-        trace(`DEFECT: ${item.ref} threw handling ${item.event.type}, and nothing changed: ${error instanceof Error ? error.message : String(error)}`)
+        trace(`DEFECT: ${item.ref} threw handling ${item.event.type}, and nothing changed: ${said(error)}`)
       }
       return
     }
@@ -1288,7 +1329,7 @@ export function system(host: {
       // The handler was itself asking, and whoever asked it went: it stopped answering, it did not fail.
       if (error instanceof Left) return refusal('abandoned', error.message)
       // Whoever asked is told it failed. Where it failed is said here, since the asker may be in another process.
-      const message = error instanceof Error ? error.message : String(error)
+      const message = said(error)
       // Work that was passed `signal` throws when it aborts. That is the handler stopping as it was asked to.
       if (signal.aborted) { trace(`${item.ref} stopped answering ${name}, as whoever asked had gone: ${message}`); return refusal('abandoned', message) }
       trace(`${item.ref} failed answering ${name}: ${message}`)
