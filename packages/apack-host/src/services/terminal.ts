@@ -4,7 +4,7 @@
 // terminal should pay nothing for one, and a broker that failed to start must fail the thing that needed it
 // rather than the boot.
 //
-// **The binary comes from the `apack-terminal` package**, which answers for its own: a packaged app resolves
+// **The binary comes from the `@app/terminal-broker` package**, which answers for its own: a packaged app resolves
 // it as it resolves every other dependency, and `APACK_TERMINAL_BINARY` overrides it for a build of your
 // own.
 //
@@ -88,7 +88,7 @@ export function relaySocketPath(key: string, platform: NodeJS.Platform = process
 /**
  * The broker's binary, or absence.
  *
- * **Two answers: `APACK_TERMINAL_BINARY`, then the `apack-terminal` package.** The package is asked rather
+ * **Two answers: `APACK_TERMINAL_BINARY`, then the `@app/terminal-broker` package.** The package is asked rather
  * than a path derived, because the package is what knows — the binary's name differs by platform, `cargo`
  * writing `apack-terminal.exe` on Windows, and it sits beside that package's own file wherever Node
  * resolved it from. A path built here was wrong about exactly that: `existsSync` answered false on Windows

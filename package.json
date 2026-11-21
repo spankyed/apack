@@ -156,7 +156,13 @@
     "minimatch@>=7 <11.0.1": "^11.0.1",
     "@typescript-eslint/typescript-estree": {
       "minimatch": "^11.0.1"
-    }
+    },
+    "elmdb": "file:./vendor/elmdb/crates/elmdb-node",
+    "@elmdb/ears": "file:./vendor/elmdb/packages/ears",
+    "@apackdev/git": "file:./vendor/apack-git",
+    "@apackdev/terminal": "file:./vendor/apack-terminal/node",
+    "@apackdev/terminal-view": "file:./vendor/apack-terminal/view"
   },
+  "//vendored": "The five packages above with file: overrides are published from the three checkouts vendor/ links (elmdb, apack-git, apack-terminal), each at the commit its vendor/*.rev pins. Every workspace manifest names them by the version they publish, as it would any registry package, and these overrides alone say this checkout supplies them; no workspace manifest may hold a file: spec (workspace-manifests.spec.ts).",
   "//minimatch": "GHSA-g3hv-75wg-m249 (a denial of service from a crafted pattern) affects minimatch >=7 <11.0.1, so the range override lifts only those copies to 11; the 3.x and 5.x copies eslint, electron-builder and dir-compare depend on are outside the range and stay. typescript-estree is reached through a peer dependency, which npm carries no override across, so it needs its own nested entry; npm ls still calls that edge invalid, since it does not credit the override there either."
 }

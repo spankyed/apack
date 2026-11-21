@@ -109,7 +109,7 @@ actions (`list`, `byId`), flows (`list`, `graph`), notes (`tree`, `note`, `recen
 - **An editor holds its views behind its own writes** (`ViewWrites`, `@apackdev/sdk/fe`): it applies an edit at
   once, so a result from before the write landed would undo it. Once the last write is answered it reads the views
   again. Every write such a surface records must be answered, a refusal included. The commit panel does the same
-  over a list it fetches: a staged file moves on the click to where git will list it (`apack-git/staging`),
+  over a list it fetches: a staged file moves on the click to where git will list it (`@apackdev/git/staging`),
   and no status is shown until the write is answered.
 - **A surface drawn in several areas follows its views from its machine** (`fromView`, `#generated/fe`), since no one
   component is mounted for as long as it runs — threads is the example.
@@ -150,10 +150,10 @@ holds in memory and a window shows — the logs buffer — is fetched like what 
 answered to nobody**: it replies with `reply?.()`, and only a command's outcome, which someone must hear, falls back to
 a broadcast through `answer`.
 
-**Git is run by one engine, which is a package of its own: `apack-git`.** It runs every git process and keeps
+**Git is run by one engine, which is a package of its own: `@apackdev/git`.** It runs every git process and keeps
 the picture of one working tree, in a repository of its own that the pack depends on through `vendor/apack-git`
 ([the git engine](../../docs/references/git-engine.md)): its files named below are that repository's, under
-`src/` and `tests/`. `apack pack build` bundles it into the pack's runtime, and its `apack-git/staging` entry,
+`src/` and `tests/`. `apack pack build` bundles it into the pack's runtime, and its `@apackdev/git/staging` entry,
 which imports nothing of Node's, into the frontend. It has no dependencies and is handed how to run a process,
 the environment git starts from and where to log (`RepositoryTies`). What the app decides stays with the app,
 over the engine's reads (`code/be/services/app-git-repository.ts`): when to fetch unasked, which branch a pull

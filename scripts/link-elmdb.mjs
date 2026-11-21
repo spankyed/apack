@@ -1,6 +1,7 @@
 // The link to the elmdb checkout apack consumes two packages of: `vendor/elmdb`, a gitignored symlink, beside the
 // commit it is pinned to, `vendor/elmdb.rev`. Plain Node with no dependencies, since it runs before `npm ci`: npm
-// resolves the `file:` dependencies through the link. The checkout is `ELMDB_DIR`, or `~/Develop/Projects/apack/elmdb`.
+// resolves the root's `overrides` of the two packages through the link. The checkout is `ELMDB_DIR`, or
+// `~/Develop/Projects/apack/elmdb`.
 //
 // The two packages are the binding (`crates/elmdb-node`, npm `elmdb`) and EARS (`packages/ears`, npm `@elmdb/ears`),
 // which is TypeScript consumed as its built `dist`. **Whether that `dist` is the build of the checkout as it is now is

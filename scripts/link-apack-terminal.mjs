@@ -4,9 +4,9 @@
 // `APACK_TERMINAL_DIR`, or `~/Develop/Projects/apack/apack-terminal`.
 //
 // **npm resolves through this link**, as it does through elmdb's, to the two npm packages in that checkout:
-// `@apackdev/host` and the API depend on `apack-terminal` at `file:../../vendor/apack-terminal/node`, the
-// broker, and the built-in pack on `apack-terminal-view` at `file:../../vendor/apack-terminal/view`, what a
-// window draws a terminal with. One checkout and one pin hold both, because they are the two halves of one
+// `@apackdev/host` and the API depend on `@apackdev/terminal`, the broker's protocol, and the built-in pack on
+// `@apackdev/terminal-view`, what a window draws a terminal with; the root's `overrides` maps each to
+// `file:./vendor/apack-terminal/node` and `file:./vendor/apack-terminal/view`. One checkout and one pin hold both, because they are the two halves of one
 // protocol.
 //
 // Unlike elmdb's, this builds nothing native: the broker binary the app runs is not this checkout's build but
@@ -97,8 +97,8 @@ export function linkApackTerminal(root, checkout = apackTerminalCheckout()) {
   const view = path.join(checkout, 'view');
   let viewName;
   try { viewName = JSON.parse(fs.readFileSync(path.join(view, 'package.json'), 'utf8')).name; } catch { viewName = undefined; }
-  if (viewName !== 'apack-terminal-view') {
-    throw new Error(`The apack-terminal checkout at ${checkout} holds no view (no view/package.json naming apack-terminal-view): check out a commit that does`);
+  if (viewName !== '@apackdev/terminal-view') {
+    throw new Error(`The apack-terminal checkout at ${checkout} holds no view (no view/package.json naming @apackdev/terminal-view): check out a commit that does`);
   }
   const built = viewIsBuilt(view);
   if (!built) buildView(view);

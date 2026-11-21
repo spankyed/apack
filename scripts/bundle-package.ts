@@ -1,6 +1,6 @@
 // Builds a publishable copy of a workspace package that ships as a bundle (@apackdev/cli,
 // @apackdev/testing) into <package>/dist/package. The shared-instance packages (SHARED_INSTANCE_PACKAGES), what
-// they link from another checkout (EARS, which no registry has) and the private @apackdev/host are inlined, the host
+// they take from a vendored checkout (EARS) and the private @apackdev/host are inlined, the host
 // and the SDK from source and EARS from its built `dist`, so the published package can use host-only modules; every
 // other package stays external and becomes a dependency at the version the workspace uses.
 //
@@ -12,7 +12,7 @@ import { execFileSync } from 'node:child_process';
 import { packageName } from '@apackdev/host/build/specifiers';
 import { recordBundleReads, runPackageBuild } from '@apackdev/host/build/packages-built';
 import { replaceDir } from '@apackdev/host/replace-dir';
-import { manifestPaths, publishedSpec, type Manifest } from '@apackdev/host/build/published-manifest';
+import { manifestPaths, type Manifest } from '@apackdev/host/build/published-manifest';
 import { SHARED_INSTANCE_PACKAGES } from '@apackdev/host/build/shared-deps';
 import ts from 'typescript';
 import { BareImports } from './lib/published-imports.ts';
@@ -115,11 +115,13 @@ const workspaceManifestFile = (name: string) => createRequire(path.join(repoRoot
 const workspaceManifest = (name: string) => JSON.parse(fs.readFileSync(workspaceManifestFile(name), 'utf-8'));
 const sharedPkgs = SHARED_INSTANCE_PACKAGES.map(workspaceManifest);
 /**
- * What the shared-instance packages link from another checkout (a `file:` dependency: EARS, from elmdb's): inlined with
- * them, since a published package can't depend on something no registry has
+ * What the shared-instance packages take from another checkout (EARS, from elmdb's, which the root's `overrides` maps to
+ * a `file:` path in `vendor/`): inlined with them, as the build it was made from rather than whatever a registry holds
+ * at that version
  */
-const LINKED = sharedPkgs.flatMap((shared) => Object.entries<string>(shared.dependencies ?? {})
-  .filter(([, range]) => range.startsWith('file:')).map(([name]) => name));
+const vendored = Object.entries<unknown>(JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8')).overrides ?? {})
+  .filter(([, spec]) => typeof spec === 'string' && spec.startsWith('file:')).map(([name]) => name);
+const LINKED = sharedPkgs.flatMap((shared) => Object.keys(shared.dependencies ?? {}).filter((name) => vendored.includes(name)));
 const inlinedPkgs = [...SHARED_INSTANCE_PACKAGES, ...LINKED].map((name) => ({ name, manifest: workspaceManifest(name) }));
 const hostPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages', 'apack-host', 'package.json'), 'utf-8'));
 const SHARED = new Set<string>(SHARED_INSTANCE_PACKAGES);
@@ -138,15 +140,14 @@ const externalizeAllButInlined: Plugin = {
 };
 
 function versionOf(name: string): string {
-  // The package's own ranges win; inlined shared-instance and host code brings their ranges. A `file:` range, relative to
-  // the manifest declaring it, is published as the version it links
-  const sources: Array<[Record<string, string> | undefined, string]> = [
-    [pkg.dependencies, pkgDir], [pkg.peerDependencies, pkgDir],
-    ...inlinedPkgs.flatMap(({ name, manifest }) => [[manifest.dependencies, path.dirname(workspaceManifestFile(name))], [manifest.peerDependencies, path.dirname(workspaceManifestFile(name))]] as Array<[Record<string, string> | undefined, string]>),
-    [hostPkg.dependencies, path.join(repoRoot, 'packages', 'apack-host')],
+  // The package's own ranges win; inlined shared-instance and host code brings their ranges
+  const sources: Array<Record<string, string> | undefined> = [
+    pkg.dependencies, pkg.peerDependencies,
+    ...inlinedPkgs.flatMap(({ manifest }) => [manifest.dependencies, manifest.peerDependencies]),
+    hostPkg.dependencies,
   ];
-  for (const [source, dir] of sources) {
-    if (source?.[name]) return publishedSpec(source[name], dir);
+  for (const source of sources) {
+    if (source?.[name]) return source[name];
   }
   throw new Error(`${pkg.name} bundle imports ${name}, which neither ${pkg.name}, the inlined packages nor @apackdev/host declares`);
 }

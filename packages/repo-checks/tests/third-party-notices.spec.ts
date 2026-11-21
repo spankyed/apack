@@ -636,10 +636,10 @@ describe("the app's SBOM", () => {
         'node_modules/unversioned': { integrity: 'sha512-unversioned' },
       } }),
     });
-    const { purls, integrity } = sbomIdentity(root, { elmdb: 'elmdb#crates/elmdb-node', 'apack-terminal': 'apack-terminal' });
+    const { purls, integrity } = sbomIdentity(root, { elmdb: 'elmdb#crates/elmdb-node', '@apackdev/terminal': 'apack-terminal' });
     expect(purls).toEqual({
       elmdb: 'pkg:github/spankyed/elmdb@abc123#crates/elmdb-node',
-      'apack-terminal': 'pkg:github/spankyed/apack-terminal@def456',
+      '@apackdev/terminal': 'pkg:github/spankyed/apack-terminal@def456',
     });
     // The first copy of a release is the one hashed; an entry without a version or an integrity is not hashed at all
     expect(Object.fromEntries(integrity)).toStrictEqual({

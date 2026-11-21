@@ -32,8 +32,15 @@ const VIRTUAL_PACKAGES: readonly (readonly [prefix: string, packageName: string]
   ['commonjs-', 'vite'],
 ];
 
+/**
+ * The `@apackdev` packages published from other repositories (apack-git's, and apack-terminal's two), which a checkout
+ * takes from the checkouts `vendor/` links. They share the scope and are third-party here, as elmdb's are
+ */
+export const OTHER_REPOSITORY_PACKAGES: ReadonlySet<string> = new Set(['@apackdev/git', '@apackdev/terminal', '@apackdev/terminal-view']);
+
 /** First-party: a workspace of this repository, or the repository's root package */
-const isFirstParty = (name: string): boolean => name === 'apack' || name.startsWith('@app/') || name.startsWith('@apackdev/');
+export const isFirstParty = (name: string): boolean => name === 'apack' || name.startsWith('@app/')
+  || (name.startsWith('@apackdev/') && !OTHER_REPOSITORY_PACKAGES.has(name));
 
 /** The nearest `package.json` naming a package at or above `dir`, or `undefined` past the filesystem's root */
 function namedPackageAt(dir: string): BundledPackage | undefined {

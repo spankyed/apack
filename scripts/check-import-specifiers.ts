@@ -315,6 +315,18 @@ export const UNLAYERED_BY_DESIGN = new Map<string, string>([
 const apackPackage = (specifier: string) => specifier.match(/^@apackdev\/[^/]+/)?.[0];
 
 /**
+ * The `@apackdev` packages another repository publishes (`@apackdev/git`, `@apackdev/terminal`, ...): the ones the
+ * root's `overrides` maps to a vendored checkout. They share the scope and are no layer of this repository, so the
+ * layer rule reads them as any other outside dependency. A root with no manifest, as a fixture tree is, has none
+ */
+const vendoredPackages = (root: string): Set<string> => {
+  const manifestFile = path.join(root, 'package.json');
+  if (!fs.existsSync(manifestFile)) return new Set();
+  const overrides = readJsonFile<{ overrides?: Record<string, unknown> }>(manifestFile).overrides ?? {};
+  return new Set(Object.entries(overrides).filter(([, spec]) => typeof spec === 'string' && spec.startsWith('file:')).map(([name]) => name));
+};
+
+/**
  * Every workspace with something for the layer rule to read, by the same three directories it reads.
  *
  * Takes `root`, so a fixture tree with no `packages/` answers nothing rather than throwing — which is what
@@ -363,12 +375,17 @@ export function findUpwardImports(layers = LAYERS, root = repoRoot, unlayered = 
       problems.push(`${dir}: listed in UNLAYERED_BY_DESIGN (${reason}) but it holds no code, or is gone`);
     }
   }
+  const vendored = vendoredPackages(root);
+  const layerPackage = (specifier: string) => {
+    const pkg = apackPackage(specifier);
+    return pkg !== undefined && !vendored.has(pkg) ? pkg : undefined;
+  };
   for (const { name, dir, allowed, forbidden } of layers) {
     const permitted = new Set([name, ...allowed]);
     const imported = new Set<string>();
     const files = filesUnder(['src', 'tests', 'scripts'].map((sub) => path.join(dir, sub)), root);
     problems.push(...findSpecifiers(files, root, (text) => {
-      const pkg = apackPackage(text);
+      const pkg = layerPackage(text);
       if (pkg !== undefined && pkg !== name) imported.add(pkg);
       return (pkg !== undefined && !permitted.has(pkg)) || (forbidden?.test(text) ?? false);
     }));
@@ -377,7 +394,7 @@ export function findUpwardImports(layers = LAYERS, root = repoRoot, unlayered = 
     const declared = new Set(MANIFEST_FIELDS.flatMap((field) => Object.keys(manifest[field] ?? {})));
     for (const field of MANIFEST_FIELDS) {
       for (const dep of Object.keys(manifest[field] ?? {})) {
-        if (dep.startsWith('@apackdev/') && !permitted.has(dep)) problems.push(`${path.relative(root, manifestFile)}: ${field}: ${dep}`);
+        if (layerPackage(dep) !== undefined && !permitted.has(dep)) problems.push(`${path.relative(root, manifestFile)}: ${field}: ${dep}`);
       }
     }
     for (const pkg of [...imported].sort()) {
@@ -553,7 +570,7 @@ const EMULATOR_OWNER = 'packages/default-setup/src/features/code/fe/utils/termin
  * The package that draws a terminal, named once so the rule and its message cannot disagree about what
  * they are about — and so that replacing it is this line rather than a search for a prefix.
  */
-const EMULATOR_PACKAGE = 'apack-terminal-view';
+const EMULATOR_PACKAGE = '@apackdev/terminal-view';
 
 /**
  * And the specs that **stand in** for it, so a terminal's bookkeeping and the components that show one can

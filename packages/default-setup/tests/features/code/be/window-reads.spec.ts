@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { GitError } from 'apack-git';
+import { GitError } from '@apackdev/git';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
 import { AppGitRepository } from '../../../../src/features/code/be/services/app-git-repository.ts';
