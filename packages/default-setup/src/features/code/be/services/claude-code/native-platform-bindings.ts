@@ -323,6 +323,12 @@ export const claudeNativeLinuxBindings: {
         "Zao": "Eao"
       }
     },
+    "chunk-9ah6nahr.js": {
+      "module": "chunk-f3e17y2r.js",
+      "exports": {
+        "Cot": "yot"
+      }
+    },
     "chunk-z0mpv66t.js": {
       "module": "chunk-cm0hh6yy.js",
       "exports": {

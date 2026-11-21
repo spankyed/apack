@@ -2,6 +2,33 @@
 export const claudeTerminalMcpPolicyRuntime = String.raw`
 const nativeMcpHttpCallLifetime=new WeakMap();
 const nativeMcpClientObservers=new WeakSet();
+const nativeMcpChannelClients=new WeakSet();
+const nativeMcpChannelHandlers=new WeakSet();
+const nativeMcpChannelMethods=['notifications/claude/channel','notifications/claude/channel/permission'];
+function guardNativeMcpChannel(connection,blocked){
+ if(connection.type!=='connected'||!connection.capabilities?.experimental?.['claude/channel'])return;
+ const client=connection.client, handlers=client?._notificationHandlers, register=client?.setNotificationHandler;
+ if(!(handlers instanceof Map)||typeof register!=='function'||nativeMcpChannelClients.has(client))return;
+ const guard=()=>{
+  for(const method of nativeMcpChannelMethods){
+   const original=handlers.get(method);
+   if(typeof original!=='function'||nativeMcpChannelHandlers.has(original))continue;
+   const checked=function(...args){
+    if(!blocked())return Reflect.apply(original,this,args);
+   };
+   nativeMcpChannelHandlers.add(checked);
+   handlers.set(method,checked);
+  }
+ };
+ // A legacy client can already hold its channel callbacks when the app attaches.
+ guard();
+ client.setNotificationHandler=function(...args){
+  const result=Reflect.apply(register,this,args);
+  guard();
+  return result;
+ };
+ nativeMcpChannelClients.add(client);
+}
 function observeNativeMcpHttpCalls(connection){
  if(connection.type!=='connected'||!['http','claudeai-proxy'].includes(connection.config.type))return;
  const client=connection.client;
@@ -16,11 +43,12 @@ function observeNativeMcpHttpCalls(connection){
  };
  nativeMcpHttpCallLifetime.set(client,lifetime);
 }
-function observeNativeMcpConnections(wiring){
+function observeNativeMcpConnections(wiring,channelBlocked){
  const prior=wiring.chn();
  if(prior&&nativeMcpClientObservers.has(prior))return;
  const observe=function(connection,...args){
   observeNativeMcpHttpCalls(connection);
+  guardNativeMcpChannel(connection,channelBlocked);
   if(prior)return Reflect.apply(prior,this,[connection,...args]);
  };
  nativeMcpClientObservers.add(observe);
@@ -43,9 +71,12 @@ async function detachNativePolicyBlockedMcpConnection(transport,connection,key){
 async function retireNativePolicyBlockedMcpConnections(n,context,isCurrent){
  const wiring=await import('/$bunfs/root/chunk-hdxpvbx1.js');
  if(!isCurrent())return;
- observeNativeMcpConnections(wiring);
+ observeNativeMcpConnections(wiring,n.mcpChannelBlocked);
  const connections=()=>context.getAppState().mcp.clients;
- for(const connection of connections())observeNativeMcpHttpCalls(connection);
+ for(const connection of connections()){
+  observeNativeMcpHttpCalls(connection);
+  guardNativeMcpChannel(connection,n.mcpChannelBlocked);
+ }
  const blocked=()=>connections().filter(connection=>
   connection.type==='connected'&&n.runtime.Mc(connection.name,connection.config)==='managed-policy');
  if(!blocked().length)return;

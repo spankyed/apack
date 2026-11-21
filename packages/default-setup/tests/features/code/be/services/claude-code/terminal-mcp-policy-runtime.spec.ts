@@ -8,6 +8,7 @@ function fixture() {
   const pending = { name: 'pending', type: 'pending', config: {} }
   const clients = [allowed, blocked, pending]
   const context = { getAppState: () => ({ mcp: { clients } }), setAppState: vi.fn() }
+  const mcpChannelBlocked = vi.fn(() => false)
   const Mc = vi.fn((name: string) => name === 'managed' ? null : 'managed-policy')
   const mark = vi.fn((name: string) => clients.splice(clients.findIndex(client => client.name === name), 1))
   const detach = vi.fn(async () => { expect(clients).not.toContain(blocked) })
@@ -32,8 +33,8 @@ function fixture() {
   })
   const retire = new Function('importClaudeNativeModule', rewriteClaudeNativePlatformSelectors(claudeTerminalMcpPolicyRuntime)
     + '\nreturn retireNativePolicyBlockedMcpConnections')(load)
-  return { allowed, blocked, pending, clients, context, Mc, mark, detach, cache, dispose, over, load, wiring, originalObserver,
-    run: (isCurrent = () => true) => retire({ runtime: { Mc } }, context, isCurrent) }
+  return { allowed, blocked, pending, clients, context, Mc, mark, detach, cache, dispose, over, load, wiring, originalObserver, mcpChannelBlocked,
+    run: (isCurrent = () => true) => retire({ runtime: { Mc }, mcpChannelBlocked }, context, isCurrent) }
 }
 
 it('lets original policy retire only refused live connections and detaches after withdrawal', async () => {
@@ -142,4 +143,42 @@ it.each(['legacy', 'modern'])('cancels a revoked client before close while prese
   expect(originalOptions.signal.aborted).toBe(false)
   caller.abort(Error('Caller cancelled'))
   expect(await allowedOutcome).toMatchObject({ message: 'Caller cancelled' })
+})
+
+it('applies current original channel policy to installed and re-registered native callbacks', async () => {
+  const f = fixture()
+  f.Mc.mockReturnValue(null)
+  const ingress = 'notifications/claude/channel'
+  const relay = 'notifications/claude/channel/permission'
+  const unrelated = 'notifications/tools/list_changed'
+  const inbound = vi.fn(), priorRelay = vi.fn(), nextRelay = vi.fn(), unrelatedHandler = vi.fn()
+  const handlers = new Map([[ingress, inbound], [relay, priorRelay], [unrelated, unrelatedHandler]])
+  const client = {
+    _notificationHandlers: handlers,
+    setNotificationHandler(method: string, callback: typeof priorRelay) {
+      this._notificationHandlers.set(method, callback)
+    },
+  }
+  const connection = { name: 'channel', type: 'connected', config: {}, client,
+    capabilities: { experimental: { 'claude/channel': {}, 'claude/channel/permission': {} } } }
+  f.clients.push(connection)
+  await f.run()
+  handlers.get(ingress)!('original')
+  expect(inbound).toHaveBeenCalledExactlyOnceWith('original')
+
+  // The policy reader is called at delivery without another owner snapshot.
+  f.mcpChannelBlocked.mockReturnValue(true)
+  handlers.get(ingress)!('restricted')
+  handlers.get(relay)!('restricted')
+  client.setNotificationHandler(relay, nextRelay)
+  handlers.get(relay)!('still restricted')
+  handlers.get(unrelated)!('unrelated')
+  expect(inbound).toHaveBeenCalledTimes(1)
+  expect(priorRelay).not.toHaveBeenCalled()
+  expect(nextRelay).not.toHaveBeenCalled()
+  expect(unrelatedHandler).toHaveBeenCalledExactlyOnceWith('unrelated')
+
+  f.mcpChannelBlocked.mockReturnValue(false)
+  handlers.get(relay)!('restored')
+  expect(nextRelay).toHaveBeenCalledExactlyOnceWith('restored')
 })
