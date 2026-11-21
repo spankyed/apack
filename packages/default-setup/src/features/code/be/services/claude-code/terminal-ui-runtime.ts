@@ -21,6 +21,7 @@ import { claudeTerminalSettingsRuntime } from './terminal-settings-runtime.ts'
 import { claudeTerminalLspRecommendationRuntime } from './terminal-lsp-recommendation-runtime.ts'
 import { claudeManagedSettingsDiagnosticRuntime } from './native-managed-settings-runtime.ts'
 import { claudeTerminalMcpUrlRuntime } from './terminal-mcp-url-runtime.ts'
+import { claudeTerminalMcpPolicyRuntime } from './terminal-mcp-policy-runtime.ts'
 import { claudeTerminalMcpFormRuntime } from './terminal-mcp-form-runtime.ts'
 import { claudeTerminalGenericPermissionRuntime } from './terminal-generic-permission-runtime.ts'
 import { claudeTerminalToolPermissionRuntime } from './terminal-tool-permission-runtime.ts'
@@ -556,6 +557,7 @@ function drainCompletion(n,clientId,state){
 // A revision binds the actual native descriptor and payload objects; no client-supplied tool input.
 const dialogRevisions=new Map(),questionFrames=new Map(),questionFrameHistory=new Map(),frozenQuestionFrames=new Map();
 let mcpControlActive=false;
+${claudeTerminalMcpPolicyRuntime}
 ${claudeTerminalMcpFormRuntime}
 ${claudeTerminalMcpUrlRuntime}
 ${claudeTerminalLspRecommendationRuntime}
@@ -833,7 +835,9 @@ async function control(request,abort){
   const globals=await import('/$bunfs/root/chunk-hdxpvbx1.js'),settings=await import('/$bunfs/root/chunk-1pjd7qsk.js'),paths=await import('/$bunfs/root/chunk-27d659a1.js'),restrictions=await import('/$bunfs/root/chunk-kmv3514c.js');
   const sessionId=String(globals.q());
   if(sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId&&request.follow_native_session!==true)throw Error('Native owner session changed');
-  restoreNativePlanContext(n,binding.toolContext(abort),sessionId);
+  const ownerContext=binding.toolContext(abort);
+  restoreNativePlanContext(n,ownerContext,sessionId);
+  await retireNativePolicyBlockedMcpConnections(n,ownerContext,()=>!abort.signal.aborted&&sessionId===String(globals.q()));
   await prepareNativeHelperPolicy();
   const effective=settings.ut(),policy=settings.me('policySettings')??{},privateHooksSuppressed=restrictions.xr('plugins')===true;
   const helperState=nativeHelperPolicySnapshot(effective,policy);

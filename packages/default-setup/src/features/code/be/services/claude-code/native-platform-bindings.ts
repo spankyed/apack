@@ -300,6 +300,7 @@ export const claudeNativeLinuxBindings: {
         "k7t": "cJt",
         "kfo": "Ypo",
         "kV": "gK",
+        "Mc": "Ic",
         "lpe": "rpe",
         "lY": "Z9",
         "mdt": "idt",
@@ -318,6 +319,18 @@ export const claudeNativeLinuxBindings: {
         "xbe": "kSe",
         "Z2": "jz",
         "Zao": "Eao"
+      }
+    },
+    "chunk-z0mpv66t.js": {
+      "module": "chunk-cm0hh6yy.js",
+      "exports": {
+        "knt": "_nt"
+      }
+    },
+    "chunk-y0a0212f.js": {
+      "module": "chunk-7pgnqqdd.js",
+      "exports": {
+        "mcpClientModule": "mcpClientModule"
       }
     },
     "chunk-hz2qqf17.js": {
