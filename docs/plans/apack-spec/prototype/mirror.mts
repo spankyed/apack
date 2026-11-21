@@ -8,7 +8,7 @@
 // reactive copy lets Vue's own dependency tracking do the rest: whatever read a place that changed runs again, and
 // nothing else does. There is no selector to write and nothing to compare.
 import { markRaw, reactive } from '@vue/reactivity'
-import type { Asks, Handle, System } from './state.mts'
+import type { Asks, Handle, Started, System } from './state.mts'
 
 const isPlain = (value: unknown): value is Record<string, unknown> => {
   if (typeof value !== 'object' || value === null) return false
@@ -28,15 +28,27 @@ const owned = (value: unknown): unknown => {
   return Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, owned(inner)]))
 }
 
-export function mirror<V extends { data: object }>(sys: System, handle: Handle<V, never, Asks>): { readonly value: V; stop(): void } {
-  const now = sys.read(handle as never) as { at?: string; data: object }
-  const held = reactive({ at: now.at, data: owned(now.data) as Record<string, unknown> })
+/**
+ * A state another started may not be running: its mirror reads as nothing until it is, and as nothing again once it
+ * has stopped, and a reader that read it runs again each time.
+ */
+export function mirror<V extends { data: object }>(sys: System, handle: Started<V, never, Asks, any>): { readonly value: V | undefined; stop(): void }
+export function mirror<V extends { data: object }>(sys: System, handle: Handle<V, never, Asks>): { readonly value: V; stop(): void }
+export function mirror(sys: System, handle: { readonly ref: string }): { readonly value: unknown; stop(): void } {
+  type Held = { at?: string; data: Record<string, unknown> }
+  const read = (): Held | undefined => sys.read(handle as never) as Held | undefined
+  const copied = (now: Held | undefined): Held | undefined => now && { at: now.at, data: owned(now.data) as Record<string, unknown> }
+  const box = reactive<{ now: Held | undefined }>({ now: copied(read()) })
   let stopped = false
 
-  sys.subscribe((_, __, changes) => {
+  sys.subscribe((changed, __, changes) => {
+    if (stopped || !changed.includes(handle.ref)) return
+    const latest = read()
+    // It stopped, or it has only now started: there is nothing to write into, or nothing written yet.
+    if (!latest || !box.now) { box.now = copied(latest); return }
+    const held = box.now
     const mine = changes[handle.ref]
-    const latest = sys.read(handle as never) as { at?: string; data: Record<string, unknown> } | undefined
-    if (stopped || !mine || !latest) return
+    if (!mine) return
     if (mine.moved) held.at = latest.at
     for (const path of mine.paths) {
       // Walk to the place in both: what the state holds there now, and where in the mirror it goes.
@@ -50,5 +62,5 @@ export function mirror<V extends { data: object }>(sys: System, handle: Handle<V
     }
   })
 
-  return { value: held as unknown as V, stop: () => { stopped = true } }
+  return { get value() { return box.now }, stop: () => { stopped = true } }
 }

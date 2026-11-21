@@ -47,6 +47,8 @@ type BoardEvent =
   | { type: 'CLOSE' }
   | { type: 'OPEN' }
   | { type: 'ADD_THEN_BUMP'; id: string; label: string }
+  | { type: 'AGAIN'; id: string; how: 'one handler' | 'two events' }
+  | { type: 'BRIEFLY'; id: string; label: string }
   // from a card it started
   | { type: 'CARD_BUMPED'; bumps: number; from: string }
 type BoardAsks = {
@@ -81,6 +83,15 @@ const board = (log: string[], work: (label: string) => Promise<unknown> = () => 
     // Tells itself to add an item and then to bump it: two more things in the step this one is handled in.
     ADD_THEN_BUMP: ({ id, label }, { send }) => { send({ type: 'ADD', id, label }); send({ type: 'BUMP', id }) },
     CARD_BUMPED: ({ bumps, from }) => ({ data: { lastBump: `${from} to ${bumps}` } }),
+    // Takes an item out and puts it back, in one handler or as two things it tells itself.
+    AGAIN: ({ id, how }, { data, send }) => {
+      const label = data.items[id]!
+      if (how === 'one handler') return { data: (d) => { delete d.items[id]; d.items[id] = label } }
+      send({ type: 'REMOVE', id })
+      send({ type: 'ADD', id, label })
+    },
+    // Puts an item in, bumps it, and takes it out again, all in the step this is handled in.
+    BRIEFLY: ({ id, label }, { send }) => { send({ type: 'ADD', id, label }); send({ type: 'BUMP', id }); send({ type: 'REMOVE', id }) },
   },
 
   asks: {
@@ -107,12 +118,13 @@ const wired = () => {
   const log: string[] = []
   const defects: string[] = []
   const looked: string[] = []
-  const sys = system({ side: 'backend', trace: (line) => { if (line.startsWith('DEFECT')) defects.push(line); if (line.includes('looked at')) looked.push(line) } })
+  const ignored: string[] = []
+  const sys = system({ side: 'backend', trace: (line) => { if (line.startsWith('DEFECT')) defects.push(line); if (line.includes('looked at')) looked.push(line); if (line.includes(' ignored ')) ignored.push(line) } })
   const it = sys.start('board', board(log))
   const steps: string[][] = []
   sys.subscribe((changed) => { steps.push([...changed].sort()) })
   const cards = (): Record<string, unknown> => Object.fromEntries(Object.entries(sys.snapshot()).filter(([ref]) => ref.startsWith('board/card/')).map(([ref, value]) => [ref.slice('board/card/'.length), (value as { data: unknown }).data]))
-  return { sys, it, log, defects, looked, steps, cards, send: (event: BoardEvent): void => sys.send(it, event), now: () => sys.read(it) }
+  return { sys, it, log, defects, looked, ignored, steps, cards, send: (event: BoardEvent): void => sys.send(it, event), now: () => sys.read(it) }
 }
 
 const checks: Array<[string, () => Promise<void>]> = [
@@ -159,6 +171,28 @@ const checks: Array<[string, () => Promise<void>]> = [
     deepStrictEqual(cards(), {})
     deepStrictEqual(log.filter((line) => line.endsWith(' a')), ['started a', 'stopped a'])
     deepStrictEqual(await slowly, { ok: true, value: 'abandoned' })
+    sys.stop()
+  }],
+  ['a key taken out and put back within a step is a key that stayed, whichever way it was done', async () => {
+    for (const how of ['one handler', 'two events'] as const) {
+      const { send, cards, log, sys } = wired()
+      send({ type: 'ADD', id: 'a', label: 'Alpha' })
+      send({ type: 'BUMP', id: 'a' })
+      send({ type: 'AGAIN', id: 'a', how })
+      deepStrictEqual(cards(), { a: { id: 'a', label: 'Alpha', bumps: 1 } }, how)
+      deepStrictEqual(log.filter((line) => line.endsWith(' a')), ['started a'], how)
+      sys.stop()
+    }
+  }],
+  ['a key put in and taken out within a step starts nothing, and what was sent to it reaches nothing', async () => {
+    const { send, cards, log, ignored, steps, sys } = wired()
+    steps.length = 0
+    send({ type: 'BRIEFLY', id: 'z', label: 'Zed' })
+    deepStrictEqual(log.filter((line) => line.endsWith(' z')), [])
+    deepStrictEqual(cards(), {})
+    deepStrictEqual(ignored, ['board/card/z ignored BUMP'])
+    // The step changed nothing: the item is not there, as it was not before.
+    deepStrictEqual(steps.flat().filter((ref) => ref !== 'board'), [])
     sys.stop()
   }],
   ['a key that stays leaves its state as it is, whatever else changes', async () => {

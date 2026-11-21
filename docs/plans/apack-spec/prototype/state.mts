@@ -93,7 +93,10 @@ type StartsAt<S, P extends string> = P extends '' ? StartsOf<S> : StartsOf<S> & 
 type ReportsOf<S> = S extends { reports: infer P extends AnyEvent } ? P : never
 /** A field that says which there are: by its keys, or by its items. */
 type KeysField<D> = { [K in keyof D & string]: D[K] extends readonly string[] | Readonly<Record<string, unknown>> ? K : never }[keyof D & string]
-type HandleOf<T> = T extends Each<infer X> ? HandleOf<X> : T extends State<infer S2, infer E2, infer A2, any> ? Handle<Value<S2>, E2, A2> : never
+type UnionToIntersection<U> = (U extends unknown ? (of: U) => void : never) extends (of: infer I) => void ? I : never
+/** Everything a state starts, whichever of its states declares it: what can be reached from outside it. */
+type AllStarts<S> = StartsOf<S> & ([Names<S>] extends [never] ? {} : UnionToIntersection<{ [K in Names<S>]: AllStarts<StatesOf<S>[K]> }[Names<S>]>)
+type HandleOf<T> = T extends Each<infer X> ? HandleOf<X> : T extends State<infer S2, infer E2, infer A2, any> ? Started<Value<S2>, E2, A2, AllStarts<S2>> : never
 type Join<H extends string, K extends string> = H extends '' ? K : `${H}.${K}`
 
 type Paths<S> = [Names<S>] extends [never] ? never : { [K in Names<S>]: K | `${K}.${Paths<StatesOf<S>[K]>}` }[Names<S>]
@@ -135,7 +138,12 @@ type Next<R, H extends string> =
   | { [T in Paths<R>]: {} extends Gained<R, H, T> ? { at: T; data?: Partial<DataAt<R, T>> | ((draft: DataAt<R, H>) => void) } : { at: T; data: Gained<R, H, T> & Partial<DataAt<R, T>> } }[Paths<R>]
 
 /** A state this one started. Only its starter holds it: it can be told, asked and read, never written. */
-export interface Handle<V, E extends AnyEvent, A extends Asks> { readonly ref: string; readonly _?: { v: V; e: (event: E) => void; a: A } }
+export interface Handle<V, E extends AnyEvent, A extends Asks, C = {}> { readonly ref: string; readonly _?: { v: V; e: (event: E) => void; a: A; c: C } }
+/**
+ * A handle to a state that another started. It is a name, and the state it names runs only while its starter is the
+ * case and its key is there: reading it gives nothing while it is not running.
+ */
+export interface Started<V, E extends AnyEvent, A extends Asks, C = {}> extends Handle<V, E, A, C> { readonly _started: true }
 
 type SystemsOf<N extends Net> = keyof N['systems'] & string
 type AskOf<N extends Net, K extends SystemsOf<N>, Q extends keyof N['systems'][K]['asks']> = N['systems'][K]['asks'][Q]
@@ -415,9 +423,15 @@ const PORT = Symbol('port')
 export interface Changes { readonly moved: boolean; readonly paths: ReadonlyArray<ReadonlyArray<string>> }
 
 export interface System {
-  start<S extends Shape, E extends AnyEvent, A extends Asks>(ref: string, made: State<S, E, A>): Handle<Value<S>, E, A>
+  start<S extends Shape, E extends AnyEvent, A extends Asks>(ref: string, made: State<S, E, A>): Handle<Value<S>, E, A, AllStarts<S>>
+  /**
+   * A state that this one starts, by the name it is declared under, and by key where there is one for each. This is
+   * how something outside a handler reaches one: a component reading one card of many.
+   */
+  child<C, K extends keyof C & string>(of: Handle<unknown, any, any, C>, name: K, ...key: C[K] extends Each<any> ? [key: string] : []): HandleOf<C[K]>
   send<E extends AnyEvent>(to: Handle<unknown, E, Asks>, event: E): void
   ask<A extends Asks, Q extends keyof A & string>(of: Handle<unknown, never, A>, name: Q, args: A[Q]['args'], heard?: (updates: ReadonlyArray<ProgressOf<A[Q]>>) => void): Promise<OutcomeOf<A[Q]>>
+  read<V>(of: Started<V, never, Asks, any>): V | undefined
   read<V>(of: Handle<V, never, Asks>): V
   /** Every running state here, as of the last commit. */
   snapshot(): Record<string, unknown>
@@ -846,6 +860,9 @@ export function system(host: {
       return
     }
     const top = running.get(item.ref)
+    // Sent to a state that is not running. It may be one this step is about to start, so it waits until what runs
+    // has been matched to the data.
+    if (!top && !settling) { held.push(item); return }
     if (item.kind === 'event') {
       const found = top && taker(top, 'on', item.event.type)
       if (!found) { trace(`${item.ref} ignored ${item.event.type}`); return }
@@ -909,18 +926,33 @@ export function system(host: {
     stepping = true
     try {
       first()
-      // After each thing handled, what is running is matched to the data, so that what comes next finds it there.
-      matchStale()
-      for (let handled = 0; inside.length; handled++) {
-        const item = inside.shift()!
-        if (handled < RUNAWAY) { handle(item); matchStale(); continue }
-        // What it had done is committed, so that the states can be read and the report says where they got to.
-        trace(`DEFECT: a step was cut short after ${RUNAWAY} things, at ${'ref' in item ? item.ref : item.kind}: something tells something else without end`)
-        inside.length = 0
+      let handled = 0
+      for (;;) {
+        for (; inside.length; handled++) {
+          const item = inside.shift()!
+          if (handled < RUNAWAY) { handle(item); continue }
+          // What it had done is committed, so that the states can be read and the report says where they got to.
+          trace(`DEFECT: a step was cut short after ${RUNAWAY} things, at ${'ref' in item ? item.ref : item.kind}: something tells something else without end`)
+          inside.length = 0
+          held.length = 0
+        }
+        // What runs is matched to the data once everything sent so far is handled, and not in between. So which
+        // states run depends on the data the step leaves and not on the way it got there: a key taken out and put
+        // back is a key that stayed, whether one handler did both or two did one each.
+        matchStale()
+        const ready = held.filter((item) => running.has(item.ref))
+        if (!ready.length && !inside.length) break
+        for (const item of ready) { held.splice(held.indexOf(item), 1); inside.push(item) }
       }
+      // What is still waiting was sent to nothing that runs.
+      settling = true
+      try { for (const item of held.splice(0)) handle(item) } finally { settling = false }
       commit()
     } finally { stepping = false; hearing = undefined }
   }
+  /** What was sent in this step to a state that is not running, until the step's match says whether it is to be. */
+  const held: Array<Extract<Item, { ref: string }>> = []
+  let settling = false
   const pump = (): void => { while (!stepping && outside.length) step(() => handle(outside.shift()!)) }
   const arrive = (item: Item): void => { handOver(); outside.push(item); pump() }
   const enqueue = (item: Item): void => { if (stepping) inside.push(item); else arrive(item) }
@@ -942,6 +974,7 @@ export function system(host: {
       else { step(() => { handleOf = begin(ref, made.def as LooseDef) }); pump() }
       return handleOf!
     },
+    child: ((of: { ref: string }, name: string, key?: string) => ({ ref: key === undefined ? `${of.ref}/${name}` : `${of.ref}/${name}/${key}` })) as unknown as System['child'],
     send: (to, event) => arrive({ kind: 'event', ref: to.ref, event }),
     ask: (of, name, args, hears) => ask(of, name, args, undefined, hears as ((updates: unknown[]) => void) | undefined),
     read: (of) => committed[of.ref] as never,

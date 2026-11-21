@@ -188,13 +188,24 @@ points at.
     starts: { thread: each('titles', thread(inference), (threadId) => ({ threadId })) },
     ```
 
-    After everything a step handles, the kernel makes what is running match: a key the field gained starts its
-    state, one it lost stops its state, and one that stayed leaves its state as it is. **Nothing starts or stops a
+    Once a step has handled everything sent in it, the kernel makes what is running match: a key the field gained
+    starts its state, one it lost stops its state, and one that stayed leaves its state as it is. **Nothing starts or stops a
     state by hand**, so there is nothing to forget. Starting is a change to data, and so it has what every change has:
     it is one step with the answer it came with, it can be checked and refused where it is made, and after an `await`
     it is made against the data as it is then. What runs cannot disagree with the data, because it is worked out
     from it. A handler reaches one with `child('draft')` or `child('thread', threadId)`, typed from the declaration,
     and only from where the state that starts it is the case.
+
+    **Which states run depends on the data a step leaves, not on the way it got there.** The match is made once, when
+    the step has handled everything, and not in between. A key taken out and put back within a step is a key that
+    stayed, whether one handler did both or two did one each, and its state is untouched. A key put in and taken out
+    starts nothing. What is sent within the step to a state that is not running waits for the match: if the step
+    starts that state, it is delivered then, so a handler can add an item and tell it something in one breath; if it
+    does not, it reached nothing, as it would have at any other time.
+
+    **From outside a handler** a started state is reached the same way, `system.child(handle, 'thread', threadId)`,
+    typed from what its starter declares. That is what a component uses. Such a handle is a name: its state runs
+    only while its starter is the case and its key is there, so what is read through it is nothing until then.
 
     **A field is named, not worked out.** Which there are is looked at again only when that field changes, which the
     kernel already knows, so it costs nothing while anything else changes. There is no function to throw. And the
@@ -293,6 +304,15 @@ threads.value.at                              // reactive
 threads.value.data.messages[threadId]         // read again only when that thread's messages change
 ```
 
+One of many is read the same way, through the handle of a state the first one starts. It reads as nothing while it
+is not running, and whatever read it runs again when it starts and when it stops. Which there are is the starter's
+field, read like any other:
+
+```ts
+const thread = mirror(system, system.child(handle, 'thread', threadId))
+thread.value?.data.messages                   // nothing until that thread runs
+```
+
 There is no selector to write and nothing to compare, which is what the 439 `useSelector` sites do today. The copy is
 the mirror's own: a reactive object is written to in place, and the kernel's values are shared and never mutated.
 
@@ -346,6 +366,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | Where work is put says who owns it, and so when it stops | One rule for every handler. Stopping an ask's work when its asker goes is right for a search and wrong for a message being answered, and never stopping it, as Effect's `Machine` does once a handler is running, wastes the search. A flag on the ask saying it survives its asker, or a shield around part of a handler as Trio and Kotlin have, would each be a second way to say what a state's `run` already says: this work is the answerer's. The threads example had it wrong: a window that closed mid-reply aborted the reply, and the message it had sent was never stored |
 | What a state starts is declared and follows from its data | `start(name, state)` called from a handler, which the prototype had. A start was then something a handler did and not part of what it returned, so after an `await`, checking and starting could not be one step; nothing stopped a started state short of its starter ending; a handle was rebuilt from the definition at every use; and a state that was restored would have had nothing it started. And naming the starts in what a handler returns, beside `at` and `data`, which makes them one step and leaves them to be remembered: a start with no stop is a leak, and what runs is kept in two places. Working it out from data is what a view layer does with a keyed list, and what Effect's `forkOne` and `forkReplace` do by hand under a key: a key that stays is theirs "only if missing", and replacing is a key that changes |
 | What says which there are is a field, by name | A function from the data to the keys, which was built first: `each((data) => Object.keys(data.titles), …)`. It could throw, so there had to be a rule for what ran when it did. It had to be run again after every change, since nothing said what it read. And the graph could not say where the keys came from. Tracking what the function reads, as a signals library does, would fix the second and not the others |
+| What runs is matched once, when a step has handled everything | Matching after each thing handled, which was built first so that a state started part-way through a step would be there for what came next. It made what ran depend on the route: a key taken out and put back by one handler kept its state, and by two events in one step lost it. Holding what is sent to a state that is not running, until the match, keeps the one thing the first way was for |
 | A started state is given its data once | Data that follows the starter's as it changes. That keeps one fact in two states and needs a rule for which of them may write it |
 | A started state reports to its starter with one verb, into the starter's own events | A table of handlers per started state, which would have been a fourth beside `on`, `asks` and `follows` |
 | What a view delivers goes to a handler | Writing it straight into a field. Data would then change by something other than what a handler returns, and the graph would not show it |
@@ -382,7 +403,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   busy by the thread itself, whose `writing` state answers the same ask its `idle` state accepts; accepting and
   starting to write are one step. The threads system takes no events: the two it had existed so that two asks could
   change data, and went when those asks returned `answered`.
-- **What runs follows the data** (`starts-check.mts`, 13 checks): a state started alone runs while its starter is
+- **What runs follows the data** (`starts-check.mts`, 15 checks): a state started alone runs while its starter is
   the case, stops when it is left and starts anew when it is entered again; it is given its data once, as it starts;
   a key the field gains starts its state in that step, given what the data holds for it; one started part-way
   through a step is there for what comes next in that step; a key the field loses stops its state, lets go of what it
@@ -462,10 +483,12 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   something the user does while progress waits is handled after it; another ask's answer is not ahead of progress
   sent before it; a frame hands over what waits when nothing else arrives first; and stopping a window mid-ask leaves
   nothing unhandled.
-- **A reader runs again only for the place it read** (`mirror.mts`, `binding-check.mts`, 9 checks, with
+- **A reader runs again only for the place it read** (`mirror.mts`, `binding-check.mts`, 12 checks, with
   `@vue/reactivity`'s `effect` standing for a component's render): a message in one thread runs only that thread's
   reader, a rename only that title's, a move only the reader of where the state is; removing from a list and deleting
-  a key reach their readers; and the state's own value is never written to. The same file checks a window's frame:
+  a key reach their readers; and the state's own value is never written to. One of many, reached from outside by
+  name and key: a change in one runs only that one's reader; one that is not running reads as nothing, and its reader
+  runs when it starts and when it stops; one that stops and starts again is read afresh. The same file checks a window's frame:
   the next paint while it shows, the next turn while it is hidden, and what was waiting handed over once when it hides.
 - **Progress gathered into batches** (`append-cost.mts`): the measurement above, and the search and threads examples,
   which now make one change per batch.
@@ -648,10 +671,8 @@ projects. Each would loosen the fit to this app.
 - **Window-to-window sends**, the app's `sendToSurface`.
 - **What is left of what a state starts and follows.** Rule 10 is built and checked on two examples. Not built: the
   brain, the bus and the shell on it, which are the app's own cases: a flow per run, a surface per pack, a system per
-  registration. A component cannot reach a started state, since `child` exists only in a handler, so the Vue binding
-  has no way to read one card of many. Removing a key and adding it back keeps its state when one handler does both
-  and starts it anew when two events in one step do, which follows from matching after each thing handled and is a
-  rule someone will meet.
+  registration. And `useState`, the composable that would call `system.child` and `mirror` for a component: what it
+  rests on exists and is checked, and nothing renders.
 - **Events only the state itself may send.** A state has one union of events, so anything that can reach it can tell
   it `FOUND` or `PIECES`, which only its own work should. The app's contracts already keep `incoming` apart from
   `internal`, and the prototype lost that: `send` should take both, and `tell` and `broadcast` only what is

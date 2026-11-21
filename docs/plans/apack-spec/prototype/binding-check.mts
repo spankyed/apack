@@ -5,7 +5,7 @@
 import { deepStrictEqual, strictEqual } from 'node:assert'
 import { effect } from '@vue/reactivity'
 import { mirror } from './mirror.mts'
-import { given, reaching, system, type Value } from './state.mts'
+import { each, given, reaching, system, type Each, type Value } from './state.mts'
 import { windowFrame } from './window-frame.mts'
 
 type Shape = {
@@ -60,6 +60,56 @@ const watched = () => {
   return { send, held, ran, seen, sys, handle }
 }
 
+// ── one of many: a card for each item, read from outside ────────────────────────────────────────────────────────────
+
+type Card = { data: { id: string; label: string; bumps: number } }
+const card = state<Card, { type: 'BUMP' }>()({
+  data: { id: given, label: given, bumps: 0 },
+  on: { BUMP: (_, { data }) => ({ data: { bumps: data.bumps + 1 } }) },
+})
+type Board = { data: { items: Record<string, string> }; starts: { card: Each<typeof card> } }
+type BoardEvent = { type: 'ADD'; id: string; label: string } | { type: 'REMOVE'; id: string } | { type: 'BUMP'; id: string }
+const board = state<Board, BoardEvent>()({
+  data: { items: {} },
+  starts: { card: each('items', card, (id, data) => ({ id, label: data.items[id]! })) },
+  on: {
+    ADD: ({ id, label }) => ({ data: (d) => { d.items[id] = label } }),
+    REMOVE: ({ id }) => ({ data: (d) => { delete d.items[id] } }),
+    BUMP: ({ id }, { tell, child }) => { tell(child('card', id), { type: 'BUMP' }) },
+  },
+})
+
+/** A board with two cards, and a reader of each card, of a third that is not there yet, and of which there are. */
+const boarded = () => {
+  const sys = system({ side: 'window' })
+  const handle = sys.start('board', board)
+  const send = (event: BoardEvent): void => sys.send(handle, event)
+  send({ type: 'ADD', id: 'a', label: 'Alpha' })
+  send({ type: 'ADD', id: 'b', label: 'Beta' })
+  // A card is reached from outside by the name it is declared under and its key: what a component would do.
+  const held = { board: mirror<Value<Board>>(sys, handle), a: mirror(sys, sys.child(handle, 'card', 'a')), b: mirror(sys, sys.child(handle, 'card', 'b')), c: mirror(sys, sys.child(handle, 'card', 'c')) }
+  const runs = { which: 0, a: 0, b: 0, c: 0 }
+  const seen: { which?: string[]; a?: number; c?: string } = {}
+  effect(() => { runs.which++; seen.which = Object.keys(held.board.value.data.items) })
+  effect(() => { runs.a++; seen.a = held.a.value?.data.bumps })
+  effect(() => { runs.b++; void held.b.value?.data.bumps })
+  effect(() => { runs.c++; seen.c = held.c.value?.data.label })
+  const since = { ...runs }
+  const ran = (): string[] => { const names = (Object.keys(runs) as Array<keyof typeof runs>).filter((name) => runs[name] !== since[name]); Object.assign(since, runs); return names }
+  return { send, ran, seen, sys, handle }
+}
+
+// What must not compile: reaching a started state from outside is checked against what its starter declares.
+{
+  const sys = system({ side: 'window' })
+  const handle = sys.start('typed', board)
+  // @ts-expect-error a card is one of many, so reaching one takes its key
+  void sys.child(handle, 'card')
+  // @ts-expect-error the board starts no such state
+  void sys.child(handle, 'deck', 'a')
+  sys.stop()
+}
+
 const checks: Array<[string, () => void]> = [
   ['a message in one thread runs only the reader of that thread', () => {
     const it = watched()
@@ -112,6 +162,35 @@ const checks: Array<[string, () => void]> = [
 
   // ── a frame, in a window ──────────────────────────────────────────────────────────────────────────────────────────
 
+  ['a change in one of many runs only the reader of that one', () => {
+    const it = boarded()
+    it.send({ type: 'BUMP', id: 'a' })
+    deepStrictEqual(it.ran(), ['a'])
+    strictEqual(it.seen.a, 1)
+    it.send({ type: 'BUMP', id: 'b' })
+    deepStrictEqual(it.ran(), ['b'])
+  }],
+  ['one that is not running reads as nothing, and its reader runs when it starts and when it stops', () => {
+    const it = boarded()
+    strictEqual(it.seen.c, undefined)
+    it.send({ type: 'ADD', id: 'c', label: 'Gamma' })
+    deepStrictEqual(it.ran(), ['which', 'c'])
+    strictEqual(it.seen.c, 'Gamma')
+    deepStrictEqual(it.seen.which, ['a', 'b', 'c'])
+    it.send({ type: 'REMOVE', id: 'c' })
+    deepStrictEqual(it.ran(), ['which', 'c'])
+    strictEqual(it.seen.c, undefined)
+  }],
+  ['one that stops and starts again is read afresh, and the readers of the others do not run', () => {
+    const it = boarded()
+    it.send({ type: 'BUMP', id: 'a' })
+    it.send({ type: 'REMOVE', id: 'a' })
+    it.ran()
+    strictEqual(it.seen.a, undefined)
+    it.send({ type: 'ADD', id: 'a', label: 'Alpha again' })
+    deepStrictEqual(it.ran(), ['which', 'a'])
+    strictEqual(it.seen.a, 0)
+  }],
   ['a showing window waits for its next paint', () => {
     const page = fakePage()
     const ran: string[] = []
