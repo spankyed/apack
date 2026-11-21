@@ -11,7 +11,7 @@
 // from `inference` directly where the app goes through a brain flow. `findDocument` stands for `libraryService.find`
 // and `inference` for `services.inference`.
 
-import { given, reaching, system, type AskFailure } from './state.mts'
+import { given, reaching, system, within, type AskFailure } from './state.mts'
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // What can be reached by name. In the app a pack's generated facade would declare this.
@@ -214,7 +214,7 @@ function threadsSurface(log: (line: string) => void) {
       THREAD_CREATED: ({ threadId, title }, { data }) => ({ data: { titles: { ...data.titles, [threadId]: title } } }),
 
       THREAD_CHANGED: ({ threadId }, { data, snapshot }) => {
-        const showing = (snapshot.at === 'thread.idle' || snapshot.at === 'thread.sending') && snapshot.data.threadId === threadId
+        const showing = within(snapshot, 'thread') && snapshot.data.threadId === threadId
         if (showing || data.unseen.includes(threadId)) return
         return { data: { unseen: [...data.unseen, threadId] } }
       },
@@ -389,3 +389,17 @@ if (process.argv[1]?.endsWith('threads.mts')) {
   console.log(lines.join('\n'))
   a.window.stop(); b.window.stop(); backend.stop()
 }
+
+// ── `within`: what must not compile ─────────────────────────────────────────────────────────────────────────────────
+
+function withinMustNotCompile(value: import('./state.mts').Value<ThreadsSurface>): void {
+  // @ts-expect-error a thread's id exists only somewhere inside `thread`
+  void value.data.threadId
+  if (within(value, 'thread')) void value.data.threadId
+  if (within(value, 'thread.sending')) void value.data.streamed
+  // @ts-expect-error there is no such state to be inside
+  within(value, 'board')
+  // @ts-expect-error inside `thread` is not enough to know it is sending
+  if (within(value, 'thread')) void value.data.streamed
+}
+void withinMustNotCompile

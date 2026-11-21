@@ -80,6 +80,17 @@ export type Value<S> = [Names<S>] extends [never]
   ? { readonly data: Readonly<DataOf<S>> }
   : { [L in Leaves<S>]: { readonly at: L; readonly data: Readonly<DataAt<S, L>> } }[Leaves<S>]
 
+/** Every state a path passes through: `thread` and `thread.idle` for `thread.idle`. */
+type Through<A> = A extends `${infer H}.${infer T}` ? H | `${H}.${Through<T>}` : A
+
+/**
+ * Whether a value is at a state or anywhere inside it. It narrows the value to the places under that state, so the
+ * data that exists there can be read. The path is the structure itself: nothing is declared, and nothing can go stale.
+ */
+export function within<V extends { readonly at: string }, P extends Through<V['at']>>(value: V, state: P): value is Extract<V, { readonly at: P | `${P}.${string}` }> {
+  return value.at === state || value.at.startsWith(`${state}.`)
+}
+
 type Gained<S, H, T> = T extends `${infer TH}.${infer TT}`
   ? (H extends `${TH}.${infer HT}` ? Gained<Sub<S, TH>, HT, TT> : H extends TH ? Below<Sub<S, TH>, TT> : Below<S, T>)
   : DataOf<Sub<S, T>>

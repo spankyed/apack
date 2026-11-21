@@ -158,6 +158,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
 | An ask does not change data by returning | Considered and declined: every change then has one shape, the extractor stays complete, and no real port needed it. To revisit if ports show many ask-plus-event pairs; the form would be an explicit `change((data) => …)` |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
+| No tags; `within(value, 'thread')` reads the path | Tags, as XState has them. "Somewhere inside `thread`" is a fact about the structure, so a tag for it is a second copy that can go stale, and it narrows no data. Tags are for grouping states that share no parent, and the app has no such group: on `375e00a563`, 2026-11-21, by text search, all 16 tags it declares name one state each. To revisit if a port finds a real cross-cutting group |
 | A refusal may carry data, declared per kind | A kind and a message only. spankyed/apack#583 declares data per kind, and its settings refusal, which carries the store's `problems`, is the case a message alone cannot serve |
 
 ## What the prototype proves
@@ -178,6 +179,8 @@ commands. Types and kernel together are about 500 lines.
 - **A surface follows views** (`views.mts`), modelled on the threads surface: one for as long as the surface runs, one
   only while a thread is open, and one per open tab. Opening another thread stops the last one's view; closing a tab
   stops its view; stopping the surface stops the rest.
+- **`within` narrows by path** (`state.mts`, used in `threads.mts`): inside `thread` the thread's id can be read,
+  inside `thread.sending` the streamed text can, and a state that does not exist does not compile.
 - **Mistakes that do not compile** were checked at each stage with `@ts-expect-error`: a state missing from a
   definition, entering a state without its data, reading a field of a state it is not in, an answer of the wrong type,
   an undeclared refusal, telling a state an event it does not take. Three about a refusal's data are in `threads.mts`:
@@ -246,15 +249,51 @@ than renaming again here.
 What does not carry over is authoring in this design's syntax on XState's runtime. A handler here chooses where to go
 when it runs, and XState's targets are fixed in the machine's config.
 
+## What to build around it
+
+The design is the smaller half of the value. In the order they would pay:
+
+1. **The Vue binding.** The largest unknown, and what the 439 `useSelector` sites become. A component should read a
+   state by name and re-render only for the fields it read:
+
+   ```ts
+   const thread = useState('threads')
+   thread.at                                  // reactive
+   if (within(thread, 'thread')) thread.data.threadId
+   ```
+
+   `within` exists. `useState` and per-field reactivity do not, and a per-field change is known to the kernel only as
+   "this state changed" today.
+2. **Tests that replay interleavings.** The risk in this design is ordering: a result that arrives after its state was
+   left. A kernel with an injectable scheduler can run every ordering of a scenario, or a seeded one, and replay a
+   failure exactly. This is the strongest reason to own the kernel.
+3. **The graph as a recorded file.** `graph.mts` is a script. As a recorded file per feature, with `:check` and
+   `:update` halves like the API reports, a change to a state's graph shows in the diff. The same data gives pack rules:
+   a state never entered, an event nothing takes, an ask nobody asks.
+4. **The step log.** A step is already one whole unit: its cause, the handlers that ran, the data that changed, and
+   what left the system. Recorded, it gives a bug report that replays to the same state, a test made from a recording,
+   and a timeline in the Logs surface that shows what one click caused across every state it reached.
+5. **Affordances.** Every state declares what it takes, so the app can answer what can be done right now on any
+   surface, with each event's name and the type of its fields. An agent driving the app asks that instead of reading
+   the screen, and the answer is right by construction. For this product it is the capability most worth having, and
+   no state library offers it.
+6. **The rough edges the examples showed.** A state it started is reached with `child('draft', draft)` each time and
+   should be declared once. A nested update is noisy (`{ ...data.titles, [id]: title }`). The two under Not built about
+   fields: a default that still has to be given, and names unique along a path.
+
+Deliberately not built: parallel states, history states, a visual editor, and a general-purpose library for other
+projects. Each would loosen the fit to this app.
+
 ## Not built
 
-- **The Vue binding.** Nothing renders. 439 `useSelector` sites depend on it.
+- **The Vue binding.** Nothing renders. 439 `useSelector` sites depend on it. Sketched under What to build around it.
 - **Roles**: `tell({ role: 'brain' }, …)`.
 - **A write nobody waits for**, which appliers and migrations make today.
 - **Window-to-window sends**, the app's `sendToSurface`.
 - **Keyed dynamic children**: a flow per run, a surface per pack, a system per registration. The brain, the bus and the
   shell need them. A keyed set of views is covered by `watch`; a keyed set of states is not.
-- **A bound on a step.** Two states that tell each other forever never commit.
+- **A bound on a step, and what a thrown handler does.** Two states that tell each other forever never commit, and a
+  handler that throws has no defined outcome beyond being reported.
 - **Field names unique along a path** are assumed and not enforced.
 - **A field with a default still has to be given** when entering its state, because the types cannot see the default.
 - **Persistence, delayed transitions and history states** are absent. The app uses one delayed transition and no
