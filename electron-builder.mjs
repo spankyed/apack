@@ -6,6 +6,7 @@ import {createRequire} from 'node:module';
 import {APP_WORKSPACES, bundledPackagesFile, readBuildManifest, verifyBuildOutputs, verifyPackagedBuild} from './build/build-metadata.ts';
 import {electronNoticesPointer, electronSbomComponent, ffmpegSource, shipElectronNotices} from './scripts/lib/electron-notices.ts';
 import {brokerNoticesFile, brokerSbomComponent, sbomIdentity, writeAppNotices} from './scripts/lib/third-party-notices.ts';
+import {REPOSITORIES} from './scripts/lib/external-packages.mjs';
 
 /**
  * Electron Builder Configuration
@@ -85,8 +86,6 @@ export default /** @type import('electron-builder').Configuration */
     const brokerPlatform = `${context.electronPlatformName}-${Arch[context.arch]}`;
     const broker = brokerNoticesFile(appDir, brokerPlatform);
     const electronVersion = context.packager.info.framework.version;
-    // The pin the broker's install downloads and checks its files against, for the SBOM's commit and hashes
-    const brokerPin = path.join(projectDir, 'packages', 'terminal-broker', 'src', 'pin.json');
     const elmdb = path.join(appDir, 'node_modules', 'elmdb');
     const os = {darwin: 'mac', win32: 'win', linux: 'linux'}[context.electronPlatformName];
     const problems = writeAppNotices({
@@ -104,7 +103,7 @@ export default /** @type import('electron-builder').Configuration */
         ffmpegSource(electronVersion),
         {pointer: "elmdb's native binding's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html in node_modules/elmdb", files: ['THIRD-PARTY-NOTICES', 'COPYRIGHT-rust-library.html'].map(name => path.join(elmdb, name))},
         {
-          pointer: "the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@app/terminal-broker/bin",
+          pointer: `the terminal broker's: THIRD-PARTY-NOTICES and COPYRIGHT-rust-library.html beside it, in node_modules/@apackdev/terminal-${brokerPlatform}`,
           files: broker ? [broker, path.join(path.dirname(broker), 'COPYRIGHT-rust-library.html')] : null,
         },
       ],
@@ -114,10 +113,12 @@ export default /** @type import('electron-builder').Configuration */
       sbom: {
         file: path.join(context.outDir, `${releasePrefix}-${metadata.version}-${os}-${Arch[context.arch]}.cdx.json`),
         app: {name: productName, version: metadata.version},
-        // The vendored checkouts' packages, by the repository each is pinned from, which no registry publishes
-        identity: sbomIdentity(projectDir, {elmdb: 'elmdb#crates/elmdb-node', '@elmdb/ears': 'elmdb#packages/ears', '@apackdev/git': 'apack-git', '@apackdev/terminal': 'apack-terminal#node', '@apackdev/terminal-view': 'apack-terminal#view'}),
-        // The runtime the app ships, with the Chromium and FFmpeg inside it, and the broker with its release's files
-        others: [electronSbomComponent(electronVersion), ...(broker ? [brokerSbomComponent(brokerPin, brokerPlatform)] : [])].filter(Boolean),
+        // The packages our other repositories' releases publish, by the repository and directory each is packed from,
+        // which no registry publishes (scripts/lib/external-packages.mjs)
+        identity: sbomIdentity(projectDir, Object.fromEntries(Object.entries(REPOSITORIES).flatMap(([repo, {packages}]) =>
+          Object.entries(packages).map(([name, {dir}]) => [name, dir === '.' ? repo : `${repo}#${dir}`])))),
+        // The runtime the app ships, with the Chromium and FFmpeg inside it, and the broker with the files beside it
+        others: [electronSbomComponent(electronVersion), brokerSbomComponent(projectDir, appDir, brokerPlatform)].filter(Boolean),
       },
     });
     for (const problem of problems) console.warn(`  • third-party notices: ${problem}`);
@@ -259,11 +260,6 @@ export default /** @type import('electron-builder').Configuration */
     // @apackdev/host/build/pack-workdir), none of which the app loads — and `packages/**/*` above took all of
     // it, dotted directories and all, because electron-builder reads no .gitignore either.
     '!packages/*/.apack/**',
-    // ...nor the terminal broker's build a second time. `@app/terminal-broker` is a workspace, so the app carries it
-    // under node_modules as it carries any dependency, and resolves it there: the resolver in its `src/` answers the
-    // `bin/` beside it, and `packages/terminal-broker` in the app has no resolver, its `src/` being excluded above.
-    // The notices beside the binary ship in the copy the app runs (packaged-app-files.spec.ts)
-    '!packages/terminal-broker/bin/**',
     // The CLI's scaffold templates, which are .ts and .vue files it reads at run time rather than code the
     // app loads — so the exclusions above would strip every one of them and `apack pack init` from the CLI this
     // app installs (bin/app-launcher.sh) would scaffold nothing. Last match wins, so this comes after them.
@@ -276,15 +272,6 @@ export default /** @type import('electron-builder').Configuration */
     '!**/node_modules/**/docs/**',
     '!**/node_modules/**/CHANGELOG*',
     '!**/node_modules/**/.eslintrc*',
-    // elmdb is linked from a checkout of its repository, so its crate sits beside what it publishes (its package.json
-    // `files`: index.js, the protocol and the binding); only what it publishes ships
-    '!**/node_modules/elmdb/{src,target}/**',
-    '!**/node_modules/elmdb/{build.rs,Cargo.toml}',
-    '!**/node_modules/elmdb/protocol/*.js',
-    // EARS is linked from the same checkout, so its source, specs, benchmarks and API reports sit beside the `dist`
-    // it publishes (its package.json `files`); only what it publishes ships. `scripts` and `*.ts` go above
-    '!**/node_modules/@elmdb/ears/{src,tests,bench,etc,.temp}/**',
-    '!**/node_modules/@elmdb/ears/{tsconfig*.json,vitest*.config.ts}',
     ...APP_WORKSPACES.map(name => ({
       from: path.join(buildRoot, 'packages', name, 'dist'), to: `packages/${name}/dist`, filter: ['**/*'],
     })),

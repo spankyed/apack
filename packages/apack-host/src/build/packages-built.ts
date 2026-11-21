@@ -165,17 +165,17 @@ function compiled(at: CheckoutPaths, pkg: string, ...extraInputs: string[]): Bui
 }
 
 /**
- * What a bundle **inlines** of each shared-instance package and what it links from another checkout
- * (`scripts/bundle-package.ts`): the SDK's source in this checkout, and EARS' built `dist` in the elmdb checkout
- * `vendor/elmdb` links to (in CI, the clone at the pin), with each one's manifest.
+ * What a bundle **inlines** of each shared-instance package (`scripts/bundle-package.ts`): the SDK's source in this
+ * checkout, and EARS' built `dist` as the install put it in `node_modules` (elmdb's release, or the checkout
+ * `npm run deps:local` points at), with each one's manifest.
  *
  * Keyed by at least the list of what is shared, so a second shared-instance package fails to compile until it says
  * where its code comes from.
  */
 const INLINED_FROM = {
   '@apackdev/sdk': ({ pkgFile }) => [pkgFile('apack-sdk', 'src'), pkgFile('apack-sdk', 'package.json')],
-  '@elmdb/ears': ({ repoFile }) => [repoFile('vendor', 'elmdb', 'packages', 'ears', 'dist'),
-    repoFile('vendor', 'elmdb', 'packages', 'ears', 'package.json')],
+  '@elmdb/ears': ({ repoFile }) => [repoFile('node_modules', '@elmdb', 'ears', 'dist'),
+    repoFile('node_modules', '@elmdb', 'ears', 'package.json')],
 } satisfies Record<(typeof SHARED_INSTANCE_PACKAGES)[number], (at: CheckoutPaths) => string[]> & Record<string, (at: CheckoutPaths) => string[]>;
 
 /**

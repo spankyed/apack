@@ -13,8 +13,8 @@
 //                     peer resolving to the binding above, in the packaged layout
 //   @napi-rs/keyring  loads its binding, without touching the credential store
 //
-//   apack-terminal    runs the pinned broker `@app/terminal-broker` installed, every file the pin names for this
-//                     platform being there (on Windows, the ConPTY beside the binary)
+//   apack-terminal    runs the broker `@apackdev/terminal` answers from its platform package, with the ConPTY
+//                     beside the binary on Windows
 //
 // **The broker is a binary rather than a module, so its probe is a spawn.** A pty belongs to the
 // `apack-terminal` broker, which the app starts as a child process; what can be wrong with it is what can
@@ -104,8 +104,12 @@ async function main() {
   // be wrong in a release: a binary built for another architecture never reaches its own argument check,
   // and one the package did not carry is not there to run. Asked of the package, not of a path, because
   // the name carries .exe on Windows and the package is what knows that.
-  const broker = load('@app/terminal-broker').brokerBinary();
-  if (!broker) throw new Error('@app/terminal-broker holds no broker for this platform, or not every file its pin names');
+  const broker = load('@apackdev/terminal').brokerBinary();
+  if (!broker) throw new Error('@apackdev/terminal holds no broker for this platform: its platform package is not in the app');
+  // Without these beside it, a Windows broker runs on the system's ConPTY rather than the one it was built with
+  const beside = process.platform === 'win32' ? ['conpty.dll', 'OpenConsole.exe'] : [];
+  const missing = beside.filter((file) => !require('node:fs').existsSync(path.join(path.dirname(broker), file)));
+  if (missing.length) throw new Error('apack-terminal is missing ' + missing.join(' and ') + ' beside ' + broker);
   const ran = require('node:child_process').spawnSync(broker, [], { encoding: 'utf8' });
   if (ran.error) throw new Error('apack-terminal did not run: ' + ran.error.message);
   if (ran.status !== 2 || !/usage: apack-terminal/.test(ran.stderr || '')) {

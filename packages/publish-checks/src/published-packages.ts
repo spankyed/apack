@@ -59,14 +59,14 @@ export const CONSUMER_MATRIX = (Object.keys(TSC_VERSIONS) as TscVersion[])
 export const PACKAGES_BUILT = packagesBuiltOrRefuse('npm run packages:build (or npm test -w @app/publish-checks, which builds them)');
 
 /**
- * elmdb's packages the SDK brings, which no registry has: each packed from the checkout `vendor/elmdb` links to (EARS'
- * `dist` built by `npm run link:elmdb`, the binding for this machine) and standing in for the registry through npm's
- * `overrides`, as `test-packaged-authoring-author.sh` does. A consumer names neither: they arrive as the SDK's.
+ * elmdb's packages the SDK brings, which no registry has: the tarball of each that this repository's root `overrides`
+ * name, elmdb's release's, standing in for the registry through npm's `overrides`, as
+ * `test-packaged-authoring-author.sh` does. A consumer names neither: they arrive as the SDK's. While the root points
+ * them at a local checkout (`npm run deps:local`), each is packed from it.
  */
-const ELMDB_PACKAGES: Record<string, string> = {
-  '@elmdb/ears': path.join(REPO_ROOT, 'vendor', 'elmdb', 'packages', 'ears'),
-  elmdb: path.join(REPO_ROOT, 'vendor', 'elmdb', 'crates', 'elmdb-node'),
-};
+const ELMDB_PACKAGES = ['@elmdb/ears', 'elmdb'];
+const rootOverrides = (): Record<string, string> =>
+  (JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')) as { overrides: Record<string, string> }).overrides;
 
 /** The version of `name` this repository has installed */
 function installedVersion(name: string): string {
@@ -121,7 +121,10 @@ export function installPublishedPackages(): string {
       ...Object.fromEntries(Object.values(PACKED_PACKAGES).flatMap((dir) => optionalPeers(dir))),
       ...Object.fromEntries(Object.entries(PACKED_PACKAGES).map(([name, dir]) => [`@apackdev/${name}`, packed(dir)])),
     },
-    overrides: Object.fromEntries(Object.entries(ELMDB_PACKAGES).map(([name, dir]) => [name, packed(dir)])),
+    overrides: Object.fromEntries(ELMDB_PACKAGES.map((name) => {
+      const spec = rootOverrides()[name]!;
+      return [name, spec.startsWith('file:') ? packed(path.resolve(REPO_ROOT, spec.slice('file:'.length))) : spec];
+    })),
   }));
   npm(['install', '--install-strategy=nested', '--prefer-offline', '--ignore-scripts', '--no-audit', '--no-fund', '--loglevel=error'], root);
   return root;

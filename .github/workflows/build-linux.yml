@@ -8,7 +8,7 @@ name: Build Linux
 #
 # **The glibc floor is the newest glibc any binary the app ships needs**, which the deb states to apt as
 # `libc6 (>= …)` (`LINUX_GLIBC_FLOOR`, electron-builder.mjs): 2.28. The terminal broker apack-terminal publishes and
-# elmdb's binding, built here in manylinux_2_28, are each built against it. Every ELF file in the packaged app is read
+# elmdb's binding, which elmdb's release builds in manylinux_2_28, are each built against it. Every ELF file in the packaged app is read
 # after the build (build/prod/glibc-floor.sh): one past the floor fails it, since it wouldn't load on a system at the
 # floor, and so does a floor that isn't the newest need. The runner's own glibc is newer, so the smoke check above runs
 # the app on 2.39, not at the floor: the symbols read are what holds the floor.
@@ -55,11 +55,6 @@ jobs:
           cache: npm
       - name: Install pinned npm
         run: npm install -g npm@11.21.1
-
-      - uses: ./.github/actions/elmdb
-        with: { glibc: '2.28' }
-      - uses: ./.github/actions/apack-terminal
-      - uses: ./.github/actions/apack-git
 
       # A tag names its channel, and the `channel` input is read for a branch alone: a tag's files go into its
       # release, where a beta build dispatched on a production tag would put apack Beta's files

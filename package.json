@@ -20,11 +20,9 @@
   "scripts": {
     "preinstall": "[ \"$NODE_ENV\" = 'production' ] && echo '\u26a0\ufe0f  NODE_ENV=production \u2014 devDependencies will be skipped. Run: unset NODE_ENV' >&2 || true",
     "postinstall": "node scripts/postinstall.mjs",
-    "fetch:terminal-broker": "node scripts/fetch-terminal-broker.mjs",
-    "pin:apack-terminal": "node scripts/pin-apack-terminal.mjs",
-    "link:elmdb": "node scripts/link-elmdb.mjs",
-    "link:apack-terminal": "node scripts/link-apack-terminal.mjs",
-    "link:apack-git": "node scripts/link-apack-git.mjs",
+    "deps:pin": "node scripts/deps.mjs pin",
+    "deps:local": "node scripts/deps.mjs local",
+    "deps:released": "node scripts/deps.mjs released",
     "session:new": "node scripts/session.mjs new",
     "session:check": "node scripts/session.mjs check",
     "dev": "node packages/dev-mode.js",
@@ -157,12 +155,12 @@
     "@typescript-eslint/typescript-estree": {
       "minimatch": "^11.0.1"
     },
-    "elmdb": "file:./vendor/elmdb/crates/elmdb-node",
-    "@elmdb/ears": "file:./vendor/elmdb/packages/ears",
-    "@apackdev/git": "file:./vendor/apack-git",
-    "@apackdev/terminal": "file:./vendor/apack-terminal/node",
-    "@apackdev/terminal-view": "file:./vendor/apack-terminal/view"
+    "elmdb": "https://github.com/spankyed/elmdb/releases/download/pkg-5a7a350149e70d3d17fd37a7a098ef4f2a9f3997/elmdb-0.1.0.tgz",
+    "@elmdb/ears": "https://github.com/spankyed/elmdb/releases/download/pkg-5a7a350149e70d3d17fd37a7a098ef4f2a9f3997/elmdb-ears-0.1.0.tgz",
+    "@apackdev/git": "https://github.com/spankyed/apack-git/releases/download/pkg-0be7efd71616356cf31fcf6ac9f33ad469481683/apackdev-git-0.1.0.tgz",
+    "@apackdev/terminal": "https://github.com/spankyed/apack-terminal/releases/download/bin-8816ce8efd9a2a26d2a4cbff291cd433580f61bd/apackdev-terminal-0.1.0.tgz",
+    "@apackdev/terminal-view": "https://github.com/spankyed/apack-terminal/releases/download/bin-8816ce8efd9a2a26d2a4cbff291cd433580f61bd/apackdev-terminal-view-0.1.0.tgz"
   },
-  "//vendored": "The five packages above with file: overrides are published from the three checkouts vendor/ links (elmdb, apack-git, apack-terminal), each at the commit its vendor/*.rev pins. Every workspace manifest names them by the version they publish, as it would any registry package, and these overrides alone say this checkout supplies them; no workspace manifest may hold a file: spec (workspace-manifests.spec.ts).",
+  "//external": "The five packages above with URL overrides are the tarballs the CI of elmdb, apack-git and apack-terminal attaches to the release of a commit, which `npm run deps:pin -- <repo> <commit>` writes (scripts/lib/external-packages.mjs). Every workspace manifest names them by the version they publish, as it would any registry package, and these overrides alone say where they come from; no workspace manifest may hold a file: spec (workspace-manifests.spec.ts). `npm run deps:local` points them at a local checkout for working across repositories, which is never committed.",
   "//minimatch": "GHSA-g3hv-75wg-m249 (a denial of service from a crafted pattern) affects minimatch >=7 <11.0.1, so the range override lifts only those copies to 11; the 3.x and 5.x copies eslint, electron-builder and dir-compare depend on are outside the range and stay. typescript-estree is reached through a peer dependency, which npm carries no override across, so it needs its own nested entry; npm ls still calls that edge invalid, since it does not credit the override there either."
 }

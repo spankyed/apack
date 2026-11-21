@@ -77,7 +77,7 @@ jobs:
     if: ${{ !inputs.app_acceptance && !inputs.strict_chain && !inputs.compiler_windows && !inputs.compiler_macos && !inputs.compiler_linux }}
     runs-on: macos-26
     # Measured 2026-11-17: 25 minutes reached the CLI integration tests with four steps to go, every finished
-    # step passing; building elmdb from source alone takes about five. A budget for a stuck job, not a target
+    # step passing. A budget for a stuck job, not a target
     timeout-minutes: 60
 
     steps:
@@ -89,10 +89,6 @@ jobs:
           cache: npm
       - name: Install pinned npm
         run: npm install -g npm@11.21.1
-
-      - uses: ./.github/actions/elmdb
-      - uses: ./.github/actions/apack-terminal
-      - uses: ./.github/actions/apack-git
 
       - name: Install dependencies
         env:
@@ -202,10 +198,6 @@ jobs:
           cache: npm
       - name: Install pinned npm
         run: npm install -g npm@11.21.1
-
-      - uses: ./.github/actions/elmdb
-      - uses: ./.github/actions/apack-terminal
-      - uses: ./.github/actions/apack-git
 
       # **Electron's binary is cached, so most runs never ask the CDN for it.** It comes from GitHub's release
       # CDN, whose 504 failed a strict job inside `scripts/postinstall.mjs` on 2026-11-08 — before any of this

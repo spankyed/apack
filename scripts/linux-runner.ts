@@ -7,9 +7,8 @@
 // The checkout is mounted read-only and copied into a persistent volume, because the container needs its own
 // `node_modules` (the Mac's holds macOS binaries) and its own package builds, and because the suites' live
 // watchers want an ordinary Linux filesystem rather than a bind mount. Only the first run pays for `npm ci`;
-// later runs copy what changed. The elmdb checkout `vendor/elmdb` links to is mounted and copied the same way, into a
-// volume of its own, where the container builds its Linux binding. The command's exit code and output pass straight
-// through.
+// later runs copy what changed. The packages the lockfile takes from our other repositories' releases install there as
+// on any Linux machine, each holding its Linux build. The command's exit code and output pass straight through.
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
@@ -17,94 +16,11 @@ import * as path from 'node:path';
 import { PACKAGES_PREBUILT_ENV, REPO_ROOT } from '@apackdev/host/build/packages-built';
 import { linuxTestInvocation } from './lib/linux-native-scratch.ts';
 import { BUDGET_MS } from './lib/step-budgets.ts';
-import { oneRustToolchain, pinnedChannel } from './lib/vendored-checkouts.ts';
 
 const DOCKERFILE = path.join(REPO_ROOT, 'scripts', 'linux', 'Dockerfile');
 const short = (text: string | Buffer): string => createHash('sha256').update(text).digest('hex').slice(0, 12);
-/** Native source for this owned run; qualification may select a frozen checkout without changing the developer link. */
-const ELMDB_CHECKOUT = (() => {
-  try {
-    return fs.realpathSync(process.env.APACK_LINUX_ELMDB_ROOT ?? path.join(REPO_ROOT, 'vendor', 'elmdb'));
-  } catch {
-    process.stderr.write('Native source is unavailable: check APACK_LINUX_ELMDB_ROOT or run npm run link:elmdb.\n');
-    process.exit(1);
-  }
-})();
-/**
- * The apack-terminal checkout, for the two npm packages in it: the broker's (`node/`) and the view a
- * window's terminals are drawn with (`view/`), which the built-in pack bundles.
- *
- * **Copied in as files, the view built.** The view is TypeScript, so what the Mac's link built is what
- * Linux runs, and there is nothing for the container to compile: its `dist/` goes where the link would
- * have pointed. The broker's package goes as what is tracked in it — the manifest `npm ci` resolves and
- * the protocol's types — and without the binary staged beside them, which is this Mac's.
- */
-const TERMINAL_CHECKOUT = (() => {
-  try {
-    return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'apack-terminal'));
-  } catch {
-    process.stderr.write('The terminal broker and its view are unavailable: run npm run link:apack-terminal.\n');
-    process.exit(1);
-  }
-})();
-/**
- * The apack-git checkout, for the one npm package in it: the git engine the built-in pack bundles.
- *
- * **Copied in as files, built.** It is TypeScript with nothing native, so what the Mac's link built is what
- * Linux runs: its manifest and its `dist/` go where the link would have pointed.
- */
-const GIT_ENGINE_CHECKOUT = (() => {
-  try {
-    return fs.realpathSync(path.join(REPO_ROOT, 'vendor', 'apack-git'));
-  } catch {
-    process.stderr.write('The git engine is unavailable: run npm run link:apack-git.\n');
-    process.exit(1);
-  }
-})();
-/**
- * The Rust checkouts this image installs a toolchain for, which is **the ones the container builds** and not
- * every one `vendor/` links.
- *
- * A linked Rust checkout the container never compiles has no say in the toolchain: `vendor/apack-terminal` is
- * one, since the container is given its two npm packages as files (`TERMINAL_CHECKOUT`) rather than source to
- * build. Folding it in made its `rust-toolchain.toml` a veto over every `test:linux` on a Mac — a channel
- * disagreement in a checkout this image does nothing with refused the run and named both pins, with no way to
- * act on it short of editing the other repository.
- *
- * Mounting a second source is what adds a member here, and `oneRustToolchain` is kept for that: with one it
- * cannot refuse, and the edit that makes it fire again is a second `-v` beside elmdb's below.
- */
-const CONTAINER_RUST_CHECKOUTS = [ELMDB_CHECKOUT];
-/** The one toolchain the image installs, since there is one image */
-const RUST_TOOLCHAIN = (() => {
-  try {
-    return oneRustToolchain(CONTAINER_RUST_CHECKOUTS.map((dir) => ({ path: dir, channel: pinnedChannel(dir) })));
-  } catch (error) {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-    process.exit(1);
-  }
-})();
-/** Keyed by the Dockerfile's bytes and the toolchain it installs, so either changing builds a new image */
-const IMAGE = `apack-linux-test:${short(`${fs.readFileSync(DOCKERFILE, 'utf8')}\n${RUST_TOOLCHAIN}`)}`;
-/**
- * The container's copy of the elmdb checkout and its builds, kept across runs as the work volume is. Keyed by the
- * elmdb checkout, so every worktree linking that checkout shares it — and one Rust release build serves them all,
- * which is why it is not per worktree. `ELMDB_LOCK` is what makes sharing it safe
- */
-const ELMDB_VOLUME = `apack-linux-elmdb-${short(ELMDB_CHECKOUT)}`;
-/**
- * The elmdb volume's lock, at its root: the sync's copy, install and build take it, waiting for one another's, since
- * the run lock below covers only a checkout's own work volume and every checkout's runs share this one
- */
-const ELMDB_LOCK = '.apack-elmdb.lock';
-/**
- * Written at the elmdb volume's root once a build of what the volume holds finished, and removed before one starts:
- * a copy that changed nothing, onto a finished build, builds nothing, so a sync never rewrites the binding a run in
- * another checkout has loaded unless elmdb's source moved
- */
-const ELMDB_BUILT = '.apack-elmdb-built';
-/** Cargo's downloaded crates, shared by every checkout's builds */
-const CARGO_REGISTRY_VOLUME = 'apack-linux-cargo-registry';
+/** Keyed by the Dockerfile's bytes, so changing it builds a new image */
+const IMAGE = `apack-linux-test:${short(fs.readFileSync(DOCKERFILE, 'utf8'))}`;
 /** One working copy per checkout, so two worktrees never share a container `node_modules` */
 const WORK_VOLUME = `apack-linux-work-${short(REPO_ROOT)}`;
 const NPM_CACHE_VOLUME = 'apack-linux-npm-cache';
@@ -177,8 +93,6 @@ const CONTAINER_CACHES = [
  * A file is written by the run, so one sync makes any volume identifiable, however old.
  */
 const CHECKOUT_FILE = '.apack-checkout';
-/** Whose elmdb volume this is, as `CHECKOUT_FILE` says whose work volume: the elmdb checkout it copies */
-const ELMDB_CHECKOUT_FILE = '.apack-elmdb-checkout';
 /**
  * What Docker must have free before a run starts. A run's sync, install and builds grow its volumes by several GB, and
  * a disk that fills mid-run fails it with errors that name neither the disk nor what holds it
@@ -201,13 +115,13 @@ if (docker(['info']).status !== 0) {
 
 if (docker(['image', 'inspect', IMAGE]).status !== 0) {
   process.stderr.write(`Building the Linux test image ${IMAGE} (once per Dockerfile change)…\n`);
-  if (docker(['build', '-t', IMAGE, '--build-arg', `RUST_TOOLCHAIN=${RUST_TOOLCHAIN}`, '-f', DOCKERFILE, path.dirname(DOCKERFILE)], 'inherit').status !== 0) {
+  if (docker(['build', '-t', IMAGE, '-f', DOCKERFILE, path.dirname(DOCKERFILE)], 'inherit').status !== 0) {
     refuse(`Building ${IMAGE} failed; its output is above.`);
   }
 }
 
 /**
- * Work and elmdb volumes whose checkout is gone.
+ * Work volumes whose checkout is gone.
  *
  * A volume is keyed by a hash of the checkout's path, so nothing could tell an abandoned volume from a live one
  * — a deleted worktree's `node_modules` and platform builds simply stayed for ever, and one of them reached
@@ -225,7 +139,6 @@ function pruneAbandonedVolumes(): void {
   if (listed.status !== 0) return;
   const kinds = [
     { prefix: 'apack-linux-work-', mine: WORK_VOLUME, file: CHECKOUT_FILE, what: 'work' },
-    { prefix: 'apack-linux-elmdb-', mine: ELMDB_VOLUME, file: ELMDB_CHECKOUT_FILE, what: 'elmdb' },
   ];
   for (const name of listed.stdout.split('\n').map((line) => line.trim())) {
     const kind = kinds.find(({ prefix }) => name.startsWith(prefix));
@@ -294,38 +207,7 @@ const quote = (arg: string): string => `'${arg.replace(/'/g, `'\\''`)}'`;
  * The containers share the Linux VM's kernel, so `flock` on a file in the volume holds across them.
  */
 const sync = [
-  // The link is the container's own, to its copy of elmdb, where its Linux binding is built before npm resolves it
-  `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} --exclude=/vendor/elmdb --exclude=/vendor/apack-terminal --exclude=/vendor/apack-git ${FILTERS.map(quote).join(' ')} /src/ /work/`,
-  // The broker's and the view's packages, as the files the link names on the Mac: see TERMINAL_CHECKOUT.
-  // A volume from before this held the Mac's link there, copied as a link to a path the container lacks
-  'if [ -L /work/vendor/apack-terminal ]; then unlink /work/vendor/apack-terminal; fi',
-  'mkdir -p /work/vendor/apack-terminal',
-  "rsync -a --delete --exclude=node_modules --exclude=/node/apack-terminal --exclude=/node/apack-terminal.exe --include=/node/*** --include=/view/*** --exclude='*' /terminal-src/ /work/vendor/apack-terminal/",
-  // The git engine's package, as the files the link names on the Mac: see GIT_ENGINE_CHECKOUT
-  'if [ -L /work/vendor/apack-git ]; then unlink /work/vendor/apack-git; fi',
-  'mkdir -p /work/vendor/apack-git',
-  "rsync -a --delete --include=/package.json --include=/dist/*** --exclude='*' /git-engine-src/ /work/vendor/apack-git/",
-  `exec 8>/elmdb/${ELMDB_LOCK}`,
-  'if ! flock -n 8; then',
-  '  echo "Waiting for another checkout\'s test:linux run to finish syncing the shared elmdb volume…" >&2',
-  '  flock 8',
-  'fi',
-  `elmdbChanged=$(rsync -aiO --delete --exclude=/${ELMDB_LOCK} --exclude=/${ELMDB_BUILT} --exclude=/${ELMDB_CHECKOUT_FILE} --exclude=/target/ --exclude=node_modules --exclude='*.node' /elmdb-src/ /elmdb/)`,
-  'ln -sfn /elmdb /work/vendor/elmdb',
-  'elmdbLock=$(sha256sum /elmdb/package-lock.json | cut -d" " -f1)',
-  'if [ "$(cat /elmdb/node_modules/.apack-installed-lock 2>/dev/null)" != "$elmdbLock" ]; then',
-  '  (cd /elmdb && npm ci --no-audit --no-fund)',
-  '  echo "$elmdbLock" > /elmdb/node_modules/.apack-installed-lock',
-  '  elmdbChanged=installed',
-  'fi',
-  `if [ -n "$elmdbChanged" ] || [ ! -f /elmdb/${ELMDB_BUILT} ]; then`,
-  `  rm -f /elmdb/${ELMDB_BUILT}`,
-  '  (cd /elmdb && npm run -s build >/dev/null)',
-  `  touch /elmdb/${ELMDB_BUILT}`,
-  'fi',
-  // Whose volume this is: see ELMDB_CHECKOUT_FILE
-  `printf '%s' ${quote(ELMDB_CHECKOUT)} > /elmdb/${ELMDB_CHECKOUT_FILE}`,
-  'exec 8>&-',
+  `rsync -a --delete --exclude=/${RUN_LOCK} --exclude=/${CHECKOUT_FILE} ${FILTERS.map(quote).join(' ')} /src/ /work/`,
   // Whose volume this is, for the prune that cannot otherwise tell: see CHECKOUT_FILE
   `printf '%s' ${quote(REPO_ROOT)} > /work/${CHECKOUT_FILE}`,
   // What the rsync exemption would otherwise keep for ever: see CONTAINER_CACHES
@@ -374,7 +256,7 @@ const run = [
   `export APACK_COMPILER_STORE="\${APACK_COMPILER_STORE:-/work/node_modules/.cache/${COMPILER_CACHE}}"`,
   `bash -ec ${quote(sync)}`,
   // `exec` keeps fd 9, so the lock is held for as long as the command runs
-  `export APACK_EXECUTION_RECORDS=${quote(JSON.stringify({ source: [RUN_LOCK, CHECKOUT_FILE], native: [ELMDB_LOCK, ELMDB_BUILT, ELMDB_CHECKOUT_FILE] }))}`,
+  `export APACK_EXECUTION_RECORDS=${quote(JSON.stringify({ source: [RUN_LOCK, CHECKOUT_FILE] }))}`,
   `exec ${command.map(quote).join(' ')}`,
 ].join('\n');
 const script = ['set -e', run].join('\n');
@@ -398,9 +280,6 @@ const child = spawn('docker', [
   // dev server binds where a client dialling 127.0.0.1 cannot reach it
   'run', '--rm', '--init', '--name', CONTAINER, ...RESOURCE_LIMITS, ...scratchArgs, '--sysctl', 'net.ipv6.conf.all.disable_ipv6=1',
   '-v', `${REPO_ROOT}:/src:ro`, '-v', `${WORK_VOLUME}:/work`, '-v', `${NPM_CACHE_VOLUME}:/root/.npm`,
-  '-v', `${ELMDB_CHECKOUT}:/elmdb-src:ro`, '-v', `${ELMDB_VOLUME}:/elmdb`, '-v', `${CARGO_REGISTRY_VOLUME}:/usr/local/cargo/registry`,
-  '-v', `${TERMINAL_CHECKOUT}:/terminal-src:ro`,
-  '-v', `${GIT_ENGINE_CHECKOUT}:/git-engine-src:ro`,
   ...gitDirMount(),
   ...forwarded.flatMap((key) => ['-e', key]),
   // Set here and never forwarded: the VM counts the host's load as its CPU, so a ceiling held to its size there fires

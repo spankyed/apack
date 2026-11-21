@@ -43,13 +43,20 @@ SDK_TGZ="$(ls "$WORK"/apackdev-sdk-*.tgz)"
 UI_TGZ="$(ls "$WORK"/apackdev-ui-*.tgz)"
 CLI_TGZ="$(ls "$WORK"/apackdev-cli-*.tgz)"
 TESTING_TGZ="$(ls "$WORK"/apackdev-testing-*.tgz)"
-# EARS and elmdb, its peer, are elmdb's packages and aren't published: each one's tarball, packed from the elmdb
-# checkout the link points at (EARS' dist built by `npm run link:elmdb`, the binding for this machine), stands in for
-# the registry through npm's overrides, as no pack names either: EARS arrives as @apackdev/sdk's dependency
-(cd "$ROOT/vendor/elmdb/packages/ears" && npm pack --silent --pack-destination "$WORK" >/dev/null)
-EARS_TGZ="$(ls "$WORK"/elmdb-ears-*.tgz)"
-(cd "$ROOT/vendor/elmdb/crates/elmdb-node" && npm pack --silent --pack-destination "$WORK" >/dev/null)
-ELMDB_TGZ="$(ls "$WORK"/elmdb-0*.tgz)"
+# EARS and elmdb, its peer, are elmdb's packages and aren't published to a registry: the tarball of each that the
+# root's overrides name, elmdb's release's, stands in for the registry through npm's overrides, as no pack names
+# either: EARS arrives as @apackdev/sdk's dependency. One the root points at a local checkout (`npm run deps:local`)
+# is packed from it
+external_spec() {
+  local spec
+  spec="$(node -p "require('$ROOT/package.json').overrides['$1']")"
+  case "$spec" in
+    file:*) (cd "$ROOT/${spec#file:}" && echo "file:$WORK/$(npm pack --silent --pack-destination "$WORK")") ;;
+    *) echo "$spec" ;;
+  esac
+}
+EARS_SPEC="$(external_spec @elmdb/ears)"
+ELMDB_SPEC="$(external_spec elmdb)"
 
 step "1. Install @apackdev/cli + @apackdev/sdk from the tarballs"
 # Every install revalidates npm's cached metadata, as a pack author's does: under `--prefer-offline`, metadata cached
@@ -57,7 +64,7 @@ step "1. Install @apackdev/cli + @apackdev/sdk from the tarballs"
 # without an error (rollup's), so the build fails later for want of it
 mkdir "$WORK/tools"
 # The SDK's @elmdb/ears comes from its tarball too
-(cd "$WORK/tools" && npm init -y >/dev/null && npm pkg set "overrides.elmdb=file:$ELMDB_TGZ" "overrides.@elmdb/ears=file:$EARS_TGZ" && npm install --loglevel=error --no-audit --no-fund "$SDK_TGZ" "$CLI_TGZ")
+(cd "$WORK/tools" && npm init -y >/dev/null && npm pkg set "overrides.elmdb=$ELMDB_SPEC" "overrides.@elmdb/ears=$EARS_SPEC" && npm install --loglevel=error --no-audit --no-fund "$SDK_TGZ" "$CLI_TGZ")
 APACK="$WORK/tools/node_modules/.bin/apack"
 "$APACK" --version
 
@@ -68,7 +75,7 @@ PACK="$WORK/demo-pack"
 cd "$PACK"
 # The tarballs stand in for the npm registry. The scaffold names no @elmdb/ears: a pack has the SDK's
 [ "$(npm pkg get dependencies.@elmdb/ears devDependencies.@elmdb/ears)" = "{}" ] || fail "apack pack init added @elmdb/ears to the pack"
-npm pkg set "dependencies.@apackdev/sdk=file:$SDK_TGZ" "devDependencies.@apackdev/cli=file:$CLI_TGZ" "devDependencies.@apackdev/testing=file:$TESTING_TGZ" "overrides.elmdb=file:$ELMDB_TGZ" "overrides.@elmdb/ears=file:$EARS_TGZ"
+npm pkg set "dependencies.@apackdev/sdk=file:$SDK_TGZ" "devDependencies.@apackdev/cli=file:$CLI_TGZ" "devDependencies.@apackdev/testing=file:$TESTING_TGZ" "overrides.elmdb=$ELMDB_SPEC" "overrides.@elmdb/ears=$EARS_SPEC"
 npm install --loglevel=error --no-audit --no-fund
 # @apackdev/sdk carries the platform API only; the component library and its editors come with @apackdev/ui
 for lib in @tiptap highlight.js lowlight @guolao/vue-monaco-editor; do
