@@ -409,25 +409,29 @@ The design is the smaller half of the value. In the order they would pay:
    failure exactly. This is the strongest reason to own the kernel.
 3. **The graph as a recorded file.** `graph.mts` is a script. As a recorded file per feature, with `:check` and
    `:update` halves like the API reports, a change to a state's graph shows in the diff. The same data gives pack rules:
-   a state never entered, an event nothing takes, an ask nobody asks.
+   a state never entered, an event nothing takes, an ask nobody asks. That is the whole of the checking worth having.
+   Exploring the graph for a state with no way out, or an event a state does not take, was considered and left out:
+   the first reports every state that is meant to be an end, and the second every event handled further up, which is
+   where most handlers sit.
 4. **The step log.** A step is already one whole unit: its cause, the handlers that ran, the data that changed, and
    what left the system. Recorded, it gives a bug report that replays to the same state, a test made from a recording,
    and a timeline in the Logs surface that shows what one click caused across every state it reached.
-5. **Affordances.** Every state declares what it takes, so the app can answer what can be done right now on any
-   surface, with each event's name and the type of its fields. An agent driving the app asks that instead of reading
-   the screen, and the answer is right by construction. For this product it is the capability most worth having, and
-   no state library offers it.
-6. **A pack rule against a promise nobody awaits.** The kernel keeps a dropped ask from taking the process down, but
+5. **A pack rule against a promise nobody awaits.** The kernel keeps a dropped ask from taking the process down, but
    the code that dropped it also never sees its answer or its refusal. `no-floating-promises` over pack sources, as a
    pack rule beside the others, refuses it for every pack.
-7. **A pack rule against a swallowed `Left`.** A `catch` in `run` or in an ask's handler that can take a `Left` has to
+6. **A pack rule against a swallowed `Left`.** A `catch` in `run` or in an ask's handler that can take a `Left` has to
    rethrow it. One that does not lets the code carry on after its state was left. The kernel already drops what that
    code returns and raises `Left` again at its next ask, so what the rule protects is a side effect outside the state,
    a file written or a process started, made by code that should have stopped. Refusals come back as values, so
    ordinary code has no reason to catch around an ask and the rule should fire rarely.
-8. **The rough edges the examples showed.** A state it started is reached with `child('draft', draft)` each time and
+7. **The rough edges the examples showed.** A state it started is reached with `child('draft', draft)` each time and
    should be declared once. The two under Not built about fields: a default that still has to be given, and names
    unique along a path.
+8. **Affordances, once the graph is a recorded file.** Every state declares what it takes, so the app can answer what
+   can be done right now on any surface, with each event's name and the type of its fields. An agent driving the app
+   asks that instead of reading the screen, and the answer is right by construction. For this product it is the
+   capability most worth having, and no state library offers it. It is last because it reads the same data the recorded
+   graph holds, so it is small after item 3 and a second extractor before it.
 
 Deliberately not built: parallel states, history states, a visual editor, and a general-purpose library for other
 projects. Each would loosen the fit to this app.
@@ -445,8 +449,12 @@ projects. Each would loosen the fit to this app.
   handler that throws has no defined outcome beyond being reported.
 - **Field names unique along a path** are assumed and not enforced.
 - **A field with a default still has to be given** when entering its state, because the types cannot see the default.
-- **Persistence, delayed transitions and history states** are absent. The app uses one delayed transition and no
-  history states.
+- **Restoring a state after a reconnect or a code reload.** A state is plain data, `{ at, data }`, so it can be handed
+  back to a fresh copy of itself, which is what `useSurfaceDraft` does by hand today for what a component holds. Wanted,
+  and waits for the first port to say what it must carry.
+- **Saving a state to disk** is not wanted. Its running work cannot be saved, so a restored state would be at
+  `searching` with nothing searching, and a saved state is a stored format that would then have to be kept stable.
+- **Delayed transitions and history states** are absent. The app uses one delayed transition and no history states.
 - **The kernel's own rough edges.** Reading a state that has ended throws, and a returned field that no active state
   owns is dropped without a word.
 - **The bridge**: running a state inside XState's actor system during a migration. Unproven, and the migration order
