@@ -1,5 +1,4 @@
 import * as fs from 'node:fs';
-import { createRequire } from 'node:module';
 import * as path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { packagesBuiltOrRefuse, REPO_ROOT } from '@apackdev/host/build/packages-built';
@@ -121,7 +120,7 @@ function filesUnder(dir: string): string[] {
  */
 const LICENSE_LIKE = /(licen[cs]e|notice|copying)/i;
 
-/** A directory entry that is a directory, or a link to one: the workspaces and vendored packages are links */
+/** A directory entry that is a directory, or a link to one: the workspaces are links */
 const isDirectory = (dir: string, entry: fs.Dirent): boolean =>
   entry.isDirectory()
   || (entry.isSymbolicLink() && fs.statSync(path.join(dir, entry.name), { throwIfNoEntry: false })?.isDirectory() === true);
@@ -189,44 +188,21 @@ describe("the packaged app's file list", () => {
   });
 
   /**
-   * The terminal broker the app runs, as a packaged app resolves it: through `node_modules/@app/terminal-broker`,
-   * whose resolver is in `src/` — which `packages/*` + `/src/**` keeps out of the app's own copy of `packages/` —
-   * and whose installed build is in `bin/`. The population is the package as installed here, so a build the
-   * install has not fetched is not asked about, and the resolver always is.
+   * The terminal broker the app runs, as a packaged app resolves it: `@apackdev/terminal`'s runtime entry, and the
+   * platform package it answers the binary from, with the notices beside it and, on Windows, the ConPTY. The
+   * population is the packages as installed here, so this machine's platform package is the one asked about.
    */
   it('carries the terminal broker where the packaged app resolves it', () => {
-    const installed = population('the terminal broker package', [...filesUnder('packages/terminal-broker/src'), ...filesUnder('packages/terminal-broker/bin')])
-      .map((file) => path.join('node_modules/@app/terminal-broker', path.relative('packages/terminal-broker', file)));
+    const platformPackage = `node_modules/@apackdev/terminal-${process.platform}-${process.arch}`;
+    // Declarations aside, which the app carries of no package
+    const installed = population('the terminal broker packages', [...filesUnder('node_modules/@apackdev/terminal'), ...filesUnder(platformPackage)]
+      .filter((file) => !file.endsWith('.d.ts')));
+    expect(population('the broker binary', installed.filter((file) => /\/apack-terminal(\.exe)?$/.test(file)))
+      .filter((file) => !dependencyShipsUnder(patterns, file))).toEqual([]);
     expect(installed.filter((file) => !dependencyShipsUnder(patterns, file))).toEqual([]);
-    // And the case can fail: an exclusion naming `src` takes the resolver
-    const resolver = installed.filter((file) => file.includes('/src/'));
-    expect(population('the broker resolver', resolver).filter((file) => dependencyShipsUnder([...patterns, '!**/src/**'], file))).toEqual([]);
-  });
-
-  /**
-   * And it carries the broker's build once. `@app/terminal-broker` is a workspace, so the same `bin/` is reachable
-   * twice: as the dependency under `node_modules`, and under `packages/`, where no resolver ships to answer it. The
-   * resolver looks beside itself, so the copy under `node_modules` is the one the app runs and the other is weight:
-   * the binary, its notices and, on Windows, the ConPTY beside it.
-   */
-  const BROKER_BIN_EXCLUSION = '!packages/terminal-broker/bin/**';
-  const brokerBuild = () => population("the terminal broker's installed build", filesUnder('packages/terminal-broker/bin'));
-
-  it("ships the terminal broker's build once, beside the resolver the app loads", () => {
-    expect(brokerBuild().filter(ships)).toEqual([]);
-    // The one resolver that ships answers a path in its own package, so the build it finds is the one kept
-    expect(filesUnder('packages/terminal-broker/src').filter(ships)).toEqual([]);
-    const { brokerBinaryPath } = createRequire(import.meta.url)(path.join(REPO_ROOT, 'packages/terminal-broker')) as { brokerBinaryPath(): string };
-    const answered = path.relative(path.join(REPO_ROOT, 'packages/terminal-broker'), brokerBinaryPath());
-    expect(answered.split(path.sep)[0]).toBe('bin');
-    expect(dependencyShipsUnder(patterns, path.join('node_modules/@app/terminal-broker', answered))).toBe(true);
-  });
-
-  /** The mutation: the recursive include of `packages` carries the second copy without the one exclusion */
-  it('would carry a second copy of it without the one pattern that excludes it', () => {
-    expect(patterns).toContain(BROKER_BIN_EXCLUSION);
-    const stripped = without(BROKER_BIN_EXCLUSION);
-    expect(brokerBuild().filter((file) => !shipsUnder(stripped, file))).toEqual([]);
+    // And the case can fail: an exclusion naming the platform package takes the binary
+    expect(installed.filter((file) => file.startsWith(platformPackage))
+      .filter((file) => dependencyShipsUnder([...patterns, '!**/node_modules/@apackdev/terminal-*/**'], file))).toEqual([]);
   });
 
   /**

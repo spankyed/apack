@@ -12,7 +12,7 @@
 // session that survived is told from one that did not.
 import { describe, expect, it, vi } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { repository } from '#generated/repository.ts'
 import { EARS, newId } from '#generated/ears.ts'
 import { defaultShell } from '#features/code/be/services/known-shells.ts'

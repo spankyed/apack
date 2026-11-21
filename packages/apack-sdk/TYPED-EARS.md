@@ -4,7 +4,7 @@ The typed EARS helpers are the main way pack authors touch data, so their types 
 
 ## Files covered
 
-The engine's types are `@elmdb/ears`' (elmdb's `packages/ears`, changed there and reaching apack when `vendor/elmdb.rev` moves); the SDK keeps the names and shapes it adds, and codegen the pack's.
+The engine's types are `@elmdb/ears`' (elmdb's `packages/ears`, changed there and reaching apack when `npm run deps:pin -- elmdb` moves its release); the SDK keeps the names and shapes it adds, and codegen the pack's.
 
 
 - elmdb's `packages/ears/src/entities.ts`: the core `EARS` namespace (`EARS.EntityId`), `BaseEntity`, `ShapeOf`, `EntityNameArg`

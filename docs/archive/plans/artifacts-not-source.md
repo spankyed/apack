@@ -1,13 +1,13 @@
 # The vendored checkouts hand over artifacts, not source
 
 Status: **route decided, not scheduled — 2026-11-08.** Prompted by
-[apack-terminal as a package](../archive/plans/apack-terminal-as-a-package.md), which left publishing as the
+[apack-terminal as a package](apack-terminal-as-a-package.md), which left publishing as the
 remaining condition — *"Only publishing to a registry retires those, and elmdb has not got there either."*
 Publishing is the larger of two answers and it is the one taken: **the npm registry**. The smaller
 answer — a per-platform release asset — stays below as the step that proves the matrix first, not as a
 route still open.
 
-Not the same work as [npm and Homebrew distribution](deferred/npm-and-homebrew-distribution.md), which
+Not the same work as [npm and Homebrew distribution](../../plans/deferred/npm-and-homebrew-distribution.md), which
 publishes the five `@apackdev` packages and the CLI. These two are native, unscoped, and consumed through
 `vendor/`; nothing in that plan reaches them.
 
@@ -44,7 +44,7 @@ its matrix before a version range replaces a path.
 - **Artifacts** — each repository's CI builds its matrix on release and publishes the per-platform artifact
   as a GitHub release asset. This repo's two actions download the asset for the runner instead of cloning and
   compiling. No scope, no registry account, no publish in the development loop, and nothing entangled with
-  [npm and Homebrew distribution](deferred/npm-and-homebrew-distribution.md).
+  [npm and Homebrew distribution](../../plans/deferred/npm-and-homebrew-distribution.md).
 - **A registry — chosen.** The same artifacts, served by npm, with the `file:` dependency replaced by a
   version range. It additionally buys an outside consumer for elmdb and removes `vendor/` entirely. What it
   brings with it is a publish in the path of a protocol change and version negotiation where there is none;
@@ -212,7 +212,7 @@ docs point at `npm ci` when both files must stay in sync.
    names. The broker keeps compiling, deliberately: one checkout built from source still exercises the
    container's toolchain derivation and the janitor, so nothing rots unnoticed between the two halves.
 4. **The broker's per-platform packages, then the same switch — after
-   [goal-one-vt-core](../archive/goals/goal-one-vt-core.md), not before** (its D8, settled 2026-11-09). That goal
+   [goal-one-vt-core](../goals/goal-one-vt-core.md), not before** (its D8, settled 2026-11-09). That goal
    gives the broker a pinned per-target binary dependency of its own on the same four triples, so packaging
    it first means building this matrix twice and the second time is the one with a native artifact in it.
    Steps 1 to 3 are unaffected and run beside it; the broker staying vendored and compiled throughout is

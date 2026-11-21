@@ -6,7 +6,7 @@
 // recording opened by a window is closed when that window is not there to look at it.
 import { afterEach, describe, expect, it } from 'vitest'
 import { mockService, resetTestData, startApp, takeSystemErrors } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { featureSettings } from '#generated/settings.ts'
 import { repository } from '#generated/repository.ts'
 import { EARS, newId } from '#generated/ears.ts'

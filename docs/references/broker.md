@@ -3,9 +3,11 @@
 A terminal's process is owned by `apack-terminal`, a Rust process outside the app's API process. A pack asks
 `services.terminal` for a session; nothing in a pack, and nothing in the API, holds a pty.
 
-The broker lives in a sibling checkout, linked as `vendor/apack-terminal` and pinned by
-`vendor/apack-terminal.rev`. Run `npm run link:apack-terminal` to make the link; the linker refuses a
-checkout that is not one and one that does not hold the pin.
+The broker lives in its own repository, [spankyed/apack-terminal](https://github.com/spankyed/apack-terminal), whose CI
+attaches each commit's packages to a release: `@apackdev/terminal` (the protocol's types and `brokerBinary()`), one
+platform package per target holding the binary and its notices, and `@apackdev/terminal-view`. The root's `overrides`
+name the release (`npm run deps:pin -- apack-terminal <commit>`), and npm installs the platform package this machine
+runs.
 
 ## Why it is a separate process
 
@@ -80,7 +82,7 @@ rows and its keys cross no process but the broker and the window.
 After the greeting the connection is length-prefixed binary (`src/view/wire.rs` in the broker,
 `view/src/broker/wire.ts` in the view, in the same repository). Its two halves meet in a file of vectors the
 broker's suite writes from its encoder and the view's suite reads where it lies, so one commit — the one
-`vendor/apack-terminal.rev` pins — holds both.
+whose release the overrides name — holds both.
 
 - **A frame is what changed since the frame that view last drew**, and the next is sent only once the
   last was acknowledged. A window that stops drawing — hidden, busy, gone — is sent nothing and costs
@@ -183,10 +185,10 @@ the broker ships**, at `node/protocol.ts` there, where `cargo xtask check-genera
 `client.ts` imports those types from `apack-terminal` like any dependency's.
 
 This repository kept a copy of that file instead, with a script that re-derived and compared it and a
-typecheck leg to run the comparison. All three are gone. The copy existed because nothing resolved through
-the `vendor/apack-terminal` link, and the check could not fail where it mattered: CI never linked a
-checkout, so it printed *not derived here* and passed — a gate that reports nothing because it looked at
-nothing. The package resolves through the link now, so there is one file and nothing watching a second.
+typecheck leg to run the comparison. All three are gone. The copy existed because nothing resolved the broker's
+package, and the check could not fail where it mattered: CI never had a checkout, so it printed *not derived here*
+and passed — a gate that reports nothing because it looked at nothing. The package is a dependency now, so there is
+one file and nothing watching a second.
 
 Newline-delimited JSON, because the first consumer is a Node client and a debuggable frame is worth more than
 a compact one. Every connection's first message is `hello` with a protocol number; anything else is refused

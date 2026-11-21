@@ -1,4 +1,5 @@
 import { createRequire } from 'module'
+import path from 'node:path'
 
 const require = createRequire(import.meta.url)
 
@@ -77,10 +78,9 @@ if (installed) {
 }
 
 /**
- * The terminal broker the app runs: the release build `packages/terminal-broker/src/pin.json` pins, downloaded and
- * verified for this platform (`fetch-terminal-broker.mjs`). Not retried around here, since the fetch asks again
- * itself, and a failure fails the install: an app whose broker is missing or is not the pinned bytes is the
- * state the pin exists to rule out.
+ * The terminal broker's platform package, which npm skips without failing when its download fails: refused here, so an
+ * install without it fails rather than an app without a terminal (`lib/broker-installed.mjs`)
  */
-const { fetchTerminalBroker } = await import('./fetch-terminal-broker.mjs')
-await fetchTerminalBroker()
+const { missingBroker } = await import('./lib/broker-installed.mjs')
+const broker = missingBroker(path.resolve(import.meta.dirname, '..'))
+if (broker !== undefined) throw new Error(`[postinstall] ${broker}`)

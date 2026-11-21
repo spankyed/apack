@@ -33,14 +33,17 @@ const VIRTUAL_PACKAGES: readonly (readonly [prefix: string, packageName: string]
 ];
 
 /**
- * The `@apackdev` packages published from other repositories (apack-git's, and apack-terminal's two), which a checkout
- * takes from the checkouts `vendor/` links. They share the scope and are third-party here, as elmdb's are
+ * The `@apackdev` packages published from other repositories (apack-git's, and apack-terminal's two), which the root's
+ * `overrides` take from each repository's release. They share the scope and are third-party here, as elmdb's are
  */
 export const OTHER_REPOSITORY_PACKAGES: ReadonlySet<string> = new Set(['@apackdev/git', '@apackdev/terminal', '@apackdev/terminal-view']);
 
+/** The platform packages `@apackdev/terminal` installs its broker from, one per target (`@apackdev/terminal-darwin-arm64`) */
+const BROKER_PLATFORM_PACKAGE = /^@apackdev\/terminal-(darwin|linux|win32)-/;
+
 /** First-party: a workspace of this repository, or the repository's root package */
 export const isFirstParty = (name: string): boolean => name === 'apack' || name.startsWith('@app/')
-  || (name.startsWith('@apackdev/') && !OTHER_REPOSITORY_PACKAGES.has(name));
+  || (name.startsWith('@apackdev/') && !OTHER_REPOSITORY_PACKAGES.has(name) && !BROKER_PLATFORM_PACKAGE.test(name));
 
 /** The nearest `package.json` naming a package at or above `dir`, or `undefined` past the filesystem's root */
 function namedPackageAt(dir: string): BundledPackage | undefined {

@@ -36,8 +36,9 @@ async function bundledInputs(): Promise<string[]> {
   const { metafile } = await build({
     absWorkingDir: API_DIR, entryPoints: ['src/server.ts'], bundle: true, write: false, metafile: true, logLevel: 'silent',
     format: 'esm', platform: 'node', outdir: 'unwritten', conditions: ['@apackdev/source', 'module'],
-    // What is left outside changes nothing here: only the workspace's own sources are compared
-    external: ['typescript', 'esbuild', '*.node', 'electron', 'vue'],
+    // What is left outside changes nothing here: only the workspace's own sources are compared. elmdb is left out as
+    // tsup leaves it (tsup.config.ts): its loader requires its binary's platform package, a `.node` file by name
+    external: ['typescript', 'esbuild', '*.node', 'electron', 'vue', 'elmdb', '@elmdb/binding-*'],
     plugins: [{ name: 'externalize-vue', setup(bundler) { bundler.onResolve({ filter: /\.vue$/ }, () => ({ path: '__vue_stub__', external: true })); } }],
   });
   return Object.keys(metafile.inputs);

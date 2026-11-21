@@ -295,9 +295,6 @@ export const LAYERS: {
   // Both check the repo rather than run in it, and reach the host for the build and freshness primitives
   { name: '@app/repo-checks', dir: 'packages/repo-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
   { name: '@app/publish-checks', dir: 'packages/publish-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
-  // The pinned broker's resolver, which the host and a packaged app's smoke check reach: plain Node, below
-  // every layer, so it imports none of them
-  { name: '@app/terminal-broker', dir: 'packages/terminal-broker', allowed: [] },
 ];
 
 /**
@@ -316,14 +313,15 @@ const apackPackage = (specifier: string) => specifier.match(/^@apackdev\/[^/]+/)
 
 /**
  * The `@apackdev` packages another repository publishes (`@apackdev/git`, `@apackdev/terminal`, ...): the ones the
- * root's `overrides` maps to a vendored checkout. They share the scope and are no layer of this repository, so the
- * layer rule reads them as any other outside dependency. A root with no manifest, as a fixture tree is, has none
+ * root's `overrides` takes from a release's tarball, or from a local checkout (`npm run deps:local`). They share the
+ * scope and are no layer of this repository, so the layer rule reads them as any other outside dependency. A root
+ * with no manifest, as a fixture tree is, has none
  */
-const vendoredPackages = (root: string): Set<string> => {
+const externalPackages = (root: string): Set<string> => {
   const manifestFile = path.join(root, 'package.json');
   if (!fs.existsSync(manifestFile)) return new Set();
   const overrides = readJsonFile<{ overrides?: Record<string, unknown> }>(manifestFile).overrides ?? {};
-  return new Set(Object.entries(overrides).filter(([, spec]) => typeof spec === 'string' && spec.startsWith('file:')).map(([name]) => name));
+  return new Set(Object.entries(overrides).filter(([, spec]) => typeof spec === 'string' && /^(https:|file:)/.test(spec)).map(([name]) => name));
 };
 
 /**
@@ -375,10 +373,10 @@ export function findUpwardImports(layers = LAYERS, root = repoRoot, unlayered = 
       problems.push(`${dir}: listed in UNLAYERED_BY_DESIGN (${reason}) but it holds no code, or is gone`);
     }
   }
-  const vendored = vendoredPackages(root);
+  const external = externalPackages(root);
   const layerPackage = (specifier: string) => {
     const pkg = apackPackage(specifier);
-    return pkg !== undefined && !vendored.has(pkg) ? pkg : undefined;
+    return pkg !== undefined && !external.has(pkg) ? pkg : undefined;
   };
   for (const { name, dir, allowed, forbidden } of layers) {
     const permitted = new Set([name, ...allowed]);

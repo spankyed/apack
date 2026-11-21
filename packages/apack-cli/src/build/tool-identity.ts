@@ -44,7 +44,7 @@ export function buildToolHash(moduleUrl = import.meta.url): string {
         : path.dirname(require.resolve(`${name}/package.json`));
       scopes.push({ name, root: owner, directory: 'src' });
     }
-    // What the SDK links from a checkout (EARS from elmdb's, which the root's `overrides` maps to `vendor/`) changes
+    // What the SDK links from a checkout (EARS from elmdb's, which `npm run deps:local` maps the root's `overrides` to) changes
     // without its version or the lockfile moving, so it is scoped by what it ships; what the SDK has from the registry
     // moves with the lockfile. A linked package is the one whose real directory is outside every `node_modules`
     const [sdk, ...brought] = dependencyClosure('@apackdev/sdk', root);

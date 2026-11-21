@@ -433,11 +433,16 @@ describe('the notices written into the app', () => {
     expect(write(setup, 'preview')).toContainEqual(expect.stringContaining('@vscode/ripgrep@1.0.0 downloads v0.0.1'));
   });
 
-  it("points at the broker's notices built for the app's own platform, never another's", () => {
-    const broker = 'node_modules/@app/terminal-broker/bin/abc123';
-    const app = tree({ [`${broker}/darwin-arm64/THIRD-PARTY-NOTICES`]: 'x', [`${broker}/darwin-x64/THIRD-PARTY-NOTICES`]: 'x' });
-    expect(brokerNoticesFile(app, 'darwin-x64')).toBe(path.join(app, broker, 'darwin-x64', 'THIRD-PARTY-NOTICES'));
-    expect(brokerNoticesFile(app, 'darwin-arm64')).toBe(path.join(app, broker, 'darwin-arm64', 'THIRD-PARTY-NOTICES'));
+  it("points at the broker's notices beside the binary of the app's own platform, never another's", () => {
+    const broker = 'node_modules/@apackdev/terminal-';
+    const app = tree({
+      [`${broker}darwin-arm64/apack-terminal`]: 'x', [`${broker}darwin-arm64/THIRD-PARTY-NOTICES`]: 'x',
+      [`${broker}win32-x64/bin/apack-terminal.exe`]: 'x', [`${broker}win32-x64/bin/THIRD-PARTY-NOTICES`]: 'x',
+      [`${broker}linux-x64/package.json`]: '{}',
+    });
+    expect(brokerNoticesFile(app, 'darwin-arm64')).toBe(path.join(app, `${broker}darwin-arm64`, 'THIRD-PARTY-NOTICES'));
+    expect(brokerNoticesFile(app, 'win32-x64')).toBe(path.join(app, `${broker}win32-x64`, 'bin', 'THIRD-PARTY-NOTICES'));
+    // A platform package holding no binary, and none at all
     expect(brokerNoticesFile(app, 'linux-x64')).toBeUndefined();
     expect(brokerNoticesFile(tree(), 'linux-x64')).toBeUndefined();
   });
@@ -564,26 +569,27 @@ describe("the app's SBOM", () => {
     expect(sbom({})).toEqual([{ license: { name: 'SEE LICENSE IN LICENSE' } }]);
   });
 
-  it("names the terminal broker by its pin: the commit, its binary's hash, and each file beside it with its own", () => {
-    const pin = tree({ 'pin.json': JSON.stringify({ commit: 'abc', files: {
-      'win32-x64': { 'apack-terminal.exe': 'e1', 'conpty.dll': 'c1', 'THIRD-PARTY-NOTICES': 'n1' },
-      'darwin-arm64': { 'apack-terminal': 'd1', 'THIRD-PARTY-NOTICES': 'n1' },
+  it("names the terminal broker by its release's commit, its binary's hash, and each file beside it with its own", () => {
+    const commit = 'a'.repeat(40);
+    const root = tree({ 'package-lock.json': JSON.stringify({ packages: {
+      'node_modules/@apackdev/terminal-win32-x64': { resolved: `https://github.com/spankyed/apack-terminal/releases/download/bin-${commit}/t.tgz` },
     } }) });
-    expect(brokerSbomComponent(path.join(pin, 'pin.json'), 'win32-x64')).toEqual({
-      type: 'application', name: 'apack-terminal', version: 'abc', purl: 'pkg:github/spankyed/apack-terminal@abc', license: 'MIT OR Apache-2.0', sha256: 'e1',
-      components: [{ type: 'file', name: 'conpty.dll', sha256: 'c1' }, { type: 'file', name: 'THIRD-PARTY-NOTICES', sha256: 'n1' }],
+    const app = tree({
+      'node_modules/@apackdev/terminal-win32-x64/package.json': '{}',
+      'node_modules/@apackdev/terminal-win32-x64/apack-terminal.exe': 'exe',
+      'node_modules/@apackdev/terminal-win32-x64/conpty.dll': 'dll',
+      'node_modules/@apackdev/terminal-darwin-arm64/apack-terminal': 'mach-o',
     });
-    expect(brokerSbomComponent(path.join(pin, 'pin.json'), 'darwin-arm64')).toMatchObject({ sha256: 'd1', components: [{ name: 'THIRD-PARTY-NOTICES' }] });
-    expect(brokerSbomComponent(path.join(pin, 'pin.json'), 'linux-arm64')).toBeUndefined();
-    // The committed pin, for every platform it holds: a binary with a SHA-256, and the notices beside it
-    const committed = path.join(REPO_ROOT, 'packages', 'terminal-broker', 'src', 'pin.json');
-    const { files } = JSON.parse(fs.readFileSync(committed, 'utf8')) as { files: Record<string, unknown> };
-    expect(Object.keys(files).length).toBeGreaterThan(0);
-    for (const platform of Object.keys(files)) {
-      const component = brokerSbomComponent(committed, platform)!;
-      expect(component.sha256, platform).toMatch(/^[0-9a-f]{64}$/);
-      expect(component.components!.map(({ name }) => name), platform).toEqual(expect.arrayContaining(['THIRD-PARTY-NOTICES', 'COPYRIGHT-rust-library.html']));
-    }
+    const sha256 = (bytes: string) => createHash('sha256').update(bytes).digest('hex');
+    expect(brokerSbomComponent(root, app, 'win32-x64')).toEqual({
+      type: 'application', name: 'apack-terminal', version: commit, purl: `pkg:github/spankyed/apack-terminal@${commit}`, license: 'MIT OR Apache-2.0',
+      sha256: sha256('exe'), components: [{ type: 'file', name: 'conpty.dll', sha256: sha256('dll') }],
+    });
+    // A platform package the lockfile names no release for is still the binary carried, with no commit to name
+    expect(brokerSbomComponent(root, app, 'darwin-arm64')).toEqual({
+      type: 'application', name: 'apack-terminal', license: 'MIT OR Apache-2.0', sha256: sha256('mach-o'), components: [],
+    });
+    expect(brokerSbomComponent(root, app, 'linux-x64')).toBeUndefined();
   });
 
   it("names the binary a package's install downloaded, at the release its texts were read for, with the hash of the file carried", () => {
@@ -622,12 +628,14 @@ describe("the app's SBOM", () => {
     expect(components.map(({ purl }) => purl)).toEqual(['pkg:github/electron/electron@v1', `pkg:github/microsoft/ripgrep-prebuilt@${release}`, 'pkg:npm/%40vscode/ripgrep@1.0.0']);
   });
 
-  it("names vendored packages by their pinned commit and directory, and hashes the lockfile's", () => {
+  it("names our repositories' packages by the commit of the release the lockfile installs, and hashes the lockfile's", () => {
+    const [elmdb, terminal] = ['a'.repeat(40), 'b'.repeat(40)];
     const root = tree({
-      'vendor/elmdb.rev': 'abc123\n',
-      'vendor/apack-terminal.rev': 'def456\n',
       'package-lock.json': JSON.stringify({ packages: {
         '': { name: 'apack', version: '0.3.14' },
+        'node_modules/elmdb': { version: '0.1.0', resolved: `https://github.com/spankyed/elmdb/releases/download/pkg-${elmdb}/elmdb-0.1.0.tgz`, integrity: 'sha512-elmdb' },
+        'node_modules/@apackdev/terminal': { version: '0.1.0', resolved: `https://github.com/spankyed/apack-terminal/releases/download/bin-${terminal}/t.tgz`, integrity: 'sha512-terminal' },
+        'node_modules/@apackdev/git': { version: '0.1.0', resolved: '../apack-git', link: true },
         'node_modules/vue': { version: '3.5.0', integrity: 'sha512-hoisted' },
         'node_modules/a/node_modules/vue': { version: '3.4.0', integrity: 'sha512-nested' },
         'node_modules/linked': { resolved: 'packages/linked', link: true },
@@ -636,14 +644,16 @@ describe("the app's SBOM", () => {
         'node_modules/unversioned': { integrity: 'sha512-unversioned' },
       } }),
     });
-    const { purls, integrity } = sbomIdentity(root, { elmdb: 'elmdb#crates/elmdb-node', '@apackdev/terminal': 'apack-terminal' });
+    const { purls, integrity } = sbomIdentity(root, { elmdb: 'elmdb#crates/elmdb-node', '@apackdev/terminal': 'apack-terminal', '@apackdev/git': 'apack-git' });
+    // A local checkout's package (`npm run deps:local`) is from no release, so it has no purl here
     expect(purls).toEqual({
-      elmdb: 'pkg:github/spankyed/elmdb@abc123#crates/elmdb-node',
-      '@apackdev/terminal': 'pkg:github/spankyed/apack-terminal@def456',
+      elmdb: `pkg:github/spankyed/elmdb@${elmdb}#crates/elmdb-node`,
+      '@apackdev/terminal': `pkg:github/spankyed/apack-terminal@${terminal}`,
     });
     // The first copy of a release is the one hashed; an entry without a version or an integrity is not hashed at all
     expect(Object.fromEntries(integrity)).toStrictEqual({
       'vue@3.5.0': 'sha512-hoisted', 'vue@3.4.0': 'sha512-nested', 'real-name@1.0.0': 'sha512-aliased',
+      'elmdb@0.1.0': 'sha512-elmdb', '@apackdev/terminal@0.1.0': 'sha512-terminal',
     });
   });
 });

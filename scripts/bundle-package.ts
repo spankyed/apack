@@ -1,6 +1,6 @@
 // Builds a publishable copy of a workspace package that ships as a bundle (@apackdev/cli,
 // @apackdev/testing) into <package>/dist/package. The shared-instance packages (SHARED_INSTANCE_PACKAGES), what
-// they take from a vendored checkout (EARS) and the private @apackdev/host are inlined, the host
+// they take from another repository's release (EARS) and the private @apackdev/host are inlined, the host
 // and the SDK from source and EARS from its built `dist`, so the published package can use host-only modules; every
 // other package stays external and becomes a dependency at the version the workspace uses.
 //
@@ -115,13 +115,13 @@ const workspaceManifestFile = (name: string) => createRequire(path.join(repoRoot
 const workspaceManifest = (name: string) => JSON.parse(fs.readFileSync(workspaceManifestFile(name), 'utf-8'));
 const sharedPkgs = SHARED_INSTANCE_PACKAGES.map(workspaceManifest);
 /**
- * What the shared-instance packages take from another checkout (EARS, from elmdb's, which the root's `overrides` maps to
- * a `file:` path in `vendor/`): inlined with them, as the build it was made from rather than whatever a registry holds
- * at that version
+ * What the shared-instance packages take from another of our repositories (EARS, from elmdb's release, or a local
+ * checkout's, which the root's `overrides` name by URL or `file:` path): inlined with them, as the build it was made
+ * from, since no registry holds it
  */
-const vendored = Object.entries<unknown>(JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8')).overrides ?? {})
-  .filter(([, spec]) => typeof spec === 'string' && spec.startsWith('file:')).map(([name]) => name);
-const LINKED = sharedPkgs.flatMap((shared) => Object.keys(shared.dependencies ?? {}).filter((name) => vendored.includes(name)));
+const external = Object.entries<unknown>(JSON.parse(fs.readFileSync(path.join(repoRoot, 'package.json'), 'utf-8')).overrides ?? {})
+  .filter(([, spec]) => typeof spec === 'string' && /^(https:|file:)/.test(spec)).map(([name]) => name);
+const LINKED = sharedPkgs.flatMap((shared) => Object.keys(shared.dependencies ?? {}).filter((name) => external.includes(name)));
 const inlinedPkgs = [...SHARED_INSTANCE_PACKAGES, ...LINKED].map((name) => ({ name, manifest: workspaceManifest(name) }));
 const hostPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages', 'apack-host', 'package.json'), 'utf-8'));
 const SHARED = new Set<string>(SHARED_INSTANCE_PACKAGES);
@@ -243,7 +243,7 @@ async function main(): Promise<void> {
   // directory, so an inlined workspace package arrives as `../apack-sdk/src/x.ts` — which is why the first
   // version of this recorded zero of the files it exists to record. A dependency under a real `node_modules`
   // is left out: those are covered by `package-lock.json`, which every unit declares. So is a read outside the
-  // checkout, which is EARS' `dist` where `vendor/elmdb` is a link (a clone at the pin, in CI, is inside it).
+  // checkout, which is EARS' `dist` where `npm run deps:local` links a checkout of elmdb.
   const repoRelative = (input: string): string => path.relative(repoRoot, path.resolve(pkgDir, input));
   recordBundleReads(pkg.name, [...new Set([
     ...Object.keys(result.metafile.inputs), ...Object.keys(sharedExternal?.metafile?.inputs ?? {}), ...Object.keys(commonjs?.metafile?.inputs ?? {}),

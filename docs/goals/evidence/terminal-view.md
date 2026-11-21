@@ -255,7 +255,7 @@ things phase 8 and phase 7 left undriven were driven.
 Five readers for the first read (the broker in three parts, the view, the app), one per repository for
 the second and third, each reading a diff nobody on it had written. About a hundred and fifty
 findings; every one was fixed, declined with its reason below, or written down as a limit in
-[the broker reference](../../references/terminal-broker.md). The ones that would have reached a person:
+[the broker reference](../../references/broker.md). The ones that would have reached a person:
 
 | Where | What |
 |---|---|

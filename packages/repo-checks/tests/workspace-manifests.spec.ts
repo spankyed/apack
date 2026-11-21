@@ -4,14 +4,16 @@ import { describe, expect, it } from 'vitest';
 import { population } from '@apackdev/sdk/testing';
 import { REPO_ROOT } from '../../../scripts/lib/packaged-app.ts';
 import { PACKAGE_DIRS } from '../../../scripts/lib/workspace-deps.ts';
-import { OTHER_REPOSITORY_PACKAGES } from '@apackdev/host/build/bundled-packages';
+import { OTHER_REPOSITORY_PACKAGES, isFirstParty } from '@apackdev/host/build/bundled-packages';
+import { REPOSITORIES, releaseOf, releaseUrl, repositoryOf } from '../../../scripts/lib/external-packages.mjs';
 
 /**
  * **A workspace manifest names every package by a version a registry could hold, and the root decides where the
- * code comes from.** The packages of the vendored checkouts (`elmdb`, `@elmdb/ears`, `@apackdev/git`,
+ * code comes from.** The packages of our other repositories (`elmdb`, `@elmdb/ears`, `@apackdev/git`,
  * `@apackdev/terminal`, `@apackdev/terminal-view`) are depended on as `0.1.0`, and the root's `overrides` maps each to
- * its `file:./vendor/...` path. A `file:` spec in a workspace manifest is a path only this checkout has: published,
- * it names nothing, and kept, it puts a second answer to "where does this come from" beside the root's.
+ * the tarball its repository's release holds (`npm run deps:pin`), or to a local checkout while one is worked on
+ * (`npm run deps:local`). A `file:` spec in a workspace manifest is a path only this checkout has: published, it names
+ * nothing, and kept, it puts a second answer to "where does this come from" beside the root's.
  */
 const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'] as const;
 
@@ -37,13 +39,31 @@ describe('workspace manifests', () => {
       .toEqual(DEPENDENCY_FIELDS.map((field) => `x: ${field}.a is file:../a`));
   });
 
-  it("are the root's overrides' to point at a checkout", () => {
+  it("are the root's overrides' to point at a release or a checkout", () => {
     const root = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'package.json'), 'utf8')) as { overrides?: Record<string, unknown> };
-    const linked = Object.entries(root.overrides ?? {}).filter(([, spec]) => typeof spec === 'string' && spec.startsWith('file:./vendor/'));
-    expect(population('vendored overrides', linked).map(([name]) => name).sort())
-      .toEqual(['@apackdev/git', '@apackdev/terminal', '@apackdev/terminal-view', '@elmdb/ears', 'elmdb']);
+    const external = Object.entries(root.overrides ?? {})
+      .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && /^(https:|file:)/.test(entry[1]));
+    expect(population('overrides naming a release or a checkout', external).map(([name]) => name).sort())
+      .toEqual(Object.values(REPOSITORIES).flatMap(({ packages }) => Object.keys(packages)).sort());
+    // A URL is the one `deps:pin` writes for its repository: the release of a commit, and that release's file for it
+    for (const [name, spec] of external.filter(([, spec]) => spec.startsWith('https:'))) {
+      const release = releaseOf(spec);
+      expect(release?.repo, `${name}: ${spec}`).toBe(repositoryOf(name));
+      expect(spec).toBe(releaseUrl(release!.repo, release!.commit, name));
+    }
     // The scope's packages another repository publishes are third-party to the notices and the bundle records
-    // (`isFirstParty`), which knows them by name: the vendored ones of the scope, and no other
-    expect(linked.map(([name]) => name).filter((name) => name.startsWith('@apackdev/')).sort()).toEqual([...OTHER_REPOSITORY_PACKAGES].sort());
+    // (`isFirstParty`), which knows them by name: the external ones of the scope, and no other
+    expect(external.map(([name]) => name).filter((name) => name.startsWith('@apackdev/')).sort()).toEqual([...OTHER_REPOSITORY_PACKAGES].sort());
+    // And so is the platform package `@apackdev/terminal` installs its broker from, which no override names
+    expect(['@apackdev/terminal-darwin-arm64', '@apackdev/terminal-win32-x64', '@apackdev/terminal-view', '@apackdev/sdk'].map(isFirstParty))
+      .toEqual([false, false, false, true]);
+  });
+
+  it('read a URL as a release only when it is one of ours', () => {
+    const commit = 'a'.repeat(40);
+    expect(releaseOf(releaseUrl('elmdb', commit, 'elmdb'))).toEqual({ repo: 'elmdb', commit });
+    expect(releaseOf(`https://github.com/someone/elmdb/releases/download/pkg-${commit}/elmdb-0.1.0.tgz`)).toBeUndefined();
+    expect(releaseOf(`https://github.com/spankyed/elmdb/releases/download/pkg-${commit.slice(7)}/elmdb-0.1.0.tgz`)).toBeUndefined();
+    expect(releaseOf('file:../elmdb/crates/elmdb-node')).toBeUndefined();
   });
 });

@@ -6,10 +6,9 @@ import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
-import { brokerDrift, duplicateCopies, lockfileDrift } from '../../../scripts/lib/installed-dependencies.ts';
+import { duplicateCopies, lockfileDrift } from '../../../scripts/lib/installed-dependencies.ts';
+import { missingBroker } from '../../../scripts/lib/broker-installed.mjs';
 
-const PLATFORM = `${process.platform}-${process.arch}`;
-const COMMIT = 'c'.repeat(40);
 
 let dir: string | undefined;
 afterEach(() => {
@@ -39,12 +38,13 @@ function aCheckout(locked: Record<string, unknown>, installed?: Record<string, u
 describe('one copy of what the app loads once', () => {
   const linked = (target: string) => ({ resolved: target, link: true });
 
+  // Links, as `npm run deps:local` installs a local checkout's packages
   it('says nothing when EARS and elmdb are each one copy, however many links reach it', () => {
     expect(duplicateCopies(aCheckout({}, {
-      'node_modules/@elmdb/ears': linked('vendor/elmdb/packages/ears'),
-      'packages/api/node_modules/@elmdb/ears': linked('vendor/elmdb/packages/ears'),
-      'node_modules/elmdb': linked('vendor/elmdb/crates/elmdb-node'),
-      'vendor/elmdb/packages/ears': { version: '0.0.0' },
+      'node_modules/@elmdb/ears': linked('../elmdb/packages/ears'),
+      'packages/api/node_modules/@elmdb/ears': linked('../elmdb/packages/ears'),
+      'node_modules/elmdb': linked('../elmdb/crates/elmdb-node'),
+      '../elmdb/packages/ears': { version: '0.0.0' },
     }))).toEqual([]);
   });
 
@@ -52,9 +52,9 @@ describe('one copy of what the app loads once', () => {
   // this refusal sees it
   it('refuses a second copy, naming the package, where each is, and the fix', () => {
     const refusals = duplicateCopies(aCheckout({}, {
-      'node_modules/@elmdb/ears': linked('vendor/elmdb/packages/ears'),
+      'node_modules/@elmdb/ears': linked('../elmdb/packages/ears'),
       'node_modules/@apackdev/testing/node_modules/@elmdb/ears': entry('0.0.1'),
-      'node_modules/elmdb': linked('vendor/elmdb/crates/elmdb-node'),
+      'node_modules/elmdb': linked('../elmdb/crates/elmdb-node'),
     }));
     expect(refusals).toEqual([expect.stringContaining(
       '@elmdb/ears is installed 2 times (node_modules/@elmdb/ears, node_modules/@apackdev/testing/node_modules/@elmdb/ears)')]);
@@ -100,32 +100,32 @@ describe('node_modules against package-lock.json', () => {
   });
 });
 
-describe('the terminal broker against its pin', () => {
-  /** A copy of `@app/terminal-broker` with a pin naming `files` for `platform`, and the files of `installed` in `bin/` */
-  function aBrokerPackage(platform: string, installed: boolean): string {
-    const pkg = aDir('broker-pin-');
-    fs.mkdirSync(path.join(pkg, 'src'));
-    fs.copyFileSync(path.join(REPO_ROOT, 'packages', 'terminal-broker', 'src', 'index.js'), path.join(pkg, 'src', 'index.js'));
-    const binary = process.platform === 'win32' ? 'apack-terminal.exe' : 'apack-terminal';
-    fs.writeFileSync(path.join(pkg, 'src', 'pin.json'), JSON.stringify({ commit: COMMIT, files: { [platform]: { [binary]: 'f'.repeat(64) } } }));
-    if (installed) {
-      fs.mkdirSync(path.join(pkg, 'bin', COMMIT, platform), { recursive: true });
-      fs.writeFileSync(path.join(pkg, 'bin', COMMIT, platform, binary), '');
-    }
-    return pkg;
+describe("the terminal broker's platform package", () => {
+  /**
+   * A checkout whose `@apackdev/terminal` names `listed` as its platform packages and answers a binary only when
+   * `installed`, as the real one answers from its platform package
+   */
+  function aCheckout(listed: string[], installed: boolean): string {
+    const root = aDir('broker-installed-');
+    const pkg = path.join(root, 'node_modules', '@apackdev', 'terminal');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.writeFileSync(path.join(root, 'package.json'), '{}');
+    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({
+      name: '@apackdev/terminal', main: 'index.js', optionalDependencies: Object.fromEntries(listed.map((name) => [name, 'https://x.invalid/t.tgz'])),
+    }));
+    fs.writeFileSync(path.join(pkg, 'index.js'), `module.exports = { PACKAGE_NAME: '@apackdev/terminal-here',
+      brokerBinary: () => ${installed ? "'/bin/apack-terminal'" : 'undefined'}, brokerBinaryPath: () => '/bin/apack-terminal' };`);
+    return root;
   }
 
-  it('refuses a pin that moved past what bin/ holds, naming the commit and `npm run fetch:terminal-broker`', () => {
-    const refusal = brokerDrift(aBrokerPackage(PLATFORM, false));
-    expect(refusal).toContain(`apack-terminal ${COMMIT.slice(0, 7)} is not installed for ${PLATFORM}`);
-    expect(refusal).toContain('npm run fetch:terminal-broker');
+  it('refuses an install the platform package went missing from, naming it', () => {
+    const refusal = missingBroker(aCheckout(['@apackdev/terminal-here', '@apackdev/terminal-there'], false));
+    expect(refusal).toContain('@apackdev/terminal-here');
+    expect(refusal).toContain('npm ci');
   });
 
-  it('says nothing when the pinned broker is installed', () => {
-    expect(brokerDrift(aBrokerPackage(PLATFORM, true))).toBeUndefined();
-  });
-
-  it('says nothing on a platform the pin has no build for, which no install could fetch', () => {
-    expect(brokerDrift(aBrokerPackage('plan9-mips', false))).toBeUndefined();
+  it('says nothing when it is there, or when no package is built for this platform', () => {
+    expect(missingBroker(aCheckout(['@apackdev/terminal-here'], true))).toBeUndefined();
+    expect(missingBroker(aCheckout(['@apackdev/terminal-there'], false))).toBeUndefined();
   });
 });

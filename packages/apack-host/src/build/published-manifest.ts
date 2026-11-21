@@ -48,8 +48,8 @@ const DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependen
 /**
  * The workspace manifest as it is published: without the source condition, without an entry that condition was
  * the whole of, and without the fields above. Its dependencies are published as written: a workspace manifest
- * names every package by a version a registry holds, and only the root's `overrides` says a checkout supplies one
- * (`vendor/`), which a published package never sees.
+ * names every package by a version a registry holds, and only the root's `overrides` says a release's tarball or a
+ * local checkout supplies one, which a published package never sees.
  *
  * An emptied entry is dropped rather than left as `{}`, and must not be given a published target instead.
  * `@apackdev/sdk`'s `./runtime/internals` is the case: `facade-gate.ts` reports a pack whose facade imports

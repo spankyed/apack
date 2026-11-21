@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { getTestSettings, resetTestData, startApp } from '@apackdev/testing/harness';
-import { recordingBroker } from './_support/terminal-broker.ts';
+import { recordingBroker } from './_support/recording-broker.ts';
 
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;

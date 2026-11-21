@@ -3,7 +3,7 @@
 // take-up, and again when the setting changes. Each case reads what the recording broker was sent.
 import { afterEach, describe, expect, it } from 'vitest'
 import { getTestSettings, resetTestData, startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { cursorDefaultsOf } from '../../../../src/features/code/be/services/terminal.ts'
 import { featureSettings } from '#generated/settings.ts'
 

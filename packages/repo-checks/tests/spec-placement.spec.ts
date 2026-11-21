@@ -44,10 +44,7 @@ const packageDirs = (): string[] =>
  * `src/` is worth a spec — which is a strong claim, so it carries a reason and is reported when it stops
  * applying.
  */
-const NO_SUITE: Record<string, string> = {
-  'terminal-broker': 'its one module answers where the install put the pinned broker, and its cases are '
-    + "@app/repo-checks' `terminal-broker-pin`, beside the fetch that does the installing",
-};
+const NO_SUITE: Record<string, string> = {};
 
 describe('a package with source has a suite', () => {
   const withSource = (): string[] => packageDirs().filter((dir) => fs.existsSync(path.join(REPO_ROOT, 'packages', dir, 'src')));
