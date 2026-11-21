@@ -574,15 +574,18 @@ export function registerApackNativePlugin(on: ClaudeHookRegistrar, configuration
     return next(event);
   });
   on('turn.complete', async ($, event: ClaudeTurnEvent, next) => {
+    if (event.agentId) return next(event);
     const ownGeneration = generation;
+    const sessionId = await $.session.id();
     const result = await next(event);
     // Completion belongs to the turn that entered the chain, even if another session starts meanwhile.
     if (ownGeneration !== generation) return result;
-    if (!event.agentId) {
-      const startExchange = await begin($);
-      await notify($, 'turn', { running: false, turnId: event.turnId, reason: event.reason });
-      startExchange?.();
-    }
+    // Native clear can change identity without rerunning session.start or SessionMode.
+    const currentSessionId = await $.session.id();
+    if (ownGeneration !== generation || currentSessionId !== sessionId) return result;
+    const startExchange = await begin($);
+    await notify($, 'turn', { sessionId, running: false, turnId: event.turnId, reason: event.reason });
+    startExchange?.();
     return result;
   });
 }
