@@ -138,6 +138,12 @@ points at.
    giving fields, which the compiler holds: fields would be worked out from the data as it was before the wait, and a
    draft is edited against the data as it is when the change is made. If the state that was answering was left
    meanwhile, the ask is `abandoned` and nothing is changed.
+
+   **What has to hold when the change is made is checked in the change.** A handler that waits lets other events and
+   asks through while it does, so what it checked before the wait may not be so after. The change is made against the
+   data as it is then, in one step, and it may refuse: an edit that throws one of the ask's refusals answers with that
+   refusal and changes nothing. So the work is done holding nothing, and the check and the write are one step at the
+   end.
 7. **Every ask ends exactly once**: with its answer, a refusal it declares, or `failed`, `abandoned`, `unavailable` or
    `disconnected`. An ask whose asker has gone, because the state that asked was left or its system stopped, ends
    where it is awaited by throwing `Left`. The code that asked unwinds as cancelled code does everywhere: its `finally`
@@ -259,6 +265,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | A handler names the path to go to | `leave`, by which a state changed the state around it |
 | `asks` is a table of its own | One `on` table. An ask and an event follow different rules, and nothing marked which was which |
 | An ask changes data only together with its answer, as `answered(answer, next)` | An ask that could not change data at all, which was the first decision: to change data it sent its own state an event and returned the answer separately. The answer could then say "created" before the event that did the creating was handled, and still say it if that event's handler threw. The handler could not see the result of its own change. And each such ask needed an event that existed only for it, which anything could tell the state. Every system this was checked against joins the two: Erlang's `gen_statem` replies and moves in one handler, Effect's `Machine` handlers return `[reply, newState]`, and Temporal added Updates beside its read-only queries. They are safe because their handlers do not interleave; these do, at each `await`, which is why a change after one must be a draft edit. The graph stays complete: the extractor reads `next` as it reads any handler's return |
+| Handlers that wait let others through, and the change checks what must hold | One handler at a time, as Effect's `Machine` and Erlang's `gen_server` run them. A handler then sees the same data throughout, and a reply that streams for half a minute keeps every other window out of that system until it ends. Each of those systems has a way round it (`fork` and reply later; a worker that replies), which is interleaving again with less around it; a caller that leaves cannot stop a handler already running; and a cycle of asks is a deadlock. Here every write was already one step. What could go wrong was a decision: check, wait, then act on a check no longer true. That is a long transaction, and the answer where work is long and conflicts are rare is to hold nothing and validate at the write. Locks, which Temporal suggests for this, bring the blocking back. A declared policy per ask, one at a time under a key, is left until a port needs it |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
 | What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
 | An ask whose asker has gone throws `Left` where it is awaited | Never settling it, which was tried first. A promise that never settles skips every `finally` after it, so a lock or a handle taken before the ask is held for good, and `Promise.all` over it hangs. Rejection is what `AbortSignal`, `fetch` and structured concurrency do, and code written for them is already correct here |
@@ -286,13 +293,20 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   mid-stream, which ends its ask as `disconnected` and aborts the work on the backend. Its threads system takes no
   events at all: the two it had existed so that two asks could change data, and both went when those asks returned
   `answered`.
-- **An answer and its change cannot disagree** (`answer-check.mts`, 9 checks): an ask that only answers changes
+- **An answer and its change cannot disagree** (`answer-check.mts`, 12 checks): an ask that only answers changes
   nothing; one that answers with a change has made it by the time the answer is had, and subscribers hear of it in
   that step, once; an answer can come with a move that gives the entered state its data; a change that is refused
   fails the ask and changes nothing; two asks that each add one after a wait both count; and an ask whose answering
   state was left is abandoned with nothing changed. Under every ordering of three such asks and a close (24), the
   count is exactly the number of answers that said they added. Giving fields after an `await`, a move that leaves out
   what the entered state needs, and an answer of the wrong type do not compile.
+
+  **A change may refuse** (3 more checks in the same file). A put that waits and a remove of the same id, under both
+  orderings there are: a put that is answered was stored, and one that was not is told the id had gone, with the id.
+  Both outcomes were run. The same put checking only before its work passes under the first ordering and is answered
+  for nothing stored under the second, which exploring finds. `threads.mts` had that fault: it checked the thread
+  existed, wrote the reply for a while, then stored with `messages[threadId]?.push`, so a thread removed meanwhile
+  lost the message and the asker was told it was sent. It now refuses `no-such-thread` where it stores.
 - **The graph can be derived without running anything** (`graph.mts`): states, moves, what each state answers, and
   which other states it reaches, read from handler return types by the TypeScript checker. An earlier version of it
   caught a handler dropped during a port.
@@ -566,6 +580,9 @@ projects. Each would loosen the fit to this app.
 - **Static analysis needs the compiler**, and is as precise as the helper types: a loosely typed helper blurs the graph.
 - **A discipline XState avoids by forbidding it.** After an `await` in `run` or an ask, code should only return. The
   kernel drops what a stale task sends through it, and cannot stop a side effect that bypasses it.
+- **A check before a wait proves nothing about after it.** The change that comes with an answer can check again and
+  refuse. What a handler told others or sent as progress on the strength of the earlier check has already gone, and
+  no design that does not block can take that back.
 
 ## Order of work
 

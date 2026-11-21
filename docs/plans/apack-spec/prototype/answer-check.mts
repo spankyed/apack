@@ -22,6 +22,57 @@ type CounterEvent = { type: 'REOPEN' }
 type Counter = { data: { count: number }; states: { open: {}; closed: { data: { reason: string } } } }
 const state = reaching()
 
+/** Things kept under an id, which can be removed while something is being put there. */
+type BoxAsks = {
+  /** Puts text under an id once its work is done, and refuses if the id is no longer there to put it under. */
+  PUT: { args: { id: string; text: string }; answer: 'put'; refuses: { gone: { id: string } } }
+  /** The same, without checking where the change is made: it checks before its work, and then stores if it can. */
+  PUT_CARELESSLY: { args: { id: string; text: string }; answer: 'put'; refuses: { gone: { id: string } } }
+  REMOVE: { args: { id: string }; answer: 'removed' }
+}
+type Box = { data: { items: Record<string, string[]> } }
+
+const box = (work: (label: string) => Promise<unknown>) => state<Box, never, BoxAsks>()({
+  data: { items: { a: [] } },
+  asks: {
+    PUT: async ({ id, text }, { data, refuse }) => {
+      if (!(id in data.items)) throw refuse('gone', `There is no ${id}.`, { id })
+      await work('storing')
+      return answered('put' as const, {
+        data: (d) => {
+          const held = d.items[id]
+          if (!held) throw refuse('gone', `${id} was removed meanwhile.`, { id })
+          held.push(text)
+        },
+      })
+    },
+    PUT_CARELESSLY: async ({ id, text }, { data, refuse }) => {
+      if (!(id in data.items)) throw refuse('gone', `There is no ${id}.`, { id })
+      await work('storing')
+      return answered('put' as const, { data: (d) => { d.items[id]?.push(text) } })
+    },
+    REMOVE: ({ id }) => answered('removed' as const, { data: (d) => { delete d.items[id] } }),
+  },
+})
+
+/** A put and a remove of the same id, in whichever order the schedule takes them. */
+const putAndRemove = (put: 'PUT' | 'PUT_CARELESSLY', seen: Set<string>) => (schedule: Schedule): (() => void) => {
+  const sys = system({ side: 'backend', later: schedule.later })
+  const it = sys.start('box', box((label) => schedule.work(label, null)))
+  let answer: { said: string; storedThen: boolean } | undefined
+  void sys.ask(it, put, { id: 'a', text: 'x' }).then((outcome) => {
+    answer = { said: outcome.ok ? outcome.value : outcome.failure.kind, storedThen: sys.read(it).data.items.a?.includes('x') ?? false }
+  })
+  schedule.does('the user', ['removes a', () => { void sys.ask(it, 'REMOVE', { id: 'a' }) }])
+  return () => {
+    ok(answer, 'the put was never answered')
+    seen.add(answer.said)
+    // Told it was put, it was there to be seen. Otherwise it was told the id had gone, and nothing was stored.
+    if (answer.said === 'put') strictEqual(answer.storedThen, true)
+    else deepStrictEqual(answer, { said: 'gone', storedThen: false })
+  }
+}
+
 const turns = (count: number): Promise<void> => new Promise((resolve) => { let left = count; const tick = (): void => { if (left-- <= 0) resolve(); else setImmediate(tick) }; tick() })
 
 const counter = (work: (label: string) => Promise<unknown>) => state<Counter, CounterEvent, CounterAsks>()({
@@ -92,6 +143,17 @@ const checks: Array<[string, () => Promise<void>]> = [
     strictEqual(traced.length, 1)
     sys.stop()
   }],
+  ['a change may refuse, with a refusal the ask declares and the data it carries: nothing is changed and nothing is a defect', async () => {
+    const traced: string[] = []
+    const sys = system({ side: 'backend', trace: (line) => { if (line.startsWith('DEFECT')) traced.push(line) } })
+    const it = sys.start('box', box(() => turns(4)))
+    const putting = sys.ask(it, 'PUT', { id: 'a', text: 'x' })
+    await sys.ask(it, 'REMOVE', { id: 'a' })
+    deepStrictEqual(await putting, { ok: false, failure: { kind: 'gone', message: 'a was removed meanwhile.', id: 'a' } })
+    deepStrictEqual(sys.read(it), { data: { items: {} } })
+    deepStrictEqual(traced, [])
+    sys.stop()
+  }],
   ['a change after a wait is made against the data as it is then: two at once both count', async () => {
     const { sys, it, now } = wired()
     const both = await Promise.all([sys.ask(it, 'ADD_LATER', { after: 'one' }), sys.ask(it, 'ADD_LATER', { after: 'two' })])
@@ -160,7 +222,25 @@ for (const [name, check] of checks) {
     console.log(`  ok    ${name}  (${found.orderings} orderings, all there are)`)
   } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n')[0]}`) }
 }
+{
+  const name = 'under every ordering of a put and a remove, a put that is answered was stored, and one that was not says the id had gone'
+  const seen = new Set<string>()
+  const found = await explore(putAndRemove('PUT', seen))
+  try {
+    ok(!found.failure, found.failure && `${String(found.failure.error).split('\n')[0]} after: ${found.failure.taken.join(' → ')}`)
+    ok(found.complete && found.orderings > 1, `ran ${found.orderings} orderings, ${found.complete ? 'all' : 'not all'}`)
+    // Both ways it can go were run, or the check proved only one of them.
+    deepStrictEqual([...seen].sort(), ['gone', 'put'])
+    console.log(`  ok    ${name}  (${found.orderings} orderings, all there are)`)
+  } catch (error) { failed++; console.log(`  FAIL  ${name}\n        ${String(error).split('\n')[0]}`) }
+}
+{
+  const name = 'exploring finds the ordering in which a put that checks only before its work is answered for nothing stored'
+  const found = await explore(putAndRemove('PUT_CARELESSLY', new Set()))
+  if (found.failure && String(found.failure.error).includes('true')) console.log(`  ok    ${name}  (at ordering ${found.orderings}: ${found.failure.taken.join(', then ')})`)
+  else { failed++; console.log(`  FAIL  ${name}\n        ${found.failure ? String(found.failure.error).split('\n')[0] : `no ordering failed in ${found.orderings}`}`) }
+}
 await turns(20)
 if (unhandled.length) { failed++; console.log(`  FAIL  nothing was left unhandled\n        ${String(unhandled[0])}`) } else console.log('  ok    none of it left a rejection unhandled')
-console.log(`\n${checks.length + 2 - failed} of ${checks.length + 2} passed`)
+console.log(`\n${checks.length + 4 - failed} of ${checks.length + 4} passed`)
 if (failed) process.exitCode = 1

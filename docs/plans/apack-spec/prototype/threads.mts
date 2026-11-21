@@ -144,7 +144,14 @@ function threads(inference: { streamText(prompt: string, signal: AbortSignal): A
 
         broadcast('threads', { type: 'THREAD_CHANGED', threadId })
         // After an await the change is an edit to a draft, made against the data as it is when the answer leaves.
-        return answered({ reply }, { data: (d) => { d.messages[threadId]?.push(text, reply) } })
+        // The thread was there when this began. Whether it still is is checked here, where the message is stored.
+        return answered({ reply }, {
+          data: (d) => {
+            const messages = d.messages[threadId]
+            if (!messages) throw refuse('no-such-thread', `Thread ${threadId} was removed while the reply was being written.`)
+            messages.push(text, reply)
+          },
+        })
       },
     },
   })

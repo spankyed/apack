@@ -199,6 +199,9 @@ export function answered<V, X>(answer: V, next: X): Answered<V, X> { return { [A
  * What can happen next after an `await`. Data is changed by editing a draft, never by giving fields: fields would be
  * worked out from data as it was before the wait, and would overwrite what changed meanwhile. A draft is edited when
  * the change is made, against the data as it is then. A move still gives the fields the states it enters need.
+ *
+ * It is also where to check what has to hold when the change is made. What was checked before the wait may not be
+ * so after it, and an edit may `throw refuse(...)`: the ask is then answered with that refusal and nothing changes.
  */
 type NextAfterAwait<R, H extends string> =
   | { at?: never; data: (draft: DataAt<R, H>) => void }
@@ -566,7 +569,7 @@ export function system(host: {
     trace(`LARGE: ${top.ref} holds ${held.length} items in ${field}. A collection this size belongs in a view`)
   }
 
-  const apply = (active: Active, next: unknown): void => {
+  const apply = (active: Active, next: unknown, mayRefuse = false): void => {
     if (next === undefined || next === null || active.controller.signal.aborted) return
     const { at, data = {} } = next as { at?: string; data?: Plain | ((draft: Plain) => void) }
     const top = active.top
@@ -575,7 +578,12 @@ export function system(host: {
       const before = top.data
       let made: ReturnType<typeof produce<Plain>>
       // An edit that is refused changes nothing, and the move it came with is not made either.
-      try { made = produce(before, data) } catch (error) { trace(`DEFECT: ${top.ref}: ${error instanceof Error ? error.message : String(error)}`); return }
+      try { made = produce(before, data) } catch (error) {
+        // A change that came with an answer may refuse, with one of the refusals its ask declares.
+        if (mayRefuse && error instanceof Refusal) throw error
+        trace(`DEFECT: ${top.ref}: ${error instanceof Error ? error.message : String(error)}`)
+        return
+      }
       const { value, touched } = made
       const kept = Object.fromEntries(Object.keys(before).map((field) => [field, field in value ? value[field] : before[field]]))
       // All of an edit or none of it: one place it may not change, and nothing is changed.
@@ -612,10 +620,17 @@ export function system(host: {
     safely(`${where}'s failed`, () => apply(active, failed(error, scope)))
   }
 
-  /** Makes the change an answer came with. An answer whose change was refused is not given: the ask failed. */
+  /**
+   * Makes the change an answer came with. The change is where to check what has to hold when it is made, since it is
+   * made against the data as it is then: an edit that throws one of the ask's refusals answers with that refusal, and
+   * nothing is changed. An answer whose change could not be made at all is not given either: the ask failed.
+   */
   const withChange = (of: Active, next: unknown, outcome: AnyOutcome): AnyOutcome => {
     const before = defects
-    apply(of, next)
+    try { apply(of, next, true) } catch (error) {
+      if (error instanceof Refusal) return refusal(error.kind, error.message, error.data)
+      throw error
+    }
     return defects === before ? outcome : refusal('failed', 'The change that came with the answer was refused, so nothing was changed')
   }
   const isAnswered = (made: unknown): made is Answered<unknown, unknown> => typeof made === 'object' && made !== null && ANSWERED in made
