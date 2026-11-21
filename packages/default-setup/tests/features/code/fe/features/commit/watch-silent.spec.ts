@@ -5,7 +5,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import { latestAsk, resetAsks } from '../../_support/asks.ts';
 
-vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -18,7 +18,7 @@ const { commitState } = await import('#features/code/fe/features/commit/state.ts
 beforeEach(resetAsks);
 
 /** Sends the panel a status, as the backend answers its asking for one */
-async function tell(actor: ReturnType<typeof createActor<typeof commitState>>, { watching, watchSilent }: { watching: boolean; watchSilent?: boolean }) {
+async function report(actor: ReturnType<typeof createActor<typeof commitState>>, { watching, watchSilent }: { watching: boolean; watchSilent?: boolean }) {
   actor.send({ type: 'commit.REFRESH_STATUS' });
   await latestAsk('commit.GET_GIT_STATUS').answer({ files: [], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching, ...(watchSilent && { watchSilent }) });
 }
@@ -26,17 +26,17 @@ async function tell(actor: ReturnType<typeof createActor<typeof commitState>>, {
 it('holds a silent watch while the statuses say it, and lets it go once one does not', async () => {
   const actor = createActor(commitState).start();
 
-  await tell(actor, { watching: true, watchSilent: true });
+  await report(actor, { watching: true, watchSilent: true });
   expect(actor.getSnapshot().context).toMatchObject({ isWatchingRepository: true, isWatchSilent: true });
 
-  await tell(actor, { watching: true });
+  await report(actor, { watching: true });
   expect(actor.getSnapshot().context.isWatchSilent).toBe(false);
 });
 
 it('keeps a watch that could not be opened apart from one that is not delivering', async () => {
   const actor = createActor(commitState).start();
 
-  await tell(actor, { watching: false });
+  await report(actor, { watching: false });
 
   expect(actor.getSnapshot().context).toMatchObject({ isWatchingRepository: false, isWatchSilent: false });
 });

@@ -6,10 +6,10 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // delivered, the machine ignored it, and nothing said so — a typo or a stale event type simply stopped
 // working.
 //
-// **What this nets is the untyped hatch**, which is where the asymmetry was. A pack's `sendToSystem` and a
-// handler's `reply` are typed against a contract, so the compiler has those; `untypedSendToSystem` is for
+// **What this nets is the untyped hatch**, which is where the asymmetry was. A pack's `tell` and a
+// handler's `reply` are typed against a contract, so the compiler has those; `untypedTell` is for
 // host code, tooling and a target that arrives as data, and its outward mirror
-// (`untypedBroadcastToSurface`) was already caught here while this one was not.
+// (`untypedBroadcast`) was already caught here while this one was not.
 //
 // Measured 2026-10-06: nothing in either unit pool trips it, so the cases below are written rather than
 // found. That makes them the only thing standing under the check — delete the report and the first one
@@ -17,7 +17,7 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createActor, setup, type AnyActorRef } from 'xstate';
 import { startTestRuntime, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
-import { untypedSendToSystem, type Message } from '@apackdev/sdk/events';
+import { untypedTell, type Message } from '@apackdev/sdk/events';
 import { createAppBus } from '../../src/bus/index.ts';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
 
@@ -39,7 +39,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
  * registered for — unrelated noise that would otherwise be `reported()[0]`.
  */
 const reported = () => takeSystemErrors()
-  .filter((error) => error.operation === 'sendToSystem')
+  .filter((error) => error.operation === 'tell')
   .map((error) => error.message);
 
 beforeEach(async () => {
@@ -153,7 +153,7 @@ describe('what it leaves alone', () => {
    *
    * default-setup's `code` system is the real instance — it routes every unmatched event to a child — and
    * it does not trip this because its contract declares all 157 of those child events. A typed
-   * `sendToSystem` could not compile otherwise, so the declaration stays complete by construction, and
+   * `tell` could not compile otherwise, so the declaration stays complete by construction, and
    * what is left for this check is the untyped hatch.
    *
    * The event is delivered either way: the machine handling or ignoring it is its business, and refusing
@@ -187,7 +187,7 @@ describe('what it leaves alone', () => {
 });
 
 /**
- * The same split the outgoing side makes: `reply` and `sendToSystem` both land in this check, and advice to fix
+ * The same split the outgoing side makes: `reply` and `tell` both land in this check, and advice to fix
  * a target sends the next reader to a call site with none in it.
  *
  * **The helper above still works, which is the design.** `answering` is its own field on the report, so
@@ -205,7 +205,7 @@ describe('an answer to a system that declares no such event', () => {
 
     const [error] = takeSystemErrors();
     expect(error?.answering).toBe(true);
-    expect(error?.operation, 'so the direction filter above keeps finding it').toBe('sendToSystem');
+    expect(error?.operation, 'so the direction filter above keeps finding it').toBe('tell');
   });
 
   it('says why an answer can be undeclared, rather than pointing at the contract alone', async () => {
@@ -234,8 +234,8 @@ describe('an answer to a system that declares no such event', () => {
 });
 
 describe('through the untyped send', () => {
-  it('reports what untypedSendToSystem could not have been typed out of', async () => {
-    untypedSendToSystem(MEMOS, { type: 'BUILT_FROM_DATA' });
+  it('reports what untypedTell could not have been typed out of', async () => {
+    untypedTell(MEMOS, { type: 'BUILT_FROM_DATA' });
     await flush();
 
     expect(reported()[0]).toContain('Sent "BUILT_FROM_DATA"');

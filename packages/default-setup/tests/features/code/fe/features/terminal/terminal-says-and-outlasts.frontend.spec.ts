@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
 import { asksOf, latestAsk, made, resetAsks } from '../../_support/asks.ts'
 
-const sendToSystem = vi.hoisted(() => vi.fn())
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }))
+const tell = vi.hoisted(() => vi.fn())
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }))
 const parent = vi.hoisted(() => ({ updateParentState: vi.fn(), addTabToParent: vi.fn(), getParentContext: vi.fn(() => null), sendEventToParent: vi.fn() }))
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => parent)
 const pool = vi.hoisted(() => ({ dispose: vi.fn(), syncProcesses: vi.fn(), noteExit: vi.fn(), describe: vi.fn() }))
@@ -14,7 +14,7 @@ vi.mock('#features/code/fe/utils/terminal-pool.ts', () => ({ terminalPool: pool 
 const { terminalState } = await import('#features/code/fe/features/terminal/state.ts')
 
 const aTerminal = (id: string) => ({ id, title: id, cwd: '/tmp', active: true }) as never
-const sent = () => sendToSystem.mock.calls.map(([, event]) => event)
+const sent = () => tell.mock.calls.map(([, event]) => event)
 /** What the machine asked the code system, in order */
 const asked = () => made.map(({ event }) => event)
 
@@ -27,13 +27,13 @@ async function listTerminals(actor: { send(event: { type: 'terminal.REFRESH_LIST
 async function started() {
   const actor = createActor(terminalState).start()
   await listTerminals(actor, [aTerminal('t-1'), aTerminal('t-2')])
-  sendToSystem.mockClear()
+  tell.mockClear()
   resetAsks()
   return { actor, activity: () => actor.getSnapshot().context.activity, context: () => actor.getSnapshot().context }
 }
 
 beforeEach(() => {
-  sendToSystem.mockReset()
+  tell.mockReset()
   resetAsks()
   pool.dispose.mockReset()
 })
@@ -128,13 +128,13 @@ describe('looking back through a terminal', () => {
     await asksOf('terminal.REWIND_SEEK')[1]!.answer({ session: 'r-4', at: 450 })
     expect(context().rewind?.at).toBe(450)
 
-    sendToSystem.mockClear()
+    tell.mockClear()
     actor.send({ type: 'terminal.REWIND_CLOSE' })
     expect(sent()).toEqual([{ type: 'terminal.REWIND_CLOSE', session: 'r-4' }])
     expect(pool.dispose).toHaveBeenCalledWith('rewind:r-4')
     expect(context().rewind).toBeNull()
     // And closing what is not open asks nothing
-    sendToSystem.mockClear()
+    tell.mockClear()
     actor.send({ type: 'terminal.REWIND_CLOSE' })
     expect(sent()).toEqual([])
   })

@@ -1,5 +1,5 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import type { AskFailure } from '@apackdev/sdk/events';
 import { safeEvents } from '@apackdev/sdk/helpers';
 import { freshKey, makes, type MadeEvent, type MakesEnqueue, type Making } from '@apackdev/sdk/fe';
@@ -391,7 +391,7 @@ export const explorerState = setup({
 
       // Send SET_BASE_DIRECTORY to the parent code system to update everything
       // (backend's UPDATE_BASE_DIRECTORY handler auto-lists files via listBaseFiles)
-      sendToSystem('code', { type: 'SET_BASE_DIRECTORY', path: ev.path })
+      tell('code', { type: 'SET_BASE_DIRECTORY', path: ev.path })
 
       // Update parent state
       updateParentState(self, {
@@ -565,7 +565,7 @@ export const explorerState = setup({
     }),
 
     closeFile: ({ event }) => {
-      sendToSystem('code', { type: 'explorer.CLOSE_FILE', path: typeOf('explorer.CLOSE_FILE', event).path })
+      tell('code', { type: 'explorer.CLOSE_FILE', path: typeOf('explorer.CLOSE_FILE', event).path })
     },
 
     revealInTree: enqueueActions(({ event, context, self, enqueue }) => {

@@ -3,7 +3,7 @@
 // same reason the system doesn't live in the API — it decides things, and deciding isn't rendering.
 import { assign, setup, type ActorRefFrom } from 'xstate';
 import { breadcrumb, safeEvents } from '@apackdev/sdk/fe';
-import { sendToSystem } from '../../../events.ts';
+import { tell } from '../../../events.ts';
 import type { AppPackSourceSummary, InstalledPackSummary } from '../../../packs/registry.ts';
 import type { OutgoingPacksEvents } from '../../event-contracts.ts';
 import { HOST } from '../../../refs.ts';
@@ -103,17 +103,17 @@ const packsState = setup({
 
     sendInstall: ({ event }) => {
       const ev = typeOf('UI.INSTALL', event);
-      sendToSystem('packs', { type: 'INSTALL_PACK', packSlug: ev.packSlug, sourceKind: ev.sourceKind });
+      tell('packs', { type: 'INSTALL_PACK', packSlug: ev.packSlug, sourceKind: ev.sourceKind });
     },
 
     sendReplace: ({ event }) => {
       const ev = typeOf('UI.REPLACE', event);
-      sendToSystem('packs', { type: 'REPLACE_PACK', packId: ev.packId, packSlug: ev.packSlug, sourceKind: ev.sourceKind });
+      tell('packs', { type: 'REPLACE_PACK', packId: ev.packId, packSlug: ev.packSlug, sourceKind: ev.sourceKind });
     },
 
     sendRestore: ({ event }) => {
       const ev = typeOf('UI.RESTORE', event);
-      sendToSystem('packs', { type: 'RESTORE_PACK', packId: ev.packId, sourceRevision: ev.sourceRevision });
+      tell('packs', { type: 'RESTORE_PACK', packId: ev.packId, sourceRevision: ev.sourceRevision });
     },
 
     promptUninstall: assign({
@@ -126,7 +126,7 @@ const packsState = setup({
 
     sendUninstall: ({ event }) => {
       const ev = typeOf('UI.UNINSTALL', event);
-      sendToSystem('packs', { type: 'UNINSTALL_PACK', packId: ev.packId });
+      tell('packs', { type: 'UNINSTALL_PACK', packId: ev.packId });
     },
 
     clearUninstallPrompt: assign({
@@ -135,7 +135,7 @@ const packsState = setup({
 
     sendToggleEnabled: ({ event }) => {
       const ev = typeOf('UI.TOGGLE_ENABLED', event);
-      sendToSystem('packs', { type: 'TOGGLE_PACK_ENABLED', packId: ev.packId });
+      tell('packs', { type: 'TOGGLE_PACK_ENABLED', packId: ev.packId });
     },
 
     selectPack: assign({
@@ -166,35 +166,35 @@ const packsState = setup({
 
     sendUpdate: ({ event }) => {
       const ev = typeOf('UI.UPDATE', event);
-      sendToSystem('packs', { type: 'UPDATE_PACK', packId: ev.packId });
+      tell('packs', { type: 'UPDATE_PACK', packId: ev.packId });
     },
 
     sendAppUpdate: ({ event }) => {
       const ev = typeOf('UI.UPDATE_APP', event);
-      sendToSystem('packs', { type: 'UPDATE_APP_PACK', packId: ev.packId, sourceRevision: ev.sourceRevision });
+      tell('packs', { type: 'UPDATE_APP_PACK', packId: ev.packId, sourceRevision: ev.sourceRevision });
     },
 
     sendCheckUpdates: () => {
-      sendToSystem('packs', { type: 'CHECK_FOR_UPDATES' });
+      tell('packs', { type: 'CHECK_FOR_UPDATES' });
     },
 
     sendRefresh: () => {
-      sendToSystem('packs', { type: 'GET_INSTALLED_PACKS' });
+      tell('packs', { type: 'GET_INSTALLED_PACKS' });
     },
 
     sendRestoreContent: ({ event }) => {
       const ev = typeOf('UI.RESTORE_CONTENT', event);
-      sendToSystem('packs', { type: 'RESTORE_CONTENT_ITEM', packId: ev.packId, key: ev.key });
+      tell('packs', { type: 'RESTORE_CONTENT_ITEM', packId: ev.packId, key: ev.key });
     },
 
     sendDismissOffer: ({ event }) => {
       const ev = typeOf('UI.DISMISS_OFFER', event);
-      sendToSystem('packs', { type: 'DISMISS_CONTENT_OFFER', packId: ev.packId, key: ev.key });
+      tell('packs', { type: 'DISMISS_CONTENT_OFFER', packId: ev.packId, key: ev.key });
     },
 
     sendDeleteContent: ({ event }) => {
       const ev = typeOf('UI.DELETE_CONTENT', event);
-      sendToSystem('packs', { type: 'DELETE_CONTENT_ITEM', packId: ev.packId, key: ev.key });
+      tell('packs', { type: 'DELETE_CONTENT_ITEM', packId: ev.packId, key: ev.key });
     },
   },
 }).createMachine({

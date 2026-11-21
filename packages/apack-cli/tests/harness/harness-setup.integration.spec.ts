@@ -82,9 +82,9 @@ it('writes nothing', async () => {
 import { expect, it } from 'vitest';
 import { createActionEmitter } from '@apackdev/sdk/services';
 it('sends to its own system and surface', () => {
-  expect(() => createActionEmitter().sendToSystem('data-pack/memos', { type: 'GET_MEMOS' })).not.toThrow();
-  expect(() => createActionEmitter().broadcastToSurface('data-pack/memos', { type: 'MEMOS_UPDATED' })).not.toThrow();
-  expect(() => createActionEmitter().broadcastToSurface('data-pack/ghost', { type: 'MEMOS_UPDATED' })).toThrow('No registered surface is named "data-pack/ghost"');
+  expect(() => createActionEmitter().tell('data-pack/memos', { type: 'GET_MEMOS' })).not.toThrow();
+  expect(() => createActionEmitter().broadcast('data-pack/memos', { type: 'MEMOS_UPDATED' })).not.toThrow();
+  expect(() => createActionEmitter().broadcast('data-pack/ghost', { type: 'MEMOS_UPDATED' })).toThrow('No registered surface is named "data-pack/ghost"');
 });`, { features: { memos: { description: 'Exercise the harness system.', system: { entry: 'src/features/memos/be/system.ts' }, surface: { label: 'Fixture', state: 'src/features/memos/fe/index.ts' } } } });
     // inherent: runs a pack's own vitest suite — the nested runner is the thing under test
     const result = await run(process.execPath, [VITEST, 'run'], root);

@@ -9,8 +9,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import { latestAsk, resetAsks } from '../../_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+const tell = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 
 const parent = vi.hoisted(() => ({ updateParentState: vi.fn(), addTabToParent: vi.fn(), getParentContext: vi.fn(() => null), sendEventToParent: vi.fn() }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => parent);
@@ -35,7 +35,7 @@ async function listTerminals(actor: { send(event: { type: 'terminal.REFRESH_LIST
 const panelUpdates = () => parent.updateParentState.mock.calls.map(([, update]) => update);
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  tell.mockReset();
   resetAsks();
   parent.updateParentState.mockReset();
   parent.addTabToParent.mockReset();

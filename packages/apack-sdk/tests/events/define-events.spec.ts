@@ -5,7 +5,7 @@
 // Nothing routes or refuses on it: it is what lets a dropped message name who sent it.
 import * as os from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { defineEvents, untypedSendToSystem, type SurfaceEvents, type SystemEventMap } from '../../src/events/index.ts';
+import { defineEvents, untypedTell, type SurfaceEvents, type SystemEventMap } from '../../src/events/index.ts';
 import { startTestRuntime, testRootEvents } from '../../src/testing/index.ts';
 
 process.env.APACK_ENV ??= 'test';
@@ -31,7 +31,7 @@ function incoming(send: () => void): unknown[] {
 // absent is a sender with nothing to declare rather than a fault.
 describe('a send made outside a pack', () => {
   it('carries no sender', () => {
-    expect(incoming(() => untypedSendToSystem('memo-pack/memos', { type: 'ADD_MEMO', text: 'x' })))
+    expect(incoming(() => untypedTell('memo-pack/memos', { type: 'ADD_MEMO', text: 'x' })))
       .toEqual([{ to: 'memo-pack/memos', call: expect.any(String), event: { type: 'ADD_MEMO', text: 'x' } }]);
   });
 });
@@ -40,12 +40,12 @@ describe('defineEvents', () => {
   const events = defineEvents<Surfaces, Systems>('memo-pack');
 
   it("sends to the pack's own system at its address", () => {
-    expect(incoming(() => events.sendToSystem('memos', { type: 'ADD_MEMO', text: 'x' })))
+    expect(incoming(() => events.tell('memos', { type: 'ADD_MEMO', text: 'x' })))
       .toEqual([{ to: 'memo-pack/memos', call: expect.any(String), event: { type: 'ADD_MEMO', text: 'x' }, from: 'memo-pack' }]);
   });
 
   it("sends to another pack's system, named <pack>/<feature>, at its address", () => {
-    expect(incoming(() => events.sendToSystem('default-setup/settings', { type: 'GET_SETTINGS' })))
+    expect(incoming(() => events.tell('default-setup/settings', { type: 'GET_SETTINGS' })))
       .toEqual([{ to: 'default-setup/settings', call: expect.any(String), event: { type: 'GET_SETTINGS' }, from: 'memo-pack' }]);
   });
 
@@ -53,7 +53,7 @@ describe('defineEvents', () => {
     const outgoing: unknown[] = [];
     const stop = testRootEvents.onSurfaceSend((event) => outgoing.push(event));
     try {
-      events.broadcastToSurface('memos', { type: 'MEMO_ADDED' });
+      events.broadcast('memos', { type: 'MEMO_ADDED' });
     } finally {
       stop();
     }
@@ -62,7 +62,7 @@ describe('defineEvents', () => {
 
   // The host is a pack: its surfaces are named by ref, and a bare name is always this pack's own feature
   it("broadcasts to a host surface by its ref, and takes a bare name as this pack's own", () => {
-    const untyped = events.broadcastToSurface as unknown as (name: string, event: { type: string }) => void;
+    const untyped = events.broadcast as unknown as (name: string, event: { type: string }) => void;
     const sent: Array<{ to: string }> = [];
     const stop = testRootEvents.onSurfaceSend((message) => sent.push(message));
     try {

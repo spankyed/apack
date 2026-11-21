@@ -5,13 +5,13 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import type { BrainStateEvent } from '#features/brain/be/types.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
+const tell = vi.hoisted(() => vi.fn());
 /** The asks the machine has made, in order: what each was, what it carried, and the spec's way to answer it */
 const made = vi.hoisted(() => [] as Array<{ type: string; input: object; answer(value: unknown): void }>);
 vi.mock('#generated/events.ts', async () => {
   const { fromPromise } = await import('xstate');
   return {
-    sendToSystem,
+    tell,
     fromAsk: (_to: string, type: string) => fromPromise(({ input }) => new Promise((resolve) => {
       made.push({ type, input: input as object, answer: (value: unknown) => resolve({ ok: true, value }) });
     })),
@@ -31,7 +31,7 @@ async function answerTree(flowRunNodeId: `${string}-${string}`, state: BrainStat
   await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-beforeEach(() => { sendToSystem.mockReset(); made.length = 0; });
+beforeEach(() => { tell.mockReset(); made.length = 0; });
 
 it('asks for the root run when the shell starts it, and nothing from its own entry', () => {
   const actor = createActor(brainState).start();
@@ -89,7 +89,7 @@ it('passes an inspect toggle on, and takes what it became, before its first tree
   const actor = createActor(brainState).start();
   actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: false });
   actor.send({ type: 'TOGGLE_INSPECT' });
-  expect(sendToSystem.mock.calls.map(([, event]) => event.type), 'passed on while loading').toContain('TOGGLE_INSPECT');
+  expect(tell.mock.calls.map(([, event]) => event.type), 'passed on while loading').toContain('TOGGLE_INSPECT');
 
   actor.send({ type: 'INSPECT_TOGGLED', enabled: true });
   expect(actor.getSnapshot().context.inspectEnabled).toBe(true);

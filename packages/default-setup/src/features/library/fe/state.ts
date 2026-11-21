@@ -480,7 +480,7 @@ export const librarySystem = setup({
     }),
     // [SEARCH_INDEX_FF] Search index actions — commented out
     // requestSearchIndices: ({ context }) => {
-    //   sendToSystem(id, {
+    //   tell(id, {
     //     type: 'LIST_SEARCH_INDICES',
     //     folderId: context.currentFolderId,
     //   })
@@ -495,7 +495,7 @@ export const librarySystem = setup({
     // }),
     // saveSearchIndex: ({ context, event }) => {
     //   if (event.type === 'SAVE_SEARCH_INDEX') {
-    //     sendToSystem(id, {
+    //     tell(id, {
     //       type: 'CREATE_SEARCH_INDEX',
     //       config: event.config,
     //       folderId: context.currentFolderId,
@@ -504,7 +504,7 @@ export const librarySystem = setup({
     // },
     // updateSearchIndex: ({ event }) => {
     //   if (event.type === 'UPDATE_SEARCH_INDEX') {
-    //     sendToSystem(id, {
+    //     tell(id, {
     //       type: 'UPDATE_SEARCH_INDEX',
     //       id: event.indexId,
     //       config: event.config,
@@ -513,7 +513,7 @@ export const librarySystem = setup({
     // },
     // deleteSearchIndex: ({ event }) => {
     //   if (event.type === 'DELETE_SEARCH_INDEX') {
-    //     sendToSystem(id, {
+    //     tell(id, {
     //       type: 'DELETE_SEARCH_INDEX',
     //       id: event.indexId,
     //     })
@@ -566,7 +566,7 @@ export const librarySystem = setup({
     // }),
     // executeTestSearch: ({ context }) => {
     //   if (context.testingIndexId && context.testQuery) {
-    //     sendToSystem(id, {
+    //     tell(id, {
     //       type: 'SEARCH_IN_INDEX',
     //       indexId: context.testingIndexId,
     //       query: context.testQuery,

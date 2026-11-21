@@ -8,7 +8,7 @@ import { setup, assign, enqueueActions, fromCallback, type ActorRefFrom } from '
 import type { BrowserSettings } from '#generated/types.ts';
 import type { Bookmark, BrowserContext, BrowserInboxEvent, BrowserTab, BrowserTabPersistedId } from './contract.ts';
 import { autocomplete, recordVisit, updateHistoryMeta, displayUrl, type AutocompleteSuggestion } from './history.ts';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import { openSurface } from '#generated/fe.ts';
 import { getNextAvailableColor, saveTabGroups, loadTabGroups, type TabGroup, type TabGroupColor } from '@apackdev/sdk/fe';
 
@@ -118,7 +118,7 @@ function syncTabsToBackend(tabs: BrowserTab[], options?: { immediate?: boolean }
         isMuted: t.isMuted,
         groupId: t.groupId,
       }));
-    sendToSystem(id, { type: 'SYNC_TABS', tabs: persistable });
+    tell(id, { type: 'SYNC_TABS', tabs: persistable });
   };
 
   if (options?.immediate) {
@@ -183,7 +183,7 @@ function syncBookmarksToBackend(bookmarks: Bookmark[]) {
       favicon: bm.favicon,
       displayOrder: i,
     }));
-    sendToSystem(id, { type: 'SYNC_BOOKMARKS', bookmarks: persistable });
+    tell(id, { type: 'SYNC_BOOKMARKS', bookmarks: persistable });
   }, 2000);
 }
 

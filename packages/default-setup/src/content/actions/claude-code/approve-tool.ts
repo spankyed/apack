@@ -42,7 +42,7 @@ export async function action(
   if (!handle) {
     if (toolName === 'ExitPlanMode') {
       resolvePlanDraft(services, threadId as EntityId, 'approved');
-      services.emitter.broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
+      services.emitter.broadcast('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
     }
     persistClaudeState(services, threadId, { pendingControlRequest: undefined });
     // Start a new turn that resumes the session — mirrors replayQueuedMessage.
@@ -58,7 +58,7 @@ export async function action(
 
   if (toolName === 'ExitPlanMode') {
     resolvePlanDraft(services, threadId as EntityId, 'approved');
-    services.emitter.broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
+    services.emitter.broadcast('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
   }
 
   // If the user checked "auto-accept file edits", switch for current + future turns.

@@ -39,13 +39,13 @@ function typecheck(tsc: TscVersion, moduleResolution: 'node16' | 'bundler') {
     "const memo = query.ids(memoId).pickOne()!;",
     "export const text: string = memo.text;",
     "export const textNotAny: IsAny<typeof memo.text> = false;",
-    "const { broadcastToSurface, sendToSystem } = defineEvents<{ memos: { type: 'MEMO_ADDED'; id: string } }, { memos: { type: 'ADD_MEMO'; text: string } }>('demo');",
-    "sendToSystem('memos', { type: 'ADD_MEMO', text: 'x' });",
+    "const { broadcast, tell } = defineEvents<{ memos: { type: 'MEMO_ADDED'; id: string } }, { memos: { type: 'ADD_MEMO'; text: string } }>('demo');",
+    "tell('memos', { type: 'ADD_MEMO', text: 'x' });",
     "// @ts-expect-error ADD_MEMO needs its text",
-    "sendToSystem('memos', { type: 'ADD_MEMO' });",
-    "broadcastToSurface('memos', { type: 'MEMO_ADDED', id: 'm1' });",
+    "tell('memos', { type: 'ADD_MEMO' });",
+    "broadcast('memos', { type: 'MEMO_ADDED', id: 'm1' });",
     "// @ts-expect-error the memos surface doesn't receive this event",
-    "broadcastToSurface('memos', { type: 'MEMO_REMOVED' });",
+    "broadcast('memos', { type: 'MEMO_REMOVED' });",
     // Host-only modules live in the private @apackdev/host
   ] });
 }

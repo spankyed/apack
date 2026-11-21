@@ -25,7 +25,7 @@ export { _currentDelivery, _runDelivery, type _Delivery, type _Asker, type _AskD
 /**
  * A message on the bus: the ref of the system or surface it goes to, and the event exactly as the sender wrote it.
  * Where it goes is never a field of the event, so an event may carry any field (a `surfaceId` of its own included).
- * Messages sent in (`sendToSystem`) go to systems, and messages sent out (`broadcastToSurface`) to surfaces.
+ * Messages sent in (`tell`) go to systems, and messages sent out (`broadcast`) to surfaces.
  */
 export interface Message {
   /** Ephemeral diagnostic context; it does not route, authorize or identify the sender. */
@@ -105,7 +105,7 @@ export interface Message {
    * every field past `event` being omittable. What holds the invariant is `createSends`, which is the one
    * place a send is built, plus the spec that every verb stamps one.
    *
-   * A pack never writes this. `sendToSystem` returns the call it used and takes one for the case that needs
+   * A pack never writes this. `tell` returns the call it used and takes one for the case that needs
    * the id before the send happens; the other three verbs mint internally and say nothing about it.
    */
   call?: string;
@@ -134,7 +134,7 @@ export interface Message {
 /**
  * What a send takes beside the event, for the one send that can be asked under a call the caller already has.
  *
- * Written out at every `sendToSystem` overload before this existed, which is seven copies of one shape for
+ * Written out at every `tell` overload before this existed, which is seven copies of one shape for
  * the compiler to keep agreeing by hand.
  */
 export interface CallOptions {
@@ -169,7 +169,7 @@ let minted = 0;
  *
  * Exported for the one shape that needs the id before the send happens — an `enqueueActions` body, where the
  * send is deferred past the `assign` that stores it. Every other caller lets the send mint and takes what
- * `sendToSystem` returns.
+ * `tell` returns.
  */
 export const newCall = (): string => `c-${PROCESS_TAG}-${++minted}`;
 
@@ -202,7 +202,7 @@ export const _callOf = (event: { [key: string]: unknown }): string | undefined =
 /**
  * Whether this event answers the one ask `outstanding` names — `false` when nothing is outstanding.
  *
- * For a correlation holding at most one ask at a time: store what `sendToSystem` returned, clear it when
+ * For a correlation holding at most one ask at a time: store what `tell` returned, clear it when
  * the answer lands, read it with this. Either spelling of an empty slot is accepted, so a machine's choice
  * of `null` or `undefined` decides nothing.
  *
@@ -252,7 +252,7 @@ export const settleCall = <T>(
  * `_`-prefixed for what the prefix means everywhere here — not yours to write — and a key rather than a
  * member because the thing it sits in is an open bag (`{ type: string; [key: string]: unknown }`) where a
  * collision is possible. `Message.call` is un-prefixed for the opposite reason: a closed interface has
- * nothing to collide with, and a pack *does* supply a call through `sendToSystem`.
+ * nothing to collide with, and a pack *does* supply a call through `tell`.
  *
  * @internal Host and SDK only. Pack code asks `answersCall` or `settleCall` and never names the key.
  */
@@ -501,11 +501,11 @@ export interface SendBinding {
  * `from` and `via` — is threaded here rather than added as a parameter to each of them, and to every caller
  * that has nothing to pass.
  *
- * **`call` is the one thing that could not follow that policy, and `sendToSystem` takes it.** A binding is one
+ * **`call` is the one thing that could not follow that policy, and `tell` takes it.** A binding is one
  * value for the life of a pack; a call is one value per send, so `SendBinding` cannot carry it. Minting still
  * happens here — all four verbs stamp one, and 728 call sites across the repo are untouched — but an *ask*
  * needs the id before the answer can be matched against it, and in an `enqueueActions` body the send is
- * deferred past the `assign` that would store it. So `sendToSystem` accepts one and returns the one it used,
+ * deferred past the `assign` that would store it. So `tell` accepts one and returns the one it used,
  * and the three verbs nobody asks with keep their signatures exactly.
  */
 export function createSends({ resolve = (name: string) => name, from, via }: SendBinding = {}) {
@@ -522,11 +522,11 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
   };
 
   return {
-    broadcastToSurface(name: string, event: { type: string; [key: string]: unknown }): void {
+    broadcast(name: string, event: { type: string; [key: string]: unknown }): void {
       // The two sends share a signature, so the compiler can't tell a caller it picked the wrong one: say which it
       // is. Reaching for the other from here is the likely mistake, not a missing bindHost.
       if (!_isHostBound() && _isFeHostBound()) {
-        throw new Error(`broadcastToSurface("${name}") is the backend's, over the bus to every window. In the renderer, send to this window's surface with sendToSurface from #generated/events`);
+        throw new Error(`broadcast("${name}") is the backend's, over the bus to every window. In the renderer, send to this window's surface with sendToSurface from #generated/events`);
       }
       boundHost().transport.rootEvents.emitSurfaceSend(_performanceEnvelope({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress() }));
     },
@@ -534,7 +534,7 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
     sendToSurface(name: string, event: { type: string; [key: string]: unknown }): void {
       // The two sends share a signature, so the compiler can't tell a caller it picked the wrong one: say which it is.
       if (!_isFeHostBound() && _isHostBound()) {
-        throw new Error(`sendToSurface("${name}") is the renderer's, to this window's surface. On the backend, send over the bus with broadcastToSurface from #generated/events`);
+        throw new Error(`sendToSurface("${name}") is the renderer's, to this window's surface. On the backend, send over the bus with broadcast from #generated/events`);
       }
       deliverInWindow({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress() });
     },
@@ -543,7 +543,7 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
      * Sends an event to a surface on **one connection** — the window a handler is serving — rather than to
      * every window showing it.
      *
-     * The pair with `broadcastToSurface` is the whole point, and which to reach for follows the job: news
+     * The pair with `broadcast` is the whole point, and which to reach for follows the job: news
      * every window needs is a broadcast, and anything only the window that asked should act on is this.
      * Before it existed a system could be *answered* by a window but could only *ask* by broadcasting, so
      * one question collected one answer per open window.
@@ -562,7 +562,7 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
       // widening from one window to all of them that this verb exists to prevent. The type says `string`,
       // so reaching this takes a cast or untyped code; it is a gate on the one wrong value, not on a shape.
       if (!client) {
-        throw new Error(`sendToWindow("${name}") was given no connection to send to. A handler is handed the one it is serving as \`client\`, which is absent when the message came from another system or from nothing — to reach every window showing that surface, use broadcastToSurface.`);
+        throw new Error(`sendToWindow("${name}") was given no connection to send to. A handler is handed the one it is serving as \`client\`, which is absent when the message came from another system or from nothing — to reach every window showing that surface, use broadcast.`);
       }
       boundHost().transport.rootEvents.emitSurfaceSend(_performanceEnvelope({ to: resolve(name), event, call: newCall(), ...labels, ...answerAddress(), client }));
     },
@@ -580,7 +580,7 @@ export function createSends({ resolve = (name: string) => name, from, via }: Sen
      * and the two addressed surface sends are answers or news. One of them gains the parameter the day
      * something asks with it, and not before.
      */
-    sendToSystem(to: SystemTarget, event: { type: string; [key: string]: unknown }, options?: CallOptions): string {
+    tell(to: SystemTarget, event: { type: string; [key: string]: unknown }, options?: CallOptions): string {
       const call = options?.call ?? newCall();
       sendIncoming({ to: typeof to === 'string' ? resolve(to) : getDesignated(to.role), event, call, ...labels, ...answerAddress() });
       return call;
@@ -768,10 +768,10 @@ const unboundSends = createSends();
  * That reach is the reason for the name. `sendToSurface` beside it is the renderer's, and goes to one window's actor.
  * A backend send that only one window should act on says so in the event, as the host's `OPEN_SURFACE` does.
  *
- * Untyped: packs use the `broadcastToSurface` from their `#generated/events`.
+ * Untyped: packs use the `broadcast` from their `#generated/events`.
  */
-export function untypedBroadcastToSurface(to: string, event: { type: string; [key: string]: unknown }): void {
-  unboundSends.broadcastToSurface(to, event);
+export function untypedBroadcast(to: string, event: { type: string; [key: string]: unknown }): void {
+  unboundSends.broadcast(to, event);
 }
 
 /**
@@ -883,7 +883,7 @@ export function _replyTo(delivery: _Delivery | undefined): Reply | undefined {
     const { rootEvents } = boundHost().transport;
     if (asker.kind === 'connection') { rootEvents.emitSurfaceSend({ ...message, client: asker.client }); return; }
     if (asker.kind === 'bus') { rootEvents.emitIncoming(message); return; }
-    throw new Error(`Can't answer the "${asker.ref}" surface in its own window from the backend: there is no window-local bus here, so a backend send to a surface either reaches every window (broadcastToSurface) or one connection (sendToWindow). Nothing on the backend builds a window asker, so the delivery was constructed wrongly rather than answered wrongly — the handler that called reply is not at fault.`);
+    throw new Error(`Can't answer the "${asker.ref}" surface in its own window from the backend: there is no window-local bus here, so a backend send to a surface either reaches every window (broadcast) or one connection (sendToWindow). Nothing on the backend builds a window asker, so the delivery was constructed wrongly rather than answered wrongly — the handler that called reply is not at fault.`);
   };
 }
 
@@ -904,11 +904,11 @@ export function _clientOf(delivery: _Delivery | undefined): string | undefined {
 }
 
 /**
- * Sends an event to a backend system, by ref or by the role it plays. Untyped: packs use the `sendToSystem` from
+ * Sends an event to a backend system, by ref or by the role it plays. Untyped: packs use the `tell` from
  * their `#generated/events`, which takes names and checks the event against what the system declares.
  */
-export function untypedSendToSystem(to: SystemTarget, event: { type: string; [key: string]: unknown }, options?: CallOptions): string {
-  return unboundSends.sendToSystem(to, event, options);
+export function untypedTell(to: SystemTarget, event: { type: string; [key: string]: unknown }, options?: CallOptions): string {
+  return unboundSends.tell(to, event, options);
 }
 
 
@@ -969,11 +969,11 @@ export type TypedSendToWindow<M extends SurfaceEvents> = (<P extends keyof M & s
 ) => void) & ((client: string, surface: FeatureRef, event: FeatureSettingsUpdated) => void);
 
 /**
- * `sendToSystem` typed against a system event map; `type` picks the event, so a missing field names it. A role
+ * `tell` typed against a system event map; `type` picks the event, so a missing field names it. A role
  * (`{ role: 'brain' }`) names whichever system plays it, which the build can't know, so its event is unchecked. Any
  * feature's system, named by its ref, takes the events every system does (`SystemEvents`).
  */
-export type TypedSendToSystem<S extends SystemEventMap> = (<Id extends keyof S & string, Type extends S[Id]['type']>(
+export type TypedTell<S extends SystemEventMap> = (<Id extends keyof S & string, Type extends S[Id]['type']>(
   system: Id,
   event: OneSend<IsUnion<Id> | IsUnion<Type>, Type, { type: Type } & WithoutType<EventsOfType<S[Id], Type>>>,
   options?: CallOptions,
@@ -999,12 +999,12 @@ export type TypedFromAsk<A extends SystemAskMap> = <Id extends keyof A & string,
 /** A pack's typed sends */
 export interface TypedEvents<P extends SurfaceEvents, S extends SystemEventMap, A extends SystemAskMap = {}> {
   /** Backend: over the bus, to every window showing that surface */
-  broadcastToSurface: TypedSendToSurface<P>;
+  broadcast: TypedSendToSurface<P>;
   /** Backend: to that surface on one connection — the window a handler is serving, handed to it as `client` */
   sendToWindow: TypedSendToWindow<P>;
   /** Renderer: straight to this window's actor for that surface */
   sendToSurface: TypedSendToSurface<P>;
-  sendToSystem: TypedSendToSystem<S>;
+  tell: TypedTell<S>;
   /** Asks a system, and answers with its answer or why it was not done */
   ask: TypedAsk<A>;
   /** An ask as actor logic, for a machine to invoke */

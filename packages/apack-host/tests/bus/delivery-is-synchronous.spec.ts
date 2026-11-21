@@ -11,7 +11,7 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // sending would find the sender missing and read it as a bug rather than as the shape.
 import { beforeEach, describe, expect, it } from 'vitest';
 import { startTestRuntime, testRootEvents } from '@apackdev/sdk/testing';
-import { _currentDelivery, untypedSendToSystem } from '@apackdev/sdk/events';
+import { _currentDelivery, untypedTell } from '@apackdev/sdk/events';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
 import { deliverAs } from '../../src/bus/delivery.ts';
 
@@ -28,7 +28,7 @@ beforeEach(() => {
   stop = testRootEvents.onIncoming((message) => sent.push(message.sender));
 });
 
-const send = () => untypedSendToSystem('pack/other', { type: 'PING' });
+const send = () => untypedTell('pack/other', { type: 'PING' });
 
 /**
  * A timer a handler schedules, which is the subject of a case below rather than a wait for something else.

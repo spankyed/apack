@@ -3,7 +3,7 @@
 import { setup, assign, enqueueActions, type ActorRefFrom } from 'xstate'
 import type { ProgressEventOf } from '@apackdev/sdk/events'
 import { makes, type MadeEvent, type Making } from '@apackdev/sdk/fe'
-import { fromAsk, sendToSystem } from '#generated/events.ts'
+import { fromAsk, tell } from '#generated/events.ts'
 import type { Contract as CodeSystemContract } from '#features/code/be/contract.ts'
 import type { GitHubAccount, GitHubSignInFailure } from '#features/code/be/services/github.ts'
 
@@ -68,7 +68,7 @@ export const githubState = setup({
   initial: 'idle',
   context: { making: made.none(), account: undefined, code: null, failure: null },
   on: {
-    'github.SIGN_OUT': { actions: () => { sendToSystem('code', { type: 'github.SIGN_OUT' }) } },
+    'github.SIGN_OUT': { actions: () => { tell('code', { type: 'github.SIGN_OUT' }) } },
     // Who the app is signed in as, read when a view of it asks: a read under way is replaced by the newer one
     'github.GET_ACCOUNT': { actions: enqueueActions(({ enqueue }) => made.make(enqueue, 'account', {})) },
     [made.done]: { actions: made.settle() },

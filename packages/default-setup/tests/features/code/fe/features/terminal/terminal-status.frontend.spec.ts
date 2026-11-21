@@ -8,8 +8,8 @@ import { latestAsk, resetAsks } from '../../_support/asks.ts'
 import { createApp, h, nextTick } from 'vue'
 import type { TerminalStatus } from '#features/code/be/types.ts'
 
-const sendToSystem = vi.hoisted(() => vi.fn())
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }))
+const tell = vi.hoisted(() => vi.fn())
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }))
 const parent = vi.hoisted(() => ({ updateParentState: vi.fn(), addTabToParent: vi.fn(), getParentContext: vi.fn(() => null), sendEventToParent: vi.fn() }))
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => parent)
 const pool = vi.hoisted(() => ({ dispose: vi.fn(), syncProcesses: vi.fn(), noteExit: vi.fn(), describe: vi.fn() }))
@@ -52,7 +52,7 @@ let notify: ReturnType<typeof vi.fn>
 let hasFocus: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
-  sendToSystem.mockReset()
+  tell.mockReset()
   resetAsks()
   parent.getParentContext.mockReset()
   notify = vi.fn().mockResolvedValue(true)
@@ -173,22 +173,22 @@ describe("a terminal's status on the window", () => {
     const w = await aWindow()
     w.told('t-1', [record(), record({ id: 'i', state: 'idle' })])
     w.looks('t-1')
-    expect(sendToSystem, 'nothing was waiting to be looked at').not.toHaveBeenCalled()
+    expect(tell, 'nothing was waiting to be looked at').not.toHaveBeenCalled()
     w.told('t-1', [record({ state: 'done', seen: true }), record({ id: 'b', state: 'blocked', seen: true })])
     w.looks('t-1')
-    expect(sendToSystem, 'they have already looked at these').not.toHaveBeenCalled()
+    expect(tell, 'they have already looked at these').not.toHaveBeenCalled()
 
     w.told('t-1', [record({ state: 'done', changed: 2 })])
     w.looks('t-2')
-    expect(sendToSystem, 'they looked at another terminal').not.toHaveBeenCalled()
+    expect(tell, 'they looked at another terminal').not.toHaveBeenCalled()
     w.looks('t-1')
-    expect(sendToSystem).toHaveBeenCalledExactlyOnceWith('code', { type: 'terminal.STATUS_SEEN', terminalId: 't-1' })
+    expect(tell).toHaveBeenCalledExactlyOnceWith('code', { type: 'terminal.STATUS_SEEN', terminalId: 't-1' })
 
     // Waiting on them is looked at too, which is what lets another window stop holding its notification back
-    sendToSystem.mockClear()
+    tell.mockClear()
     w.told('t-2', [record({ state: 'blocked' })])
     w.looks('t-2')
-    expect(sendToSystem).toHaveBeenCalledExactlyOnceWith('code', { type: 'terminal.STATUS_SEEN', terminalId: 't-2' })
+    expect(tell).toHaveBeenCalledExactlyOnceWith('code', { type: 'terminal.STATUS_SEEN', terminalId: 't-2' })
   })
 })
 
@@ -210,20 +210,20 @@ describe('a terminal on screen', () => {
     const w = await showing('t-1')
     w.told('t-1', [record()])
     await nextTick()
-    expect(sendToSystem, 'working wants nobody').not.toHaveBeenCalled()
+    expect(tell, 'working wants nobody').not.toHaveBeenCalled()
     w.told('t-1', [record({ state: 'done', changed: 2 })])
     await nextTick()
-    expect(sendToSystem.mock.calls).toEqual([seen('t-1')])
+    expect(tell.mock.calls).toEqual([seen('t-1')])
   })
 
   it('is not looked at behind another window, until this one comes to the front', async () => {
     const w = await showing('t-1')
     w.told('t-1', [record({ state: 'error' })])
     await nextTick()
-    expect(sendToSystem, 'on screen is not looked at').not.toHaveBeenCalled()
+    expect(tell, 'on screen is not looked at').not.toHaveBeenCalled()
     hasFocus.mockReturnValue(true)
     window.dispatchEvent(new Event('focus'))
-    expect(sendToSystem.mock.calls).toEqual([seen('t-1')])
+    expect(tell.mock.calls).toEqual([seen('t-1')])
   })
 
   it('says nothing of a terminal it is not showing, or once it is gone from the screen', async () => {
@@ -232,13 +232,13 @@ describe('a terminal on screen', () => {
     w.told('t-2', [record({ state: 'done' })])
     await nextTick()
     window.dispatchEvent(new Event('focus'))
-    expect(sendToSystem).not.toHaveBeenCalled()
+    expect(tell).not.toHaveBeenCalled()
 
     w.app.unmount()
     w.told('t-1', [record({ state: 'done' })])
     await nextTick()
     window.dispatchEvent(new Event('focus'))
-    expect(sendToSystem).not.toHaveBeenCalled()
+    expect(tell).not.toHaveBeenCalled()
   })
 })
 

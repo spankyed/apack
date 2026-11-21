@@ -1,7 +1,7 @@
 import { featureSettings } from '#generated/settings.ts';
 import type { OutgoingTerminalEvents, TerminalAsks } from '../contract.ts'
 
-import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
+import { broadcast, tell } from '#generated/events.ts';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { safeEvents } from '@apackdev/sdk/helpers';
 import { setup, assign, fromPromise, waitFor, type AnyActorRef } from 'xstate'
@@ -43,7 +43,7 @@ type TerminalNews = Extract<OutgoingTerminalEvents, { type: TerminalNewsType }>
 
 /** Tell every window showing the code surface what a terminal did */
 const emitToFrontend = (event: TerminalNews) => {
-  broadcastToSurface(surfaceId, event)
+  broadcast(surfaceId, event)
 }
 
 /**
@@ -84,7 +84,7 @@ const terminalHandlers = {
     switch (event.kind) {
       // A command that finished may have changed the repository or an open file with no file event for it
       case 'commandFinished':
-        sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+        tell('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
         break
       case 'cwdChanged': {
         // Shaped for this platform: an OSC 7 URL gives `/C:/Users/...` on Windows, which nothing can open
@@ -121,12 +121,12 @@ const terminalHandlers = {
         if (!heard) break
         emitToFrontend({ type: 'terminal.STATUS', data: { terminalId, statuses: heard.after } })
         const { moves, leftWorking } = statusMoves(heard.before, heard.after)
-        if (leftWorking) sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
+        if (leftWorking) tell('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' })
         for (const { record, previous } of moves) {
           // A record naming a program that is not the one in front is drawn as such and tells no flow:
           // a flow acts on what it hears
           if (record.confirmed === 'mismatched') continue
-          sendToSystem({ role: 'brain' }, {
+          tell({ role: 'brain' }, {
             type: 'TRIGGER_BRAIN_EVENT',
             eventType: 'terminal.status',
             payload: { terminalId, id: record.id, app: record.app, state: record.state, kind: record.kind, previous },
@@ -244,7 +244,7 @@ const answers = handlers.answers<TerminalAsks>({
 
   'terminal.RENAME_TERMINAL': ({ args: { terminalId, customTitle } }) => {
     if (!terminalService.rename(terminalId, customTitle)) throw new Error(`${nameOf(terminalId)} not found`)
-    broadcastToSurface(surfaceId, { type: 'terminal.RENAMED', data: { terminalId, customTitle } })
+    broadcast(surfaceId, { type: 'terminal.RENAMED', data: { terminalId, customTitle } })
   },
 
   'terminal.REFRESH_LIST': async ({ self }) => {

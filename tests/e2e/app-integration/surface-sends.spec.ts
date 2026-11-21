@@ -1,4 +1,4 @@
-// Backend sends to surfaces from outside a system's own `emit` (broadcastToSurface, services.emitter.broadcastToSurface) go
+// Backend sends to surfaces from outside a system's own `emit` (broadcast, services.emitter.broadcast) go
 // through the app's bus, which drops them until a client connects and delivers them after. The code system's file
 // watcher and terminal output, and the browser system's startup data, still reach their surfaces.
 import { execFileSync } from 'node:child_process';

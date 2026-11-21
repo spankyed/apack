@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startTestRuntime, takeSystemErrors, testRootEvents } from '../../src/testing/index.ts';
 import { testPacksView } from '../../src/testing/packs.ts';
 import { resolveName } from '../../src/ids/index.ts';
-import { onIncoming, untypedBroadcastToSurface, untypedSendToSystem } from '../../src/events/index.ts';
+import { onIncoming, untypedBroadcast, untypedTell } from '../../src/events/index.ts';
 import { bindFeHost, unbindFeHost } from '../../src/runtime/fe-host.ts';
 import { createLogger, onLog, type LogEvent } from '../../src/logger/index.ts';
 import { createActionEmitter } from '../../src/services/index.ts';
@@ -41,11 +41,11 @@ function onBus(run: () => void) {
 }
 
 describe('on the bound bus', () => {
-  it('untypedBroadcastToSurface and services.emitter.broadcastToSurface go to the bus, which delivers them, not to the clients directly', () => {
+  it('untypedBroadcast and services.emitter.broadcast go to the bus, which delivers them, not to the clients directly', () => {
     const sent = onBus(() => {
       // The untyped send takes the id a surface runs under; the emitter takes the name an action writes
-      untypedBroadcastToSurface('memo-pack/memos', { type: 'MEMO_ADDED' });
-      createActionEmitter().broadcastToSurface('memo-pack/memos', { type: 'MEMO_REMOVED' });
+      untypedBroadcast('memo-pack/memos', { type: 'MEMO_ADDED' });
+      createActionEmitter().broadcast('memo-pack/memos', { type: 'MEMO_REMOVED' });
     });
     expect(sent.toSurfaces).toEqual([
       { to: 'memo-pack/memos', call: expect.any(String), event: { type: 'MEMO_ADDED' } },
@@ -57,8 +57,8 @@ describe('on the bound bus', () => {
   // Where a message goes is never a field of its event, so an event may carry any field of its own
   it('delivers an event exactly as it was sent, a field named surfaceId or systemId included', () => {
     const sent = onBus(() => {
-      untypedBroadcastToSurface('memo-pack/memos', { type: 'SURFACE_PICKED', surfaceId: 'default-setup/notes' });
-      untypedSendToSystem('memo-pack/memos', { type: 'OPEN', systemId: 'kept', surfaceId: 'also-kept' });
+      untypedBroadcast('memo-pack/memos', { type: 'SURFACE_PICKED', surfaceId: 'default-setup/notes' });
+      untypedTell('memo-pack/memos', { type: 'OPEN', systemId: 'kept', surfaceId: 'also-kept' });
     });
     expect(sent.toSurfaces).toEqual([{ to: 'memo-pack/memos', call: expect.any(String), event: { type: 'SURFACE_PICKED', surfaceId: 'default-setup/notes' } }]);
     expect(sent.incoming).toEqual([{ to: 'memo-pack/memos', call: expect.any(String), event: { type: 'OPEN', systemId: 'kept', surfaceId: 'also-kept' } }]);
@@ -129,8 +129,8 @@ describe('with a frontend bound too', () => {
     });
     try {
       const sent = onBus(() => {
-        untypedSendToSystem('memos', { type: 'ADD_MEMO' });
-        untypedSendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'user.message' });
+        untypedTell('memos', { type: 'ADD_MEMO' });
+        untypedTell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'user.message' });
       });
       expect(sent.incoming).toEqual([]);
       expect(sentByFrontend).toEqual([

@@ -94,7 +94,7 @@ export function stopRunningShells(): void {
 /**
  * Starts the app shell with `options.surfaces` registered as `packId`'s and binds the frontend host to it, so
  * `openSurface`, `untypedOpenSurface` and `useShell()` reach it. Its client is the harness's bus: what the shell and
- * `sendToSystem` send reaches a test app's systems, and what those systems send surfaces reaches the surfaces' actors.
+ * `tell` send reaches a test app's systems, and what those systems send surfaces reaches the surfaces' actors.
  * Lookups the backend shares with it (roles, artifacts, blocks) read `backend` first. Resolves once the shell
  * is connected and has read the (empty) loaded packs, as a window is once the app is up.
  */

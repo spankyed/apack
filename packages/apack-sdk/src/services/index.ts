@@ -1,5 +1,5 @@
 import { boundHost, _boundHostGeneration, type HostRuntimeServices } from '../runtime/host-runtime.ts';
-import { createSends, untypedBroadcastToSurface, untypedSendToWindow, untypedSendToSystem } from '../events/index.ts';
+import { createSends, untypedBroadcast, untypedSendToWindow, untypedTell } from '../events/index.ts';
 import { resolveRegistered } from '../ids/refs.ts';
 import { createLogger, type Logger } from '../logger/logger.ts';
 import type { AppDataService } from './app-data.ts';
@@ -62,7 +62,7 @@ export interface HostServices {
   logger: Logger;
   /**
    * Sends to surfaces and systems. Both name a feature `<packId>/<featureId>` — the action's own pack included,
-   * and the host's (`host/application`); `sendToSystem` also takes a role (`{ role: 'brain' }`), which reaches
+   * and the host's (`host/application`); `tell` also takes a role (`{ role: 'brain' }`), which reaches
    * whichever system plays it — a flow event goes to the brain as `TRIGGER_BRAIN_EVENT`. A pack's `Services`
    * types them with its own and its dependencies' events.
    *
@@ -77,14 +77,14 @@ export interface HostServices {
    * the message, the second would change what a name means.
    */
   emitter: {
-    broadcastToSurface: typeof untypedBroadcastToSurface;
+    broadcast: typeof untypedBroadcast;
     /**
      * To that surface on one connection, which the caller supplies. A handler is handed the connection it
      * is serving; an action is handed nothing, so it has one only if something passed it in a payload —
      * nothing does today, which is why this has no caller yet rather than why it would fail.
      */
     sendToWindow: typeof untypedSendToWindow;
-    sendToSystem: typeof untypedSendToSystem;
+    tell: typeof untypedTell;
   };
   repository: typeof repository;
   /** Completion of the app's onboarding, independent of preferences and database administration */
@@ -133,9 +133,9 @@ export interface ActionSender {
 export function createActionEmitter(sender?: ActionSender): HostServices['emitter'] {
   const sends = createSends(sender);
   return {
-    broadcastToSurface: (name, event) => sends.broadcastToSurface(actionRef('surface', name, boundHost().packs.surfaceIds()), event),
+    broadcast: (name, event) => sends.broadcast(actionRef('surface', name, boundHost().packs.surfaceIds()), event),
     sendToWindow: (client, name, event) => sends.sendToWindow(client, actionRef('surface', name, boundHost().packs.surfaceIds()), event),
-    sendToSystem: (to, event, options) => sends.sendToSystem(typeof to === 'string' ? actionRef('system', to, boundHost().packs.systemIds()) : to, event, options),
+    tell: (to, event, options) => sends.tell(typeof to === 'string' ? actionRef('system', to, boundHost().packs.systemIds()) : to, event, options),
   };
 }
 

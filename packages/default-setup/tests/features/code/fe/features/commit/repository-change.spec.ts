@@ -7,7 +7,7 @@ import { createActor } from 'xstate';
 import { made, resetAsks } from '../../_support/asks.ts';
 
 const getParentContext = vi.hoisted(() => vi.fn((): { openFiles?: unknown[] } => ({})));
-vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),

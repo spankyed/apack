@@ -9,7 +9,7 @@ import { ArtifactItem } from '@apackdev/sdk/artifacts';
 import * as _apackdev_sdk_build from '@apackdev/sdk/build';
 import * as _apackdev_sdk_ears from '@apackdev/sdk/ears';
 import { ShortCode } from '@apackdev/sdk/ears';
-import { ContractAsks, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, SurfaceInboxOf, TypedSendToSurface, TypedSendToSystem, TypedSendToWindow } from '@apackdev/sdk/events';
+import { ContractAsks, HostSurfaceEvents, HostSystemEvents, IncomingEventsOf, OutgoingEventsOf, PublicSurfaceInboxOf, Qualified, SurfaceInboxOf, TypedSendToSurface, TypedSendToWindow, TypedTell } from '@apackdev/sdk/events';
 import { HotkeysMap, MakingOf, NavHistory, SurfaceInbox, SurfaceStateOf, TabGroup, ViewWrites } from '@apackdev/sdk/fe';
 import { Simplify as Simplify$1 } from '@apackdev/sdk/helpers';
 import { ModelCatalogEntry, ModelId } from '@apackdev/sdk/models';
@@ -4303,10 +4303,10 @@ declare const PR_LIST_STATES: readonly ["open", "closed", "merged", "all"];
  * feature, or nothing — where a ref that no longer fits is wrong visibly, and is refused at the bus rather
  * than doing something else.
  */
-type PackEmitter = Omit<HostServices['emitter'], 'broadcastToSurface' | 'sendToSystem' | 'sendToWindow'> & {
-    broadcastToSurface: TypedSendToSurface<QualifiedSurfaceEvents>;
+type PackEmitter = Omit<HostServices['emitter'], 'broadcast' | 'sendToWindow' | 'tell'> & {
+    broadcast: TypedSendToSurface<QualifiedSurfaceEvents>;
     sendToWindow: TypedSendToWindow<QualifiedSurfaceEvents>;
-    sendToSystem: TypedSendToSystem<QualifiedSystemEvents>;
+    tell: TypedTell<QualifiedSystemEvents>;
 };
 
 type PackFeatureSettings = {

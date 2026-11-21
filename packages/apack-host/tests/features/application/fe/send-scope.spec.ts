@@ -2,7 +2,7 @@
 // a backend `OPEN_SURFACE` reaches every window, so a popout would have followed the main window's navigation, and
 // the event had to be renamed and guarded per window instead.
 //
-// `broadcastToSurface` (backend, over the bus) reaches **every** window showing that surface, because a surface runs
+// `broadcast` (backend, over the bus) reaches **every** window showing that surface, because a surface runs
 // once per window. The renderer's `sendToSurface` reaches this window's only. Two shells over one backend is the
 // cheapest faithful way to say that: each shell is a window, and the bus delivers to both subscriptions.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -48,7 +48,7 @@ afterEach(() => { main.app.stop(); popout.app.stop(); });
  * The delivery scope on the shell's path, which is one of the four places a message gets named and the only one
  * that runs in a browser.
  *
- * Without it a surface's own `sendToSystem` carries no `Message.sender`, so the system it asks has no address to
+ * Without it a surface's own `tell` carries no `Message.sender`, so the system it asks has no address to
  * answer and `reply` throws — for the commonest request in the app, a view asking its own system for data. The
  * scope is read here directly, because what this pins is whether it is set at all.
  */
@@ -144,7 +144,7 @@ describe('a surface handling what the shell gave it', () => {
 
 describe('how far each send reaches', () => {
   it('delivers a backend send to that surface in every window', async () => {
-    // What the bus does with a `broadcastToSurface`: it goes out on every window's subscription
+    // What the bus does with a `broadcast`: it goes out on every window's subscription
     for (const w of [main, popout]) w.shell.client.receive({ to: 'default-setup/threads', event: { type: 'SELECT_ARTIFACT', artifactId: 'a1' } });
     await settle();
 

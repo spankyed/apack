@@ -34,7 +34,7 @@ const wrappers = new WeakMap<AnyActorRef, AnyActorRef>()
  *
  * A component sending to its own surface is the one path that reaches a machine's actions from outside a
  * delivery — the bus names the message it routes to a system and the shell names the one it hands a surface, but
- * a click goes straight to the actor. Running the send in a delivery means the action's own `sendToSystem`
+ * a click goes straight to the actor. Running the send in a delivery means the action's own `tell`
  * stamps this surface's ref, so a system can answer *this* surface in the window it was asked from. `actor.id` is
  * that ref because the shell spawns a surface with its ref as both `id` and `systemId`.
  *

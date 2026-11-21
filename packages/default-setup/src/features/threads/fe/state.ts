@@ -17,7 +17,7 @@ import { freshKey, makes, viewRead, viewWrites, writeEnded, writeSent, writing, 
 import { fromView } from '#generated/fe.ts';
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
 import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
@@ -878,7 +878,7 @@ const threadsState = setup({
     })),
     sendViewThread: ({ event }) => {
       const threadId = typeOf(['SELECT_THREAD', 'OPEN_ENTITY'], event).id;
-      sendToSystem(id, {
+      tell(id, {
         type: 'VIEW_THREAD',
         threadId,
       });
@@ -1492,7 +1492,7 @@ const threadsState = setup({
         return;
       }
 
-      sendToSystem(id, {
+      tell(id, {
         type: 'INTERACTIVE_MSG_RESPONSE',
         messageId,
         threadId: context.currentThread.id,
@@ -1554,7 +1554,7 @@ const threadsState = setup({
     }),
     revertThread: ({ event }) => {
       const { messageId, threadId, restoreFiles, userCliUuid } = typeOf('REVERT_THREAD', event);
-      sendToSystem(id, {
+      tell(id, {
         type: 'REVERT_THREAD',
         messageId,
         threadId,
@@ -1564,19 +1564,19 @@ const threadsState = setup({
     },
     summarizeThread: ({ event }) => {
       const { messageId, threadId } = typeOf('SUMMARIZE_THREAD', event);
-      sendToSystem(id, { type: 'SUMMARIZE_THREAD', messageId, threadId });
+      tell(id, { type: 'SUMMARIZE_THREAD', messageId, threadId });
     },
     pauseTurn: ({ event }) => {
       const { threadId } = typeOf('PAUSE_TURN', event);
-      sendToSystem(id, { type: 'PAUSE_TURN', threadId });
+      tell(id, { type: 'PAUSE_TURN', threadId });
     },
     unqueueMessage: ({ event }) => {
       const { threadId, messageId } = typeOf('UNQUEUE_MESSAGE', event);
-      sendToSystem(id, { type: 'FORWARD_BRAIN_EVENT', eventType: 'user.thread.unqueue', payload: { threadId, messageId } });
+      tell(id, { type: 'FORWARD_BRAIN_EVENT', eventType: 'user.thread.unqueue', payload: { threadId, messageId } });
     },
     persistDismissMessage: ({ event }) => {
       const { messageId } = typeOf('DISMISS_MESSAGE', event);
-      sendToSystem(id, { type: 'DELETE_MESSAGE', messageId });
+      tell(id, { type: 'DELETE_MESSAGE', messageId });
     },
   },
   guards: { entityIs: entityIs<Contract['opens']>,
@@ -1782,7 +1782,7 @@ const threadsState = setup({
             } as any;
           }),
           ({ context }) => {
-            sendToSystem(id, { type: 'VIEW_THREAD', threadId: context.view.id });
+            tell(id, { type: 'VIEW_THREAD', threadId: context.view.id });
           },
           'followDetail',
         ],
@@ -1825,7 +1825,7 @@ const threadsState = setup({
             } as any;
           }),
           ({ context }) => {
-            sendToSystem(id, { type: 'VIEW_THREAD', threadId: context.view.id });
+            tell(id, { type: 'VIEW_THREAD', threadId: context.view.id });
           },
           'followDetail',
         ],

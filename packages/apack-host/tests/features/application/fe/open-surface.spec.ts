@@ -248,7 +248,7 @@ it('still toasts for an ordinary send that carries an asker', async () => {
   );
 });
 
-// A pack's system or action asks the app to open a surface with broadcastToSurface('host/application', …); every window
+// A pack's system or action asks the app to open a surface with broadcast('host/application', …); every window
 // hears it, and only a main window acts: a popout shows its own surface
 describe('a request from the app to open a surface', () => {
   it('opens the surface in a main window, with the events', async () => {

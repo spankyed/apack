@@ -63,7 +63,7 @@ export async function action(
   if (!threadId) return { success: false, reason: 'missing threadId' };
 
   // The turn may have changed files with no file event for each: the code surface reads the repository again
-  services.emitter.sendToSystem('default-setup/code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' });
+  services.emitter.tell('default-setup/code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' });
 
   // ─── Update session artifact ──────────────────────────────────────
   const { toolCallCount } = params as { toolCallCount?: number };
@@ -163,7 +163,7 @@ export async function action(
       });
       updateChatState(services, threadId as EntityId, nextState);
       if (nextState === 'success') {
-        services.emitter.broadcastToSurface('default-setup/threads', {
+        services.emitter.broadcast('default-setup/threads', {
           type: 'FLASH_CHAT_STATE', threadId, stateId: 'success', durationMs: 3000,
         });
       }

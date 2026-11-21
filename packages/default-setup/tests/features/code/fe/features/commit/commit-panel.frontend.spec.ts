@@ -8,7 +8,7 @@ import { createApp, h, nextTick, type App } from 'vue'
 import { createActor, createMachine, sendTo, type AnyActorRef, type AnyEventObject } from 'xstate'
 import { asksOf, latestAsk, made, resetAsks } from '../../_support/asks.ts'
 
-vi.mock('#generated/events.ts', async () => ({ sendToSystem: vi.fn(), broadcastToSurface: vi.fn(), sendToSurface: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }))
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), broadcast: vi.fn(), sendToSurface: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }))
 
 const { SurfaceScope } = await import('@apackdev/sdk/fe')
 const { fakeSettings, startFeTestRuntime, stopFeTestRuntime } = await import('@apackdev/sdk/testing')

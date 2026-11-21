@@ -24,7 +24,7 @@ export interface ReportErrorInput {
   source?: string;
   title?: string;
   /**
-   * The verb that was attempted: `setPackEnabled`, `broadcastToSurface`, `sendToSystem`. A reader filters on it
+   * The verb that was attempted: `setPackEnabled`, `broadcast`, `tell`. A reader filters on it
    * to pick out one kind of report from a list of them, so it names **one** fact and keeps naming it —
    * `undeclared-incoming.spec.ts` separates the bus's inward reports from its outward ones this way, and the
    * E2E fixture collects the outward ones to fail a test on a dropped send.
@@ -185,6 +185,6 @@ function reportStepError(input: ReportSystemErrorInput, step: StepErrorContext):
 
   // The flow shows it in the surface playing the brain role, if any does — sent as the step that reported it, so a
   // drop names the step rather than nothing
-  if (hasDesignation('brain')) createSends({ via: source }).broadcastToSurface(getDesignated('brain'), { type: 'BRAIN_RUNTIME_ERROR', error: runtimeError });
+  if (hasDesignation('brain')) createSends({ via: source }).broadcast(getDesignated('brain'), { type: 'BRAIN_RUNTIME_ERROR', error: runtimeError });
   return runtimeError;
 }

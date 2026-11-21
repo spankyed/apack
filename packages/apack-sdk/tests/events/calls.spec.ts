@@ -10,8 +10,8 @@
 // `answersCall`/`settleCall` refuse what a hand-written comparison would accept.
 import { describe, expect, it } from 'vitest';
 import {
-  _CALL_KEY, _callOf, answersCall, newCall, recordCall, settleCall, untypedBroadcastToSurface,
-  untypedSendToSystem, _callOn, _replyTo, type Message,
+  _CALL_KEY, _callOf, answersCall, newCall, recordCall, settleCall, untypedBroadcast,
+  untypedTell, _callOn, _replyTo, type Message,
 } from '../../src/events/index.ts';
 import { startTestRuntime, testRootEvents } from '../../src/testing/index.ts';
 
@@ -35,8 +35,8 @@ describe('a call is minted by the send', () => {
    */
   it('names every send, asked for or not', () => {
     const seen = onBus(() => {
-      untypedBroadcastToSurface('pack/surface', { type: 'NEWS' });
-      untypedSendToSystem('pack/system', { type: 'DO_IT' });
+      untypedBroadcast('pack/surface', { type: 'NEWS' });
+      untypedTell('pack/system', { type: 'DO_IT' });
     });
 
     expect(seen.map(({ call }) => typeof call)).toEqual(['string', 'string']);
@@ -47,7 +47,7 @@ describe('a call is minted by the send', () => {
   it('uses the call it was given, and hands it back', () => {
     const call = newCall();
     let returned: string | undefined;
-    const seen = onBus(() => { returned = untypedSendToSystem('pack/system', { type: 'DO_IT' }, { call }); });
+    const seen = onBus(() => { returned = untypedTell('pack/system', { type: 'DO_IT' }, { call }); });
 
     expect(seen[0]?.call, 'the envelope carries the one supplied').toBe(call);
     expect(returned, 'and the send answers with it, so a caller that minted none can still store it').toBe(call);

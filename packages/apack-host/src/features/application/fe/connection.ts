@@ -1,7 +1,7 @@
 // This window's subscription to the bus, held by a child actor over the shell's client: the connection's lifecycle
 // becomes the shell's events, and each message goes to the surface it's for — named as it is handled, so a send
 // that surface makes in answer carries its own ref (`notifySurfaceActor`/`sendToSurfaceActor`). This is the path every backend
-// `broadcastToSurface` takes, and it set no name until it was tested for one.
+// `broadcast` takes, and it set no name until it was tested for one.
 import { fromCallback } from 'xstate';
 import { _settleAsk, senderSuffix } from '@apackdev/sdk/events';
 import type { ShellClient } from '../../../fe/client.ts';

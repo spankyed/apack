@@ -146,7 +146,7 @@ import { useState } from '@apackdev/sdk/fe'
 import { ref, computed } from 'vue'
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 
-import { sendToSystem } from '#generated/events.ts'
+import { tell } from '#generated/events.ts'
 import type { BrainState } from '#features/brain/fe/state.ts'
 import { useView } from '#generated/fe.ts'
 
@@ -183,11 +183,11 @@ const inspectEnabled = ref<boolean>(false)
 const handleRestart = () => {
   // If brain is dead, send START_BRAIN, otherwise RESTART_BRAIN
   if (brain.value.data.brainIsDead) {
-    sendToSystem('brain', {
+    tell('brain', {
       type: 'START_BRAIN',
     })
   } else {
-    sendToSystem('brain', {
+    tell('brain', {
       type: 'RESTART_BRAIN',
     })
   }
@@ -195,7 +195,7 @@ const handleRestart = () => {
 
 const handleKill = () => {
   // Send kill event to backend brain system
-  sendToSystem('brain', {
+  tell('brain', {
     type: 'KILL_BRAIN',
   })
 }
@@ -203,7 +203,7 @@ const handleKill = () => {
 const toggleInspect = () => {
   inspectEnabled.value = !inspectEnabled.value
   // Send toggle inspect event to backend
-  sendToSystem('brain', {
+  tell('brain', {
     type: 'TOGGLE_INSPECT',
   })
 }

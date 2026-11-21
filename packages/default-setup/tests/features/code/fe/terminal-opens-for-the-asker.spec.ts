@@ -1,6 +1,6 @@
 // A terminal opens in the window that asked for it, and appears in every window's list.
 //
-// Those are two jobs and they used to be one event. `terminal.CREATED` is a broadcast — `broadcastToSurface`
+// Those are two jobs and they used to be one event. `terminal.CREATED` is a broadcast — `broadcast`
 // reaches every window — and its handler both grew the list *and* routed the terminal into this window's
 // panel and ran the pending command. So opening a terminal in one window opened it in all of them, and ran
 // there a command nobody had typed there.
@@ -16,8 +16,8 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import { asksOf, latestAsk, made, resetAsks } from './_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('./_support/asks.ts')).fromAsk }));
+const tell = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('./_support/asks.ts')).fromAsk }));
 
 const parent = vi.hoisted(() => ({ updateParentState: vi.fn(), addTabToParent: vi.fn(), getParentContext: vi.fn(() => null), sendEventToParent: vi.fn() }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => parent);
@@ -42,7 +42,7 @@ const pendingOpens = (actor: ReturnType<typeof createActor>) =>
 const create = (nth: number) => asksOf('terminal.CREATE_TERMINAL')[nth]!;
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  tell.mockReset();
   resetAsks();
   parent.updateParentState.mockReset();
   parent.addTabToParent.mockReset();
@@ -80,7 +80,7 @@ it('opens the terminal for the window that asked', async () => {
 
   expect(parent.updateParentState).toHaveBeenCalledWith(expect.anything(), { panelTerminalId: 't-1', panelTerminalExpanded: true });
   // The command this window typed is run in the terminal this window asked for, and nowhere else
-  expect(sendToSystem).toHaveBeenCalledWith('code', expect.objectContaining({ type: 'terminal.TERMINAL_INPUT', terminalId: 't-1', data: 'echo hi\n' }));
+  expect(tell).toHaveBeenCalledWith('code', expect.objectContaining({ type: 'terminal.TERMINAL_INPUT', terminalId: 't-1', data: 'echo hi\n' }));
 });
 
 it('opens it as a tab when that is what was asked for', async () => {
@@ -131,8 +131,8 @@ it('opens two terminals asked for together the way each was asked for', async ()
   await create(0).answer(aTerminal('t-build'));
 
   // Each command in the terminal its own ask created, which is the whole of T4
-  expect(sendToSystem).toHaveBeenCalledWith('code', expect.objectContaining({ terminalId: 't-build', data: 'build\n' }));
-  expect(sendToSystem).toHaveBeenCalledWith('code', expect.objectContaining({ terminalId: 't-test', data: 'test\n' }));
+  expect(tell).toHaveBeenCalledWith('code', expect.objectContaining({ terminalId: 't-build', data: 'build\n' }));
+  expect(tell).toHaveBeenCalledWith('code', expect.objectContaining({ terminalId: 't-test', data: 'test\n' }));
   // And the targets likewise: the tab was the second ask's, the panel the first's
   expect(parent.addTabToParent).toHaveBeenCalledTimes(1);
   expect(parent.updateParentState).toHaveBeenCalledWith(expect.anything(), { panelTerminalId: 't-build', panelTerminalExpanded: true });

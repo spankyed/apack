@@ -270,7 +270,7 @@ import { Bot, Check, Copy, Terminal } from 'lucide-vue-next'
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'
 import { useSurfaceState } from '#generated/fe.ts'
 import { openSurface } from '#generated/fe.ts'
-import { sendToSystem } from '#generated/events.ts'
+import { tell } from '#generated/events.ts'
 
 
 type ApprovalMode = 'user' | 'auto_review'
@@ -456,7 +456,7 @@ function openTerminalTab() {
 function updateSessionSettings(payload: { approvalMode?: ApprovalMode; sandbox?: SandboxMode; networkAccess?: boolean; webSearch?: 'live' | 'cached' | 'disabled' }) {
   const threadId = currentThread.value?.id
   if (!threadId) return
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'FORWARD_BRAIN_EVENT',
     eventType: 'user.update.codexSessionSettings',
     payload: { threadId, ...payload },

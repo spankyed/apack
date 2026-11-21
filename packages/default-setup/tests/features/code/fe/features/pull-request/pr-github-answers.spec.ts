@@ -8,8 +8,8 @@ import { createActor } from 'xstate';
 import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 import type { GhPullRequest } from '#generated/types.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+const tell = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 const parent = vi.hoisted(() => ({ baseDirectory: '/repo' as string | null, selectedPanel: 'pr' }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
@@ -40,7 +40,7 @@ const pick = async (actor: Actor, which: GhPullRequest) => {
 };
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  tell.mockReset();
   resetAsks();
   parent.baseDirectory = '/repo';
   parent.selectedPanel = 'pr';

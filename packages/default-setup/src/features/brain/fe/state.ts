@@ -8,7 +8,7 @@ import { targetIs, type TrailClickEvent } from '@apackdev/sdk/fe';
 import type { BrainContext } from './contract.ts';
 import type { BrainStateEvent, OutgoingBrainEvents } from '#features/brain/be/types.ts'
 import type { FlowRunNodeData } from '#generated/types.ts';
-import { fromAsk, sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import type { StepRuntimeError, RunTree } from '@apackdev/sdk/steps';
 import {
   applyRunNodeSpawn,
@@ -213,7 +213,7 @@ const brainState = setup({
       selectedStepNode: undefined
     }),
     toggleInspect: () => {
-      sendToSystem(id, {
+      tell(id, {
         type: 'TOGGLE_INSPECT',
       });
     },
@@ -268,21 +268,21 @@ const brainState = setup({
       latestRuntimeError: undefined,
     }),
     pauseBrain: () => {
-      sendToSystem(id, {
+      tell(id, {
         type: 'PAUSE_BRAIN',
       });
     },
     resumeBrain: () => {
-      sendToSystem(id, {
+      tell(id, {
         type: 'RESUME_BRAIN',
       });
     },
     restartBrain: ({ context }) => {
-      if (context.brainIsDead) sendToSystem(id, { type: 'START_BRAIN' });
-      else sendToSystem(id, { type: 'RESTART_BRAIN' });
+      if (context.brainIsDead) tell(id, { type: 'START_BRAIN' });
+      else tell(id, { type: 'RESTART_BRAIN' });
     },
     killBrain: () => {
-      sendToSystem(id, {
+      tell(id, {
         type: 'KILL_BRAIN',
       });
     },

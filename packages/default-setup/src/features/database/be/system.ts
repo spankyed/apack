@@ -1,6 +1,6 @@
 import { featureSettings } from '#generated/settings.ts';
 
-import { sendToSystem, broadcastToSurface } from '#generated/events.ts';
+import { tell, broadcast } from '#generated/events.ts';
 import { setup } from 'xstate';
 import { performance } from 'node:perf_hooks';
 import { defineSystem } from '@apackdev/sdk/framework';
@@ -32,7 +32,7 @@ async function ran(what: string, run: () => Promise<unknown>) {
 export const databaseSpec = defineSystem<Contract>();
 
 /** The data was replaced: every window drops what it showed, and the asker is answered besides */
-const replaced = () => broadcastToSurface('database', { type: 'DATABASE_REPLACED' });
+const replaced = () => broadcast('database', { type: 'DATABASE_REPLACED' });
 
 /**
  * What a window asks the database feature, each answered to whoever asked, its replacing the data among them; that
@@ -96,7 +96,7 @@ export const answers = databaseSpec.answers({
     const threadsSettings = featureSettings.forFeature('threads').get();
     const provider = threadsSettings?.chat?.defaultMode || 'Claude Code';
 
-    sendToSystem('brain', {
+    tell('brain', {
       type: 'HANDLE_BRAIN_EVENT',
       eventType: 'db.query',
       payload: { prompt: prompt.trim(), mode: mode ?? 'query', provider, ...(client && { client }) },
@@ -148,7 +148,7 @@ export const answers = databaseSpec.answers({
       await services.appData.reset();
 
       // Restart the brain with the new root flow
-      sendToSystem('brain', { type: 'RESTART_BRAIN' });
+      tell('brain', { type: 'RESTART_BRAIN' });
 
       logger.info('Database reset completed', { flowId: repository.flowsQueries.rootFlow() });
     } catch (error: unknown) {

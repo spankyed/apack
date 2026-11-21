@@ -98,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { sendToSystem } from '#generated/events.ts'
+import { tell } from '#generated/events.ts'
 import { useSurfaceState } from '#generated/fe.ts'
 import { ref, computed, watch } from 'vue';
 import { ListTodo, Check } from 'lucide-vue-next';
@@ -161,7 +161,7 @@ function decide(eventType: 'user.todo.approved' | 'user.todo.rejected', payload:
     console.warn('[todo-artifact] no current thread; cannot raise the decision');
     return;
   }
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'FORWARD_BRAIN_EVENT',
     eventType,
     payload: { threadId, artifactId: props.artifact.id, ...payload },

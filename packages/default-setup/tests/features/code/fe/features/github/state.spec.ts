@@ -5,12 +5,12 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
 import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+const tell = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 
 import { githubState } from '#features/code/fe/features/github/state.ts';
 
-beforeEach(() => { sendToSystem.mockReset(); resetAsks(); });
+beforeEach(() => { tell.mockReset(); resetAsks(); });
 
 /** A window that has started a sign-in */
 const started = () => {

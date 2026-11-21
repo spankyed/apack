@@ -6,8 +6,8 @@ import { createActor } from 'xstate';
 import { asksOf, latestAsk, resetAsks } from '../../_support/asks.ts';
 import type { GhPullRequest, GhPRComment, GhReviewThread } from '#generated/types.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', async () => ({ sendToSystem, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
+const tell = vi.hoisted(() => vi.fn());
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 const parent = vi.hoisted(() => ({ baseDirectory: '/repo' as string | null, selectedPanel: 'pr' }));
 const updateParentState = vi.hoisted(() => vi.fn());
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
@@ -58,7 +58,7 @@ const onBranchPR = async (actor: Actor, which: GhPullRequest | null) => {
 };
 
 beforeEach(() => {
-  sendToSystem.mockReset();
+  tell.mockReset();
   updateParentState.mockReset();
   resetAsks();
   parent.baseDirectory = '/repo';
