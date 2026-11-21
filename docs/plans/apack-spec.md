@@ -456,7 +456,11 @@ The design is the smaller half of the value. In the order they would pay:
    windows be run in full. This is the strongest reason to own the kernel.
 3. **The graph as a recorded file.** `graph.mts` is a script. As a recorded file per feature, with `:check` and
    `:update` halves like the API reports, a change to a state's graph shows in the diff. The same data gives pack rules:
-   a state never entered, an event nothing takes, an ask nobody asks. That is the whole of the checking worth having.
+   a state never entered, an event nothing takes, an ask nobody asks, and **a cycle of asks**. A answering an ask by
+   asking B, while B answers by asking A, is the oldest fault of request and answer between actors: in Erlang it is the
+   `gen_server` deadlock, and Orleans checks its call chains for it. Here nothing blocks, and both asks wait for good,
+   since by design no ask times out. The graph already holds who each state's ask handlers ask, so a cycle is found
+   without running anything. That is the whole of the checking worth having.
    Exploring the graph for a state with no way out, or an event a state does not take, was considered and left out:
    the first reports every state that is meant to be an end, and the second every event handled further up, which is
    where most handlers sit.
@@ -492,6 +496,8 @@ projects. Each would loosen the fit to this app.
 - **Window-to-window sends**, the app's `sendToSurface`.
 - **Keyed dynamic children**: a flow per run, a surface per pack, a system per registration. The brain, the bus and the
   shell need them. A keyed set of views is covered by `watch`; a keyed set of states is not.
+- **A check for a cycle of asks.** Two systems that each answer by asking the other wait on each other without end,
+  and nothing reports it. It is a pack rule over the recorded graph, under What to build around it.
 - **A bound across steps.** A step is cut short after ten thousand things. Two systems that tell each other across a
   link without end are a step each, and nothing bounds that; a schedule stops a run that has not come to rest.
 - **Undoing what a handler sent before it threw.** Its change is not made, and what it told others is still told.
