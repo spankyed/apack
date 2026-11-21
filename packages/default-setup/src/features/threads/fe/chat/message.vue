@@ -85,7 +85,7 @@
             </button>
             <button
               v-if="isTail"
-              @click="$emit('resend', message.id, message.text, message.references)"
+              @click="$emit('resend', message.id, userMessageText, message.references)"
               class="p-1.5 hover:bg-neutral-700 transition-colors text-neutral-300"
               title="Resend message"
             >
@@ -185,7 +185,7 @@
           <slot v-if="!hasNativeTranscript" />
           <div v-else-if="!hasNativeUserFrame" hidden inert aria-hidden="true"><slot /></div>
           <template v-for="part in hasNativeTranscript ? nativeParts : []" :key="part.kind === 'native' ? part.frame.uuid : `host-${part.start}`">
-            <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="part.frame"
+            <NativeTranscriptMessage v-if="part.kind === 'native'" :frame="presentTranscriptFrame(part.frame)"
               @press="(id, href) => emit('native-ui-press', id, href)" @field="emit('native-ui-field', $event)" />
             <TiptapEditor v-else mode="viewer" variant="chat" :model-value="part.text" />
           </template>
@@ -249,6 +249,7 @@ import NativeTranscriptMessage from './NativeTranscriptMessage.vue'
 import ThinkingBlock from '#extensions/blocks/display/ThinkingBlock.vue'
 import type { ThinkingBlockProps } from '#features/threads/be/types.ts'
 import { claudeNativeMessageParts, claudeThinkingMessageParts } from './native-message-parts.ts'
+import { claudeUserMessageText } from './native-user-message-text.ts'
 import type { ClaudeUiTranscriptFrame, ClaudeUiFieldEvent } from '#features/code/be/services/claude-code/ui-presentation.ts'
 import InteractionContainer from './interactions/InteractionContainer.vue'
 import FileBlock from './FileBlock.vue'
@@ -307,6 +308,16 @@ const groupedSuppressed = computed(() => {
   const groups=(props.nativeFrames??[]).filter(frame=>frame.component==='ToolGroup'&&frame.body.status==='live')
   return props.message.blocks.every(block=>block.props.entries?.length&&block.props.entries.every((entry:{id:string})=>groups.some(group=>group.component==='ToolGroup'&&group.tools[0]?.id!==entry.id&&group.tools.some(tool=>tool.id===entry.id))))
 })
+const userMessageText = computed(() => claudeUserMessageText(props.message))
+
+function presentTranscriptFrame(frame: ClaudeUiTranscriptFrame): ClaudeUiTranscriptFrame {
+  if (frame.component === 'UserMessage' && frame.text === props.message.text
+    && frame.displayText === frame.text && userMessageText.value !== frame.text) {
+    return { ...frame, displayText: userMessageText.value }
+  }
+  return frame
+}
+
 const hasNativeTranscript = computed(() => nativeParts.value.some(part => part.kind === 'native'))
 const nativeParts = computed(() => claudeNativeMessageParts(props.message.id, props.message.text || '', props.message.sender === 'assistant' || props.message.sender === 'user' ? props.nativeFrames : []))
 
@@ -417,7 +428,7 @@ const otherBlocks = computed(() =>
 
 const copyMessageText = async () => {
   try {
-    await navigator.clipboard.writeText(props.message.text)
+    await navigator.clipboard.writeText(userMessageText.value)
   } catch (error) {
     console.error('Failed to copy text:', error)
   }

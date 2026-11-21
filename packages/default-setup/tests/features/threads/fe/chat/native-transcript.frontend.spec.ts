@@ -6,6 +6,7 @@ import { claudeToolDrawings } from '#extensions/blocks/display/native-tool-drawi
 import { createApp, h, nextTick, computed, provide, ref, type App } from 'vue'
 import ThinkingBlock from '#extensions/blocks/display/ThinkingBlock.vue'
 import { claudeNativeMessageParts, claudeThinkingMessageParts } from '#features/threads/fe/chat/native-message-parts.ts'
+import { claudeUserMessageText } from '#features/threads/fe/chat/native-user-message-text.ts'
 import NativeTranscriptMessage from '#features/threads/fe/chat/NativeTranscriptMessage.vue'
 import type { ClaudeUiTranscriptFrame } from '#features/code/be/services/claude-code/ui-presentation.ts'
 vi.mock('@apackdev/ui/components/tiptap/TiptapEditor', async () => {
@@ -176,4 +177,21 @@ it('retains a reader-opened native task across display remount while releasing n
  ;(root.querySelector('button') as HTMLButtonElement).click();await nextTick();key.value++;await nextTick()
  expect(root.querySelector('[data-native-agent-id="owned-agent"]')).toBeNull()
  expect(expansion.get('task-tool')).toBe(false)
+})
+
+it('removes only appended Claude image labels from an app-owned image message', () => {
+  const authored = 'Compare [Image #4] to my notes.\n\n[Image: first.png]'
+  const suffix = '\n\n[Image: first.png]\n\n[Image: second.png][Image #7][Image #8]'
+  const message = {
+    sender: 'user' as const, text: authored + suffix,
+    context: { claudeTerminalMessage: { media: [{ type: 'image' }, { type: 'image' }] } },
+    references: { images: [{ name: 'first.png', url: 'media://message/first.png' }, { name: '', url: 'media://message/second.png' }] },
+  }
+  expect(claudeUserMessageText(message)).toBe(authored)
+  expect(claudeUserMessageText({ ...message, text: suffix.slice(2) })).toBe('')
+  expect(claudeUserMessageText({ ...message, text: authored + suffix + '\nKeep this.' })).toBe(authored + suffix + '\nKeep this.')
+  expect(claudeUserMessageText({ ...message, text: authored + '\n\n[Image: first.png]\n\n[Image: second.png][Image #7]' })).toContain('[Image #7]')
+  expect(claudeUserMessageText({ ...message, sender: 'assistant' })).toBe(message.text)
+  expect(claudeUserMessageText({ ...message, context: {} })).toBe(message.text)
+  expect(claudeUserMessageText({ ...message, references: { images: message.references.images.map(image => ({ ...image, url: 'data:image/png;base64,AAAA' })) } })).toBe(message.text)
 })

@@ -270,6 +270,7 @@ import { claudeClientInput, claudeClientReturnFocus } from './native-client-inpu
 import ChatMessage from './message.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import ConversationViewer from '@apackdev/ui/components/tiptap/ConversationViewer'
+import { claudeUserMessageText } from './native-user-message-text.ts'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ClaudeNativeSession from './ClaudeNativeSession.vue'
 import { useNativeTranscriptViewport } from './native-transcript-viewport.ts'
@@ -366,7 +367,12 @@ const pageSelection = provideClaudeUiSelection(() => composerAreaRef.value)
 watch(() => JSON.stringify([currentThread.value?.id, nativeUiMount.value?.mountId, allMessages.value.filter(message => message.sender === 'user').at(-1)?.id]), pageSelection.clear)
 
 const messagesById = computed(() => new Map<string, MessageEntity>(visibleMessages.value.map(message => [message.id, message])));
-const conversationMessages = computed(() => visibleMessages.value.filter(message => message.id !== pendingNativeApproval.value?.messageId));
+const conversationMessages = computed(() => visibleMessages.value
+  .filter(message => message.id !== pendingNativeApproval.value?.messageId)
+  .map(message => {
+    const text = claudeUserMessageText(message)
+    return text === message.text ? message : { ...message, text }
+  }));
 const chatMessageCount = useSelector(actor, state => state.context.chatMessageIds.length);
 const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
 const messagesReady = computed(() => !messagePagination.value.isLoading && allMessages.value.length >= chatMessageCount.value);
@@ -1045,7 +1051,7 @@ const prefillText = ref('')
 const prefillReferences = ref<MessageReferences | undefined>()
 
 function prefillInput(msg: MessageEntity | undefined) {
-  const text = msg?.text || ''
+  const text = msg ? claudeUserMessageText(msg) : ''
   const refs = msg?.references as MessageReferences | undefined
   prefillText.value = text
   if (refs?.images?.length || refs?.files?.length) {
