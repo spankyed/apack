@@ -72,8 +72,11 @@ describe('argsFromOptions', () => {
       expectContains(argsFromOptions(opts), needles)
     })
 
-    it('serialises --agents as JSON', () => {
-      const agents = { Explore: { description: 'd', prompt: 'p' } }
+    it('serialises native inline agent definitions without dropping options', () => {
+      const agents = {
+        Reviewer: { description: 'Review release notes', prompt: 'Review the draft', tools: [], autoCompactWindow: 100_000, maxTurns: 2, effort: 10 },
+        Writer: { description: 'Write release notes', prompt: 'Draft the summary' },
+      } satisfies NonNullable<QueryOptions['agents']>
       const args = argsFromOptions({ agents })
       expectContains(args, ['--agents', JSON.stringify(agents)])
     })

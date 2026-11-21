@@ -779,8 +779,8 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                 value: z.ZodString;
                 label: z.ZodString;
                 mode: z.ZodEnum<{
-                    default: "default";
                     plan: "plan";
+                    default: "default";
                     auto: "auto";
                     acceptEdits: "acceptEdits";
                     bypassPermissions: "bypassPermissions";
@@ -1122,6 +1122,33 @@ declare const ClaudeInitializationSchema: z.ZodObject<{
     current_permission_mode: z.ZodOptional<z.ZodString>;
     capabilities: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$loose>;
+
+/** A native `--agents` JSON definition. Claude validates values and owns feature admission. */
+interface ClaudeInlineAgentDefinition {
+    description: string;
+    prompt: string;
+    tools?: string[];
+    disallowedTools?: string[];
+    model?: string;
+    effort?: Effort | number;
+    permissionMode?: PermissionMode;
+    /** Existing MCP server names or original inline server configurations. */
+    mcpServers?: Array<string | Record<string, Record<string, unknown>>>;
+    /** Native settings hook declarations, serialized as JSON. */
+    hooks?: Record<string, unknown>;
+    maxTurns?: number;
+    /** Native compaction ceiling in tokens, from 100,000 to 1,000,000. */
+    autoCompactWindow?: number;
+    skills?: string[];
+    initialPrompt?: string;
+    memory?: 'local' | 'project' | 'user';
+    background?: boolean;
+    omitClaudeMd?: boolean;
+    isolation?: 'remote' | 'worktree';
+    observer?: string;
+    observerMessage?: string;
+    observeSubagents?: boolean;
+}
 
 type ClaudeInterruptReceipt = z.infer<typeof ClaudeInterruptReceiptSchema>;
 
@@ -2364,8 +2391,8 @@ declare const ClaudeNativePlanDialogSchema: z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
             mode: z.ZodEnum<{
-                default: "default";
                 plan: "plan";
+                default: "default";
                 auto: "auto";
                 acceptEdits: "acceptEdits";
                 bypassPermissions: "bypassPermissions";
@@ -8612,8 +8639,8 @@ type PermissionMode = z.infer<typeof PermissionModeSchema>;
  * classifier instead of prompting.
  */
 declare const PermissionModeSchema: z.ZodEnum<{
-    default: "default";
     plan: "plan";
+    default: "default";
     auto: "auto";
     acceptEdits: "acceptEdits";
     bypassPermissions: "bypassPermissions";
@@ -8832,10 +8859,7 @@ interface QueryOptions {
     maxBudgetUsd?: number;
     betas?: string[];
     agent?: string;
-    agents?: Record<string, {
-        description: string;
-        prompt: string;
-    }>;
+    agents?: Record<string, ClaudeInlineAgentDefinition>;
     permissionMode?: PermissionMode;
     /** Make a later user-requested bypass switch available without starting in bypass mode. */
     allowDangerouslySkipPermissions?: boolean;

@@ -308,6 +308,33 @@ export type ControlRequestHandler = (
 
 // ─── Query options ───────────────────────────────────────────────────────────
 
+/** A native `--agents` JSON definition. Claude validates values and owns feature admission. */
+export interface ClaudeInlineAgentDefinition {
+  description: string
+  prompt: string
+  tools?: string[]
+  disallowedTools?: string[]
+  model?: string
+  effort?: Effort | number
+  permissionMode?: PermissionMode
+  /** Existing MCP server names or original inline server configurations. */
+  mcpServers?: Array<string | Record<string, Record<string, unknown>>>
+  /** Native settings hook declarations, serialized as JSON. */
+  hooks?: Record<string, unknown>
+  maxTurns?: number
+  /** Native compaction ceiling in tokens, from 100,000 to 1,000,000. */
+  autoCompactWindow?: number
+  skills?: string[]
+  initialPrompt?: string
+  memory?: 'user' | 'project' | 'local'
+  background?: boolean
+  omitClaudeMd?: boolean
+  isolation?: 'worktree' | 'remote'
+  observer?: string
+  observerMessage?: string
+  observeSubagents?: boolean
+}
+
 /**
  * Typed launch options exposed by this wrapper. Grouped by concern.
  *
@@ -338,7 +365,7 @@ export interface QueryOptions {
   maxBudgetUsd?: number
   betas?: string[]
   agent?: string
-  agents?: Record<string, { description: string; prompt: string }>
+  agents?: Record<string, ClaudeInlineAgentDefinition>
 
   // Permissions
   permissionMode?: PermissionMode
