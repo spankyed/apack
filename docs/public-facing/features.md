@@ -332,7 +332,7 @@ Discovery reads these declarations without loading the machine or component modu
 | isPinned | no | Initial pinned placement |
 | hotkeys | no | `{ action, global? }` per shortcut action |
 | options | no | `{ headerClass?: string }` |
-| fallbackPanel | no | `{ label, toggle: { type }, isShown: "path#exportName" }`; the predicate executes only at runtime |
+| fallbackPanel | no | `{ label, toggle: { type }, isShown: "path#exportName" }`; the predicate is handed the surface as `useState` gives it, `{ at, data }`, and executes only at runtime |
 | contract | no | Leaf module/type export for published state and inbox |
 | default | no | Startup default claim |
 | defaultVisible | no | Initial navigation visibility before the user's override |
