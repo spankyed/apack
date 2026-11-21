@@ -1258,6 +1258,10 @@ const nativeViewport = useNativeTranscriptViewport({
   .native-chat-shell[data-native-workspace-owner="agent"] {
     min-height: min(32rem, max(25rem, calc(100vh - 14rem)));
   }
+  /* Set aside more Agent transcript space beside the draft and the thread footer. */
+  .native-chat-shell[data-native-workspace-owner="agent"]:not(:has([data-native-notice], [data-native-command-panel], [data-testid="native-mcp-form"], [data-testid="native-mcp-url"])) {
+    min-height: min(32rem, max(26rem, calc(100vh - 13rem)));
+  }
   .chat-composer-area--background { min-height: min(12.5rem, 55%); }
   .native-chat-shell:has([data-native-notice]) { min-height: calc(100vh - 3rem); }
 }
