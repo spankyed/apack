@@ -42,6 +42,11 @@
         <span v-if="asideContext" class="text-neutral-600 ml-2">{{ asideContext }}</span>
       </div>
 
+      <div v-else-if="nativeChannel" class="space-y-1 rounded-md border-l-2 border-blue-400/50 py-1 pl-3 pr-2">
+        <p class="text-xs font-medium text-neutral-300 [overflow-wrap:anywhere]">Channel · {{ nativeChannel }}</p>
+        <p class="text-sm whitespace-pre-wrap text-neutral-200 [overflow-wrap:anywhere]">{{ message.text }}</p>
+      </div>
+
       <!-- System message: non-interactive aside -->
       <div v-else-if="isSystem" class="text-xs italic py-1 px-2 text-neutral-500">
         {{ message.text }}
@@ -359,6 +364,10 @@ const statusIndicator = computed(() => {
 })
 const isMarker = computed(() => props.message.sender === 'marker')
 const isSystem = computed(() => props.message.sender === 'system')
+const nativeChannel = computed(() => {
+  const channel = props.message.context?.claudeNativeChannel as { server?: unknown } | undefined
+  if (props.isClaudeCodeThread && isSystem.value && typeof channel?.server === 'string') return channel.server
+})
 const nativeCompaction = computed(() => {
   const kind = props.message.context?.claudeNativeCompaction
   if (props.isClaudeCodeThread && isSystem.value && (kind === 'boundary' || kind === 'summary')) return kind

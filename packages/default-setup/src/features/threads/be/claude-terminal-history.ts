@@ -3,6 +3,20 @@ import { presentClaudeCommandHistory } from '#features/code/be/services/claude-c
 import type { ClaudeNativeJournalEntry } from '#features/code/be/services/claude-code/terminal-journal.ts'
 import type { BlockConfig, MessageReferences } from './types.ts'
 const object = (value: unknown): Record<string, unknown> | undefined => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined
+/** Strip the native model envelope from a source-stamped channel message. */
+function nativeChannelBody(value: string, server: string): string | undefined {
+  const wrapped = [`A message arrived from ${server}:\n`, `A message arrived from ${server} while you were working:\n`]
+    .find(prefix => value.startsWith(prefix))
+  const envelope = wrapped ? value.slice(wrapped.length) : value
+  const open = /^<channel source="([^"]*)"(?: [a-zA-Z_][a-zA-Z0-9_]*="[^"]*")*>\n/.exec(envelope)
+  const encodedServer = server.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;').replaceAll("'", '&apos;')
+  if (!open || open[1] !== encodedServer) return
+  const end = envelope.indexOf('\n</channel>', open[0].length - 1)
+  if (end < 0) return
+  const body = envelope.slice(open[0].length, end)
+  return body.trim() ? body : undefined
+}
 /** Project persisted native rows; hidden context and agent conversations never become user bubbles. */
 export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   uuid: string; sessionId: string; timestamp?: number; sender: 'user' | 'assistant' | 'system'; text: string; blocks: BlockConfig[]; references?: MessageReferences; context: Record<string, unknown>
@@ -43,8 +57,22 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
     && presentClaudeCommandHistory(source, source.content)
   const row = commandRow ? { ...source, type: 'user', message: { content: source.content } } : source
   const message = object(row.message)
-  if (!message || row.sessionId !== entry.sessionId || row.isSidechain === true || row.agentId !== undefined || row.parent_tool_use_id || row.isMeta === true
+  if (!message || row.sessionId !== entry.sessionId || row.isSidechain === true || row.agentId !== undefined || row.parent_tool_use_id
     || (row.type !== 'user' && row.type !== 'assistant') || typeof row.uuid !== 'string' || !/^[a-f0-9-]{36}$/i.test(row.uuid)) return
+  const origin = object(row.origin)
+  if (row.type === 'user' && origin?.kind === 'channel') {
+    if (row.entrypoint !== 'cli' || row.isVirtual === true || typeof origin.server !== 'string' || !origin.server.trim()) return
+    const block = Array.isArray(message.content) && message.content.length === 1 ? object(message.content[0]) : undefined
+    const envelope = typeof message.content === 'string' ? message.content : block?.type === 'text' ? block.text : undefined
+    const body = typeof envelope === 'string' ? nativeChannelBody(envelope, origin.server) : undefined
+    if (body === undefined) return
+    const timestamp = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN
+    return { uuid: row.uuid, sessionId: entry.sessionId, sender: 'system', text: body, blocks: [],
+      ...(Number.isFinite(timestamp) ? { timestamp } : {}),
+      context: { cliUuid: row.uuid, claudeTerminalMessage: { uuid: row.uuid, sessionId: entry.sessionId },
+        claudeNativeChannel: { server: origin.server } } }
+  }
+  if (row.isMeta === true) return
   const content = typeof message.content === 'string' ? [{ type: 'text', text: message.content }] : Array.isArray(message.content) ? message.content.map(object).filter((block): block is Record<string, unknown> => !!block) : []
   const text = content.filter(block => block.type === 'text' && typeof block.text === 'string').map(block => block.text).join('\n')
   // Preserve native interruption events without assigning person/composer ownership.
@@ -58,7 +86,6 @@ export function projectClaudeTerminalHistory(entry: ClaudeNativeJournalEntry): {
   const command = content.every(block => block.type === 'text') ? presentClaudeCommandHistory(row, text) : undefined
   if (command && !command.text) return
   const thinking = content.filter(block => block.type === 'thinking' && typeof block.thinking === 'string').map(block => block.thinking).join('\n')
-  const origin = object(row.origin)
   // An original MCP ending can contain model instructions and raw server text.
   // Show only the bounded native summary of an original journal event.
   if (row.type === 'user' && origin?.kind === 'task-notification' && origin.producer === 'session-task'

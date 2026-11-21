@@ -76,6 +76,32 @@ it('projects native system command journal rows without turning other system out
   }
 })
 
+it('projects only source-stamped inbound channels as inert transcript messages', () => {
+  const server = 'plugin:fakechat:fakechat'
+  const body = 'Review <b>literal markup</b>\nLonger second line'
+  const packet = `<channel source="${server}" user="web">\n${body}\n</channel>`
+  const channel = { ...row, type: 'user', entrypoint: 'cli', isMeta: true, origin: { kind: 'channel', server },
+    message: { content: packet } }
+  const values = [
+    channel,
+    { ...channel, message: { content: [{ type: 'text', text: `A message arrived from ${server} while you were working:\n${packet}\n\nModel-only suffix` }] } },
+  ]
+  for (const value of values) {
+    const projected = projectClaudeTerminalHistory({ sessionId, row: value })!
+    expect(projected).toMatchObject({ uuid, sessionId, text: body, sender: 'system', blocks: [],
+      context: { cliUuid: uuid, claudeTerminalMessage: { uuid, sessionId }, claudeNativeChannel: { server } } })
+    expect(projected.context.claudeNativeUserMessage).toBeUndefined()
+  }
+  for (const changes of [
+    { sessionId: 'foreign' }, { entrypoint: 'sdk' }, { agentId: 'child' }, { isSidechain: true },
+    { isVirtual: true }, { origin: undefined }, { origin: { kind: 'channel', server: 'different' } },
+    { message: { content: packet.replace('</channel>', '') } },
+    { message: { content: [{ type: 'text', text: packet }, { type: 'tool_result' }] } },
+  ]) expect(projectClaudeTerminalHistory({ sessionId, row: { ...channel, ...changes } })).toBeUndefined()
+  const human = { ...channel, isMeta: false, origin: { kind: 'human' } }
+  expect(projectClaudeTerminalHistory({ sessionId, row: human })).toMatchObject({ sender: 'user', text: packet })
+})
+
 it('projects original informational notice rows as inert system text with native identity', () => {
   const notice = { sessionId, uuid, type: 'system', subtype: 'informational', level: 'notice', entrypoint: 'cli',
     content: 'native-plugin: <b>literal review</b>', timestamp: '2026-10-25T02:13:07.922Z' }
