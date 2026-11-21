@@ -554,7 +554,7 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
 
   A check waits with `rest()`, until everything it started has come to rest, where it used to wait a number of turns
   someone had guessed was enough. The kernel says whether anything is under way in it (`idle`): work a state is
-  doing, an ask being answered or waited on, something put off, something gathered. Thirty-seven waits are now
+  doing, an ask being answered or waited on, something put off, something gathered. Thirty-six waits are now
   that. The counted turns that remain are of two kinds and neither is a guess at how long something takes: a check
   letting something begin before it acts, as in "search again before the first finishes", and the work a stand-in
   backend pretends to do. A kernel changed so that a read asks itself round without end used to keep the checks
