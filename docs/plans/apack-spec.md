@@ -785,18 +785,39 @@ a component reads it. There is no id, no list kept by hand, and no event for how
 slice of that surface written this way. So this record is not extended to new code, and nothing new is built on `asking`, `askId` or `endedAsk`. It
 goes when its surface is ported.
 
-**Where the next work starts.** What can be done on XState now, each its own PR on `master`:
+**Where the next work starts: cleaning up `master`, on XState.** The aim is that code written now reads as it will
+after the move, and that what #593 added is replaced and not only left alone. Each of these is its own PR on
+`master`, and each can be checked and merged on its own:
 
-1. Rename to `tell` and `broadcast`.
-2. `useState` over the XState snapshot, in the shape it is to keep, and the 407 `useSelector` sites onto it. A
-   component then names neither an actor nor an ask's id: what it showed by `askUnderWay(context.asking, id)` the
-   machine gives as data.
-3. The 8 `useAsk` sites into the states of the surfaces they belong to, and `useAsk` out of the SDK.
+1. **`useState` in the SDK, over an XState actor**, in the shape it is to keep: `const { state, send } = useState(…)`,
+   with `state` holding `{ at, data }`. A rendering spec holds it, and `CommitPanel.vue`, which has 63 `useSelector`
+   lines, is the proof. Under it is one mirror of an actor shared by everything that reads it, written to only where
+   the context changed. Today each `useSelector` is a subscription of its own that runs its selector again on every
+   snapshot, so what a change costs grows with how many lines read the actor and not with what changed. What does
+   not carry over to XState: a machine's context is one type whatever state it is in, so data is not narrowed by
+   where the state is.
+2. **The other `useSelector` sites onto it**, 407 in all, and a pack rule that refuses `useSelector` on a surface's
+   actor.
+3. **`makes` on XState**, proven on the commit surface. Its 40 writes are declared once and made by name, and which
+   are under way is `making`, kept by the helper and read through `useState`. The panel stops importing the ids of
+   asks. This begins with a spike: it needs one transition that takes how any made ask ended, which XState's
+   wildcard event names should allow and which has not been tried.
+4. **`makes` through the other surfaces**, and the four settings forms. All eight `useAsk` calls are an import or an
+   export in the settings form of actions, library, notes and prompts, and each becomes a write its surface makes.
+   `useAsk` leaves the SDK.
+5. **Reads.** Spike `awaits` on XState, which has no natural place for "ask again when a field changes", and either
+   roll it out or leave reads as they are until their surface is ported. Then `asks-under-way.ts` is deleted, with
+   pack rules that refuse `askId`, `enqueueAsks`, a transition on `xstate.done.actor`, and `useAsk`.
+6. Rename to `tell` and `broadcast`.
+
+`makes` and `useState` are helpers a machine and a component use. They are not a way of defining a machine, which
+stays XState's ([the seam that was taken out](#what-the-two-should-share)).
 
 Not now: taking apart the commit and pull-request machines by concern. That carries over one for one, a state for
-each concern, and done on XState first it is done twice. They are split as they are ported.
+each concern, and done on XState first it is done twice. They are split as they are ported, and are a good deal
+smaller after step 3.
 
-Then step 2.
+Then step 2 of the order of work.
 
 ## What to build around it
 
