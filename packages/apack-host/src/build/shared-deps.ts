@@ -17,6 +17,17 @@ import { SOURCE_CONDITION } from './source-resolution.ts';
  */
 export const SHARED_INSTANCE_PACKAGES = ['@apackdev/sdk', '@elmdb/ears'] as const;
 
+/**
+ * Packages a pack reaches only through the SDK, each with the SDK entry that re-exports the whole of it. A pack depends
+ * on `@apackdev/sdk` alone, so its facade declarations, which dependents compile, may name only the SDK: a type a pack
+ * infers from one of these is written as the entry's (`apack pack build`'s declaration bundler), and the build refuses
+ * the rewrite unless the entry's declarations say `export * from '<package>'`, so it never names something the entry
+ * doesn't export. A subpath not listed here has no entry and stays as written, which the facade gate refuses.
+ */
+export const THROUGH_SDK: Readonly<Record<string, string>> = {
+  '@elmdb/ears': '@apackdev/sdk/ears',
+};
+
 /** The shared-instance package a specifier belongs to (`@apackdev/sdk/repositories` → `@apackdev/sdk`), if any */
 export function sharedInstancePackage(specifier: string): string | undefined {
   return SHARED_INSTANCE_PACKAGES.find((pkg) => specifier === pkg || specifier.startsWith(`${pkg}/`));

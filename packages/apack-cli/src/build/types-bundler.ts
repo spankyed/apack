@@ -8,6 +8,7 @@ import ts from 'typescript';
 import { compilerReadOptions, readPackCompilerConfiguration } from './compiler-configuration.ts';
 import { isBuiltin } from 'node:module';
 import type { CompilationInputs } from './compilation-inputs.ts';
+import { writeThroughSdk } from './through-sdk.ts';
 
 /** A package specifier (`vue`, `@elmdb/ears`), not a relative path or a pack's own `#` subpath */
 export function isPackageSpecifier(id: string): boolean {
@@ -20,7 +21,7 @@ export function isPackageSpecifier(id: string): boolean {
  * modules and its dependencies' facade types are inlined; packages stay imports.
  */
 export async function bundlePackTypes(packDir: string, outFile: string, options: Pick<BundleDeclarationsOptions, 'recordReads' | 'compilation' | 'recordOutput'> = {}): Promise<{ success: true; content: string } | { success: false; error: string }> {
-  return bundleDeclarations(packDir, path.join(packDir, 'src', '__generated__', 'pack-types.ts'), outFile, options);
+  return bundleDeclarations(packDir, path.join(packDir, 'src', '__generated__', 'pack-types.ts'), outFile, { ...options, forDependents: true });
 }
 
 export interface BundleDeclarationsOptions {
@@ -32,6 +33,11 @@ export interface BundleDeclarationsOptions {
   outro?: string;
   /** Applied to the bundled declarations before they're written */
   renderChunk?: (code: string) => string;
+  /**
+   * The bundle is one the pack's dependents compile (its facade, its flow helpers' declarations), so it names a package
+   * the pack reaches only through the SDK as the SDK's entry for it (`writeThroughSdk`)
+   */
+  forDependents?: boolean;
   /**
    * Compile with these options instead of the pack's tsconfig.json. The tsconfig's `include` becomes the
    * program's files, so a bundle that needs only the entry's imports passes the options it needs instead.
@@ -118,7 +124,8 @@ export async function bundleDeclarations(
     } finally {
       await bundle.close();
     }
-    const rendered = options.renderChunk ? options.renderChunk(code) : code;
+    const throughSdk = options.forDependents ? writeThroughSdk(code, packDir, path.relative(packDir, outFile)) : code;
+    const rendered = options.renderChunk ? options.renderChunk(throughSdk) : throughSdk;
     // Here rather than in each caller, so every declaration bundle this function writes is reproducible and a
     // fourth caller cannot forget: the facade, the DSL defs and the flow helpers all come through here
     const content = sortLiteralUnions(rendered, outFile);

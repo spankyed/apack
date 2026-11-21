@@ -309,6 +309,13 @@ cause a cold rebuild. Archive/test/drive freshness policy migration remains owne
 
 ## Facade gate
 
+Before the gate, the declaration bundler writes a package the pack reaches only through the SDK as the SDK's entry for it
+(`writeThroughSdk`, `build/through-sdk.ts`, over `THROUGH_SDK` in `@apackdev/host/build/shared-deps`: `@elmdb/ears` →
+`@apackdev/sdk/ears`), in the facade and the flow helpers' declarations (`forDependents`). TypeScript writes an inferred
+EARS type by where EARS is installed, as `import("@elmdb/ears")` when npm hoists it, so the pack's source can't keep it
+out; the rewrite refuses an SDK whose entry doesn't say `export * from '@elmdb/ears'`
+(`tests/build/through-sdk.integration.spec.ts`, a hoisted and a nested install).
+
 `facadeProblems(packDir, bundleFile)` in `build/facade-gate.ts` checks `dist/types/pack-types.d.ts` before it goes into the snapshot's `defs`. Dependents compile it with `skipLibCheck`, where these problems would silently become `any`:
 
 - the bundle type-checks on its own (the pack's tsconfig, `skipLibCheck: false`, and no `customConditions`: a pack compiles against the packages' published `dist`); only diagnostics inside the bundle count;
