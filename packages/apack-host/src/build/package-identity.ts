@@ -122,7 +122,6 @@ interface LockedPackage {
   readonly version?: string;
   readonly resolved?: string;
   readonly integrity?: string;
-  readonly link?: boolean;
 }
 
 /** Each lockfile read, by path, kept while its size and modification time are the ones it was read at */
@@ -154,7 +153,7 @@ function registryIntegrity(root: string, version: string): string | undefined {
     const packages = lockfilePackages(path.join(dir, 'package-lock.json'));
     if (packages) {
       const entry = packages[path.relative(dir, root).split(path.sep).join('/')];
-      const fromRegistry = entry !== undefined && !entry.link && /^https?:\/\//.test(entry.resolved ?? '');
+      const fromRegistry = entry !== undefined && /^https?:\/\//.test(entry.resolved ?? '');
       return fromRegistry && entry.version === version && entry.integrity ? entry.integrity : undefined;
     }
     if (path.dirname(dir) === dir) return undefined;

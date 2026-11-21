@@ -40,7 +40,6 @@
   "dependencies": {
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
-    "@elmdb/ears": "0.1.0",
     "ajv": "^8.20.0",
     "tsx": "^4.23.15",
     "zod": "^4.6.7"
