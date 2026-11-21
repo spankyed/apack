@@ -167,7 +167,13 @@ points at.
    the way down, when it becomes the state's. A handler changes data by returning a change, never by writing to what
    it was handed, and one that writes throws on that line, changes nothing and is reported. A component is handed
    these same objects ([What a component reads](#what-a-component-reads)) and cannot write to them either. It costs
-   little: a step makes new objects only for what it changed, and freezing stops at what is frozen already. What is
+   little: a step makes new objects only for what it changed, and freezing stops at what is frozen already. What
+   it costs a reader is three ways of copying a list and nothing else that matters. V8 copies a frozen list by
+   `slice`, `toSpliced` or `with` an element at a time: on 5,000 rows about 0.12 ms where an unfrozen list takes under
+   a microsecond, and `filter` and `find` cost four and two times what they did. A spread, `map`, a loop, a read by
+   index and a sort of a spread copy cost the same frozen or not, and a spread is how the draft copies
+   (`frozen-cost.mts`, 2026-11-21, Node 24.16.0, each figure the least of nine rounds on a machine under load). So a
+   copy of what was read is written `[...list]`. What is
    not plain data is left as it is. And **what goes into a state is the state's from then on**: an object a handler
    stores is frozen where it stands, so whoever else kept it and writes to it later is the one that fails. A state
    that held something another could still change would change with no step, which is the fault; freezing puts the
@@ -1078,11 +1084,6 @@ projects. Each would loosen the fit to this app.
   that refuses an assignment or an in-place method through anything read from a state closes it before a run:
   `eslint-plugin-functional`'s `immutable-data` and unicorn's `no-array-sort`, `no-array-reverse` and
   `no-array-splice` are the kind, and it belongs with the pack rules, since a pack is where the handlers are.
-- **What a frozen list costs.** V8 reads and copies a frozen list slower than an unfrozen one: by an agent's
-  measurement on a busy machine, `slice`, `with` and `toSpliced` by tens of times, `filter` and `forEach` by about
-  ten, and a spread not at all. Those are sizes to check and not figures to plan on. What is to be measured is a
-  step over a list the size the threads and code features hold, frozen and not, with `npm run measure`, before
-  the first surface with a long list is ported; if it matters, the draft copies by spread.
 - **The Vue binding in a window.** One thing about it is not known, and cannot be found out here:
   - **Devtools.** Pinia shows its stores in Vue's devtools, with what changed them and when. A step is already that
     record here: its cause, the handlers that ran, the fields that changed. Giving it to the devtools belongs with
