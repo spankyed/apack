@@ -10,7 +10,7 @@
  * correctly on the harness's in-memory engine.
  */
 import { expectTypeOf, describe, it, expect, beforeEach } from 'vitest';
-import { type QueryBuilder, type WriteBuilder } from '@apackdev/ears';
+import { type QueryBuilder, type WriteBuilder } from '@apackdev/sdk/ears';
 import { untypedCreate } from '@apackdev/sdk/ears';
 import {
   query, create, upsert, newId, write, type EntityShape

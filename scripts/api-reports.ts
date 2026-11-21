@@ -38,7 +38,7 @@ packagesBuiltOrRefuse('npm run packages:build');
 /**
  * Exports with declarations: [subpath, declaration file in .temp/api-types].
  *
- * Two kinds of package, because two kinds resolve differently. `@apackdev/ears`, `/sdk` and `/ui` carry an
+ * Two kinds of package, because two kinds resolve differently. `@apackdev/sdk` and `/ui` carry an
  * `@apackdev/source` branch per entry, which names the source file directly. A **bundled** package
  * (`@apackdev/testing`) deliberately carries none — it resolves its built bundle for everyone, which is what
  * makes the fixture a pack runs the one this repo runs — so its entry is read from `types` instead, whose
@@ -137,7 +137,11 @@ const compilerState = prepared.length === 0 ? undefined : CompilerState.create(p
 });
 
 for (const { key, config } of prepared) {
-  const result = Extractor.invoke(config, { localBuild: local, showVerboseMessages: false, compilerState });
+  const result = Extractor.invoke(config, {
+    localBuild: local,
+    showVerboseMessages: false,
+    compilerState,
+  });
   if (result.apiReportChanged) changed++;
   if (!result.succeeded) {
     failed++;
@@ -163,7 +167,7 @@ function componentEntries(): ComponentEntry[] {
 }
 
 // componentContracts builds a TypeScript program, which is the slow part of this script. A package
-// with no component entries (@apackdev/ears, @apackdev/sdk) has nothing for it to report, so don't.
+// with no component entries (@apackdev/sdk) has nothing for it to report, so don't.
 const components = componentEntries();
 const contracts = components.length === 0 ? [] : componentContracts({
   packageName: pkg.name,

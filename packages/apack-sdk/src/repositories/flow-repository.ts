@@ -1,7 +1,7 @@
 // The flow model's repository: flows, their nodes and the edges between them, and the root flow role.
 // The SDK declares these entities (sdk-entities.ts), so it owns their reads and writes; packs build
 // their views on top (default-setup's flows repository).
-import { getTimestamp, RESERVED_ATTRIBUTES } from '@apackdev/ears';
+import { getTimestamp, RESERVED_ATTRIBUTES } from '@elmdb/ears';
 import { RepositoryError, RepositoryErrorCode } from './repository-error.ts';
 import { findRelations, nextLabel, getRow, getRoles, updateRelation, removeRelation, untypedCreate, untypedWrite, untypedQuery as query, transact } from '../ears/index.ts';
 import { EARS } from '../types/entities.ts';

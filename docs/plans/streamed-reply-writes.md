@@ -65,9 +65,9 @@ fold cost has not been measured on a long reply and is the next thing to measure
 
 ## 4. Safe mode for apack's databases — measured reading, not built
 
-**Finding.** `packages/apack-ears/src/lmdb/database.ts` opens databases with `syncs` only, which is
+**Finding.** elmdb's `packages/ears/src/lmdb/database.ts` opens databases with `syncs` only, which is
 elmdb's group commit. It has no database-level `syncEachCommit`. The per-commit safe path is the
-`durable` flag on a commit or write, which `packages/apack-ears/src/database.ts` already passes
+`durable` flag on a commit or write, which elmdb's `packages/ears/src/database.ts` already passes
 through (`commit(options.durable)`). So apack can make any unit durable without an elmdb change.
 
 **Reading.** At 40 commits a reply and elmdb's documented 8.0 ms per durable commit on an Apple M1 Pro
@@ -77,7 +77,7 @@ durable commit at all is a separate decision; the streamed text is already on th
 
 **Waiting.** The safe-mode measurement waits on the monorepo resolving an elmdb that has `syncEachCommit`; neither the pinned `4b67670` nor `c745183` has it, so nothing is measured here.
 
-**Done when.** The durable commit cost is measured on this machine through `apack-ears`, and the
+**Done when.** The durable commit cost is measured on this machine through EARS, and the
 reading is recorded here with its date.
 
 ## Other findings

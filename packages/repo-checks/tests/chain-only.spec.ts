@@ -28,14 +28,14 @@ describe('--only', () => {
 
   it('refuses a leg that reads packages:ensure while a published package is stale, saying which, why, and what makes it current', () => {
     const why = packagesNotCurrent([
-      { workspace: '@apackdev/ears', reason: 'not built (no packages/apack-ears/dist)' },
+      { workspace: '@apackdev/ui', reason: 'not built (no packages/apack-ui/dist)' },
       { workspace: '@apackdev/sdk', reason: 'its inputs changed since the last successful run' },
     ]);
-    expect(why).toBe('@apackdev/ears: not built (no packages/apack-ears/dist); @apackdev/sdk: its inputs changed since the last successful run; '
+    expect(why).toBe('@apackdev/ui: not built (no packages/apack-ui/dist); @apackdev/sdk: its inputs changed since the last successful run; '
       + 'name packages:ensure in --only too, or run npm run packages:ensure first');
     expect(() => selectOnly([{ name: 'packages:ensure', dependsOn: [] }, { name: 'build', dependsOn: ['packages:ensure'] }], ['build'],
       (producer) => producer === 'packages:ensure' ? why : null))
-      .toThrow(/build reads packages:ensure, which is not current here \(@apackdev\/ears: not built/);
+      .toThrow(/build reads packages:ensure, which is not current here \(@apackdev\/ui: not built/);
   });
 
   it('runs the named steps alone, keeping only the edges between them', () => {

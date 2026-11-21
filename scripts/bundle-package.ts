@@ -1,7 +1,8 @@
 // Builds a publishable copy of a workspace package that ships as a bundle (@apackdev/cli,
-// @apackdev/testing) into <package>/dist/package. The shared-instance packages (SHARED_INSTANCE_PACKAGES)
-// and the private @apackdev/host are inlined from source, so the published package can use host-only
-// modules; every other package stays external and becomes a dependency at the version the workspace uses.
+// @apackdev/testing) into <package>/dist/package. The shared-instance packages (SHARED_INSTANCE_PACKAGES), what
+// they take from another repository's release (EARS) and the private @apackdev/host are inlined, the host
+// and the SDK from source and EARS from its built `dist`, so the published package can use host-only modules; every
+// other package stays external and becomes a dependency at the version the workspace uses.
 //
 //   tsx scripts/bundle-package.ts packages/apack-cli
 import * as fs from 'node:fs';
@@ -11,10 +12,11 @@ import { execFileSync } from 'node:child_process';
 import { packageName } from '@apackdev/host/build/specifiers';
 import { recordBundleReads, runPackageBuild } from '@apackdev/host/build/packages-built';
 import { replaceDir } from '@apackdev/host/replace-dir';
-import { manifestPaths, publishedSpec, type Manifest } from '@apackdev/host/build/published-manifest';
+import { manifestPaths, type Manifest } from '@apackdev/host/build/published-manifest';
 import { SHARED_INSTANCE_PACKAGES } from '@apackdev/host/build/shared-deps';
 import ts from 'typescript';
 import { BareImports } from './lib/published-imports.ts';
+import { repositoryOf } from './lib/external-packages.mjs';
 import { build, type BuildOptions, type Plugin } from 'esbuild';
 
 interface BundleConfig {
@@ -113,9 +115,15 @@ const stagedDir = path.join(pkgDir, '.temp', 'build');
 const workspaceManifestFile = (name: string) => createRequire(path.join(repoRoot, 'package.json')).resolve(`${name}/package.json`);
 const workspaceManifest = (name: string) => JSON.parse(fs.readFileSync(workspaceManifestFile(name), 'utf-8'));
 const sharedPkgs = SHARED_INSTANCE_PACKAGES.map(workspaceManifest);
+/**
+ * What the shared-instance packages take from another of our repositories (EARS, from elmdb's release,
+ * `lib/external-packages.mjs`): inlined with them, as the build it was made from, since no registry holds it
+ */
+const FROM_RELEASES = sharedPkgs.flatMap((shared) => Object.keys(shared.dependencies ?? {}).filter((name) => repositoryOf(name) !== undefined));
+const inlinedPkgs = [...SHARED_INSTANCE_PACKAGES, ...FROM_RELEASES].map((name) => ({ name, manifest: workspaceManifest(name) }));
 const hostPkg = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages', 'apack-host', 'package.json'), 'utf-8'));
 const SHARED = new Set<string>(SHARED_INSTANCE_PACKAGES);
-const INLINED = new Set([...SHARED, '@apackdev/host']);
+const INLINED = new Set([...SHARED, ...FROM_RELEASES, '@apackdev/host']);
 
 const builtins = new Set([...builtinModules, ...builtinModules.map((m) => `node:${m}`)]);
 
@@ -130,17 +138,16 @@ const externalizeAllButInlined: Plugin = {
 };
 
 function versionOf(name: string): string {
-  // The package's own ranges win; inlined shared-instance and host code brings their ranges. A `file:` range, relative to
-  // the manifest declaring it, is published as the version it links
-  const sources: Array<[Record<string, string> | undefined, string]> = [
-    [pkg.dependencies, pkgDir], [pkg.peerDependencies, pkgDir],
-    ...SHARED_INSTANCE_PACKAGES.flatMap((shared, i) => [[sharedPkgs[i].dependencies, path.dirname(workspaceManifestFile(shared))], [sharedPkgs[i].peerDependencies, path.dirname(workspaceManifestFile(shared))]] as Array<[Record<string, string> | undefined, string]>),
-    [hostPkg.dependencies, path.join(repoRoot, 'packages', 'apack-host')],
+  // The package's own ranges win; inlined shared-instance and host code brings their ranges
+  const sources: Array<Record<string, string> | undefined> = [
+    pkg.dependencies, pkg.peerDependencies,
+    ...inlinedPkgs.flatMap(({ manifest }) => [manifest.dependencies, manifest.peerDependencies]),
+    hostPkg.dependencies,
   ];
-  for (const [source, dir] of sources) {
-    if (source?.[name]) return publishedSpec(source[name], dir);
+  for (const source of sources) {
+    if (source?.[name]) return source[name];
   }
-  throw new Error(`${pkg.name} bundle imports ${name}, which neither ${pkg.name}, the shared-instance packages nor @apackdev/host declares`);
+  throw new Error(`${pkg.name} bundle imports ${name}, which neither ${pkg.name}, the inlined packages nor @apackdev/host declares`);
 }
 
 const externalizeAllButHost: Plugin = {
@@ -231,9 +238,10 @@ async function main(): Promise<void> {
   // observation and never a key: see `bundleReadsFile`.
   //
   // **Repo-relative, which the metafile's paths are not**: esbuild reports them relative to its working
-  // directory, so an inlined workspace package arrives as `../apack-ears/src/x.ts` — which is why the first
+  // directory, so an inlined workspace package arrives as `../apack-sdk/src/x.ts` — which is why the first
   // version of this recorded zero of the files it exists to record. A dependency under a real `node_modules`
-  // is left out: those are covered by `package-lock.json`, which every unit declares.
+  // is left out: those are covered by `package-lock.json`, which every unit declares. So is a read outside the
+  // checkout, which is EARS' `dist` where `npm run deps:local` links a checkout of elmdb.
   const repoRelative = (input: string): string => path.relative(repoRoot, path.resolve(pkgDir, input));
   recordBundleReads(pkg.name, [...new Set([
     ...Object.keys(result.metafile.inputs), ...Object.keys(sharedExternal?.metafile?.inputs ?? {}), ...Object.keys(commonjs?.metafile?.inputs ?? {}),
@@ -264,8 +272,9 @@ async function main(): Promise<void> {
       dependencies[shared.name] = shared.version;
     }
   }
-  // The private host package is inlined, never installed
+  // The private host package and what the SDK takes from a release are inlined, never installed
   delete dependencies['@apackdev/host'];
+  for (const name of FROM_RELEASES) delete dependencies[name];
 
   for (const file of config.copy ?? []) {
     const from = path.join(pkgDir, file);
@@ -315,7 +324,7 @@ async function main(): Promise<void> {
   // @apackdev/testing's harness and was found by reading the built file rather than by any check.
   if (config.declarations) {
     // Reachable from the exports map, not every file tsc emitted. `build-package.ts` walks the whole tree
-    // because for @apackdev/ears and /sdk every dist module is an export; a bundled package has three entries
+    // because for @apackdev/sdk every dist module is an export; a bundled package has three entries
     // and tsc writes a declaration per module it compiled, so walking everything reports a module a consumer
     // cannot name — `checkout-freshness.d.ts` takes a host type in an options bag only this package's own
     // spec passes, and no entry's declaration mentions it.

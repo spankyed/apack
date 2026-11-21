@@ -45,12 +45,12 @@
     "magic-string": "^0.30.21"
   },
   "devDependencies": {
-    "es-module-lexer": "^1.7.0",
-    "@apackdev/ears": "*",
     "@apackdev/testing": "*",
     "@apackdev/ui": "*",
     "@app/publish-checks": "*",
+    "@elmdb/ears": "0.1.0",
     "@types/semver": "^7.8.0",
+    "es-module-lexer": "^1.7.0",
     "vitest": "^4.1.12",
     "yaml": "^2.9.1"
   }

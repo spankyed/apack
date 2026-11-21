@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { _appDataPaths } from '@apackdev/sdk/utils';
-import type { Ears, EARS } from '@apackdev/ears';
+import type { Ears, EARS } from '@elmdb/ears';
 import { openDatabaseStore } from './open.ts';
 
 /** The app's stored settings overrides, which boot reads before any pack is loaded: the one host-owned row */

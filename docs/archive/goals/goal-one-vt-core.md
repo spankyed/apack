@@ -171,7 +171,7 @@ it is **one core adopted on both sides of a split that already exists**.
 
 - **Any change to who owns a session.** The ownership tables, the lifetime hold, `adopt`, the restart budget
   and the protocol's shape are settled and this goal consumes them. See
-  [terminal-broker.md](../../references/terminal-broker.md).
+  [broker.md](../../references/broker.md).
 - **The agent-observation pipeline**, which [terminal-runtime-refactor-target.md](../../deferred/terminal-runtime-refactor-target.md)
   owns as design and no goal currently owns as delivery.
 - **Persistence, PTY multiplexing and shell-integration redesign**, as the predecessor plan excluded them.
@@ -566,7 +566,7 @@ before cutover**, not after seeing the numbers.
 **Work — gates and closure:**
 
 - `npm run chain`, the `test:smoke` e2e gate, and the packaged install path.
-- Update `docs/references/terminal-broker.md` and the root guide's terminal-stack description to the
+- Update `docs/references/broker.md` and the root guide's terminal-stack description to the
   contract that shipped.
 - Write Outcome, archive this goal and both deferred documents, and repair links.
 

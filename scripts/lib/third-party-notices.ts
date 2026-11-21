@@ -49,8 +49,9 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import parse, { type Node as SpdxNode } from 'spdx-expression-parse';
 import satisfies from 'spdx-satisfies';
-import { bundledPackages, installedPackage, type BundledPackage } from '@apackdev/host/build/bundled-packages';
+import { bundledPackages, installedPackage, isFirstParty, type BundledPackage } from '@apackdev/host/build/bundled-packages';
 import { PACK_BUILD_STAGING_DIR } from '@apackdev/host/build/pack-workdir';
+import { OWNER, REPOSITORIES, releaseOf } from './external-packages.mjs';
 
 /** A license, licence, notice or copying file, in any case and with any extension, the word anywhere in the name */
 export const LICENSE_FILE = /(licen[cs]e|notice|copying)/i;
@@ -143,10 +144,6 @@ export const OVERRIDES: Readonly<Record<string, Override>> = {
   '@ai-sdk/provider-utils': {
     files: ['vercel-ai-LICENSE', 'Apache-2.0.txt'],
     why: "ships no license file; its repository's (vercel/ai) is Apache-2.0's notice, and the license is its full text",
-  },
-  'apack-terminal': {
-    files: ['apack-terminal-LICENSE-MIT'],
-    why: "the terminal broker's protocol package, whose license files are at its repository's root, outside it",
   },
   '@napi-rs/lzma-linux-x64-gnu': {
     files: ['napi-rs-lzma-LICENSE'],
@@ -323,7 +320,6 @@ function packagesIn(nodeModules: string): string[] {
     .filter((dir) => fs.existsSync(path.join(dir, 'package.json')));
 }
 
-const firstParty = (name: string) => name === 'apack' || name.startsWith('@app/') || name.startsWith('@apackdev/');
 
 function manifestOf(dir: string): { name: string; version?: string; license?: unknown; licenses?: unknown; repository?: unknown; author?: unknown } {
   return JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
@@ -338,7 +334,7 @@ export function shippedPackages(appDir: string): NoticePackage[] {
   while (queue.length) {
     for (const dir of packagesIn(queue.pop()!)) {
       const manifest = manifestOf(dir);
-      if (!firstParty(manifest.name)) found.push({ name: manifest.name, version: manifest.version ?? '0.0.0', dir, carried: 'files' });
+      if (!isFirstParty(manifest.name)) found.push({ name: manifest.name, version: manifest.version ?? '0.0.0', dir, carried: 'files' });
       queue.push(path.join(dir, 'node_modules'));
     }
   }
@@ -369,8 +365,8 @@ const SCRIPT_PATH = /^\S+\.[cm]?[jt]sx?$/;
  * package's JSON, a path with spaces. A bundle with neither cannot say what it inlined, and is a problem rather than an
  * empty list.
  *
- * **A module is its package's by where its file is** (`packageOf`): a pack can inline another workspace's or a vendored
- * checkout's copy of a package the pack itself would resolve at another version. Only a module that is no file is told
+ * **A module is its package's by where its file is** (`packageOf`): a pack can inline another workspace's or a
+ * dependency's copy of a package the pack itself would resolve at another version. Only a module that is no file is told
  * by the names in its path, and one whose names don't resolve is a problem.
  *
  * A pack's CSS says nothing of where it came from, so a package a pack takes only CSS from is not found here.
@@ -429,7 +425,7 @@ export function packBundledPackages(packDir: string): { packages: NoticePackage[
     fromModules = [...bundledPackages(ids, packDir, injected), installedPackage('esbuild', installedPackage('vite', packDir).dir)];
   } catch (error) { problems.push((error as Error).message); }
   const found = new Map([...fromModules, ...named.values()].map((pkg) => [pkg.dir, pkg]));
-  const packages = [...found.values()].filter((pkg) => !firstParty(pkg.name)).map((pkg) => ({ ...pkg, carried: 'inlined' as const }));
+  const packages = [...found.values()].filter((pkg) => !isFirstParty(pkg.name)).map((pkg) => ({ ...pkg, carried: 'inlined' as const }));
   return { packages, problems };
 }
 
@@ -556,7 +552,7 @@ export const npmPurl = (name: string, version: string) => `pkg:npm/${name.replac
 
 /** How the SBOM names a package: its purl, and its hash where the lockfile records one */
 export interface SbomIdentity {
-  /** A package not from npm, by name, such as a vendored checkout: the purl naming it where it is from */
+  /** A package not from npm, by name, such as another of our repositories' release: the purl naming it where it is from */
   purls: Readonly<Record<string, string>>;
   /** The lockfile's integrity of a package, `sha512-<base64>`, by `name@version` */
   integrity: ReadonlyMap<string, string>;
@@ -647,37 +643,46 @@ export function downloadedBinaries(packages: readonly NoticePackage[]): SbomComp
   return [...found.values()];
 }
 
+/** The commit a release tarball was packed from, as its URL names it (`external-packages.mjs`'s `releaseOf`) */
+const releaseCommit = (resolved: string | undefined) => (resolved === undefined ? undefined : releaseOf(resolved)?.commit);
+
 /**
- * The terminal broker as an SBOM component, from its pin (`packages/terminal-broker/src/pin.json`): the pinned commit
- * it was built from, the hash of its binary for the build's own `<platform>` (`darwin-arm64`), and each file its release
- * ships beside the binary with its hash; or `undefined` when the pin holds no build for the platform
+ * The terminal broker as an SBOM component, from the platform package that carries it in the app (`brokerDirectory`):
+ * the commit its release was built from, which the lockfile's URL for the package names, the hash of its binary, and
+ * each file beside the binary with its own hash; or `undefined` when the app carries no broker
  */
-export function brokerSbomComponent(pinFile: string, platform: string): SbomComponent | undefined {
-  const pin = JSON.parse(fs.readFileSync(pinFile, 'utf8')) as { commit: string; files: Record<string, Record<string, string>> };
-  if (!Object.hasOwn(pin.files, platform)) return undefined;
-  const files = pin.files[platform];
-  const binary = ['apack-terminal', 'apack-terminal.exe'].find((name) => Object.hasOwn(files, name));
+export function brokerSbomComponent(repoRoot: string, appDir: string, platform: string): SbomComponent | undefined {
+  const dir = brokerDirectory(appDir, platform);
+  if (dir === undefined) return undefined;
+  const lock = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8')) as { packages: Record<string, { resolved?: string }> };
+  const commit = releaseCommit(lock.packages[`node_modules/${BROKER_PACKAGE_PREFIX}${platform}`]?.resolved);
+  const sha256 = (file: string) => createHash('sha256').update(fs.readFileSync(path.join(dir, file))).digest('hex');
+  const files = fs.readdirSync(dir).filter((name) => fs.statSync(path.join(dir, name)).isFile() && name !== 'package.json').sort();
+  const binary = files.find((name) => name === 'apack-terminal' || name === 'apack-terminal.exe');
   return {
-    type: 'application', name: 'apack-terminal', version: pin.commit, purl: `pkg:github/spankyed/apack-terminal@${pin.commit}`, license: 'MIT OR Apache-2.0',
-    ...(binary ? { sha256: files[binary] } : {}),
-    components: Object.entries(files).filter(([name]) => name !== binary).map(([name, sha256]) => ({ type: 'file' as const, name, sha256 })),
+    type: 'application', name: 'apack-terminal', license: 'MIT OR Apache-2.0',
+    ...(commit ? { version: commit, purl: `pkg:github/${OWNER}/apack-terminal@${commit}` } : {}),
+    ...(binary ? { sha256: sha256(binary) } : {}),
+    components: files.filter((name) => name !== binary).map((name) => ({ type: 'file' as const, name, sha256: sha256(name) })),
   };
 }
 
 /**
- * The SBOM's identity for the packages of a repository: the vendored checkouts it pins, by the packages each provides,
- * as GitHub purls at the pinned commit (`vendor/<repo>.rev`), since none is published to npm, each named
- * `<repo>` or `<repo>#<directory>` for a package in a directory of its repository, the purl's subpath, so two from one
- * repository are told apart; and the lockfile's integrity of every package installed from a registry
+ * The SBOM's identity for the packages of a repository: those another of ours publishes as a release's tarball
+ * (`external-packages.mjs`), as GitHub purls at the commit the lockfile's URL for each names, with the package's
+ * directory in its repository as the purl's subpath, so two from one repository are told apart; and the lockfile's
+ * integrity of every package it holds one for, which those tarballs have as a registry's packages do. A package
+ * installed from elsewhere, a local checkout's, has no purl here
  */
-export function sbomIdentity(repoRoot: string, vendored: Readonly<Record<string, string>>): SbomIdentity {
+export function sbomIdentity(repoRoot: string): SbomIdentity {
+  const lock = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8')) as { packages: Record<string, { version?: string; integrity?: string; name?: string; resolved?: string }> };
   const purls: Record<string, string> = {};
-  for (const [name, where] of Object.entries(vendored)) {
-    const [repo, subpath] = where.split('#');
-    const rev = fs.readFileSync(path.join(repoRoot, 'vendor', `${repo}.rev`), 'utf8').trim();
-    purls[name] = `pkg:github/spankyed/${repo}@${rev}${subpath ? `#${subpath}` : ''}`;
+  for (const [repo, { packages }] of Object.entries(REPOSITORIES)) {
+    for (const [name, { dir }] of Object.entries(packages)) {
+      const commit = releaseCommit(lock.packages[`node_modules/${name}`]?.resolved);
+      if (commit) purls[name] = `pkg:github/${OWNER}/${repo}@${commit}${dir === '.' ? '' : `#${dir}`}`;
+    }
   }
-  const lock = JSON.parse(fs.readFileSync(path.join(repoRoot, 'package-lock.json'), 'utf8')) as { packages: Record<string, { version?: string; integrity?: string; name?: string }> };
   const integrity = new Map<string, string>();
   for (const [key, entry] of Object.entries(lock.packages)) {
     const name = entry.name ?? key.split('node_modules/').pop();
@@ -700,17 +705,26 @@ export function noticePackages(sources: readonly (readonly NoticePackage[])[]): 
   return [...byRelease.values()].sort(byNameAndVersion);
 }
 
+/** The name of the package holding the terminal broker for a platform, but for the platform (`darwin-arm64`) */
+const BROKER_PACKAGE_PREFIX = '@apackdev/terminal-';
+
 /**
- * The terminal broker's notices in the packaged app, `bin/<commit>/<platform>/THIRD-PARTY-NOTICES` of its package,
- * where the install puts what the pinned release publishes beside the binary, for the build's own `<platform>`
- * (`darwin-arm64`, as `process.platform` and `process.arch` name it), or `undefined` when the package holds no build
- * for it
+ * The directory holding the terminal broker in the packaged app, for the build's own `<platform>` (`darwin-arm64`, as
+ * `process.platform` and `process.arch` name it): the binary in `@apackdev/terminal`'s platform package, beside the
+ * notices its release ships; or `undefined` when the app carries no broker for it
  */
+export function brokerDirectory(appDir: string, platform: string): string | undefined {
+  const pkg = path.join(appDir, 'node_modules', `${BROKER_PACKAGE_PREFIX}${platform}`);
+  if (!fs.existsSync(pkg)) return undefined;
+  const holds = (dir: string) => ['apack-terminal', 'apack-terminal.exe'].some((name) => fs.existsSync(path.join(dir, name)));
+  return [pkg, ...fs.readdirSync(pkg, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => path.join(pkg, entry.name))]
+    .find(holds);
+}
+
+/** The terminal broker's notices in the packaged app, beside its binary (`brokerDirectory`), or `undefined` with no broker */
 export function brokerNoticesFile(appDir: string, platform: string): string | undefined {
-  const bin = path.join(appDir, 'node_modules', '@app', 'terminal-broker', 'bin');
-  const builds = fs.existsSync(bin) ? fs.readdirSync(bin).map((commit) => path.join(bin, commit, platform))
-    .filter((build) => fs.existsSync(build)) : [];
-  return builds.length ? path.join(builds[0], 'THIRD-PARTY-NOTICES') : undefined;
+  const dir = brokerDirectory(appDir, platform);
+  return dir === undefined ? undefined : path.join(dir, 'THIRD-PARTY-NOTICES');
 }
 
 /** A bundle record written by `recordBundledPackages` */

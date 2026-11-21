@@ -5,13 +5,13 @@
 ```ts
 
 import type { ActionArgs } from 'xstate';
-import type { BaseEntity } from '@apackdev/ears';
-import { EARS as EARS_2 } from '@apackdev/ears';
+import type { BaseEntity } from '@elmdb/ears';
+import { EARS as EARS_2 } from '@elmdb/ears';
 import type { EventObject } from 'xstate';
 import type { MachineContext } from 'xstate';
 import type { Mapper } from 'xstate';
 import type { ParameterizedObject } from 'xstate';
-import type { ShortCode } from '@apackdev/ears';
+import type { ShortCode } from '@elmdb/ears';
 
 // @public (undocumented)
 export interface ActionEntity extends BaseEntity {

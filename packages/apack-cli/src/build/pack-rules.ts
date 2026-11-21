@@ -265,10 +265,21 @@ const RULE_LIST = [
   },
   {
     key: 'elmdb-imports',
-    rule: 'A pack reaches its data through the engine the app binds: neither elmdb nor @apackdev/ears/lmdb is '
+    rule: 'A pack reaches its data through the engine the app binds: neither elmdb nor @elmdb/ears/database is '
       + 'provided to a pack, so importing one fails at load',
     check(view, _place) {
-      return view.specifiers.filter(({ text }) => /^elmdb(\/|$)/.test(text) || /^@apackdev\/ears\/lmdb(\/|$)/.test(text))
+      return view.specifiers.filter(({ text }) => /^elmdb(\/|$)/.test(text) || /^@elmdb\/ears\/database(\/|$)/.test(text))
+        .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
+    },
+  },
+  {
+    key: 'ears-imports',
+    rule: 'A pack names EARS through its SDK, @apackdev/sdk/ears, which re-exports all of it: @elmdb/ears is the '
+      + "SDK's dependency rather than the pack's, which an install need not put where the pack resolves it, and the app "
+      + "loads the one copy its SDK brings",
+    check(view, _place) {
+      // `@elmdb/ears/database` is elmdb-imports': nothing re-exports it, so this rule's fix doesn't apply
+      return view.specifiers.filter(({ text }) => /^@elmdb\/ears(\/|$)/.test(text) && !/^@elmdb\/ears\/database(\/|$)/.test(text))
         .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
     },
   },

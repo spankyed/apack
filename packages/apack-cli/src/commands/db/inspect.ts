@@ -1,5 +1,5 @@
 // apack db inspect: an entity's relations, followed a few levels, or relation counts per entity type
-import type { Ears, EARS } from '@apackdev/ears';
+import type { Ears, EARS } from '@elmdb/ears';
 import { openTarget, parseDbArgs, TARGET_USAGE, withDatabase, type DbIo } from './target';
 
 const OPTIONS = {

@@ -7,12 +7,12 @@ import { Readable } from 'node:stream';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createEarsEngine, type EARS } from '@apackdev/ears';
+import { createEarsEngine, type EARS } from '@elmdb/ears';
 import { _bindEars, boundEars, untypedCreate, untypedWrite } from '@apackdev/sdk/ears';
 import { findDatabaseWriter, holdDatabaseWriteLock, openDatabaseStore, readInstalledSchema } from '@apackdev/host/database';
 import { runHistoryAt } from '../_support/run-history.ts';
 import { databaseBackupStore, exportDatabase } from '@apackdev/host/backup';
-import { DATABASE_FORMAT, openDatabase } from '@apackdev/ears/lmdb';
+import { DATABASE_FORMAT, openDatabase } from '@elmdb/ears/database';
 import { createSecretsStore, memoryKeyVault } from '@apackdev/host/secrets';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { _appDirOf, appDataDirFor, resolveAppEnvironment } from '@apackdev/sdk/env';
@@ -234,8 +234,8 @@ describe('apack db query', () => {
 
   it('reads a database another process holds open in a unit it is writing, as a running app does', async () => {
     const dir = await appDataDir();
-    // elmdb as @apackdev/ears resolves it, opened to write and holding a unit, so LMDB's one write transaction is taken
-    const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
+    // elmdb as @elmdb/ears resolves it, opened to write and holding a unit, so LMDB's one write transaction is taken
+    const elmdb = createRequire(createRequire(import.meta.url).resolve('@elmdb/ears/package.json')).resolve('elmdb');
     const holder = spawn(process.execPath, ['-e', [
       `const { Database } = require(${JSON.stringify(elmdb)});`,
       'const database = Database.open(process.argv[1]);',
@@ -574,7 +574,7 @@ describe('apack db exec', () => {
 
     it('reopens a write repl when an app has declared a schema since it opened', async () => {
       const dir = await appDataDir();
-      const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
+      const elmdb = createRequire(createRequire(import.meta.url).resolve('@elmdb/ears/package.json')).resolve('elmdb');
       async function* lines() {
         yield "write('Note-a').set('title', 'Before')\n";
         await execFileWhileWorking(process.execPath, ['-e', [
@@ -594,7 +594,7 @@ describe('apack db exec', () => {
 
     it('reopens a write repl when another process has replaced the data since it opened', async () => {
       const dir = await appDataDir();
-      const elmdb = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json')).resolve('elmdb');
+      const elmdb = createRequire(createRequire(import.meta.url).resolve('@elmdb/ears/package.json')).resolve('elmdb');
       async function* lines() {
         yield "write('Note-a').set('title', 'Before')\n";
         await execFileWhileWorking(process.execPath, ['-e', [

@@ -47,7 +47,7 @@ it('cancels a pending refresh when the commit actor stops', async () => {
 it('announces a write as the repository changing, and lists nothing itself', async () => {
   const announced = vi.fn();
   const stashDrop = vi.fn(async () => {});
-  const gitRepository = { whenFetchDue: () => {}, stashDrop, lastUndoable: async () => null, refreshSnapshot: async () => NOTHING } as never;
+  const gitRepository = { whenFetchDue: () => {}, stashDrop, undoables: async () => [], refreshSnapshot: async () => NOTHING } as never;
   const actor = createActor(commitSystem.provide({ actions: { announceRepositoryChanged: announced } }),
     { input: { baseDirectory: '/repo', gitRepository } }).start();
   actors.push(actor);

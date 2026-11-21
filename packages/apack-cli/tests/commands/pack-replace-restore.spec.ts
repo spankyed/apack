@@ -12,7 +12,7 @@ import { replace } from '../../src/commands/pack-replace';
 import { install } from '../../src/commands/pack-install';
 import { uninstall } from '../../src/commands/pack-uninstall';
 import { _appDataPaths } from '@apackdev/sdk/utils';
-import { type EARS } from '@apackdev/ears';
+import { type EARS } from '@elmdb/ears';
 import { untypedUpsert, _bindEars } from '@apackdev/sdk/ears';
 import { openProfile } from '../../src/app/profiles';
 

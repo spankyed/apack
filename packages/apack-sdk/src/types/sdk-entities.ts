@@ -7,7 +7,7 @@
  *
  * The shapes here are part of the typed EARS contract (packages/apack-sdk/TYPED-EARS.md).
  */
-import type { BaseEntity, RelationRules, RequiredField, RowRules, ShortCode } from '@apackdev/ears';
+import type { BaseEntity, RelationRules, RequiredField, RowRules, ShortCode } from '@elmdb/ears';
 
 export const SDK_ENTITIES = {
   Flow: 'Flow',

@@ -6,10 +6,12 @@
 //   node build/prod/verify-node-modules.mjs "dist/mac-arm64/apack.app/Contents/Resources/app" [workspace]
 //
 // Also checked: the published packages bundled in the app (packages/*/dist/package, e.g. the
-// CLI behind Resources/cli/apack), and optional dependencies the build workspace installed
-// for this platform (e.g. esbuild's native binary) but the app doesn't ship.
+// CLI behind Resources/cli/apack), optional dependencies the build workspace installed
+// for this platform (e.g. esbuild's native binary) but the app doesn't ship, and that the app
+// holds one copy of each package it must load once (`single-copy.mjs`).
 import fs from 'node:fs';
 import path from 'node:path';
+import { extraCopies } from './single-copy.mjs';
 
 const appDir = path.resolve(process.argv[2] ?? '');
 const workspaceDir = path.resolve(process.argv[3] ?? process.cwd());
@@ -63,15 +65,22 @@ function check(dir) {
 
 const packagesDir = path.join(appDir, 'packages');
 const workspacePackages = fs.existsSync(packagesDir) ? fs.readdirSync(packagesDir).map(p => path.join(packagesDir, p)) : [];
+const installed = [];
 for (const root of [path.join(appDir, 'node_modules'), ...workspacePackages.map(p => path.join(p, 'node_modules'))]) {
-  for (const dir of packages(root)) check(dir);
+  for (const dir of packages(root)) {
+    check(dir);
+    const { name } = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf-8'));
+    installed.push({ name, copy: fs.realpathSync(dir), where: path.relative(appDir, dir) });
+  }
 }
 for (const bundled of workspacePackages.map(p => path.join(p, 'dist', 'package'))) {
   if (fs.existsSync(path.join(bundled, 'package.json'))) check(bundled);
 }
 
+const duplicated = extraCopies(installed);
 if (missing.length > 0) {
   console.error(`Packaged app is missing ${missing.length} declared dependencies:\n${missing.map(m => `  ${m}`).join('\n')}`);
-  process.exit(1);
 }
-console.log('Packaged node_modules: every declared dependency is present');
+if (duplicated.length > 0) console.error(`Packaged app holds more than one copy of a package it loads once:\n${duplicated.map(m => `  ${m}`).join('\n')}`);
+if (missing.length > 0 || duplicated.length > 0) process.exit(1);
+console.log('Packaged node_modules: every declared dependency is present, and one copy of each package loaded once');

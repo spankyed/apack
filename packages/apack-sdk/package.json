@@ -202,6 +202,7 @@
     "@tiptap/pm": "^3.32.0",
     "@tiptap/vue-3": "^3.32.0",
     "ai": "^7.0.0",
+    "elmdb": "0.1.0",
     "esbuild": "^0.25.0",
     "typescript": ">=5.7",
     "vue": "^3.5.18",
@@ -240,7 +241,7 @@
     "provenance": true
   },
   "dependencies": {
-    "@apackdev/ears": "^0.1.0",
+    "@elmdb/ears": "0.1.0",
     "ajv": "^8.20.0",
     "json-schema-to-typescript": "^15.0.4",
     "mdast-util-from-markdown": "^2.0.2",

@@ -1,5 +1,5 @@
 // The run history's database for the specs that write nodes as a run left them, read them back and remove them
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@elmdb/ears';
 import { openRunHistory } from '@apackdev/host/database';
 
 /** The run history's database at `dir`, its nodes written whole, read and removed by id */

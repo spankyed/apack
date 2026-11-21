@@ -1,4 +1,4 @@
-import type { RankDeclaration, RelationRules, RowRules } from '@apackdev/ears';
+import type { RankDeclaration, RelationRules, RowRules } from '@elmdb/ears';
 import type { ContentWriter } from '../content/writers.ts';
 
 /** Generated content bindings used without activating a pack's systems or services. */

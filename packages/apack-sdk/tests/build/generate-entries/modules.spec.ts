@@ -168,9 +168,9 @@ describe('generated EARS facade', () => {
       paths: { '#generated/*': ['./src/__generated__/*'] },
     } }));
     write('src/tag.ts', 'export interface TagEntity { label: string }\n');
-    // An id's type is the engine's, which a pack reads from its installed @apackdev/ears
+    // An id's type is the engine's, which a pack reads through its installed @apackdev/sdk's EARS namespace
     fs.mkdirSync(path.join(root, 'node_modules', '@apackdev'), { recursive: true });
-    fs.symlinkSync(path.resolve(import.meta.dirname, '../../../../apack-ears'), path.join(root, 'node_modules', '@apackdev', 'ears'), 'dir');
+    fs.symlinkSync(path.resolve(import.meta.dirname, '../../../../apack-sdk'), path.join(root, 'node_modules', '@apackdev', 'sdk'), 'dir');
     write('src/memo.ts', `import type { EARS } from '#generated/ears.ts';
 export interface MemoEntity {
   title: string; count: number; done: boolean; stage: 'draft' | 'final'; kind: 'note';

@@ -271,12 +271,10 @@ export function packExternalsPlugin(packDir: string): VitePlugin {
           `This pack imports ${source}, but @apackdev/ui can't be resolved from ${packDir}, so there is nothing to take from the host. Install @apackdev/ui in the pack, or set build.bundleUi to carry your own copy.`,
         );
       }
-      // Reached only by what the host does *not* share: `@apackdev/ears`, which a pack frontend inlines
-      // because the renderer keeps no EARS data, and an `@apackdev/sdk` subpath outside SDK_FE_MODULES. From
-      // the pack rather than the importing module, so those land on the pack's own copies.
-      if (sharedInstancePackage(source)) {
-        return this.resolve(source, packImporter, { ...options, skipSelf: true });
-      }
+      // Reached only by an `@apackdev/sdk` subpath outside SDK_FE_MODULES, which a pack frontend inlines. From the
+      // pack rather than the importing module, so it lands on the pack's own SDK. What that SDK module imports in turn
+      // (`@elmdb/ears`, behind `@apackdev/sdk/ears`) resolves from the SDK, as Node would, wherever npm put it
+      if (sharedInstancePackage(source)) return this.resolve(source, packImporter, { ...options, skipSelf: true });
     },
   };
 }

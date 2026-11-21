@@ -23,7 +23,7 @@ import type { ImportMode, ApplyResult, ContentSelection } from '@apackdev/sdk/ut
 import { untypedQuery } from '@apackdev/sdk/ears';
 import { dropAttribute, entityIds } from '@apackdev/sdk/testing';
 import { compileContent, resetDatabase, apply, snapshot, type Snapshot } from './harness.ts';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@apackdev/sdk';
 
 const GOLDEN_DIR = path.join(import.meta.dirname, '__golden__');
 const UPDATE = process.env.UPDATE_CONTENT_GOLDEN === '1';

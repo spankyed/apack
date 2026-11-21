@@ -4,9 +4,9 @@
 
 ```ts
 
-import type { BaseEntity } from '@apackdev/ears';
-import { EARS as EARS_2 } from '@apackdev/ears';
-import type { ShortCode } from '@apackdev/ears';
+import type { BaseEntity } from '@elmdb/ears';
+import { EARS as EARS_2 } from '@elmdb/ears';
+import type { ShortCode } from '@elmdb/ears';
 
 // @public
 export interface ActionInput {

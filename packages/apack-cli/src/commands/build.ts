@@ -344,8 +344,8 @@ async function buildIntoStaging(args: string[], root: string) {
     // ── DSL editor definitions ───────────────────────────────────────────
     if (manifest.extensions?.dsl) {
       const dslScope = apackScope(root);
-      const dslHash = 'missing' in dslScope ? null : dslInputsHash(root, dslScope.dirs, dependencyFiles, compilation);
-      const dslStale = dslHash === null ? 'scope incomplete'
+      const dslHash = 'missing' in dslScope ? null : dslInputsHash(root, dslScope.hash, dependencyFiles, compilation);
+      const dslStale = dslHash === null ? `scope incomplete: ${'missing' in dslScope ? dslScope.missing.join('; ') : ''}`
         : reuseProblem(stamps.dslDefs, distDir, dslHash) ?? (reads && !reads.carry('dslDefs') ? 'no reads recorded to carry' : null);
       const defs = dslStale === null
         ? (reusePhase('dslDefs'),

@@ -1,5 +1,5 @@
-import { createEarsEngine, type EarsDatabase, type EarsEngine } from '@apackdev/ears';
-import { createTemporaryDatabases } from '@apackdev/ears/lmdb';
+import { createEarsEngine, type EarsDatabase, type EarsEngine } from '@elmdb/ears';
+import { createTemporaryDatabases } from '@elmdb/ears/database';
 import { _RUN_HISTORY_SCHEMA } from '../services/run-history.ts';
 
 /** The process's test run histories, each removed when the process exits */

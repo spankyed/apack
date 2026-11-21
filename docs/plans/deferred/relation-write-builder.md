@@ -4,7 +4,7 @@ Status: deferred, 2026-10-24. An alternative to the relation API that landed; de
 
 ## Where relations are
 
-A relation is not an entity (step 9), and it has its own operations, held by one module (`apack-ears/src/relations.ts`):
+A relation is not an entity (step 9), and it has its own operations, held by one module (elmdb's `packages/ears/src/relations.ts`):
 
 | Job | How |
 |---|---|
@@ -67,7 +67,7 @@ it then refused. They differ on whether relations share the entity pipe or sit b
 ## What building it would take, from here
 
 1. **Let `write` and `getRow` take a `RelationId`.** Replace `WriteTarget`'s refusal with the conditional return
-   above, in `apack-ears/src/runtime.ts`, `typed.ts` and `write.ts`.
+   above, in elmdb's `packages/ears/src/runtime.ts`, `typed.ts` and `write.ts`.
 2. **Build `RelationWriteBuilder`** over the relations module (`relations.update` and `relations.remove` already do
    the work). Keep a runtime refusal naming the relation operations for an entity member called on a relation.
 3. **Retire the separate operations.**
@@ -93,7 +93,7 @@ delete and a create. The flow editor moves edges and keeps their ids, which the 
   typed entity id.
 - **A cold chain.** The change is in the bottom layer.
 - **Performance should be unchanged.** The builder's operations are the relations module's existing writes. Verify
-  with `npm run bench -w @apackdev/ears` against the recorded baseline.
+  with EARS' benchmark (its `bench` script, run in elmdb), against the recorded baseline.
 
 ## When to revisit
 

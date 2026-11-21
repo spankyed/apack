@@ -1,8 +1,8 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import { createLogger } from '@apackdev/sdk/logger';
-import { createEarsEngine, type Ears, type EarsDatabase, type EarsEngine } from '@apackdev/ears';
-import { DATABASE_FORMAT, openDatabase } from '@apackdev/ears/lmdb';
+import { createEarsEngine, type Ears, type EarsDatabase, type EarsEngine } from '@elmdb/ears';
+import { DATABASE_FORMAT, openDatabase } from '@elmdb/ears/database';
 import { UnknownBackupDatabasesError } from '@apackdev/sdk/services';
 
 const logger = createLogger('database:backup');

@@ -315,14 +315,14 @@ const ran = (...projects: string[]): ReportedRun => ({ projects, modules: [] });
  * minimum project count, and no case this cannot answer.
  */
 describe('projectsThatDidNotRun', () => {
-  const asked = ['@apackdev/ears', '@app/main'];
+  const asked = ['@apackdev/ui', '@app/main'];
 
   it('names a project that was asked for and never reported', () => {
-    expect(projectsThatDidNotRun(asked, ran('@apackdev/ears'))).toEqual(['@app/main']);
+    expect(projectsThatDidNotRun(asked, ran('@apackdev/ui'))).toEqual(['@app/main']);
   });
 
   it('says nothing when every project reported', () => {
-    expect(projectsThatDidNotRun(asked, ran('@apackdev/ears', '@app/main'))).toEqual([]);
+    expect(projectsThatDidNotRun(asked, ran('@apackdev/ui', '@app/main'))).toEqual([]);
   });
 
   it('names them all when the filter matched none of several', () => {

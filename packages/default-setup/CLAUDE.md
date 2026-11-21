@@ -109,7 +109,7 @@ actions (`list`, `byId`), flows (`list`, `graph`), notes (`tree`, `note`, `recen
 - **An editor holds its views behind its own writes** (`ViewWrites`, `@apackdev/sdk/fe`): it applies an edit at
   once, so a result from before the write landed would undo it. Once the last write is answered it reads the views
   again. Every write such a surface records must be answered, a refusal included. The commit panel does the same
-  over a list it fetches: a staged file moves on the click to where git will list it (`apack-git/staging`),
+  over a list it fetches: a staged file moves on the click to where git will list it (`@apackdev/git/staging`),
   and no status is shown until the write is answered.
 - **A surface drawn in several areas follows its views from its machine** (`fromView`, `#generated/fe`), since no one
   component is mounted for as long as it runs — threads is the example.
@@ -160,10 +160,10 @@ there is no request it could fail to match. A **feed** is news too: a terminal's
 `RUN_NODE_SPAWNED`/`RUN_NODE_UPDATED` patch what a window already holds, as streaming tokens would. What a system
 holds in memory and a window shows — the logs buffer — is asked for like what is on disk.
 
-**Git is run by one engine, which is a package of its own: `apack-git`.** It runs every git process and keeps
-the picture of one working tree, in a repository of its own that the pack depends on through `vendor/apack-git`
+**Git is run by one engine, which is a package of its own: `@apackdev/git`.** It runs every git process and keeps
+the picture of one working tree, in a repository of its own whose release the pack depends on (`@apackdev/git`)
 ([the git engine](../../docs/references/git-engine.md)): its files named below are that repository's, under
-`src/` and `tests/`. `apack pack build` bundles it into the pack's runtime, and its `apack-git/staging` entry,
+`src/` and `tests/`. `apack pack build` bundles it into the pack's runtime, and its `@apackdev/git/staging` entry,
 which imports nothing of Node's, into the frontend. It has no dependencies and is handed how to run a process,
 the environment git starts from and where to log (`RepositoryTies`). What the app decides stays with the app,
 over the engine's reads (`code/be/services/app-git-repository.ts`): when to fetch unasked, which branch a pull
@@ -353,7 +353,7 @@ state accessed through `services.onboarding.isComplete()`/`complete()`, not an a
 Import `EARS` from `#generated/ears` by default. The SDK's `EARS` (`@apackdev/sdk`) is fine for `EntityId`, SDK-owned constants and shared EARS types (build facets use it), but its `EARS.Entity` type is open: annotate with it only when any entity name is intended, as the create step's `entityTypeTarget` does (see `packages/apack-sdk/TYPED-EARS.md`).
 
 Typed facades (no module augmentation):
-- `__generated__/ears.ts` — `PackShapes` (entity type → attribute interface; a numbered entity's shape gains the `shortCode` the engine writes, typed from its `apack.json` entry, so `ThreadEntity` declares none), `ShortCodeOf<E>` (a numbered entity's code type, `ShortCodeOf<'Thread'>` is `` `THR-${number}` ``), `EntityName`, and the typed `query`/`create`/`upsert`/`write`/`transact`/`newId`/`getAttr` helpers built with `defineEars`. Feature code imports its writes from here; migrations write with the unchecked `untypedCreate`/`untypedUpsert`/`untypedWrite` from `@apackdev/ears`, as does the Database console's transaction code (which exposes them to console code as `create`, `upsert` and `write`), which runs through `@apackdev/sdk/database-console` (`features/database/be/execute/`)
+- `__generated__/ears.ts` — `PackShapes` (entity type → attribute interface; a numbered entity's shape gains the `shortCode` the engine writes, typed from its `apack.json` entry, so `ThreadEntity` declares none), `ShortCodeOf<E>` (a numbered entity's code type, `ShortCodeOf<'Thread'>` is `` `THR-${number}` ``), `EntityName`, and the typed `query`/`create`/`upsert`/`write`/`transact`/`newId`/`getAttr` helpers built with `defineEars`. Feature code imports its writes from here; migrations write with the unchecked `untypedCreate`/`untypedUpsert`/`untypedWrite` from `@apackdev/sdk/ears`, as does the Database console's transaction code (which exposes them to console code as `create`, `upsert` and `write`), which runs through `@apackdev/sdk/database-console` (`features/database/be/execute/`)
 - `__generated__/events.ts` — `SendableSurfaceEvents` (receiving surface ID → the events it gets: its own system's, plus the inbox that surface's `Contract` declares — the flows surface takes the three action events it handles, the logs surface `LOG_ADDED` from any pack), `PackSystemEvents` (system → the events it receives), and typed `broadcastToSurface`/`sendToSurface`/`sendToSystem` built with `defineEvents`. Frontend state machines and systems send to systems with `sendToSystem` (to the brain's role with `{ role: 'brain' }`); backend code sends to surfaces with `broadcastToSurface`, which reaches every window, and frontend code with `sendToSurface`, which reaches this window's actor. Don't import these from `@apackdev/sdk/events`; a surface that takes events from anywhere but its own system declares them in its `Contract`'s `inbox` (`fe/contract.ts`). Subscriptions (`onConnected`, `onIncoming`) come from `@apackdev/sdk/events`, `onLog` from `@apackdev/sdk/logger`. A system answers whoever asked through its `answers` table, which is the only way an ask is answered; `ask` and `fromAsk`, from the same module, ask one of the pack's or its dependencies' systems and resolve to its `Outcome`
 - `__generated__/services.ts` — the `services` proxy typed as `Services` (with `services.repository` typed as `Repositories`, and `services.emitter`'s sends typed with the pack's events; actions name systems `default-setup/<feature>`)
 - `__generated__/repository.ts` — `repository`, typed with every repository in `features.<id>.repositories`

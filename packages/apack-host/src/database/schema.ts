@@ -8,7 +8,7 @@ import { parseManifest, parseSnapshot, type PackManifest } from '@apackdev/sdk/b
 import { readInstalledPacks } from '../packs/installed.ts';
 import { SDK_ENTITIES, SDK_REL_KINDS, SDK_RELATION_RULES, SDK_ROW_RULES, SDK_ROLES, SDK_SHORT_CODES, _withSdkIndexes } from '@apackdev/sdk/types';
 import { HOST_ENTITY_TYPES } from '../app-state/index.ts';
-import type { EngineSchema, RankDeclaration, RelationRules, RowRules } from '@apackdev/ears';
+import type { EngineSchema, RankDeclaration, RelationRules, RowRules } from '@elmdb/ears';
 import { PACK_LAYOUT } from '../packs/layout.ts';
 import { readInstalledPackBuilds } from '../packs/discovery.ts';
 

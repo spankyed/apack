@@ -1,4 +1,4 @@
-import type { Ears } from '@apackdev/ears';
+import type { Ears } from '@elmdb/ears';
 import { _createRunHistory, type RunHistory } from '@apackdev/sdk/services';
 import { createLogger } from '@apackdev/sdk/logger';
 

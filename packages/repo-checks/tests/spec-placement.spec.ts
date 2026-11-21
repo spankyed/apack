@@ -44,10 +44,7 @@ const packageDirs = (): string[] =>
  * `src/` is worth a spec — which is a strong claim, so it carries a reason and is reported when it stops
  * applying.
  */
-const NO_SUITE: Record<string, string> = {
-  'terminal-broker': 'its one module answers where the install put the pinned broker, and its cases are '
-    + "@app/repo-checks' `terminal-broker-pin`, beside the fetch that does the installing",
-};
+const NO_SUITE: Record<string, string> = {};
 
 describe('a package with source has a suite', () => {
   const withSource = (): string[] => packageDirs().filter((dir) => fs.existsSync(path.join(REPO_ROOT, 'packages', dir, 'src')));
@@ -106,6 +103,9 @@ const PACKS_AS_A_FIXTURE: Record<string, string> = {
   'packages/apack-cli/tests/build/types-bundler-determinism.integration.spec.ts':
     'the types bundler emits the same facade from the workspace and from the packed tarballs — the packed '
     + 'side is one of two inputs to a comparison about the bundler',
+  'packages/apack-cli/tests/build/facade-nested-consumer.integration.spec.ts':
+    "the types bundler's facade, compiled where the packed packages are installed nested — the consumer is where "
+    + 'the facade is used, and the subject is what the bundler wrote',
 };
 
 describe('a spec about the published packages lives in @app/publish-checks', () => {
@@ -369,8 +369,8 @@ describe('a spec is collected by some config', () => {
    * The roots a config's `include` or `exclude` arrays name, read as text.
    *
    * Text rather than an import, for `suite-timeouts.spec.ts`' reason: importing a pack's config creates a
-   * temp data dir. The cost is that every array under the key is collected, `@apackdev/ears`' nested
-   * `benchmark.include` among them — so the included set is a little wider than the test runner's, and the
+   * temp data dir. The cost is that every array under the key is collected, a nested
+   * `benchmark.include` among them — so the included set can be a little wider than the test runner's, and the
    * direction of that error is a spec under `bench/` going unreported. Narrowing it means parsing the
    * nesting, which means importing.
    */
@@ -408,8 +408,10 @@ describe('a spec is collected by some config', () => {
 
   const rootsOf = (file: string, key: 'include' | 'exclude'): string[] => {
     const own = fs.readFileSync(path.join(REPO_ROOT, file), 'utf-8');
-    const delegate = Object.entries(DELEGATES).find(([name]) => own.includes(name));
-    const text = delegate === undefined ? own : `${own}\n${fs.readFileSync(path.join(REPO_ROOT, delegate[1]), 'utf-8')}`;
+    const delegate = Object.entries(DELEGATES).find(([name]) => own.includes(name))?.[1];
+    const text = [own, ...[delegate]
+      .filter((other) => other !== undefined)
+      .map((other) => fs.readFileSync(path.join(REPO_ROOT, other), 'utf-8'))].join('\n');
     const found: string[] = [];
     for (const match of text.matchAll(new RegExp(`\\b${key}:\\s*\\[`, 'g'))) {
       for (const glob of globsFrom(text, match.index)) {

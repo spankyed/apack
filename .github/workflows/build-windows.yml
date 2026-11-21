@@ -44,10 +44,6 @@ jobs:
       - name: Install pinned npm
         run: npm install -g npm@11.21.1
 
-      - uses: ./.github/actions/elmdb
-      - uses: ./.github/actions/apack-terminal
-      - uses: ./.github/actions/apack-git
-
       # A tag names its channel, and the `channel` input is read for a branch alone: a tag's files go into its
       # release, where a beta build dispatched on a production tag would put apack Beta's files
       - name: Detect channel

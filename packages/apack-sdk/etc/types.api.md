@@ -4,11 +4,11 @@
 
 ```ts
 
-import type { BaseEntity } from '@apackdev/ears';
-import { EARS as EARS_2 } from '@apackdev/ears';
-import type { RelationRules } from '@apackdev/ears';
-import type { RowRules } from '@apackdev/ears';
-import type { ShortCode } from '@apackdev/ears';
+import type { BaseEntity } from '@elmdb/ears';
+import { EARS as EARS_2 } from '@elmdb/ears';
+import type { RelationRules } from '@elmdb/ears';
+import type { RowRules } from '@elmdb/ears';
+import type { ShortCode } from '@elmdb/ears';
 
 // @public (undocumented)
 export interface ActionEntity extends BaseEntity {

@@ -12,7 +12,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { holdExclusiveLock, type ExclusiveLock } from '@apackdev/host/exclusive-lock';
-import { linkedOffPin } from './vendored-checkouts.ts';
 import { diffableStamp, REPO_ROOT, stampedRunAll, type BuildUnit, type StampedUnit } from '@apackdev/host/build/packages-built';
 import { INTEGRATION_SUITES, NATIVE_SUITES, poolStepName, suiteInputs } from './chain-steps.ts';
 import { CONFIG_BY_HALF, hasSplit, type Half } from './spec-halves.ts';
@@ -303,14 +302,10 @@ export function prunePoolStamps(): void {
  */
 export const poolUnitFor = (suite: UnitSuite, pool: Pool, provenance: Provenance, workers?: number): BuildUnit => {
   const inputs = suiteInputs(suite, POOLS[pool].half);
-  // A suite that declares the pins ran against whatever the vendored checkouts were, which its key says where
-  // that is not what the pins name (`vendoredOffPin`), as a chain step's does
-  const offPin = inputs.some((input) => /^vendor\/[^/]+\.rev$/.test(input)) ? linkedOffPin(REPO_ROOT) : '';
   return {
     inputs: inputs.map((input) => path.join(REPO_ROOT, input)),
     outputs: [],
-    command: `${POOLS[pool].run([suite], workers).map(({ command, args }) => [command, ...args].join(' ')).join(' && ')} [${provenance}]`
-      + (offPin === '' ? '' : `\n${offPin}`),
+    command: `${POOLS[pool].run([suite], workers).map(({ command, args }) => [command, ...args].join(' ')).join(' && ')} [${provenance}]`,
   };
 };
 
