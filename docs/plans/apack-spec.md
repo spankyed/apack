@@ -62,6 +62,16 @@ type SearchSurface = {
 }
 ```
 
+A state that starts others says so here too, under `starts`: a state, or `Each<…>` of one where there is one for each
+key.
+
+```ts
+type Threads = {
+  data: { titles: Record<string, string> }
+  starts: { thread: Each<ThreadState> }
+}
+```
+
 ### Read as a value
 
 Exactly one path is the case, so where a state is is one string, and its data is every field that exists on that path.
@@ -80,6 +90,7 @@ Exactly one path is the case, so where a state is is one string, and its data is
 | `on` | The events it takes. Synchronous. A handler returns what happens next |
 | `asks` | The asks it answers. May be async. A handler returns the answer, or `answered(answer, next)` to change something as it answers |
 | `run` | What it does while it is the case. May be async. What it returns happens only if the state still is the case |
+| `starts` | The states it starts, which run while it is the case. `each(keys, of)` gives one for each key the data holds |
 | `failed` | Where it goes when `run` throws, given what was thrown. Synchronous. Required when `run` is async |
 
 A handler or `run` returns the same two fields the value has: `{ at, data }`. Giving only `data` changes fields and
@@ -167,6 +178,22 @@ points at.
    so work that stopped part-way has changed nothing; and a handler that does reach its end has its change made even
    if whoever asked has gone, because the work was done and the data should say so. A handler that throws because its
    `signal` aborted has stopped, and is reported as that and not as a failure.
+10. **What a state starts is declared, and which of them run follows from its data.** A state names the states it
+    starts once, in its shape and its definition. One that is started alone runs for as long as its starter is the
+    case. Where there is one for each key, the definition gives a function from the data to the keys, and a function
+    from a key to its state:
+
+    ```ts
+    starts: { thread: each((data) => Object.keys(data.titles), (threadId) => thread(threadId, inference)) },
+    ```
+
+    After everything a step handles, the kernel makes what is running match: a key the data gained starts its state,
+    one it lost stops its state, and one that stayed leaves its state as it is. **Nothing starts or stops a state by
+    hand**, so there is nothing to forget. Starting is a change to data, and so it has what every change has: it is
+    one step with the answer it came with, it can be checked and refused where it is made, and after an `await` it is
+    made against the data as it is then. What runs cannot disagree with the data, because it is worked out from it.
+    A handler reaches one with `child('draft')` or `child('thread', threadId)`, typed from the declaration, and only
+    from where the state that starts it is the case.
 
 ### Communication
 
@@ -178,8 +205,8 @@ points at.
 | `progress(update)` | An ask's handler | Whoever asked, and only them, as a list at most once a frame | No |
 | `broadcast(name, event)` | The backend | That surface in every window | No |
 
-Names are typed by one declaration of what can be reached, which a pack's generated facade would supply. A state may
-also `start` another that lives exactly as long as it does, and reach it through the handle it gets back.
+Names are typed by one declaration of what can be reached, which a pack's generated facade would supply. A state also declares the
+states it starts, and reaches each through `child`: rule 10.
 
 ### Collections that grow
 
@@ -281,6 +308,7 @@ batch, and this repo's own `transact` followed by `watch`.
 | An ask changes data only together with its answer, as `answered(answer, next)` | An ask that could not change data at all, which was the first decision: to change data it sent its own state an event and returned the answer separately. The answer could then say "created" before the event that did the creating was handled, and still say it if that event's handler threw. The handler could not see the result of its own change. And each such ask needed an event that existed only for it, which anything could tell the state. Every system this was checked against joins the two: Erlang's `gen_statem` replies and moves in one handler, Effect's `Machine` handlers return `[reply, newState]`, and Temporal added Updates beside its read-only queries. They are safe because their handlers do not interleave; these do, at each `await`, which is why a change after one must be a draft edit. The graph stays complete: the extractor reads `next` as it reads any handler's return |
 | Handlers that wait let others through, and the change checks what must hold | One handler at a time, as Effect's `Machine` and Erlang's `gen_server` run them. A handler then sees the same data throughout, and a reply that streams for half a minute keeps every other window out of that system until it ends. Each of those systems has a way round it (`fork` and reply later; a worker that replies), which is interleaving again with less around it; a caller that leaves cannot stop a handler already running; and a cycle of asks is a deadlock. Here every write was already one step. What could go wrong was a decision: check, wait, then act on a check no longer true. That is a long transaction, and the answer where work is long and conflicts are rare is to hold nothing and validate at the write. Locks, which Temporal suggests for this, bring the blocking back. A declared policy per ask, one at a time under a key, is left until a port needs it |
 | Where work is put says who owns it, and so when it stops | One rule for every handler. Stopping an ask's work when its asker goes is right for a search and wrong for a message being answered, and never stopping it, as Effect's `Machine` does once a handler is running, wastes the search. A flag on the ask saying it survives its asker, or a shield around part of a handler as Trio and Kotlin have, would each be a second way to say what a state's `run` already says: this work is the answerer's. The threads example had it wrong: a window that closed mid-reply aborted the reply, and the message it had sent was never stored |
+| What a state starts is declared and follows from its data | `start(name, state)` called from a handler, which the prototype had. A start was then something a handler did and not part of what it returned, so after an `await`, checking and starting could not be one step; nothing stopped a started state short of its starter ending; a handle was rebuilt from the definition at every use; and a state that was restored would have had nothing it started. And naming the starts in what a handler returns, beside `at` and `data`, which makes them one step and leaves them to be remembered: a start with no stop is a leak, and what runs is kept in two places. Working it out from data is what a view layer does with a keyed list, and what Effect's `forkOne` and `forkReplace` do by hand under a key: a key that stays is theirs "only if missing", and replacing is a key that changes |
 | Event handlers are synchronous | Async handlers. They bring back work nobody can see or cancel |
 | What was gathered is handed over before anything else arrives | Progress waiting for its frame while other messages went straight through. A broadcast sent after a piece of text was then heard before it, a reordering that shows only under timing |
 | An ask whose asker has gone throws `Left` where it is awaited | Never settling it, which was tried first. A promise that never settles skips every `finally` after it, so a lock or a handle taken before the ask is held for good, and `Promise.all` over it hangs. Rejection is what `AbortSignal`, `fetch` and structured concurrency do, and code written for them is already correct here |
@@ -313,6 +341,16 @@ commands. Types and kernel together are about 600 lines, and the draft 139.
   busy by the thread itself, whose `writing` state answers the same ask its `idle` state accepts; accepting and
   starting to write are one step. The threads system takes no events: the two it had existed so that two asks could
   change data, and went when those asks returned `answered`.
+- **What runs follows the data** (`starts-check.mts`, 10 checks): a state started alone runs while its starter is
+  the case, stops when it is left and starts anew when it is entered again; a key the data gains starts its state in
+  that step, given what the data holds for it; one started part-way through a step is there for what comes next in
+  that step; a key the data loses stops its state, lets go of what it held and abandons what it was answering; a key
+  that stays leaves its state as it is whatever else changes; a state that is not running answers `unavailable`;
+  keys that cannot be read are reported and what was running goes on; and stopping stops everything, the last
+  started first. Under both orderings of two asks that add the same item after a wait, one is added, one is refused,
+  and one state starts. Reaching one of many without its key, reaching one that is not declared, reaching one from
+  outside the state that starts it, and leaving the starts out of a definition do not compile. `threads.mts` runs on
+  it: a thread for each title, and the composer's draft for as long as a thread is open.
 - **An answer and its change cannot disagree** (`answer-check.mts`, 12 checks): an ask that only answers changes
   nothing; one that answers with a change has made it by the time the answer is had, and subscribers hear of it in
   that step, once; an answer can come with a move that gives the entered state its data; a change that is refused
@@ -540,9 +578,8 @@ The design is the smaller half of the value. In the order they would pay:
    code returns and raises `Left` again at its next ask, so what the rule protects is a side effect outside the state,
    a file written or a process started, made by code that should have stopped. Refusals come back as values, so
    ordinary code has no reason to catch around an ask and the rule should fire rarely.
-7. **The rough edges the examples showed.** A state it started is reached with `child('draft', draft)` each time and
-   should be declared once. The two under Not built about fields: a default that still has to be given, and names
-   unique along a path.
+7. **The rough edges the examples showed.** The two under Not built about fields: a default that still has to be
+   given, and names unique along a path.
 8. **Affordances, once the graph is a recorded file.** Every state declares what it takes, so the app can answer what
    can be done right now on any surface, with each event's name and the type of its fields. An agent driving the app
    asks that instead of reading the screen, and the answer is right by construction. For this product it is the
@@ -559,15 +596,11 @@ projects. Each would loosen the fit to this app.
 - **Roles**: `tell({ role: 'brain' }, …)`.
 - **A write nobody waits for**, which appliers and migrations make today.
 - **Window-to-window sends**, the app's `sendToSurface`.
-- **Keyed dynamic children**: a flow per run, a surface per pack, a system per registration. The brain, the bus and the
-  shell need them. A keyed set of views is covered by `watch`; a keyed set of states is not. The shape to take is
-  Effect's, whose `Machine` forks work under a key with one of two policies: `start` under a key that either replaces
-  what is running there, or does nothing when something is. Rule 9 depends on this: work that outlasts its asker
-  needs a state to be in, and for anything there is one of per id that is a state per key. `threads.mts` starts a
-  state per thread with what exists, and shows what is missing. A start is something a handler does, not part of
-  what it returns, so after an `await` checking and starting are not one step; the example starts each thread in a
-  handler that does not wait. Nothing stops a state that was started, short of its starter ending. And the state is
-  given what it starts with by building its definition around it.
+- **What is left of the states a state starts.** Rule 10 is built and checked on one example. Not built: a started
+  state telling its starter something, which today goes by name and so only to a backend system; giving a started
+  state its data as `given` fields where it is now given by building its definition around it; and the brain, the bus
+  and the shell on it, which are the app's own cases: a flow per run, a surface per pack, a system per registration.
+  A set of views is still followed by hand with `watch` and `unwatch`, and should follow from data the same way.
 - **Events only the state itself may send.** A state has one union of events, so anything that can reach it can tell
   it `FOUND` or `PIECES`, which only its own work should. The app's contracts already keep `incoming` apart from
   `internal`, and the prototype lost that: `send` should take both, and `tell` and `broadcast` only what is
@@ -619,8 +652,8 @@ Step 1 is under way; no later step is started. Each is a decision point.
    spankyed/apack#591 did the vocabulary and the asking side, which removes the event path for answers.
    [What #591 delivered](#what-591-delivered) lists the seams still to do, which are what leave pack code that does not
    name XState.
-2. **Settle the open design** that the first real ports will hit: the Vue binding, a write nobody waits for, events
-   only the state itself may send, and states started under a key.
+2. **Settle the open design** that the first real ports will hit: the Vue binding, a write nobody waits for, and
+   events only the state itself may send.
 3. **Write the semantics down and test them**: ordering within a step, what ends when, errors, and the link. The
    prototype's kernel takes a schedule and its checks run every ordering; the kernel in the tree keeps both.
 4. **Build the kernel in the tree**, with no dependencies, as its own workspace. Not a sibling repository: its API is

@@ -22,8 +22,16 @@ export type AnyEvent = { readonly type: string }
 export type AskShape = { args: object; answer: unknown; refuses?: string | Record<string, object>; progress?: unknown }
 export type Asks = Record<string, AskShape>
 
-/** What a state is, declared as a type: its own data, and the states inside it. The same shape all the way down. */
-export type Shape = { data?: object; states?: Record<string, Shape> }
+/**
+ * What a state is, declared as a type: its own data, the states inside it, and the states it starts. The same shape
+ * all the way down.
+ */
+export type Shape = { data?: object; states?: Record<string, Shape>; starts?: Record<string, AnyState | Each<AnyState>> }
+
+/** Any state, as something another can start. */
+export type AnyState = State<any, any, any>
+/** In a shape's `starts`: one of these for each key, where a bare state is the one. */
+export interface Each<T> { readonly _each?: T }
 
 /** What some code can reach by name: the backend's systems, and the surfaces a window runs. */
 export type Net = {
@@ -70,6 +78,11 @@ type DataOf<S> = S extends { data: infer D extends object } ? D : {}
 type StatesOf<S> = S extends { states: infer T extends Record<string, Shape> } ? T : {}
 type Names<S> = keyof StatesOf<S> & string
 type Sub<S, K> = K extends keyof StatesOf<S> ? StatesOf<S>[K] : never
+type StartsOf<S> = S extends { starts: infer C extends object } ? C : {}
+type StartsBelow<S, P> = P extends `${infer H}.${infer T}` ? StartsOf<Sub<S, H>> & StartsBelow<Sub<S, H>, T> : StartsOf<Sub<S, P>>
+/** Everything started where a handler sits: by its own state and by every state around it. */
+type StartsAt<S, P extends string> = P extends '' ? StartsOf<S> : StartsOf<S> & StartsBelow<S, P>
+type HandleOf<T> = T extends Each<infer X> ? HandleOf<X> : T extends State<infer S2, infer E2, infer A2> ? Handle<Value<S2>, E2, A2> : never
 type Join<H extends string, K extends string> = H extends '' ? K : `${H}.${K}`
 
 type Paths<S> = [Names<S>] extends [never] ? never : { [K in Names<S>]: K | `${K}.${Paths<StatesOf<S>[K]>}` }[Names<S>]
@@ -158,10 +171,11 @@ export interface Scope<R, H extends string, E extends AnyEvent, N extends Net> {
 
   /** A state this one started, as it is now. */
   read<V2>(of: Handle<V2, never, Asks>): V2
-  /** Starts a state that runs exactly as long as this one is the case. */
-  start<S2 extends Shape, E2 extends AnyEvent, A2 extends Asks>(name: string, made: State<S2, E2, A2>): Handle<Value<S2>, E2, A2>
-  /** The handle of a state this one started, by the name it was started under. */
-  child<S2 extends Shape, E2 extends AnyEvent, A2 extends Asks>(name: string, of: State<S2, E2, A2>): Handle<Value<S2>, E2, A2>
+  /**
+   * A state this one starts, by the name it is declared under, and by key where there is one for each. A handle is
+   * a name: asking through one whose state is not running is answered `unavailable`.
+   */
+  child<K extends keyof StartsAt<R, H> & string>(name: K, ...key: StartsAt<R, H>[K] extends Each<any> ? [key: string] : []): HandleOf<StartsAt<R, H>[K]>
   /** Released, last first, when this state stops being the case. */
   use(release: () => void): void
 }
@@ -241,6 +255,13 @@ export type Def<R, S, H extends string, E extends AnyEvent, A extends Asks, N ex
 } & Work<R, H, E, N> & ([keyof DataOf<S>] extends [never] ? { data?: never } : {
   /** Its own data: each field's starting value, or `given` for one whoever enters it has to give. */
   data: { [K in keyof DataOf<S>]-?: DataOf<S>[K] | Given }
+}) & ([keyof StartsOf<S>] extends [never] ? { starts?: never } : {
+  /**
+   * The states it starts. Each runs for exactly as long as this one is the case and, where there is one for each
+   * key, for as long as its key is among the keys the data gives. Nothing starts or stops one by hand: change the
+   * data, and what runs follows in the same step.
+   */
+  starts: { [K in keyof StartsOf<S>]: StartsOf<S>[K] extends Each<infer X> ? EachOf<DataAt<R, H>, X> : StartsOf<S>[K] }
 }) & ([Names<S>] extends [never] ? { start?: never; states?: never } : {
   /** The state inside it that it is at when whoever enters it does not say. */
   start: { [K in Names<S>]: {} extends DataOf<StatesOf<S>[K]> ? K : never }[Names<S>]
@@ -249,6 +270,14 @@ export type Def<R, S, H extends string, E extends AnyEvent, A extends Asks, N ex
 })
 
 export interface State<S extends Shape, E extends AnyEvent, A extends Asks> { readonly def: unknown; readonly _?: { s: S; e: E; a: A } }
+
+/** One state for each key: which keys there are, from the data, and the state for a key. */
+export interface EachOf<D, X> { readonly keys: (data: Readonly<D>) => Iterable<string>; readonly of: (key: string, data: Readonly<D>) => X }
+/**
+ * In a definition's `starts`: one state for each key the data gives. A key that appears starts its state, and one
+ * that goes stops it. A key that stays leaves its state running as it is, whatever else in the data changes.
+ */
+export function each<D, X>(keys: (data: Readonly<D>) => Iterable<string>, of: (key: string, data: Readonly<D>) => X): EachOf<D, X> { return { keys, of } }
 
 /** `state`, for code that can reach `N` by name. In the app this is what a pack's generated facade would export. */
 export function reaching<N extends Net = Nothing>() {
@@ -276,7 +305,7 @@ class Question {
 const refusal = (kind: string, message: string, data?: object): AnyOutcome => ({ ok: false, failure: { ...data, kind, message } })
 
 type Plain = Record<string, unknown>
-type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; failed?: Function; states?: Record<string, LooseDef> }
+type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; failed?: Function; states?: Record<string, LooseDef>; starts?: Record<string, { def: unknown } | { keys: Function; of: Function }> }
 type Heard = (update: unknown) => void
 
 interface Active {
@@ -289,7 +318,8 @@ interface Active {
   readonly controller: AbortController
   readonly releases: Array<() => void>
   readonly questions: Set<Question>
-  readonly started: string[]
+  /** The states it has started, by where each runs. */
+  readonly started: Set<string>
   readonly watching: Map<string, () => void>
 }
 interface Running { ref: string; data: Plain; root: Active }
@@ -377,14 +407,17 @@ export function system(host: {
   const changed = new Set<string>()
   /** For each running state that changed in this step, the fields of its data that did. */
   const fields = new Map<string, Set<string>>()
-  const touch = (ref: string, field: string): void => { changed.add(ref); fields.set(ref, (fields.get(ref) ?? new Set()).add(field)) }
+  /** The running states whose data or place changed since what they start was last matched to it. */
+  const stale = new Set<string>()
+  const mark = (ref: string): void => { changed.add(ref); stale.add(ref) }
+  const touch = (ref: string, field: string): void => { mark(ref); fields.set(ref, (fields.get(ref) ?? new Set()).add(field)) }
   /** The same, to the place: what a reader of one part of the data needs, to know whether it is the part that changed. */
   const places = new Map<string, { moved: boolean; paths: string[][] }>()
   const placesOf = (ref: string) => places.get(ref) ?? places.set(ref, { moved: false, paths: [] }).get(ref)!
   const touchAt = (ref: string, path: readonly string[]): void => { touch(ref, path[0]!); placesOf(ref).paths.push([...path]) }
   /** A move can add and remove fields as states are left and entered: each one that differs afterwards changed. */
   const moved = (top: Running, was: Plain): void => {
-    changed.add(top.ref)
+    mark(top.ref)
     placesOf(top.ref).moved = true
     for (const field of new Set([...Object.keys(was), ...Object.keys(top.data)])) {
       if (field in was !== field in top.data || !Object.is(was[field], top.data[field])) touchAt(top.ref, [field])
@@ -486,15 +519,14 @@ export function system(host: {
       },
       unwatch: (key: string) => { mine.watching.get(key)?.(); mine.watching.delete(key) },
       read: (target: { ref: string }) => valueOf(running.get(target.ref)!),
-      start: (name: string, made: { def: unknown }) => { mine.started.push(`${ref}/${name}`); return begin(`${ref}/${name}`, made.def as LooseDef) },
-      child: (name: string) => ({ ref: `${ref}/${name}` }),
+      child: (name: string, key?: string) => ({ ref: key === undefined ? `${ref}/${name}` : `${ref}/${name}/${key}` }),
       use: (release: () => void) => { mine.releases.push(release) },
     }
   }
 
   const enter = (top: Running, def: LooseDef, name: string, around: Active | undefined, entering: Plain): Active => {
     const path = around?.path ? `${around.path}.${name}` : name
-    const active: Active = { top, def, name, path, around, inside: undefined, controller: new AbortController(), releases: [], questions: new Set(), started: [], watching: new Map() }
+    const active: Active = { top, def, name, path, around, inside: undefined, controller: new AbortController(), releases: [], questions: new Set(), started: new Set(), watching: new Map() }
     if (around) around.inside = active; else top.root = active
     for (const [field, initial] of Object.entries(def.data ?? {})) {
       if (field in entering) top.data = { ...top.data, [field]: entering[field] }
@@ -517,7 +549,8 @@ export function system(host: {
     active.controller.abort()
     for (const stop of active.watching.values()) stop()
     active.watching.clear()
-    for (const ref of active.started.reverse()) end(ref)
+    for (const ref of [...active.started].reverse()) end(ref)
+    active.started.clear()
     for (const question of active.questions) leaving.push(() => question.end(refusal('abandoned', 'It stopped before answering')))
     for (const release of active.releases.reverse()) safely(`a release of ${active.top.ref}`, release)
     const { ...rest } = active.top.data
@@ -545,8 +578,39 @@ export function system(host: {
     descend(kept, names.slice(shared), entering)
   }
 
+  /**
+   * Makes what a running state has started match what it declares and the data it holds now: starts what should be
+   * running and is not, and stops what is running and should not be. This is all that ever starts or stops one.
+   */
+  const match = (top: Running): void => {
+    for (let active: Active | undefined = top.root; active; active = active.inside) {
+      const wanted = new Map<string, () => LooseDef>()
+      /** A name whose keys could not be read keeps what it has running. */
+      const kept = new Set<string>()
+      for (const [name, declared] of Object.entries(active.def.starts ?? {})) {
+        const under = `${top.ref}/${name}`
+        if ('def' in declared) { wanted.set(under, () => declared.def as LooseDef); continue }
+        try { for (const key of declared.keys(top.data) as Iterable<string>) wanted.set(`${under}/${key}`, () => (declared.of(key, top.data) as { def: LooseDef }).def) }
+        catch (error) { trace(`DEFECT: ${top.ref} could not say which ${name} to start: ${error instanceof Error ? error.message : String(error)}`); kept.add(`${under}/`) }
+      }
+      const keeps = (ref: string): boolean => [...kept].some((under) => ref.startsWith(under))
+      for (const ref of [...active.started]) if (!wanted.has(ref) && !keeps(ref)) { active.started.delete(ref); end(ref) }
+      for (const [ref, make] of wanted) {
+        if (active.started.has(ref)) continue
+        let def: LooseDef
+        try { def = make() } catch (error) { trace(`DEFECT: ${top.ref} could not make ${ref} to start it: ${error instanceof Error ? error.message : String(error)}`); continue }
+        active.started.add(ref)
+        begin(ref, def)
+      }
+    }
+  }
+  /** Matches every state that changed, and whatever that starts, until nothing is left to match. */
+  const matchStale = (): void => {
+    while (stale.size) for (const ref of [...stale]) { stale.delete(ref); const top = running.get(ref); if (top) match(top) }
+  }
+
   const begin = (ref: string, def: LooseDef): { ref: string } => {
-    changed.add(ref)
+    mark(ref)
     const top = { ref, data: {}, root: undefined as unknown as Active }
     running.set(ref, top)
     descend(enter(top, def, '', undefined, {}), [], {})
@@ -716,9 +780,11 @@ export function system(host: {
     stepping = true
     try {
       first()
+      // After each thing handled, what is running is matched to the data, so that what comes next finds it there.
+      matchStale()
       for (let handled = 0; inside.length; handled++) {
         const item = inside.shift()!
-        if (handled < RUNAWAY) { handle(item); continue }
+        if (handled < RUNAWAY) { handle(item); matchStale(); continue }
         // What it had done is committed, so that the states can be read and the report says where they got to.
         trace(`DEFECT: a step was cut short after ${RUNAWAY} things, at ${'ref' in item ? item.ref : item.kind}: something tells something else without end`)
         inside.length = 0

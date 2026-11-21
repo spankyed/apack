@@ -85,7 +85,11 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
   for (const move of moves) for (const target of move.to) enter(target)
 
   const declared: string[] = []
+  const startsStates: string[] = []
   const survey = (of: Type, within: string): void => {
+    // What it starts is declared in the shape: a state, or one for each key.
+    const started = of.getProperty('starts')
+    if (started) for (const each of typeOf(started).getProperties()) startsStates.push(`${each.name}${typeOf(each).getProperty('_each') ? ' (one for each key)' : ''}${within ? ` in ${within}` : ''}`)
     const states = of.getProperty('states')
     if (!states) return
     for (const inner of typeOf(states).getProperties()) { declared.push(join(within, inner.name)); survey(typeOf(inner), join(within, inner.name)) }
@@ -97,6 +101,7 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
   for (const move of moves) console.log(`    ${move.from.padEnd(16)} ${move.on.padEnd(18)} → ${move.to.join(' | ')}`)
   if (stays.length) console.log(`  changes data only: ${stays.join(', ')}`)
   if (answers.length) console.log(`  answers: ${answers.join(', ')}`)
+  if (startsStates.length) console.log(`  starts: ${startsStates.join(', ')}`)
   if (reaches.length) console.log(`  reaches: ${reaches.join(', ')}`)
   const findings: string[] = []
   for (const taken of [...events, ...asks]) if (!takes.has(taken)) findings.push(`nothing takes ${taken}`)
@@ -104,7 +109,7 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
   console.log(`  findings: ${findings.length ? findings.join('; ') : 'none'}`)
 }
 
-const VERBS = new Set(['tell', 'ask', 'broadcast', 'start'])
+const VERBS = new Set(['tell', 'ask', 'broadcast'])
 const visit = (node: any): void => {
   // state<Shape, Events, Asks>()(definition)
   if (ts.isCallExpression(node) && ts.isCallExpression(node.expression) && ts.isIdentifier(node.expression.expression)

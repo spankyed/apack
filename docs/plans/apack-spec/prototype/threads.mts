@@ -17,7 +17,7 @@
 // and `inference` for `services.inference`.
 
 import { deepStrictEqual } from 'node:assert'
-import { answered, given, reaching, system, within, type AskFailure } from './state.mts'
+import { answered, each, given, reaching, system, within, type AskFailure, type Each } from './state.mts'
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // What can be reached by name. In the app a pack's generated facade would declare this.
@@ -164,17 +164,23 @@ function thread(threadId: string, inference: Inference) {
 
 type Threads = {
   data: { titles: Record<string, string> }
+  // A thread for each title. Which threads run is not kept anywhere else: it follows from the titles.
+  starts: { thread: Each<ReturnType<typeof thread>> }
 }
 
 function threads(inference: Inference) {
   return state<Threads, ThreadsEvent, ThreadsAsks>()({
     data: { titles: {} },
 
+    starts: {
+      thread: each((data) => Object.keys(data.titles), (threadId) => thread(threadId, inference)),
+    },
+
     asks: {
-      // Answers, changes data and starts the thread, as one step: nobody is told a thread exists that was not made.
-      CREATE_THREAD: ({ title }, { data, broadcast, start }) => {
+      // Answers and changes data as one step, and the thread is running by the end of it: adding its title is what
+      // starts it. Nobody is told a thread exists that was not made.
+      CREATE_THREAD: ({ title }, { data, broadcast }) => {
         const threadId = `THR-${Object.keys(data.titles).length + 1}`
-        start(threadId, thread(threadId, inference))                 // lives as long as the threads system does
         // to that surface in every window
         broadcast('threads', { type: 'THREAD_CREATED', threadId, title })
         return answered({ threadId }, { data: (d) => { d.titles[threadId] = title } })
@@ -193,7 +199,7 @@ function threads(inference: Inference) {
         }
 
         // ask the thread, a state this one started. From here the reply is the thread's, and this ask is done.
-        const accepted = await ask(child(threadId, thread(threadId, inference)), 'WRITE', { text, attached })
+        const accepted = await ask(child('thread', threadId), 'WRITE', { text, attached })
         if (!accepted.ok) throw refuse('busy', accepted.failure.message)
         return { accepted: true as const }
       },
@@ -227,6 +233,8 @@ type ThreadsSurface = {
     creating: { data: { title: string } }
     thread: {
       data: { threadId: string; lastReply: string | null; streamed: string }
+      // What the composer holds. It runs exactly as long as a thread is open.
+      starts: { draft: typeof draft }
       states: {
         idle: {}
         sending: { data: { text: string; documentId: string | null } }
@@ -281,14 +289,15 @@ function threadsSurface(log: (line: string) => void) {
         data: { threadId: given, lastReply: given, streamed: given },
         start: 'idle',
 
-        run({ data, start, use }) {
-          start('draft', draft)                                    // lives exactly as long as `thread` does
+        starts: { draft },
+
+        run({ data, use }) {
           log(`composer mounted for ${data.threadId}`)
           use(() => log(`composer unmounted for ${data.threadId}`))
         },
 
         on: {
-          TYPE: ({ text }, { tell, child }) => { tell(child('draft', draft), { type: 'DRAFT_CHANGED', text }) },
+          TYPE: ({ text }, { tell, child }) => { tell(child('draft'), { type: 'DRAFT_CHANGED', text }) },
 
           // A reply is broadcast as it is written, whoever sent the message it answers: this window shows it for the
           // thread it has open, and for no other.
@@ -303,7 +312,7 @@ function threadsSurface(log: (line: string) => void) {
           idle: {
             on: {
               SEND: ({ documentId }, { read, child }) => {
-                const text = read(child('draft', draft)).data.text
+                const text = read(child('draft')).data.text
                 if (!text) return { data: { problem: 'There is nothing to send.' } }
                 return { at: 'thread.sending', data: { text, documentId: documentId ?? null, problem: null } }
               },
@@ -346,6 +355,7 @@ function mustNotCompile(): void {
 
   state<Threads, ThreadsEvent, ThreadsAsks>()({
     data: { titles: {} },
+    starts: { thread: each(() => [], (threadId) => thread(threadId, undefined as never)) },
     asks: {
       CREATE_THREAD: () => ({ threadId: 'THR-1' }),
       // @ts-expect-error `attachment-missing` carries the document's id, so it cannot be refused without one
@@ -355,6 +365,7 @@ function mustNotCompile(): void {
 
   state<Threads, ThreadsEvent, ThreadsAsks>()({
     data: { titles: {} },
+    starts: { thread: each(() => [], (threadId) => thread(threadId, undefined as never)) },
     asks: {
       CREATE_THREAD: () => ({ threadId: 'THR-1' }),
       // @ts-expect-error `no-such-thread` carries nothing, so it takes no document id
@@ -424,7 +435,7 @@ if (process.argv[1]?.endsWith('threads.mts')) {
     const d = now.data as { threadId?: string; lastReply?: string | null; streamed?: string; unseen: string[]; problem: string | null }
     return { at: now.at, threadId: d.threadId ?? null, streamed: d.streamed ?? null, lastReply: d.lastReply ?? null, unseen: d.unseen, problem: d.problem }
   }
-  const stored = (): string[] => (backend.snapshot()['threads/THR-1'] as { data: Thread['data'] }).data.messages
+  const stored = (): string[] => (backend.snapshot()['threads/thread/THR-1'] as { data: Thread['data'] }).data.messages
 
   say('A creates a thread: both windows hear THREAD_CREATED, only A opens it')
   a.window.send(a.surface, { type: 'NEW_THREAD', title: 'Plan' });                 await turns(8)
