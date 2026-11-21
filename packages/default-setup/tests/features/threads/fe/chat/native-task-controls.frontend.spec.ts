@@ -116,6 +116,8 @@ it('offers shell output and Stop without Agent reply or foreground controls', as
 })
 
 it('shows MCP task details and native refusal without offering Agent controls', async () => {
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) { this.open = true })
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) { this.open = false })
   const task={kind:'mcp' as const,id:'registry-mcp',ownerId:'owner',sessionId:'session',status:'running',canStop:true,mcp:{serverName:'workspace',toolName:'review',serverTaskId:'server-task-42',status:'input_required',startTime:Date.now(),protocol:'sep2663',truncated:false}}
   const state=ref<ClaudeTerminalTaskState>({ownerId:'owner', sessionId: 'session',taskId:task.id,revision:1,operation:'inspect',status:'done',details:{taskId:task.id,name:'Review',status:'running',canInput:false,canMessage:false,mcp:task.mcp,messages:[],truncated:false}})
   const operate=vi.fn(),root=document.createElement('div');document.body.append(root)
@@ -123,10 +125,12 @@ it('shows MCP task details and native refusal without offering Agent controls', 
   const button=(text:string)=>[...root.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent===text)!
   expect(button('Open Agent')).toBeUndefined();expect(root.querySelector('textarea')).toBeNull()
   button('Task details').click();await nextTick()
-  const details=root.querySelector('[aria-label="MCP task details"]')!
+  const details=root.querySelector<HTMLDialogElement>('dialog[aria-label="MCP task details"]')!
+  expect(details.open).toBe(true)
   expect(details.textContent).toContain('workspace');expect(details.textContent).toContain('server-task-42')
   expect(details.textContent).toContain('Waiting for your answer');expect(details.textContent).toContain('can continue after you leave')
-  button('Stop task').click();expect(operate).toHaveBeenLastCalledWith(task,'stop')
+  details.querySelector<HTMLButtonElement>('footer button:last-child')!.click()
+  expect(operate).toHaveBeenLastCalledWith(task,'stop')
   state.value={ownerId:'owner', sessionId: 'session',taskId:task.id,revision:2,operation:'stop',status:'error',problem:'Native cancellation refused'};await nextTick()
   expect(root.querySelector('[role="alert"]')?.textContent).toBe('Native cancellation refused')
   expect(root.querySelector('textarea')).toBeNull()

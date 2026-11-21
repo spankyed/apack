@@ -36,10 +36,24 @@
         <button type="submit" :disabled="pending || !draft.trim()" class="mt-2 rounded bg-blue-600 px-2.5 py-1 text-[11px] text-white hover:bg-blue-500 disabled:opacity-40">{{ pending && ['send', 'input'].includes(state.operation) ? 'Sending…' : state.details.canInput ? 'Reply to Agent' : 'Send to Agent' }}</button>
       </form>
     </section>
-    <section v-if="mcp && shown && state?.details?.mcp" aria-label="MCP task details" class="mt-2 rounded border border-white/10 p-3 text-xs">
-      <NativeMcpTaskDetails :info="task.mcp ?? state.details.mcp" :status="task.status" />
-      <button type="button" :disabled="pending" class="mt-3 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh task details</button>
-    </section>
+    <dialog v-if="mcp && shown && state?.details?.mcp" ref="mcpDialog" aria-label="MCP task details"
+      class="m-auto w-[calc(100vw-2rem)] max-w-md rounded-xl border border-white/10 bg-neutral-900 p-0 text-neutral-200 shadow-xl backdrop:bg-black/60"
+      @cancel.prevent="closeDetails">
+      <div class="flex max-h-[calc(100dvh-2rem)] flex-col">
+        <header class="shrink-0 border-b border-white/10 px-4 py-3">
+          <h2 class="text-sm font-semibold">{{ task.name }}</h2>
+        </header>
+        <div class="min-h-0 overflow-y-auto p-4 text-xs">
+          <NativeMcpTaskDetails :info="task.mcp ?? state.details.mcp" :status="task.status" />
+          <button type="button" :disabled="pending" class="mt-3 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh task details</button>
+        </div>
+        <footer class="flex shrink-0 justify-end gap-2 border-t border-white/10 px-4 py-3">
+          <button type="button" autofocus class="rounded px-3 py-2 text-xs hover:bg-white/10" @click="closeDetails">Close</button>
+          <button type="button" class="rounded px-3 py-2 text-xs text-red-300 hover:bg-red-400/10 disabled:opacity-40"
+            :disabled="pending || task.canStop !== true" @click="controls.operate(task,'stop')">{{ pending && state.operation === 'stop' ? 'Stopping…' : 'Stop task' }}</button>
+        </footer>
+      </div>
+    </dialog>
     <section v-if="shell && shown && state?.details?.shell" aria-label="Background command output" tabindex="0" class="mt-2 max-h-64 overflow-y-auto overscroll-contain rounded border border-white/10 p-3 text-xs">
       <button type="button" :disabled="pending" class="mb-2 text-neutral-400 hover:text-neutral-200 disabled:opacity-40" @click="controls.operate(task,'inspect')">Refresh output</button>
       <details class="mb-3">
@@ -75,6 +89,16 @@ const sessionState = computed(() => {
 const state = computed(() => sessionState.value?.taskId === props.task.id ? sessionState.value : undefined)
 watch(state, value => { if (value?.status === 'done' && (value.worker?.accepted || value.paused)) controls?.operate(props.task, 'inspect') })
 const shown = ref(false), draft = ref(''), toggle = ref<HTMLButtonElement | null>(null)
+const mcpDialog = ref<HTMLDialogElement | null>(null)
+watch(mcpDialog, (dialog, previous) => {
+  previous?.close()
+  dialog?.showModal()
+}, { flush: 'post' })
+function closeDetails() {
+  mcpDialog.value?.close()
+  shown.value = false
+  toggle.value?.focus({ preventScroll: true })
+}
 const expanded = computed(() => shown.value && state.value !== undefined)
 let submitted: { revision: number; text: string } | undefined
 watch(taskKey, () => {
@@ -91,7 +115,7 @@ function sendMessage() {
 const pending = computed(() => sessionState.value?.status === 'pending')
 function leaveConversation(event: KeyboardEvent) {
   if (event.isComposing || event.defaultPrevented || !expanded.value) return
-  event.preventDefault(); event.stopPropagation(); shown.value = false; toggle.value?.focus({ preventScroll: true })
+  event.preventDefault(); event.stopPropagation(); closeDetails()
 }
 function showConversation() { shown.value = !expanded.value; if (shown.value) controls?.operate(props.task, 'inspect') }
 </script>
