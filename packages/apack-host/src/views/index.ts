@@ -11,7 +11,7 @@
 //
 // Who subscribes is the caller's: the API holds one subscription per tRPC subscription, so a window closing its
 // socket ends its own, and the test harness one per watch a spec opens.
-import type { Ears, WatchReadContext } from '@apackdev/ears';
+import type { Ears, WatchReadContext } from '@elmdb/ears';
 import { viewKey, type PackRegistration, type ViewRead, type ViewRequest, type ViewUpdate } from '@apackdev/sdk/framework';
 import { splitRef } from '@apackdev/sdk/ids';
 import { errorMessage } from '@apackdev/sdk/utils/pure';

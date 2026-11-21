@@ -72,9 +72,8 @@ it('admits differing clean revisions and rejects changed fixtures or failed proc
   const file = path.join(output, 'B/manifest.json'); const candidate = JSON.parse(readFileSync(file, 'utf8'));
   const mismatches = [
     { source: { ...candidate.source, dirty: true } },
-    { native: { ...candidate.native, dirty: true } },
-    { native: { ...candidate.native, checkoutRevision: 'other' } },
-    { builds: [...candidate.builds, { path: 'vendor/elmdb/binding.node', sha256: 'changed' }] },
+    { native: { ...candidate.native, integrity: 'sha512-other' } },
+    { builds: [...candidate.builds, { path: 'node_modules/elmdb/binding.node', sha256: 'changed' }] },
     { cache: 'fresh-process-warm-filesystem' },
     { fixture: { ...candidate.fixture, seed: 1 } },
   ];
@@ -82,13 +81,13 @@ it('admits differing clean revisions and rejects changed fixtures or failed proc
     writeFileSync(file, JSON.stringify({ ...candidate, ...patch }));
     expect(() => readPerformanceRevisionComparison(output, 2)).toThrow();
   }
-  // Equal native identities still cannot qualify if both workers used an unpinned checkout.
+  // Equal native identities still cannot qualify if both workers used a local checkout's.
   for (const variant of ['A', 'B']) {
     const own = path.join(output, variant, 'manifest.json');
     const value = JSON.parse(readFileSync(own, 'utf8'));
-    writeFileSync(own, JSON.stringify({ ...value, ...(variant === 'B' ? candidate : {}), native: { ...manifest.native, checkoutRevision: 'other' } }));
+    writeFileSync(own, JSON.stringify({ ...value, ...(variant === 'B' ? candidate : {}), native: { ...manifest.native, resolved: 'file:../elmdb/crates/elmdb-node' } }));
   }
-  expect(() => readPerformanceRevisionComparison(output, 2)).toThrow(/pinned/);
+  expect(() => readPerformanceRevisionComparison(output, 2)).toThrow(/from a release/);
   expect(performanceRevisionSchedule('lightweight', 20).filter(step => !step.warmup)).toHaveLength(40);
 });
 

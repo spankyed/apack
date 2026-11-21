@@ -18,7 +18,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '@apackdev/sdk/events';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@elmdb/ears';
 
 // The test environment keeps the data key in a file vault; `vaultDown` swaps it for an OS credential store that fails,
 // the way a system without one (or a locked keyring) does

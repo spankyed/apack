@@ -4,8 +4,8 @@ import { _declarationRevision, PACK_SNAPSHOT_FORMAT, type PackManifest } from '@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { EARS } from '@apackdev/ears';
-import { openDatabase } from '@apackdev/ears/lmdb';
+import type { EARS } from '@elmdb/ears';
+import { openDatabase } from '@elmdb/ears/database';
 import { _createTestEngine } from '@apackdev/sdk/testing';
 import { _bindEars, boundEars, untypedQuery } from '@apackdev/sdk/ears';
 import { _appDataPaths } from '@apackdev/sdk/utils';

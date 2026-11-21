@@ -980,7 +980,7 @@
 </template>
 
 <script setup lang="ts">
-import { whatCanBeDone, type Availability, type UnavailableReason } from 'apack-git/availability'
+import { whatCanBeDone, type Availability, type UnavailableReason } from '@apackdev/git/availability'
 
 import { computed, ref, nextTick, watch } from 'vue'
 import { useState, useSurface, useShell } from '@apackdev/sdk/fe'

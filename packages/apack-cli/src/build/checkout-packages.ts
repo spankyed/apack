@@ -10,11 +10,13 @@ import * as path from 'node:path';
 import { CHECKOUT_MARKER, buildUnitsIn, type BuildUnit } from '@apackdev/host/build/packages-built';
 
 /**
- * The packages a pack can resolve whose dist a checkout builds on demand. Every one is asked, because a
+ * The packages a pack depends on whose dist a checkout builds on demand. Every one is asked, because a
  * pack need not link them all: with @apackdev/sdk installed from the registry and @apackdev/ui linked to a
- * checkout, asking only the SDK would find no checkout and leave that linked dist stale and silent.
+ * checkout, asking only the SDK would find no checkout and leave that linked dist stale and silent. The
+ * pack's @elmdb/ears is its SDK's, whose `dist` comes built in elmdb's release, or from the local checkout
+ * `npm run deps:local` points it at, which has to be built there: not this.
  */
-const CHECKOUT_PACKAGES = ['@apackdev/sdk', '@apackdev/ears', '@apackdev/ui', '@apackdev/testing', '@apackdev/cli'];
+const CHECKOUT_PACKAGES = ['@apackdev/sdk', '@apackdev/ui', '@apackdev/testing', '@apackdev/cli'];
 
 /** The checkout a package resolves into from `packDir`, or undefined for an installed copy */
 function checkoutOf(packDir: string, pkg: string): string | undefined {

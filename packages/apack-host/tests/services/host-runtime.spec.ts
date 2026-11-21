@@ -7,7 +7,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EARS, EarsDatabase } from '@apackdev/ears';
+import type { EARS, EarsDatabase } from '@elmdb/ears';
 import { _bindEars } from '@apackdev/sdk/ears';
 import { _createTestEngine, _openTestRunHistory, _openTestDatabase, testRootEvents } from '@apackdev/sdk/testing';
 import { createHostRuntime } from '../../src/services/index.ts';

@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
 import type * as TS from 'typescript';
-import { RESERVED_ATTRIBUTES, type FieldRule, type FieldType } from '@apackdev/ears';
+import { RESERVED_ATTRIBUTES, type FieldRule, type FieldType } from '@elmdb/ears';
 import type { SurfaceInboxAudiences } from '../fe/surface.ts';
 
 /** What a module exports under a name, as the TypeScript compiler resolves it */

@@ -7,10 +7,11 @@ workspace is how two packages share a module by name.
 
 ## Why it exists
 
-These specs lived in `@apackdev/cli`, and none of them is about the CLI. They npm-pack `@apackdev/ears`, the
-SDK and UI into a temporary consumer and compile it across the TypeScript matrix, which is a property of
-the *publish*, owned by no single package: `published-exports` and `published-declarations` install all
-three at once, so there is no one package they could move to.
+These specs lived in `@apackdev/cli`, and none of them is about the CLI. They npm-pack the
+SDK and UI, install them into a temporary consumer with npm (with the `@elmdb/ears` and `elmdb` elmdb's checkout packs
+standing in for the registry) and compile it across the TypeScript matrix, which is a property of
+the *publish*, owned by no single package: `published-exports` and `published-declarations` install both
+at once, so there is no one package they could move to.
 
 The fixture decided the shape. Three `@apackdev/cli` specs — `facade-typing`, `fe-bundler-host-registry`,
 `types-bundler-determinism` — use a packed consumer to test the CLI's own bundlers, and they stay there.
@@ -28,15 +29,18 @@ rather than the script it borrows from. The family is split by subject, not by a
 
 | Spec | Subject |
 |---|---|
-| `published-exports`, `published-declarations` | what a consumer can import, and that the declarations resolve, across all three packages at once |
+| `published-exports`, `published-declarations` | what a consumer can import, and that the declarations resolve, across both packages at once |
 | `published-sdk-any`, `published-sdk-types` | the SDK's published surface: no `any`, and it compiles for a consumer |
 | `published-ui-types` | `@apackdev/ui`'s declarations compile for a consumer |
 | `published-specifiers`, `published-ui-dist` | what the built `dist` trees contain: declared bare imports, no SFC source shipped, no relative CSS `@import` left |
-| `published-manifest-paths` | that each of the **five** published trees names only files its tarball holds, publishes no `scripts` and ships no `src/`. The only spec here that covers `@apackdev/cli` and `@apackdev/testing` too, because their manifests are generated and their shape is not the other three's |
-| `published-license` | that each published package carries the repository's `LICENSE`: the copies in the three packages staged from their own directory, and every one of the five published trees once built |
+| `published-manifest-paths` | that each of the **four** published trees names only files its tarball holds, publishes no `scripts` and ships no `src/`. The only spec here that covers `@apackdev/cli` and `@apackdev/testing` too, because their manifests are generated and their shape is not the other two's |
+| `published-license` | that each published package carries the repository's `LICENSE`: the copies in the two packages staged from their own directory, and every one of the four published trees once built |
 
-`src/published-packages.ts` is the fixture: `installPublishedPackages()` (npm-packs the three into a temp
-`node_modules`), `packedFiles()` (one `npm pack --dry-run`, for a check that needs the file list and not a
+`src/published-packages.ts` is the fixture: `installPublishedPackages()` (npm-packs the two and `npm install`s them
+into a temp consumer **nested** (`--install-strategy=nested`), so each package's dependencies sit under it and a published
+declaration naming a package its own package doesn't declare, or one only a dependency brings, fails to resolve, as it
+would for some author; the consumer adds only its own `@types/node`, the packages' optional peers and the
+`@types/json-schema` the AI SDK's declarations name without declaring), `packedFiles()` (one `npm pack --dry-run`, for a check that needs the file list and not a
 consumer), `compileConsumer()` over `CONSUMER_MATRIX` (the workspace TypeScript and the 5.7 floor
 from `packages/typescript-floor`, × `node16`/`bundler`), `PACKED_PACKAGES`, and `PACKAGES_BUILT`.
 `@apackdev/cli` imports it as `@app/publish-checks`.

@@ -62,7 +62,7 @@ it('moves every cached phase for a same-version helper change with identical sna
   expect(second.get('dep-pack')!.snapshot).toEqual(first.get('dep-pack')!.snapshot);
   expect(dependencyInputsHash(second)).not.toBe(dependencyInputsHash(first));
   for (const hash of [files => typesInputsHash(pack.directory, files, compilation),
-    files => dslInputsHash(pack.directory, [], files, compilation)] satisfies Array<(files: typeof first) => string>) {
+    files => dslInputsHash(pack.directory, '', files, compilation)] satisfies Array<(files: typeof first) => string>) {
     expect(hash(second)).not.toBe(hash(first));
   }
   expect(() => assertDependencyInputsCurrent(first)).toThrow('changed during the build');

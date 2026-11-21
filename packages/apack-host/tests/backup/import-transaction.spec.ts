@@ -6,8 +6,8 @@ import { importDatabase, type BackupStore } from '../../src/backup/index.ts';
 
 // Exercise the rollback's order without opening native databases: the backup reads as an empty database, and the
 // store's files are text. import.spec covers real databases.
-vi.mock('@apackdev/ears/lmdb', async importOriginal => ({
-  ...await importOriginal<typeof import('@apackdev/ears/lmdb')>(),
+vi.mock('@elmdb/ears/database', async importOriginal => ({
+  ...await importOriginal<typeof import('@elmdb/ears/database')>(),
   openDatabase: () => ({ hearBuilderCommits: () => {}, path: '', readOnly: true, isOpen: true, schema: null, stats: () => ({ types: {}, relations: {}, fileBytes: 0 }), close: () => {} }),
 }));
 

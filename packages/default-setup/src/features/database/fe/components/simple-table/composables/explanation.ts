@@ -1,4 +1,4 @@
-import type { QueryExplanation } from '@apackdev/ears';
+import type { QueryExplanation } from '@apackdev/sdk/ears';
 
 /** Whether a console result is what a query's `explain()` answers, which the console shows as its plan's stages */
 export function isExplanation(value: unknown): value is QueryExplanation {

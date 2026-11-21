@@ -1,5 +1,5 @@
 import type {} from '@trpc/server/unstable-core-do-not-import';
-import { type EARS } from '@apackdev/ears';
+import { type EARS } from '@elmdb/ears';
 import { boundEars } from '@apackdev/sdk/ears';
 import { z } from 'zod';
 import { procedure, router } from './trpc';

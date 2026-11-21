@@ -1,9 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createEarsEngine, type EARS, type EarsDatabase } from '@apackdev/ears';
+import { createEarsEngine, type EARS, type EarsDatabase } from '@elmdb/ears';
 import { untypedCreate } from '@apackdev/sdk/ears';
-import { openDatabase } from '@apackdev/ears/lmdb';
+import { openDatabase } from '@elmdb/ears/database';
 import { _appDataPaths } from '@apackdev/sdk/utils';
 import { databaseBackupStore, importDatabase } from '../../src/backup/index.ts';
 import { openDatabaseStore } from '../../src/database/open.ts';

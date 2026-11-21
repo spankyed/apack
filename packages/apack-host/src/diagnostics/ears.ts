@@ -1,5 +1,5 @@
 import { trace, SpanStatusCode, type Context, type Tracer, type SpanContext } from '@opentelemetry/api';
-import type { EarsOperationObserver } from '@apackdev/ears';
+import type { EarsOperationObserver } from '@elmdb/ears';
 
 /** Stable names and scalar attributes: database requests, results and error messages never become telemetry. */
 export const EARS_SPAN_NAMES = ['ears.read', 'ears.write', 'ears.unit', 'ears.load'] as const;

@@ -7,7 +7,7 @@
 // it rather than removing it, which is what Phase H asks for and what T6's restart-in-place needs.
 import { describe, expect, it, vi } from 'vitest'
 import { resetTestData, startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { repository } from '#generated/repository.ts'
 
 
@@ -107,7 +107,7 @@ describe('restarting a terminal', () => {
    *
    * It asserts `onCrashed` for that reason: `onExit` alone passes with the guard removed, because the
    * status of a kill never reads as a close. That is also why the double's `terminate` has to fire an exit
-   * at all (`_support/terminal-broker.ts`) — against one that ends nothing, neither assertion can fail.
+   * at all (`_support/recording-broker.ts`) — against one that ends nothing, neither assertion can fail.
    */
   it('restarts a shell that is still running, and the old one ending reaches nobody', async () => {
     const { app, terminalService, told, info } = await aTerminal()

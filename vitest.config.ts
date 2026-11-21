@@ -39,7 +39,6 @@ export default defineConfig({
       'packages/apack-host',
       'packages/api',
       'packages/repo-checks',
-      'packages/apack-ears',
       'packages/renderer',
       'packages/main',
       'packages/preload',

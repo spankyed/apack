@@ -93,7 +93,7 @@ describe('what a target plans', () => {
   it('partitions every package into those that reach a pack suite and those that do not', () => {
     const reaches = PACKAGE_DIRS.filter((dir) => affectedPackSuites([dir]).length > 0);
     expect(reaches, 'a dependency edge changed: check the partition is still what you meant, and that no doc '
-      + 'comment states a count').toEqual(['apack-ears', 'apack-host', 'apack-sdk', 'apack-testing', 'apack-ui']);
+      + 'comment states a count').toEqual(['apack-host', 'apack-sdk', 'apack-testing', 'apack-ui']);
     // And the rest genuinely say nothing, rather than being absent from a list
     for (const dir of PACKAGE_DIRS.filter((d) => !reaches.includes(d))) {
       expect(affectedPackSuites([dir]), dir).toEqual([]);
@@ -233,7 +233,7 @@ describe('what --full adds', () => {
 
 describe('what the change set plans', () => {
   it('asks every host project once, and the pack suite only when it changed', () => {
-    expect(planChanged(changedIn('apack-ears'), [], REPO_ROOT).runs.map((r) => r.label))
+    expect(planChanged(changedIn('apack-host'), [], REPO_ROOT).runs.map((r) => r.label))
       .toEqual([ENSURE_LABEL, 'the specs your changes affect']);
     expect(planChanged(changedIn('default-setup'), [], REPO_ROOT).runs.map((r) => r.label))
       .toEqual([ENSURE_LABEL, 'the specs your changes affect', 'packages/default-setup: (changed)']);
@@ -514,7 +514,7 @@ describe('a target with no runs at all', () => {
 
   /** A source directory whose specs live under `tests/` is the same shape, and the commoner one. */
   it('plans nothing for a source directory whose specs are elsewhere', () => {
-    expect(planTargets(['packages/apack-ears/src/lmdb'], [], REPO_ROOT).runs).toEqual([]);
+    expect(planTargets(['packages/apack-host/src/database'], [], REPO_ROOT).runs).toEqual([]);
   });
 });
 

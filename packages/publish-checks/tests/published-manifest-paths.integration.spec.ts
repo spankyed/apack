@@ -103,7 +103,7 @@ describe.skipIf(!PACKAGES_BUILT)('a published tarball', () => {
  */
 describe('the packages a consumer fixture installs', () => {
   it('are all packages the build builds', () => {
-    expect(Object.keys(PACKED_PACKAGES).sort()).toEqual(['ears', 'sdk', 'ui']);
+    expect(Object.keys(PACKED_PACKAGES).sort()).toEqual(['sdk', 'ui']);
     for (const name of Object.keys(PACKED_PACKAGES)) expect(BUILD_UNITS[`@apackdev/${name}`]).toBeDefined();
   });
 });

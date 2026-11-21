@@ -104,8 +104,6 @@ const PACKAGE_JSON_TEMPLATE = (name: string) => JSON.stringify({
     'facade:update': 'apack pack facade-report --update',
   },
   dependencies: {
-    // The generated facades import the EARS engine; it's released with the SDK at the same version
-    '@apackdev/ears': SDK_RANGE(),
     '@apackdev/sdk': SDK_RANGE(),
     zod: '^4.6.7',
   },

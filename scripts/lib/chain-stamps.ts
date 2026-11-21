@@ -13,7 +13,6 @@ import type { ChainStep } from './chain-steps.ts';
 import { commandText, rootScripts } from './npm-scripts.ts';
 import { poolForStep, measureCommandFor } from './unit-pool.ts';
 import { box } from './core-budget.ts';
-import { linkedOffPin, vendoredOffPin, type VendoredState } from './vendored-checkouts.ts';
 
 /**
  * Beside the package builds' and the pools' stamps, in the same cache directory and the same format, so one
@@ -56,10 +55,7 @@ export const flatStepName = (step: string): string => step.replace(/[:/]/g, '-')
  * step's output is current. `scripts/drive-preflight.ts` asks it of `build:runtime` and `build:default-setup` before
  * launching the app, and asking it any other way would be a second account of what those steps read.
  */
-export function unitFor(step: ChainStep, budget?: number, vendored?: readonly VendoredState[]): BuildUnit {
-  // Only for a step that declares the pins: those are what say it reads the vendored checkouts at all
-  const offPin = !step.inputs.some((input) => /^vendor\/[^/]+\.rev$/.test(input)) ? ''
-    : vendored === undefined ? linkedOffPin(REPO_ROOT) : vendoredOffPin(vendored);
+export function unitFor(step: ChainStep, budget?: number): BuildUnit {
   return {
     inputs: step.inputs.map((input) => path.join(REPO_ROOT, input)),
     outputs: (step.outputs ?? []).map((output) => path.join(REPO_ROOT, output)),
@@ -67,9 +63,7 @@ export function unitFor(step: ChainStep, budget?: number, vendored?: readonly Ve
     ...(step.excludeSuffixes === undefined ? {} : { excludeSuffixes: step.excludeSuffixes }),
     // What `npm run <name>` resolves to, so a step's script is in its key without `package.json` being one
     command: commandText(step.name, rootScripts()) + (poolForStep(step.name) === undefined ? ''
-      : `\n${measureCommandFor(step.name, budget ?? box())}`)
-      // And what it ran against, where a vendored checkout is not what its pin names (`vendoredOffPin`)
-      + (offPin === '' ? '' : `\n${offPin}`),
+      : `\n${measureCommandFor(step.name, budget ?? box())}`),
   };
 }
 

@@ -8,8 +8,8 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { createEarsEngine, type EARS, type EarsEngine } from '@apackdev/ears';
-import { openDatabase } from '@apackdev/ears/lmdb';
+import { createEarsEngine, type EARS, type EarsEngine } from '@elmdb/ears';
+import { openDatabase } from '@elmdb/ears/database';
 import { _installProjections } from '../../src/runtime/projections.ts';
 import { startTestRuntime, testPacks } from '../../src/testing/index.ts';
 
@@ -71,7 +71,7 @@ function history(seed: number): Step[] {
   });
 }
 
-const requireFromEars = createRequire(createRequire(import.meta.url).resolve('@apackdev/ears/package.json'));
+const requireFromEars = createRequire(createRequire(import.meta.url).resolve('@elmdb/ears/package.json'));
 
 /** Another process holding the database open: it does what it's sent, each its own commit, and answers */
 function anotherProcess(path: string) {

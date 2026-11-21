@@ -187,7 +187,7 @@ behind it unblocked the same shape, each run once:
 
 **Consequence for step 2.** The keeping suite ends its reads by cancelling their I/O (F for the broker's handle), and
 never by disconnecting the pipe or closing the handle the read is blocked on. The broker's `hang_up` for a named pipe
-now calls `CancelIoEx` on the stream's handle: the change is on branch `fix/windows-hang-up` in `vendor/apack-terminal`,
+now calls `CancelIoEx` on the stream's handle: the change is on branch `fix/windows-hang-up` in apack-terminal,
 type-checks only with the VM's zig toolchain, and is **not yet built or tested on Windows**. Step 2 is not done: the
 suite is not ported and has not run on the VM.
 

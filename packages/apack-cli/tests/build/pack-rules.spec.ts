@@ -84,6 +84,7 @@ const FIRES: Record<PackRuleKey, { onFile?: [code: string, problem: string][]; e
   },
   'host-imports': { onFile: [["import { edgeStore } from '@apackdev/host/ears';\n", 'src/f.ts:1: @apackdev/host/ears']] },
   'elmdb-imports': { onFile: [["import { Database } from 'elmdb';\n", 'src/f.ts:1: elmdb']] },
+  'ears-imports': { onFile: [["import { defineEars } from '@elmdb/ears';\n", 'src/f.ts:1: @elmdb/ears']] },
   'untyped-sends': {
     onFile: [["import { untypedSendToSystem } from '@apackdev/sdk/events';\n",
       'src/f.ts:1: untypedSendToSystem from @apackdev/sdk/events']],
@@ -528,8 +529,8 @@ describe('when several rules are right about one site', () => {
   });
 
   it('gives an @internal name from the store to the rule about the store', () => {
-    expect(offender("import { _x } from '@apackdev/ears/lmdb';\n")).toEqual([
-      'elmdb-imports: src/extensions/steps/x.ts:1: @apackdev/ears/lmdb',
+    expect(offender("import { _x } from '@elmdb/ears/database';\n")).toEqual([
+      'elmdb-imports: src/extensions/steps/x.ts:1: @elmdb/ears/database',
     ]);
   });
 
@@ -616,7 +617,7 @@ describe('when several rules are right about one site', () => {
   it('declares that precedence in one place', () => {
     expect(PACK_RULES.map((rule) => rule.key)).toEqual([
       'source-resolution', 'contract-leaves',
-      'host-imports', 'elmdb-imports',
+      'host-imports', 'elmdb-imports', 'ears-imports',
       // cross-feature-imports is out of its cause group on purpose: its fix subsumes own-modules'
       'cross-feature-imports', 'own-modules', 'pack-own-aliases',
       'internal-package-imports',

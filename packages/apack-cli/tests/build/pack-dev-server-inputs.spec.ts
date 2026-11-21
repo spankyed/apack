@@ -25,9 +25,9 @@ it('tracks frontend SDK and UI metadata while leaving bundled EARS outside the s
     fs.mkdirSync(directory, { recursive: true });
     fs.writeFileSync(path.join(directory, 'package.json'), JSON.stringify({ name, description, exports: {} }));
   };
-  for (const name of ['@apackdev/sdk', '@apackdev/ui', '@apackdev/ears']) metadata(name, 'original');
+  for (const name of ['@apackdev/sdk', '@apackdev/ui', '@elmdb/ears']) metadata(name, 'original');
   const before = readPackDevServerInputs(pack);
-  metadata('@apackdev/ears', 'changed');
+  metadata('@elmdb/ears', 'changed');
   expect(readPackDevServerInputs(pack)).toBe(before);
   metadata('@apackdev/sdk', 'changed');
   const sdkChanged = readPackDevServerInputs(pack);
