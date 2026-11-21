@@ -68,8 +68,8 @@ Two repositories on this machine:
 | `spankyed/apack` ("the app", "the monorepo") | `/Users/spankyed/Develop/Projects/apack/monorepo` | An Electron app. TypeScript. Read its `CLAUDE.md` before changing anything |
 | `spankyed/apack-terminal` ("the broker") | `/Users/spankyed/Develop/Projects/apack/apack-terminal` | A Rust program that owns every terminal's pty and interprets its output. Its `view/` folder is the TypeScript a window draws a terminal with. Read its `CLAUDE.md` and `docs/architecture/testing.md` |
 
-The app depends on the broker through a symlink, `vendor/apack-terminal`, and names the exact broker
-commit it is built against in `vendor/apack-terminal.rev` ("the pin").
+The app depends on the broker's packages from the release of one broker commit, which the root `package.json`'s
+`overrides` name by URL ("the pin"; `npm run deps:pin -- apack-terminal <commit>` moves it).
 
 **Vouched marks**, which several tasks touch: a shell in an app terminal prints invisible markers
 ("a command started", "it ended with status 0"). The broker keeps a record per command from them.
@@ -358,20 +358,20 @@ It prints the new directory, `../monorepo-worktrees.noindex/terminal-follow-ups`
 
 ### B1. The app is built against the broker's `master`
 
-1. Write the pin: put the commit from `git rev-parse HEAD` above, and a newline, in
-   `vendor/apack-terminal.rev`.
-2. Point this worktree's link at the broker worktree you just built:
+1. Move the pin to the commit from `git rev-parse HEAD` above, once the broker's CI has released it:
 
    ```bash
-   APACK_TERMINAL_DIR=/Users/spankyed/Develop/Projects/apack/apack-terminal-worktrees.noindex/follow-ups npm run link:apack-terminal
+   npm run deps:pin -- apack-terminal <commit>
    ```
 
-   It refuses a checkout that does not hold the pin, and says so. A warning about the pin is a
-   reason to stop.
+   It fails at `npm install` when that commit has no release yet.
+2. To build against the broker worktree before its release exists, point the overrides at it instead
+   (`npm run deps:local -- apack-terminal /Users/spankyed/Develop/Projects/apack/apack-terminal-worktrees.noindex/follow-ups`),
+   and run `npm run deps:pin` before committing.
 3. Check: `npm run typecheck`, then `npm run chain -- --no-native` (run it in the background; it can
    take 20 to 40 minutes cold). Both must pass. The chain prints one result line; quote it.
 
-**Commit:** `chore(vendor): the broker at its master`, adding only `vendor/apack-terminal.rev`. Say in
+**Commit:** `chore(deps): the broker at its master`, adding only `package.json` and `package-lock.json`. Say in
 the message what the broker gained since `efe5d84`, from
 `git -C <broker worktree> log --oneline efe5d84..HEAD`.
 

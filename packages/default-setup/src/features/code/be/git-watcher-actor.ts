@@ -1,6 +1,6 @@
 import { fromCallback } from 'xstate';
 import { createLogger } from '@apackdev/sdk/logger';
-import type { GitRepository, GitWatcherService } from 'apack-git';
+import type { GitRepository, GitWatcherService } from '@apackdev/git';
 
 interface GitWatcherSelection {
   watcher: Pick<GitWatcherService, 'setGitRepository' | 'setChangeCallback' | 'startWatching' | 'stopWatching'> | null;

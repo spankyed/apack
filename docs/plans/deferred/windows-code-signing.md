@@ -147,7 +147,7 @@ Read from `winPackager.js`, `platformPackager.js` and `targets/nsis/NsisTarget.j
 
 So with signing configured and nothing else changed, the installer, the uninstaller and `apack.exe` are signed, and
 every native binary the app loads from `resources/app` is not: the terminal broker's `apack-terminal.exe` and
-`OpenConsole.exe` (`packages/terminal-broker/src/pin.json`, `win32-x64`), elmdb's `.node` binding, and any other
+`OpenConsole.exe` (in `@apackdev/terminal-win32-x64`), elmdb's `.node` binding, and any other
 `.exe`, `.dll` or `.node` under `node_modules`. Smart App Control checks each of those. The work below signs them from
 an `afterSign` hook, through `context.packager.signIf(file)`, which signs any file it is handed with the configured
 signer and queues the calls one at a time.

@@ -49,11 +49,10 @@ required local packaged-authoring and isolated app/runtime acceptance.
 3. Verify control of the `@apackdev` npm organization and publishing rights for all five packages.
 4. Obtain an explicit decision to publish. This plan records deferred work, not authorization to publish
    later automatically.
-5. Publish `elmdb` first. `@apackdev/ears` depends on it as `file:../../vendor/elmdb/crates/elmdb-node`, a
-   checkout's link (`vendor/elmdb.rev` pins the commit), and `elmdb` is `0.0.0` on no registry: a published
-   `@apackdev/ears` would name a dependency no consumer can install. elmdb's binding needs napi-rs's per-platform
-   packages (one prebuilt binary each, as its CI matrix builds them) and a version, and then `@apackdev/ears` and
-   `packages/api` depend on that version rather than the link.
+5. Publish `elmdb` and `@elmdb/ears` first, from elmdb's repository. `@apackdev/sdk` depends on EARS as `0.1.0`,
+   which the root's `overrides` take from a tarball on elmdb's GitHub release, and no registry holds either: a
+   published `@elmdb/ears` would name a dependency no consumer can install. Once both are on the registry, the
+   overrides for them go and the version alone resolves.
 
 ## 1. Prepare and verify npm publication
 
@@ -61,7 +60,6 @@ Publish these packages through the existing package publisher:
 
 | Package | Staging directory | Purpose |
 |---|---|---|
-| `@apackdev/ears` | `packages/apack-ears/publish` | Store engine used by the SDK |
 | `@apackdev/sdk` | `packages/apack-sdk/publish` | Pack API; depends on ears |
 | `@apackdev/ui` | `packages/apack-ui/publish` | Pack UI components |
 | `@apackdev/testing` | `packages/apack-testing/dist/package` | Pack test harness and fixtures |

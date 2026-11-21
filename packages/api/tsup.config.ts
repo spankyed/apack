@@ -14,7 +14,7 @@ export default defineConfig((options) => {
     // consumers without the workspace source condition need its compiled type entry.
     clean: !isDev,
     // **What to watch is on the command line, not here, and that is not a preference.** tsup watches a
-    // *directory* rather than the module graph, so `@apackdev/ears`, `@apackdev/host` and `@apackdev/sdk` — all
+    // *directory* rather than the module graph, so `@apackdev/host` and `@apackdev/sdk` — both
     // inlined into this bundle by the `@apackdev/source` condition below — have to be named or an edit to one
     // rebuilds nothing: measured 2026-10-10, no rebuild in two and a half minutes. `tests/dev-watch.spec.ts`
     // compares the list with what the bundle reads. Naming them here does not work, because a `--watch` flag
@@ -25,8 +25,11 @@ export default defineConfig((options) => {
     shims: true,
     minify: !isDev,
     // The development app's stacks name source files, which is what the engine's call count attributes calls by
-    // (`@apackdev/ears`'s `calls.ts`); the app runs this build with `--enable-source-maps`
+    // (EARS' `calls.ts`, whose own frames are its installed `dist`); the app runs this build with `--enable-source-maps`
     sourcemap: isDev,
+    // Beside these, tsup leaves out every package `dependencies` names: `elmdb` and `@elmdb/ears` among them, so the
+    // API loads the one EARS installed beside the binding, which the packaged app carries in its node_modules, and the
+    // host and the SDK it inlines share it rather than each holding a copy
     external: ['typescript', 'esbuild'],
     // Bundled CommonJS dependencies require Node builtins (yaml requires 'process'); ESM output has no
     // require, so give it one, as the CLI bundle does

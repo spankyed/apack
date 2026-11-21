@@ -37,7 +37,7 @@ export function performanceManifest(overrides: Partial<PerformanceManifest> = {}
   return {
     format: 1, source: { revision: 'one', dirty: false, excludedUntracked: [], diffSha256: 'clean' },
     builds: [{ path: 'app', sha256: 'one' }], fixture: { generator: 'test', seed: 0, sha256: 'fixture', distribution: {} },
-    native: { pin: 'native', checkoutRevision: 'native', dirty: false, excludedUntracked: [] },
+    native: { resolved: 'https://example.invalid/elmdb-0.1.0.tgz', integrity: 'sha512-native' },
     mode: 'lightweight', cache: 'warm-process', warmups: 5, runtime: {},
     machine: { platform: 'linux', arch: 'arm64', cpus: 2, memoryBytes: 1024, identity: 'machine' },
     clock: 'Local monotonic durations; cross-process epoch alignment is approximate', ...overrides,

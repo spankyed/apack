@@ -2,7 +2,7 @@
 
 **Status: implemented.** All seven phases have their work, evidence and gap notes in [the evidence record](../references/evidence/terminal-next-features.md). Open, and needing a person at a real window: the IME checklist (D6), and the real-app checks listed in the evidence. Phase 0 is done; see [the evidence record](../references/evidence/terminal-next-features.md). Start only after [the terminal parity goal](../archive/goals/goal-terminal-parity.md) is closed
 (it is closed on `master` as of 2026-11-12; its strict-chain run is the last check on it).
-Owner: the terminal view and broker (`vendor/apack-terminal`) and the Code surface
+Owner: the terminal view and broker (apack-terminal) and the Code surface
 (`packages/default-setup/src/features/code`).
 
 This document is written so that an implementer who did not write it can finish it. Every seam is named with a
@@ -238,8 +238,8 @@ it finishes. A phase is not finished until its evidence section is written.
 
 - **Deliverable:** a short evidence section confirming each seam in Verified seams still exists at the pin, with the
   current line numbers. Any seam that moved is corrected in this document.
-- **Why:** the survey's line numbers came from a checkout at `efe5d84`, not the pin. The primary checkout at
-  `vendor/apack-terminal` is at `efe5d84`; check it out at `3a2140cc8dd24a1c62b60a4d723b264a53a91c1d` (or a branch
+- **Why:** the survey's line numbers came from a checkout at `efe5d84`, not the pin. The primary checkout of
+  apack-terminal is at `efe5d84`; check it out at `3a2140cc8dd24a1c62b60a4d723b264a53a91c1d` (or a branch
   at that commit) before reading.
 - **Dependencies:** none.
 - **Done when:** every seam in Verified seams is confirmed or corrected, and the corrections are in this document.
@@ -418,7 +418,7 @@ it finishes. A phase is not finished until its evidence section is written.
 - Mutation-check every guard. A test that restates its implementation does not count.
 - Validate in the bounded way CLAUDE.md describes: focused specs during a phase (`npm run spec`), the chain at a
   converged checkpoint (`npm run chain -- --no-native` for everyday work).
-- Changes to `vendor/apack-terminal` are committed there and pinned here only after they land on the broker's
+- Changes to apack-terminal are committed there and pinned here only after they land on the broker's
   `master`. Each pin names a commit on `master`.
 - Do not edit release or version metadata.
 - Each phase ends with its evidence written to `docs/references/evidence/terminal-next-features.md`.
@@ -427,7 +427,7 @@ it finishes. A phase is not finished until its evidence section is written.
 ## Current handoff
 
 - Status: planned. Phase 0 is next. No code has changed for this goal.
-- The primary `vendor/apack-terminal` checkout is at `efe5d84`. Work from `3a2140cc8d` (on the broker's `master`).
+- The primary apack-terminal checkout is at `efe5d84`. Work from `3a2140cc8d` (on the broker's `master`).
 - Everything in Verified seams was read at `3a2140cc8d` by a survey, and Phase 0 re-confirms it.
 - Unresolved: the xterm.js PR #5453 has not been read (Phase 1 reads it). The ghostty bell and audio defaults are
   unverified (Phase 2 reads the reference page past its truncation before choosing defaults).

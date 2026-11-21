@@ -236,8 +236,8 @@ test('a double click selects the word under it, and copying puts it on the clipb
  * the transport — and the window draws its terminal from the socket the app puts in front of that command.
  */
 test('a terminal on a target is drawn and typed at like any other', async ({ app, appPage }) => {
-  const broker = (createRequire(import.meta.url)('@app/terminal-broker') as { brokerBinary(): string | undefined }).brokerBinary();
-  test.skip(broker === undefined || process.platform === 'win32', 'needs the pinned broker installed');
+  const broker = (createRequire(import.meta.url)('@apackdev/terminal') as { brokerBinary(): string | undefined }).brokerBinary();
+  test.skip(broker === undefined || process.platform === 'win32', 'needs the broker @apackdev/terminal installs');
   const far = path.join(workDir!, 'far.sock');
   // Named where a person names one: in the code feature's settings
   await app.navigate('host/settings');

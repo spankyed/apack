@@ -25,7 +25,7 @@ function tree(files: Record<string, string>): string {
 
 const manifest = (name: string, version = '1.0.0') => JSON.stringify({ name, version });
 
-/** A repository with a workspace, two installed packages and a vendored package linked in */
+/** A repository with a workspace, two installed packages and a package linked in from another checkout */
 function repository() {
   const root = tree({
     'package.json': manifest('apack'),
@@ -36,10 +36,11 @@ function repository() {
     'node_modules/vite/package.json': manifest('vite', '7.0.0'),
     'node_modules/esbuild/package.json': manifest('esbuild', '0.25.0'),
     'node_modules/tailwindcss/package.json': manifest('tailwindcss', '3.4.0'),
-    'vendor-checkout/package.json': manifest('apack-git', '0.1.0'),
+    'vendor-checkout/package.json': manifest('@apackdev/git', '0.1.0'),
     'vendor-checkout/dist/index.js': '',
   });
-  fs.symlinkSync(path.join(root, 'vendor-checkout'), path.join(root, 'node_modules', 'apack-git'));
+  fs.mkdirSync(path.join(root, 'node_modules', '@apackdev'));
+  fs.symlinkSync(path.join(root, 'vendor-checkout'), path.join(root, 'node_modules', '@apackdev', 'git'));
   return root;
 }
 
@@ -49,8 +50,8 @@ describe('the package a module id belongs to', () => {
   it('is the nearest named package of the file, found where a linked package really is', () => {
     const root = repository();
     expect(packageOf(path.join(root, 'node_modules/vue/dist/vue.js'), root)).toMatchObject({ name: 'vue', version: '3.5.0' });
-    expect(packageOf(path.join(root, 'node_modules/apack-git/dist/index.js'), root))
-      .toMatchObject({ name: 'apack-git', dir: path.join(root, 'vendor-checkout') });
+    expect(packageOf(path.join(root, 'node_modules/@apackdev/git/dist/index.js'), root))
+      .toMatchObject({ name: '@apackdev/git', dir: path.join(root, 'vendor-checkout') });
   });
 
   it('ignores a query, and maps a virtual id to the package that injects it', () => {

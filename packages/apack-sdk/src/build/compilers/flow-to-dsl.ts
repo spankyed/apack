@@ -1,4 +1,4 @@
-import { type Ears } from '@apackdev/ears';
+import { type Ears } from '@elmdb/ears';
 import { boundEars } from '../../ears/index.ts';
 import { createExportDir, ensureDirectoryExists, writeExportJson } from '../../utils/index.ts';
 import type { StepDefinition } from '../../steps/index.ts';

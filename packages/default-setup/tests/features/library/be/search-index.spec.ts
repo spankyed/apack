@@ -1,7 +1,7 @@
 // The dormant library search index on the engine's vector index: indexing a folder files one IndexedDoc row per chunk,
 // pending until embedIndexedDocs embeds them with IndexedDoc's model; a search embeds its query with that model and
 // ranks the index's chunks; an edited document's chunk is pending again until it is embedded. How the engine ranks
-// is the engine's (apack-ears/tests/engine/vector.spec.ts); this holds the index to filing what its rules make.
+// is the engine's (EARS' `tests/engine/vector.spec.ts`, in elmdb); this holds the index to filing what its rules make.
 import { describe, expect, it } from 'vitest'
 import { mockInference, startApp } from '@apackdev/testing/harness'
 import { boundEars } from '@apackdev/sdk/ears'

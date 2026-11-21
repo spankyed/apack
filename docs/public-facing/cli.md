@@ -479,7 +479,8 @@ Checks:
 | `pack-own-aliases` | `@/…`, a TypeScript-only `paths` mapping no runtime reads. Name your own modules with `#` subpath imports from your `package.json` | no |
 | `internal-package-imports` | an `@apackdev` export named `_x`: it is `@internal`, the app's own, and an app update is free to rename it | no |
 | `host-imports` | `@apackdev/host`, which is not installed for a pack | no |
-| `elmdb-imports` | `elmdb` or `@apackdev/ears/lmdb`: your data comes through the engine the app installs | no |
+| `elmdb-imports` | `elmdb` or `@elmdb/ears/database`: your data comes through the engine the app installs | no |
+| `ears-imports` | `@elmdb/ears`: import EARS from `@apackdev/sdk/ears`, which re-exports all of it. EARS is your SDK's dependency, not your pack's, so your install need not have it where your pack resolves it | no |
 | `untyped-sends` | `untypedBroadcast`, `untypedTell` — use the typed facades from `#generated/events` | yes |
 | `raw-transport` | `_rootEvents`, `trpc.bus`, `@apackdev/sdk/rpc` | yes |
 | `backend-console` | `console.*` under `features/*/be/`, `migrations/` or `extensions/` — use `createLogger` from `@apackdev/sdk/logger` | yes |
@@ -759,7 +760,7 @@ apack db script ./cleanup.ts --profile development -- --older-than 30
 | `args` | whatever follows `--` |
 | `log` | prints a line, like the script's own output |
 
-The database is handed to the script rather than left for it to open: the published CLI carries its own copy of the engine, so a script importing `@apackdev/ears` itself would get a second one, with no data in it. `--read-only` opens the database without writing, so a reporting script can run while apack is open.
+The database is handed to the script rather than left for it to open: the published CLI carries its own copy of the engine, so a script importing `@elmdb/ears` itself would get a second one, with no data in it. `--read-only` opens the database without writing, so a reporting script can run while apack is open.
 
 #### `apack db inspect [<entity-id> | --type <Entity>] [--depth <n>] [--incoming] [--outgoing]`
 

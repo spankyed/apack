@@ -7,8 +7,8 @@ import { safeEvents } from '@apackdev/sdk/helpers';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { assign, setup, enqueueActions, fromCallback, type AnyActorRef } from 'xstate'
 
-import { GitError, GitUnusableError, HookRefusedError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from 'apack-git'
-import type { HistoryCommit, HistoryPage, RewriteStep } from 'apack-git'
+import { GitError, GitUnusableError, HookRefusedError, NOTHING_CHANGED, StashConflictError, UnsafeOwnershipError, UntrustedError, changedAnything } from '@apackdev/git'
+import type { HistoryCommit, HistoryPage, JournalEntry, RewriteStep } from '@apackdev/git'
 import { openGitRepository, trustRepository, type AppGitRepository } from '../services/app-git-repository.ts'
 import { storedSignIn } from './github.ts'
 import { isHostName } from '../services/sign-in.ts'
@@ -63,13 +63,21 @@ const WHAT_TO_DO = {
 } as const
 
 /**
+ * The newest write the panel's undo takes back: the engine lists every write it can (`undoables`), discards among
+ * them, and a discard is put back from the change it removed (`restoreDiscarded`), not from the panel's undo
+ */
+async function lastUndoable(repo: AppGitRepository): Promise<JournalEntry | undefined> {
+  return (await repo.undoables()).find(({ entry }) => entry.operation !== 'discard')?.entry
+}
+
+/**
  * What Undo would take back now, for the answer to a write that can be taken back: the last write in the repository's
  * journal, unless another window or process made one since. Absent when it cannot be read, which leaves what the
  * window holds as it was
  */
 async function undoableAfter(repository: AppGitRepository): Promise<{ undoable?: { id: string; summary: string } | null }> {
   try {
-    const entry = await repository.lastUndoable()
+    const entry = await lastUndoable(repository)
     return { undoable: entry ? { id: entry.id, summary: entry.summary } : null }
   } catch {
     return {}
@@ -585,14 +593,18 @@ const answers = handlers.answers<CommitAsks>({
   /** Takes back the last write the engine made here, refused as `published` for a commit a remote branch already holds */
   'commit.UNDO_LAST': ({ args: { evenIfPublished }, context, self }) => git(async () => {
     const repository = repositoryIn(context)
-    const entry = await repository.undo({ evenIfPublished }).catch((error: unknown) => { throw published(error) ?? error })
+    // With none, the engine's own refusal of an id it does not hold, `nothing-to-undo`
+    const { entry } = await repository.undo((await lastUndoable(repository))?.id ?? '', { evenIfPublished })
+      .catch((error: unknown) => { throw published(error) ?? error })
     written(self)
     return { id: entry.id, summary: entry.summary, ...await undoableAfter(repository) }
   }),
 
   /** Puts back what a discard kept: a write like the discard it undoes, announced the same way */
   'commit.RESTORE_DISCARDED': ({ args: { id }, context, self }) => git(async () => {
-    const restored = await repositoryIn(context).restoreDiscarded(id)
+    // A discard is in the engine's journal, and undoing it is what puts it back
+    const { discard } = await repositoryIn(context).undo(id)
+    const restored = discard ?? { restored: [], left: [] }
     written(self)
     filesChanged(restored.restored)
     return { id, ...restored }

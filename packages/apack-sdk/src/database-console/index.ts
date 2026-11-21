@@ -10,7 +10,7 @@ import { boundHost, type HostCallReports, type HostDiagnostics } from '../runtim
 import type { EarsNames } from '../runtime/packs-view.ts';
 import { EARS as EARS_NAMES } from '../types/index.ts';
 import { boundEars, catalog, transact, untypedQuery, untypedCreate, untypedUpsert, untypedWrite, getRow, getRoles, getRelation, findRelations, removeRelation, getSchemaStats } from '../ears/index.ts';
-import { defineEars } from '@apackdev/ears';
+import { defineEars } from '@elmdb/ears';
 import { createLogger } from '../logger/logger.ts';
 import { errorMessage } from '../utils/shared.ts';
 

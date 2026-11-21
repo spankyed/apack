@@ -4,7 +4,7 @@
 // terminal should pay nothing for one, and a broker that failed to start must fail the thing that needed it
 // rather than the boot.
 //
-// **The binary comes from the `apack-terminal` package**, which answers for its own: a packaged app resolves
+// **The binary comes from the `@apackdev/terminal` package**, which answers for its own: a packaged app resolves
 // it as it resolves every other dependency, and `APACK_TERMINAL_BINARY` overrides it for a build of your
 // own.
 //
@@ -88,7 +88,7 @@ export function relaySocketPath(key: string, platform: NodeJS.Platform = process
 /**
  * The broker's binary, or absence.
  *
- * **Two answers: `APACK_TERMINAL_BINARY`, then the `apack-terminal` package.** The package is asked rather
+ * **Two answers: `APACK_TERMINAL_BINARY`, then the `@apackdev/terminal` package.** The package is asked rather
  * than a path derived, because the package is what knows — the binary's name differs by platform, `cargo`
  * writing `apack-terminal.exe` on Windows, and it sits beside that package's own file wherever Node
  * resolved it from. A path built here was wrong about exactly that: `existsSync` answered false on Windows
@@ -119,18 +119,17 @@ export function brokerBinary(): string {
   const found = findBrokerBinary();
   if (found) return found;
   throw new Error(
-    'No terminal broker: the release build `packages/terminal-broker/src/pin.json` pins is not installed for this '
-    + 'platform. Run `npm run fetch:terminal-broker` (the install runs it), or set APACK_TERMINAL_BINARY to a build '
-    + 'of your own',
+    `No terminal broker: @apackdev/terminal has no platform package installed for ${process.platform}-${process.arch}. `
+    + 'Run `npm ci`, or set APACK_TERMINAL_BINARY to a build of your own',
   );
 }
 
 /**
- * The pinned broker, as `@app/terminal-broker` installed it, or absence.
+ * The broker `@apackdev/terminal` installed, or absence.
  *
- * **A release build of the commit the app pins, verified against its hash at install**, not a build of anything
- * here: the package answers the path of the pinned commit's files for this platform, so a broker of another
- * commit is never what this finds (`packages/terminal-broker/src/index.js`).
+ * **A release build of the commit the lockfile pins**, not a build of anything here: the package's optional
+ * dependency for this platform holds the binary, with ConPTY beside it on Windows, and the package answers its
+ * path. npm installs the one platform package that matches and checks it against the lockfile's integrity.
  *
  * Resolved from `import.meta.url` rather than from a path of ours: this module is bundled into the API's
  * build, so its directory at runtime is `packages/api/dist`, and Node's lookup walks up from there to the
@@ -141,8 +140,8 @@ export function brokerBinary(): string {
  */
 export function packagedBrokerBinary(): string | undefined {
   try {
-    // Plain JavaScript with no declarations, so the one function this reaches is said here
-    const shipping = createRequire(import.meta.url)('@app/terminal-broker') as { brokerBinary(): string | undefined };
+    // Its runtime entry, loaded where the bundle runs rather than inlined, so the one function this reaches is said here
+    const shipping = createRequire(import.meta.url)('@apackdev/terminal') as { brokerBinary(): string | undefined };
     return shipping.brokerBinary();
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'MODULE_NOT_FOUND') return undefined;

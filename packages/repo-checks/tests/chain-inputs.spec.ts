@@ -365,7 +365,7 @@ describe('a step keys on a staged publish tree only if it reads one', () => {
   /** The data is a list, so the case mutates it rather than trusting that it could fail */
   it('names a step that starts keying on one', () => {
     const compile = CHAIN_STEPS.find((step) => step.name === 'build:default-setup')!;
-    const widened = { ...compile, inputs: [...compile.inputs, `packages/apack-ears/${PUBLISH_TREE}`] };
+    const widened = { ...compile, inputs: [...compile.inputs, `packages/apack-ui/${PUBLISH_TREE}`] };
     expect(unexplained([widened]), 'a step given a staged tree was not reported').toEqual([
       'build:default-setup keys on a staged publish tree and does not read one — spread PACKAGE_BUILD_READS',
     ]);
@@ -404,6 +404,13 @@ describe('a step declares the modules its script imports', () => {
     .map((file) => repoRelative(file)));
   const decidesWhether = (file: string): boolean => NOT_A_BUILD_INPUT[file] !== undefined;
   const excused = (file: string): boolean => table.has(file) || decidesWhether(file);
+  /**
+   * An installed package's file is declared by the lockfile, which stands for what it names (`ROOT`,
+   * `scripts/lib/chain-steps.ts`): EARS' imports reach the binding's protocol types in `node_modules/elmdb`, which no
+   * step lists file by file
+   */
+  const pinned = (file: string, covered: Set<string>): boolean =>
+    /(^|\/)node_modules\//.test(file) && covered.has('package-lock.json');
 
   /** The `.ts` entries a step's script names, which is where the text-level case above already ends */
   const entriesOf = (step: ChainStep, all: ReturnType<typeof rootScripts>): string[] =>
@@ -420,7 +427,7 @@ describe('a step declares the modules its script imports', () => {
       if (entriesOf(step, all).length === 0) return [];
       const covered = coveredBy([step]);
       return walked(step, all)
-        .filter((file) => !excused(file) && !covered.has(file))
+        .filter((file) => !excused(file) && !covered.has(file) && !pinned(file, covered))
         .map((file) => `${step.name} imports ${file} and does not declare it`);
     });
     expect(missing,

@@ -6,9 +6,9 @@
 // stand-in that records what a real view would have been asked.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startFeTestRuntime } from '@apackdev/sdk/testing'
-import type { Command } from 'apack-terminal-view'
+import type { Command } from '@apackdev/terminal-view'
 
-vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-view.ts')).viewModule())
+vi.mock('@apackdev/terminal-view', async () => (await import('../_support/terminal-view.ts')).viewModule())
 
 const { views, lastView, connections, fakeStream } = await import('../_support/terminal-view.ts')
 type FakeStream = ReturnType<typeof fakeStream>

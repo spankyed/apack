@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest';
 import { expectTypeOf } from 'vitest';
-import type { QueryBuilder, UntypedSchema } from '@apackdev/ears';
+import type { QueryBuilder, UntypedSchema } from '@apackdev/sdk/ears';
 import { EARS, query, type EntityName, type PackSchema } from '#generated/ears.ts';
 
 /** A query builder over this pack's names: its entity shapes and names, its relation kinds and its roles */

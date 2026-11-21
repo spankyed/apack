@@ -18,6 +18,7 @@ import {
   SOURCE_EXTENSIONS,
 } from './lib/import-populations.ts';
 import { DIR_BY_PACKAGE, RUNTIME_ONLY_DEPS } from './lib/workspace-deps.ts';
+import { repositoryOf } from './lib/external-packages.mjs';
 import {
   DECLARES_SOURCE_BY_DESIGN, findMissingSourceConditions, RESOLVES_DIST_BY_DESIGN, sourceConditionPackages,
 } from './lib/import-source-conditions.ts';
@@ -290,31 +291,30 @@ export const LAYERS: {
   allowed: string[];
   forbidden?: RegExp;
 }[] = [
-  { name: '@apackdev/ears', dir: 'packages/apack-ears', allowed: [] },
-  { name: '@apackdev/sdk', dir: 'packages/apack-sdk', allowed: ['@apackdev/ears'] },
+  { name: '@apackdev/sdk', dir: 'packages/apack-sdk', allowed: [] },
   {
     name: '@apackdev/host',
     dir: 'packages/apack-host',
-    allowed: ['@apackdev/sdk', '@apackdev/ears'],
+    allowed: ['@apackdev/sdk'],
     // The API: its package, its `@/` alias, or its sources by relative path
     forbidden: /^(?:@app\/api(?:\/|$)|@\/|(?:\.\.?\/)+(?:[\w.-]+\/)*api\/(?:src|scripts)(?:\/|$))/,
   },
-  { name: '@app/api', dir: 'packages/api', allowed: ['@apackdev/ears', '@apackdev/sdk', '@apackdev/host'] },
+  { name: '@app/api', dir: 'packages/api', allowed: ['@apackdev/sdk', '@apackdev/host'] },
   { name: '@app/renderer', dir: 'packages/renderer', allowed: ['@apackdev/sdk', '@apackdev/host', '@apackdev/ui'] },
   // Published alongside the SDK rather than above it: a component takes its contracts and host-shared state
   // from `@apackdev/sdk/fe`, and the other direction is already refused by the SDK's own row
   { name: '@apackdev/ui', dir: 'packages/apack-ui', allowed: ['@apackdev/sdk'] },
   // The harness binds a test runtime, so it reaches the host; it may not reach the component library or the
   // CLI, which are above it
-  { name: '@apackdev/testing', dir: 'packages/apack-testing', allowed: ['@apackdev/ears', '@apackdev/sdk', '@apackdev/host'] },
+  { name: '@apackdev/testing', dir: 'packages/apack-testing', allowed: ['@apackdev/sdk', '@apackdev/host'] },
   // Tooling at the top, so `allowed` forbids nothing — what this row is for is the other half, the manifest:
-  // it imported `@apackdev/ears` and `@apackdev/testing` and declared neither until this row existed.
+  // it imported `@apackdev/testing` and didn't declare it until this row existed.
   //
   // `@apackdev/ui` is here as the pack FE bundler's *subject* rather than as a dependency of this code: `src`
   // only ever resolves it by name — the Tailwind content globs, the host-proxy decision (`build.bundleUi`),
   // `CHECKOUT_PACKAGES` — and the one real import is a test checking that proxying against the real module.
   { name: '@apackdev/cli', dir: 'packages/apack-cli',
-    allowed: ['@apackdev/ears', '@apackdev/sdk', '@apackdev/host', '@apackdev/ui', '@apackdev/testing'] },
+    allowed: ['@apackdev/sdk', '@apackdev/host', '@apackdev/ui', '@apackdev/testing'] },
   // `@apackdev/cli` is allowed because the manifest declares it, and unused because that declaration is a
   // process dependency — `RUNTIME_ONLY_DEPS` is where it says so, and this row reads that rather than
   // keeping a second copy of the reason
@@ -325,9 +325,6 @@ export const LAYERS: {
   // Both check the repo rather than run in it, and reach the host for the build and freshness primitives
   { name: '@app/repo-checks', dir: 'packages/repo-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
   { name: '@app/publish-checks', dir: 'packages/publish-checks', allowed: ['@apackdev/sdk', '@apackdev/host'] },
-  // The pinned broker's resolver, which the host and a packaged app's smoke check reach: plain Node, below
-  // every layer, so it imports none of them
-  { name: '@app/terminal-broker', dir: 'packages/terminal-broker', allowed: [] },
 ];
 
 /**
@@ -343,6 +340,13 @@ export const UNLAYERED_BY_DESIGN = new Map<string, string>([
 ]);
 
 const apackPackage = (specifier: string) => specifier.match(/^@apackdev\/[^/]+/)?.[0];
+
+/**
+ * Whether an `@apackdev` package is one another repository publishes (`@apackdev/git`, `@apackdev/terminal`, ...),
+ * which the root's `overrides` take from its release (`lib/external-packages.mjs`). They share the scope and are no
+ * layer of this repository, so the layer rule reads them as any other outside dependency
+ */
+const isExternal = (pkg: string): boolean => repositoryOf(pkg) !== undefined;
 
 /**
  * Every workspace with something for the layer rule to read, by the same three directories it reads.
@@ -393,12 +397,16 @@ export function findUpwardImports(layers = LAYERS, root = repoRoot, unlayered = 
       problems.push(`${dir}: listed in UNLAYERED_BY_DESIGN (${reason}) but it holds no code, or is gone`);
     }
   }
+  const layerPackage = (specifier: string) => {
+    const pkg = apackPackage(specifier);
+    return pkg !== undefined && !isExternal(pkg) ? pkg : undefined;
+  };
   for (const { name, dir, allowed, forbidden } of layers) {
     const permitted = new Set([name, ...allowed]);
     const imported = new Set<string>();
     const files = filesUnder(['src', 'tests', 'scripts'].map((sub) => path.join(dir, sub)), root);
     problems.push(...findSpecifiers(files, root, (text) => {
-      const pkg = apackPackage(text);
+      const pkg = layerPackage(text);
       if (pkg !== undefined && pkg !== name) imported.add(pkg);
       return (pkg !== undefined && !permitted.has(pkg)) || (forbidden?.test(text) ?? false);
     }));
@@ -407,7 +415,7 @@ export function findUpwardImports(layers = LAYERS, root = repoRoot, unlayered = 
     const declared = new Set(MANIFEST_FIELDS.flatMap((field) => Object.keys(manifest[field] ?? {})));
     for (const field of MANIFEST_FIELDS) {
       for (const dep of Object.keys(manifest[field] ?? {})) {
-        if (dep.startsWith('@apackdev/') && !permitted.has(dep)) problems.push(`${path.relative(root, manifestFile)}: ${field}: ${dep}`);
+        if (layerPackage(dep) !== undefined && !permitted.has(dep)) problems.push(`${path.relative(root, manifestFile)}: ${field}: ${dep}`);
       }
     }
     for (const pkg of [...imported].sort()) {
@@ -478,30 +486,29 @@ export function findUnimportedDependencies(root = repoRoot, runtimeOnly = RUNTIM
 }
 
 /**
- * Who may load the database (docs/goals/goal-package-boundaries.md, Decision 3): only `@apackdev/ears/lmdb` imports
- * `elmdb`. `dirs` may not import what `forbidden` matches; `except` is a directory inside them that may.
+ * Who may load the database (docs/goals/goal-package-boundaries.md, Decision 3): only `@elmdb/ears/database` imports
+ * `elmdb`. `dirs` may not import what `forbidden` matches.
  */
-export const ELMDB_RULES: { dirs: string[]; except?: string; forbidden?: RegExp; rule?: PackRuleKey }[] = [
-  // The host and the API open the database through @apackdev/ears/lmdb
+export const ELMDB_RULES: { dirs: string[]; forbidden?: RegExp; rule?: PackRuleKey }[] = [
+  // The host and the API open the database through @elmdb/ears/database
   {
     dirs: ['packages/apack-host/src', 'packages/apack-host/tests', 'packages/apack-host/scripts', 'packages/api/src', 'packages/api/tests', 'packages/api/scripts'],
     forbidden: /^elmdb(?:\/|$)/,
   },
-  // The engine's root never loads the database: its port to one is structural (`database.ts`)
-  { dirs: ['packages/apack-ears/src'], except: 'packages/apack-ears/src/lmdb', forbidden: /^(?:elmdb(?:\/|$)|(?:\.\.?\/)+(?:[\w.-]+\/)*lmdb(?:\/|$))/ },
   // Packs and their tests don't use the app's database. Named rather than spelled: this population is a pack's, so
-  // the rule is `@apackdev/cli`'s, the one `apack pack build` already runs for every pack. The two above are the host's
-  // and the engine's own trees, which no pack rule can have, so they keep a pattern here.
+  // the rule is `@apackdev/cli`'s, the one `apack pack build` already runs for every pack. The one above is the host's
+  // and the API's trees, which no pack rule can have, so it keeps a pattern here. What EARS' own root may import is
+  // elmdb's to hold, where EARS is built.
   { dirs: PACK_CODE_DIRS, rule: 'elmdb-imports' },
 ];
 
-/** `file:line: specifier` for each import of elmdb or `@apackdev/ears/lmdb` where `rules` forbid it */
+/** `file:line: specifier` for each import of elmdb or `@elmdb/ears/database`, or of what else `rules` forbid, where they forbid it */
 export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[] {
-  return rules.flatMap(({ dirs, except, forbidden, rule }) => {
+  return rules.flatMap(({ dirs, forbidden, rule }) => {
     if (rule) return packRule(rule, dirs, root);
-    const allowed = except && path.join(root, except) + path.sep;
-    const files = filesUnder(dirs, root).filter((file) => !allowed || !file.startsWith(allowed));
-    return findSpecifiers(files, root, (text) => forbidden!.test(text));
+    return filesUnder(dirs, root).flatMap((file) => readSource(file).specifiers
+      .filter(({ text }) => forbidden!.test(text))
+      .map(({ text, line }) => `${path.relative(root, file)}:${line}: ${text}`));
   });
 }
 
@@ -513,7 +520,7 @@ export function findElmdbImports(rules = ELMDB_RULES, root = repoRoot): string[]
  * Windows half an owned process tree. An addon loaded inside a pack puts a pty back in the API process, and
  * takes the Electron-ABI rebuild back with it.
  *
- * The shape is `APP_ONLY_EXPORTS`' — the list that keeps `@apackdev/ears/lmdb` out of pack code — applied to
+ * The shape is `APP_ONLY_EXPORTS`' — the list that keeps `@elmdb/ears/database` out of pack code — applied to
  * the one native module left. It is a rule over pack sources rather than a layer rule, because `node-pty` is
  * a third-party dependency and no layer table has a row for one.
  */
@@ -607,7 +614,7 @@ const EMULATOR_OWNER = 'packages/default-setup/src/features/code/fe/utils/termin
  * The package that draws a terminal, named once so the rule and its message cannot disagree about what
  * they are about — and so that replacing it is this line rather than a search for a prefix.
  */
-const EMULATOR_PACKAGE = 'apack-terminal-view';
+const EMULATOR_PACKAGE = '@apackdev/terminal-view';
 
 /**
  * And the specs that **stand in** for it, so a terminal's bookkeeping and the components that show one can
@@ -865,7 +872,7 @@ export const SHARED_LIST_CONSUMERS = [
 
 /**
  * `file:line: "text"` for each string in a consumer of the shared-instance list that names one of the
- * packages (`'@apackdev/sdk'`, `'@apackdev/ears/*'`) outside an import. Specific modules
+ * packages (`'@apackdev/sdk'`, `'@apackdev/sdk/*'`) outside an import. Specific modules
  * (`'@apackdev/sdk/runtime'`) are fine: they aren't a list of what must be loaded once.
  */
 export function findSharedPackageLists(files = SHARED_LIST_CONSUMERS, root = repoRoot, packages: readonly string[] = SHARED_INSTANCE_PACKAGES): string[] {
@@ -1056,7 +1063,7 @@ const RULE_LIST = [
     id: 'findUpwardImports',
     repoOnly: { kind: 'inapplicable', note: "The `@apackdev/*` layer rule, which is about this repo's packages and their manifests" },
     find: findUpwardImports,
-    rule: "Every workspace holding code has a layer (or is a pack, which the pack rules govern), packages import only downward (@apackdev/ears imports no @apackdev package, @apackdev/sdk only @apackdev/ears, @apackdev/host only those two and never the API, the API and the renderer only the packages below them), each lists every @apackdev package it imports in its package.json, and every package a layer allows is one it imports or says why not",
+    rule: "Every workspace holding code has a layer (or is a pack, which the pack rules govern), packages import only downward (@apackdev/sdk imports no @apackdev package, @apackdev/host only the SDK and never the API, the API and the renderer only the packages below them), each lists every @apackdev package it imports in its package.json, and every package a layer allows is one it imports or says why not",
   },
   {
     id: 'findUnimportedDependencies',
@@ -1066,9 +1073,9 @@ const RULE_LIST = [
   },
   {
     id: 'findElmdbImports',
-    repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API, the host and the engine's own root" },
+    repoOnly: { kind: 'covered', by: 'elmdb-imports', note: "What is left here is the API and the host" },
     find: findElmdbImports,
-    rule: "Only @apackdev/ears/lmdb loads elmdb: the host and the API open the database through it, the engine's root and packs never load it",
+    rule: "Only @elmdb/ears/database loads elmdb: the host and the API open the database through it, and packs never load it",
   },
   {
     id: 'findMachineLibraryVueImports',
@@ -1164,7 +1171,7 @@ const RULE_LIST = [
     id: 'findMissingSourceConditions',
     repoOnly: { kind: 'covered', by: 'source-resolution', note: "What is left here is the repo's own configs, which declare the condition where a pack's must not" },
     find: findMissingSourceConditions,
-    rule: "The repo's own configs declare the @apackdev/source condition when they compile or bundle code importing @apackdev/ears, @apackdev/sdk or @apackdev/ui, so they read TypeScript source instead of a stale dist; a pack's configs declare none, because a pack resolves the published dist",
+    rule: "The repo's own configs declare the @apackdev/source condition when they compile or bundle code importing @apackdev/sdk or @apackdev/ui, so they read TypeScript source instead of a stale dist; a pack's configs declare none, because a pack resolves the published dist",
   },
 ] as const satisfies readonly ImportRule[];
 

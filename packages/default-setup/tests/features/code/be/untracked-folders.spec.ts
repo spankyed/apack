@@ -29,9 +29,9 @@ async function codeOverAnUntrackedFolder() {
   fs.writeFileSync(path.join(directory, 'a.txt'), 'tracked\n');
   await git(directory, 'add', '.');
   await git(directory, 'commit', '--quiet', '-m', 'first');
-  fs.mkdirSync(path.join(directory, 'vendor/lib'), { recursive: true });
-  fs.writeFileSync(path.join(directory, 'vendor/lib/one.js'), 'one\n');
-  fs.writeFileSync(path.join(directory, 'vendor/two.js'), 'two\n');
+  fs.mkdirSync(path.join(directory, 'third-party/lib'), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'third-party/lib/one.js'), 'one\n');
+  fs.writeFileSync(path.join(directory, 'third-party/two.js'), 'two\n');
   app = await startApp({ systems: ['code'] });
   await app.connect();
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
@@ -43,11 +43,11 @@ it('tells the window the folder as one row, and what is in it when the row is op
 
   const asked = app!.ask('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
   const status = (await answered(asked)) as { files: object[] };
-  expect(status.files).toEqual([{ path: 'vendor/', status: 'untracked', staged: false, isDirectory: true }]);
+  expect(status.files).toEqual([{ path: 'third-party/', status: 'untracked', staged: false, isDirectory: true }]);
 
-  const opened = app!.ask('code', { type: 'commit.LIST_UNTRACKED', path: 'vendor/' }, asWindow);
+  const opened = app!.ask('code', { type: 'commit.LIST_UNTRACKED', path: 'third-party/' }, asWindow);
   expect(await answered(opened)).toEqual({
-    path: 'vendor/', files: ['vendor/lib/one.js', 'vendor/two.js'], truncated: false,
+    path: 'third-party/', files: ['third-party/lib/one.js', 'third-party/two.js'], truncated: false,
   });
 });
 
@@ -55,9 +55,9 @@ it('tells the window the folder as one row, and what is in it when the row is op
 it('shows a file of the folder as a new file: nothing on the left, the file on the right', async () => {
   await codeOverAnUntrackedFolder();
 
-  const call = app!.ask('code', { type: 'commit.GET_GIT_DIFF', path: 'vendor/lib/one.js', staged: false }, asWindow);
+  const call = app!.ask('code', { type: 'commit.GET_GIT_DIFF', path: 'third-party/lib/one.js', staged: false }, asWindow);
 
   expect(await answered(call)).toMatchObject({
-    path: 'vendor/lib/one.js', originalContent: '', modifiedContent: 'one\n',
+    path: 'third-party/lib/one.js', originalContent: '', modifiedContent: 'one\n',
   });
 });

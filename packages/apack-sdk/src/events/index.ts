@@ -295,7 +295,7 @@ export type SurfaceEvents = { [surface: string]: { type: string } };
 export type FeatureSettingsUpdated = { type: 'FEATURE_SETTINGS_UPDATED'; settings: unknown };
 
 /** Open a canonical entity ID at this surface's declared destination. */
-export type OpenEntity = { type: 'OPEN_ENTITY'; id: import('@apackdev/ears').EARS.EntityId };
+export type OpenEntity = { type: 'OPEN_ENTITY'; id: import('@elmdb/ears').EARS.EntityId };
 
 /**
  * The event types every surface receives from the app, beside those its pack's systems declare: its settings

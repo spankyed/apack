@@ -1,6 +1,7 @@
 // `query` names one thing: the engine's read operation, `ears.query(...)`, and the names built from it. A reader
 // of an LMDB partition is `read`, a data dir's engine is `db.ears`, and a lookup that finds entities is `find…`
-// (`packages/apack-ears/CLAUDE.md`, the naming rule). This holds that over every name the three packages export,
+// (EARS' guide, `docs/architecture/ears.md` in elmdb, the naming rule). This holds that over every name the three
+// packages export (EARS through its built declarations, the SDK and the host through their source),
 // and every member of an exported type, since a member is where the other meanings lived — and over the names the
 // Database console injects, which are the library's own rather than a shorter second set.
 import * as fs from 'node:fs';
@@ -11,7 +12,8 @@ import { READ_HELPER_NAMES, WRITE_HELPER_NAMES } from '@apackdev/sdk/database-co
 import { population } from '@apackdev/sdk/testing';
 
 const PACKAGES = path.resolve(__dirname, '..', '..');
-const OWNERS = { '@apackdev/ears': 'apack-ears', '@apackdev/sdk': 'apack-sdk', '@apackdev/host': 'apack-host' };
+/** Each package's directory, relative to `packages/`: EARS is installed, linked from the elmdb checkout */
+const OWNERS = { '@elmdb/ears': '../node_modules/@elmdb/ears', '@apackdev/sdk': 'apack-sdk', '@apackdev/host': 'apack-host' };
 
 /** The names that are the operation, each with why */
 const THE_OPERATION: Record<string, string> = {
@@ -30,7 +32,7 @@ function exportedEntries(): { entry: string; file: string }[] {
   return Object.entries(OWNERS).flatMap(([name, dir]) => {
     const manifest = JSON.parse(fs.readFileSync(path.join(PACKAGES, dir, 'package.json'), 'utf8'));
     return Object.entries<string | Record<string, string>>(manifest.exports ?? {}).flatMap(([sub, target]) => {
-      const source = typeof target === 'string' ? target : target['@apackdev/source'] ?? target.default;
+      const source = typeof target === 'string' ? target : target['@apackdev/source'] ?? target.types ?? target.default;
       return source?.endsWith('.ts') ? [{ entry: name + sub.slice(1), file: path.join(PACKAGES, dir, source) }] : [];
     });
   });
@@ -79,7 +81,7 @@ describe('the word query', () => {
     const { names, exported } = scan();
     population('exported names', [...exported], { atLeast: 100 });
     // The operation is there to be found, so a scan that reads nothing cannot pass
-    expect(names).toContain('@apackdev/ears: Ears.query');
+    expect(names).toContain('@elmdb/ears: Ears.query');
     const other = names.filter((n) => !(n.split(/[:.]\s*/).at(-1)! in THE_OPERATION));
     expect(other).toEqual([]);
   });

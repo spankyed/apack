@@ -25,7 +25,7 @@ Each phase ends with evidence written to docs/references/evidence/terminal-progr
 Finished when:
 - Every phase's Done-when holds on current source, with source commits and evidence recorded.
 - The final validation under Closing passes.
-- docs/references/terminal-broker.md and the broker's docs/architecture/protocol.md describe the contract.
+- docs/references/broker.md and the broker's docs/architecture/protocol.md describe the contract.
 - Outcome is written, the goal is archived, links are repaired and the closure is committed.
 
 Commit usable checkpoints as you go. Do not expand or reduce scope without user authorization.
@@ -332,7 +332,7 @@ Done when, recorded with screenshots from `.apack/drive/screenshots/`:
 
 - `npm run chain` passes on the final source, and one strict run is dispatched for it:
   `gh workflow run ci.yml --ref <branch> -f strict_chain=true`.
-- [The broker reference](../../references/terminal-broker.md) describes statuses: the record, who owns the
+- [The broker reference](../../references/broker.md) describes statuses: the record, who owns the
   rules, the check against the program in front, and that a record is a claim.
 - The pull request is opened ready for review.
 
@@ -360,7 +360,7 @@ the broker, [spankyed/apack-terminal#57](https://github.com/spankyed/apack-termi
   matters on its tab in every layout, drawing faint a record whose program is not the one in front, notifies
   once for a terminal that newly needs the person (the `terminalStatusNotification` setting), checks the
   repository when a program stops working, and fires the flow event `terminal.status`.
-- **The contract** is described in [the broker reference](../../references/terminal-broker.md) and the
+- **The contract** is described in [the broker reference](../../references/broker.md) and the
   broker's `docs/architecture/protocol.md`.
 
 ### Closing, as it went

@@ -1,7 +1,7 @@
 // services.appData: reset, back up and restore the app's stored data
 import type { ProjectionRunner } from '@apackdev/sdk/runtime';
 import { AppDataBusyError, type AppDataService, type BackupDatabase, type RunHistory, type SettingsAdmin } from '@apackdev/sdk/services';
-import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
+import type { EarsDatabase, EarsEngine } from '@elmdb/ears';
 import { databaseBackupStore, exportDatabase, readBackupSummary, importDatabase, type BackupStores } from '../backup/index.ts';
 import { secretsStore } from '../secrets/index.ts';
 import { _getMediaPath } from '@apackdev/sdk/utils';

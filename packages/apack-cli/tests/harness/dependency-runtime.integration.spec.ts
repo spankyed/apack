@@ -123,7 +123,7 @@ it("connects to default-setup's notes and the app's settings", async () => {
   expect(app.emitted('host/application').map((e) => e.type)).toContain('APPLICATION_HOTKEYS');
   // One SDK and one engine: this pack's feature settings (registered by the harness) reach the app's
   // settings, and the repositories default-setup's runtime registered are the test's, through
-  // @apackdev/ears and services.repository alike
+  // @elmdb/ears and services.repository alike
   expect(loaded.snapshot).toMatchObject({ values: { features: { 'dependent-pack/widgets': { size: 3 } } } });
   const noteQueries = Reflect.get(repository, 'noteQueries');
   expect(noteQueries).toBeDefined();

@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "esnext",
     "moduleResolution": "bundler",
-    // @apackdev/sdk and @apackdev/ears resolve to their published declarations, not their source: API
+    // @apackdev/sdk and @elmdb/ears resolve to their published declarations, not source: API
     // Extractor analyses .d.ts files, and a dependency read as source is followed into it instead
     // of being reported as an import. Run npm run packages:build first.
     "allowImportingTsExtensions": true,

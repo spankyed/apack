@@ -4,7 +4,7 @@
 // have to agree on every one of them.
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { EarsEngine, BeforeCommit } from '@apackdev/ears';
+import type { EarsEngine, BeforeCommit } from '@elmdb/ears';
 import { readInstalledContributionCatalog } from '../packs/catalog.ts';
 import { discoverPackDirectories } from '../packs/discovery.ts';
 import { PACK_LAYOUT } from '../packs/layout-paths.ts';

@@ -9,7 +9,7 @@
 // marks that never come.
 import { afterEach, describe, expect, it } from 'vitest'
 import { mockService, resetTestData, startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { featureSettings } from '#generated/settings.ts'
 import { MARKS_KEY_VARIABLE } from '#features/code/be/services/shell-integration.ts'
 

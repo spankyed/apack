@@ -4,7 +4,7 @@
 
 ```ts
 
-import { EARS } from '@apackdev/ears';
+import { EARS } from '@elmdb/ears';
 import { PromiseActorLogic } from 'xstate';
 
 // @internal

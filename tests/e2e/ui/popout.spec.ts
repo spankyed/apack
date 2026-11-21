@@ -16,4 +16,6 @@ test('pops a built-in surface out into its own window, which renders it', async 
   await expect(popout.getByTestId('notes-canvas')).toBeVisible();
   expect(await popout.evaluate(() => (window as any).__errorPageShown ?? false)).toBe(false);
   expect(errors).toEqual([]);
+  // The tests after this one share the app, and a second window with a shell in it is not theirs
+  await popout.close();
 });

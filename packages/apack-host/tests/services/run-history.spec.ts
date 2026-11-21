@@ -5,7 +5,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, afterEach, describe, expect, it } from 'vitest';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@elmdb/ears';
 import type { RunHistory, RunNode, RunNodeId, RunNodeStart } from '@apackdev/sdk/services';
 import { _openTestRunHistory } from '@apackdev/sdk/testing';
 import { openRunHistory, type RunsDatabase } from '../../src/database/open.ts';

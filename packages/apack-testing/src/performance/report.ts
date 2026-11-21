@@ -71,7 +71,7 @@ export const manifestSchema = z.object({
   format: z.literal(1), source: z.object({ revision: z.string(), dirty: z.boolean(), excludedUntracked: z.array(z.string()), diffSha256: z.string() }),
   builds: z.array(z.object({ path: z.string(), sha256: z.string() })).min(1),
   fixture: z.object({ generator: z.string(), seed: count, sha256: z.string(), distribution: z.record(z.string(), count) }),
-  native: z.object({ pin: z.string(), checkoutRevision: z.string(), dirty: z.boolean(), excludedUntracked: z.array(z.string()) }),
+  native: z.object({ resolved: z.string(), integrity: z.string() }),
   runtime: z.record(z.string(), z.string()), machine: z.object({ platform: z.string(), arch: z.string(), cpus: count, memoryBytes: count, identity: z.string() }),
   mode: _recordingModeSchema,
   cache: z.enum(['warm-process', 'fresh-process-warm-filesystem']), warmups: count,
@@ -171,13 +171,14 @@ export function comparisonOrder(perRevision = 20): Array<'A' | 'B'> {
 /** Source/build identities describe each revision; execution conditions must match before comparing them. */
 export function assertComparable(leftInput: unknown, rightInput: unknown) {
   const left = manifestSchema.parse(leftInput); const right = manifestSchema.parse(rightInput);
-  if (left.source.dirty || right.source.dirty || left.native.dirty || right.native.dirty) throw new Error('Comparison requires clean source revisions');
-  if ([left, right].some(manifest => manifest.native.checkoutRevision !== manifest.native.pin)) throw new Error('Comparison requires the pinned native checkout');
+  if (left.source.dirty || right.source.dirty) throw new Error('Comparison requires clean source revisions');
+  // A local checkout's elmdb (`npm run deps:local`) is whatever it held when the run started, which nothing records
+  if ([left, right].some(manifest => !manifest.native.resolved.startsWith('https:'))) throw new Error('Comparison requires the native package from a release');
   for (const field of ['fixture', 'native', 'runtime', 'machine', 'mode', 'cache', 'warmups'] as const) {
     const canonical = (value: unknown): string => JSON.stringify(value, (_key, entry: unknown) => entry !== null && typeof entry === 'object' && !Array.isArray(entry) ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => a.localeCompare(b))) : entry);
     if (canonical(left[field]) !== canonical(right[field])) throw new Error(`Incompatible comparison: ${field}`);
   }
-  const nativeOutputs = (manifest: PerformanceManifest) => manifest.builds.filter(build => build.path.startsWith('vendor/elmdb/')).sort((a, b) => a.path.localeCompare(b.path));
+  const nativeOutputs = (manifest: PerformanceManifest) => manifest.builds.filter(build => build.path.startsWith('node_modules/')).sort((a, b) => a.path.localeCompare(b.path));
   if (JSON.stringify(nativeOutputs(left)) !== JSON.stringify(nativeOutputs(right))) throw new Error('Incompatible comparison: native outputs');
 }
 
