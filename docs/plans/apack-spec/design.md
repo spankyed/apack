@@ -1,0 +1,188 @@
+# apack-spec: the design on one page
+
+This is the design as it stands, with no history. How it got here, what was tried first and what is not built are in
+[the plan](../apack-spec.md). Everything shown here runs in [`prototype/`](prototype/).
+
+## A state
+
+There is one primitive, a **state**. A state has its own data, and is at exactly one of the states inside it. What you
+read is where it is and the data there:
+
+```ts
+{ at: 'thread.sending', data: { titles, threadId, text } }
+```
+
+Data exists only while the state that declares it is the case. `threadId` is there while the state is somewhere inside
+`thread`, and reading it anywhere else does not compile.
+
+## What a state declares
+
+Its shape is a type. Its definition has the same keys at every depth.
+
+| Key | What it says |
+|---|---|
+| `data` | Its own fields and their starting values. `given` marks one that whoever enters it has to give |
+| `start`, `states` | The states inside it, and which it is at when entered |
+| `on` | The events it takes. A handler is synchronous and returns what happens next: `{ at, data }` |
+| `asks` | The asks it answers. A handler returns the answer, or `answered(answer, next)` to change something as it answers |
+| `run`, `failed` | Work it does while it is the case, and where it goes if that work fails |
+| `starts` | Other states it runs |
+| `follows` | Views of the database it keeps up to date |
+| `awaits` | Asks it is waiting on |
+
+## One idea for the last three
+
+You never start, follow or ask by hand. A state **declares** what it starts, follows and awaits, and says which
+fields of its data each depends on. The kernel keeps what is live matching the data, and looks again only when one of
+those fields changes.
+
+Each entry depends on the data in one of two ways:
+
+- **`from: ['id']`**: there is one, and it reads these fields. It is asked again when one of them changes.
+- **`each: 'staging'`**: there is one for each key of this field, or each item of a list. A key that appears starts
+  one, and a key that goes stops it.
+
+So changing data is how everything starts and stops:
+
+| To do this | Change the data like this |
+|---|---|
+| Open a thread's state | Add its id to `titles` |
+| Follow another thread's detail | Set `id` |
+| Stage a file | Add its path to `staging` |
+| Stop a push | Clear `push` |
+
+## A complete example
+
+A slice of the app's commit surface: its status, the diff of the selected file, staging, and a push. The real one is
+1,778 lines, declares 54 asks, and keeps a hand-written list of which are under way. This has no ids, no list, and no
+event for how an ask ended.
+
+```ts
+type Commit = {
+  data: {
+    gitStatus: GitStatus | null
+    revision: number                                    // counts each change to the repository
+    selectedGitFile: { path: string; staged: boolean } | null
+    gitDiff: string | null
+    staging: Record<string, true>                       // the paths being staged
+    push: {} | null                                     // the push being made, while one is
+    pushPhase: string | null
+    gitError: string | null
+  }
+}
+
+const commit = state<Commit, CommitEvent>()({
+  data: { gitStatus: null, revision: 0, selectedGitFile: null, gitDiff: null, staging: {}, push: null, pushPhase: null, gitError: null },
+
+  awaits: (asking) => ({
+    // A read. Asked as the surface starts, and again whenever the repository changes.
+    status: asking('code', 'commit.GET_GIT_STATUS', {
+      from: ['revision'],
+      args: () => ({}),
+      ended: (outcome) => (outcome.ok ? { data: { gitStatus: outcome.value } } : { data: { gitError: outcome.failure.message } }),
+    }),
+
+    // A read of whichever file is selected. Selecting another gives up the read of the first.
+    diff: asking('code', 'commit.GET_GIT_DIFF', {
+      from: ['selectedGitFile'],
+      args: ({ selectedGitFile }) => selectedGitFile,
+      ended: (outcome) => (outcome.ok ? { data: { gitDiff: outcome.value.text } } : { data: { gitError: outcome.failure.message } }),
+    }),
+
+    // Several writes at once: one for each path. A path is in `staging` exactly as long as its write is under way.
+    stage: asking('code', 'commit.STAGE_FILES', {
+      each: 'staging',
+      args: (path) => ({ paths: [path] }),
+      ended: (outcome, { key }) => (outcome.ok ? undefined : { data: { gitError: `Could not stage ${key}: ${outcome.failure.message}` } }),
+    }),
+
+    // One write, made while `push` holds it. Clearing `push` is what stopping it is.
+    push: asking('code', 'commit.PUBLISH_BRANCH', {
+      from: ['push'],
+      args: ({ push }) => push,
+      heard: (updates) => ({ data: { pushPhase: updates.at(-1)!.phase } }),
+      ended: (outcome) => ({ data: { push: null, pushPhase: null, ...(outcome.ok ? {} : { gitError: outcome.failure.message }) } }),
+    }),
+  }),
+
+  on: {
+    'commit.STAGE_FILE':  ({ path }) => ({ data: (d) => { d.staging[path] = true } }),
+    'commit.VIEW_DIFF':   ({ path, staged }) => ({ data: { selectedGitFile: { path, staged }, gitDiff: null } }),
+    'commit.PUSH_BRANCH': (_, { data }) => (data.push ? undefined : { data: { push: {} } }),
+    'commit.STOP_PUSH':   () => ({ data: { push: null, pushPhase: null } }),
+    'REPOSITORY_CHANGED': (_, { data }) => ({ data: { revision: data.revision + 1 } }),
+  },
+})
+```
+
+And the component that shows it:
+
+```vue
+<script setup lang="ts">
+const { state: commit, send } = useState('commit')
+</script>
+
+<template>
+  <Spinner v-if="commit.data.push" :label="commit.data.pushPhase" />
+  <li v-for="file in commit.data.gitStatus?.unstaged" :key="file">
+    {{ file }}
+    <Spinner v-if="commit.data.staging[file]" />
+    <button v-else @click="send({ type: 'commit.STAGE_FILE', path: file })">Stage</button>
+  </li>
+</template>
+```
+
+Whether something is under way is data, and the component reads it. It imports nothing but the state.
+
+## The other two, in the same grammar
+
+```ts
+// States it runs: a thread for each title, told which it is.
+starts: (start) => ({
+  thread: start(thread, { each: 'titles', given: (threadId) => ({ threadId }) }),
+}),
+
+// Views it follows: the detail of the open thread, and one for each open tab.
+follows: (follow) => ({
+  detail: follow('threads', 'detail', { from: ['id'], args: ({ id }) => ({ id }), heard: (update) => … }),
+  tab:    follow('threads', 'tab',    { each: 'openTabs', args: (threadId) => ({ threadId }), heard: (update, { key }) => … }),
+}),
+```
+
+## When to use which
+
+| What it is | Use |
+|---|---|
+| A value fetched for some arguments | `awaits`, with `from` |
+| A write to make, several at once | `awaits`, with `each` |
+| A write to make, one at a time | `awaits`, with `from` a field that holds it |
+| Something the surface is *in*, where what it accepts changes | A state with `run`, like `searching` |
+| A thing with a life of its own, one for each id | `starts`, with `each` |
+| Data from the database that keeps changing | `follows` |
+
+## Talking to other states
+
+| Verb | From | To |
+|---|---|---|
+| `send(event)` | A state | Itself |
+| `tell(name, event)` | A state | A backend system. Nobody waits |
+| `ask(name, ask, args)` | A state's `run`, or an ask's handler | A backend system. One answer comes back |
+| `progress(update)` | An ask's handler | Whoever asked, and only them |
+| `broadcast(name, event)` | The backend | That surface in every window |
+| `report(event)` | A state that was started | The state that started it |
+
+A component reads and sends. It does not ask.
+
+## What holds, always
+
+- **A change is all of it or none.** What the compiler refuses, the kernel refuses too, whole, where it is tried.
+- **One message and everything it causes is one step.** Nothing leaves until the step commits, so nobody sees a
+  half-made change, and what runs is matched to the data once, as the step ends.
+- **Work has one owner and stops when its owner does.** A state's `run` is the state's. An ask is the asker's. What a
+  state awaits, follows or starts is that state's.
+- **An answer and the change it makes are one thing.** Whoever asked is never told of a change that was not made.
+- **An ask whose asker has gone throws `Left` where it is awaited**, so `finally` runs and what was held is let go.
+- **Nothing depends on itself in a circle.** What a view delivers, or how an ask ended, may not change a field it is
+  itself asked from.
+- **Every ordering is checked, not the one that happened.** A schedule stands in for the event loop and runs a
+  scenario under every ordering its messages allow.

@@ -32,24 +32,24 @@ const shop = state<Shop, ShopEvent>()({
   data: { currency: 'EUR', total: null, watching: [], prices: {}, note: '', problem: null },
   start: 'browsing',
 
-  follows: {
+  follows: (follow) => ({
     // Asked for the currency the data holds. A change of currency follows it again; a change of anything else does not.
-    total: {
-      feature: 'shop', view: 'total',
-      args: (data) => ({ currency: data.currency }),
+    total: follow('shop', 'total', {
+      from: ['currency'],
+      args: ({ currency }) => ({ currency }),
       heard: (update) => (update.ok ? { data: { total: update.value } } : { data: { problem: update.error } }),
-    },
+    }),
     // One for each item being watched.
-    price: {
-      feature: 'shop', view: 'price', each: 'watching',
+    price: follow('shop', 'price', {
+      each: 'watching',
       args: (id) => ({ id }),
       heard: (update, { key }) => {
         if (!update.ok) return { data: { problem: `${key}: ${update.error}` } }
         if (update.value < 0) throw new Error('a price below nothing')
         return { data: (d) => { d.prices[key] = update.value } }
       },
-    },
-  },
+    }),
+  }),
 
   on: {
     SET_CURRENCY: ({ currency }) => ({ data: { currency } }),
@@ -62,14 +62,14 @@ const shop = state<Shop, ShopEvent>()({
   states: {
     browsing: {},
     away: {
-      follows: {
+      follows: (follow) => ({
         // What it hears changes the note, and the note is what it asks for: it would follow itself round for good.
-        echo: {
-          feature: 'shop', view: 'total',
-          args: (data) => ({ currency: data.note }),
+        echo: follow('shop', 'total', {
+          from: ['note'],
+          args: ({ note }) => ({ currency: note }),
           heard: (update) => (update.ok ? { data: { note: `heard ${update.value}` } } : undefined),
-        },
-      },
+        }),
+      }),
     },
   },
 })
@@ -81,20 +81,20 @@ type Pair = { data: { left: string; right: string } }
 const pair = state<Pair, PairEvent>()({
   data: { left: 'EUR', right: 'USD' },
   on: { SET_LEFT: ({ currency }) => ({ data: { left: currency } }) },
-  follows: {
+  follows: (follow) => ({
     // What `left` delivers says what `right` is asked for. One view leading another is how a list leads a detail.
-    left: {
-      feature: 'shop', view: 'total',
-      args: (data) => ({ currency: data.left }),
+    left: follow('shop', 'total', {
+      from: ['left'],
+      args: ({ left }) => ({ currency: left }),
       heard: (update) => (update.ok ? { data: { right: `R${update.value}` } } : undefined),
-    },
+    }),
     // And what `right` delivers says what `left` is asked for, which closes the circle.
-    right: {
-      feature: 'shop', view: 'total',
-      args: (data) => ({ currency: data.right }),
+    right: follow('shop', 'total', {
+      from: ['right'],
+      args: ({ right }) => ({ currency: right }),
       heard: (update) => (update.ok ? { data: { left: `L${update.value}` } } : undefined),
-    },
-  },
+    }),
+  }),
 })
 
 /** Stands in for the view host: says what is followed, and delivers what a check tells it to. */
@@ -225,7 +225,7 @@ const checks: Array<[string, () => void]> = [
     // The handler's change is made: it is the following again that is refused.
     strictEqual(data().note, 'heard 7')
     strictEqual(defects.length, 1)
-    ok(defects[0]!.includes('shop#echo delivered changed what it is itself asked for'))
+    ok(defects[0]!.includes('shop#echo delivered changed a field it is itself asked from'))
     deepStrictEqual(calls, [])
     deepStrictEqual(following(), [eur, 'total{"currency":"GBP"}'])
     sys.stop()
@@ -248,7 +248,7 @@ const checks: Array<[string, () => void]> = [
     deepStrictEqual(calls, [])
     ok(following().includes('total{"currency":"EUR"}') && !following().includes('total{"currency":"L2"}'))
     strictEqual(defects.length, 1)
-    ok(defects[0]!.includes('pair#left is what led to pair#right being asked what it is'))
+    ok(defects[0]!.includes('pair#left is what led to pair#right being asked'))
     sys.stop()
   }],
   ['a change from anywhere else follows a view again as before, and it leads the other again', () => {
@@ -273,23 +273,27 @@ const checks: Array<[string, () => void]> = [
 state<Shop, ShopEvent>()({
   data: { currency: '', total: null, watching: [], prices: {}, note: '', problem: null },
   start: 'browsing',
-  follows: {
+  follows: (follow) => ({
     // @ts-expect-error there is no such view
-    stock: { feature: 'shop', view: 'stock', args: () => ({}), heard: () => {} },
+    stock: follow('shop', 'stock', { from: [], args: () => ({}), heard: () => {} }),
     // @ts-expect-error the total is asked for a currency, not an id
-    total: { feature: 'shop', view: 'total', args: (data) => ({ id: data.currency }), heard: () => {} },
+    total: follow('shop', 'total', { from: ['currency'], args: ({ currency }) => ({ id: currency }), heard: () => {} }),
     // @ts-expect-error a currency is neither a list nor keyed, so it cannot say which prices to follow
-    price: { feature: 'shop', view: 'price', each: 'currency', args: (id) => ({ id }), heard: () => {} },
-  },
+    price: follow('shop', 'price', { each: 'currency', args: (id) => ({ id }), heard: () => {} }),
+    // @ts-expect-error it reads the note, which it did not name: a field it does not name is not there to read
+    noted: follow('shop', 'total', { from: ['currency'], args: ({ note }) => ({ currency: note }), heard: () => {} }),
+    // @ts-expect-error the shop has no such field to read from
+    missing: follow('shop', 'total', { from: ['locale'], args: () => ({ currency: '' }), heard: () => {} }),
+  }),
   states: { browsing: {}, away: {} },
 })
 state<Shop, ShopEvent>()({
   data: { currency: '', total: null, watching: [], prices: {}, note: '', problem: null },
   start: 'browsing',
-  follows: {
+  follows: (follow) => ({
     // @ts-expect-error a price is a number, so it cannot be put where the note goes
-    price: { feature: 'shop', view: 'price', each: 'watching', args: (id) => ({ id }), heard: (update) => (update.ok ? { data: { note: update.value } } : undefined) },
-  },
+    price: follow('shop', 'price', { each: 'watching', args: (id) => ({ id }), heard: (update) => (update.ok ? { data: { note: update.value } } : undefined) }),
+  }),
   states: { browsing: {}, away: {} },
 })
 

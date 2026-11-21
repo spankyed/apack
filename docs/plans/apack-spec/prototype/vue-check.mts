@@ -11,7 +11,7 @@ import { compile } from '@vue/compiler-dom'
 import * as runtime from '@vue/runtime-core'
 import { createRenderer, defineComponent, h, nextTick, ref, type Component } from '@vue/runtime-core'
 import { mirrors } from './mirror.mts'
-import { each, given, reaching, system, type Each } from './state.mts'
+import { given, reaching, system, type Each } from './state.mts'
 import { vueBinding } from './vue.mts'
 
 // ── what is rendered into ───────────────────────────────────────────────────────────────────────────────────────────
@@ -70,7 +70,7 @@ type BoardEvent =
 const board = state<Board, BoardEvent>()({
   data: { title: 'Board', items: {}, told: 0 },
   start: 'open',
-  starts: { card: each('items', card, (id, data) => ({ id, label: data.items[id]! })) },
+  starts: (start) => ({ card: start(card, { each: 'items', given: (id, data) => ({ id, label: data.items[id]! }) }) }),
   on: {
     ADD: ({ id, label }) => ({ data: (d) => { d.items[id] = label } }),
     REMOVE: ({ id }) => ({ data: (d) => { delete d.items[id] } }),

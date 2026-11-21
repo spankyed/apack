@@ -1,6 +1,6 @@
 // The states the component files in this folder read, and the `useState` typed for them. In the app a pack's
 // generated facade would give both.
-import { each, given, reaching, type Each } from '../state.mts'
+import { given, reaching, type Each } from '../state.mts'
 import { vueBinding } from '../vue.mts'
 
 const state = reaching()
@@ -24,7 +24,7 @@ export type BoardEvent =
 export const board = state<Board, BoardEvent>()({
   data: { title: 'Board', items: {} },
   start: 'list',
-  starts: { card: each('items', card, (id, data) => ({ id, label: data.items[id]! })) },
+  starts: (start) => ({ card: start(card, { each: 'items', given: (id, data) => ({ id, label: data.items[id]! }) }) }),
   on: {
     ADD: ({ id, label }) => ({ data: (d) => { d.items[id] = label } }),
     RETITLE: ({ title }) => ({ data: { title } }),

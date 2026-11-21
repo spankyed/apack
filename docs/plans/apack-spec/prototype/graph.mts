@@ -21,7 +21,7 @@ const unwrap = (type: Type): Type[] => real(type).flatMap((m: Type) => (m.symbol
 const literalsOf = (type: Type): string[] => members(type).filter((m: Type) => m.isStringLiteral()).map((m: Type) => m.value as string)
 const join = (within: string, name: string): string => (within ? `${within}.${name}` : name)
 
-function analyse(title: string, shape: Type, events: string[], asks: string[], def: Type, reaches: string[]): void {
+function analyse(title: string, shape: Type, events: string[], asks: string[], def: Type, reaches: string[], literal: any): void {
   const moves: Array<{ from: string; on: string; to: string[] }> = []
   const stays: string[] = []
   const answers: string[] = []
@@ -29,6 +29,7 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
   const entered = new Set<string>()
   const starts = new Map<string, string>()
   const follows: string[] = []
+  const awaits: string[] = []
   const where = (path: string, name: string): string => (path ? `${name} in ${path}` : name)
 
   /** A returned value that says `at` is a move to that path. Anything else changes data and stays. */
@@ -61,17 +62,6 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
       } else if (property.name === 'run') {
         const returned = type.getCallSignatures()[0] ? unwrap(type.getCallSignatures()[0].getReturnType()) : []
         if (returned.length) read(returned, path, '(its work ends)')
-      } else if (property.name === 'follows') {
-        // The views it follows, and what each one's handler does with what it delivers.
-        for (const followed of type.getProperties()) {
-          const declared = real(typeOf(followed))[0]
-          if (!declared) continue
-          const view = declared.getProperty('view')
-          follows.push(`${followed.name}${declared.getProperty('each') ? ' (one for each key)' : ''}${view ? ` of ${literalsOf(typeOf(view)).join('|')}` : ''}${path ? ` in ${path}` : ''}`)
-          const heard = declared.getProperty('heard')
-          const signature = heard && real(typeOf(heard))[0]?.getCallSignatures()[0]
-          if (signature) read(unwrap(signature.getReturnType()), path, `${followed.name} (hearing)`)
-        }
       } else if (property.name === 'failed') {
         const signature = type.getCallSignatures()[0]
         if (signature) read(unwrap(signature.getReturnType()), path, '(its work fails)')
@@ -83,6 +73,41 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
     }
   }
   walk(def, '')
+
+  // What it follows and awaits is read from the definition as written: each entry is a call that names what it is
+  // of and the fields it depends on, which is why those are named and not worked out.
+  const text = (node: any): string => (ts.isStringLiteralLike(node) ? node.text : node.getText())
+  const declarations = (object: any, path: string): void => {
+    for (const property of object.properties) {
+      if (!ts.isPropertyAssignment(property) && !ts.isMethodDeclaration(property)) continue
+      const name = property.name.getText()
+      const made = ts.isPropertyAssignment(property) ? property.initializer : undefined
+      if (name === 'states' && made && ts.isObjectLiteralExpression(made)) {
+        for (const inner of made.properties) if (ts.isPropertyAssignment(inner) && ts.isObjectLiteralExpression(inner.initializer)) declarations(inner.initializer, join(path, inner.name.getText()))
+      }
+      if ((name !== 'follows' && name !== 'awaits') || !made || !ts.isArrowFunction(made)) continue
+      let body = made.body
+      while (ts.isParenthesizedExpression(body)) body = body.expression
+      if (!ts.isObjectLiteralExpression(body)) continue
+      for (const entry of body.properties) {
+        if (!ts.isPropertyAssignment(entry) || !ts.isCallExpression(entry.initializer)) continue
+        const [first, second, options] = entry.initializer.arguments
+        if (!first || !second || !options || !ts.isObjectLiteralExpression(options)) continue
+        const option = (key: string): any => options.properties.find((each: any) => each.name?.getText() === key)
+        const each = option('each')
+        const from = option('from')
+        const depends = each ? `one for each key of ${text(each.initializer)}`
+          : from && ts.isArrayLiteralExpression(from.initializer) && from.initializer.elements.length ? `from ${from.initializer.elements.map(text).join(', ')}` : 'from nothing: once'
+        ;(name === 'follows' ? follows : awaits).push(`${entry.name.getText()}${path ? ` in ${path}` : ''}: ${text(first)} ${text(second)}, ${depends}`)
+        for (const hears of name === 'follows' ? ['heard'] : ['ended', 'heard']) {
+          const handler = option(hears)
+          const signature = handler && checker.getTypeAtLocation(handler.initializer ?? handler).getCallSignatures()[0]
+          if (signature) read(unwrap(signature.getReturnType()), path, `${entry.name.getText()} (${hears === 'ended' ? 'ending' : 'hearing'})`)
+        }
+      }
+    }
+  }
+  declarations(literal, '')
 
   /** Entering a state also enters the one it starts at, and so on down. */
   const enter = (path: string): void => {
@@ -114,7 +139,8 @@ function analyse(title: string, shape: Type, events: string[], asks: string[], d
   if (stays.length) console.log(`  changes data only: ${stays.join(', ')}`)
   if (answers.length) console.log(`  answers: ${answers.join(', ')}`)
   if (startsStates.length) console.log(`  starts: ${startsStates.join(', ')}`)
-  if (follows.length) console.log(`  follows: ${follows.join(', ')}`)
+  for (const followed of follows) console.log(`  follows ${followed}`)
+  for (const awaited of awaits) console.log(`  awaits  ${awaited}`)
   if (reaches.length) console.log(`  reaches: ${reaches.join(', ')}`)
   const findings: string[] = []
   for (const taken of [...events, ...asks]) if (!takes.has(taken)) findings.push(`nothing takes ${taken}`)
@@ -142,7 +168,7 @@ const visit = (node: any): void => {
       ts.forEachChild(inner, scan)
     }
     scan(node.arguments[0])
-    analyse(shapeNode.getText(), checker.getTypeFromTypeNode(shapeNode), events, asks, checker.getTypeAtLocation(node.arguments[0]), [...reaches])
+    analyse(shapeNode.getText(), checker.getTypeFromTypeNode(shapeNode), events, asks, checker.getTypeAtLocation(node.arguments[0]), [...reaches], node.arguments[0])
   }
   ts.forEachChild(node, visit)
 }

@@ -4,7 +4,7 @@
 //   npx tsx docs/plans/apack-spec/prototype/starts-check.mts
 import { deepStrictEqual, ok, strictEqual } from 'node:assert'
 import { explore, type Schedule } from './schedule.mts'
-import { answered, each, given, one, reaching, system, type Each } from './state.mts'
+import { answered, given, reaching, system, type Each } from './state.mts'
 
 const state = reaching()
 const turns = (count: number): Promise<void> => new Promise((resolve) => { let left = count; const tick = (): void => { if (left-- <= 0) resolve(); else setImmediate(tick) }; tick() })
@@ -68,10 +68,10 @@ const board = (log: string[], work: (label: string) => Promise<unknown> = () => 
   data: { title: 'Board', items: {}, lastBump: null },
   start: 'open',
 
-  starts: {
+  starts: (start) => ({
     // A card for each item, told which it is and what it says.
-    card: each('items', card(log), (id, data) => ({ id, label: data.items[id]! })),
-  },
+    card: start(card(log), { each: 'items', given: (id, data) => ({ id, label: data.items[id]! }) }),
+  }),
 
   on: {
     ADD: ({ id, label }) => ({ data: (d) => { d.items[id] = label } }),
@@ -109,7 +109,7 @@ const board = (log: string[], work: (label: string) => Promise<unknown> = () => 
   },
 
   states: {
-    open: { starts: { helper: one(helper(log), (data) => ({ title: data.title })) } },
+    open: { starts: (start) => ({ helper: start(helper(log), { given: (data) => ({ title: data.title }) }) }) },
     closed: {},
   },
 })
@@ -275,7 +275,7 @@ const racing = (schedule: Schedule): (() => void) => {
 state<Board, BoardEvent, BoardAsks>()({
   data: { title: '', items: {}, lastBump: null },
   start: 'open',
-  starts: { card: each('items', card([]), (id) => ({ id, label: '' })) },
+  starts: (start) => ({ card: start(card([]), { each: 'items', given: (id) => ({ id, label: '' }) }) }),
   on: {
     // @ts-expect-error a card is one of many, so reaching one takes its key
     BUMP: (_, { tell, child }) => { tell(child('card'), { type: 'BUMP' }) },
@@ -288,7 +288,7 @@ state<Board, BoardEvent, BoardAsks>()({
   },
   states: {
     open: {
-      starts: { helper: one(helper([]), () => ({ title: '' })) },
+      starts: (start) => ({ helper: start(helper([]), { given: () => ({ title: '' }) }) }),
       // Inside `open` it can be reached, and there is one, so it takes no key.
       on: { OPEN: (_, { child }) => { void child('helper') } },
     },
@@ -296,26 +296,26 @@ state<Board, BoardEvent, BoardAsks>()({
   },
 })
 // @ts-expect-error a state whose shape says it starts cards has to say which
-state<Board, BoardEvent, BoardAsks>()({ data: { title: '', items: {}, lastBump: null }, start: 'open', states: { open: { starts: { helper: one(helper([]), () => ({ title: '' })) } }, closed: {} } })
+state<Board, BoardEvent, BoardAsks>()({ data: { title: '', items: {}, lastBump: null }, start: 'open', states: { open: { starts: (start) => ({ helper: start(helper([]), { given: () => ({ title: '' }) }) }) }, closed: {} } })
 state<Board, BoardEvent, BoardAsks>()({
   data: { title: '', items: {}, lastBump: null },
   start: 'open',
-  starts: {
+  starts: (start) => ({
     // @ts-expect-error a title is neither a list nor keyed, so it cannot say which cards there are
-    card: each('title', card([]), (id) => ({ id, label: '' })),
-  },
-  states: { open: { starts: { helper: one(helper([]), () => ({ title: '' })) } }, closed: {} },
+    card: start(card([]), { each: 'title', given: (id) => ({ id, label: '' }) }),
+  }),
+  states: { open: { starts: (start) => ({ helper: start(helper([]), { given: () => ({ title: '' }) }) }) }, closed: {} },
 })
 state<Board, BoardEvent, BoardAsks>()({
   data: { title: '', items: {}, lastBump: null },
   start: 'open',
-  starts: {
+  starts: (start) => ({
     // @ts-expect-error a card has to be given its label as well as which it is
-    card: each('items', card([]), (id) => ({ id })),
-  },
+    card: start(card([]), { each: 'items', given: (id) => ({ id }) }),
+  }),
   states: {
     // @ts-expect-error the helper has to be given its title, so it cannot be named bare
-    open: { starts: { helper: helper([]) } },
+    open: { starts: (start) => ({ helper: helper([]) }) },
     closed: {},
   },
 })

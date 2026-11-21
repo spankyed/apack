@@ -45,21 +45,21 @@ const threadsSurface = state<ThreadsSurface, ThreadsSurfaceEvent>()({
   data: { threads: [], tabs: {}, openTabs: [], problem: null },
   start: 'list',
 
-  follows: {
+  follows: (follow) => ({
     // Followed for as long as the surface runs.
-    list: {
-      feature: 'threads', view: 'list',
+    list: follow('threads', 'list', {
+      from: [],
       args: () => ({}),
       heard: (update) => (update.ok ? { data: { threads: update.value } } : { data: { problem: `list: ${update.error}` } }),
-    },
+    }),
 
     // One for each open tab. Which tabs are open is the data; opening or closing one is all it takes.
-    tab: {
-      feature: 'threads', view: 'tab', each: 'openTabs',
+    tab: follow('threads', 'tab', {
+      each: 'openTabs',
       args: (threadId) => ({ threadId }),
       heard: (update, { key }) => (update.ok ? { data: (d) => { d.tabs[key] = update.value } } : { data: { problem: `tab: ${update.error}` } }),
-    },
-  },
+    }),
+  }),
 
   on: {
     SHOW_LIST:   ()       => ({ at: 'list' }),
@@ -78,13 +78,13 @@ const threadsSurface = state<ThreadsSurface, ThreadsSurfaceEvent>()({
       data: { id: given, detail: given },
 
       // Followed only while a thread is open, and asked for whichever thread that is.
-      follows: {
-        detail: {
-          feature: 'threads', view: 'detail',
-          args: (data) => ({ id: data.id }),
+      follows: (follow) => ({
+        detail: follow('threads', 'detail', {
+          from: ['id'],
+          args: ({ id }) => ({ id }),
           heard: (update) => (update.ok ? { data: { detail: update.value } } : { data: { problem: `detail: ${update.error}` } }),
-        },
-      },
+        }),
+      }),
     },
   },
 })

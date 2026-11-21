@@ -17,7 +17,7 @@
 // and `inference` for `services.inference`.
 
 import { deepStrictEqual } from 'node:assert'
-import { answered, each, given, reaching, system, within, type AskFailure, type Each } from './state.mts'
+import { answered, given, reaching, system, within, type AskFailure, type Each } from './state.mts'
 
 // ════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
 // What can be reached by name. In the app a pack's generated facade would declare this.
@@ -174,10 +174,10 @@ function threads(inference: Inference) {
   return state<Threads, ThreadsEvent, ThreadsAsks>()({
     data: { titles: {} },
 
-    starts: {
+    starts: (start) => ({
       // A thread for each title, told which it is.
-      thread: each('titles', thread(inference), (threadId) => ({ threadId })),
-    },
+      thread: start(thread(inference), { each: 'titles', given: (threadId) => ({ threadId }) }),
+    }),
 
     asks: {
       // Answers and changes data as one step, and the thread is running by the end of it: adding its title is what
@@ -292,7 +292,7 @@ function threadsSurface(log: (line: string) => void) {
         data: { threadId: given, lastReply: given, streamed: given },
         start: 'idle',
 
-        starts: { draft },
+        starts: () => ({ draft }),
 
         run({ data, use }) {
           log(`composer mounted for ${data.threadId}`)
@@ -358,7 +358,7 @@ function mustNotCompile(): void {
 
   state<Threads, ThreadsEvent, ThreadsAsks>()({
     data: { titles: {} },
-    starts: { thread: each('titles', thread(undefined as never), (threadId) => ({ threadId })) },
+    starts: (start) => ({ thread: start(thread(undefined as never), { each: 'titles', given: (threadId) => ({ threadId }) }) }),
     asks: {
       CREATE_THREAD: () => ({ threadId: 'THR-1' }),
       // @ts-expect-error `attachment-missing` carries the document's id, so it cannot be refused without one
@@ -368,7 +368,7 @@ function mustNotCompile(): void {
 
   state<Threads, ThreadsEvent, ThreadsAsks>()({
     data: { titles: {} },
-    starts: { thread: each('titles', thread(undefined as never), (threadId) => ({ threadId })) },
+    starts: (start) => ({ thread: start(thread(undefined as never), { each: 'titles', given: (threadId) => ({ threadId }) }) }),
     asks: {
       CREATE_THREAD: () => ({ threadId: 'THR-1' }),
       // @ts-expect-error `no-such-thread` carries nothing, so it takes no document id

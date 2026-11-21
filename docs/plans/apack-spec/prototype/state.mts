@@ -11,7 +11,8 @@
 //   broadcast(name, event)   from the backend to that surface in every window
 //   report(event)            from a state that was started, to the state that started it
 //
-// What a state starts, and the views it follows, are declared. Which of them run follows from its data.
+// What a state starts, the views it follows and the asks it awaits are declared, each naming the fields of the data
+// it depends on. Which of them are live follows from the data, and is looked at again only when one of those changes.
 
 import { produce } from './draft.mts'
 
@@ -276,14 +277,19 @@ export type Def<R, S, H extends string, E extends AnyEvent, A extends Asks, N ex
    * key, for as long as its key is among the keys the data gives. Nothing starts or stops one by hand: change the
    * data, and what runs follows in the same step.
    */
-  starts: { [K in keyof StartsOf<S>]: StartsOf<S>[K] extends Each<infer X> ? EachOf<DataAt<R, H>, X>
+  starts: (start: Start<DataAt<R, H>>) => { [K in keyof StartsOf<S>]: StartsOf<S>[K] extends Each<infer X> ? EachOf<DataAt<R, H>, X>
     : NeedsGiven<StartsOf<S>[K]> extends true ? OneOf<DataAt<R, H>, StartsOf<S>[K]> : StartsOf<S>[K] | OneOf<DataAt<R, H>, StartsOf<S>[K]> }
 }) & {
   /**
    * The views it follows while it is the case. What each is asked for comes from the data, and what it delivers goes
    * to a handler, which returns what happens next as any handler does.
    */
-  follows?: Record<string, Follow<R, H, E, N>>
+  follows?: (follow: Follow<R, H, E, N>) => Record<string, Followed<R, H, E, N>>
+  /**
+   * The asks it is waiting on while it is the case: a read, asked again when a field it names changes, or one for
+   * each key of a field, which is how several writes are under way at once. How each ended goes to a handler.
+   */
+  awaits?: (asking: Asking<R, H, E, N>) => Record<string, Awaiting<R, H, E, N>>
 } & ([Names<S>] extends [never] ? { start?: never; states?: never } : {
   /** The state inside it that it is at when whoever enters it does not say. */
   start: { [K in Names<S>]: {} extends DataOf<StatesOf<S>[K]> ? K : never }[Names<S>]
@@ -305,40 +311,88 @@ export interface EachOf<D, X> { readonly each: KeysField<D>; readonly state: X; 
 /** One state, given its data from the starter's data. */
 export interface OneOf<D, X> { readonly state: X; readonly given: (data: Readonly<D>) => RootGiven<X> }
 
-/**
- * In a definition's `starts`: one state for each key of a field of the data, or each item where the field is a list.
- * A key that appears starts its state, given what `given` returns for it. One that goes stops its state. One that
- * stays leaves its state running as it is. Which there are is looked at again only when that field changes.
- */
-export function each<D, X extends AnyState>(field: KeysField<D>, state: X, given: (key: string, data: Readonly<D>) => RootGiven<X>): EachOf<D, X> {
-  return { each: field, state, given }
-}
-/** In a definition's `starts`: a state that has to be given data, and what it is given, from the starter's data. */
-export function one<D, X extends AnyState>(state: X, given: (data: Readonly<D>) => RootGiven<X>): OneOf<D, X> { return { state, given } }
+// ── one grammar for what a state starts, follows and awaits ─────────────────────────────────────────────────────────
+//
+//   starts:  (start)  => ({ thread: start(thread, { each: 'titles', given: (threadId) => ({ threadId }) }) }),
+//   follows: (follow) => ({ detail: follow('threads', 'detail', { from: ['id'], args: ({ id }) => ({ id }), heard }) }),
+//   awaits:  (asking) => ({ stage:  asking('code', 'STAGE_FILES', { each: 'staging', args: (path) => ({ paths: [path] }), ended }) }),
+//
+// Each says which fields of the data it depends on: `each`, a field with one of them for each of its keys, or
+// `from`, the fields a single one reads. The kernel looks again only when one of those fields changes. There is
+// nothing to work out and nothing to run to find out, so nothing can throw, and the graph can say what depends on
+// what. Each is written as a function of the helper it is made with, which is what gives a handler inside it the
+// types of the state it is declared in.
 
 /**
- * A view to follow. Followed alone, what it is asked for is worked out from the data, and it is followed again when
- * that comes out different. With `each`, one is followed for each key of that field, asked for what the key says.
+ * Makes a state to start. With `each`, one for each key of that field, or each item where the field is a list: a
+ * key that appears starts its state, one that goes stops it, and one that stays leaves it as it is. `given` says
+ * what the state is given as it starts, once.
  */
-type Follow<R, H extends string, E extends AnyEvent, N extends Net> = {
-  [F in keyof N['views'] & string]: {
-    [V in keyof N['views'][F] & string]:
-      | {
-        readonly feature: F
-        readonly view: V
-        readonly each?: undefined
-        readonly args: (data: Readonly<DataAt<R, H>>) => N['views'][F][V]['args']
-        readonly heard: (update: ViewUpdate<N['views'][F][V]['result']>, scope: EventScope<R, H, E, N>) => Next<R, H> | void
-      }
-      | {
-        readonly feature: F
-        readonly view: V
-        readonly each: KeysField<DataAt<R, H>>
-        readonly args: (key: string) => N['views'][F][V]['args']
-        readonly heard: (update: ViewUpdate<N['views'][F][V]['result']>, scope: EventScope<R, H, E, N> & { readonly key: string }) => Next<R, H> | void
-      }
-  }[keyof N['views'][F] & string]
-}[keyof N['views'] & string]
+export interface Start<D> {
+  <X extends AnyState>(state: X, options: { each: KeysField<D>; given: (key: string, data: Readonly<D>) => RootGiven<X> }): EachOf<D, X>
+  <X extends AnyState>(state: X, options: { given: (data: Readonly<D>) => RootGiven<X> }): OneOf<D, X>
+}
+
+/** What `args` is given: the key, for one of many, or the fields it named. */
+type Given_<R, H extends string, K extends string, Many> = [Many] extends [string] ? string : Readonly<Pick<DataAt<R, H>, K & keyof DataAt<R, H>>>
+/** What a handler of one of many is given beside its scope: which one it is. */
+type Keyed<Many> = [Many] extends [string] ? { readonly key: string } : {}
+
+/** A view a state follows, as `follow` makes it. */
+export interface Followed<R, H extends string, E extends AnyEvent, N extends Net> {
+  readonly feature: string; readonly view: string; readonly each?: string; readonly from?: readonly string[]
+  readonly args: Function; readonly heard: Function
+  readonly _?: { r: R; h: H; e: E; n: N }
+}
+/**
+ * Makes a view to follow. With `from`, it is asked for what `args` makes of those fields, and followed again when
+ * one of them changes. With `each`, one is followed for each key of that field. What it delivers goes to `heard`,
+ * which returns what happens next as any handler does.
+ */
+export type Follow<R, H extends string, E extends AnyEvent, N extends Net> = <
+  F extends keyof N['views'] & string, V extends keyof N['views'][F] & string,
+  K extends keyof DataAt<R, H> & string = never, Many extends KeysField<DataAt<R, H>> | undefined = undefined,
+>(feature: F, view: V, options: {
+  /** The fields a single one reads. It is followed again when one of them changes. */
+  from?: readonly K[]
+  /** A field with one to follow for each of its keys, in place of `from`. */
+  each?: Many
+  args: (given: Given_<R, H, K, Many>) => N['views'][F][V]['args']
+  heard: (update: ViewUpdate<N['views'][F][V]['result']>, scope: EventScope<R, H, E, N> & Keyed<Many>) => Next<R, H> | void
+}) => Followed<R, H, E, N>
+
+/** An ask a state awaits, as `asking` makes it. */
+export interface Awaiting<R, H extends string, E extends AnyEvent, N extends Net> {
+  readonly of: string; readonly ask: string; readonly each?: string; readonly from?: readonly string[]
+  readonly args: Function; readonly ended: Function; readonly heard?: Function
+  readonly _?: { r: R; h: H; e: E; n: N }
+}
+/**
+ * Makes an ask to wait on.
+ *
+ * With `from` it is a read. It is asked for what `args` makes of those fields, and asked again when one of them
+ * changes, the one before given up. Where `args` gives nothing, nothing is asked. To have it asked again with
+ * nothing else changed, name a field that only counts, and change it.
+ *
+ * With `each` there is one for each key of that field, which is how several are under way at once: putting a key in
+ * asks, and taking it out gives the ask up. When one ends its key is taken out, so the field holds what is under
+ * way and nothing else, and a component shows that by reading it.
+ *
+ * How it ended goes to `ended`, and what it says before that to `heard`, as a list at most once a frame. Each
+ * returns what happens next as any handler does.
+ */
+export type Asking<R, H extends string, E extends AnyEvent, N extends Net> = <
+  S extends SystemsOf<N>, Q extends keyof N['systems'][S]['asks'] & string,
+  K extends keyof DataAt<R, H> & string = never, Many extends KeysField<DataAt<R, H>> | undefined = undefined,
+>(of: S, ask: Q, options: {
+  /** The fields a single one reads. It is asked again when one of them changes. */
+  from?: readonly K[]
+  /** A field with one ask for each of its keys, in place of `from`. */
+  each?: Many
+  args: (given: Given_<R, H, K, Many>) => AskOf<N, S, Q>['args'] | ([Many] extends [string] ? never : null | undefined | false)
+  ended: (outcome: OutcomeOf<AskOf<N, S, Q>>, scope: EventScope<R, H, E, N> & Keyed<Many>) => Next<R, H> | void
+  heard?: (updates: ReadonlyArray<ProgressOf<AskOf<N, S, Q>>>, scope: EventScope<R, H, E, N> & Keyed<Many>) => Next<R, H> | void
+}) => Awaiting<R, H, E, N>
 
 /** `state`, for code that can reach `N` by name. In the app this is what a pack's generated facade would export. */
 export function reaching<N extends Net = Nothing>() {
@@ -366,8 +420,9 @@ class Question {
 const refusal = (kind: string, message: string, data?: object): AnyOutcome => ({ ok: false, failure: { ...data, kind, message } })
 
 type Plain = Record<string, unknown>
-type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; failed?: Function; states?: Record<string, LooseDef>; starts?: Record<string, { def: unknown } | { state: { def: unknown }; given: Function; each?: string }>
-  follows?: Record<string, { feature: string; view: string; each?: string; args: Function; heard: Function }>
+type LooseDef = { data?: Plain; start?: string; on?: Record<string, Function>; asks?: Record<string, Function>; run?: Function; failed?: Function; states?: Record<string, LooseDef>; starts?: (start: Function) => Record<string, { def: unknown } | { state: { def: unknown }; given: Function; each?: string }>
+  follows?: (follow: Function) => Record<string, { feature: string; view: string; each?: string; from?: readonly string[]; args: Function; heard: Function }>
+  awaits?: (asking: Function) => Record<string, { of: string; ask: string; each?: string; from?: readonly string[]; args: Function; ended: Function; heard?: Function }>
 }
 type Heard = (update: unknown) => void
 
@@ -387,8 +442,15 @@ interface Active {
    * The views it follows, by name and key: what each was asked for, how to stop following it, and which views'
    * deliveries led to it being asked that.
    */
-  readonly following: Map<string, { readonly args: string; readonly because: ReadonlySet<string>; stop(): void }>
+  readonly following: Map<string, Live>
+  /** The asks it awaits, by name and key, in the same terms. */
+  readonly awaiting: Map<string, Live>
 }
+/**
+ * One view being followed or one ask awaited: the values of the fields it named when it was asked, how to stop it,
+ * and which deliveries led to it being asked.
+ */
+interface Live { readonly seen: readonly unknown[]; readonly because: ReadonlySet<string>; stop: () => void }
 interface Running { ref: string; data: Plain; root: Active; starter?: { readonly ref: string; readonly from: string } }
 
 type Item =
@@ -397,6 +459,8 @@ type Item =
   | { kind: 'result'; of: Active; value: unknown }
   | { kind: 'failure'; of: Active; error: unknown }
   | { kind: 'view'; of: Active; name: string; id: string; key: string | undefined; update: ViewUpdate<unknown> }
+  | { kind: 'ended'; of: Active; name: string; id: string; key: string | undefined; live: Live; outcome: AnyOutcome }
+  | { kind: 'progressed'; of: Active; name: string; id: string; key: string | undefined; live: Live; updates: unknown[] }
   | { kind: 'answer'; question: Question; outcome: AnyOutcome; change?: { of: Active; next: unknown } }
   | { kind: 'out'; leave: () => void }
 
@@ -607,7 +671,7 @@ export function system(host: {
 
   const enter = (top: Running, def: LooseDef, name: string, around: Active | undefined, entering: Plain): Active => {
     const path = around?.path ? `${around.path}.${name}` : name
-    const active: Active = { top, def, name, path, around, inside: undefined, controller: new AbortController(), releases: [], questions: new Set(), started: new Set(), following: new Map() }
+    const active: Active = { top, def, name, path, around, inside: undefined, controller: new AbortController(), releases: [], questions: new Set(), started: new Set(), following: new Map(), awaiting: new Map() }
     if (around) around.inside = active; else top.root = active
     for (const [field, initial] of Object.entries(def.data ?? {})) {
       if (field in entering) top.data = { ...top.data, [field]: entering[field] }
@@ -628,8 +692,9 @@ export function system(host: {
     if (active.inside) exit(active.inside)
     if (active.path) trace(`${active.top.ref} left ${active.path}`)
     active.controller.abort()
-    for (const followed of active.following.values()) followed.stop()
+    for (const live of [...active.following.values(), ...active.awaiting.values()]) live.stop()
     active.following.clear()
+    active.awaiting.clear()
     for (const ref of [...active.started].reverse()) end(ref)
     active.started.clear()
     for (const question of active.questions) leaving.push(() => question.end(refusal('abandoned', 'It stopped before answering')))
@@ -659,6 +724,20 @@ export function system(host: {
     descend(kept, names.slice(shared), entering)
   }
 
+  /** What a definition declares, read from it once: each is a function of the helper its entries are made with. */
+  const declared = new WeakMap<LooseDef, { starts: ReturnType<NonNullable<LooseDef['starts']>>; follows: ReturnType<NonNullable<LooseDef['follows']>>; awaits: ReturnType<NonNullable<LooseDef['awaits']>> }>()
+  const declaredBy = (def: LooseDef) => {
+    let found = declared.get(def)
+    if (!found) {
+      found = {
+        starts: def.starts?.((state: unknown, options: { each?: string; given: Function }) => ({ each: options.each, state, given: options.given })) ?? {},
+        follows: def.follows?.((feature: string, view: string, options: object) => ({ feature, view, ...options })) ?? {},
+        awaits: def.awaits?.((of: string, ask: string, options: object) => ({ of, ask, ...options })) ?? {},
+      }
+      declared.set(def, found)
+    }
+    return found
+  }
   const keysOf = (held: unknown): string[] => [...new Set(Array.isArray(held) ? held as string[] : Object.keys((held ?? {}) as object))]
   const said = (error: unknown): string => (error instanceof Error ? error.message : String(error))
   /** Where an error was thrown, outside the kernel and the draft: the line of the handler that did it. */
@@ -684,7 +763,7 @@ export function system(host: {
     const looks = (field: string): boolean => touched === 'all' || touched.has(field)
     for (let active: Active | undefined = top.root; active; active = active.inside) {
       const at = active
-      for (const [name, declared] of Object.entries(at.def.starts ?? {})) {
+      for (const [name, declared] of Object.entries(declaredBy(at.def).starts)) {
         const under = `${top.ref}/${name}`
         const start = (ref: string, def: unknown, from: string, given: () => Plain): void => {
           let entering: Plain
@@ -704,42 +783,87 @@ export function system(host: {
         for (const [ref, key] of wanted) if (!at.started.has(ref)) start(ref, declared.state.def, key, () => declared.given(key, top.data) as Plain)
       }
 
-      const views = host.views
-      if (!views) continue
-      for (const [name, declared] of Object.entries(at.def.follows ?? {})) {
-        /** What should be followed under this name, and what each is asked for. */
-        const wanted = new Map<string, { key: string | undefined; args: () => object }>()
-        if (declared.each === undefined) wanted.set(name, { key: undefined, args: () => declared.args(top.data) as object })
-        else if (!looks(declared.each)) continue
-        else {
-          trace(`${top.ref} looked at ${declared.each} for which ${name} to follow`)
-          for (const key of keysOf(top.data[declared.each])) wanted.set(`${name}/${key}`, { key, args: () => declared.args(key) as object })
+      /**
+       * One of what this state follows or awaits, as it should be now. `seen` is the values of the fields it named:
+       * the data is never changed in place, so a field that changed is a different value, and comparing the two
+       * says whether to ask again without working anything out.
+       */
+      const settle = (live: Map<string, Live>, id: string, seen: readonly unknown[], begin: (entry: Live) => (() => void) | undefined, nothing = false): void => {
+        const now = live.get(id)
+        if (now && now.seen.length === seen.length && now.seen.every((value, index) => Object.is(value, seen[index]))) return
+        // There is nothing to ask for now: what was asked is given up, and nothing can come round.
+        if (nothing) { now?.stop(); live.set(id, { seen, because: new Set(), stop: () => {} }); return }
+        const here = `${top.ref}#${id}`
+        // A circle would be asked again, deliver again, and never come to rest, each round a read. It is refused
+        // where it closes: this one goes on as it was.
+        if (now && hearing && (hearing.id === here || hearing.because.has(here))) {
+          trace(hearing.id === here
+            ? `DEFECT: what ${here} delivered changed a field it is itself asked from. It goes on as it was`
+            : `DEFECT: what ${hearing.id} delivered changed a field ${here} is asked from, and ${here} is what led to ${hearing.id} being asked. ${here} goes on as it was`)
+          return
         }
+        now?.stop()
+        live.delete(id)
+        const because: ReadonlySet<string> = hearing ? new Set([...hearing.because, hearing.id]) : new Set()
+        // In place before it begins, so that whatever it delivers can be told from what an earlier one did.
+        const entry: Live = { seen, because, stop: () => {} }
+        live.set(id, entry)
+        const stop = begin(entry)
+        if (stop) entry.stop = stop; else live.delete(id)
+      }
+      const picked = (from: readonly string[]): Plain => Object.fromEntries(from.map((field) => [field, top.data[field]]))
+      /** For one declared with `each`: the keys there are now, with what went stopped. Nothing if the field did not change. */
+      const keysNow = (live: Map<string, Live>, name: string, field: string, what: string): string[] | undefined => {
+        if (!looks(field)) return undefined
+        trace(`${top.ref} looked at ${field} for which ${name} to ${what}`)
+        const keys = keysOf(top.data[field])
+        const wanted = new Set(keys.map((key) => `${name}/${key}`))
+        for (const [id, entry] of [...live]) if (id.startsWith(`${name}/`) && !wanted.has(id)) { entry.stop(); live.delete(id) }
+        return keys
+      }
 
-        for (const [id, followed] of [...at.following]) if ((id === name || id.startsWith(`${name}/`)) && !wanted.has(id)) { followed.stop(); at.following.delete(id) }
-        for (const [id, { key, args }] of wanted) {
+      const views = host.views
+      if (views) for (const [name, declared] of Object.entries(declaredBy(at.def).follows)) {
+        const followed = (id: string, key: string | undefined, seen: readonly unknown[], args: () => unknown): void => settle(at.following, id, seen, (live) => {
           let asked: object
-          try { asked = args() } catch (error) { trace(`DEFECT: ${top.ref} could not say what to ask ${id} for: ${said(error)}`); continue }
-          const now = at.following.get(id)
-          const asking = JSON.stringify(asked)
-          if (now?.args === asking) continue
-          const here = `${top.ref}#${id}`
-          // A circle would be followed again, deliver again, and never come to rest, each round a read of the
-          // database. It is refused where it closes: this view goes on being asked what it was.
-          if (now && hearing && (hearing.id === here || hearing.because.has(here))) {
-            trace(hearing.id === here
-              ? `DEFECT: what ${here} delivered changed what it is itself asked for. It goes on following what it was`
-              : `DEFECT: what ${hearing.id} delivered changed what ${here} is asked for, and ${here} is what led to ${hearing.id} being asked what it is. ${here} goes on following what it was`)
-            continue
-          }
-          now?.stop()
-          const because: ReadonlySet<string> = hearing ? new Set([...hearing.because, hearing.id]) : new Set()
-          const mine: { args: string; because: ReadonlySet<string>; stop(): void } = { args: asking, because, stop: () => {} }
-          at.following.set(id, mine)
-          const stop = views(declared.feature, declared.view, asked, (update) => {
-            if (!at.controller.signal.aborted && at.following.get(id) === mine) arrive({ kind: 'view', of: at, name, id, key, update })
+          try { asked = args() as object } catch (error) { trace(`DEFECT: ${top.ref} could not say what to ask ${id} for: ${said(error)}`); return undefined }
+          return views(declared.feature, declared.view, asked, (update) => {
+            if (!at.controller.signal.aborted && at.following.get(id) === live) arrive({ kind: 'view', of: at, name, id, key, update })
           })
-          mine.stop = stop
+        })
+        if (declared.each !== undefined) {
+          for (const key of keysNow(at.following, name, declared.each, 'follow') ?? []) followed(`${name}/${key}`, key, [key], () => declared.args(key))
+        } else {
+          const from = declared.from ?? []
+          if (!from.some(looks) && at.following.has(name)) continue
+          followed(name, undefined, from.map((field) => top.data[field]), () => declared.args(picked(from)))
+        }
+      }
+
+      for (const [name, declared] of Object.entries(declaredBy(at.def).awaits)) {
+        const awaited = (id: string, key: string | undefined, seen: readonly unknown[], args: () => unknown): void => {
+          let asked: object | null | undefined | false
+          try { asked = args() as object | null | undefined | false } catch (error) { trace(`DEFECT: ${top.ref} could not say what to ask ${id} for: ${said(error)}`); return }
+          const what = asked
+          // Nothing to ask for is nothing asked, and it is still looked at again when its fields change.
+          settle(at.awaiting, id, seen, (live) => {
+          if (!what) return () => {}
+          const given = new AbortController()
+          const signal = AbortSignal.any([at.controller.signal, given.signal])
+          const mine = (): boolean => at.awaiting.get(id) === live && !signal.aborted
+          const hears = declared.heard && ((updates: unknown[]): void => { if (mine()) arrive({ kind: 'progressed', of: at, name, id, key, live, updates }) })
+          const made = ask(declared.of, declared.ask, what, signal, hears) as unknown as Promise<AnyOutcome>
+          // Given up, it ends with `Left`, which is that and nothing to hear of.
+          made.then((outcome) => { if (mine()) arrive({ kind: 'ended', of: at, name, id, key, live, outcome }) }, () => {})
+          return () => given.abort()
+          }, !what)
+        }
+        if (declared.each !== undefined) {
+          for (const key of keysNow(at.awaiting, name, declared.each, 'await') ?? []) awaited(`${name}/${key}`, key, [key], () => declared.args(key))
+        } else {
+          const from = declared.from ?? []
+          if (!from.some(looks) && at.awaiting.has(name)) continue
+          awaited(name, undefined, from.map((field) => top.data[field]), () => declared.args(picked(from)))
         }
       }
     }
@@ -894,13 +1018,36 @@ export function system(host: {
     if (item.kind === 'result') { apply(item.of, item.value); return }
     if (item.kind === 'failure') { fail(item.of, item.error); return }
     if (item.kind === 'view') {
-      const followed = item.of.def.follows?.[item.name]
+      const followed = declaredBy(item.of.def).follows[item.name]
       if (!followed || item.of.controller.signal.aborted) return
       const { ask: _, ...scope } = scopeOf(item.of)
       hearing = { id: `${item.of.top.ref}#${item.id}`, because: item.of.following.get(item.id)?.because ?? new Set() }
       try { apply(item.of, followed.heard(item.update, item.key === undefined ? scope : { ...scope, key: item.key })) } catch (error) {
         trace(`DEFECT: ${item.of.top.ref} threw hearing ${item.id}, and nothing changed: ${said(error)}`)
       }
+      return
+    }
+    if (item.kind === 'ended' || item.kind === 'progressed') {
+      const awaited = declaredBy(item.of.def).awaits[item.name]
+      if (!awaited || item.of.controller.signal.aborted || item.of.awaiting.get(item.id) !== item.live) return
+      const top = item.of.top
+      const { ask: _, ...scope } = scopeOf(item.of)
+      const given = item.key === undefined ? scope : { ...scope, key: item.key }
+      hearing = { id: `${top.ref}#${item.id}`, because: item.live.because }
+      if (item.kind === 'progressed') {
+        try { apply(item.of, awaited.heard!(item.updates, given)) } catch (error) { trace(`DEFECT: ${top.ref} threw hearing ${item.id}, and nothing changed: ${said(error)}`) }
+        return
+      }
+      // One of many has ended, so it is no longer under way: its key goes from the field that says which are. That
+      // is before its handler, which may put it back to have it asked again.
+      if (item.key !== undefined && awaited.each !== undefined) {
+        const held = top.data[awaited.each]
+        const without = Array.isArray(held) ? held.filter((key) => key !== item.key) : Object.fromEntries(Object.entries((held ?? {}) as object).filter(([key]) => key !== item.key))
+        top.data = { ...top.data, [awaited.each]: without }
+        touchAt(top.ref, [awaited.each])
+        item.of.awaiting.delete(item.id)
+      }
+      try { apply(item.of, awaited.ended(item.outcome, given)) } catch (error) { trace(`DEFECT: ${top.ref} threw taking how ${item.id} ended, and nothing changed: ${said(error)}`) }
       return
     }
     if (item.kind === 'answer') {

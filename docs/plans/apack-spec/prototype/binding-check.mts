@@ -5,7 +5,7 @@
 import { deepStrictEqual, strictEqual } from 'node:assert'
 import { effect } from '@vue/reactivity'
 import { mirror } from './mirror.mts'
-import { each, given, reaching, system, type Each, type Value } from './state.mts'
+import { given, reaching, system, type Each, type Value } from './state.mts'
 import { windowFrame } from './window-frame.mts'
 
 type Shape = {
@@ -71,7 +71,7 @@ type Board = { data: { items: Record<string, string> }; starts: { card: Each<typ
 type BoardEvent = { type: 'ADD'; id: string; label: string } | { type: 'REMOVE'; id: string } | { type: 'BUMP'; id: string }
 const board = state<Board, BoardEvent>()({
   data: { items: {} },
-  starts: { card: each('items', card, (id, data) => ({ id, label: data.items[id]! })) },
+  starts: (start) => ({ card: start(card, { each: 'items', given: (id, data) => ({ id, label: data.items[id]! }) }) }),
   on: {
     ADD: ({ id, label }) => ({ data: (d) => { d.items[id] = label } }),
     REMOVE: ({ id }) => ({ data: (d) => { delete d.items[id] } }),
