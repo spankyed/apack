@@ -748,6 +748,7 @@ it('returns focus from a dismissed notice after restoration without stealing ano
 
 
 it.each(['pending', 'offered'] as const)('retires %s completion ownership when composition starts before a document change', state => {
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   editor.commands.setContent('#rel')
   editor.commands.setTextSelection(5)
   const send = vi.fn(), request = vi.fn(), update = vi.fn()
@@ -775,7 +776,47 @@ it.each(['pending', 'offered'] as const)('retires %s completion ownership when c
     expect(freshOffer).toBeTruthy()
     expect(bridge.selectCompletion(0, freshOffer)).toBe(true)
     expect(serialize(editor.state.doc)).toBe('#release')
-  } finally { bridge.dispose() }
+  } finally { bridge.dispose(); focused.mockRestore() }
+})
+
+
+it.each(['pending', 'offered'] as const)('retires %s completion ownership when the window loses focus', state => {
+  const focused = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  editor.commands.setContent('#rel')
+  editor.commands.setTextSelection(5)
+  const send = vi.fn(), request = vi.fn(), update = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, vi.fn(), 0, { request, update })
+  const acknowledge = () => {
+    const edit = send.mock.lastCall![0]
+    bridge.receive({ revision: edit.revision, status: 'applied', frame: { text: edit.text, cursor: edit.cursor } })
+  }
+  try {
+    acknowledge()
+    const revision = request.mock.lastCall![0].revision
+    const reply = { revision, status: 'ready' as const, result: { start: 0, suggestions: [{ text: '#release', label: 'Release review' }] } }
+    if (state === 'offered') bridge.receiveCompletions(reply)
+    const oldOffer = update.mock.lastCall?.[1]
+    const { doc, selection } = editor.state
+    focused.mockReturnValue(false)
+    window.dispatchEvent(new Event('blur'))
+    if (state === 'pending') bridge.receiveCompletions(reply)
+    expect(update).toHaveBeenLastCalledWith([])
+    if (oldOffer) expect(bridge.selectCompletion(0, oldOffer)).toBe(false)
+    expect(editor.state.doc).toBe(doc)
+    expect(editor.state.selection.eq(selection)).toBe(true)
+
+    editor.commands.insertContent('e')
+    acknowledge()
+    expect(request).toHaveBeenCalledTimes(1)
+    focused.mockReturnValue(true)
+    editor.commands.insertContent('a')
+    acknowledge()
+    const fresh = request.mock.lastCall![0].revision
+    expect(fresh).toBeGreaterThan(revision)
+    bridge.receiveCompletions({ ...reply, revision: fresh })
+    expect(bridge.selectCompletion(0, update.mock.lastCall![1])).toBe(true)
+    expect(serialize(editor.state.doc)).toBe('#release')
+  } finally { bridge.dispose(); focused.mockRestore() }
 })
 
 

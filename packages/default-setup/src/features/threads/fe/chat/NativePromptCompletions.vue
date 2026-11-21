@@ -55,6 +55,6 @@ watch(() => props.editor, (editor, _prior, cleanup) => {
   cleanup(() => { editor.off('transaction', update); dom.removeEventListener('keydown', navigate, true) })
 }, { immediate: true, flush: 'post' })
 watch([() => props.rows[0]?.offerId, () => props.editor], ([, editor], [, previousEditor]) => {
-  if (!props.disabled && !hostPopup.value && editor && editor === previousEditor && !editor.isDestroyed && root.value?.contains(editor.view.dom.ownerDocument.activeElement) && !editor.view.dom.ownerDocument.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) editor.view.focus()
+  if (!props.disabled && !hostPopup.value && editor && editor === previousEditor && !editor.isDestroyed && editor.view.dom.ownerDocument.hasFocus() && root.value?.contains(editor.view.dom.ownerDocument.activeElement) && !editor.view.dom.ownerDocument.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) editor.view.focus()
 }, { flush: 'pre' })
 </script>

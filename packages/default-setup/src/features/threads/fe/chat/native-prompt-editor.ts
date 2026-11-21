@@ -28,7 +28,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   let completionOffer: NonNullable<typeof completionPending> & { id: string; result: Extract<ClaudePromptCompletionReply, { status: 'ready' }>['result'] } | undefined
   function retireCompletions() { completionPending = undefined; completionOffer = undefined; completion?.update([]) }
   function askCompletions() {
-    if (!completion || disposed || editor.isDestroyed || editor.view.composing) return
+    if (!completion || disposed || editor.isDestroyed || editor.view.composing || !dom.ownerDocument.hasFocus()) return
     const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize, editor.state.storedMarks ?? undefined)
     if (!snapshot) return
     const revision = ++completionRevision
@@ -213,7 +213,9 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
   dom.addEventListener('compositionend', compositionEnd)
   dom.addEventListener('compositionstart', compositionStart)
   dom.addEventListener('keydown', acceptSuggestion, true)
-  window.addEventListener('blur', dismissSuggestion)
+  const onWindowBlur = () => { dismissSuggestion(); retireCompletions() }
+  const ownerWindow = dom.ownerDocument.defaultView
+  ownerWindow?.addEventListener('blur', onWindowBlur)
   publish()
   return {
     get revision() { return revision },
@@ -274,14 +276,14 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       const pending = completionPending
       if (!pending || disposed || editor.isDestroyed || reply.revision !== pending.revision) return
       completionPending = undefined
-      if (editor.view.composing || reply.status !== 'ready' || reply.result.superseded || editor.state.doc !== pending.snapshot.doc || !editor.state.selection.eq(pending.selection)) { retireCompletions(); return }
+      if (editor.view.composing || !dom.ownerDocument.hasFocus() || reply.status !== 'ready' || reply.result.superseded || editor.state.doc !== pending.snapshot.doc || !editor.state.selection.eq(pending.selection)) { retireCompletions(); return }
       completionOffer = { ...pending, id: crypto.randomUUID(), result: reply.result }
       completion?.update(reply.result.suggestions, completionOffer.id)
     },
     dismissCompletions() { retireCompletions() },
     selectCompletion(index: number, offerId: string): boolean {
       const offer = completionOffer, row = offer?.result.suggestions[index]
-      if (!offer || offer.id !== offerId || !row || disposed || editor.isDestroyed || editor.view.composing || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection) || offer.result.start === undefined) return false
+      if (!offer || offer.id !== offerId || !row || disposed || editor.isDestroyed || editor.view.composing || !dom.ownerDocument.hasFocus() || editor.state.doc !== offer.snapshot.doc || !editor.state.selection.eq(offer.selection) || offer.result.start === undefined) return false
       const { snapshot, result } = offer, start = result.start!
       const next = rewriteClaudePromptDocument(snapshot, { text: snapshot.text.slice(0, start) + row.text + snapshot.text.slice(snapshot.cursor), cursor: start + row.text.length }, serialize, parse)
       retireCompletions()
@@ -305,7 +307,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       dom.removeEventListener('compositionend', compositionEnd)
       dom.removeEventListener('compositionstart', compositionStart)
       dom.removeEventListener('keydown', acceptSuggestion, true)
-      window.removeEventListener('blur', dismissSuggestion)
+      ownerWindow?.removeEventListener('blur', onWindowBlur)
     },
   }
 }
