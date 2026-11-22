@@ -16,7 +16,7 @@ describe('TEST_CLI_PROVIDER', () => {
     expect(cliPaths()['not-a-cli']).toBeUndefined();
   });
 
-  it('tests the requested path even before the form save arrives', async () => {
+  it('tests the requested path without replacing a different saved value', async () => {
     const app = await startApp({ systems: ['code'] });
     await app.connect();
     const settings = featureSettings.forFeature('code');
@@ -29,6 +29,12 @@ describe('TEST_CLI_PROVIDER', () => {
     }, { client: 'c-main' });
 
     expect(answer).toEqual({ ok: true, value: { success: true, resolvedPath: process.execPath } });
+    expect(cliPaths()).toMatchObject({ codex: '/old/location', git: '/another/provider' });
+
+    settings.set({ path: ['cliPaths', 'codex'], value: process.execPath });
+    await expect(app.ask('code', {
+      type: 'TEST_CLI_PROVIDER', provider: 'codex', path: process.execPath,
+    }, { client: 'c-main' })).resolves.toEqual(answer);
     expect(cliPaths()).toMatchObject({ codex: process.execPath, git: '/another/provider' });
   });
 });

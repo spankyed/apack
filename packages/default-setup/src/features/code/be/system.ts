@@ -92,12 +92,12 @@ export const answers = codeSpec.answers<keyof SearchAsks | keyof ActionsAsks | k
   TEST_CLI_PROVIDER: async ({ args: { provider, path } }) => {
     if (!isCliName(provider)) return { success: false, error: `Unknown CLI provider: ${provider}` };
     const settings = featureSettings.forFeature('code');
-    const previous = settings.get().cliPaths[provider];
-    const result = await testCli(provider, path ?? previous);
+    const testedPath = path ?? settings.get().cliPaths[provider];
+    const result = await testCli(provider, testedPath);
     if (result.success) {
       const current = settings.get().cliPaths[provider];
-      // Keep changes from another window made after this test started.
-      if (current === previous || current === path) settings.set({ path: ['cliPaths', provider], value: result.resolvedPath });
+      // A test can finish before the form save, or after another window changed the setting.
+      if ((current ?? '') === (testedPath ?? '')) settings.set({ path: ['cliPaths', provider], value: result.resolvedPath });
     } else {
       cliLogger.error(`CLI test failed for "${provider}"`, { error: result.error });
     }
