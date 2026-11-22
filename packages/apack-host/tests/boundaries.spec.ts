@@ -108,7 +108,7 @@ describe('host package boundaries', () => {
     const transport = /^(fastify(\/|$)|@fastify\/|@trpc\/|ws$|ws\/|virtual:)/;
     const offending = sourceFiles(SRC).flatMap((file) =>
       importsOf(file).filter(({ specifier }) => transport.test(specifier)).map(({ specifier }) => `${rel(file)}: ${specifier}`));
-    expect(offending, 'Transport belongs in packages/api; host is also run by the CLI and the pack test harness').toEqual([]);
+    expect(offending, 'Transport belongs in packages/server; host is also run by the CLI and the pack test harness').toEqual([]);
   });
 
   it('imports itself by relative path, never as @apackdev/host/*', () => {

@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // Its own, not tsconfig.json's inherited one: typecheck:server runs three tsc passes over this package
+    // and one shared .tsbuildinfo would have them overwrite each other, so none of them stays warm
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/server-scripts.tsbuildinfo"
+  },
+  // The one-off scripts under scripts/, typechecked by npm run typecheck:server (they import the API's src)
+  "include": ["scripts/**/*.ts", "src/env.d.ts"],
+  "exclude": []
+}

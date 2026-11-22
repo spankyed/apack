@@ -299,7 +299,7 @@ describe('findUpwardImports', () => {
   // The four rows the fixture below builds a directory for. These cases are about the mechanism, so a row with
   // no tree behind it would only make the manifest read throw; the real ones are covered by `holds for the
   // repo` and the two coverage cases at the end of this block.
-  const modelled = ['apack-sdk', 'apack-host', 'api', 'renderer'];
+  const modelled = ['apack-sdk', 'apack-host', 'server', 'renderer'];
   const layers = LAYERS.filter((l) => modelled.includes(path.basename(l.dir)))
     .map((l) => ({ ...l, dir: `layers/${path.basename(l.dir).replace(/^apack-/, '')}` }));
   const allowed = () => {
@@ -310,7 +310,7 @@ describe('findUpwardImports', () => {
       'src/index.ts': "import { createActionEmitter } from '@apackdev/sdk/services';\nimport { untypedQuery } from '@apackdev/sdk/ears';\nimport { x } from '../x.ts';\n",
       'tests/a.spec.ts': "vi.mock('@elmdb/ears');\n",
     });
-    layer('layers/api', { devDependencies: { '@elmdb/ears': '*', '@apackdev/host': '*', '@apackdev/sdk': '*' } }, {
+    layer('layers/server', { devDependencies: { '@elmdb/ears': '*', '@apackdev/host': '*', '@apackdev/sdk': '*' } }, {
       'src/setup/backend.ts': "import { openLmdbStore } from '@elmdb/ears/database';\nimport { createHostRuntime } from '@apackdev/host/services';\nimport { bindHost } from '@apackdev/sdk/runtime';\n",
     });
     layer('layers/renderer', { dependencies: { '@apackdev/host': '*', '@apackdev/sdk': '*', '@apackdev/ui': '*' } }, {
@@ -327,11 +327,11 @@ describe('findUpwardImports', () => {
   it.each([
     ['sdk', 'src/services/app.ts', "import { createHostRuntime } from '@apackdev/host/services';", 'layers/sdk/src/services/app.ts:1: @apackdev/host/services'],
     ['sdk', 'src/fe/ui.ts', "export type { Button } from '@apackdev/ui/design/button';", 'layers/sdk/src/fe/ui.ts:1: @apackdev/ui/design/button'],
-    ['host', 'src/bus/app.ts', "import { rootEvents } from '@app/api/core/router/bus-emitter';", 'layers/host/src/bus/app.ts:1: @app/api/core/router/bus-emitter'],
-    ['host', 'src/bus/app.ts', "import { rootEvents } from '../../../api/src/core/router/bus-emitter.ts';", 'layers/host/src/bus/app.ts:1: ../../../api/src/core/router/bus-emitter.ts'],
+    ['host', 'src/bus/app.ts', "import { rootEvents } from '@app/server/core/router/bus-emitter';", 'layers/host/src/bus/app.ts:1: @app/server/core/router/bus-emitter'],
+    ['host', 'src/bus/app.ts', "import { rootEvents } from '../../../server/src/core/router/bus-emitter.ts';", 'layers/host/src/bus/app.ts:1: ../../../server/src/core/router/bus-emitter.ts'],
     ['host', 'src/bus/app.ts', "import { logger } from '@/core/shared/debug/logger';", 'layers/host/src/bus/app.ts:1: @/core/shared/debug/logger'],
     ['host', 'scripts/x.ts', "import { cli } from '@apackdev/cli';", 'layers/host/scripts/x.ts:1: @apackdev/cli'],
-    ['api', 'src/router.ts', "import Button from '@apackdev/ui/design/button';", 'layers/api/src/router.ts:1: @apackdev/ui/design/button'],
+    ['server', 'src/router.ts', "import Button from '@apackdev/ui/design/button';", 'layers/server/src/router.ts:1: @apackdev/ui/design/button'],
     ['renderer', 'tests/store.spec.ts', "const { startTestRuntime } = await import('@apackdev/testing');", 'layers/renderer/tests/store.spec.ts:1: @apackdev/testing'],
   ])('flags an upward import in %s: %s', (pkg, file, code, problem) => {
     allowed();
@@ -359,7 +359,7 @@ describe('findUpwardImports', () => {
   });
 
   it.each([
-    ['api', { devDependencies: { '@elmdb/ears': '*', '@apackdev/sdk': '*' } }, 'layers/api/package.json: undeclared: @apackdev/host'],
+    ['server', { devDependencies: { '@elmdb/ears': '*', '@apackdev/sdk': '*' } }, 'layers/server/package.json: undeclared: @apackdev/host'],
     ['renderer', { dependencies: { '@apackdev/host': '*', '@apackdev/sdk': '*' } }, 'layers/renderer/package.json: undeclared: @apackdev/ui'],
     ['host', { dependencies: { '@elmdb/ears': '*' } }, 'layers/host/package.json: undeclared: @apackdev/sdk'],
   ])('flags an @apackdev package %s imports without declaring it', (pkg, manifest, problem) => {
@@ -398,9 +398,9 @@ describe('findUpwardImports', () => {
    */
   it('reports a permission a row has and imports nowhere', () => {
     allowed();
-    const wider = layers.map((l) => (l.name === '@app/api' ? { ...l, allowed: [...l.allowed, '@apackdev/ui'] } : l));
+    const wider = layers.map((l) => (l.name === '@app/server' ? { ...l, allowed: [...l.allowed, '@apackdev/ui'] } : l));
     expect(findUpwardImports(wider, root))
-      .toEqual(['layers/api: allows @apackdev/ui and imports it nowhere, so the permission grants nothing']);
+      .toEqual(['layers/server: allows @apackdev/ui and imports it nowhere, so the permission grants nothing']);
   });
 
   // The reason comes from RUNTIME_ONLY_DEPS, which `workspaceDeps` reads too — a permission is unused because
@@ -408,9 +408,9 @@ describe('findUpwardImports', () => {
   it('reports a reason for a permission that is now used', () => {
     allowed();
     const WHY = 'kept for the packaged app rather than for an import';
-    const runtimeOnly = new Map([['layers/api @apackdev/host', WHY]]);
+    const runtimeOnly = new Map([['layers/server @apackdev/host', WHY]]);
     expect(findUpwardImports(layers, root, UNLAYERED_BY_DESIGN, runtimeOnly))
-      .toEqual([`layers/api: imports @apackdev/host, so its unusedBecause ("${WHY}") no longer applies`]);
+      .toEqual([`layers/server: imports @apackdev/host, so its unusedBecause ("${WHY}") no longer applies`]);
   });
 
   // The third clause the sibling exemption lists carry too: an entry whose
@@ -488,7 +488,7 @@ describe('findElmdbImports', () => {
   const rules = ELMDB_RULES.map((rule) => ({ ...rule, dirs: rule.dirs.map((dir) => `src/${dir}`) }));
   const allowed = () => {
     write('packages/apack-host/src/services/app-data.ts', "import type { DatabaseOptions } from '@elmdb/ears/database';\n");
-    write('packages/api/src/setup/backend.ts', "import { openDatabase } from '@elmdb/ears/database';\n");
+    write('packages/server/src/setup/backend.ts', "import { openDatabase } from '@elmdb/ears/database';\n");
     write('packages/default-setup/src/features/notes/be/system.ts', "import { untypedWrite } from '@apackdev/sdk/ears';\n");
   };
 
@@ -500,8 +500,8 @@ describe('findElmdbImports', () => {
   it.each([
     ['packages/apack-host/src/services/run-history.ts', "import { Database } from 'elmdb';"],
     ['packages/apack-host/tests/store.spec.ts', "const elmdb = await import('elmdb');"],
-    ['packages/api/src/setup/backend.ts', "import type { Database } from 'elmdb';"],
-    ['packages/api/scripts/db/fix.ts', "const { Database } = require('elmdb/index.js');"],
+    ['packages/server/src/setup/backend.ts', "import type { Database } from 'elmdb';"],
+    ['packages/server/scripts/db/fix.ts', "const { Database } = require('elmdb/index.js');"],
     ['packages/default-setup/src/features/notes/be/system.ts', "import { openDatabase } from '@elmdb/ears/database';"],
     ['tests/packs/external-pack/tests/unit/memos.spec.ts', "vi.mock('elmdb');"],
   ])('flags %s', (file, code) => {
@@ -680,7 +680,7 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
   },
   findUpwardImports: () => {
     // Only the rows this tree builds a directory for: one with no tree behind it makes the manifest read throw
-    const modelled = ['apack-sdk', 'apack-host', 'api', 'renderer'];
+    const modelled = ['apack-sdk', 'apack-host', 'server', 'renderer'];
     const layers = LAYERS.filter((l) => modelled.includes(path.basename(l.dir)))
       .map((l) => ({ ...l, dir: `layers/${path.basename(l.dir).replace(/^apack-/, '')}` }));
     // Every layer has to be there, since the rule walks all of them; only the lowest one imports upward
@@ -797,11 +797,11 @@ const FIRES: Record<ImportRuleId, () => string[]> = {
     const inner = path.join(outer, 'nested', 'worktree');
     for (const checkout of [outer, inner]) {
       writeAt(path.relative(root, path.join(checkout, 'package.json')), JSON.stringify({ name: 'root', workspaces: ['packages/*'] }));
-      writeAt(path.relative(root, path.join(checkout, 'packages', 'api', 'package.json')), JSON.stringify({ name: '@app/api', types: 'dist/types.d.ts' }));
+      writeAt(path.relative(root, path.join(checkout, 'packages', 'server', 'package.json')), JSON.stringify({ name: '@app/server', types: 'dist/types.d.ts' }));
       fs.mkdirSync(path.join(checkout, 'node_modules', '@app'), { recursive: true });
-      fs.symlinkSync(path.join(checkout, 'packages', 'api'), path.join(checkout, 'node_modules', '@app', 'api'), 'dir');
+      fs.symlinkSync(path.join(checkout, 'packages', 'server'), path.join(checkout, 'node_modules', '@app', 'server'), 'dir');
     }
-    writeAt(path.relative(root, path.join(outer, 'packages', 'api', 'dist', 'types.d.ts')), 'export {};\n');
+    writeAt(path.relative(root, path.join(outer, 'packages', 'server', 'dist', 'types.d.ts')), 'export {};\n');
     return findCrossCheckoutResolution(inner);
   },
   findMissingSourceConditions: () => {
@@ -2027,7 +2027,7 @@ describe('findRepositoryCasts', () => {
   it("checks every package's src/", () => {
     expect(packageSourceDirs()).toEqual(expect.arrayContaining([
       'packages/apack-sdk/src', 'packages/apack-host/src', 'packages/apack-testing/src',
-      'packages/api/src', 'packages/default-setup/src', 'packages/renderer/src',
+      'packages/server/src', 'packages/default-setup/src', 'packages/renderer/src',
     ]));
     writeAt('packages/new-package/src/index.ts', 'export const x = (repository as unknown as Repos).x;');
     fs.mkdirSync(path.join(root, 'packages', 'no-sources'), { recursive: true });
@@ -2079,19 +2079,19 @@ describe('findCrossCheckoutResolution', () => {
     const inner = path.join(outer, 'nested', 'worktree');
     for (const checkout of [outer, inner]) {
       writeAt(path.relative(root, path.join(checkout, 'package.json')), JSON.stringify({ name: 'root', workspaces: ['packages/*'] }));
-      writeAt(path.relative(root, path.join(checkout, 'packages', 'api', 'package.json')), JSON.stringify({ name: '@app/api', types: 'dist/types.d.ts' }));
+      writeAt(path.relative(root, path.join(checkout, 'packages', 'server', 'package.json')), JSON.stringify({ name: '@app/server', types: 'dist/types.d.ts' }));
     }
     // Only the outer checkout is built, and the inner one links the package it hasn't built
-    writeAt(path.relative(root, path.join(outer, 'packages', 'api', 'dist', 'types.d.ts')), 'export {};\n');
+    writeAt(path.relative(root, path.join(outer, 'packages', 'server', 'dist', 'types.d.ts')), 'export {};\n');
     fs.mkdirSync(path.join(inner, 'node_modules', '@app'), { recursive: true });
-    fs.symlinkSync(path.join(inner, 'packages', 'api'), path.join(inner, 'node_modules', '@app', 'api'), 'dir');
+    fs.symlinkSync(path.join(inner, 'packages', 'server'), path.join(inner, 'node_modules', '@app', 'server'), 'dir');
     fs.mkdirSync(path.join(outer, 'node_modules', '@app'), { recursive: true });
-    fs.symlinkSync(path.join(outer, 'packages', 'api'), path.join(outer, 'node_modules', '@app', 'api'), 'dir');
+    fs.symlinkSync(path.join(outer, 'packages', 'server'), path.join(outer, 'node_modules', '@app', 'server'), 'dir');
 
     expect(findCrossCheckoutResolution(outer)).toEqual([]);
     expect(findCrossCheckoutResolution(inner)).toEqual([
       // realpath: on macOS the temp dir is /var/… and resolves to /private/var/…
-      expect.stringContaining(`@app/api resolves to ${fs.realpathSync(path.join(outer, 'packages', 'api', 'dist', 'types.d.ts'))}, outside this checkout`),
+      expect.stringContaining(`@app/server resolves to ${fs.realpathSync(path.join(outer, 'packages', 'server', 'dist', 'types.d.ts'))}, outside this checkout`),
     ]);
   });
 });
@@ -2104,7 +2104,7 @@ describe('findMissingSourceConditions', () => {
     // @apackdev/testing is not among them: its entries resolve its built bundle whoever loads them, so a
     // config importing it selects nothing and needs no condition
     // The API participates for TypeScript; its runtime entry still resolves the compiled server.
-    expect(sourceConditionPackages()).toEqual(['@apackdev/sdk', '@apackdev/ui', '@app/api']);
+    expect(sourceConditionPackages()).toEqual(['@apackdev/sdk', '@apackdev/ui', '@app/server']);
   });
 
   // Every config-file name the check recognises, with the option each kind declares the condition in

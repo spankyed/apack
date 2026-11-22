@@ -6,7 +6,7 @@ D9–D11 live in the goal; T4, M3, G3, G6, G7 and F18 are struck, the rest were 
 findings were and what each cost; the evidence table carries the dispositions
 **Severity:** Critical — one finding writes user credentials to disk in plaintext; two more can lose work
 **Component:** `packages/default-setup/src/features/code` — terminal (xterm.js front end, node-pty back end),
-plus the app plumbing it depends on (`packages/main`, `packages/api`, `@apackdev/host/bus`)
+plus the app plumbing it depends on (`packages/main`, `packages/server`, `@apackdev/host/bus`)
 
 **Delivery is owned by [goal-terminal-ownership](../archive/goals/goal-terminal-ownership.md).** This document owns
 the findings, the root causes and decisions D1–D8; the goal owns the outcome, the execution order and
@@ -562,7 +562,7 @@ on its merits rather than rediscover the question.
    The cheap deletion remains available if the refactor is abandoned; it is a false economy while it is not.
 4. **S1 is fixed at the source, not at the spawn.** The API token reaches every pty because
    `apiToken()` reads `process.env.APACK_API_TOKEN` lazily on every call
-   (`packages/api/src/boot/config.ts`), so the variable has to stay set for the process's whole life and
+   (`packages/server/src/boot/config.ts`), so the variable has to stay set for the process's whole life and
    every child inherits it. Read it once at boot, memoise it and delete the variable; `apiTokenIsOwn()`
    reflects the captured provenance instead of re-reading. That removes the leak for **every** child the API
    spawns, now and later, rather than for the one spawn site a filter would cover, and it is asserted by a

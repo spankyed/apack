@@ -55,15 +55,15 @@ describe('verify-node-modules.mjs', () => {
     pkg(path.join(app, 'node_modules', '@elmdb', 'ears'), { name: '@elmdb/ears', dependencies: { elmdb: '0.0.0' } });
     pkg(path.join(app, 'node_modules', 'elmdb'), { name: 'elmdb' });
     pkg(path.join(app, 'node_modules', '@apackdev', 'sdk'), { name: '@apackdev/sdk', dependencies: { '@elmdb/ears': '0.0.0' } });
-    fs.mkdirSync(path.join(app, 'packages', 'api', 'node_modules', '@elmdb'), { recursive: true });
-    fs.symlinkSync(path.join(app, 'node_modules', '@elmdb', 'ears'), path.join(app, 'packages', 'api', 'node_modules', '@elmdb', 'ears'), 'dir');
+    fs.mkdirSync(path.join(app, 'packages', 'server', 'node_modules', '@elmdb'), { recursive: true });
+    fs.symlinkSync(path.join(app, 'node_modules', '@elmdb', 'ears'), path.join(app, 'packages', 'server', 'node_modules', '@elmdb', 'ears'), 'dir');
     expect(await verify(app, tmp)).toMatchObject({ code: 0 });
 
     pkg(path.join(app, 'node_modules', '@apackdev', 'sdk', 'node_modules', '@elmdb', 'ears'), { name: '@elmdb/ears' });
     pkg(path.join(app, 'node_modules', '@apackdev', 'sdk', 'node_modules', 'elmdb'), { name: 'elmdb' });
     const result = await verify(app, tmp);
     expect(result.code).toBe(1);
-    expect(result.output).toContain('@elmdb/ears is installed 2 times (node_modules/@apackdev/sdk/node_modules/@elmdb/ears, node_modules/@elmdb/ears, packages/api/node_modules/@elmdb/ears)');
+    expect(result.output).toContain('@elmdb/ears is installed 2 times (node_modules/@apackdev/sdk/node_modules/@elmdb/ears, node_modules/@elmdb/ears, packages/server/node_modules/@elmdb/ears)');
     expect(result.output).toContain('elmdb is installed 2 times (node_modules/@apackdev/sdk/node_modules/elmdb, node_modules/elmdb)');
   });
 });

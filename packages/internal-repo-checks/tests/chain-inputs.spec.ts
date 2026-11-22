@@ -450,7 +450,7 @@ describe('a step declares the modules its script imports', () => {
 
 // A suite whose own specs name build output must declare that it reads it. This is deliberately a subset
 // check and not an equality one: a scan of spec text can prove a suite reads the tree, never that it does
-// not. `@app/api`'s specs never name the pack's `dist` — they boot the app runtime and host code resolves
+// not. `@app/server`'s specs never name the pack's `dist` — they boot the app runtime and host code resolves
 // the path — so an equality check called it independent, it ran beside `build:default-setup` under three lanes, and it
 // failed. `SUITE_READS`' doc comment carries the measurement that is the authority, and the command that
 // reproduces it. What this catches is the cheap half: a spec that starts naming the tree outright.
@@ -786,7 +786,7 @@ describe('a step keys on the command it runs', () => {
   /**
    * The manifest stays out of keys except steps that read it or cover metadata readers.
    *
-   * `typecheck:api` is the exception and it is evidenced rather than assumed: its three programs each
+   * `typecheck:server` is the exception and it is evidenced rather than assumed: its three programs each
    * resolve through the root `package.json`, which its dep files report, so it declares it through
    * `alsoReads`. The dep-file gate found this the moment the manifest left `ROOT` — while every step
    * declared it, a real read and an accident were indistinguishable.
@@ -809,7 +809,7 @@ describe('a step keys on the command it runs', () => {
       'a step keying on the whole manifest re-runs when any unrelated script is edited; add one here only '
       + 'with the dep-file evidence that it reads the manifest').toEqual([
         'build:default-setup', 'facade:check', 'test:external-pack:contract', 'test:external-pack:fork',
-        'typecheck:renderer', 'typecheck:api', 'check:specifiers', 'typecheck:scripts', 'check:tiers',
+        'typecheck:renderer', 'typecheck:server', 'check:specifiers', 'typecheck:scripts', 'check:tiers',
         'lint:check', 'test:unit:host', 'test:integration', 'build:runtime',
       ]);
   });

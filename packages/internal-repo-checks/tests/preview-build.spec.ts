@@ -64,7 +64,7 @@ describe('local preview builds', () => {
     fs.copyFileSync(path.join(preview, 'build-manifest.json'), path.join(app, 'build-manifest.json'));
     fs.writeFileSync(path.join(app, 'package.json'), JSON.stringify({ version: '0.3.14' }));
     expect(() => verifyPackagedBuild(app, preview)).toThrow(/Packaged version/);
-    fs.writeFileSync(path.join(preview, 'packages/api/dist/index.js'), 'changed after build');
+    fs.writeFileSync(path.join(preview, 'packages/server/dist/index.js'), 'changed after build');
     expect(() => verifyBuildOutputs(preview)).toThrow(/outputs differ/);
   });
 

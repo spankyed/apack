@@ -45,8 +45,8 @@ export interface Leg {
   /**
    * Files this leg's compiler reads that no workspace scope can name, because they belong to no workspace.
    *
-   * Three legs have any, and only two kinds of file. `typecheck:api`'s three programs each resolve through
-   * the root `package.json`, which `scope: ['api']` cannot express. `typecheck:main` and `typecheck:preload`
+   * Three legs have any, and only two kinds of file. `typecheck:server`'s three programs each resolve through
+   * the root `package.json`, which `scope: ['server']` cannot express. `typecheck:main` and `typecheck:preload`
    * compile `types/`, the repo-root ambient declarations their tsconfigs `include`.
    *
    * **A file inside a workspace does not belong here.** Naming one means an edge no declaration describes;
@@ -78,7 +78,7 @@ export const ENSURE = 'packages:ensure';
 export const TYPECHECK_LEGS: readonly Leg[] = [
   { name: ENSURE, command: 'npm run packages:ensure', scope: ['apack-sdk', 'apack-ui', 'apack-cli', 'apack-testing'] },
   { name: 'typecheck:renderer', command: 'npm run typecheck:renderer', alsoReads: ['build/build-metadata.ts', 'package.json'] },
-  { name: 'typecheck:api', command: 'npm run typecheck:api', alsoReads: ['package.json'] },
+  { name: 'typecheck:server', command: 'npm run typecheck:server', alsoReads: ['package.json'] },
   { name: 'typecheck:sdk', command: 'npm run typecheck:sdk' },
   { name: 'typecheck:host', command: 'npm run typecheck:host' },
   { name: 'typecheck:ui', command: 'npm run typecheck:ui' },

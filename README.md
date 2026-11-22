@@ -110,7 +110,7 @@ apack separates the desktop host from the features it runs:
 | Area | Responsibility |
 |---|---|
 | `packages/main`, `packages/preload` | Desktop lifecycle, windows, protocols and IPC |
-| `packages/api`, `packages/renderer` | Backend process/transport and frontend shell |
+| `packages/server`, `packages/renderer` | Backend process/transport and frontend shell |
 | `packages/apack-host` | Pack discovery, installation and runtime; host services and settings |
 | `packages/default-setup` | Shipped features, extensions and content |
 | `packages/apack-sdk`, `packages/apack-ui` | Pack-facing APIs, types, components and editors |

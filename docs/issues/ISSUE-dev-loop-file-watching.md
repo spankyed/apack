@@ -89,7 +89,7 @@ Everything below is on master.
 - **`packages/apack-cli/src/build/frontend-process.ts:115`:** a directory `fs.watch`, so FSEvents.
 - **`packages/dev-mode.js`:** `npm run dev`. One process runs Vite's renderer dev server (`createServer`). It spawns:
   - the default-setup pack build and watcher, `build:dev -w @app/default-setup`;
-  - the API's `tsup --watch` (`build:dev:watch` in `packages/api/package.json`).
+  - the API's `tsup --watch` (`build:dev:watch` in `packages/server/package.json`).
   - So **three processes** each watch on their own.
 - **`packages/main/src/modules/api-server/dev-reloader.ts:90`:** `fs.watch` on the API bundle file, so kqueue.
 - **`apack-git`'s `src/watcher.ts` (the git engine, in a repository of its own):** watches the *user's* repositories. This is a product feature, not the dev loop, and a separate question.

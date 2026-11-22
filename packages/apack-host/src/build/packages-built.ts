@@ -387,7 +387,7 @@ export const repoRelative = (absolute: string): string => path.relative(REPO_ROO
 
 /**
  * A config a bundler compiled in order to load it: `bundle-require` writes `<name>.bundled_<id>.mjs` beside
- * the config and removes it again, which is what `tsup` leaves in `packages/api` for the length of a build.
+ * the config and removes it again, which is what `tsup` leaves in `packages/server` for the length of a build.
  *
  * Skipped because it is there for part of a build and gone at rest, so a fingerprint taken while one exists
  * records a file the next walk cannot find — the step then never caches and nothing says why. Its id is

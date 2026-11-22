@@ -63,7 +63,7 @@ export const BUILD_BUDGET: BudgetClass = 'suite';
  */
 export const RUNTIME_BUILD_LEGS: readonly RuntimeBuildLeg[] = [
   { name: '@app/renderer', command: 'npm run build-only -w @app/renderer', heapMb: 4096 },
-  { name: '@app/api', command: 'npm run build -w @app/api' },
+  { name: '@app/server', command: 'npm run build -w @app/server' },
   { name: '@app/main', command: 'npm run build -w @app/main' },
   { name: '@app/preload', command: 'npm run build -w @app/preload' },
 ];

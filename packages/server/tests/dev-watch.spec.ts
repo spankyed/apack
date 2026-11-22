@@ -7,13 +7,13 @@ import { build } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@apackdev/host/build/packages-built';
 
-const API_DIR = path.join(REPO_ROOT, 'packages/api');
+const SERVER_DIR = path.join(REPO_ROOT, 'packages/server');
 
 /** The `packages/<name>/src` trees among a bundle's inputs (relative to the API package), repo-relative. */
 function workspaceSourceTrees(inputs: readonly string[]): string[] {
   const trees = new Set<string>();
   for (const input of inputs) {
-    const relative = path.relative(REPO_ROOT, path.resolve(API_DIR, input)).split(path.sep).join('/');
+    const relative = path.relative(REPO_ROOT, path.resolve(SERVER_DIR, input)).split(path.sep).join('/');
     const tree = /^packages\/[^/]+\/src(?=\/)/.exec(relative)?.[0];
     if (tree) trees.add(tree);
   }
@@ -23,7 +23,7 @@ function workspaceSourceTrees(inputs: readonly string[]): string[] {
 /** The directories a `tsup … --watch <dir>` script names, repo-relative. */
 function watchedTrees(script: string): string[] {
   return [...script.matchAll(/--watch\s+(\S+)/g)]
-    .map(([, directory]) => path.relative(REPO_ROOT, path.resolve(API_DIR, directory!)).split(path.sep).join('/'));
+    .map(([, directory]) => path.relative(REPO_ROOT, path.resolve(SERVER_DIR, directory!)).split(path.sep).join('/'));
 }
 
 function unwatchedTrees(inputs: readonly string[], script: string): string[] {
@@ -34,7 +34,7 @@ function unwatchedTrees(inputs: readonly string[], script: string): string[] {
 /** What the bundle reads: the `@apackdev/source` condition is what inlines a workspace package. */
 async function bundledInputs(): Promise<string[]> {
   const { metafile } = await build({
-    absWorkingDir: API_DIR, entryPoints: ['src/server.ts'], bundle: true, write: false, metafile: true, logLevel: 'silent',
+    absWorkingDir: SERVER_DIR, entryPoints: ['src/server.ts'], bundle: true, write: false, metafile: true, logLevel: 'silent',
     format: 'esm', platform: 'node', outdir: 'unwritten', conditions: ['@apackdev/source', 'module'],
     // What is left outside changes nothing here: only the workspace's own sources are compared. elmdb is left out as
     // tsup leaves it (tsup.config.ts): its loader requires its binary's platform package, a `.node` file by name
@@ -45,12 +45,12 @@ async function bundledInputs(): Promise<string[]> {
 }
 
 const script = (): string =>
-  (JSON.parse(fs.readFileSync(path.join(API_DIR, 'package.json'), 'utf8')) as { scripts: Record<string, string> }).scripts['build:dev:watch']!;
+  (JSON.parse(fs.readFileSync(path.join(SERVER_DIR, 'package.json'), 'utf8')) as { scripts: Record<string, string> }).scripts['build:dev:watch']!;
 
 describe('the API dev watch', () => {
   it('names every workspace source the API bundle inlines', async () => {
     const inputs = await bundledInputs();
-    expect(workspaceSourceTrees(inputs)).toEqual(expect.arrayContaining(['packages/api/src', 'packages/apack-host/src']));
+    expect(workspaceSourceTrees(inputs)).toEqual(expect.arrayContaining(['packages/server/src', 'packages/apack-host/src']));
     expect(unwatchedTrees(inputs, script())).toEqual([]);
   });
 

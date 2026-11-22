@@ -4,7 +4,7 @@ The Vue 3 app every apack window runs. It hosts surfaces; it doesn't implement t
 
 ## Layout
 
-`src/` is one folder per job this package does, and `packages/api/src` is the same five minus the last, so a concept
+`src/` is one folder per job this package does, and `packages/server/src` is the same five minus the last, so a concept
 found in one is looked for in the same place in the other (`tests/source-layout.spec.ts` says so on both sides):
 
 | Folder | What belongs there | The API's counterpart |
@@ -67,13 +67,13 @@ Its static imports are evaluated first, `virtual:host-shared-modules` among them
   `sharedFeModules()` is *derived* from the three lists the bundler checks against rather than written
   beside them — and `fe-bundler-externals.spec.ts` asks the question directly, that every specifier a
   bundle leaves bare is one this map names.
-- **Resolution:** conditions include `@apackdev/source`. The API's router type comes from `@app/api` (a type-only import, a dev dependency).
+- **Resolution:** conditions include `@apackdev/source`. The API's router type comes from `@app/server` (a type-only import, a dev dependency).
 - `base: './'` (loaded from `file://` in builds), `modulePreload: false`, and a long `optimizeDeps.include` list (Monaco, the terminal emulator, tiptap, vidstack, …) for the dev server.
 - `tsconfig.app.json` includes `../apack-sdk/src/fe/**/*` (the `Window.electronAPI` declaration, see `packages/preload/CLAUDE.md`) and maps `@/*` → `src/*`.
 
 ## tRPC client (`src/transport/index.ts`)
 
-- Connects a `wsLink` to `ws://${API_HOST}:<electronAPI.apiPort>` (port default 3001) with `ApiSocket`, which offers the subprotocols `apack` and `apack-token.<electronAPI.apiToken>`; the API refuses connections without the token. The token isn't in the URL, which the browser prints on a failed connection. `AppRouter` is a type-only import from `@app/api`.
+- Connects a `wsLink` to `ws://${API_HOST}:<electronAPI.apiPort>` (port default 3001) with `ApiSocket`, which offers the subprotocols `apack` and `apack-token.<electronAPI.apiToken>`; the API refuses connections without the token. The token isn't in the URL, which the browser prints on a failed connection. `AppRouter` is a type-only import from `@app/server`.
 - `trpc` is a `Proxy` over the current connection, so importers keep one binding across reconnects.
 - `reconnectApiClient(port)` closes the socket and reconnects only when the port changed, returning whether it did. A restart on the same port keeps the socket; the ws client reconnects on its own.
 

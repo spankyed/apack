@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import pkg from '../package.json' with { type: 'json' };
 
-export const APP_WORKSPACES = ['main', 'api', 'renderer', 'preload'] as const;
+export const APP_WORKSPACES = ['main', 'server', 'renderer', 'preload'] as const;
 type AppWorkspace = (typeof APP_WORKSPACES)[number];
 
 /** Identity recorded once for each packaged build. */

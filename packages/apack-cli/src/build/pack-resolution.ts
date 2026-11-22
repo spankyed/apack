@@ -17,7 +17,7 @@
  *
  * `assertSourceResolution` (`@apackdev/host/build/source-resolution`) is the same question with the opposite
  * expectation, asked of a host process. It lives in `@apackdev/host` and this does not, because this needs
- * `typescript`, which `@apackdev/host` deliberately does not declare — `packages/api` imports host, and the
+ * `typescript`, which `@apackdev/host` deliberately does not declare — `packages/server` imports host, and the
  * compiler has no business in the backend's tree.
  */
 import * as fs from 'node:fs';

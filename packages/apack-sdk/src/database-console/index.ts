@@ -157,7 +157,7 @@ function isBuilderRead(member: string | symbol): boolean {
  * The write helpers for one run of transaction code, closed by `close()` as its unit ends. Code the run left behind, a
  * timer or the rest of an async function, may still call them and whatever builder it holds. Such a call writes nothing
  * and logs an error rather than throwing: nothing is left to catch it by then, and in the app an uncaught error ends the
- * API process (`packages/api/src/boot/errors.ts`).
+ * API process (`packages/server/src/boot/errors.ts`).
  */
 function closableWriteHelpers(): { helpers: typeof writeHelpers; close: () => void } {
   let open = true;

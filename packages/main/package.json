@@ -16,7 +16,7 @@
     "@apackdev/cli": "*",
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
-    "@app/api": "*",
+    "@app/server": "*",
     "@app/preload": "*",
     "@app/renderer": "*",
     "electron-context-menu": "^4.1.2",

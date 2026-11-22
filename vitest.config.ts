@@ -37,7 +37,7 @@ export default defineConfig({
       'packages/apack-sdk',
       'packages/apack-cli',
       'packages/apack-host',
-      'packages/api',
+      'packages/server',
       'packages/internal-repo-checks',
       'packages/renderer',
       'packages/main',

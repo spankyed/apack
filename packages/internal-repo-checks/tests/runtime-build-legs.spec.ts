@@ -96,19 +96,19 @@ it('reads the workspace API type contract from source without needing an API bui
   const importer = path.join(REPO_ROOT, 'packages/renderer/src/transport/index.ts');
   // Two bounds, because the question is what resolves *in this checkout* with the API unbuilt, and hiding
   // the build alone does not ask it. A worktree under `.claude/worktrees/` sits inside the main checkout, so
-  // TypeScript's `node_modules` walk-up leaves the worktree and finds the parent's `node_modules/@app/api` —
-  // and a second `packages/api/dist` behind it, which the build mask does not name. Lowercased throughout
+  // TypeScript's `node_modules` walk-up leaves the worktree and finds the parent's `node_modules/@app/server` —
+  // and a second `packages/server/dist` behind it, which the build mask does not name. Lowercased throughout
   // because this filesystem is case-insensitive and both spellings of the repo path are live.
   //
   // The outer bound cannot fire from a flat checkout: drop it and every case here still passes, while the
-  // second assertion fails in any nested worktree. The inner one fires anywhere — drop it and `@app/api`
+  // second assertion fails in any nested worktree. The inner one fires anywhere — drop it and `@app/server`
   // resolves to `dist/types.d.ts` whenever the API has been built.
   const inThisCheckout = REPO_ROOT.toLowerCase() + path.sep;
-  const apiOutput = path.join(REPO_ROOT, 'packages/api/dist').toLowerCase() + path.sep;
+  const serverOutput = path.join(REPO_ROOT, 'packages/server/dist').toLowerCase() + path.sep;
   const real = (file: string) => (ts.sys.realpath?.(file) ?? file).toLowerCase();
   const withoutBuild = { ...ts.sys, fileExists: (file: string) => ts.sys.fileExists(file)
-    && real(file).startsWith(inThisCheckout) && !real(file).startsWith(apiOutput) };
-  const resolve = (options: ts.CompilerOptions) => ts.resolveModuleName('@app/api', importer, options, withoutBuild).resolvedModule?.resolvedFileName;
-  expect(resolve(config.options)).toBe(path.join(REPO_ROOT, 'packages/api/src/types.ts'));
+    && real(file).startsWith(inThisCheckout) && !real(file).startsWith(serverOutput) };
+  const resolve = (options: ts.CompilerOptions) => ts.resolveModuleName('@app/server', importer, options, withoutBuild).resolvedModule?.resolvedFileName;
+  expect(resolve(config.options)).toBe(path.join(REPO_ROOT, 'packages/server/src/types.ts'));
   expect(resolve({ ...config.options, customConditions: [] })).toBeUndefined();
 });

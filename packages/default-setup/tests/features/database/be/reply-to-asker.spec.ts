@@ -6,7 +6,7 @@
 //
 // What this file cannot check is the *delivery narrowing*: the harness has one client, so `emitted` sees
 // whatever the bus put out whether or not it was addressed. The addressing itself is covered where it lives
-// (`@apackdev/host`'s `tests/bus/reply.spec.ts` and `@app/api`'s `tests/transport/sub-scope.spec.ts`). What is
+// (`@apackdev/host`'s `tests/bus/reply.spec.ts` and `@app/server`'s `tests/transport/sub-scope.spec.ts`). What is
 // covered here is the pack's half: that the handler answers its sender at all.
 //
 // Every case connects first: the bus holds sends to surfaces until a client does, so an answer would otherwise

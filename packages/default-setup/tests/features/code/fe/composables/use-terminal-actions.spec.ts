@@ -17,17 +17,17 @@ const terminal = (fields: Partial<TerminalInfo>): TerminalInfo =>
 
 describe('a terminal’s display name', () => {
   it('is the name the user gave it', () => {
-    expect(getTerminalDisplayName(terminal({ customTitle: 'build', title: 'repo', cwd: '/repo/packages/api' }))).toBe('build')
+    expect(getTerminalDisplayName(terminal({ customTitle: 'build', title: 'repo', cwd: '/repo/packages/server' }))).toBe('build')
   })
 
   it('is the terminal’s own title, not the cwd it happens to be in', () => {
-    // A create passed this title; the old derivation answered 'api' and the title was never seen
-    expect(getTerminalDisplayName(terminal({ title: 'Claude Code', cwd: '/repo/packages/api' }))).toBe('Claude Code')
+    // A create passed this title; the old derivation answered 'server' and the title was never seen
+    expect(getTerminalDisplayName(terminal({ title: 'Claude Code', cwd: '/repo/packages/server' }))).toBe('Claude Code')
   })
 
   it('is the title the backend derived from the cwd, when that is all there is', () => {
     // The backend sets `title` to the cwd's basename on create and keeps it current, so there is nothing
     // for a second derivation here to add
-    expect(getTerminalDisplayName(terminal({ title: 'api', cwd: '/repo/packages/api' }))).toBe('api')
+    expect(getTerminalDisplayName(terminal({ title: 'server', cwd: '/repo/packages/server' }))).toBe('server')
   })
 })

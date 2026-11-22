@@ -62,7 +62,7 @@ export const DIR_BY_PACKAGE = new Map<string, string>(PACKAGE_DIRS.map((dir) => 
  * package's code imports. Keyed `<dir> <package>`, because the subject is the pair.
  *
  * Electron's main process reaches every other part of the app by literal path —
- * `path.join(process.resourcesPath, 'app', 'packages', 'api')`, a `{path: string}` handed to `WindowManager`
+ * `path.join(process.resourcesPath, 'app', 'packages', 'server')`, a `{path: string}` handed to `WindowManager`
  * for the preload bundle and the renderer — and runs the CLI through a launcher that names
  * `Resources/app/packages/apack-cli/dist/package/bin/apack.mjs`. There is no `require.resolve` in
  * `packages/main/src` at all. So these declarations resolve nothing and compile nothing; what they do is put
@@ -85,7 +85,7 @@ export const DIR_BY_PACKAGE = new Map<string, string>(PACKAGE_DIRS.map((dir) => 
  * files rather than by name.
  */
 export const RUNTIME_ONLY_DEPS = new Map<string, string>([
-  ['packages/main @app/api', 'main spawns it as a child process from a path it builds itself; the declaration '
+  ['packages/main @app/server', 'main spawns it as a child process from a path it builds itself; the declaration '
     + "is what puts the API's own dependencies in the packaged app"],
   ['packages/main @app/preload', 'main hands the preload bundle to each window as a path; its tsconfig maps '
     + 'the name for that path and nothing imports it'],

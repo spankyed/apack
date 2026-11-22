@@ -61,7 +61,7 @@ export interface Message {
    * connection, which is what a notification wants and what a backend send has always done.
    *
    * Unlike `from` and `via`, this one routes — so it is never read from the wire. The API mints it per
-   * WebSocket connection and stamps it on the way in (`createRpcContext`, `packages/api/src/transport/context.ts`),
+   * WebSocket connection and stamps it on the way in (`createRpcContext`, `packages/server/src/transport/context.ts`),
    * which is what makes it a return address a sender cannot forge. A client that puts a `client` on a send has
    * it dropped at the boundary, like any other field the input schema does not name.
    *

@@ -11,7 +11,7 @@
  * can fail to follow an edge, and then it is a written-down list wearing a walk's clothes. Five instances in
  * one day, 2026-09-28: a lint derivation that expanded each `npm run` once and so never saw the `-ws` fan-out
  * (858 files unexamined, green); a tsconfig check that read one config per workspace where three compile
- * `packages/api`; seven places deriving "the workspaces" by listing `packages/` rather than reading the
+ * `packages/server`; seven places deriving "the workspaces" by listing `packages/` rather than reading the
  * `workspaces` field that decides them; a fixture claiming every step and holding eleven of thirteen; and an
  * audit that grepped `src/` and `docs/` but not `tests/`. None of them was empty, so nothing here would have
  * fired. The question is not "derived or listed" but **derived from what defines the population, or from

@@ -102,7 +102,7 @@ export interface StreamHandle {
 /**
  * Build the environment for a spawned Claude CLI child process.
  *
- * The API server auto-loads `packages/api/.env` via `dotenv/config`, so a
+ * The API server auto-loads `packages/server/.env` via `dotenv/config`, so a
  * developer's `ANTHROPIC_API_KEY` can be in its environment (the app's own
  * model calls don't read it: `services.inference` uses the key selected in
  * Settings → Secrets). The Claude CLI treats env-var API keys as an

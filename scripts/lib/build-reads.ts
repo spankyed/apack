@@ -117,7 +117,7 @@ export function readsOf(packDir: string): BuildReads | undefined {
  *
  * `apack pack build` for anything this cannot place, which is the honest answer and the general one: a refusal
  * is asked about a directory the caller named, which may hold no pack at all — the spec asks about
- * `packages/api` — so this cannot be the place that requires a manifest to be there.
+ * `packages/server` — so this cannot be the place that requires a manifest to be there.
  */
 /**
  * The packs this repo builds through a script of its own rather than by `apack pack build` in the pack's own

@@ -434,7 +434,7 @@ const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSP
   'drive/playwright.config.ts',
   'build/prod/verify-node-modules.mjs', 'build/prod/single-copy.mjs', 'build/prod/smoke-native.mjs',
   'packages/apack-cli/bin',
-  'packages/api/tsup.config.ts',
+  'packages/server/tsup.config.ts',
   'packages/dev-mode.js', 'packages/entry-point.mjs'];
 
 /**
@@ -475,7 +475,7 @@ const PACKAGE_BUILD_READS = [...new Set([
 ])].sort();
 
 /** What `build` writes: the app that `needsApp` steps read */
-export const APP_OUTPUTS = ['packages/renderer/dist', 'packages/api/dist', 'packages/main/dist', 'packages/preload/dist'];
+export const APP_OUTPUTS = ['packages/renderer/dist', 'packages/server/dist', 'packages/main/dist', 'packages/preload/dist'];
 
 /**
  * Whether a step reads the built app — derived from what it declares, never written beside it.
@@ -617,7 +617,7 @@ const FIXTURE_TEST_OUTPUT = FIXTURE_PACKS.flatMap((name) => [`tests/packs/${name
  * The unit suites that read build output, and which. Every other suite resolves workspace source through
  * the `@apackdev/source` condition and needs nothing built, which is what lets it start beside the builds.
  *
- * **This cannot be derived from the spec sources, and a scan of them is not the authority.** `@app/api`'s
+ * **This cannot be derived from the spec sources, and a scan of them is not the authority.** `@app/server`'s
  * specs never name the pack's `dist`: they boot the app runtime, and host code resolves the path. Declaring
  * that suite as reading nothing let it run beside `build:default-setup` under three lanes, where it failed with
  * "Missing or unreadable settings.content.json" — after passing serially forever, because `build:default-setup` always
@@ -629,7 +629,7 @@ const FIXTURE_TEST_OUTPUT = FIXTURE_PACKS.flatMap((name) => [`tests/packs/${name
  *     for w in <the UNIT_SUITES workspaces>; do npm test -w $w; done
  *     mv packages/default-setup/.dist-aside packages/default-setup/dist
  *
- * Measured 2026-09-25: default-setup, @apackdev/cli and @app/api fail without it; the other five pass.
+ * Measured 2026-09-25: default-setup, @apackdev/cli and @app/server fail without it; the other five pass.
  *
  * `@apackdev/host` is listed anyway, and that is the second thing a scan would get wrong. Its
  * `sdk-bridge-drift.spec.ts` reads `dist/runtime/index.cjs` but *skips* when it is missing, so it passes
@@ -995,8 +995,8 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   // both bundles. A pack source edit reaches this step through `build:default-setup`. `check:tiers` and the
   // app build's own header keep an app bundle from tracing into a pack's `src`
   { name: 'build:runtime', budget: 'suite', outputs: APP_OUTPUTS,
-    inputs: [...ROOT, ...APP_RUNNER, ...['renderer', 'api', 'main', 'preload', 'apack-host'].flatMap(workspace),
-      'packages/api/tsup.config.ts', 'build/build-metadata.ts', 'package.json', ...APP_ENTRY,
+    inputs: [...ROOT, ...APP_RUNNER, ...['renderer', 'server', 'main', 'preload', 'apack-host'].flatMap(workspace),
+      'packages/server/tsup.config.ts', 'build/build-metadata.ts', 'package.json', ...APP_ENTRY,
       ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   // App checks load the shipped pack separately at runtime. Its bytes can change while every
   // app workspace bundle stays identical, so their cache keys must include PACK_OUTPUTS too.

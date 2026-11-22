@@ -31,7 +31,7 @@ if (args.includes('--help')) {
     if (fs.existsSync(app.logsDir)) fs.cpSync(app.logsDir, path.join(out, 'logs'), { recursive: true });
     fs.copyFileSync(path.join(app.appPath, 'Contents/Info.plist'), path.join(out, 'Info.plist'));
     fs.copyFileSync(path.join(app.appDir, 'build-manifest.json'), path.join(out, 'build-manifest.json'));
-    const server = path.join(app.appDir, 'packages/api/dist/server.js');
+    const server = path.join(app.appDir, 'packages/server/dist/server.js');
     fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify({ appPath: app.appPath, metadata: app.metadata,
       userDataDir: app.context.userDataDir, logsDir: app.logsDir,
       apiSha256: createHash('sha256').update(fs.readFileSync(server)).digest('hex') }, null, 2));

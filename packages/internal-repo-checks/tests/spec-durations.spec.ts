@@ -74,14 +74,14 @@ describe('durationsOf', () => {
    * single-project run. The project is stated now, so the collision cannot arise.
    */
   it('keeps two suites\' identically-named specs apart', () => {
-    const covered = UNIT_SUITES.filter((suite) => ['api', 'renderer'].includes(suite.dir));
+    const covered = UNIT_SUITES.filter((suite) => ['server', 'renderer'].includes(suite.dir));
     const run = reported(
       mod('@app/renderer', 'tests/source-layout.spec.ts', 55),
-      mod('@app/api', 'tests/source-layout.spec.ts', 31),
+      mod('@app/server', 'tests/source-layout.spec.ts', 31),
     );
     expect(durationsOf(run, covered)).toEqual([
       row('renderer', 'tests/source-layout.spec.ts', 55),
-      row('api', 'tests/source-layout.spec.ts', 31),
+      row('server', 'tests/source-layout.spec.ts', 31),
     ]);
   });
 

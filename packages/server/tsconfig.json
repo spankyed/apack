@@ -5,7 +5,7 @@
     // instead of reparsing. `incremental` works with `noEmit`; `composite` does not, which is why this
     // is not project references (docs/goals/goal-test-tiers.md).
     "incremental": true,
-    "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/api.tsbuildinfo",
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/server.tsbuildinfo",
     // Workspace @apackdev/* packages resolve to source (see their package.json exports)
     "customConditions": ["@apackdev/source"],
     // Their sources import .ts files by name; this config emits, which requires rewriteRelativeImportExtensions too
