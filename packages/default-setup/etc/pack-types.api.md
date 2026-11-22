@@ -969,6 +969,12 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
         presentation: z.ZodObject<{
             token: z.ZodString;
             ready: z.ZodBoolean;
+            title: z.ZodString;
+            details: z.ZodArray<z.ZodObject<{
+                label: z.ZodString;
+                value: z.ZodString;
+                ansi: z.ZodOptional<z.ZodString>;
+            }, z.core.$strip>>;
             choices: z.ZodArray<z.ZodObject<{
                 value: z.ZodString;
                 label: z.ZodString;
@@ -977,12 +983,7 @@ declare const ClaudeBackgroundControlSchema: z.ZodDiscriminatedUnion<[z.ZodObjec
                     allow: "allow";
                 }>;
                 feedback: z.ZodBoolean;
-            }, z.core.$strip>>;
-            title: z.ZodString;
-            details: z.ZodArray<z.ZodObject<{
-                label: z.ZodString;
-                value: z.ZodString;
-                ansi: z.ZodOptional<z.ZodString>;
+                prefix: z.ZodOptional<z.ZodString>;
             }, z.core.$strip>>;
             defaultFocusValue: z.ZodOptional<z.ZodString>;
             canCancel: z.ZodBoolean;
@@ -1581,6 +1582,7 @@ interface ClaudeNativeGenericToolPermissionDialogResponse {
     choiceToken: string;
     decision: 'allow' | 'cancel' | 'deny';
     feedback?: string;
+    prefix?: string;
 }
 
 /** Mounted tool approval presented by the shared desktop card. The native payload supplies the tool identity. */
@@ -1593,6 +1595,12 @@ declare const ClaudeNativeGenericToolPermissionDialogSchema: z.ZodObject<{
     presentation: z.ZodObject<{
         token: z.ZodString;
         ready: z.ZodBoolean;
+        title: z.ZodString;
+        details: z.ZodArray<z.ZodObject<{
+            label: z.ZodString;
+            value: z.ZodString;
+            ansi: z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>>;
         choices: z.ZodArray<z.ZodObject<{
             value: z.ZodString;
             label: z.ZodString;
@@ -1601,12 +1609,7 @@ declare const ClaudeNativeGenericToolPermissionDialogSchema: z.ZodObject<{
                 allow: "allow";
             }>;
             feedback: z.ZodBoolean;
-        }, z.core.$strip>>;
-        title: z.ZodString;
-        details: z.ZodArray<z.ZodObject<{
-            label: z.ZodString;
-            value: z.ZodString;
-            ansi: z.ZodOptional<z.ZodString>;
+            prefix: z.ZodOptional<z.ZodString>;
         }, z.core.$strip>>;
         defaultFocusValue: z.ZodOptional<z.ZodString>;
         canCancel: z.ZodBoolean;

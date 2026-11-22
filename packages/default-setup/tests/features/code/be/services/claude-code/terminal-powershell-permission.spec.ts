@@ -14,7 +14,7 @@ function fixture(withFeedback = false) {
   let refusing = false
   const onChange = vi.fn((_: string) => { if (refusing) return false; open.pop(); return true })
   const onCancel = vi.fn(() => { open.pop() })
-  const options = [{ value: 'yes', label: 'Original approval' }, { value: 'no', label: 'Original refusal' }]
+  const options: { value: string; label: string; type?: string; initialValue?: string; onChange?: (text: string) => void }[] = [{ value: 'yes', label: 'Original approval' }, { value: 'no', label: 'Original refusal' }]
   const onInputModeToggle = () => {}
   const control = { type: Xe, props: { options, onChange: (choice: string) => onChange(choice), onCancel, onInputModeToggle } }
   const acceptedFeedback = vi.fn(), refusedFeedback = vi.fn()
@@ -27,6 +27,17 @@ function fixture(withFeedback = false) {
     feedback[field] = text
     const report = field === 'acceptFeedback' ? acceptedFeedback : refusedFeedback
     control.props.onChange = choice => { report(text); return onChange(choice) }
+  }
+  const usePrefix = (value: string) => {
+    const report = vi.fn()
+    const option = { value: 'yes-prefix-edited', label: 'Original editable rule', type: 'input', initialValue: value,
+      onChange(text: string) {
+        option.initialValue = text
+        control.props.onChange = choice => { report(text); return onChange(choice) }
+      },
+    }
+    options.splice(1, 0, option)
+    return { option, report }
   }
   const memoRow = Array.from({ length: 35 }, (_, index) => index === 34 ? feedback : null)
   const command = { kind: 'full', text: 'Write-Output "Local fixture"' }
@@ -44,8 +55,8 @@ function fixture(withFeedback = false) {
     nativeDialog: () => current,
   })
   const show = () => runtime.show(n, dialog)
-  const answer = (token: string, decision: string, choice: string, feedback?: string) => runtime.answer(n, dialog, { feedback, toolName: 'PowerShell', choiceToken: token, decision, choice }, new AbortController().signal)
-  return { show, answer, onChange, onCancel, acceptedFeedback, refusedFeedback, feedback, refuse: () => { refusing = true }, command, options, fitted: wrapper.fitted, replace: () => { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
+  const answer = (token: string, decision: string, choice: string, feedback?: string, prefix?: string) => runtime.answer(n, dialog, { feedback, prefix, toolName: 'PowerShell', choiceToken: token, decision, choice }, new AbortController().signal)
+  return { show, answer, usePrefix, onChange, onCancel, acceptedFeedback, refusedFeedback, feedback, refuse: () => { refusing = true }, command, options, fitted: wrapper.fitted, replace: () => { current = { ...dialog, item: { ...item }, revision: randomUUID() } } }
 }
 
 it.each([['allow', 'yes'], ['deny', 'no'], ['cancel', '']])('sends %s to the original PowerShell control', async (decision, choice) => {
@@ -63,7 +74,7 @@ it.each([['allow', 'yes'], ['deny', 'no'], ['cancel', '']])('sends %s to the ori
   }
 })
 
-it('leaves an editable command prefix and withheld previews in the original terminal', async () => {
+it('leaves unrecognized editable choices and withheld previews in the original terminal', async () => {
   const f = fixture()
   f.options.splice(1, 0, { value: 'yes-prefix-edited', label: 'Original standing rule' })
   expect(await f.show()).toBeUndefined()
@@ -107,4 +118,17 @@ it('restores the prior native text when the original callback refuses the operat
   f.refuse()
   await expect(f.answer(shown.presentation.token, 'allow', 'yes', 'Do not keep this after failure')).rejects.toThrow('refused')
   expect(f.feedback.acceptFeedback).toBe('')
+})
+
+it('passes an edited prefix through the original field and fresh choice while preserving the actual command', async () => {
+  const f = fixture(), field = f.usePrefix('Write-Output "Local fixture"')
+  const shown = await f.show()
+  expect(shown.presentation.choices[1]).toEqual({ value: 'yes-prefix-edited', label: 'Original editable rule', decision: 'allow', feedback: false, prefix: f.command.text })
+  await expect(f.answer(shown.presentation.token, 'allow', 'yes-prefix-edited', undefined, ' ')).rejects.toThrow('Invalid PowerShell permission prefix')
+  await expect(f.answer(shown.presentation.token, 'allow', 'yes', undefined, 'Write-Output *')).rejects.toThrow('Invalid PowerShell permission prefix')
+  expect(f.onChange).not.toHaveBeenCalled()
+  await f.answer(shown.presentation.token, 'allow', 'yes-prefix-edited', undefined, 'write-output "Local fixture"')
+  expect(field.report).toHaveBeenCalledExactlyOnceWith('write-output "Local fixture"')
+  expect(f.onChange).toHaveBeenCalledExactlyOnceWith('yes-prefix-edited')
+  expect(f.command.text).toBe('Write-Output "Local fixture"')
 })

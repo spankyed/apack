@@ -83,6 +83,7 @@ async function answerNativeGenericPermissionChoice(n,d,request){
  if(!shown.ready||request.choiceToken!==shown.token)throw Error('Native generic permission choices changed or are not ready');
  const choice=shown.choices.find(value=>value.value===request.choice);
  const cancelling=request.decision==='cancel';
+ if(request.prefix!==undefined)throw Error('Unsupported generic permission prefix');
  if(request.toolName!==d.payload.toolName||(cancelling?(!shown.canCancel||request.choice!==''||request.feedback!==undefined):(!choice||request.decision!==choice.decision)))throw Error('Invalid native generic permission choice');
  if(request.feedback!==undefined&&(!choice?.feedback||typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Unsupported native generic permission feedback');
  const current=nativeDialog(n,'permission_prompt');

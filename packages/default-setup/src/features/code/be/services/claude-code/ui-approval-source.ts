@@ -51,6 +51,11 @@ export function createClaudeChildApprovalSource(owner: ClaudeBackgroundDesktopOw
           } else {
             const choice = presentation.choices.find(choice => choice.value === response.choice && choice.decision === request.decision)
             if (!choice) throw new Error('Native approval choice changed')
+            if (response.prefix !== undefined) {
+              if (current.kind !== 'generic' || !('prefix' in choice) || typeof choice.prefix !== 'string')
+                throw new Error('Native permission prefix is unavailable')
+              request.prefix = response.prefix
+            }
             request.choice = choice.value
           }
           request.choiceToken = response.choiceToken

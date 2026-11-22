@@ -8,6 +8,7 @@ export const ClaudeToolPermissionApprovalSchema = ClaudeFileApprovalPresentation
 })
 /** Shared card presentation, including original focus and choice explanations when available. */
 export const ClaudeGenericToolPermissionApprovalSchema = ClaudeToolPermissionApprovalSchema.extend({
+  choices: z.array(ClaudeToolPermissionApprovalSchema.shape.choices.element.extend({ prefix: z.string().max(4000).optional() })).max(16),
   defaultFocusValue: z.string().max(128).optional(),
   canCancel: z.boolean(),
   choiceDescriptions: z.record(z.string().max(128), z.string().max(4000)).refine(value => Object.keys(value).length <= 16),

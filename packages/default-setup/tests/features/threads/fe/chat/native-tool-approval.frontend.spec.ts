@@ -281,3 +281,27 @@ it('emits the displayed decision scope for Cancel and keeps an earlier delivery 
   expect(captured).toMatchObject({ownerId:'owner',revision:'revision'});
  }finally{app.unmount();root.remove()}
 });
+
+it('keeps editable tool rules separate from the one-time choice and refuses blank prefixes', async () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const tool = { token: 'a'.repeat(64), ready: true, title: 'PowerShell command', details: [], choices: [
+    { value: 'yes', label: 'Yes', decision: 'allow' as const, feedback: true },
+    { value: 'yes-prefix-edited', label: 'Original scope', decision: 'allow' as const, feedback: false, prefix: 'Write-Output "Local fixture"' },
+    { value: 'no', label: 'No', decision: 'deny' as const, feedback: true },
+  ], canCancel: true, choiceDescriptions: {} }
+  const respond = vi.fn(), app = createApp({ render: () => h(NativeToolApproval, { toolName: 'PowerShell', title: tool.title, question: 'Proceed?', disabled: false, tool, onRespond: respond }) }); app.mount(root)
+  try {
+    const select = root.querySelector('select')!
+    select.value = 'yes-prefix-edited'; select.dispatchEvent(new Event('change')); await nextTick()
+    const prefix = root.querySelector('input')!, approve = root.querySelector<HTMLButtonElement>('.approve')!
+    expect(prefix.value).toBe('Write-Output "Local fixture"')
+    prefix.value = ' '; prefix.dispatchEvent(new Event('input')); await nextTick()
+    expect(approve.disabled).toBe(true)
+    prefix.value = 'write-output "Local fixture"'; prefix.dispatchEvent(new Event('input')); await nextTick()
+    approve.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes-prefix-edited', choiceToken: tool.token, prefix: prefix.value })
+    select.value = 'yes'; select.dispatchEvent(new Event('change')); await nextTick()
+    approve.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes', choiceToken: tool.token })
+  } finally { app.unmount(); root.remove() }
+})

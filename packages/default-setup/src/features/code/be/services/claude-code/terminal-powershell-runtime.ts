@@ -30,18 +30,24 @@ function nativePowerShellControl(n,d){
  return matches.length===1?matches[0]:undefined;
 }
 function supportedPowerShellChoices(options){
- const ordered=options.length===2?['yes','no']:options.length===3?['yes','yes-apply-suggestions','no']:[];
- return ordered.length>0&&options.every((option,index)=>option.value===ordered[index]&&option.type===undefined&&option.disabled!==true&&
-  (option.value==='yes-apply-suggestions'?option.label!==undefined:typeof option.label==='string'&&option.label.length>0&&option.label.length<=4000));
+ const ordered=options.length===2?['yes','no']:
+  options.length===3&&['yes-apply-suggestions','yes-prefix-edited'].includes(options[1].value)?['yes',options[1].value,'no']:[];
+ return ordered.length>0&&options.every((option,index)=>{
+  if(option.value!==ordered[index]||option.disabled===true)return false;
+  if(option.value==='yes-prefix-edited')return option.type==='input'&&typeof option.initialValue==='string'&&
+   option.initialValue.length<=4000&&typeof option.onChange==='function'&&typeof option.label==='string';
+  return option.type===undefined&&(option.value==='yes-apply-suggestions'?option.label!==undefined:
+   typeof option.label==='string'&&option.label.length>0&&option.label.length<=4000);
+ });
 }
 async function nativePowerShellPresentation(n,d){
  const source=nativePowerShellControl(n,d);if(!source)return;
  const {fiber,wrapper,panel,command,body,control}=source;
  const standingHeld=wrapper.fitted?.body?.isStandingHeld===true,choices=[];
  for(const option of control.options){
-  if(option.value==='yes-apply-suggestions'&&standingHeld)continue;
+  if(standingHeld&&option.value!=='yes'&&option.value!=='no')continue;
   const label=await nativeGenericPermissionText(n,option.label);if(!label||label.length>4000)return;
-  choices.push({value:option.value,label,decision:option.value==='no'?'deny':'allow',feedback:source.feedback!==undefined&&(option.value==='yes'||option.value==='no')});
+  choices.push({value:option.value,label,decision:option.value==='no'?'deny':'allow',feedback:source.feedback!==undefined&&(option.value==='yes'||option.value==='no'),...(option.value==='yes-prefix-edited'?{prefix:option.initialValue}:{})});
  }
  const details=[];
  if(typeof wrapper.fitted?.description==='string'&&wrapper.fitted.description)details.push({label:'Description',value:wrapper.fitted.description});
@@ -61,6 +67,16 @@ function currentPowerShellAnswer(n,d){
  if(!source||source.fiber.memoizedProps.wouldTakeAnswer()!==true)throw Error('Native PowerShell permission controls changed');
  return source;
 }
+async function waitForPowerShellEdit(n,d,previousAnswer,accepted,signal){
+ const deadline=Date.now()+1000;
+ do{
+  await new Promise(resolve=>setTimeout(resolve,10));
+  signal.throwIfAborted();
+  const source=currentPowerShellAnswer(n,d);
+  if(source.control.onChange!==previousAnswer&&accepted(source))return source;
+ }while(Date.now()<deadline);
+ throw Error('Native PowerShell edit was not acknowledged');
+}
 async function answerNativePowerShellPermission(n,d,request,signal){
  if(powerShellAnswers.has(d.item))throw Error('Native PowerShell decision is already pending');
  powerShellAnswers.add(d.item);
@@ -72,10 +88,12 @@ async function answerNativePowerShellPermission(n,d,request,signal){
   const cancelling=request.decision==='cancel'&&request.choice==='';
   const choice=shown.presentation.choices.find(choice=>request.choice===choice.value&&request.decision===choice.decision);
   if(!cancelling&&!choice)throw Error('Invalid native PowerShell choice');
+  const prefix=request.prefix;
+  if(choice?.prefix!==undefined?(typeof prefix!=='string'||prefix.length>4000||!prefix.trim()):prefix!==undefined)throw Error('Invalid PowerShell permission prefix');
   if(request.feedback!==undefined&&(!choice?.feedback||typeof request.feedback!=='string'||request.feedback.length>4000))throw Error('Unsupported PowerShell feedback');
   let source=currentPowerShellAnswer(n,d);
   if(source.control!==shown.source.control)throw Error('Native PowerShell permission controls changed');
-  if(request.choice==='yes-apply-suggestions'&&source.wrapper.fitted?.body?.isStandingHeld===true)throw Error('Native PowerShell standing choice is currently held');
+  if((request.choice==='yes-apply-suggestions'||request.choice==='yes-prefix-edited')&&source.wrapper.fitted?.body?.isStandingHeld===true)throw Error('Native PowerShell standing choice is currently held');
   signal.throwIfAborted();
   if(request.feedback!==undefined){
    if(!source.feedback)throw Error('Native PowerShell feedback is unavailable');
@@ -90,15 +108,25 @@ async function answerNativePowerShellPermission(n,d,request,signal){
      if(feedback?.[setter]===set&&(feedback[field]===text||feedback[field]===previous))set(previous);
     };
     set(text);
-    const deadline=Date.now()+1000;
-    do{
-     await new Promise(resolve=>setTimeout(resolve,10));
-     signal.throwIfAborted();
-     source=currentPowerShellAnswer(n,d);
-     if(source.feedback?.[setter]===set&&source.feedback[field]===text&&source.control.onChange!==previousAnswer)break;
-    }while(Date.now()<deadline);
-    if(source.feedback?.[setter]!==set||source.feedback[field]!==text||source.control.onChange===previousAnswer)throw Error('Native PowerShell feedback was not acknowledged');
+    source=await waitForPowerShellEdit(n,d,previousAnswer,current=>current.feedback?.[setter]===set&&current.feedback[field]===text,signal);
    }
+  }
+  if(prefix!==undefined&&prefix!==choice.prefix){
+   const option=frame=>frame?.control.options.find(value=>value.value==='yes-prefix-edited');
+   const field=option(source),previousAnswer=source.control.onChange;
+   if(field?.initialValue!==choice.prefix||typeof field.onChange!=='function')throw Error('Native PowerShell prefix field changed');
+   const set=field.onChange,previous=field.initialValue;
+   rollback=()=>{
+    const current=nativeDialog(n,'permission_powershell');
+    if(current.item!==d.item||current.revision!==d.revision||current.sessionId!==d.sessionId)return;
+    const active=option(nativePowerShellControl(n,current));
+    if(active?.onChange===set&&(active.initialValue===prefix||active.initialValue===previous))set(previous);
+   };
+   set(prefix);
+   source=await waitForPowerShellEdit(n,d,previousAnswer,current=>{
+    const field=option(current);
+    return field?.onChange===set&&field.initialValue===prefix&&current.wrapper.fitted?.body?.isStandingHeld!==true;
+   },signal);
   }
   signal.throwIfAborted();
   const accepted=cancelling?await source.control.onCancel():await source.control.onChange(request.choice);

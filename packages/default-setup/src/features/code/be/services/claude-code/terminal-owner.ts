@@ -526,7 +526,7 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
       },
       async answerGenericToolPermissionDialog(response) {
         if (closed || response.sessionId !== bridge.projection.sessionId) throw new Error('Native generic permission session expired')
-        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_generic_tool_permission_dialog', decision: response.decision, id: response.id, revision: response.revision, session_id: response.sessionId, toolName: response.toolName, choice: response.choice, choiceToken: response.choiceToken, feedback: response.feedback }) as { answered?: unknown }
+        const result = await bridge.uiTransport.request({ subtype: 'apack_answer_generic_tool_permission_dialog', decision: response.decision, id: response.id, revision: response.revision, session_id: response.sessionId, toolName: response.toolName, choice: response.choice, choiceToken: response.choiceToken, feedback: response.feedback, prefix: response.prefix }) as { answered?: unknown }
         if (result.answered !== true) throw new Error('Native generic permission was not acknowledged')
       },
       async getToolPermissionDialogs() {

@@ -71,14 +71,14 @@
       <button type="button" class="cancel" :disabled="canCancel === undefined ? disabled : controlsDisabled || !canCancel" @click="cancel">{{ cancelLabel ?? 'Cancel' }}</button>
       <div class="decisions">
         <button type="button" ref="denyElement" class="deny" :disabled="controlsDisabled || !!tool && !tool.choices.some(choice => choice.value === 'no')" @click="deny">Deny</button>
-        <button type="button" ref="approveElement" class="approve" :disabled="controlsDisabled || canApprove === false || !!bash && !bash.choices.some(choice => choice.value === selectedChoice) || !!tool && !tool.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow') || selectedChoice !== 'yes' && !currentChoice || !!workflow && !workflow.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow')" @click="approve">{{ tool ? selectedChoice === 'yes' ? tool.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' : 'Continue' : workflow ? workflow.choices.find(choice => choice.value === selectedChoice)?.label ?? 'Allow' : selectedChoice !== 'yes' || file && file.choices.find(choice => choice.value === 'yes')?.label !== 'Yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
+        <button type="button" ref="approveElement" class="approve" :disabled="controlsDisabled || canApprove === false || !!bash && !bash.choices.some(choice => choice.value === selectedChoice) || !!tool && !tool.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow') || selectedChoice !== 'yes' && !currentChoice || invalidToolPrefix || !!workflow && !workflow.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow')" @click="approve">{{ tool ? selectedChoice === 'yes' ? tool.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' : 'Continue' : workflow ? workflow.choices.find(choice => choice.value === selectedChoice)?.label ?? 'Allow' : selectedChoice !== 'yes' || file && file.choices.find(choice => choice.value === 'yes')?.label !== 'Yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
       </div>
     </footer>
   </section>
 </template>
 
 <script setup lang="ts">
-import type { ClaudeToolPermissionApproval } from '#features/code/common/native-tool-permission.ts'
+import type { ClaudeGenericToolPermissionApproval, ClaudeToolPermissionApproval } from '#features/code/common/native-tool-permission.ts'
 import NativePermissionText from './NativePermissionText.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import type { ClaudeWorkflowApproval } from '#features/code/common/native-workflow-approval.ts'
@@ -86,7 +86,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import type { ClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
-const props = withDefaults(defineProps<{ tool?: ClaudeToolPermissionApproval; workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: string; pauseScope?: ClaudeDecisionPauseScope; cancelLabel?: string; canApprove?: boolean; choiceDescriptions?: Record<string, string>; defaultFocusValue?: string; canCancel?: boolean; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>(), { canCancel: undefined, canApprove: undefined })
+const props = withDefaults(defineProps<{ tool?: ClaudeToolPermissionApproval | ClaudeGenericToolPermissionApproval; workflow?: ClaudeWorkflowApproval; bash?: ClaudeBashApprovalPresentation; file?: ClaudeFileApprovalPresentation; toolName: string; pauseScope?: ClaudeDecisionPauseScope; cancelLabel?: string; canApprove?: boolean; choiceDescriptions?: Record<string, string>; defaultFocusValue?: string; canCancel?: boolean; review?: ClaudeFileApprovalReview; title: string; question: string; filePath?: string; command?: string; cwd?: string; reason?: string; disabled: boolean }>(), { canCancel: undefined, canApprove: undefined })
 const emit = defineEmits<{ respond: [response: { approved: boolean; cancelled?: boolean; reason?: string; choice?: string; choiceToken?: string; prefix?: string }]; pause: [scope?: ClaudeDecisionPauseScope]; 'edit-workflow': [] }>()
 const rawWorkflow = ref<boolean>()
 const showRawWorkflow = computed(() => rawWorkflow.value ?? props.workflow?.raw ?? true)
@@ -129,7 +129,15 @@ const controlsDisabled = computed(() => props.disabled || permission.value?.read
 const standingChoices = computed(() => (props.tool ? props.tool.choices : props.toolName === 'Bash' ? props.bash?.choices : permission.value?.choices)?.filter(choice => choice.value !== 'yes' && choice.value !== 'no') ?? [])
 const selectedFileChoice = computed(() => props.file?.choices.find(choice => choice.value === selectedChoice.value))
 const currentChoice = computed(() => standingChoices.value.find(choice => choice.value === selectedChoice.value))
-const prefix = computed({ get: () => prefixDrafts[selectedChoice.value] ?? (currentChoice.value && 'prefix' in currentChoice.value ? currentChoice.value.prefix : '') ?? '', set: value => { prefixDrafts[selectedChoice.value] = value } })
+const initialPrefix = computed(() => {
+  const choice = currentChoice.value
+  return choice && 'prefix' in choice && typeof choice.prefix === 'string' ? choice.prefix : undefined
+})
+const prefix = computed({
+  get: () => prefixDrafts[selectedChoice.value] ?? initialPrefix.value ?? '',
+  set: value => { prefixDrafts[selectedChoice.value] = value },
+})
+const invalidToolPrefix = computed(() => !!props.tool && initialPrefix.value !== undefined && !prefix.value.trim())
 watch(() => [controlsDisabled.value, props.defaultFocusValue] as const, async () => {
   if (initialFocusApplied || interacted.value || controlsDisabled.value || props.defaultFocusValue === undefined) return
   await nextTick()
@@ -160,10 +168,10 @@ function deny() {
   emit('respond', { approved: false, reason: feedback.value.trim() || undefined, ...(permission.value ? { choice: 'no', choiceToken: permission.value.token } : {}) })
 }
 function approve() {
-  if (controlsDisabled.value) return
+  if (controlsDisabled.value || invalidToolPrefix.value) return
   if (permission.value) {
     const choice = permission.value.choices.find(choice => choice.value === selectedChoice.value)
-    if (choice) emit('respond', { approved: choice.decision === 'allow', choice: choice.value, choiceToken: permission.value.token, ...(props.tool && choice.feedback && feedback.value ? { reason: feedback.value } : {}) })
+    if (choice) emit('respond', { approved: choice.decision === 'allow', choice: choice.value, choiceToken: permission.value.token, ...('prefix' in choice && typeof choice.prefix === 'string' ? { prefix: prefix.value } : {}), ...(props.tool && choice.feedback && feedback.value ? { reason: feedback.value } : {}) })
     return
   }
   const choice = props.bash?.choices.find(choice => choice.value === selectedChoice.value)
