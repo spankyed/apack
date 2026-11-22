@@ -11,13 +11,17 @@ export interface ClaudePromptDocument {
 }
 export type ClaudePromptSerializer = (doc: ProseMirrorNode) => string
 
+export function isEmptyClaudePromptParagraph(doc: ProseMirrorNode): boolean {
+  return doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph' && !doc.firstChild.content.size
+}
+
 /** Locate a caret in the submitted Markdown without mistaking a document offset for text. */
 export function captureClaudePromptDocument(doc: ProseMirrorNode, position: number, serialize: ClaudePromptSerializer, marks?: readonly Mark[]): ClaudePromptDocument | undefined {
   if (!Number.isInteger(position) || position < 0 || position > doc.content.size) return
   const text = serialize(doc)
   // The empty paragraph has one text boundary, including Select All's document-edge head.
   // The app's Markdown extension spells it as &nbsp;, not user draft text.
-  if ((text === '' || text === '&nbsp;') && doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph' && !doc.firstChild.content.size) {
+  if ((text === '' || text === '&nbsp;') && isEmptyClaudePromptParagraph(doc)) {
     return { text: '', cursor: 0, doc, position: 1 }
   }
   let resolved = doc.resolve(position)

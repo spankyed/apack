@@ -285,6 +285,7 @@ import { bindClaudePromptEditor } from './native-prompt-editor.ts'
 import { useSpeechRecognition } from './composables/useSpeechRecognition.ts'
 import { DOUBLE_ESC_MS } from '@apackdev/ui/components/tiptap/composables/createEditorKeyboard'
 import { useAttachments } from './composables/useAttachments.ts'
+import { isEmptyClaudePromptParagraph } from './native-prompt-document.ts'
 import { imagePaste } from '#extensions/tiptap/image-paste.ts'
 import { useExternalFileDrag } from '@apackdev/ui/composables/useExternalFileDrag'
 import {
@@ -1012,11 +1013,11 @@ const handleSubmit = async () => {
       }
     }
     if (epoch !== composerEpoch || editor.isDestroyed || tiptapRef.value?.editor !== editor || props.disabled || props.nativeDecisionPending) return
-    const serialized = (editor.storage as any).markdown.getMarkdown() as string
-    const md = editor.state.doc.childCount === 1 && editor.state.doc.firstChild?.type.name === 'claudePromptSource'
-      ? serialized : serialized.replace(/(\n&nbsp;)+$/, '').trim()
-    if (!editor.state.doc.textContent.trim() && !hasAttachments.value) return
     const doc = editor.state.doc
+    if (!doc.textContent.trim() && !hasAttachments.value) return
+    const serialized = isEmptyClaudePromptParagraph(doc) ? '' : (editor.storage as any).markdown.getMarkdown() as string
+    const md = doc.childCount === 1 && doc.firstChild?.type.name === 'claudePromptSource'
+      ? serialized : serialized.replace(/(\n&nbsp;)+$/, '').trim()
     const entityId = props.currentThread?.id || 'chat-attachments'
     const attachments = captureAttachments()
     const contextRefs = collectContextReferences(editor)

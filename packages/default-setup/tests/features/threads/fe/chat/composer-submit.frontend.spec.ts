@@ -35,7 +35,7 @@ vi.mock('#features/threads/fe/chat/FileBlock.vue', () => ({ default: { render: (
 vi.mock('#features/threads/fe/chat/ImageThumbnail.vue', () => ({ default: { render: () => null } }))
 
 beforeEach(() => { HTMLElement.prototype.scrollIntoView = vi.fn(); vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} }); previousElectronApi = Object.getOwnPropertyDescriptor(window, 'electronAPI'); startFeTestRuntime({ application: { getSnapshot: surface.getSnapshot, system: { get: () => surface }, subscribe: () => ({ unsubscribe() {} }) } as never }); localStorage.clear() })
-afterEach(() => { vi.useRealTimers(); app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); app?.unmount(); document.body.replaceChildren(); stopFeTestRuntime(); if (previousElectronApi) Object.defineProperty(window, 'electronAPI', previousElectronApi); else Reflect.deleteProperty(window, 'electronAPI'); vi.unstubAllGlobals() })
 function mount(upload: (...args: unknown[]) => Promise<string | undefined>) {
   Object.defineProperty(window, 'electronAPI', { configurable: true, value: { media: { upload } } })
   const state = reactive({ currentThread: { id: 'thread-one', messages: [] } as any, currentMode: 'Claude Code', nativeBackgrounded: false, nativeDecisionPending: false, nativeSendWaiting: false, isBusy: false, nativeSubmit: undefined as ((text: string, references: import('#generated/types.ts').MessageReferences) => Promise<import('#features/threads/fe/chat/native-submit.ts').ClaudeComposerSubmitResult>) | undefined, nativeUi: undefined as ClaudeUiMountState | undefined, nativePrompt: undefined as { hostRequest?: import('#generated/types.ts').ClaudePromptHostRequest; mountId: string; reply?: ClaudePromptReply; completions?: ClaudePromptCompletionReply } | undefined, currentPhase: undefined as string | undefined, modes: [{ name: 'Claude Code' }] as any })
@@ -67,6 +67,18 @@ it('keeps the draft editable while native input is busy and sends it once Claude
   f.submit()
   await vi.waitFor(() => expect(nativeSubmit).toHaveBeenCalledExactlyOnceWith('Edited while Claude was busy', expect.anything()))
   await vi.waitFor(() => expect(editor.state.doc.textContent).toBe(''))
+})
+
+it('sends an attached image with an empty caption despite the Markdown paragraph marker', async () => {
+  const f = mount(async () => '/media/image.png')
+  const nativeSubmit = vi.fn(async () => undefined)
+  f.state.nativeSubmit = nativeSubmit
+  editor.commands.clearContent(true)
+  vi.spyOn((editor.storage as any).markdown, 'getMarkdown').mockReturnValue('&nbsp;')
+  attachments.pendingImages.value = [image('image.png')]
+  await nextTick()
+  f.submit()
+  await vi.waitFor(() => expect(nativeSubmit).toHaveBeenCalledExactlyOnceWith('', { images: [{ name: 'image.png', url: '/media/image.png' }] }))
 })
 
 it('sends once during upload and preserves newer typing and attachments', async () => {
@@ -122,7 +134,8 @@ it('retires an in-flight send when the composer unmounts', async () => {
 })
 
 
-async function nativeMount() {
+async function nativeMount(focused = false) {
+  if (focused) vi.spyOn(document, 'hasFocus').mockReturnValue(true)
   const f = mount(vi.fn(async () => undefined))
   f.state.nativePrompt = { mountId: 'native-view' }; await nextTick()
   const adoption = f.prompt.mock.lastCall![0]
@@ -171,7 +184,7 @@ it.each(['disconnect', 'error', 'superseded'] as const)('retires a waiting Send 
 
 
 it('draws native rows without autofocus, selects the exact token and never submits chat', async () => {
-  const f = await nativeMount()
+  const f = await nativeMount(true)
   const request = f.complete.mock.lastCall![0]
   f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'native-word', label: '<script>Native</script>', description: 'Plugin description' }] } }
   await nextTick()
@@ -187,7 +200,7 @@ it('draws native rows without autofocus, selects the exact token and never submi
 })
 
 it('keeps native row navigation inside its group and drops stale clicks after typing', async () => {
-  const f = await nativeMount(), request = f.complete.mock.lastCall![0]
+  const f = await nativeMount(true), request = f.complete.mock.lastCall![0]
   f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'one' }, { text: 'two' }] } }
   await nextTick()
   const group = document.querySelector('[aria-label="Claude suggestions"]')!, buttons = group.querySelectorAll('button')
@@ -203,7 +216,7 @@ it('keeps native row navigation inside its group and drops stale clicks after ty
 
 
 it('dismisses native offers on Escape and leaves Shift+Tab to normal focus traversal', async () => {
-  const f = await nativeMount(), request = f.complete.mock.lastCall![0]
+  const f = await nativeMount(true), request = f.complete.mock.lastCall![0]
   f.state.nativePrompt!.completions = { revision: request.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'native' }] } }
   await nextTick()
   const row = document.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
@@ -219,7 +232,7 @@ it('dismisses native offers on Escape and leaves Shift+Tab to normal focus trave
 
 
 it('refuses a detached old row click even after a newer offer occupies the same index', async () => {
-  const f = await nativeMount(), first = f.complete.mock.lastCall![0]
+  const f = await nativeMount(true), first = f.complete.mock.lastCall![0]
   f.state.nativePrompt!.completions = { revision: first.revision, status: 'ready', result: { start: 0, suggestions: [{ text: 'old' }] } }
   await nextTick()
   const old = document.querySelector('[aria-label="Claude suggestions"] button')! as HTMLButtonElement
