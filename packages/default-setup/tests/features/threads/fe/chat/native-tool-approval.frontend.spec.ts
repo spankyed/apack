@@ -197,7 +197,9 @@ it('preserves exact native-supported Skill feedback for allow and deny, and excl
   const respond = vi.fn(), app = createApp({ render: () => h(NativeToolApproval, { toolName: 'Skill', title: tool.title, question: 'Use this skill?', disabled: false, tool, onRespond: respond }) }); app.mount(root)
   try {
     const feedback = root.querySelector('textarea')!
-    expect(feedback.getAttribute('aria-label')).toBe('Feedback for Claude')
+    expect(feedback.labels?.[0]?.textContent?.trim()).toBe('Feedback for Claude')
+    root.querySelector<HTMLButtonElement>('.feedback-toggle')!.click()
+    await nextTick()
     feedback.value = '  Review the migration notes first.  '; feedback.dispatchEvent(new Event('input')); await nextTick()
     root.querySelector<HTMLButtonElement>('.approve')!.click()
     expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes', choiceToken: tool.token, reason: feedback.value })
@@ -303,5 +305,32 @@ it('keeps editable tool rules separate from the one-time choice and refuses blan
     select.value = 'yes'; select.dispatchEvent(new Event('change')); await nextTick()
     approve.click()
     expect(respond).toHaveBeenLastCalledWith({ approved: true, choice: 'yes', choiceToken: tool.token })
+  } finally { app.unmount(); root.remove() }
+})
+
+it('keeps native feedback beside the decisions, focuses its field and retains the draft on collapse', async () => {
+  const root = document.createElement('div'); document.body.append(root)
+  const tool = { token: 'b'.repeat(64), ready: true, title: 'PowerShell command', details: [], choices: [
+    { value: 'yes', label: 'Yes', decision: 'allow' as const, feedback: true },
+    { value: 'no', label: 'No', decision: 'deny' as const, feedback: true },
+  ] }
+  const respond = vi.fn(), app = createApp({ render: () => h(NativeToolApproval, { toolName: 'PowerShell', title: tool.title, question: 'Proceed?', disabled: false, tool, onRespond: respond }) })
+  app.mount(root)
+  try {
+    const toggle = root.querySelector<HTMLButtonElement>('footer .feedback-toggle')!
+    const field = root.querySelector<HTMLTextAreaElement>('textarea')!
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(toggle.getAttribute('aria-controls')).toBe(field.parentElement?.id)
+    toggle.click(); await nextTick(); await nextTick()
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(document.activeElement).toBe(field)
+    field.value = 'Keep the release checklist.'
+    field.dispatchEvent(new Event('input'))
+    toggle.click(); await nextTick()
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    toggle.click(); await nextTick(); await nextTick()
+    expect(field.value).toBe('Keep the release checklist.')
+    root.querySelector<HTMLButtonElement>('.deny')!.click()
+    expect(respond).toHaveBeenLastCalledWith({ approved: false, choice: 'no', choiceToken: tool.token, reason: field.value })
   } finally { app.unmount(); root.remove() }
 })

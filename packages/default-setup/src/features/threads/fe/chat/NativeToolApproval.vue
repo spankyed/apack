@@ -62,13 +62,21 @@
           <input v-model="prefix" aria-label="Remembered command prefix" maxlength="4000" :disabled="controlsDisabled" />
         </label>
       </details>
-      <details v-if="!tool || tool.choices.some(choice => choice.feedback)">
-        <summary>{{ tool ? 'Add feedback' : 'Add a reason for denying' }}</summary>
-        <textarea v-model="feedback" :aria-label="tool ? 'Feedback for Claude' : 'Reason for denying'" rows="2" maxlength="4000" :disabled="controlsDisabled || !!tool && !selectedToolChoice?.feedback" />
+      <details v-if="!tool">
+        <summary>Add a reason for denying</summary>
+        <textarea v-model="feedback" aria-label="Reason for denying" rows="2" maxlength="4000" :disabled="controlsDisabled" />
       </details>
+      <label v-else-if="toolOffersFeedback" v-show="feedbackOpen" :id="feedbackId" class="approval-feedback">
+        Feedback for Claude
+        <textarea ref="toolFeedback" v-model="feedback" rows="2" maxlength="4000" :disabled="controlsDisabled || !selectedToolChoice?.feedback" />
+      </label>
     </div>
     <footer>
-      <button type="button" class="cancel" :disabled="canCancel === undefined ? disabled : controlsDisabled || !canCancel" @click="cancel">{{ cancelLabel ?? 'Cancel' }}</button>
+      <div class="footer-tools">
+        <button type="button" class="cancel" :disabled="canCancel === undefined ? disabled : controlsDisabled || !canCancel" @click="cancel">{{ cancelLabel ?? 'Cancel' }}</button>
+        <button v-if="toolOffersFeedback" type="button" class="feedback-toggle" :aria-controls="feedbackId" :aria-expanded="feedbackOpen"
+          :disabled="controlsDisabled || !selectedToolChoice?.feedback" @click="toggleFeedback">{{ feedbackOpen ? 'Hide feedback' : 'Add feedback' }}</button>
+      </div>
       <div class="decisions">
         <button type="button" ref="denyElement" class="deny" :disabled="controlsDisabled || !!tool && !tool.choices.some(choice => choice.value === 'no')" @click="deny">Deny</button>
         <button type="button" ref="approveElement" class="approve" :disabled="controlsDisabled || canApprove === false || !!bash && !bash.choices.some(choice => choice.value === selectedChoice) || !!tool && !tool.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow') || selectedChoice !== 'yes' && !currentChoice || invalidToolPrefix || !!workflow && !workflow.choices.some(choice => choice.value === selectedChoice && choice.decision === 'allow')" @click="approve">{{ tool ? selectedChoice === 'yes' ? tool.choices.find(choice => choice.value === 'yes')?.label ?? 'Allow once' : 'Continue' : workflow ? workflow.choices.find(choice => choice.value === selectedChoice)?.label ?? 'Allow' : selectedChoice !== 'yes' || file && file.choices.find(choice => choice.value === 'yes')?.label !== 'Yes' ? 'Continue' : toolName === 'Read' ? 'Approve' : 'Allow once' }}</button>
@@ -82,7 +90,7 @@ import type { ClaudeGenericToolPermissionApproval, ClaudeToolPermissionApproval 
 import NativePermissionText from './NativePermissionText.vue'
 import NativeStatusText from '#extensions/blocks/display/NativeStatusText.vue'
 import type { ClaudeWorkflowApproval } from '#features/code/common/native-workflow-approval.ts'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, useId, watch } from 'vue'
 import type { ClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import type { ClaudeBashApprovalPresentation } from '#features/code/common/native-bash-approval.ts'
 import type { ClaudeFileApprovalReview, ClaudeFileApprovalPresentation } from '#features/code/common/native-file-approval.ts'
@@ -122,6 +130,15 @@ onBeforeUnmount(() => {
   if (focusFrame !== undefined) cancelAnimationFrame(focusFrame)
 })
 const feedback = ref('')
+const feedbackId = useId(), feedbackOpen = ref(false), toolFeedback = ref<HTMLTextAreaElement>()
+const toolOffersFeedback = computed(() => props.tool?.choices.some(choice => choice.feedback) === true)
+async function toggleFeedback() {
+  feedbackOpen.value = !feedbackOpen.value
+  if (!feedbackOpen.value) return
+  await nextTick()
+  toolFeedback.value?.focus({ preventScroll: true })
+  ensureFocusedField()
+}
 const selectedChoice = ref('yes'), prefixDrafts = reactive<Record<string, string>>({})
 const permission = computed(() => props.workflow ?? props.file ?? props.tool)
 const selectedToolChoice = computed(() => props.tool?.choices.find(choice => choice.value === selectedChoice.value))
@@ -202,11 +219,14 @@ select, input { display: block; width: 100%; margin-top: 6px; padding: 6px; bord
 .standing-permission label { display: block; margin-top: 8px; }
 textarea { display: block; width: 100%; margin-top: 6px; padding: 6px; resize: vertical; border: 1px solid #555; border-radius: 6px; background: #191919; color: #eee; }
 footer { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-top: 1px solid rgb(255 255 255 / .07); }
-.decisions { display: flex; gap: 8px; }
+.footer-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.decisions { display: flex; flex: none; gap: 8px; }
 button { border-radius: 6px; padding: 7px 12px; font-size: 12px; font-weight: 500; cursor: pointer; }
 button:focus-visible, summary:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; }
 button:disabled { opacity: .5; cursor: default; }
 .cancel { color: #aaa; background: transparent; }
+.feedback-toggle { color: #bfdbfe; background: transparent; }
+.approval-feedback { display: block; margin-top: 10px; color: #aaa; }
 .deny { background: #3b3b3b; color: #eee; }
 .approve { background: #e5e5e5; color: #202020; }
 button:hover:not(:disabled) { filter: brightness(1.12); }
