@@ -16,8 +16,7 @@ function nativePowerShellControl(n,d){
       command?.kind==='full'&&typeof command.text==='string'&&command.text.length<=200000&&
       Array.isArray(body)&&body.length===5&&!body[0]&&!body[2]&&selector?.type?.name==='Xe'&&
       typeof control?.onChange==='function'&&typeof control.onCancel==='function'&&
-      Array.isArray(control.options)&&control.options.length===2&&
-      control.options.every((option,index)=>option.value===(index===0?'yes':'no')&&option.type===undefined&&option.disabled!==true&&typeof option.label==='string'&&option.label.length>0&&option.label.length<=4000)){
+      Array.isArray(control.options)&&supportedPowerShellChoices(control.options)){
     matches.push({fiber,wrapper,panel,command,body,control});
    }
   }
@@ -25,10 +24,20 @@ function nativePowerShellControl(n,d){
  }
  return matches.length===1?matches[0]:undefined;
 }
+function supportedPowerShellChoices(options){
+ const ordered=options.length===2?['yes','no']:options.length===3?['yes','yes-apply-suggestions','no']:[];
+ return ordered.length>0&&options.every((option,index)=>option.value===ordered[index]&&option.type===undefined&&option.disabled!==true&&
+  (option.value==='yes-apply-suggestions'?option.label!==undefined:typeof option.label==='string'&&option.label.length>0&&option.label.length<=4000));
+}
 async function nativePowerShellPresentation(n,d){
  const source=nativePowerShellControl(n,d);if(!source)return;
  const {fiber,wrapper,panel,command,body,control}=source;
- const choices=control.options.map(option=>({value:option.value,label:option.label,decision:option.value==='yes'?'allow':'deny',feedback:false}));
+ const standingHeld=wrapper.fitted?.body?.isStandingHeld===true,choices=[];
+ for(const option of control.options){
+  if(option.value==='yes-apply-suggestions'&&standingHeld)continue;
+  const label=await nativeGenericPermissionText(n,option.label);if(!label||label.length>4000)return;
+  choices.push({value:option.value,label,decision:option.value==='no'?'deny':'allow',feedback:false});
+ }
  const details=[];
  if(typeof wrapper.fitted?.description==='string'&&wrapper.fitted.description)details.push({label:'Description',value:wrapper.fitted.description});
  details.push({label:'Command',value:command.text});
@@ -45,10 +54,11 @@ async function answerNativePowerShellPermission(n,d,request){
  if(!shown?.presentation.ready||request.choiceToken!==shown.presentation.token||request.feedback!==undefined||request.toolName!=='PowerShell')throw Error('Native PowerShell choices changed or are unavailable');
  const current=nativeDialog(n,'permission_powershell');
  if(current.item!==d.item||current.payload!==d.payload||current.revision!==d.revision||current.sessionId!==d.sessionId)throw Error('Native PowerShell permission expired');
- const {control,fiber}=nativePowerShellControl(n,current)??{};
+ const {control,fiber,wrapper}=nativePowerShellControl(n,current)??{};
  if(!control||control!==shown.source.control||fiber.memoizedProps.wouldTakeAnswer()!==true)throw Error('Native PowerShell permission controls changed');
  const cancelling=request.decision==='cancel'&&request.choice==='';
  if(!cancelling&&!shown.presentation.choices.some(choice=>request.choice===choice.value&&request.decision===choice.decision))throw Error('Invalid native PowerShell choice');
+ if(request.choice==='yes-apply-suggestions'&&wrapper.fitted?.body?.isStandingHeld===true)throw Error('Native PowerShell standing choice is currently held');
  const accepted=cancelling?await control.onCancel():await control.onChange(request.choice);
  if(accepted===false)throw Error('Original native PowerShell permission refused the answer');
  const deadline=Date.now()+1000;
