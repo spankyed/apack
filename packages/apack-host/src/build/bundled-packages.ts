@@ -77,6 +77,11 @@ export function installedPackage(name: string, fromDir: string): BundledPackage 
  * resolved to its real path so a linked package is found where its files are.
  */
 export function packageOf(id: string, fromDir: string): BundledPackage | undefined {
+  const found = resolveModulePackage(id, fromDir);
+  return found && !isFirstParty(found.name) ? found : undefined;
+}
+
+function resolveModulePackage(id: string, fromDir: string): BundledPackage | undefined {
   if (id.startsWith('\0')) {
     const virtual = VIRTUAL_PACKAGES.find(([prefix]) => id.slice(1).startsWith(prefix));
     if (virtual) return installedPackage(virtual[1], fromDir);
@@ -84,15 +89,20 @@ export function packageOf(id: string, fromDir: string): BundledPackage | undefin
   }
   const file = id.split('?')[0];
   if (!path.isAbsolute(file) || !fs.existsSync(file)) return undefined;
-  const found = namedPackageAt(path.dirname(fs.realpathSync(file)));
-  return found && !isFirstParty(found.name) ? found : undefined;
+  return namedPackageAt(path.dirname(fs.realpathSync(file)));
 }
 
 /** The distinct packages of some module ids plus the named ones, sorted by name and then version */
 export function bundledPackages(ids: Iterable<string>, fromDir: string, named: readonly string[] = []): BundledPackage[] {
+  return collectBundledPackages(ids, fromDir, named, packageOf);
+}
+
+function collectBundledPackages(ids: Iterable<string>, fromDir: string, named: readonly string[],
+  resolvePackage: (id: string, fromDir: string) => BundledPackage | undefined,
+): BundledPackage[] {
   const byDir = new Map<string, BundledPackage>();
   for (const id of ids) {
-    const found = packageOf(id, fromDir);
+    const found = resolvePackage(id, fromDir);
     if (found) byDir.set(found.dir, found);
   }
   for (const name of named) {
@@ -242,12 +252,12 @@ export function readPackBundledPackages(packDir: string): { packages: BundledPac
   try {
     // Two esbuilds write a pack's bundles: the one the pack builder calls for the build helpers, and the one Vite
     // depends on, which transforms and minifies the frontend and is another install when Vite asks for a newer one
-    fromModules = [...bundledPackages(ids, packDir, injected), installedPackage('esbuild', installedPackage('vite', packDir).dir)];
+    fromModules = [...collectBundledPackages(ids, packDir, injected, resolveModulePackage), installedPackage('esbuild', installedPackage('vite', packDir).dir)];
   } catch (error) { problems.push((error as Error).message); }
   const found = new Map([...fromModules, ...named.values()].map((pkg) => [pkg.dir, pkg]));
   // The pack's own sources belong to this pack regardless of its npm name. An installed
   // dependency that happens to use that same name still belongs to its own directory.
   const authoredDir = fs.realpathSync(packDir);
-  const packages = [...found.values()].filter((pkg) => pkg.dir !== authoredDir && !isFirstParty(pkg.name));
+  const packages = [...found.values()].filter((pkg) => pkg.dir !== authoredDir);
   return { packages, problems };
 }

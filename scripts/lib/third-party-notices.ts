@@ -342,7 +342,7 @@ export function shippedPackages(appDir: string): NoticePackage[] {
 /** The third-party packages a built pack inlined, classified for the app's notices. */
 export function packBundledPackages(packDir: string): { packages: NoticePackage[]; problems: string[] } {
   const { packages, problems } = readPackBundledPackages(packDir);
-  return { packages: packages.map(pkg => ({ ...pkg, carried: 'inlined' })), problems };
+  return { packages: packages.filter(pkg => !isFirstParty(pkg.name)).map(pkg => ({ ...pkg, carried: 'inlined' })), problems };
 }
 
 /** The repository URL a manifest names, or `undefined` */

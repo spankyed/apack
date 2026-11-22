@@ -1,3 +1,4 @@
+import { readPackBundledPackages } from '@apackdev/host/build/bundled-packages';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -230,6 +231,20 @@ describe('the packages the notices cover', () => {
     const { packages, problems } = packBundledPackages(path.join(repo, 'pack'));
     expect(problems).toEqual([]);
     expect(packages.map((pkg) => pkg.name)).toContain('vidstack');
+  });
+
+  it('preserves a standalone dependency with an app-scoped npm name', () => {
+    const repo = tree({
+      ...bundlers,
+      ...installed('@app/private-helper', { version: '1.0.0' }, { 'index.js': '' }),
+      'pack/package.json': JSON.stringify({ name: 'ordinary-pack' }),
+      'pack/dist/a.js': '// ../node_modules/@app/private-helper/index.js\n',
+    });
+    const dir = path.join(repo, 'pack');
+    expect(readPackBundledPackages(dir)).toMatchObject({
+      problems: [], packages: expect.arrayContaining([expect.objectContaining({ name: '@app/private-helper' })]),
+    });
+    expect(packBundledPackages(dir).packages.map(pkg => pkg.name)).not.toContain('@app/private-helper');
   });
 
   it("credits a module to the package its file is in, not to the one of that name the pack would resolve", () => {
