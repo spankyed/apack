@@ -79,6 +79,12 @@ export function elmdb(): ElmdbRows {
     get commits() { return engine.lastCommit() - started },
     get writing() { return open },
     failNext: (why) => { failing = why },
+    watch: (read, heard) => { const watching = engine.watch(read, (value) => heard(value)); return () => watching.stop() },
+    // The engine's own timers do not keep a process alive, so while this waits something else has to.
+    settled: (then) => {
+      const alive = setInterval(() => {}, 1_000)
+      void engine.admin.watchesSettled().finally(() => clearInterval(alive)).then(then)
+    },
     close: () => opened.dispose(),
   }
 }

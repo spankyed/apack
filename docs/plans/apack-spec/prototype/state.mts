@@ -609,6 +609,8 @@ interface Port {
   event(ref: string, event: AnyEvent): void
   /** Returns what to call when whoever asked has gone. */
   ask(ref: string, name: string, args: object, heard: Heard, settle: (outcome: AnyOutcome) => void): () => void
+  /** Follows a view the other system runs. Returns what to call to stop following it. */
+  view(feature: string, view: string, args: object, heard: (update: ViewUpdate<unknown>) => void): () => void
 }
 /**
  * Things that happen one after another: what crosses a link in one direction, or a system's frames. What is in one
@@ -668,6 +670,12 @@ export function system(host: {
    */
   transact?: Transact
   /**
+   * On a backend that runs views for its windows: calls `then` once every view has been sent what was kept before
+   * this call. With it, what a step sends a window leaves after the views that window follows have been sent the
+   * step's rows, down the same link, so a window is never told of something its views do not show yet.
+   */
+  viewsSent?(then: () => void): void
+  /**
    * Runs something later, after whatever is ahead of it in its lane. The default is the next turn of the event loop.
    * A check gives a schedule here, which decides the order between lanes and can run every one of them.
    */
@@ -681,9 +689,7 @@ export function system(host: {
    */
   limit?: number
 }): System {
-  /** How many defects have been reported: what a change is checked against, to know whether it was made. */
-  let defects = 0
-  const trace = (line: string): void => { if (line.startsWith('DEFECT')) defects++; host.trace?.(line) }
+  const trace = (line: string): void => { host.trace?.(line) }
   const called = host.name ?? host.side
   /** How many things are under way: work, asks, and what was put off. Nothing is, when this is nought. */
   let pending = 0
@@ -707,10 +713,37 @@ export function system(host: {
   const leaving: Array<(() => void) & { lost?: () => void }> = []
   /** Thrown inside a unit to have what it wrote undone, and caught around it. */
   const UNDONE = Symbol('undone')
-  /** Whether what is being handled changed nothing: it threw, was refused, or its change could not be made. */
-  let nothingChanged = false
+  /**
+   * Whether what was handled was made. Everything that takes something says which, as what it returns, so that a path
+   * which forgets to does not compile: what was not made has its rows undone, and what was has them kept.
+   */
+  const MADE = true
+  const NOT_MADE = false
   /** Set when a step's rows could not be kept. The states are ahead of the rows then, and no more steps are taken. */
   let broken = false
+  /**
+   * What is waiting to go to windows, in the order it was sent, until the views have been sent what its step kept.
+   * One list for every window: what a backend sends them keeps its order across them too.
+   */
+  const toWindows: Array<() => void> = []
+  /** How many of those have been asked after: what was sent since is still to be. */
+  let askedAfter = 0
+  /** Sends something to a window: now, or once the views it follows have been sent the rows of the step it leaves in. */
+  const toAWindow = (send: () => void): void => { if (host.viewsSent) toWindows.push(send); else send() }
+  /** After a step has left: has what it sent windows go once the views have caught up with it. */
+  const release = (): void => {
+    const wait = host.viewsSent
+    if (!wait || toWindows.length === askedAfter) return
+    const count = toWindows.length - askedAfter
+    askedAfter = toWindows.length
+    pending++
+    wait(() => {
+      pending--
+      askedAfter -= count
+      // What was sent before this was asked, and so before everything kept by then was sent to the views.
+      for (const send of toWindows.splice(0, count)) safely('what is sent to a window', send)
+    })
+  }
   /** An answer leaves when the step's rows are kept. If they cannot be, whoever asked is told that it failed. */
   const answer = (question: Question, outcome: AnyOutcome): void => {
     leaving.push(Object.assign(() => question.end(outcome), { lost: () => question.end(refusal('failed', 'What this step wrote could not be kept, so nothing was changed')) }))
@@ -867,7 +900,7 @@ export function system(host: {
         asked.catch(() => {})
         return asked
       },
-      broadcast: (to: string, event: AnyEvent) => { if (alive()) out(() => { for (const window of down) carry(window.link, 'down', () => window.port.event(to, event)) }) },
+      broadcast: (to: string, event: AnyEvent) => { if (alive()) out(() => toAWindow(() => { for (const window of down) carry(window.link, 'down', () => window.port.event(to, event)) })) },
       make: (name: string, key?: string) => { if (alive()) enqueue({ kind: 'make', of: mine, name, key }) },
       drop: (name: string, key?: string) => { if (alive()) enqueue({ kind: 'drop', of: mine, name, key }) },
       report: (event: AnyEvent) => {
@@ -1041,7 +1074,23 @@ export function system(host: {
         return keys
       }
 
-      const views = host.views
+      // A window with no views of its own follows its backend's, over the link: what a view delivers comes down it
+      // in order with everything else the backend sends.
+      const linked = up
+      const views: ViewHost | undefined = host.views ?? (linked && ((feature, view, args, heard) => {
+        let stop: (() => void) | undefined
+        let stopped = false
+        out(() => carry(linked.link, 'up', () => {
+          if (stopped) return
+          stop = linked.port.view(feature, view, args, (update) => carry(linked.link, 'down', () => { if (!stopped) heard(update) }))
+          linked.gone.add(stop)
+        }))
+        return () => {
+          stopped = true
+          const ended = stop
+          if (ended) { linked.gone.delete(ended); out(() => carry(linked.link, 'up', ended)) }
+        }
+      }))
       if (views) for (const [name, declared] of Object.entries(declaredBy(at.def).follows)) {
         const followed = (id: string, key: string | undefined, seen: readonly unknown[], args: () => unknown): void => settle(at.following, id, seen, (live) => {
           let asked: object
@@ -1161,11 +1210,11 @@ export function system(host: {
   }
 
   /** Makes a change, and freezes what the state holds afterwards, however the change went. */
-  const apply = (active: Active, next: unknown, mayRefuse = false): void => {
-    try { change(active, next, mayRefuse) } finally { active.top.data = frozen(active.top.data) }
+  const apply = (active: Active, next: unknown, mayRefuse = false): boolean => {
+    try { return change(active, next, mayRefuse) } finally { active.top.data = frozen(active.top.data) }
   }
-  const change = (active: Active, next: unknown, mayRefuse: boolean): void => {
-    if (next === undefined || next === null || active.controller.signal.aborted) return
+  const change = (active: Active, next: unknown, mayRefuse: boolean): boolean => {
+    if (next === undefined || next === null || active.controller.signal.aborted) return MADE
     const { at, data = {} } = next as { at?: string; data?: Plain | ((draft: Plain) => void) }
     const top = active.top
     if (typeof data === 'function') {
@@ -1175,29 +1224,28 @@ export function system(host: {
       // An edit that is refused changes nothing, and the move it came with is not made either.
       // A move is looked at before the edit is made: one that cannot be made takes its edit with it.
       const cannot = at === undefined ? undefined : cannotGo(top, at, {})
-      if (cannot) { nothingChanged = true; trace(`DEFECT: ${top.ref} ${cannot}`); return }
+      if (cannot) { trace(`DEFECT: ${top.ref} ${cannot}`); return NOT_MADE }
       // Which fields there are is the states' to say, so the edit may change them and neither add nor remove one.
       // The write that tries throws there and then, and an edit that throws has changed nothing.
       try { made = produce(before, data, { fixed: true }) } catch (error) {
         // A change that came with an answer may refuse, with one of the refusals its ask declares.
         if (mayRefuse && error instanceof Refusal) throw error
-        nothingChanged = true
         trace(`DEFECT: ${top.ref}: ${said(error)}${whereOf(error)}`)
-        return
+        return NOT_MADE
       }
       const { value, touched } = made
       for (const path of touched) touch(top.ref, path[0]!)
       top.data = touched.length ? value : before
       for (const field of fields.get(top.ref) ?? []) large(top, field)
       if (at !== undefined) { const was = top.data; go(top, at, {}); moved(top, was) }
-      return
+      return MADE
     }
     // The same rule for fields as for an edit: every one of them has to be a field there will be, or none is taken.
     // Without a move those are the fields there are. With one, they are the fields of the states the move leaves it in.
     const cannot = at === undefined
       ? Object.keys(data).filter((field) => !(field in top.data)).map((field) => `has no field ${field} to change`)[0]
       : cannotGo(top, at, data)
-    if (cannot) { nothingChanged = true; trace(`DEFECT: ${top.ref} ${cannot}`); return }
+    if (cannot) { trace(`DEFECT: ${top.ref} ${cannot}`); return NOT_MADE }
     // Data first, then the move: the work of a state that is entered reads the data as the handler left it.
     for (const [field, value] of Object.entries(data)) {
       if (!(field in top.data)) continue
@@ -1205,21 +1253,22 @@ export function system(host: {
       top.data = { ...top.data, [field]: value }
     }
     if (at !== undefined) { const was = top.data; go(top, at, data); moved(top, was) }
+    return MADE
   }
 
   /**
    * A state's work failed. If the state is still the case it goes where its `failed` says, with the error. If it was
    * left first there is nowhere to go: a `Left` is that leaving and nothing more, and anything else is reported.
    */
-  const fail = (active: Active, error: unknown): void => {
-    if (error instanceof Left) return
+  const fail = (active: Active, error: unknown): boolean => {
+    if (error instanceof Left) return MADE
     const where = `${active.top.ref}${active.path ? ` in ${active.path}` : ''}`
-    if (active.controller.signal.aborted) { trace(`${where} failed after it was left: ${said(error)}`); return }
+    if (active.controller.signal.aborted) { trace(`${where} failed after it was left: ${said(error)}`); return MADE }
     trace(`${where} failed: ${said(error)}`)
     const failed = active.def.failed
-    if (!failed) { trace(`DEFECT: ${where} says nowhere to go when its work fails, and stays as it is`); return }
+    if (!failed) { trace(`DEFECT: ${where} says nowhere to go when its work fails, and stays as it is`); return MADE }
     const { ask: _, ...scope } = scopeOf(active)
-    try { apply(active, failed(error, scope)) } catch (thrown) { nothingChanged = true; trace(`DEFECT: ${where}'s failed threw: ${said(thrown)}`) }
+    try { return apply(active, failed(error, scope)) } catch (thrown) { trace(`DEFECT: ${where}'s failed threw: ${said(thrown)}`); return NOT_MADE }
   }
 
   /**
@@ -1228,13 +1277,12 @@ export function system(host: {
    * nothing is changed. An answer whose change could not be made at all is not given either: the ask failed.
    */
   const withChange = (of: Active, next: unknown, outcome: AnyOutcome): AnyOutcome => {
-    const before = defects
-    try { apply(of, next, true) } catch (error) {
-      nothingChanged = true
+    let made: boolean
+    try { made = apply(of, next, true) } catch (error) {
       if (error instanceof Refusal) return refusal(error.kind, error.message, error.data)
       throw error
     }
-    return defects === before ? outcome : refusal('failed', 'The change that came with the answer was refused, so nothing was changed')
+    return made ? outcome : refusal('failed', 'The change that came with the answer was refused, so nothing was changed')
   }
   const isAnswered = (made: unknown): made is Answered<unknown, unknown> => typeof made === 'object' && made !== null && ANSWERED in made
 
@@ -1251,46 +1299,46 @@ export function system(host: {
   const handle = (item: Item): void => {
     const within = host.transact
     if (!within) { take(item); return }
-    try { within(() => { nothingChanged = false; take(item); if (nothingChanged) throw UNDONE }) } catch (error) { if (error !== UNDONE) throw error }
+    try { within(() => { if (!take(item)) throw UNDONE }) } catch (error) { if (error !== UNDONE) throw error }
   }
-  const take = (item: Item): void => {
-    if (item.kind === 'out') { leaving.push(item.leave); return }
-    if (item.kind === 'result') { apply(item.of, item.value); return }
-    if (item.kind === 'failure') { fail(item.of, item.error); return }
+  const take = (item: Item): boolean => {
+    if (item.kind === 'out') { leaving.push(item.leave); return MADE }
+    if (item.kind === 'result') return apply(item.of, item.value)
+    if (item.kind === 'failure') return fail(item.of, item.error)
     if (item.kind === 'view') {
       const followed = declaredBy(item.of.def).follows[item.name]
-      if (!followed || item.of.controller.signal.aborted) return
+      if (!followed || item.of.controller.signal.aborted) return MADE
       const { ask: _, ...scope } = scopeOf(item.of)
       hearing = { id: `${item.of.top.ref}#${item.id}`, because: item.of.following.get(item.id)?.because ?? new Set() }
-      try { apply(item.of, followed.heard(item.update, item.key === undefined ? scope : { ...scope, key: item.key })) } catch (error) {
-        nothingChanged = true; trace(`DEFECT: ${item.of.top.ref} threw hearing ${item.id}, and nothing changed: ${said(error)}`)
+      try { return apply(item.of, followed.heard(item.update, item.key === undefined ? scope : { ...scope, key: item.key })) } catch (error) {
+        trace(`DEFECT: ${item.of.top.ref} threw hearing ${item.id}, and nothing changed: ${said(error)}`)
+        return NOT_MADE
       }
-      return
     }
     if (item.kind === 'make' || item.kind === 'drop') {
       const { name, key } = item
       // It is made by the state that declares it, which is the one it stops with: here, or a state around here.
       let of: Active | undefined = item.of
       while (of && !(name in declaredBy(of.def).makes)) of = of.around
-      if (!of || of.controller.signal.aborted) return
+      if (!of || of.controller.signal.aborted) return MADE
       const at = of
       const top = at.top
       const id = key === undefined ? name : `${name}/${key}`
       const now = at.making.get(id)
       if (item.kind === 'drop') {
-        if (!now) return
+        if (!now) return MADE
         now.stop()
         at.making.delete(id)
         madeChanged(top)
-        return
+        return MADE
       }
       // One that is under way is the same one: a second push while one is being made is that push.
-      if (now) return
+      if (now) return MADE
       const declared = declaredBy(at.def).makes[name]!
       let asked: object
       try { asked = (key === undefined ? declared.args(top.data) : declared.args(key, top.data)) as object } catch (error) {
         trace(`DEFECT: ${top.ref} could not say what to ask ${id} for: ${said(error)}`)
-        return
+        return NOT_MADE
       }
       const given = new AbortController()
       const signal = AbortSignal.any([at.controller.signal, given.signal])
@@ -1302,21 +1350,20 @@ export function system(host: {
       const made = ask(declared.of, declared.ask, asked, signal, hears) as unknown as Promise<AnyOutcome>
       // Given up, it ends with `Left`, which is that and nothing to hear of.
       made.then((outcome) => { if (mine()) arrive({ kind: 'ended', made: true, of: at, name, id, key, live, outcome }) }, () => {})
-      return
+      return MADE
     }
     if (item.kind === 'ended' || item.kind === 'progressed') {
       const table = item.made ? declaredBy(item.of.def).makes : declaredBy(item.of.def).awaits
       const live = item.made ? item.of.making : item.of.awaiting
       const declared = table[item.name]
-      if (!declared || item.of.controller.signal.aborted || live.get(item.id) !== item.live) return
+      if (!declared || item.of.controller.signal.aborted || live.get(item.id) !== item.live) return MADE
       const top = item.of.top
       const { ask: _, ...scope } = scopeOf(item.of)
       const given = item.key === undefined ? scope : { ...scope, key: item.key }
       // What a read delivers may not lead round to itself. An ask that was made once has nothing to come round to.
       hearing = item.made ? undefined : { id: `${top.ref}#${item.id}`, because: item.live.because }
       if (item.kind === 'progressed') {
-        try { apply(item.of, declared.heard!(item.updates, given)) } catch (error) { nothingChanged = true; trace(`DEFECT: ${top.ref} threw hearing ${item.id}, and nothing changed: ${said(error)}`) }
-        return
+        try { return apply(item.of, declared.heard!(item.updates, given)) } catch (error) { trace(`DEFECT: ${top.ref} threw hearing ${item.id}, and nothing changed: ${said(error)}`); return NOT_MADE }
       }
       // One that was made has ended, so it is no longer under way. That is the kernel's to say, and it is said before
       // the handler, which may have it made again.
@@ -1324,20 +1371,20 @@ export function system(host: {
       // A read that has ended stays as what was asked, so that it is not asked again until its fields change. There
       // is nothing left of it to give up: stopping it later tells nobody.
       else item.live.stop = () => {}
-      try { apply(item.of, declared.ended(item.outcome, given)) } catch (error) { nothingChanged = true; trace(`DEFECT: ${top.ref} threw taking how ${item.id} ended, and nothing changed: ${said(error)}`) }
-      return
+      try { return apply(item.of, declared.ended(item.outcome, given)) } catch (error) { trace(`DEFECT: ${top.ref} threw taking how ${item.id} ended, and nothing changed: ${said(error)}`); return NOT_MADE }
     }
     if (item.kind === 'answer') {
       // An answer that came with a change: the change is made here, in the step the answer leaves in. If the state
       // that answered was left meanwhile, its ask was ended as abandoned when it was, and nothing is changed.
       const outcome = item.change && !item.change.of.controller.signal.aborted ? withChange(item.change.of, item.change.next, item.outcome) : item.outcome
       answer(item.question, outcome)
-      return
+      // An ask that is refused has changed nothing, whichever of its handler and its change refused.
+      return outcome.ok
     }
     const top = running.get(item.ref)
     // Sent to a state that is not running. It may be one this step is about to start, so it waits until what runs
     // has been matched to the data.
-    if (!top && !settling) { held.push(item); return }
+    if (!top && !settling) { held.push(item); return MADE }
     if (item.kind === 'event') {
       // What a state sends itself is looked for among what only it sends, and then among what anyone may. What
       // comes from outside is looked for among what anyone may send, and nowhere else.
@@ -1346,18 +1393,18 @@ export function system(host: {
         trace(top && !item.own && taker(top, 'internal', item.event.type)
           ? `${item.ref} was sent ${item.event.type} from outside, which only it sends itself: ignored`
           : `${item.ref} ignored ${item.event.type}`)
-        return
+        return MADE
       }
       const { ask: _, ...scope } = scopeOf(found.of)
       // A handler that throws changes nothing: the state is as it was before the event, which it could handle.
-      try { apply(found.of, found.handler(item.event, scope)) } catch (error) {
-        nothingChanged = true; trace(`DEFECT: ${item.ref} threw handling ${item.event.type}, and nothing changed: ${said(error)}`)
+      try { return apply(found.of, found.handler(item.event, scope)) } catch (error) {
+        trace(`DEFECT: ${item.ref} threw handling ${item.event.type}, and nothing changed: ${said(error)}`)
+        return NOT_MADE
       }
-      return
     }
     const { name, args, question, heard, gone } = item
     const found = top && taker(top, 'asks', name)
-    if (!found) { answer(question, refusal('unavailable', `${item.ref} does not take ${name}`)); return }
+    if (!found) { answer(question, refusal('unavailable', `${item.ref} does not take ${name}`)); return MADE }
     const failed = (error: unknown): AnyOutcome => {
       if (error instanceof Refusal) return refusal(error.kind, error.message, error.data)
       // The handler was itself asking, and whoever asked it went: it stopped answering, it did not fail.
@@ -1382,21 +1429,44 @@ export function system(host: {
           (value) => arrive(isAnswered(value) ? { kind: 'answer', question, outcome: { ok: true, value: value.answer }, change: { of: found.of, next: value.next } } : { kind: 'answer', question, outcome: { ok: true, value } }),
           (error) => arrive({ kind: 'answer', question, outcome: failed(error) }),
         )
+        // What it wrote before it waited is kept: it answers in a later step, and this one is made.
+        return MADE
       } else {
         const outcome: AnyOutcome = isAnswered(made) ? withChange(found.of, made.next, { ok: true, value: made.answer }) : { ok: true, value: made }
         answer(question, outcome)
+        return outcome.ok
       }
-    } catch (error) { nothingChanged = true; answer(question, failed(error)) }
+    } catch (error) { answer(question, failed(error)); return NOT_MADE }
   }
 
-  /** A step's rows could not be kept. Nothing has left yet, so nobody was told of a change that was not made. */
+  /**
+   * Answers every ask among what was waiting to be taken, and lets the rest go: for a system that takes no more
+   * steps, so that nobody is left waiting on one.
+   */
+  const turnAway = (waiting: Item[], why: string): void => {
+    for (const item of waiting.splice(0)) if (item.kind === 'ask') safely('answering an ask that will not be taken', () => item.question.end(refusal('unavailable', why)))
+  }
+  const STOPPED = 'It stopped when it could not keep what a step wrote'
+  /**
+   * A step's rows could not be kept. Nothing has left yet, so nobody was told of a change that was not made. The
+   * states are ahead of the rows now, and the system stops, all of it: an ask in the step is told it failed, one
+   * that was waiting to be taken is told there is nothing to take it, and every state ends, which ends the work it
+   * was doing and the asks it was answering. Nothing is left that somebody could be waiting on.
+   */
   const lost = (error: unknown): void => {
     broken = true
-    trace(`DEFECT: ${called} could not keep what a step wrote, and takes no more steps: its states are ahead of its rows. ${said(error)}`)
+    trace(`DEFECT: ${called} could not keep what a step wrote, and has stopped: its states were ahead of its rows. ${said(error)}`)
     changed.clear(); fields.clear(); places.clear()
-    inside.length = 0; outside.length = 0; held.length = 0
-    // Whoever asked is told it failed. Nothing else leaves.
+    // Whoever asked in this step is told it failed. Nothing else the step would have sent leaves.
     for (const leave of leaving.splice(0)) if (leave.lost) safely('what leaves at the commit', leave.lost)
+    turnAway(inside, STOPPED); turnAway(outside, STOPPED); turnAway(held, STOPPED)
+    for (const ref of [...running.keys()].reverse()) end(ref)
+    const refs = [...changed]
+    changed.clear(); fields.clear(); places.clear()
+    committed = {}
+    for (const leave of leaving.splice(0)) safely('what leaves as it stops', leave)
+    release()
+    for (const listener of listeners) safely('a subscriber', () => listener(refs, {}, {}))
   }
   const commit = (): void => {
     if (changed.size) {
@@ -1410,6 +1480,7 @@ export function system(host: {
       leaving.push(() => { for (const listener of listeners) safely('a subscriber', () => listener(refs, which, where)) })
     }
     for (const leave of leaving.splice(0)) safely('what leaves at the commit', leave)
+    release()
   }
 
   /** One step: something from outside, then everything it caused inside, then the commit. */
@@ -1418,12 +1489,11 @@ export function system(host: {
   const step = (first: () => void): void => {
     if (host.limit !== undefined && ++steps > host.limit) {
       if (!spent) { spent = true; trace(`DEFECT: ${called} took ${host.limit} steps and takes no more: something leads to something else without end`) }
-      // Nothing more is taken: what was waiting to be is let go, or it would wait for good.
-      inside.length = 0
-      outside.length = 0
+      // Nothing more is taken: an ask that was waiting to be is answered, or it would wait for good.
+      turnAway(inside, 'It has taken every step it is allowed'); turnAway(outside, 'It has taken every step it is allowed')
       return
     }
-    if (broken) { inside.length = 0; outside.length = 0; return }
+    if (broken) { turnAway(inside, STOPPED); turnAway(outside, STOPPED); return }
     stepping = true
     // Whether everything was handled. A throw before that is the kernel's own; one after is the database not keeping it.
     let handled = false
@@ -1473,8 +1543,13 @@ export function system(host: {
     event: (ref, event) => arrive({ kind: 'event', ref, event }),
     ask: (ref, name, args, heard, settle) => {
       const gone = new AbortController()
-      arrive({ kind: 'ask', ref, name, args, question: new Question(settle), heard, gone: gone.signal })
+      // Whoever asks through the port is across a link: what they hear and how it ends go to a window.
+      arrive({ kind: 'ask', ref, name, args, question: new Question((outcome) => toAWindow(() => settle(outcome))), heard: (update) => toAWindow(() => heard(update)), gone: gone.signal })
       return () => gone.abort(new Error('Whoever asked has gone'))
+    },
+    view: (feature, view, args, heard) => {
+      if (!host.views) { heard({ ok: false, error: `${called} runs no views` }); return () => {} }
+      return host.views(feature, view, args, heard)
     },
   }
 

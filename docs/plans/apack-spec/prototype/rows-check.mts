@@ -22,7 +22,7 @@ type Events =
   | { type: 'NOTE_THEN_BREAK'; id: string }
   | { type: 'BOTH'; kept: string; broken: string }
   | { type: 'TOUCH' }
-  | { type: 'LOAD'; id: string; how: 'at once' | 'writes after waiting' | 'returns its write' }
+  | { type: 'LOAD'; id: string; how: 'at once' | 'writes after waiting' | 'returns its write' | 'breaks, and so does failed' }
   | { type: 'BACK' }
   | { type: 'JOIN'; from: string; to: string }
   | { type: 'JOIN_AHEAD'; from: string; to: string }
@@ -30,7 +30,7 @@ const state = reaching()
 
 type Threads = {
   data: { count: number; touched: number; problem: string | null }
-  states: { idle: {}; loading: { data: { id: string; how: 'at once' | 'writes after waiting' | 'returns its write' } } }
+  states: { idle: {}; loading: { data: { id: string; how: 'at once' | 'writes after waiting' | 'returns its write' | 'breaks, and so does failed' } } }
 }
 
 /** A system that keeps threads as rows and how many there are as data: the two a step has to keep in step. */
@@ -115,6 +115,7 @@ const threads = (store: Rows, read: (path: string) => Promise<string> = async (p
       run({ data }) {
         store.put('import', data.id, { state: 'reading' })
         if (data.how === 'at once') throw new Error('broke at once')
+        if (data.how === 'breaks, and so does failed') return Promise.reject(new Error('broke later'))
         return (async () => {
           const text = await read(data.id)
           // Outside a step: this is the write the store refuses.
@@ -129,7 +130,11 @@ const threads = (store: Rows, read: (path: string) => Promise<string> = async (p
           }
         })()
       },
-      failed: (error) => ({ at: 'idle', data: { problem: error instanceof Error ? error.message : String(error) } }),
+      failed: (error, { data }) => {
+        // Writes that it failed, and then fails itself.
+        if (data.how === 'breaks, and so does failed') { store.put('thread', `failed-${data.id}`, { topic: 'noted the failure' }); throw new Error('failed broke as well') }
+        return { at: 'idle', data: { problem: error instanceof Error ? error.message : String(error) } }
+      },
     },
   },
 })
@@ -243,6 +248,15 @@ const checks = ([kept, open]: Kept): Array<readonly [string, () => void | Promis
     strictEqual(sys.read(handle).at, 'idle')
     strictEqual(sys.read(handle).data.problem, 'broke at once')
   }],
+  ['where work goes when it fails is a handler too: one that writes and then throws has written nothing', async () => {
+    const { store, sys, handle, defects } = made(open)
+    sys.send(handle, { type: 'LOAD', id: 'a', how: 'breaks, and so does failed' })
+    await rest()
+    strictEqual(store.get('thread', 'failed-a'), undefined)
+    // What its work wrote as it began was a step of its own, and is kept.
+    deepStrictEqual(store.get('import', 'a'), { state: 'reading' })
+    ok(defects().some((line) => line.includes('failed broke as well')))
+  }],
   ['a write after an await is outside a step and is refused on the line that made it', async () => {
     const { store, sys, handle } = made(open)
     sys.send(handle, { type: 'LOAD', id: 'a', how: 'writes after waiting' })
@@ -270,18 +284,41 @@ const checks = ([kept, open]: Kept): Array<readonly [string, () => void | Promis
     strictEqual(store.get('thread', 'a'), undefined)
     strictEqual(sys.read(handle).data.count, 0)
   }],
-  ['rows that cannot be kept: whoever asked is told it failed, nobody is told of a change, and no more steps are taken', async () => {
+  ['rows that cannot be kept: whoever asked is told it failed, nobody is told of the change, and the system stops with every state ended', async () => {
     const { store, sys, handle, defects } = made(open)
-    let told = 0
-    sys.subscribe(() => { told++ })
+    const told: Array<{ count: number | undefined }> = []
+    sys.subscribe(() => { told.push({ count: sys.read(handle)?.data.count }) })
     store.failNext('the disk is full')
     const outcome = await sys.ask(handle, 'CREATE', { id: 'a', topic: 'lost' })
     ok(!outcome.ok && outcome.failure.kind === 'failed')
     strictEqual(store.get('thread', 'a'), undefined)
-    strictEqual(told, 0)
+    // What subscribers hear is that the state is gone, and never the count the lost step had made.
+    deepStrictEqual(told, [{ count: undefined }])
     ok(defects().some((line) => line.includes('the disk is full')))
     sys.send(handle, { type: 'TOUCH' })
-    strictEqual(sys.read(handle).data.touched, 0)
+    strictEqual(sys.read(handle), undefined)
+  }],
+  ['rows that cannot be kept: an ask that was being answered, one waiting to be taken, and one made after are each told, and none waits', async () => {
+    let finish!: (text: string) => void
+    const { store, sys, handle } = made(open, undefined, () => new Promise((resolve) => { finish = resolve }))
+    // Being answered: its handler wrote, and is waiting on a file.
+    const importing = sys.ask(handle, 'IMPORT', { id: 'a', path: 'a.md' })
+    // It cannot come to rest while it waits on its file, so this is a turn and no more.
+    await new Promise((resolve) => { setImmediate(resolve) })
+    deepStrictEqual(store.get('import', 'a'), { state: 'reading' })
+    store.failNext('the disk is full')
+    const lost = await sys.ask(handle, 'CREATE', { id: 'b', topic: 'lost' })
+    ok(!lost.ok && lost.failure.kind === 'failed')
+    const answering = await importing
+    ok(!answering.ok && answering.failure.kind === 'abandoned')
+    // Its file arrives after the system stopped: nothing takes it, and nothing is written.
+    finish('late')
+    await rest()
+    strictEqual(store.get('thread', 'a'), undefined)
+    const after = await sys.ask(handle, 'CREATE', { id: 'c', topic: 'after' })
+    ok(!after.ok && after.failure.kind === 'unavailable')
+    strictEqual(store.get('thread', 'c'), undefined)
+    strictEqual(store.writing, false)
   }],
   ['a command that is a unit of its own joins the step: two of them and the count are kept in one keeping', async () => {
     const { store, sys, handle } = made(open)

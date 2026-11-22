@@ -6,7 +6,7 @@
 //
 //   npx tsx docs/plans/apack-spec/prototype/rows-cost.mts
 import { cpus } from 'node:os'
-import { reaching, system } from './state.mts'
+import { reaching, system, type ViewHost } from './state.mts'
 import { elmdb } from './store-elmdb.mts'
 import type { Rows } from './store.mts'
 
@@ -65,3 +65,38 @@ line('the kernel, with the step a unit', timed(2_000, kernel(true, (at) => ({ ty
 
 console.log('\nTen rows, a step each: what a stream written a piece at a time is')
 line('the kernel, ten steps of one write', timed(500, (store) => { const step = kernel(true, (at) => ({ type: 'NOTE', id: String(at) }))(store); return (at) => { for (let row = 0; row < 10; row++) step(at * 10 + row) } }), bareTen)
+
+// What it costs a window to be answered after its views show the row: the backend holds the answer until the engine
+// has told its watches, which run on the engine's own clock. One ask after another, from a window that follows a view
+// of the rows, with the hold and without it.
+type WindowAsks = { ADD: { args: { id: string }; answer: boolean } }
+type Net = { systems: { rows: { events: never; asks: { CREATE: { args: { id: string }; answer: string } } } }; surfaces: {}; views: { rows: { count: { args: {}; result: number } } } }
+const linked = reaching<Net>()
+const asking = async (held: boolean, asks: number, writes: boolean): Promise<number> => {
+  const store = elmdb()
+  const views: ViewHost = (_feature, _view, _args, heard) => store.watch(() => store.count('thread'), (value) => heard({ ok: true, value }))
+  const backend = system({ side: 'backend', transact: store.transact, views, ...(held ? { viewsSent: store.settled } : {}) })
+  backend.start('rows', linked<{}, never, Net['systems']['rows']['asks']>()({ asks: { CREATE: ({ id }) => { if (writes) store.put('thread', id, { topic: 'made' }); return id } } }))
+  const window = system({ side: 'window' })
+  window.connect(backend)
+  const handle = window.start('panel', linked<{ data: { count: number } }, never, WindowAsks>()({
+    data: { count: 0 },
+    follows: (follow) => ({ count: follow('rows', 'count', { args: () => ({}), heard: (update) => (update.ok ? { data: { count: update.value } } : undefined) }) }),
+    asks: { ADD: async ({ id }, { ask }) => (await ask('rows', 'CREATE', { id })).ok },
+  }))
+  for (let at = 0; at < 20; at++) await window.ask(handle, 'ADD', { id: `warm-${at}` })
+  const began = process.hrtime.bigint()
+  for (let at = 0; at < asks; at++) await window.ask(handle, 'ADD', { id: String(at) })
+  const took = Number(process.hrtime.bigint() - began) / 1_000
+  window.stop(); backend.stop(); store.close()
+  return took / asks
+}
+for (const writes of [true, false]) {
+  console.log(`\nA window asks its backend ${writes ? 'to write a row' : 'something that writes nothing'}, with a view of the rows open`)
+  const unheld: number[] = []
+  const held: number[] = []
+  for (let at = 0; at < RUNS; at++) { unheld.push(await asking(false, 200, writes)); held.push(await asking(true, 200, writes)) }
+  const plain = median(unheld)
+  line(writes ? 'answered as soon as the row is kept' : 'answered at once', plain)
+  line(writes ? 'answered once the view has been sent the row' : 'answered once the views have been sent what was kept, which is nothing new', median(held), plain)
+}

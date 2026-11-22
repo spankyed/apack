@@ -29,10 +29,19 @@ export interface Rows {
   readonly writing: boolean
   /** Makes the next keeping fail, as a full disk would. */
   failNext(why: string): void
+  /**
+   * Reads now, and again after each keeping, telling `heard` the first result and each one after that differs: what
+   * a view is. It is told later, never as the rows are written. Returns what stops it.
+   */
+  watch<T>(read: () => T, heard: (value: T) => void): () => void
+  /** Calls `then` once every watch has been told of what was kept before this call. */
+  settled(then: () => void): void
   close(): void
 }
 
-export function memory(): Rows {
+/** `later` runs something after what it was given before: a check gives a lane of its schedule, to choose when. */
+export function memory(later: (run: () => void) => void = (run) => { setImmediate(run) }): Rows {
+  const watches = new Set<{ again(): void }>()
   const tables = new Map<string, Map<string, Row>>()
   const table = (name: string): Map<string, Row> => tables.get(name) ?? tables.set(name, new Map()).get(name)!
   const joins = new Set<string>()
@@ -66,7 +75,7 @@ export function memory(): Rows {
       const why = failing
       if (wrote && why !== undefined) { failing = undefined; back(0); undo = undefined; throw new Error(why) }
       undo = undefined
-      if (wrote) commits++
+      if (wrote) { commits++; for (const watch of watches) later(watch.again) }
       return value
     },
     put: (name, id, row) => {
@@ -99,6 +108,19 @@ export function memory(): Rows {
     get commits() { return commits },
     get writing() { return undo !== undefined },
     failNext: (why) => { failing = why },
-    close: () => {},
+    watch: (read, heard) => {
+      let last: string | undefined
+      const watch = { again: (): void => {
+        if (!watches.has(watch)) return
+        const value = read()
+        const now = JSON.stringify(value)
+        if (now !== last) { last = now; heard(value) }
+      } }
+      watches.add(watch)
+      later(watch.again)
+      return () => { watches.delete(watch) }
+    },
+    settled: (then) => later(then),
+    close: () => { watches.clear() },
   }
 }
