@@ -203,17 +203,18 @@ describe('the packages the notices cover', () => {
     const repo = tree({
       ...bundlers,
       ...installed('vidstack', { license: 'MIT' }),
-      'linked-view/package.json': JSON.stringify({ name: 'linked-view', version: '2.0.0' }),
+      'linked-view/package.json': JSON.stringify({ name: '@apack-pack/example', version: '2.0.0' }),
       'linked-view/index.js': '',
       // A map's sources are relative to the staging directory the pack was built in, not to where the map is now
       'pack/dist/runtime/a.js': 'x',
       'pack/dist/runtime/a.js.map': JSON.stringify({ sources: ['../../../../node_modules/vidstack/prod/a.js', '../../../src/own.ts', '../../../../linked-view/index.js'] }),
       'pack/src/own.ts': '',
-      'pack/package.json': JSON.stringify({ name: '@apackdev/pack' }),
+      'pack/package.json': JSON.stringify({ name: '@apack-pack/example', version: '1.0.0' }),
     });
     const { packages, problems } = packBundledPackages(path.join(repo, 'pack'));
     expect(problems).toEqual([]);
-    expect(packages.map((pkg) => pkg.name).sort()).toEqual(['@vitejs/plugin-vue', 'esbuild', 'linked-view', 'vidstack', 'vite']);
+    expect(packages.map((pkg) => pkg.name).sort()).toEqual(['@apack-pack/example', '@vitejs/plugin-vue', 'esbuild', 'vidstack', 'vite']);
+    expect(packages.find(pkg => pkg.name === '@apack-pack/example')).toMatchObject({ version: '2.0.0', dir: path.join(repo, 'linked-view') });
   });
 
   it("reads a map source named by its file: URL, as esbuild names one no relative path reaches", () => {
