@@ -20,14 +20,15 @@ function fixture() {
   redraw()
   const walk = claudeTerminalIdeRuntime.slice(claudeTerminalIdeRuntime.indexOf('function nativeIdeWalk('), claudeTerminalIdeRuntime.indexOf('function nativeIdeFrame('))
   const textType = function Text() {}
-  const n = { terminalComponents: {n:textType}, themeRoots: { ai: () => new Map([[undefined, { container: { current: root } }]]) } }
+  const managedPermissionRulesOnly = vi.fn(() => false)
+  const n = { managedPermissionRulesOnly, terminalComponents: {n:textType}, themeRoots: { ai: () => new Map([[undefined, { container: { current: root } }]]) } }
   // The authored runtime uses process.stdout only as the original root-map key.
   const globalProcess = { stdout: undefined }
   const context = vm.createContext({ createHash, randomUUID, setTimeout, process: globalProcess, nativeModelFunctionHash: (fn: any) => fn.hash })
   const runtime = vm.runInContext(walk + claudeTerminalPermissionsRuntime + ';({frame:nativePermissionsFrame,act:nativePermissionsPanel,close:closeNativePermissionsPanel})', context)
   const read = () => runtime.frame(n, entry)
   const act = (revision: string, command: object) => runtime.act(n, entry, { operation: 'permissions', revision, command }, new AbortController())
-  return { entry, root, textType, originalType, cancel, getter, select, queryChange, tab, redraw, read, act, close: () => runtime.close(n, entry) }
+  return { entry, root, textType, originalType, cancel, getter, select, queryChange, tab, managedPermissionRulesOnly, redraw, read, act, close: () => runtime.close(n, entry) }
 }
 
 describe('original mounted Permissions authority', () => {
@@ -101,6 +102,29 @@ describe('original mounted Permissions authority', () => {
     const frame = f.read().snapshot.permissions
     expect(frame.title).toBe('Rule details'); expect(frame.paragraphs).toEqual([{runs:[{text:'Original delete warning',style:{}}]}])
     expect(frame.choices[1].description).toBe('Keep the original rule'); expect(frame.defaultFocusValue).toBe('cancel')
+  })
+
+  it('withdraws a held private-rule confirmation on policy change and keeps native Cancel', async () => {
+    const f = fixture()
+    const onChange = vi.fn(() => f.redraw())
+    const choices = { options: [{ value: 'confirm', label: 'Yes' }, { value: 'cancel', label: 'No' }], onChange }
+    const picker = function Choices() {}
+    f.root.child = {
+      type: Object.assign(function RuleDetails() {}, { hash: '19402997c9ec0c7bb57ebb4fe65ffd9e9fbdef857b9088fa1ed1eac99f9fe18d' }),
+      memoizedProps: { title: 'Rule details', onCancel: f.cancel, rule: { source: 'userSettings' }, children: [{ type: picker, props: choices }] },
+      child: { type: picker, memoizedProps: choices },
+    }
+    const prior = f.read().snapshot
+    expect(prior.permissions.choices[0].disabled).toBe(false)
+    f.managedPermissionRulesOnly.mockReturnValue(true)
+    const current = f.read().snapshot
+    expect(current.revision).not.toBe(prior.revision)
+    expect(current.permissions.choices.map((choice: { disabled: boolean }) => choice.disabled)).toEqual([true, false])
+    await expect(f.act(prior.revision, { action: 'select', value: 'confirm' })).rejects.toThrow(/changed/)
+    await expect(f.act(current.revision, { action: 'select', value: 'confirm' })).rejects.toThrow(/unavailable/)
+    expect(onChange).not.toHaveBeenCalled()
+    await f.act(current.revision, { action: 'select', value: 'cancel' })
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('cancel')
   })
 
   it('uses native dismissal so original summary/retry semantics are preserved', async () => {
