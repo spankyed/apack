@@ -213,9 +213,9 @@ button:hover:not(:disabled) { filter: brightness(1.12); }
     display: grid;
     grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr);
     align-items: baseline;
-    gap: 0.375rem 0.75rem;
+    gap: 0.25rem 0.75rem;
   }
   .tool-details dt { margin: 0; overflow-wrap: anywhere; }
-  .tool-details dd { margin: 0; }
+  .tool-details dd { margin: 0; padding: 4px 8px; }
 }
 </style>
