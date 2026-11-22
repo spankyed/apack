@@ -106,7 +106,17 @@ watch(visible,value=>{
 },{flush:'sync'})
 onMounted(()=>{observer=typeof ResizeObserver==='undefined'?undefined:new ResizeObserver(schedule);if(region.value)observer?.observe(region.value);schedule()})
 watch(()=>props.node.id,(_current,previous)=>{retireClient(previous);lastPointer={x:0,y:0};lastLayout='';void nextTick(schedule)},{flush:'sync'})
-watch(()=>props.node.keys,value=>{if(!value)cancelComposition()},{flush:'sync'})
+watch(()=>props.node.keys,enabled=>{
+ if(!enabled){
+  cancelComposition()
+  // Removing a focused proxy otherwise restarts the page's Tab order at the body.
+  if(visible.value&&document.activeElement===textInput.value)region.value?.focus({preventScroll:true})
+ }else{
+  void nextTick(()=>{
+   if(live&&document.activeElement===region.value)focusKeyboard()
+  })
+ }
+},{flush:'sync'})
 watch(()=>props.node.pointer,value=>{if(!value){retirePointer();void nextTick(schedule)}},{flush:'sync'})
 onBeforeUnmount(()=>{live=false;retireClient();observer?.disconnect()})
 </script>

@@ -109,6 +109,51 @@ it('keeps composition preview local across redraws and commits Unicode once in e
  expect(send).toHaveBeenCalledExactlyOnceWith(id,{kind:'key',key:'😀'})
 })
 
+it('keeps the keyboard position on a visible Client when its text input is withdrawn',async()=>{
+ const {region,node,send}=await mount()
+ region.focus()
+ const input=region.querySelector<HTMLTextAreaElement>('[data-native-client-text-input]')!
+ expect(document.activeElement).toBe(input)
+ input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))
+ input.dispatchEvent(new CompositionEvent('compositionupdate',{data:'未確定',bubbles:true}))
+ await nextTick()
+ expect(region.querySelector('[data-native-client-composition]')?.textContent).toBe('未確定')
+ send.mockClear()
+
+ node.value={...node.value,keys:false}
+ await nextTick()
+
+ expect(document.activeElement).toBe(region)
+ expect(region.querySelector('[data-native-client-text-input]')).toBeNull()
+ expect(region.querySelector('[data-native-client-composition]')).toBeNull()
+ const tab=new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true})
+ region.dispatchEvent(tab)
+ expect(tab.defaultPrevented).toBe(false)
+ expect(send.mock.calls.filter(([,event])=>event.kind==='key')).toEqual([])
+
+ node.value={...node.value,keys:true}
+ await nextTick()
+ await nextTick()
+ const newInput=region.querySelector<HTMLTextAreaElement>('[data-native-client-text-input]')!
+ expect(newInput).not.toBe(input)
+ expect(document.activeElement).toBe(newInput)
+ newInput.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}))
+ newInput.dispatchEvent(new CompositionEvent('compositionend',{data:'新',bubbles:true}))
+ expect(send.mock.calls.filter(([,event])=>event.kind==='key')).toEqual([[id,{kind:'key',key:'新'}]])
+})
+
+it('does not take focus from an embedded field when Client key input is restored',async()=>{
+ const {region,node}=await mount()
+ const nested=region.querySelector<HTMLTextAreaElement>('textarea[aria-label="Nested editor"]')!
+ nested.focus()
+ for(const keys of [false,true]){
+  node.value={...node.value,keys}
+  await nextTick()
+  await nextTick()
+  expect(document.activeElement).toBe(nested)
+ }
+})
+
 it('refuses a released Client composition commit',async()=>{
  const {region,send}=await mount(),input=region.querySelector<HTMLTextAreaElement>('[data-native-client-text-input]')!
  input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));send.mockClear();app!.unmount();app=undefined
