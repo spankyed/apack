@@ -32,7 +32,7 @@ import { resolveForService } from '../../utils/resolve-cli.ts'
 import { buildChildEnv, DENIED_TO_A_CHILD } from './runner.ts'
 import { createClaudeTerminalBridge } from './terminal-bridge.ts'
 import type { PermissionMode } from './types.ts'
-import { ClaudeMcpStatusSchema, type ClaudeMcpStatus, ClaudeModelCatalogSchema, type ClaudeModelCatalog, type ClaudeSettings } from './host-controls.ts'
+import { ClaudeMemoryDialogSchema, type ClaudeMemoryDialog, ClaudeMcpStatusSchema, type ClaudeMcpStatus, ClaudeModelCatalogSchema, type ClaudeModelCatalog, type ClaudeSettings } from './host-controls.ts'
 import type { ClaudeNativeTerminalState } from '../../../common/native-terminal.ts'
 
 export interface ClaudeNativeTerminalOwner {
@@ -80,6 +80,8 @@ export interface ClaudeNativeTerminalOwner {
   answerFileDialog(response: ClaudeNativeFileDialogResponse): Promise<void>
   operateTask(taskId: string, operation: 'inspect' | 'stop' | 'send' | 'input' | 'foreground' | 'background' | 'skip_worker' | 'retry_worker' | 'pause_workflow' | 'resume_workflow', text?: string, worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget): Promise<{ paused?: boolean; resume?: { taskId: string; runId: string; requested: true }; worker?: import('../../../common/native-terminal.ts').ClaudeNativeWorkflowWorkerReceipt; view?: { taskId: string | null }; sent?: boolean; input?: import('../../../common/native-terminal.ts').ClaudeNativeTaskInputReceipt; stopped?: boolean; details?: import('../../../common/native-terminal.ts').ClaudeNativeTaskDetails }>
   getMcpStatus(): Promise<ClaudeMcpStatus>
+  getMemoryDialog(): Promise<ClaudeMemoryDialog>
+  setAutoMemory(enabled: boolean): Promise<void>
   controlMcpServer(serverName: string, operation: 'reconnect' | 'enable' | 'disable'): Promise<ClaudeMcpStatus>
   getModels(options?: { includeUnsupportedModels?: boolean }): Promise<ClaudeModelCatalog>
   renameSession(title: string): Promise<{ title: string; message: string }>
@@ -553,6 +555,22 @@ export async function prepareClaudeNativeTerminal(options: ClaudeNativeTerminalO
         const result = await bridge.uiTransport.request({ subtype: 'apack_mcp_control', session_id: sessionId, server_name: serverName, operation })
         if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native MCP session changed during control')
         return ClaudeMcpStatusSchema.parse(result)
+      },
+      async getMemoryDialog() {
+        if (closed) throw new Error('Native terminal closed')
+        const sessionId = bridge.projection.sessionId
+        const result = await bridge.uiTransport.request({ subtype: 'apack_memory_dialog', session_id: sessionId })
+        if (closed || bridge.projection.sessionId !== sessionId) throw new Error('Native session changed while reading memory')
+        return ClaudeMemoryDialogSchema.parse(result)
+      },
+      async setAutoMemory(enabled) {
+        if (closed || currentState().busy) throw new Error('Wait for the native conversation to become idle before changing Auto-memory')
+        const result = await bridge.uiTransport.request({
+          subtype: 'apack_memory_edit', enabled, session_id: bridge.projection.sessionId,
+        })
+        if (!result || typeof result !== 'object' || !('enabled' in result) || result.enabled !== enabled) {
+          throw new Error('Native Auto-memory write was not acknowledged')
+        }
       },
       async getMcpStatus() {
         if (closed) throw new Error('Native terminal closed')

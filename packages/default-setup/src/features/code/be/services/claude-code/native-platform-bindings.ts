@@ -12,6 +12,9 @@ export const claudeNativeLinuxBindings: {
   "binarySha256": "2bd4f4e5ed5cb09955b490098f745321cb5491e7ea8c752ba1e3bb010cdadb10",
   "platform": "linux",
   "modules": {
+    "chunk-bx7jbfqx.js": { "module": "chunk-2neq0ee1.js", "exports": { "qp": "Vp" } },
+    "chunk-sg7akve2.js": { "module": "chunk-4c68y08t.js", "exports": { "buildMemoryDialogResponse": "buildMemoryDialogResponse" } },
+    "chunk-sfa1w2rp.js": { "module": "chunk-xp071bp2.js", "exports": { "runMemorySettingsEdit": "runMemorySettingsEdit" } },
     "chunk-ev1xcp32.js": { "module": "chunk-q1hf100k.js", "exports": { "Sh": "bh" } },
     "chunk-0xj14bee.js": { "module": "chunk-zpevf1ap.js", "exports": { "jh": "Bh" } },
     "chunk-tj6zgtfh.js": { "module": "chunk-ncvt4jr6.js", "exports": { "io": "io", "Kp": "Kp", "Zr": "Zr", "uL": "aL", "iZt": "KQt" } },

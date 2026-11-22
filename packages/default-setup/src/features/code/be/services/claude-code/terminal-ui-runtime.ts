@@ -1077,6 +1077,41 @@ async function control(request,abort){
   const context=liveMcp();return {mcpServers:n.mcp.Q_n({connections:context.clients,tools:context.tools})};
   }finally{mcpControlActive=false;}
  }
+ if(request.subtype==='apack_memory_dialog'||request.subtype==='apack_memory_edit'){
+  const editing=request.subtype==='apack_memory_edit';
+  if(editing&&typeof request.enabled!=='boolean')throw Error('Invalid Auto-memory preference');
+  const binding=originalContext??n.runtime.ey();
+  if(binding?.surface!=='terminal'||typeof binding.toolContext!=='function')throw Error('Native memory controls are not ready');
+  const context=binding.toolContext(abort),initial=nativeViewFacts(n,binding,abort);
+  const current=()=>{
+   abort.signal.throwIfAborted();
+   const facts=nativeViewFacts(n,binding,abort);
+   if((originalContext??n.runtime.ey())!==binding||facts.view.kind!=='main'||facts.sequence!==initial.sequence||
+    facts.sessionId!==request.session_id||facts.sessionId!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native memory session or view changed');
+  };
+  current();
+  const command=n.engine.Rs('memory',binding.commands());
+  if(command?.thinClientDispatch!=='control-request')throw Error('Claude has not admitted memory controls in this session');
+  const eligibility=await import('/$bunfs/root/chunk-bx7jbfqx.js');
+  const memory=await import('/$bunfs/root/chunk-sg7akve2.js');
+  if(eligibility.qp(context.session))throw Error('Native memory is unavailable on this connection');
+  return n.runtime.DS(context.session,async()=>{
+   current();
+   const state=context.getAppState(),activeAgents=state.agentDefinitions?.activeAgents;
+   if(!Array.isArray(activeAgents))throw Error('Native memory sources are not ready');
+   const dialog=await memory.buildMemoryDialogResponse({session:context.session,storageV5:context.storageV5,
+    credentials:context.credentials,activeAgents,dreamRunning:Object.values(state.tasks).some(task=>task.type==='dream'&&task.status==='running')});
+   current();
+   if(!editing)return dialog;
+   if(!dialog.auto_memory.toggleable)throw Error('Auto-memory cannot be changed in this session: '+dialog.auto_memory.status);
+   const writer=await import('/$bunfs/root/chunk-sfa1w2rp.js');
+   current();
+   if(n.runtime.lpe())throw Error('Wait for the native conversation to become idle before changing Auto-memory');
+   const receipt=await writer.runMemorySettingsEdit({autoMemoryEnabled:request.enabled},{json:true});
+   if(!receipt.ok||receipt.written?.autoMemoryEnabled!==request.enabled)throw Error(receipt.error??'Native Auto-memory write was not acknowledged');
+   return {enabled:receipt.written.autoMemoryEnabled};
+  });
+ }
  if(request.subtype==='apack_mcp_status'){
   const expected=request.session_id;
   if(expected!==String(n.questionOptions.q())||expected!==JSON.parse(readFileSync(configUrl,'utf8')).sessionId)throw Error('Native MCP session changed');

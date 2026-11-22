@@ -275,25 +275,27 @@ async function handleMemory(
   const cwd = directory(prior);
   const profile = prior?.profile ?? claude.profile();
   const opts = { cwd, ...claudeProfileOptions({profile}) };
-  const owner = threadId ? claude.getConversation(threadId)?.owner : undefined;
-  const sessionId = owner?.sessionId;
+  const native = threadId ? claude.getNativeTerminal(threadId) : undefined;
+  const owner = threadId && !native ? claude.getConversation(threadId)?.owner : undefined;
+  const session = () => native?.state.sessionId ?? owner?.sessionId;
+  const sessionId = session();
   const current = () => {
     const next = state();
     return directory(next) === cwd && sameClaudeProfile(next?.profile ?? claude.profile(), profile)
-      && (!threadId || (!claude.getNativeTerminal(threadId) && claude.getConversation(threadId)?.owner === owner
-        && owner?.sessionId === sessionId));
+      && (!threadId || (claude.getNativeTerminal(threadId) === native
+        && (native || claude.getConversation(threadId)?.owner === owner) && session() === sessionId));
   };
   const busy = () => threadId ? claude.isConversationBusy(threadId) : false;
-  if (threadId && claude.getNativeTerminal(threadId)) {
-    return { text: 'Memory controls are unavailable while the native terminal owns this conversation. Stop the native interface before running /cc-memory.' };
-  }
-  if (owner && owner.sessionCwd !== cwd) {
+  if ((native || owner) && (native?.state.cwd ?? owner?.sessionCwd) !== cwd) {
     return { text: 'The active Claude conversation is in a different directory. Stop it before reading or changing memory for this project.' };
   }
-  if (busy() && (editing || !owner)) {
+  if (busy() && (editing || (!owner && !native))) {
     return { text: 'Wait for the Claude conversation to become idle before using memory controls.' };
   }
-  const handle = owner?.handle ?? await claude.query({ ...opts, strictMcpConfig: true, keepStdinOpen: true, noSessionPersistence: true });
+  const temporary = native || owner ? undefined : await claude.query({
+    ...opts, strictMcpConfig: true, keepStdinOpen: true, noSessionPersistence: true,
+  });
+  const handle = native ?? owner?.handle ?? temporary!;
   try {
     let memory = await handle.getMemoryDialog();
     if (!current()) return { text: 'Claude conversation or profile changed while reading memory.' };
@@ -302,7 +304,8 @@ async function handleMemory(
       if (busy()) return { text: 'Wait for the Claude conversation to become idle before changing Auto-memory.' };
       if (!memory.auto_memory.toggleable) return { text: `Auto-memory cannot be changed in this session: ${memory.auto_memory.status}` };
       const enabled = args[1] === 'on';
-      await claude.setAutoMemory(enabled, opts);
+      if (native) await native.setAutoMemory(enabled);
+      else await claude.setAutoMemory(enabled, opts);
       notice = `Saved user Auto-memory preference: ${enabled ? 'on' : 'off'}.\n`;
       try {
         memory = await handle.getMemoryDialog();
@@ -318,7 +321,7 @@ async function handleMemory(
     if (memory.auto_dream.shown) lines.push(`Auto-dream: ${memory.auto_dream.status}${memory.auto_dream.detail ? ` · ${memory.auto_dream.detail}` : ''}`);
     return { text: notice + lines.join('\n') };
   } finally {
-    if (!owner) await handle.close();
+    await temporary?.close();
   }
 }
 

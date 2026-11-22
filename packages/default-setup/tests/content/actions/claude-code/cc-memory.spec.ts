@@ -82,10 +82,34 @@ it('does not write a locked native preference or a stale thread selection', asyn
   expect(f.setAutoMemory).not.toHaveBeenCalled()
 })
 
-it('does not launch speculative discovery while the terminal owns the thread', async () => {
+it('keeps read, edit and readback on the current terminal owner', async () => {
   const f = setup()
-  f.getNativeTerminal.mockReturnValue({state: {sessionId: 'terminal-session'}})
-  expect((await run()).text).toContain('native terminal owns this conversation')
+  const getMemoryDialog = vi.fn().mockResolvedValueOnce(memory).mockResolvedValueOnce({
+    ...memory, auto_memory: { enabled: false, toggleable: true, status: 'off' },
+  })
+  const setAutoMemory = vi.fn()
+  f.getNativeTerminal.mockReturnValue({
+    state: { sessionId: 'terminal-session', cwd: '/picked' }, getMemoryDialog, setAutoMemory,
+  })
+  const result = await run('auto off')
+  expect(result.text).toContain('Auto-memory: off')
+  expect(getMemoryDialog).toHaveBeenCalledTimes(2)
+  expect(setAutoMemory).toHaveBeenCalledWith(false)
+  expect(f.query).not.toHaveBeenCalled()
+  expect(f.setAutoMemory).not.toHaveBeenCalled()
+})
+
+it('does not edit a replacement terminal session after the native read', async () => {
+  const f = setup()
+  const state = { sessionId: 'terminal-session', cwd: '/picked' }
+  const getMemoryDialog = vi.fn(async () => {
+    state.sessionId = 'replacement'
+    return memory
+  })
+  const setAutoMemory = vi.fn()
+  f.getNativeTerminal.mockReturnValue({ state, getMemoryDialog, setAutoMemory })
+  expect((await run('auto off')).text).toContain('changed while reading memory')
+  expect(setAutoMemory).not.toHaveBeenCalled()
   expect(f.query).not.toHaveBeenCalled()
 })
 
