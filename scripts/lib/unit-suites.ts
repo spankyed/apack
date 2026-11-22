@@ -42,13 +42,13 @@ export const UNIT_SUITES: readonly UnitSuite[] = [
   { workspace: '@apackdev/cli', dir: 'apack-cli', kind: 'host' },
   { workspace: '@apackdev/host', dir: 'apack-host', kind: 'host' },
   { workspace: '@app/api', dir: 'api', kind: 'host' },
-  { workspace: '@app/repo-checks', dir: 'repo-checks', kind: 'host' },
+  { workspace: '@app/internal-repo-checks', dir: 'internal-repo-checks', kind: 'host' },
   { workspace: '@app/renderer', dir: 'renderer', kind: 'host' },
   { workspace: '@app/main', dir: 'main', kind: 'host' },
   { workspace: '@app/preload', dir: 'preload', kind: 'host' },
   { workspace: '@apackdev/testing', dir: 'apack-testing', kind: 'host' },
   { workspace: '@apackdev/ui', dir: 'apack-ui', kind: 'host' },
-  { workspace: '@app/publish-checks', dir: 'publish-checks', kind: 'host' },
+  { workspace: '@app/internal-publish-checks', dir: 'internal-publish-checks', kind: 'host' },
 ];
 
 /**

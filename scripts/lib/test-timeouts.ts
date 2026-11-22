@@ -373,7 +373,7 @@ export function clockedDeadlines(absFile: string, repoRoot: string): Clock[] {
  * derived in the first place. A spec's *name* is only a claim: a package without that config runs
  * everything in its fast half, so `x.integration.spec.ts` there is `small` whatever it is called.
  * Checking the claim against `INTEGRATION_SUITES` rather than naming a package is the part with a firing
- * case — naming one put the 8 integration specs in `repo-checks` and `publish-checks` under a small
+ * case — naming one put the 8 integration specs in `internal-repo-checks` and `internal-publish-checks` under a small
  * budget while they ran large, invisibly, because neither had a per-test override and the *configs* were
  * already derived.
  *

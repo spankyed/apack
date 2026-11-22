@@ -277,7 +277,7 @@ Fix what would make a reader fail first. Every item is verified against the code
   - main;
   - preload: its IPC surface, and never running bare tsc;
   - renderer: application actor, pack FE loading;
-  - typescript-floor.
+  - internal-typescript-floor.
 
 ## Out of scope (tracked separately)
 

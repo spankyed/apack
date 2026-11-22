@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "noUnusedLocals": true,
+    "incremental": true,
+    "tsBuildInfoFile": "../../node_modules/.cache/tsbuildinfo/internal-publish-checks.tsbuildinfo",
+    "allowImportingTsExtensions": true,
+    // Workspace @apackdev/* packages resolve to source (see their package.json exports)
+    "customConditions": ["@apackdev/source"],
+    "target": "ES2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}

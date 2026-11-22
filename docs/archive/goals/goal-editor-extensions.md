@@ -59,7 +59,7 @@ vocabulary. Its Decision 5 — the generated `readSurfaceState`/`useSurfaceState
 
 ## Scope
 
-`packages/repo-checks/tests/surface-vocabulary.spec.ts` currently allows `plugin` for three
+`packages/internal-repo-checks/tests/surface-vocabulary.spec.ts` currently allows `plugin` for three
 vocabularies. Two are genuinely somebody else's. The third — the editor one — is **our own
 abstraction wearing a borrowed word**, and this goal removes it.
 
@@ -336,11 +336,11 @@ regenerated diff is this rename.
 ### Phase 5 — docs, and the guard goes live
 
 **Deliverable.** `docs/public-facing/{extensions,manifest,architecture}.md` (where a pack author reads
-the key), `packages/{apack-sdk,apack-ui,apack-host,renderer,repo-checks}/CLAUDE.md`,
+the key), `packages/{apack-sdk,apack-ui,apack-host,renderer,internal-repo-checks}/CLAUDE.md`,
 `packages/default-setup/CLAUDE.md`, and root `CLAUDE.md`'s Naming section — which currently names three
 vocabularies and must name the two that remain plus Decision 1's rule. Unpark the scan.
 
-**Done when:** the scan is green unparked, `doc-links` passes, and `repo-checks`' guard row describes
+**Done when:** the scan is green unparked, `doc-links` passes, and `internal-repo-checks`' guard row describes
 what the guard now holds.
 
 ## Constraints

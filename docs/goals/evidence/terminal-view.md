@@ -70,7 +70,7 @@ The echo is quantized by the display: the emulator paints on the next frame, so 
 as the value they mean (`tests/view_vectors.rs`, which fails when the file is not what the encoder writes).
 `apack-terminal-view` holds a copy and its suite decodes each vector for a view and encodes each one for the
 broker (`tests/wire.spec.ts`). The two copies are the same file, which
-`packages/repo-checks/tests/terminal-view-vectors.spec.ts` holds them to at the commits pinned here.
+`packages/internal-repo-checks/tests/terminal-view-vectors.spec.ts` holds them to at the commits pinned here.
 
 ### The broker
 

@@ -94,7 +94,7 @@ export interface BuildReads {
    * A reused phase takes the previous build's output forward unchanged, so what that build read is still
    * exactly what produced these files. Without this the record would lose a phase whenever it was cheapest
    * to build — and the only check in this repo that compares a declared input set against an observed one
-   * (`repo-checks`' `dep-files`) would quietly stop speaking for it, which it notices by asserting the
+   * (`internal-repo-checks`' `dep-files`) would quietly stop speaking for it, which it notices by asserting the
    * recorded phases are every phase the build has.
    *
    * `false` means there is nothing to carry, and the caller's answer to that is to run the phase: a record

@@ -13,8 +13,8 @@ passed. So a single failure leaves every project unstamped, and the next chain r
 **Stamping per project instead was scoped and rejected, on two findings:**
 
 - **One project is almost all of the cost.** Measured 2026-10-23, a quiet `npm run test:integration` on a
-  ten-core Mac: `@apackdev/cli` was 2,424s of the half's 2,506s of file time (96.7%), `@app/repo-checks` 49s
-  and `@app/publish-checks` 33s. Failures land in the CLI, so keeping the others' stamps saves about 3% of a
+  ten-core Mac: `@apackdev/cli` was 2,424s of the half's 2,506s of file time (96.7%), `@app/internal-repo-checks` 49s
+  and `@app/internal-publish-checks` 33s. Failures land in the CLI, so keeping the others' stamps saves about 3% of a
   rerun.
 - **A real failure does not rerun with the same inputs.** It is fixed by a code change, the change moves the
   suite's fingerprint, and every spec in the suite reruns whatever was stamped. A partial stamp pays only for a

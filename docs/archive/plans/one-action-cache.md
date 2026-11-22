@@ -36,7 +36,7 @@ Four symptoms, all the same cause:
   passenger. `test:integration` is a raw `vitest run` whose step inputs are `workspace(dir)`, not
   `suiteInputs(dir)` — which is an under-declaration rather than a naming detail. Measured 2026-10-01, the
   files `suiteInputs` reaches that the step does not declare: 386 for `@apackdev/cli`, 1944 for
-  `@app/repo-checks`, 275 for `@app/publish-checks`. The two pool steps *derive* their inputs
+  `@app/internal-repo-checks`, 275 for `@app/internal-publish-checks`. The two pool steps *derive* their inputs
   (`[...new Set(suites.flatMap(suiteInputs))]`); `test:integration` is a literal entry in the step table,
   which is the whole reason it drifted.
 - **Scheduling changes cache identity.** A spec's measured cost picks its half, the half picks the step,
@@ -420,10 +420,10 @@ nothing, which is why these came before the decisions above rather than after.
 
 - **Per-leg typecheck caching: worth nothing for most edits.** 7 of 11 single-package edits leave
   `typecheck:fe` stale, and it is the 6.2s critical leg. The other four save 6-8s. Decision 1.
-- **Per-suite staleness in the integration half: the largest warm-chain win on this list.** `repo-checks`
-  declares `repo: true` and is stale on any source edit; `apack-cli` and `publish-checks` are stale only
+- **Per-suite staleness in the integration half: the largest warm-chain win on this list.** `internal-repo-checks`
+  declares `repo: true` and is stale on any source edit; `apack-cli` and `internal-publish-checks` are stale only
   within their own dependency closures, so the common case is **1 of 3 suites stale**. Measured:
-  repo-checks' integration half is **5.06s** against the pooled run's 48.2s. Inner per-suite caching takes
+  internal-repo-checks' integration half is **5.06s** against the pooled run's 48.2s. Inner per-suite caching takes
   the common case from 48s to about 5s, and the pool pattern already exists for the unit suites.
 - **Action-key overhead at ~47 actions: not an action-count problem.** It is a 6.64x overlap problem that
   exists today, at 13. Decision 2.

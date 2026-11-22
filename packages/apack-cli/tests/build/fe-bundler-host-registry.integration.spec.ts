@@ -5,7 +5,7 @@ import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
 import { bundlePackFE } from '../../src/build/fe-bundler';
 import { bundleExternals } from '../_support/pack-builds';
-import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/publish-checks';
+import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/internal-publish-checks';
 
 const SDK_SOURCE = path.join(REPO_ROOT, 'packages', 'apack-sdk');
 const UI_SOURCE = path.join(REPO_ROOT, 'packages', 'apack-ui');

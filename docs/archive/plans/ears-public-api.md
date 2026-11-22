@@ -249,7 +249,7 @@ with a missing end, and rows read with `entityType` and `createdAt`.
 (`installed.ts`) and throws `NO_ENGINE_INSTALLED` without one. `createEarsEngine()` returns a working
 instance, but most of the API ignores it, and two engines in one process means swapping the global (17
 files call `installEngine`: 6 in host, 4 in the SDK, 4 in ears' own tests, 2 in the CLI, 1 in
-publish-checks).
+internal-publish-checks).
 
 **Change.**
 

@@ -17,7 +17,7 @@ that need a built application, external pack projects, or controlled performance
 | `_support/` | Pure data builders shared by multiple suites | Imported by their consumers |
 
 Use the cheapest boundary that proves the behavior. Package logic belongs in its package suite;
-repository tooling checks belong in `packages/repo-checks/tests/`. Neither needs Electron merely to
+repository tooling checks belong in `packages/internal-repo-checks/tests/`. Neither needs Electron merely to
 assert state. One-off driving belongs in `drive/`, outside test discovery.
 
 Keep helpers with their suite unless there is a real second consumer. Shared data builders have no

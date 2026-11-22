@@ -49,7 +49,7 @@ import * as path from 'node:path';
 import ts from 'typescript';
 import { sealPackBuild } from '@apackdev/host/packs';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/publish-checks';
+import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/internal-publish-checks';
 import { callCli, packageJson, preparePack, tsconfig, typecheckPack, write } from './pack-builds';
 import { PACK_LAYOUT } from '@apackdev/host/packs';
 

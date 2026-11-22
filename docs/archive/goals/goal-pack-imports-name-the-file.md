@@ -253,7 +253,7 @@ to `.js` and watch that named too.
 **1,537 specifiers across some 600 files.** Counts: default-setup 87 files / 720 tests unchanged, the fixture
 pack 10 / 32 unchanged, E2E 21 unchanged, `test:packaged-authoring` and `test:external-pack` green,
 `npm run chain` green. Three suites grew, all of them checks this goal added: `@apackdev/host` 77 / 697 to
-78 / 706 (`own-module-specifiers.spec.ts`), repo-checks' `import-specifiers` to 192 cases (the two rules that
+78 / 706 (`own-module-specifiers.spec.ts`), internal-repo-checks' `import-specifiers` to 192 cases (the two rules that
 had none, and this one), and `@apackdev/cli`'s integration half from 1 failed / 167 passed / 20 skipped to 188
 passed — the skips were everything downstream of a fixture pack that had stopped building, which is how the
 last four failures of this goal were found.

@@ -1,0 +1,23 @@
+{
+  "name": "@app/internal-repo-checks",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Specs whose subject is the repo's own tooling: the chain's graph and cache keys, the recorded spec costs, and the scripts that check the published packages",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "pretest": "tsx ../../scripts/ensure-packages-built.ts",
+    "test": "vitest run",
+    "pretest:integration": "tsx ../../scripts/ensure-packages-built.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts"
+  },
+  "devDependencies": {
+    "@apackdev/host": "*",
+    "@apackdev/sdk": "*",
+    "app-builder-lib": "26.18.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.8.3",
+    "vite": "^7.3.7",
+    "vitest": "^4.1.12"
+  }
+}

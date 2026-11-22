@@ -53,7 +53,7 @@
 //
 // **Two flags of its own.** `npm run spec:dry` answers "what would this run, and what did the last run on
 // this machine measure it at" without running any of it. It collects — ~1.6s whatever comes back — which the ordinary run never
-// does: the collector and the pricing load behind `await import`, and repo-checks asserts that from this
+// does: the collector and the pricing load behind `await import`, and internal-repo-checks asserts that from this
 // file's source. And `--no-bail` reports every failure in the plan rather than stopping at the first, for
 // when you want the whole picture in one run; bailing is the default because a 1s failure otherwise pays for
 // the pack suite behind it.

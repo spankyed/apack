@@ -55,7 +55,7 @@ npm run api:update -w @apackdev/ui       # regenerate etc/ reports, commit them
 - Stale reports are deleted on update. CI runs `api:check` for the SDK and UI, after `packages:build`: `tsconfig.api-extractor.json` resolves `@apackdev/*` dependencies to their built declarations, since API Extractor analyses `.d.ts` and follows a dependency read as source into it instead of reporting it as an import.
 - The reports carry API Extractor's messages (`scripts/api-reports.ts` sets them explicitly, because `ExtractorConfig.prepare()` applies none of its defaults and reports nothing without them). `ae-forgotten-export` — a type a public export names without exporting it — is recorded in the report, so a new one shows up as a report diff. On a component entry one of those names `__VLS_export`: that is vue-tsc's own symbol for the SFC's default export, not something to export.
 
-The published surface supports TypeScript 5.7+ (`typescript` peer `>=5.7`). `@app/publish-checks`'s `published-ui-types` compiles consumers against the packed package with both compilers (`packages/typescript-floor`).
+The published surface supports TypeScript 5.7+ (`typescript` peer `>=5.7`). `@app/internal-publish-checks`'s `published-ui-types` compiles consumers against the packed package with both compilers (`packages/internal-typescript-floor`).
 
 ## Build (`npm run build:package`, part of root `packages:build`)
 
@@ -67,7 +67,7 @@ The repo's `scripts/build-ui-package.ts` (it lives there, not here, so this pack
 4. `vue-tsc -p tsconfig.package.json` type-checks and emits declarations. `X.vue.d.ts` files are renamed to `X.d.vue.ts`, the name TypeScript looks for under node16/nodenext.
 5. `BareImports.assertDeclared` (`scripts/lib/published-imports.ts`) checks that every bare import in `dist/**/*.js` is declared in `package.json`, and `assertExportTargetsBuilt` that every export target exists.
 
-`dist/` checks live in `@app/publish-checks`: `published-ui-dist` (no SFC source shipped, no relative CSS `@import` left, shared modules emitted once), `published-exports`, `published-specifiers`. They skip without `dist/` locally and fail when `dist` is older than `src`. This package's own suite holds `exports` (the map) and `import-side-effects` (its source).
+`dist/` checks live in `@app/internal-publish-checks`: `published-ui-dist` (no SFC source shipped, no relative CSS `@import` left, shared modules emitted once), `published-exports`, `published-specifiers`. They skip without `dist/` locally and fail when `dist` is older than `src`. This package's own suite holds `exports` (the map) and `import-side-effects` (its source).
 
 `package.json` is what the published manifest is derived from (`files: ["dist"]`); the build stages the derived one in `publish/`. Monorepo tooling resolves `src/` through the `@apackdev/source` condition (`tsconfig.json` `customConditions`, the renderer's Vite `resolve.conditions`), which only a checkout can satisfy.
 
@@ -117,6 +117,6 @@ npm run typecheck:ui                  # vue-tsc --noEmit (src, scripts, tsdown c
 npm run exports:check -w @apackdev/ui   # exports map + component entries
 npm run api:check -w @apackdev/ui       # etc/ reports current
 npm run packages:build && npm run packages:check   # dist, publint, attw (esm-only)
-npm test -w @app/publish-checks       # the published-* dist checks
+npm test -w @app/internal-publish-checks       # the published-* dist checks
 npm test -w @apackdev/cli               # the fe-bundler-*ui specs
 ```

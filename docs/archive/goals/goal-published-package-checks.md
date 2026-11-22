@@ -80,7 +80,7 @@ are 30.2s of that suite's 190.8s:
 | 7 | `tests/build/ui-exports.spec.ts` |
 
 **The family is already split across two packages**, which is the clearest sign it has no settled home:
-`published-imports.spec.ts` and `published-sdk-peers.spec.ts` live in `@app/repo-checks`, moved there by
+`published-imports.spec.ts` and `published-sdk-peers.spec.ts` live in `@app/internal-repo-checks`, moved there by
 [`goal-one-job-pool.md`](goal-one-job-pool.md) because they import `scripts/lib/published-imports.ts`. So
 "where do the `published-*` specs go" has been answered twice, differently, on a mechanical criterion that
 happened not to apply to the other twelve.
@@ -96,7 +96,7 @@ divide cleanly:
   files use these.**
 - **`REPO_ROOT` and `PACKAGES_BUILT`** — a path constant and a freshness verdict. **Ten files use only
   these**, and both are now available from `@apackdev/host/build/packages-built` (`REPO_ROOT` directly,
-  `PACKAGES_BUILT` via `packagesBuiltOrRefuse()`, which `@app/repo-checks` already calls). Those ten import
+  `PACKAGES_BUILT` via `packagesBuiltOrRefuse()`, which `@app/internal-repo-checks` already calls). Those ten import
   a packing fixture to get a path.
 
   *Corrected in Phase 1: the survey said twelve, counting `fe-bundler-tailwind` and `fe-bundler-ui-theme`,
@@ -181,7 +181,7 @@ Final.
 6. **Don't reopen cost-based placement or the two pools.** Which half a spec runs in is decided by
    `etc/spec-cost.json` and the dead band; which pool by `UnitSuite.kind`. Both settled.
 
-## Open decision — **settled 2026-09-25: a new `@app/publish-checks`**
+## Open decision — **settled 2026-09-25: a new `@app/internal-publish-checks`**
 
 The five specs and the packing fixture go to one new workspace, and `@apackdev/cli` depends on it for the
 fixture. Option 2 below.
@@ -191,12 +191,12 @@ and stay put under Decision 1, so wherever the five go, the fixture must be reac
 name. Every other answer paid for that badly: promoting it to `@apackdev/testing` ships repo-internal packing
 tooling in a package pack authors install; distributing the five gives `@apackdev/sdk` and `@apackdev/ui` an
 expensive pack-and-compile half each, where both suites are currently pure and fast; and folding them into
-`@app/repo-checks` widens that package again, after the one widening it already carries for layout checks. A workspace is what exists
+`@app/internal-repo-checks` widens that package again, after the one widening it already carries for layout checks. A workspace is what exists
 so two packages can share a module by name, and it keeps five specs that share one expensive fixture in one
 place.
 
 **Two corrections that fell out of settling it.** `published-imports.spec.ts` and `published-sdk-peers.spec.ts`
-**stay in `@app/repo-checks`**: their subject is `scripts/lib/published-imports.ts`, which five build scripts
+**stay in `@app/internal-repo-checks`**: their subject is `scripts/lib/published-imports.ts`, which five build scripts
 use (`build-package`, `build-ui-package`, `bundle-package`, `apack-ui/scripts/exports`, `packages-built`) and
 which therefore cannot leave `scripts/`. The family is split by subject, correctly, and "reuniting it" was the
 wrong goal. So this is **five specs, not seven**.
@@ -205,8 +205,8 @@ The options as surveyed, kept for the reasoning:
 
 | | Where Group A goes | Where the packing fixture goes | Cost |
 |---|---|---|---|
-| 1 | `@app/repo-checks` | with it, exported for Group B | Two siblings are already there, so the family stops being split. But `repo-checks` is defined as *specs whose subject is a repo script*, and these aren't — the definition widens to "cross-package concerns", and its boundary guard has to widen with it |
-| 2 | A new `@app/publish-checks` | with it | Mirrors `repo-checks` exactly, and the subject is genuinely its own. A fourth workspace that exists for twelve specs, and the `published-*` family in `repo-checks` should then move again |
+| 1 | `@app/internal-repo-checks` | with it, exported for Group B | Two siblings are already there, so the family stops being split. But `internal-repo-checks` is defined as *specs whose subject is a repo script*, and these aren't — the definition widens to "cross-package concerns", and its boundary guard has to widen with it |
+| 2 | A new `@app/internal-publish-checks` | with it | Mirrors `internal-repo-checks` exactly, and the subject is genuinely its own. A fourth workspace that exists for twelve specs, and the `published-*` family in `internal-repo-checks` should then move again |
 | 3 | `@apackdev/ears`, `/sdk`, `/ui` respectively | promoted to a published `@apackdev/testing` export | The fixture's natural home: `@apackdev/testing` *is* the test-fixture package, `goal-test-placement.md` Phase 2 gives it a suite, and Group B reaches it by a normal import. But `published-exports` and `published-declarations` span all three packages in one consumer install, so they have no single owner and would need splitting or an arbitrary host |
 | 4 | Stay in `@apackdev/cli`, with the reason recorded | stays | Honest null option. Publishing is driven from `scripts/publish-packages.ts` and `scripts/bundle-package.ts`, so the *repo* publishes and the CLI is merely where the helper landed — which is an argument for 1, not for 4. Choosing this means recording that `@apackdev/cli`'s cost record includes 30.2s that is not about the CLI, so nobody reads it as a CLI number |
 
@@ -228,13 +228,13 @@ which uses a packing export; `npm test -w @apackdev/cli` and `npm run test:integ
 ### Phase 2 — settle and move
 
 Act on the Open decision. Move Group A and the packing fixture to wherever it lands, leaving Group B a
-non-relative import (Decision 1). If a new workspace is created, it follows `@app/repo-checks`: private,
+non-relative import (Decision 1). If a new workspace is created, it follows `@app/internal-repo-checks`: private,
 `host` kind in `UNIT_SUITES`, `SUITE_READS` entry for the built packages, both vitest configs, an entry in
 the root `projects` list in `UNIT_SUITES` order, `pretest` running `ensure-packages-built`, and a
 `CLAUDE.md` saying what it is for and what it is not.
 
 **Done when:** every Group A spec is in the chosen home and passes there; Group B passes unchanged with no
-relative import crossing a package; the `published-*` specs in `@app/repo-checks` are either with their
+relative import crossing a package; the `published-*` specs in `@app/internal-repo-checks` are either with their
 siblings or recorded as staying, with the reason. If a new workspace was created, show that its suite **ran**
 rather than that it appears — `npm run test:unit:host -- --all` naming it in the output, or the pool's total
 test count rising by the specs that moved. A suite can be listed, ordered and stamped without executing, and
@@ -296,14 +296,14 @@ Mutation-check it: put a Group A spec back in `@apackdev/cli` and watch the guar
 | Phase | Status | Evidence |
 |---|---|---|
 | 1 — stop importing a fixture to get a path | **done** | `9e0eb7891`. Ten files repointed; the fixture's reach fell from 21 importers to its real 9 |
-| 2 — settle and move | **done** | `52c0d7a60`. `@app/publish-checks` created; eight specs and the fixture moved, one to `@apackdev/ui` |
+| 2 — settle and move | **done** | `52c0d7a60`. `@app/internal-publish-checks` created; eight specs and the fixture moved, one to `@apackdev/ui` |
 | 3 — re-record and re-measure | **done** | this commit. 338 specs across twelve suites; chain green, no drift reported |
 | 4 — the guard | **done** | `3d0d0da8d`. Mutation-checked both ways |
 
 ### What moved, and what it cost
 
 `@apackdev/cli` went from 65 specs and 190.8s to **53 and 170.8s**, and its record can now be read as a CLI
-number rather than a suite total. `@app/publish-checks` holds 7 specs and 28.1s. `@apackdev/ui` gained the
+number rather than a suite total. `@app/internal-publish-checks` holds 7 specs and 28.1s. `@apackdev/ui` gained the
 one spec whose subject was its own source.
 
 **The chain's `test:integration` reads 71.4s against a declared 52s, and is left at 52.** The step gained a
@@ -336,7 +336,7 @@ would have broken; it needs no repo root at all now, one level up to its own `sr
 
 ### Corrected while settling the decision
 
-**`published-imports` and `published-sdk-peers` stay in `@app/repo-checks`.** Their subject is
+**`published-imports` and `published-sdk-peers` stay in `@app/internal-repo-checks`.** Their subject is
 `scripts/lib/published-imports.ts`, which five build scripts use and which therefore cannot leave
 `scripts/`. The family is split by subject, correctly; "reuniting it" was the wrong goal, and this is five
 specs rather than seven.
@@ -344,7 +344,7 @@ specs rather than seven.
 **The first recommendation was wrong and the user rejected it.** It distributed the specs to `@apackdev/sdk`
 and `@apackdev/ui` and promoted the fixture to `@apackdev/testing` — which would have shipped repo-internal
 packing tooling in a package pack authors install, given two pure fast suites an expensive
-pack-and-compile half each, and widened `repo-checks` again. All three costs were stated and waved
+pack-and-compile half each, and widened `internal-repo-checks` again. All three costs were stated and waved
 through in the same message. What decided it in the end was the fixture, not the specs: three CLI specs
 need it and stay, so it has to be reachable from two packages by name, and a workspace is what exists for
 that.
@@ -353,7 +353,7 @@ that.
 
 - The new workspace is `host` kind with both halves, `SUITE_READS: { packages: true }`, and the worker cap
   its integration config explains — the same shape as `@apackdev/cli`'s, for the same reason.
-- `@apackdev/cli` reaches the fixture as `@app/publish-checks`, a devDependency, rather than by path.
+- `@apackdev/cli` reaches the fixture as `@app/internal-publish-checks`, a devDependency, rather than by path.
 - The guard's signal is the fixture import, because nothing else in the repo installs a published consumer.
 
 ### Deferred, unchanged

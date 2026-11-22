@@ -292,7 +292,7 @@ name), so delete it in the same change.
 - `npm run spec -- fe-bundler` for the surface's suites, and `npm run chain` for the rest.
 - **The fixture pack's frontend actually loading**, in both modes. `npm run start` covers the dev half:
   since `goal-one-kind-of-pack`'s phase 3 the renderer's dev server serves every pack in the tree from
-  source, `tests/packs/external-pack` included, and `repo-checks`' `dev-pack-hmr.integration.spec.ts` holds
+  source, `tests/packs/external-pack` included, and `internal-repo-checks`' `dev-pack-hmr.integration.spec.ts` holds
   it to patching a component rather than reloading. A packaged build (`npm run build-prod`) with the same
   pack installed covers the other, and is the one that exercises `file://` and emitted chunk names.
   `apack run` remains the path for a pack outside the tree, where the proxy is replaced by the map.

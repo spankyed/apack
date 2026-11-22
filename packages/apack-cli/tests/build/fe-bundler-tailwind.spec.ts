@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { bundlePackFE } from '../../src/build/fe-bundler';
 
-// Computed here rather than taken from @app/publish-checks, whose import checks that
+// Computed here rather than taken from @app/internal-publish-checks, whose import checks that
 // the published packages' dist is up to date — irrelevant to this suite, which builds from source.
 const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 

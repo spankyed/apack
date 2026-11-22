@@ -172,7 +172,7 @@ npm run spec -- <target> # You don't say what the target is; it works that out:
                          # the host projects resolve source, so no import edge runs from your edit to the
                          # spec that covers it — that edge runs through a build. The command says so when
                          # it is true, derived from the declared dependencies (workspace-deps.ts) and
-                         # including the transitive ones; repo-checks' spec-plan.spec.ts partitions which
+                         # including the transitive ones; internal-repo-checks' spec-plan.spec.ts partitions which
                          # packages those are, so a new edge fails a check instead of dating a sentence.
                          # A pack's own source runs `related` inside that pack, since no root project
                          # imports a pack's backend or frontend: 1-3 files in 2-6s against the whole
@@ -182,10 +182,10 @@ npm run spec -- <target> # You don't say what the target is; it works that out:
                          # directly by one. Named the same way, run by spec:full.
                          # Anything from the first `-` goes to vitest untouched, so `-t "a case"`,
                          # `--bail 1` and `--changed HEAD~1` work. The routing is data
-                         # (scripts/lib/spec-plan.ts), asserted by repo-checks' spec-plan.spec.ts.
+                         # (scripts/lib/spec-plan.ts), asserted by internal-repo-checks' spec-plan.spec.ts.
                          # Where a spec belongs: its path under tests/ mirrors the source it covers, no
                          # directory names a level or a cost half, and support dirs take a _ prefix
-                         # (docs/references/test-inventory.md; repo-checks' spec-placement.spec.ts)
+                         # (docs/references/test-inventory.md; internal-repo-checks' spec-placement.spec.ts)
 ```
 
 ## Test commands
@@ -260,9 +260,9 @@ You don't say what the target is; it works that out:
                     what building it produces (named here, run by spec:full)
 Anything from the first `-` goes to vitest untouched, so `-t "a case"`,
 `--bail 1` and `--changed HEAD~1` work. The routing is data
-(scripts/lib/spec-plan.ts), asserted by repo-checks' spec-plan.spec.ts.
+(scripts/lib/spec-plan.ts), asserted by internal-repo-checks' spec-plan.spec.ts.
 Where a spec belongs: its path under tests/ mirrors the source it covers
-(docs/references/test-inventory.md; repo-checks' spec-placement.spec.ts).
+(docs/references/test-inventory.md; internal-repo-checks' spec-placement.spec.ts).
 **A pack suite and an integration half are not in a plain run's answer** — one
 resolves the published dist, the other is a second config the root projects
 exclude. docs/archive/references/pipeline-commands.md has the blast-radius figures.
@@ -320,15 +320,15 @@ size: 300s a case (`SIZE_MS`), since each composes cold captures and builds
 ### `npm run test:integration`
 
 ```text
-The expensive half of every suite that has one (@apackdev/cli, @app/repo-checks,
-@app/publish-checks), as **one vitest run** over vitest.integration.config.ts's
+The expensive half of every suite that has one (@apackdev/cli, @app/internal-repo-checks,
+@app/internal-publish-checks), as **one vitest run** over vitest.integration.config.ts's
 projects rather than three `npm -w` invocations in series: measured 2026-09-29,
 48.2s pooled against 71s. Which packages those are is derived from the configs
 each has (INTEGRATION_SUITES); the root config's project list is checked rather
 than derived, because check:specifiers reads these files as text.
 **It is the third pool**, not a fourth kind of thing: the same runner as the two
 unit pools (scripts/test-unit-pool.ts, over POOLS in scripts/lib/unit-pool.ts),
-so it runs only the projects whose inputs moved — a repo-checks edit is 6s of its
+so it runs only the projects whose inputs moved — a internal-repo-checks edit is 6s of its
 44s. A pool is a resolution and a half; this one shares the host resolution and
 differs in the half, which is why its stamps are keyed (dir, half). One key for
 both would skip the expensive half on the fast half's record, which is the hole

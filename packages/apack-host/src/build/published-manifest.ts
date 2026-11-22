@@ -11,13 +11,13 @@
  * condition against it resolves the same `dist` path as not enabling it.
  *
  * Derived at **build** time, into a staged tree the build writes. Not at publish time: `test-packaged-authoring.sh`
- * and `@app/publish-checks` both `npm pack` the tree, so a manifest written only by `npm publish` would be one
+ * and `@app/internal-publish-checks` both `npm pack` the tree, so a manifest written only by `npm publish` would be one
  * nothing ever packed, typechecked or installed. And not in a `prepack` hook: seven specs pack these packages
  * concurrently, so a hook rewriting `package.json` in place would race them.
  *
  * Here rather than in the repo's `scripts/` because four callers need it and a package may not reach into
  * `scripts/`: the two build scripts write the tree, `bundle-package.ts` checks its own generated manifest with
- * the same walk, and `@app/publish-checks` checks what `npm pack` would produce.
+ * the same walk, and `@app/internal-publish-checks` checks what `npm pack` would produce.
  */
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -34,7 +34,7 @@ export const PUBLISH_TREE = 'publish';
 /**
  * Fields a published manifest has no use for. `scripts` is the load-bearing one: with no scripts there is no
  * lifecycle hook to add, so the published manifest cannot become something that runs on install or rewrites
- * itself at pack time. `@app/publish-checks` asserts the absence rather than a list of hook names, which npm
+ * itself at pack time. `@app/internal-publish-checks` asserts the absence rather than a list of hook names, which npm
  * is free to grow.
  */
 const DROPPED_FIELDS = ['scripts', 'devDependencies'];
@@ -196,7 +196,7 @@ export function packTree(dir: string, destDir: string): string {
  * `npm pack --json` over one directory, as JSON.
  *
  * Two things it gets right that are easy to leave out. `--ignore-scripts`, because anything a lifecycle script
- * printed lands on this stdout *before* npm's JSON (`@app/publish-checks`' `published-manifest-paths` holds
+ * printed lands on this stdout *before* npm's JSON (`@app/internal-publish-checks`' `published-manifest-paths` holds
  * these manifests to publishing no `scripts` at all, so this is the second door rather than the only one), and
  * the guard, which names that as the cause if some other way is ever found. And an **absolute** path, because
  * npm reads a relative one as a git shorthand and fails in `git ls-remote`.
@@ -232,7 +232,7 @@ export function treeFiles(dir: string): Set<string> {
  * `files` is kept in the derived manifest rather than dropped, so packing the staged tree is as explicit as
  * packing the source tree: without it npm would fall back to gitignore rules, and this tree sits inside a
  * gitignored directory. Then it checks the result, so a build that stages a short tree fails here rather than
- * shipping a manifest pointing at nothing — `@app/publish-checks` is the backstop, not the first line.
+ * shipping a manifest pointing at nothing — `@app/internal-publish-checks` is the backstop, not the first line.
  */
 export function stagePublishTree(pkgDir: string, manifest: Manifest): string {
   const name = String(manifest.name);

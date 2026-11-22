@@ -3,7 +3,7 @@
 > **Done** (`0074e26dd`..`232f85e78` on `AS/test-pipeline`). The text below is the plan as written; two of
 > its Decisions were corrected afterwards and one Deferred item was closed, both under the Outcome. For
 > what the command does now, see the root `CLAUDE.md` beside the spec commands, and
-> `repo-checks/tests/spec-plan.spec.ts` for the routing itself.
+> `internal-repo-checks/tests/spec-plan.spec.ts` for the routing itself.
 
 ```
 # Goal: npm run spec runs every spec that covers what you changed
@@ -26,7 +26,7 @@ Finished when:
 - Editing a package's source runs every spec that covers it, in whatever package it lives, and the
   routing is a pure function a spec can assert against.
 - The cost is measured and recorded: a shallow edit, a deep one, and what each was before.
-- npm run typecheck; npm run spec-cost:check; npm test -w @app/repo-checks; npm run chain once at the end.
+- npm run typecheck; npm run spec-cost:check; npm test -w @app/internal-repo-checks; npm run chain once at the end.
 - A final summary: phase → done/deferred, evidence, and the conventional choices made.
 - The doc is in `docs/archive/goals/`, with its status blockquote and an Outcome section, committed.
 
@@ -61,7 +61,7 @@ wrong**: it reports a green run of specs that do not cover the change.
 | `@apackdev/host` | 6 | **1** |
 | `@apackdev/ui` | 6 | **1** |
 | `@apackdev/testing` | 4 | **1** |
-| `@app/publish-checks`, `@apackdev/cli`, `@app/api` | 2 each | **1** |
+| `@app/internal-publish-checks`, `@apackdev/cli`, `@app/api` | 2 each | **1** |
 
 **29 cross-package edges the command does not follow.** Editing the EARS engine — the module every pack's
 data goes through — runs one suite of the eight that cover it.
@@ -138,10 +138,10 @@ Final.
 Factor the target handling in `scripts/spec.ts` into a pure function: target → the runs to make. A file
 under `packages/*/src` plans one root `vitest related` preceded by `packages:ensure`; a spec path, a
 directory and a name-match keep today's per-package plan; `scripts/` and the configs keep their explicit
-route to `@app/repo-checks`.
+route to `@app/internal-repo-checks`.
 
 **Done when:** `npm run spec -- packages/apack-sdk/src/types/sdk-entities.ts` runs 104 files rather than
-the specs of one package, and the plan for every target shape is asserted by a spec in `@app/repo-checks`
+the specs of one package, and the plan for every target shape is asserted by a spec in `@app/internal-repo-checks`
 that runs nothing.
 
 ### Phase 2 — the change set follows the same path
@@ -166,8 +166,8 @@ default.
 
 ### Phase 4 — the guard
 
-A spec in `@app/repo-checks` over the routing function from Phase 1: a package source file plans a root
-run, a spec path plans its own package, and a `scripts/` path plans `@app/repo-checks`. It asserts the plan, so it costs nothing and cannot drift from the implementation.
+A spec in `@app/internal-repo-checks` over the routing function from Phase 1: a package source file plans a root
+run, a spec path plans its own package, and a `scripts/` path plans `@app/internal-repo-checks`. It asserts the plan, so it costs nothing and cannot drift from the implementation.
 
 Mutation-check it by making the source-file case plan one package again and watching it named.
 

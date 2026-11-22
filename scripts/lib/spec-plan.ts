@@ -494,7 +494,7 @@ const groupByPackage = (specs: readonly string[], root: string): Map<string | nu
  * so no module graph reaches it. It keeps an explicit route; everything else a root run finds.
  */
 const IS_VITEST_CONFIG = /(^|\/)vitest\.[\w.]*config\.ts$/;
-const CONFIG_READER = 'repo-checks';
+const CONFIG_READER = 'internal-repo-checks';
 
 /** `--full` asks for the answer a rebuild would give as well, which costs a build and the pack suite */
 export interface PlanOptions { readonly full?: boolean }
@@ -645,7 +645,7 @@ const notYetCovered = (affected: readonly string[], runs: readonly Run[]): strin
  * With no target: the specs your uncommitted changes affect.
  *
  * One root `--changed` answers it for every host project at once, resolving the same graph `related` does
- * — including a change under `scripts/`, which reaches `@app/repo-checks` through its specs' imports. The
+ * — including a change under `scripts/`, which reaches `@app/internal-repo-checks` through its specs' imports. The
  * pack suite is asked separately because it is not a root project, and it is asked at all because a change
  * *inside* it is the one thing a root run cannot see.
  *

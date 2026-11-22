@@ -92,7 +92,7 @@ origin's commit, as a release is cut: it reverts the release commit, pushes the 
 origin together, then deletes both GitHub releases and the local tags. A revert that conflicts, a push origin rejects,
 or tags or releases it can't read stop it with the release as it was. With no version it undoes the newest release
 commit in the branch's history that still has its tag. A `v<version>-beta.0` on another commit is an earlier beta
-release and is left alone. `packages/repo-checks/tests/release-scripts.test.sh` runs both scripts against a scratch
+release and is left alone. `packages/internal-repo-checks/tests/release-scripts.test.sh` runs both scripts against a scratch
 repository and origin.
 
 Run `npm run chain` before releasing to validate changes, including migration tests. Settings-default changes do not automatically require a migration; stored-data changes are covered by upgrade tests. The release script does not infer migration requirements from changed files.

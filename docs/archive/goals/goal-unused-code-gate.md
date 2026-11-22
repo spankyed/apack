@@ -126,7 +126,7 @@ reading, not by a check. Asking why turned up two independent gaps.
 
 | has `lint:check` | does not |
 |---|---|
-| `@app/default-setup`, `@app/renderer` | `@apackdev/host`, `@apackdev/sdk`, `@apackdev/ears`, `@apackdev/cli`, `@apackdev/testing`, `@apackdev/ui`, `@app/api`, `@app/main`, `@app/preload`, `@app/electron-versions`, `@app/typescript-floor` |
+| `@app/default-setup`, `@app/renderer` | `@apackdev/host`, `@apackdev/sdk`, `@apackdev/ears`, `@apackdev/cli`, `@apackdev/testing`, `@apackdev/ui`, `@app/api`, `@app/main`, `@app/preload`, `@app/internal-electron-versions`, `@app/internal-typescript-floor` |
 
 The root script is `npm run lint:check -ws --if-present && oxlint scripts tests -D correctness`
 (`package.json`), and `--if-present` makes a missing script a pass. `lint:check` is the last step of the
@@ -219,7 +219,7 @@ Final.
    standalone, which is how this repo has deliberately kept them; the flag is repeated thirteen times and
    Decision 5's guard is what catches a new package omitting it.
 2. **The whole goal is in scope**, Phases 1–4, not only Phase 4's lint widening. Phase 1 reports what
-   `@app/electron-versions` and `@app/typescript-floor` contain before either is included.
+   `@app/internal-electron-versions` and `@app/internal-typescript-floor` contain before either is included.
 
 Confirmed unimplemented at `9e0eb7891`: `noUnusedLocals` appears in **0** tsconfigs and `lint:check` in
 **2** of 13 workspaces — exactly the state the Background describes.
@@ -235,7 +235,7 @@ The options as surveyed, kept for the reasoning:
      every package's config depends on, and the repo has deliberately kept them standalone (`tsconfig`
      comments in `packages/apack-ears/tsconfig.json` explain why project references were rejected). — *open*
 
-2. **Whether `@app/electron-versions` and `@app/typescript-floor` are in scope.** Both are tiny and may
+2. **Whether `@app/internal-electron-versions` and `@app/internal-typescript-floor` are in scope.** Both are tiny and may
    have no source to check; Phase 1 should report what they contain before either is included. — *open*
 
 ## Phases
@@ -245,7 +245,7 @@ The options as surveyed, kept for the reasoning:
 - Add the spec from Decision 5 over every `packages/*/tsconfig.json`, with the two packages that measure
   0 (`@apackdev/ears`, `@app/preload`) turned on, and every other package listed in the spec as a known
   exemption with its current count.
-- Report what `@app/electron-versions` and `@app/typescript-floor` contain (Open decision 2).
+- Report what `@app/internal-electron-versions` and `@app/internal-typescript-floor` contain (Open decision 2).
 - Do not touch `packages/preload` with a bare `tsc`: use `npm run build -w @app/preload`.
 
 **Done when:** `npm run typecheck` passes; the spec passes; the exemption list matches the measured
@@ -346,7 +346,7 @@ went with the binding.
 
 ### The guard Decision 5 asked for
 
-`packages/repo-checks/tests/unused-code-gate.spec.ts`. It reads **every** tsconfig in the tree, not one per
+`packages/internal-repo-checks/tests/unused-code-gate.spec.ts`. It reads **every** tsconfig in the tree, not one per
 workspace: `typecheck:be` compiles `packages/api` through three of them, and the first version — which read a
 workspace's root config plus whatever a solution config referenced — covered 15 of 25 and would have passed
 with `"noUnusedLocals": false` in `api/tsconfig.test.json`. What leaves the population is derived rather than

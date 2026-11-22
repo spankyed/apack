@@ -105,10 +105,10 @@ jobs:
         run: npm run typecheck
 
       - name: Release beta-before-production rule
-        run: packages/repo-checks/tests/release-beta-rule.test.sh
+        run: packages/internal-repo-checks/tests/release-beta-rule.test.sh
 
       - name: Release and unrelease, against a scratch origin
-        run: packages/repo-checks/tests/release-scripts.test.sh
+        run: packages/internal-repo-checks/tests/release-scripts.test.sh
 
       - name: Schema drift check
         run: npm run schema:check --workspace @apackdev/sdk
@@ -168,14 +168,14 @@ jobs:
       # `strict-chain.yml`), which takes the chain lock, where absent evidence refuses instead of skipping.
       # `--reporter=verbose` is what prints each skip's reason; the default reporter prints only a count.
       - name: Unit tests (repo checks)
-        run: npm test --workspace @app/repo-checks -- --reporter=verbose
+        run: npm test --workspace @app/internal-repo-checks -- --reporter=verbose
 
-      # Repo-checks' integration half reads the fixture packs' generated frontend entries, which are gitignored
+      # internal-repo-checks' integration half reads the fixture packs' generated frontend entries, which are gitignored
       - name: Prepare declared external fixture outputs
         run: npm run test:external-pack:contract
 
       - name: Integration tests (repo checks)
-        run: npm run test:integration --workspace @app/repo-checks -- --reporter=verbose
+        run: npm run test:integration --workspace @app/internal-repo-checks -- --reporter=verbose
 
       - name: Unit tests (renderer)
         run: npm run test:unit --workspace @app/renderer -- --run

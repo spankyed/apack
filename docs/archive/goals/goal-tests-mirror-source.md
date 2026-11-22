@@ -4,7 +4,7 @@
 > the rule and the suite as it is now, see
 > [`docs/references/test-inventory.md`](../../references/test-inventory.md); the two directories that still
 > name no `src/` counterpart, and why that is a property rather than pending work, are in
-> `repo-checks/tests/spec-placement.spec.ts`'s `NOT_MIRRORED_YET`.
+> `internal-repo-checks/tests/spec-placement.spec.ts`'s `NOT_MIRRORED_YET`.
 
 ```
 # Goal: a spec's path is the path of what it covers
@@ -65,7 +65,7 @@ nobody wrote it down.
 | `@app/renderer` | adapters, boot, runtime, transport, views | **mirrors `src/`** |
 | `@apackdev/cli` | app, build, cli, harness, packs, helpers | mostly mirrors (`cli` ↔ `src/commands`) |
 | `@apackdev/ears` | contract, lmdb, + 3 flat | partial |
-| `@app/repo-checks` | flat (18) | flat, like the `scripts/` it covers |
+| `@app/internal-repo-checks` | flat (18) | flat, like the `scripts/` it covers |
 | **`@app/api`** | **runtime, unit** | **by level** |
 | **`@app/default-setup`** | **unit, integration, fixtures** | **by level** |
 
@@ -125,7 +125,7 @@ That is the Open decision below.
 | `scripts/lib/spec-cost.ts:52` | `_hybrid/claude-code-permission-flow`, in a comment |
 | every `etc/spec-cost.json` | keys are spec paths, so each moved suite re-records |
 
-`PLACEMENT_GUARD` in `spec-cost.ts` names `tests/suite-split.spec.ts` in `@app/repo-checks`, which this goal
+`PLACEMENT_GUARD` in `spec-cost.ts` names `tests/suite-split.spec.ts` in `@app/internal-repo-checks`, which this goal
 does not touch.
 
 ## Decisions
@@ -148,7 +148,7 @@ Final.
 6. **A spec that covers several modules mirrors the entry point it drives.** `export-round-trip.spec.ts`
    drives `exportActions` and `exportPrompts`; it goes under the feature whose repository it calls, not into
    a new directory for things that span two.
-7. **`@apackdev/ears` and `@apackdev/cli` are in scope only where they already deviate**, and `@app/repo-checks`
+7. **`@apackdev/ears` and `@apackdev/cli` are in scope only where they already deviate**, and `@app/internal-repo-checks`
    stays flat: its 18 specs cover `scripts/`, which is flat, so flat mirrors it.
 
 ## Open decision — **settled 2026-09-25: the scaffold changes with the rule**
@@ -182,7 +182,7 @@ and written in none.
 
 ### Phase 2 — the guard
 
-Extend `repo-checks/tests/spec-placement.spec.ts`: every directory under a package's `tests/` either names
+Extend `internal-repo-checks/tests/spec-placement.spec.ts`: every directory under a package's `tests/` either names
 a directory under that package's `src/`, or starts with `_`, or is on a recorded list with a reason and a
 stale-entry check. Land it with today's exceptions recorded, so the guard is green before anything moves and
 each phase below deletes entries rather than adding them.
@@ -222,7 +222,7 @@ than work not yet done.
 
 ## Deferred
 
-- **`@app/repo-checks` staying flat** is Decision 7, not a deferral, but it is worth revisiting if that
+- **`@app/internal-repo-checks` staying flat** is Decision 7, not a deferral, but it is worth revisiting if that
   package grows past what one directory listing shows at a glance.
 - **Colocation**, which `goal-test-placement.md` Phase 5 removed from `default-setup`. Mirroring is the
   middle answer between colocation and a flat pile; if mirroring proves awkward in practice, colocation is

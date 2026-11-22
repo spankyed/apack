@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PACKAGES_BUILT, REPO_ROOT, compileConsumer, installPublishedPackages } from '@app/publish-checks';
+import { PACKAGES_BUILT, REPO_ROOT, compileConsumer, installPublishedPackages } from '@app/internal-publish-checks';
 import { bundlePackTypes } from '../../src/build/types-bundler';
 
 /**

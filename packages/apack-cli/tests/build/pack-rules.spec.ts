@@ -522,7 +522,7 @@ describe('when several rules are right about one site', () => {
 
   /**
    * One specifier two rules are both right about, for each pair whose predicates can hold at once. The matrix in
-   * repo-checks puts *one rule's* offending line at each place a rule discriminates on, so it can only find a pair
+   * internal-repo-checks puts *one rule's* offending line at each place a rule discriminates on, so it can only find a pair
    * that claims a line written for one of them; these are the other shape, and every one of them was unpinned —
    * a precedence change would have moved what an author is told and nothing would have failed.
    */

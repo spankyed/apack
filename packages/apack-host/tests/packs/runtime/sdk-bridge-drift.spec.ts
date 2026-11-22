@@ -33,7 +33,7 @@ const UNBRIDGED_BY_POLICY = new Map<string, string>([
   // The key vault: the OS credential store, or a file when there is none. Values reach the backend only
   // through the API's secrets procedures and never over the bus, so a pack that could open the vault would
   // read every key the user has stored. Published as a subpath so the api's spec can mock it by specifier
-  // rather than by a path into this package's src/ (`repo-checks/tests/spec-placement.spec.ts`).
+  // rather than by a path into this package's src/ (`internal-repo-checks/tests/spec-placement.spec.ts`).
   ['@apackdev/host/secrets/vault', 'host-only — a pack that could open the vault would read every stored key'],
   // A 0600 atomic write. A pack has `services.filesystem` for files the user asked it to touch; this one
   // writes the app's own private records — the API's token, the secrets store, the dev session — and a pack

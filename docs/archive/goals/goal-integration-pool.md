@@ -18,7 +18,7 @@ Background was surveyed at.
 Before Phase 1, confirm the base: scripts/lib/chain-steps.ts exports INTEGRATION_SUITES and it
 names three suites; the root test:integration script is three `-w` flags; two of the three
 vitest.integration.config.ts files set maxThreads '50%'; and `npm run spec -- packages/
-repo-checks/tests/import-specifiers.integration.spec.ts` prints "No test files found" and exits 1.
+internal-repo-checks/tests/import-specifiers.integration.spec.ts` prints "No test files found" and exits 1.
 If any is already false, stop and say so — the plan was surveyed somewhere else.
 Read Background, Decisions, Phases and Constraints first. Decisions are final: implement them,
 don't reopen them or stop to ask.
@@ -39,7 +39,7 @@ Finished when:
 - The worker cap is either lifted after twenty clean runs or kept because one failed, with the count
   recorded. Keeping it is a valid outcome; keeping it without the count is not.
 - `npm run spec -- <any integration spec>` runs it and exits 0.
-- Checks: npm run typecheck; npm test -w @app/repo-checks; npm run spec-cost:check; npm run chain
+- Checks: npm run typecheck; npm test -w @app/internal-repo-checks; npm run spec-cost:check; npm run chain
   once per phase.
 - A final summary: phase -> done/deferred, evidence, the conventional choices made, and the
   measured wall of `npm run chain` before and after — the chain's, not the step's.
@@ -80,8 +80,8 @@ largest single number in the records. It was deferred out of
 | | specs | file-time | **wall** |
 |---|---|---|---|
 | `@apackdev/cli` integration | 15 | 167.9s | **31s** |
-| `@app/repo-checks` integration | 3 | 34.2s | **32s** |
-| `@app/publish-checks` integration | 5 | 30.6s | **8s** |
+| `@app/internal-repo-checks` integration | 3 | 34.2s | **32s** |
+| `@app/internal-publish-checks` integration | 5 | 30.6s | **8s** |
 | all three, as the chain runs them | 23 | 232.7s | **71s**, and 90-105s as the step measures |
 
 So the question is not why `@apackdev/cli` is slow. It is **why 71s of work takes 90-105s, and why the step
@@ -107,8 +107,8 @@ What does spawn a compiler is three files, and only three — **wrong, and corre
 | spec | spawns |
 |---|---|
 | `apack-cli/tests/commands/add-extensions.integration.spec.ts` | `tsc --noEmit` ×2, `vue-tsc --noEmit` |
-| `repo-checks/tests/component-contracts.integration.spec.ts` | `vue-tsc -p` |
-| `publish-checks/tests/published-exports.integration.spec.ts` | `node <tsc> -p` per consumer, per TypeScript version |
+| `internal-repo-checks/tests/component-contracts.integration.spec.ts` | `vue-tsc -p` |
+| `internal-publish-checks/tests/published-exports.integration.spec.ts` | `node <tsc> -p` per consumer, per TypeScript version |
 
 **The constraint is on the wrong axis.** What must be bounded is how many compilers run at once; what is
 bounded is how many test workers exist. The proxy throttles twenty innocent specs to protect against three,
@@ -123,8 +123,8 @@ and running the floor in-process would mean two `typescript` instances in one pr
 
 ### 2. The step is three `npm -w` invocations in series
 
-`package.json`'s `test:integration` is `npm run test:integration -w @apackdev/cli -w @app/repo-checks -w
-@app/publish-checks`: three vitest startups, three worker pools, three `packages:ensure` pretests, none
+`package.json`'s `test:integration` is `npm run test:integration -w @apackdev/cli -w @app/internal-repo-checks -w
+@app/internal-publish-checks`: three vitest startups, three worker pools, three `packages:ensure` pretests, none
 overlapping. All three configs declare **identical** resolution —
 `['@apackdev/source', ...defaultServerConditions.filter((c) => c !== 'module')]` — so unlike the unit suites,
 where `host` and `pack` cannot share a process because Node conditions are per process (`UnitSuite.kind`),
@@ -172,7 +172,7 @@ Recorded so nobody re-chases them. Four of the five were mine, and each looked b
   content-fingerprinting already spares it a rebuild that produces identical bytes.
 - **`installPublishedPackages` is not the cost.** It looks like the shared expensive primitive — an `npm
   pack` and a `tar -xzf` per published tree, plus a symlink per `node_modules` entry, called from 8 specs
-  across all three suites (`packages/publish-checks/src/published-packages.ts:65`). It packs **three** trees
+  across all three suites (`packages/internal-publish-checks/src/published-packages.ts:65`). It packs **three** trees
   (`ears`, `sdk`, `ui`) and takes **1.1s**, twice measured: ~9s of 232.7s. Not worth a shared fixture.
 - **The birpc timeout cannot be raised.** The obvious answer to a 60s RPC window is a longer window.
   Vitest hardcodes `DEFAULT_TIMEOUT = 6e4` in its birpc chunk and passes no `timeout` at any of its four
@@ -195,7 +195,7 @@ Neither is about speed, and both are in files this work touches.
   mapping that fixes it (`halfOfPath`, `CONFIG_BY_HALF`).
 - **`suite-timeouts.spec.ts:34` hardcodes the suite.** `stepForSpec` reads `dir === 'apack-cli' &&
   file.endsWith('.integration.spec.ts')` while `INTEGRATION_SUITES` derives the same set, so the 8
-  integration specs in `repo-checks` and `publish-checks` are checked against `test:unit:host`'s tier budget
+  integration specs in `internal-repo-checks` and `internal-publish-checks` are checked against `test:unit:host`'s tier budget
   instead of `test:integration`'s. A restated population where a derived one exists.
 
 ## Decisions
@@ -247,7 +247,7 @@ Final.
    has to hold afterwards is a property of the tree: **no integration spec spawns a compiler outside a
    recorded exception list**, and each entry names a real path, the shape `repro`'s exception list already
    has here — *"each must still name a path the check looks at, or it is dead text reading as coverage"*. A
-   source-reading spec in `@app/repo-checks`, not a rule in `check:specifiers`, which is about import
+   source-reading spec in `@app/internal-repo-checks`, not a rule in `check:specifiers`, which is about import
    specifiers. Its firing case is one line: add a spawn and watch it fail. It keeps working whether or not a
    semaphore is ever built, where a check on a semaphore nobody built would be dead the day it landed.
 
@@ -276,10 +276,10 @@ definition, and one of these defects is a second definition of it.
 - `scripts/lib/spec-plan.ts`: `packageRun` routes a named spec by its half, through that package's
   `test:integration` script for an integration spec. Reuse `halfOfPath` and `CONFIG_BY_HALF`
   (`scripts/lib/spec-cost.ts`) rather than adding a third copy of the mapping.
-- `packages/repo-checks/tests/suite-timeouts.spec.ts`: `stepForSpec` derives the integration set from
+- `packages/internal-repo-checks/tests/suite-timeouts.spec.ts`: `stepForSpec` derives the integration set from
   `INTEGRATION_SUITES` instead of naming `apack-cli`.
 
-**Done when:** `npm run spec -- packages/repo-checks/tests/import-specifiers.integration.spec.ts` runs it and
+**Done when:** `npm run spec -- packages/internal-repo-checks/tests/import-specifiers.integration.spec.ts` runs it and
 exits 0; a fast spec in the same package is unchanged; cases in `spec-plan.spec.ts` for both halves.
 Mutation: routing an integration spec to the default config fails the new case, and attributing one to
 `test:unit:host` fails the timeout budget check.
@@ -306,7 +306,7 @@ Three steps, in this order, because each one makes the next cheaper to judge (De
   measured.
 - **Then lift the root cap** to vitest's default and run the pooled suite **twenty times** (Decision 6). One
   failure settles it; twenty clean runs bound the rate at 14%, and five would have bounded it at 45%.
-- **Then the gate** (Decision 7): a `@app/repo-checks` spec holding integration specs to spawning no compiler
+- **Then the gate** (Decision 7): a `@app/internal-repo-checks` spec holding integration specs to spawning no compiler
   outside a recorded exception list, each entry naming a real path. It lands whether the cap was lifted or
   kept — it is what stops the count creeping back to five.
 - If the cap has to stay, bound the three spawns rather than the twenty other specs, and lift it behind that.

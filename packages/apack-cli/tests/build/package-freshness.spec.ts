@@ -175,7 +175,7 @@ describe('buildScriptFor', () => {
 describe('refusing an unbuilt tree', () => {
   /**
    * Gated on `CI` this never fired, because this repo's CI is off by design — and thirteen spec files sit
-   * behind the `false` it used to return, nine of them all of `@app/publish-checks`. Put `process.env.CI`
+   * behind the `false` it used to return, nine of them all of `@app/internal-publish-checks`. Put `process.env.CI`
    * back in place of the escape and the first case below passes on an unbuilt tree, which is the bug.
    */
   it('refuses, naming the build command and the way to run anyway', () => {

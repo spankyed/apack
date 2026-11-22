@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { uiTailwindPreset } from '../../../apack-ui/src/tailwind-preset.ts';
 
-// Not from @app/publish-checks: importing that asserts the packages are freshly built,
+// Not from @app/internal-publish-checks: importing that asserts the packages are freshly built,
 // and nothing here reads them — this spec reads @apackdev/ui's source and the fixture's built CSS.
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 
