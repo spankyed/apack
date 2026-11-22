@@ -54,7 +54,7 @@ export const claudeTerminalUiRuntime = withClaudeNativePlatformRuntime(String.ra
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {dirname as nativeEditorDirname} from 'node:path';
 import {stripVTControlCharacters} from 'node:util';
-import {readFileSync} from 'node:fs';
+import {accessSync,constants as fsConstants,readFileSync,statSync} from 'node:fs';
 import {createHash,randomUUID} from 'node:crypto';
 const nativeUiTextMessageMaxBytes=${CLAUDE_UI_TEXT_MESSAGE_MAX_BYTES};
 const nativeUiTextMaxLength=${CLAUDE_UI_TEXT_MAX_LENGTH};
@@ -1318,6 +1318,7 @@ async function control(request,abort){
  if(request.subtype==='apack_ui_terminal_timestamps'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native transcript view is detached');return {timestamps:nativeTranscriptTimestamps(n)};}
  if(request.subtype==='apack_ui_terminal_placements'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native terminal placement view is detached');return {placements:terminalPlacementList(n)};}
  if(request.subtype==='apack_ui_composer'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native composer view is detached');return {placements:nativeComposerList(n,request.client_id)};}
+ if(request.subtype==='apack_managed_settings_recheck')return recheckNativeManagedSettings(n,request,abort);
  if(request.subtype==='apack_ui_managed_settings_diagnostics'){if(!clients.has(request.client_id))throw Error('Native settings diagnostic view is detached');return {diagnostics:await readNativeManagedSettingsDiagnostics(()=>clientViewCurrent(n,request.client_id))};}
  if(request.subtype==='apack_ui_diagnostics'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native diagnostic view is detached');if(request.columns!==undefined&&(!Number.isSafeInteger(request.columns)||request.columns<20||request.columns>240))throw Error('Invalid diagnostic width');return {diagnostics:await nativeDiagnosticList(n,request.client_id,request.columns,abort.signal)};}
  if(request.subtype==='apack_ui_tool_groups'){if(!clients.has(request.client_id)||!clientViewCurrent(n,request.client_id))throw Error('Native group view is detached');return {groups:nativeToolGroupList(n,request.client_id)};}

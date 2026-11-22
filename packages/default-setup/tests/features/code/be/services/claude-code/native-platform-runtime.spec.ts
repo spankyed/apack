@@ -142,3 +142,47 @@ it('uses the original queue removal for only the selected desktop prompt and ref
   expect(messageQueue.removeByFilter.mock.results[0].value).toEqual([selected])
   expect(desktopQueuedPrompts.size).toBe(0)
 })
+
+
+it('runs the original managed ConfigChange gate before notifying and refuses a stale owner or file', async () => {
+  const source = claudeTerminalUiRuntime
+  const ast: any = parse(source, {ecmaVersion: 'latest', sourceType: 'module'})
+  const handler = ast.body.find((node: any) => node.type === 'FunctionDeclaration' && node.id.name === 'runNativeManagedSettingsRecheck')
+  const file = '/etc/claude-code/managed-settings.json'
+  const request = {session_id: 'session', view_revision: 2}
+  const facts = {view: {kind: 'main'}, sessionId: 'session', sequence: 2}
+  const context = {session: {}, storageV5: {}, credentials: {}}
+  const hook = vi.fn(async () => false), producer = vi.fn(() => hook)
+  const notifyChange = vi.fn(), publish = vi.fn(), stamp = vi.fn(() => 'original')
+  const modules: Record<string, object> = {
+    'chunk-1pjd7qsk.js': {D_: () => [{file, errno: 'EACCES'}]},
+    'chunk-ayzz9bjs.js': {Ta: {isWatching: () => true, notifyChange}},
+    'chunk-ne2pzqpv.js': {dAe: producer},
+  }
+  const run = vm.runInNewContext(source.slice(handler.start, handler.end) + ';runNativeManagedSettingsRecheck', {
+    process: {platform: 'linux'},
+    importClaudeNativeModule: async (name: string) => modules[name],
+    originalContext: {surface: 'terminal', toolContext: () => context},
+    nativeViewFacts: () => facts,
+    nativeLinuxManagedSettingsFile: file,
+    nativeManagedFileStamp: stamp,
+    publish,
+  })
+  const native = {gate: {_Jo: async () => {}}}
+  hook.mockImplementationOnce(async () => { facts.sequence++; return false })
+  await expect(run(native, request, new AbortController())).rejects.toThrow('owner changed')
+  expect(notifyChange).not.toHaveBeenCalled()
+  facts.sequence = 2
+  stamp.mockReturnValueOnce('original').mockReturnValueOnce('changed')
+  await expect(run(native, request, new AbortController())).rejects.toThrow('file changed')
+  expect(notifyChange).not.toHaveBeenCalled()
+  hook.mockResolvedValueOnce(true)
+  await expect(run(native, request, new AbortController())).rejects.toThrow('declined')
+  expect(notifyChange).not.toHaveBeenCalled()
+
+  await expect(run(native, request, new AbortController())).resolves.toEqual({rechecked: true})
+  expect(producer).toHaveBeenLastCalledWith(context.session, context.storageV5, context.credentials)
+  expect(hook).toHaveBeenLastCalledWith('policy_settings', file)
+  expect(notifyChange).toHaveBeenCalledExactlyOnceWith('policySettings')
+  expect(publish).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({managed_settings_diagnostics: true}))
+})

@@ -7,10 +7,18 @@
         <p>{{ diagnostic.message }}</p>
         <p v-if="diagnostic.path" class="mt-1 font-mono text-amber-200/70">{{ diagnostic.path }}</p>
       </div>
+      <button v-if="canRecheck" type="button" class="mt-3 rounded px-1 py-1 underline hover:text-white focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+        :disabled="recheck?.status === 'pending'" @click="$emit('recheck')">{{ recheck?.status === 'pending' ? 'Rechecking…' : 'Recheck settings' }}</button>
+      <p v-if="recheck?.status === 'error'" role="alert" class="mt-1">{{ recheck.problem }}</p>
     </div>
   </details>
 </template>
 <script setup lang="ts">
 import type { ClaudeManagedSettingsDiagnostic } from '#features/code/be/services/claude-code/ui-controls.ts'
-defineProps<{diagnostics:ClaudeManagedSettingsDiagnostic[]}>()
+defineProps<{
+  diagnostics: ClaudeManagedSettingsDiagnostic[]
+  canRecheck?: boolean
+  recheck?: import('../../be/claude-terminal-views.ts').ClaudeTerminalViewSnapshot['policyRecheck']
+}>()
+defineEmits<{recheck: []}>()
 </script>

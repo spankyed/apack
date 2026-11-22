@@ -234,6 +234,7 @@ export function createClaudeTranscriptMessageHost(options: {
         if (line.client_id === options.client.client_id) { timestampRevision++; void refreshTimestamps() }
         return
       }
+      if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.managed_settings_diagnostics === true) { void refreshDiagnostics(); return }
       if(line.type==='attachment'||line.type==='assistant'||line.type==='user'||line.type==='conversation_reset'||line.type==='system'&&line.subtype==='ui_invalidate')void refreshDiagnostics()
       if (line.type === 'system' && line.subtype === 'ui_invalidate' && line.event === 'ui.render') {
         if(line.tool_groups===true||line.composer_placements===true||line.terminal_placements===true){if(typeof line.client_id==='string'&&line.client_id!==options.client.client_id)return;void refreshGroups()}

@@ -25,6 +25,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
       { type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' } | { type: 'CLAUDE_TERMINAL_QUEUE_EDIT'; itemId: string } | { type: 'CLAUDE_TERMINAL_QUEUE_CANCEL'; itemId: string }
     ))
   | { type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED'; ownerId: string; sessionId: string; itemId: string }
+  | { type: 'CLAUDE_TERMINAL_POLICY_RECHECK'; ownerId: string; sessionId: string; viewRevision: number }
   | { type: 'CLAUDE_TERMINAL_NOTICE'; ownerId: string; notice: import('#features/code/common/native-notice.ts').ClaudeNativeNoticeResponse }
   | { type: 'CLAUDE_TERMINAL_MCP_URL'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlRequest }
   | { type: 'CLAUDE_TERMINAL_MCP_FORM'; ownerId: string; sequence: number; request: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormRequest }
@@ -95,6 +96,7 @@ export type ClaudeTerminalViewSnapshot = {
   mcpOperation?: { sequence: number; status: 'pending' | 'done' | 'error'; problem?: string }
   queueOperation?: { sequence: number; sessionId: string; viewRevision: number; queueRevision: string; status: 'pending' | 'done' | 'error'; problem?: string }
   queueDraft?: { sessionId: string; id: string; text: string; automatic: boolean }
+  policyRecheck?: { sessionId: string; viewRevision: number; status: 'pending' | 'done' | 'error'; problem?: string }
   noticeAnswer?: { id: string; revision: string; requestId?: string; status: 'pending' | 'done' | 'error'; problem?: string }
   task?: ClaudeTerminalTaskState
   stop?: ClaudeTerminalStopState
@@ -136,6 +138,7 @@ interface View {
   backgroundRegistration?: string
   mcpOperation?: ClaudeTerminalViewSnapshot['mcpOperation']
   queueOperation?: ClaudeTerminalViewSnapshot['queueOperation']
+  policyRecheck?: ClaudeTerminalViewSnapshot['policyRecheck']
   noticeAnswer?: ClaudeTerminalViewSnapshot['noticeAnswer']
   task?: ClaudeTerminalTaskState
   stop?: ClaudeTerminalStopState
@@ -221,7 +224,7 @@ export function createClaudeTerminalViews(dependencies: {
     const output = view.owner?.output.filter(chunk => chunk.sequence > view.sequence) ?? []
     try {
       view.send({ type: 'CLAUDE_TERMINAL_STATE', backgroundInfo: dependencies.backgroundInfo?.(view.threadId), canReplyBackground: dependencies.get(view.threadId) ? dependencies.get(view.threadId)?.canReplyBackground === true : !!dependencies.replyBackground && !!dependencies.continuation?.(view.threadId), threadId: view.threadId, mountId: view.mountId,
-        state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, queueOperation: view.queueOperation, queueDraft, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
+        state, attachment: view.attachment ? {...view.attachment} : undefined, background: view.background, mcpOperation: view.mcpOperation, queueOperation: view.queueOperation, queueDraft, policyRecheck: view.policyRecheck, noticeAnswer: view.noticeAnswer, task: view.task, stop: view.stop, submission: view.submission, opening: view.opening, openingId: view.launch?.id, cancelling: view.launch?.abort.signal.aborted, problem: view.problem, output: [...output] })
       if (output.length) view.sequence = output.at(-1)!.sequence
     } catch { drop(key) }
   }
@@ -279,7 +282,7 @@ export function createClaudeTerminalViews(dependencies: {
   }
   function attach(key: string, view: View, owner: ClaudeNativeTerminalOwner) {
     if (view.owner === owner) return
-    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.draftSessionId = undefined; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined; view.queueOperation = undefined
+    view.unsubscribe?.(); view.owner = owner; view.sequence = 0; view.submission = undefined; view.submissionRevision = 0; view.draftSessionId = undefined; view.task = undefined; view.noticeAnswer = undefined; view.mcpOperation = undefined; view.queueOperation = undefined; view.policyRecheck = undefined
     view.unsubscribe = owner.subscribe(() => {
       if (view.queued) return
       view.queued = true
@@ -467,6 +470,32 @@ export function createClaudeTerminalViews(dependencies: {
         }, error => {
           if (current()) { target.queueOperation = {...operation, status: 'error', problem: error instanceof Error ? error.message : refusal}; publish(key, target) }
         }).finally(() => { if (editing) queueEditsInFlight.delete(owner) })
+        return
+      }
+      if (event.type === 'CLAUDE_TERMINAL_POLICY_RECHECK') {
+        const {sessionId, viewRevision} = event
+        const sameScope = () => {
+          const state = owner.state
+          return state.status === 'live' && state.sessionId === sessionId && state.view?.kind === 'main'
+            && state.view.revision === viewRevision && !state.inputBlocked
+        }
+        if (!sameScope() || target.policyRecheck?.status === 'pending') return
+        const operation: NonNullable<ClaudeTerminalViewSnapshot['policyRecheck']> = {sessionId, viewRevision, status: 'pending'}
+        target.policyRecheck = operation; publish(key, target)
+        const current = () => views.get(key) === target && dependencies.get(event.threadId) === owner
+          && target.owner === owner && target.policyRecheck === operation
+        void Promise.resolve().then(async () => {
+          if (!current() || !sameScope()) throw new Error('Claude settings owner changed')
+          const result = await owner.uiTransport.request({subtype:'apack_managed_settings_recheck', session_id:sessionId, view_revision:viewRevision}) as {rechecked?: unknown}
+          if (result.rechecked !== true) throw new Error('Claude did not acknowledge the settings recheck')
+        }).then(() => {
+          if (current()) { target.policyRecheck = {...operation, status:'done'}; publish(key, target) }
+        }, error => {
+          if (current()) {
+            target.policyRecheck = {...operation, status:'error', problem: error instanceof Error ? error.message : 'Claude could not recheck managed settings'}
+            publish(key, target)
+          }
+        })
         return
       }
       if (event.type === 'CLAUDE_TERMINAL_NOTICE') {

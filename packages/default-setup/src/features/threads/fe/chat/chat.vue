@@ -44,7 +44,7 @@
           </template>
         </ClaudeNativeSession>
         <NativeMemoryPanel v-if="showMemory && memoryTarget" :key="memoryTarget.attachmentId" :target="memoryTarget" :busy="nativeComposerOwner?.busy" @close="closeMemory" />
-        <NativeManagedSettingsNotice v-if="!nativeTerminalActive && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" />
+        <NativeManagedSettingsNotice v-if="!nativeTerminalActive && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" :can-recheck="canRecheckManagedSettings" :recheck="managedSettingsRecheck" @recheck="recheckManagedSettings" />
         <section v-if="!nativeTerminalActive && workflowTasks.length" aria-label="Native Claude workflows" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in workflowTasks" :key="task.id" :data-native-workflow-id="task.id" class="py-1">
             <div class="flex items-center justify-between gap-3"><span class="min-w-0 break-words font-medium text-neutral-200">{{ task.name }}</span><span class="shrink-0 text-neutral-400">{{ task.status === 'killed' ? 'Stopped' : task.status }}</span></div>
@@ -382,6 +382,21 @@ const nativePromptQueue = computed(() => {
   if (owner?.view?.kind === 'main' && nativeComposerView.value?.threadId === thread?.id
     && owner.sessionId === thread?.context?.claudeCode?.sessionId) return owner.promptQueue
 })
+const canRecheckManagedSettings = computed(() => {
+  const owner = nativeComposerOwner.value
+  return owner?.view?.kind === 'main' && !owner.inputBlocked && nativeComposerView.value?.threadId === currentThread.value?.id
+    && owner.sessionId === currentThread.value?.context?.claudeCode?.sessionId
+    && nativeUiDrawing.value?.managedSettingsDiagnostics?.some(row => row.file === '/etc/claude-code/managed-settings.json' && row.errno === 'EACCES')
+})
+const managedSettingsRecheck = computed(() => {
+  const owner = nativeComposerOwner.value, operation = nativeComposerView.value?.policyRecheck
+  if (operation && owner?.sessionId === operation.sessionId && owner.view?.revision === operation.viewRevision) return operation
+})
+function recheckManagedSettings() {
+  const mount = nativeUiMount.value, owner = nativeComposerOwner.value
+  if (!mount || owner?.view?.kind !== 'main' || !canRecheckManagedSettings.value) return
+  send({type:'CLAUDE_TERMINAL_POLICY_RECHECK', ...mount, ownerId:owner.ownerId, sessionId:owner.sessionId, viewRevision:owner.view.revision})
+}
 const nativeQueueSendAvailable = computed(() => {
   const owner = nativeComposerOwner.value
   return !!nativePromptQueue.value && !!owner?.activeTurnId && !owner.endingTurnId && !owner.inputBlocked
