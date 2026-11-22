@@ -1583,7 +1583,7 @@ interface ClaudeNativeGenericToolPermissionDialogResponse {
     feedback?: string;
 }
 
-/** Exact permission_prompt; the original native payload supplies the tool identity. */
+/** Mounted tool approval presented by the shared desktop card. The native payload supplies the tool identity. */
 declare const ClaudeNativeGenericToolPermissionDialogSchema: z.ZodObject<{
     id: z.ZodString;
     revision: z.ZodString;
