@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core'
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
 import { rewriteClaudePromptSource } from './native-prompt-source.ts'
 import { createClaudePromptSuggestion } from './native-prompt-suggestion.ts'
 import { createClaudePromptDecorations, drawClaudePromptDecorations } from './native-prompt-decorations.ts'
@@ -127,10 +128,11 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
     const snapshot = captureClaudePromptDocument(editor.state.doc, editor.state.selection.head, serialize, editor.state.storedMarks ?? undefined)
     revision++
     if (fillPaint?.revision !== revision) fillPaint = undefined
+    if (!snapshot) { onProblem('Claude prompt hooks cannot map this editor selection'); return }
+    if (snapshot.text.length > CLAUDE_UI_TEXT_MAX_LENGTH) { onProblem(CLAUDE_UI_TEXT_LIMIT_MESSAGE); return }
     let finish!: (accepted: boolean) => void
     const done = new Promise<boolean>(resolve => { finish = resolve })
-    pending = snapshot ? { revision, snapshot, selection: editor.state.selection, done, finish } : undefined
-    if (!snapshot) { onProblem('Claude prompt hooks cannot map this editor selection'); return }
+    pending = { revision, snapshot, selection: editor.state.selection, done, finish }
     onProblem(undefined)
     const origin = by ?? (person ? 'person' : 'app')
     selectionKey = undefined
@@ -246,7 +248,7 @@ export function bindClaudePromptEditor(editor: Editor, send: (edit: ClaudePrompt
       return placeDraft(input, expectedRevision, 'app')
     },
     showSuggestion(text: string, expectedRevision: number): boolean {
-      if (disposed || editor.isDestroyed || editor.view.composing || revision !== expectedRevision || !editor.isEmpty || !text.trim() || text.length > 1000000 || (host && !host.canSuggest())) return false
+      if (disposed || editor.isDestroyed || editor.view.composing || revision !== expectedRevision || !editor.isEmpty || !text.trim() || text.length > CLAUDE_UI_TEXT_MAX_LENGTH || (host && !host.canSuggest())) return false
       const prepared = prepareDraft({ mode: 'replace', text }, expectedRevision)
       if (!prepared || prepared.before !== '') return false
       editor.view.dispatch(editor.state.tr.setMeta(suggestion.key, text))

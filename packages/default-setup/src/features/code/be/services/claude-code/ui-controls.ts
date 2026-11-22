@@ -3,7 +3,7 @@ import type { ClaudePrintClientProjection } from './print-client-bridge.ts'
 import { z } from 'zod'
 import type { ClaudePromptHost, createClaudePromptHosts } from './ui-prompt-host.ts'
 import { ClaudeProtocolError } from './errors.ts'
-import { CLAUDE_UI_TEXT_MAX_LENGTH } from './ui-text-limits.ts'
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from './ui-text-limits.ts'
 import type { ClaudeInitialization, createHostControls } from './host-controls.ts'
 
 const clientPointer = z.object({kind:z.literal('pointer'),type:z.enum(['down','move','up','enter','leave']),x:z.number().int().min(-1000000).max(1000000),y:z.number().int().min(-1000000).max(1000000),fine:z.object({x:z.number().finite().min(-1000000).max(1000000),y:z.number().finite().min(-1000000).max(1000000)}).strict().optional(),button:z.enum(['left','middle','right']).optional(),ctrl:z.literal(true).optional(),shift:z.literal(true).optional(),alt:z.literal(true).optional()}).strict()
@@ -312,6 +312,7 @@ export function createClaudeUiControls(initialized: () => Promise<Pick<ClaudeIni
     },
     /** Native owns prompt.edit hooks and latest-edit coalescing; app adoption raises no edit hook. */
     async promptEdit(options: ClaudeUiPromptEdit): Promise<ClaudeUiPromptFrame> {
+      if (typeof options.text === 'string' && options.text.length > CLAUDE_UI_TEXT_MAX_LENGTH) throw new ClaudeProtocolError(CLAUDE_UI_TEXT_LIMIT_MESSAGE)
       const valid = promptEdit.parse(options)
       const frame = promptFrame.parse(await request({ subtype: 'ui_prompt_edit', ...valid }))
       return frame.decorations?.length && printClients?.prompt ? promptFrame.parse({ ...frame, decorations: await printClients.prompt(valid.client_id, frame.decorations) }) : frame

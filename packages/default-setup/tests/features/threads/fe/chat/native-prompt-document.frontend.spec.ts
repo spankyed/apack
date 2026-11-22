@@ -1,3 +1,4 @@
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE, CLAUDE_UI_TEXT_MAX_LENGTH } from '#features/code/common/native-prompt-limits.ts'
 import { claudePromptThemeStyle, claudeUiColor } from '#features/threads/fe/chat/native-ui-paint.ts'
 import { Editor, Node } from '@tiptap/core'
 import { createClaudePromptDecorations, drawClaudePromptDecorations } from '#features/threads/fe/chat/native-prompt-decorations.ts'
@@ -989,4 +990,24 @@ it('refuses ambiguous serializer framing inside an empty middle paragraph', () =
   const doc = editor.state.doc, position = doc.firstChild!.nodeSize + 1
   expect(captureClaudePromptDocument(doc, position, serialize)).toBeUndefined()
   expect(editor.state.doc).toBe(doc)
+})
+
+it('keeps an oversized draft local and settles a shortened edit normally', async () => {
+  const send = vi.fn(), problem = vi.fn()
+  const bridge = bindClaudePromptEditor(editor, send, problem)
+  send.mockClear()
+  const draft = 'x'.repeat(CLAUDE_UI_TEXT_MAX_LENGTH) + 'Z'
+  editor.commands.setContent({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: draft }] }] })
+  expect(problem).toHaveBeenLastCalledWith(CLAUDE_UI_TEXT_LIMIT_MESSAGE)
+  expect(send).not.toHaveBeenCalled()
+  expect(editor.state.doc.textContent).toBe(draft)
+  await expect(bridge.settle()).resolves.toBe(false)
+
+  editor.commands.setContent('A shorter draft')
+  expect(problem).toHaveBeenLastCalledWith(undefined)
+  const sent = send.mock.lastCall![0]
+  expect(sent.text).toBe('A shorter draft')
+  bridge.receive({ revision: sent.revision, status: 'applied', frame: { text: sent.text, cursor: sent.cursor } })
+  await expect(bridge.settle()).resolves.toBe(true)
+  bridge.dispose()
 })

@@ -72,7 +72,7 @@
             @pause="pauseWork"
             @open-revert-menu="openRevertMenu"
           />
-          <p v-if="composerProblem" class="px-3 text-xs text-neutral-500" role="status">{{ composerProblem }}</p>
+          <p v-if="composerProblem && !nativeDraftTooLong" class="px-3 text-xs text-neutral-500" role="status">{{ composerProblem }}</p>
           <RevertHistoryPopup
             :open="revertMenuOpen"
             :anchor-el="inputCardRef"
@@ -93,6 +93,7 @@
 
         <!-- Keep the background explanation and actions visible while the draft scrolls. -->
         <div class="sticky bottom-0 z-10 shrink-0 bg-[#202022]">
+          <p v-if="nativeDraftTooLong" role="status" class="px-4 pt-2 text-xs leading-relaxed text-amber-200">{{ nativePromptProblem }}</p>
           <p v-if="nativeBackgrounded" role="status" data-background-note-hint class="px-4 pt-2 text-xs leading-relaxed text-neutral-400">This conversation moved to the background. Your notes stay here.</p>
           <div data-composer-toolbar class="flex shrink-0 items-center justify-between gap-3 px-3 pb-3 pt-2 text-neutral-500">
             <!-- Left side buttons -->
@@ -204,7 +205,7 @@
               <Button
                 type="submit"
                 aria-label="Send"
-                :disabled="nativeBackgrounded || nativeDecisionPending || nativeSendWaiting || submitting || (!hasTextContent && !hasAttachments) || disabled"
+                :disabled="nativeBackgrounded || nativeDecisionPending || nativeSendWaiting || nativeDraftTooLong || submitting || (!hasTextContent && !hasAttachments) || disabled"
                 class="h-8 gap-2 rounded-lg px-3 text-xs font-medium shadow-sm @lg:px-3.5"
               >
                 <span class="hidden @lg:inline">Send</span>
@@ -224,6 +225,7 @@
 <script setup lang="ts">
 import ClaudeChannelSettings from './ClaudeChannelSettings.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
+import { CLAUDE_UI_TEXT_LIMIT_MESSAGE } from '#features/code/common/native-prompt-limits.ts'
 import { CLAUDE_BUSY_DRAFT_MESSAGE, CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
 import { bindClaudeWindowDraft } from './native-window-draft.ts'
 import { ref, shallowRef, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
@@ -417,6 +419,7 @@ async function pressNativeAgentsGesture() {
   } catch (error) { if (epoch === composerEpoch) submissionProblem.value = error instanceof Error ? error.message : 'Claude agents could not be opened' }
 }
 const nativePromptProblem = ref<string>()
+const nativeDraftTooLong = computed(() => nativePromptProblem.value === CLAUDE_UI_TEXT_LIMIT_MESSAGE)
 const hostPopupActive = ref(false)
 // Keep the person's pane size when panes close/reopen or the plugin changes its request.
 const paneRowsPreference = ref<number>()
@@ -916,7 +919,7 @@ async function openNativePanel(command: '/config' | '/model' | '/tasks' | '/mcp'
 watch(() => props.nativeBackgrounded, (value, previous) => { if (value && !previous) composerEpoch++ })
 
 const handleSubmit = async () => {
-  if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || props.nativeSendWaiting || submitting.value) return
+  if (props.disabled || props.nativeDecisionPending || props.nativeBackgrounded || props.nativeSendWaiting || nativeDraftTooLong.value || submitting.value) return
   const editor = tiptapRef.value?.editor
   if (!editor) return
   const epoch = composerEpoch, bridge = promptEditor
@@ -930,7 +933,7 @@ const handleSubmit = async () => {
     if (bridge) {
       const revision = bridge.revision
       if (!await bridge.settle() || bridge.revision !== revision || promptEditor !== bridge) {
-        if (epoch === composerEpoch) submissionProblem.value = nativePromptProblem.value ?? 'Claude input changed while preparing this message. Send again.'
+        if (epoch === composerEpoch && !nativePromptProblem.value) submissionProblem.value = 'Claude input changed while preparing this message. Send again.'
         return
       }
     }
