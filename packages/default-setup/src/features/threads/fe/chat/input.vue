@@ -444,6 +444,9 @@ const composerProblem = computed(() => {
   if (rejected && (rejected.sessionChanged || rejected.sessionId !== props.currentThread?.context?.claudeCode?.sessionId)) {
     return CLAUDE_STALE_DRAFT_MESSAGE
   }
+  if (submissionProblem.value === CLAUDE_BUSY_DRAFT_MESSAGE && !props.isBusy && !props.nativeSendWaiting) {
+    return hasTextContent.value || hasAttachments.value ? 'Your draft was kept. Send it when you’re ready.' : nativePromptProblem.value
+  }
   return submissionProblem.value || nativePromptProblem.value
 })
 watch([() => tiptapRef.value?.editor, () => props.currentThread?.id], () => { rejectedNativeDraft.value = undefined }, { flush: 'sync' })
