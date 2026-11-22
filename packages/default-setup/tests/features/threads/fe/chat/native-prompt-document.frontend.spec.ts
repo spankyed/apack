@@ -505,23 +505,32 @@ it.each([
   bridge.dispose()
 })
 
-it('adopts a long structural rewrite even when decoration offsets cannot map within the diff budget', () => {
+it('preserves exact decoration boundaries through a long list rewrite', () => {
   editor.commands.setContent('seed')
   const send = vi.fn(), problem = vi.fn()
   const bridge = bindClaudePromptEditor(editor, send, problem)
-  const items = Array.from({ length: 2000 }, (_, index) => `Review release item ${index + 1}`)
+  const items = Array.from({ length: 2000 }, (_, index) => `Review release item ${Math.floor(index / 2) + 1}`)
   const text = items.map(item => `*   ${item}`).join('\n')
   const canonical = items.map(item => `- ${item}`).join('\n')
+  const last = text.lastIndexOf('\n') + 1
   bridge.receive({
     revision: bridge.revision,
     status: 'applied',
-    frame: { text, cursor: text.length, decorations: [{ start: 0, end: 10, color: 'red' }] },
+    frame: { text, cursor: text.length, decorations: [
+      { start: 0, end: 10, color: 'red' },
+      { start: last + 1, end: last + 10, underline: true },
+    ] },
   })
   const draft = bridge.readDraft()
   expect(draft?.text === canonical).toBe(true)
   expect(draft?.cursor).toBe(canonical.length)
   expect(send.mock.lastCall?.[0]?.by).toBe('app')
   expect(send.mock.lastCall?.[0]?.text === canonical).toBe(true)
+  const rows = editor.view.dom.querySelectorAll('li')
+  expect(rows[0]?.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
+  expect(rows[1]?.querySelector('.claude-prompt-decoration')).toBeNull()
+  expect(rows[rows.length - 2]?.querySelector('.claude-prompt-decoration')).toBeNull()
+  expect(rows[rows.length - 1]?.querySelector('.claude-prompt-decoration')?.textContent).toBe('Review')
   expect(problem).toHaveBeenLastCalledWith(undefined)
   bridge.dispose()
 })

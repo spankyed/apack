@@ -141,6 +141,32 @@ function normalizedClaudePromptOffsets(source: string, canonical: string, offset
   return mapped.size === requested.length ? mapped : undefined
 }
 
+/** Expose visible boundaries in lists whose serialization only normalizes bullet prefixes. */
+function listPaintBoundaries(source: string, canonical: string, offsets: readonly number[]): Map<number, number> | undefined {
+  const rawLines = source.split('\n'), canonicalLines = canonical.split('\n')
+  if (rawLines.length !== canonicalLines.length) return
+  const requested = [...new Set(offsets)].sort((a, b) => a - b), boundaries = new Map<number, number>()
+  let start = 0, index = 0, moved = false
+  for (const [lineIndex, raw] of rawLines.entries()) {
+    const normalized = canonicalLines[lineIndex]!
+    let visibleStart = start
+    if (raw !== normalized) {
+      const before = /^( *)(?:[*+-])[ \t]+(?=\S)/.exec(raw), after = /^( *)(?:[*+-])[ \t]+(?=\S)/.exec(normalized)
+      if (!before || !after || before[1] !== after[1] || raw.slice(before[0].length) !== normalized.slice(after[0].length)) return
+      visibleStart += before[0].length
+    }
+    const end = start + raw.length
+    while (index < requested.length && requested[index]! <= end) {
+      const offset = requested[index++]!
+      const visible = Math.max(offset, visibleStart)
+      moved ||= visible !== offset
+      boundaries.set(offset, visible)
+    }
+    start = end + 1
+  }
+  if (moved && boundaries.size === requested.length) return boundaries
+}
+
 /** Apply native Markdown structure through the editor schema while retaining unchanged atom attributes. */
 export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, frame: { text: string; cursor: number }, serialize: ClaudePromptSerializer, parse?: (text: string) => ProseMirrorNode, offsets: readonly number[] = []): { doc: ProseMirrorNode; position: number; storedMarks?: readonly Mark[]; normalized?: boolean; sourcePositions?: ReadonlyMap<number, number>; sourceOffsets?: ReadonlyMap<number, number> } | undefined {
   const textOnly = rewriteClaudePromptText(snapshot, frame, serialize)
@@ -199,6 +225,21 @@ export function rewriteClaudePromptDocument(snapshot: ClaudePromptDocument, fram
       return {doc, sourcePositions, markerMarks}
     }
     let located = locate(requested), sourceOffsets: ReadonlyMap<number, number> | undefined
+    if (!located && !canonicalSource && offsets.length) {
+      // A global diff is quadratic across many normalized bullet markers. Probe the visible
+      // boundaries directly after proving the normalization preserved each line's content.
+      const boundaries = listPaintBoundaries(frame.text, canonicalText, offsets)
+      if (boundaries) {
+        located = locate([...new Set([frame.cursor, ...boundaries.values()])].sort((a, b) => a - b))
+        if (located) {
+          const sourcePositions = new Map([[frame.cursor, located.sourcePositions.get(frame.cursor)!]])
+          for (const [offset, visible] of boundaries) {
+            if (offset !== frame.cursor) sourcePositions.set(offset, located.sourcePositions.get(visible)!)
+          }
+          located = { ...located, sourcePositions }
+        }
+      }
+    }
     if (!located && !canonicalSource && offsets.length) {
       // Paint may touch hidden delimiters even when the native caret and document are valid.
       // Verify the caret separately, then project paint inward through canonical serialization.
