@@ -56,7 +56,7 @@ export interface ClaudeNativeTerminalSession {
 export interface ClaudeNativePromptQueue {
   revision: string
   count: number
-  items: { id: string; text: string; editable: boolean }[]
+  items: { id: string; text: string; editable: boolean; cancellable: boolean }[]
 }
 
 export interface ClaudeNativeTerminalState {

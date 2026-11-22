@@ -1880,11 +1880,11 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
         }, z.core.$strict>>;
         ide: z.ZodOptional<z.ZodObject<{
             stage: z.ZodEnum<{
-                finished: "finished";
                 selection: "selection";
                 enable: "enable";
                 disable: "disable";
                 connecting: "connecting";
+                finished: "finished";
             }>;
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
@@ -1959,8 +1959,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
                 loading: z.ZodBoolean;
                 copyState: z.ZodOptional<z.ZodEnum<{
                     error: "error";
-                    pending: "pending";
                     idle: "idle";
+                    pending: "pending";
                     saved: "saved";
                 }>>;
                 insight: z.ZodOptional<z.ZodString>;
@@ -2202,8 +2202,8 @@ declare const ClaudeNativeNoticeSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 }, z.core.$strip>, z.ZodObject<{
     kind: z.ZodLiteral<"effort_preference_result">;
     severity: z.ZodEnum<{
-        warning: "warning";
         feedback: "feedback";
+        warning: "warning";
     }>;
     title: z.ZodString;
     paragraphs: z.ZodArray<z.ZodString>;
@@ -2610,6 +2610,7 @@ interface ClaudeNativePromptQueue {
         id: string;
         text: string;
         editable: boolean;
+        cancellable: boolean;
     }[];
 }
 
@@ -3521,6 +3522,9 @@ type ClaudeTerminalViewRequest = {
     type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW';
 } | {
     type: 'CLAUDE_TERMINAL_QUEUE_EDIT';
+    itemId: string;
+} | {
+    type: 'CLAUDE_TERMINAL_QUEUE_CANCEL';
     itemId: string;
 })) | {
     type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED';
@@ -11351,11 +11355,11 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
     }, z.core.$strict>>;
     ide: z.ZodOptional<z.ZodObject<{
         stage: z.ZodEnum<{
-            finished: "finished";
             selection: "selection";
             enable: "enable";
             disable: "disable";
             connecting: "connecting";
+            finished: "finished";
         }>;
         title: z.ZodString;
         description: z.ZodOptional<z.ZodString>;
@@ -11430,8 +11434,8 @@ declare const claudeSettingsSnapshot: z.ZodObject<{
             loading: z.ZodBoolean;
             copyState: z.ZodOptional<z.ZodEnum<{
                 error: "error";
-                pending: "pending";
                 idle: "idle";
+                pending: "pending";
                 saved: "saved";
             }>>;
             insight: z.ZodOptional<z.ZodString>;

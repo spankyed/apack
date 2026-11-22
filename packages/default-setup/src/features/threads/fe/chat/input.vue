@@ -62,7 +62,10 @@
             <span v-if="!queueExpanded || nativePromptQueue.count === 1" class="min-w-0 flex-1 truncate text-neutral-400">{{ nativePromptQueue.items[0]?.text }}</span>
             <button v-if="nativePromptQueue.count === 1 && nativePromptQueue.items[0]?.editable && nativeQueueSendAvailable"
               type="button" class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
-              :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, nativePromptQueue.items[0].id)">Edit</button>
+              :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, {kind:'edit', id:nativePromptQueue.items[0].id})">Edit</button>
+            <button v-if="nativePromptQueue.count === 1 && nativePromptQueue.items[0]?.cancellable && nativeQueueSendAvailable"
+              type="button" aria-label="Cancel queued prompt" class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+              :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, {kind:'cancel', id:nativePromptQueue.items[0].id})">Cancel</button>
             <button v-if="nativeQueueSendAvailable" type="button" class="ml-auto shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
               :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision)">Send now</button>
           </div>
@@ -71,7 +74,10 @@
               <span class="min-w-0 flex-1 truncate text-neutral-400">{{ item.text }}</span>
               <button v-if="item.editable && nativeQueueSendAvailable" :aria-label="`Edit queued prompt: ${item.text}`" type="button"
                 class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
-                :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, item.id)">Edit</button>
+                :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, {kind:'edit', id:item.id})">Edit</button>
+              <button v-if="item.cancellable && nativeQueueSendAvailable" :aria-label="`Cancel queued prompt: ${item.text}`" type="button"
+                class="shrink-0 rounded px-1.5 py-1 text-neutral-300 hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-50"
+                :disabled="queueActionPending" @click="emit('native-queue-action', nativePromptQueue.revision, {kind:'cancel', id:item.id})">Cancel</button>
             </li>
           </ul>
         </section>
@@ -372,7 +378,7 @@ const emit = defineEmits<{
   (e: 'summarize-from-here', messageId: string): void
   (e: 'native-prompt-autocomplete', request: import('#generated/types.ts').ClaudePromptCompletionRequest): void
   (e: 'native-prompt-host-response', response: import('#generated/types.ts').ClaudePromptHostResponse): void
-  (e: 'native-queue-action', revision: string, itemId?: string): void
+  (e: 'native-queue-action', revision: string, action?: {kind: 'edit' | 'cancel'; id: string}): void
   (e: 'native-queue-edit-applied', itemId: string): void
   (e: 'native-agents-gesture', request: { mountId: string; revision: number }): void
   (e: 'native-prompt-edit', edit: import('#generated/types.ts').ClaudePromptEdit): void

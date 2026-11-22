@@ -1830,6 +1830,7 @@ const threadsState = setup({
     CLAUDE_BACKGROUND_INPUT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_BACKGROUND_RESIZE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_BACKGROUND_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_QUEUE_CANCEL: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_QUEUE_EDIT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_QUEUE_SEND_NOW: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },

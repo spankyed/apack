@@ -22,7 +22,7 @@ export type ClaudeTerminalViewRequest = { threadId: string; mountId: string } & 
   | { type: 'CLAUDE_TERMINAL_RESIZE'; ownerId: string; columns: number; rows: number; cell?: {width:number;height:number} }
   | ({ type: 'CLAUDE_TERMINAL_TASK'; ownerId: string; sessionId: string; revision: number; taskId: string } & ({ operation: 'inspect' | 'stop' | 'foreground' | 'background' | 'pause_workflow' | 'resume_workflow' } | { operation: 'send' | 'input'; text: string } | { operation: 'skip_worker' | 'retry_worker'; worker: import('#features/code/common/native-terminal.ts').ClaudeNativeWorkflowWorkerTarget }))
   | ({ ownerId: string; sessionId: string; viewRevision: number; turnId: string; queueRevision: string; sequence: number } & (
-      { type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' } | { type: 'CLAUDE_TERMINAL_QUEUE_EDIT'; itemId: string }
+      { type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' } | { type: 'CLAUDE_TERMINAL_QUEUE_EDIT'; itemId: string } | { type: 'CLAUDE_TERMINAL_QUEUE_CANCEL'; itemId: string }
     ))
   | { type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED'; ownerId: string; sessionId: string; itemId: string }
   | { type: 'CLAUDE_TERMINAL_NOTICE'; ownerId: string; notice: import('#features/code/common/native-notice.ts').ClaudeNativeNoticeResponse }
@@ -420,8 +420,13 @@ export function createClaudeTerminalViews(dependencies: {
         publish(key, target)
         return
       }
-      if (event.type === 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' || event.type === 'CLAUDE_TERMINAL_QUEUE_EDIT') {
+      if (event.type === 'CLAUDE_TERMINAL_QUEUE_SEND_NOW' || event.type === 'CLAUDE_TERMINAL_QUEUE_EDIT' || event.type === 'CLAUDE_TERMINAL_QUEUE_CANCEL') {
         const editing = event.type === 'CLAUDE_TERMINAL_QUEUE_EDIT'
+        const cancelling = event.type === 'CLAUDE_TERMINAL_QUEUE_CANCEL'
+        const itemId = 'itemId' in event ? event.itemId : undefined
+        const subtype = editing ? 'apack_main_queue_edit' : cancelling ? 'apack_main_queue_cancel' : 'apack_main_queue_send_now'
+        const refusal = editing ? 'Claude could not return the queued prompt'
+          : cancelling ? 'Claude could not cancel the queued prompt' : 'Claude could not send the waiting prompts now'
         const {sessionId, viewRevision, turnId, queueRevision, sequence} = event
         const previous = target.queueOperation
         const scopeCurrent = () => {
@@ -429,10 +434,11 @@ export function createClaudeTerminalViews(dependencies: {
           return state.status === 'live' && !state.inputBlocked && state.sessionId === sessionId
             && state.view?.kind === 'main' && state.view.revision === viewRevision && state.activeTurnId === turnId
             && !state.endingTurnId && state.promptQueue?.revision === queueRevision
-            && (!editing || queueDrafts.get(owner)?.draft.sessionId !== sessionId
-              && state.promptQueue.items.some(row => row.id === event.itemId && row.editable))
+            && (!editing || queueDrafts.get(owner)?.draft.sessionId !== sessionId)
+            && (!itemId || state.promptQueue.items.some(row => row.id === itemId && (editing ? row.editable : row.cancellable)))
         }
         if (typeof queueRevision !== 'string' || !/^[a-f0-9]{64}$/.test(queueRevision) || typeof turnId !== 'string' || !turnId
+          || (editing || cancelling) && (typeof itemId !== 'string' || !itemId)
           || editing && queueEditsInFlight.has(owner) || !scopeCurrent() || !Number.isSafeInteger(sequence) || sequence <= (previous?.sequence ?? 0) || previous?.status === 'pending') return
         const operation: NonNullable<ClaudeTerminalViewSnapshot['queueOperation']> = {sequence, sessionId, viewRevision, queueRevision, status: 'pending'}
         if (editing) queueEditsInFlight.add(owner)
@@ -442,15 +448,15 @@ export function createClaudeTerminalViews(dependencies: {
         void Promise.resolve().then(async () => {
           if (!current() || !scopeCurrent()) throw new Error('The Claude queue changed before the request')
           const result = await owner.uiTransport.request({
-            subtype: editing ? 'apack_main_queue_edit' : 'apack_main_queue_send_now',
+            subtype,
             session_id: sessionId, view_revision: viewRevision, turn_id: turnId, queue_revision: queueRevision,
-            ...(editing ? {item_id: event.itemId} : {}),
-          }) as {handled?: unknown; restored?: {id?: unknown; text?: unknown}}
-          if (result.handled !== true) throw new Error(editing ? 'Claude could not return the queued prompt' : 'Claude could not send the waiting prompts now')
+            ...(itemId ? {item_id: itemId} : {}),
+          }) as {handled?: unknown; cancelled?: unknown; restored?: {id?: unknown; text?: unknown}}
+          if (result.handled !== true || cancelling && result.cancelled !== itemId) throw new Error(refusal)
           if (!editing) return
-          if (result.restored?.id !== event.itemId || typeof result.restored.text !== 'string'
+          if (!itemId || result.restored?.id !== itemId || typeof result.restored.text !== 'string'
             || result.restored.text.length > CLAUDE_UI_TEXT_MAX_LENGTH) throw new Error('Claude did not return the selected draft')
-          return {id: event.itemId, text: result.restored.text}
+          return {id: itemId, text: result.restored.text}
         }).then(restored => {
           const sameView = current()
           if (restored && dependencies.get(event.threadId) === owner && owner.state.sessionId === sessionId) {
@@ -459,7 +465,7 @@ export function createClaudeTerminalViews(dependencies: {
           if (sameView) { target.queueOperation = {...operation, status: 'done'}; publish(key, target) }
           else if (restored) for (const [id, candidate] of views) if (candidate.owner === owner) publish(id, candidate)
         }, error => {
-          if (current()) { target.queueOperation = {...operation, status: 'error', problem: error instanceof Error ? error.message : 'Send now failed'}; publish(key, target) }
+          if (current()) { target.queueOperation = {...operation, status: 'error', problem: error instanceof Error ? error.message : refusal}; publish(key, target) }
         }).finally(() => { if (editing) queueEditsInFlight.delete(owner) })
         return
       }

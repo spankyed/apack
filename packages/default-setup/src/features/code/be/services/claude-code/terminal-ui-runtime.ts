@@ -452,6 +452,7 @@ function installHosts(n){
  n.runtime.Zao(wrappedContext);
 }
 let preparedPrompt;
+const desktopQueuedPrompts=new Set();
 function nativeUnknownCommandRefusal(n,messages){
  if(typeof preparedPrompt?.text!=='string')return;
  const name=n.commandInput.IS(preparedPrompt.text.trimEnd())?.commandName;
@@ -471,11 +472,16 @@ function canEditNativeQueuedText(n,item){
 }
 function nativeMainPromptQueue(n,queue){
  const rows=queue.filter(item=>isNativeMainHumanPrompt(n,item)&&typeof (item.preExpansionValue??item.value)==='string');
+ if(desktopQueuedPrompts.size){
+  const liveIds=new Set(queue.map(item=>item.uuid));
+  for(const id of desktopQueuedPrompts)if(!liveIds.has(id))desktopQueuedPrompts.delete(id);
+ }
  if(!rows.length)return null;
  const items=rows.slice(0,12).map(item=>({
   id:item.uuid,
   text:(item.preExpansionValue??item.value).trim().slice(0,240).replace(/[\uD800-\uDBFF]$/u,''),
   editable:canEditNativeQueuedText(n,item),
+  cancellable:desktopQueuedPrompts.has(item.uuid),
  }));
  // Include waiting work that may join delivery even when the preview shows only human text.
  const revision=createHash('sha256').update(JSON.stringify(queue.map(item=>[item.uuid,item.mode,item.priority,item.screeningPending===true]))).digest('hex');
@@ -540,6 +546,19 @@ function editNativeQueuedPrompt(n,request,abort){
   return {handled:true,restored:{id:request.item_id,text:result.text}};
  });
 }
+function cancelNativeQueuedPrompt(n,request,abort){
+ return dispatchNativeQueueAction(n,request,abort,({commands,messageQueue,queue})=>{
+  const id=request.item_id;
+  if(!queue.items.some(row=>row.id===id&&row.cancellable)||messageQueue.isFoldInFlight(id))return {handled:false};
+  const selected=commands.find(item=>item.uuid===id&&isNativeMainHumanPrompt(n,item));
+  if(!selected)return {handled:false};
+  // The original queue retains removal accounting and discard notifications for the addressed sender's prompt.
+  const removed=messageQueue.removeByFilter(item=>item===selected,{reason:'cancelled_by_sender'});
+  if(removed.length!==1)return {handled:false};
+  desktopQueuedPrompts.delete(id);
+  return {handled:true,cancelled:id};
+ });
+}
 async function promptOutcome(n,id){
  const interruptions=await nativeInterruptionModule();
  if(!preparedPrompt||preparedPrompt.id!==id)return {};
@@ -552,7 +571,11 @@ async function promptOutcome(n,id){
    // Original zp / Gp identifies the main Agent by its real session-bound ID.
    const matches=queue.getCommandQueueSnapshot().filter(item=>isNativeMainHumanPrompt(n,item)&&!beforeQueue.has(item.uuid)
     &&(item.preExpansionValue??item.value)===text.trim());
-   if(matches.length===1)return {queued:matches[0].uuid};
+   if(matches.length===1){
+    const queued=matches[0].uuid;
+    desktopQueuedPrompts.add(queued);
+    return {queued};
+   }
   }
   if(candidates.length===0){const reason=nativeUnknownCommandRefusal(n,messages);return reason===undefined?{}:{drop:reason};}
   if(candidates.length!==1)return {};
@@ -991,6 +1014,7 @@ async function control(request,abort){
  }
  if(request.subtype==='apack_main_queue_send_now')return sendNativeQueueNow(n,request,abort);
  if(request.subtype==='apack_main_queue_edit')return editNativeQueuedPrompt(n,request,abort);
+ if(request.subtype==='apack_main_queue_cancel')return cancelNativeQueuedPrompt(n,request,abort);
  if(request.subtype==='apack_native_agents_gesture')return await dispatchNativeAgentsGesture(n,request);
  if(request.subtype==='apack_native_notice')return {...await readNativeNoticeSnapshot(n,abort.signal),handoffPending:nativeAgentsParkState(n)};
  if(request.subtype==='apack_answer_native_notice'){
@@ -1520,7 +1544,7 @@ const server=http.createServer(async(request,response)=>{
   if(seen.has(body.sequence)||body.sequence<=highestSequence-4096||inFlight>=64)return reply(409,{...identity,error:'Native UI request is repeated, stale or exceeds its concurrent limit'});
   highestSequence=Math.max(highestSequence,body.sequence);seen.add(body.sequence);for(const sequence of seen)if(sequence<=highestSequence-4096)seen.delete(sequence);inFlight++;
   try{
-   while(activeSession!==body.sessionId){if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during client retirement');await (sessionTransition??=(async()=>{await retireNativeAgentCommands();if(native){nativeRasterMirrors.detach();native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();actionKeys.clear(native);clients.clear();nativeIdeContextLeases.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();composerFrames.clear();composerSeen.clear();composerClocks.clear();terminalPlacementFrames.clear();terminalTimestampSeen.clear();terminalPlacementSeen.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;resetNotices(body.sessionId);activeSession=body.sessionId;})().finally(()=>{sessionTransition=undefined;}));}
+   while(activeSession!==body.sessionId){if(JSON.parse(readFileSync(configUrl,'utf8')).sessionId!==body.sessionId)throw Error('Native session changed during client retirement');await (sessionTransition??=(async()=>{await retireNativeAgentCommands();if(native){nativeRasterMirrors.detach();native.nativeClients.detach();for(const key of sites.keys())dropSite(native,key);for(const id of clients){clearEdit(id);clearCompletion(id);await native.session.d2t(id,'detach');}restoreHosts(native);}instanceLifetimes.clear();actionKeys.clear(native);clients.clear();nativeIdeContextLeases.clear();clientViews.clear();commandOutputFrames.clear();toolResultFrames.clear();toolUseFrames.clear();toolProgressFrames.clear();toolGroupFrames.clear();toolGroupSnapshot=undefined;toolGroupRevisions.clear();composerFrames.clear();composerSeen.clear();composerClocks.clear();terminalPlacementFrames.clear();terminalTimestampSeen.clear();terminalPlacementSeen.clear();questionFrames.clear();questionFrameHistory.clear();frozenQuestionFrames.clear();preparedPrompt=undefined;desktopQueuedPrompts.clear();resetNotices(body.sessionId);activeSession=body.sessionId;})().finally(()=>{sessionTransition=undefined;}));}
    const beforeControl=JSON.parse(readFileSync(configUrl,'utf8'));if(beforeControl.sessionId!==body.sessionId||beforeControl.transportEpoch!==body.transportEpoch)throw Error('Native owner changed before UI request');
    const result=await control(body.request,abort);
    const after=JSON.parse(readFileSync(configUrl,'utf8'));if(after.sessionId!==body.sessionId||after.transportEpoch!==body.transportEpoch)throw Error('Native owner changed during UI request');

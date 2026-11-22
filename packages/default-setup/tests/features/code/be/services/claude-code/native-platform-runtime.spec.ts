@@ -115,3 +115,30 @@ it('preserves the original theme storage reader, path, filename predicate, key f
     for (const field of fields) expect(module[field]).toBe(original[spec.exports[field]])
   }
 })
+
+
+it('uses the original queue removal for only the selected desktop prompt and refuses a fold in progress', () => {
+  const source = claudeTerminalUiRuntime
+  const ast: any = parse(source, {ecmaVersion: 'latest', sourceType: 'module'})
+  const control = ast.body.find((node: any) => node.type === 'FunctionDeclaration' && node.id.name === 'cancelNativeQueuedPrompt')
+  const selected = {uuid: 'desktop'}, other = {uuid: 'neighbor'}
+  const commands = [selected, other], desktopQueuedPrompts = new Set([selected.uuid])
+  const queue = {items: [{id: selected.uuid, cancellable: true}, {id: other.uuid, cancellable: false}]}
+  const messageQueue = {
+    isFoldInFlight: vi.fn(() => false),
+    removeByFilter: vi.fn((matches: (command: {uuid: string}) => boolean, _reason: {reason: string}) => commands.filter(matches)),
+  }
+  const cancel = vm.runInNewContext(source.slice(control.start, control.end) + ';cancelNativeQueuedPrompt', {
+    dispatchNativeQueueAction: (_n: unknown, _request: unknown, _abort: unknown, run: (scope: object) => unknown) => run({commands, messageQueue, queue}),
+    isNativeMainHumanPrompt: () => true,
+    desktopQueuedPrompts,
+  })
+  expect(cancel({}, {item_id: other.uuid}, {})).toEqual({handled: false})
+  messageQueue.isFoldInFlight.mockReturnValueOnce(true)
+  expect(cancel({}, {item_id: selected.uuid}, {})).toEqual({handled: false})
+  expect(messageQueue.removeByFilter).not.toHaveBeenCalled()
+  expect(cancel({}, {item_id: selected.uuid}, {})).toEqual({handled: true, cancelled: selected.uuid})
+  expect(messageQueue.removeByFilter).toHaveBeenCalledExactlyOnceWith(expect.any(Function), {reason: 'cancelled_by_sender'})
+  expect(messageQueue.removeByFilter.mock.results[0].value).toEqual([selected])
+  expect(desktopQueuedPrompts.size).toBe(0)
+})

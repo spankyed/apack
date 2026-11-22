@@ -402,13 +402,13 @@ function acknowledgeNativeQueueEdit(itemId: string) {
   send({type: 'CLAUDE_TERMINAL_QUEUE_EDIT_APPLIED', ...view, ownerId: owner.ownerId, sessionId: owner.sessionId, itemId})
 }
 let nativeQueueSequence = 0
-function operateNativeQueue(queueRevision: string, itemId?: string) {
+function operateNativeQueue(queueRevision: string, action?: {kind: 'edit' | 'cancel'; id: string}) {
   const view = nativeUiMount.value, owner = nativeComposerOwner.value
   if (!view || owner?.view?.kind !== 'main' || !owner.activeTurnId || !nativeQueueSendAvailable.value
-    || nativePromptQueue.value?.revision !== queueRevision || nativeQueueOperation.value?.status === 'pending' || itemId && nativeQueueDraft.value) return
+    || nativePromptQueue.value?.revision !== queueRevision || nativeQueueOperation.value?.status === 'pending' || action?.kind === 'edit' && nativeQueueDraft.value) return
   const request = {...view, ownerId: owner.ownerId, sessionId: owner.sessionId,
     viewRevision: owner.view.revision, turnId: owner.activeTurnId, queueRevision, sequence: ++nativeQueueSequence}
-  if (itemId) send({type: 'CLAUDE_TERMINAL_QUEUE_EDIT', ...request, itemId})
+  if (action) send({type: action.kind === 'edit' ? 'CLAUDE_TERMINAL_QUEUE_EDIT' : 'CLAUDE_TERMINAL_QUEUE_CANCEL', ...request, itemId: action.id})
   else send({type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW', ...request})
 }
 const nativeSendWaiting = computed(() => {

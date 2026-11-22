@@ -770,7 +770,7 @@ it('forwards Send now only from the live window and with the current turn and qu
     const state = f.owner.state
     state.view = {kind: 'main', revision: 4}
     state.activeTurnId = 'live-turn'
-    state.promptQueue = {revision: queueRevision, count: 1, items: [{id: randomUUID(), text: 'Waiting follow-up', editable: true}]}
+    state.promptQueue = {revision: queueRevision, count: 1, items: [{id: randomUUID(), text: 'Waiting follow-up', editable: true, cancellable: true}]}
     f.views.handle(mount, 'one', f.send)
     const action = {...mount, type: 'CLAUDE_TERMINAL_QUEUE_SEND_NOW', ownerId: state.ownerId, sessionId: state.sessionId,
       viewRevision: 4, turnId: state.activeTurnId, queueRevision, sequence: 1} as const
@@ -797,8 +797,8 @@ it('retains a selected queue edit across window detach and accepts only the reci
     state.view = {kind: 'main', revision: 4}
     state.activeTurnId = 'live-turn'
     state.promptQueue = {revision: queueRevision, count: 2, items: [
-      {id: first, text: 'Keep waiting', editable: true},
-      {id: selected, text: 'Return to the draft', editable: true},
+      {id: first, text: 'Keep waiting', editable: true, cancellable: true},
+      {id: selected, text: 'Return to the draft', editable: true, cancellable: true},
     ]}
     const second = {...mount, mountId: randomUUID()}
     const sendSecond = vi.fn<(reply: ClaudeTerminalViewReply) => void>()
@@ -823,5 +823,33 @@ it('retains a selected queue edit across window detach and accepts only the reci
     expect(sendSecond.mock.calls.at(-1)![0].queueDraft?.id).toBe(selected)
     f.views.handle(ack, 'two', sendSecond)
     expect(sendSecond.mock.calls.at(-1)![0].queueDraft).toBeUndefined()
+  } finally { f.views.clear() }
+})
+
+
+it('requires an owned cancellable queue item and the matching native cancellation receipt', async () => {
+  const f = fixture()
+  try {
+    const queueRevision = 'a'.repeat(64), eligible = randomUUID(), native = randomUUID(), state = f.owner.state
+    state.view = {kind: 'main', revision: 4}
+    state.activeTurnId = 'live-turn'
+    state.promptQueue = {revision: queueRevision, count: 2, items: [
+      {id: eligible, text: 'Desktop prompt', editable: true, cancellable: true},
+      {id: native, text: 'Ordinary terminal prompt', editable: true, cancellable: false},
+    ]}
+    f.views.handle(mount, 'one', f.send)
+    const action = {...mount, type: 'CLAUDE_TERMINAL_QUEUE_CANCEL', ownerId: state.ownerId, sessionId: state.sessionId,
+      viewRevision: 4, turnId: state.activeTurnId, queueRevision, sequence: 1, itemId: eligible} as const
+    const request = vi.mocked(f.owner.uiTransport.request)
+    f.views.handle({...action, itemId: native}, 'one', f.send)
+    f.views.handle({...action, queueRevision: 'b'.repeat(64)}, 'one', f.send)
+    expect(request).not.toHaveBeenCalled()
+    request.mockResolvedValueOnce({handled: true, cancelled: native})
+    f.views.handle(action, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].queueOperation?.status).toBe('error'))
+    request.mockResolvedValueOnce({handled: true, cancelled: eligible})
+    f.views.handle({...action, sequence: 2}, 'one', f.send)
+    await vi.waitFor(() => expect(f.send.mock.calls.at(-1)![0].queueOperation?.status).toBe('done'))
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({subtype: 'apack_main_queue_cancel', item_id: eligible}))
   } finally { f.views.clear() }
 })
