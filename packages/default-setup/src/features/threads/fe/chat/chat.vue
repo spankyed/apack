@@ -290,6 +290,7 @@ import NativeManagedTasks from './NativeManagedTasks.vue'
 import NativeMcpForm from './NativeMcpForm.vue'
 import NativeMcpUrl from './NativeMcpUrl.vue'
 import type { ClaudeComposerSubmitResult } from './native-submit.ts'
+import { CLAUDE_STALE_DRAFT_MESSAGE } from '#features/code/common/native-terminal.ts'
 import NativeAgentView from './NativeAgentView.vue'
 import type { ClaudeAgentDraftSnapshot } from './native-agent-draft.ts'
 import type { ClaudeAgentScrollPosition } from './native-agent-scroll.ts'
@@ -801,14 +802,14 @@ function pauseNativeQuestion(identity: import('#features/code/be/services/claude
 }
 
 let nativeSendRevision = 0
-const pendingNativeSend = ref<{ ownerId: string; revision: number; threadId: string; stageRevision?: string; resolve(result?: ClaudeComposerSubmitResult): void; reject(error: Error): void }>()
+const pendingNativeSend = ref<{ ownerId: string; sessionId: string; revision: number; threadId: string; stageRevision?: string; resolve(result?: ClaudeComposerSubmitResult): void; reject(error: Error): void }>()
 function submitNativeMessage(text: string, references: MessageReferences): Promise<ClaudeComposerSubmitResult> {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value
   if (nativeQuotaDecisionPending.value) return Promise.reject(new Error('Choose how to continue before sending'))
   if (!mount || !owner || pendingNativeSend.value) return Promise.reject(new Error('Claude input is not ready'))
   return new Promise((resolve, reject) => {
     const revision = ++nativeSendRevision
-    pendingNativeSend.value = { ownerId: owner.ownerId, revision, threadId: mount.threadId, stageRevision: readClaudeComposerPhase(mount.threadId)?.revision, resolve, reject }
+    pendingNativeSend.value = { ownerId: owner.ownerId, sessionId: owner.sessionId, revision, threadId: mount.threadId, stageRevision: readClaudeComposerPhase(mount.threadId)?.revision, resolve, reject }
     send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, sessionId: owner.sessionId, revision, text, references, phase: currentPhase.value === 'Plan' ? 'Plan' : 'Edit' })
     pendingScrollOnSend.value = true
   })
@@ -820,7 +821,16 @@ watch(nativeComposerView, view => {
     pendingNativeSend.value = undefined; pending.reject(new Error('Claude conversation owner changed')); return
   }
   const result = view.submission
-  if (result?.ownerId !== pending.ownerId || result.revision !== pending.revision || result.status === 'pending') return
+  if (result?.ownerId !== pending.ownerId || result.revision !== pending.revision) {
+    // A request that has not been admitted cannot follow the owner into the next session.
+    // A matching pending command can reset its own session and still acknowledge completion.
+    if (view.state.sessionId !== pending.sessionId) {
+      pendingNativeSend.value = undefined
+      pending.reject(new Error(CLAUDE_STALE_DRAFT_MESSAGE))
+    }
+    return
+  }
+  if (result.status === 'pending') return
   pendingNativeSend.value = undefined
   if (result.status === 'accepted') {
     if (result.receipt && pending.stageRevision) commitClaudeComposerPhase(pending.threadId, pending.stageRevision)
