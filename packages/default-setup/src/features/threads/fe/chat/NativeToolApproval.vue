@@ -172,7 +172,7 @@ function approve() {
 </script>
 
 <style scoped>
-.native-tool-approval { display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; overflow: hidden; border: 1px solid rgb(255 255 255 / .1); border-radius: 12px; background: #232323; color: #e5e5e5; }
+.native-tool-approval { container: native-approval / inline-size; display: flex; flex-direction: column; min-height: 0; flex: 0 1 auto; overflow: hidden; border: 1px solid rgb(255 255 255 / .1); border-radius: 12px; background: #232323; color: #e5e5e5; }
 header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 8px; }
 .eyebrow { color: #b8a887; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
 h2 { margin: 0; font-size: 14px; font-weight: 600; }
@@ -207,4 +207,15 @@ button:hover:not(:disabled) { filter: brightness(1.12); }
 .workflow-phases > li { margin-block: .75rem; }
 .workflow-phases h3 { font-weight: 600; }
 .workflow-phases ul { margin-top: .35rem; padding-left: 1.25rem; list-style: disc; }
+/* Align labels beside their values where a stacked review uses too much of a short pane. */
+@container native-approval (max-width: 40rem) {
+  .tool-details {
+    display: grid;
+    grid-template-columns: minmax(0, 6.5rem) minmax(0, 1fr);
+    align-items: baseline;
+    gap: 0.375rem 0.75rem;
+  }
+  .tool-details dt { margin: 0; overflow-wrap: anywhere; }
+  .tool-details dd { margin: 0; }
+}
 </style>

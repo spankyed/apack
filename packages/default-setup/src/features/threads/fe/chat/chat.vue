@@ -1307,6 +1307,11 @@ const nativeViewport = useNativeTranscriptViewport({
   margin-inline: auto;
 }
 
+/* Reserve a transcript preview without sizing the decision to a percentage of a short pane. */
+@media (max-height: 720px) {
+  .approvalContainer { max-height: calc(100% - 3rem); }
+}
+
 .inputContainer {
   // The card bounds and scrolls its own content; never hide its header above the pane.
   display: flex;
