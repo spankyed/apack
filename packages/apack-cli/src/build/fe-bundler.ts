@@ -1,3 +1,4 @@
+import MagicString from 'magic-string';
 import { compilerEnvironmentIdentity } from './compiler-environment.ts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -592,7 +593,8 @@ async function bundleFrontend(options: BundleFEOptions): Promise<{ success: bool
     load(id) { if (id === '\0virtual:tailwind-utils.css') return '@tailwind utilities;'; },
     transform(code, id) {
       if (id === entryFile || id === entryPoint || id === path.resolve(packDir, entryPoint)) {
-        return `import 'virtual:tailwind-utils.css';\n${code}`;
+        const modified = new MagicString(code).prepend("import 'virtual:tailwind-utils.css';\n");
+        return { code: modified.toString(), map: modified.generateMap({ source: id }) };
       }
     },
   };
@@ -663,7 +665,8 @@ async function bundleFrontend(options: BundleFEOptions): Promise<{ success: bool
         },
         outDir: outputDir,
         emptyOutDir: false,
-        sourcemap: !release,
+        // Keep origins for redistribution checks without referencing the map from the shipped JS.
+        sourcemap: release ? 'hidden' : true,
         minify: release,
         target: 'es2022',
         cssCodeSplit: false,
@@ -680,6 +683,7 @@ async function bundleFrontend(options: BundleFEOptions): Promise<{ success: bool
            * build is the one that spec and the E2E suite cover.
            */
           treeshake: { propertyReadSideEffects: false },
+          output: { sourcemapExcludeSources: release },
         },
       },
       logLevel: 'warn',
