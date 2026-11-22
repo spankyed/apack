@@ -7,7 +7,7 @@ import { bindHost } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsDatabase, EarsEngine } from '@elmdb/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
-import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
+import { createPackRegistry, installShippedPacks, prepareHostDataDirs, readAppPackSources, recordShippedPackSeed, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { loadAppPacks, startPacks } from '@apackdev/host/packs/runtime';
@@ -167,6 +167,17 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   const appContext = resolveAppEnvironment();
   assertNoDatabaseWriter(appContext.userDataDir);
 
+  const shippedDir = process.env.SHIPPED_PACKS_DIR;
+  const shipped = shippedDir ? readAppPackSources(shippedDir) : undefined;
+  let seedMissing: ReadonlySet<string> | undefined;
+  if (shipped) {
+    try {
+      seedMissing = recordShippedPackSeed(appContext, shipped.sources.map(source => source.id));
+    } catch (error) {
+      console.error("[packs] Could not record the profile's shipped pack selection:", error);
+    }
+  }
+
   // The app's data: the engine reads and writes it from here on
   const { engine, packs, catchUpProjections } = openAppStore(performance);
 
@@ -187,14 +198,12 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   // ── Install the packs the app ships, so every pack is an installed pack ────────────
   // Install before discovery. Ownership, shipped source revision and deliberate removal decide refresh;
   // matching bytes never grant app ownership of an existing user build.
-  const shippedDir = process.env.SHIPPED_PACKS_DIR;
-  if (!shippedDir) {
+  if (!shipped) {
     // "This app ships no packs" and "nobody told me where they are" are different answers, and installing
     // nothing looks the same either way: on a fresh data dir both give an app with no surfaces
     console.warn('[packs] SHIPPED_PACKS_DIR is not set, so no pack the app ships is installed');
   } else {
-    const results = await installShippedPacks(shippedDir, appContext.packsDir, { installedPacksFile: appContext.installedPacksFile, hostVersion: APP_VERSION, packFormat: PACK_SNAPSHOT_FORMAT, settingsOverrides: () => storedSettings(engine) });
-    if (results.length === 0) console.warn(`[packs] ${shippedDir} holds no pack to install`);
+    const results = await installShippedPacks(shipped, appContext.packsDir, { installedPacksFile: appContext.installedPacksFile, seedMissing, hostVersion: APP_VERSION, packFormat: PACK_SNAPSHOT_FORMAT, settingsOverrides: () => storedSettings(engine) });
     for (const result of results) {
       if (result.outcome === 'failed') console.error(`[packs] Could not install ${result.id}, which this app ships: ${result.error}`);
       else if (result.outcome === 'installed' || result.outcome === 'updated') console.log(`[packs] ${result.outcome === 'updated' ? 'Updated' : 'Installed'} ${result.id}, which this app ships`);

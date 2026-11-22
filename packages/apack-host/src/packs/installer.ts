@@ -1,7 +1,7 @@
 import { assertPackSettings } from './settings-admission.ts';
 import * as fs from 'fs';
 import { INSTALL_RECORD_RECOVERY } from './staging.ts';
-import { readAppPackSources } from './app-sources.ts';
+import { readAppPackSources, type AppPackSources } from './app-sources.ts';
 import { readInstalledPacks, writeInstalledPacks, type PackRecord } from './installed.ts';
 import * as path from 'path';
 import * as os from 'os';
@@ -165,23 +165,24 @@ export function checkDependencies(
 export interface ShippedPackInstall {
   id: string;
   /** Installation decisions; unchanged source identity does not certify the installed build's health. */
-  outcome: 'installed' | 'updated' | 'unchanged' | 'preserved' | 'suppressed' | 'failed';
+  outcome: 'installed' | 'updated' | 'unchanged' | 'preserved' | 'offered' | 'suppressed' | 'failed';
   /** Why, when it failed */
   error?: string;
 }
 
-/** Install missing shipped packs and refresh only explicitly app-managed installations. */
+/** Seed the profile's initial selection and refresh explicitly app-managed installations. */
 export interface ShippedInstallOptions extends InstallOptions {
   /** Installation decisions for the same target profile as packsDir. Always explicit. */
   installedPacksFile: string;
+  /** IDs allowed to seed new installations. Isolated profiles may explicitly select the complete catalog. */
+  seedMissing?: ReadonlySet<string> | 'all';
   /** Refresh only this declared pack id, using the same ownership decision as boot. */
   only?: string;
 }
 
-export async function installShippedPacks(shippedDir: string, packsDir: string, options: ShippedInstallOptions): Promise<ShippedPackInstall[]> {
-  if (!fs.existsSync(shippedDir)) return [];
+export async function installShippedPacks(sourceCatalog: string | AppPackSources, packsDir: string, options: ShippedInstallOptions): Promise<ShippedPackInstall[]> {
   const results: ShippedPackInstall[] = [];
-  const catalog = readAppPackSources(shippedDir);
+  const catalog = typeof sourceCatalog === 'string' ? readAppPackSources(sourceCatalog) : sourceCatalog;
   for (const problem of catalog.problems) {
     if (options.only === undefined || problem.id === options.only) results.push({ id: problem.id, outcome: 'failed', error: problem.message });
   }
@@ -199,6 +200,11 @@ export async function installShippedPacks(shippedDir: string, packsDir: string, 
       }
       if (wasInstalled && !fs.statSync(installedDir).isDirectory()) {
         throw new Error(`Installed pack path is not a directory: ${installedDir}`);
+      }
+      const selectedForSeed = options.seedMissing === 'all' || options.seedMissing?.has(id);
+      if (!wasInstalled && record?.updatesWith !== 'app' && (record || !selectedForSeed)) {
+        results.push({ id, outcome: 'offered' });
+        continue;
       }
       if (wasInstalled && record?.updatesWith !== 'app') {
         results.push({ id, outcome: 'preserved' });

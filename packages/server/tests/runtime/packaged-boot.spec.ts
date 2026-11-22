@@ -54,7 +54,7 @@ if (module.exports.registration) module.exports.registration.declarationRevision
  * loaded through the same admission path, without advertisement-based registration priority
  */
 async function bootPacks(app: ReturnType<typeof openAppStore>) {
-  await installShippedPacks(PACKAGES_DIR, resolveAppEnvironment().packsDir, { installedPacksFile: resolveAppEnvironment().installedPacksFile });
+  await installShippedPacks(PACKAGES_DIR, resolveAppEnvironment().packsDir, { seedMissing: 'all', installedPacksFile: resolveAppEnvironment().installedPacksFile });
   return loadAppPacks(app.packs);
 }
 

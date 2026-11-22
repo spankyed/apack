@@ -40,7 +40,7 @@ export {
   installPack, installPackFromLocal, installPackFromGitHub, installShippedPacks, restoreShippedPack, updateShippedPack, type ShippedPackInstall,
   uninstallPack, isHostCompatible,
 } from './installer.ts';
-export { recordHostCompatibility, readHostCompatibility, type HostCompatibility } from './host-info.ts';
+export { recordHostCompatibility, readHostCompatibility, recordShippedPackSeed, type HostCompatibility } from './host-info.ts';
 export { prepareHostDataDirs } from './staging.ts';
 
 // Updater
