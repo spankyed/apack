@@ -51,9 +51,12 @@ lists each filename and SHA-256 and the upstream release URLs for dependencies t
 through npm overrides. Stage into an ignored directory or a path outside the checkout.
 
 The release operator can attach those files to the GitHub release of the same name when authorized.
-A consumer pins the exact asset URLs in `package.json`, copies the upstream overrides it uses, and
-commits the resulting npm lockfile. Test `npm ci` from a clean consumer checkout with no local
-authoring checkout. Reuse the staged bytes for retries and keep each commit's release files immutable.
+A consumer pins the exact asset URLs in `package.json` and commits the resulting npm lockfile.
+Use the upstream URLs as dependency specs for directly declared packages such as `@apackdev/git`
+and `@apackdev/terminal-view`. Use npm overrides for transitive-only packages such as EARS and
+elmdb. npm rejects a URL override that conflicts with a direct semver dependency.
+Test `npm ci` from a clean consumer checkout with no local authoring checkout. Reuse the staged
+bytes for retries and keep each commit's release files immutable.
 The actual hosted round trip belongs to the starter goal. Registry distribution and Homebrew remain
 owned by this plan.
 
