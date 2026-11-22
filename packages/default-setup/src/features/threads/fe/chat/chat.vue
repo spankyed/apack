@@ -1264,7 +1264,9 @@ function onMessagesRendered() {
     return
   }
 
-  const isThreadLoad = threadChanged || previousCount === 0 || Math.abs(newMsgs.length - previousCount) > 1
+  // Native history can append several messages from one queue drain. Keep an active reader's position.
+  const nativeHistory = !!currentThread.value?.context?.claudeCode
+  const isThreadLoad = threadChanged || !nativeHistory && (previousCount === 0 || Math.abs(newMsgs.length - previousCount) > 1)
   if (isThreadLoad || pendingScrollOnSend.value) {
     pendingScrollOnSend.value = false
     forceScrollToBottom()
@@ -1306,7 +1308,11 @@ const nativeViewport = useNativeTranscriptViewport({
   viewport: messagesContainer, content: messagesContent,
   owner: () => currentThread.value?.context?.claudeCode?.sessionId ? `${currentThread.value.id}:${currentThread.value.context.claudeCode.sessionId}` : undefined,
   active: () => nativeTranscriptVisible.value,
-  onFollowingChange: following => { isNearBottom.value = following },
+  onFollowingChange: following => {
+    isNearBottom.value = following
+    // A queued submission can have no rendered row until the native turn ends.
+    if (!following) pendingScrollOnSend.value = false
+  },
 })
 const showMemory = ref(false)
 const memoryTarget = computed(() => {

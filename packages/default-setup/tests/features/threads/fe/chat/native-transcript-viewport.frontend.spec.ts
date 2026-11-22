@@ -22,6 +22,14 @@ it('keeps short replies readable and includes visible pending controls in the sc
   expect(nativeTranscriptLatestTop(viewport)).toBe(450)
   requestHeight = 0
   expect(nativeTranscriptLatestTop(viewport)).toBe(320)
+  const stream = document.createElement('div')
+  stream.dataset.nativeStreamPreview = ''
+  viewport.append(stream)
+  let streamHeight = 40
+  stream.getBoundingClientRect = () => ({ top: 492 - viewport.scrollTop, height: streamHeight }) as DOMRect
+  expect(nativeTranscriptLatestTop(viewport)).toBe(482)
+  streamHeight = 0
+  expect(nativeTranscriptLatestTop(viewport)).toBe(320)
 })
 
 it('follows viewport resizing without stealing focus and retires queued work on reader intent or owner replacement', async () => {

@@ -3,8 +3,10 @@ import { onBeforeUnmount, watch, type Ref } from 'vue'
 /** Prefer a complete short reply to trailing native placements when the pane cannot fit both. */
 export function nativeTranscriptLatestTop(viewport: HTMLElement): number {
   const tail = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-  const row = [...viewport.querySelectorAll<HTMLElement>('[data-message-id]')].reverse()
-    .find(element => element.getBoundingClientRect().height > 0)
+  const stream = viewport.querySelector<HTMLElement>('[data-native-stream-preview]')
+  const row = stream?.getBoundingClientRect().height ? stream
+    : [...viewport.querySelectorAll<HTMLElement>('[data-message-id]')].reverse()
+      .find(element => element.getBoundingClientRect().height > 0)
   if (!row || !viewport.clientHeight) return tail
   const rowBounds = row.getBoundingClientRect()
   const body = row.querySelector<HTMLElement>('[data-chat-message-content]')?.getBoundingClientRect()
