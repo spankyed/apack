@@ -24,6 +24,29 @@ it('keeps native values authoritative, explains locks and allows Close while a s
   } finally { app.unmount(); root.remove() }
 })
 
+it('shows the current native output style and its safe-mode restriction beside Change', async () => {
+  const view = reactive<ClaudeSettingsView>({
+    requestId: 'output-style', status: 'ready',
+    snapshot: { revision: 'b'.repeat(64), rows: [
+      { key: 'outputStyle', label: 'Output style', kind: 'choice', value: 'Release Review Checklist', isLocked: false, editorAvailable: true },
+    ] },
+  })
+  const operations: ClaudeSettingsOperation[] = []
+  const root = document.createElement('div')
+  document.body.append(root)
+  const app = createApp({ render: () => h(NativeSettingsPanel, { state: view, onOperate: (event: ClaudeSettingsOperation) => operations.push(event) }) })
+  app.mount(root)
+  try {
+    const row = root.querySelector('[data-native-setting="outputStyle"]')!
+    expect(row.textContent).toContain('Release Review Checklist')
+    view.snapshot!.rows[0].value = 'Release Review Checklist (disabled in safe mode)'
+    await nextTick()
+    expect(row.textContent).toContain('Release Review Checklist (disabled in safe mode)')
+    row.querySelector('button')!.click()
+    expect(operations.at(-1)).toEqual({ kind: 'open', revision: 'b'.repeat(64), key: 'outputStyle' })
+  } finally { app.unmount(); root.remove() }
+})
+
 it('waits for native tab acknowledgement and displays structured Status, Usage and Stats', async () => {
   const frame = reactive<NonNullable<import('#features/code/common/native-settings.ts').ClaudeSettingsSnapshot['frame']>>({ selectedTab:'Config',tabs:['Status','Config','Usage','Stats'],hidden:false })
   const operations: ClaudeSettingsOperation[] = [], root = document.createElement('div'); document.body.append(root)

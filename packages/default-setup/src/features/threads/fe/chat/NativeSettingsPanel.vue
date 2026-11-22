@@ -19,6 +19,7 @@
       <div v-for="row in rows" :key="row.key" class="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 py-3" :data-native-setting="row.key">
         <label :for="controlId(row.key)" class="min-w-0 flex-1 basis-40">
           <span class="text-sm text-neutral-200">{{ row.label }}</span>
+          <span v-if="row.key === 'outputStyle' && row.editorAvailable && typeof row.value === 'string'" class="mt-1 block break-words text-xs text-neutral-400">{{ row.value }}</span>
           <span v-if="row.description" class="mt-1 block text-xs leading-relaxed text-neutral-500">{{ row.description }}</span>
           <span v-if="row.isLocked" class="mt-1 block text-xs text-amber-200/80">{{ row.lockReason || 'Managed by Claude Code policy' }}</span>
         </label>
