@@ -87,6 +87,7 @@ it('keeps IDE onboarding nonblocking and addresses both Continue and Escape to t
   expect(welcome.querySelector('h3')?.textContent).toBe(notice.title)
   expect(welcome.textContent).toContain(notice.paragraphs[0])
   const button = welcome.querySelector('button')!
+  button.focus()
   button.click()
   const expected = { type: 'CLAUDE_TERMINAL_NOTICE', ownerId: 'owner', notice: {
     id: notice.id, revision: notice.revision, sessionId: notice.sessionId, decision: 'ide_welcome_dismiss',
@@ -99,6 +100,8 @@ it('keeps IDE onboarding nonblocking and addresses both Continue and Escape to t
   f.publish(f.snapshot); await nextTick()
   expect(welcome.isConnected).toBe(false)
   expect(draft.value).toBe('A draft in progress')
+  await nextTick()
+  expect(document.activeElement).toBe(draft)
 })
 
 it('exposes a scoped cancel action before owner state exists and keeps retry disabled while cleanup is pending', async () => {
