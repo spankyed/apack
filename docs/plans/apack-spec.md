@@ -692,15 +692,21 @@ On elmdb, 2026-11-22, an M1 Pro under a load of 7.6, temporary databases with sy
 
 | A window asks its backend | Answered when the rows are kept | Answered when its views show them |
 |---|---|---|
-| to write a row | 0.14 ms | 17.5 ms |
-| something that writes nothing | 0.18 ms | 0.16 ms |
+| to write a row, straight after the last | 0.12 ms | 17.3 ms |
+| to write a row, 20 ms after the last was answered | 1.2 ms | 1.6 ms |
+| something that writes nothing | 0.05 ms | 0.05 ms |
 
 A step that writes nothing pays nothing, since the writer is never taken. A unit around a handler is about 3 µs
 once the step has written. The commit is what costs: ten rows in ten steps are 2.8 times ten rows in one, so a
-stream is written a batch to a step. And the hold costs a frame, 17 ms, on an ask that writes: elmdb tells its
-watches on a schedule of its own. A window is answered when its screen can show the answer, and no sooner. An ask
-that writes nothing waits for nothing, and a run of asks that each write costs a frame each, which is the case to
-put in one ask.
+stream is written a batch to a step.
+
+The hold costs a third of a millisecond on an ask that writes, and nothing on one that does not. What costs more
+is elmdb's own limit on a watch: it runs one again no sooner than a frame, 16 ms, after it last ran
+(`WATCH_SCHEDULE`), so an ask that writes straight after another that wrote into the same view waits out what is
+left of that frame. One thing a person does is never that close to the last. A run of asks, each made when the one
+before is answered and each writing, is: it costs a frame a link, and is the case to put in one ask. Asks made
+together are told together, after one frame for all of them. Running a waited-for watch at once, and not when its
+frame is up, is elmdb's to offer and is not asked for here ([Not built](#not-built)).
 
 #### What it does not cover
 
@@ -1353,6 +1359,11 @@ projects. Each would loosen the fit to this app.
     down one ordered connection, and on the host saying when the views have been sent what was kept: for elmdb,
     its `watchesSettled`. Whether the API's view subscriptions and its bus share a socket today is to read when the
     host is ported, and they are put on one if not.
+  - *A watch somebody is waiting on.* elmdb runs a watch again no sooner than a frame after it last ran, which
+    bounds what a churning view costs and is what a run of asks that each write pays, a frame a link. A way to have
+    the watches a held answer waits on run at once, within the slice a flush already keeps to, would make that the
+    time the view takes to read. It is a change to elmdb's scheduler, and is made if a ported feature has such a
+    run that cannot be one ask.
   - *A step that must be on disk before it answers.* `transact` takes `durable: true`; a handler has no way to ask
     for it yet. It is one more key on what a handler returns, and is added when a handler needs it.
   - *Restart.* Nothing here kills a system between something done outside and the row that records it. That is

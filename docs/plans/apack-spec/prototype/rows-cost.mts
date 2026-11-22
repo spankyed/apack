@@ -67,12 +67,12 @@ console.log('\nTen rows, a step each: what a stream written a piece at a time is
 line('the kernel, ten steps of one write', timed(500, (store) => { const step = kernel(true, (at) => ({ type: 'NOTE', id: String(at) }))(store); return (at) => { for (let row = 0; row < 10; row++) step(at * 10 + row) } }), bareTen)
 
 // What it costs a window to be answered after its views show the row: the backend holds the answer until the engine
-// has told its watches, which run on the engine's own clock. One ask after another, from a window that follows a view
-// of the rows, with the hold and without it.
+// has told its watches. The engine runs a watch again no sooner than a frame after it last ran, so what the hold costs
+// depends on how long ago the view was last told: asks are made straight after one another, and a frame or more apart.
 type WindowAsks = { ADD: { args: { id: string }; answer: boolean } }
 type Net = { systems: { rows: { events: never; asks: { CREATE: { args: { id: string }; answer: string } } } }; surfaces: {}; views: { rows: { count: { args: {}; result: number } } } }
 const linked = reaching<Net>()
-const asking = async (held: boolean, asks: number, writes: boolean): Promise<number> => {
+const asking = async (held: boolean, asks: number, writes: boolean, apartMs: number): Promise<number> => {
   const store = elmdb()
   const views: ViewHost = (_feature, _view, _args, heard) => store.watch(() => store.count('thread'), (value) => heard({ ok: true, value }))
   const backend = system({ side: 'backend', transact: store.transact, views, ...(held ? { viewsSent: store.settled } : {}) })
@@ -85,18 +85,27 @@ const asking = async (held: boolean, asks: number, writes: boolean): Promise<num
     asks: { ADD: async ({ id }, { ask }) => (await ask('rows', 'CREATE', { id })).ok },
   }))
   for (let at = 0; at < 20; at++) await window.ask(handle, 'ADD', { id: `warm-${at}` })
-  const began = process.hrtime.bigint()
-  for (let at = 0; at < asks; at++) await window.ask(handle, 'ADD', { id: String(at) })
-  const took = Number(process.hrtime.bigint() - began) / 1_000
+  let took = 0
+  for (let at = 0; at < asks; at++) {
+    if (apartMs) await new Promise((resolve) => { setTimeout(resolve, apartMs) })
+    const began = process.hrtime.bigint()
+    await window.ask(handle, 'ADD', { id: String(at) })
+    took += Number(process.hrtime.bigint() - began) / 1_000
+  }
   window.stop(); backend.stop(); store.close()
   return took / asks
 }
-for (const writes of [true, false]) {
-  console.log(`\nA window asks its backend ${writes ? 'to write a row' : 'something that writes nothing'}, with a view of the rows open`)
+const cases = [
+  ['to write a row, straight after the last', true, 0, 200],
+  ['to write a row, 20 ms after the last was answered', true, 20, 40],
+  ['something that writes nothing, straight after the last', false, 0, 200],
+] as const
+for (const [what, writes, apartMs, asks] of cases) {
+  console.log(`\nA window asks its backend ${what}, with a view of the rows open`)
   const unheld: number[] = []
   const held: number[] = []
-  for (let at = 0; at < RUNS; at++) { unheld.push(await asking(false, 200, writes)); held.push(await asking(true, 200, writes)) }
+  for (let at = 0; at < RUNS; at++) { unheld.push(await asking(false, asks, writes, apartMs)); held.push(await asking(true, asks, writes, apartMs)) }
   const plain = median(unheld)
-  line(writes ? 'answered as soon as the row is kept' : 'answered at once', plain)
-  line(writes ? 'answered once the view has been sent the row' : 'answered once the views have been sent what was kept, which is nothing new', median(held), plain)
+  line('answered when the rows are kept', plain)
+  line('answered when its views have been sent them', median(held), plain)
 }
