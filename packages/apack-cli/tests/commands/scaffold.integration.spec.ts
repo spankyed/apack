@@ -112,9 +112,12 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
 
     const out = path.join(tmp, 'out');
     // produces: the archive extractPackArchive/verifyPack read below
-    const packed = await callCli(pack, 'archive', ['--out', out]);
+    const packed = await callCli(pack, 'export', ['--out', out]);
     expect(packed.code, packed.output).toBe(0);
-    const extracted = await extractPackArchive(path.join(out, 'demo-pack-0.1.0.tgz'), path.join(tmp, 'extract'));
+    const archive = path.join(out, 'demo-pack-0.1.0.tgz');
+    const [sha256] = fs.readFileSync(`${archive}.sha256`, 'utf8').split(/\s+/);
+    expect(sha256).toMatch(/^[a-f0-9]{64}$/);
+    const extracted = await extractPackArchive(archive, path.join(tmp, 'extract'), sha256);
     expect(verifyPack(extracted).id).toBe('demo-pack');
     const guide = fs.readFileSync(path.join(REPO_ROOT, 'docs/public-facing/pack-builds.md'), 'utf8');
     for (const file of [PACK_LAYOUT.manifest, PACK_LAYOUT.integrity, PACK_LAYOUT.runtimeEntry, PACK_LAYOUT.feEntry, PACK_LAYOUT.snapshot]) {
@@ -299,7 +302,7 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     manifest.features = { notes_v2: Object.values(manifest.features)[0] };
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
     try {
-      for (const args of [['pack', 'build'], ['pack', 'archive', '--out', path.join(tmp, 'invalid-out')], ['pack', 'generate-entries', '--force']]) {
+      for (const args of [['pack', 'build'], ['pack', 'export', '--out', path.join(tmp, 'invalid-out')], ['pack', 'generate-entries', '--force']]) {
         // process: each command's exit code and message for an invalid manifest is the assertion
         const result = await run('node', [CLI, ...args], pack);
         expect(result.code, args.join(' ')).not.toBe(0);
@@ -325,7 +328,7 @@ describe('apack pack init → add feature → build → tsc → pack', () => {
     expect(fs.existsSync(path.join(pack, 'dist', 'runtime', 'index.cjs'))).toBe(true);
     // The incumbent build's captured manifest bytes no longer match, regardless of timestamps.
     // process: the exit code and the message are the assertion
-    const packed = await run('node', [CLI, 'pack', 'archive', '--out', path.join(tmp, 'stale-out')], pack);
+    const packed = await run('node', [CLI, 'pack', 'export', '--out', path.join(tmp, 'stale-out')], pack);
     expect(packed.code).not.toBe(0);
     // Either the authored inventory or the manifest bytes may be the first differing observation.
     expect([

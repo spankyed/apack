@@ -97,7 +97,7 @@ previous build on failure. See [the build command](cli.md#building) for its gate
 apack pack build
 
 # Pack into a verified .tgz archive (integrity.json lists a sha256 per file)
-apack pack archive
+apack pack export
 # Creates my-pack-0.1.0.tgz and my-pack-0.1.0.tgz.sha256
 
 # Install into apack

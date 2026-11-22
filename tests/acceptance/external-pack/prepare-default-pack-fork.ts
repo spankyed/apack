@@ -19,7 +19,7 @@ const FORK_STEP_MS = budgetMsFor('scenario');
 export const DEFAULT_FORK_BUDGET_MS = {
   build: 0.5 * FORK_STEP_MS,
   // Two input replays plus archive staging/verification.
-  archive: 0.3 * FORK_STEP_MS,
+  export: 0.3 * FORK_STEP_MS,
   // Package freshness, source copying, final verification and removal of owned temporary trees.
   housekeeping: 0.2 * FORK_STEP_MS,
 } as const;
@@ -67,7 +67,7 @@ async function prepare(): Promise<void> {
     const config = path.join(fork, 'tsconfig.json');
     fs.writeFileSync(config, fs.readFileSync(config, 'utf8').replace(
       '../../node_modules/.cache/tsbuildinfo/default-setup.tsbuildinfo', '.apack/typecheck.tsbuildinfo'));
-    for (const [phase, args] of [['build', ['build']], ['archive', ['archive', '--out', staged]]] as const) {
+    for (const [phase, args] of [['build', ['build']], ['export', ['export', '--out', staged]]] as const) {
       console.log(`Default fork ${phase}: starting (${DEFAULT_FORK_BUDGET_MS[phase] / 1000}s limit)`);
       const result = await boundedSpawn(process.execPath, [path.join(root, 'node_modules/.bin/apack'), 'pack', ...args], DEFAULT_FORK_BUDGET_MS[phase],
         { cwd: fork, env: { ...process.env, APACK_HOST: root }, stream: true });

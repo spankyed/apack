@@ -7,10 +7,10 @@ import { readPackBuildInputs, assertPackBuildInputsCurrent } from '@apackdev/hos
 import { holdPackBuildLock } from '../build/build-lock.ts';
 
 const HELP = `
-Usage: apack pack archive [--out <dir>]
+Usage: apack pack export [--out <dir>]
 
-Stage the built pack (dist/) into a verified pack layout and write
-<id>-<version>.tgz plus <id>-<version>.tgz.sha256. Run "apack pack build" first
+Export the built pack as an installable <id>-<version>.tgz and write
+<id>-<version>.tgz.sha256. Run "apack pack build" first
 ("apack pack build --release" for publishable output).
 
 Options:
@@ -42,7 +42,7 @@ export async function buildPackArchive(root: string, outDir = path.join(root, '.
   // Keep one producer generation through verification, staging and archive publication.
   const lock = await holdPackBuildLock(root, {
     packId: readValidManifest(root).id,
-    what: 'apack pack archive',
+    what: 'apack pack export',
     onWait: (holder) => console.log(`Waiting for ${holder} to finish...`),
   });
   let temporary: string | undefined;
@@ -68,13 +68,13 @@ export async function buildPackArchive(root: string, outDir = path.join(root, '.
   }
 }
 
-export async function archive(args: string[]) {
+export async function exportPack(args: string[]) {
   if (args.includes('--help') || args.includes('-h')) {
     console.log(HELP);
     return;
   }
   if (args.length && (args[0] !== '--out' || args.length !== 2 || args[1]!.startsWith('-'))) {
-    throw new Error('Usage: apack pack archive [--out <dir>]');
+    throw new Error('Usage: apack pack export [--out <dir>]');
   }
   const root = findPackRoot(process.cwd());
   const outIndex = args.indexOf('--out');

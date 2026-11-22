@@ -1,7 +1,7 @@
 // One writer or long reader of a pack's `dist` at a time, and the policy over `@apackdev/host/exclusive-lock`'s
 // mechanism: where the lock file lives, what the refusal says, and how long a second arrival waits.
 //
-// **It guards the output, not only the build**, which is why `apack pack archive` takes it too: staging an archive is
+// **It guards the output, not only the build**, which is why `apack pack export` takes it too: staging an archive is
 // a multi-file copy of `dist`, and a build renaming that tree mid-copy gives an archive holding half of two
 // builds. That is a wider window than the rename itself and a worse outcome, since the archive looks whole.
 //

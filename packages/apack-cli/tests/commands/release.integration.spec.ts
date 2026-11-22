@@ -14,7 +14,7 @@ import { writePackBuildInputs } from '@apackdev/host/build/pack-build-inputs';
  * runRelease verifies with a release build; these tests use prebuilt packs, so the build is a stand-in.
  *
  * **It still has to leave what the steps after it read.** `writeVersion` rewrites `apack.json` immediately
- * before `verify`, and `apack pack archive` refuses a build of different sources — a build it cannot
+ * before `verify`, and `apack pack export` refuses a build of different sources — a build it cannot
  * see having happened is exactly the stale build that check exists for. A stand-in returning nothing claimed
  * the build had run and left a tree it had not touched, which is the fidelity gap rather than the check being
  * wrong: a real `apack pack build` writes `dist` here.
