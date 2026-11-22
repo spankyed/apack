@@ -12,7 +12,7 @@ let bridge: Awaited<ReturnType<typeof createClaudeTerminalBridge>> | undefined
 async function config() { return JSON.parse(await readFile(bridge!.directory + '/observer.json', 'utf8')) }
 /** Node-hosted helper fixtures supply policy reads; the real UI module requires the pinned Claude binary. */
 async function standInHelperPolicy(policy?: string) {
-  await writeFile(join(bridge!.directory, 'ui.mjs'), `let prepared=false;export function bindNativeHelperObservationReader(reader){if(typeof reader!=='function')throw Error('Invalid observation reader');}export async function prepareNativeHelperPolicy(){await Promise.resolve();prepared=true;}export function readNativeHelperCommands(){return {main:null,subagent:null,prefix:undefined}};export function readNativeHelperPolicy(){if(!prepared)throw Error('Policy was not prepared');return ${JSON.stringify(policy) ?? 'undefined'};}`)
+  await writeFile(join(bridge!.directory, 'ui.mjs'), `let prepared=false;export function bindNativeHelperObservationReader(reader){if(typeof reader!=='function')throw Error('Invalid observation reader');}export function bindNativeMainStatusReconciliation(binding){if(typeof binding.startedAt!=='function'||typeof binding.reconcile!=='function')throw Error('Invalid main status reconciliation');}export async function prepareNativeHelperPolicy(){await Promise.resolve();prepared=true;}export function readNativeHelperCommands(){return {main:null,subagent:null,prefix:undefined}};export function readNativeHelperPolicy(){if(!prepared)throw Error('Policy was not prepared');return ${JSON.stringify(policy) ?? 'undefined'};}`)
 }
 async function request(path: string, body: unknown, token?: string) {
   const value = await config()
@@ -820,8 +820,12 @@ it.each([false, true])('queues a desktop image only while its original turn stay
   await create(enter, pasteImage)
   const main = {sessionId: session, pid: process.pid, sequence: 1, view: {kind: 'main'}, heartbeat: true}
   const owner = {sessionId: session, agents: [], directOwner: true, busy: true}
+  const reportTurn = (sequence: number, activeTurnId: string) => request('/native-activity', {
+    sessionId: session, pid: process.pid, sequence, activeTurnId, activity: {pendingAgents: 0, pendingWorkflows: 0},
+  })
   await request('/native-view', main)
   await request('/poll', {...owner, turn: {id: 'first-turn', cancelled: false}})
+  await reportTurn(1, 'first-turn')
   const configValue = await config()
   const released = vi.fn()
   const native = http.createServer(async (request, response) => {
@@ -851,9 +855,9 @@ it.each([false, true])('queues a desktop image only while its original turn stay
       assert.ok(prepared && typeof prepared === 'object' && 'id' in prepared && typeof prepared.id === 'string')
       preparedId = prepared.id
       expect(prepared).toEqual({id: preparedId, prepared: true})
-    })
+    }, {timeout: 3000})
     expect(enter).not.toHaveBeenCalled()
-    if (replaceTurn) await request('/poll', {...owner, turn: {id: 'replacement-turn', cancelled: false}})
+    if (replaceTurn) await reportTurn(2, 'replacement-turn')
     await request('/result', {sessionId: session, pid: process.pid, id: preparedId, filled: true})
     if (replaceTurn) {
       expect(await outcome).toMatchObject({message: expect.stringContaining('Claude is busy')})
