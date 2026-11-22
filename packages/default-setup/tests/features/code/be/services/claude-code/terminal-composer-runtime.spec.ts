@@ -12,9 +12,10 @@ function fixture(){
  const input={surface:'terminal',component:'Spinner',requestId:'native-agent',props:{word:'Working',message:null,suffix:'…',mode:'tool-input'}}
  const factory=vi.fn((value:any)=>({type:'original-engine',props:value.props})),cache=Array(22);cache[21]=factory
  const fiber:any={type:vtr,memoizedState:{memoizedState:[input,[]]},updateQueue:{memoCache:{data:[cache]}}}
- const n={themeRoots:{ai:()=>new Map([[output,{container:{current:fiber}}]])},questionOptions:{Ze:()=> 'native-agent',j:()=> 'session'},runtime:{ey:()=>({})},nativeClients:{release:vi.fn(),suspend:vi.fn(),suspendInstance:vi.fn()},jsx:{e:(type:unknown,props:unknown)=>({type,props})},terminalComponents:{n:Symbol('native themed Text')},appProvider:{d_:Symbol('fresh original provider')},staticRender:{v6e:vi.fn(async(_tree:unknown,_options:unknown)=> 'Original native engine')}}
+ const roster={list:vi.fn(()=>[] as {clientId:string;answers:string[]}[])}, fleet={Kwn:{Provider:Symbol('mounted original provider')}}
+ const n={roster:{Kw:roster},fleet,themeRoots:{ai:()=>new Map([[output,{container:{current:fiber}}]])},questionOptions:{Ze:()=> 'native-agent',j:()=> 'session'},runtime:{ey:()=>({})},nativeClients:{release:vi.fn(),suspend:vi.fn(),suspendInstance:vi.fn()},jsx:{e:(type:unknown,props:unknown)=>({type,props})},terminalComponents:{n:Symbol('native themed Text')},appProvider:{d_:Symbol('fresh original provider')},staticRender:{v6e:vi.fn(async(_tree:unknown,_options:unknown)=> 'Original native engine')}}
  const api=vm.runInNewContext(claudeTerminalComposerRuntime+`;({read:nativeComposerInputs,list:nativeComposerList,facts:nativeComposerFacts,refresh:refreshNativeComposer,current:currentComposerAction,format:formatNativeComposer,frames:composerFrames})`,{process:{stdout:output},createHash:crypto,clients,edits,publish,originalContext:undefined,clientViewCurrent:()=>true,nativeViewFacts:()=>({view:{kind:'main'}}),nativeThemeProvider:()=>({type:'theme',value:{resolvedTheme:{text:'#fff'}}}),AbortController,Date})
- return{n,api,fiber,input,factory,edits,publish,OH,vY}
+ return{n,api,fiber,input,factory,edits,publish,OH,vY,roster,fleet}
 }
 it('uses exact original inputs and default factories, mapping desktop mode without changing native props',async()=>{
  const f=fixture(),facts=f.api.facts(f.n,'view','Spinner','native-agent')
@@ -64,4 +65,29 @@ it('rejects actions from an old source generation when the native request id is 
  f.fiber.updateQueue.memoCache.data[0][21]=()=>({type:'new original instance'})
  expect(()=>f.api.current(f.n,request)).toThrow('changed or expired')
  expect(f.api.facts(f.n,'view','Spinner','native-agent').fingerprint).not.toBe(facts.fingerprint)
+})
+
+
+it('refreshes a visible waiting count through the current native provider at its sweep cadence',()=>{
+ const f=fixture(),store={getSnapshot:vi.fn(()=>({needsInput:1})),refetch:vi.fn(async()=>{})};
+ f.fiber.type=f.vY;
+ f.fiber.memoizedState={memoizedState:[{surface:'terminal',component:'PromptHint',requestId:'main',props:{hint:'← 1 agent'}},[]]};
+ f.fiber.return={type:f.fleet.Kwn.Provider,memoizedProps:{value:store}};
+ const clock=vi.spyOn(Date,'now').mockReturnValue(20000);
+ try{
+  f.api.refresh(f.n);
+  expect(store.refetch).not.toHaveBeenCalled();
+  f.roster.list.mockReturnValue([{clientId:'view',answers:['ui_prompt_read']}]);
+  f.api.refresh(f.n);
+  clock.mockReturnValue(29999);
+  f.api.refresh(f.n);
+  expect(store.refetch).toHaveBeenCalledTimes(1);
+  clock.mockReturnValue(30000);
+  f.api.refresh(f.n);
+  expect(store.refetch).toHaveBeenCalledTimes(2);
+  store.getSnapshot.mockReturnValue({needsInput:0});
+  clock.mockReturnValue(40000);
+  f.api.refresh(f.n);
+  expect(store.refetch).toHaveBeenCalledTimes(2);
+ }finally{clock.mockRestore();}
 })

@@ -59,9 +59,30 @@ function currentComposerAction(n,request){
  const facts=frame&&nativeComposerFacts(n,request.client_id,request.component,request.instance_id);
  if(!facts||facts.fingerprint!==frame.fingerprint)throw Error('Native composer source changed or expired');
 }
+const composerFleetLastRead=new WeakMap();
+function refreshComposerFleet(n,inputs){
+ const hint=[...inputs.values()].find(item=>item.component==='PromptHint');
+ if(!hint||!n.roster.Kw.list().some(client=>clients.has(client.clientId)&&client.answers?.includes('ui_prompt_read')&&clientViewCurrent(n,client.clientId)))return;
+ const view=nativeViewFacts(n,originalContext??n.runtime.ey(),new AbortController()).view;
+ if(view.kind!=='main')return;
+ // Use the mounted provider and original foreground sweep cadence while a desktop client displays a waiting count.
+ // The terminal renderer can be blurred while its owned desktop composer remains visible.
+ const context=n.fleet.Kwn;
+ for(let fiber=hint.fiber,depth=0;fiber&&depth<128;fiber=fiber.return,depth++){
+  if(fiber.type!==context&&fiber.type!==context.Provider)continue;
+  const store=fiber.memoizedProps?.value;
+  if(!store?.getSnapshot?.()?.needsInput||typeof store.refetch!=='function')return;
+  const now=Date.now();
+  if(now-(composerFleetLastRead.get(store)??0)<10000)return;
+  composerFleetLastRead.set(store,now);
+  void store.refetch().catch(()=>{});
+  return;
+ }
+}
 function refreshNativeComposer(n){
  if(!clients.size)return;
  let inputs;try{inputs=nativeComposerInputs(n);}catch{inputs=new Map();}
+ refreshComposerFleet(n,inputs);
  for(const client of clients){
   if(!clientViewCurrent(n,client))continue;
   const list=nativeComposerList(n,client,inputs),next=new Map(list.map(item=>[JSON.stringify([item.component,item.id]),item.revision])),prior=composerSeen.get(client),changed=[];

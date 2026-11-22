@@ -21,6 +21,7 @@ export const claudeNativeLinuxBindings: {
     "chunk-07y7va8x.js": { "module": "chunk-eefy8bve.js", "exports": { "qh": "Kh" } },
     "chunk-1ghyy712.js": { "module": "chunk-t6m4bmxc.js", "exports": { "configRowHandles": "configRowHandles" } },
     "chunk-kmv3514c.js": { "module": "chunk-tsw4ek67.js", "exports": { "xr": "xr" } },
+    "chunk-zpkky5k1.js": { "module": "chunk-k8y71hwe.js", "exports": { "Kwn": "Own" } },
     "chunk-p22r2x2e.js": { "module": "chunk-mct2b85z.js", "exports": { "AM": "E0" } },
     "chunk-002p0hd2.js": {
       "module": "chunk-ztnrxvr2.js",
