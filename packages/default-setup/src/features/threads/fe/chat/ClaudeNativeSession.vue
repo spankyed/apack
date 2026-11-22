@@ -80,6 +80,7 @@
       </div>
     </section>
     <div v-if="!active && !view?.attachment" v-show="view?.state?.notice?.kind !== 'refusal_fallback_prompt' && (!continuation || launchProblem || view?.opening)" class="native-launch__actions">
+      <slot name="conversation-navigation" />
       <span v-if="launchProblem" role="status" class="native-problem" :class="{ 'native-problem--expected': managedPolicyDeclined }">{{ launchProblem }}</span>
       <span v-if="continuation && view?.opening" role="status">{{ view.cancelling ? 'Cancelling native startup…' : 'Opening native interface…' }}</span>
       <button v-if="!continuation" type="button" class="native-button native-button--launch" :disabled="(busy && (!view?.state || ended)) || view?.opening || inputBlocksLaunch" @click="open">

@@ -1,10 +1,10 @@
 <template>
   <!-- Workspace reading retains room for composing, status and native owner controls. -->
-  <div class="native-chat-shell flex flex-col h-full" :data-native-workspace-owner="compactWorkspaceOwner" :style="{
+  <div class="native-chat-shell flex flex-col h-full" :data-native-workspace-owner="compactWorkspaceOwner" :data-compact-navigation-header="compactNavigationInHeader ? '' : undefined" :style="{
     contain: 'size',
     '--native-chat-min-height': nativeChatMinHeight,
     '--composer-workspace-history-reserve': nativeWorkspaceReading ? '2rem' : undefined,
-    '--composer-navigation-height': nativeConversationNavigation ? '2rem' : undefined,
+    '--composer-navigation-height': nativeConversationNavigation ? 'var(--native-conversation-navigation-height, 2rem)' : undefined,
     '--agent-composer-history-reserve': nativeWorkspaceReading ? '2rem' : undefined,
   }">
     <!-- Main content: optional inline dashboard + chat -->
@@ -36,7 +36,13 @@
       <div class="flex flex-col flex-1 min-w-0 overflow-hidden" :class="{ 'pt-2': !showInlineTabs }" style="background-color: rgb(28 28 28)">
         <!-- Inline Tab Bar -->
         <InlineTabBar :visible="showInlineTabs && !isOnboarding" @close="showInlineTabs = false" />
-        <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :continuation="currentThread.context.claudeCode.nativeContinuation?.sessionId === currentThread.context.claudeCode.sessionId ? currentThread.context.claudeCode.nativeContinuation : undefined" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" @background-composing="nativeBackgroundComposing = $event" />
+        <ClaudeNativeSession ref="nativeSession" v-if="currentThread?.context?.claudeCode && currentThread.id" :key="currentThread.id" :thread-id="currentThread.id" :continuation="currentThread.context.claudeCode.nativeContinuation?.sessionId === currentThread.context.claudeCode.sessionId ? currentThread.context.claudeCode.nativeContinuation : undefined" :busy="isBusy" :input-pending="!!pendingNativeSend || agentPending || !!agentSelection || mcpFormPending || nativeComposerView?.mcpOperation?.status === 'pending'" @active="nativeTerminalActive = $event" @background-composing="nativeBackgroundComposing = $event">
+          <template #conversation-navigation>
+            <button v-if="compactNavigationInHeader && nativeConversationNavigation && !isNearBottom"
+              type="button" class="compact-conversation-navigation rounded-md px-2 py-1 text-xs text-neutral-400 hover:bg-white/5 hover:text-neutral-200 focus-visible:outline focus-visible:outline-blue-400"
+              aria-label="Scroll to latest message" @click="scrollToBottom('smooth')">Latest message <span aria-hidden="true">↓</span></button>
+          </template>
+        </ClaudeNativeSession>
         <NativeManagedSettingsNotice v-if="!nativeTerminalActive && nativeUiDrawing?.managedSettingsDiagnostics?.length" :diagnostics="nativeUiDrawing.managedSettingsDiagnostics" />
         <section v-if="!nativeTerminalActive && workflowTasks.length" aria-label="Native Claude workflows" class="mx-4 mt-2 max-h-48 shrink-0 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
           <div v-for="task in workflowTasks" :key="task.id" :data-native-workflow-id="task.id" class="py-1">
@@ -120,7 +126,7 @@
                 <div v-if="nativeComposerOwner?.preview" data-native-stream-preview class="min-w-0 whitespace-pre-wrap break-words text-sm leading-relaxed" role="status" aria-label="Claude response in progress"><NativeStatusText :text="nativeComposerOwner.preview.output" /></div>
               </div>
             </div>
-            <div v-if="nativeConversationNavigation" aria-label="Conversation navigation" class="relative h-8 shrink-0 [&>button]:bottom-0">
+            <div v-if="nativeConversationNavigation" aria-label="Conversation navigation" class="conversation-navigation relative h-8 shrink-0 [&>button]:bottom-0">
               <ScrollToBottomFob :visible="!isNearBottom" aria-label="Scroll to latest message" @click="scrollToBottom('smooth')" />
             </div>
             <ScrollToBottomFob v-else-if="!currentThread?.context?.claudeCode" :visible="!isNearBottom && allMessages.length > 0" @click="scrollToBottom('smooth')" />
@@ -897,6 +903,10 @@ const isNearBottom = ref(true)
 const nativeTranscriptVisible = computed(() => !nativeTerminalActive.value && !focusedAgent.value && !agentSelection.value && !mainCommandView.value && !pendingNativeQuestion.value && !pendingNativePlan.value)
 // Navigation takes space beside history; the composer must not consume both.
 const nativeConversationNavigation = computed(() => !!currentThread.value?.context?.claudeCode && (!isNearBottom.value || !!currentThread.value.context.claudeCode.pendingElicitation) && allMessages.value.length > 0)
+const compactNavigationInHeader = computed(() => compactWorkspaceOwner.value === 'parent' && nativeTranscriptVisible.value
+  && !pendingNativeApproval.value && !nativeComposerOwner.value?.notice
+  && !currentThread.value?.context?.claudeCode?.nativeContinuation)
+
 const pendingScrollOnSend = ref(false)
 const lightboxOpen = ref(false)
 const lightboxSrc = ref('')
@@ -1244,6 +1254,7 @@ const nativeViewport = useNativeTranscriptViewport({
 </script>
 
 <style scoped>
+.compact-conversation-navigation { display: none; }
 .native-chat-shell { min-height: var(--native-chat-min-height, auto); }
 .chat-composer-area--background { flex-basis: 0; min-height: min(14rem, 55%); }
 /* The child owns input while replying; parent notes stay mounted for an exact return. */
@@ -1256,6 +1267,12 @@ const nativeViewport = useNativeTranscriptViewport({
 }
 /* Keep pending native decisions beside useful conversation space in short windows. */
 @media (max-height: 720px) {
+  .native-chat-shell[data-compact-navigation-header] { --native-conversation-navigation-height: 0px; }
+  .native-chat-shell[data-compact-navigation-header] .conversation-navigation { display: none; }
+  .compact-conversation-navigation { display: inline-flex; align-items: center; gap: 0.375rem; margin-inline-end: auto; }
+  .native-chat-shell[data-compact-navigation-header] :deep([data-testid="composer-session-strip"]:not(.native-strip--open)) {
+    padding-block: 0.375rem;
+  }
   /* The duration already separates its text from the reply. Keep both in view together. */
   [data-testid="chat-transcript"] :deep([data-chat-message]:has(+ [data-native-placement-band="TurnDuration"])) {
     padding-bottom: 0;
