@@ -304,6 +304,8 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
         }
         updateChatState(threadId, chatState)
       } catch (error) {
+        // An error replaces the published summary even when the next native snapshot is identical.
+        lastMetadata = ''
         journalPending = false
         problem = error instanceof Error ? error.message : 'Native conversation history could not be synchronized'
         const thread = ownsHistory() ? repository.threadQueries.byId(threadId) : undefined

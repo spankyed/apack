@@ -254,6 +254,41 @@ it('persists a consumed journal batch even when native dialog discovery fails du
   expect(fake.messages).toEqual([expect.objectContaining({sender:'user',text:'Managed media submission',context:expect.objectContaining({cliUuid:uuid})})])
 })
 
+it.each([
+  ['answer', 'success', undefined],
+  ['error', 'error', 'Native Claude turn failed; details remain in the native interface'],
+] as const)('restores the native %s summary after dialog discovery recovers without another turn', async (reason, chatState, sessionError) => {
+  let release!: () => Promise<void>
+  let unavailable = false
+  const emptyDialogs = async () => []
+  const state = { ownerId: 'owner', sessionId, status: 'live' as const, tasks: [], lastTurn: { id: 'original-turn', reason } }
+  const owner = {
+    state, busy: false, readJournal: async () => ({ entries: [], pending: false, problems: [] }),
+    refreshMcpInput: async () => {}, refreshNotice: async () => {},
+    getGenericToolPermissionDialogs: emptyDialogs, getToolPermissionDialogs: emptyDialogs,
+    getWorkflowDialogs: async () => {
+      if (unavailable) throw new Error('Native UI request timed out')
+      return []
+    },
+    getFileDialogs: emptyDialogs, getBashDialogs: emptyDialogs,
+    getQuestionDialogs: emptyDialogs, getPlanDialogs: emptyDialogs,
+    beforeRelease(listener: () => Promise<void>) { release = listener },
+  } as unknown as ClaudeNativeTerminalOwner
+
+  const { syncClaudeTerminalThread } = await import('#features/threads/be/claude-terminal-sync.ts')
+  syncClaudeTerminalThread('thread' as EntityId, owner, () => true, readLaunch)
+  try {
+    await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ sessionId, chatState, sessionError }))
+    unavailable = true
+    await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ sessionId, chatState: 'error', sessionError: 'Native UI request timed out' }))
+    unavailable = false
+    await vi.waitFor(() => expect(fake.thread.context.claudeCode).toMatchObject({ sessionId, chatState, sessionError }))
+    expect(fake.messages).toEqual([])
+  } finally {
+    await release()
+  }
+})
+
 it('does not recount a saved tool when its native journal is read again after reopening', async () => {
  const uuid='22222222-2222-2222-2222-222222222222';
  fake.thread.context={claudeCode:{sessionId,toolCallCount:1}};
