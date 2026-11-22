@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { _appDirOf, type AppEnvironment } from '@apackdev/sdk/env';
 import { PACK_ID_PATTERN } from '@apackdev/sdk/ids';
 import { _appDataPaths } from '@apackdev/sdk/utils';
+import type { AppPackSources } from './app-sources.ts';
 
 const hostCompatibilityFile = (userDataDir: string) => path.join(_appDirOf(userDataDir), 'host.json');
 
@@ -41,6 +42,11 @@ export function readHostCompatibility(userDataDir: string): HostCompatibility {
     version: typeof recorded.version === 'string' ? recorded.version : undefined,
     packFormat: typeof recorded.packFormat === 'number' ? recorded.packFormat : undefined,
   };
+}
+
+/** A declared shipped ID remains part of the selection while its build is unreadable. */
+export function shippedPackSeedIds({ sources, problems }: AppPackSources): string[] {
+  return [...new Set([...sources, ...problems].map(entry => entry.id).filter(id => PACK_ID_PATTERN.test(id)))];
 }
 
 /** The IDs this profile can install automatically. Persist the first selection before any seed install

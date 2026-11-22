@@ -14,7 +14,7 @@ import { registry } from './runtime/test-host.ts';
 import { loadAppPacks } from '../../src/packs/runtime/loader.ts';
 import { reloadPackById } from '../../src/packs/runtime/reload.ts';
 import { readAppPackSources } from '../../src/packs/app-sources.ts';
-import { recordShippedPackSeed } from '../../src/packs/host-info.ts';
+import { recordShippedPackSeed, shippedPackSeedIds } from '../../src/packs/host-info.ts';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 
@@ -51,7 +51,7 @@ const outcomes = async () => (await installShippedPacks(shipped, packsDir, { see
 async function bootWithShippedSelection(sourceDir = shipped) {
   const catalog = readAppPackSources(sourceDir);
   const seedMissing = recordShippedPackSeed({ appDir: path.dirname(installedPacksFile), userDataDir: tmp, installedPacksFile },
-    catalog.sources.map(source => source.id));
+    shippedPackSeedIds(catalog));
   return installShippedPacks(catalog, packsDir, { installedPacksFile, seedMissing });
 }
 
@@ -88,6 +88,22 @@ describe('the first shipped selection belongs to the profile', () => {
     await restoreShippedPack('starter-b', sourceB, packsDir, { installedPacksFile });
     expect(await bootWithShippedSelection()).toEqual([{ id: 'starter-b', outcome: 'unchanged' }]);
     expect(readInstalledPacks(installedPacksFile)).toEqual([...before, expect.objectContaining({ id: 'starter-b', updatesWith: 'app' })]);
+  });
+
+  it('retries a declared starter whose shipped build was invalid on first boot', async () => {
+    const source = shipPack('starter-a');
+    const runtime = path.join(source, 'dist', PACK_LAYOUT.runtimeEntry);
+    const contents = fs.readFileSync(runtime);
+    fs.unlinkSync(runtime);
+
+    expect(await bootWithShippedSelection()).toMatchObject([{ id: 'starter-a', outcome: 'failed' }]);
+
+    fs.writeFileSync(runtime, contents);
+    shipPack('starter-b');
+    expect(await bootWithShippedSelection()).toEqual([
+      { id: 'starter-a', outcome: 'installed' },
+      { id: 'starter-b', outcome: 'offered' },
+    ]);
   });
 
   it('records an empty selection and seeds B only on a fresh profile', async () => {

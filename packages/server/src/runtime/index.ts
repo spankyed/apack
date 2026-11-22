@@ -7,7 +7,7 @@ import { bindHost } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
 import type { EarsDatabase, EarsEngine } from '@elmdb/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
-import { createPackRegistry, installShippedPacks, prepareHostDataDirs, readAppPackSources, recordShippedPackSeed, type PackRegistry } from '@apackdev/host/packs';
+import { createPackRegistry, installShippedPacks, prepareHostDataDirs, readAppPackSources, recordShippedPackSeed, shippedPackSeedIds, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';
 import { PACK_SNAPSHOT_FORMAT } from '@apackdev/sdk/build';
 import { loadAppPacks, startPacks } from '@apackdev/host/packs/runtime';
@@ -172,7 +172,7 @@ async function initializeBackend(performance?: ReturnType<typeof createNodePerfo
   let seedMissing: ReadonlySet<string> | undefined;
   if (shipped) {
     try {
-      seedMissing = recordShippedPackSeed(appContext, shipped.sources.map(source => source.id));
+      seedMissing = recordShippedPackSeed(appContext, shippedPackSeedIds(shipped));
     } catch (error) {
       console.error("[packs] Could not record the profile's shipped pack selection:", error);
     }
