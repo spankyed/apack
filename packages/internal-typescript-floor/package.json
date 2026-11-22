@@ -1,0 +1,9 @@
+{
+  "name": "@app/internal-typescript-floor",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The oldest TypeScript @apackdev/sdk and @apackdev/ui support (the SDK's and UI's typescript peer), for the published-types specs",
+  "dependencies": {
+    "typescript": "5.7.3"
+  }
+}

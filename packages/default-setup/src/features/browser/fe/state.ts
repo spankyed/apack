@@ -1,14 +1,14 @@
-import { surfaceStorage } from '@apackdev/sdk/fe'
+import { makes, surfaceStorage, type MadeEvent, type Making } from '@apackdev/sdk/fe'
 import type { SurfaceLifecycleEvent } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
 const storage = surfaceStorage(featureRef('browser'))
-import { setup, assign, fromCallback, type ActorRefFrom } from 'xstate';
+import { setup, assign, enqueueActions, fromCallback, type ActorRefFrom } from 'xstate';
 import type { BrowserSettings } from '#generated/types.ts';
 import type { Bookmark, BrowserContext, BrowserInboxEvent, BrowserTab, BrowserTabPersistedId } from './contract.ts';
 import { autocomplete, recordVisit, updateHistoryMeta, displayUrl, type AutocompleteSuggestion } from './history.ts';
-import { sendToSystem } from '#generated/events.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import { openSurface } from '#generated/fe.ts';
 import { getNextAvailableColor, saveTabGroups, loadTabGroups, type TabGroup, type TabGroupColor } from '@apackdev/sdk/fe';
 
@@ -37,6 +37,12 @@ interface NormalizeTabsResult {
   invalidCount: number;
 }
 
+
+/** The asks the surface makes of the browser system: what the window restores, one at a time */
+const made = makes(({ one }) => ({ savedSession: one(fromAsk('browser', 'GET_SAVED_SESSION')) }));
+
+/** The surface's state as its machine holds it: what it publishes, and which of its asks are under way */
+type MachineContext = BrowserContext & { making: Making<typeof made> };
 
 type BrowserEvents =
   // UI events
@@ -74,8 +80,8 @@ type BrowserEvents =
   | { type: 'BOOKMARK.TOGGLE' }
   | { type: 'BOOKMARK.REMOVE'; url: string }
   | { type: 'BOOKMARK.NAVIGATE'; url: string }
-  // Backend events
-  | { type: 'SAVED_SESSION_READ'; savedTabs: SavedTab[]; savedBookmarks: Bookmark[] }
+  // How the ask for what the window restores ended
+  | MadeEvent<typeof made>
   | SurfaceLifecycleEvent
   // IPC bridge events
   | { type: 'IPC.TAB_CREATED'; tab: BrowserTabState }
@@ -84,6 +90,7 @@ type BrowserEvents =
   | { type: 'IPC.ACTIVE_TAB_CHANGED'; tabId: number };
 
 export type BrowserState = ActorRefFrom<typeof browserState>;
+
 
 function navAction(method: 'goBack' | 'goForward' | 'reload' | 'stop') {
   return ({ context }: { context: BrowserContext }) => {
@@ -111,7 +118,7 @@ function syncTabsToBackend(tabs: BrowserTab[], options?: { immediate?: boolean }
         isMuted: t.isMuted,
         groupId: t.groupId,
       }));
-    sendToSystem(id, { type: 'SYNC_TABS', tabs: persistable });
+    tell(id, { type: 'SYNC_TABS', tabs: persistable });
   };
 
   if (options?.immediate) {
@@ -176,7 +183,7 @@ function syncBookmarksToBackend(bookmarks: Bookmark[]) {
       favicon: bm.favicon,
       displayOrder: i,
     }));
-    sendToSystem(id, { type: 'SYNC_BOOKMARKS', bookmarks: persistable });
+    tell(id, { type: 'SYNC_BOOKMARKS', bookmarks: persistable });
   }, 2000);
 }
 
@@ -228,10 +235,11 @@ function runAutocompleteQuery(query: string, sendBack: (event: BrowserEvents) =>
 
 const browserState = setup({
   types: {
-    context: {} as BrowserContext,
+    context: {} as MachineContext,
     events: {} as BrowserEvents,
   },
   actors: {
+    ...made.actors,
     ipcBridge: fromCallback(({ sendBack }) => {
       const api = window.electronAPI?.browser;
       if (!api) return;
@@ -265,6 +273,7 @@ const browserState = setup({
   id,
   initial: 'active',
   context: {
+    making: made.none(),
     tabs: [],
     settings: {} as BrowserSettings,
     activeTabId: null,
@@ -279,10 +288,13 @@ const browserState = setup({
     bookmarks: [],
   },
   invoke: { src: 'ipcBridge' },
+  on: {
+    [made.done]: { actions: made.settle() },
+  },
   states: {
     active: {
       on: {
-        FEATURE_SETTINGS_UPDATED: { actions: assign({ settings: ({ event }) => (event as { settings: BrowserSettings }).settings }) },
+        FEATURE_SETTINGS_UPDATED: { actions: assign({ settings: ({ event }) => event.settings }) },
         'TAB.CREATE': {
           actions: ({ event }) => {
             window.electronAPI?.browser.createTab(event.url);
@@ -558,21 +570,26 @@ const browserState = setup({
             'navigate',
           ],
         },
-        // What the window restores, asked for when the shell starts the surface, in a delivery naming it
+        // What the window restores, asked for when the shell starts the surface, in a delivery naming it: one ask at
+        // a time, a later start's in place of one under way
         SURFACE_STARTED: {
-          actions: () => { sendToSystem(id, { type: 'GET_SAVED_SESSION' }); },
+          actions: enqueueActions(({ enqueue }) => made.make(enqueue, 'savedSession', {})),
         },
-        'SAVED_SESSION_READ': {
+        // A session that could not be read restores nothing
+        'made.savedSession': {
           actions: [
-            assign(({ event }) => ({
+            assign(({ event }) => (event.outcome.ok ? {
               tabGroups: loadTabGroups(storage, 'tab-groups'),
-              bookmarks: event.savedBookmarks ?? [],
-            })),
+              // A page with no favicon is saved without one, which the bar shows as an empty one
+              bookmarks: event.outcome.value.savedBookmarks.map((bookmark) => ({ ...bookmark, favicon: bookmark.favicon ?? '' })),
+            } : {})),
             ({ context, event }) => {
-              const normalized = normalizeSavedTabs(event.savedTabs ?? []);
+              if (!event.outcome.ok) return;
+              const { savedTabs } = event.outcome.value;
+              const normalized = normalizeSavedTabs(savedTabs);
               if (normalized.invalidCount > 0) {
                 console.warn('[Browser] Dropping invalid saved tabs before restore', {
-                  rawCount: event.savedTabs?.length ?? 0,
+                  rawCount: savedTabs.length,
                   repairedCount: normalized.tabs.length,
                   invalidCount: normalized.invalidCount,
                 });

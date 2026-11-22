@@ -1,6 +1,6 @@
 // Preferences reset independently of onboarding and pack lifecycle state.
 import { describe, expect, it } from 'vitest';
-import { type EARS } from '@apackdev/ears';
+import { type EARS } from '@apackdev/sdk';
 import { untypedWrite, untypedQuery } from '@apackdev/sdk/ears';
 import { getTestSettings, startApp } from '@apackdev/testing/harness';
 import { featureSettings } from '#generated/settings.ts';
@@ -17,7 +17,7 @@ describe('resetting settings', () => {
     featureSettings.forFeature('threads').set({ path: ['recentThreadsSortOrder'], value: 'created' });
 
     const call = await app.send('host/settings', { type: 'RESET_ALL_SETTINGS' }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
-    await app.nextEmit('host/settings', 'SETTINGS_SAVED', { answering: call });
+    await app.nextEmit('host/settings', 'ASK_ANSWERED', { answering: call });
 
     expect(featureSettings.forFeature('threads').get()).not.toMatchObject({ recentThreadsSortOrder: 'created' });
     expect(untypedQuery.ids(APP_STATE_ID).pickOne(['hasOnboarded', 'packVersions', 'failedAgainst'])).toMatchObject({

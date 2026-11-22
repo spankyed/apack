@@ -5,7 +5,7 @@ import { createActor } from 'xstate';
 import { createLogger, reportError } from '@apackdev/sdk/logger';
 import { bindHost } from '@apackdev/sdk/runtime';
 import { _getLmdbPath, _getRunHistoryPath } from '@apackdev/sdk/utils';
-import type { EarsDatabase, EarsEngine } from '@apackdev/ears';
+import type { EarsDatabase, EarsEngine } from '@elmdb/ears';
 import { assertNoDatabaseWriter, openDatabaseStore, openRunHistory, storedSettings, type RunsDatabase } from '@apackdev/host/database';
 import { createPackRegistry, installShippedPacks, prepareHostDataDirs, type PackRegistry } from '@apackdev/host/packs';
 import { resolveAppEnvironment } from '@apackdev/sdk/env';

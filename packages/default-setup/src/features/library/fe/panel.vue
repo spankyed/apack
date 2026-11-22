@@ -21,11 +21,11 @@
       </h3>
 
       <!-- Single Document Selected -->
-      <div v-if="selectedDocument" class="space-y-3">
+      <div v-if="library.data.selectedDocument" class="space-y-3">
         <div class="space-y-2">
           <div class="flex items-center justify-between">
             <span class="text-xs text-neutral-400">Name:</span>
-            <span class="text-sm font-medium text-neutral-200">{{ selectedDocument.name }}</span>
+            <span class="text-sm font-medium text-neutral-200">{{ library.data.selectedDocument.name }}</span>
           </div>
           <div v-if="selectedItemFullPath" class="flex items-start justify-between">
             <span class="text-xs text-neutral-400 flex-shrink-0">Path:</span>
@@ -38,7 +38,7 @@
               :class="codeCopied ? 'text-green-400' : 'text-blue-400 hover:text-blue-300'"
               title="Click to copy"
               @click="copyShortCode"
-            >{{ codeCopied ? 'Copied!' : (selectedDocument.shortCode ?? '') }}</span>
+            >{{ codeCopied ? 'Copied!' : (library.data.selectedDocument.shortCode ?? '') }}</span>
           </div>
         </div>
 
@@ -47,7 +47,7 @@
           <h4 class="text-xs font-medium text-neutral-400">Content Preview:</h4>
           <div class="space-y-1.5">
             <div
-              v-for="(section, index) in selectedDocument.content"
+              v-for="(section, index) in library.data.selectedDocument.content"
               :key="index"
               class="px-2 py-1.5 bg-neutral-800 rounded text-xs overflow-hidden line-clamp-2 break-all"
             >
@@ -69,11 +69,11 @@
         </div>
 
         <!-- Document Tags -->
-        <div v-if="selectedDocument.tags.length > 0" class="space-y-2">
+        <div v-if="library.data.selectedDocument.tags.length > 0" class="space-y-2">
           <h4 class="text-xs font-medium text-neutral-400">Tags:</h4>
           <div class="flex flex-wrap gap-1.5">
             <span
-              v-for="tag in selectedDocument.tags"
+              v-for="tag in library.data.selectedDocument.tags"
               :key="tag"
               class="inline-flex items-center px-2 py-0.5 text-xs rounded-md bg-blue-500/20 text-blue-400 border border-blue-500/30"
             >
@@ -84,13 +84,13 @@
 
         <!-- Dates -->
         <div class="space-y-2">
-          <div v-if="selectedDocument.createdAt" class="flex items-center justify-between">
+          <div v-if="library.data.selectedDocument.createdAt" class="flex items-center justify-between">
             <span class="text-xs text-neutral-400">Created:</span>
-            <span class="text-xs text-neutral-300">{{ formatDate(selectedDocument.createdAt) }}</span>
+            <span class="text-xs text-neutral-300">{{ formatDate(library.data.selectedDocument.createdAt) }}</span>
           </div>
-          <div v-if="selectedDocument.updatedAt" class="flex items-center justify-between">
+          <div v-if="library.data.selectedDocument.updatedAt" class="flex items-center justify-between">
             <span class="text-xs text-neutral-400">Modified:</span>
-            <span class="text-xs text-neutral-300">{{ formatDate(selectedDocument.updatedAt) }}</span>
+            <span class="text-xs text-neutral-300">{{ formatDate(library.data.selectedDocument.updatedAt) }}</span>
           </div>
         </div>
       </div>
@@ -241,42 +241,37 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState } from '@apackdev/sdk/fe'
 
 import { computed, ref } from 'vue'
-import { useSelector } from '@xstate/vue'
 import type { FieldContent, ListContent, MarkdownContent, TextContent } from '#features/library/be/types.ts'
 import type { LibraryActor } from './state.ts'
 import { useView } from '#generated/fe.ts'
 
-const actor = useSurface<LibraryActor>()
+const { state: library } = useState<LibraryActor>()
 
 // Individual selectors for each context property
 const indexView = useView('library', 'index')
 const index = computed(() => indexView.data ?? { documents: [], folders: [] })
-const selectedDocument = useSelector(actor, (state) => state.context.selectedDocument)
 // [SEARCH_INDEX_FF] const searchIndices = useSelector(actor, (state) => state.context.searchIndices)
-const items = useSelector(actor, (state) => state.context.items)
-const selectedItems = useSelector(actor, (state) => state.context.selectedItems)
-const expandedFolderChildren = useSelector(actor, (state) => state.context.expandedFolderChildren)
 
 const allVisibleItems = computed(() => {
-  const all = [...items.value]
-  for (const children of Object.values(expandedFolderChildren.value)) {
+  const all = [...library.value.data.items]
+  for (const children of Object.values(library.value.data.expandedFolderChildren)) {
     all.push(...children)
   }
   return all
 })
 
 const selectedFolder = computed(() => {
-  if (selectedItems.value?.length !== 1) return null
-  const item = allVisibleItems.value.find(i => i.id === selectedItems.value[0])
+  if (library.value.data.selectedItems?.length !== 1) return null
+  const item = allVisibleItems.value.find(i => i.id === library.value.data.selectedItems[0])
   return item?.type === 'folder' ? item : null
 })
 
 const selectedItemFullPath = computed(() => {
-  const item = selectedDocument.value
-    ? allVisibleItems.value.find(i => i.id === selectedDocument.value!.id)
+  const item = library.value.data.selectedDocument
+    ? allVisibleItems.value.find(i => i.id === library.value.data.selectedDocument!.id)
     : selectedFolder.value
   if (!item) return null
   if ((item as any).filePath) return (item as any).filePath
@@ -287,7 +282,7 @@ const selectedItemFullPath = computed(() => {
 
 const totalCollections = computed(() => {
   // Count folders in the current view (items array)
-  return items.value.filter(item => item.type === 'folder').length
+  return library.value.data.items.filter(item => item.type === 'folder').length
 })
 
 const allTags = computed(() => {
@@ -316,17 +311,17 @@ const sortedTags = computed(() => {
 })
 
 // Multi-selection computed properties
-const selectedItemsCount = computed(() => selectedItems.value?.length || 0)
+const selectedItemsCount = computed(() => library.value.data.selectedItems?.length || 0)
 
 const selectedDocumentsCount = computed(() => {
   return allVisibleItems.value.filter(item =>
-    selectedItems.value.includes(item.id) && item.type === 'document'
+    library.value.data.selectedItems.includes(item.id) && item.type === 'document'
   ).length
 })
 
 const selectedFoldersCount = computed(() => {
   return allVisibleItems.value.filter(item =>
-    selectedItems.value.includes(item.id) && item.type === 'folder'
+    library.value.data.selectedItems.includes(item.id) && item.type === 'folder'
   ).length
 })
 
@@ -334,7 +329,7 @@ const selectedItemsTags = computed(() => {
   const tags = new Set<string>()
 
   allVisibleItems.value
-    .filter(item => selectedItems.value.includes(item.id) && item.type === 'document')
+    .filter(item => library.value.data.selectedItems.includes(item.id) && item.type === 'document')
     .forEach((item: any) => {
       if (item.tags?.length) {
         item.tags.forEach((tag: string) => tags.add(tag))
@@ -369,7 +364,7 @@ function getTagClass(count: number): string {
 
 const codeCopied = ref(false)
 const copyShortCode = () => {
-  const code = selectedDocument.value?.shortCode
+  const code = library.value.data.selectedDocument?.shortCode
   if (code) {
     navigator.clipboard.writeText(code)
     codeCopied.value = true

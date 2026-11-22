@@ -36,7 +36,7 @@
  * facade gate pays. Plus the file-level floor, and two files named for what they cover.
  *
  * **And layout is the only axis that splits it without paying the fixture twice.** `buildPacks` runs two
- * real `apack pack build`s, and for the published layout an `installPublishedPackages()` that npm-packs three
+ * real `apack pack build`s, and for the published layout an `installPublishedPackages()` that npm-packs two
  * tarballs and is *not* memoised. A split by subject — typechecks here, completions there — would run
  * that fixture in both files and raise the half's total work to lower its floor, which is the trade
  * `generate-entries` already made for nothing (`apack-sdk/tests/build/generate-entries/_support/pack.ts`
@@ -49,7 +49,7 @@ import * as path from 'node:path';
 import ts from 'typescript';
 import { sealPackBuild } from '@apackdev/host/packs';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/publish-checks';
+import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/internal-publish-checks';
 import { callCli, packageJson, preparePack, tsconfig, typecheckPack, write } from './pack-builds';
 import { PACK_LAYOUT } from '@apackdev/host/packs';
 
@@ -153,7 +153,7 @@ const APP_PACK = {
 
 const CONSUMER = `
 import { query, create, upsert, write, newId, type EntityShape, type EntityName, type EARS as PackEARS } from '#generated/ears.ts';
-import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
+import { broadcast, tell } from '#generated/events.ts';
 import { services } from '#generated/services.ts';
 import { repository } from '#generated/repository.ts';
 import type { EARS } from '@apackdev/sdk';
@@ -183,46 +183,46 @@ export type RepositoryService = Expect<Equal<typeof services.repository, typeof 
 services.nope;
 
 // A surface of the dependency, and the host's: each takes what its own owner declares it accepts
-broadcastToSurface('base-pack/calendar', { type: 'TAG_ADDED', name: 'x' });
-broadcastToSurface('memos', { type: 'MEMO_ADDED', text: 'x' });
-broadcastToSurface('host/application', { type: 'SURFACE_VISIBILITY_UPDATED', surfaceVisibility: { 'demo-pack/memos': false } });
+broadcast('base-pack/calendar', { type: 'TAG_ADDED', name: 'x' });
+broadcast('memos', { type: 'MEMO_ADDED', text: 'x' });
+broadcast('host/application', { type: 'SURFACE_VISIBILITY_UPDATED', surfaceVisibility: { 'demo-pack/memos': false } });
 // A surface someone else owns keeps the events its owner declares it receives; a pack widens only its own
 // @ts-expect-error the calendar surface doesn't receive this event
-broadcastToSurface('base-pack/calendar', { type: 'MEMO_ADDED', text: 'x' });
+broadcast('base-pack/calendar', { type: 'MEMO_ADDED', text: 'x' });
 // @ts-expect-error a dependency's surface is named <dependency>/<feature>
-broadcastToSurface('calendar', { type: 'TAG_ADDED', name: 'x' });
+broadcast('calendar', { type: 'TAG_ADDED', name: 'x' });
 // @ts-expect-error the host declares what its application surface receives
-broadcastToSurface('host/application', { type: 'MEMO_ADDED', text: 'x' });
+broadcast('host/application', { type: 'MEMO_ADDED', text: 'x' });
 // @ts-expect-error the dependency's inbox surface declares no inbox, so nothing may be sent to it
-broadcastToSurface('base-pack/inbox', { type: 'MAIL_ARRIVED', from: 'x' });
+broadcast('base-pack/inbox', { type: 'MAIL_ARRIVED', from: 'x' });
 
 // Systems: this pack's by feature id, the dependency's as <dependency>/<feature>
-sendToSystem('memos', { type: 'ADD_MEMO', text: 'x' });
-sendToSystem('memos', { type: 'UNPIN_MEMO', id: 'm1' });
-sendToSystem('base-pack/calendar', { type: 'ADD_TAG', name: 'x' });
+tell('memos', { type: 'ADD_MEMO', text: 'x' });
+tell('memos', { type: 'UNPIN_MEMO', id: 'm1' });
+tell('base-pack/calendar', { type: 'ADD_TAG', name: 'x' });
 // @ts-expect-error the memos system doesn't receive this event
-sendToSystem('memos', { type: 'ADD_TAG', name: 'x' });
+tell('memos', { type: 'ADD_TAG', name: 'x' });
 // @ts-expect-error PIN_MEMO needs its id
-sendToSystem('memos', { type: 'PIN_MEMO' });
+tell('memos', { type: 'PIN_MEMO' });
 declare const memoEventType: 'ADD_MEMO' | 'CLEAR_MEMOS';
 // @ts-expect-error one event type per send
-sendToSystem('memos', { type: memoEventType, text: 'x' });
+tell('memos', { type: memoEventType, text: 'x' });
 declare const systemId: 'memos' | 'base-pack/calendar';
 // @ts-expect-error one system per send
-sendToSystem(systemId, { type: 'ADD_TAG', name: 'x' });
+tell(systemId, { type: 'ADD_TAG', name: 'x' });
 
 // Actions get services.emitter, which names every system and surface <pack>/<feature>, this pack's own too.
 // Its own pack included is the point: an action is content, not source — a row a user edits, exports and copies
 // into another pack — and a bare name would rebind on that copy instead of staying visibly wrong.
-services.emitter.sendToSystem('app-pack/memos', { type: 'ADD_MEMO', text: 'x' });
-services.emitter.sendToSystem('base-pack/calendar', { type: 'ADD_TAG', name: 'x' });
-services.emitter.broadcastToSurface('base-pack/calendar', { type: 'TAG_ADDED', name: 'x' });
+services.emitter.tell('app-pack/memos', { type: 'ADD_MEMO', text: 'x' });
+services.emitter.tell('base-pack/calendar', { type: 'ADD_TAG', name: 'x' });
+services.emitter.broadcast('base-pack/calendar', { type: 'TAG_ADDED', name: 'x' });
 // @ts-expect-error a bare name would rebind if this action were copied to another pack
-services.emitter.sendToSystem('memos', { type: 'ADD_MEMO', text: 'x' });
+services.emitter.tell('memos', { type: 'ADD_MEMO', text: 'x' });
 // @ts-expect-error and its surfaces, for the same reason
-services.emitter.broadcastToSurface('calendar', { type: 'TAG_ADDED', name: 'x' });
+services.emitter.broadcast('calendar', { type: 'TAG_ADDED', name: 'x' });
 // @ts-expect-error ADD_MEMO needs its text
-services.emitter.sendToSystem('app-pack/memos', { type: 'ADD_MEMO' });
+services.emitter.tell('app-pack/memos', { type: 'ADD_MEMO' });
 
 export type Undeclared = Expect<Equal<EntityShape<'Nope'>['anything'], unknown>>;
 // An entity name only known at runtime is accepted, and reads as unknown values
@@ -394,10 +394,10 @@ async function buildPacks(published: boolean, dependencyStamp?: { format?: numbe
  */
 const COMPLETIONS = `
 import { EARS, query, getAttr, newId, write, create } from '#generated/ears.ts';
-import { sendToSystem } from '#generated/events.ts';
+import { tell } from '#generated/events.ts';
 declare const memoId: EARS.EntityId<'Memo'>;
-sendToSystem('|systemId|', { type: 'CLEAR_MEMOS' });
-sendToSystem('memos', { type: '|eventType|' });
+tell('|systemId|', { type: 'CLEAR_MEMOS' });
+tell('memos', { type: '|eventType|' });
 query('Memo').pick(['|pick|']);
 query('Memo').pickOne(['|pickOne|']);
 query.ids(memoId).out('related', 'Memo').pick(['|outPick|']);
@@ -615,7 +615,7 @@ afterEach(() => new Promise<void>((resolve) => { setImmediate(resolve); }));
     expect(at.rankOption, 'rank options').toEqual(expect.arrayContaining(['direction', 'seeds', 'weights']));
   });
 
-  it.each(['bundler', 'node16'] as const)('offers system-id and event-type completions for sendToSystem under moduleResolution %s', (moduleResolution) => {
+  it.each(['bundler', 'node16'] as const)('offers system-id and event-type completions for tell under moduleResolution %s', (moduleResolution) => {
     const app = path.join(parent, 'app-pack');
     const { at } = completionsIn(app, writeTsconfig(app, moduleResolution, published));
     expect(at.systemId, 'system-id completions').toEqual(expect.arrayContaining(['memos', 'base-pack/calendar']));

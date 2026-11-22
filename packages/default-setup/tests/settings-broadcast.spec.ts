@@ -13,7 +13,7 @@ it('sends current shell hotkeys and settings after an app preferences reset', as
 
   const call = await app.send('host/settings', { type: 'RESET_SETTINGS', target: { kind: 'app' } },
     { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
-  await app.nextEmit('host/settings', 'SETTINGS_SAVED', { answering: call });
+  await app.nextEmit('host/settings', 'ASK_ANSWERED', { answering: call });
   await app.settle();
 
   expect(app.emitted('host/settings').filter(event => event.type === 'SETTINGS_UPDATED').at(-1))

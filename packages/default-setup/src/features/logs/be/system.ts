@@ -1,6 +1,6 @@
 import { featureSettings } from '#generated/settings.ts';
 
-import { broadcastToSurface } from '#generated/events.ts';
+import { broadcast } from '#generated/events.ts';
 import { assign, setup, fromCallback, spawnChild } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
 
@@ -19,6 +19,17 @@ function effectiveExcludedSources(settings: LogsSettings | undefined): string[] 
 
 export const logsSpec = defineSystem<Contract>();
 
+const DEFAULT_SETTINGS: LogsSettings = { maxLogs: 1000, excludedSources: [], showAppEvents: false };
+
+export const answers = logsSpec.answers({
+  /** The buffer as the settings filter it, newest first and no more than they keep */
+  GET_LOGS: ({ context }) => {
+    const settings = featureSettings.forFeature('logs').get() ?? DEFAULT_SETTINGS;
+    const kept = context.logs.slice(0, settings.maxLogs || DEFAULT_SETTINGS.maxLogs);
+    return { logs: filterLogsByExcludedSources(kept, effectiveExcludedSources(settings)), settings };
+  },
+});
+
 export const logsSystem = setup({
   types: logsSpec.types,
   actors: {
@@ -34,7 +45,9 @@ export const logsSystem = setup({
       return onLog(logHandler);
     }),
   },
-  actions: logsSpec.actions({
+  actions: {
+    ...answers.actions,
+    ...logsSpec.actions({
     setupEventListeners: spawnChild('setupEventListeners'),
     clearLogs: assign({ logs: () => [] }),
     addLog: assign({
@@ -59,16 +72,6 @@ export const logsSystem = setup({
         return updatedLogs;
       }
     }),
-    /** The buffer as the settings filter it, answered to the window that asked */
-    sendLogs: ({ context, reply }) => {
-      const settings = featureSettings.forFeature('logs').get();
-      const filteredLogs = filterLogsByExcludedSources(context.logs, effectiveExcludedSources(settings));
-      reply?.({
-        type: 'LOGS_READ',
-        logs: filteredLogs,
-        settings: settings ?? { maxLogs: 1000, excludedSources: [], showAppEvents: false },
-      });
-    },
     broadcastNewLog: ({ context }) => {
       const newLog = context.logs[0];
 
@@ -81,13 +84,13 @@ export const logsSystem = setup({
         return; // Don't broadcast excluded logs
       }
 
-      broadcastToSurface('logs', {
+      broadcast('logs', {
         type: 'LOG_ADDED',
         log: newLog,
       });
     },
     broadcastLogsCleared: () => {
-      broadcastToSurface('logs', {
+      broadcast('logs', {
         type: 'LOGS_CLEARED',
       })
     },
@@ -102,6 +105,7 @@ export const logsSystem = setup({
       }
     }),
   }),
+  },
 }).createMachine({
   id: 'logs',
   initial: 'active',
@@ -112,6 +116,7 @@ export const logsSystem = setup({
   },
   entry: ['setupEventListeners'],
   on: {
+    ...answers.on,
     // Each window showing the logs asks for them again, filtered by what the settings now say
     FEATURE_SETTINGS_UPDATED: {
       actions: ['truncateLogsIfNeeded'],
@@ -125,9 +130,6 @@ export const logsSystem = setup({
         },
         CLEAR_LOGS: {
           actions: ['clearLogs', 'broadcastLogsCleared'],
-        },
-        GET_LOGS: {
-          actions: ['truncateLogsIfNeeded', 'sendLogs'],
         },
       },
     },

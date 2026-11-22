@@ -5,12 +5,12 @@
 ```ts
 
 import type { DeepPartial } from 'ai';
-import type { Ears } from '@apackdev/ears';
-import { EARS as EARS_2 } from '@apackdev/ears';
+import type { Ears } from '@elmdb/ears';
+import { EARS as EARS_2 } from '@elmdb/ears';
 import type { embed } from 'ai';
 import type { EmbeddingModel } from 'ai';
 import type { embedMany } from 'ai';
-import type { EngineSchema } from '@apackdev/ears';
+import type { EngineSchema } from '@elmdb/ears';
 import type { FlexibleSchema } from 'ai';
 import type { generateImage } from 'ai';
 import type { generateSpeech } from 'ai';
@@ -77,9 +77,9 @@ export function _captureHostServices(): {
     forAction(sender: ActionSender): {
         logger: Logger;
         emitter: {
-            broadcastToSurface: typeof untypedBroadcastToSurface;
+            broadcast: typeof untypedBroadcast;
             sendToWindow: typeof untypedSendToWindow;
-            sendToSystem: typeof untypedSendToSystem;
+            tell: typeof untypedTell;
         };
     };
     get(name: string): unknown;
@@ -222,9 +222,9 @@ export interface FlowRunNode extends RunNodeBase {
 export interface HostServices {
     appData: AppDataService;
     emitter: {
-        broadcastToSurface: typeof untypedBroadcastToSurface;
+        broadcast: typeof untypedBroadcast;
         sendToWindow: typeof untypedSendToWindow;
-        sendToSystem: typeof untypedSendToSystem;
+        tell: typeof untypedTell;
     };
     filesystem: FilesystemService;
     inference: InferenceService;

@@ -55,8 +55,7 @@ export type HostShellEvent =
    * frontend is still loading is waited for, and one no pack provides is reported once loading settles — but the
    * surface the user has open doesn't change: a send is not a navigation.
    *
-   * `asker` is where an answer goes, so the receiving surface's handler is handed a `reply` that reaches whoever
-   * asked. `from`/`via` are labels a refusal names and deliberately not an address; this is the address.
+   * `asker` is where an answer goes, so an answer to this send reaches whoever asked. `from`/`via` are labels a refusal names and deliberately not an address; this is the address.
    *
    * It is the address rather than a ref because the **channel** is known here and nowhere later: this send stays
    * inside the window, so what answers it answers an actor beside it. The shell carries the value whole from
@@ -65,7 +64,7 @@ export type HostShellEvent =
    *
    * `answering` says this send is an answer to a question rather than something a person asked for, which is
    * what decides how the shell reports a surface that isn't there — a toast tells a user their command failed,
-   * and there is no user behind an answer. Only `reply` sets it.
+   * and there is no user behind an answer. Only an answer sets it.
    */
   | { type: 'SEND_TO_SURFACE'; diagnostics?: PerformanceCarrier; surface: string; events: SurfaceEvent[]; from?: string; via?: string; asker?: _Asker; answering?: string; call?: string }
   | { type: 'RESIZE_PANEL'; panel: 'canvas' | 'inspection'; size: number }

@@ -20,7 +20,7 @@ describe('background continuation action consumer', () => {
     const update = vi.fn();
     mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageToolEntry: (blockId: EntityId, entry: Parameters<typeof repository.chatCommands.writeToolEntry>[0]['entry'], entryRowId?: EntityId) => repository.chatCommands.writeToolEntry({ blockId, entry, entryRowId }), compactMessageBlock: (blockId: EntityId) => repository.chatCommands.compactMessageBlock({ blockId }), removeMessageBlock: (messageId: EntityId, type: string) => repository.chatCommands.removeMessageBlock({ messageId, type }), updateMessageState: update, sendBlockMessage: vi.fn() });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
-    mockService<Services, 'emitter'>('emitter', { sendToSystem: vi.fn(), broadcastToSurface: vi.fn() });
+    mockService<Services, 'emitter'>('emitter', { tell: vi.fn(), broadcast: vi.fn() });
     const lines = [
       { type: 'user', uuid: 'tool-result-row', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'unknown-tool', content: 'Done' }] } },
       { type: 'user', uuid: 'child-input', isReplay: true, parent_tool_use_id: 'child-task', message: { role: 'user', content: 'Child prompt' } },
@@ -46,7 +46,7 @@ describe('background continuation action consumer', () => {
     const update = vi.fn(), emit = vi.fn();
     mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageToolEntry: (blockId: EntityId, entry: Parameters<typeof repository.chatCommands.writeToolEntry>[0]['entry'], entryRowId?: EntityId) => repository.chatCommands.writeToolEntry({ blockId, entry, entryRowId }), compactMessageBlock: (blockId: EntityId) => repository.chatCommands.compactMessageBlock({ blockId }), removeMessageBlock: (messageId: EntityId, type: string) => repository.chatCommands.removeMessageBlock({ messageId, type }), updateMessageState: update });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
-    mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
+    mockService<Services, 'emitter'>('emitter', { tell: emit, broadcast: vi.fn() });
     const activity = createClaudeNestedActivity();
     const child = { type: 'assistant', uuid: 'child-uuid', parent_tool_use_id: 'agent-tool', message: { content: [
       { type: 'text', text: 'Private worker response' }, { type: 'tool_use', id: 'nested-read', name: 'Read', input: { file_path: '/fixture/child.txt' } },
@@ -90,7 +90,7 @@ describe('background continuation action consumer', () => {
     const update = vi.fn(), emit = vi.fn();
     mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageToolEntry: (blockId: EntityId, entry: Parameters<typeof repository.chatCommands.writeToolEntry>[0]['entry'], entryRowId?: EntityId) => repository.chatCommands.writeToolEntry({ blockId, entry, entryRowId }), compactMessageBlock: (blockId: EntityId) => repository.chatCommands.compactMessageBlock({ blockId }), removeMessageBlock: (messageId: EntityId, type: string) => repository.chatCommands.removeMessageBlock({ messageId, type }), updateMessageState: update });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
-    mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
+    mockService<Services, 'emitter'>('emitter', { tell: emit, broadcast: vi.fn() });
     mockService<Services, 'cli'>('cli', { claudeCode: { isCurrentTurn: vi.fn(() => true), clearHandle: vi.fn() } as never });
     const activity = createClaudeNestedActivity();
     const run = async (messageId: EntityId, lines: unknown[], costBaseline: number) => {
@@ -139,7 +139,7 @@ describe('background continuation action consumer', () => {
       sendBlockMessage: vi.fn(() => ({ messageId: followUpId } as never)) });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     const emit = vi.fn();
-    mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
+    mockService<Services, 'emitter'>('emitter', { tell: emit, broadcast: vi.fn() });
     const tracker = createBackgroundTaskTracker();
     const lines = [
       { type: 'system', subtype: 'task_started', task_id: 'background-fixture' },
@@ -172,7 +172,7 @@ describe('background continuation action consumer', () => {
     const { id } = repository.threadCommands.create({ topic: 'Superseded background', instructions: '', tags: [] });
     repository.threadCommands.update(id, { context: { claudeCode: { sessionId: 'old-session', isRunning: true } } });
     const emit = vi.fn();
-    mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
+    mockService<Services, 'emitter'>('emitter', { tell: emit, broadcast: vi.fn() });
     mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
     mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageToolEntry: (blockId: EntityId, entry: Parameters<typeof repository.chatCommands.writeToolEntry>[0]['entry'], entryRowId?: EntityId) => repository.chatCommands.writeToolEntry({ blockId, entry, entryRowId }), compactMessageBlock: (blockId: EntityId) => repository.chatCommands.compactMessageBlock({ blockId }), removeMessageBlock: (messageId: EntityId, type: string) => repository.chatCommands.removeMessageBlock({ messageId, type }), updateMessageState: vi.fn() });
     let current: object | undefined;
@@ -202,7 +202,7 @@ it('cancels an unsupported generic dialog without sending tool denial, pausing o
   const sendBlockMessage = vi.fn(), emit = vi.fn();
   mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageToolEntry: (blockId: EntityId, entry: Parameters<typeof repository.chatCommands.writeToolEntry>[0]['entry'], entryRowId?: EntityId) => repository.chatCommands.writeToolEntry({ blockId, entry, entryRowId }), compactMessageBlock: (blockId: EntityId) => repository.chatCommands.compactMessageBlock({ blockId }), removeMessageBlock: (messageId: EntityId, type: string) => repository.chatCommands.removeMessageBlock({ messageId, type }), updateMessageState: vi.fn(), sendBlockMessage });
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
-  mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
+  mockService<Services, 'emitter'>('emitter', { tell: emit, broadcast: vi.fn() });
   const cancelUserDialog = vi.fn(), respond = vi.fn();
   const lines = [
     { type: 'control_request', request_id: 'native-dialog', request: { subtype: 'request_user_dialog', dialog_kind: 'fable_overage_consent_prompt', payload: { modelName: 'Fixture' } } },
@@ -231,7 +231,7 @@ it('marks a success/is_error result as failed while preserving refusal detail an
   mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageToolEntry: (blockId: EntityId, entry: Parameters<typeof repository.chatCommands.writeToolEntry>[0]['entry'], entryRowId?: EntityId) => repository.chatCommands.writeToolEntry({ blockId, entry, entryRowId }), compactMessageBlock: (blockId: EntityId) => repository.chatCommands.compactMessageBlock({ blockId }), removeMessageBlock: (messageId: EntityId, type: string) => repository.chatCommands.removeMessageBlock({ messageId, type }), updateMessageState: update, sendBlockMessage: vi.fn() });
   mockService<Services, 'threads'>('threads', { updateChatState: vi.fn() });
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() });
-  mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() });
+  mockService<Services, 'emitter'>('emitter', { tell: emit, broadcast: vi.fn() });
   const raw = { type: 'result', subtype: 'success', is_error: true, terminal_reason: 'api_error', session_id: 'refusal-session', result: 'API Error: fixed native refusal', total_cost_usd: 0.25, duration_ms: 42, errors: [] };
   const handle = { events: (async function* () { yield raw; })(), hasPendingBackgroundTasks: vi.fn(() => true), close: vi.fn(async () => {}), kill: vi.fn() };
   mockService<Services, 'cli'>('cli', { claudeCode: { getHandle: vi.fn(() => handle), clearHandle: vi.fn() } as never });
@@ -254,7 +254,7 @@ it('uses the owner baseline updated during a reset when emitting completion cost
   const emit = vi.fn()
   mockService<Services, 'chat'>('chat', { streamMessageText: vi.fn(), streamMessageBlockText: vi.fn(), updateMessageBlock: (messageId: EntityId, block: Parameters<typeof repository.chatCommands.writeMessageBlock>[0]['block'], blockId?: EntityId) => repository.chatCommands.writeMessageBlock({ messageId, block, blockId }), appendMessageBlockText: (blockId: EntityId, at: number, text: string) => repository.chatCommands.appendMessageBlockText({ blockId, at, text }), updateMessageToolEntry: (blockId: EntityId, entry: Parameters<typeof repository.chatCommands.writeToolEntry>[0]['entry'], entryRowId?: EntityId) => repository.chatCommands.writeToolEntry({ blockId, entry, entryRowId }), compactMessageBlock: (blockId: EntityId) => repository.chatCommands.compactMessageBlock({ blockId }), removeMessageBlock: (messageId: EntityId, type: string) => repository.chatCommands.removeMessageBlock({ messageId, type }), updateMessageState: vi.fn() })
   mockService<Services, 'logger'>('logger', { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() })
-  mockService<Services, 'emitter'>('emitter', { sendToSystem: emit, broadcastToSurface: vi.fn() })
+  mockService<Services, 'emitter'>('emitter', { tell: emit, broadcast: vi.fn() })
   mockService<Services, 'cli'>('cli', { claudeCode: { storeHandle: vi.fn(), isCurrentTurn: () => true, clearHandle: vi.fn() } as never })
   const activity = createClaudeNestedActivity()
   let turn!: import('../../../../src/features/code/be/services/claude-code/conversation.ts').ClaudeConversationTurn

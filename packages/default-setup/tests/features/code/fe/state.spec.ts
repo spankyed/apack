@@ -12,7 +12,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
 import type { OpenFile } from '#features/code/fe/contract.ts'
 
-vi.mock('#generated/events.ts', () => ({ sendToSystem: vi.fn(), broadcastToSurface: vi.fn(), sendToSurface: vi.fn() }))
+// An ask a machine invokes stands in as one that is never answered: these cases start no search. The ask for what
+// the surface starts from is the one a case answers (`startOver`)
+const starts = vi.hoisted(() => [] as Array<(outcome: { ok: true; value: unknown }) => void>)
+/** Each ask a machine made by invoking or spawning it, by type, in the order made */
+const invoked = vi.hoisted(() => [] as string[])
+vi.mock('#generated/events.ts', async () => {
+  const { fromPromise } = await import('xstate')
+  return {
+    tell: vi.fn(), broadcast: vi.fn(), sendToSurface: vi.fn(),
+    fromAsk: (_to: string, type: string) => fromPromise(() => new Promise((resolve) => { invoked.push(type); if (type === 'GET_CODE_START') starts.push(resolve) })),
+  }
+})
 vi.mock('#extensions/terminal/pool.ts', async (importOriginal) => ({
   // The real `viewSettingsOf` is the mapping under test; only the pool is replaced
   ...(await importOriginal<typeof import('#extensions/terminal/pool.ts')>()),
@@ -35,10 +46,16 @@ const started = () => {
   running.push(actor)
   return actor
 }
+/** Starts the surface as the shell does, and answers what it asks the code system for with `start` */
+const startOver = async (actor: ReturnType<typeof started>, start: { baseDirectory: string; settings?: object }) => {
+  actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true })
+  starts.pop()!({ ok: true, value: start })
+  await vi.waitFor(() => expect(contextOf(actor).baseDirectory).toBe(start.baseDirectory))
+}
 const contextOf = (actor: ReturnType<typeof started>) => actor.getSnapshot().context
 const storedTabs = (): { tabs: Array<{ path: string }> } => JSON.parse(localStorage.getItem(TABS_KEY) ?? '{"tabs":[]}')
 
-beforeEach(() => localStorage.clear())
+beforeEach(() => { localStorage.clear(); starts.length = 0 })
 afterEach(() => {
   for (const actor of running.splice(0)) actor.stop()
   // Stopping a surface disposes its pool, which is one case's subject and no other's
@@ -322,11 +339,11 @@ describe('an open diff read again', () => {
 })
 
 describe("the feature's settings reaching the terminals", () => {
-  it('gives the saved copy-on-selection setting to the terminal pool when the surface starts, not only when it next changes', () => {
+  it('gives the saved copy-on-selection setting to the terminal pool when the surface starts, not only when it next changes', async () => {
     const actor = started()
     vi.mocked(terminalPool.setCopyOnSelect).mockClear()
 
-    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work', settings: { copyOnSelect: true } } } as never)
+    await startOver(actor, { baseDirectory: '/work', settings: { copyOnSelect: true } })
     expect(terminalPool.setCopyOnSelect, 'the saved value reaches the terminals at start').toHaveBeenLastCalledWith(true)
   })
 
@@ -344,11 +361,11 @@ describe("the feature's settings reaching the terminals", () => {
     expect(terminalPool.setCopyOnSelect, 'a setting that is not there is off, not left as it was').toHaveBeenLastCalledWith(false)
   })
 
-  it('gives the cursor and link settings to the terminal pool at start and as they change, with their defaults when unset', () => {
+  it('gives the cursor and link settings to the terminal pool at start and as they change, with their defaults when unset', async () => {
     const actor = started()
     vi.mocked(terminalPool.setViewSettings).mockClear()
 
-    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work', settings: { cursorInactiveStyle: 'underline', linkPreview: 'all' } } } as never)
+    await startOver(actor, { baseDirectory: '/work', settings: { cursorInactiveStyle: 'underline', linkPreview: 'all' } })
     expect(terminalPool.setViewSettings).toHaveBeenLastCalledWith({ cursorInactive: 'underline', linkPreview: 'all' })
 
     // The blink is not a view's setting: one changed leaves the view's as they were, at their defaults here
@@ -359,14 +376,31 @@ describe("the feature's settings reaching the terminals", () => {
 
 describe('starting over a folder', () => {
   it('has each panel ask about the folder the start names, which is the surface\'s by the time they ask', async () => {
-    const { sendToSystem } = await import('#generated/events.ts')
+    const { tell } = await import('#generated/events.ts')
     const actor = started()
-    vi.mocked(sendToSystem).mockClear()
+    vi.mocked(tell).mockClear()
+    invoked.length = 0
 
-    actor.send({ type: 'CODE_STARTED', data: { baseDirectory: '/work' } } as never)
+    await startOver(actor, { baseDirectory: '/work' })
 
-    const asked = vi.mocked(sendToSystem).mock.calls.map(([, event]) => (event as { type: string }).type)
-    expect(asked, 'the pull request panel asks whether GitHub answers for it').toContain('pr.CHECK_GITHUB_ACCESS')
-    expect(asked, 'the commit panel asks for the repositories under it').toContain('LIST_REPOSITORIES')
+    expect(invoked, 'the pull request panel asks whether GitHub answers for it').toContain('pr.CHECK_GITHUB_ACCESS')
+    expect(invoked, 'the commit panel asks for the repositories under it').toContain('commit.LIST_REPOSITORIES')
+  })
+})
+
+describe('asking for what the surface starts from', () => {
+  it('hears the ask made last: one still under way when the directory moves is stopped, and its answer changes nothing', async () => {
+    const actor = started()
+    actor.send({ type: 'SURFACE_STARTED', ownsAppLayout: true })
+    const first = starts.pop()!
+
+    actor.send({ type: 'BASE_DIRECTORY_CHANGED', baseDirectory: '/second' })
+    const second = starts.pop()!
+    second({ ok: true, value: { baseDirectory: '/second' } })
+    first({ ok: true, value: { baseDirectory: '/first' } })
+
+    await vi.waitFor(() => expect(contextOf(actor).baseDirectory).toBe('/second'))
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(contextOf(actor).baseDirectory, 'the stopped ask is not heard after it').toBe('/second')
   })
 })

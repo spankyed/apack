@@ -3,7 +3,7 @@ import { claudeOpus5RefusalRetryNotice, ClaudeNativeMessageRetirementsSchema } f
 import type { ClaudeNativeLaunch } from '#features/code/common/native-launch.ts'
 import type { EntityId } from '#generated/services.ts'
 import { repository } from '#generated/repository.ts'
-import { broadcastToSurface } from '#generated/events.ts'
+import { broadcast } from '#generated/events.ts'
 import type { ClaudeNativeTerminalOwner } from '#features/code/be/services/claude-code/terminal-owner.ts'
 import type { ClaudeNativeJournalEntry } from '#features/code/be/services/claude-code/terminal-journal.ts'
 import { projectClaudeTerminalHistory } from './claude-terminal-history.ts'
@@ -300,7 +300,7 @@ export function syncClaudeTerminalThread(threadId: EntityId, owner: ClaudeNative
 
         if (state.status === 'live' && metadata?.permissionMode && metadata.permissionMode !== prior.permissionMode
           && (metadata.permissionMode === 'plan' || prior.permissionMode === 'plan')) {
-          broadcastToSurface('threads', { type: 'SET_PHASE', source: 'native', threadId, phase: metadata.permissionMode === 'plan' ? 'Plan' : 'Edit' })
+          broadcast('threads', { type: 'SET_PHASE', source: 'native', threadId, phase: metadata.permissionMode === 'plan' ? 'Plan' : 'Edit' })
         }
         updateChatState(threadId, chatState)
       } catch (error) {

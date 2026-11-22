@@ -8,8 +8,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -19,7 +19,7 @@ afterEach(async () => {
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
 
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const git = async (cwd: string, ...args: string[]) =>
   (await execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd })).stdout.trim();
 
@@ -49,8 +49,8 @@ async function codeOverFourCommits() {
 }
 
 async function undo() {
-  const call = await app!.send('code', { type: 'commit.UNDO_LAST' }, asWindow);
-  await app!.nextEmit('code', 'commit.UNDONE', { answering: call });
+  const call = app!.ask('code', { type: 'commit.UNDO_LAST' }, asWindow);
+  await answered(call);
 }
 
 it('amends the last commit with what is staged and a new message, and undoing it puts it back', async () => {
@@ -59,8 +59,8 @@ it('amends the last commit with what is staged and a new message, and undoing it
   fs.writeFileSync(path.join(directory, 'late.txt'), 'late\n');
   await git(directory, 'add', 'late.txt');
 
-  const call = await app!.send('code', { type: 'commit.AMEND', message: 'four, amended' }, asWindow);
-  await app!.nextEmit('code', 'commit.AMENDED', { answering: call });
+  const call = app!.ask('code', { type: 'commit.AMEND', message: 'four, amended' }, asWindow);
+  await answered(call);
 
   expect((await subjects())[0]).toBe('four, amended');
   expect(await files()).toContain('late.txt');
@@ -74,12 +74,14 @@ it('rewords a commit with its whole message, keeping those after it and the tree
   const tree = await git(dirs[0]!, 'rev-parse', 'HEAD^{tree}');
   const three = await commit('three');
 
-  const read = await app!.send('code', { type: 'commit.GET_COMMIT_MESSAGE', hash: three }, asWindow);
-  const { message } = (await app!.nextEmit('code', 'commit.COMMIT_MESSAGE_RECEIVED', { answering: read })).data as { message: string };
+  const read = app!.ask('code', { type: 'commit.GET_COMMIT_MESSAGE', hash: three }, asWindow);
+  const { message } = (await answered(read)) as { message: string };
   expect(message).toBe('three\n\nWhy three.');
 
-  const call = await app!.send('code', { type: 'commit.REWRITE_COMMIT', hash: three, action: 'reword', message: message.replace('three', 'three, reworded') }, asWindow);
-  expect((await app!.nextEmit('code', 'commit.COMMIT_REWRITTEN', { answering: call })).data).toEqual({ hash: three, action: 'reword' });
+  const call = app!.ask('code', { type: 'commit.REWRITE_COMMIT', hash: three, action: 'reword', message: message.replace('three', 'three, reworded') }, asWindow);
+  const { undoable, ...rewritten } = await answered(call);
+  expect(rewritten).toEqual({ hash: three, action: 'reword' });
+  expect(undoable, 'and it can be taken back').toMatchObject({ summary: expect.any(String) });
 
   expect(await subjects()).toEqual(['four', 'three, reworded', 'two', 'one']);
   expect(await git(dirs[0]!, 'log', '-1', '--format=%b', 'HEAD~1'), 'and its body is kept').toBe('Why three.');
@@ -93,8 +95,8 @@ it('folds a commit into the one before it, keeping that one\'s message and the t
   const before = await head();
   const tree = await git(dirs[0]!, 'rev-parse', 'HEAD^{tree}');
 
-  const call = await app!.send('code', { type: 'commit.REWRITE_COMMIT', hash: await commit('three'), action: 'squash' }, asWindow);
-  await app!.nextEmit('code', 'commit.COMMIT_REWRITTEN', { answering: call });
+  const call = app!.ask('code', { type: 'commit.REWRITE_COMMIT', hash: await commit('three'), action: 'squash' }, asWindow);
+  await answered(call);
 
   expect(await subjects()).toEqual(['four', 'two', 'one']);
   expect(await git(dirs[0]!, 'rev-parse', 'HEAD^{tree}')).toBe(tree);
@@ -106,8 +108,8 @@ it('drops a commit, taking out only what it brought', async () => {
   const { head, commit, subjects, files } = await codeOverFourCommits();
   const before = await head();
 
-  const call = await app!.send('code', { type: 'commit.REWRITE_COMMIT', hash: await commit('two'), action: 'drop' }, asWindow);
-  await app!.nextEmit('code', 'commit.COMMIT_REWRITTEN', { answering: call });
+  const call = app!.ask('code', { type: 'commit.REWRITE_COMMIT', hash: await commit('two'), action: 'drop' }, asWindow);
+  await answered(call);
 
   expect(await subjects()).toEqual(['four', 'three', 'one']);
   expect(await files()).toEqual(['four.txt', 'one.txt', 'three.txt']);
@@ -120,20 +122,20 @@ it('asks before rewriting a commit a remote branch holds, and rewrites it once t
   await git(directory, 'update-ref', 'refs/remotes/origin/main', 'HEAD');
   const three = await commit('three');
 
-  const refused = await app!.send('code', { type: 'commit.REWRITE_COMMIT', hash: three, action: 'drop' }, asWindow);
-  expect(((await app!.nextEmit('code', 'commit.REWRITE_NEEDS_CONFIRMATION', { answering: refused })).data as { message: string }).message).toMatch(/already on a remote branch/);
+  const unconfirmed = app!.ask('code', { type: 'commit.REWRITE_COMMIT', hash: three, action: 'drop' }, asWindow);
+  expect(await refused(unconfirmed), 'the window is asked whether to go on').toMatchObject({ kind: 'published', message: expect.stringMatching(/already on a remote branch/) });
   expect(await subjects(), 'and nothing was rewritten').toEqual(['four', 'three', 'two', 'one']);
 
-  const call = await app!.send('code', { type: 'commit.REWRITE_COMMIT', hash: three, action: 'drop', evenIfPublished: true }, asWindow);
-  await app!.nextEmit('code', 'commit.COMMIT_REWRITTEN', { answering: call });
+  const call = app!.ask('code', { type: 'commit.REWRITE_COMMIT', hash: three, action: 'drop', evenIfPublished: true }, asWindow);
+  await answered(call);
   expect(await subjects()).toEqual(['four', 'two', 'one']);
 });
 
 it('refuses a fold of the first commit, and a commit across a merge', async () => {
   const { directory, commit } = await codeOverFourCommits();
 
-  const first = await app!.send('code', { type: 'commit.REWRITE_COMMIT', hash: await commit('one'), action: 'squash' }, asWindow);
-  expect(((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: first })).data as { message: string }).message).toMatch(/nothing before it/);
+  const first = app!.ask('code', { type: 'commit.REWRITE_COMMIT', hash: await commit('one'), action: 'squash' }, asWindow);
+  expect(((await refused(first)) as { message: string }).message).toMatch(/nothing before it/);
 
   await git(directory, 'checkout', '--quiet', '-b', 'side', 'HEAD~1');
   fs.writeFileSync(path.join(directory, 'side.txt'), 'side\n');
@@ -141,6 +143,6 @@ it('refuses a fold of the first commit, and a commit across a merge', async () =
   await git(directory, 'commit', '--quiet', '-m', 'side');
   await git(directory, 'checkout', '--quiet', 'main');
   await git(directory, 'merge', '--quiet', '--no-ff', '-m', 'merged', 'side');
-  const acrossMerge = await app!.send('code', { type: 'commit.REWRITE_COMMIT', hash: await commit('two'), action: 'drop' }, asWindow);
-  expect(((await app!.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: acrossMerge })).data as { message: string }).message).toMatch(/merge is among/);
+  const acrossMerge = app!.ask('code', { type: 'commit.REWRITE_COMMIT', hash: await commit('two'), action: 'drop' }, asWindow);
+  expect(((await refused(acrossMerge)) as { message: string }).message).toMatch(/merge is among/);
 });

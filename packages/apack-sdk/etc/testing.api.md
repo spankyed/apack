@@ -7,15 +7,15 @@
 import type { AnyActorRef } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
 import type { AnyStateMachine } from 'xstate';
-import { CallCounting } from '@apackdev/ears';
+import { CallCounting } from '@elmdb/ears';
 import type { Component } from 'vue';
 import type { DeepPartial } from 'ai';
-import { EARS as EARS_2 } from '@apackdev/ears';
-import { EarsDatabase } from '@apackdev/ears';
-import { EarsEngine } from '@apackdev/ears';
+import { EARS as EARS_2 } from '@elmdb/ears';
+import { EarsDatabase } from '@elmdb/ears';
+import { EarsEngine } from '@elmdb/ears';
 import type { EditorState } from '@tiptap/pm/state';
 import type { embed } from 'ai';
-import type { EmbedDeclaration } from '@apackdev/ears';
+import type { EmbedDeclaration } from '@elmdb/ears';
 import type { embedMany } from 'ai';
 import type { FlexibleSchema } from 'ai';
 import type { generateImage } from 'ai';
@@ -25,13 +25,12 @@ import type { InferSchema } from 'ai';
 import type { JSONSchema7 } from 'ai';
 import type { Output } from 'ai';
 import type { OutputInterface } from 'ai';
-import { RankDeclaration } from '@apackdev/ears';
+import { RankDeclaration } from '@elmdb/ears';
 import type { Ref } from 'vue';
-import { RelationRules } from '@apackdev/ears';
+import { RelationRules } from '@elmdb/ears';
 import type { rerank } from 'ai';
-import { RowRules } from '@apackdev/ears';
-import type { SearchDeclaration } from '@apackdev/ears';
-import type { SnapshotFrom } from 'xstate';
+import { RowRules } from '@elmdb/ears';
+import type { SearchDeclaration } from '@elmdb/ears';
 import type { streamText } from 'ai';
 import type { ToolLoopAgent } from 'ai';
 import type { ToolLoopAgentSettings } from 'ai';
@@ -46,6 +45,15 @@ export function addTestSecret(provider: SecretProvider, label: string): SecretMe
 export function answerTo<E extends {
     type: string;
 }>(call: string, event: E): E;
+
+// @public
+export function askAnswered<K extends string, A>(call: string, asked: K, answer: A): AskAnswered<K, A>;
+
+// @public
+export function askFailed<K extends string, F extends {
+    kind: string;
+    message: string;
+}>(call: string, asked: K, failure: F): AskFailed<K, F>;
 
 // @public
 export function catchUpTestProjections(): Promise<void>;

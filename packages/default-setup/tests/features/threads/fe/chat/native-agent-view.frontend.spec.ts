@@ -5,8 +5,7 @@ import type { ClaudeNativeTaskDetails, ClaudeNativeTerminalState } from '#featur
 const send = vi.fn(), latest = vi.fn(), following = ref(true)
 let context: { nativeUiViews: Record<string, { state: { agent: ClaudeNativeTaskDetails; agentInput?: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiMountState['agentInput'] } }>; nativeTerminalViews: Record<string, ClaudeTerminalViewSnapshot> }, app: App | undefined
 vi.mock('#extensions/terminal/pool.ts', () => ({ mountNativeTerminal: () => ({ fit: () => ({ columns: 80, rows: 24 }), write: () => {},setInputBlocked:vi.fn(), focus: () => {}, detach: () => {} }) }))
-vi.mock('@apackdev/sdk/fe', () => ({ useSurface: () => ({ send, getSnapshot: () => ({ context, status: 'active' }) }) }))
-vi.mock('@xstate/vue', async () => { const { computed } = await import('vue'); return { useSelector: (_actor: unknown, select: (value: unknown) => unknown) => computed(() => select({ context })) } })
+vi.mock('@apackdev/sdk/fe', async () => { const { computed } = await import('vue'); return ({ useState: () => ({ state: computed(() => ({ data: context })), send: send }),  useSurface: () => ({ send, getSnapshot: () => ({ context, status: 'active' }) }) }) })
 vi.mock('#features/threads/fe/chat/native-agent-scroll.ts', () => ({ useClaudeAgentScroll: () => ({ following, latest, intentRevision: () => 0 }) }))
 vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue', () => ({ default: { props: ['disabled', 'focus', 'openSettings'], setup(_props: unknown, { expose }: { expose(value: unknown): void }) { expose({ focus: () => document.querySelector<HTMLInputElement>('[aria-label="Agent draft"]')?.focus() }) }, template: '<div><input aria-label="Agent draft" :disabled="disabled" /><button @click="openSettings">Claude settings</button></div>' } }))
 vi.mock('#features/threads/fe/chat/NativeTranscriptMessage.vue', () => ({ default: { template: '<div />' } }))

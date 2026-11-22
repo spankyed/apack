@@ -111,7 +111,7 @@ inputs. The producers job is unchanged and always runs, so the typecheck legs' b
     `$GITHUB_STEP_SUMMARY` under an "AFFECTED-ONLY, not exhaustive" banner;
   - consumers add `--affected "$BASE_SHA"` and append their own run/skip block to the summary.
 
-## Tests (`packages/repo-checks/tests/`, behavioural)
+## Tests (`packages/internal-repo-checks/tests/`, behavioural)
 - **`affected.spec.ts`**, over an injected comparison plus a temp mini repo:
   - **Docs and guides:** docs and `CLAUDE.md` select nothing, but content markdown does select.
   - **Renderer edit:** selects no pool suite, but does select the app steps.
@@ -135,7 +135,7 @@ inputs. The producers job is unchanged and always runs, so the typecheck legs' b
 ## Verification
 - **Locally:**
   - `npm run typecheck`, `npm run lint:check`, `npm run check:specifiers`;
-  - `npm run spec` for scripts and repo-checks;
+  - `npm run spec` for scripts and internal-repo-checks;
   - `npm run chain -- --dry --affected origin/master` on this branch and on hand-made diffs, recording the
     expected tables.
 - **CI:** dispatch `ci.yml -f strict_chain=true -f affected_base=<sha>` on throwaway commits:
@@ -145,7 +145,7 @@ inputs. The producers job is unchanged and always runs, so the typecheck legs' b
   | Renderer edit | No pool suites; app steps run |
   | CLI `src` edit | CLI, publish and repo suites whole; native whole |
   | Docs-only | Every consumer skips |
-  | `scripts/lib` file outside the closure | repo-checks suite whole |
+  | `scripts/lib` file outside the closure | internal-repo-checks suite whole |
   | `chain-steps.ts` edit | EVERYTHING |
   | CLI `tests/_support` helper edit | Narrowed to its importers plus spawners |
   | Planted failing helper | The affected run fails |

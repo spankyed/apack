@@ -6,7 +6,7 @@
  */
 
 import type { AnyStateMachine } from 'xstate';
-import type { RankDeclaration, RelationRules, RowRules } from '@apackdev/ears';
+import type { RankDeclaration, RelationRules, RowRules } from '@elmdb/ears';
 
 /** A versioned change: declared target/description with a checked executable function. */
 export interface PackMigration {
@@ -63,6 +63,11 @@ export interface PackFeatureSystem {
   machine: AnyStateMachine;
   /** Declared incoming events plus the SDK lifecycle protocol; private machine handlers do not define an inbox. */
   receives: readonly string[];
+  /**
+   * The asks among `receives`, each with the failure kinds its contract declares. A pack built by `apack pack build`
+   * carries these in its compiled event contracts, which is what the app reads; a native registration says them here.
+   */
+  asks?: Readonly<Record<string, readonly string[]>>;
 }
 
 /** What the backend knows of a feature's surface: the event types it receives, which the app checks a send against */

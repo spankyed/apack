@@ -15,7 +15,7 @@ const fake = vi.hoisted(() => ({
   stamp: (messageId: string, blocks: unknown) => (blocks as { type: string }[]).map(block => ({ ...block, id: `${messageId}-${block.type}` })),
 }))
 vi.mock('#generated/ears.ts', () => ({ write: (id: string) => ({ destroy: () => { const index=fake.messages.findIndex(message=>message.id===id);if(index!==-1)fake.messages.splice(index,1) } }) }))
-vi.mock('#generated/events.ts', () => ({ broadcastToSurface: fake.broadcast }))
+vi.mock('#generated/events.ts', () => ({ broadcast: fake.broadcast }))
 vi.mock('#generated/repository.ts', () => ({ repository: {
   chatQueries: { threadData: () => ({ ...fake.thread, messages: fake.messages }), messageById: (id: string) => fake.messages.find(message => message.id === id), blocksOf: (id: string) => ((fake.messages.find(message => message.id === id)?.blocks ?? []) as { type: string; id: string }[]) },
   threadQueries: { byId: () => fake.thread },

@@ -36,4 +36,4 @@ type HostSystems = WithOwnNames<typeof HOST_PACK_ID, {
   'host/settings': IncomingEventsOf<SettingsContract>;
 }>;
 
-export const { broadcastToSurface, sendToSurface, sendToSystem } = defineEvents<HostSurfaces, HostSystems>(HOST_PACK_ID);
+export const { broadcast, sendToSurface, tell } = defineEvents<HostSurfaces, HostSystems>(HOST_PACK_ID);

@@ -6,8 +6,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -16,7 +16,7 @@ afterEach(async () => {
   resetTestData();
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const git = async (cwd: string, ...args: string[]) =>
   String((await execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd })).stdout).trim();
 
@@ -37,12 +37,12 @@ it('answers the status with each file\'s count, and a stash\'s files without app
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const asked = await app.send('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
-  const { data } = await app.nextEmit('code', 'commit.STATUS_RECEIVED', { answering: asked });
+  const asked = app.ask('code', { type: 'commit.GET_GIT_STATUS' }, asWindow);
+  const data = await answered(asked);
   expect((data as { counts: unknown }).counts).toEqual([{ path: 'a.txt', staged: false, added: 2, removed: 1, binary: false }]);
 
-  const peeked = await app.send('code', { type: 'commit.GET_STASH_CHANGES', index: 0 }, asWindow);
-  const { data: stash } = await app.nextEmit('code', 'commit.STASH_CHANGES_RECEIVED', { answering: peeked });
+  const peeked = app.ask('code', { type: 'commit.GET_STASH_CHANGES', index: 0 }, asWindow);
+  const stash = await answered(peeked);
   expect(stash).toEqual({ index: 0, files: [{ path: 'b.txt', status: 'modified', added: 1, removed: 1, binary: false }] });
   expect(fs.readFileSync(path.join(directory, 'b.txt'), 'utf8'), 'and the stash was not applied').toBe('b\n');
 });

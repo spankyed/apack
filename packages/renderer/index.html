@@ -126,6 +126,7 @@
       window.__showErrorPage = function(title, detail) {
         if (window.__errorPageShown) return;
         window.__errorPageShown = true;
+        window.__errorPageTitle = title;
         var errorPage = document.getElementById('error-page');
         var appEl = document.getElementById('app');
         if (!errorPage) return;
@@ -148,6 +149,17 @@
 
         errorPage.style.display = 'flex';
         if (appEl) appEl.style.display = 'none';
+      };
+
+      // Takes the page down again, for a failure that turned out not to be one: the page a later failure put up
+      // stays, since only the page with this title is taken down
+      window.__hideErrorPage = function(title) {
+        if (!window.__errorPageShown || window.__errorPageTitle !== title) return;
+        window.__errorPageShown = false;
+        var errorPage = document.getElementById('error-page');
+        var appEl = document.getElementById('app');
+        if (errorPage) errorPage.style.display = 'none';
+        if (appEl) appEl.style.display = '';
       };
 
       window.addEventListener('unhandledrejection', function(e) {

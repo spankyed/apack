@@ -1,4 +1,4 @@
-import { sendToSystem } from '#generated/events.ts';
+import { tell } from '#generated/events.ts';
 import type { StepInput, ExecutionContext } from '@apackdev/sdk/steps';
 import { extractValueByPath } from '@apackdev/sdk/utils';
 import type { FireNode } from './types.ts';
@@ -31,7 +31,7 @@ export function handler(input: StepInput, node: unknown, ctx: ExecutionContext, 
   const targetFlowId = scope === 'local' ? ctx.flowRunNodeId : undefined;
 
   try {
-    sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT',  eventType, payload, targetFlowId });
+    tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT',  eventType, payload, targetFlowId });
     a.send({
       type: 'COMPLETE',
       result: { eventFired: eventType, eventScope: scope, targetFlowId, payload },

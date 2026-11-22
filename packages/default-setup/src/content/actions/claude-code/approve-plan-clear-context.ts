@@ -87,7 +87,7 @@ export async function action(
 
   // 7. Switch frontend to new thread and set edit phase
   services.chat.showThread(newThreadId);
-  services.emitter.broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
+  services.emitter.broadcast('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
   updateChatState(services, newThreadId as EntityId, 'working');
 
   // 8. Fire chat action on new thread (fresh CLI session, no resume)

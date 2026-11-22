@@ -1,34 +1,16 @@
-import type { Reply } from '@apackdev/sdk/events'
-import type { OutgoingCodeEvents } from '../contract.ts'
-import { answer } from '../answer.ts'
-import { broadcastToSurface } from '#generated/events.ts';
-import { defineHandlers } from '@apackdev/sdk/framework';
+import type { ExplorerAsks } from '../contract.ts'
+import { AskError, type AsksEvents } from '@apackdev/sdk/events'
+import { defineHandlers } from '@apackdev/sdk/framework'
+import { safeEvents } from '@apackdev/sdk/helpers'
+import { broadcast } from '#generated/events.ts';
 import { assign, fromCallback, setup, type AnyActorRef } from 'xstate'
 
 import { FileSystemRepository } from '../services/filesystem.ts'
 import { OpenFileWatcher } from '../services/open-file-watcher.ts'
 import type { FileChangeInfo } from '../services/open-file-watcher.ts'
+import type { CodeSystemError } from '../types.ts'
 
 const surfaceId = 'code' as const
-
-function requireRepository(context: CodeExplorerSystemContext, path: string, reply: Reply<OutgoingCodeEvents> | undefined): context is CodeExplorerSystemContext & { repository: FileSystemRepository } {
-  if (!context.repository) {
-    answer(reply, {
-      type: 'explorer.CODE_ERROR',
-      data: {
-        code: 'INVALID_PATH',
-        message: 'No directory selected.',
-        path,
-      },
-    })
-    return false
-  }
-  return true
-}
-
-// Incoming events from frontend
-
-// Outgoing events to frontend
 
 export interface CodeExplorerSystemContext {
   baseDirectory: string | null
@@ -42,25 +24,90 @@ type OpenFilesEvent = { type: 'OPEN' | 'CLOSE'; path: string } | { type: 'CHECK'
 const openFiles = (self: AnyActorRef): AnyActorRef | undefined => self.getSnapshot().children.openFiles
 
 export type Event =
-  | { type: 'explorer.LIST_FILES'; path: string }
-  | { type: 'explorer.READ_FILE'; path: string }
-  | { type: 'explorer.WRITE_FILE'; path: string; content: string }
-  | { type: 'explorer.CREATE_FILE'; path: string; content?: string }
-  | { type: 'explorer.DELETE_FILE'; path: string }
-  | { type: 'explorer.RENAME_FILE'; oldPath: string; newPath: string }
-  | { type: 'explorer.CREATE_DIRECTORY'; path: string }
-  | { type: 'explorer.GET_FILE_INFO'; path: string }
   | { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
   | { type: 'explorer.UPDATE_BASE_DIRECTORY'; path: string }
   | { type: 'explorer.CHECK_OPEN_FILES' }
   | { type: 'explorer.CLOSE_FILE'; path: string }
-  | { type: 'explorer.MOVE_FILES'; sourcePaths: string[]; targetDir: string }
-  | { type: 'explorer.COPY_FILES'; sourcePaths: string[]; targetDir: string }
   | { type: 'explorer.FILE_CHANGE_CALLBACK'; change: FileChangeInfo }
-  | { type: 'explorer.QUICK_OPEN_SEARCH'; baseDirectory: string };
+  // The explorer asks, which the code system forwards here to be answered
+  | AsksEvents<ExplorerAsks>;
 
-/** Hands each handler the answer for the message it is handling — see `defineHandlers` */
+const typeOf = safeEvents<Event>();
 const handlers = defineHandlers<CodeExplorerSystemContext, Event>();
+
+/** The codes a file failure is told with, by the code the filesystem service or the disk gave; `IO_ERROR` for any other */
+const FILE_FAILURE_CODES: Readonly<Record<string, CodeSystemError['code']>> = {
+  NOT_FOUND: 'NOT_FOUND', PERMISSION_DENIED: 'PERMISSION_DENIED', INVALID_PATH: 'INVALID_PATH', IO_ERROR: 'IO_ERROR', FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  ENOENT: 'NOT_FOUND', EACCES: 'PERMISSION_DENIED', EPERM: 'PERMISSION_DENIED',
+}
+
+/** A file operation that failed, as its ask is refused: what failed, and the path it failed at, else the one asked about */
+function fileFailure(error: unknown, path: string | undefined): AskError {
+  const { code, path: at, message } = error as { code?: unknown; path?: string; message?: string }
+  const failed = (typeof code === 'string' ? FILE_FAILURE_CODES[code] : undefined) ?? 'IO_ERROR'
+  const where = at ?? path
+  return new AskError('file', message ?? String(error), { code: failed, ...(where !== undefined && { path: where }) })
+}
+
+/**
+ * Runs a file operation over the explorer's folder: refused when there is none, and its failure told as a file
+ * failure of the path it was at (`fileFailure`)
+ */
+async function overFiles<T>({ repository }: CodeExplorerSystemContext, path: string | undefined, run: (repository: FileSystemRepository) => Promise<T>): Promise<T> {
+  if (!repository) throw new AskError('file', 'No directory selected.', { code: 'INVALID_PATH', ...(path !== undefined && { path }) })
+  try {
+    return await run(repository)
+  } catch (error) {
+    throw fileFailure(error, path)
+  }
+}
+
+/** The explorer asks, answered here over the folder this machine holds */
+const answers = handlers.answers<ExplorerAsks>({
+  'explorer.LIST_FILES': ({ args, context }) => overFiles(context, args.path, repository =>
+    repository.listDirectory(args.path || context.baseDirectory || '')),
+  'explorer.READ_FILE': ({ args: { path }, context, self }) => overFiles(context, path, async (repository) => {
+    // Watched from before it is read, so a change made while it is being read is one to what the editor holds
+    openFiles(self)?.send({ type: 'OPEN', path })
+    try {
+      return await repository.readFile(path)
+    } catch (error) {
+      openFiles(self)?.send({ type: 'CLOSE', path })
+      throw error
+    }
+  }),
+  'explorer.WRITE_FILE': ({ args: { path, content }, context }) => overFiles(context, path, async (repository) => {
+    await repository.writeFile(path, content)
+    return { path }
+  }),
+  'explorer.DELETE_FILE': ({ args: { path }, context }) => overFiles(context, path, async (repository) => {
+    await repository.deleteFile(path)
+    return { path }
+  }),
+  'explorer.RENAME_FILE': ({ args: { oldPath, newPath }, context }) => overFiles(context, oldPath, async (repository) => {
+    await repository.renameFile(oldPath, newPath)
+    return { oldPath, newPath }
+  }),
+  'explorer.CREATE_DIRECTORY': ({ args: { path }, context }) => overFiles(context, path, async (repository) => {
+    await repository.createDirectory(path)
+    return { path }
+  }),
+  'explorer.QUICK_OPEN_SEARCH': ({ args: { baseDirectory }, context }) => overFiles(context, baseDirectory, repository => repository.getAllFiles(baseDirectory)),
+  'explorer.MOVE_FILES': ({ args: { sourcePaths, targetDir }, context, self }) => overFiles(context, targetDir, async (repository) => {
+    const movedPaths: string[] = []
+    for (const sourcePath of sourcePaths) {
+      movedPaths.push(await repository.moveFile(sourcePath, targetDir))
+      // The old path is no file any more, so a change at it is not one to an open file
+      openFiles(self)?.send({ type: 'CLOSE', path: sourcePath })
+    }
+    return { sourcePaths, targetDir, movedPaths }
+  }),
+  'explorer.COPY_FILES': ({ args: { sourcePaths, targetDir }, context }) => overFiles(context, targetDir, async (repository) => {
+    const copiedPaths: string[] = []
+    for (const sourcePath of sourcePaths) copiedPaths.push(await repository.copyFileInto(sourcePath, targetDir))
+    return { targetDir, copiedPaths }
+  }),
+})
 
 export const explorerSystem = setup({
   types: {
@@ -79,323 +126,34 @@ export const explorerSystem = setup({
       return () => { void watcher.stop() }
     }),
   },
-  actions: handlers.actions({
+  actions: {
+    ...answers.actions,
     /** Something may have changed on disk without an event for it: look at every open file again */
     checkOpenFiles: ({ self }) => {
       openFiles(self)?.send({ type: 'CHECK' })
     },
 
     handleFileChange: ({ event }) => {
-      const ev = event as { type: 'explorer.FILE_CHANGE_CALLBACK'; change: FileChangeInfo }
-
-      broadcastToSurface(surfaceId, {
+      broadcast(surfaceId, {
         type: 'explorer.FILE_CHANGED_EXTERNALLY',
-        data: ev.change
+        data: typeOf('explorer.FILE_CHANGE_CALLBACK', event).change
       })
     },
 
-
-    listFiles: async ({ event, context, reply }) => {
-      const ev = event as { type: 'explorer.LIST_FILES'; path: string }
-
-      if (!requireRepository(context, ev.path, reply)) return
-
-      try {
-        const path = ev.path || context.baseDirectory || ''
-        const content = await context.repository.listDirectory(path)
-        answer(reply, {
-          type: 'explorer.FILES_LISTED',
-          data: content,
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
-
-    readFile: async ({ event, context, reply, self }) => {
-      const ev = event as { type: 'explorer.READ_FILE'; path: string }
-
-      if (!requireRepository(context, ev.path, reply)) return
-
-      // Watched from before it is read, so a change made while it is being read is one to what the editor holds
-      openFiles(self)?.send({ type: 'OPEN', path: ev.path })
-      try {
-        const content = await context.repository.readFile(ev.path)
-        answer(reply, {
-          type: 'explorer.FILE_CONTENT',
-          data: content,
-        })
-      } catch (error: any) {
-        openFiles(self)?.send({ type: 'CLOSE', path: ev.path })
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
-
-    writeFile: async ({ event, context, reply }) => {
-      const ev = event as { type: 'explorer.WRITE_FILE'; path: string; content: string }
-
-      if (!requireRepository(context, ev.path, reply)) return
-
-      try {
-        await context.repository.writeFile(ev.path, ev.content)
-        answer(reply, {
-          type: 'explorer.FILE_SAVED',
-          data: { path: ev.path },
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
-
-    createFile: async ({ event, context, reply }) => {
-      const ev = event as { type: 'explorer.CREATE_FILE'; path: string; content?: string }
-
-      if (!requireRepository(context, ev.path, reply)) return
-
-      try {
-        await context.repository.writeFile(ev.path, ev.content || '')
-        answer(reply, {
-          type: 'explorer.FILE_CREATED',
-          data: { path: ev.path },
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
-
-    deleteFile: async ({ event, context, reply }) => {
-      const ev = event as { type: 'explorer.DELETE_FILE'; path: string }
-
-      if (!requireRepository(context, ev.path, reply)) return
-
-      try {
-        await context.repository.deleteFile(ev.path)
-        answer(reply, {
-          type: 'explorer.FILE_DELETED',
-          data: { path: ev.path },
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
-
-    renameFile: async ({ event, context, reply }) => {
-      const ev = event as { type: 'explorer.RENAME_FILE'; oldPath: string; newPath: string }
-
-      if (!requireRepository(context, ev.oldPath, reply)) return
-
-      try {
-        await context.repository.renameFile(ev.oldPath, ev.newPath)
-        answer(reply, {
-          type: 'explorer.FILE_RENAMED',
-          data: { oldPath: ev.oldPath, newPath: ev.newPath },
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
-
-    createDirectory: async ({ event, context, reply }) => {
-      const ev = event as { type: 'explorer.CREATE_DIRECTORY'; path: string }
-
-      if (!requireRepository(context, ev.path, reply)) return
-
-      try {
-        await context.repository.createDirectory(ev.path)
-        answer(reply, {
-          type: 'explorer.DIRECTORY_CREATED',
-          data: { path: ev.path },
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
-
-    getFileInfo: async ({ event, context, reply }) => {
-      const ev = event as { type: 'explorer.GET_FILE_INFO'; path: string }
-
-      if (!requireRepository(context, ev.path, reply)) return
-
-      try {
-        const info = await context.repository.getFileInfo(ev.path)
-        answer(reply, {
-          type: 'explorer.FILE_INFO',
-          data: info,
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
-
-    setBaseDirectory: () => {
-      // No longer need to send active directory info
-    },
-
     assignBaseDirectory: assign({
-      baseDirectory: ({ event }) => {
-        const ev = event as { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
-        return ev.path
-      },
-      repository: ({ event }) => {
-        const ev = event as { type: 'explorer.SET_BASE_DIRECTORY'; path: string }
-        return new FileSystemRepository(ev.path)
-      },
+      baseDirectory: ({ event }) => typeOf('explorer.SET_BASE_DIRECTORY', event).path,
+      repository: ({ event }) => new FileSystemRepository(typeOf('explorer.SET_BASE_DIRECTORY', event).path),
     }),
 
     updateBaseDirectory: assign({
-      baseDirectory: ({ event }) => {
-        const ev = event as { type: 'explorer.UPDATE_BASE_DIRECTORY'; path: string }
-        return ev.path
-      },
-      repository: ({ event }) => {
-        const ev = event as { type: 'explorer.UPDATE_BASE_DIRECTORY'; path: string }
-        return new FileSystemRepository(ev.path)
-      },
+      baseDirectory: ({ event }) => typeOf('explorer.UPDATE_BASE_DIRECTORY', event).path,
+      repository: ({ event }) => new FileSystemRepository(typeOf('explorer.UPDATE_BASE_DIRECTORY', event).path),
     }),
 
     closeFile: ({ event, self }) => {
-      const ev = event as { type: 'explorer.CLOSE_FILE'; path: string }
-      openFiles(self)?.send({ type: 'CLOSE', path: ev.path })
+      openFiles(self)?.send({ type: 'CLOSE', path: typeOf('explorer.CLOSE_FILE', event).path })
     },
-
-    quickOpenSearch: async ({ event, context, reply }) => {
-      const ev = event as { type: 'explorer.QUICK_OPEN_SEARCH'; baseDirectory: string }
-
-      if (!requireRepository(context, ev.baseDirectory, reply)) return
-
-      try {
-        const files = await context.repository.getAllFiles(ev.baseDirectory)
-        answer(reply, {
-          type: 'explorer.QUICK_OPEN_RESULTS',
-          data: files,
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: ev.baseDirectory,
-          },
-        })
-      }
-    },
-
-    moveFiles: async ({ event, context, reply, self }) => {
-      const ev = event as { type: 'explorer.MOVE_FILES'; sourcePaths: string[]; targetDir: string }
-
-      if (!requireRepository(context, ev.targetDir, reply)) return
-
-      try {
-        const movedPaths: string[] = []
-        for (const sourcePath of ev.sourcePaths) {
-          const destPath = await context.repository.moveFile(sourcePath, ev.targetDir)
-          movedPaths.push(destPath)
-          // The old path is no file any more, so a change at it is not one to an open file
-          openFiles(self)?.send({ type: 'CLOSE', path: sourcePath })
-        }
-
-        answer(reply, {
-          type: 'explorer.FILES_MOVED',
-          data: { sourcePaths: ev.sourcePaths, targetDir: ev.targetDir, movedPaths },
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
-
-    copyFiles: async ({ event, context, reply }) => {
-      const ev = event as { type: 'explorer.COPY_FILES'; sourcePaths: string[]; targetDir: string }
-
-      if (!requireRepository(context, ev.targetDir, reply)) return
-
-      try {
-        const copiedPaths: string[] = []
-        for (const sourcePath of ev.sourcePaths) {
-          const destPath = await context.repository.copyFileInto(sourcePath, ev.targetDir)
-          copiedPaths.push(destPath)
-        }
-
-        answer(reply, {
-          type: 'explorer.FILES_COPIED',
-          data: { targetDir: ev.targetDir, copiedPaths },
-        })
-      } catch (error: any) {
-        answer(reply, {
-          type: 'explorer.CODE_ERROR',
-          data: {
-            code: error.code || 'IO_ERROR',
-            message: error.message,
-            path: error.path,
-          },
-        })
-      }
-    },
-
-  })
+  },
 }).createMachine({
   id: 'explorer',
   initial: 'idle',
@@ -410,38 +168,9 @@ export const explorerSystem = setup({
   states: {
     idle: {
       on: {
-        'explorer.LIST_FILES': {
-          actions: 'listFiles'
-        },
-        'explorer.READ_FILE': {
-          actions: 'readFile'
-        },
-        'explorer.WRITE_FILE': {
-          actions: 'writeFile'
-        },
-        'explorer.CREATE_FILE': {
-          actions: 'createFile'
-        },
-        'explorer.DELETE_FILE': {
-          actions: 'deleteFile'
-        },
-        'explorer.RENAME_FILE': {
-          actions: 'renameFile'
-        },
-        'explorer.CREATE_DIRECTORY': {
-          actions: 'createDirectory'
-        },
-        'explorer.GET_FILE_INFO': {
-          actions: 'getFileInfo'
-        },
+        ...answers.on,
         'explorer.SET_BASE_DIRECTORY': {
-          actions: ['assignBaseDirectory', 'setBaseDirectory']
-        },
-        'explorer.MOVE_FILES': {
-          actions: 'moveFiles'
-        },
-        'explorer.COPY_FILES': {
-          actions: 'copyFiles'
+          actions: 'assignBaseDirectory'
         },
         'explorer.UPDATE_BASE_DIRECTORY': {
           actions: ['updateBaseDirectory']
@@ -454,9 +183,6 @@ export const explorerSystem = setup({
         },
         'explorer.FILE_CHANGE_CALLBACK': {
           actions: 'handleFileChange'
-        },
-        'explorer.QUICK_OPEN_SEARCH': {
-          actions: 'quickOpenSearch'
         }
       }
     }

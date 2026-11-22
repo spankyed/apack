@@ -5,7 +5,7 @@
 // can check, so a cell cannot drift from the code it describes.
 //
 // **Why it is data here rather than one spec somewhere.** The passes live in `@app/api`, `@apackdev/cli` and
-// `@apackdev/sdk`, and no package may import all three: `@app/repo-checks` is allowed `@apackdev/sdk` and
+// `@apackdev/sdk`, and no package may import all three: `@app/internal-repo-checks` is allowed `@apackdev/sdk` and
 // `@apackdev/host` only. So the matrix is declared once and asserted from the three suites that can each reach
 // their own, which between them cover all five rows.
 //

@@ -6,7 +6,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RESIZE_SETTLE_MS } from '#extensions/terminal/pool.ts'
 
-vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-view.ts')).viewModule())
+vi.mock('@apackdev/terminal-view', async () => (await import('../_support/terminal-view.ts')).viewModule())
 
 const { views, lastView } = await import('../_support/terminal-view.ts')
 const { startCodeSurface, terminalInfo } = await import('../_support/terminal-host.ts')

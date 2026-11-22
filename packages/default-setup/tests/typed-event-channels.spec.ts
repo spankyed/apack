@@ -8,9 +8,8 @@ import type { ApplicationHotkeys } from '@apackdev/sdk/types';
 import type { EARS } from '#generated/ears.ts';
 import type { Services } from '#generated/services.ts';
 import type { SurfaceInboxOf } from '@apackdev/sdk/events';
-import { broadcastToSurface, sendToSystem, type SendableSurfaceEvents } from '#generated/events.ts';
+import { broadcast, tell, type SendableSurfaceEvents } from '#generated/events.ts';
 import { openSurface } from '#generated/fe.ts';
-import type { OutgoingActionEvents } from '#features/actions/be/types.ts';
 import type { OutgoingFlowsEvents } from '#features/flows/be/types.ts';
 import type { OutgoingThreadsEvents } from '#features/threads/be/types.ts';
 import type { Contract as ThreadsContract } from '#features/threads/fe/contract.ts';
@@ -20,7 +19,6 @@ import type { Contract as FlowsContract } from '#features/flows/fe/contract.ts';
 type ThreadsAccepts = SurfaceInboxOf<ThreadsContract>;
 type FlowsAccepts = SurfaceInboxOf<FlowsContract>;
 
-declare const actionEvent: OutgoingActionEvents;
 declare const hotkeys: ApplicationHotkeys;
 // What a content action receives
 declare const services: Services;
@@ -39,60 +37,60 @@ describe('SendableSurfaceEvents', () => {
   });
 });
 
-describe('broadcastToSurface', () => {
+describe('broadcast', () => {
   // Wrapped in functions that never run: only their types are checked
   it('accepts an event the surface receives', () => {
     expectTypeOf(() => {
-      broadcastToSurface('threads', { type: 'SHOW_THREAD', threadId: 't1' as EARS.EntityId });
-      broadcastToSurface('flows', { type: 'FLOW.SELECT', flowId: 'Flow-1' as EARS.EntityId });
-      broadcastToSurface('host/application', { type: 'APPLICATION_HOTKEYS', hotkeys });
-      broadcastToSurface('host/application', { type: 'SURFACE_VISIBILITY_UPDATED', surfaceVisibility: { 'default-setup/notes': false } });
+      broadcast('threads', { type: 'SHOW_THREAD', threadId: 't1' as EARS.EntityId });
+      broadcast('flows', { type: 'FLOW.SELECT', flowId: 'Flow-1' as EARS.EntityId });
+      broadcast('host/application', { type: 'APPLICATION_HOTKEYS', hotkeys });
+      broadcast('host/application', { type: 'SURFACE_VISIBILITY_UPDATED', surfaceVisibility: { 'default-setup/notes': false } });
     }).toBeFunction();
   });
 
   it('rejects an event the surface does not receive', () => {
     expectTypeOf(() => {
-      // @ts-expect-error the threads surface doesn't receive action events
-      broadcastToSurface('threads', actionEvent);
+      // @ts-expect-error the threads surface doesn't receive the database's news
+      broadcast('threads', { type: 'DATABASE_REPLACED' });
       // @ts-expect-error not an application event
-      broadcastToSurface('host/application', { type: 'SETTINGS_LOADED' });
+      broadcast('host/application', { type: 'SETTINGS_LOADED' });
       // @ts-expect-error unknown surface
-      broadcastToSurface('unknown-surface', { type: 'ANYTHING' });
+      broadcast('unknown-surface', { type: 'ANYTHING' });
     }).toBeFunction();
   });
 });
 
-describe('sendToSystem', () => {
+describe('tell', () => {
   // Wrapped in functions that never run: only their types are checked
   it('accepts an event the system receives', () => {
     expectTypeOf(() => {
-      sendToSystem('notes', { type: 'DELETE_NOTE', id: 'Note-1' });
+      tell('notes', { type: 'DELETE_NOTE', id: 'Note-1' });
       // System to system, as a backend system sends another: the same typed send
-      sendToSystem('brain', { type: 'TRIGGER_BRAIN_EVENT', eventType: 'thread.fork' });
-      sendToSystem('threads', { type: 'GET_CHAT_START' });
+      tell('brain', { type: 'TRIGGER_BRAIN_EVENT', eventType: 'thread.fork' });
+      tell('threads', { type: 'GET_CHAT_START' });
       // A role reaches whichever system plays it
-      sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'thread.fork' });
+      tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'thread.fork' });
       // The host's systems, by ref
-      sendToSystem('host/bus', { type: 'PACK_CHANGED', packId: 'default-setup' });
+      tell('host/bus', { type: 'PACK_CHANGED', packId: 'default-setup' });
     }).toBeFunction();
   });
 
   it('rejects an unknown system, an unknown event type, a missing field and a union system or type', () => {
     expectTypeOf((systemId: 'notes' | 'settings', brainIsDead: boolean) => {
       // @ts-expect-error not a system of this pack or its dependencies
-      sendToSystem('unknown-system', { type: 'GET_SETTINGS' });
+      tell('unknown-system', { type: 'GET_SETTINGS' });
       // @ts-expect-error the settings system doesn't receive this event
-      sendToSystem('settings', { type: 'DELETE_NOTE', id: 'Note-1' });
+      tell('settings', { type: 'DELETE_NOTE', id: 'Note-1' });
       // @ts-expect-error the brain doesn't receive what threads does, so a system can't send it one
-      sendToSystem('brain', { type: 'GET_CHAT_START' });
+      tell('brain', { type: 'GET_CHAT_START' });
       // @ts-expect-error DELETE_NOTE needs an id
-      sendToSystem('notes', { type: 'DELETE_NOTE' });
+      tell('notes', { type: 'DELETE_NOTE' });
       // @ts-expect-error one system per send
-      sendToSystem(systemId, { type: 'GET_SETTINGS' });
+      tell(systemId, { type: 'GET_SETTINGS' });
       // @ts-expect-error one event type per send
-      sendToSystem('brain', { type: brainIsDead ? 'START_BRAIN' : 'RESTART_BRAIN' });
+      tell('brain', { type: brainIsDead ? 'START_BRAIN' : 'RESTART_BRAIN' });
       // @ts-expect-error the bus receives only PACK_CHANGED from pack code
-      sendToSystem('host/bus', { type: 'CLIENT_CONNECTED' });
+      tell('host/bus', { type: 'CLIENT_CONNECTED' });
     }).toBeFunction();
   });
 });
@@ -101,24 +99,24 @@ describe('services.emitter in actions', () => {
   // Wrapped in functions that never run: only their types are checked
   it('accepts an event the surface or system receives', () => {
     expectTypeOf(() => {
-      services.emitter.broadcastToSurface('default-setup/database', { type: 'AI_QUERY_LOADING' });
-      services.emitter.sendToSystem('default-setup/notes', { type: 'DELETE_NOTE', id: 'Note-1' });
-      services.emitter.sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'user.message' });
+      services.emitter.broadcast('default-setup/database', { type: 'AI_QUERY_LOADING' });
+      services.emitter.tell('default-setup/notes', { type: 'DELETE_NOTE', id: 'Note-1' });
+      services.emitter.tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType: 'user.message' });
     }).toBeFunction();
   });
 
   it('rejects an event the surface or system does not receive', () => {
     expectTypeOf(() => {
       // @ts-expect-error the database surface doesn't receive this event
-      services.emitter.broadcastToSurface('default-setup/database', { type: 'SET_PHASE', phase: 'Edit' });
+      services.emitter.broadcast('default-setup/database', { type: 'SET_PHASE', phase: 'Edit' });
       // @ts-expect-error unknown surface
-      services.emitter.broadcastToSurface('unknown-surface', { type: 'ANYTHING' });
+      services.emitter.broadcast('unknown-surface', { type: 'ANYTHING' });
       // @ts-expect-error actions name every pack surface <pack>/<feature>, this pack's own too
-      services.emitter.broadcastToSurface('database', { type: 'AI_QUERY_LOADING' });
+      services.emitter.broadcast('database', { type: 'AI_QUERY_LOADING' });
       // @ts-expect-error DELETE_NOTE needs an id
-      services.emitter.sendToSystem('default-setup/notes', { type: 'DELETE_NOTE' });
+      services.emitter.tell('default-setup/notes', { type: 'DELETE_NOTE' });
       // @ts-expect-error actions name every system <pack>/<feature>
-      services.emitter.sendToSystem('notes', { type: 'DELETE_NOTE', id: 'Note-1' });
+      services.emitter.tell('notes', { type: 'DELETE_NOTE', id: 'Note-1' });
     }).toBeFunction();
   });
 });

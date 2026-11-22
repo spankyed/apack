@@ -7,12 +7,12 @@
 import type { AnyActorRef } from 'xstate';
 import type { AnyExtension } from '@tiptap/vue-3';
 import type { AnyStateMachine } from 'xstate';
-import type { CallReport } from '@apackdev/ears';
+import type { CallReport } from '@elmdb/ears';
 import type { Component } from 'vue';
 import type { DeepPartial } from 'ai';
-import { Ears } from '@apackdev/ears';
-import { EARS as EARS_2 } from '@apackdev/ears';
-import type { EarsEngine } from '@apackdev/ears';
+import { Ears } from '@elmdb/ears';
+import { EARS as EARS_2 } from '@elmdb/ears';
+import type { EarsEngine } from '@elmdb/ears';
 import type { EditorState } from '@tiptap/pm/state';
 import type { embed } from 'ai';
 import type { embedMany } from 'ai';
@@ -26,7 +26,6 @@ import type { Output } from 'ai';
 import type { OutputInterface } from 'ai';
 import type { Ref } from 'vue';
 import type { rerank } from 'ai';
-import type { SnapshotFrom } from 'xstate';
 import type { streamText } from 'ai';
 import type { ToolLoopAgent } from 'ai';
 import type { ToolLoopAgentSettings } from 'ai';
@@ -50,7 +49,7 @@ export { Ears }
 
 // @public
 export interface FeClient {
-    send(message: Message): void;
+    send(message: Message, refused?: () => void): void;
     watchView(request: ViewRequest, observer: (update: ViewUpdate) => void): () => void;
 }
 

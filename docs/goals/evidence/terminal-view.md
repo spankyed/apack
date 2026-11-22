@@ -70,7 +70,7 @@ The echo is quantized by the display: the emulator paints on the next frame, so 
 as the value they mean (`tests/view_vectors.rs`, which fails when the file is not what the encoder writes).
 `apack-terminal-view` holds a copy and its suite decodes each vector for a view and encodes each one for the
 broker (`tests/wire.spec.ts`). The two copies are the same file, which
-`packages/repo-checks/tests/terminal-view-vectors.spec.ts` holds them to at the commits pinned here.
+`packages/internal-repo-checks/tests/terminal-view-vectors.spec.ts` holds them to at the commits pinned here.
 
 ### The broker
 
@@ -255,7 +255,7 @@ things phase 8 and phase 7 left undriven were driven.
 Five readers for the first read (the broker in three parts, the view, the app), one per repository for
 the second and third, each reading a diff nobody on it had written. About a hundred and fifty
 findings; every one was fixed, declined with its reason below, or written down as a limit in
-[the broker reference](../../references/terminal-broker.md). The ones that would have reached a person:
+[the broker reference](../../references/broker.md). The ones that would have reached a person:
 
 | Where | What |
 |---|---|

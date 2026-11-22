@@ -17,4 +17,3 @@ export async function resolveClaudeExecutable(executable: string, cwd: string, s
   }
   throw new Error('The selected Claude executable is unavailable in the launch directory and PATH')
 }
-

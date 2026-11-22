@@ -1,11 +1,11 @@
 // The app's own sign-in to GitHub, which the code feature's pull requests and git's pushes to GitHub run on. The
 // token is this pack's own secret (`services.secrets.own`): another pack cannot read it, and it is in no setting
 // and no log. Which account it signs in as is kept beside it, so showing it asks GitHub nothing.
-import { answer } from '../answer.ts'
-import type { OutgoingGitHubEvents } from '../contract.ts'
-import { broadcastToSurface } from '#generated/events.ts'
+import type { GitHubAsks, OutgoingGitHubEvents } from '../contract.ts'
+import { broadcast } from '#generated/events.ts'
 import { services } from '#generated/services.ts'
 import { defineHandlers } from '@apackdev/sdk/framework'
+import type { AsksEvents } from '@apackdev/sdk/events'
 import { createLogger } from '@apackdev/sdk/logger'
 import { setup } from 'xstate'
 import { GitHubSignInError, type GitHubAccount } from '../services/github.ts'
@@ -44,16 +44,13 @@ interface StoredSignIn {
   account: GitHubAccount
 }
 
-export interface CodeGitHubSystemContext {
-  /** The sign-in under way, which a new one or a cancel ends */
-  held: { signIn?: AbortController }
-}
+/** The sign-in is held beside this machine (`heldSignIn`), so it keeps nothing of its own */
+export type CodeGitHubSystemContext = Record<string, never>
 
 export type Event =
-  | { type: 'github.GET_ACCOUNT' }
-  | { type: 'github.SIGN_IN' }
-  | { type: 'github.CANCEL_SIGN_IN' }
   | { type: 'github.SIGN_OUT' }
+  // The github asks, which the code system forwards here to be answered
+  | AsksEvents<GitHubAsks>
 
 /**
  * The sign-in as last read, so that a git run, which lays it over git's environment, neither reads nor decrypts
@@ -147,67 +144,66 @@ function signedIn(repo: GitHubRepo, head: GitHubRepo = repo): GitHubApi {
   return createGitHubApi({ endpoints: services.github.endpoints, token: signIn.token, repo, head })
 }
 
-const accountChanged = (account: GitHubAccount | null) => broadcastToSurface('code', { type: 'github.ACCOUNT_CHANGED', account } satisfies OutgoingGitHubEvents)
+const accountChanged = (account: GitHubAccount | null) => broadcast('code', { type: 'github.ACCOUNT_CHANGED', account } satisfies OutgoingGitHubEvents)
 
-/** Hands each handler the answer for the message it is handling — see `defineHandlers` */
+/** Why a sign-in ended without an account, as GitHub's sign-in service says it */
+const signInFailureOf = (error: unknown): GitHubSignInError =>
+  error instanceof GitHubSignInError ? error : new GitHubSignInError('failed', error instanceof Error ? error.message : String(error))
+
 const handlers = defineHandlers<CodeGitHubSystemContext, Event>()
+
+/** The github asks, answered here over the sign-in this pack holds */
+const answers = handlers.answers<GitHubAsks>({
+  'github.GET_ACCOUNT': () => storedSignIn()?.account ?? null,
+
+  /**
+   * Signs in: tells whoever asked the code to type at GitHub, waits for them to approve it there, and answers with
+   * the account, which is news for every window too (`github.ACCOUNT_CHANGED`). `signal` aborts when the asker stops
+   * waiting — a cancel, or their window going — which ends the sign-in and keeps nothing
+   */
+  'github.SIGN_IN': async ({ signal, progress, refuse }) => {
+    try {
+      const code = await services.github.fetchDeviceCode(signal)
+      progress({ userCode: code.userCode, verificationUri: code.verificationUri, expiresAt: code.expiresAt })
+      const { token, scopes } = await services.github.pollForToken(code, signal)
+      const account = await services.github.fetchAccount(token, signal)
+      const signIn: StoredSignIn = { token, scopes, account }
+      services.secrets.own.set(SECRET, JSON.stringify(signIn))
+      heldSignIn = { signIn }
+      logger.info(`Signed in to GitHub as ${account.login}`)
+      accountChanged(account)
+      return account
+    } catch (error) {
+      const why = signInFailureOf(error)
+      if (why.reason !== 'cancelled') logger.warn(`Signing in to GitHub failed: ${why.message}`)
+      throw why.reason === 'failed' ? new Error(why.message) : refuse(why.reason, why.message)
+    }
+  },
+})
 
 export const githubSystem = setup({
   types: {
     context: {} as CodeGitHubSystemContext,
     events: {} as Event,
   },
-  actions: handlers.actions({
-    tellAccount: ({ reply }) => {
-      answer(reply, { type: 'github.ACCOUNT', account: storedSignIn()?.account ?? null })
-    },
+  actions: {
+    ...answers.actions,
 
-    signIn: ({ context, reply }) => {
-      context.held.signIn?.abort()
-      const controller = new AbortController()
-      context.held.signIn = controller
-      const { signal } = controller
-      void (async () => {
-        const code = await services.github.fetchDeviceCode(signal)
-        answer(reply, { type: 'github.SIGN_IN_CODE', userCode: code.userCode, verificationUri: code.verificationUri, expiresAt: code.expiresAt })
-        const { token, scopes } = await services.github.pollForToken(code, signal)
-        const account = await services.github.fetchAccount(token, signal)
-        const signIn: StoredSignIn = { token, scopes, account }
-        services.secrets.own.set(SECRET, JSON.stringify(signIn))
-        heldSignIn = { signIn }
-        logger.info(`Signed in to GitHub as ${account.login}`)
-        accountChanged(account)
-      })().catch((error: unknown) => {
-        const failure = error instanceof GitHubSignInError ? error : new GitHubSignInError('failed', error instanceof Error ? error.message : String(error))
-        if (failure.reason !== 'cancelled') logger.warn(`Signing in to GitHub failed: ${failure.message}`)
-        answer(reply, { type: 'github.SIGN_IN_FAILED', reason: failure.reason, message: failure.message })
-      }).finally(() => {
-        if (context.held.signIn === controller) context.held.signIn = undefined
-      })
-    },
-
-    cancelSignIn: ({ context }) => {
-      context.held.signIn?.abort()
-    },
-
-    signOut: ({ context }) => {
-      context.held.signIn?.abort()
+    signOut: () => {
       const signedIn = storedSignIn()
       services.secrets.own.delete(SECRET)
       heldSignIn = { signIn: null }
       if (signedIn) void forgetInGit(signedIn.token, services.github.endpoints.web, agentChildEnvironment(process.env))
       accountChanged(null)
     },
-  }),
+  },
 }).createMachine({
   id: 'github',
-  context: () => ({ held: {} }),
+  context: {},
   // A sign-in read by an app before this one is not this app's
   entry: () => forgetHeldSignIn(),
   on: {
-    'github.GET_ACCOUNT': { actions: 'tellAccount' },
-    'github.SIGN_IN': { actions: 'signIn' },
-    'github.CANCEL_SIGN_IN': { actions: 'cancelSignIn' },
+    ...answers.on,
     'github.SIGN_OUT': { actions: 'signOut' },
   },
 })

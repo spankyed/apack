@@ -7,8 +7,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -17,7 +17,7 @@ afterEach(async () => {
   resetTestData();
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const git = (cwd: string, ...args: string[]) => execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd });
 
 it('lists the repositories under the opened folder, and choosing one moves the panels there', async () => {
@@ -33,15 +33,15 @@ it('lists the repositories under the opened folder, and choosing one moves the p
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: folder });
   await app.settle();
 
-  const listed = await app.send('code', { type: 'LIST_REPOSITORIES' }, asWindow);
-  const { data } = await app.nextEmit('code', 'commit.REPOSITORIES_RECEIVED', { answering: listed });
+  const listed = app.ask('code', { type: 'commit.LIST_REPOSITORIES' }, asWindow);
+  const data = await answered(listed);
   expect((data as { repositories: { relative: string; kind: string }[] }).repositories.map(({ relative, kind }) => [relative, kind])).toEqual([['', 'top'], ['tools/nested', 'nested']]);
 
   await app.send('code', { type: 'SELECT_REPOSITORY', path: nested }, asWindow);
   await app.settle();
 
-  const again = await app.send('code', { type: 'LIST_REPOSITORIES' }, asWindow);
-  const { data: after } = await app.nextEmit('code', 'commit.REPOSITORIES_RECEIVED', { answering: again });
+  const again = app.ask('code', { type: 'commit.LIST_REPOSITORIES' }, asWindow);
+  const after = await answered(again);
   expect(after).toMatchObject({ current: nested });
   expect((after as { repositories: unknown[] }).repositories, 'still what is under the folder the user opened').toHaveLength(2);
 });

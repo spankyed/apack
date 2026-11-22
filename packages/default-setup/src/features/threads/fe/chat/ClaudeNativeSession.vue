@@ -146,8 +146,7 @@ import { describeClaudeUiProblem } from '#features/code/common/native-ui-problem
 import { isClaudeNativeNoticeDecision, type ClaudeNativeNoticeResponse } from '#features/code/common/native-notice.ts'
 import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent, PopoverClose } from 'reka-ui'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import { useSelector } from '@xstate/vue'
-import { useSurface, useShell } from '@apackdev/sdk/fe'
+import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
 import type { ThreadsState } from '../state.ts'
 import { mountNativeTerminal } from '#extensions/terminal/pool.ts'
 import NativeBackgroundAttachment from './NativeBackgroundAttachment.vue'
@@ -162,7 +161,8 @@ const backgroundComposing = ref(false)
 watch(backgroundComposing, value => emit('background-composing', value), {immediate:true})
 const actor: ThreadsState = useSurface()
 const mountId = crypto.randomUUID()
-const views = useSelector(actor, state => state.context.nativeTerminalViews)
+const { state: threads, send } = useState(actor)
+const views = computed(() => threads.value.data.nativeTerminalViews)
 const view = computed(() => views.value[mountId])
 
 const noticePending = computed(() => view.value?.noticeAnswer?.status === 'pending' && view.value.noticeAnswer.revision === view.value.state?.notice?.revision)
@@ -178,18 +178,18 @@ function answerCredit(response: ClaudeNativeNoticeResponse) {
   if(response.decision!=='credit'||!state||!notice||active.value||noticePending.value||notice.kind!=='fable_overage_consent_prompt'||notice.id!==response.id||notice.revision!==response.revision||notice.sessionId!==response.sessionId)return
   const operation=response.credit.operation
   if(operation.kind==='editor'&&(operation.revision!==notice.snapshot.revision||operation.editorRevision!==notice.snapshot.editor?.revision))return
-  actor.send({type:'CLAUDE_TERMINAL_NOTICE',...identity(),ownerId:state.ownerId,notice:response})
+  send({type:'CLAUDE_TERMINAL_NOTICE',...identity(),ownerId:state.ownerId,notice:response})
 }
 function answerManagedSecurity(response: ClaudeNativeNoticeResponse) {
   const state = view.value?.state, notice = state?.notice
   if (!state || notice?.kind !== 'managed_settings_security' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
   if (response.decision === 'policy_reject') managedPolicyExit.value = { ownerId: state.ownerId, afterSequence: view.value?.output.at(-1)?.sequence ?? 0 }
-  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
+  send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
 }
 function answerSandboxNetwork(response: ClaudeNativeNoticeResponse) {
   const state = view.value?.state, notice = state?.notice
   if (!state || notice?.kind !== 'sandbox_network_access' || noticePending.value || notice.id !== response.id || notice.revision !== response.revision || notice.sessionId !== response.sessionId) return
-  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
+  send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: state.ownerId, notice: response })
 }
 const leftArrowPanel = computed(() => {
   const state = view.value?.state, notice = state?.notice
@@ -203,12 +203,12 @@ const leftArrowPanel = computed(() => {
 function answerLeftArrow(panel: NonNullable<typeof leftArrowPanel.value>, request: { panelId: string; revision: string; decision: 'confirm' | 'cancel' }) {
   const state = view.value?.state
   if (panel !== leftArrowPanel.value || !state || noticePending.value || panel.ownerId !== state.ownerId || request.panelId !== panel.id || request.revision !== panel.revision) return
-  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision: request.decision === 'confirm' ? 'background_confirm' : 'background_stay' } })
+  send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision: request.decision === 'confirm' ? 'background_confirm' : 'background_stay' } })
 }
 function answerNotice(panel: (typeof noticePanels.value)[number], decision: Exclude<ClaudeNativeNoticeResponse['decision'],'credit'>, selectedValues?: string[]) {
   const state = view.value?.state, notice = state?.notice
   if (!state || !notice || active.value || noticePending.value || state.ownerId !== panel.ownerId || notice.kind !== panel.kind || notice.id !== panel.id || notice.revision !== panel.revision || notice.sessionId !== panel.sessionId || !isClaudeNativeNoticeDecision(notice, decision)) return
-  actor.send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision, ...(decision === 'auto_rules_select' ? { selectedValues } : {}) } })
+  send({ type: 'CLAUDE_TERMINAL_NOTICE', ...identity(), ownerId: panel.ownerId, notice: { id: panel.id, revision: panel.revision, sessionId: panel.sessionId, decision, ...(decision === 'auto_rules_select' ? { selectedValues } : {}) } })
 }
 function selectAutoRule(panel: (typeof noticePanels.value)[number], value: string, checked: boolean) {
   if (panel.notice.kind !== 'auto_mode_flagged_allow' || panel.notice.phase !== 'pick' || !panel.notice.rules.some(rule => rule.value === value)) return
@@ -238,7 +238,7 @@ function returnToConversation() {
   const revision = (view.value?.task?.revision ?? 0) + 1
   returning.value = { ownerId: state.ownerId, sessionId: state.sessionId, revision }; returnProblem.value = undefined
   const taskId = state.view?.kind === 'agent' ? state.view.taskId ?? state.view.registryId : '@main-view'
-  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...identity(), ownerId: state.ownerId, sessionId: state.sessionId, taskId, revision, operation: 'background' })
+  send({ type: 'CLAUDE_TERMINAL_TASK', ...identity(), ownerId: state.ownerId, sessionId: state.sessionId, taskId, revision, operation: 'background' })
 }
 watch(view, value => {
   const request = returning.value
@@ -298,37 +298,37 @@ const viewport = ref<HTMLElement>()
 let terminal: ReturnType<typeof mountNativeTerminal> | undefined
 let attachedOwner: string | undefined, attachedSession: string | undefined
 const identity = () => ({ threadId: props.threadId, mountId })
-function renew() { actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity() }) }
+function renew() { send({ type: 'CLAUDE_TERMINAL_MOUNT', ...identity() }) }
 function operateBackground(target: ClaudeNativeContinuation, request: ClaudeBackgroundSessionRequest | ClaudeBackgroundReplyRequest | ClaudeBackgroundTurnInterruptRequest) {
   if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.background?.continuedInSessionId === target.continuedInSessionId && view.value.background.sessionId === target.sessionId && view.value.background.status === 'pending') return
-  actor.send({ type: 'CLAUDE_TERMINAL_BACKGROUND', ...identity(), sessionId: target.sessionId, continuedInSessionId: target.continuedInSessionId,
+  send({ type: 'CLAUDE_TERMINAL_BACKGROUND', ...identity(), sessionId: target.sessionId, continuedInSessionId: target.continuedInSessionId,
     revision: (view.value?.background?.revision ?? 0) + 1, ...request })
 }
 let attachmentRevision = 0
 function openBackground(target: ClaudeNativeContinuation, jobId: string) {
   if (props.continuation?.sessionId !== target.sessionId || props.continuation.continuedInSessionId !== target.continuedInSessionId || view.value?.attachment) return
   expanded.value = true
-  actor.send({type:'CLAUDE_BACKGROUND_OPEN',...identity(),sessionId:target.sessionId,continuedInSessionId:target.continuedInSessionId,jobId,revision:++attachmentRevision})
+  send({type:'CLAUDE_BACKGROUND_OPEN',...identity(),sessionId:target.sessionId,continuedInSessionId:target.continuedInSessionId,jobId,revision:++attachmentRevision})
 }
-function closeBackground(requestId: string) {actor.send({type:'CLAUDE_BACKGROUND_CLOSE',...identity(),requestId})}
-function inputBackground(attachmentId: string,text: string) {actor.send({type:'CLAUDE_BACKGROUND_INPUT',...identity(),attachmentId,text})}
-function resizeBackground(attachmentId: string,size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize) {actor.send({type:'CLAUDE_BACKGROUND_RESIZE',...identity(),attachmentId,...size})}
+function closeBackground(requestId: string) {send({type:'CLAUDE_BACKGROUND_CLOSE',...identity(),requestId})}
+function inputBackground(attachmentId: string,text: string) {send({type:'CLAUDE_BACKGROUND_INPUT',...identity(),attachmentId,text})}
+function resizeBackground(attachmentId: string,size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize) {send({type:'CLAUDE_BACKGROUND_RESIZE',...identity(),attachmentId,...size})}
 function open() {
   if (inputBlocksLaunch.value) return
   expanded.value = true; returnProblem.value = undefined; returning.value = undefined; requested.value = true; dismissed.value = false
-  if (!props.inputPending) actor.send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() })
+  if (!props.inputPending) send({ type: 'CLAUDE_TERMINAL_OPEN', ...identity() })
 }
 function cancelOpen() {
   const openingId = view.value?.openingId
   if (!openingId || view.value?.cancelling) return
   requested.value = false; dismissed.value = true
-  actor.send({ type: 'CLAUDE_TERMINAL_CANCEL_OPEN', ...identity(), openingId })
+  send({ type: 'CLAUDE_TERMINAL_CANCEL_OPEN', ...identity(), openingId })
 }
 function stop() {
   const ownerId = view.value?.state?.ownerId
   if (!ownerId || stopping.value) return
   stopping.value = { ownerId, afterRevision: view.value?.stop?.revision ?? 0 }
-  actor.send({ type: 'CLAUDE_TERMINAL_CLOSE', ...identity(), ownerId })
+  send({ type: 'CLAUDE_TERMINAL_CLOSE', ...identity(), ownerId })
 }
 function detach() { terminal?.detach(); terminal = undefined; attachedOwner = undefined; attachedSession = undefined }
 watch(displayActive, value => emit('active', value), { immediate: true })
@@ -342,7 +342,7 @@ watch([view, active], async ([value, showing]) => {
   const sessionKey=JSON.stringify(session)
   if (attachedOwner !== ownerId||attachedSession!==sessionKey) {
     detach(); attachedOwner = ownerId; attachedSession=sessionKey
-    terminal = mountNativeTerminal(ownerId, session, viewport.value, size => actor.send({ type: 'CLAUDE_TERMINAL_RESIZE', ...identity(), ownerId, ...size }), value?.state?.inputBlocked===true)
+    terminal = mountNativeTerminal(ownerId, session, viewport.value, size => send({ type: 'CLAUDE_TERMINAL_RESIZE', ...identity(), ownerId, ...size }), value?.state?.inputBlocked===true)
     if (expanded.value) terminal.focus()
   }
   terminal?.setInputBlocked(value?.state?.inputBlocked===true)
@@ -353,7 +353,7 @@ watch(() => JSON.stringify([props.continuation?.sessionId, props.continuation?.c
   if (props.continuation) operateBackground({ ...props.continuation }, { operation: 'refresh' })
 }, { immediate: true, flush: 'post' })
 const heartbeat = setInterval(renew, 10000)
-onBeforeUnmount(() => { clearInterval(heartbeat); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity() }); emit('active', false); emit('background-composing', false) })
+onBeforeUnmount(() => { clearInterval(heartbeat); detach(); send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...identity() }); emit('active', false); emit('background-composing', false) })
 </script>
 
 <style scoped>

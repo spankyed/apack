@@ -111,6 +111,7 @@ export const FACADE_DEFAULTS = {
   PackStepNodes: 'never',
   PackSurfaceEvents: '{}',
   PackSystemEvents: '{}',
+  PackSystemAsks: '{}',
   PackFeatureSettings: '{}',
   PackGroupSettings: '{}',
   Services: '{}',

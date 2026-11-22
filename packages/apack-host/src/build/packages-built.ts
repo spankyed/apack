@@ -149,6 +149,7 @@ function compiled(at: CheckoutPaths, pkg: string, ...extraInputs: string[]): Bui
       pkgFile('apack-host', 'src', 'build', 'node-options.d.ts'),
       // Reached through this module: it is where the list of inlined packages comes from
       pkgFile('apack-host', 'src', 'build', 'shared-deps.ts'),
+      pkgFile('apack-host', 'src', 'build', 'package-identity.ts'),
       pkgFile('apack-host', 'src', 'build', 'package-inputs.ts'),
       pkgFile('apack-host', 'src', 'build', 'pack-inputs.ts'),
       // How the built tree is published: assembled under `.temp/` and renamed over `dist`, so it decides where
@@ -164,16 +165,22 @@ function compiled(at: CheckoutPaths, pkg: string, ...extraInputs: string[]): Bui
 }
 
 /**
- * Each workspace whose source a bundle **inlines**, as a directory name.
+ * What a bundle **inlines** of each shared-instance package (`scripts/bundle-package.ts`): the SDK's source in this
+ * checkout, and EARS' built `dist` as the install put it in `node_modules` (elmdb's release, or the checkout
+ * `npm run deps:local` points at), with each one's manifest.
  *
- * Derived from the list of what is inlined rather than written out, so a third shared-instance package arrives
- * declared. The naming is the repo's own and holds for all of them: `@apackdev/x` lives in `packages/apack-x`.
+ * Keyed by at least the list of what is shared, so a second shared-instance package fails to compile until it says
+ * where its code comes from.
  */
-const INLINED_SOURCE_DIRS = SHARED_INSTANCE_PACKAGES.map((name) => name.replace('@apackdev/', 'apack-'));
+const INLINED_FROM = {
+  '@apackdev/sdk': ({ pkgFile }) => [pkgFile('apack-sdk', 'src'), pkgFile('apack-sdk', 'package.json')],
+  '@elmdb/ears': ({ repoFile }) => [repoFile('node_modules', '@elmdb', 'ears', 'dist'),
+    repoFile('node_modules', '@elmdb', 'ears', 'package.json')],
+} satisfies Record<(typeof SHARED_INSTANCE_PACKAGES)[number], (at: CheckoutPaths) => string[]> & Record<string, (at: CheckoutPaths) => string[]>;
 
 /**
- * A package esbuild bundles into `dist/package/`, inlining @apackdev/host and the shared-instance packages from
- * source (scripts/bundle-package.ts).
+ * A package esbuild bundles into `dist/package/`, inlining @apackdev/host, the shared-instance packages and what they
+ * link (scripts/bundle-package.ts): the host and the SDK from source, EARS from its built `dist`.
  *
  * **It declares every source it inlines, which is the whole of what it reads.** `apack-host/src` was there
  * and the shared-instance packages' were not, so an edit to `@apackdev/sdk/src` left the `@apackdev/cli` and
@@ -186,12 +193,12 @@ function bundled(at: CheckoutPaths, pkg: string, ...copiedPaths: string[]): Buil
   const { repoFile, pkgFile } = at;
   return {
     inputs: [...sharedInputs(at), repoFile('scripts', 'bundle-package.ts'),
-      repoFile('scripts', 'lib', 'published-imports.ts'), ...copiedPaths.map(file => pkgFile(pkg, file)),
+      repoFile('scripts', 'lib', 'published-imports.ts'), repoFile('scripts', 'lib', 'external-packages.mjs'), ...copiedPaths.map(file => pkgFile(pkg, file)),
       // The repository's license, which the bundle copies into the published package
       repoFile('LICENSE'),
       pkgFile(pkg, 'src'), pkgFile(pkg, 'package.json'), pkgFile(pkg, 'tsconfig.json'),
       pkgFile('apack-host', 'src'), pkgFile('apack-host', 'package.json'),
-      ...INLINED_SOURCE_DIRS.flatMap((dir) => [pkgFile(dir, 'src'), pkgFile(dir, 'package.json')])],
+      ...Object.values(INLINED_FROM).flatMap((inlined) => inlined(at))],
     outputs: [pkgFile(pkg, 'dist', 'package', 'package.json'), pkgFile(pkg, 'dist', 'package', 'dist'),
       pkgFile(pkg, 'dist', 'package', 'LICENSE'),
       ...copiedPaths.map(file => pkgFile(pkg, 'dist', 'package', file))],
@@ -202,7 +209,6 @@ function bundled(at: CheckoutPaths, pkg: string, ...copiedPaths: string[]): Buil
 export function buildUnitsIn(root: string): Record<string, BuildUnit> {
   const at = checkoutPaths(root);
   return {
-    '@apackdev/ears': compiled(at, 'apack-ears'),
     '@apackdev/sdk': compiled(at, 'apack-sdk'),
     '@apackdev/ui': compiled(at, 'apack-ui', at.pkgFile('apack-ui', 'tsdown.config.ts'), at.repoFile('scripts', 'build-ui-package.ts'),
       at.pkgFile('apack-ui', 'scripts', 'exports.ts')),
@@ -270,17 +276,16 @@ export const NOT_A_BUILD_INPUT: Record<string, string> = {
 
 /**
  * Package directory → the directory inside it that npm publishes, in publish order (a dependency before its
- * dependents). None of the five publishes its workspace `package.json`: `@apackdev/ears`, `/sdk` and `/ui` stage a
+ * dependents). None of the four publishes its workspace `package.json`: `@apackdev/sdk` and `/ui` stage a
  * derived one under `publish/` (`stagePublishTree`), and `@apackdev/cli` and `@apackdev/testing` a generated one
  * under `dist/package`.
  *
  * Here rather than in `scripts/publish-packages.ts` because two callers need it and neither may import the
- * other: that script is the command over this, and `@app/publish-checks` checks what it would publish. It is
+ * other: that script is the command over this, and `@app/internal-publish-checks` checks what it would publish. It is
  * not `BUILD_UNITS` above — that is what a build reads to decide freshness, `@apackdev/host` included, which
  * nothing publishes.
  */
 export const PUBLISHED_TREES: Record<string, string> = {
-  'apack-ears': PUBLISH_TREE,
   'apack-sdk': PUBLISH_TREE,
   'apack-ui': PUBLISH_TREE,
   'apack-testing': 'dist/package',
@@ -318,7 +323,7 @@ export const stampFile = (workspace: string): string => path.join(STAMP_DIR, `${
  * run's reads cannot invalidate on a file that was not read last time: a newly imported module would be
  * absent from it, so an edit to that module would change nothing and the unit would read fresh over a stale
  * bundle. That is exactly the failure this is here to *catch* — the `@apackdev/cli` and `@apackdev/testing`
- * bundles inline `@apackdev/sdk` and `@apackdev/ears` from source and declared neither, which no check could see,
+ * bundles inline `@apackdev/sdk` from source and didn't declare it, which no check could see,
  * because every other input check compares one declaration against another.
  *
  * In a `reads/` subdirectory so it can never be taken for a stamp: `stampFile` names its files in this
@@ -454,7 +459,7 @@ export interface TreeReader {
  * propagates**, which is load-bearing rather than incidental: `unitStaleReason` catches it and reports
  * `its sources could not be read (…)`, so an unreadable tree is a refusal instead of a fresh verdict.
  *
- * Tolerating the absent file is why the chain never had the bug its own checks did: `@app/repo-checks` built
+ * Tolerating the absent file is why the chain never had the bug its own checks did: `@app/internal-repo-checks` built
  * their populations from `git ls-files`, which reports a file deleted from the worktree and not yet staged, and
  * four of them died reading one. They ask `repoFiles()` now. Keep this branch.
  */
@@ -553,11 +558,11 @@ const digestOf = (contents: Buffer | null): string =>
  * content sources, compiled into entities a user gets. `templates` is the CLI's scaffold, rendered into a
  * new pack.
  * `fixtures` is test input. `docs` is the document tree `doc-links` resolves every relative link in, which
- * is why it is an input of `@app/repo-checks` rather than of every repo-scope step.
+ * is why it is an input of `@app/internal-repo-checks` rather than of every repo-scope step.
  *
  * **The condition that would make this wrong** is a check that asserts one of these files' *text*: it would
  * then be a real input, and skipping it would let that check cache over a doc that had gone stale. One
- * exists — `spec-plan.spec.ts` holds `packages/repo-checks/CLAUDE.md` to naming every spec in that package —
+ * exists — `spec-plan.spec.ts` holds `packages/internal-repo-checks/CLAUDE.md` to naming every spec in that package —
  * which `GUIDES_A_CHECK_READS` takes back. A second, and a new tree whose markdown something starts reading,
  * are both the case to come back here for; a wrong entry is *silent*, so
  * `fingerprint-scope.integration.spec.ts` holds each of these trees to being unskippable rather than
@@ -581,11 +586,11 @@ const isProse = (file: string): boolean => {
  * row could be deleted and the check that would have caught it would not run.
  *
  * Listed rather than derived, because what a spec reads at a path it builds at runtime cannot be read off
- * the source. Repo-checks' *"prose costs nothing"* holds both directions: a guide not listed here is in no
+ * the source. internal-repo-checks' *"prose costs nothing"* holds both directions: a guide not listed here is in no
  * step's fingerprint, and a guide listed here is in one — so an entry that stops applying fails rather than
  * quietly protecting nothing.
  */
-export const GUIDES_A_CHECK_READS: ReadonlySet<string> = new Set(['packages/repo-checks/CLAUDE.md']);
+export const GUIDES_A_CHECK_READS: ReadonlySet<string> = new Set(['packages/internal-repo-checks/CLAUDE.md']);
 
 /**
  * Whether a unit's `excludeSuffixes` puts this file outside its key.
@@ -939,7 +944,7 @@ export function freshnessSweep(): {
   /**
    * Everything remembered at or under `target`, by prefix rather than by exact key.
    *
-   * A caller declares `packages/apack-ears/dist`; what is memoised are the files inside it and the listing
+   * A caller declares `packages/apack-sdk/dist`; what is memoised are the files inside it and the listing
    * of it, so forgetting the one key it was handed would leave every file under it stale in the maps. The
    * listing goes too — a build that adds or removes a file changes what a walk returns, not only what the
    * files contain.
@@ -1172,7 +1177,7 @@ export function waitForPackageBuild({ idleMs = HOLDER_IDLE_MS, pollMs = LOCK_POL
  *
  * The refusal above is not gated on `CI`, which is the obvious place for it and the wrong one here: this
  * repo's CI is off by design, so a CI-gated refusal never fires, and thirteen spec files — nine of them all
- * of `@app/publish-checks` — reported green having checked nothing. Every gated path (`test:unit`, `chain`,
+ * of `@app/internal-publish-checks` — reported green having checked nothing. Every gated path (`test:unit`, `chain`,
  * a package's `pretest`) runs `packages:ensure` first, so refusing costs those nothing; what it changes is a
  * bare run against an unbuilt tree, which now says so.
  */

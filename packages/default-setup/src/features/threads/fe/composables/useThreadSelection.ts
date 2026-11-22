@@ -3,7 +3,7 @@ import type { ThreadListItem } from '#features/threads/fe/state.ts'
 
 export function useThreadSelection(
   items: () => ThreadListItem[],
-  selectedItems: () => string[],
+  selectedItems: () => readonly string[],
   emit: (itemIds: string[]) => void
 ) {
   const shiftAnchorId = ref<string | null>(null)

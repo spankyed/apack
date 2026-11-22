@@ -168,9 +168,9 @@ describe('generated EARS facade', () => {
       paths: { '#generated/*': ['./src/__generated__/*'] },
     } }));
     write('src/tag.ts', 'export interface TagEntity { label: string }\n');
-    // An id's type is the engine's, which a pack reads from its installed @apackdev/ears
+    // An id's type is the engine's, which a pack reads through its installed @apackdev/sdk's EARS namespace
     fs.mkdirSync(path.join(root, 'node_modules', '@apackdev'), { recursive: true });
-    fs.symlinkSync(path.resolve(import.meta.dirname, '../../../../apack-ears'), path.join(root, 'node_modules', '@apackdev', 'ears'), 'dir');
+    fs.symlinkSync(path.resolve(import.meta.dirname, '../../../../apack-sdk'), path.join(root, 'node_modules', '@apackdev', 'sdk'), 'dir');
     write('src/memo.ts', `import type { EARS } from '#generated/ears.ts';
 export interface MemoEntity {
   title: string; count: number; done: boolean; stage: 'draft' | 'final'; kind: 'note';
@@ -544,7 +544,7 @@ describe('the snapshot format', () => {
   const REGISTRATION_FEATURE_FIELDS: Record<keyof PackFeature, true> = {
     designation: true, system: true, surface: true, services: true, settings: true, views: true, projections: true,
   };
-  const REGISTRATION_SYSTEM_FIELDS: Record<keyof PackFeatureSystem, true> = { machine: true, receives: true };
+  const REGISTRATION_SYSTEM_FIELDS: Record<keyof PackFeatureSystem, true> = { asks: true, machine: true, receives: true };
   const REGISTRATION_SURFACE_FIELDS: Record<keyof PackFeatureSurface, true> = { receives: true };
 
   /** Every name generated code imports from a dependency's facade, with a send to one of its surfaces */
@@ -595,11 +595,11 @@ describe('the snapshot format', () => {
       registration: {
         fields: ['appliers', 'artifacts', 'bindServices', 'blocks', 'contentWriters', 'declarationRevision', 'dependencies', 'ears', 'features', 'id', 'lifecycle', 'migrations', 'repositories', 'services', 'settings', 'steps'],
         feature: ['designation', 'projections', 'services', 'settings', 'surface', 'system', 'views'],
-        system: ['machine', 'receives'],
+        system: ['asks', 'machine', 'receives'],
         surface: ['receives'],
       },
       provenanceKinds: ['entities', 'rankIndexes', 'referenceCategories', 'referenceTypes', 'relKinds', 'roles', 'surfaces', 'tiptapExtensions', 'weightedKinds'],
-      facadeImports: ['PackEntityShapes', 'PackFeatureSettings', 'PackGroupSettings', 'PackStepNodes', 'PackSurfaceEvents', 'PackSurfaceState', 'PackSystemEvents', 'Repositories', 'Services'],
+      facadeImports: ['PackEntityShapes', 'PackFeatureSettings', 'PackGroupSettings', 'PackStepNodes', 'PackSurfaceEvents', 'PackSurfaceState', 'PackSystemAsks', 'PackSystemEvents', 'Repositories', 'Services'],
     });
   });
 });

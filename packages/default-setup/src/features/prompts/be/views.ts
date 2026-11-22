@@ -7,7 +7,7 @@ import type { EARS } from '#generated/ears.ts';
 
 export const promptViews = defineViews({
   /** The first `limit` prompts in `categories` (every category when it's empty), or all of them without a limit */
-  list: ({ limit, categories }: { limit: number | null; categories: string[] }) => repository.promptQueries.list(limit, categories),
+  list: ({ limit, categories }: { limit: number | null; categories: readonly string[] }) => repository.promptQueries.list(limit, categories),
   /** One prompt, or `null` for one that doesn't exist or is in the trash */
   byId: ({ id }: { id: EARS.EntityId }) => repository.promptQueries.byId(id) ?? null,
 });

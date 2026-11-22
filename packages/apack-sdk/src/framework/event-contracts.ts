@@ -1,7 +1,10 @@
 /** Compiled endpoint metadata; shared SDK lifecycle events are implicit in the protocol. */
 export interface FeatureEventContract {
-  /** Declared system inputs and outputs; private child events are excluded. */
-  system?: { incoming: readonly string[]; outgoing: readonly string[] };
+  /**
+   * Declared system inputs and outputs; private child events are excluded. `asks` names each declared ask with the
+   * failure kinds its contract gives it, so the bus can tell an ask from an event and answer one nothing took.
+   */
+  system?: { incoming: readonly string[]; outgoing: readonly string[]; asks?: Readonly<Record<string, readonly string[]>> };
   /** Own-system outputs and declared inbox audiences, excluding shared SDK lifecycle events. */
   surface?: { receives: readonly string[] };
 }

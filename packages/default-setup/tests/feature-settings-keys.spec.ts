@@ -1,6 +1,6 @@
 // Generated handles resolve local names; raw settings targets require qualified owner identities.
 import { describe, expect, it, onTestFinished } from 'vitest';
-import { type EARS } from '@apackdev/ears';
+import { type EARS } from '@apackdev/sdk';
 import { untypedQuery } from '@apackdev/sdk/ears';
 import { getTestSettings, registerPack, startApp, takeSystemErrors, unregisterPack } from '@apackdev/testing/harness';
 import { featureSettings } from '#generated/settings.ts';
@@ -34,8 +34,8 @@ describe('feature settings identities', () => {
       type: 'UPDATE_SETTINGS', target: { kind: 'feature', featureRef: 'threads' }, path: ['sort'], value: 'oldest',
     }, { settingsAccess: { kind: 'host', service: getTestSettings() }, sender: 'host/settings', client: 'c-window' });
 
-    expect(await app.nextEmit('host/settings', 'SETTINGS_REFUSED', { answering: call }))
-      .toMatchObject({ problems: [expect.stringContaining('settings target')] });
+    expect(await app.nextEmit('host/settings', 'ASK_FAILED', { answering: call }))
+      .toMatchObject({ failure: { kind: 'refused', problems: [expect.stringContaining('settings target')] } });
     expect(takeSystemErrors()).toEqual([]);
     expect(stored()).toBeUndefined();
   });

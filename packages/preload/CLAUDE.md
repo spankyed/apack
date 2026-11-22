@@ -43,7 +43,7 @@ the bridge just called — every assertion reads an empty map.
 
 - `src/index.ts` — the whole surface: builds the API objects and calls `contextBridge.exposeInMainWorld('electronAPI', …)`.
 - `src/exposed.ts` — the build entry. It imports `./index.js` for that side effect; the re-export beside it carries nothing, since the surface reaches a window through `contextBridge`.
-- `vite.config.js` — SSR library build of `src/exposed.ts` to `dist/exposed.mjs` (Electron requires `.mjs` for ESM preloads), targeting the Chrome version from `@app/electron-versions`. Inline sourcemaps in development. In `npm run dev` it builds in watch mode and sends the renderer dev server a `full-reload` after each rebuild.
+- `vite.config.js` — SSR library build of `src/exposed.ts` to `dist/exposed.mjs` (Electron requires `.mjs` for ESM preloads), targeting the Chrome version from `@app/internal-electron-versions`. Inline sourcemaps in development. In `npm run dev` it builds in watch mode and sends the renderer dev server a `full-reload` after each rebuild.
 - `package.json` exports only `./exposed.mjs` → `dist/exposed.mjs`. `packages/entry-point.mjs` resolves that path and hands it to `initApp`.
 
 ## Values read at load

@@ -7,7 +7,7 @@ import { ALLOWABLE_PACK_CHECKS, PackChecksSchema, _namingRefusedValue } from '@a
 import { ownModuleFindings, type OwnModuleSpecifier } from '@apackdev/host/build/own-module-specifiers';
 import { readSubpathImports } from '@apackdev/host/build/subpath-imports';
 // The key itself, not a copy of it: one declaration, so a rename there renames what this refuses
-import { _CALL_KEY } from '@apackdev/sdk/events';
+import { _CALL_KEY, ASK_ANSWER_TYPES } from '@apackdev/sdk/events';
 import { moduleOf, readSource, sourceFiles, type SourceView } from './pack-sources.ts';
 import { contractLeafFindings, crossFeatureFindings } from './pack-features.ts';
 import { configsNamingSourceCondition, packResolvesSource } from './pack-resolution.ts';
@@ -115,7 +115,7 @@ export interface PackRule {
 }
 
 /** Ref-taking sends a pack gets as name-taking ones from `#generated/events`, whichever module exports them */
-const EVENT_SENDS = ['untypedBroadcastToSurface', 'untypedSendToSystem', '_sendToLocalSurface'];
+const EVENT_SENDS = ['untypedBroadcast', 'untypedTell', '_sendToLocalSurface'];
 
 /**
  * A feature's own component, which is where `useSurface()` is available and so where a cross-surface send has an
@@ -190,6 +190,30 @@ const reservedEventKey = (node: ts.Node): string[] | undefined => {
 };
 
 /**
+ * `ASK_ANSWERED:`, `ASK_FAILED:` or `ASK_PROGRESS:` for each object a pack writes with one of those as its `type`, and
+ * for each it writes with one as a key, which is a machine's transition for it.
+ *
+ * An ask's answer is built by the asked system's `answers` table, which answers whoever asked however its handler
+ * ends — returned, thrown, or thrown as a refusal of a declared kind — and reports a failure nobody asked about. An
+ * answer written by hand skips all of it: an action that forgets its failure path leaves the asker waiting, and one
+ * that names the wrong ask settles somebody else's. A transition for one is the other half: the ask that was made
+ * takes its answer (`ask`, `fromAsk`), so a machine that also routes it has to work out which ask it is about.
+ * Source only, since a spec driving an asking machine directly has to hand it the answers a system would.
+ */
+const handWrittenAnswer = (node: ts.Node): string[] | undefined => {
+  if (!ts.isObjectLiteralExpression(node)) return;
+  for (const property of node.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const name = ts.isIdentifier(property.name) || ts.isStringLiteral(property.name) ? property.name.text : undefined;
+    if (name !== undefined && (ASK_ANSWER_TYPES as readonly string[]).includes(name)) return [`${name}:`];
+    if (name !== 'type' || !ts.isStringLiteralLike(property.initializer)) continue;
+    const type = property.initializer.text;
+    if ((ASK_ANSWER_TYPES as readonly string[]).includes(type)) return [`${type}:`];
+  }
+  return undefined;
+};
+
+/**
  * Every pack rule, **in precedence order**: when several are right about one site, the first reports it and the
  * rest stand down (`packRuleProblems`). The order is the order of causes — what stops the pack loading at all,
  * then what stops a specifier resolving, then what breaks on an app update, then the conventions — so an author
@@ -241,10 +265,21 @@ const RULE_LIST = [
   },
   {
     key: 'elmdb-imports',
-    rule: 'A pack reaches its data through the engine the app binds: neither elmdb nor @apackdev/ears/lmdb is '
+    rule: 'A pack reaches its data through the engine the app binds: neither elmdb nor @elmdb/ears/database is '
       + 'provided to a pack, so importing one fails at load',
     check(view, _place) {
-      return view.specifiers.filter(({ text }) => /^elmdb(\/|$)/.test(text) || /^@apackdev\/ears\/lmdb(\/|$)/.test(text))
+      return view.specifiers.filter(({ text }) => /^elmdb(\/|$)/.test(text) || /^@elmdb\/ears\/database(\/|$)/.test(text))
+        .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
+    },
+  },
+  {
+    key: 'ears-imports',
+    rule: 'A pack names EARS through its SDK, @apackdev/sdk/ears, which re-exports all of it: @elmdb/ears is the '
+      + "SDK's dependency rather than the pack's, which an install need not put where the pack resolves it, and the app "
+      + "loads the one copy its SDK brings",
+    check(view, _place) {
+      // `@elmdb/ears/database` is elmdb-imports': nothing re-exports it, so this rule's fix doesn't apply
+      return view.specifiers.filter(({ text }) => /^@elmdb\/ears(\/|$)/.test(text) && !/^@elmdb\/ears\/database(\/|$)/.test(text))
         .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
     },
   },
@@ -290,7 +325,7 @@ const RULE_LIST = [
   },
   {
     key: 'untyped-sends',
-    rule: 'Pack code uses the typed facades: broadcastToSurface, sendToSurface and sendToSystem from '
+    rule: 'Pack code uses the typed facades: broadcast, sendToSurface and tell from '
       + '#generated/events',
     check(view, place) {
       if (place.generated) return [];
@@ -322,7 +357,7 @@ const RULE_LIST = [
   },
   {
     key: 'raw-transport',
-    rule: 'Pack code sends with broadcastToSurface, sendToSurface and sendToSystem from #generated/events, and '
+    rule: 'Pack code sends with broadcast, sendToSurface and tell from #generated/events, and '
       + 'subscribes with onConnected and onIncoming from @apackdev/sdk/events',
     check(view, _place) {
       return view.visit((node) => {
@@ -376,6 +411,19 @@ const RULE_LIST = [
     },
   },
   {
+    key: 'machine-selectors',
+    rule: 'A component reads a machine with useState from @apackdev/sdk/fe, which mirrors it once for every '
+      + 'component that reads it and writes only what changed. A useSelector from @xstate/vue is a subscription of '
+      + 'its own that runs its selector on every snapshot, and it hands a component the machine library the pack '
+      + 'runs on rather than the state it reads',
+    check(view, place) {
+      // Source only. A pack's test may drive an actor however it likes: it renders no surface a user sees.
+      if (place.packRelative.startsWith('tests/')) return [];
+      return view.specifiers.filter(({ text }) => text === '@xstate/vue')
+        .map(({ text, line, start, end }) => ({ line, what: text, start, end }));
+    },
+  },
+  {
     key: 'repository-casts',
     rule: "Read repositories through their owner's exports — a pack through `repository` from "
       + "#generated/repository, which types its own and its dependencies' — never through a cast of the engine's "
@@ -386,6 +434,57 @@ const RULE_LIST = [
       // renaming that local in codegen cannot fail every pack's build.
       if (place.generated) return [];
       return view.visit(repositoryCast);
+    },
+  },
+  {
+    key: 'ask-answers',
+    rule: "A system answers its declared asks with its `answers` table (defineSystem's `answers`), whose handler "
+      + 'returns the answer and throws the refusal: an `ASK_ANSWERED` or `ASK_FAILED` written by hand is an answer '
+      + 'a failure path can forget and a wrong ask can take. An asker takes the answer as a value (`ask`, `fromAsk`), '
+      + 'so its machine has no transition for one either. A spec driving an asking machine builds its answers '
+      + 'with askAnswered and askFailed from @apackdev/sdk/testing',
+    check(view, place) {
+      if (place.packRelative.startsWith('tests/')) return [];
+      return view.visit(handWrittenAnswer);
+    },
+  },
+  {
+    key: 'ask-ends',
+    rule: 'A machine declares the asks it makes with makes from @apackdev/sdk/fe, and how one ended reaches it as '
+      + "`made.<name>`. A transition on `xstate.done.actor.<id>` is that bookkeeping kept by hand: an id to spawn "
+      + 'under, a child to stop in every such transition, and a record of which are under way that a component then '
+      + 'reads by importing the id. An actor that is not an ask is invoked, and its end taken with `onDone`',
+    check(view, place) {
+      if (place.packRelative.startsWith('tests/')) return [];
+      return view.visit((node) => {
+        const text = ts.isStringLiteralLike(node) ? node.text : ts.isTemplateExpression(node) ? node.head.text : undefined;
+        return text?.startsWith('xstate.done.actor') ? ['xstate.done.actor'] : undefined;
+      });
+    },
+  },
+  {
+    key: 'swallowed-ask-ends',
+    rule: "A machine that makes asks (makes, @apackdev/sdk/fe) writes `[made.done]: { actions: made.settle() }` beside "
+      + "every `'*'` transition it has. A state's wildcard is tried before its parent's transitions, so one written "
+      + "without it takes the end of every ask made while the machine is in that state: the ask is never let go, and "
+      + '`making` says it is under way for good',
+    check(view, place) {
+      if (place.packRelative.startsWith('tests/')) return [];
+      const makesAsks = view.visit((node) => {
+        const imported = importedFrom(node);
+        return imported?.module === '@apackdev/sdk/fe' && imported.names.includes('makes') ? ['makes'] : undefined;
+      }).length > 0;
+      if (!makesAsks) return [];
+      return view.visit((node) => {
+        if (!ts.isObjectLiteralExpression(node)) return undefined;
+        const named = (name: ts.PropertyName | undefined): string | undefined =>
+          name && (ts.isStringLiteralLike(name) || ts.isIdentifier(name)) ? name.text : undefined;
+        if (!node.properties.some((property) => named(property.name) === '*')) return undefined;
+        // `[made.done]`, whatever the declared asks are called
+        const settles = node.properties.some((property) => property.name && ts.isComputedPropertyName(property.name)
+          && ts.isPropertyAccessExpression(property.name.expression) && property.name.expression.name.text === 'done');
+        return settles ? undefined : ["'*'"];
+      });
     },
   },
   {

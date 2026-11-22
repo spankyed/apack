@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc --noEmit && cross-env NODE_OPTIONS=--max-old-space-size=8192 tsup",
     "build:dev": "cross-env NODE_OPTIONS=--max-old-space-size=8192 tsup --env.NODE_ENV development",
-    "build:dev:watch": "cross-env-shell NODE_OPTIONS=--max-old-space-size=8192 tsup --env.NODE_ENV development --watch src --watch ../apack-ears/src --watch ../apack-host/src --watch ../apack-sdk/src",
+    "build:dev:watch": "cross-env-shell NODE_OPTIONS=--max-old-space-size=8192 tsup --env.NODE_ENV development --watch src --watch ../apack-host/src --watch ../apack-sdk/src",
     "dev:types": "tsc -p . --noEmit --watch --preserveWatchOutput",
     "dev:serve": "node ../../scripts/with-source.mjs tsx --watch src/server.ts",
     "start": "node ../../scripts/with-source.mjs node dist/server.js",
@@ -34,21 +34,20 @@
   },
   "license": "ISC",
   "dependencies": {
-    "@app/terminal-broker": "*",
+    "@apackdev/terminal": "0.1.0",
+    "@elmdb/ears": "0.1.0",
     "@napi-rs/keyring": "^1.3.0",
-    "apack-terminal": "file:../../vendor/apack-terminal/node",
-    "elmdb": "file:../../vendor/elmdb/crates/elmdb-node",
     "@vscode/ripgrep": "^1.17.1",
     "chokidar": "^3.6.0",
     "croner": "^10.0.1",
     "dotenv": "^16.5.0",
+    "elmdb": "0.1.0",
     "fs-extra": "^11.3.1",
     "ws": "^8.18.2",
     "xstate": "^5.19.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@apackdev/ears": "*",
     "@apackdev/host": "*",
     "@apackdev/sdk": "*",
     "@trpc/server": "^11.1.2",
@@ -61,5 +60,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5.8.3",
     "vitest": "^4.1.12"
+  },
+  "optionalDependencies": {
+    "msgpackr-extract": "^3.0.6"
   }
 }

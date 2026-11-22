@@ -6,8 +6,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -16,7 +16,7 @@ afterEach(async () => {
   resetTestData();
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const git = async (cwd: string, ...args: string[]) =>
   String((await execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd })).stdout).trim();
 
@@ -40,12 +40,12 @@ it('sends a conflicted file\'s three sides with its diff, and taking theirs reso
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const asked = await app.send('code', { type: 'commit.GET_GIT_DIFF', path: 'a.txt' }, asWindow);
-  const { data } = await app.nextEmit('code', 'commit.DIFF_RECEIVED', { answering: asked });
+  const asked = app.ask('code', { type: 'commit.GET_GIT_DIFF', path: 'a.txt' }, asWindow);
+  const data = await answered(asked);
   expect((data as { conflict: unknown }).conflict).toEqual({ base: 'base\n', ours: 'ours\n', theirs: 'theirs\n' });
 
-  const resolved = await app.send('code', { type: 'commit.RESOLVE_CONFLICT', path: 'a.txt', strategy: 'theirs' }, asWindow);
-  await app.nextEmit('code', 'commit.CONFLICT_RESOLVED', { answering: resolved });
+  const resolved = app.ask('code', { type: 'commit.RESOLVE_CONFLICT', path: 'a.txt', strategy: 'theirs' }, asWindow);
+  await answered(resolved);
   expect(fs.readFileSync(path.join(directory, 'a.txt'), 'utf8')).toBe('theirs\n');
   expect(await git(directory, 'diff', '--name-only', '--diff-filter=U')).toBe('');
 });

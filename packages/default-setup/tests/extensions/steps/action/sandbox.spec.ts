@@ -28,7 +28,7 @@ const ACTION = `
 
 // What an action sends, and who it says sent it
 const SENDING = `
-  services.emitter.broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
+  services.emitter.broadcast('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' });
   return 'sent';
 `;
 
@@ -98,7 +98,7 @@ describe('the action sandbox', () => {
     try {
       const escaped = await runActionCode(`return {
         log: services.logger.info,
-        send: () => services.emitter.broadcastToSurface('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' })
+        send: () => services.emitter.broadcast('default-setup/threads', { type: 'SET_PHASE', phase: 'Edit' })
       };`, { label: 'Escaped', params: {}, servicesForAction: access.servicesForAction }) as { log(message: string): void; send(): void };
       escaped.log('accepted');
       expect(logs).toContainEqual(expect.objectContaining({ message: 'accepted', source: 'action:Escaped' }));

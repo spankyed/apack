@@ -28,13 +28,13 @@ The app is built from packages whose imports point down only (`npm run check:spe
 
 | Package | Holds | Imports |
 |---|---|---|
-| `@apackdev/ears` | The EARS engine (`createEarsEngine`), its types, the database port; `@apackdev/ears/lmdb`, which opens elmdb databases | No `@apackdev/*` package |
-| `@apackdev/sdk` | The pack contract and pack runtime: the lookups of what packs registered, service contracts, event sends, logging and error reports over the bound bus, the SDK entities and their repositories, the `HostRuntime` port | `@apackdev/ears` |
-| `@apackdev/host` (private) | The app runtime: the five app services (`/services`), the app's own state (`/app-state`), the registered packs and pack runtime (`/packs`, `/packs/runtime`), the bus (`/bus`), migrations (`/migrations`), API keys (`/secrets`) | `@apackdev/sdk`, `@apackdev/ears` |
+| `@elmdb/ears` | The EARS engine (`createEarsEngine`), its types, the database port; `@elmdb/ears/database`, which opens elmdb databases | No `@apackdev/*` package |
+| `@apackdev/sdk` | The pack contract and pack runtime: the lookups of what packs registered, service contracts, event sends, logging and error reports over the bound bus, the SDK entities and their repositories, the `HostRuntime` port | `@elmdb/ears` |
+| `@apackdev/host` (private) | The app runtime: the five app services (`/services`), the app's own state (`/app-state`), the registered packs and pack runtime (`/packs`, `/packs/runtime`), the bus (`/bus`), migrations (`/migrations`), API keys (`/secrets`) | `@apackdev/sdk`, `@elmdb/ears` |
 | `packages/api` | Transport (`node:http`, `ws`, tRPC routers, the log stream), process boot and composition | All of the above |
 | `packages/renderer` | The frontend composition: binds the frontend port | |
 
-Packs import `@apackdev/sdk`, `@apackdev/ears` and `@apackdev/ui`, never `@apackdev/host`. What an app owns is an instance its composition root creates and binds: the engine, the registered packs (`createPackRegistry()`, and in the renderer `createFePackRegistry()`) and the host services. No SDK, EARS or host module keeps them at module scope.
+Packs import `@apackdev/sdk` and `@apackdev/ui`, never `@apackdev/host`, and reach `@elmdb/ears`, the SDK's dependency, through the SDK. What an app owns is an instance its composition root creates and binds: the engine, the registered packs (`createPackRegistry()`, and in the renderer `createFePackRegistry()`) and the host services. No SDK, EARS or host module keeps them at module scope.
 
 ## Pack loading lifecycle
 
@@ -279,11 +279,11 @@ To ship your own copy instead, set `build.bundleUi` in `apack.json`. All of `@ap
 
 ### Backend: the module bridge
 
-The API bundles its own copy of `@apackdev/sdk`, `@apackdev/ears` and `@apackdev/host`. Pack runtime code loaded from disk would otherwise get separate instances, with no app bound: no registered packs to look up and no installed EARS engine. `@apackdev/sdk` and `@apackdev/ears` are the shared-instance packages (`SHARED_INSTANCE_PACKAGES` in `@apackdev/host/build/shared-deps`): the bundler externals, this bridge and the test harness's all derive from that one list.
+The API bundles its own copy of `@apackdev/sdk`, `@elmdb/ears` and `@apackdev/host`. Pack runtime code loaded from disk would otherwise get separate instances, with no app bound: no registered packs to look up and no installed EARS engine. `@apackdev/sdk` and `@elmdb/ears` are the shared-instance packages (`SHARED_INSTANCE_PACKAGES` in `@apackdev/host/build/shared-deps`): the bundler externals, this bridge and the test harness's all derive from that one list.
 
 `withHostResolution(fn)` (`packages/apack-host/src/packs/runtime/bridge.ts`) runs a `require()` of pack code through `withModuleBridge()` (`@apackdev/host/packs`), which:
 
-- puts the loader's instances (the API bundle's, in the app) of the bridged `@apackdev/sdk`, `@apackdev/ears` modules (every backend export of the shared-instance packages, except `@apackdev/ears/lmdb`, which only the app loads) in the require cache, and patches `Module._resolveFilename` so those specifiers resolve to them;
+- puts the loader's instances (the API bundle's, in the app) of the bridged `@apackdev/sdk`, `@elmdb/ears` modules (every backend export of the shared-instance packages, except `@elmdb/ears/database`, which only the app loads) in the require cache, and patches `Module._resolveFilename` so those specifiers resolve to them;
 - resolves the shared backend packages (`xstate`, `zod`) from the API, since an installed pack has no `node_modules`;
 - restores the resolver afterwards. The bridged modules stay cached, so requires the pack makes later get them too.
 
@@ -301,7 +301,7 @@ secrets and filesystem require `consumes.services` declarations. Onboarding is s
 Reset clears stored data and keys, then runs `onInit`, app-line migrations, pack-line migrations and
 content application in dependency order, as startup does. Failed app-line migrations stop later stages.
 
-Sends, logging and error reports are SDK code over the bound bus: `sendToSystem` emits an incoming event, `broadcastToSurface` (and `services.emitter.broadcastToSurface`) goes through the bus actor, which drops it until a client connects, like a system's `emit`, and `createLogger` emits log events, which the API prints once and streams to the logs surface (with nothing bound, as in the CLI, a logger writes to the console). In the renderer, `bindFeHost` binds the application actor, the secrets client behind `secretsClient` (the Settings → Secrets procedures) and a transport that sends to systems over the API client. Using the port with nothing bound throws, naming `bindHost` or `bindFeHost`.
+Sends, logging and error reports are SDK code over the bound bus: `tell` emits an incoming event, `broadcast` (and `services.emitter.broadcast`) goes through the bus actor, which drops it until a client connects, like a system's `emit`, and `createLogger` emits log events, which the API prints once and streams to the logs surface (with nothing bound, as in the CLI, a logger writes to the console). In the renderer, `bindFeHost` binds the application actor, the secrets client behind `secretsClient` (the Settings → Secrets procedures) and a transport that sends to systems over the API client. Using the port with nothing bound throws, naming `bindHost` or `bindFeHost`.
 
 A pack can't register a service under a host service's name.
 
@@ -316,7 +316,7 @@ The user's API keys live in `@apackdev/host/secrets`, which is host-only and not
 
 ## Persistence
 
-The app keeps two [elmdb](https://github.com/spankyed/elmdb) databases, both opened from `@apackdev/ears/lmdb`, each with an engine of its own; packs and pack tests never load elmdb:
+The app keeps two [elmdb](https://github.com/spankyed/elmdb) databases, both opened from `@elmdb/ears/database`, each with an engine of its own; packs and pack tests never load elmdb:
 
 | Database | Directory | Holds | Opened by |
 |---|---|---|---|
@@ -345,7 +345,7 @@ A flow run is not in the app's database: no unit (`transact`) on the app's engin
 | `ref.ts` | `ref(name)`: the ref (`<packId>/<featureId>`) a name in this pack's code stands for, its own features by id and any other by ref, bound to the pack so its code never passes its own pack id |
 | `fe.ts` | `openSurface(name, event?)`, taking the names pack code writes, and the `SurfaceName` type, which lists exactly those names (the pack's own surfaces by feature id, its dependencies' by `<packId>/<featureId>`). Only packs with surfaces get it |
 | `system-specs.ts` | Type-only: `specs`, the events each system receives and sends, keyed by feature id, read from its entry's spec. `events.ts` imports it; only packs with systems get it |
-| `events.ts` | `SendableSurfaceEvents` (surface ID -> the events it receives: its own feature's system's, plus the inbox that surface's `Contract` declares), `PackSystemEvents`, and the typed `broadcastToSurface` (backend, every window), `sendToSurface` (renderer, this window) and `sendToSystem` |
+| `events.ts` | `SendableSurfaceEvents` (surface ID -> the events it receives: its own feature's system's, plus the inbox that surface's `Contract` declares), `PackSystemEvents`, and the typed `broadcast` (backend, every window), `sendToSurface` (renderer, this window) and `tell` |
 | `types.ts` | Type barrel: each feature's `types` and step node types |
 | `entity-destinations.json` / `event-contracts.json` | Build-checked entity destinations and event contracts, readable without executing pack modules |
 | `settings.ts` / `settings-fe.ts` | Typed, owner-bound settings handles and frontend settings binding |

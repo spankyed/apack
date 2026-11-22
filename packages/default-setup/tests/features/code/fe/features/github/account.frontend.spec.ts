@@ -21,14 +21,17 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-const signingIn = (userCode: string) => ({ code: { userCode, verificationUri: 'https://github.com/login/device', expiresAt: 0 } })
+const codeOf = (userCode: string) => ({ userCode, verificationUri: 'https://github.com/login/device', expiresAt: 0 })
 
 /** The account form, over a sign-in GitHub has given `userCode` for */
 async function account(userCode: string) {
   const github = createMachine({
-    types: {} as { context: { account: null; signIn: ReturnType<typeof signingIn>; failure: null }; events: AnyEventObject },
-    context: { account: null, signIn: signingIn(userCode), failure: null },
-    on: { 'test.CODE': { actions: assign({ signIn: ({ event }) => signingIn(event.userCode as string) }) } },
+    types: {} as { context: { account: null; code: ReturnType<typeof codeOf>; failure: null }; events: AnyEventObject },
+    context: { account: null, code: codeOf(userCode), failure: null },
+    // As the sign-in's own machine is while one is under way
+    initial: 'signingIn',
+    states: { signingIn: {} },
+    on: { 'test.CODE': { actions: assign({ code: ({ event }) => codeOf(event.userCode as string) }) } },
   })
   code = createActor(createMachine({
     types: {} as { events: AnyEventObject },

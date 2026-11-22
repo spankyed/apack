@@ -4,19 +4,20 @@
 
 ```ts
 
-import type { Create } from '@apackdev/ears';
-import { DatabaseCatalog } from '@apackdev/ears';
-import { EARS } from '@apackdev/ears';
-import type { Ears } from '@apackdev/ears';
-import { EntityRow } from '@apackdev/ears';
-import type { Query } from '@apackdev/ears';
-import { RelationMatch } from '@apackdev/ears';
-import { RelationPatch } from '@apackdev/ears';
-import { RelationRow } from '@apackdev/ears';
-import { SchemaStats } from '@apackdev/ears';
-import { UnitOptions } from '@apackdev/ears';
-import type { Upsert } from '@apackdev/ears';
-import type { Write } from '@apackdev/ears';
+import type { CallSiteNaming } from '@elmdb/ears';
+import type { Create } from '@elmdb/ears';
+import { DatabaseCatalog } from '@elmdb/ears';
+import { EARS } from '@elmdb/ears';
+import type { Ears } from '@elmdb/ears';
+import { EntityRow } from '@elmdb/ears';
+import type { Query } from '@elmdb/ears';
+import { RelationMatch } from '@elmdb/ears';
+import { RelationPatch } from '@elmdb/ears';
+import { RelationRow } from '@elmdb/ears';
+import { SchemaStats } from '@elmdb/ears';
+import { UnitOptions } from '@elmdb/ears';
+import type { Upsert } from '@elmdb/ears';
+import type { Write } from '@elmdb/ears';
 
 // @internal
 export function _bindEars(engine: Ears | undefined): Ears | undefined;
@@ -26,6 +27,9 @@ export function boundEars(): Ears;
 
 // @public (undocumented)
 export const catalog: () => DatabaseCatalog;
+
+// @internal
+export const _EARS_CALL_SITES: CallSiteNaming;
 
 // @public (undocumented)
 export const findRelations: (match?: RelationMatch) => RelationRow[];
@@ -74,5 +78,8 @@ export const updateRelation: (relId: EARS.RelationId, patch: RelationPatch) => v
 
 // @public (undocumented)
 export const wouldCreateCycle: (source: EARS.EntityId, target: EARS.EntityId, kinds: readonly EARS.RelKind[]) => boolean;
+
+
+export * from "@elmdb/ears";
 
 ```

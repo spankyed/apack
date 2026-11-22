@@ -7,12 +7,12 @@ import { fromCallback, setup } from 'xstate';
 import { commandsFromDocuments } from '@apackdev/sdk/commands';
 import { documentRepository } from '@apackdev/sdk/repositories';
 import type { ApplicationClientEvent } from '../../event-contracts.ts';
-import { broadcastToSurface } from '../../../events.ts';
+import { broadcast } from '../../../events.ts';
 import { splitRef } from '@apackdev/sdk/ids';
 import { appState } from '../../../app-state/index.ts';
 import type { PackRegistry } from '../../../packs/registry.ts';
 
-/** Hands each handler the answer for the message it is handling — see `defineHandlers` */
+/** Hands each handler the connection the message it handles arrived on — see `defineHandlers` */
 // No context is declared on this machine, so XState's own open `MachineContext` is what its handlers get
 const handlers = defineHandlers<MachineContext, ApplicationEvent>();
 
@@ -71,7 +71,7 @@ export function createApplicationSystem(registry: Pick<PackRegistry, 'surfaceDef
           if (!runtime) throw new Error(`Pack "${id}" has no accepted runtime identity`);
           return [id, runtime.registrationId];
         }));
-        broadcastToSurface('application', { type: 'PACK_RUNTIMES_UPDATED', runtimes });
+        broadcast('application', { type: 'PACK_RUNTIMES_UPDATED', runtimes });
       },
       /**
        * The chat's slash commands, which the shell holds for every editor in the window. Derived from the
@@ -84,10 +84,10 @@ export function createApplicationSystem(registry: Pick<PackRegistry, 'surfaceDef
        * what a pack's tests run in.
        */
       sendCommands: () => {
-        broadcastToSurface('application', { type: 'COMMANDS_UPDATED', commands: commandsFromDocuments() });
+        broadcast('application', { type: 'COMMANDS_UPDATED', commands: commandsFromDocuments() });
       },
       sendVisibility: () => {
-        broadcastToSurface('application', { type: 'SURFACE_VISIBILITY_UPDATED', surfaceVisibility: surfaceVisibility(registry) });
+        broadcast('application', { type: 'SURFACE_VISIBILITY_UPDATED', surfaceVisibility: surfaceVisibility(registry) });
       },
     }),
   }).createMachine({

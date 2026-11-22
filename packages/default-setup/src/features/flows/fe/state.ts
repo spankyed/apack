@@ -1,4 +1,4 @@
-import { entityIs, viewRead, viewWrites, writeAnswered, writeSent, writing } from '@apackdev/sdk/fe'
+import { entityIs, freshKey, makes, viewRead, viewWrites, writeEnded, writeSent, writing, type MadeEvent, type Making } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
 import { and, assign, enqueueActions, setup, type ActorRefFrom } from 'xstate'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe'
@@ -15,8 +15,8 @@ import type {
   EdgeEntity,
 } from '#generated/types.ts'
 import type { Contract, FlowsContext, FlowsInboxEvent } from './contract.ts'
-import type { FlowExtendedData, OutgoingFlowsEvents } from '#features/flows/be/types.ts'
-import { sendToSystem } from '#generated/events.ts'
+import type { FlowExtendedData } from '#features/flows/be/types.ts'
+import { fromAsk } from '#generated/events.ts'
 import { getNodeConfig, isTriggerNode } from '@apackdev/ui/components/node-styles'
 import { getStepDeclaration } from '@apackdev/sdk/fe'
 import { calculateLayoutAsync, allNodesHavePositions, LAYOUT_CONFIG, layoutComponentAroundSource } from './canvas/layout-utils.ts'
@@ -77,9 +77,9 @@ function reindexEdges(
 
 const HANDLE_OCCUPIED_ERROR = 'This step already has an outbound connection'
 
-/** A graph write, sent where the edit is made: its call recorded in the same assignment, for its answer to settle */
-const withWrite = (writes: FlowsContext['writes'], call: string): { writes: FlowsContext['writes'] } =>
-  ({ writes: writeSent(writes, call) })
+/** A graph write, asked where the edit is made: the key it was made under recorded beside it, for its end to settle */
+const withWrite = (writes: FlowsContext['writes'], ask: string): { writes: FlowsContext['writes'] } =>
+  ({ writes: writeSent(writes, ask) })
 
 /**
  * The fields a new node starts with, onto the node drawn before the backend answers. It reads the same
@@ -99,14 +99,39 @@ export const flowsId = 'flows' as const
 export const id = flowsId
 export type FlowsState = ActorRefFrom<typeof flowsState>
 
-type SystemEvent = OutgoingFlowsEvents
+/**
+ * What the machine asks the flows system, each under the name it is made by. Any number of each are under way at
+ * once, every one under a key of its own (`freshKey`), so every one asked for is done and answered.
+ */
+const made = makes(({ each }) => ({
+  modelCatalog: each(fromAsk(id, 'GET_MODEL_CATALOG')),
+  createFlow: each(fromAsk(id, 'CREATE_FLOW')),
+  createNode: each(fromAsk(id, 'CREATE_NODE')),
+  createEdge: each(fromAsk(id, 'CREATE_EDGE')),
+  importDsl: each(fromAsk(id, 'IMPORT_DSL')),
+  exportDsl: each(fromAsk(id, 'EXPORT_DSL')),
+  // The asks whose answer is only that it was done
+  deleteFlow: each(fromAsk(id, 'DELETE_FLOW')),
+  updateFlowLabel: each(fromAsk(id, 'UPDATE_FLOW_LABEL')),
+  updateNode: each(fromAsk(id, 'UPDATE_NODE')),
+  deleteNode: each(fromAsk(id, 'DELETE_NODE')),
+  deleteEdge: each(fromAsk(id, 'DELETE_EDGE')),
+  updateEdge: each(fromAsk(id, 'UPDATE_EDGE')),
+  reindexHandles: each(fromAsk(id, 'REINDEX_HANDLES')),
+  setRootFlow: each(fromAsk(id, 'SET_ROOT_FLOW')),
+}))
+
+/** The asks whose end settles as a write's: a refusal shows its reason, and one `writes` holds is answered */
+const SETTLED = [
+  'made.createFlow', 'made.createNode', 'made.createEdge', 'made.deleteFlow', 'made.updateFlowLabel', 'made.updateNode',
+  'made.deleteNode', 'made.deleteEdge', 'made.updateEdge', 'made.reindexHandles', 'made.setRootFlow',
+] as const
+
+/** The surface's context, and which of the asks the machine makes (`made`) are under way */
+type MachineContext = FlowsContext & { making: Making<typeof made> }
+
+type SystemEvent = MadeEvent<typeof made>
   | FlowsInboxEvent
-  // DSL Import backend responses
-  | { type: 'DSL_IMPORTED'; flowIds: string[] }
-  | { type: 'DSL_IMPORT_FAILED'; errors: string[] }
-  // DSL Export backend responses
-  | { type: 'DSL_EXPORTED'; filePath: string; flowCount: number; skipped: string[] }
-  | { type: 'DSL_EXPORT_FAILED'; errors: string[] }
 
 type UIEvent =
   | { type: 'NODE.CLICK'; nodeId: string }
@@ -172,12 +197,18 @@ function layoutGraph(data: Pick<FlowsContext['graph'], 'nodes' | 'edges'>, posit
 
 const flowsState = setup({
   types: {
-    context: {} as FlowsContext,
+    context: {} as MachineContext,
     events: {} as FlowsEvents,
   },
+  actors: made.actors,
   actions: {
     /* ── bootstrap ─────────────────────────────────────── */
-    setModelCatalog: assign(({ event }) => ({ models: typeOf('MODEL_CATALOG_READ', event).data.models })),
+    askModelCatalog: enqueueActions(({ enqueue }) => made.make(enqueue, 'modelCatalog', freshKey(), {})),
+
+    setModelCatalog: assign(({ event }) => {
+      const { outcome } = typeOf('made.modelCatalog', event);
+      return outcome.ok ? { models: outcome.value.models } : { canvasError: outcome.failure.message };
+    }),
 
     takeFlowsRead: assign(({ event }) => {
       const { labels, rootFlowId } = typeOf('FLOWS.READ', event);
@@ -261,41 +292,43 @@ const flowsState = setup({
       writes: viewWrites(),
     }),
 
-    /** One of the editor's writes answered: once the last is, the graph is read again if a result was held or one was refused */
-    settleWrite: assign(({ context, event }) => ({ writes: writeAnswered(context.writes, event, event.type === 'FLOW_WRITE_FAILED') })),
+    /**
+     * One of the machine's asks ended. A refusal shows its reason; and where it was one of the editor's writes, once
+     * the last is answered the graph is read again if a result was held or one was refused
+     */
+    settleWrite: assign(({ context, event }) => {
+      const { key, outcome } = typeOf(SETTLED, event);
+      return {
+        writes: writeEnded(context.writes, key, !outcome.ok),
+        ...(!outcome.ok && { canvasError: outcome.failure.message }),
+      };
+    }),
 
-    surfaceWriteError: assign(({ event }) => ({ canvasError: typeOf('FLOW_WRITE_FAILED', event).error })),
+    sendCreateFlow: enqueueActions(({ enqueue }) => made.make(enqueue, 'createFlow', freshKey(), {})),
 
-    sendCreateFlow: ({ event }) => {
-      typeOf('FLOW.CREATE', event);
-      sendToSystem(id, { type: 'CREATE_FLOW' });
-    },
-
-    sendUpdateLabel: ({ event }) => {
+    sendUpdateLabel: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('FLOW.UPDATE_LABEL', event);
-      sendToSystem(id, {
-        type: 'UPDATE_FLOW_LABEL',
-        flowId: ev.flowId,
-        label: ev.label,
-      });
-    },
+      made.make(enqueue, 'updateFlowLabel', freshKey(), { flowId: ev.flowId, label: ev.label });
+    }),
 
     /** The flow *this* window asked to create, which this window opens; every window's list has it from its view */
-    openCreatedFlow: assign(({ event }) => ({
-      pendingFlow: { flowId: typeOf('FLOW_OPENED', event).flowId, recordHistory: true },
-      selectedNodeId: undefined,
-      editingNodeId: undefined,
-    })),
+    openCreatedFlow: assign(({ event }) => {
+      const { outcome } = typeOf('made.createFlow', event);
+      if (!outcome.ok) return {};
+      return {
+        pendingFlow: { flowId: outcome.value.flowId, recordHistory: true },
+        selectedNodeId: undefined,
+        editingNodeId: undefined,
+      };
+    }),
 
-    sendDeleteFlow: ({ event }) => {
-      const ev = event as { type: 'FLOW.DELETE'; flowId: EARS.EntityId };
-      if (ev.type !== 'FLOW.DELETE') return;
+    sendDeleteFlow: enqueueActions(({ event, enqueue }) => {
+      made.make(enqueue, 'deleteFlow', freshKey(), { flowId: typeOf('FLOW.DELETE', event).flowId });
+    }),
 
-      sendToSystem(id, {
-        type: 'DELETE_FLOW',
-        flowId: ev.flowId as string,
-      });
-    },
+    sendSetRootFlow: enqueueActions(({ event, enqueue }) => {
+      made.make(enqueue, 'setRootFlow', freshKey(), { flowId: typeOf('ROOT_FLOW.SET', event).flowId });
+    }),
 
     /* ── graph interactions ───────────────────────────────── */
     selectNode: assign({ selectedNodeId: ({ event }) => typeOf('NODE.CLICK', event).nodeId as EARS.EntityId }),
@@ -357,23 +390,24 @@ const flowsState = setup({
       }
     }),
     
-    sendEdgeConnected: assign(({ context, event }) => {
+    sendEdgeConnected: enqueueActions(({ context, event, enqueue }) => {
       const ev = typeOf('EDGE.CONNECT', event);
-      if (!context.selectedFlowId) return {};
+      if (!context.selectedFlowId) return;
 
       // Only send if both IDs are permanent (not temporary)
       if (!ev.src.startsWith('temp-') && !ev.tgt.startsWith('temp-')) {
-        return withWrite(context.writes, sendToSystem(id, {
-          type: 'CREATE_EDGE',
+        const write = freshKey();
+        made.make(enqueue, 'createEdge', write, {
           flowId: context.selectedFlowId,
           sourceId: ev.src,
           targetId: ev.tgt,
           sourceHandle: ev.sourceHandle,
           targetHandle: ev.targetHandle,
-        }));
+        });
+        enqueue.assign(withWrite(context.writes, write));
       }
-      // A node still being added: its answer sends the edge (`reconcileNodeId`)
-      return {};
+      // A node still being added: its answer asks for the edge (`reconcileNodeId`)
+      return;
     }),
     
     disconnectEdge: assign(({ context, event }) => {
@@ -387,14 +421,15 @@ const flowsState = setup({
       }
     }),
     
-    sendEdgeDisconnected: assign(({ context, event }) => {
+    sendEdgeDisconnected: enqueueActions(({ context, event, enqueue }) => {
       const ev = typeOf('EDGE.DISCONNECT', event);
-      if (!context.selectedFlowId) return {};
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'DELETE_EDGE',
+      if (!context.selectedFlowId) return;
+      const write = freshKey();
+      made.make(enqueue, 'deleteEdge', write, {
         flowId: context.selectedFlowId,
         edgeId: ev.edgeId,
-      }));
+      });
+      enqueue.assign(withWrite(context.writes, write));
     }),
     
     reconnectEdge: assign(({ context, event }) => {
@@ -405,18 +440,19 @@ const flowsState = setup({
       return { graph: { ...context.graph, edges } };
     }),
 
-    sendEdgeReconnected: assign(({ context, event }) => {
+    sendEdgeReconnected: enqueueActions(({ context, event, enqueue }) => {
       const ev = typeOf('EDGE.RECONNECT', event);
-      if (!context.selectedFlowId) return {};
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_EDGE',
+      if (!context.selectedFlowId) return;
+      const write = freshKey();
+      made.make(enqueue, 'updateEdge', write, {
         flowId: context.selectedFlowId,
         edgeId: ev.edgeId,
         source: ev.source,
         target: ev.target,
         sourceHandle: ev.sourceHandle,
         targetHandle: ev.targetHandle,
-      }));
+      });
+      enqueue.assign(withWrite(context.writes, write));
     }),
     
     deselectNode: assign({ selectedNodeId: undefined, editingNodeId: undefined }),
@@ -443,47 +479,48 @@ const flowsState = setup({
       return { graph: { ...context.graph, edges: updatedEdges } }
     }),
 
-    sendReindexHandles: assign(({ context, event }) => {
+    sendReindexHandles: enqueueActions(({ context, event, enqueue }) => {
       const ev = typeOf('HANDLE.REINDEX', event)
-      if (!context.selectedFlowId) return {}
+      if (!context.selectedFlowId) return
       const nodeId = ev.nodeId.startsWith('temp-')
         ? context.tempIdMap[ev.nodeId] || ev.nodeId
         : ev.nodeId
-      if (nodeId.startsWith('temp-')) return {}
+      if (nodeId.startsWith('temp-')) return
 
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'REINDEX_HANDLES',
+      const write = freshKey()
+      made.make(enqueue, 'reindexHandles', write, {
         flowId: context.selectedFlowId,
         nodeId,
         prefix: ev.prefix,
         index: ev.index,
         direction: ev.direction,
-      }))
+      })
+      enqueue.assign(withWrite(context.writes, write))
     }),
 
-    // Connect from selected handle to clicked node and send to backend
+    // Connect from selected handle to clicked node and ask the backend for the edge
     // Combined into single action to ensure handle is captured before being cleared
-    connectFromHandleAndSend: assign(({ context, event }) => {
+    connectFromHandleAndSend: enqueueActions(({ context, event, enqueue }) => {
       const ev = typeOf('NODE.CLICK', event);
       const handle = context.selectedHandle;
-      if (!handle) return { selectedNodeId: ev.nodeId as EARS.EntityId, selectedHandle: undefined };
+      if (!handle) return enqueue.assign({ selectedNodeId: ev.nodeId as EARS.EntityId, selectedHandle: undefined });
 
       // Don't connect to self — select the node and clear handle instead
-      if (handle.nodeId === ev.nodeId) return { selectedNodeId: ev.nodeId as EARS.EntityId, selectedHandle: undefined };
+      if (handle.nodeId === ev.nodeId) return enqueue.assign({ selectedNodeId: ev.nodeId as EARS.EntityId, selectedHandle: undefined });
 
       // Don't create duplicate edge to an already-connected target
       const alreadyConnected = context.graph.edges.some(
         (e) => e.source === handle.nodeId && e.target === ev.nodeId
       );
-      if (alreadyConnected) return { selectedNodeId: ev.nodeId as EARS.EntityId, selectedHandle: undefined };
+      if (alreadyConnected) return enqueue.assign({ selectedNodeId: ev.nodeId as EARS.EntityId, selectedHandle: undefined });
 
       // Don't connect to trigger nodes (no inputs)
       const clickedNode = context.graph.nodes.find(n => n.id === ev.nodeId);
-      if (isTriggerNode(clickedNode?.nodeType)) return { selectedNodeId: ev.nodeId as EARS.EntityId, selectedHandle: undefined };
+      if (isTriggerNode(clickedNode?.nodeType)) return enqueue.assign({ selectedNodeId: ev.nodeId as EARS.EntityId, selectedHandle: undefined });
 
       // Don't connect if source handle already has an outgoing edge (except listeners)
       if (isHandleOccupied(context.graph.edges, context.graph.nodes, handle.nodeId, handle.handleId)) {
-        return { selectedNodeId: ev.nodeId as EARS.EntityId, selectedHandle: undefined, canvasError: HANDLE_OCCUPIED_ERROR };
+        return enqueue.assign({ selectedNodeId: ev.nodeId as EARS.EntityId, selectedHandle: undefined, canvasError: HANDLE_OCCUPIED_ERROR });
       }
 
       const edgeId = `Edge-${randId()}`;
@@ -495,25 +532,27 @@ const flowsState = setup({
         sourceHandle: handle.handleId,
       } as EdgeEntity;
 
-      // Send to backend (handle is still available here, before we clear it)
-      const sent = context.selectedFlowId && !handle.nodeId.startsWith('temp-') && !ev.nodeId.startsWith('temp-')
-        ? withWrite(context.writes, sendToSystem(id, {
-          type: 'CREATE_EDGE',
+      // Asked of the backend while the handle is still here, before it is cleared
+      let sent = {};
+      if (context.selectedFlowId && !handle.nodeId.startsWith('temp-') && !ev.nodeId.startsWith('temp-')) {
+        const write = freshKey();
+        made.make(enqueue, 'createEdge', write, {
           flowId: context.selectedFlowId,
           sourceId: handle.nodeId,
           targetId: ev.nodeId,
           sourceHandle: handle.handleId,
-        }))
-        : {};
+        });
+        sent = withWrite(context.writes, write);
+      }
 
-      return {
+      enqueue.assign({
         ...sent,
         graph: {
           ...context.graph,
           edges: [...context.graph.edges, newEdge],
         },
         selectedHandle: undefined, // Clear selection after connecting
-      };
+      });
     }),
 
     deleteNode: assign(({ context, event }) => {
@@ -543,30 +582,32 @@ const flowsState = setup({
       };
     }),
     
-    sendNodeDeleted: assign(({ context, event }) => {
+    sendNodeDeleted: enqueueActions(({ context, event, enqueue }) => {
       const ev = typeOf('NODE.DELETE', event);
-      if (!context.selectedFlowId) return {};
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'DELETE_NODE',
+      if (!context.selectedFlowId) return;
+      const write = freshKey();
+      made.make(enqueue, 'deleteNode', write, {
         flowId: context.selectedFlowId,
         nodeId: ev.nodeId,
-      }));
+      });
+      enqueue.assign(withWrite(context.writes, write));
     }),
 
-    createNode: assign(({ context, event, self }) => {
-      if (!context.selectedFlowId) return { selectedNodeId: undefined }
+    createNode: enqueueActions(({ context, event, self, enqueue }) => {
+      if (!context.selectedFlowId) return enqueue.assign({ selectedNodeId: undefined })
 
       const tempId = `temp-${randId()}`
       const ev = typeOf('NODE.CREATE', event)
       const nodeConfig = getNodeConfig(ev.nodeType)
       const label = nodeConfig?.defaultLabel || nodeConfig?.label || `New ${ev.nodeType}`
 
-      const sent = withWrite(context.writes, sendToSystem(id, {
-        type: 'CREATE_NODE',
+      const write = freshKey();
+      made.make(enqueue, 'createNode', write, {
         flowId: context.selectedFlowId,
         tempId,
         nodeData: { nodeType: ev.nodeType, label },
-      }));
+      });
+      const sent = withWrite(context.writes, write);
 
       // Calculate position based on node type and selection state
       const { newNode: nodeOffset } = LAYOUT_CONFIG
@@ -662,7 +703,7 @@ const flowsState = setup({
         )
       }
 
-      return {
+      enqueue.assign({
         ...sent,
         graph: {
           ...context.graph,
@@ -673,12 +714,12 @@ const flowsState = setup({
         selectedNodeId: tempId as EARS.EntityId,
         tempIdMap: { ...context.tempIdMap, [tempId]: tempId },
         canvasError: handleBlocked ? HANDLE_OCCUPIED_ERROR : undefined,
-      }
+      })
     }),
 
-    createConnectedNode: assign(({ context, event, self }) => {
+    createConnectedNode: enqueueActions(({ context, event, self, enqueue }) => {
       if (!context.selectedFlowId) {
-        return { selectedNodeId: undefined }
+        return enqueue.assign({ selectedNodeId: undefined })
       }
 
       const tempId = `temp-${randId()}`
@@ -726,7 +767,7 @@ const flowsState = setup({
 
       // Don't connect if source handle already occupied (except listeners)
       if (isHandleOccupied(context.graph.edges, context.graph.nodes, ev.sourceNodeId, resolvedSourceHandle)) {
-        return { canvasError: HANDLE_OCCUPIED_ERROR }
+        return enqueue.assign({ canvasError: HANDLE_OCCUPIED_ERROR })
       }
 
       // Create temporary edge
@@ -739,16 +780,17 @@ const flowsState = setup({
         sourceHandle: resolvedSourceHandle,
       } as EdgeEntity
 
-      // Send create to backend
-      const sent = withWrite(context.writes, sendToSystem(id, {
-        type: 'CREATE_NODE',
+      // Ask the backend for the node
+      const write = freshKey();
+      made.make(enqueue, 'createNode', write, {
         flowId: context.selectedFlowId,
         tempId: tempId,
         nodeData: {
           nodeType: ev.nodeType,
           label: newNode.label,
         },
-      }));
+      });
+      const sent = withWrite(context.writes, write);
 
       // Async ELK layout to snap the new node and reposition siblings in the same component
       layoutComponentAroundSource(
@@ -759,7 +801,7 @@ const flowsState = setup({
         (nodeId, position) => self.send({ type: 'NODE.UPDATE_POSITION', nodeId, position })
       )
 
-      return {
+      enqueue.assign({
         ...sent,
         graph: {
           ...context.graph,
@@ -773,7 +815,7 @@ const flowsState = setup({
           ...context.tempIdMap,
           [tempId]: tempId,
         }
-      }
+      })
     }),
 
     /* ── node update actions ──────────────────────────────── */
@@ -789,9 +831,9 @@ const flowsState = setup({
       };
     }),
 
-    sendNodeUpdate: assign(({ context, event }) => {
+    sendNodeUpdate: enqueueActions(({ context, event, enqueue }) => {
       const ev = typeOf('NODE.UPDATE', event);
-      if (!context.selectedFlowId) return {};
+      if (!context.selectedFlowId) return;
       
       // Check if this is a temporary ID
       const nodeId = ev.nodeId.startsWith('temp-') 
@@ -801,19 +843,20 @@ const flowsState = setup({
       // If it's still temporary (not yet resolved), skip the update
       if (nodeId.startsWith('temp-')) {
         console.warn('Cannot update node with temporary ID:', nodeId);
-        return {};
+        return;
       }
       
       const node = context.graph.nodes.find(n => n.id === nodeId);
-      if (!node) return {};
+      if (!node) return;
 
-      // Send update to backend
-      return withWrite(context.writes, sendToSystem(id, {
-        type: 'UPDATE_NODE',
+      // Ask the backend for the update
+      const write = freshKey();
+      made.make(enqueue, 'updateNode', write, {
         flowId: context.selectedFlowId,
         nodeId: nodeId,
         nodeData: { ...node, ...ev.updates },
-      }));
+      });
+      enqueue.assign(withWrite(context.writes, write));
     }),
 
     updateNodePosition: assign(({ context, event }) => {
@@ -838,9 +881,11 @@ const flowsState = setup({
     }),
 
     /* ── ID reconciliation actions ────────────────────────── */
-    reconcileNodeId: assign(({ context, event }) => {
-      const ev = typeOf('NODE_CREATED', event);
-      const { tempId, nodeId: permanentId, node } = ev;
+    reconcileNodeId: enqueueActions(({ context, event, enqueue }) => {
+      const { outcome } = typeOf('made.createNode', event);
+      // A node the backend refused stays as drawn until the graph is read again, which its refusal asks for
+      if (!outcome.ok) return;
+      const { tempId, nodeId: permanentId, node } = outcome.value;
       
       // The node from backend already has the permanent ID, just replace the temp node. A refresh may already
       // have brought the permanent node, and then the temp one is only dropped
@@ -876,28 +921,29 @@ const flowsState = setup({
       const updatedTempIdMap = { ...context.tempIdMap };
       updatedTempIdMap[tempId] = permanentId;
       
-      // Send edge creation to backend for any edges with the new permanent ID
+      // Ask the backend for any edges with the new permanent ID
       let writes = context.writes;
       if (context.selectedFlowId) {
         updatedEdges.forEach(edge => {
-          // If this edge was just updated from temp to permanent, send it
+          // If this edge was just updated from temp to permanent, ask for it
           const wasUpdated = (edge.source === permanentId && context.graph.edges.find(e => e.id === edge.id)?.source === tempId)
             || (edge.target === permanentId && context.graph.edges.find(e => e.id === edge.id)?.target === tempId);
           
           if (wasUpdated && !edge.source.startsWith('temp-') && !edge.target.startsWith('temp-')) {
-            writes = withWrite(writes, sendToSystem(id, {
-              type: 'CREATE_EDGE',
+            const write = freshKey();
+            made.make(enqueue, 'createEdge', write, {
               flowId: context.selectedFlowId!,
               sourceId: edge.source,
               targetId: edge.target,
               sourceHandle: edge.sourceHandle,
               targetHandle: edge.targetHandle,
-            })).writes;
+            });
+            writes = withWrite(writes, write).writes;
           }
         });
       }
       
-      return {
+      enqueue.assign({
         graph: {
           nodes: updatedNodes,
           edges: updatedEdges,
@@ -907,13 +953,14 @@ const flowsState = setup({
         editingNodeId: newEditingNodeId,
         tempIdMap: updatedTempIdMap,
         writes,
-      };
+      });
     }),
     
     /* ── Edge ID reconciliation ────────────────────────────── */
     reconcileEdgeId: assign(({ context, event }) => {
-      const ev = typeOf('EDGE_CREATED', event);
-      const { sourceId, targetId, relId, sourceHandle, targetHandle } = ev;
+      const { outcome } = typeOf('made.createEdge', event);
+      if (!outcome.ok) return {};
+      const { sourceId, targetId, relId, sourceHandle, targetHandle } = outcome.value;
 
       // Find the edge with matching source, target, and handles
       const updatedEdges = context.graph.edges.map(edge => {
@@ -947,33 +994,18 @@ const flowsState = setup({
       },
     })),
 
-    sendImportDSL: ({ event }) => {
-      const ev = typeOf('DSL.IMPORT', event);
-      sendToSystem(id, {
-        type: 'IMPORT_DSL',
-        dsl: ev.dsl,
-      });
-    },
-
-    handleDSLImported: assign(({ context, event }) => {
-      typeOf('DSL_IMPORTED', event);
-      return {
-        dslImport: {
-          status: 'success' as const,
-          errors: [],
-          importedFlowNames: context.dslImport.importedFlowNames, // Keep the names we parsed from file
-        },
-      };
+    sendImportDSL: enqueueActions(({ event, enqueue }) => {
+      made.make(enqueue, 'importDsl', freshKey(), { dsl: typeOf('DSL.IMPORT', event).dsl });
     }),
 
-    handleDSLImportFailed: assign(({ event }) => {
-      const ev = typeOf('DSL_IMPORT_FAILED', event);
+    /** An import's answer is its status */
+    handleDSLImportEnded: assign(({ context, event }) => {
+      const { outcome } = typeOf('made.importDsl', event);
       return {
-        dslImport: {
-          status: 'error' as const,
-          errors: ev.errors,
-          importedFlowNames: [],
-        },
+        dslImport: outcome.ok
+          // The names are the ones read from the file as it was sent
+          ? { status: 'success' as const, errors: [], importedFlowNames: context.dslImport.importedFlowNames }
+          : { status: 'error' as const, errors: outcome.failure.message.split('\n'), importedFlowNames: [] },
       };
     }),
 
@@ -999,38 +1031,18 @@ const flowsState = setup({
       },
     })),
 
-    sendExportDSL: ({ event }) => {
+    sendExportDSL: enqueueActions(({ event, enqueue }) => {
       const ev = typeOf('DSL.EXPORT', event);
-      sendToSystem(id, {
-        type: 'EXPORT_DSL',
-        directory: ev.directory,
-        ...(ev.flowId && { flowId: ev.flowId }),
-      });
-    },
-
-    handleDSLExported: assign(({ event }) => {
-      const ev = typeOf('DSL_EXPORTED', event);
-      return {
-        dslExport: {
-          status: 'success' as const,
-          errors: [],
-          filePath: ev.filePath,
-          flowCount: ev.flowCount,
-          skipped: ev.skipped,
-        },
-      };
+      made.make(enqueue, 'exportDsl', freshKey(), { directory: ev.directory, ...(ev.flowId && { flowId: ev.flowId }) });
     }),
 
-    handleDSLExportFailed: assign(({ event }) => {
-      const ev = typeOf('DSL_EXPORT_FAILED', event);
+    /** An export's answer is its status */
+    handleDSLExportEnded: assign(({ event }) => {
+      const { outcome } = typeOf('made.exportDsl', event);
       return {
-        dslExport: {
-          status: 'error' as const,
-          errors: ev.errors,
-          filePath: '',
-          flowCount: 0,
-          skipped: [],
-        },
+        dslExport: outcome.ok
+          ? { status: 'success' as const, errors: [], ...outcome.value }
+          : { status: 'error' as const, errors: [outcome.failure.message], filePath: '', flowCount: 0, skipped: [] },
       };
     }),
 
@@ -1052,6 +1064,8 @@ const flowsState = setup({
     readsNothing: ({ event }) => event.type === 'FLOW.GRAPH_READ' && event.data === null,
     /** Whether any of the editor's writes is unanswered */
     writing: ({ context }) => writing(context.writes),
+    /** Whether the ask that ended was answered, and not refused */
+    answered: ({ event }) => typeOf('made.createFlow', event).outcome.ok,
     hasSelectedHandle: ({ context }) => !!context.selectedHandle,
   },
 }).createMachine({
@@ -1067,6 +1081,7 @@ const flowsState = setup({
       positions: {},
     },
     models: [],
+    making: made.none(),
     writes: viewWrites(),
     flowLabels: {},
     tempIdMap: {},
@@ -1089,13 +1104,10 @@ const flowsState = setup({
     'FLOW.SELECT': { target: '.view', actions: 'selectFlow' },
     'NODE.REVEAL': { target: '.view', actions: 'selectFlow' },
     SURFACE_DEACTIVATED: { actions: 'cancelFlowSelection' },
-    // The models the editor offers, asked as the shell starts the surface, in a delivery naming it
-    SURFACE_STARTED: { actions: () => { sendToSystem(id, { type: 'GET_MODEL_CATALOG' }); } },
-    MODEL_CATALOG_READ: { actions: 'setModelCatalog' },
+    // The models the editor offers, asked as the shell starts the surface
+    SURFACE_STARTED: { actions: 'askModelCatalog' },
     'FLOWS.READ': { actions: 'takeFlowsRead' },
-    'ROOT_FLOW.SET': {
-      actions: ({ event }) => sendToSystem(id, { type: 'SET_ROOT_FLOW', flowId: typeOf('ROOT_FLOW.SET', event).flowId }),
-    },
+    'ROOT_FLOW.SET': { actions: 'sendSetRootFlow' },
     'FLOW.GRAPH_READ': [
       { guard: and(['readsPendingFlow', 'readsNothing']), actions: 'dropGoneFlow' },
       { guard: 'readsPendingFlow', actions: 'loadFlowData' },
@@ -1118,17 +1130,28 @@ const flowsState = setup({
         }
       }),
     },
-    // The answer, which only the window that asked is sent — so only it navigates
-    FLOW_OPENED: {
-      actions: 'openCreatedFlow',
-      target: '.view'
-    },
-    // The answers to the editor's writes
-    NODE_CREATED: { actions: ['reconcileNodeId', 'settleWrite'] },
-    EDGE_CREATED: { actions: ['reconcileEdgeId', 'settleWrite'] },
-    FLOW_WRITTEN: { actions: 'settleWrite' },
-    // A refused write: its reason, and the flow as stored read again once nothing else is unanswered
-    FLOW_WRITE_FAILED: { actions: ['surfaceWriteError', 'settleWrite'] },
+    [made.done]: { actions: made.settle() },
+    // How each ask the machine made ended, by the name it was made under (`made`)
+    'made.modelCatalog': { actions: 'setModelCatalog' },
+    'made.createFlow': [
+      // The flow this window asked to create, which only the window that asked is answered with — so only it navigates
+      { guard: 'answered', target: '.view', actions: 'openCreatedFlow' },
+      { actions: 'settleWrite' },
+    ],
+    // The editor's writes. A refused one shows its reason, and the flow as stored is read again once nothing else is
+    // unanswered
+    'made.createNode': { actions: ['reconcileNodeId', 'settleWrite'] },
+    'made.createEdge': { actions: ['reconcileEdgeId', 'settleWrite'] },
+    'made.deleteFlow': { actions: 'settleWrite' },
+    'made.updateFlowLabel': { actions: 'settleWrite' },
+    'made.updateNode': { actions: 'settleWrite' },
+    'made.deleteNode': { actions: 'settleWrite' },
+    'made.deleteEdge': { actions: 'settleWrite' },
+    'made.updateEdge': { actions: 'settleWrite' },
+    'made.reindexHandles': { actions: 'settleWrite' },
+    'made.setRootFlow': { actions: 'settleWrite' },
+    'made.importDsl': { actions: 'handleDSLImportEnded' },
+    'made.exportDsl': { actions: 'handleDSLExportEnded' },
     'CANVAS.CLEAR_ERROR': {
       actions: 'clearCanvasError',
     },
@@ -1139,24 +1162,12 @@ const flowsState = setup({
     'DSL.RESET_STATUS': {
       actions: 'resetImportStatus'
     },
-    DSL_IMPORTED: {
-      actions: 'handleDSLImported'
-    },
-    DSL_IMPORT_FAILED: {
-      actions: 'handleDSLImportFailed'
-    },
     // DSL Export events
     'DSL.EXPORT': {
       actions: ['setExporting', 'sendExportDSL']
     },
     'DSL.RESET_EXPORT_STATUS': {
       actions: 'resetExportStatus'
-    },
-    DSL_EXPORTED: {
-      actions: 'handleDSLExported'
-    },
-    DSL_EXPORT_FAILED: {
-      actions: 'handleDSLExportFailed'
     },
     NAVIGATE_BACK: [
       {

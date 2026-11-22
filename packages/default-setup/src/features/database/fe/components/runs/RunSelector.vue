@@ -13,12 +13,12 @@
     
     <!-- Flow List -->
     <div class="flex-1 p-2 overflow-y-auto">
-      <div v-if="flowRuns.length === 0 && !isLoadingRuns" class="px-4 py-8 text-center">
+      <div v-if="database.data.flowRuns.length === 0 && !isLoadingRuns" class="px-4 py-8 text-center">
         <p class="text-xs text-neutral-500">No flow runs yet</p>
         <p class="mt-1 text-xs text-neutral-600">Run a flow to see it here</p>
       </div>
       
-      <div v-else-if="isLoadingRuns && flowRuns.length === 0" class="px-4 py-8 text-center">
+      <div v-else-if="isLoadingRuns && database.data.flowRuns.length === 0" class="px-4 py-8 text-center">
         <div class="inline-flex items-center justify-center w-8 h-8 mb-2">
           <Loader2 class="w-5 h-5 animate-spin text-neutral-500" />
         </div>
@@ -27,11 +27,11 @@
       
       <div v-else class="space-y-1">
         <div
-          v-for="flow in flowRuns"
+          v-for="flow in database.data.flowRuns"
           :key="flow.id"
           :class="[
             'group px-3 py-2.5 rounded-lg cursor-pointer transition-all duration-150',
-            currentFlowId === flow.id
+            database.data.currentFlowId === flow.id
               ? 'bg-blue-900/30 text-blue-300 border border-blue-800/50'
               : 'hover:bg-neutral-800/50 text-neutral-400'
           ]"
@@ -44,7 +44,7 @@
               <GitBranch 
                 :class="[
                   'w-3.5 h-3.5 flex-shrink-0',
-                  currentFlowId === flow.id ? 'text-blue-400' : 'text-neutral-500'
+                  database.data.currentFlowId === flow.id ? 'text-blue-400' : 'text-neutral-500'
                 ]" 
               />
               <span class="text-sm font-medium truncate">
@@ -77,27 +77,26 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
-import { useSelector } from '@xstate/vue'
-import type { DatabaseState } from '../../state.ts'
+import { computed } from 'vue'
+import { isLoadingRuns as readingRuns, type DatabaseState } from '../../state.ts'
 import { GitBranch, Loader2, ArrowLeft } from 'lucide-vue-next'
 import type { RunStatus } from '@apackdev/sdk/steps'
 
 const databaseActor: DatabaseState = useSurface()
 
 // State selectors
-const flowRuns = useSelector(databaseActor, (state) => state.context.flowRuns)
-const currentFlowId = useSelector(databaseActor, (state) => state.context.currentFlowId)
-const isLoadingRuns = useSelector(databaseActor, (state) => state.context.isLoadingRuns)
+const { state: database, send } = useState(databaseActor)
+const isLoadingRuns = computed(() => readingRuns(database.value.data.making))
 
 // Actions
 function selectFlow(flowId: string) {
-  databaseActor.send({ type: 'RUNS.SELECT_FLOW', flowId })
+  send({ type: 'RUNS.SELECT_FLOW', flowId })
 }
 
 function exitRunView() {
-  databaseActor.send({ type: 'VIEW_MODE.TOGGLE' })
+  send({ type: 'VIEW_MODE.TOGGLE' })
 }
 
 // Formatting helpers

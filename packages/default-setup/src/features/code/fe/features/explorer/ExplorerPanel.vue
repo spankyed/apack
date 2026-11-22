@@ -16,7 +16,7 @@
         </button>
         <button
           v-if="baseDirectory"
-          @click="explorerActor?.send({ type: 'explorer.REFRESH_TREE' })"
+          @click="send({ type: 'explorer.REFRESH_TREE' })"
           class="p-1.5 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800 rounded transition-colors"
           title="Refresh"
         >
@@ -42,16 +42,16 @@
       <!-- Error alert banner -->
       <div v-if="showError" class="flex items-center gap-2 px-3 py-1.5 bg-red-950/60 border-b border-red-900/50 text-red-300 text-xs">
         <AlertCircle :size="14" class="shrink-0" />
-        <span class="flex-1 truncate">{{ error }}</span>
+        <span class="flex-1 truncate">{{ code.data.error }}</span>
         <button
-          @click="dismissedError = error"
+          @click="dismissedError = code.data.error"
           class="shrink-0 p-0.5 rounded hover:bg-red-900/50 text-red-400 hover:text-red-200 transition-colors"
         >
           <X :size="14" />
         </button>
       </div>
 
-      <div v-if="isLoading && rootFiles.length === 0" class="flex items-center justify-center flex-1">
+      <div v-if="code.data.isLoading && rootFiles.length === 0" class="flex items-center justify-center flex-1">
         <div class="text-sm text-neutral-400">Loading...</div>
       </div>
 
@@ -87,11 +87,10 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { useSettings } from '#generated/settings-fe.ts'
 import { ref, computed, provide, nextTick } from 'vue'
-import { useSelector } from '@xstate/vue'
 import type { CodeState } from '#features/code/fe/state.ts'
 import Dialog from '@apackdev/ui/design/dialog'
 import ExplorerTreeItem from '#features/code/fe/features/explorer/ExplorerTreeItem.vue'
@@ -110,19 +109,17 @@ const explorerActor = panelChild(codeActor, 'explorer')!
 const terminalActor = panelChild(codeActor, 'terminal')!
 
 // State selectors
-const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)
-const rootFiles = useSelector(explorerActor, (state) => state.context.rootFiles)
-const expandedDirs = useSelector(explorerActor, (state) => state.context.expandedDirs)
-const dirContents = useSelector(explorerActor, (state) => state.context.dirContents)
-const loadingDirs = useSelector(explorerActor, (state) => state.context.loadingDirs)
-const selectedPaths = useSelector(explorerActor, (state) => state.context.selectedPaths)
-const revealPath = useSelector(explorerActor, (state) => state.context.revealPath)
-const isLoading = useSelector(codeActor, (state) => state.context.isLoading)
-const error = useSelector(codeActor, (state) => state.context.error)
+const { state: code, send: sendCode } = useState(codeActor)
+const { state: explorer, send } = useState(explorerActor)
+const baseDirectory = computed(() => code.value.data.baseDirectory)
+const rootFiles = computed(() => explorer.value.data.rootFiles)
+const expandedDirs = computed(() => explorer.value.data.expandedDirs)
+const dirContents = computed(() => explorer.value.data.dirContents)
+const selectedPaths = computed(() => explorer.value.data.selectedPaths)
 
 // Error dismissal
 const dismissedError = ref<string | null>(null)
-const showError = computed(() => !!error.value && error.value !== dismissedError.value)
+const showError = computed(() => !!code.value.data.error && code.value.data.error !== dismissedError.value)
 
 // Delete functionality
 const showDeleteDialog = ref(false)
@@ -140,7 +137,7 @@ const treeContainerRef = ref<HTMLElement | null>(null)
 // Build flattened visible paths for shift-range selection
 function getFlattenedVisiblePaths(): string[] {
   const paths: string[] = []
-  function walk(files: FileInfo[]) {
+  function walk(files: readonly FileInfo[]) {
     for (const file of files) {
       paths.push(file.path)
       if (file.type === 'directory' && expandedDirs.value.has(file.path)) {
@@ -157,7 +154,7 @@ function getFlattenedVisiblePaths(): string[] {
 const { selectItem, clearSelection, toggleSelectAll } = useExplorerSelection({
   selectedPaths,
   onSelect: (paths: string[]) => {
-    explorerActor?.send({ type: 'explorer.SELECT_ITEMS', paths })
+    send({ type: 'explorer.SELECT_ITEMS', paths })
   }
 })
 
@@ -176,10 +173,10 @@ const {
 } = useExplorerDragDrop({
   selectedPaths,
   onMove: (sourcePaths, targetDir) => {
-    explorerActor?.send({ type: 'explorer.MOVE_ITEMS', sourcePaths, targetDir })
+    send({ type: 'explorer.MOVE_ITEMS', sourcePaths, targetDir })
   },
   onCopyFiles: (sourcePaths, targetDir) => {
-    explorerActor?.send({ type: 'explorer.COPY_FILES', sourcePaths, targetDir })
+    send({ type: 'explorer.COPY_FILES', sourcePaths, targetDir })
   }
 })
 
@@ -189,13 +186,13 @@ provide('explorer-select-item', (path: string, event: MouseEvent) => {
   selectItem(path, flatPaths, event)
 })
 provide('explorer-expand-dir', (path: string) => {
-  explorerActor?.send({ type: 'explorer.EXPAND_DIRECTORY', path })
+  send({ type: 'explorer.EXPAND_DIRECTORY', path })
 })
 provide('explorer-collapse-dir', (path: string) => {
-  explorerActor?.send({ type: 'explorer.COLLAPSE_DIRECTORY', path })
+  send({ type: 'explorer.COLLAPSE_DIRECTORY', path })
 })
 provide('explorer-open-file', (path: string, editorMode?: 'richText' | 'plainText') => {
-  explorerActor?.send({ type: 'explorer.OPEN_FILE', path, editorMode })
+  send({ type: 'explorer.OPEN_FILE', path, editorMode })
 })
 
 const codeSettings = useSettings('code')
@@ -207,7 +204,7 @@ provide('explorer-rename', (oldPath: string, newName: string) => {
   const pathParts = oldPath.split('/')
   pathParts[pathParts.length - 1] = newName
   const newPath = pathParts.join('/')
-  explorerActor?.send({ type: 'explorer.RENAME_FILE', oldPath, newPath })
+  send({ type: 'explorer.RENAME_FILE', oldPath, newPath })
 })
 provide('explorer-delete', (file: FileInfo) => {
   fileToDelete.value = file
@@ -217,15 +214,15 @@ provide('explorer-open-terminal', (path: string) => {
   terminalActor?.send({ type: 'terminal.CREATE', cwd: path, target: 'tab' })
 })
 provide('explorer-search-in-folder', (path: string) => {
-  codeActor.send({ type: 'SEARCH_IN_FOLDER', folder: path })
+  sendCode({ type: 'SEARCH_IN_FOLDER', folder: path })
 })
 provide('explorer-promote-preview', (path: string) => {
-  codeActor.send({ type: 'PROMOTE_PREVIEW_TAB', path })
+  sendCode({ type: 'PROMOTE_PREVIEW_TAB', path })
 })
 provide('explorer-selected-paths', () => selectedPaths.value)
 provide('explorer-expanded-dirs', () => expandedDirs.value)
 provide('explorer-dir-contents', () => dirContents.value)
-provide('explorer-loading-dirs', () => loadingDirs.value)
+provide('explorer-loading-dirs', () => explorer.value.data.loadingDirs)
 provide('explorer-base-directory', () => baseDirectory.value || '')
 provide('explorer-check-auto-rename', (itemPath: string): boolean => {
   if (pendingRenamePath.value === itemPath) {
@@ -238,9 +235,9 @@ provide('explorer-rename-trigger', {
   get: () => renameTriggerPath.value,
   clear: () => { renameTriggerPath.value = null }
 })
-provide('explorer-reveal-path', () => revealPath.value)
+provide('explorer-reveal-path', () => explorer.value.data.revealPath)
 provide('explorer-clear-reveal', () => {
-  explorerActor?.send({ type: 'explorer.CLEAR_REVEAL' })
+  send({ type: 'explorer.CLEAR_REVEAL' })
 })
 
 provide('explorer-restore-focus', () => {
@@ -271,8 +268,8 @@ const createFolderIn = (targetDir: string) => {
 
   const newPath = `${targetDir}/${folderName}`
   pendingRenamePath.value = newPath
-  explorerActor?.send({ type: 'explorer.EXPAND_DIRECTORY', path: targetDir })
-  explorerActor?.send({ type: 'explorer.CREATE_DIRECTORY', path: newPath })
+  send({ type: 'explorer.EXPAND_DIRECTORY', path: targetDir })
+  send({ type: 'explorer.CREATE_DIRECTORY', path: newPath })
 }
 
 provide('explorer-create-folder-in', createFolderIn)
@@ -285,7 +282,7 @@ const confirmDelete = (file: FileInfo) => {
 
 const handleDelete = () => {
   if (fileToDelete.value) {
-    explorerActor?.send({ type: 'explorer.DELETE_FILE', path: fileToDelete.value.path })
+    send({ type: 'explorer.DELETE_FILE', path: fileToDelete.value.path })
     showDeleteDialog.value = false
     fileToDelete.value = null
   }
@@ -350,7 +347,7 @@ const onEmptySpaceDrop = (e: DragEvent) => {
           if (filePath) paths.push(filePath)
         }
         if (paths.length > 0) {
-          explorerActor?.send({ type: 'explorer.COPY_FILES', sourcePaths: paths, targetDir: baseDirectory.value })
+          send({ type: 'explorer.COPY_FILES', sourcePaths: paths, targetDir: baseDirectory.value })
         }
       }
       return
@@ -412,9 +409,9 @@ const handleKeydown = (e: KeyboardEvent) => {
     if (!file || file.type !== 'directory') return
 
     if (e.key === 'ArrowRight' && !expandedDirs.value.has(selected)) {
-      explorerActor?.send({ type: 'explorer.EXPAND_DIRECTORY', path: selected })
+      send({ type: 'explorer.EXPAND_DIRECTORY', path: selected })
     } else if (e.key === 'ArrowLeft' && expandedDirs.value.has(selected)) {
-      explorerActor?.send({ type: 'explorer.COLLAPSE_DIRECTORY', path: selected })
+      send({ type: 'explorer.COLLAPSE_DIRECTORY', path: selected })
     }
     return
   }
@@ -437,7 +434,7 @@ const handleKeydown = (e: KeyboardEvent) => {
       nextIndex = currentIndex === -1 ? paths.length - 1 : Math.max(currentIndex - 1, 0)
     }
 
-    explorerActor?.send({ type: 'explorer.SELECT_ITEMS', paths: [paths[nextIndex]] })
+    send({ type: 'explorer.SELECT_ITEMS', paths: [paths[nextIndex]] })
   }
 }
 </script>

@@ -1,7 +1,7 @@
 // An install asked for from outside the app: `apack://install?pack=<slug>&sourceKind=<kind>`, which the platform hands
 // the window as parameters. Reading them and asking the Packs system is the app's, so a window only subscribes to
 // the protocol and passes on what it was given.
-import { sendToSystem } from '../../../events.ts';
+import { tell } from '../../../events.ts';
 
 export interface PackInstallRequest {
   packSlug: string;
@@ -25,7 +25,7 @@ export function packInstallRequest(params: Record<string, string>): PackInstallR
 
 /** Asks the Packs system to install a pack; a send that fails is reported by the window's client */
 export function requestPackInstall(request: PackInstallRequest): void {
-  sendToSystem('packs', { type: 'INSTALL_PACK', ...request });
+  tell('packs', { type: 'INSTALL_PACK', ...request });
 }
 
 /** What a deep link asks for, installed: the one call a window makes when the platform hands it an install URL */

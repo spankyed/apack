@@ -156,7 +156,7 @@ That keeps a renderer edit running only the renderer project while leaving one p
 `stampedRun` already writes one stamp per name, so N stamps under one step is an extension rather than a
 redesign, and the step's `needs` collapse to `compile`. The eight steps are generated from `UNIT_SUITES` in a
 single `.map()`, and no guard hardcodes eight — the specs in
-`packages/repo-checks/tests/chain-inputs.spec.ts` iterate `UNIT_SUITES` and `SUITE_READS` —
+`packages/internal-repo-checks/tests/chain-inputs.spec.ts` iterate `UNIT_SUITES` and `SUITE_READS` —
 so the collapse is local to that map and the chain step table.
 
 ### `projects` should derive from `UNIT_SUITES` rather than repeat it

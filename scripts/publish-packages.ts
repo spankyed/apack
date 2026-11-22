@@ -1,7 +1,7 @@
-// Publishes each package's built tree, never a workspace directory: @apackdev/ears, @apackdev/sdk and @apackdev/ui
+// Publishes each package's built tree, never a workspace directory: @apackdev/sdk and @apackdev/ui
 // from publish/ (a manifest derived from theirs, without the checkout-only @apackdev/source branches) and
 // @apackdev/cli and @apackdev/testing from dist/package (a generated manifest). Which tree is which is
-// `PUBLISHED_TREES` in @apackdev/host/build/packages-built, where @app/publish-checks reads it too. Run
+// `PUBLISHED_TREES` in @apackdev/host/build/packages-built, where @app/internal-publish-checks reads it too. Run
 // `npm run packages:build` first. Versions already on the
 // registry are skipped, so re-running after a partial failure is safe. Prints "New tag:" lines,
 // which changesets/action turns into git tags and GitHub releases.

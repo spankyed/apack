@@ -192,11 +192,12 @@ test("a re-enabled pack's surface gets its startup data again", async ({ appPage
   await expect(appPage.getByTestId('memo-list').getByText('Written from markdown', { exact: true })).toBeVisible();
 });
 
-test('writes through @apackdev/ears and reads back through the SDK, on the app\'s engine', async ({ appPage, app }) => {
+test('writes untyped and reads back through the SDK\'s services, on the app\'s engine', async ({ appPage, app }) => {
   await app.waitForSurface('memos');
   await app.navigate('memos');
   const text = `memo note ${Date.now()}`;
-  // The memos system writes a note with @apackdev/ears (bridged to the app's) and reads it through services.repository
+  // The memos system writes a note with untypedCreate (@apackdev/sdk/ears, bridged to the app's) and reads it through
+  // services.repository
   await appPage.evaluate((t) => (window as any).applicationState.system.get('e2e-fixture/memos').send({ type: 'MEMOS.ADD_NOTE', text: t }), text);
   const noteFor = () => appPage.evaluate((t) => ((window as any).applicationState.system.get('e2e-fixture/memos').getSnapshot().context.notes as Array<{ text: string; note: { title: string } | null }>)
     .find((entry) => entry.text === t), text);

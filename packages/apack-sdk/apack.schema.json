@@ -846,7 +846,7 @@
                   "isShown": {
                     "type": "string",
                     "pattern": "^([^#]+)#([A-Za-z_$][\\w$]*)$",
-                    "description": "Named predicate export that reads this surface snapshot to decide whether its fallback panel is shown."
+                    "description": "Named predicate export that reads where the machine of this surface is and what it holds, `{ at, data }`, to decide whether its fallback panel is shown."
                   }
                 },
                 "required": [

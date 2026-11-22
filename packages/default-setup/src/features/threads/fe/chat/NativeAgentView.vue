@@ -68,8 +68,7 @@ import { claudeTranscriptLayout } from './native-transcript-layout.ts'
 import { createClaudeActionKeyHandler } from './native-action-keys.ts'
 import { provideClaudeUiSelection } from './native-ui-selection.ts'
 import { computed, nextTick, onMounted, onBeforeUnmount, provide, ref, watch } from 'vue'
-import { useSelector } from '@xstate/vue'
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
 import TiptapEditor from '@apackdev/ui/components/tiptap/TiptapEditor'
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
@@ -92,7 +91,8 @@ const transcriptViewport = ref<HTMLElement>(), transcriptContent = ref<HTMLEleme
 const scrollTarget = props.target
 const transcriptScroll = useClaudeAgentScroll({ viewport: transcriptViewport, content: transcriptContent, active: () => props.active, initial: props.scrollPosition, save: position => emit('scrollPosition', scrollTarget, position) })
 const actor: ThreadsState = useSurface(), uiMount = ref<string>(), terminalMount = crypto.randomUUID()
-const context = useSelector(actor, state => state.context)
+const { state: threads, send: sendToThreads } = useState(actor)
+const context = computed(() => threads.value.data)
 const snapshot = computed(() => uiMount.value ? context.value.nativeUiViews[uiMount.value] : undefined)
 const state = computed(() => snapshot.value?.state)
 const selectionRoot = ref<HTMLElement | null>(null)
@@ -135,17 +135,17 @@ let submission: { revision: number; text: string; preserveDraft: boolean; scroll
 const nativeActionKey = createClaudeActionKeyHandler(() => ({
   scope: props.active && uiMount.value && snapshot.value?.attachmentId ? `${uiMount.value}:${snapshot.value.attachmentId}` : undefined,
   keys: state.value?.actionKeys, result: snapshot.value?.actionKeyResult,
-}), request => { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_KEY', ...identity(), ...request }) })
+}), request => { if (uiMount.value) sendToThreads({ type: 'CLAUDE_UI_KEY', ...identity(), ...request }) })
 const identity = () => ({ threadId: props.threadId, mountId: uiMount.value! })
 const terminalIdentity = () => ({ threadId: props.threadId, mountId: terminalMount })
-function renew() { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: document.hasFocus(), ...identity(), nativeView: props.target }); actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...terminalIdentity() }) }
+function renew() { if (uiMount.value) sendToThreads({ type: 'CLAUDE_UI_MOUNT', promptFocused: document.hasFocus(), ...identity(), nativeView: props.target }); sendToThreads({ type: 'CLAUDE_TERMINAL_MOUNT', ...terminalIdentity() }) }
 function detach() {
   if (heartbeat) clearInterval(heartbeat); heartbeat = undefined
   if (uiMount.value) {
     const snapshot = actor.getSnapshot()
     const resumeKey = snapshot.context.nativeUiViews[uiMount.value]?.resumeKey
     if (resumeKey) queueClaudeUiRetirement({ ...identity(), resumeKey })
-    if (snapshot.status !== 'stopped') actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...identity() })
+    if (snapshot.status !== 'stopped') sendToThreads({ type: 'CLAUDE_UI_UNMOUNT', ...identity() })
   }
   uiMount.value = undefined
   submission?.reject(Error('Agent view changed before acknowledgment')); submission = undefined
@@ -156,7 +156,7 @@ function send(text: string, options: { preserveDraft?: boolean } = {}): Promise<
   if (!uiMount.value || commandActive.value || stopping.value || returning.value || !selectedOwner.value || submission || !text.trim() || text.length > 16384) return Promise.reject(Error('Agent input must contain 1 to 16384 characters'))
   problem.value = undefined
   const request = ++revision
-  return new Promise((resolve, reject) => { submission = { revision: request, text, preserveDraft: options.preserveDraft === true, scrollIntent: transcriptScroll.intentRevision(), resolve, reject }; actor.send({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })
+  return new Promise((resolve, reject) => { submission = { revision: request, text, preserveDraft: options.preserveDraft === true, scrollIntent: transcriptScroll.intentRevision(), resolve, reject }; sendToThreads({ type: 'CLAUDE_UI_AGENT_INPUT', ...identity(), revision: request, text }) })
 }
 async function openSettings() {
   const result = await send('/config', { preserveDraft: true })
@@ -190,14 +190,14 @@ function returnToParent() {
   if (!owner || pending.value || returning.value || stopping.value || commandActive.value) return
   returning.value = true; emit('returning', true); emit('pending', true); problem.value = undefined
   returnRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
-  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: props.target.taskId, revision: returnRevision, operation: 'background' })
+  sendToThreads({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: props.target.taskId, revision: returnRevision, operation: 'background' })
 }
 function stopAgent() {
   const owner = selectedOwner.value
   if (!owner || selectedTask.value?.status !== 'running' || pending.value || returning.value || stopping.value || commandActive.value) return
   stopping.value = true; emit('pending', true); problem.value = undefined
   stopRevision = Math.max(returnRevision, stopRevision, terminal.value?.task?.revision ?? 0) + 1
-  actor.send({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: props.target.taskId, revision: stopRevision, operation: 'stop' })
+  sendToThreads({ type: 'CLAUDE_TERMINAL_TASK', ...terminalIdentity(), ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: props.target.taskId, revision: stopRevision, operation: 'stop' })
 }
 watch(terminal, view => {
   const result = view?.task
@@ -214,33 +214,33 @@ function decideCommand(decision: 'confirm' | 'cancel') {
   if (!uiMount.value || commandSending.value || input?.status !== 'confirmation' || !input.command) return
   commandFocusOwned = !!commandPanel.value?.contains(document.activeElement)
   commandSending.value = true; emit('pending', true); problem.value = undefined
-  actor.send({ type: 'CLAUDE_UI_COMMAND_DECISION', ...identity(), revision: input.revision, commandId: input.command.id, decision })
+  sendToThreads({ type: 'CLAUDE_UI_COMMAND_DECISION', ...identity(), revision: input.revision, commandId: input.command.id, decision })
 }
 watch(panelActive, (value, previous) => { if (previous && !value) void nextTick(() => { if (props.active) agentComposer.value?.focus() }) })
 function panelInput(text?: string) {
   const input = state.value?.agentInput
-  if (uiMount.value && input?.status === 'panel' && input.panel) actor.send({ type: 'CLAUDE_UI_COMMAND_PANEL', ...identity(), revision: input.revision, panelId: input.panel.id, ...(text !== undefined ? { text } : {}) })
+  if (uiMount.value && input?.status === 'panel' && input.panel) sendToThreads({ type: 'CLAUDE_UI_COMMAND_PANEL', ...identity(), revision: input.revision, panelId: input.panel.id, ...(text !== undefined ? { text } : {}) })
 }
 function settings(action: import('#features/code/common/native-settings.ts').ClaudeSettingsOperation) {
   const input = state.value?.agentInput
-  if (uiMount.value && input?.status === 'panel' && input.panel) actor.send({type:'CLAUDE_UI_SETTINGS',...identity(),revision:input.revision,panelId:input.panel.id,requestId:crypto.randomUUID(),action})
+  if (uiMount.value && input?.status === 'panel' && input.panel) sendToThreads({type:'CLAUDE_UI_SETTINGS',...identity(),revision:input.revision,panelId:input.panel.id,requestId:crypto.randomUUID(),action})
 }
 function panelResize(size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize) {
   const ownerId = selectedOwner.value?.ownerId
-  if (panelActive.value && ownerId) actor.send({ type: 'CLAUDE_TERMINAL_RESIZE', ...terminalIdentity(), ownerId, ...size })
+  if (panelActive.value && ownerId) sendToThreads({ type: 'CLAUDE_TERMINAL_RESIZE', ...terminalIdentity(), ownerId, ...size })
 }
 watch(commandActive, value => emit('pending', value || pending.value || returning.value || stopping.value))
 function escape(event: KeyboardEvent) { if (!event.isComposing && !event.defaultPrevented && !pending.value) { event.preventDefault(); event.stopPropagation(); if (commandActive.value) decideCommand('cancel'); else returnToParent() } }
-function press(actionId: string, href?: string) { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_PRESS', ...identity(), actionId, ...(href ? { href } : {}) }) }
-provide(claudeTranscriptLayout, event => { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT', ...identity(), ...event }) })
-function field(value: ClaudeUiFieldEvent) { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_FIELD', ...identity(), ...value }) }
-function scroll(value: ClaudeUiScrollEvent) { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_SCROLL', ...identity(), ...value }) }
-function focus(value: ClaudeUiFocusEvent) { if (uiMount.value) actor.send({ type: 'CLAUDE_UI_FOCUS', ...identity(), ...value }) }
-function edit(value: ClaudePromptEdit) { if (uiMount.value) actor.send({ type: 'CLAUDE_PROMPT_EDIT', ...identity(), ...value }) }
-function complete(value: ClaudePromptCompletionRequest) { if (uiMount.value) actor.send({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...identity(), ...value }) }
-function host(value: ClaudePromptHostResponse) { if (uiMount.value) actor.send({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity(), ...value }) }
+function press(actionId: string, href?: string) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_UI_PRESS', ...identity(), actionId, ...(href ? { href } : {}) }) }
+provide(claudeTranscriptLayout, event => { if (uiMount.value) sendToThreads({ type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT', ...identity(), ...event }) })
+function field(value: ClaudeUiFieldEvent) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_UI_FIELD', ...identity(), ...value }) }
+function scroll(value: ClaudeUiScrollEvent) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_UI_SCROLL', ...identity(), ...value }) }
+function focus(value: ClaudeUiFocusEvent) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_UI_FOCUS', ...identity(), ...value }) }
+function edit(value: ClaudePromptEdit) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_PROMPT_EDIT', ...identity(), ...value }) }
+function complete(value: ClaudePromptCompletionRequest) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...identity(), ...value }) }
+function host(value: ClaudePromptHostResponse) { if (uiMount.value) sendToThreads({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity(), ...value }) }
 onMounted(() => { window.addEventListener('blur', nativeActionKey.cancel); window.addEventListener('focus', renew); window.addEventListener('blur', renew) })
-onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cancel); window.removeEventListener('focus', renew); window.removeEventListener('blur', renew); detach(); actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...terminalIdentity() }); emit('pending', false); emit('returning', false) })
+onBeforeUnmount(() => { window.removeEventListener('blur', nativeActionKey.cancel); window.removeEventListener('focus', renew); window.removeEventListener('blur', renew); detach(); sendToThreads({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...terminalIdentity() }); emit('pending', false); emit('returning', false) })
 </script>
 
 <style scoped>

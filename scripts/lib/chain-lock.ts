@@ -76,7 +76,7 @@ export async function holdChainLock(
     onWait?: (holder: string) => void;
     /**
      * Which lock, defaulting to the one the chain takes — as `withBuildLock` and `runningPackageBuild` take
-     * theirs. The spec passes its own: this one's spec runs *inside* the chain (`repo-checks`), so a case
+     * theirs. The spec passes its own: this one's spec runs *inside* the chain (`internal-repo-checks`), so a case
      * taking `CHAIN_LOCK` would be refused by the run that is running it.
      */
     file?: string;

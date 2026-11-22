@@ -122,7 +122,7 @@ Every pack receives `logger`, `emitter`, `repository` and caller-bound `settings
 | `services.filesystem` | Files and folders on the user's disk, as UTF-8 text: `readFile(path)`, `writeFile(path, content)` (creating missing parent folders), `exists(path)`, `mkdir(path)` (with its parents), `readDir(path)` (`{ name, isDirectory }` entries), `stat(path)` (`size`, `mtime`, `isFile`, `isDirectory`), `rename(from, to)` and `remove(path)` (a folder with its contents; a missing path isn't an error). In unit tests it fails until the test mocks it with `mockService('filesystem', …)`. |
 | `services.terminal` | Terminal sessions, whose processes the app owns in a broker outside its own process — so **a pack never owns a pty**, and no session's lifetime is the API's. `open({ cols, rows, shell?, cwd? }, { onOutput, onExit })` starts a shell and answers a session: its `id` (the host's; a pack never invents one), its `pid` (a diagnostic, not a handle — nothing addresses a session by it), and `write(data)`, `resize(cols, rows)` and `terminate()`. The listeners are given at `open`, so the first byte the shell writes has somewhere to go. **Every operation is a promise**, which is a fact about the broker rather than a style: the engine is synchronous because elmdb is in-process, and a session is a socket away, so code that treats a write as settled when it returns is wrong about this contract. One size per session, because a pty has one. **A session a window draws is opened without `onOutput`**: its screen reaches the window as rows, over a connection the window opens itself (`terminalViews()` in `@apackdev/sdk/fe`, with the view from `apack-terminal-view`), and what its program does off the screen — a title, a bell, a clipboard request, each command the shell marks — arrives as `onEvent`. `open` also takes `record` (a file to record the session in), `restore` (begin with the screen that file holds), `images` (its programs may send pictures) and `imageFiles` (a picture may be named as a file or a shared memory object for the terminal to read, which is for a session started to run one program its owner trusts and not for a shell); a session answers `commands()` and `commandOutput(id)`, and `keep(true)` leaves it running when the app quits, for `sessions()` to find at the next start. `rewind(recording, size)` opens a recording to look back through. `at({ command })` is the same service on another machine or in a container, reached through a command that runs the broker's proxy there; a session's `target` says which broker it is on, which is what a window asks `terminalViews` for. |
 | `services.logger` | `debug`, `info`, `warn`, `error` (any arguments), sent to the app as redacted log events. In an action it's named `action:<label>`. `createLogger(source)` from `@apackdev/sdk/logger` gives a logger tagged with your own source. |
-| `services.emitter` | `broadcastToSurface(surface, event)` (to the frontend) and `sendToSystem(system, event)` (onto the bus); `sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType, payload?, targetFlowId? })` fires a flow event. `Services` types both with your pack's events. An action is content — a row a user can edit, export and copy into another pack — so both name every feature `<packId>/<featureId>`, your own too (`'my-pack/bookmarks'`, `'default-setup/threads'`); the app's own are the pack `host`'s (`'host/application'`). The host sends to the surface or system the name is, and throws for a name nothing is registered under, suggesting the `<packId>/<featureId>` form when a bare name matches one pack's feature. What an action sends says where it came from: the executing pack in `Message.from`, and the action as `action:<label>` in `Message.via`, which is also what names its logger — so a message the app couldn't deliver names the action in the same string you grep the logs for. |
+| `services.emitter` | `broadcast(surface, event)` (to the frontend) and `tell(system, event)` (onto the bus); `tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType, payload?, targetFlowId? })` fires a flow event. `Services` types both with your pack's events. An action is content — a row a user can edit, export and copy into another pack — so both name every feature `<packId>/<featureId>`, your own too (`'my-pack/bookmarks'`, `'default-setup/threads'`); the app's own are the pack `host`'s (`'host/application'`). The host sends to the surface or system the name is, and throws for a name nothing is registered under, suggesting the `<packId>/<featureId>` form when a bare name matches one pack's feature. What an action sends says where it came from: the executing pack in `Message.from`, and the action as `action:<label>` in `Message.via`, which is also what names its logger — so a message the app couldn't deliver names the action in the same string you grep the logs for. |
 
 Backups never include API keys; `exportBackup` copies the database (`lmdb`, with media) and the run history (`runHistory`) you name. `importBackup` restores only the stores the app has, and leaves out any other a backup lists; a restored run history's running nodes come back `stopped`.
 
@@ -254,14 +254,14 @@ Pack code never imports `@apackdev/host`, the app's private package: `apack pack
 
 EARS is a graph database on elmdb, a Rust engine over LMDB, which keeps no copy of the data in memory. Packs declare entity types and relation kinds in the manifest, and use the repository pattern for data access.
 
-The engine is its own package, `@apackdev/ears`, which packs may depend on and import directly: the app shares one instance of it with every pack, as it does `@apackdev/sdk`. Import from:
+The engine is its own package, `@elmdb/ears`, which `@apackdev/sdk` depends on: a pack names only the SDK, and the app shares one instance of the engine with every pack, as it does `@apackdev/sdk`. Import from:
 
 | Module | What |
 |---|---|
 | `#generated/ears` | Your pack's `EARS` constants and the typed `query`, `create`, `upsert`, `write`, `transact`, `newId` and `getAttr` (checked against your, your dependencies' and the SDK's shapes). Use these by default |
 | `#generated/repository` | `repository`, typed with your and your dependencies' repositories |
-| `@apackdev/sdk/ears` | The app's engine, untyped: `untypedQuery`, `untypedCreate`, `untypedUpsert`, `untypedWrite`, `transact`, and the relation and role reads |
-| `@apackdev/ears` | The engine itself: `createEarsEngine` for tests and tooling, `EarsError`, the core `EARS` types and `BaseEntity` |
+| `@apackdev/sdk/ears` | The app's engine, untyped: `untypedQuery`, `untypedCreate`, `untypedUpsert`, `untypedWrite`, `transact`, and the relation and role reads; and the engine's own types and helpers: `BaseEntity`, `QueryBuilder`, `WriteBuilder`, `QueryExplanation`, the relation reads' `RelationRow`, `RelationMatch` and `RelationStats`, `RESERVED_ATTRIBUTES`, and `defineEars`, which `#generated/ears` binds to the app's engine |
+| `@elmdb/ears` | The engine itself, which the SDK brings: `createEarsEngine` and `EarsError`, for tests and tooling that hold an engine of their own. A pack's own code needs none of it |
 | `@apackdev/sdk/repositories` | The SDK entities' repositories, and `RepositoryError` (`NOT_FOUND`, `VALIDATION_ERROR`, `OPERATION_FAILED`), which a repository throws to refuse |
 | `@apackdev/sdk/types` | What the SDK adds to the engine's types: its `EARS` (with the SDK's entities and relation kinds) and the SDK entity shapes |
 | `@apackdev/sdk/repositories` | The SDK entities' repositories |
@@ -587,9 +587,9 @@ const surface = setup({
 
 `untypedFromView(ref, view, read)` from `@apackdev/sdk/fe` is its escape hatch.
 
-**What a view cannot read is fetched, and its answer is replied.** A file on disk, the run history and a walk over the
-whole store are not views: the first two are outside the engine, and the third would re-run on every commit anyone
-makes. A surface asks for them and its system answers it with `reply`. A surface asks for what it starts from when the
+**What a view cannot read is asked for.** A file on disk, the run history and a walk over the whole store are not
+views: the first two are outside the engine, and the third would re-run on every commit anyone makes. The system
+declares an ask for each in its contract and answers it from its `answers` table ([asks](features.md#asks)). A surface asks for what it starts from when the
 shell hands it `SURFACE_STARTED` (`SurfaceLifecycleEvent`, `@apackdev/sdk/fe`), which arrives in a delivery naming the
 surface; a send from the machine's own entry is in none, carries no sender, and so cannot be answered.
 
@@ -668,10 +668,10 @@ What trashing means beyond the mark stays with your feature: trashing an entity'
 
 Each app has one EARS engine, which the app creates at startup. Everything above (`query`, `create`, `write`, the helpers from `#generated/ears` and `@apackdev/sdk/ears`) acts on the engine the app *bound*; a pack never creates or replaces it in the app.
 
-Unit tests and tooling create their own with `createEarsEngine` from `@apackdev/ears`. A new engine is empty, and shares nothing with the app's or with other engines:
+Unit tests and tooling create their own with `createEarsEngine` from `@elmdb/ears`. A new engine is empty, and shares nothing with the app's or with other engines:
 
 ```typescript
-import { createEarsEngine } from '@apackdev/ears';
+import { createEarsEngine } from '@elmdb/ears';
 
 const engine = createEarsEngine({
   isEntityType: (name) => ['Bookmark', 'Tag'].includes(name),
@@ -713,7 +713,7 @@ The shapes (yours, your dependencies' and the SDK's) type the query helpers that
 Rows are a query's: the row with an id is `query.ids(id).pickOne()`, rows of a type `query(type).pickAll()`, and of a type
 with a field's value `query(type).where(field, value).pickAll()`; a write reads its entity back with `row()`.
 A query reads live entities; `getAttr(id, field)` (one field) and `getRow(id)` (the whole row, from `@apackdev/sdk/ears`)
-read an entity by id as it is stored, the trash included, answering `undefined` for nothing there. `@apackdev/ears` exports the
+read an entity by id as it is stored, the trash included, answering `undefined` for nothing there. `@elmdb/ears` exports the
 writes unchecked, as `untypedCreate`, `untypedUpsert` and `untypedWrite`, and `transact`. The `find*` helpers leave out rows in the trash, as every query does. A shape the build can't find (a missing module or exported TypeScript type) fails the build. It also
 exports the types `EntityShape<E>` (one entity type's shape), `OwnEntityShapes` (this pack's
 declared shapes), `PackShapes` (the SDK's, the dependencies' and this pack's), `EntityName`, and

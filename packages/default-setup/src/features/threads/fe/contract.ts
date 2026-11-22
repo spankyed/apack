@@ -46,7 +46,7 @@ export interface ThreadsContext {
   threadsExport: { status: 'idle' | 'exporting' | 'success' | 'error'; errors: string[]; filePath: string; threadCount: number };
   nativeTerminalViews: Record<string, { threadId: string } & import('../be/claude-terminal-views.ts').ClaudeTerminalViewSnapshot>;
   nativeUiViews: Record<string, { threadId: string; resumeKey?: string; attachmentId?: string; mountRequest?: import('../be/types.ts').ClaudeUiMountRequest; state: ClaudeUiMountState; actionKeyResult?: { sequence: number; handled: boolean; actionKeys?: ClaudeUiMountState['actionKeys'] }; promptHostRequest?: ClaudePromptHostRequest; focusRevision?: number; focusSite?: string; focus?: ClaudeUiFocusReply; prompt?: ClaudePromptReply; promptRevision?: number; completions?: ClaudePromptCompletionReply; completionRevision?: number; completionEditRevision?: number }>;
-  permissionModeChanges: Record<string, { call: string | null; reason?: string }>;
+  permissionModeChanges: Record<string, { pending: boolean; reason?: string }>;
   // Chat/agent
   currentThread: AgentThreadData | null;
   recentThreadIds: string[];
@@ -106,9 +106,14 @@ export interface ThreadsContext {
   freshThreadIds: string[];
   /** This window's thread writes, which hold the views back until they are answered */
   writes: ViewWrites;
-  /** The call the link form's last save went under, until it is answered, and why that save was refused, if it was */
+  /** The ask the link form's last save is, by the key it was made under, until it ends, and why that save was refused, if it was */
   linkSave: string | null;
   linkRefusal: string | null;
+  /**
+   * The messages, commands and forks of this window's that were not done, until the chat has told the person. A new
+   * object for each, so two failures with one message are two
+   */
+  sendFailures: readonly { readonly message: string }[];
 }
 
 /** What the artifact viewers, the dashboard and the tiptap command items ask of the threads surface */

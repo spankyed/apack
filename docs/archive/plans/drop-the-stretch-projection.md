@@ -57,7 +57,7 @@ The docs that describe them change with them:
 - the root `CLAUDE.md`'s `measure:stretch` entry;
 - `docs/references/pipeline-commands.md` (the `declaredShare` and `outgrownRungs` lines);
 - `docs/references/recorded-files.md` (its list of readers that tolerate half-to-double);
-- `packages/repo-checks/CLAUDE.md`'s `chain-graph` row and its description of the bound;
+- `packages/internal-repo-checks/CLAUDE.md`'s `chain-graph` row and its description of the bound;
 - the comment in `typecheck-legs.spec.ts` that cites the `ASSUMED_RUNGS` check.
 
 Already gone since this plan was first written: `timedOutBecause` lost its `stretches` arm and `rungTerms`, and
@@ -78,7 +78,7 @@ now reports the bound and the recorded cost with no projection.
 
 - `npm run typecheck`: the deletions ripple through `chain.ts`, `chain-output.ts`, `step-timing.ts`,
   `core-budget.ts` and the specs above, and the compiler finds every reader.
-- `npm run spec -- packages/repo-checks`: the total drops by the deleted cases and **no other case moves**. One
+- `npm run spec -- packages/internal-repo-checks`: the total drops by the deleted cases and **no other case moves**. One
   that does was reading the projection for something else.
 - `npm run chain -- --dry --all`: still prints the plan, the critical path and `driftReport`'s rows, and no rung
   advisory.

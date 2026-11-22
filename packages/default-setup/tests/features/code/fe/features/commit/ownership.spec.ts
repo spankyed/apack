@@ -2,9 +2,9 @@
 // one send: the backend asks git which path, so the window sends none.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
+import { latestAsk, made, resetAsks } from '../../_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -14,30 +14,34 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
 
 const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 
-beforeEach(() => sendToSystem.mockReset());
+beforeEach(resetAsks);
 
-const sent = () => sendToSystem.mock.calls.map(([, event]) => event as { type: string });
-const refused = { type: 'commit.ERROR_RECEIVED' as const, data: { message: 'Another user owns it.', code: 'unsafe-ownership' as const, ownership: { directory: '/mnt/shared/repo' } } };
-
-it('holds the repository git refused for who owns it, and asks the backend to trust it with no path', () => {
+const sent = () => made.map(ask => ask.event);
+/** A panel whose status read git refused for who owns the repository */
+async function refused() {
   const actor = createActor(commitState).start();
+  actor.send({ type: 'commit.REFRESH_STATUS' });
+  await latestAsk('commit.GET_GIT_STATUS').refuse('Another user owns it.', { kind: 'git', code: 'unsafe-ownership', ownership: { directory: '/mnt/shared/repo' } });
+  return actor;
+}
 
-  actor.send(refused);
+it('holds the repository git refused for who owns it, and asks the backend to trust it with no path', async () => {
+  const actor = await refused();
   expect(actor.getSnapshot().context.gitFailure).toMatchObject({ code: 'unsafe-ownership', ownership: { directory: '/mnt/shared/repo' } });
 
   actor.send({ type: 'commit.TRUST_OWNERSHIP' });
   expect(sent()).toContainEqual({ type: 'commit.TRUST_OWNERSHIP' });
 });
 
-it('drops the refusal once the repository is trusted, and asks for its status', () => {
-  const actor = createActor(commitState).start();
-  actor.send(refused);
-  sendToSystem.mockReset();
+it('drops the refusal once the repository is trusted, and asks for its status', async () => {
+  const actor = await refused();
+  actor.send({ type: 'commit.TRUST_OWNERSHIP' });
+  const before = made.length;
 
-  actor.send({ type: 'commit.OWNERSHIP_TRUSTED', data: { directory: '/mnt/shared/repo' } });
+  await latestAsk('commit.TRUST_OWNERSHIP').answer({ directory: '/mnt/shared/repo' });
 
   expect(actor.getSnapshot().context).toMatchObject({ gitError: null, gitFailure: null });
-  expect(sent()).toContainEqual({ type: 'commit.GET_GIT_STATUS' });
+  expect(sent().slice(before)).toContainEqual({ type: 'commit.GET_GIT_STATUS' });
 });
 
 it('says nothing to the backend when git has refused nothing', () => {

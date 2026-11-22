@@ -3,7 +3,7 @@
  *
  * It has to be the code and not the text, because the configs this is asked about carry a comment
  * explaining the helper by name — so a plain `source.includes('defineDriveConfig')` answers yes for a
- * config that went back to assembling its own and kept the comment. `@app/repo-checks`'
+ * config that went back to assembling its own and kept the comment. `@app/internal-repo-checks`'
  * `pack-test-config.spec.ts` records that its first mutation run was fooled by exactly that.
  */
 

@@ -1,6 +1,5 @@
 // Builds a workspace package's dist/ with tsc: ESM and declarations, no source maps (src doesn't ship).
-// @apackdev/ears and @apackdev/sdk are built exactly alike, so they share this script the way the bundled
-// packages share bundle-package.ts:
+// @apackdev/sdk is built by it, as the bundled packages are by bundle-package.ts:
 //
 //   tsx ../../scripts/build-package.ts .        (from the package directory)
 //

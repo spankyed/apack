@@ -21,6 +21,7 @@ import { SettingsAdmin } from '@apackdev/sdk/services';
 import type { SettingsService } from '@apackdev/sdk/services';
 import type { SurfaceDefinition } from '@apackdev/sdk/fe';
 import { takeSystemErrors } from '@apackdev/sdk/testing';
+import { UntypedAskOutcome } from '@apackdev/sdk/events';
 import type { ViewUpdate } from '@apackdev/sdk/framework';
 
 export { addTestSecret }
@@ -119,6 +120,14 @@ export { takeSystemErrors }
 
 // @public (undocumented)
 export interface TestApp {
+    ask(systemId: string, event: {
+        type: string;
+        [key: string]: unknown;
+    }, options?: {
+        client?: string;
+        signal?: AbortSignal;
+        heard?: (update: unknown) => void;
+    }): Promise<UntypedAskOutcome>;
     connect(): Promise<void>;
     emitted(surface: string): SurfaceEvent[];
     endConnection(client: string): Promise<void>;

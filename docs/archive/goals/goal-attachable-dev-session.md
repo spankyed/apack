@@ -842,11 +842,11 @@ instrument, not the subject.
 
 **Verification at `319ed640b`**: `npm run typecheck` (19 jobs), `npm run chain` 159.4s, `npm test -- smoke`
 5 passed, `app-integration` 14 passed, and every workspace suite with one — `@apackdev/cli` 573 + 209
-integration, `@apackdev/host` 900, `@apackdev/sdk` 730, `@app/repo-checks` 910, `@app/default-setup` 843,
-`@apackdev/ears` 119, `@app/api` 110, `@apackdev/testing` 98, `@app/main` 32, `@app/publish-checks` 8.
+integration, `@apackdev/host` 900, `@apackdev/sdk` 730, `@app/internal-repo-checks` 910, `@app/default-setup` 843,
+`@apackdev/ears` 119, `@app/api` 110, `@apackdev/testing` 98, `@app/main` 32, `@app/internal-publish-checks` 8.
 
 **Three workspaces have no suite**, so `npm run spec` over one reports exactly that and exits 3 —
-`@app/preload`, `@app/electron-versions`, `@app/typescript-floor`. That is the whole answer the command can
+`@app/preload`, `@app/internal-electron-versions`, `@app/internal-typescript-floor`. That is the whole answer the command can
 give for them, and it is an answer rather than a silence only because `c932a2423` fixed it. This work
 touched none of the three.
 

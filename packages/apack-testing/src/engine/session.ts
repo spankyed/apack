@@ -198,9 +198,11 @@ const channelGone = (requestId: string, reason: string): Error =>
  * document can be wrong in several places at once. Both are the same thing to a caller — why it was refused —
  * so they are read here rather than at each call site.
  */
+/** Why an ask failed, as a caller reads it: each of a refusal's problems, or its message */
 const refusalText = (event: Record<string, unknown>): string => {
-  if (Array.isArray(event.problems)) return event.problems.join('; ');
-  return String(event.error ?? 'the system reported an error');
+  const failure = (event.failure ?? {}) as { message?: unknown; problems?: unknown };
+  if (Array.isArray(failure.problems)) return failure.problems.join('; ');
+  return String(failure.message ?? 'the system reported an error');
 };
 
 /** The system that runs query and transaction code, and the one that owns the settings document */
@@ -343,7 +345,7 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
    * in the app declares a correlation field, because every send mints a call and `reply` names the one it
    * answers.
    */
-  const nextReply = (to: string, call: string, ok: string, bad: string, resultField = 'result'): Promise<unknown> =>
+  const nextReply = (to: string, call: string): Promise<unknown> =>
     new Promise((resolve, reject) => {
       // Already gone, so there is nothing to wait for and no reason to make the caller wait for the timeout
       if (api.failure !== null) {
@@ -352,12 +354,12 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
       }
       const waiter = {
         receive: (event: SeenEvent): void => {
-          if (event.type !== ok && event.type !== bad) return;
+          if (event.type !== 'ASK_ANSWERED' && event.type !== 'ASK_FAILED') return;
           if (event.answering !== call) return;
           clearTimeout(timer);
           waiting.delete(waiter);
-          if (event.type === bad) reject(new Error(refusalText(event.event)));
-          else resolve(event.event[resultField]);
+          if (event.type === 'ASK_FAILED') reject(new Error(refusalText(event.event)));
+          else resolve(event.event.answer);
         },
         /** The channel finished while this was in flight: say so now rather than in fifteen seconds */
         fail: (reason: string): void => {
@@ -375,7 +377,7 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
           reject(channelGone(call, api.failure));
           return;
         }
-        reject(new Error(`no ${ok} or ${bad} answering ${call} within ${REPLY_TIMEOUT_MS}ms. `
+        reject(new Error(`no answer to ${call} within ${REPLY_TIMEOUT_MS}ms. `
           + `Either it is still running, or nothing provides ${to}, or that system answered with a `
           + `broadcast rather than a reply — which an app built before ${DRIVE_REF} existed does. A broadcast `
           + 'answers no call at all, so it cannot be matched here however it is delivered, and GET /events '
@@ -392,7 +394,7 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
    * to an unknown system comes back as a refusal rather than being dropped silently in the renderer, and why
    * `/query` works while the window's own subscription is broken.
    */
-  const sendToSystem = (to: string, event: Record<string, unknown>, call?: string): Promise<unknown> =>
+  const tell = (to: string, event: Record<string, unknown>, call?: string): Promise<unknown> =>
     api.send({ to, event, sender: DRIVE_REF, ...(call === undefined ? {} : { call }) }).then(() => null);
 
   /**
@@ -409,15 +411,12 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
   const roundTrip = async (
     to: string,
     event: Record<string, unknown>,
-    ok: string,
-    bad: string,
-    resultField = 'result',
     send: SessionApi['send'] = api.send,
   ): Promise<unknown> => {
     // Minted here, by the asker: an answer can only name an ask if the ask named itself first
     const call = newCall();
     // Armed before the send, so an answer that arrives immediately is not missed
-    const answer = nextReply(to, call, ok, bad, resultField);
+    const answer = nextReply(to, call);
     // A send that never left means no answer is coming, and the armed waiter is abandoned — handled here so
     // its rejection is not an unhandled one when the timer finally fires
     answer.catch(() => {});
@@ -425,11 +424,9 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
     return answer;
   };
 
-  /** What the database answers with, which is the one round-trip shape used twice */
-  const runCode = (kind: 'query' | 'transact', type: string, code: string): Promise<unknown> =>
-    roundTrip(DATABASE_SYSTEM, { type, code },
-      kind === 'query' ? 'QUERY_RESULT' : 'TRANSACTION_RESULT',
-      kind === 'query' ? 'QUERY_ERROR' : 'TRANSACTION_ERROR');
+  /** What the database answers a query or a transaction with: its answer's result, or why it failed */
+  const runCode = (type: 'EXECUTE_QUERY' | 'EXECUTE_TRANSACTION', code: string): Promise<unknown> =>
+    roundTrip(DATABASE_SYSTEM, { type, code }).then((answer) => (answer as { result?: unknown } | undefined)?.result);
 
   /**
    * Hooks the app's actor inspection up to `BRIDGE_FUNCTION`, which is a callback into this process rather
@@ -552,10 +549,10 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
 
     // No call: this is the fire-and-forget verb, so nothing here waits for an answer and there is nothing to
     // match one against. A system that replies to it answers a call nobody is holding, which the bus drops
-    system: (to, event) => attempt('system', () => sendToSystem(to, event)),
+    system: (to, event) => attempt('system', () => tell(to, event)),
 
-    query: (code) => attempt('query', () => runCode('query', 'EXECUTE_QUERY', code)),
-    transact: (code) => attempt('transact', () => runCode('transact', 'EXECUTE_TRANSACTION', code)),
+    query: (code) => attempt('query', () => runCode('EXECUTE_QUERY', code)),
+    transact: (code) => attempt('transact', () => runCode('EXECUTE_TRANSACTION', code)),
 
     state: () => attempt('state', () => page.evaluateExpression(`(() => {
       const snap = window.applicationState?.getSnapshot();
@@ -622,8 +619,11 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
     setViewport: (width, height) => attempt('setViewport', () => page.setViewport(width, height)),
 
     /** The host snapshot includes effective values, lifecycle status and declaration metadata. */
-    settings: () => attempt('settings', () => roundTrip(SETTINGS_SYSTEM, { type: 'GET_SETTINGS' },
-      'SETTINGS_LOADED', 'SETTINGS_REFUSED', 'snapshot')),
+    settings: () => attempt('settings', async () => {
+      const read = await roundTrip(SETTINGS_SYSTEM, { type: 'GET_SETTINGS' }) as { snapshot?: unknown; recovery?: unknown };
+      if (read.snapshot === undefined) throw new Error('the settings need repair before they can be read; open the app to repair them');
+      return read.snapshot;
+    }),
 
     /** Waits for the host writer's saved/refused answer, rather than merely accepting the send. */
     setSetting: (target, at, value) => attempt('setSetting', () => roundTrip(
@@ -634,11 +634,8 @@ export function createSession({ page, api, takeErrors, readLog }: SessionDeps): 
         path: at.split('.'),
         value,
       },
-      'SETTINGS_SAVED',
-      'SETTINGS_REFUSED',
-      'result',
       api.sendSettings,
-    )),
+    ).then(() => undefined)),
 
     logs: ({ since, source }) => attempt('logs', async () => {
       const lines = readLog().split('\n').filter(Boolean);

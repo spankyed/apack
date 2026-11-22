@@ -2,9 +2,8 @@
 
 The code that runs git for the code feature and keeps the picture of one working tree is a package of its own,
 `apack-git`, in a repository of its own: [spankyed/apack-git](https://github.com/spankyed/apack-git). The
-built-in pack depends on it at `file:../../vendor/apack-git`, a link to a checkout pinned by
-`vendor/apack-git.rev`. Run `npm run link:apack-git` to make the link; the linker refuses a checkout that is
-not one or that does not hold the pin, and builds the engine's `dist/` when it is older than its sources.
+built-in pack depends on `@apackdev/git`, which the root's `overrides` take from the tarball apack-git's CI attaches
+to the release of a commit (`npm run deps:pin -- apack-git <commit>` moves it).
 
 ## Why it is not in this repository
 
@@ -92,7 +91,7 @@ commit feature (`failureOf`).
 **Only a fetch and a push can be stopped** (`fetch(signal)`, `pushBranch(onProgress, signal)`). Stopped midway,
 each leaves the working tree and the index as they were; a commit, a checkout, a stash or a merge would leave
 them half-written with a lock behind, and a pull is one `git pull` whose merge cannot be told apart from its
-fetch. The panel offers it while a push runs (`commit.STOP_PUSH`, answered `commit.PUSH_STOPPED`).
+fetch. The panel offers it while a push runs (`commit.STOP_PUSH`; the publish's answer says it was `stopped`).
 
 Stopping asks git to end, so it lets go of its locks, along with the helpers it started (`ssh`, the HTTPS
 helper), found from the process table by their parents, since git does not end them when it is signalled. Any
@@ -117,7 +116,7 @@ git that cannot be told not to fetch, every read in a partial clone waits in tha
 
 `GitRepository.repositoriesUnder(folder)` finds the folder's repository and those nested in it, submodules and
 linked worktrees, by what each one's `.git` is, without running git. The commit panel shows a picker when there is
-more than one (`LIST_REPOSITORIES`, `commit.REPOSITORIES_RECEIVED`); choosing one makes it the base directory, as a
+more than one (the `commit.LIST_REPOSITORIES` ask); choosing one makes it the base directory, as a
 worktree switch does, and the picker goes on listing what is under the folder the user opened (`openedDirectory`).
 A submodule's row in its parent's status says how it differs (`submodule`).
 
@@ -168,7 +167,7 @@ remote branch holds is asked about (`commit.REWRITE_NEEDS_CONFIRMATION`) and don
 `refsModel()` reads every branch with its upstream and how far ahead and behind it is in one command, beside the
 remotes with their addresses and the tags. The snapshot's `refs` part says when any of them moved; `history` is what
 is checked out and the local branches, so a fetch that moves a remote's branch is news of the refs alone. The branch
-picker shows each local branch's standing (`commit.BRANCHES_RECEIVED` `standing`).
+picker shows each local branch's standing (the `standing` in the answer to `commit.GET_ALL_BRANCHES`).
 
 The commit panel lists the tags in its branch picker, each pushed (`pushTag`) or deleted there, and makes one at a
 commit of its history (`createTag`); a local branch is renamed from its row in the picker (`renameBranch`), and a
@@ -279,10 +278,7 @@ elsewhere, access the sign-in lacks, an organisation's single sign-on, or nothin
 
 ## Working on both at once
 
-The link points at a checkout, so an edit there is what a local build here uses once the engine is built
-(`npm run build` in the checkout, or `npm run link:apack-git`, which builds when `dist/` is stale). A local
-chain then runs against the checkout's working tree, where CI clones the pin: the linker says when the two
-differ. Commit and push the engine, move `vendor/apack-git.rev` to that commit, and land both.
-
-In the Linux test container the engine arrives as files, its manifest and its `dist/`, since what the Mac
-built is what Linux runs (`scripts/linux-runner.ts`).
+`npm run deps:local -- apack-git [path]` points the override at a checkout, so an edit there is what a local build
+here uses once the engine is built (`npm run build` in the checkout). Commit and push the engine; once its CI has
+released that commit, `npm run deps:pin -- apack-git <commit>` and land the change here (`npm run deps:released` undoes
+the local link).

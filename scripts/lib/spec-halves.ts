@@ -51,7 +51,7 @@ export const CONFIG_BY_HALF: Readonly<Record<Half, string>> = {
 /**
  * The vitest configs a package runs its specs under, read from the package rather than assumed.
  *
- * `@apackdev/cli` has three; `@app/repo-checks` and `@app/publish-checks` have two; the other nine have one.
+ * `@apackdev/cli` has three; `@app/internal-repo-checks` and `@app/internal-publish-checks` have two; the other nine have one.
  */
 export function configsFor(packageDir: string): string[] {
   return Object.values(CONFIG_BY_HALF).filter((file) => fs.existsSync(path.join(packageDir, file)));

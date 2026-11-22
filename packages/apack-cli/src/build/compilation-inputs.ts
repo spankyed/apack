@@ -212,11 +212,17 @@ export function captureCompilationInputs(packRoot: string, view?: PackCompilerIn
     },
     captureGenerated() {
       assertOpen();
+      const generated: string[] = [];
       for (const relative of packInputFiles(packRoot, { generated: true })) {
         if (!relative.startsWith('src/__generated__/')) continue;
         const file = path.join(packRoot, relative);
         modules.captureFile(file, fs.readFileSync(file));
+        if (/\.[cm]?tsx?$/.test(file)) generated.push(file);
       }
+      // What the generated modules import is read as the authored sources' imports were: a package they alone name
+      // (`@apackdev/sdk/ears`, which a pack's own code may never import) is otherwise missing from the declaration
+      // programs, which type whatever it exports as `any`
+      withoutCompilerFileReads(() => modules.traceImports(generated));
     },
     readTree,
     sourcePath,

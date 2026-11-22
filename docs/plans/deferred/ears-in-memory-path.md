@@ -29,7 +29,7 @@ Of the production data's 171 MB of values:
 | Relations (details and ids) | 45.8k | 6.6 MB |
 | everything else | | under 2 MB |
 
-The probes are `npm run bench:heap -w @apackdev/ears` for the bench graph, and for real data a read-only hydrate of
+The probes are EARS' `bench:heap` script, in elmdb for the bench graph, and for real data a read-only hydrate of
 a converted copy (`openLmdbStore({ readOnly: true })`, then `getSchemaStats()` and each row's JSON size). Never open
 a running app's files: copy `data.mdb`, convert the copy with `scripts/ears-convert.ts`, measure that.
 

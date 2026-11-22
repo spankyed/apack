@@ -53,7 +53,7 @@
 //
 // **Two flags of its own.** `npm run spec:dry` answers "what would this run, and what did the last run on
 // this machine measure it at" without running any of it. It collects — ~1.6s whatever comes back — which the ordinary run never
-// does: the collector and the pricing load behind `await import`, and repo-checks asserts that from this
+// does: the collector and the pricing load behind `await import`, and internal-repo-checks asserts that from this
 // file's source. And `--no-bail` reports every failure in the plan rather than stopping at the first, for
 // when you want the whole picture in one run; bailing is the default because a 1s failure otherwise pays for
 // the pack suite behind it.
@@ -65,9 +65,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { boundedSpawn } from './lib/bounded-spawn.ts';
 import { SPEC_COUNT_FILE } from './lib/spec-count-reporter.ts';
-import { vendoredDriftLine } from './lib/chain-evidence.ts';
 import { BUDGET_MS } from './lib/step-budgets.ts';
-import { vendoredStates } from './lib/vendored-checkouts.ts';
 import { ENSURE_LABEL, exitCodeFor, packageOf, planChanged, planTargets, type Run, splitArgs, verdictOf } from './lib/spec-plan.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -278,10 +276,6 @@ async function main(): Promise<number> {
     console.error(`\n${label}: the spec count never arrived, so whether anything ran is unknown.`
       + `\n  ${path.relative(ROOT, COUNT_REPORTER)} did not write it — is it still a reporter vitest calls?`);
   }
-  // A spec over vendored code runs against whatever commit the linked sibling checkout sits on, so a failure
-  // there can belong to the link rather than this tree; the chain prints the same line
-  const drift = vendoredDriftLine(vendoredStates(ROOT));
-  if (drift !== undefined) console.error(`\n${drift}`);
   return exitCodeFor({ failed, uncovered: uncovered.length, noCount: noCount.length });
 }
 

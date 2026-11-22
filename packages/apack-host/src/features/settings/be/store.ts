@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createLogger } from '@apackdev/sdk/logger';
 // One host writer composes declarations beneath explicit choices for every preference owner.
-import type { Ears } from '@apackdev/ears';
+import type { Ears } from '@elmdb/ears';
 import type { EARS } from '@apackdev/sdk';
 import { _settingsJsonProblems, type SettingsCatalog } from '@apackdev/sdk/framework';
 import { deepMerge, isPlainObject } from '@apackdev/sdk/utils/pure';

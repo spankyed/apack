@@ -270,7 +270,7 @@ Both spikes pass, run from the fixture pack's vitest process (in-memory harness 
 - Don't launch the app outside the test environment without isolating `APACK_USER_DATA_DIR`.
 - Never run bare tsc on `packages/preload`. Don't run `npm install` in the example pack. Don't edit monorepo version/release metadata.
 - Pack code and pack tests import only `@apackdev/sdk`, `@apackdev/ui` and `@apackdev/testing`; `@apackdev/host` stays host-only. The typed EARS types are change-controlled (`packages/apack-sdk/TYPED-EARS.md`).
-- `@apackdev/sdk/testing` and the harness are published: no `any` (`published-sdk-any.spec.ts`), TypeScript 5.3 (`packages/typescript-floor`), `api:update` after export changes.
+- `@apackdev/sdk/testing` and the harness are published: no `any` (`published-sdk-any.spec.ts`), TypeScript 5.3 (`packages/internal-typescript-floor`), `api:update` after export changes.
 - The CLI suite requires `npm run packages:build` after SDK source changes. default-setup's runtime (`node packages/default-setup/dev-build.mjs`) must be rebuilt before the API suites and E2E.
 - Investigate failing tests before changing assertions; mutation-check every new guard, helper and test.
 - No backward compatibility: no shims or fallbacks for the old test setup; migrate every in-repo test and fix forward. No polling or hacky workarounds: `settle`, `nextEmit` and `runFlow` wait on actor and brain events, not on timers.

@@ -6,8 +6,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -16,7 +16,7 @@ afterEach(async () => {
   resetTestData();
   for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true });
 });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 
 it('answers each line with who last changed it, leaving out the commits the repository lists', async () => {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-blame-')));
@@ -39,8 +39,8 @@ it('answers each line with who last changed it, leaving out the commits the repo
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: directory });
   await app.settle();
 
-  const asked = await app.send('code', { type: 'commit.GET_BLAME', path: 'notes.txt' }, asWindow);
-  const { data } = await app.nextEmit('code', 'commit.BLAME_RECEIVED', { answering: asked });
+  const asked = app.ask('code', { type: 'commit.GET_BLAME', path: 'notes.txt' }, asWindow);
+  const data = await answered(asked);
 
   expect(data).toMatchObject({ path: 'notes.txt' });
   expect((data as { lines: { line: number; author: string }[] }).lines.map(({ line, author }) => [line, author])).toEqual([[1, 'ada'], [2, 'bea']]);

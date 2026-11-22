@@ -101,7 +101,7 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { ref, computed } from 'vue';
 import { X, SquarePen, Pin } from 'lucide-vue-next';
@@ -112,7 +112,6 @@ import {
 import ThreadContextMenu from '#features/threads/fe/canvas/components/thread-context-menu.vue';
 import type { Tab } from '#generated/types.ts';
 import type { ThreadTabGroup } from './types.ts';
-import { useSelector } from '@xstate/vue';
 import type { ThreadsState } from '#features/threads/fe/state.ts';
 
 const props = defineProps<{
@@ -120,7 +119,7 @@ const props = defineProps<{
   isActive: boolean;
   isPinned: boolean;
   groupId?: string;
-  tabGroups: ThreadTabGroup[];
+  tabGroups: readonly ThreadTabGroup[];
   isDragging?: boolean;
 }>();
 
@@ -140,16 +139,14 @@ defineEmits<{
 }>();
 
 const threadsActor: ThreadsState = useSurface();
-const chatStates = useSelector(threadsActor, (state) => state.context.chatStates);
-const chatStateOverrides = useSelector(threadsActor, (state) => state.context.chatStateOverrides);
-const settings = useSelector(threadsActor, (state) => state.context.settings);
+const { state: threads, send } = useState(threadsActor);
 
 function getThreadStateConfig(threadId: string) {
-  const override = chatStateOverrides.value[threadId];
+  const override = threads.value.data.chatStateOverrides[threadId];
   const activeStateId = (override && override.expiresAt > Date.now())
     ? override.id
-    : (chatStates.value[threadId] || 'idle');
-  return settings.value?.chatStates?.find(c => c.id === activeStateId);
+    : (threads.value.data.chatStates[threadId] || 'idle');
+  return threads.value.data.settings?.chatStates?.find(c => c.id === activeStateId);
 }
 
 function getThreadDotColor(threadId: string): string | undefined {
@@ -190,7 +187,7 @@ function confirmRename() {
   if (!isRenaming.value) return
   const trimmed = renamingName.value.trim()
   if (trimmed) {
-    threadsActor.send({ type: 'RENAME_THREAD', threadId: props.tab.id, topic: trimmed });
+    send({ type: 'RENAME_THREAD', threadId: props.tab.id, topic: trimmed });
   }
   isRenaming.value = false
   renamingName.value = ''

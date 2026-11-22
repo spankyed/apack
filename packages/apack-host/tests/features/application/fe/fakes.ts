@@ -62,6 +62,7 @@ export function fakeShell(start: { surfaces: Surface[]; defaultSurface?: Surface
   const notify = {
     error: vi.fn<(title: string, detail?: string) => void>(),
     errorPage: vi.fn<(title: string, detail: ShellFailure) => void>(),
+    clearErrorPage: vi.fn<(title: string) => void>(),
   };
   let savedSizes: ShellPanelSizes | undefined;
   const storage = {

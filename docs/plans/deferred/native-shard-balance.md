@@ -57,7 +57,7 @@ committed figure. So the split cannot come from a checked-in table.
 
 ## Verification
 
-- The assignment specs above, in `@app/repo-checks` or the CLI's fast half.
+- The assignment specs above, in `@app/internal-repo-checks` or the CLI's fast half.
 - One strict run with a warm cache: both native jobs within about a minute of each other, and every native
   file reported exactly once across the two logs.
 - One strict run with the cache cleared: the fallback note appears and the gate passes.

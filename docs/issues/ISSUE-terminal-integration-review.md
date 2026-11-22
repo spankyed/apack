@@ -165,7 +165,7 @@ second. The evidence table is the record; a disagreement is this file being stal
 
 The chain, each link read: `terminal-pool.ts:227` `term.onData(sendInput)` fires per keystroke →
 `fe/features/terminal/state.ts:78` forwards `terminal.TERMINAL_INPUT { terminalId, data }` over
-`sendToSystem`, so it goes through the API's `bus.send` → `apack-host/src/bus/client-events.ts:54` logs
+`tell`, so it goes through the API's `bus.send` → `apack-host/src/bus/client-events.ts:54` logs
 `{ …, event: summarizeEventForLog(event) }` → `client-events.ts:19-34` shortens **arrays** over 5 items, so
 a string payload passes through whole → `api/src/adapters/logging.ts:37` prints it →
 `main/.../process-manager.ts:45` → `main/.../logger.ts:55,84` writes `main.log` **and** `main.jsonl`.
@@ -252,7 +252,7 @@ machine, so not even F9's swallowed-error case.
 Found independently by four of the six reviews, which is why it is listed once. `createTerminal` overwrites
 `pendingTarget`/`pendingCommand` on every `terminal.CREATE` (`fe/features/terminal/state.ts:71`);
 `handleTerminalCreated` consumes whatever is there when the next `terminal.CREATED` arrives, with nothing
-tying a reply to its request — and `CREATED` is a `broadcastToSurface` (`be/features/terminal.ts:133`), so it
+tying a reply to its request — and `CREATED` is a `broadcast` (`be/features/terminal.ts:133`), so it
 reaches every window for every creation.
 
 - One window: run "build" then "test" from the Run Script popover before the first reply → **`test` runs in

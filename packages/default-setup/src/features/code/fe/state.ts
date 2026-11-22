@@ -1,5 +1,4 @@
-import { newCall, recordCall, settleCall } from '@apackdev/sdk/events'
-import { surfaceStorage } from '@apackdev/sdk/fe'
+import { makes, surfaceStorage, type MadeEvent, type Making } from '@apackdev/sdk/fe'
 import { ref as featureRef } from '#generated/ref.ts'
 
 /** This surface's window storage: the prefix is its ref, so these names are scoped to it. */
@@ -20,8 +19,9 @@ import type { ActionTab, CodeContext, CodeInboxEvent, OpenFile, PanelType, Promp
 export type { OpenFile, TerminalTab, QuickOpenResult, PanelType } from './contract.ts';
 export type { CodeContext } from './contract.ts';
 import type { OutgoingCodeEvents } from '#features/code/be/contract.ts';
-import type { GitDiff } from '#features/code/be/types.ts';
-import { sendToSystem } from '#generated/events.ts';
+import type { CodeConnectedData, GitDiff } from '#features/code/be/types.ts';
+import { fromAsk, tell } from '#generated/events.ts';
+import { safeEvents } from '@apackdev/sdk/helpers';
 
 // Import child state machines
 import { explorerState } from './features/explorer/state.ts';
@@ -62,8 +62,21 @@ export function isEditableDiff(file: OpenFile | { isDiff?: boolean; isPrDiff?: b
 
 export type { TabGroupColor, TabGroup };
 
+/** The asks the surface makes of the code system: what it starts from, one at a time, the one made last being the one heard */
+const made = makes(({ one }) => ({
+  codeStart: one(fromAsk('code', 'GET_CODE_START')),
+  claudeProfileSetup: one(fromAsk('code', 'PREPARE_CLAUDE_PROFILE_SETUP')),
+}));
+
+/** The surface's state as its machine holds it: what it publishes, and which of its asks are under way */
+type MachineContext = CodeContext & { making: Making<typeof made> };
+
 export type Event =
   | OutgoingCodeEvents
+  // What the surface starts from, which it hands every panel as it starts over a folder
+  | { type: 'CODE_STARTED'; data: CodeConnectedData }
+  // How the ask for what the surface starts from ended
+  | MadeEvent<typeof made>
   // The app's, when the code surface's settings change
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
   // Generic update event for child actors to update parent state
@@ -123,6 +136,15 @@ export type Event =
   | { type: 'RESTORE_PERSISTED_TABS_SETTLED' }
   | { type: 'NAVIGATE_BACK' }
   | { type: 'NAVIGATE_FORWARD' };
+
+const typeOf = safeEvents<Event>();
+
+/** What the surface starts from, off the ask for it that ended with an answer */
+function startOf(event: Event): CodeConnectedData {
+  const { outcome } = typeOf('made.codeStart', event);
+  if (!outcome.ok) throw new Error(outcome.failure.message);
+  return outcome.value;
+}
 
 export type CodeState = ActorRefFrom<typeof codeState>;
 
@@ -339,7 +361,7 @@ function finalizeRestoreState(context: CodeContext): Partial<CodeContext> {
 
 const codeState = setup({
   types: {
-    context: {} as CodeContext,
+    context: {} as MachineContext,
     events: {} as Event
   },
   actors: {
@@ -351,6 +373,7 @@ const codeState = setup({
     actionsState,
     promptsState,
     githubState,
+    ...made.actors,
     /**
      * **The owner of the terminal pool, which is a module singleton and so has no other.**
      *
@@ -374,7 +397,7 @@ const codeState = setup({
      * never delivered is made up for here.
      */
     externalChanges: fromCallback(() => {
-      const check = () => { sendToSystem('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' }) };
+      const check = () => { tell('code', { type: 'CHECK_FOR_EXTERNAL_CHANGES', by: 'window' }) };
       window.addEventListener('focus', check);
       return () => window.removeEventListener('focus', check);
     }),
@@ -392,8 +415,11 @@ const codeState = setup({
         enqueue.spawnChild('githubState', { id: 'github' });
     }),
 
+    // Asks for what the surface starts from. An ask still under way is given up: the one made last is the one heard
+    askForStart: enqueueActions(({ enqueue }) => made.make(enqueue, 'codeStart', {})),
+
     notifyDirectoryChange: ({ event, context, self }) => {
-      const ev = event as { type: 'UPDATE_STATE'; updates: Partial<CodeContext> }
+      const ev = typeOf('UPDATE_STATE', event)
       if (ev.updates.baseDirectory && ev.updates.baseDirectory !== context.baseDirectory) {
         // Swap in the new project's recent files, so Quick Open ranks its files and not
         // the previous project's. Sent as its own event: this action runs before
@@ -429,7 +455,7 @@ const codeState = setup({
       persistCodeTabs(context)
     },
     addTab: assign(({ event, context }) => {
-      const ev = event as { type: 'ADD_TAB'; tab: any; replacePreview?: boolean; extraUpdates?: Partial<CodeContext> }
+      const ev = typeOf('ADD_TAB', event)
       const enablePreview = context.settings?.enablePreview ?? true
       let openFiles = [...context.openFiles]
 
@@ -517,12 +543,12 @@ const codeState = setup({
     }),
     /** Brings an open diff up to date with its file, where it is: a tab closed since is not opened again */
     refreshDiffTab: assign(({ event, context }) => {
-      const { diff } = event as { type: 'REFRESH_DIFF_TAB'; diff: GitDiff }
+      const { diff } = typeOf('REFRESH_DIFF_TAB', event)
       const tabPath = diffTabPath(diff)
       return { openFiles: context.openFiles.map(file => file.path === tabPath ? refreshedDiffTab(file as OpenFile, diff) : file) }
     }),
     updateState: assign(({ event, context }) => {
-      const ev = event as { type: 'UPDATE_STATE'; updates: Partial<CodeContext> }
+      const ev = typeOf('UPDATE_STATE', event)
       const updates = { ...context, ...ev.updates }
 
       // Auto-clean history when tabs are removed
@@ -553,7 +579,7 @@ const codeState = setup({
       error: null
     }),
     initializeSurface: ({ self }) => {
-      // Explorer is initialized by the CODE_STARTED answer — no re-init needed here.
+      // The explorer starts from the start the surface hands it — no re-init needed here.
       codeChild(self, 'terminal')?.send({ type: 'terminal.REFRESH_LIST' });
       // The window shows the repository from here on, which is when it follows what changes in it
       codeChild(self, 'commit')?.send({ type: 'commit.SHOWN' });
@@ -591,7 +617,7 @@ const codeState = setup({
         : persistedTabs[0]?.path ?? null
 
       // Mark tabs as restored immediately (even if empty)
-      // Collect terminal tab IDs to restore later (when TERMINALS_LISTED arrives from backend)
+      // Collect terminal tab IDs to restore later (when the terminal list, `terminal.REFRESH_LIST`'s answer, arrives)
       const terminalTabIds = persistedTabs.filter(t => t.type === 'terminal').map(t => t.terminalId!)
       const restoredPanelTerminal = persistedPanelTerminal && terminalTabIds.includes(persistedPanelTerminal)
         ? null
@@ -643,7 +669,7 @@ const codeState = setup({
         }
 
         // Terminal tabs are NOT sent here — they're deferred to assignTerminals
-        // (when TERMINALS_LISTED arrives) to avoid racing with backend restore.
+        // (when the terminal list arrives) to avoid racing with backend restore.
         // See pendingTerminalTabIds in context.
 
         // Send action IDs to restore
@@ -679,9 +705,10 @@ const codeState = setup({
     // handling the start reads the folder the start just set (`getParentContext`), where a send made from inside
     // the transition would be handled first and read the folder before it.
     broadcastToAllFeatures: enqueueActions(({ enqueue, event, self }) => {
+      const started = { type: 'CODE_STARTED' as const, data: startOf(event) }
       for (const id of CODE_CHILD_IDS) {
         const child = self.getSnapshot().children[id] as AnyActorRef | undefined
-        if (child) enqueue.sendTo(child, event)
+        if (child) enqueue.sendTo(child, started)
       }
     }),
 
@@ -702,7 +729,7 @@ const codeState = setup({
       context,
       self
     }) => {
-      const ev = event as { type: 'SELECT_PANEL'; panel: PanelType };
+      const ev = typeOf('SELECT_PANEL', event)
 
       // Guard against invalid panel types (e.g. persisted 'terminal' from before removal)
       if (!ALL_PANELS.includes(ev.panel)) {
@@ -750,7 +777,7 @@ const codeState = setup({
     })),
 
     updateQuickOpenQuery: assign(({ event }) => {
-      const ev = event as { type: 'UPDATE_QUICK_OPEN_QUERY'; query: string };
+      const ev = typeOf('UPDATE_QUICK_OPEN_QUERY', event)
       return {
         quickOpenQuery: ev.query,
         quickOpenSelectedIndex: 0
@@ -758,7 +785,7 @@ const codeState = setup({
     }),
 
     selectQuickOpenResult: assign(({ event, context }) => {
-      const ev = event as { type: 'SELECT_QUICK_OPEN_RESULT'; index: number };
+      const ev = typeOf('SELECT_QUICK_OPEN_RESULT', event)
       const maxIndex = Math.max(0, context.quickOpenResults.length - 1);
       return {
         quickOpenSelectedIndex: Math.max(0, Math.min(ev.index, maxIndex))
@@ -766,7 +793,7 @@ const codeState = setup({
     }),
 
     openQuickOpenResult: ({ context, self, event }) => {
-      const ev = event as { type: 'OPEN_QUICK_OPEN_RESULT'; path: string };
+      const ev = typeOf('OPEN_QUICK_OPEN_RESULT', event)
 
       // Track the file as recently opened
       const updatedRecentFiles = addRecentFile(context.recentlyOpenedFiles, ev.path, context.baseDirectory);
@@ -790,7 +817,7 @@ const codeState = setup({
     },
 
     handleCodeConnected: assign(({ event, context }) => {
-      const ev = event as { type: 'CODE_STARTED'; data: { baseDirectory: string | null; settings?: CodeSettings } }
+      const ev = { data: startOf(event) }
 
       // Extract hotkeys from settings - filter out undefined values
       const hotkeys: HotkeysMap = {};
@@ -803,7 +830,7 @@ const codeState = setup({
       }
 
       // Update directory state from backend
-      // Explorer child will receive CODE_STARTED via broadcastToAllFeatures and initialize itself
+      // Each panel is handed the start (`broadcastToAllFeatures`) and asks for what it shows
       const baseDirectory = ev.data.baseDirectory || ''
 
       return {
@@ -826,7 +853,7 @@ const codeState = setup({
     },
 
     handleSettingsUpdate: assign(({ event, context }) => {
-      const ev = event as { type: 'FEATURE_SETTINGS_UPDATED'; settings: CodeSettings }
+      const ev = typeOf('FEATURE_SETTINGS_UPDATED', event)
 
       // Extract hotkeys from settings - filter out undefined values
       const hotkeys: HotkeysMap = {};
@@ -882,11 +909,11 @@ const codeState = setup({
       return closeTabWithConfirmation(context, self, context.activeFilePath)
     }),
     closeTab: assign(({ context, self, event }) => {
-      const { path } = event as { type: 'CLOSE_TAB'; path: string }
+      const { path } = typeOf('CLOSE_TAB', event)
       return closeTabWithConfirmation(context, self, path)
     }),
     killTerminal: enqueueActions(({ enqueue, context, self, event }) => {
-      const { path } = event as { type: 'KILL_TERMINAL'; path: string }
+      const { path } = typeOf('KILL_TERMINAL', event)
       const file = context.openFiles.find(f => f.path === path)
       if (!file || !('isTerminal' in file)) return
       enqueue(() => {
@@ -894,22 +921,24 @@ const codeState = setup({
       })
       enqueue(assign(() => removeTabLogic(context, self, path)))
     }),
-    retireClaudeProfileSetup: assign({pendingClaudeProfileSetup: undefined}),
-    prepareClaudeProfileSetup: enqueueActions(({context, enqueue}) => {
-      if (context.pendingClaudeProfileSetup) return
-      const call = newCall()
-      enqueue.assign({pendingClaudeProfileSetup: call, claudeProfileSetupError: undefined})
-      enqueue(() => sendToSystem('code', {type: 'PREPARE_CLAUDE_PROFILE_SETUP'}, {call}))
+    retireClaudeProfileSetup: enqueueActions(({ context, enqueue }) => {
+      made.drop(enqueue, context, 'claudeProfileSetup');
     }),
-    openClaudeProfileSetup: enqueueActions(({context, event, self, enqueue}) => {
-      if (event.type !== 'CLAUDE_PROFILE_SETUP_PREPARED' || !context.pendingClaudeProfileSetup) return
-      const pending = recordCall({}, context.pendingClaudeProfileSetup, true)
-      if (settleCall(pending, event).recorded === undefined) return
-      enqueue.assign({pendingClaudeProfileSetup: undefined, claudeProfileSetupError: 'error' in event.result ? event.result.error : undefined})
-      enqueue(() => {
-        const terminal = codeChild(self, 'terminal')
-        if (!('error' in event.result)) terminal?.send({type: 'terminal.CREATE', target: 'tab', title: 'Claude profile setup', cwd: event.result.cwd, command: event.result.command})
-      })
+    prepareClaudeProfileSetup: enqueueActions(({ context, enqueue }) => {
+      if (context.making.claudeProfileSetup) return;
+      enqueue.assign({ claudeProfileSetupError: undefined });
+      made.make(enqueue, 'claudeProfileSetup', {});
+    }),
+    openClaudeProfileSetup: enqueueActions(({ event, self, enqueue }) => {
+      const { outcome } = typeOf('made.claudeProfileSetup', event);
+      if (!outcome.ok) {
+        enqueue.assign({ claudeProfileSetupError: outcome.failure.message });
+        return;
+      }
+      const { cwd, command } = outcome.value;
+      enqueue(() => codeChild(self, 'terminal')?.send({
+        type: 'terminal.CREATE', target: 'tab', title: 'Claude profile setup', cwd, command,
+      }));
     }),
     openTerminal: enqueueActions(({ enqueue, context, self }) => {
       const terminals: TerminalInfo[] = codeChild(self, 'terminal')?.getSnapshot()?.context?.terminals || []
@@ -950,7 +979,7 @@ const codeState = setup({
     }),
 
     selectPanelTerminal: assign(({ event }) => {
-      const ev = event as { type: 'SELECT_PANEL_TERMINAL'; terminalId: string };
+      const ev = typeOf('SELECT_PANEL_TERMINAL', event)
       return { panelTerminalId: ev.terminalId };
     }),
 
@@ -969,7 +998,7 @@ const codeState = setup({
     }),
 
     updateTerminalTabInfo: assign(({ event, context }) => {
-      const ev = event as { type: 'TERMINAL_TAB_INFO_CHANGED'; terminalId: string; changes: Record<string, any> }
+      const ev = typeOf('TERMINAL_TAB_INFO_CHANGED', event)
       const terminalPath = `terminal:${ev.terminalId}`
       let changed = false
       const updatedOpenFiles = context.openFiles.map((file: any) => {
@@ -986,7 +1015,7 @@ const codeState = setup({
     }),
 
     openTerminalInTab: enqueueActions(({ enqueue, context, event, self }) => {
-      const ev = event as { type: 'OPEN_TERMINAL_IN_TAB'; terminalId: string }
+      const ev = typeOf('OPEN_TERMINAL_IN_TAB', event)
       const terminals: TerminalInfo[] = codeChild(self, 'terminal')?.getSnapshot()?.context?.terminals || []
       const terminalInfo = terminals.find(t => t.id === ev.terminalId)
 
@@ -1009,7 +1038,7 @@ const codeState = setup({
     }),
 
     moveTerminalToPanel: assign(({ context, event }) => {
-      const { path } = event as { type: 'MOVE_TERMINAL_TO_PANEL'; path: string }
+      const { path } = typeOf('MOVE_TERMINAL_TO_PANEL', event)
       const file = context.openFiles.find(f => f.path === path)
       if (!file || !('isTerminal' in file)) return {}
       const terminalId = (file as any).terminalInfo.id
@@ -1051,7 +1080,7 @@ const codeState = setup({
     }),
 
     searchInFolder: ({ event, context, self }) => {
-      const ev = event as { type: 'SEARCH_IN_FOLDER'; folder: string }
+      const ev = typeOf('SEARCH_IN_FOLDER', event)
       // Compute relative path and set as include pattern glob
       const relativePath = ev.folder.startsWith(context.baseDirectory)
         ? ev.folder.slice(context.baseDirectory.length + 1)
@@ -1064,7 +1093,7 @@ const codeState = setup({
     },
 
     promotePreviewTab: assign(({ event, context }) => {
-      const ev = event as { type: 'PROMOTE_PREVIEW_TAB'; path: string }
+      const ev = typeOf('PROMOTE_PREVIEW_TAB', event)
       return {
         ...context,
         openFiles: context.openFiles.map(file =>
@@ -1074,7 +1103,7 @@ const codeState = setup({
     }),
 
     pinTab: assign(({ event, context }) => {
-      const ev = event as { type: 'PIN_TAB'; path: string }
+      const ev = typeOf('PIN_TAB', event)
 
       // Get groupId before modifying
       const tab = context.openFiles.find(f => f.path === ev.path)
@@ -1099,7 +1128,7 @@ const codeState = setup({
     }),
 
     unpinTab: assign(({ event, context }) => {
-      const ev = event as { type: 'UNPIN_TAB'; path: string }
+      const ev = typeOf('UNPIN_TAB', event)
 
       // Get groupId before modifying
       const tab = context.openFiles.find(f => f.path === ev.path)
@@ -1120,7 +1149,7 @@ const codeState = setup({
     }),
 
     pinTabAt: assign(({ event, context }) => {
-      const ev = event as { type: 'PIN_TAB_AT'; path: string; targetPath: string; side: 'left' | 'right' }
+      const ev = typeOf('PIN_TAB_AT', event)
       const tab = context.openFiles.find(f => f.path === ev.path)
       if (!tab) return context
       const groupId = 'groupId' in tab ? tab.groupId : undefined
@@ -1140,7 +1169,7 @@ const codeState = setup({
     }),
 
     unpinTabAt: assign(({ event, context }) => {
-      const ev = event as { type: 'UNPIN_TAB_AT'; path: string; targetPath: string; side: 'left' | 'right' }
+      const ev = typeOf('UNPIN_TAB_AT', event)
       const tab = context.openFiles.find(f => f.path === ev.path)
       if (!tab) return context
       const groupId = 'groupId' in tab ? tab.groupId : undefined
@@ -1160,7 +1189,7 @@ const codeState = setup({
     }),
 
     pinGroup: assign(({ event, context }) => {
-      const ev = event as { type: 'PIN_GROUP'; groupId: string }
+      const ev = typeOf('PIN_GROUP', event)
       const updatedGroups = context.tabGroups.map(group =>
         group.id === ev.groupId ? { ...group, isPinned: true } : group
       )
@@ -1181,7 +1210,7 @@ const codeState = setup({
     }),
 
     unpinGroup: assign(({ event, context }) => {
-      const ev = event as { type: 'UNPIN_GROUP'; groupId: string }
+      const ev = typeOf('UNPIN_GROUP', event)
       const updatedGroups = context.tabGroups.map(group =>
         group.id === ev.groupId ? { ...group, isPinned: false } : group
       )
@@ -1199,7 +1228,7 @@ const codeState = setup({
     }),
 
     createGroup: assign(({ event, context }) => {
-      const ev = event as { type: 'CREATE_GROUP'; name: string; tabPaths?: string[] }
+      const ev = typeOf('CREATE_GROUP', event)
 
       // Determine if group should be pinned based on tabs being added
       let shouldPinGroup = false
@@ -1241,7 +1270,7 @@ const codeState = setup({
     }),
 
     renameGroup: assign(({ event, context }) => {
-      const ev = event as { type: 'RENAME_GROUP'; groupId: string; name: string }
+      const ev = typeOf('RENAME_GROUP', event)
       return {
         ...context,
         tabGroups: context.tabGroups.map(group =>
@@ -1251,7 +1280,7 @@ const codeState = setup({
     }),
 
     changeGroupColor: assign(({ event, context }) => {
-      const ev = event as { type: 'CHANGE_GROUP_COLOR'; groupId: string; color: TabGroupColor }
+      const ev = typeOf('CHANGE_GROUP_COLOR', event)
       return {
         ...context,
         tabGroups: context.tabGroups.map(group =>
@@ -1261,7 +1290,7 @@ const codeState = setup({
     }),
 
     deleteGroup: assign(({ event, context }) => {
-      const ev = event as { type: 'DELETE_GROUP'; groupId: string; closeTabsInGroup?: boolean }
+      const ev = typeOf('DELETE_GROUP', event)
 
       // Remove group
       const updatedGroups = context.tabGroups.filter(g => g.id !== ev.groupId)
@@ -1294,7 +1323,7 @@ const codeState = setup({
     }),
 
     toggleGroupCollapse: assign(({ event, context }) => {
-      const ev = event as { type: 'TOGGLE_GROUP_COLLAPSE'; groupId: string }
+      const ev = typeOf('TOGGLE_GROUP_COLLAPSE', event)
       return {
         ...context,
         tabGroups: context.tabGroups.map(group =>
@@ -1304,7 +1333,7 @@ const codeState = setup({
     }),
 
     addTabToGroup: assign(({ event, context }) => {
-      const ev = event as { type: 'ADD_TAB_TO_GROUP'; path: string; groupId: string }
+      const ev = typeOf('ADD_TAB_TO_GROUP', event)
 
       // Find the target group to check if it's pinned
       const targetGroup = context.tabGroups.find(g => g.id === ev.groupId)
@@ -1328,7 +1357,7 @@ const codeState = setup({
     }),
 
     removeTabFromGroup: assign(({ event, context }) => {
-      const ev = event as { type: 'REMOVE_TAB_FROM_GROUP'; path: string }
+      const ev = typeOf('REMOVE_TAB_FROM_GROUP', event)
 
       // Find the group this tab belongs to
       const tab = context.openFiles.find(f => f.path === ev.path)
@@ -1369,7 +1398,7 @@ const codeState = setup({
     }),
 
     reorderGroups: assign(({ event, context }) => {
-      const ev = event as { type: 'REORDER_GROUPS'; fromIndex: number; toIndex: number }
+      const ev = typeOf('REORDER_GROUPS', event)
       const groups = [...context.tabGroups]
       const [movedGroup] = groups.splice(ev.fromIndex, 1)
       groups.splice(ev.toIndex, 0, movedGroup)
@@ -1394,6 +1423,7 @@ const codeState = setup({
   invoke: [{ src: 'poolOwner', id: 'poolOwner' }, { src: 'externalChanges', id: 'externalChanges' }],
   entry: ['spawnFeatureActors', 'restorePersistedTabs'],
   context: {
+    making: made.none(),
     // Until the shell says otherwise, this is the window that keeps the layout: a surface started with no
     // answer is the only window there is
     ownsAppLayout: true,
@@ -1431,19 +1461,22 @@ const codeState = setup({
           actions: [
             'retireClaudeProfileSetup',
             // Which window this is, as the shell starts the surface: a popout writes no layout (M5)
-            assign(({ event }) => ({ ownsAppLayout: (event as { ownsAppLayout?: boolean }).ownsAppLayout !== false })),
-            () => { sendToSystem('code', { type: 'GET_CODE_START' }) },
+            assign(({ event }) => ({ ownsAppLayout: event.ownsAppLayout !== false })),
+            'askForStart',
           ],
         },
         // The directory moved, in every window: ask again for what the surface starts from
         BASE_DIRECTORY_CHANGED: {
-          actions: ['retireClaudeProfileSetup', () => { sendToSystem('code', { type: 'GET_CODE_START' }) }],
+          actions: ['retireClaudeProfileSetup', 'askForStart'],
         },
-        // The answer, handed to every feature, each of which asks for what its panel shows
-        CODE_STARTED: {
-          // The saved settings reach the terminals at start, as they do when they change
-          actions: ['handleCodeConnected', 'applyCopyOnSelect', 'applyViewSettings', 'broadcastToAllFeatures']
+        // The start, handed to every feature, each of which asks for what its panel shows. The saved settings reach
+        // the terminals at start, as they do when they change. A start that could not be read changes nothing
+        'made.codeStart': {
+          guard: ({ event }) => event.outcome.ok,
+          actions: ['handleCodeConnected', 'applyCopyOnSelect', 'applyViewSettings', 'broadcastToAllFeatures'],
         },
+        // How an ask ended. Taken here, beside the route to the children, which would otherwise take it
+        [made.done]: { actions: made.settle() },
         // Handle settings updates
         FEATURE_SETTINGS_UPDATED: {
           actions: ['handleSettingsUpdate', 'applyCopyOnSelect', 'applyViewSettings']
@@ -1543,7 +1576,7 @@ const codeState = setup({
         },
         OPEN_CLAUDE_PROFILE_SETUP: {actions: 'prepareClaudeProfileSetup'},
         DISMISS_CLAUDE_PROFILE_SETUP_ERROR: {actions: assign({claudeProfileSetupError: undefined})},
-        CLAUDE_PROFILE_SETUP_PREPARED: {actions: 'openClaudeProfileSetup'},
+        'made.claudeProfileSetup': {actions: 'openClaudeProfileSetup'},
         OPEN_TERMINAL: {
           actions: 'openTerminal'
         },

@@ -1,4 +1,4 @@
-import {getNodeMajorVersion} from '@app/electron-versions';
+import {getNodeMajorVersion} from '@app/internal-electron-versions';
 import {realpathSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {spawn} from 'child_process';

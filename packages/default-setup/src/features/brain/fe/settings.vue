@@ -4,7 +4,7 @@
     <CollapsibleSection label="Brain Status" :default-open="true" class="mb-8">
       <div class="space-y-4">
         <!-- Brain is Dead/Killed Status -->
-        <div v-if="brainIsDead" class="p-4 bg-neutral-800/50 border border-neutral-600/30 rounded-lg">
+        <div v-if="brain.data.brainIsDead" class="p-4 bg-neutral-800/50 border border-neutral-600/30 rounded-lg">
           <div class="flex items-start gap-3 mb-4">
             <Power class="w-5 h-5 text-neutral-500 mt-0.5" />
             <div class="flex-1">
@@ -12,7 +12,7 @@
                 Brain Stopped
               </h4>
               <p class="text-sm text-neutral-500">
-                {{ startError ?? 'The brain system is currently inactive. Start it to begin dialog execution.' }}
+                {{ brain.data.startError ?? 'The brain system is currently inactive. Start it to begin dialog execution.' }}
               </p>
             </div>
           </div>
@@ -65,7 +65,7 @@
           </div>
         </div>
 
-        <div v-else-if="!brainIsDead" class="p-4 bg-neutral-900/50 rounded-lg border border-neutral-700/50">
+        <div v-else-if="!brain.data.brainIsDead" class="p-4 bg-neutral-900/50 rounded-lg border border-neutral-700/50">
           <div class="flex items-start gap-3 mb-3">
             <CheckCircle class="w-5 h-5 text-green-500 mt-0.5" />
             <div class="flex-1">
@@ -91,7 +91,7 @@
                 Restart Brain
               </button>
               <button 
-                v-if="!brainIsDead"
+                v-if="!brain.data.brainIsDead"
                 @click="handleKill"
                 data-onboarding-id="settings-kill-brain-button"
                 class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 text-sm font-medium"
@@ -142,12 +142,11 @@
 <script setup lang="ts">
 import { RefreshCw, AlertTriangle, Power, CheckCircle, PlayCircle } from 'lucide-vue-next'
 import type { SettingsOf } from '#generated/settings-fe.ts'
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState } from '@apackdev/sdk/fe'
 import { ref, computed } from 'vue'
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 
-import { sendToSystem } from '#generated/events.ts'
-import { useSelector } from '@xstate/vue'
+import { tell } from '#generated/events.ts'
 import type { BrainState } from '#features/brain/fe/state.ts'
 import { useView } from '#generated/fe.ts'
 
@@ -160,10 +159,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Get brain state from brain state machine
-const brainActor: BrainState = useSurface();
-const brainIsDead = useSelector(brainActor, (state) => state.context.brainIsDead)
-const startError = useSelector(brainActor, (state) => state.context.startError)
-const runningRootFlowId = useSelector(brainActor, (state) => state.context.runningRootFlowId)
+const { state: brain } = useState<BrainState>();
 // The root flow is the flows feature's (the flow with the root role), as its list view reads it
 const flowList = useView('flows', 'list')
 const rootFlowId = computed(() => flowList.data?.rootFlowId)
@@ -171,7 +167,7 @@ const rootFlowId = computed(() => flowList.data?.rootFlowId)
 // Compute if restart is needed by comparing root flow IDs
 const needsRestart = computed(() => {
   const flowsRootId = rootFlowId.value
-  const brainRunningId = runningRootFlowId.value
+  const brainRunningId = brain.value.data.runningRootFlowId
   
   // Need restart if:
   // 1. Brain is running (not dead) AND
@@ -186,12 +182,12 @@ const inspectEnabled = ref<boolean>(false)
 // Methods
 const handleRestart = () => {
   // If brain is dead, send START_BRAIN, otherwise RESTART_BRAIN
-  if (brainIsDead.value) {
-    sendToSystem('brain', {
+  if (brain.value.data.brainIsDead) {
+    tell('brain', {
       type: 'START_BRAIN',
     })
   } else {
-    sendToSystem('brain', {
+    tell('brain', {
       type: 'RESTART_BRAIN',
     })
   }
@@ -199,7 +195,7 @@ const handleRestart = () => {
 
 const handleKill = () => {
   // Send kill event to backend brain system
-  sendToSystem('brain', {
+  tell('brain', {
     type: 'KILL_BRAIN',
   })
 }
@@ -207,7 +203,7 @@ const handleKill = () => {
 const toggleInspect = () => {
   inspectEnabled.value = !inspectEnabled.value
   // Send toggle inspect event to backend
-  sendToSystem('brain', {
+  tell('brain', {
     type: 'TOGGLE_INSPECT',
   })
 }

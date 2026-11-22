@@ -20,7 +20,7 @@ import { SYSTEM_EVENT_TYPES, type PackEventContracts } from '@apackdev/sdk/frame
 import { isDeepStrictEqual } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import type { AnyStateMachine } from 'xstate';
-import type { RankDeclaration, RelationRules, RowRules } from '@apackdev/ears';
+import type { RankDeclaration, RelationRules, RowRules } from '@elmdb/ears';
 import type { PackRegistration, PackLifecycleHooks, PackEARS, PackMigration, PackFeature, PackFeatureSystem } from '@apackdev/sdk/framework';
 import { _packDeclarationProblem, type ContentRuntime } from '@apackdev/sdk/framework';
 import type { MigrationLine, PackManifest } from '@apackdev/sdk/build';
@@ -249,6 +249,11 @@ export interface PackRegistry extends PackRegistryView {
    */
   getEventValidationMap(): Map<string, Set<string>>;
   /**
+   * The failure kinds system `ref` declares for its ask `type`, or nothing where `type` is no ask it declares: what
+   * tells the bus an ask from an event, so it can answer one nothing took.
+   */
+  askKinds(ref: string, type: string): readonly string[] | undefined;
+  /**
    * Each surface's id → the event types it receives, the outgoing counterpart of `getEventValidationMap`.
    * A pack declares its own surfaces' (`surface.receives`, generated from its systems' outgoing unions) and the
    * host declares its own. A surface absent from the map is one no registered pack owns. Cached on the same
@@ -332,7 +337,8 @@ function admitContributions(registration: PackRegistration, { steps: declaration
       dependencies: migrationOwner.dependencies, migrations: { app: migrations('app'), pack: migrations('pack') } },
     steps,
     systems: new Map(featuresOf(registration).flatMap(({ featureId, ref, feature }) => feature.system
-      ? [[ref, { machine: feature.system.machine, receives: [...eventContracts![featureId].system!.incoming, ...SYSTEM_EVENT_TYPES] }] as const] : [])),
+      ? [[ref, { machine: feature.system.machine, receives: [...eventContracts![featureId].system!.incoming, ...SYSTEM_EVENT_TYPES],
+        asks: new Map(Object.entries(eventContracts![featureId].system!.asks ?? {})) }] as const] : [])),
     surfaceEvents: new Map(featuresOf(registration).flatMap(({ featureId, ref, feature }) => feature.surface
       ? [[ref, [...eventContracts![featureId].surface!.receives, ...SURFACE_EVENT_TYPES]] as const] : [])),
     designations: designationsOf(registration),
@@ -898,6 +904,13 @@ export function createPackRegistry({ installedPacksDir, appPackSourcesDir, setti
     surfaceIds: () => [...surfaceEventValidationMap().keys()] as FeatureRef[],
 
     getEventValidationMap: eventValidationMap,
+    askKinds: (ref, type) => {
+      for (const pack of admitted.values()) {
+        const system = pack.systems.get(ref as FeatureRef);
+        if (system) return system.asks.get(type);
+      }
+      return undefined;
+    },
     getSurfaceEventValidationMap: surfaceEventValidationMap,
 
     earsNames() {

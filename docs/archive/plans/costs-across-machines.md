@@ -204,7 +204,7 @@ with the scoping removed fails exactly the placement gate, which is what a secon
 
 **What portability cannot do here**, measured 2026-10-03:
 
-- **`repo-checks` is not separable by any ratio.** Four fast specs cost more than its three cheapest
+- **`internal-repo-checks` is not separable by any ratio.** Four fast specs cost more than its three cheapest
   integration specs — `lint-scope` 2388, `spec-plan-collect` 2134, `chain-inputs` 2041, `suite-reads` 1872
   against `fingerprint-scope.integration` 1843, `component-contracts.integration` 2007,
   `bounded-spawn.integration` 2059. The halves overlap at 9.4x the median against 7.3x, and today's record

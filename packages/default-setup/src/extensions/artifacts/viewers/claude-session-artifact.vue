@@ -230,7 +230,7 @@
               :key="opt.value"
               type="button"
               @click="selectPermissionMode(opt.value)"
-              :disabled="!!permissionChange?.call"
+              :disabled="!!permissionChange?.pending"
               :aria-pressed="permissionMode === opt.value"
               :title="opt.tooltip"
               :class="[
@@ -245,7 +245,7 @@
               {{ opt.label }}
             </button>
           </div>
-          <p v-if="permissionChange?.call" role="status" class="mt-1.5 text-xs text-neutral-400">Waiting for Claude…</p>
+          <p v-if="permissionChange?.pending" role="status" class="mt-1.5 text-xs text-neutral-400">Waiting for Claude…</p>
           <p v-else-if="permissionChange?.reason" role="alert" class="mt-1.5 text-xs text-amber-300 break-words">{{ permissionChange.reason }}</p>
               </PopoverContent>
             </PopoverPortal>
@@ -290,7 +290,7 @@ import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent } from 'reka
 import type { ArtifactItem } from '@apackdev/sdk/artifacts'
 import { useSurfaceState } from '#generated/fe.ts'
 import { openSurface } from '#generated/fe.ts'
-import { sendToSystem, sendToSurface } from '#generated/events.ts'
+import { sendToSurface, tell } from '#generated/events.ts'
 
 
 type PermissionMode =
@@ -501,7 +501,7 @@ function selectPermissionMode(mode: PermissionMode) {
 function clearGoal() {
   const threadId = currentThreadId.value
   if (!threadId) return
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'FORWARD_BRAIN_EVENT',
     eventType: 'user.goal.clear',
     payload: { threadId },
@@ -514,7 +514,7 @@ function selectWorktree(value: boolean) {
   if (value === useWorktree.value) return
   const threadId = currentThreadId.value
   if (!threadId) return
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'FORWARD_BRAIN_EVENT',
     eventType: 'user.update.worktree',
     payload: { threadId, useWorktree: value },

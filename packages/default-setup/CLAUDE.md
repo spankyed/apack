@@ -15,7 +15,7 @@ src/
     ears.ts                # EARS entity/relation registry, generated from apack.json
     ref.ts                 # ref(name): the ref a name in this pack's code stands for, bound to the pack
     fe.ts                  # openSurface(name, event?), SurfaceName: the surfaces this pack's code can name
-    events.ts              # SendableSurfaceEvents/PackSystemEvents + typed broadcastToSurface/sendToSurface/sendToSystem
+    events.ts              # SendableSurfaceEvents/PackSystemEvents + typed broadcast/sendToSurface/tell
     system-specs.ts        # Type-only: the events each system receives and sends, read by events.ts and types.ts
     types.ts               # Type barrel (per-feature types; a surface imports its system's events from be/contract.ts)
     services.ts            # Selected services, types and the lifetime-bound servicesForAction factory
@@ -84,9 +84,9 @@ Frontend components don't render untrusted text as markup: script injected into 
 
 Backend systems wired via `__generated__/pack-entry.ts`, each feature's with `packSystem()` from the SDK. Each system file default-exports a `SystemEntry` (the manifest names only the path, not an export name). The logs system is the bus's like any other: what the in-app viewer shows is what `onLog` delivers from the moment the bus starts it, so the boot lines before that — the boot reading, each `onInit`, the migrations, the content — reach stdout and the log file only.
 
-Code names a system by feature id, and reaches another system with the typed `sendToSystem(name, event)` from `__generated__/events`, never its actor. Each system file defines its events with `defineSystem()`; its identity is its feature's, from `apack.json`. A feature's designation comes only from `apack.json` `features.<id>.designation`. It is a role, not a name: it need not equal the feature id, and every one default-setup declares happens to.
+Code names a system by feature id, and reaches another system with the typed `tell(name, event)` from `__generated__/events`, never its actor. Each system file defines its events with `defineSystem()`; its identity is its feature's, from `apack.json`. A feature's designation comes only from `apack.json` `features.<id>.designation`. It is a role, not a name: it need not equal the feature id, and every one default-setup declares happens to.
 
-## What a system sends a surface: data is a view, a result is a reply, news is a broadcast
+## What a system sends a surface: data is a view, a result is an ask's answer, news is a broadcast
 
 **A system sends a surface three kinds of thing, and each has one channel.** Which kind an event is decides how it
 travels; getting that wrong is where every bug of this class came from — a terminal opened in every window, a flow
@@ -95,8 +95,8 @@ navigated every window, six features announced an import to windows that had not
 | the kind | the channel | correlation |
 |---|---|---|
 | **data** — what the feature stores, as a window shows it | a **view** (`useView`, `fromView`) | none: it is the window's own subscription |
-| a **result** — the answer to one window's ask or write | **`reply`** | the envelope's call, which every ask already carries |
-| **news** — something happened that every window should know | `broadcastToSurface` | none, and guarding one is a category error |
+| a **result** — the answer to one window's read, write or command | an **ask** (`asks` in the contract, answered by `answers`) | the envelope's call, which every send already carries |
+| **news** — something happened that every window should know | `broadcast` | none, and guarding one is a category error |
 
 **Data is a view.** A feature declares its reads (`be/views.ts`, `apack.json` `features.<id>.views`); a window
 subscribes with its arguments and is sent each changed result, and nothing that writes says who is looking. No
@@ -108,29 +108,40 @@ actions (`list`, `byId`), flows (`list`, `graph`), notes (`tree`, `note`, `recen
   lists its messages by id and reads no message's content, so a streamed reply re-runs that message's view alone;
   the notes tree reads no note's text, so typing in a note re-runs nothing but that note's view.
 - **A view reads the engine and nothing else.** What is on disk (a symlinked library folder), in the run history (a
-  brain run's tree) or the result of a walk over the whole store (the database schema) is not a view: it is fetched,
-  and its answer is a result. The library says so in its view (`{ onDisk: true }`), and announces a write it makes on
-  disk as news (`FOLDER_CHANGED`) for the windows showing it to fetch again.
+  brain run's tree) or the result of a walk over the whole store (the database schema) is not a view: it is asked
+  for, and its answer is a result. The library says so in its view (`{ onDisk: true }`), and announces a write it makes on
+  disk as news (`FOLDER_CHANGED`) for the windows showing it to ask again.
 - **Arguments come from the window.** A view that read the settings would not re-run when they change, so the
   threads' recent list takes its limit and order as arguments from the settings the surface holds.
 - **An editor holds its views behind its own writes** (`ViewWrites`, `@apackdev/sdk/fe`): it applies an edit at
   once, so a result from before the write landed would undo it. Once the last write is answered it reads the views
   again. Every write such a surface records must be answered, a refusal included. The commit panel does the same
-  over a list it fetches: a staged file moves on the click to where git will list it (`apack-git/staging`),
+  over a list it fetches: a staged file moves on the click to where git will list it (`@apackdev/git/staging`),
   and no status is shown until the write is answered.
 - **A surface drawn in several areas follows its views from its machine** (`fromView`, `#generated/fe`), since no one
   component is mounted for as long as it runs — threads is the example.
 
-**A result is a reply.** A handler is handed `reply` (`spec.actions({ … })`), absent when the message named no sender,
-and answering is the handler's whole job: the window that asked hears it, and no other. Where a result must still
-reach someone when nobody asked — an action opening a thread — a feature's `answer(reply, event)` replies or
-broadcasts, never both (`threads/be/answer.ts`), and takes only that feature's outcomes (its `Outcome` type), so a data
-result cannot reach the fallback. Code's `answer` (`code/be/answer.ts`) has no fallback: a code result is data its asker
-shows.
+**A result is an ask's answer.** Whatever a window or another system needs an answer to — a fetch, a write a surface
+holds its views behind, a command whose outcome the user is shown — is declared in the system's contract under `asks`,
+with what it takes, what it answers with and the kinds it may fail as, and answered by the system's `answers` table
+(`defineSystem`): a handler returns its answer and throws its refusal, so no path through it leaves the asker waiting,
+and the window that asked hears it and no other. `docs/public-facing/features.md#asks` is the reference; the library
+is the worked example of a read, notes of writes, threads of commands.
 
-- **`reply` answers the message being delivered, and only that one.** An event a machine makes while handling a
-  message — a system telling its children something of its own — is not that message, and its handler is handed no
-  `reply`; the same object forwarded to a child still is.
+- **A refusal the asker can act on has a kind**, declared under `refuses` and thrown with `refuse(kind, message, data)`,
+  and a surface branches on `failure.kind`, never on the wording: the library closes an editor whose document is
+  `not-found`, the settings form shows a change's `refused` problems. Anything else a handler throws is `failed`, and
+  an ask nothing took — the system is not running, or its state does not take the ask — is `unavailable`, which the
+  bus answers itself.
+- **An ask nobody waits on still does its work.** An action opening a thread, an applier writing a setting: the
+  handler runs, a failure is reported, a success goes nowhere. A handler is not told whether anyone waits. One whose
+  outcome every window must hear when no window asked broadcasts it where `client` is absent: threads shows every
+  window a thread a flow started, and the window that started one itself opens it from its answer.
+- **A feed beside an answer goes to the asking window** with `sendToWindow(client, surface, event)`, `client` being
+  the connection the handler is handed: a search's results as it finds them, a push's progress. The answer still
+  says how the whole ask ended.
+- **An answer is written only by the table.** The `ask-answers` pack rule refuses an `ASK_ANSWERED` or `ASK_FAILED`
+  written by hand; a spec driving an asking machine builds one with `askAnswered`/`askFailed` (`@apackdev/sdk/testing`).
 - **A surface asks where a delivery names it.** A send from a machine's own entry, from a timer or after an `await`
   carries no sender, so its answer goes nowhere. A surface asks for what it starts from on `SURFACE_STARTED`, which
   the shell hands it in a delivery naming it, and asks again from the handler of whatever news says it should.
@@ -138,10 +149,11 @@ shows.
   holds one outstanding ask, `recordCall`/`settleCall` where it holds several, and `newCall()` to mint one before a
   send an `enqueueActions` body defers. `_callOf` is host-only: a raw call invites `===` against a stored one, which
   answers *true* when both are absent. **No event type declares a correlation field, and none should.**
-- **A spec that drives a machine directly builds the answer with `answerTo(call, event)`** (`@apackdev/sdk/testing`);
-  one driving a whole system through `startApp` passes `nextEmit`'s `answering`. The `reserved-event-keys` pack rule
+- **A spec that drives a machine directly builds the answer with `askAnswered`/`askFailed`** (`@apackdev/sdk/testing`,
+  over `answerTo(call, event)`); one driving a whole system through `startApp` asks with `app.ask`, which resolves to
+  the ask's `Outcome`. The `reserved-event-keys` pack rule
   refuses the reserved key in `tests` as well as `src`.
-- **A flow answers by the window's connection.** A flow run is no delivery, so an action has no sender to reply to.
+- **A flow answers by the window's connection.** A flow run is no delivery, so an action has no ask to answer.
   The system that starts the flow is handling a delivery, so it puts the asker's `client` in the brain event's
   payload, the flow maps it into the action's params, and the action answers that window alone with
   `services.emitter.sendToWindow(client, surface, event)` — the database's generated query, the commit panel's
@@ -153,14 +165,12 @@ shows.
 (`BASE_DIRECTORY_CHANGED`), the data replaced (`DATABASE_REPLACED`), a flow's notifications to the chat (`SET_MODE`, `FLASH_CHAT_STATE`). Nobody asked for it, so
 there is no request it could fail to match. A **feed** is news too: a terminal's output and a brain run's
 `RUN_NODE_SPAWNED`/`RUN_NODE_UPDATED` patch what a window already holds, as streaming tokens would. What a system
-holds in memory and a window shows — the logs buffer — is fetched like what is on disk. **A fetch nobody asked for is
-answered to nobody**: it replies with `reply?.()`, and only a command's outcome, which someone must hear, falls back to
-a broadcast through `answer`.
+holds in memory and a window shows — the logs buffer — is asked for like what is on disk.
 
-**Git is run by one engine, which is a package of its own: `apack-git`.** It runs every git process and keeps
-the picture of one working tree, in a repository of its own that the pack depends on through `vendor/apack-git`
+**Git is run by one engine, which is a package of its own: `@apackdev/git`.** It runs every git process and keeps
+the picture of one working tree, in a repository of its own whose release the pack depends on (`@apackdev/git`)
 ([the git engine](../../docs/references/git-engine.md)): its files named below are that repository's, under
-`src/` and `tests/`. `apack pack build` bundles it into the pack's runtime, and its `apack-git/staging` entry,
+`src/` and `tests/`. `apack pack build` bundles it into the pack's runtime, and its `@apackdev/git/staging` entry,
 which imports nothing of Node's, into the frontend. It has no dependencies and is handed how to run a process,
 the environment git starts from and where to log (`RepositoryTies`). What the app decides stays with the app,
 over the engine's reads (`code/be/services/app-git-repository.ts`): when to fetch unasked, which branch a pull
@@ -258,7 +268,7 @@ neither watcher needs to be exact.
   nearest branch by commits. One that names a branch that is gone is passed over.
 - **Every git command can be logged with how long it took** (the code surface's `logGitCommands` setting, the
   `git-commands` log source): off by default, since a status runs for most file events.
-- **A watch that fails is said to the user.** `commit.STATUS_RECEIVED` carries `watching`, and the panel says live
+- **A watch that fails is said to the user.** the status a window is answered with carries `watching`, and the panel says live
   updates are off; the next check opens the watch again.
 - **A tree is watched with Node's own `fs.watch`, and no native watcher library is loaded** (the engine's `directory-watch.ts`).
   macOS and Windows watch a tree natively, and Node's recursive watch is that watch. Linux has no watch over a
@@ -275,8 +285,8 @@ neither watcher needs to be exact.
 because every git child is run in English, and `classifyGitError` (the engine's `errors.ts`) turns what
 it printed on either stream into a `GitErrorCode`, by the lines git itself writes, each from its start: a
 phrase found anywhere would be read out of a branch's name, a hook's output or another step's line. A caller that needs to know why reads `result.code`, never the
-text; a failure thrown to a handler is a `GitError` carrying it, and `commit.ERROR_RECEIVED` hands it to the
-panel. A new reason is a new entry in that module's list, most telling first, with a case in
+text; a failure thrown to a handler is a `GitError` carrying it, and the ask fails as `git` with it, which the
+panel reads. A new reason is a new entry in that module's list, most telling first, with a case in
 the engine's `failures.spec.ts` that fails a real git that way.
 
 - **A remote that asks for a sign-in is refused at once**, since git runs with its prompts off, so the refusal
@@ -296,24 +306,24 @@ the engine's `failures.spec.ts` that fails a real git that way.
 and they failed in four different ways — which is the argument for reading the list rather than copying the one you
 land on.
 
-**A guard needs an invariant every asker holds.** `answersSelectedNode` admits a reply only for the node in
+**A guard needs an invariant every asker holds.** `answersSelectedNode` admits an answer only for the node in
 `selectedStepNode`, so every asker must select before it asks — stated over two of its four askers and broken by the
 fourth, which asked for an erroring node's details and never selected it.
 `tests/features/brain/fe/run-node-correlation.spec.ts` asks each asker rather than describing them, which is the thing
 to copy if a guard stays.
 
-**A guard cannot correlate on what the answer does not carry.** `answersCurrentPage` matched a flow while
-`FLOW_EVENTS_RESULT` echoed no `offset`, so re-selecting a flow while a later page was in flight let that page replace
-the whole list. The answer carries its offset now; `loadMoreEvents` keeps one page in flight, which the correlation
-requires rather than prefers.
+**A guard cannot correlate on what the answer does not carry.** `answersCurrentPage` matches a flow and a page's
+`offset`, which the answer to `GET_FLOW_EVENTS` carries: matched by the flow alone, re-selecting a flow while a later
+page was in flight let that page replace the whole list. `loadMoreEvents` keeps one page in flight, which the
+correlation requires rather than prefers.
 
 **A guard's invariant is not "who writes this" but "what else could satisfy it".** A slot with one setter says nothing
 about whether anything other than its own answer matches it. Set the slot before the ask, clear it on the answer,
-reply rather than broadcast, and read it with `answersCall`, which refuses an empty slot. A row a window shows needs
+answer rather than broadcast, and read it with `answersCall`, which refuses an empty slot. A row a window shows needs
 no slot at all: it is a view.
 
 **And a clock is not a correlation.** `code/be/features/pull-request.ts` stamped a module-scoped counter on every
-`pr.PR_DETAILS_RECEIVED`, compared in the renderer, which outlives the backend: an API restart or a pack reload put
+answer of PR details, compared in the renderer, which outlives the backend: an API restart or a pack reload put
 it back to zero and every later answer read as older. The PR number was always the key; what the tie-break wanted was
 a clock, so it is `fetchedAt`. The PR diff is keyed by what was asked (`diffsByRef[refKey(base, head)]`), and its
 answer must **not** write `prBaseBranch`, half the key the view reads under; the file-diff half keeps an in-flight
@@ -350,8 +360,8 @@ state accessed through `services.onboarding.isComplete()`/`complete()`, not an a
 Import `EARS` from `#generated/ears` by default. The SDK's `EARS` (`@apackdev/sdk`) is fine for `EntityId`, SDK-owned constants and shared EARS types (build facets use it), but its `EARS.Entity` type is open: annotate with it only when any entity name is intended, as the create step's `entityTypeTarget` does (see `packages/apack-sdk/TYPED-EARS.md`).
 
 Typed facades (no module augmentation):
-- `__generated__/ears.ts` — `PackShapes` (entity type → attribute interface; a numbered entity's shape gains the `shortCode` the engine writes, typed from its `apack.json` entry, so `ThreadEntity` declares none), `ShortCodeOf<E>` (a numbered entity's code type, `ShortCodeOf<'Thread'>` is `` `THR-${number}` ``), `EntityName`, and the typed `query`/`create`/`upsert`/`write`/`transact`/`newId`/`getAttr` helpers built with `defineEars`. Feature code imports its writes from here; migrations write with the unchecked `untypedCreate`/`untypedUpsert`/`untypedWrite` from `@apackdev/ears`, as does the Database console's transaction code (which exposes them to console code as `create`, `upsert` and `write`), which runs through `@apackdev/sdk/database-console` (`features/database/be/execute/`)
-- `__generated__/events.ts` — `SendableSurfaceEvents` (receiving surface ID → the events it gets: its own system's, plus the inbox that surface's `Contract` declares — the flows surface takes the three action events it handles, the logs surface `LOG_ADDED` from any pack), `PackSystemEvents` (system → the events it receives), and typed `broadcastToSurface`/`sendToSurface`/`sendToSystem` built with `defineEvents`. Frontend state machines and systems send to systems with `sendToSystem` (to the brain's role with `{ role: 'brain' }`); backend code sends to surfaces with `broadcastToSurface`, which reaches every window, and frontend code with `sendToSurface`, which reaches this window's actor. Don't import these from `@apackdev/sdk/events`; a surface that takes events from anywhere but its own system declares them in its `Contract`'s `inbox` (`fe/contract.ts`). Subscriptions (`onConnected`, `onIncoming`) come from `@apackdev/sdk/events`, `onLog` from `@apackdev/sdk/logger`. A system answers whoever asked with the `reply` its handler is handed (`spec.actions({ … })`, built by `defineSystem`), which is absent when the message named no sender — there is no `reply` to import
+- `__generated__/ears.ts` — `PackShapes` (entity type → attribute interface; a numbered entity's shape gains the `shortCode` the engine writes, typed from its `apack.json` entry, so `ThreadEntity` declares none), `ShortCodeOf<E>` (a numbered entity's code type, `ShortCodeOf<'Thread'>` is `` `THR-${number}` ``), `EntityName`, and the typed `query`/`create`/`upsert`/`write`/`transact`/`newId`/`getAttr` helpers built with `defineEars`. Feature code imports its writes from here; migrations write with the unchecked `untypedCreate`/`untypedUpsert`/`untypedWrite` from `@apackdev/sdk/ears`, as does the Database console's transaction code (which exposes them to console code as `create`, `upsert` and `write`), which runs through `@apackdev/sdk/database-console` (`features/database/be/execute/`)
+- `__generated__/events.ts` — `SendableSurfaceEvents` (receiving surface ID → the events it gets: its own system's, plus the inbox that surface's `Contract` declares — the flows surface takes the three action events it handles, the logs surface `LOG_ADDED` from any pack), `PackSystemEvents` (system → the events it receives), and typed `broadcast`/`sendToSurface`/`tell` built with `defineEvents`. Frontend state machines and systems send to systems with `tell` (to the brain's role with `{ role: 'brain' }`); backend code sends to surfaces with `broadcast`, which reaches every window, and frontend code with `sendToSurface`, which reaches this window's actor. Don't import these from `@apackdev/sdk/events`; a surface that takes events from anywhere but its own system declares them in its `Contract`'s `inbox` (`fe/contract.ts`). Subscriptions (`onConnected`, `onIncoming`) come from `@apackdev/sdk/events`, `onLog` from `@apackdev/sdk/logger`. A system answers whoever asked through its `answers` table, which is the only way an ask is answered; `ask` and `fromAsk`, from the same module, ask one of the pack's or its dependencies' systems and resolve to its `Outcome`
 - `__generated__/services.ts` — the `services` proxy typed as `Services` (with `services.repository` typed as `Repositories`, and `services.emitter`'s sends typed with the pack's events; actions name systems `default-setup/<feature>`)
 - `__generated__/repository.ts` — `repository`, typed with every repository in `features.<id>.repositories`
 
@@ -385,7 +395,7 @@ both retain the small-test bounds. Keep component tests here with their owning p
 A spec's path under `tests/` mirrors the source it covers: `src/features/brain/be/trigger-dedupe.ts` is
 covered by `tests/features/brain/be/trigger-dedupe.spec.ts`. No directory names a level, a cost half or a
 history — which half a spec runs in is its `.integration.spec.ts` suffix, decided by measured cost — and
-support directories take a `_` prefix. `repo-checks/tests/spec-placement.spec.ts` fails a directory here
+support directories take a `_` prefix. `internal-repo-checks/tests/spec-placement.spec.ts` fails a directory here
 that names no directory under `src/`. The reference is
 [`docs/references/test-inventory.md`](../../docs/references/test-inventory.md).
 
@@ -435,8 +445,8 @@ whole point of an artifact: a new type is a definition and a component, never a 
   backend's is read, the user's in-progress edit is held.
 - **Read another surface's state with `useSurfaceState`** (`#generated/fe`), which is a value and not an actor, so
   it follows that surface arriving and reloading.
-- **Raise what the user did as an event, with `sendToSystem` to the feature hosting you** —
-  `sendToSystem('threads', { type: 'FORWARD_BRAIN_EVENT', eventType, payload })`. The threads system forwards
+- **Raise what the user did as an event, with `tell` to the feature hosting you** —
+  `tell('threads', { type: 'FORWARD_BRAIN_EVENT', eventType, payload })`. The threads system forwards
   any `eventType` to the brain and a flow listens for it, so the decision travels without threads knowing what
   a todo is.
 

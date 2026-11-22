@@ -6,7 +6,7 @@
 ## Why
 
 The validation tooling has grown machinery to explain and police itself:
-- `scripts/` is about 14,500 lines, and the repo-checks specs that check it about 16,500.
+- `scripts/` is about 14,500 lines, and the internal-repo-checks specs that check it about 16,500.
 - The core chain files are 50–73% comments (`chain-steps.ts` 71%, `core-budget.ts` 73%), with 96 phrases of
   edit history ("until 2026-…", "used to", "no longer") despite the repo's own rule that a comment states the
   current state.
@@ -134,7 +134,7 @@ Last, because it is easier once the code it describes is smaller.
 ## Verification
 
 - **After each phase:** `npm run typecheck`, `npm run lint:check`, `npm run check:specifiers` and
-  `npm run spec -- packages/repo-checks`. Each phase drops the cases it deletes, and no other case moves. One
+  `npm run spec -- packages/internal-repo-checks`. Each phase drops the cases it deletes, and no other case moves. One
   that moves was reading the deleted machinery for something else.
 - **Phase 1 mutation:** shorten a rung's `ms` and confirm a step is killed and `timedOutBecause` names the new
   deadline.

@@ -25,7 +25,7 @@ function rendered(): { name: string; from: string }[] {
  * What a template may be, if the CLI is to have it wherever it runs. Found by packaging the app and listing what
  * arrived, not by reading the config.
  *
- * Whether the packaging config *does* carry the templates is `repo-checks/tests/packaged-app-files.spec.ts`,
+ * Whether the packaging config *does* carry the templates is `internal-repo-checks/tests/packaged-app-files.spec.ts`,
  * which asks electron-builder's own matcher. There used to be a second case here, comparing two string offsets to
  * pin one include's position — and measured, two patterns carry the templates independently, so that case failed
  * on an edit to either and not on the thing that breaks the app. The matcher case fails when no pattern reaches

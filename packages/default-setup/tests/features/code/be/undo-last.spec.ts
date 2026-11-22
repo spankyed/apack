@@ -7,8 +7,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -20,7 +20,7 @@ afterEach(async () => {
 
 const git = async (cwd: string, ...args: string[]) =>
   String((await execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd })).stdout).trim();
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 
 /** The code system over a repository with one commit, an identity for the next, and `a.txt` edited and staged */
 async function codeOverStaged() {
@@ -45,13 +45,13 @@ it('offers to take back a commit, and takes it back with what it held left stage
   const directory = await codeOverStaged();
   const first = await git(directory, 'rev-parse', 'HEAD');
 
-  const committed = await app!.send('code', { type: 'commit.COMMIT', message: 'second' }, asWindow);
-  const { data: offered } = await app!.nextEmit('code', 'commit.UNDOABLE_RECEIVED', { answering: committed });
+  const committed = app!.ask('code', { type: 'commit.COMMIT', message: 'second' }, asWindow);
+  const offered = (await answered(committed)).undoable;
   expect(offered).toMatchObject({ summary: 'commit "second"' });
 
-  const undone = await app!.send('code', { type: 'commit.UNDO_LAST' }, asWindow);
-  expect((await app!.nextEmit('code', 'commit.UNDONE', { answering: undone })).data).toMatchObject({ summary: 'commit "second"' });
-  expect((await app!.nextEmit('code', 'commit.UNDOABLE_RECEIVED', { answering: undone })).data, 'and there is nothing more to take back').toBeNull();
+  const undone = app!.ask('code', { type: 'commit.UNDO_LAST' }, asWindow);
+  expect(await answered(undone)).toMatchObject({ summary: 'commit "second"' });
+  expect((await answered(undone)).undoable, 'and there is nothing more to take back').toBeNull();
   expect(await git(directory, 'rev-parse', 'HEAD')).toBe(first);
   expect(await git(directory, 'diff', '--cached', '--name-only')).toBe('a.txt');
 });
@@ -62,16 +62,16 @@ it('asks before taking back a commit already pushed, and takes it back once told
   dirs.push(remote);
   await git(remote, 'init', '--quiet', '--bare');
   await git(directory, 'remote', 'add', 'origin', remote);
-  const committed = await app!.send('code', { type: 'commit.COMMIT', message: 'second' }, asWindow);
-  await app!.nextEmit('code', 'commit.UNDOABLE_RECEIVED', { answering: committed });
+  const committed = app!.ask('code', { type: 'commit.COMMIT', message: 'second' }, asWindow);
+  await answered(committed);
   await git(directory, 'push', '--quiet', 'origin', 'main');
 
-  const asked = await app!.send('code', { type: 'commit.UNDO_LAST' }, asWindow);
-  const { data } = await app!.nextEmit('code', 'commit.UNDO_NEEDS_CONFIRMATION', { answering: asked });
+  const asked = app!.ask('code', { type: 'commit.UNDO_LAST' }, asWindow);
+  const data = await refused(asked);
   expect((data as { message: string }).message).toContain('origin/main');
   expect(await git(directory, 'log', '-1', '--format=%s'), 'nothing was undone yet').toBe('second');
 
-  const undone = await app!.send('code', { type: 'commit.UNDO_LAST', evenIfPublished: true }, asWindow);
-  await app!.nextEmit('code', 'commit.UNDONE', { answering: undone });
+  const undone = app!.ask('code', { type: 'commit.UNDO_LAST', evenIfPublished: true }, asWindow);
+  await answered(undone);
   expect(await git(directory, 'log', '-1', '--format=%s')).toBe('first');
 });

@@ -154,7 +154,7 @@ reached 43s and stopped. This goal is the part that was left.
 
 > **Re-measured 2026-09-25** at `07afe0bc2`, idle, same machine. The table below it is the original survey
 > at `c7517e0da`, kept because the Decisions were taken against it. Eleven suites now rather than eight:
-> `@app/repo-checks`, `@apackdev/testing` and `@apackdev/ui` were created by later goals, and `@apackdev/cli`
+> `@app/internal-repo-checks`, `@apackdev/testing` and `@apackdev/ui` were created by later goals, and `@apackdev/cli`
 > gave twenty specs away to them.
 >
 > | Suite | Alone | Tests |
@@ -166,7 +166,7 @@ reached 43s and stopped. This goal is the part that was left.
 > | `@app/api` | 3.1s | 70 |
 > | `@apackdev/ears` | 3.0s | 116 |
 > | `@app/renderer` | 2.5s | 33 |
-> | `@app/repo-checks` | 2.1s | 177 |
+> | `@app/internal-repo-checks` | 2.1s | 177 |
 > | `@apackdev/ui` | 0.9s | 2 |
 > | `@app/main` | 0.8s | 23 |
 > | `@apackdev/testing` | 0.8s | 19 |

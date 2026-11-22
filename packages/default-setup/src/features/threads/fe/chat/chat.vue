@@ -13,8 +13,8 @@
       <ThreadSidebar
         v-if="showThreadSidebar && !isOnboarding"
         :style="{ width: sidebarWidthPx + 'px' }"
-        @select-thread="(threadId: string) => { expandChatIfCollapsed(); actor.send({ type: 'OPEN_THREAD_CHAT', threadId }) }"
-        @open-message="(result: MessageSearchResult) => { expandChatIfCollapsed(); actor.send({ type: 'OPEN_MESSAGE', threadId: result.threadId, messageId: result.messageId }) }"
+        @select-thread="(threadId: string) => { expandChatIfCollapsed(); send({ type: 'OPEN_THREAD_CHAT', threadId }) }"
+        @open-message="(result: MessageSearchResult) => { expandChatIfCollapsed(); send({ type: 'OPEN_MESSAGE', threadId: result.threadId, messageId: result.messageId }) }"
         @close="showThreadSidebar = false"
       />
       <PanelResizer
@@ -62,9 +62,9 @@
               <div v-else class="w-full max-w-4xl px-4 py-4 mx-auto space-y-3" ref="messagesContent">
                 <NativeTerminalPlacements :frames="nativeUiDrawing?.composer" component="InfoNotice" @press="pressNativeUi" @field="editNativeUi" />
                 <!-- Load older messages -->
-                <div v-if="messagePagination.hasMore" class="flex justify-center py-3">
+                <div v-if="threads.data.messagePagination.hasMore" class="flex justify-center py-3">
                   <button
-                    v-if="!messagePagination.isLoading"
+                    v-if="!threads.data.messagePagination.isLoading"
                     @click="requestLoadMore"
                     class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors"
                   >
@@ -90,7 +90,7 @@
                       :is-tail="tailMessageIds.has(id)"
                       :is-claude-code-thread="!!currentThread?.context?.claudeCode"
                       @open-lightbox="openLightbox"
-                      @fork="(messageId: string) => actor.send({ type: 'FORK_THREAD', messageId, threadId: currentThread?.id, threadTopic: currentThread?.topic })"
+                      @fork="(messageId: string) => send({ type: 'FORK_THREAD', messageId, threadId: currentThread?.id, threadTopic: currentThread?.topic })"
                       @unqueue="handleUnqueue"
                       @resend="handleResend"
                       @revert="(messageId: string) => handleRevert(messageId)"
@@ -127,13 +127,13 @@
           </div>
           <div v-if="pendingNativeApproval" class="min-h-0 overflow-hidden px-4 py-2" :class="$style.approvalContainer">
             <NativeToolApproval :key="JSON.stringify(pendingNativeApproval.pauseScope ?? pendingNativeApproval.messageId)" v-bind="pendingNativeApproval"
-              @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeApproval!.messageId, response })"
+              @respond="response => send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativeApproval!.messageId, response })"
               @edit-workflow="nativeSession?.open()"
               @pause="pauseNativeDecision" />
           </div>
           <div v-if="pendingNativePlan" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
             <NativePlanPanel :key="JSON.stringify(pendingNativePlan.pauseScope ?? pendingNativePlan.messageId)" v-bind="pendingNativePlan"
-              @respond="response => actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativePlan!.messageId, response })"
+              @respond="response => send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: pendingNativePlan!.messageId, response })"
               @pause="pauseNativeDecision" />
           </div>
           <div v-if="pendingNativeQuestion" class="flex-1 min-h-0 overflow-hidden px-4 py-2">
@@ -150,19 +150,19 @@
               :disabled-reason="!nativeSessionBackgrounded && taskView?.[1].state ? taskView[1].state.view?.kind === 'agent' ? 'Return to the main conversation in the native interface' : taskView[1].state.view ? undefined : 'Connecting to Claude input' : undefined"
               :native-decision-pending="nativeQuotaDecisionPending"
               :current-thread="currentThread"
-              :current-mode="currentMode"
-              :current-phase="currentPhase"
+              :current-mode="threads.data.mode"
+              :current-phase="threads.data.phase"
               :prefill-text="prefillText"
               :prefill-references="prefillReferences"
               :is-busy="isBusy"
               :native-pause-requested="nativePauseRequested"
               @native-session-controls="nativeSession?.open()"
-              :modes="modes"
-              :default-mode="settings?.defaultMode"
-              :hotkeys="hotkeys"
+              :modes="threads.data.modes"
+              :default-mode="threads.data.chatSettings?.defaultMode"
+              :hotkeys="threads.data.hotkeys"
               :quick-prompts="quickPrompts"
               :quick-prompt-number-key-inserts="quickPromptNumberKeyInserts"
-              :quick-prompt-cursor="quickPromptCursor"
+              :quick-prompt-cursor="threads.data.quickPromptCursor"
               :recording-limit-minutes="recordingLimitMinutes"
               :status-line="statusLine"
               :native-status="nativeComposerOwner?.mainStatus" :native-permission-mode="nativePermissionMode" :native-background="nativeComposerOwner?.view?.kind === 'main' && !nativeSessionBackgrounded" :native-backgrounded="nativeSessionBackgrounded"
@@ -174,17 +174,17 @@
               @native-prompt-autocomplete="completeNativePrompt"
               @native-ui-press="pressNativeUi"
               @native-ui-notice="operateNativeNotice" @native-ui-scroll="scrollNativeUi" @native-ui-pane="operateNativePane" @native-ui-field="editNativeUi" @native-ui-focus="focusNativeUi"
-              @channels-change="channels => currentThread?.id && sendToSystem('threads', {type: 'SET_CLAUDE_CHANNELS', threadId: currentThread.id, channels})"
+              @channels-change="channels => currentThread?.id && tell('threads', {type: 'SET_CLAUDE_CHANNELS', threadId: currentThread.id, channels})"
               @send-message="handleSendMessage"
               @send-command="handleSendCommand"
-              @mode-change="(mode: string) => actor.send({ type: 'SET_MODE', mode: mode as any })"
+              @mode-change="(mode: string) => send({ type: 'SET_MODE', mode: mode as any })"
               @phase-change="setComposerPhase"
               @set-default-mode="(mode: string) => threadsSettings.set({ path: ['chat', 'defaultMode'], value: mode })"
               @set-default-phase="(phase: string) => threadsSettings.set({ path: ['chat', 'defaultPhase'], value: phase })"
-              @pause="actor.send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })"
+              @pause="send({ type: 'PAUSE_TURN', threadId: currentThread?.id ?? '' })"
               @open-lightbox="openLightbox"
               @update-quick-prompts="(prompts: QuickPrompt[]) => threadsSettings.set({ path: ['chat', 'quickPrompts'], value: prompts })"
-              @close-quick-prompts="actor.send({ type: 'CLOSE_QUICK_PROMPTS' })"
+              @close-quick-prompts="send({ type: 'CLOSE_QUICK_PROMPTS' })"
               @revert="(messageId: string) => handleRevert(messageId, false, true)"
               @revert-with-files="(messageId: string) => handleRevert(messageId, true, true)"
               @summarize-from-here="(messageId: string) => handleSummarize(messageId, true)"
@@ -198,16 +198,16 @@
             :current-thread="currentThread"
             :recent-threads="recentThreads"
             @view-thread="(threadId: string) => handleViewDetails(threadId)"
-            @open-thread-chat="(threadId: string) => { expandChatIfCollapsed(); actor.send({ type: 'OPEN_THREAD_CHAT', threadId }) }"
+            @open-thread-chat="(threadId: string) => { expandChatIfCollapsed(); send({ type: 'OPEN_THREAD_CHAT', threadId }) }"
             @view-dashboard="handleViewDashboard"
             @toggle-inline-dashboard="handleToggleInlineDashboard"
             @toggle-thread-sidebar="handleToggleThreadSidebar"
             @toggle-inline-tabs="handleToggleInlineTabs"
             @view-artifacts="(threadId: string) => handleViewArtifacts(threadId)"
-            @new-thread="() => { expandChatIfCollapsed(); rotateQuote(); actor.send({ type: 'CLEAR_THREAD' }) }"
-            @new-thread-in-project="(dir: string) => { expandChatIfCollapsed(); rotateQuote(); actor.send({ type: 'NEW_THREAD_IN_PROJECT', directory: dir }) }"
-            @new-thread-no-project="() => { expandChatIfCollapsed(); rotateQuote(); actor.send({ type: 'NEW_THREAD_NO_PROJECT' }) }"
-            @new-thread-as-child="(parentThreadId: string) => actor.send({ type: 'CREATE_CHILD_THREAD', parentThreadId })"
+            @new-thread="() => { expandChatIfCollapsed(); rotateQuote(); send({ type: 'CLEAR_THREAD' }) }"
+            @new-thread-in-project="(dir: string) => { expandChatIfCollapsed(); rotateQuote(); send({ type: 'NEW_THREAD_IN_PROJECT', directory: dir }) }"
+            @new-thread-no-project="() => { expandChatIfCollapsed(); rotateQuote(); send({ type: 'NEW_THREAD_NO_PROJECT' }) }"
+            @new-thread-as-child="(parentThreadId: string) => send({ type: 'CREATE_CHILD_THREAD', parentThreadId })"
           />
         </div>
       </div>
@@ -228,6 +228,7 @@
     </ConfirmationDialog>
 
     <ImageLightbox v-model="lightboxOpen" :image-src="lightboxSrc" />
+    <ToastNotification ref="toast" />
   </div>
 </template>
 
@@ -238,7 +239,7 @@ import NativeTerminalPlacements from './NativeTerminalPlacements.vue'
 import NativeManagedSettingsNotice from './NativeManagedSettingsNotice.vue'
 import NativeDiagnosticAttachment from './NativeDiagnosticAttachment.vue'
 import NativeToolGroup from './NativeToolGroup.vue'
-import { provide, ref, computed, watch, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
+import { provide, ref, computed, watch, watchPostEffect, nextTick, onMounted, onUnmounted, useCssModule } from 'vue'
 import { claudeMcpTaskStatusLabel } from '#features/code/common/native-mcp-task.ts'
 import { readClaudeDecisionPauseScope, type ClaudeDecisionPauseScope } from '#features/code/common/native-decision-pause.ts'
 import { createScrollPositioning } from './scroll-positioning.ts'
@@ -309,12 +310,12 @@ import PanelResizer from '@apackdev/ui/layout/panel-resizer'
 import ImageLightbox from '@apackdev/ui/design/ImageLightbox'
 import ConfirmationDialog from '@apackdev/ui/design/ConfirmationDialog'
 import ScrollToBottomFob from '@apackdev/ui/design/ScrollToBottomFob'
-import { useSurface, useShell } from '@apackdev/sdk/fe'
+import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
+import ToastNotification from '@apackdev/ui/design/ToastNotification'
 import { openSurface } from '#generated/fe.ts'
-import { useSelector } from '@xstate/vue'
 import { threadsFromStore, type ThreadsState } from '#features/threads/fe/state.ts';
 import type { MessageEntity, MessageSearchResult, ThreadEntity, MessageReferences, QuickPrompt } from '#generated/types.ts'
-import { sendToSystem } from '#generated/events.ts'
+import { tell } from '#generated/events.ts'
 import { queueClaudeUiRetirement } from './native-ui-retirement.ts'
 import { claudeWindowAgentDrafts } from './native-window-draft.ts'
 import { useSettings } from '#generated/settings-fe.ts';
@@ -328,6 +329,17 @@ const nativeTerminalActive = ref(false)
 const mcpFormPending = ref(false)
 const nativeToolsExpanded = ref(false)
 const actor: ThreadsState = useSurface();
+
+// A message, command or fork of this window's that was not done is told here, where it was sent from. Telling and
+// saying so are one step, run once the toast is drawn: the machine drops exactly the failures told
+const toast = ref<InstanceType<typeof ToastNotification>>()
+const { state: threads, send } = useState(actor)
+watchPostEffect(() => {
+  const told = threads.value.data.sendFailures
+  if (!toast.value || told.length === 0) return
+  for (const failure of told) toast.value.error('Message not sent', failure.message)
+  send({ type: 'CHAT.FAILURES_TOLD', told })
+})
 const isOnboarding = shell.isOnboarding;
 // The input's budget excludes tabs/recent threads and follows panel resizing, not the window.
 const composerAreaRef = ref<HTMLElement | null>(null)
@@ -338,14 +350,14 @@ watch(composerAreaRef, (element, _previous, onCleanup) => {
   observer.observe(element); update()
   onCleanup(() => { observer.disconnect(); element.style.removeProperty('--composer-available-height') })
 }, { flush: 'post' })
-const currentMode = useSelector(actor, (state) => state.context.mode)
-const currentThread = useSelector(actor, (state) => state.context.currentThread)
+const currentMode = computed(() => threads.value.data.mode)
+const currentThread = computed(() => threads.value.data.currentThread)
 const nativeQuotaDecisionPending = computed(() => !nativeSessionBackgrounded.value && Object.values(nativeTerminalViews.value).some(view => view.threadId === currentThread.value?.id && view.state?.ownerId === nativeComposerOwner.value?.ownerId && view.state?.notice?.kind === 'cold_resume_quota' && view.state.notice.sessionId === currentThread.value?.context?.claudeCode?.sessionId))
 const nativeAgentsDecisionPending = computed(() => !nativeSessionBackgrounded.value && Object.values(nativeTerminalViews.value).some(view => view.threadId === currentThread.value?.id && (view.state?.notice?.kind === 'left_arrow_confirm' || view.state?.handoffPending === true)))
 const nativeSessionBackgrounded = computed(() => { const native = currentThread.value?.context?.claudeCode; return currentMode.value === 'Claude Code' && !!native?.nativeContinuation && native.nativeContinuation.sessionId === native.sessionId })
 const nativeBackgroundReplyActive = computed(() => nativeSessionBackgrounded.value && nativeBackgroundComposing.value && !nativeTerminalActive.value)
-const allMessages = useSelector(actor, (state) => (state.context.currentThread?.messages || []) as MessageEntity[]);
-const nativeTerminalViews = useSelector(actor, state => state.context.nativeTerminalViews)
+const allMessages = computed(() => (threads.value.data.currentThread?.messages || []) as MessageEntity[]);
+const nativeTerminalViews = computed(() => threads.value.data.nativeTerminalViews)
 const nativeUiMount = ref<{ threadId: string; mountId: string }>()
 const nativeComposerView = computed(() => { const mount = nativeUiMount.value; return mount ? nativeTerminalViews.value[mount.mountId] : undefined })
 const nativeComposerOwner = computed(() => !nativeSessionBackgrounded.value && nativeComposerView.value?.state?.status === 'live' ? nativeComposerView.value.state : undefined)
@@ -362,13 +374,13 @@ const nativePermissionMode = computed(() => {
 function operateMcpForm(action: import('#features/code/common/native-mcp-form.ts').ClaudeNativeMcpFormOperation) {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value, form = owner?.mcpForm
   if (!mount || !owner || !form) return
-  actor.send({ type: 'CLAUDE_TERMINAL_MCP_FORM', ...mount, ownerId: owner.ownerId, sequence: (nativeComposerView.value?.mcpOperation?.sequence ?? 0) + 1,
+  send({ type: 'CLAUDE_TERMINAL_MCP_FORM', ...mount, ownerId: owner.ownerId, sequence: (nativeComposerView.value?.mcpOperation?.sequence ?? 0) + 1,
     request: { id: form.id, revision: form.revision, sessionId: form.sessionId, token: form.token, action } })
 }
 function operateMcpUrl(action: import('#features/code/common/native-mcp-url.ts').ClaudeNativeMcpUrlOperation) {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value, url = owner?.mcpUrl
   if (!mount || !owner || !url) return
-  actor.send({ type: 'CLAUDE_TERMINAL_MCP_URL', ...mount, ownerId: owner.ownerId, sequence: (nativeComposerView.value?.mcpOperation?.sequence ?? 0) + 1,
+  send({ type: 'CLAUDE_TERMINAL_MCP_URL', ...mount, ownerId: owner.ownerId, sequence: (nativeComposerView.value?.mcpOperation?.sequence ?? 0) + 1,
     request: { id: url.id, revision: url.revision, sessionId: url.sessionId, token: url.token, action } })
 }
 const visibleMessages = computed(() => selectClaudeFocusMessages(allMessages.value, nativeComposerOwner.value));
@@ -382,12 +394,14 @@ const conversationMessages = computed(() => visibleMessages.value
     const text = claudeUserMessageText(message)
     return text === message.text ? message : { ...message, text }
   }));
-const chatMessageCount = useSelector(actor, state => state.context.chatMessageIds.length);
-const messagePagination = useSelector(actor, (state) => state.context.messagePagination);
+const chatMessageCount = computed(() => threads.value.data.chatMessageIds.length);
+const messagePagination = computed(() => threads.value.data.messagePagination);
 const messagesReady = computed(() => !messagePagination.value.isLoading && allMessages.value.length >= chatMessageCount.value);
 // The message to bring into view, while the thread shown is its own
-const focusMessageId = useSelector(actor, ({ context }) =>
-  context.focusMessage && context.focusMessage.threadId === context.currentThread?.id ? context.focusMessage.messageId : null);
+const focusMessageId = computed(() => {
+  const context = threads.value.data
+  return context.focusMessage && context.focusMessage.threadId === context.currentThread?.id ? context.focusMessage.messageId : null
+});
 const style = useCssModule();
 
 // Scroll preservation for prepending older messages
@@ -396,11 +410,11 @@ let prependScroll: { height: number; top: number } | undefined;
 // Asks only when the machine takes the ask (`loadMoreMessages`): one it dropped would leave the page already loading,
 // a focused message's seek's, handled as this prepend
 function requestLoadMore() {
-  if (messagePagination.value.isLoading || !messagePagination.value.hasMore) return;
+  if (threads.value.data.messagePagination.isLoading || !threads.value.data.messagePagination.hasMore) return;
   const el = messagesContainer.value;
   if (!el) return;
   prependScroll = { height: el.scrollHeight, top: el.scrollTop };
-  actor.send({ type: 'LOAD_MORE_MESSAGES' });
+  send({ type: 'LOAD_MORE_MESSAGES' });
 }
 
 /** Rows with no later processed user message are eligible for queued/cancelled actions. */
@@ -418,12 +432,12 @@ const tailMessageIds = computed(() => {
 const nativeBlockExpansion = ref<Record<string, number[]>>({})
 const nativeBlockVisibility = ref<Record<string, number[]>>({})
 const nativeUserExpansion = ref<Record<string, boolean>>({})
-const nativeUiViews = useSelector(actor, state => state.context.nativeUiViews)
+const nativeUiViews = computed(() => threads.value.data.nativeUiViews)
 const nativeActionKey = createClaudeActionKeyHandler(() => {
   const mount = nativeUiMount.value
   const view = mount && mount.threadId === currentThread.value?.id ? nativeUiViews.value[mount.mountId] : undefined
   return { scope: mount && view?.attachmentId ? `${mount.mountId}:${view.attachmentId}` : undefined, keys: view?.state.actionKeys, result: view?.actionKeyResult }
-}, request => { const mount = nativeUiMount.value; if (mount) actor.send({ type: 'CLAUDE_UI_KEY', ...mount, ...request }) })
+}, request => { const mount = nativeUiMount.value; if (mount) send({ type: 'CLAUDE_UI_KEY', ...mount, ...request }) })
 const nativeUiDrawing = computed(() => {
   if (nativeSessionBackgrounded.value) return
   const mount = nativeUiMount.value
@@ -437,8 +451,8 @@ const nativeFocus = computed(() => {
 function renewNativeUi() {
   const mount = nativeUiMount.value
   if (mount && mount.threadId === currentThread.value?.id) {
-    actor.send({ type: 'CLAUDE_UI_MOUNT', promptFocused: document.hasFocus(), ...mount, messageIds: visibleMessages.value.map(message => message.id), userExpansion: nativeUserExpansion.value, blockExpansion: nativeBlockVisibility.value })
-    actor.send({ type: 'CLAUDE_TERMINAL_MOUNT', ...mount })
+    send({ type: 'CLAUDE_UI_MOUNT', promptFocused: document.hasFocus(), ...mount, messageIds: visibleMessages.value.map(message => message.id), userExpansion: nativeUserExpansion.value, blockExpansion: nativeBlockVisibility.value })
+    send({ type: 'CLAUDE_TERMINAL_MOUNT', ...mount })
   }
 }
 function reportNativeBlockView(view: { messageId: string; blockIndex: number; open: boolean }) {
@@ -466,19 +480,19 @@ function reportNativeMessageView(view: { messageId: string; isExpanded: boolean 
 }
 function operateNativeNotice(event: import('#generated/types.ts').ClaudeUiNoticeEvent) {
   const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_UI_NOTICE', ...mount, ...event })
+  if (mount) send({ type: 'CLAUDE_UI_NOTICE', ...mount, ...event })
 }
 function scrollNativeUi(event: import('#generated/types.ts').ClaudeUiScrollEvent) {
   const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_UI_SCROLL', ...mount, ...event })
+  if (mount) send({ type: 'CLAUDE_UI_SCROLL', ...mount, ...event })
 }
 function operateNativePane(event: import('#generated/types.ts').ClaudeUiPaneEvent) {
   const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_UI_PANE', ...mount, ...event })
+  if (mount) send({ type: 'CLAUDE_UI_PANE', ...mount, ...event })
 }
 function focusNativeUi(event: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiFocusEvent) {
   const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_UI_FOCUS', ...mount, ...event })
+  if (mount) send({ type: 'CLAUDE_UI_FOCUS', ...mount, ...event })
 }
 const nativePrompt = computed(() => {
   if (nativeSessionBackgrounded.value) return
@@ -490,15 +504,15 @@ const nativePrompt = computed(() => {
 })
 function answerPromptHost(response: import('#generated/types.ts').ClaudePromptHostResponse) {
   const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...mount, ...response })
+  if (mount) send({ type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...mount, ...response })
 }
 function completeNativePrompt(request: import('#generated/types.ts').ClaudePromptCompletionRequest) {
   const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...mount, ...request })
+  if (mount) send({ type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...mount, ...request })
 }
 function editNativePrompt(edit: import('#generated/types.ts').ClaudePromptEdit) {
   const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_PROMPT_EDIT', ...mount, ...edit })
+  if (mount) send({ type: 'CLAUDE_PROMPT_EDIT', ...mount, ...edit })
 }
 let heartbeat: ReturnType<typeof setInterval> | undefined
 let stopNativeUiWatch: (() => void) | undefined
@@ -513,28 +527,28 @@ function detachNativeUi() {
   nativeBlockVisibility.value = {}
   if (mount) {
     const snapshot = actor.getSnapshot()
-    const resumeKey = snapshot.context.nativeUiViews[mount.mountId]?.resumeKey
+    const resumeKey = threads.value.data.nativeUiViews[mount.mountId]?.resumeKey
     if (resumeKey) queueClaudeUiRetirement({ ...mount, resumeKey })
-    if (snapshot.status !== 'stopped') actor.send({ type: 'CLAUDE_UI_UNMOUNT', ...mount })
-    actor.send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...mount })
+    if (snapshot.status !== 'stopped') send({ type: 'CLAUDE_UI_UNMOUNT', ...mount })
+    send({ type: 'CLAUDE_TERMINAL_UNMOUNT', ...mount })
   }
   pendingNativeSend.value?.reject(new Error('Claude conversation view changed')); pendingNativeSend.value = undefined
 }
-provide(claudeTranscriptLayout, event => { const mount = nativeUiMount.value; if (mount) actor.send({ type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT', ...mount, ...event }) })
+provide(claudeTranscriptLayout, event => { const mount = nativeUiMount.value; if (mount) send({ type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT', ...mount, ...event }) })
 provide(claudeClientReturnFocus,()=>mainComposer.value?.focus())
 let nativeClientSequence=0
 provide(claudeClientInput,(id,event)=>{
  const mount=nativeUiMount.value;if(!mount)return
  const sequence=++nativeClientSequence
- actor.send({type:'CLAUDE_UI_CLIENT',...mount,id,sequence,event})
+ send({type:'CLAUDE_UI_CLIENT',...mount,id,sequence,event})
 })
 function editNativeUi(event: import('#generated/types.ts').ClaudeUiFieldEvent) {
   const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_UI_FIELD', ...mount, ...event })
+  if (mount) send({ type: 'CLAUDE_UI_FIELD', ...mount, ...event })
 }
 function pressNativeUi(actionId: string, href?: string) {
   const mount = nativeUiMount.value
-  if (mount) actor.send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
+  if (mount) send({ type: 'CLAUDE_UI_PRESS', ...mount, actionId, ...(href !== undefined ? { href } : {}) })
 }
 function mountNativeUi() {
   detachNativeUi()
@@ -559,26 +573,24 @@ watch(() => JSON.stringify(visibleMessages.value.map(message => message.id)), re
 const scrollPositioning = createScrollPositioning(callback => requestAnimationFrame(callback), id => cancelAnimationFrame(id))
 watch(() => currentThread.value?.id, () => scrollPositioning.reset(), { flush: 'sync' })
 onUnmounted(() => scrollPositioning.reset())
-const recentThreadIds = useSelector(actor, (state) => state.context.recentThreadIds)
-const threadMap = useSelector(actor, (state) => state.context.threadMap)
+const recentThreadIds = computed(() => threads.value.data.recentThreadIds)
+const threadMap = computed(() => threads.value.data.threadMap)
 const recentThreads = computed(() => threadsFromStore(threadMap.value, recentThreadIds.value) as ThreadEntity[])
-const currentPhase = useSelector(actor, (state) => state.context.phase)
+const currentPhase = computed(() => threads.value.data.phase)
 function setComposerPhase(phase: string) {
-  if (nativeComposerOwner.value && currentThread.value?.context?.claudeCode && (phase === 'Plan' || phase === 'Edit')) actor.send({ type: 'STAGE_CLAUDE_PHASE', phase })
-  else actor.send({ type: 'SET_PHASE', phase })
+  if (nativeComposerOwner.value && currentThread.value?.context?.claudeCode && (phase === 'Plan' || phase === 'Edit')) send({ type: 'STAGE_CLAUDE_PHASE', phase })
+  else send({ type: 'SET_PHASE', phase })
 }
-const modes = useSelector(actor, (state) => state.context.modes)
-const hotkeys = useSelector(actor, (state) => state.context.hotkeys)
-const quickPrompts = useSelector(actor, (state) => (state.context.chatSettings?.quickPrompts || []) as QuickPrompt[])
-const quickPromptNumberKeyInserts = useSelector(actor, (state) => state.context.chatSettings?.quickPromptNumberKeyInserts ?? true)
-const quickPromptCursor = useSelector(actor, (state) => state.context.quickPromptCursor)
-const recordingLimitMinutes = useSelector(actor, (state) => state.context.settings?.recordingLimitMinutes ?? 3)
+const quickPrompts = computed(() => (threads.value.data.chatSettings?.quickPrompts || []) as QuickPrompt[])
+const quickPromptNumberKeyInserts = computed(() => threads.value.data.chatSettings?.quickPromptNumberKeyInserts ?? true)
+const recordingLimitMinutes = computed(() => threads.value.data.settings?.recordingLimitMinutes ?? 3)
 // The fallback uses the current thread's raw chat state: the one the user
 // marked as "busy" in settings. Intentionally ignores chatStateOverrides
 // (the short-lived flash used to surface terminal states like success/error):
 // pausing a transient visual flash is semantically wrong — we only want
 // Pause/Esc to act on active work. MCP input also retains an explicit stop action.
-const conversationBusy = useSelector(actor, ({ context }) => {
+const conversationBusy = computed(() => {
+  const context = threads.value.data
   const busyId = context.settings?.chatStates?.find(c => c.busy)?.id
   const threadId = context.currentThread?.id
   return !!context.currentThread?.context?.claudeCode?.pendingElicitation || !!busyId && !!threadId && context.chatStates[threadId] === busyId
@@ -649,8 +661,8 @@ provide(claudeTaskControls, {
       agentSelection.value = { threadId, mountId: lease[0], ownerId: owner.ownerId, sessionId: owner.sessionId, taskId: task.id, revision }
       detachNativeUi()
     }
-    if (operation === 'skip_worker' || operation === 'retry_worker') { if (!worker || task.kind !== 'workflow') return; actor.send({ ...request, operation, worker }); return revision }
-    actor.send((operation === 'send' || operation === 'input') ? { ...request, operation, text: text ?? '' } : { ...request, operation })
+    if (operation === 'skip_worker' || operation === 'retry_worker') { if (!worker || task.kind !== 'workflow') return; send({ ...request, operation, worker }); return revision }
+    send((operation === 'send' || operation === 'input') ? { ...request, operation, text: text ?? '' } : { ...request, operation })
     return revision
   },
 })
@@ -673,29 +685,29 @@ const mainCommandView = computed(() => mainPanelActive.value || mainCommand.valu
 function dismissMainOutput() { mainDismissedRevision.value = mainCommand.value?.revision; mainOutputExpanded.value = false; void nextTick(() => mainComposer.value?.focus()) }
 function mainPanel(text?: string) {
   const mount = nativeUiMount.value, state = mainCommand.value
-  if (mount && state?.panel) actor.send({ type: 'CLAUDE_UI_COMMAND_PANEL', ...mount, revision: state.revision, panelId: state.panel.id, ...(text !== undefined ? { text } : {}) })
+  if (mount && state?.panel) send({ type: 'CLAUDE_UI_COMMAND_PANEL', ...mount, revision: state.revision, panelId: state.panel.id, ...(text !== undefined ? { text } : {}) })
 }
 let agentsGestureSequence = 0
 function pressNativeAgentsGesture(request: { mountId: string; revision: number }) {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value
   if (!mount || mount.mountId !== request.mountId || owner?.view?.kind !== 'main') return
-  actor.send({ type: 'CLAUDE_UI_AGENTS_GESTURE', ...mount, sequence: ++agentsGestureSequence, revision: request.revision })
+  send({ type: 'CLAUDE_UI_AGENTS_GESTURE', ...mount, sequence: ++agentsGestureSequence, revision: request.revision })
 }
 function mainBackgroundReview(request: { panelId: string; revision: string; decision: 'confirm' | 'cancel' }) {
   const mount = nativeUiMount.value, state = mainCommand.value
-  if (mount && state?.panel?.id === request.panelId && state.backgroundReview?.review?.revision === request.revision) actor.send({ type: 'CLAUDE_UI_BACKGROUND_REVIEW', ...mount, revision: state.revision, panelId: request.panelId, sourceRevision: request.revision, decision: request.decision })
+  if (mount && state?.panel?.id === request.panelId && state.backgroundReview?.review?.revision === request.revision) send({ type: 'CLAUDE_UI_BACKGROUND_REVIEW', ...mount, revision: state.revision, panelId: request.panelId, sourceRevision: request.revision, decision: request.decision })
 }
 function mainSettings(request: import('#features/code/common/native-settings.ts').ClaudeSettingsRequest) {
   const mount = nativeUiMount.value, state = mainCommand.value
-  if (mount && state?.panel) actor.send({ type: 'CLAUDE_UI_SETTINGS', ...mount, revision: state.revision, panelId: state.panel.id, requestId: request.requestId, action: request.action })
+  if (mount && state?.panel) send({ type: 'CLAUDE_UI_SETTINGS', ...mount, revision: state.revision, panelId: state.panel.id, requestId: request.requestId, action: request.action })
 }
 function mainPanelResize(size: import('#features/code/common/native-terminal.ts').ClaudeNativeTerminalSize) {
   const mount = nativeUiMount.value, owner = nativeComposerOwner.value
-  if (mount && owner) actor.send({ type: 'CLAUDE_TERMINAL_RESIZE', ...mount, ownerId: owner.ownerId, ...size })
+  if (mount && owner) send({ type: 'CLAUDE_TERMINAL_RESIZE', ...mount, ownerId: owner.ownerId, ...size })
 }
 function mainCommandDecision(decision: 'confirm' | 'cancel') {
   const mount = nativeUiMount.value, state = mainCommand.value
-  if (mount && state?.command) actor.send({ type: 'CLAUDE_UI_COMMAND_DECISION', ...mount, revision: state.revision, commandId: state.command.id, decision })
+  if (mount && state?.command) send({ type: 'CLAUDE_UI_COMMAND_DECISION', ...mount, revision: state.revision, commandId: state.command.id, decision })
 }
 watch(() => mainCommand.value?.status, (status, before) => {
   if (before === 'panel' && status !== 'panel' || before === 'deciding' && status !== 'deciding') void nextTick(() => mainComposer.value?.focus())
@@ -754,23 +766,23 @@ function answerNativeQuestion(answer: import('#features/code/common/native-quest
   if (!question?.frame || question.messageId !== identity.messageId) return
   const token = identity.token
   if (!token) return
-  actor.send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: question.messageId, response: { nativeQuestionAnswer: answer, nativeQuestionRenderToken: token, nativeQuestionDraftStarted: true } })
+  send({ type: 'RESPOND_TO_BLOCK_INTERACTION', messageId: question.messageId, response: { nativeQuestionAnswer: answer, nativeQuestionRenderToken: token, nativeQuestionDraftStarted: true } })
 }
 
 function rejectNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
   const question = pendingNativeQuestion.value, mount = nativeUiMount.value
   if (!mount || !question?.frame || question.messageId !== identity.messageId || !identity.token || nativeComposerOwner.value?.view?.kind !== 'main') return
-  actor.send({ type: 'CLAUDE_UI_QUESTION_REJECT', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token })
+  send({ type: 'CLAUDE_UI_QUESTION_REJECT', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token })
 }
 
 function pauseNativeDecision(scope?: ClaudeDecisionPauseScope) {
   const mount = nativeUiMount.value;
-  if (mount && scope) actor.send({ type: 'CLAUDE_UI_DECISION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, scope });
+  if (mount && scope) send({ type: 'CLAUDE_UI_DECISION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, scope });
 }
 function pauseNativeQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
   const question = pendingNativeQuestion.value, mount = nativeUiMount.value;
   if (!mount || !question?.frame || question.messageId !== identity.messageId || !identity.token) return;
-  actor.send({ type: 'CLAUDE_UI_QUESTION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token });
+  send({ type: 'CLAUDE_UI_QUESTION_PAUSE', threadId: mount.threadId, mountId: mount.mountId, messageId: identity.messageId, token: identity.token });
 }
 
 let nativeSendRevision = 0
@@ -782,7 +794,7 @@ function submitNativeMessage(text: string, references: MessageReferences): Promi
   return new Promise((resolve, reject) => {
     const revision = ++nativeSendRevision
     pendingNativeSend.value = { ownerId: owner.ownerId, revision, threadId: mount.threadId, stageRevision: readClaudeComposerPhase(mount.threadId)?.revision, resolve, reject }
-    actor.send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, revision, text, references, phase: currentPhase.value === 'Plan' ? 'Plan' : 'Edit' })
+    send({ type: 'CLAUDE_TERMINAL_SUBMIT', ...mount, ownerId: owner.ownerId, revision, text, references, phase: currentPhase.value === 'Plan' ? 'Plan' : 'Edit' })
     pendingScrollOnSend.value = true
   })
 }
@@ -879,7 +891,6 @@ const nativeConversationNavigation = computed(() => !!currentThread.value?.conte
 const pendingScrollOnSend = ref(false)
 const lightboxOpen = ref(false)
 const lightboxSrc = ref('')
-const settings = useSelector(actor, (state) => state.context.chatSettings)
 const showRevertDialog = ref(false)
 const pendingRevertMessageId = ref<string | null>(null)
 const dontAskAgain = ref(false)
@@ -905,23 +916,23 @@ function handleStatuslineClick() {
 }
 
 function handleSendMessage(text: string, references?: MessageReferences) {
-  actor.send({ type: 'SEND_MESSAGE', text, references })
+  send({ type: 'SEND_MESSAGE', text, references })
   pendingScrollOnSend.value = true
 }
 
 function handleUnqueue(messageId: string) {
   if (currentThread.value?.id) {
-    actor.send({ type: 'UNQUEUE_MESSAGE', threadId: currentThread.value.id, messageId })
+    send({ type: 'UNQUEUE_MESSAGE', threadId: currentThread.value.id, messageId })
   }
 }
 
 function handleResend(messageId: string, text: string, references?: any) {
-  actor.send({ type: 'DISMISS_MESSAGE', messageId })
+  send({ type: 'DISMISS_MESSAGE', messageId })
   handleSendMessage(text, references)
 }
 
 function handleSendCommand(command: string, text: string, references?: MessageReferences) {
-  actor.send({ type: 'SEND_COMMAND', command, text, references })
+  send({ type: 'SEND_COMMAND', command, text, references })
   pendingScrollOnSend.value = true
 }
 
@@ -931,7 +942,7 @@ function onScroll() {
   if (!currentThread.value?.context?.claudeCode) isNearBottom.value = el.scrollHeight - el.scrollTop - el.clientHeight < 100
 
   // Trigger load-more when scrolled near the top
-  if (scrollPositioning.ready() && el.scrollTop < 100 && messagePagination.value.hasMore && !prependScroll) {
+  if (scrollPositioning.ready() && el.scrollTop < 100 && threads.value.data.messagePagination.hasMore && !prependScroll) {
     requestLoadMore()
   }
 }
@@ -1018,15 +1029,15 @@ function handleRevert(messageId: string, restoreFiles = false, skipConfirm = fal
   if (msg?.status === 'queued' || msg?.status === 'cancelled') {
     prefillInput(msg)
     if (msg.status === 'queued' && currentThread.value?.id) {
-      actor.send({ type: 'UNQUEUE_MESSAGE', threadId: currentThread.value.id, messageId })
+      send({ type: 'UNQUEUE_MESSAGE', threadId: currentThread.value.id, messageId })
     }
-    actor.send({ type: 'DISMISS_MESSAGE', messageId })
+    send({ type: 'DISMISS_MESSAGE', messageId })
     return
   }
 
   pendingRestoreFiles = restoreFiles
   pendingIsSummarize.value = false
-  if (skipConfirm || settings.value?.skipRevertConfirm) {
+  if (skipConfirm || threads.value.data.chatSettings?.skipRevertConfirm) {
     doRevert(messageId)
   } else {
     pendingRevertMessageId.value = messageId
@@ -1037,7 +1048,7 @@ function handleRevert(messageId: string, restoreFiles = false, skipConfirm = fal
 function handleSummarize(messageId: string, skipConfirm = false) {
   pendingRestoreFiles = false
   pendingIsSummarize.value = true
-  if (skipConfirm || settings.value?.skipRevertConfirm) {
+  if (skipConfirm || threads.value.data.chatSettings?.skipRevertConfirm) {
     doSummarize(messageId)
   } else {
     pendingRevertMessageId.value = messageId
@@ -1078,7 +1089,7 @@ function prefillInput(msg: MessageEntity | undefined) {
 function doRevert(messageId: string) {
   if (!currentThread.value?.id) return
   const msg = allMessages.value.find(m => m.id === messageId)
-  actor.send({
+  send({
     type: 'REVERT_THREAD',
     messageId,
     threadId: currentThread.value.id,
@@ -1094,7 +1105,7 @@ function doRevert(messageId: string) {
 function doSummarize(messageId: string) {
   if (!currentThread.value?.id) return
   const msg = allMessages.value.find(m => m.id === messageId)
-  actor.send({
+  send({
     type: 'SUMMARIZE_THREAD',
     messageId,
     threadId: currentThread.value.id,
@@ -1103,7 +1114,7 @@ function doSummarize(messageId: string) {
 }
 
 function handleToggleCompacted(markerId: string, compacted: boolean) {
-  sendToSystem('threads', {
+  tell('threads', {
     type: 'TOGGLE_COMPACTED',
     markerId,
     compacted,
@@ -1126,12 +1137,12 @@ function showFocusedMessage(messages: MessageEntity[]): boolean {
     scrollPositioning.position(() => el.scrollIntoView({ block: 'center' }))
     el.classList.add(style.focused)
     setTimeout(() => el.classList.remove(style.focused), 1600)
-    actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
+    send({ type: 'FOCUSED_MESSAGE_SHOWN' })
     return true
   }
   const message = messages.find(m => m.id === focused)
   if (!message || !(message as any).compacted) return true
-  actor.send({ type: 'FOCUSED_MESSAGE_SHOWN' })
+  send({ type: 'FOCUSED_MESSAGE_SHOWN' })
   return false
 }
 

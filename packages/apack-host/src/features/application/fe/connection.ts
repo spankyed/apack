@@ -1,9 +1,9 @@
 // This window's subscription to the bus, held by a child actor over the shell's client: the connection's lifecycle
 // becomes the shell's events, and each message goes to the surface it's for — named as it is handled, so a send
 // that surface makes in answer carries its own ref (`notifySurfaceActor`/`sendToSurfaceActor`). This is the path every backend
-// `broadcastToSurface` takes, and it set no name until it was tested for one.
+// `broadcast` takes, and it set no name until it was tested for one.
 import { fromCallback } from 'xstate';
-import { senderSuffix } from '@apackdev/sdk/events';
+import { _settleAsk, senderSuffix } from '@apackdev/sdk/events';
 import type { ShellClient } from '../../../fe/client.ts';
 import { notifySurfaceActor, sendToSurfaceActor } from '../../../fe/surface-delivery.ts';
 import { HOST } from '../../../refs.ts';
@@ -16,6 +16,9 @@ export function connectionListener(client: ShellClient) {
     onFailed: (error) => sendBack({ type: 'BACKEND_ERROR', error }),
     // The event arrives exactly as the system sent it
     onMessage: (message) => {
+      // An answer to an ask this window is waiting on is that ask's, and goes to no surface: its address is only what
+      // brought it to this window (`ask`, `@apackdev/sdk/events`)
+      if (_settleAsk(message)) return;
       const { to, event, sender } = message;
       if (to === HOST.application) {
         // Every window hears it; the shell tells a backend's request to open a surface from its own window's

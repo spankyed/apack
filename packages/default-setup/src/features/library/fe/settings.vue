@@ -194,16 +194,15 @@
 
 <script setup lang="ts">
 import { Plus, X, Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useSettingsDraft, useSurface } from '@apackdev/sdk/fe'
+import { useSettingsDraft, useState } from '@apackdev/sdk/fe'
+import type { LibraryActor } from './state.ts'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 import ColorPicker, { DEFAULT_COLORS } from '@apackdev/ui/design/ColorPicker'
 import { useDebounce } from '@apackdev/ui/composables/useDebounce'
-import { useSelector } from '@xstate/vue'
-import type { LibraryActor } from './state.ts'
 
 interface LibraryTagOption {
   name: string
@@ -254,27 +253,35 @@ const removeTag = (index: number) => {
   }
 }
 
-// Get library actor and state via selectors
-const libraryActor: LibraryActor = useSurface()
+// The import and the export are the surface's machine's: it makes each, and holds how the last one ended. What an
+// earlier visit to this form left is not shown again
+const { state: surface, send } = useState<LibraryActor>()
+send({ type: 'FORGET_IMPORT' })
+send({ type: 'FORGET_EXPORT' })
 
-// Import state
-const isImporting = useSelector(libraryActor, (state) => state.context.libraryImport.status === 'importing')
-const importStatus = useSelector(libraryActor, (state) => state.context.libraryImport.status)
-const applyErrors = useSelector(libraryActor, (state) => state.context.libraryImport.errors)
-const importedCount = useSelector(libraryActor, (state) => state.context.libraryImport.importedCount)
+// How the last import ended, shown until another is picked
+const imported = computed(() => surface.value.data.imported)
+const isImporting = computed(() => surface.value.data.making.importLibrary)
+const importStatus = computed(() => (imported.value === undefined ? 'idle' : imported.value.ok ? 'success' : 'error'))
+const applyErrors = computed(() => {
+  if (imported.value === undefined) return []
+  return imported.value.ok ? imported.value.value.errors ?? [] : imported.value.failure.message.split('\n')
+})
+const importedCount = computed(() => (imported.value?.ok ? imported.value.value.count : 0))
 
-// Export state
+// How the last export ended, shown until another is made
 const exportFormat = ref<'markdown' | 'json'>('markdown')
 const exportDirectory = ref<string>('')
-const isExporting = useSelector(libraryActor, (state) => state.context.libraryExport.status === 'exporting')
-const exportStatus = useSelector(libraryActor, (state) => state.context.libraryExport.status)
-const exportErrors = useSelector(libraryActor, (state) => state.context.libraryExport.errors)
-const exportedFilePath = useSelector(libraryActor, (state) => state.context.libraryExport.filePath)
-const exportedItemCount = useSelector(libraryActor, (state) => state.context.libraryExport.itemCount)
+const exported = computed(() => surface.value.data.exported)
+const isExporting = computed(() => surface.value.data.making.exportLibrary)
+const exportStatus = computed(() => (exported.value === undefined ? 'idle' : exported.value.ok ? 'success' : 'error'))
+const exportErrors = computed(() => (exported.value?.ok === false ? [exported.value.failure.message] : []))
+const exportedFilePath = computed(() => (exported.value?.ok ? exported.value.value.filePath : ''))
+const exportedItemCount = computed(() => (exported.value?.ok ? exported.value.value.itemCount : 0))
 
-// Import - directory picker and send to state machine
+// Import - directory picker, then the machine's ask
 const selectAndImportLibrary = async () => {
-  libraryActor.send({ type: 'LIBRARY.RESET_IMPORT_STATUS' })
+  send({ type: 'FORGET_IMPORT' })
 
   const directory = await window.electronAPI?.fileUtils.selectPath({
     type: 'directory'
@@ -282,10 +289,7 @@ const selectAndImportLibrary = async () => {
 
   if (!directory || Array.isArray(directory)) return
 
-  libraryActor.send({
-    type: 'LIBRARY.IMPORT',
-    directory,
-  })
+  send({ type: 'IMPORT', directory })
 }
 
 // Export
@@ -294,9 +298,8 @@ const selectExportDirectory = async () => {
   if (dir && typeof dir === 'string') exportDirectory.value = dir
 }
 
-const exportLibraryToFile = () => {
+const exportLibraryToFile = async () => {
   if (!exportDirectory.value) return
-  libraryActor.send({ type: 'LIBRARY.RESET_EXPORT_STATUS' })
-  libraryActor.send({ type: 'LIBRARY.EXPORT', directory: exportDirectory.value, format: exportFormat.value })
+  send({ type: 'EXPORT', directory: exportDirectory.value, format: exportFormat.value })
 }
 </script>

@@ -2,7 +2,7 @@
   <div class="flex flex-col h-full bg-neutral-900/50 backdrop-blur-sm">
     <!-- Event List -->
     <div class="flex-1 overflow-y-auto">
-      <div v-if="flowEvents.length === 0 && !isLoadingRuns" class="flex flex-col items-center justify-center h-full px-4 text-center">
+      <div v-if="database.data.flowEvents.length === 0 && !isLoadingRuns" class="flex flex-col items-center justify-center h-full px-4 text-center">
         <div class="flex items-center justify-center w-12 h-12 mb-3 rounded-lg bg-neutral-800/30">
           <svg class="w-6 h-6 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -14,11 +14,11 @@
       <div v-else class="p-4">
         <div class="space-y-1">
           <RunNodeListItem
-            v-for="event in flowEvents"
+            v-for="event in database.data.flowEvents"
             :key="event.id"
             :node="event"
-            :node-details="nodeDetails.get(event.id)"
-            :node-details-map="nodeDetails"
+            :node-details="database.data.nodeDetails.get(event.id)"
+            :node-details-map="database.data.nodeDetails"
             :depth="0"
             @toggle="toggleNode"
             @request-details="requestNodeDetails"
@@ -27,7 +27,7 @@
         </div>
         
         <!-- Load More Button -->
-        <div v-if="runPagination.hasMore" class="flex justify-center mt-4">
+        <div v-if="database.data.runPagination.hasMore" class="flex justify-center mt-4">
           <button
             @click="loadMore"
             :disabled="isLoadingRuns"
@@ -43,39 +43,37 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
-import { useSelector } from '@xstate/vue'
-import type { DatabaseState } from '../../state.ts'
+import { computed } from 'vue'
+import { isLoadingRuns as readingRuns, type DatabaseState } from '../../state.ts'
 import { Loader2 } from 'lucide-vue-next'
 import RunNodeListItem from '@apackdev/ui/components/RunNodeListItem'
 
 const databaseActor: DatabaseState = useSurface()
 
 // State selectors
-const flowEvents = useSelector(databaseActor, (state) => state.context.flowEvents)
-const nodeDetails = useSelector(databaseActor, (state) => state.context.nodeDetails)
-const isLoadingRuns = useSelector(databaseActor, (state) => state.context.isLoadingRuns)
-const runPagination = useSelector(databaseActor, (state) => state.context.runPagination)
+const { state: database, send } = useState(databaseActor)
+const isLoadingRuns = computed(() => readingRuns(database.value.data.making))
 
 // Actions
 function toggleNode(nodeId: string) {
-  databaseActor.send({ type: 'RUNS.EXPAND_NODE', nodeId })
+  send({ type: 'RUNS.EXPAND_NODE', nodeId })
 }
 
 function requestNodeDetails(nodeId: string) {
   // Request node details if not already loaded
-  if (!nodeDetails.value.has(nodeId)) {
-    databaseActor.send({ type: 'RUNS.EXPAND_NODE', nodeId })
+  if (!database.value.data.nodeDetails.has(nodeId)) {
+    send({ type: 'RUNS.EXPAND_NODE', nodeId })
   }
 }
 
 function loadMore() {
-  databaseActor.send({ type: 'RUNS.LOAD_MORE' })
+  send({ type: 'RUNS.LOAD_MORE' })
 }
 
 function openFlow(flowId: string) {
   // Send event to select the flow that was double-clicked
-  databaseActor.send({ type: 'RUNS.SELECT_FLOW', flowId })
+  send({ type: 'RUNS.SELECT_FLOW', flowId })
 }
 </script>

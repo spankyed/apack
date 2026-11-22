@@ -1,10 +1,10 @@
-// `apack-terminal-view`, as much of it as the code surface's pool uses, standing in for the real one.
+// `@apackdev/terminal-view`, as much of it as the code surface's pool uses, standing in for the real one.
 //
 // The real view paints on a canvas and speaks to a broker, neither of which a case about the pool or a
 // host has: what they are about is which session a terminal is drawn from, where it is mounted, and what
 // the host is told. So the stand-in records exactly that — every view made, with the session it was made
 // for and what was asked of it — and lets a case say what a real view would have reported.
-import type { Command, ViewOptions } from 'apack-terminal-view'
+import type { Command, ViewOptions } from '@apackdev/terminal-view'
 
 export interface FakeView {
   readonly session: string
@@ -96,7 +96,7 @@ export const lastView = (): FakeView => {
   return view
 }
 
-/** What `vi.mock('apack-terminal-view', …)` answers with */
+/** What `vi.mock('@apackdev/terminal-view', …)` answers with */
 export function viewModule(): Record<string, unknown> {
   class BrokerViews {
     private readonly closing = new Set<() => void>()

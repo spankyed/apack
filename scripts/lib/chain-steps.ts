@@ -45,7 +45,7 @@ export interface ChainStep {
   readonly outputs?: readonly string[];
   /**
    * Generated trees inside `inputs` that this step declares the parent of and never reads. Every gitignored
-   * input has to be accounted for — `packages/repo-checks/tests/chain-inputs.spec.ts` fails one that is neither a step's
+   * input has to be accounted for — `packages/internal-repo-checks/tests/chain-inputs.spec.ts` fails one that is neither a step's
    * output you depend on nor listed here — because an unaccounted one is either an undeclared dependency
    * (a race) or churn that stops the step ever caching. Each entry is a claim that the step reads around
    * the tree, so it belongs with evidence.
@@ -335,16 +335,9 @@ export function orderedSteps(given: readonly ChainStep[] = CHAIN_STEPS): readonl
  */
 /**
  * The files every step really does read: the installed toolchain, because a dependency moving changes what any of
- * them do, by the records that pin it — the lockfile, and every vendored checkout's commit (`vendor/*.rev`).
- * Like the lockfile for `node_modules`, a pin stands for what it names. Where a checkout is not at its pin, or
- * has uncommitted changes, a step's key says so beside these (`vendoredOffPin`, added in `unitFor`): a step that
- * ran against another commit is not current once the checkout is at the pinned one.
- *
- * **Derived from the pins rather than naming a checkout**, so a third sibling is declared the day its `.rev` is
- * committed — which is the rule the guide states for everything that reads `vendor/`. The `.rev` files are tracked,
- * where the links beside them are not, so this reads the same here as in CI; naming `vendor/elmdb.rev` alone left
- * every leg that compiles against `apack-terminal` with nothing to re-run it, and only CI could see that, since a
- * sibling checkout's reads resolve outside the repo entirely.
+ * them do, by the record that pins it — the lockfile, which names every package by its integrity, the ones the root's
+ * `overrides` take from another repository's release (elmdb, EARS, the git engine, the terminal broker and its view)
+ * among them. Like the lockfile for `node_modules`, it stands for what it names.
  *
  * **`package.json` is not here**, and that is the point. Hashing the whole manifest to key on each step's
  * command would turn an edit to one script into a full chain. A unit carries its own `command`
@@ -354,27 +347,7 @@ export function orderedSteps(given: readonly ChainStep[] = CHAIN_STEPS): readonl
  * changes `EVERY_WORKSPACE`, which changes the declared path list, which `fingerprintUnit` hashes. And
  * each workspace's own manifest is already an input through `WORKSPACE_PARTS`.
  */
-const VENDOR_PINS = fs.existsSync(path.join(REPO_ROOT, 'vendor'))
-  ? fs.readdirSync(path.join(REPO_ROOT, 'vendor')).filter((name) => name.endsWith('.rev')).sort()
-    .map((name) => `vendor/${name}`)
-  : [];
-const ROOT = ['package-lock.json', ...VENDOR_PINS];
-
-/**
- * The terminal broker the app runs: `@app/terminal-broker`'s resolver and the pin naming the release build its
- * install fetched. **An input of every step that starts the broker** — the host pool's terminal suites and every
- * step that launches the app — since the host loads it at run time rather than importing it, which leaves it out
- * of the dependency edges the rest of a key is derived from (`RUNTIME_ONLY_DEPS`). The fetched build itself is
- * not an input: its path carries the pinned commit and its bytes were checked against the pin's hashes, so the
- * pin stands for it as the lockfile stands for `node_modules`.
- */
-const TERMINAL_BROKER = ['packages/terminal-broker/package.json', 'packages/terminal-broker/src'];
-
-/**
- * Where the install puts that build. A step reading every source tree reads around it, for the reason above: the
- * pin in `TERMINAL_BROKER` stands for it, and the install, not any chain step, writes it.
- */
-const TERMINAL_BROKER_INSTALL = 'packages/terminal-broker/bin';
+const ROOT = ['package-lock.json'];
 
 /**
  * The root vitest config a run of one half uses — which projects it pools is an input to every suite in it.
@@ -422,9 +395,6 @@ export const WORKSPACE_PARTS = [
   // `templates` is the CLI's scaffold: pack code the specifier rules read and the CLI's own suite renders,
   // so a change to one has to invalidate the steps that read the workspace
   'src', 'tests', 'scripts', 'bin', 'etc', 'templates', 'index.js',
-  // `bench` is in `@apackdev/ears`' tsconfig `include`, so its typecheck compiles the benchmark and has to
-  // re-run when it moves. Only that workspace has one; the dep-file gate is what noticed
-  'bench',
   // A pack's manifest, which `default-setup`'s specs import directly. Eleven workspaces have none
   // and the walk skips what is not there, so for those this adds a path and no bytes
   'apack.json',
@@ -438,7 +408,7 @@ const workspace = (pkg: string): string[] => WORKSPACE_PARTS.map((part) => `pack
 /**
  * What a *suite* reads, which is the workspace plus its guide. A fingerprint skips prose (see `READS_MARKDOWN`
  * in `packages-built.ts`), so for all but one package this adds a path and no bytes — and that one is
- * `packages/repo-checks/CLAUDE.md`, whose "What is here" table `spec-plan.spec.ts` asserts. Here and not in
+ * `packages/internal-repo-checks/CLAUDE.md`, whose "What is here" table `spec-plan.spec.ts` asserts. Here and not in
  * `WORKSPACE_PARTS`, so `typecheck`, which compiles the repo and reads no guide, does not take it on.
  */
 const suiteWorkspace = (pkg: string): string[] => [...workspace(pkg), `packages/${pkg}/CLAUDE.md`];
@@ -471,9 +441,9 @@ const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSP
   // The drive layer's one tracked file. The driving scripts beside it are gitignored and ad-hoc, so naming
   // the directory would re-run a typecheck every time someone poked at the app
   'drive/playwright.config.ts',
-  'build/prod/verify-node-modules.mjs', 'build/prod/smoke-native.mjs',
+  'build/prod/verify-node-modules.mjs', 'build/prod/single-copy.mjs', 'build/prod/smoke-native.mjs',
   'packages/apack-cli/bin',
-  'packages/apack-ears/bench/ears.bench.ts', 'packages/api/tsup.config.ts',
+  'packages/api/tsup.config.ts',
   'packages/dev-mode.js', 'packages/entry-point.mjs'];
 
 /**
@@ -484,7 +454,10 @@ const EVERY_SOURCE = [...ROOT, ...Object.values(CONFIG_BY_HALF), ...EVERY_WORKSP
 // Through `repoRelative`, because these land in `step.outputs` beside hand-written POSIX literals and
 // `writerOf` compares the two
 const relative = repoRelative;
-const PACKAGE_BUILD_INPUTS = [...new Set(Object.values(BUILD_UNITS).flatMap((unit) => unit.inputs.map(relative)))].sort();
+// A unit's input inside `node_modules` (EARS' `dist`, which the CLI's and the harness's bundles inline) is left to the
+// lockfile in every step's `ROOT`, which names what the install put there: no step here writes it
+const PACKAGE_BUILD_INPUTS = [...new Set(Object.values(BUILD_UNITS).flatMap((unit) => unit.inputs.map(relative)))]
+  .filter((input) => !input.startsWith('node_modules/')).sort();
 const PACKAGE_BUILD_OUTPUTS = [...new Set(Object.values(BUILD_UNITS).flatMap((unit) => unit.outputs.map(relative)))].sort();
 
 /**
@@ -590,8 +563,7 @@ const SUITE_RUNNER = ['scripts/test-unit-pool.ts', 'scripts/lib/unit-pool.ts', '
   'scripts/lib/exit-on-epipe.ts', ...SOURCE_RUNNER, 'scripts/lib/spec-durations.ts',
   'scripts/lib/spec-durations-reporter.ts', 'scripts/lib/over-budget.ts', 'scripts/lib/test-timeouts.ts',
   'scripts/lib/spec-halves.ts', 'scripts/lib/chain-only.ts',
-  // What a suite's key says of a vendored checkout that is off its pin is this module's to word (`poolUnitFor`)
-  'scripts/lib/vendored-checkouts.ts', ...SUITE_SETUP_FILES, ...BOUNDED_RUNNER];
+  ...SUITE_SETUP_FILES, ...BOUNDED_RUNNER];
 /**
  * What `build:default-setup` writes. `src/__generated__` is under the `src` it also reads, so it has to be declared:
  * `fingerprintUnit` excludes a unit's own output from its own fingerprint, and that is what stops the step
@@ -688,8 +660,7 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   'apack-testing': { packages: true },
   // `@apackdev/testing`'s bundle; and `sdk-bridge-drift.spec.ts` reads `dist/runtime/index.cjs` when it is
   // there and skips when it is not, so the tree decides whether that check checks anything
-  // and its terminal suites start the broker it loads at run time (`TERMINAL_BROKER`)
-  'apack-host': { packages: true, pack: true, inputs: TERMINAL_BROKER },
+  'apack-host': { packages: true, pack: true },
   // Boots the app runtime, which loads the built-in pack: `dist/runtime/index.cjs` and `settings.content.json`.
   // The runtime also imports root package metadata for the app version.
   api: { pack: true, inputs: ['package.json'] },
@@ -700,9 +671,9 @@ export const SUITE_READS: Record<string, { packages?: true; pack?: true; repo?: 
   // `inputs: ['docs']`: `doc-links` resolves every relative link between the repo's documents, and a
   // dead link fails nothing on its own — so the tree it reads has to be in this step's key or the check
   // caches over a move. Only here, since a typo in a guide should not re-run `typecheck`.
-  'repo-checks': { packages: true, repo: true, inputs: ['docs'], integrationInputs: FIXTURE_OUTPUTS },
+  'internal-repo-checks': { packages: true, repo: true, inputs: ['docs'], integrationInputs: FIXTURE_OUTPUTS },
   // `pretest: ensure-packages-built`; it npm-packs the built packages into a consumer and compiles it
-  'publish-checks': { packages: true },
+  'internal-publish-checks': { packages: true },
 };
 
 
@@ -736,13 +707,13 @@ export const STEP_TABLES = ['scripts/lib/chain-steps.ts', 'scripts/lib/typecheck
  * `publish` trees, `bin/`, `env.d.ts`, `eslint.config.ts` — the same breadth the typecheck legs' 0-21% is
  * mostly made of (`scripts/lib/dep-files.ts`).
  *
- * **The one project that never benefits is `repo-checks`**, stale in 154 of 154 — it declares `EVERY_SOURCE`
+ * **The one project that never benefits is `internal-repo-checks`**, stale in 154 of 154 — it declares `EVERY_SOURCE`
  * below, because six of its specs ask git what the repo holds, and that is a rule rather than an oversight
  * (`fingerprint-scope.spec.ts`: a suite holding a guard over the whole repo declares the whole repo).
  * Splitting those six out so the other seventeen cache separately was costed and declined: they are specs
  * about this repo's tooling, so they are stale whenever `scripts/` moves — 97 of the same 200 commits — and
  * would re-run anyway. Worth revisiting if that suite's cost grows or its repo-wide specs stop dominating
- * it. The sample is this branch's own work, so `scripts/` and `repo-checks/tests` lead it by construction;
+ * it. The sample is this branch's own work, so `scripts/` and `internal-repo-checks/tests` lead it by construction;
  * re-take it over a stretch of feature work before reading the per-project ranking as general.
  */
 export function suiteInputs(suite: UnitSuite, half: Half): string[] {
@@ -752,9 +723,6 @@ export function suiteInputs(suite: UnitSuite, half: Half): string[] {
     // A suite's half runs under one root config, so which projects that config pools is an input to it
     ...rootConfigFor(suite, half),
     // The native pool's Docker scratch policy is part of both the outer and per-project verdict.
-    // `vendored-checkouts.ts` decides which Rust toolchain the image installs, and the toolchain is part of the
-    // image tag, so an edit to it changes the container this suite runs in. Every half declares it already
-    // (`SUITE_RUNNER`).
     ...(half === 'native'
       ? ['scripts/linux-runner.ts', 'scripts/lib/linux-native-scratch.ts', 'scripts/linux/Dockerfile']
       : []),
@@ -798,7 +766,7 @@ function inputsForSuites(suites: readonly UnitSuite[], half: Half): Pick<ChainSt
   return {
     inputs: [...new Set(suites.flatMap((suite) => suiteInputs(suite, half)))].sort(),
     ...(suites.some((suite) => SUITE_READS[suite.dir]?.repo)
-      ? { excludes: [...(half !== 'fast' ? [] : FIXTURE_OUTPUTS), ...FIXTURE_TEST_OUTPUT, TERMINAL_BROKER_INSTALL] }
+      ? { excludes: [...(half !== 'fast' ? [] : FIXTURE_OUTPUTS), ...FIXTURE_TEST_OUTPUT] }
       : {}),
   };
 }
@@ -833,7 +801,7 @@ function inputsForSuites(suites: readonly UnitSuite[], half: Half): Pick<ChainSt
  * so the edge to `build:default-setup` survives on the leg that has it, and the other fourteen stop waiting for a
  * build they never read.
  *
- * What the scope narrows is the source: an edit under the renderer does not invalidate `typecheck:ears`.
+ * What the scope narrows is the source: an edit under the renderer does not invalidate `typecheck:sdk`.
  *
  * `dep-files.spec.ts` checks each leg's declaration against what the compiler reported reading, which is
  * the half that would catch a scope narrower than the truth.
@@ -869,9 +837,8 @@ const TYPECHECK_STEPS: readonly ChainStep[] = TYPECHECK_LEGS
     inputs: legInputs(leg),
     // A leg reading every source tree reads around the fixture packs' build output for the same reason
     // the single step did: `tsc -p tests` compiles `e2e/**` only and `check:specifiers` filters
-    // `__generated__` itself, so hashing it would tie the leg to a build it does not depend on. The installed
-    // terminal broker likewise (`TERMINAL_BROKER_INSTALL`).
-    ...(scopeOf(leg) === 'repo' ? { excludes: [...FIXTURE_OUTPUTS, ...FIXTURE_TEST_OUTPUT, TERMINAL_BROKER_INSTALL] } : {}),
+    // `__generated__` itself, so hashing it would tie the leg to a build it does not depend on.
+    ...(scopeOf(leg) === 'repo' ? { excludes: [...FIXTURE_OUTPUTS, ...FIXTURE_TEST_OUTPUT] } : {}),
   }));
 
 /**
@@ -920,7 +887,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
   //
   // Not the dangling-path check, and the difference matters: publint skips any target behind a custom
   // condition (`hasCustomCondition`) and attw resolves standard conditions only, which is how 99 published
-  // paths named files no tarball held. `@app/publish-checks`' `published-manifest-paths` is that check.
+  // paths named files no tarball held. `@app/internal-publish-checks`' `published-manifest-paths` is that check.
   //
   // It reads the published trees, which `PACKAGE_BUILD_OUTPUTS` covers along with the `dist` they are staged
   // from — the same constant `packages:ensure` declares as its outputs, so every input here is an ancestor's
@@ -949,14 +916,14 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // report at all, so each is a module whose edit moves a report while the script that imports it does not.
     // The closure check in `chain-inputs.spec.ts` is what found them and what keeps the next one from hiding
     inputs: [...ROOT,
-      'packages/apack-ears/dist', 'packages/apack-sdk/dist', 'packages/apack-ui/dist',
-      'packages/apack-ears/package.json', 'packages/apack-sdk/package.json', 'packages/apack-ui/package.json',
+      'packages/apack-sdk/dist', 'packages/apack-ui/dist',
+      'packages/apack-sdk/package.json', 'packages/apack-ui/package.json',
       'scripts/api-check.ts', 'scripts/lib/api-report-packages.ts', 'scripts/lib/exit-on-epipe.ts',
       // `bounded-spawn` is how this runs the three extractions
       'scripts/lib/bounded-spawn.ts', 'scripts/lib/left-running.ts', 'packages/apack-sdk/src/progress.ts',
       'scripts/api-reports.ts', 'scripts/component-contracts.ts', 'scripts/lib/api-entries.ts',
-      'packages/apack-ears/etc', 'packages/apack-sdk/etc', 'packages/apack-ui/etc',
-      'packages/apack-ears/tsconfig.api-extractor.json', 'packages/apack-sdk/tsconfig.api-extractor.json',
+      'packages/apack-sdk/etc', 'packages/apack-ui/etc',
+      'packages/apack-sdk/tsconfig.api-extractor.json',
       'packages/apack-ui/tsconfig.package.json'],
     // A report is a function of the declarations a package built. The compiled output beside them is what
     // `declaration: true` emits past them, and no report has ever read one
@@ -1052,7 +1019,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // built bundle, which launches Electron, finds the window and bypasses onboarding. Reached by package
     // name rather than by path, so nothing that reads a step's text can see the edge
     keepsOnFailure: FIXTURE_TEST_OUTPUT,
-    inputs: [...ROOT, ...BOUNDED_RUNNER, ...TERMINAL_BROKER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-app.sh',
+    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/packs', 'tests/acceptance/external-pack/test-external-pack-app.sh',
       'tests/acceptance/external-pack/test-default-pack-fork.ts', 'tests/acceptance/external-pack/prepare-default-pack-fork.ts', DEFAULT_FORK_OUTPUT, 'tests/acceptance/external-pack/support.sh', 'playwright.config.ts', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   // Never cached: it drives real Electron with real timing and is the likeliest step to be flaky, and a
   // flaky pass cached green hides an intermittent failure indefinitely. 28s is cheap enough to always pay.
@@ -1081,7 +1048,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // account of why an app did not start or did not close. Playwright clears the directory on the way in,
     // so the next run would take it
     evidence: ['.apack/tests/results'],
-    inputs: [...ROOT, ...TERMINAL_BROKER, 'tests/e2e/smoke', 'playwright.config.ts',
+    inputs: [...ROOT, 'tests/e2e/smoke', 'playwright.config.ts',
       ...SOURCE_RUNNER, ...APP_ENTRY, ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   // The rest of the E2E suite, a gate like the others. A spec nothing runs breaks unseen when the app changes under
   // it, and a broken one is a broken promise about the app whether or not it was written to drive it; about 1.5
@@ -1093,7 +1060,7 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     // from one of them — and `packages:check` packs a tarball inside those trees and recreates them, which a
     // reader must not observe. Declaring them is what makes that a mutex instead of a scheduling accident;
     // the step is never cached, so it buys the ordering and costs no precision
-    inputs: [...ROOT, ...TERMINAL_BROKER, 'tests/e2e', 'tests/_support', 'playwright.config.ts', ...SOURCE_RUNNER, ...APP_ENTRY,
+    inputs: [...ROOT, 'tests/e2e', 'tests/_support', 'playwright.config.ts', ...SOURCE_RUNNER, ...APP_ENTRY,
       ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
   /**
    * Two steps, split at the app boundary: only the last of the check's nine phases launches one.
@@ -1112,6 +1079,6 @@ export const CHAIN_STEPS: readonly ChainStep[] = [
     inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh',
       'tests/acceptance/packaged-authoring/support.sh', ...PACKAGE_BUILD_READS, ...PACK_OUTPUTS] },
   { name: 'test:packaged-authoring:app', budget: 'suite', expensive: true,
-    inputs: [...ROOT, ...BOUNDED_RUNNER, ...TERMINAL_BROKER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
+    inputs: [...ROOT, ...BOUNDED_RUNNER, 'tests/acceptance/packaged-authoring/test-packaged-authoring-app.sh',
       'tests/acceptance/packaged-authoring/support.sh', '.apack/tests/authoring-handoff', ...PACKAGE_BUILD_READS, ...APP_OUTPUTS, ...PACK_OUTPUTS] },
 ];

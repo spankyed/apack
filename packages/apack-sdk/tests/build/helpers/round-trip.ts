@@ -3,7 +3,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { EarsEngine } from '@apackdev/ears';
+import type { EarsEngine } from '@elmdb/ears';
 import { _createTestEngine } from '../../../src/testing/index.ts';
 import { compile } from '../../../src/build/compilers/flow-compiler.ts';
 import { exportFlowsToDSL } from '../../../src/build/compilers/flow-to-dsl.ts';

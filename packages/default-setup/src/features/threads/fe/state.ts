@@ -6,7 +6,6 @@ import { blockRunCaughtUp, finishedRun, messageStreamBlocks, messageStreamText, 
 const storage = surfaceStorage(featureRef('threads'))
 import { entityIs } from '@apackdev/sdk/fe'
 import type { OpenEntity } from '@apackdev/sdk/events'
-import { answersCall, newCall } from '@apackdev/sdk/events'
 import breadcrumb, { breadcrumbWithParams } from '@apackdev/sdk/fe';
 import { targetIs, type TrailClickEvent } from '@apackdev/sdk/fe';
 import { safeEvents } from '@apackdev/sdk/fe';
@@ -14,13 +13,13 @@ import { setup, assign, enqueueActions, fromCallback, spawnChild, stopChild, typ
 import { createNavHistory, pushNavHistory, goBack, goForward, canGoBack, canGoForward } from '@apackdev/sdk/fe';
 import type { ActorRefFrom } from 'xstate';
 import type { ThreadEntity, ThreadCreateData, ThreadViewData, ThreadEditFields, ThreadsSettings, MessageEntity, AgentThreadData, Tab, AgentSettings, AgentMode as AgentModeConfig, MessageReferences, BlockResponse, ChatPage, ChatStart, MessageSearchResult, ThreadDetailView, ThreadExtended, ThreadTabView } from '#generated/types.ts';
-import { viewRead, viewWrites, writeAnswered, writeSent, writing, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
+import { freshKey, makes, viewRead, viewWrites, writeEnded, writeSent, writing, type MadeEvent, type Making, type SurfaceLifecycleEvent } from '@apackdev/sdk/fe';
 import { fromView } from '#generated/fe.ts';
 import type { Contract, ChatState, ThreadListItem, ThreadsContext } from './contract.ts';
 import type { ClaudeUiViewRequest, OutgoingThreadsEvents } from '#features/threads/be/types.ts';
-import { sendToSystem } from '#generated/events.ts';
 import { readClaudeComposerPhase, stageClaudeComposerPhase, commitClaudeComposerPhase } from './chat/native-composer-phase.ts';
 import { takeClaudeUiRetirements, rememberClaudeUiLease, forgetClaudeUiLease } from './chat/native-ui-retirement.ts';
+import { fromAsk, tell } from '#generated/events.ts';
 import { Archive, Copy, Pin, Trash2 } from 'lucide-vue-next';
 import { contextMenuFn } from '@apackdev/sdk/fe';
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
@@ -159,8 +158,38 @@ const defaultChatThread: AgentThreadData = {
 
 // ---- Event types ----
 
+/**
+ * What the machine asks the threads system, each under the name it is made by. Any number of each are under way at
+ * once, every one under a key of its own (`freshKey`), so every one asked for is done and answered.
+ */
+const made = makes(({ each }) => ({
+  chatStart: each(fromAsk(id, 'GET_CHAT_START')),
+  claudePermission: each(fromAsk(id, 'SET_CLAUDE_PERMISSION_MODE')),
+  created: each(fromAsk(id, 'CREATE_THREAD')),
+  opened: each(fromAsk(id, 'OPEN_THREAD_CHAT')),
+  /** A message, which may have started a thread */
+  sent: each(fromAsk(id, 'USER_MSG')),
+  /** A command, which may have started a thread */
+  sentCommand: each(fromAsk(id, 'USER_COMMAND')),
+  forked: each(fromAsk(id, 'FORK_THREAD')),
+  imported: each(fromAsk(id, 'IMPORT_THREADS')),
+  exported: each(fromAsk(id, 'EXPORT_THREADS')),
+  // The writes whose answer is only that it was done
+  statusWrite: each(fromAsk(id, 'UPDATE_THREAD_STATUS')),
+  fieldWrite: each(fromAsk(id, 'UPDATE_THREAD_FIELD')),
+  deleteWrite: each(fromAsk(id, 'DELETE_THREAD')),
+  parentWrite: each(fromAsk(id, 'SET_THREAD_PARENT')),
+}))
+
+/** The asks that are writes the views are held behind: each is recorded in `writes` under the key it is made with */
+const WRITES = ['made.created', 'made.statusWrite', 'made.fieldWrite', 'made.deleteWrite', 'made.parentWrite'] as const
+
+/** The surface's context, and which of the asks the machine makes (`made`) are under way */
+type MachineContext = ThreadsContext & { making: Making<typeof made> }
+
 type SystemEvent =
   | OutgoingThreadsEvents
+  | MadeEvent<typeof made>
   | { type: 'FEATURE_SETTINGS_UPDATED'; settings: ThreadsSettings }
   | SurfaceLifecycleEvent
 
@@ -171,6 +200,7 @@ type ViewEvent =
   | { type: 'RECENT.READ'; threads: Partial<ThreadEntity>[] }
   | { type: 'DETAIL.READ'; id: string; detail: ThreadDetailView | null }
   | { type: 'CHAT.READ'; threadId: string; chat: ChatPage | null }
+  | { type: 'CHAT.FAILURES_TOLD'; told: readonly { readonly message: string }[] }
   | { type: 'MESSAGE.READ'; id: string; message: MessageEntity | null }
   | { type: 'MESSAGE_TEXT_APPENDED'; messageId: string; at: number; text: string; done?: true }
   | { type: 'MESSAGE_BLOCK_TEXT_APPENDED'; messageId: string; blockId: string; at: number; text: string; done?: true }
@@ -279,7 +309,13 @@ type ThreadEvents =
   | ViewEvent
   | TrailClickEvent;
 
-const typeOf = safeEvents<ThreadEvents>();
+const typeOf = safeEvents<ThreadEvents>()
+
+/** The thread this window asked to open and the system found gone, where that is how the ask ended */
+function goneOnOpen(event: ThreadEvents): string | undefined {
+  const { outcome } = typeOf('made.opened', event)
+  return !outcome.ok && outcome.failure.kind === 'not-found' ? outcome.failure.threadId : undefined
+}
 
 export type { ChatState, ThreadListItem } from './contract.ts';
 
@@ -289,7 +325,7 @@ export type { ChatState, ThreadListItem } from './contract.ts';
 
 type ThreadLike = Partial<ThreadEntity> & { id: string };
 
-export function threadsFromStore<T>(threadMap: Record<string, T>, threadIds: string[]): T[] {
+export function threadsFromStore<T>(threadMap: Record<string, T>, threadIds: readonly string[]): T[] {
   return threadIds.map(id => threadMap[id]).filter((thread): thread is T => Boolean(thread));
 }
 
@@ -318,10 +354,10 @@ function removeThread(ctx: ThreadsContext, threadId: string) {
   return { threadMap: rest, threadIds: ctx.threadIds.filter(id => id !== threadId) };
 }
 
-function optimisticFieldUpdate(context: ThreadsContext, threadId: string, key: string, value: unknown) {
-  const call = sendToSystem(id, { type: 'UPDATE_THREAD_FIELD', threadId, key, value });
+/** A thread's field as the user set it, shown at once: `write` is the ask that stores it, which the views are held behind */
+function optimisticFieldUpdate(context: ThreadsContext, write: string, threadId: string, key: string, value: unknown) {
   return {
-    writes: writeSent(context.writes, call),
+    writes: writeSent(context.writes, write),
     ...patchThread(context, threadId, { [key]: value } as any),
     tabs: context.tabs.map(t => t.id === threadId ? { ...t, [key]: value, ...(key === 'topic' ? { label: value as string } : {}) } : t),
     ...(context.currentThread?.id === threadId ? { currentThread: { ...context.currentThread, [key]: value } } : {}),
@@ -409,8 +445,9 @@ const newThreadFlagTimer = (threadId: string) => `clear-new-thread-flag-${thread
 const chatStateOverrideTimer = (threadId: string) => `clear-expired-override-${threadId}`;
 
 const threadsState = setup({
-  types: { context: {} as ThreadsContext, events: {} as ThreadEvents },
+  types: { context: {} as MachineContext, events: {} as ThreadEvents },
   actors: {
+    ...made.actors,
     /**
      * Follows the pointer for as long as this surface runs, and takes its listener back when it stops.
      *
@@ -450,14 +487,14 @@ const threadsState = setup({
   },
   actions: {
     // ---- Following the views ----
-    /** Asks for what the chat starts from, and follows the list: the shell's start, in a delivery naming the surface */
+    /** Asks for what the chat starts from, and follows the list, as the shell starts the surface */
     startSurface: enqueueActions(({ context, enqueue }) => {
-      enqueue(() => sendToSystem(id, { type: 'GET_CHAT_START' }));
+      made.make(enqueue, 'chatStart', freshKey(), {});
       enqueue('followList');
       enqueue(() => {
-        for (const release of takeClaudeUiRetirements()) sendToSystem(id, { type: 'CLAUDE_UI_UNMOUNT', ...release });
-        for (const [mountId, view] of Object.entries(context.nativeTerminalViews)) sendToSystem(id, { type: 'CLAUDE_TERMINAL_MOUNT', threadId: view.threadId, mountId });
-        for (const view of Object.values(context.nativeUiViews)) if (view.mountRequest) sendToSystem(id, { ...view.mountRequest, ...(view.resumeKey ? { resumeKey: view.resumeKey } : {}) });
+        for (const release of takeClaudeUiRetirements()) tell(id, { type: 'CLAUDE_UI_UNMOUNT', ...release });
+        for (const [mountId, view] of Object.entries(context.nativeTerminalViews)) tell(id, { type: 'CLAUDE_TERMINAL_MOUNT', threadId: view.threadId, mountId });
+        for (const view of Object.values(context.nativeUiViews)) if (view.mountRequest) tell(id, { ...view.mountRequest, ...(view.resumeKey ? { resumeKey: view.resumeKey } : {}) });
       });
     }),
     followList: enqueueActions(({ enqueue }) => {
@@ -530,12 +567,13 @@ const threadsState = setup({
         enqueue.spawnChild('tabView', { id: viewChild.tab(threadId), input: { threadId } });
       }
     }),
-    /** An answer to one of this window's writes */
+    /** One of this window's writes ended */
     settleWrite: enqueueActions(({ context, event, enqueue }) => {
-      const writes = writeAnswered(context.writes, event as unknown as Record<string, unknown>, event.type === 'THREAD_WRITE_FAILED');
+      const { key: ask, outcome } = typeOf(WRITES, event);
+      const writes = writeEnded(context.writes, ask, !outcome.ok);
       enqueue.assign({ writes });
-      if (answersCall(event as unknown as Record<string, unknown>, context.linkSave)) {
-        enqueue.assign({ linkSave: null, linkRefusal: event.type === 'THREAD_WRITE_FAILED' ? event.error : null });
+      if (context.linkSave !== null && context.linkSave === ask) {
+        enqueue.assign({ linkSave: null, linkRefusal: outcome.ok ? null : outcome.failure.message });
       }
       if (writes.refreshes !== context.writes.refreshes) enqueue('refollowThreadViews');
     }),
@@ -730,7 +768,9 @@ const threadsState = setup({
      * chat leaves it, and the next tab opens in its place
      */
     dropThread: enqueueActions(({ context, event, enqueue, self }) => {
-      const { threadId } = event as { type: string; threadId: string };
+      // A thread whose view says it is gone, or one that was gone when this window asked to open it
+      const threadId = event.type === 'CHAT.READ' || event.type === 'TAB.READ' ? event.threadId : goneOnOpen(event);
+      if (!threadId) return;
       const index = context.tabs.findIndex(t => t.id === threadId);
       const tabs = context.tabs.filter(t => t.id !== threadId);
       let activeTabId = context.activeTabId;
@@ -767,7 +807,7 @@ const threadsState = setup({
       const { threadId, restore } = typeOf(['OPEN_THREAD_CHAT', 'SHOW_THREAD'], event);
       enqueue(() => self.send({ type: 'VIEW_DASHBOARD' }));
       if (event.type === 'OPEN_THREAD_CHAT') {
-        enqueue(() => sendToSystem(id, { type: 'OPEN_THREAD_CHAT', threadId, ...(restore && { restore }) }));
+        made.make(enqueue, 'opened', freshKey(), { threadId, ...(restore && { restore }) });
       }
       const known = context.threadMap[threadId];
       const label = known?.topic || context.tabs.find(t => t.id === threadId)?.label || `Thread ${known?.shortCode || ''}`.trim();
@@ -807,27 +847,58 @@ const threadsState = setup({
         }
       };
     }),
+    /**
+     * Opens the thread this window's message or command started, or its fork: as a thread the system says to show,
+     * which every window handles alike
+     */
+    /** A message, command or fork of this window's that was not done, kept for the chat to tell the person */
+    noteSendFailure: assign(({ context, event }) => {
+      const { outcome } = typeOf(['made.sent', 'made.sentCommand', 'made.forked'], event);
+      return outcome.ok ? {} : { sendFailures: [...context.sendFailures, { message: outcome.failure.message }] };
+    }),
+    showStartedThread: enqueueActions(({ event, enqueue }) => {
+      const { outcome } = typeOf(['made.sent', 'made.sentCommand'], event);
+      if (outcome.ok && outcome.value.started) enqueue.raise({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
+    }),
+    showFork: enqueueActions(({ event, enqueue }) => {
+      const { outcome } = typeOf('made.forked', event);
+      if (outcome.ok) enqueue.raise({ type: 'SHOW_THREAD', threadId: outcome.value.threadId });
+    }),
+    /**
+     * The create this window asked for ended: its write settles, and the thread it made is marked new until its flag
+     * clears
+     */
+    threadCreated: enqueueActions(({ event, enqueue }) => {
+      const { outcome } = typeOf('made.created', event);
+      enqueue('settleWrite');
+      if (!outcome.ok) return;
+      const created: string = outcome.value.id;
+      enqueue('markCreated');
+      enqueue.stopChild(newThreadFlagTimer(created));
+      enqueue.spawnChild('clearNewThreadFlag', { id: newThreadFlagTimer(created), input: { id: created } });
+    }),
     /** The thread this window created: marked new in the list, for its animation, and the form emptied */
     markCreated: assign(({ context, event }) => {
-      const created = typeOf('THREAD_CREATED', event).id as string;
-      const freshThreadIds = [...context.freshThreadIds, created];
+      const { outcome } = typeOf('made.created', event);
+      if (!outcome.ok) return {};
+      const freshThreadIds = [...context.freshThreadIds, outcome.value.id];
       return { freshThreadIds, create: defaultThread, ...threadStore({ ...context, freshThreadIds }, context.lists) };
     }),
-    sendCreateThread: assign(({ context }) => {
+    sendCreateThread: enqueueActions(({ context, enqueue }) => {
       const { parentThread: _parentThread, ...createData } = context.create;
-      const call = sendToSystem(id, {
-        type: 'CREATE_THREAD',
+      const write = freshKey();
+      made.make(enqueue, 'created', write, {
         ...createData,
         parentThreadId: context.create.parentThreadId,
       });
-      return { writes: writeSent(context.writes, call) };
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
     recordThreadNavigation: assign(({ context, event }) => ({
       navHistory: pushNavHistory(context.navHistory, `view:${typeOf(['SELECT_THREAD', 'OPEN_ENTITY'], event).id}`),
     })),
     sendViewThread: ({ event }) => {
       const threadId = typeOf(['SELECT_THREAD', 'OPEN_ENTITY'], event).id;
-      sendToSystem(id, {
+      tell(id, {
         type: 'VIEW_THREAD',
         threadId,
       });
@@ -901,34 +972,39 @@ const threadsState = setup({
       const clearId = typeOf('CLEAR_NEW_THREAD_FLAG', event).id;
       return { ...patchThread(context, clearId, { isNew: false }), freshThreadIds: context.freshThreadIds.filter(fresh => fresh !== clearId) };
     }),
-    updateThreadStatus: assign(({ context, event }) => {
+    updateThreadStatus: enqueueActions(({ context, event, enqueue }) => {
       const typedEvent = typeOf('UPDATE_THREAD_STATUS', event);
-      const call = sendToSystem(id, {
-        type: 'UPDATE_THREAD_STATUS',
+      const write = freshKey();
+      made.make(enqueue, 'statusWrite', write, {
         threadId: typedEvent.id,
         status: typedEvent.status,
       });
-      return { writes: writeSent(context.writes, call) };
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
-    sendUpdateThreadField: assign(({ event, context }) => {
+    sendUpdateThreadField: enqueueActions(({ event, context, enqueue }) => {
       const { key, value } = typeOf('UPDATE_THREAD_FIELD', event);
-      const call = sendToSystem(id, {
-        type: 'UPDATE_THREAD_FIELD',
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, {
         threadId: context.view.id,
         key,
         value,
       });
-      return {
-        writes: writeSent(context.writes, call),
-        ...(key === 'linkedThreads' && { linkSave: call, linkRefusal: null }),
-      };
+      enqueue.assign({
+        writes: writeSent(context.writes, write),
+        ...(key === 'linkedThreads' && { linkSave: write, linkRefusal: null }),
+      });
     }),
-    renameThread: assign(({ event, context }) => {
+    renameThread: enqueueActions(({ event, context, enqueue }) => {
       const { threadId, topic } = typeOf('RENAME_THREAD', event);
-      return optimisticFieldUpdate(context, threadId, 'topic', topic);
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'topic', value: topic });
+      enqueue.assign(optimisticFieldUpdate(context, write, threadId, 'topic', topic));
     }),
+    /** The feature's settings: the ones the chat starts from, or the ones they were changed to */
     setThreadsSettings: assign(({ event }) => {
-      const settings = event.type === 'CHAT_STARTED' ? event.data.settings : typeOf('FEATURE_SETTINGS_UPDATED', event).settings;
+      const start = event.type === 'FEATURE_SETTINGS_UPDATED' ? undefined : typeOf('made.chatStart', event).outcome;
+      if (start && !start.ok) return {};
+      const settings = start ? start.value.settings : typeOf('FEATURE_SETTINGS_UPDATED', event).settings;
       const chat = (settings as any)?.chat as AgentSettings | undefined;
       return {
         settings,
@@ -936,45 +1012,39 @@ const threadsState = setup({
         ...(chat ? extractChatSettings(chat) : {}),
       };
     }),
-    deleteThread: assign(({ context, event }) => {
+    deleteThread: enqueueActions(({ context, event, enqueue }) => {
       const { threadId } = typeOf('DELETE_THREAD', event);
-      const call = sendToSystem(id, {
-        type: 'DELETE_THREAD',
-        threadId,
-      });
-      return { writes: writeSent(context.writes, call) };
+      const write = freshKey();
+      made.make(enqueue, 'deleteWrite', write, { threadId });
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
-    archiveThread: assign(({ context, event }) => {
+    archiveThread: enqueueActions(({ context, event, enqueue }) => {
       const { threadId } = typeOf('ARCHIVE_THREAD', event);
-      const call = sendToSystem(id, {
-        type: 'UPDATE_THREAD_FIELD',
-        threadId,
-        key: 'archived',
-        value: true,
-      });
-      return { writes: writeSent(context.writes, call) };
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'archived', value: true });
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
-    unpinThread: assign(({ event, context }) => {
+    unpinThread: enqueueActions(({ event, context, enqueue }) => {
       const { threadId } = typeOf('UNPIN_THREAD', event);
-      return optimisticFieldUpdate(context, threadId, 'pinned', false);
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'pinned', value: false });
+      enqueue.assign(optimisticFieldUpdate(context, write, threadId, 'pinned', false));
     }),
-    pinThread: assign(({ event, context }) => {
+    pinThread: enqueueActions(({ event, context, enqueue }) => {
       const { threadId } = typeOf('PIN_THREAD', event);
-      return optimisticFieldUpdate(context, threadId, 'pinned', true);
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'pinned', value: true });
+      enqueue.assign(optimisticFieldUpdate(context, write, threadId, 'pinned', true));
     }),
     toggleViewArchive: assign(({ context }) => {
       const next = { ...context, showArchived: !context.showArchived };
       return { showArchived: next.showArchived, ...threadStore(next, context.lists) };
     }),
-    unarchiveThread: assign(({ context, event }) => {
+    unarchiveThread: enqueueActions(({ context, event, enqueue }) => {
       const { threadId } = typeOf('UNARCHIVE_THREAD', event);
-      const call = sendToSystem(id, {
-        type: 'UPDATE_THREAD_FIELD',
-        threadId,
-        key: 'archived',
-        value: false,
-      });
-      return { writes: writeSent(context.writes, call) };
+      const write = freshKey();
+      made.make(enqueue, 'fieldWrite', write, { threadId, key: 'archived', value: false });
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
     removeUnarchivedThread: assign(({ event, context }) => {
       const { threadId } = typeOf('UNARCHIVE_THREAD', event);
@@ -999,22 +1069,17 @@ const threadsState = setup({
     setImportingThreads: assign(({ context }) => ({
       threadsImport: { ...context.threadsImport, status: 'importing' as const },
     })),
-    sendImportThreads: ({ event }) => {
-      if (event.type === 'THREADS.IMPORT') {
-        sendToSystem(id, { type: 'IMPORT_THREADS', directory: event.directory })
-      }
-    },
-    handleThreadsImported: assign(({ event }) => {
-      if (event.type === 'THREADS_IMPORTED') {
-        return { threadsImport: { status: 'success' as const, errors: event.errors || [], importedCount: event.count } }
-      }
-      return {}
+    sendImportThreads: enqueueActions(({ event, enqueue }) => {
+      made.make(enqueue, 'imported', freshKey(), { directory: typeOf('THREADS.IMPORT', event).directory });
     }),
-    handleThreadsImportFailed: assign(({ event }) => {
-      if (event.type === 'THREADS_IMPORT_FAILED') {
-        return { threadsImport: { status: 'error' as const, errors: event.errors, importedCount: 0 } }
+    /** An import's answer is its status */
+    handleThreadsImportEnded: assign(({ event }) => {
+      const { outcome } = typeOf('made.imported', event)
+      return {
+        threadsImport: outcome.ok
+          ? { status: 'success' as const, errors: outcome.value.errors || [], importedCount: outcome.value.count }
+          : { status: 'error' as const, errors: outcome.failure.message.split('\n'), importedCount: 0 },
       }
-      return {}
     }),
     resetImportThreadsStatus: assign({
       threadsImport: { status: 'idle' as const, errors: [] as string[], importedCount: 0 },
@@ -1024,22 +1089,17 @@ const threadsState = setup({
     setExportingThreads: assign(({ context }) => ({
       threadsExport: { ...context.threadsExport, status: 'exporting' as const },
     })),
-    sendExportThreads: ({ event }) => {
-      if (event.type === 'THREADS.EXPORT') {
-        sendToSystem(id, { type: 'EXPORT_THREADS', directory: event.directory })
-      }
-    },
-    handleThreadsExported: assign(({ event }) => {
-      if (event.type === 'THREADS_EXPORTED') {
-        return { threadsExport: { status: 'success' as const, errors: [] as string[], filePath: event.filePath, threadCount: event.threadCount } }
-      }
-      return {}
+    sendExportThreads: enqueueActions(({ event, enqueue }) => {
+      made.make(enqueue, 'exported', freshKey(), { directory: typeOf('THREADS.EXPORT', event).directory });
     }),
-    handleThreadsExportFailed: assign(({ event }) => {
-      if (event.type === 'THREADS_EXPORT_FAILED') {
-        return { threadsExport: { status: 'error' as const, errors: event.errors, filePath: '', threadCount: 0 } }
+    /** An export's answer is its status */
+    handleThreadsExportEnded: assign(({ event }) => {
+      const { outcome } = typeOf('made.exported', event)
+      return {
+        threadsExport: outcome.ok
+          ? { status: 'success' as const, errors: [] as string[], filePath: outcome.value.filePath, threadCount: outcome.value.threadCount }
+          : { status: 'error' as const, errors: [outcome.failure.message], filePath: '', threadCount: 0 },
       }
-      return {}
     }),
     resetExportThreadsStatus: assign({
       threadsExport: { status: 'idle' as const, errors: [] as string[], filePath: '', threadCount: 0 },
@@ -1081,14 +1141,11 @@ const threadsState = setup({
     toggleRootOnlyFilter: assign(({ context }) => ({
       filters: { ...context.filters, showRootOnly: !context.filters.showRootOnly },
     })),
-    sendSetThreadParent: assign(({ context, event }) => {
+    sendSetThreadParent: enqueueActions(({ context, event, enqueue }) => {
       const { childIds, parentId } = typeOf('SET_THREAD_PARENT', event);
-      const call = sendToSystem(id, {
-        type: 'SET_THREAD_PARENT',
-        childIds,
-        parentId,
-      });
-      return { writes: writeSent(context.writes, call) };
+      const write = freshKey();
+      made.make(enqueue, 'parentWrite', write, { childIds, parentId });
+      enqueue.assign({ writes: writeSent(context.writes, write) });
     }),
 
     // ---- Chat/agent actions ----
@@ -1142,8 +1199,7 @@ const threadsState = setup({
       // Explicit print submission supersedes a leftover next-native-turn choice.
       const staged = context.currentThread?.id ? readClaudeComposerPhase(context.currentThread.id) : undefined;
       if (staged && context.currentThread?.id) commitClaudeComposerPhase(context.currentThread.id, staged.revision);
-      sendToSystem(id, {
-        type: 'USER_MSG',
+      made.make(enqueue, 'sent', freshKey(), {
         text,
         mode: context.mode,
         phase: context.phase,
@@ -1158,8 +1214,7 @@ const threadsState = setup({
     }),
     sendCommand: enqueueActions(({ enqueue, context, event }) => {
       const { command, text, references } = typeOf('SEND_COMMAND', event);
-      sendToSystem(id, {
-        type: 'USER_COMMAND',
+      made.make(enqueue, 'sentCommand', freshKey(), {
         command,
         text,
         mode: context.mode,
@@ -1223,7 +1278,9 @@ const threadsState = setup({
      * the ones this window kept and the ones every window opens — and the thread to open
      */
     startChat: enqueueActions(({ enqueue, context, event, self }) => {
-      const start: ChatStart = typeOf('CHAT_STARTED', event).data;
+      const { outcome } = typeOf('made.chatStart', event);
+      if (!outcome.ok) return;
+      const start: ChatStart = outcome.value;
       const extracted = extractChatSettings(start.settings?.chat || { modes: [], hotkeys: {} });
       const visibleModes = extracted.modes.filter(m => !m.hidden);
       const { mode, phase: defaultPhase } = resolveDefaultModePhase(
@@ -1342,7 +1399,7 @@ const threadsState = setup({
       return { tabs };
     }),
     createTabGroup: assign(({ context, event }) => {
-      const { tabIds } = typeOf('CREATE_TAB_GROUP', event) as { type: string; tabIds?: string[] };
+      const { tabIds } = typeOf('CREATE_TAB_GROUP', event);
       const firstTab = tabIds?.[0] ? context.tabs.find(t => t.id === tabIds[0]) : undefined;
       const isPinned = firstTab?.pinned || false;
       const color = getNextAvailableColor(context.tabGroups, isPinned);
@@ -1479,7 +1536,7 @@ const threadsState = setup({
         return;
       }
 
-      sendToSystem(id, {
+      tell(id, {
         type: 'INTERACTIVE_MSG_RESPONSE',
         messageId,
         threadId: context.currentThread.id,
@@ -1535,13 +1592,13 @@ const threadsState = setup({
       if (context.messagePagination.hasMore) enqueue('loadMoreMessages');
       else enqueue.assign({ focusMessage: null });
     }),
-    forkThread: ({ event }) => {
+    forkThread: enqueueActions(({ event, enqueue }) => {
       const { messageId, threadId, threadTopic } = typeOf('FORK_THREAD', event);
-      sendToSystem(id, { type: 'FORK_THREAD', messageId, threadId, threadTopic });
-    },
+      made.make(enqueue, 'forked', freshKey(), { messageId, threadId, threadTopic });
+    }),
     revertThread: ({ event }) => {
       const { messageId, threadId, restoreFiles, userCliUuid } = typeOf('REVERT_THREAD', event);
-      sendToSystem(id, {
+      tell(id, {
         type: 'REVERT_THREAD',
         messageId,
         threadId,
@@ -1551,19 +1608,19 @@ const threadsState = setup({
     },
     summarizeThread: ({ event }) => {
       const { messageId, threadId } = typeOf('SUMMARIZE_THREAD', event);
-      sendToSystem(id, { type: 'SUMMARIZE_THREAD', messageId, threadId });
+      tell(id, { type: 'SUMMARIZE_THREAD', messageId, threadId });
     },
     pauseTurn: ({ event }) => {
       const { threadId } = typeOf('PAUSE_TURN', event);
-      sendToSystem(id, { type: 'PAUSE_TURN', threadId });
+      tell(id, { type: 'PAUSE_TURN', threadId });
     },
     unqueueMessage: ({ event }) => {
       const { threadId, messageId } = typeOf('UNQUEUE_MESSAGE', event);
-      sendToSystem(id, { type: 'FORWARD_BRAIN_EVENT', eventType: 'user.thread.unqueue', payload: { threadId, messageId } });
+      tell(id, { type: 'FORWARD_BRAIN_EVENT', eventType: 'user.thread.unqueue', payload: { threadId, messageId } });
     },
     persistDismissMessage: ({ event }) => {
       const { messageId } = typeOf('DISMISS_MESSAGE', event);
-      sendToSystem(id, { type: 'DELETE_MESSAGE', messageId });
+      tell(id, { type: 'DELETE_MESSAGE', messageId });
     },
   },
   guards: { entityIs: entityIs<Contract['opens']>,
@@ -1573,6 +1630,8 @@ const threadsState = setup({
     detailGone: ({ context, event }) => event.type === 'DETAIL.READ' && event.id === context.view.id && event.detail === null && !writing(context.writes),
     chatGone: ({ context, event }) => event.type === 'CHAT.READ' && event.threadId === context.currentThread?.id && event.chat === null && !writing(context.writes),
     tabGone: ({ event }) => event.type === 'TAB.READ' && event.tab === null,
+    /** Whether the thread this window asked to open was gone */
+    openedGone: ({ event }) => goneOnOpen(event) !== undefined,
   }
 }).createMachine({
   id,
@@ -1635,33 +1694,34 @@ const threadsState = setup({
     tabsRead: [],
     openedThreadId: null,
     freshThreadIds: [],
+    making: made.none(),
     writes: viewWrites(),
     linkSave: null,
     linkRefusal: null,
+    sendFailures: [],
   }),
   on: {
     SET_CLAUDE_PERMISSION_MODE: { actions: enqueueActions(({ context, event, enqueue }) => {
-      if (context.permissionModeChanges[event.threadId]?.call) return;
-      const call = newCall();
+      if (context.making.claudePermission[event.threadId]) return;
+      const { threadId, mode } = event;
       enqueue.assign(({ context }) => ({ permissionModeChanges: {
-        ...context.permissionModeChanges, [event.threadId]: { call },
+        ...context.permissionModeChanges, [threadId]: { pending: true },
       } }));
-      enqueue(() => sendToSystem(id, event, { call }));
+      made.make(enqueue, 'claudePermission', threadId, { threadId, mode });
     }) },
-    CLAUDE_PERMISSION_MODE_RESULT: { actions: assign(({ context, event }) => {
-      const pending = context.permissionModeChanges[event.threadId];
-      if (!pending || !answersCall(event, pending.call)) return {};
-      return { permissionModeChanges: { ...context.permissionModeChanges,
-        [event.threadId]: { call: null, ...(event.success ? {} : { reason: event.reason ?? 'Permission change was refused' }) },
-      } };
-    }) },
+    'made.claudePermission': { actions: assign(({ context, event }) => ({
+      permissionModeChanges: { ...context.permissionModeChanges, [event.key]: {
+        pending: false,
+        ...(event.outcome.ok ? {} : { reason: event.outcome.failure.message }),
+      } },
+    })) },
     CLAUDE_UI_MOUNT: { actions: [assign(({ context, event }) => ({ nativeUiViews: {
       ...context.nativeUiViews, [event.mountId]: { ...(context.nativeUiViews[event.mountId] ?? { threadId: event.threadId, state: { status: 'connecting' as const } }), mountRequest: event },
-    } })), ({ context, event }) => { const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey; sendToSystem(id, { ...event, ...(resumeKey ? { resumeKey } : {}) }) }] },
+    } })), ({ context, event }) => { const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey; tell(id, { ...event, ...(resumeKey ? { resumeKey } : {}) }) }] },
     CLAUDE_UI_UNMOUNT: { actions: [({ context, event }) => {
       forgetClaudeUiLease(event)
       const resumeKey = context.nativeUiViews[event.mountId]?.resumeKey
-      sendToSystem(id, { ...event, ...(resumeKey ? { resumeKey } : {}) })
+      tell(id, { ...event, ...(resumeKey ? { resumeKey } : {}) })
     }, assign(({ context, event }) => {
       const { [event.mountId]: _, ...nativeUiViews } = context.nativeUiViews
       return { nativeUiViews }
@@ -1672,7 +1732,7 @@ const threadsState = setup({
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, promptRevision: event.revision, completions: undefined } } }
     }), ({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
-      if (view?.threadId === event.threadId && view.promptRevision === event.revision) sendToSystem(id, event)
+      if (view?.threadId === event.threadId && view.promptRevision === event.revision) tell(id, event)
     }] },
     CLAUDE_PROMPT_AUTOCOMPLETE: { actions: [assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
@@ -1680,7 +1740,7 @@ const threadsState = setup({
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, completions: undefined, completionRevision: event.revision, completionEditRevision: view.promptRevision } } }
     }), ({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
-      if (view?.threadId === event.threadId && view.completionRevision === event.revision) sendToSystem(id, event)
+      if (view?.threadId === event.threadId && view.completionRevision === event.revision) tell(id, event)
     }] },
     CLAUDE_PROMPT_COMPLETIONS: { actions: assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
@@ -1699,7 +1759,7 @@ const threadsState = setup({
     }) },
     CLAUDE_PROMPT_HOST_RESPONSE: { actions: [({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
-      if (view?.threadId === event.threadId && view.promptHostRequest?.requestId === event.requestId && view.promptHostRequest.kind === event.kind) sendToSystem(id, event)
+      if (view?.threadId === event.threadId && view.promptHostRequest?.requestId === event.requestId && view.promptHostRequest.kind === event.kind) tell(id, event)
     }, assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
       if (!view || view.threadId !== event.threadId || view.promptHostRequest?.requestId !== event.requestId || view.promptHostRequest.kind !== event.kind) return {}
@@ -1711,7 +1771,7 @@ const threadsState = setup({
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, focusRevision: event.revision, focusSite: event.paneId, focus: undefined } } }
     }), ({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
-      if (view?.threadId === event.threadId && view.focusRevision === event.revision && view.focusSite === event.paneId) sendToSystem(id, event)
+      if (view?.threadId === event.threadId && view.focusRevision === event.revision && view.focusSite === event.paneId) tell(id, event)
     }] },
     CLAUDE_UI_FOCUS_STATE: { actions: assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
@@ -1719,26 +1779,26 @@ const threadsState = setup({
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, focus: event.result } } }
     }) },
     CLAUDE_UI_NOTICE: { actions: ({ context, event }) => {
-      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
     } },
     CLAUDE_UI_TRANSCRIPT_LAYOUT: { actions: ({ context, event }) => {
-      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
     } },
     CLAUDE_UI_SCROLL: { actions: ({ context, event }) => {
-      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
     } },
     CLAUDE_UI_PANE: { actions: ({ context, event }) => {
-      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
     } },
-    CLAUDE_UI_AGENTS_GESTURE: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_UI_BACKGROUND_REVIEW: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_UI_SETTINGS: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_UI_COMMAND_PANEL: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_UI_COMMAND_DECISION: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_UI_AGENT_INPUT: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_UI_CLIENT: { actions: ({context,event})=>{if(context.nativeUiViews[event.mountId]?.threadId===event.threadId)sendToSystem(id,event)} },
+    CLAUDE_UI_AGENTS_GESTURE: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_BACKGROUND_REVIEW: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_SETTINGS: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_COMMAND_PANEL: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_COMMAND_DECISION: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_AGENT_INPUT: { actions: ({ context, event }) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_UI_CLIENT: { actions: ({context,event})=>{if(context.nativeUiViews[event.mountId]?.threadId===event.threadId)tell(id,event)} },
     CLAUDE_UI_FIELD: { actions: ({ context, event }) => {
-      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
     } },
     CLAUDE_UI_KEY_RESULT: { actions: assign(({ context, event }) => {
       const view = context.nativeUiViews[event.mountId]
@@ -1746,33 +1806,33 @@ const threadsState = setup({
       return { nativeUiViews: { ...context.nativeUiViews, [event.mountId]: { ...view, actionKeyResult: { sequence: event.sequence, handled: event.handled, actionKeys: event.actionKeys } } } }
     }) },
     CLAUDE_UI_KEY: { actions: ({ context, event }) => {
-      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
     } },
-    CLAUDE_UI_APPROVAL_ANSWER: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id,event) } },
-    CLAUDE_UI_QUESTION_REJECT: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id,event) } },
-    CLAUDE_UI_QUESTION_PAUSE: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id,event) } },
-    CLAUDE_UI_DECISION_PAUSE: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id,event) } },
-    CLAUDE_UI_QUESTION_ANSWER: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id,event) } },
+    CLAUDE_UI_APPROVAL_ANSWER: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_QUESTION_REJECT: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_QUESTION_PAUSE: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_DECISION_PAUSE: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
+    CLAUDE_UI_QUESTION_ANSWER: { actions: ({context,event}) => { if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id,event) } },
     CLAUDE_UI_PRESS: { actions: ({ context, event }) => {
-      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event)
+      if (context.nativeUiViews[event.mountId]?.threadId === event.threadId) tell(id, event)
     } },
-    CLAUDE_TERMINAL_MOUNT: { actions: [assign(({ context, event }) => ({ nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: context.nativeTerminalViews[event.mountId] ?? { threadId: event.threadId, opening: false, output: [] } } })), ({ event }) => sendToSystem(id, event)] },
-    CLAUDE_TERMINAL_UNMOUNT: { actions: [({ event }) => sendToSystem(id, event), assign(({ context, event }) => { const views = { ...context.nativeTerminalViews }; delete views[event.mountId]; return { nativeTerminalViews: views } })] },
-    CLAUDE_TERMINAL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_TERMINAL_CANCEL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_TERMINAL_SUBMIT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_TERMINAL_INPUT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_TERMINAL_RESIZE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_TERMINAL_NOTICE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_TERMINAL_MCP_URL: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_TERMINAL_MCP_FORM: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_TERMINAL_BACKGROUND: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_BACKGROUND_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_BACKGROUND_INPUT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_BACKGROUND_RESIZE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_BACKGROUND_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_TERMINAL_TASK: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
-    CLAUDE_TERMINAL_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) sendToSystem(id, event) } },
+    CLAUDE_TERMINAL_MOUNT: { actions: [assign(({ context, event }) => ({ nativeTerminalViews: { ...context.nativeTerminalViews, [event.mountId]: context.nativeTerminalViews[event.mountId] ?? { threadId: event.threadId, opening: false, output: [] } } })), ({ event }) => tell(id, event)] },
+    CLAUDE_TERMINAL_UNMOUNT: { actions: [({ event }) => tell(id, event), assign(({ context, event }) => { const views = { ...context.nativeTerminalViews }; delete views[event.mountId]; return { nativeTerminalViews: views } })] },
+    CLAUDE_TERMINAL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_CANCEL_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_SUBMIT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_INPUT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_RESIZE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_NOTICE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_MCP_URL: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_MCP_FORM: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_BACKGROUND: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_BACKGROUND_OPEN: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_BACKGROUND_INPUT: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_BACKGROUND_RESIZE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_BACKGROUND_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_TASK: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
+    CLAUDE_TERMINAL_CLOSE: { actions: ({ context, event }) => { if (context.nativeTerminalViews[event.mountId]?.threadId === event.threadId) tell(id, event) } },
     CLAUDE_TERMINAL_STATE: { actions: assign(({ context, event }) => {
       const view = context.nativeTerminalViews[event.mountId]; if (view?.threadId !== event.threadId) return {};
       const sameOwner = view.state?.ownerId === event.state?.ownerId;
@@ -1782,7 +1842,7 @@ const threadsState = setup({
     }) },
     CLAUDE_UI_STATE: { actions: [() => {
       // Module refresh can unmount the old view after startup; a native frame also proves readiness.
-      for (const release of takeClaudeUiRetirements()) sendToSystem(id, { type: 'CLAUDE_UI_UNMOUNT', ...release })
+      for (const release of takeClaudeUiRetirements()) tell(id, { type: 'CLAUDE_UI_UNMOUNT', ...release })
     }, assign(({ context, event }) => {
       if (context.nativeUiViews[event.mountId]?.threadId !== event.threadId) return {}
       if (event.state.status === 'disconnected') forgetClaudeUiLease(event)
@@ -1798,7 +1858,6 @@ const threadsState = setup({
     },
     OPEN_ENTITY: { guard: { type: 'entityIs', params: { entity: 'Thread' } }, target: '.view', actions: ['setSelectedThread', 'sendViewThread', 'recordThreadNavigation', 'followDetail'] },
     SURFACE_STARTED: { actions: 'startSurface' },
-    CHAT_STARTED: { actions: 'startChat' },
     // What the views gave
     'THREADS.READ': { actions: 'readThreads' },
     'ARCHIVED.READ': { actions: 'readArchived' },
@@ -1820,9 +1879,23 @@ const threadsState = setup({
       { guard: 'tabGone', actions: 'dropThread' },
       { actions: 'readTab' },
     ],
-    // Answers to this window's writes
-    THREAD_WRITTEN: { actions: 'settleWrite' },
-    THREAD_WRITE_FAILED: { actions: 'settleWrite' },
+    [made.done]: { actions: made.settle() },
+    // How each of this window's asks ended, by the name it was made under (`made`): its writes settle, and a thread a
+    // message or a fork made opens
+    'made.chatStart': { actions: 'startChat' },
+    'made.created': { actions: 'threadCreated' },
+    'made.opened': { guard: 'openedGone', actions: 'dropThread' },
+    'made.sent': { actions: ['noteSendFailure', 'showStartedThread'] },
+    'made.sentCommand': { actions: ['noteSendFailure', 'showStartedThread'] },
+    'made.forked': { actions: ['noteSendFailure', 'showFork'] },
+    // The chat told the person of these, so they are held no longer
+    'CHAT.FAILURES_TOLD': { actions: assign(({ context, event }) => ({ sendFailures: context.sendFailures.filter(failure => !event.told.includes(failure)) })) },
+    'made.imported': { actions: 'handleThreadsImportEnded' },
+    'made.exported': { actions: 'handleThreadsExportEnded' },
+    'made.statusWrite': { actions: 'settleWrite' },
+    'made.fieldWrite': { actions: 'settleWrite' },
+    'made.deleteWrite': { actions: 'settleWrite' },
+    'made.parentWrite': { actions: 'settleWrite' },
     SHOW_THREAD: { actions: 'openThread' },
     // Thread management events
     SHOW_CREATE_FORM: {
@@ -1843,17 +1916,6 @@ const threadsState = setup({
     },
     CLEAR_NEW_THREAD_FLAG: {
       actions: ['clearNewThreadFlag', stopChild(({ event }) => newThreadFlagTimer(typeOf('CLEAR_NEW_THREAD_FLAG', event).id))]
-    },
-    THREAD_CREATED: {
-      actions: [
-        'settleWrite',
-        'markCreated',
-        stopChild(({ event }) => newThreadFlagTimer(typeOf('THREAD_CREATED', event).id)),
-        spawnChild('clearNewThreadFlag', {
-          id: ({ event }) => newThreadFlagTimer(typeOf('THREAD_CREATED', event).id),
-          input: ({ event }) => ({ id: typeOf('THREAD_CREATED', event).id })
-        })
-      ]
     },
     RENAME_THREAD: {
       actions: 'renameThread',
@@ -1888,26 +1950,11 @@ const threadsState = setup({
     'THREADS.RESET_IMPORT_STATUS': {
       actions: 'resetImportThreadsStatus',
     },
-    THREADS_IMPORTED: {
-      actions: 'handleThreadsImported',
-    },
-    THREADS_IMPORT_FAILED: {
-      actions: 'handleThreadsImportFailed',
-    },
-    THREAD_CHAT_ERROR: {
-      actions: 'dropThread',
-    },
     'THREADS.EXPORT': {
       actions: ['setExportingThreads', 'sendExportThreads'],
     },
     'THREADS.RESET_EXPORT_STATUS': {
       actions: 'resetExportThreadsStatus',
-    },
-    THREADS_EXPORTED: {
-      actions: 'handleThreadsExported',
-    },
-    THREADS_EXPORT_FAILED: {
-      actions: 'handleThreadsExportFailed',
     },
 
     // Filter events
@@ -1937,7 +1984,7 @@ const threadsState = setup({
             } as any;
           }),
           ({ context }) => {
-            sendToSystem(id, { type: 'VIEW_THREAD', threadId: context.view.id });
+            tell(id, { type: 'VIEW_THREAD', threadId: context.view.id });
           },
           'followDetail',
         ],
@@ -1980,7 +2027,7 @@ const threadsState = setup({
             } as any;
           }),
           ({ context }) => {
-            sendToSystem(id, { type: 'VIEW_THREAD', threadId: context.view.id });
+            tell(id, { type: 'VIEW_THREAD', threadId: context.view.id });
           },
           'followDetail',
         ],

@@ -2,7 +2,7 @@
   <!-- RunNode Tree Display -->
   <div class="h-full brain-panel bg-neutral-900/50 backdrop-blur-sm">
     <!-- Brain Dead State (no nodes) -->
-    <div v-if="brainIsDead && (!runNodeTree || runNodeTree.length === 0)" class="flex items-center justify-center h-full">
+    <div v-if="brain.data.brainIsDead && (!runNodeTree || runNodeTree.length === 0)" class="flex items-center justify-center h-full">
       <div class="px-6 py-8 text-center">
         <div class="flex items-center justify-center w-12 h-12 mx-auto mb-3 rounded-full bg-neutral-800/50">
           <svg class="w-6 h-6 text-neutral-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -10,7 +10,7 @@
           </svg>
         </div>
         <p class="text-sm font-medium text-neutral-400">Brain Stopped</p>
-        <p class="mt-1 text-xs text-neutral-500 mb-4">{{ startError ?? 'The brain is currently inactive' }}</p>
+        <p class="mt-1 text-xs text-neutral-500 mb-4">{{ brain.data.startError ?? 'The brain is currently inactive' }}</p>
         <button
           @click="startBrain"
           class="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
@@ -20,7 +20,7 @@
       </div>
     </div>
     <!-- Brain Dead State (with stale nodes) -->
-    <div v-else-if="brainIsDead" class="run-node-tree">
+    <div v-else-if="brain.data.brainIsDead" class="run-node-tree">
       <div class="px-4 pt-4 pb-3 border-b border-neutral-800 bg-neutral-900/30">
         <div class="flex items-center justify-between">
           <h3 class="text-xs font-semibold tracking-wider uppercase text-neutral-500">Run Events</h3>
@@ -80,37 +80,32 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState } from '@apackdev/sdk/fe'
 
 import { computed, ref, watch } from 'vue'
-import { useSelector } from '@xstate/vue'
 import type { BrainState } from '#features/brain/fe/state.ts'
 import RunNodeListItem from '@apackdev/ui/components/RunNodeListItem'
 import type { RunTree } from '@apackdev/sdk/steps'
-import { sendToSystem } from '#generated/events.ts'
+import { tell } from '#generated/events.ts'
 
-const brainActor: BrainState = useSurface();
-const normalizedTree = useSelector(brainActor, (state) => state.context.normalizedTree);
-const brainIsDead = useSelector(brainActor, (state) => state.context.brainIsDead);
-const startError = useSelector(brainActor, (state) => state.context.startError);
-const flowRunNodeId = useSelector(brainActor, (state) => state.context.flowRunNodeId);
+const { state: brain } = useState<BrainState>();
 
 // Infinite scroll: show 50 items at a time
 const PAGE_SIZE = 50;
 const displayCount = ref(PAGE_SIZE);
 
 // Reset display count only on flow navigation (not on every RUN_NODE_SPAWNED)
-watch(flowRunNodeId, () => {
+watch(() => brain.value.data.flowRunNodeId, () => {
   displayCount.value = PAGE_SIZE;
 });
 
 // Convert normalized tree back to RunTree[] format, reversed (newest first)
 const runNodeTree = computed((): RunTree[] => {
-  if (!normalizedTree.value) return [];
+  if (!brain.value.data.normalizedTree) return [];
 
   function buildNode(id: string): RunTree {
-    const node = normalizedTree.value!.byId[id];
-    const childIds = normalizedTree.value!.childrenById[id] || [];
+    const node = brain.value.data.normalizedTree!.byId[id];
+    const childIds = brain.value.data.normalizedTree!.childrenById[id] || [];
 
     return {
       ...node,
@@ -118,7 +113,7 @@ const runNodeTree = computed((): RunTree[] => {
     } as RunTree;
   }
 
-  return normalizedTree.value.rootIds.slice().reverse().map(id => buildNode(id));
+  return brain.value.data.normalizedTree.rootIds.slice().reverse().map(id => buildNode(id));
 });
 
 // Paginated slice for display
@@ -139,7 +134,7 @@ const onScroll = (e: Event) => {
 
 // Start brain method
 const startBrain = () => {
-  sendToSystem('brain', {
+  tell('brain', {
     type: 'START_BRAIN',
   });
 };

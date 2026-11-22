@@ -5,19 +5,17 @@ import { packFixture } from '@apackdev/sdk/testing/pack-fixture';
 import { population } from '@apackdev/sdk/testing';
 import { bundlePackFE } from '../../src/build/fe-bundler';
 import { bundleExternals } from '../_support/pack-builds';
-import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/publish-checks';
+import { PACKAGES_BUILT, REPO_ROOT, installPublishedPackages } from '@app/internal-publish-checks';
 
-const EARS_SOURCE = path.join(REPO_ROOT, 'packages', 'apack-ears');
 const SDK_SOURCE = path.join(REPO_ROOT, 'packages', 'apack-sdk');
 const UI_SOURCE = path.join(REPO_ROOT, 'packages', 'apack-ui');
 let installed: string | undefined;
 
 const LAYOUTS = [
   // A pack resolves the packages' published dist whether they are linked from the workspace or installed
-  { name: 'workspace install', earsDir: () => EARS_SOURCE, sdkDir: () => SDK_SOURCE, uiDir: () => UI_SOURCE, ext: 'js' },
+  { name: 'workspace install', sdkDir: () => SDK_SOURCE, uiDir: () => UI_SOURCE, ext: 'js' },
   ...(PACKAGES_BUILT ? [{
     name: 'published package',
-    earsDir: () => path.join(installed!, 'node_modules', '@apackdev', 'ears'),
     sdkDir: () => path.join(installed!, 'node_modules', '@apackdev', 'sdk'),
     uiDir: () => path.join(installed!, 'node_modules', '@apackdev', 'ui'),
     ext: 'js',
@@ -34,12 +32,12 @@ afterAll(() => {
 
 const tmpDirs: string[] = [];
 
-function makePack(layout: { earsDir: () => string; sdkDir: () => string; uiDir: () => string }, entrySource: string, manifest: Record<string, unknown> = {}): { packDir: string; entry: string } {
-  // Its own `node_modules/@apackdev/*` link tree, so the fixture writes the pack and this links the packages
+function makePack(layout: { sdkDir: () => string; uiDir: () => string }, entrySource: string, manifest: Record<string, unknown> = {}): { packDir: string; entry: string } {
+  // Its own `node_modules/@apackdev/*` link tree, so the fixture writes the pack and this links the packages. A pack
+  // names the SDK and not EARS, which it reaches as its SDK's dependency
   const packDir = packFixture({ manifest: { id: 'fixture-pack', name: 'Fixture', ...manifest } });
   tmpDirs.push(packDir);
   fs.mkdirSync(path.join(packDir, 'node_modules', '@apackdev'), { recursive: true });
-  fs.symlinkSync(layout.earsDir(), path.join(packDir, 'node_modules', '@apackdev', 'ears'), 'dir');
   fs.symlinkSync(layout.sdkDir(), path.join(packDir, 'node_modules', '@apackdev', 'sdk'), 'dir');
   fs.symlinkSync(layout.uiDir(), path.join(packDir, 'node_modules', '@apackdev', 'ui'), 'dir');
   const entry = path.join(packDir, 'src', 'entry.ts');
@@ -158,7 +156,7 @@ describe.each(LAYOUTS)('bundlePackFE host binding guard ($name)', (layout) => {
     // Shape of #generated/ears: the EARS namespace plus the pure typed-helpers factory call
     fs.writeFileSync(path.join(packDir, 'src', 'ears.ts'), [
       "export namespace EARS { export namespace Entity { export const Memo = 'Memo'; } }",
-      "import { defineEars, type UntypedSchema } from '@apackdev/ears';",
+      "import { defineEars, type UntypedSchema } from '@apackdev/sdk/ears';",
       "export const { query, newId } = /*#__PURE__*/ defineEars<UntypedSchema & { shapes: { Memo: { text: string } } }>();",
     ].join('\n'));
 

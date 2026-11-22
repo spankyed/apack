@@ -4,7 +4,7 @@ import { safeEvents } from '@apackdev/sdk/fe'
 import { type TrailClickEvent } from '@apackdev/sdk/fe'
 import type { OutgoingSettingsEvents } from '../be/types.ts'
 import type { SecretMetadata, SecretsStatus } from '@apackdev/sdk/services'
-import { sendToSystem } from '../../../events.ts'
+import { tell } from '../../../events.ts'
 import type { PackContentPreview } from '@apackdev/sdk/build'
 import type { FeatureRef } from '@apackdev/sdk/ids';
 
@@ -83,7 +83,7 @@ type UIEvent =
   | { type: 'PACK_CONTENT.RESET_STATUS' }
   | { type: 'APP.RESET' }
 
-export type SettingsEvents = UIEvent | Exclude<OutgoingSettingsEvents, { type: 'SETTINGS_LOADED' | 'SETTINGS_UPDATED' | 'SETTINGS_RESET' | 'SETTINGS_SAVED' | 'SETTINGS_REFUSED' }> | TrailClickEvent | HelpEvent
+export type SettingsEvents = UIEvent | Exclude<OutgoingSettingsEvents, { type: 'SETTINGS_LOADED' | 'SETTINGS_UPDATED' | 'SETTINGS_RESET' }> | TrailClickEvent | HelpEvent
   | { type: 'PACK_CONTENT_IMPORTED'; result: Record<string, { created: number; updated: number; skipped: number }>; errors: string[] }
   | { type: 'PACK_CONTENT_IMPORT_FAILED'; error: string }
   | { type: 'PACK_CONTENT_PREVIEW'; preview: PackContentPreview }
@@ -145,7 +145,7 @@ export function createSettingsMachine(io: SettingsIO) {
     testCliProvider: assign(({ context, event }) => {
       const ev = typeOf('CLI.TEST', event);
       // The code feature resolves CLIs: `resolve-cli` and the stored paths are its own
-      sendToSystem({ role: 'code' }, {
+      tell({ role: 'code' }, {
         type: 'TEST_CLI_PROVIDER',
         provider: ev.provider,
       });
@@ -155,7 +155,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     setCliTestResult: assign(({ context, event }) => {
-      const ev = event as { type: 'CLI_TEST_RESULT'; provider: string; success: boolean; error?: string; resolvedPath?: string };
+      const ev = typeOf('CLI_TEST_RESULT', event);
       return {
         cliTestResults: {
           ...context.cliTestResults,
@@ -169,9 +169,9 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     previewPackContent: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT.PREVIEW'; directory: string };
+      const ev = typeOf('PACK_CONTENT.PREVIEW', event);
       // The packs system owns content orchestration; its answers come back to this surface, which draws them
-      sendToSystem('packs', {
+      tell('packs', {
         type: 'PREVIEW_PACK_CONTENT',
         directory: ev.directory,
       });
@@ -191,7 +191,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     setContentPreview: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT_PREVIEW'; preview: PackContentPreview };
+      const ev = typeOf('PACK_CONTENT_PREVIEW', event);
       const selection = Object.fromEntries(Object.entries(ev.preview.content).map(([key, items]) => [key, items.map(i => i.key)]));
       return {
         packContentImport: {
@@ -208,7 +208,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     setContentPreviewFailed: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT_PREVIEW_FAILED'; error: string };
+      const ev = typeOf('PACK_CONTENT_PREVIEW_FAILED', event);
       return {
         packContentImport: {
           ...context.packContentImport,
@@ -222,7 +222,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     toggleContentExpand: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT.TOGGLE_EXPAND'; key: string };
+      const ev = typeOf('PACK_CONTENT.TOGGLE_EXPAND', event);
       return {
         packContentImport: {
           ...context.packContentImport,
@@ -235,7 +235,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     toggleContentTypeAll: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT.TOGGLE_TYPE_ALL'; key: string };
+      const ev = typeOf('PACK_CONTENT.TOGGLE_TYPE_ALL', event);
       const preview = context.packContentImport.preview;
       if (!preview) return {};
       const currentlySelected = context.packContentImport.selection[ev.key] ?? [];
@@ -253,7 +253,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     toggleContentItem: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT.TOGGLE_ITEM'; key: string; item: string };
+      const ev = typeOf('PACK_CONTENT.TOGGLE_ITEM', event);
       const current = context.packContentImport.selection[ev.key] ?? [];
       const next = current.includes(ev.item)
         ? current.filter(k => k !== ev.item)
@@ -282,7 +282,7 @@ export function createSettingsMachine(io: SettingsIO) {
         return selected.length === total ? null : selected;
       };
 
-      sendToSystem('packs', {
+      tell('packs', {
         type: 'IMPORT_PACK_CONTENT',
         directory,
         include: Object.fromEntries(Object.keys(preview.content).map((key) => [key, toIncludeField(key)])),
@@ -306,7 +306,7 @@ export function createSettingsMachine(io: SettingsIO) {
     })),
 
     setContentImported: assign(({ context, event }) => {
-      const ev = event as Extract<SettingsEvents, { type: 'PACK_CONTENT_IMPORTED' }>;
+      const ev = typeOf('PACK_CONTENT_IMPORTED', event);
       return {
         packContentImport: {
           ...context.packContentImport,
@@ -319,7 +319,7 @@ export function createSettingsMachine(io: SettingsIO) {
     }),
 
     setContentImportFailed: assign(({ context, event }) => {
-      const ev = event as { type: 'PACK_CONTENT_IMPORT_FAILED'; error: string };
+      const ev = typeOf('PACK_CONTENT_IMPORT_FAILED', event);
       return {
         packContentImport: {
           ...context.packContentImport,
@@ -339,7 +339,7 @@ export function createSettingsMachine(io: SettingsIO) {
   id,
   
   initial: 'ready',
-  entry: () => sendToSystem('help', { type: 'GET_HELP' }),
+  entry: () => tell('help', { type: 'GET_HELP' }),
   on: {
     HELP_CATALOG: { actions: 'updateHelp' },
     'HELP.OPEN': { actions: ['updateHelp', assign({ activeTab: 'help' })] },
@@ -396,7 +396,7 @@ export function createSettingsMachine(io: SettingsIO) {
           actions: assign(({ context, event }) => ({
             packContentImport: {
               ...context.packContentImport,
-              importMode: (event as any).mode,
+              importMode: typeOf('PACK_CONTENT.SET_MODE', event).mode,
             },
           })),
         },

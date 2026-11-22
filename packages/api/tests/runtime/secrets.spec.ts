@@ -12,13 +12,13 @@
 // It mocks the vault module rather than injecting one because the procedures use the module-level `secretsStore`
 // singleton, which builds its own vaults; injection is reachable from host's suite and not from here. `@apackdev/host`
 // publishes `./secrets/vault` so this names it as a specifier instead of reaching into another package's `src/`
-// (`repo-checks/tests/spec-placement.spec.ts`).
+// (`internal-repo-checks/tests/spec-placement.spec.ts`).
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Message } from '@apackdev/sdk/events';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@elmdb/ears';
 
 // The test environment keeps the data key in a file vault; `vaultDown` swaps it for an OS credential store that fails,
 // the way a system without one (or a locked keyring) does

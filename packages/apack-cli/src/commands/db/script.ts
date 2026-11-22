@@ -1,6 +1,6 @@
 // apack db script: a script file run against the data dir's database, for work a console one-liner can't do (it
 // imports what it likes, and keeps its own helpers). The database is handed to it, rather than left for it to open:
-// the published CLI carries its own copy of the engine, so a script importing @apackdev/ears would get a second one.
+// the published CLI carries its own copy of the engine, so a script importing @elmdb/ears would get a second one.
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';

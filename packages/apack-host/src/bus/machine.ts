@@ -6,9 +6,9 @@ import { carrySettingsRequest } from '../features/settings/be/access.ts';
 import { enqueueActions, fromCallback, setup, spawnChild, type AnyActorRef, type AnyActorLogic, type AnyStateMachine } from 'xstate';
 import { reportError } from '@apackdev/sdk/logger';
 import { HOST } from '../refs.ts';
-import { deliverAs } from './delivery.ts';
+import { answerUnavailable, deliverAs } from './delivery.ts';
 import { SYSTEM_EVENT_TYPES } from '@apackdev/sdk/framework';
-import { SURFACE_EVENT_TYPES, _callOn, senderSuffix, type Message } from '@apackdev/sdk/events';
+import { SURFACE_EVENT_TYPES, _callOn, _cancelAsk, _currentDelivery, _isPendingAsk, _settleAsk, senderSuffix, type Message } from '@apackdev/sdk/events';
 import type { PackRegistry } from '../packs/registry.ts';
 
 
@@ -49,12 +49,12 @@ export type BackendEvents =
   | SystemsSpawnedEvent
   | { type: 'SYSTEMS_STOPPED'; afterStop(): void };
 
-/** The events a bus source can feed it: OUTGOING for sends to surfaces from outside a system (`broadcastToSurface`) */
+/** The events a bus source can feed it: OUTGOING for sends to surfaces from outside a system (`broadcast`) */
 export type BusSourceEvent = Extract<BackendEvents, { type: 'INCOMING' | 'OUTGOING' | 'CLIENT_CONNECTED' | 'PACK_CLIENT_CONNECTED' }>;
 
 export interface BusOptions {
   /** The registered packs whose systems the bus runs */
-  registry: Pick<PackRegistry, 'getRegisteredSystems' | 'getRegisteredPackSystemIds' | 'getSurfaceEventValidationMap' | 'getEventValidationMap'>;
+  registry: Pick<PackRegistry, 'getRegisteredSystems' | 'getRegisteredPackSystemIds' | 'getSurfaceEventValidationMap' | 'getEventValidationMap' | 'askKinds'>;
   /** The systems the bus runs, by id; defaults to every system in `registry` */
   systems?(): ReadonlyMap<string, AnyStateMachine>;
   /** Delivers a message a system sent to a frontend surface */
@@ -198,6 +198,9 @@ export function createBusMachine(options: BusOptions) {
       listen: spawnChild('listen', { id: 'bus-listen' }),
       notify: ({ event }) => {
         if (event.type !== 'OUTGOING') return;
+        // An answer to an ask this process made on a connection is that ask's: only the pack test harness asks so, as
+        // the window it stands in for. A window's own asks are taken off its subscription, in the window
+        if (_settleAsk(event.message)) return;
         // The counterpart of receiveClientEvent: a client's event is checked against what a system
         // accepts, and a system's event against what the surface receives. Reported and dropped rather
         // than thrown — the caller is a running system, and a malformed message must not take it down.
@@ -207,7 +210,7 @@ export function createBusMachine(options: BusOptions) {
         // `action:<label>`). `reportError` sends for a caller that is neither, so a drop that names no sender is
         // not thereby suspicious — it just has one fewer clue in it.
         const sender = senderSuffix(event.message);
-        // Four senders reach this one path — `untypedBroadcastToSurface`, the generated `broadcastToSurface`,
+        // Four senders reach this one path — `untypedBroadcast`, the generated `broadcast`,
         // `sendToWindow` and `reply` — and a `reply` caller named no id: the address came off the envelope,
         // which is the point of the verb, so telling it to "check the id" sends the next reader to look at a
         // call site that has none. So the wording varies by this, and the report carries it as its own field.
@@ -215,7 +218,7 @@ export function createBusMachine(options: BusOptions) {
         // **Not as a third `operation` value, which was tried and regressed.** `operation` says which verb,
         // and two readers filter on it to mean *direction*: `undeclared-incoming.spec.ts` separates this
         // function's reports from `routeIncoming`'s, and `@apackdev/testing`'s fixture collects these to fail a
-        // test on a dropped send. Making it `answering ? 'reply' : 'broadcastToSurface'` left that fixture
+        // test on a dropped send. Making it `answering ? 'reply' : 'broadcast'` left that fixture
         // filtering for one value while this sent two, so a dropped answer stopped failing any Playwright
         // test — silently, there being no case over the fixture. Two facts, two fields.
         const answering = event.message.answering !== undefined;
@@ -230,7 +233,7 @@ export function createBusMachine(options: BusOptions) {
           // `diagnostic`: logged, recorded, and failing any pack test that leaves one — but no toast.
           // Whoever is using the app can do nothing about a send to a surface nobody declares, and the
           // message already reaches the Logs surface, where the person who can is looking.
-          reportError({ source: 'bus', operation: 'broadcastToSurface', ...(answering ? { answering } : {}), severity: 'diagnostic', error: new Error(message) });
+          reportError({ source: 'bus', operation: 'broadcast', ...(answering ? { answering } : {}), severity: 'diagnostic', error: new Error(message) });
         };
         if (accepted === undefined) {
           // A name a connection claimed rather than a pack registering it (`host/drive`). No pack describes it, so
@@ -262,10 +265,10 @@ export function createBusMachine(options: BusOptions) {
          * Reports a send to a system that declares no such event, which XState would otherwise ignore in
          * silence — delivered, dropped by the machine, nothing said.
          *
-         * **This is the net for `untypedSendToSystem`**, and the asymmetry it closes is between the two
-         * untyped twins rather than between typed and untyped: `untypedBroadcastToSurface` has always been
+         * **This is the net for `untypedTell`**, and the asymmetry it closes is between the two
+         * untyped twins rather than between typed and untyped: `untypedBroadcast` has always been
          * checked here on the way out (`notify`), while its inward mirror was not. The facade's
-         * `sendToSystem` and a handler's `reply` are both typed against a contract, so what is left for a
+         * `tell` and a handler's `reply` are both typed against a contract, so what is left for a
          * runtime check is exactly the hatch — host code, tooling, a target or an event that arrives as
          * data.
          *
@@ -284,7 +287,7 @@ export function createBusMachine(options: BusOptions) {
           if (accepted === undefined || accepted.has('*') || accepted.has(type)) return;
           if ((SYSTEM_EVENT_TYPES as readonly string[]).includes(type)) return;
           const sender = senderSuffix(message);
-          // As on the outgoing side: `reply` and `sendToSystem` both land here, and advice to fix a target sends
+          // As on the outgoing side: `reply` and `tell` both land here, and advice to fix a target sends
           // the next reader to a call site with none in it. Its own field rather than an `operation` value, for
           // the reason the outgoing side records — the helper in `undeclared-incoming.spec.ts` filters on
           // `operation` to mean "the reports this function made", and a second value there takes that away. In
@@ -295,7 +298,7 @@ export function createBusMachine(options: BusOptions) {
           reportedDrops.add(pair);
           reportError({
             source: 'bus',
-            operation: 'sendToSystem',
+            operation: 'tell',
             ...(answering ? { answering } : {}),
             severity: 'diagnostic',
             error: new Error(answering
@@ -305,8 +308,15 @@ export function createBusMachine(options: BusOptions) {
         };
 
         if (event.type !== 'INCOMING') return;
+        // An answer to an ask this process is waiting on is that ask's, and goes to no system: its address is only
+        // what brought it here (`ask`, `@apackdev/sdk/events`)
+        if (_settleAsk(event.message)) return;
+        // An asker stopping an ask is that ask's too: its handler's signal aborts, and the system's machine never sees it
+        if (_cancelAsk(event.message)) return;
         const { to, event: incoming, sender, client, call } = event.message;
         const actor = system.get(to);
+        // One of the system's declared asks, which is answered exactly once: by its handler, or here when none took it
+        const kinds = options.registry.askKinds(to, incoming.type);
         // Delivered inside a scope naming the message, so the system can answer its sender with `reply` and a
         // send it makes while handling carries its own ref.
         //
@@ -320,7 +330,17 @@ export function createBusMachine(options: BusOptions) {
           reportUndeclared(to, incoming.type, event.message);
           const delivered = { ...incoming, ..._callOn(event.message) };
           carrySettingsRequest(incoming, delivered);
-          deliverAs({ to, sender, client, call, diagnostics: event.message.diagnostics }, delivered, () => actor.send(delivered));
+          const ask = kinds === undefined ? undefined : { kinds, taken: false };
+          // A system asking itself through the bus is still handling the message that made it ask, so XState queues
+          // this one behind it: it has not been handled yet, rather than refused, and is not answered here
+          const queued = _currentDelivery()?.receiver === to;
+          deliverAs({ to, sender, client, call, diagnostics: event.message.diagnostics }, delivered, () => actor.send(delivered), ask);
+          if (ask && !ask.taken && !queued) answerUnavailable(event.message, `The "${to}" system does not take "${incoming.type}" in the state it is in`);
+        }
+        // An ask, which is answered whatever happens to it: one the registry knows the system declares, or one this
+        // process is waiting on and that nothing registered would otherwise answer
+        else if (kinds !== undefined || _isPendingAsk(call)) {
+          answerUnavailable(event.message, `No "${to}" system is running to answer "${incoming.type}"`);
         }
         // An event every system accepts (a feature's settings changing) is the feature's system's if it runs one
         else if (!(SYSTEM_EVENT_TYPES as readonly string[]).includes(incoming.type)) {
@@ -412,7 +432,7 @@ export function createBusMachine(options: BusOptions) {
     // A pack can be installed, uninstalled or rebuilt before any client connects (`apack pack dev` against a
     // running backend, a headless boot), so these apply in both states: handled only once a client connected,
     // the pack's systems would be left as they were with nothing reported. Events for systems don't wait for a
-    // client either: systems, steps and schedules send them (`sendToSystem`, `fire`, schedule ticks) from boot.
+    // client either: systems, steps and schedules send them (`tell`, `fire`, schedule ticks) from boot.
     on: {
       INCOMING: { actions: 'routeIncoming' },
       RELOAD_PACK: { actions: 'reloadPack' },

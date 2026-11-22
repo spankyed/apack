@@ -169,7 +169,7 @@ import ThreadContextMenu from '../components/thread-context-menu.vue';
 
 const props = defineProps<{
   thread: ThreadListItem;
-  availableTags?: ThreadTagOption[];
+  availableTags?: readonly ThreadTagOption[];
   settings?: ThreadsSettings | null;
   chatStates?: Record<string, string>;
   chatStateOverrides?: Record<string, { id: string; expiresAt: number }>;

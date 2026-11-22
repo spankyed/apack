@@ -3,8 +3,7 @@ import NativeBackgroundComposer from '#features/threads/fe/chat/NativeBackground
 import type {ClaudeUiMountState,ClaudeUiQuestionFrame} from '#features/code/be/services/claude-code/ui-presentation.ts'
 const captured=vi.hoisted(()=>({questions:[] as {run():void}[],approvals:[] as {run():void}[],send:vi.fn()}))
 let context:{nativeUiViews:Record<string,{threadId:string;attachmentId:string;state:ClaudeUiMountState}>},app:App|undefined
-vi.mock('@apackdev/sdk/fe',()=>({useSurface:()=>({send:captured.send,getSnapshot:()=>({context,status:'active'})})}))
-vi.mock('@xstate/vue',async()=>{const{computed}=await import('vue');return{useSelector:(_actor:unknown,select:(value:unknown)=>unknown)=>computed(()=>select({context}))}})
+vi.mock('@apackdev/sdk/fe',async()=>{const { computed } = await import('vue'); return ({ useState: () => ({ state: computed(() => ({ data: context })), send: captured.send }), useSurface:()=>({send:captured.send,getSnapshot:()=>({context,status:'active'})})}) })
 vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue',()=>({default:{render:()=>null}}))
 vi.mock('#features/threads/fe/chat/NativeQuestionDrawing.vue',async()=>{const{getCurrentInstance,h}=await import('vue');return{default:{props:['frame'],setup(props:{frame:ClaudeUiQuestionFrame}){const identity={messageId:props.frame.messageId,token:props.frame.token!},listener=getCurrentInstance()!.vnode.props!.onRespond as (...args:unknown[])=>void;captured.questions.push({run:()=>listener({answers:{Same:'Alpha'}},identity)});return()=>h('div')}}}})
 vi.mock('#features/threads/fe/chat/NativeBackgroundApproval.vue',async()=>{const{getCurrentInstance,h}=await import('vue');return{default:{props:['frame'],setup(props:{frame:{id:string}}){const id=props.frame.id,listener=getCurrentInstance()!.vnode.props!.onAnswer as (...args:unknown[])=>void;captured.approvals.push({run:()=>listener(id,{approved:false})});return()=>h('div')}}}})

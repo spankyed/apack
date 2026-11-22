@@ -160,14 +160,14 @@
         <span class="text-sm text-red-400">Are you sure?</span>
         <button
           @click="onResetApp"
-          :disabled="resetting"
+          :disabled="settingsView.data.resetting"
           class="px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          {{ resetting ? 'Resetting…' : 'Yes, erase everything' }}
+          {{ settingsView.data.resetting ? 'Resetting…' : 'Yes, erase everything' }}
         </button>
         <button
           @click="confirmingReset = false"
-          :disabled="resetting"
+          :disabled="settingsView.data.resetting"
           class="px-4 py-2 rounded-lg text-sm font-medium bg-neutral-700 hover:bg-neutral-600 text-neutral-300 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
         >
           Cancel
@@ -178,10 +178,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { computed, ref } from 'vue'
-import { useSelector } from '@xstate/vue'
 import { HardDrive, PackageOpen, RotateCcw, Trash2 } from 'lucide-vue-next'
 import ImportPackContentPicker from './ImportPackContentPicker.vue'
 import Hotkeys from './Hotkeys.vue'
@@ -214,18 +213,17 @@ function onHotkeyUpdate(event: SettingUpdate) {
 
 const actor: SettingsState = useSurface()
 
-const packContentImport = useSelector(actor, (state) => state.context.packContentImport)
-const resetting = useSelector(actor, (state) => state.context.resetting)
+const { state: settingsView, send } = useState(actor)
 
-const status = computed(() => packContentImport.value?.status ?? 'idle')
-const preview = computed(() => packContentImport.value?.preview ?? null)
-const selection = computed(() => packContentImport.value?.selection)
-const expanded = computed(() => packContentImport.value?.expanded)
-const importMode = computed(() => packContentImport.value?.importMode ?? 'replace-on-collision')
-const restartBrainFlag = computed(() => packContentImport.value?.restartBrain ?? false)
-const importResult = computed(() => packContentImport.value?.result)
-const applyErrors = computed<string[]>(() => packContentImport.value?.errors ?? [])
-const importError = computed(() => packContentImport.value?.error)
+const status = computed(() => settingsView.value.data.packContentImport?.status ?? 'idle')
+const preview = computed(() => settingsView.value.data.packContentImport?.preview ?? null)
+const selection = computed(() => settingsView.value.data.packContentImport?.selection)
+const expanded = computed(() => settingsView.value.data.packContentImport?.expanded)
+const importMode = computed(() => settingsView.value.data.packContentImport?.importMode ?? 'replace-on-collision')
+const restartBrainFlag = computed(() => settingsView.value.data.packContentImport?.restartBrain ?? false)
+const importResult = computed(() => settingsView.value.data.packContentImport?.result)
+const applyErrors = computed<string[]>(() => settingsView.value.data.packContentImport?.errors ?? [])
+const importError = computed(() => settingsView.value.data.packContentImport?.error)
 
 const confirmingClearAppCache = ref(false)
 const appCacheStatus = ref<{ kind: 'success' | 'error'; message: string } | null>(null)
@@ -249,45 +247,45 @@ async function selectDirectory() {
   // `string | string[] | null` whatever the options, and this wants one directory, as Projects.vue does
   const result = await window.electronAPI?.fileUtils?.selectDirectory?.()
   if (!result) return
-  actor.send({ type: 'PACK_CONTENT.PREVIEW', directory: result })
+  send({ type: 'PACK_CONTENT.PREVIEW', directory: result })
 }
 
 function onToggleExpand(key: string) {
-  actor.send({ type: 'PACK_CONTENT.TOGGLE_EXPAND', key })
+  send({ type: 'PACK_CONTENT.TOGGLE_EXPAND', key })
 }
 
 function onToggleTypeAll(key: string) {
-  actor.send({ type: 'PACK_CONTENT.TOGGLE_TYPE_ALL', key })
+  send({ type: 'PACK_CONTENT.TOGGLE_TYPE_ALL', key })
 }
 
 function onToggleItem(payload: { key: string; item: string }) {
-  actor.send({ type: 'PACK_CONTENT.TOGGLE_ITEM', key: payload.key, item: payload.item })
+  send({ type: 'PACK_CONTENT.TOGGLE_ITEM', key: payload.key, item: payload.item })
 }
 
 function onSetMode(mode: ContentImportMode) {
-  actor.send({ type: 'PACK_CONTENT.SET_MODE', mode })
+  send({ type: 'PACK_CONTENT.SET_MODE', mode })
 }
 
 function onToggleRestartBrain() {
-  actor.send({ type: 'PACK_CONTENT.TOGGLE_RESTART_BRAIN' })
+  send({ type: 'PACK_CONTENT.TOGGLE_RESTART_BRAIN' })
 }
 
 function onConfirm() {
-  actor.send({ type: 'PACK_CONTENT.CONFIRM_IMPORT' })
+  send({ type: 'PACK_CONTENT.CONFIRM_IMPORT' })
 }
 
 function onCancel() {
-  actor.send({ type: 'PACK_CONTENT.CANCEL' })
+  send({ type: 'PACK_CONTENT.CANCEL' })
 }
 
 function onReset() {
-  actor.send({ type: 'PACK_CONTENT.RESET_STATUS' })
+  send({ type: 'PACK_CONTENT.RESET_STATUS' })
 }
 
 // Reset App
 const confirmingReset = ref(false)
 
 function onResetApp() {
-  actor.send({ type: 'APP.RESET' })
+  send({ type: 'APP.RESET' })
 }
 </script>

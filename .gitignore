@@ -33,16 +33,3 @@ build/prod/logs/
 # `inputFiles` in @apackdev/host/build/packages-built skips the same pattern, for the walks that do not read this
 *.bundled_*.mjs
 *.bundled_*.cjs
-
-
-# The elmdb checkout @apackdev/ears builds against, linked by `npm run link:elmdb` (scripts/link-elmdb.mjs); the
-# commit it is pinned to is vendor/elmdb.rev
-vendor/elmdb
-
-# The apack-terminal checkout the broker is built from, arranged the same way: a machine-specific symlink that is
-# ignored, beside vendor/apack-terminal.rev, the commit it is pinned to. Ignored before the link exists, because
-# the first `git add -A` after it would otherwise commit one developer's absolute home directory.
-vendor/apack-terminal
-
-# The apack-git checkout the built-in pack's git engine comes from, arranged the same way
-vendor/apack-git

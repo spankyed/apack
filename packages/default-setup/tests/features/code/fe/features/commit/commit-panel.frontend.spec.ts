@@ -6,11 +6,9 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createApp, h, nextTick, type App } from 'vue'
 import { createActor, createMachine, sendTo, type AnyActorRef, type AnyEventObject } from 'xstate'
-import { answerTo } from '@apackdev/sdk/testing'
-import { sentCall } from '../../../../../_support/calls.ts'
+import { asksOf, latestAsk, made, resetAsks } from '../../_support/asks.ts'
 
-const sendToSystem = vi.hoisted(() => vi.fn())
-vi.mock('#generated/events.ts', () => ({ sendToSystem, broadcastToSurface: vi.fn(), sendToSurface: vi.fn() }))
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), broadcast: vi.fn(), sendToSurface: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }))
 
 const { SurfaceScope } = await import('@apackdev/sdk/fe')
 const { fakeSettings, startFeTestRuntime, stopFeTestRuntime } = await import('@apackdev/sdk/testing')
@@ -25,7 +23,7 @@ let app: App | undefined
 let code: AnyActorRef | undefined
 let stopRuntime: (() => void) | undefined
 let settings: { dispose(): void } | undefined
-beforeEach(() => sendToSystem.mockReset())
+beforeEach(resetAsks)
 afterEach(() => {
   app?.unmount()
   code?.stop()
@@ -61,13 +59,10 @@ async function panel(status: { files?: File[]; commitsAhead?: number; hasUpstrea
   settings = bound
 
   commit.send({ type: 'commit.REFRESH_STATUS' })
-  commit.send(answerTo(sentCall(sendToSystem, 'commit.GET_GIT_STATUS'), {
-    type: 'commit.STATUS_RECEIVED',
-    data: {
-      files: status.files ?? [], truncated: false, branch: 'main', hasUpstream: status.hasUpstream ?? true,
-      commitsAhead: status.commitsAhead ?? 0, commitsBehind: 0, watching: true, ...(status.operation ? { operation: status.operation } : {}),
-    },
-  }))
+  await latestAsk('commit.GET_GIT_STATUS').answer({
+    files: status.files ?? [], truncated: false, branch: 'main', hasUpstream: status.hasUpstream ?? true,
+    commitsAhead: status.commitsAhead ?? 0, commitsBehind: 0, watching: true, ...(status.operation ? { operation: status.operation } : {}),
+  })
 
   app = createApp({ render: () => h(SurfaceScope, { surface: CODE_SURFACE }, { default: () => h(CommitPanel) }) })
   app.mount(document.body.appendChild(document.createElement('div')))
@@ -77,9 +72,7 @@ async function panel(status: { files?: File[]; commitsAhead?: number; hasUpstrea
 
 const byTestId = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`)
 const buttonNamed = (label: string) => [...document.querySelectorAll('button')].find(b => b.textContent?.trim() === label)
-/** The call of the latest ask of `type`, which is the one the machine takes an answer to */
-const latest = (type: string) => sentCall(sendToSystem, type, sendToSystem.mock.calls.filter(([, event]) => (event as { type: string }).type === type).length - 1)
-const sent = () => sendToSystem.mock.calls.map(([, event]) => (event as { type: string }).type)
+const sent = () => made.map(ask => ask.event.type)
 const staged: File = { path: 'a.ts', status: 'modified', staged: true }
 const unstaged: File = { path: 'b.ts', status: 'modified', staged: false }
 
@@ -91,42 +84,43 @@ async function typeMessage(text: string) {
 }
 
 it('lists the trailers git read under the message, marks those the settings leave out of a commit, and takes one out when asked', async () => {
-  const commit = await panel({ files: [staged] }, { trailersRemovedOnCommit: ['co-authored-by'] })
+  await panel({ files: [staged] }, { trailersRemovedOnCommit: ['co-authored-by'] })
   await typeMessage('feat\n\nCo-authored-by: A\nSigned-off-by: B')
-  commit.send({ type: 'commit.TRAILERS_READ', data: { message: 'feat\n\nCo-authored-by: A\nSigned-off-by: B', trailers: [{ key: 'Co-authored-by', value: 'A' }, { key: 'Signed-off-by', value: 'B' }] } })
+  await latestAsk('commit.READ_TRAILERS').answer({ message: 'feat\n\nCo-authored-by: A\nSigned-off-by: B', trailers: [{ key: 'Co-authored-by', value: 'A' }, { key: 'Signed-off-by', value: 'B' }] })
   await settle()
 
   const chips = [...document.querySelectorAll<HTMLElement>('[data-commit-trailer]')]
   expect(chips.map(chip => chip.textContent?.includes('removed on commit'))).toEqual([true, false])
 
   chips[1]!.querySelector('button')!.click()
-  expect(sendToSystem.mock.calls.map(([, event]) => event).filter(event => event.type === 'commit.REMOVE_TRAILER'))
+  expect(asksOf('commit.REMOVE_TRAILER').map(ask => ask.event))
     .toEqual([{ type: 'commit.REMOVE_TRAILER', message: 'feat\n\nCo-authored-by: A\nSigned-off-by: B', trailer: { key: 'Signed-off-by', value: 'B' } }])
 })
 
 it('offers to update a submodule on another commit, one at a time, saying how far along it is, until it is answered', async () => {
   const moved: File = { path: 'lib', status: 'modified', staged: false, submodule: { commit: true, modified: false, untracked: false } }
   const edited: File = { path: 'vendor', status: 'modified', staged: false, submodule: { commit: false, modified: true, untracked: false } }
-  const commit = await panel({ files: [moved, edited, unstaged] })
+  await panel({ files: [moved, edited, unstaged] })
   const updates = () => [...document.querySelectorAll<HTMLButtonElement>('[data-testid="update-submodule"]')]
   expect(updates()).toHaveLength(1)
 
   updates()[0]!.click()
   await settle()
   updates()[0]!.click()
-  commit.send(answerTo(latest('commit.UPDATE_SUBMODULE'), { type: 'commit.PROGRESS', data: { during: 'submodule', stage: 'Receiving objects', percent: 40 } }))
+  latestAsk('commit.UPDATE_SUBMODULE').tell({ during: 'submodule', stage: 'Receiving objects', percent: 40 })
   await settle()
-  expect(sendToSystem.mock.calls.map(([, event]) => event).filter(event => event.type === 'commit.UPDATE_SUBMODULE')).toEqual([{ type: 'commit.UPDATE_SUBMODULE', path: 'lib' }])
+  expect(asksOf('commit.UPDATE_SUBMODULE').map(ask => ask.event)).toEqual([{ type: 'commit.UPDATE_SUBMODULE', path: 'lib' }])
   expect(updates()[0]!.disabled).toBe(true)
   expect(updates()[0]!.title).toBe('Updating submodule Receiving objects 40%')
 
-  commit.send(answerTo(latest('commit.UPDATE_SUBMODULE'), { type: 'commit.ERROR_RECEIVED', data: { message: 'lib has local changes', code: 'local-changes' } }))
+  await latestAsk('commit.UPDATE_SUBMODULE').refuse('lib has local changes', { kind: 'git', code: 'local-changes' })
   await settle()
   expect(updates()[0]!.disabled, 'a failed update lets go of the button').toBe(false)
   expect(document.body.textContent).toContain('lib has local changes')
 
   updates()[0]!.click()
-  commit.send(answerTo(latest('commit.UPDATE_SUBMODULE'), { type: 'commit.SUBMODULE_UPDATED', data: { path: 'lib' } }))
+  await settle()
+  await latestAsk('commit.UPDATE_SUBMODULE').answer({ path: 'lib' })
   await settle()
   expect(updates()[0]!.disabled, 'an update answered lets go of the button').toBe(false)
 })
@@ -136,7 +130,8 @@ it('says a push the user stopped was stopped, not pushed', async () => {
   buttonNamed('Push (2 commits)')!.click()
   await settle()
 
-  commit.send({ type: 'commit.PUSH_STOPPED' })
+  commit.send({ type: 'commit.STOP_PUSH' })
+  expect(latestAsk('commit.PUBLISH_BRANCH').stopped).toBe(true)
   await settle()
 
   expect(document.body.textContent).toContain('Push stopped')
@@ -152,9 +147,9 @@ it('shows Push without a Commit beside it when nothing is staged and there are c
 
 it('shows an untrusted repository the trust request alone, not the error again beneath it', async () => {
   const commit = await panel()
-  commit.send({
-    type: 'commit.ERROR_RECEIVED',
-    data: { message: 'This repository has hooks that make git run programs.', code: 'untrusted', trust: { repository: '/work/repo/.git', asks: [{ kind: 'hook', name: 'pre-commit', file: '/work/repo/.git/hooks/pre-commit' }] } },
+  commit.send({ type: 'commit.REFRESH_STATUS' })
+  await latestAsk('commit.GET_GIT_STATUS').refuse('This repository has hooks that make git run programs.', {
+    kind: 'git', code: 'untrusted', trust: { repository: '/work/repo/.git', asks: [{ kind: 'hook', name: 'pre-commit', file: '/work/repo/.git/hooks/pre-commit' }] },
   })
   await settle()
 
@@ -163,7 +158,7 @@ it('shows an untrusted repository the trust request alone, not the error again b
 })
 
 it('takes one commit at a time: Commit is off from the click until its answer', async () => {
-  const commit = await panel({ files: [staged] })
+  await panel({ files: [staged] })
   await typeMessage('Fix it')
   const button = byTestId('commit-button') as HTMLButtonElement
   expect(button.disabled).toBe(false)
@@ -174,7 +169,7 @@ it('takes one commit at a time: Commit is off from the click until its answer', 
   button.click()
   expect(sent().filter(type => type === 'commit.COMMIT')).toHaveLength(1)
 
-  commit.send(answerTo(sentCall(sendToSystem, 'commit.COMMIT'), { type: 'commit.ERROR_RECEIVED', data: { message: 'The hook refused it' } }))
+  await latestAsk('commit.COMMIT').refuse('The hook refused it', { kind: 'git' })
   await settle()
   expect(button.disabled, 'refused: it can be asked again').toBe(false)
 })
@@ -192,12 +187,12 @@ it('keeps the message box closed to typing while a message is being generated', 
 })
 
 it('warns Discard All of a file too large to keep when a row of the list cannot be named', async () => {
-  const commit = await panel({ files: [unstaged, { path: 'b\\377d', status: 'untracked', staged: false, nameNotText: true }] })
+  await panel({ files: [unstaged, { path: 'b\\377d', status: 'untracked', staged: false, nameNotText: true }] })
   ;(document.querySelector('[title="Discard All Changes"]') as HTMLElement).click()
   await settle()
   expect(sent()).toContain('commit.PREVIEW_DISCARD')
 
-  commit.send({ type: 'commit.DISCARD_PREVIEWED', data: { paths: ['b.ts'], notKept: ['b.ts'] } })
+  await latestAsk('commit.PREVIEW_DISCARD').answer({ paths: ['b.ts'], notKept: ['b.ts'] })
   await settle()
 
   expect(byTestId('discard-not-kept')?.textContent).toContain('b.ts')
@@ -215,7 +210,7 @@ it('keeps Commit off during a conflict, as its title says', async () => {
 it('pushes a tag only once the push is confirmed, shows it busy, and says when it is pushed', async () => {
   const commit = await panel()
   commit.send({ type: 'commit.GET_ALL_BRANCHES' })
-  commit.send(answerTo(latest('commit.GET_ALL_BRANCHES'), { type: 'commit.BRANCHES_RECEIVED', data: { branches: ['main'], tags: [{ name: 'v1', commit: 'abcdef1234' }] } }))
+  await latestAsk('commit.GET_ALL_BRANCHES').answer({ branches: ['main'], tags: [{ name: 'v1', commit: 'abcdef1234' }] })
   document.querySelector<HTMLInputElement>('input[placeholder="main"]')!.dispatchEvent(new FocusEvent('focus'))
   await settle()
   const pushTag = byTestId('push-tag')
@@ -231,7 +226,7 @@ it('pushes a tag only once the push is confirmed, shows it busy, and says when i
   expect(sent()).toContain('commit.PUSH_TAG')
   expect(byTestId('tag-busy')).not.toBeNull()
 
-  commit.send(answerTo(sentCall(sendToSystem, 'commit.PUSH_TAG'), { type: 'commit.TAG_PUSHED', data: { name: 'v1' } }))
+  await latestAsk('commit.PUSH_TAG').answer({ name: 'v1' })
   await settle()
   expect(byTestId('tag-busy')).toBeNull()
   expect(document.body.textContent).toContain('v1 is on the remote')
@@ -240,7 +235,7 @@ it('pushes a tag only once the push is confirmed, shows it busy, and says when i
 it('opens a stash row to its files on a click, and applies it only from its own button', async () => {
   const commit = await panel()
   commit.send({ type: 'commit.STASH_LIST' })
-  commit.send(answerTo(latest('commit.STASH_LIST'), { type: 'commit.STASH_LIST_RECEIVED', data: { stashes: [{ index: 0, ref: 'stash@{0}', message: 'On main: wip', date: '2026-11-14T00:00:00Z' }] } }))
+  await latestAsk('commit.STASH_LIST').answer({ stashes: [{ index: 0, ref: 'stash@{0}', message: 'On main: wip', date: '2026-11-14T00:00:00Z' }] })
   await settle()
   const stashes = [...document.querySelectorAll<HTMLElement>('div.cursor-pointer')].find(d => d.textContent?.includes('STASHES'))
   stashes?.click()
@@ -258,7 +253,7 @@ it('resets to a commit only once that is confirmed, shows it busy, and says a re
   const commit = await panel()
   commit.send({ type: 'commit.LOG_LIST' })
   const entry = (hash: string, parents: string[]) => ({ hash, parents, subject: `commit ${hash}`, authorName: 'A', authorEmail: 'a@example.com', date: '2026-11-14T00:00:00Z', refs: [] })
-  commit.send(answerTo(latest('commit.LOG_LIST'), { type: 'commit.LOG_LIST_RECEIVED', data: { commits: [entry('bbbbbbb2', ['aaaaaaa1']), entry('aaaaaaa1', [])] } }))
+  await latestAsk('commit.LOG_LIST').answer({ commits: [entry('bbbbbbb2', ['aaaaaaa1']), entry('aaaaaaa1', [])] })
   await settle()
   ;[...document.querySelectorAll<HTMLElement>('div.cursor-pointer')].find(d => d.textContent?.includes('COMMITS'))!.click()
   await settle()
@@ -275,10 +270,10 @@ it('resets to a commit only once that is confirmed, shows it busy, and says a re
   expect(sent(), 'asked first').not.toContain('commit.RESET_TO_COMMIT')
   buttonNamed('Confirm')!.click()
   await settle()
-  expect(sendToSystem).toHaveBeenLastCalledWith('code', { type: 'commit.RESET_TO_COMMIT', hash: 'aaaaaaa1' }, expect.objectContaining({ call: expect.any(String) }))
+  expect(latestAsk('commit.RESET_TO_COMMIT').event).toEqual({ type: 'commit.RESET_TO_COMMIT', hash: 'aaaaaaa1' })
   expect(byTestId('reset-busy')).not.toBeNull()
 
-  commit.send(answerTo(latest('commit.RESET_TO_COMMIT'), { type: 'commit.ERROR_RECEIVED', data: { message: 'refused' } }))
+  await latestAsk('commit.RESET_TO_COMMIT').refuse('refused', { kind: 'git' })
   await settle()
   expect(byTestId('reset-busy'), 'refused: no longer busy').toBeNull()
 })

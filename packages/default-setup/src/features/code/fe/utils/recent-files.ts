@@ -81,7 +81,7 @@ export function addRecentFile(recentFiles: string[], filePath: string, baseDirec
 /**
  * Get recency score for a file (higher = more recent)
  */
-export function getRecencyScore(recentFiles: string[], filePath: string): number {
+export function getRecencyScore(recentFiles: readonly string[], filePath: string): number {
   const index = recentFiles.indexOf(filePath)
   if (index === -1) return 0
   

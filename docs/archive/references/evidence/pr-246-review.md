@@ -72,7 +72,7 @@ focused verification; remaining application/native acceptance is listed separate
 | 9.1, 9.3, 9.4 | Completed: symlinked documents open; reopening refetches; a rebuilt graph keeps its layout | "fix(default-setup): open symlinked documents, refetch reopened items, keep layouts of rebuilt graphs" |
 | 9.2 | Completed: each `FLOWS_CONNECTED` asks for the shown flow again, keeping its node selection and editor while the node exists; a flow that is gone gives way to the published root flow | "fix(flows): refresh the shown flow when the backend republishes, falling back to the root flow" |
 | 10.1, 10.2, 10.7 | Deferred: deadline and declared-cost decisions; no change until measured | [Validation feedback budget](../../plans/validation-feedback-budget.md#review-findings-this-plan-owns) |
-| 10.3–10.6 | Completed: strict runs keep their own group; each filtered step's report is verified; the fixture build precedes repo-checks integration; uploads point at `.apack` output | "ci: keep strict runs, verify each filtered step, build fixtures first, upload .apack output" |
+| 10.3–10.6 | Completed: strict runs keep their own group; each filtered step's report is verified; the fixture build precedes internal-repo-checks integration; uploads point at `.apack` output | "ci: keep strict runs, verify each filtered step, build fixtures first, upload .apack output" |
 | S.1, S.2 | Completed for startup-invalid settings: persisted-row preflight and host-only recovery | `3a6b649b5`; real recovery/reopen passed; [acceptance evidence](pr-246-acceptance.md) |
 | S.4 | Closed by 6.3: no kept frontend is left with a dropped settings binding | "fix(shell): unload refused frontend replacements and route unloaded tabs through the shell" |
 | S.3 | Completed: a frontend whose pack the ready catalog withdrew during loading is taken back out | "fix(shell): take back a frontend whose pack was withdrawn while it loaded" |
@@ -560,7 +560,7 @@ next reload repairs it.
 
 ## Area 10: tooling, CI and tests
 
-Scope: `.github/`, `scripts/lib/`, `scripts/*.ts`, `tests/scripts/`, `packages/repo-checks/`, the vitest configs.
+Scope: `.github/`, `scripts/lib/`, `scripts/*.ts`, `tests/scripts/`, `packages/internal-repo-checks/`, the vitest configs.
 Reviewed at `HEAD` = `278661695`.
 
 | # | Severity | Finding | Status |
@@ -569,7 +569,7 @@ Reviewed at `HEAD` = `278661695`.
 | 10.2 | Medium | 69 per-test deadline exceptions were added, many citing a run that hit the old limit | Open |
 | 10.3 | Medium | A plain CI dispatch cancels an in-flight strict-acceptance run on the same ref | Open |
 | 10.4 | Medium | Name-filtered platform steps have no check that any case ran | Open |
-| 10.5 | Medium (plausible) | The manual CI `check` job fails, because repo-checks' integration half needs a fixture build it doesn't run | Open |
+| 10.5 | Medium (plausible) | The manual CI `check` job fails, because internal-repo-checks' integration half needs a fixture build it doesn't run | Open |
 | 10.6 | Low | The external-pack failure upload points at paths the PR moved | Open |
 | 10.7 | Low (plausible) | `test:external-pack:app` still declares 18s after gaining the default-fork lifecycle | Open |
 
@@ -583,7 +583,7 @@ killing a hang. No measurement shows a remaining member needs it. `step-timing.s
 were replaced with synthetic ones that pass at the new rung. The root guide says *"Do not change
 deadlines, assertions or input scope merely to obtain a pass."*
 
-**10.2. 69 per-test deadline exceptions.** `packages/repo-checks/tests/suite-timeouts.spec.ts:30`:
+**10.2. 69 per-test deadline exceptions.** `packages/internal-repo-checks/tests/suite-timeouts.spec.ts:30`:
 `TIMEOUT_EXCEPTIONS` was empty on `master` and now has 69 entries, mostly CLI integration cases and
 `_support` hooks, at 120s to 540s against the 60s Large budget. Many reasons are a run that exceeded the
 old limit (*"Normal run 39262109257 exceeds the inherited 60s…"*, *"before the former 180s full-build
@@ -602,7 +602,7 @@ which vitest reports as skipped and exits 0. The Windows and macOS workflows ver
 step's JSON, not their other filtered steps. Every pattern matches a case today. Root guide: *"A check
 that reports nothing may have looked at nothing."*
 
-**10.5. The manual `check` job lacks a fixture build (plausible).** `ci.yml:147-151` runs repo-checks'
+**10.5. The manual `check` job lacks a fixture build (plausible).** `ci.yml:147-151` runs internal-repo-checks'
 integration half without building the fixture packs. `dev-pack-hmr.integration.spec.ts` now fails in
 `beforeAll` when `tests/packs/external-pack/src/__generated__/pack-entry-fe.ts` is missing, and that
 directory is gitignored. The chain orders this after `test:external-pack:contract`. `ci.yml` does not. Not

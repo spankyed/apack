@@ -17,8 +17,10 @@ export { pasteIntoElement } from './input-paste.ts'
 export { SurfaceScope, useSurface } from './actor-system.ts'
 export { surfaceIsRunning, readUntypedSurfaceState, useUntypedSurfaceState } from './surface-state.ts'
 export { untypedUseView, type UseViewOptions, type ViewState } from './views.ts'
+export { useState, type MachineState, type Read, type UsedState } from './use-state.ts'
+export { makes, freshKey, type Makes, type Making, type MakingOf, type MadeEvent, type OneMade, type EachMade, type MakesEnqueue } from './makes.ts'
 export { untypedFromView } from './view-actor.ts'
-export { viewRead, viewWrites, writeAnswered, writeSent, writing, type ViewWrites } from './view-writes.ts'
+export { viewRead, viewWrites, writeEnded, writeSent, writing, type ViewWrites } from './view-writes.ts'
 export type { ViewDiagnostics, ViewRequest, ViewUpdate } from '../framework/views.ts'
 export { useShell, type Shell, type HostShell, type HostShellEvent, type HostShellSnapshot, type HostShellState, type ShellPanelSizes } from './shell.ts'
 export { isAnyMenuOpen, onMenuOpenChange, useTrackedMenuOpen } from './menu-state.ts'
@@ -50,21 +52,6 @@ export {
   type SurfaceEvent,
 } from './navigation.ts'
 
-/**
- * What hands a surface's handlers the answer for the message being handled — the same wrapper a system's
- * `defineSystem` gives, over a machine's own context and events.
- *
- * Re-exported here because `@apackdev/sdk/framework` is **not** in `SDK_FE_MODULES`
- * (`@apackdev/host/build/shared-deps`): a pack frontend can import its types but cannot load it at runtime, so
- * without this a pack's surface could be handed no `reply` and the frontend half of answering would exist for
- * host code alone. One implementation serves both sides — `define-system.ts` imports only xstate types,
- * `safeEvents`, `eventTypes` and `@apackdev/sdk/events`, all frontend-safe.
- *
- * A surface's `reply` is the open form, and that is right rather than a gap: a surface's contract declares the
- * state it publishes and the inbox it opens, not an outgoing union, so there is nothing to bound it by. A
- * system's is bound by its contract's `outgoing`.
- */
-export { defineHandlers, type Handlers } from '../framework/define-system.ts'
 
 export { getStepFrontendBindings, type StepFrontendBinding } from './step-bindings.ts';
 export { getStepDeclarations, getStepDeclaration, getStepBinding, onStepsChanged, useStepDeclarations } from './step-reader.ts';

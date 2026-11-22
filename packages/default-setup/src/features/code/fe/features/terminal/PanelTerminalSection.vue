@@ -3,7 +3,7 @@
     <!-- Collapsible header -->
     <div
       class="flex items-center justify-between p-3 px-5 cursor-pointer hover:bg-neutral-800/60 transition-colors"
-      @click="codeActor.send({ type: 'TOGGLE_PANEL_TERMINAL' })"
+      @click="sendCode({ type: 'TOGGLE_PANEL_TERMINAL' })"
       @contextmenu.prevent="onSectionContextMenu"
     >
       <div class="flex items-center gap-1 text-xs font-medium text-neutral-400">
@@ -161,7 +161,7 @@
                 :title="`Runs on ${terminal.target.label}`"
                 data-terminal-on
               >{{ terminal.target.label }}</span>
-              <TerminalActivityBadge :activity="activity[terminal.id]" :kept="terminal.kept === true" :status="statusToShow(terminal.statuses)" />
+              <TerminalActivityBadge :activity="terminalState.data.activity[terminal.id]" :kept="terminal.kept === true" :status="statusToShow(terminal.statuses)" />
               <!-- **A terminal whose shell died is kept so its last output can be read**, which only works
                    if the list says so: drawn like a live one, it invites typing that goes nowhere and gives
                    no reason for the screen having stopped. -->
@@ -229,11 +229,10 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { useSettings } from '#generated/settings-fe.ts'
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useSelector } from '@xstate/vue'
 import { ChevronRight, ChevronDown, Plus, X, Edit, Trash2, PanelTop, PanelBottom, Terminal as TerminalIcon, Ellipsis, Square, Copy, ClipboardPaste, TextSelect, Eraser, RotateCcw, Server } from 'lucide-vue-next'
 import {
   ContextMenuRoot,
@@ -274,11 +273,12 @@ const codeActor: CodeState = useSurface()
 const terminalActor = panelChild(codeActor, 'terminal')!
 
 // State selectors
-const panelTerminalId = useSelector(codeActor, (state) => state.context.panelTerminalId)
+const { state: code, send: sendCode } = useState(codeActor)
+const { state: terminalState, send } = useState(terminalActor)
+const panelTerminalId = computed(() => code.value.data.panelTerminalId)
 useStatusSeen(terminalActor, () => panelTerminalId.value ?? undefined)
-const openFiles = useSelector(codeActor, (state) => state.context.openFiles)
-const terminals = useSelector(terminalActor, (state) => state.context.terminals)
-const activity = useSelector(terminalActor, (state) => state.context.activity)
+const terminals = computed(() => terminalState.value.data.terminals)
+
 
 const featureSettings = useSettings('code')
 const storedCodeSettings = featureSettings.value
@@ -290,7 +290,7 @@ const terminalTargets = computed(() => storedCodeSettings.value?.terminalTargets
 const { getTerminalDisplayName, } = useTerminalActions(terminalActor, confirmTerminalClose, closeTerminalOnTabClose)
 
 // Section visibility context menu
-const codeSettings = useSelector(codeActor, (state) => state.context.settings)
+const codeSettings = computed(() => code.value.data.settings)
 const { showMenu, menuPos, sectionMenuItems, onSectionContextMenu } = useSectionVisibilityMenu(codeSettings)
 
 // Derived
@@ -298,11 +298,11 @@ const activeTerminalInfo = computed(() =>
   terminals.value.find((t: TerminalInfo) => t.id === panelTerminalId.value)
 )
 const isInTab = (terminalId: string) =>
-  openFiles.value.some((f: any) => f.path === `terminal:${terminalId}` && f.isTerminal)
+  code.value.data.openFiles.some((f: any) => f.path === `terminal:${terminalId}` && f.isTerminal)
 const getShellName = (shell?: string) => shell?.split('/').pop() ?? 'terminal'
 
 // Local state
-const isExpanded = useSelector(codeActor, (state) => state.context.panelTerminalExpanded)
+const isExpanded = computed(() => code.value.data.panelTerminalExpanded)
 const container = ref<HTMLElement>()
 const listWidth = ref(125)
 const MIN_LIST_WIDTH = 80
@@ -358,17 +358,17 @@ const attachTerminal = (terminalId: string) => {
 
     attachment = terminalPool.attach(terminalId, container.value, {
       onResize: ({ cols, rows, cellWidth, cellHeight }) => {
-        terminalActor?.send({ type: 'terminal.RESIZE', terminalId, cols, rows, cellWidth, cellHeight })
+        send({ type: 'terminal.RESIZE', terminalId, cols, rows, cellWidth, cellHeight })
       },
       onSelectionChange: has => { hasSelection.value = has },
       // A path a program printed opens as the file it names, where the explorer opens every other
       onOpenPath: (path, at) => {
       panelChild(codeActor, 'explorer')?.send({ type: 'explorer.OPEN_FILE', path })
       // Shown at the line the program named, once the file is the one showing
-      if (at) codeActor.send({ type: 'UPDATE_STATE', updates: { pendingRevealLine: { filePath: path, line: at.line, column: at.column } } })
+      if (at) sendCode({ type: 'UPDATE_STATE', updates: { pendingRevealLine: { filePath: path, line: at.line, column: at.column } } })
     },
     })
-    terminalActor.send({ type: 'terminal.SEEN', terminalId })
+    send({ type: 'terminal.SEEN', terminalId })
 
     // **Focused only when the user asked for this terminal** (F15). An attach happens on mount too — a
     // panel re-open, an actor replacement, a reconnect — none of which is a request, and taking focus from
@@ -399,7 +399,7 @@ const detachTerminal = ({ handingOver = false } = {}) => {
   // stopped showing one has to say so or it goes on holding that terminal small for every other window.
   // Only when this host is what let go: during a remount the new host has already attached, and this would
   // drop the fit it just recorded.
-  if (letGo && attachment) terminalActor?.send({ type: 'terminal.DETACHED', terminalId: attachment.terminalId })
+  if (letGo && attachment) send({ type: 'terminal.DETACHED', terminalId: attachment.terminalId })
   attachment = null
   hasSelection.value = false
   // Letting go ends any outstanding request to focus, for the same reason the guard above does: the attach
@@ -424,12 +424,12 @@ const clearTerminal = () => attachment?.clear()
 
 /** The person is looking at the panel's terminal, so what was waiting for them to has been seen */
 const seenPanelTerminal = () => {
-  if (panelTerminalId.value) terminalActor.send({ type: 'terminal.SEEN', terminalId: panelTerminalId.value })
+  if (panelTerminalId.value) send({ type: 'terminal.SEEN', terminalId: panelTerminalId.value })
 }
 
 const killPanelTerminal = () => {
   if (!panelTerminalId.value) return
-  terminalActor.send({ type: 'terminal.CLOSE', terminalId: panelTerminalId.value })
+  send({ type: 'terminal.CLOSE', terminalId: panelTerminalId.value })
 }
 
 /**
@@ -440,27 +440,27 @@ const killPanelTerminal = () => {
  */
 const restartPanelTerminal = () => {
   if (!panelTerminalId.value) return
-  terminalActor.send({ type: 'terminal.RESTART', terminalId: panelTerminalId.value })
+  send({ type: 'terminal.RESTART', terminalId: panelTerminalId.value })
 }
 
 // Actions
 const stopTerminal = () => {
   if (!panelTerminalId.value) return
-  terminalActor?.send({ type: 'terminal.INPUT', terminalId: panelTerminalId.value, data: '\x03' })
+  send({ type: 'terminal.INPUT', terminalId: panelTerminalId.value, data: '\x03' })
 }
 
 const createTerminal = () => {
-  terminalActor?.send({ type: 'terminal.CREATE' })
+  send({ type: 'terminal.CREATE' })
   if (!isExpanded.value) {
-    codeActor.send({ type: 'TOGGLE_PANEL_TERMINAL' })
+    sendCode({ type: 'TOGGLE_PANEL_TERMINAL' })
   }
 }
 
 /** A terminal somewhere other than this machine: on one of the targets the settings name */
 const createTerminalOn = (target: string) => {
-  terminalActor?.send({ type: 'terminal.CREATE', on: target })
+  send({ type: 'terminal.CREATE', on: target })
   if (!isExpanded.value) {
-    codeActor.send({ type: 'TOGGLE_PANEL_TERMINAL' })
+    sendCode({ type: 'TOGGLE_PANEL_TERMINAL' })
   }
 }
 
@@ -470,20 +470,20 @@ const runScript = (script: TerminalScript) => {
     // Reuse existing panel terminal
     // Ended the way this shell ends a line (X6), which the descriptor carries because a window cannot know
     const submit = terminals.value.find((t: TerminalInfo) => t.id === panelTerminalId.value)?.submit ?? '\n'
-    terminalActor?.send({ type: 'terminal.INPUT', terminalId: panelTerminalId.value!, data: script.command + submit })
+    send({ type: 'terminal.INPUT', terminalId: panelTerminalId.value!, data: script.command + submit })
   } else {
     // No panel terminal — create a new one
-    terminalActor?.send({ type: 'terminal.CREATE', title: script.label, command: script.command })
+    send({ type: 'terminal.CREATE', title: script.label, command: script.command })
   }
   if (!isExpanded.value) {
-    codeActor.send({ type: 'TOGGLE_PANEL_TERMINAL' })
+    sendCode({ type: 'TOGGLE_PANEL_TERMINAL' })
   }
 }
 
 const runScriptInNewTerminal = (script: TerminalScript) => {
-  terminalActor?.send({ type: 'terminal.CREATE', title: script.label, command: script.command })
+  send({ type: 'terminal.CREATE', title: script.label, command: script.command })
   if (!isExpanded.value) {
-    codeActor.send({ type: 'TOGGLE_PANEL_TERMINAL' })
+    sendCode({ type: 'TOGGLE_PANEL_TERMINAL' })
   }
 }
 
@@ -498,7 +498,7 @@ const killAllTerminals = () => {
   // closing one shortens the array being iterated.
   // eslint-disable-next-line no-useless-spread
   for (const terminal of [...terminals.value]) {
-    terminalActor?.send({ type: 'terminal.CLOSE', terminalId: terminal.id })
+    send({ type: 'terminal.CLOSE', terminalId: terminal.id })
   }
 }
 
@@ -514,15 +514,15 @@ const selectTerminal = (terminalId: string) => {
   }
   // The selection is what attaches, a tick later, so the request is recorded rather than acted on here
   focusOnAttach = true
-  codeActor.send({ type: 'SELECT_PANEL_TERMINAL', terminalId })
+  sendCode({ type: 'SELECT_PANEL_TERMINAL', terminalId })
 }
 
 const openInTab = (terminalId: string) => {
-  codeActor.send({ type: 'OPEN_TERMINAL_IN_TAB', terminalId })
+  sendCode({ type: 'OPEN_TERMINAL_IN_TAB', terminalId })
 }
 
 const moveToPanel = (terminalId: string) => {
-  codeActor.send({ type: 'MOVE_TERMINAL_TO_PANEL', path: `terminal:${terminalId}` })
+  sendCode({ type: 'MOVE_TERMINAL_TO_PANEL', path: `terminal:${terminalId}` })
 }
 
 const handleCloseTerminal = (terminal: TerminalInfo) => {
@@ -530,7 +530,7 @@ const handleCloseTerminal = (terminal: TerminalInfo) => {
     const displayName = getTerminalDisplayName(terminal)
     if (!confirm(`Close terminal "${displayName}"?`)) return
   }
-  terminalActor?.send({ type: 'terminal.CLOSE', terminalId: terminal.id })
+  send({ type: 'terminal.CLOSE', terminalId: terminal.id })
 }
 
 // List resize
@@ -602,7 +602,7 @@ const onDocumentClick = (e: MouseEvent) => {
 
 const finishRename = () => {
   if (renamingTerminalId.value && renameValue.value.trim()) {
-    terminalActor?.send({
+    send({
       type: 'terminal.RENAME',
       terminalId: renamingTerminalId.value,
       customTitle: renameValue.value.trim()

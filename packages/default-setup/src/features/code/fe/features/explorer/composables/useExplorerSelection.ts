@@ -1,7 +1,7 @@
 import { ref, computed, type Ref } from 'vue'
 
 interface SelectionOptions {
-  selectedPaths: Ref<string[]>
+  selectedPaths: Ref<readonly string[]>
   onSelect: (paths: string[]) => void
 }
 

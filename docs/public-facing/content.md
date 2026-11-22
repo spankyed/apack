@@ -146,7 +146,7 @@ Ordinary pack source imports its own `services` and `Services` from `#generated/
 | `services.repository` | The pack's declared repositories (queries and commands); actions read and write data through them |
 | `services.settings` | Caller-bound preferences: `get(target)`, `set(target, path, value, condition?)`, `reset(target)` and `onChange(listener)`. Targets identify host app, pack-group or feature preferences; target mutation policy still applies |
 | `services.logger` | Structured logging, named `action:<label>` |
-| `services.emitter` | Typed sends to surfaces and systems (`broadcastToSurface`, and `sendToSystem` naming a system `<pack>/<feature>`, such as `'my-pack/bookmarks'`, or a role, `{ role: 'brain' }`) |
+| `services.emitter` | Typed sends to surfaces and systems (`broadcast`, and `tell` naming a system `<pack>/<feature>`, such as `'my-pack/bookmarks'`, or a role, `{ role: 'brain' }`) |
 | `services.appData` | Reset, export and import app data, and inspect backup metadata |
 | `services.onboarding` | Read and complete onboarding (`isComplete`, `complete`) without granting whole-data administration |
 | `services.runHistory` | Flow runs: each run's tree of nodes, recorded while it runs and kept after |

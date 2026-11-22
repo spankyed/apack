@@ -95,22 +95,22 @@
         </button>
 
         <!-- Success message -->
-        <div v-if="importStatus === 'success'" class="p-4 bg-emerald-900/20 border border-emerald-700/50 rounded-lg">
+        <div v-if="flowsMachine.data.dslImport.status === 'success'" class="p-4 bg-emerald-900/20 border border-emerald-700/50 rounded-lg">
           <div class="flex items-start gap-3">
             <CheckCircle class="w-5 h-5 text-emerald-500 mt-0.5" />
             <div class="flex-1">
               <h4 class="text-sm font-medium text-emerald-400 mb-1">
-                Successfully imported {{ importedFlowNames.length }} flow{{ importedFlowNames.length !== 1 ? 's' : '' }}
+                Successfully imported {{ flowsMachine.data.dslImport.importedFlowNames.length }} flow{{ flowsMachine.data.dslImport.importedFlowNames.length !== 1 ? 's' : '' }}
               </h4>
-              <ul v-if="importedFlowNames.length > 0" class="text-sm text-neutral-400 list-disc list-inside">
-                <li v-for="name in importedFlowNames" :key="name">{{ name }}</li>
+              <ul v-if="flowsMachine.data.dslImport.importedFlowNames.length > 0" class="text-sm text-neutral-400 list-disc list-inside">
+                <li v-for="name in flowsMachine.data.dslImport.importedFlowNames" :key="name">{{ name }}</li>
               </ul>
             </div>
           </div>
         </div>
 
         <!-- Error message -->
-        <div v-if="importStatus === 'error'" class="p-4 bg-red-900/20 border border-red-700/50 rounded-lg">
+        <div v-if="flowsMachine.data.dslImport.status === 'error'" class="p-4 bg-red-900/20 border border-red-700/50 rounded-lg">
           <div class="flex items-start gap-3">
             <XCircle class="w-5 h-5 text-red-500 mt-0.5" />
             <div class="flex-1">
@@ -118,7 +118,7 @@
                 Import failed
               </h4>
               <ul class="text-sm text-neutral-400 list-disc list-inside">
-                <li v-for="(error, idx) in applyErrors" :key="idx">{{ error }}</li>
+                <li v-for="(error, idx) in flowsMachine.data.dslImport.errors" :key="idx">{{ error }}</li>
               </ul>
             </div>
           </div>
@@ -162,23 +162,24 @@
         </button>
 
         <!-- Success message -->
-        <div v-if="exportStatus === 'success'" class="p-4 bg-emerald-900/20 border border-emerald-700/50 rounded-lg">
+        <div v-if="flowsMachine.data.dslExport.status === 'success'" class="p-4 bg-emerald-900/20 border border-emerald-700/50 rounded-lg">
           <div class="flex items-start gap-3">
             <CheckCircle class="w-5 h-5 text-emerald-500 mt-0.5" />
             <div class="flex-1">
               <h4 class="text-sm font-medium text-emerald-400 mb-1">
-                Successfully exported {{ exportedFlowCount }} flow{{ exportedFlowCount !== 1 ? 's' : '' }}
+                Successfully exported {{ flowsMachine.data.dslExport.flowCount }} flow{{ flowsMachine.data.dslExport.flowCount !== 1 ? 's' : '' }}
               </h4>
-              <p class="text-sm text-neutral-400">{{ exportedFilePath }}</p>
-              <p v-if="skippedFlows.length > 0" class="text-sm text-amber-400 mt-1">
-                Not exported, having no trigger yet: {{ skippedFlows.join(', ') }}
+              <p class="text-sm text-neutral-400">{{ flowsMachine.data.dslExport.filePath }}</p>
+              <!-- A flow with no trigger cannot be written as DSL, so it is named here rather than missing from the file -->
+              <p v-if="flowsMachine.data.dslExport.skipped.length > 0" class="text-sm text-amber-400 mt-1">
+                Not exported, having no trigger yet: {{ flowsMachine.data.dslExport.skipped.join(', ') }}
               </p>
             </div>
           </div>
         </div>
 
         <!-- Error message -->
-        <div v-if="exportStatus === 'error'" class="p-4 bg-red-900/20 border border-red-700/50 rounded-lg">
+        <div v-if="flowsMachine.data.dslExport.status === 'error'" class="p-4 bg-red-900/20 border border-red-700/50 rounded-lg">
           <div class="flex items-start gap-3">
             <XCircle class="w-5 h-5 text-red-500 mt-0.5" />
             <div class="flex-1">
@@ -186,7 +187,7 @@
                 Export failed
               </h4>
               <ul class="text-sm text-neutral-400 list-disc list-inside">
-                <li v-for="(error, idx) in exportErrors" :key="idx">{{ error }}</li>
+                <li v-for="(error, idx) in flowsMachine.data.dslExport.errors" :key="idx">{{ error }}</li>
               </ul>
             </div>
           </div>
@@ -198,7 +199,7 @@
 
 <script setup lang="ts">
 import { AlertTriangle, Brain, Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useSettingsDraft, useSurface } from '@apackdev/sdk/fe'
+import { useSettingsDraft, useState } from '@apackdev/sdk/fe'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 import { untypedOpenSurface } from '@apackdev/sdk/fe'
 import { resolveName } from '@apackdev/sdk/ids'
@@ -209,7 +210,6 @@ import { ref, computed, watch } from 'vue'
 import { useView } from '#generated/fe.ts'
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
 
-import { useSelector } from '@xstate/vue'
 import { type FlowsState } from './state.ts'
 import { ref as featureRef } from '#generated/ref.ts'
 
@@ -229,26 +229,17 @@ const emit = defineEmits<{
 const enableFlowPreview = useSettingsDraft(() => props.settings?.enableFlowPreview ?? true)
 
 // Get flows actor and state via selectors
-const flowsActor: FlowsState = useSurface()
+const { state: flowsMachine, send } = useState<FlowsState>()
 // The flows, and the root flow among them (the flow with the root role, not a setting): the list view
 const flowList = useView('flows', 'list')
 const flows = computed(() => flowList.data?.flows ?? [])
 const rootFlowId = computed(() => flowList.data?.rootFlowId)
 const selectedRootFlowId = ref<string>(rootFlowId.value || '')
-const isImporting = useSelector(flowsActor, (state) => state.context.dslImport.status === 'importing')
-const importStatus = useSelector(flowsActor, (state) => state.context.dslImport.status)
-const applyErrors = useSelector(flowsActor, (state) => state.context.dslImport.errors)
-const importedFlowNames = useSelector(flowsActor, (state) => state.context.dslImport.importedFlowNames)
+const isImporting = computed(() => flowsMachine.value.data.dslImport.status === 'importing')
 
 // Export state
 const exportDirectory = ref<string>('')
-const isExporting = useSelector(flowsActor, (state) => state.context.dslExport.status === 'exporting')
-const exportStatus = useSelector(flowsActor, (state) => state.context.dslExport.status)
-const exportErrors = useSelector(flowsActor, (state) => state.context.dslExport.errors)
-const exportedFilePath = useSelector(flowsActor, (state) => state.context.dslExport.filePath)
-const exportedFlowCount = useSelector(flowsActor, (state) => state.context.dslExport.flowCount)
-// A flow with no trigger cannot be written as DSL, so it is named here rather than missing from the file
-const skippedFlows = useSelector(flowsActor, (state) => state.context.dslExport.skipped)
+const isExporting = computed(() => flowsMachine.value.data.dslExport.status === 'exporting')
 
 const runningRootFlowId = useSurfaceState('brain', (s) => s.runningRootFlowId)
 
@@ -283,7 +274,7 @@ const handleFlowPreviewChange = () => {
 }
 
 const handleRootFlowChange = () => {
-  flowsActor.send({ type: 'ROOT_FLOW.SET', flowId: selectedRootFlowId.value || null })
+  send({ type: 'ROOT_FLOW.SET', flowId: selectedRootFlowId.value || null })
 }
 
 const goToBrainSettings = () => {
@@ -294,7 +285,7 @@ const goToBrainSettings = () => {
 // DSL Import - file picker and emit to state machine
 const selectAndImportDSL = async () => {
   // Reset status first
-  flowsActor.send({ type: 'DSL.RESET_STATUS' })
+  send({ type: 'DSL.RESET_STATUS' })
 
   // Open file picker (Electron API is OK in component)
   const filePath = await window.electronAPI?.fileUtils.selectPath({
@@ -326,7 +317,7 @@ const selectAndImportDSL = async () => {
     }
 
     // Extract flow names and emit to state machine - state machine handles the rest
-    flowsActor.send({
+    send({
       type: 'DSL.IMPORT',
       dsl,
       flowNames: Object.keys(dsl)
@@ -344,7 +335,7 @@ const selectExportDirectory = async () => {
 
 const exportFlows = () => {
   if (!exportDirectory.value) return
-  flowsActor.send({ type: 'DSL.RESET_EXPORT_STATUS' })
-  flowsActor.send({ type: 'DSL.EXPORT', directory: exportDirectory.value })
+  send({ type: 'DSL.RESET_EXPORT_STATUS' })
+  send({ type: 'DSL.EXPORT', directory: exportDirectory.value })
 }
 </script>

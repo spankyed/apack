@@ -68,12 +68,12 @@ app.sendEvent(event)             // Send any event to applicationState
 app.waitForState(check, ms?)     // Wait for dot-separated state path (e.g. 'running.connected')
 app.waitForSurface(surfaceId, ms?) // Wait for a surface to appear in the surface list (default 30s)
 app.send(system, event)          // Send a backend system an event as this window does; rejects with the API's refusal
-app.ask(system, event)           // Send, and resolve with the event the system replies with (matched by call)
+app.ask(system, event)           // Send, and resolve with the system's answer: ASK_ANSWERED or ASK_FAILED (matched by call)
 ```
 
 A spec reaches a system through `app.send` and `app.ask` and nothing else; the repo check `e2e-door` refuses one
 that calls the renderer's door they use. Both go over the window's own connection, so a handler that answers the
-window it was asked from answers this one. `send` names no return address, so a system's `reply` to it goes nowhere:
+window it was asked from answers this one. `send` names no return address, so a system's answer to it goes nowhere:
 use `ask` when the spec needs the answer, rather than watching a surface for a side effect of it.
 
 A spec about what the API grants a *client* — settings access issued to one pack's runtime, and refused once that

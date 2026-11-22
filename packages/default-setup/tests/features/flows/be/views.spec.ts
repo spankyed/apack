@@ -53,10 +53,9 @@ describe('a write to a flow', () => {
     const list = app.watchView<{ flows: Array<{ id: string }> }>('flows', 'list')
     await list.next()
 
-    const call = await app.send('flows', { type: 'CREATE_FLOW' }, asked)
-    const opened = await app.nextEmit('flows', 'FLOW_OPENED', { answering: call }) as unknown as { flowId: EARS.EntityId }
+    const opened = await app.ask('flows', { type: 'CREATE_FLOW' }, asked)
     const listed = await list.next()
-    expect(listed.ok && listed.value.flows.map(each => each.id)).toContain(opened.flowId)
+    expect(listed.ok && listed.value.flows.map(each => each.id)).toContain(opened.ok && (opened.value as { flowId: EARS.EntityId }).flowId)
   })
 
   it('opens nothing when nobody asked, and still lists the flow', async () => {
@@ -68,7 +67,7 @@ describe('a write to a flow', () => {
     await app.send('flows', { type: 'CREATE_FLOW' })
     const listed = await list.next()
     expect(listed.ok && listed.value.flows).toHaveLength(1)
-    expect(app.emitted('flows').filter(event => event.type === 'FLOW_OPENED'), 'nobody to answer').toEqual([])
+    expect(app.emitted('flows').filter(event => event.type === 'ASK_ANSWERED'), 'nobody to answer').toEqual([])
   })
 
   it('answers each graph write, a landed one and a refused one alike', async () => {
@@ -76,22 +75,21 @@ describe('a write to a flow', () => {
     const app = await startApp({ systems: ['flows'] })
     await app.connect()
 
-    const created = await app.send('flows', { type: 'CREATE_NODE', flowId: flow.id, tempId: 'temp-1', nodeData: { nodeType: 'transform', label: 'Step' } }, asked)
-    const node = await app.nextEmit('flows', 'NODE_CREATED', { answering: created }) as unknown as { tempId: string; nodeId: EARS.EntityId }
+    const created = await app.ask('flows', { type: 'CREATE_NODE', flowId: flow.id, tempId: 'temp-1', nodeData: { nodeType: 'transform', label: 'Step' } }, asked)
+    const node = (created.ok ? created.value : {}) as { tempId: string; nodeId: EARS.EntityId }
     expect(node.tempId).toBe('temp-1')
 
-    const updated = await app.send('flows', { type: 'UPDATE_NODE', flowId: flow.id, nodeId: node.nodeId, nodeData: { label: 'Step, renamed' } }, asked)
-    await app.nextEmit('flows', 'FLOW_WRITTEN', { answering: updated })
+    expect(await app.ask('flows', { type: 'UPDATE_NODE', flowId: flow.id, nodeId: node.nodeId, nodeData: { label: 'Step, renamed' } }, asked)).toEqual({ ok: true, value: undefined })
 
     // An edge from a node that doesn't exist is refused, and the refusal says why
-    const refused = await app.send('flows', { type: 'CREATE_EDGE', flowId: flow.id, sourceId: 'Node-missing', targetId: entryNode.id }, asked)
-    expect(await app.nextEmit('flows', 'FLOW_WRITE_FAILED', { answering: refused })).toMatchObject({ error: expect.any(String) })
+    expect(await app.ask('flows', { type: 'CREATE_EDGE', flowId: flow.id, sourceId: 'Node-missing', targetId: entryNode.id }, asked))
+      .toEqual({ ok: false, failure: { kind: 'failed', message: expect.any(String) } })
     expect(takeSystemErrors(), 'the asked refusal is its window\'s to show').toEqual([])
 
     // A refusal nobody asked for has no window to show it, so it is reported
     await app.send('flows', { type: 'CREATE_EDGE', flowId: flow.id, sourceId: 'Node-missing', targetId: entryNode.id })
     await app.settle()
-    expect(takeSystemErrors()).toEqual([expect.objectContaining({ source: 'flows' })])
+    expect(takeSystemErrors()).toEqual([expect.objectContaining({ source: 'default-setup/flows' })])
   })
 
   it('answers the model catalog to the window that asks, and publishes nothing', async () => {
@@ -100,9 +98,8 @@ describe('a write to a flow', () => {
     await app.connect()
     await app.settle()
     expect(app.emitted('flows'), 'nothing sent to every window on a connection').toEqual([])
-    const call = await app.send('flows', { type: 'GET_MODEL_CATALOG' }, { sender: 'default-setup/flows', client: 'c-main' })
-    const catalog = await app.nextEmit('flows', 'MODEL_CATALOG_READ', { answering: call }) as unknown as { data: Record<string, unknown> }
-    expect(Object.keys(catalog.data)).toEqual(['models'])
-    expect((catalog.data.models as unknown[]).length).toBeGreaterThan(0)
+    const catalog = await app.ask('flows', { type: 'GET_MODEL_CATALOG' }, { client: 'c-main' })
+    const models = catalog.ok ? (catalog.value as { models: unknown[] }).models : []
+    expect(models.length).toBeGreaterThan(0)
   })
 })

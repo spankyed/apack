@@ -3,7 +3,7 @@
 // projection, is caught up on from what the database says changed since the projection's cursor, in chunks, so a
 // backlog never holds a write up for longer than one chunk. The cursor is a checkpoint the database keeps, written in
 // the same unit as what it derives, so a crash can't leave the two apart.
-import type { ChangedEntities, ChangedPosition, EarsEngine, PendingChanges } from '@apackdev/ears';
+import type { ChangedEntities, ChangedPosition, EarsEngine, PendingChanges } from '@elmdb/ears';
 import type { ProjectionDefinition } from '../framework/projections.ts';
 import { _isHostBound, boundHost } from './host-runtime.ts';
 import { createLogger } from '../logger/index.ts';

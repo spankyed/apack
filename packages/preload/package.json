@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@apackdev/sdk": "*",
-    "@app/electron-versions": "*",
+    "@app/internal-electron-versions": "*",
     "typescript": "5.8.3",
     "vite": "7.3.7",
     "vitest": "^4.1.12"

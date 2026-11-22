@@ -2,7 +2,7 @@
 // nothing takes focus. The view is the stand-in from `_support`, which records each paste it is handed.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('apack-terminal-view', async () => (await import('../_support/terminal-view.ts')).viewModule())
+vi.mock('@apackdev/terminal-view', async () => (await import('../_support/terminal-view.ts')).viewModule())
 
 const { views, lastView } = await import('../_support/terminal-view.ts')
 const { startCodeSurface, terminalInfo } = await import('../_support/terminal-host.ts')

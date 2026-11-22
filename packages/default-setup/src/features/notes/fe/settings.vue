@@ -193,14 +193,13 @@
 
 <script setup lang="ts">
 import { Upload, Download, FolderOpen, CheckCircle, XCircle } from 'lucide-vue-next'
-import { useSettingsDraft, useSurface } from '@apackdev/sdk/fe'
+import { useSettingsDraft, useState } from '@apackdev/sdk/fe'
+import type { NotesState } from './state.ts'
 import type { SettingUpdate, SettingsOf } from '#generated/settings-fe.ts'
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 import CollapsibleSection from '@apackdev/ui/design/CollapsibleSection'
-import { useSelector } from '@xstate/vue'
-import type { NotesState } from './state.ts'
 
 interface Props {
   settings: SettingsOf<'notes'>
@@ -235,27 +234,35 @@ const updatePosition = (value: 'left' | 'right') => {
   })
 }
 
-// Get notes actor and state via selectors
-const notesActor: NotesState = useSurface()
+// The import and the export are the surface's machine's: it makes each, and holds how the last one ended. What an
+// earlier visit to this form left is not shown again
+const { state: surface, send } = useState<NotesState>()
+send({ type: 'NOTES.FORGET_IMPORT' })
+send({ type: 'NOTES.FORGET_EXPORT' })
 
-// Import state
-const isImporting = useSelector(notesActor, (state) => state.context.notesImport.status === 'importing')
-const importStatus = useSelector(notesActor, (state) => state.context.notesImport.status)
-const applyErrors = useSelector(notesActor, (state) => state.context.notesImport.errors)
-const importedCount = useSelector(notesActor, (state) => state.context.notesImport.importedCount)
+// How the last import ended, shown until another is picked
+const imported = computed(() => surface.value.data.imported)
+const isImporting = computed(() => surface.value.data.making.importNotes)
+const importStatus = computed(() => (imported.value === undefined ? 'idle' : imported.value.ok ? 'success' : 'error'))
+const applyErrors = computed(() => {
+  if (imported.value === undefined) return []
+  return imported.value.ok ? imported.value.value.errors ?? [] : imported.value.failure.message.split('\n')
+})
+const importedCount = computed(() => (imported.value?.ok ? imported.value.value.count : 0))
 
-// Export state
+// How the last export ended, shown until another is made
 const exportFormat = ref<'markdown' | 'json'>('markdown')
 const exportDirectory = ref<string>('')
-const isExporting = useSelector(notesActor, (state) => state.context.notesExport.status === 'exporting')
-const exportStatus = useSelector(notesActor, (state) => state.context.notesExport.status)
-const exportErrors = useSelector(notesActor, (state) => state.context.notesExport.errors)
-const exportedFilePath = useSelector(notesActor, (state) => state.context.notesExport.filePath)
-const exportedItemCount = useSelector(notesActor, (state) => state.context.notesExport.itemCount)
+const exported = computed(() => surface.value.data.exported)
+const isExporting = computed(() => surface.value.data.making.exportNotes)
+const exportStatus = computed(() => (exported.value === undefined ? 'idle' : exported.value.ok ? 'success' : 'error'))
+const exportErrors = computed(() => (exported.value?.ok === false ? [exported.value.failure.message] : []))
+const exportedFilePath = computed(() => (exported.value?.ok ? exported.value.value.filePath : ''))
+const exportedItemCount = computed(() => (exported.value?.ok ? exported.value.value.itemCount : 0))
 
-// Import - directory picker and send to state machine
+// Import - directory picker, then the machine's ask
 const selectAndImportNotes = async () => {
-  notesActor.send({ type: 'NOTES.RESET_IMPORT_STATUS' })
+  send({ type: 'NOTES.FORGET_IMPORT' })
 
   const directory = await window.electronAPI?.fileUtils.selectPath({
     type: 'directory'
@@ -263,10 +270,7 @@ const selectAndImportNotes = async () => {
 
   if (!directory || Array.isArray(directory)) return
 
-  notesActor.send({
-    type: 'NOTES.IMPORT',
-    directory,
-  })
+  send({ type: 'NOTES.IMPORT', directory })
 }
 
 // Export
@@ -275,9 +279,8 @@ const selectExportDirectory = async () => {
   if (dir && typeof dir === 'string') exportDirectory.value = dir
 }
 
-const exportNotesToFile = () => {
+const exportNotesToFile = async () => {
   if (!exportDirectory.value) return
-  notesActor.send({ type: 'NOTES.RESET_EXPORT_STATUS' })
-  notesActor.send({ type: 'NOTES.EXPORT', directory: exportDirectory.value, format: exportFormat.value })
+  send({ type: 'NOTES.EXPORT', directory: exportDirectory.value, format: exportFormat.value })
 }
 </script>

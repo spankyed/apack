@@ -109,7 +109,7 @@ Facts that constrain the design:
 - `@apackdev/host` declares neither `typescript` nor `vue`; `packages/api` imports host, so the Vue compiler must
   not enter the backend's tree. `@apackdev/cli` has both as hard dependencies and is `private` with no `exports`
   map. `@apackdev/sdk` has `vue` as a peer and `typescript` as an optional one, but its published `./build`
-  declarations are typechecked standalone by `packages/publish-checks`.
+  declarations are typechecked standalone by `packages/internal-publish-checks`.
 - A repo script importing a package's internals by relative path is already the pattern:
   `scripts/build-ui-package.ts:18` imports `../packages/apack-ui/scripts/exports.ts`, and
   `scripts/tsconfig.json` sets `allowImportingTsExtensions`. `findPackageScriptImports` governs a *package's*
@@ -131,7 +131,7 @@ Facts that constrain the design:
 - oxlint 1.8.0 supports config `overrides` (per-path `files` globs), has `no-console` in the `restriction`
   category (not enabled by `-D correctness`), hosts **no** custom rule from the CLI (no `--js-surfaces`, no
   `jsPlugins` schema key) and has **no `no-restricted-syntax`**. eslint runs only over `packages/renderer`.
-- `packages/repo-checks/tests/import-specifiers.integration.spec.ts` is 1,282 lines and 217 tests: one
+- `packages/internal-repo-checks/tests/import-specifiers.integration.spec.ts` is 1,282 lines and 217 tests: one
   `describe` per rule, each case writing a temp tree and calling the rule with explicit `dirs`/`root`, plus the
   `FIRES` table (:446) keyed by each rule function's `.name` and the two `describe('CHECKS')` cases (:552).
   `import-specifiers-script.integration.spec.ts` runs the script through a symlink and asserts its success line.
@@ -267,7 +267,7 @@ Decisions 5, 8, 9.
   `.js`-in-a-pack.
 
 **Done when:** `npm run check:specifiers` passes; the instrumented parse count is under 2,000 and a spec
-asserts each census file is read once; `npm run test:integration -w @app/repo-checks` passes;
+asserts each census file is read once; `npm run test:integration -w @app/internal-repo-checks` passes;
 `npm run build` and `npm test` pass with `main` and `preload` migrated; a per-file run names the whole-tree
 rules it skipped, and a path outside the census is an error; `--list` shows no blank field.
 
@@ -324,9 +324,9 @@ deleted; `npm run test:external-pack:contract` passes.
 - Mutation-check every new guard, and record the mutation in the commit message.
 - External packs are first-class: the fixture packs, `test:external-pack` and `test:packaged-authoring` stay
   green, and `test:packaged-authoring` is the only check that exercises the published CLI layout.
-- A new spec file in `@app/repo-checks` needs `npm run spec-cost:update` **and** a row in that package's
+- A new spec file in `@app/internal-repo-checks` needs `npm run spec-cost:update` **and** a row in that package's
   `CLAUDE.md` table; a new spec anywhere needs `spec-cost:update` for its suite.
-- `packages/repo-checks` should declare `vue` as a devDependency rather than relying on hoisting, since
+- `packages/internal-repo-checks` should declare `vue` as a devDependency rather than relying on hoisting, since
   nothing checks its dependencies.
 
 ## Outcome (2026-09-26)
@@ -340,7 +340,7 @@ deleted; `npm run test:external-pack:contract` passes.
 | 5 — `specifiers:fix` | **done** | `6c8eee988`. Its first subject was real: the 87 specifiers the widened rule found |
 | 6 — `backend-console` moves, the cast rule stays | **done** | `437bdf35d`, and the rule itself in Phase 3 |
 
-**Counts**: `@apackdev/cli` 350 tests (was 305 + 21 in the integration half), `@app/repo-checks` 239,
+**Counts**: `@apackdev/cli` 350 tests (was 305 + 21 in the integration half), `@app/internal-repo-checks` 239,
 `@app/default-setup` 720 unchanged, the fixture pack 32 unchanged, E2E 21 unchanged, `npm run chain` green in
 183s. 15 commits.
 

@@ -3,9 +3,10 @@
 // The state is the one that decides all of it; the component only paints the flash it reports.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createActor } from 'xstate'
+import { latestAsk, resetAsks } from '../../_support/asks.ts'
 
-const sendToSystem = vi.hoisted(() => vi.fn())
-vi.mock('#generated/events.ts', () => ({ sendToSystem }))
+const tell = vi.hoisted(() => vi.fn())
+vi.mock('#generated/events.ts', async () => ({ tell, fromAsk: (await import('../../_support/asks.ts')).fromAsk }))
 const parent = vi.hoisted(() => ({ updateParentState: vi.fn(), addTabToParent: vi.fn(), getParentContext: vi.fn(() => null), sendEventToParent: vi.fn() }))
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => parent)
 const pool = vi.hoisted(() => ({ dispose: vi.fn(), syncProcesses: vi.fn(), noteExit: vi.fn(), describe: vi.fn() }))
@@ -18,11 +19,15 @@ let bellsSent = 0
 const bell = (terminalId: string, bellId: string) => ({ type: 'terminal.BELL', data: { terminalId, bellId } }) as never
 
 /** A terminal whose code surface has these settings, and the flash and notification the window showed */
-function window(settings: Record<string, unknown> = {}) {
+async function window(settings: Record<string, unknown> = {}) {
   bellsSent = 0
   parent.getParentContext.mockReturnValue({ settings } as never)
   const actor = createActor(terminalState).start()
-  actor.send({ type: 'terminal.TERMINALS_LISTED', data: [aTerminal('t-1'), aTerminal('t-2')] })
+  // The machine asks for the running terminals; the turn it takes the answer in is one of the faked timers'
+  actor.send({ type: 'terminal.REFRESH_LIST' })
+  const taken = latestAsk('terminal.REFRESH_LIST').answer([aTerminal('t-1'), aTerminal('t-2')])
+  await vi.advanceTimersByTimeAsync(0)
+  await taken
   // A flash begins where the terminal stops not flashing and starts: a change to some other field is not one
   const flashes: number[] = []
   let now = 0
@@ -47,7 +52,8 @@ let hasFocus: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
   vi.useFakeTimers()
-  sendToSystem.mockReset()
+  tell.mockReset()
+  resetAsks()
   pool.dispose.mockReset()
   parent.getParentContext.mockReset()
   notify = vi.fn().mockResolvedValue(true)
@@ -62,7 +68,7 @@ afterEach(() => {
 
 describe('a bell on the window', () => {
   it('flashes the terminal for 150 ms, then the flash is over', async () => {
-    const w = window()
+    const w = await window()
     w.bell()
     expect(w.flashing(), 'a bell did not flash').toBe(true)
     await w.advance(BELL_FLASH_MS - 1)
@@ -72,7 +78,7 @@ describe('a bell on the window', () => {
   })
 
   it('flashes once for a run of bells inside 500 ms, and a bell during the flash does not restart it', async () => {
-    const w = window()
+    const w = await window()
     w.bell()
     await w.advance(100)
     w.bell()
@@ -84,7 +90,7 @@ describe('a bell on the window', () => {
   })
 
   it('flashes again for a bell after the 500 ms window has closed', async () => {
-    const w = window()
+    const w = await window()
     w.bell()
     await w.advance(BELL_WINDOW_MS)
     w.bell()
@@ -92,53 +98,53 @@ describe('a bell on the window', () => {
   })
 
   it('paints nothing when the flash setting is off, and still counts the window for its notification', async () => {
-    const w = window({ bellFlash: false })
+    const w = await window({ bellFlash: false })
     w.bell()
     expect(w.flashing()).toBe(false)
     await w.advance(BELL_FLASH_MS)
     expect(w.flashStarts()).toEqual([])
   })
 
-  it('flashes a bell on a terminal of its own, not the others', () => {
-    const w = window()
+  it('flashes a bell on a terminal of its own, not the others', async () => {
+    const w = await window()
     w.bell('t-2')
     expect(w.flashing('t-1')).toBe(false)
     expect(w.flashing('t-2')).toBe(true)
   })
 
-  it('asks for a system notification when the window is not focused and the setting is on', () => {
+  it('asks for a system notification when the window is not focused and the setting is on', async () => {
     hasFocus.mockReturnValue(false)
-    window({ bellNotification: true }).bell()
+    ;(await window({ bellNotification: true })).bell()
     expect(notify).toHaveBeenCalledTimes(1)
     expect(notify).toHaveBeenCalledWith('Terminal', 'Rang the bell', expect.any(String))
   })
 
   it('passes the bell\'s own id as the notification tag, so each bell is its own notification', async () => {
     hasFocus.mockReturnValue(false)
-    const w = window({ bellNotification: true })
+    const w = await window({ bellNotification: true })
     w.bell('t-1')
     await w.advance(BELL_WINDOW_MS)
     w.bell('t-2')
     expect(notify.mock.calls.map(call => call[2])).toEqual(['t-1#1', 't-2#2'])
   })
 
-  it('does not ask for a system notification while the window is focused', () => {
+  it('does not ask for a system notification while the window is focused', async () => {
     hasFocus.mockReturnValue(true)
-    window({ bellNotification: true }).bell()
+    ;(await window({ bellNotification: true })).bell()
     expect(notify).not.toHaveBeenCalled()
   })
 
-  it('does not ask for a system notification when the setting is off, which is its default', () => {
+  it('does not ask for a system notification when the setting is off, which is its default', async () => {
     hasFocus.mockReturnValue(false)
-    window({}).bell()
-    window({ bellNotification: false }).bell()
+    ;(await window({})).bell()
+    ;(await window({ bellNotification: false })).bell()
     expect(notify).not.toHaveBeenCalled()
   })
 
   // Changed from "inside 500 ms": the notification gate is BELL_NOTIFY_WINDOW_MS (1 s), its own, not the flash's window.
   it('asks for one notification for a run of bells inside 1 s, and the flash is still one flash', async () => {
     hasFocus.mockReturnValue(false)
-    const w = window({ bellNotification: true })
+    const w = await window({ bellNotification: true })
     w.bell()
     await w.advance(BELL_WINDOW_MS)
     w.bell()
@@ -148,7 +154,7 @@ describe('a bell on the window', () => {
 
   it('does not notify a second bell 600 ms after the first, though the flash window has passed', async () => {
     hasFocus.mockReturnValue(false)
-    const w = window({ bellNotification: true })
+    const w = await window({ bellNotification: true })
     w.bell()
     await w.advance(600)
     w.bell()
@@ -158,7 +164,7 @@ describe('a bell on the window', () => {
 
   it('notifies a bell 1100 ms after the first, once the notification gate has closed', async () => {
     hasFocus.mockReturnValue(false)
-    const w = window({ bellNotification: true })
+    const w = await window({ bellNotification: true })
     w.bell()
     await w.advance(1100)
     w.bell()
@@ -167,7 +173,7 @@ describe('a bell on the window', () => {
 
   it('a bell 200 ms after the first flashes nothing new and asks for no notification', async () => {
     hasFocus.mockReturnValue(false)
-    const w = window({ bellNotification: true })
+    const w = await window({ bellNotification: true })
     w.bell()
     await w.advance(200)
     w.bell()
@@ -177,7 +183,7 @@ describe('a bell on the window', () => {
 
   it('gates notifications per terminal: a bell on another terminal inside the first gate is still notified', async () => {
     hasFocus.mockReturnValue(false)
-    const w = window({ bellNotification: true })
+    const w = await window({ bellNotification: true })
     w.bell('t-1')
     await w.advance(BELL_NOTIFY_WINDOW_MS - 1)
     w.bell('t-2')

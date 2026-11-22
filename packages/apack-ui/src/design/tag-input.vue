@@ -12,7 +12,7 @@ interface TagOption {
 
 const props = defineProps<{
   modelValue: string[];  // Tag names
-  availableTags: TagOption[];
+  availableTags: readonly TagOption[];
 }>()
 const emit = defineEmits<(e: 'update:modelValue', value: string[]) => void>()
 

@@ -3,10 +3,9 @@
 // the statuses it is sent say it, beside a watch that could not be opened at all.
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createActor } from 'xstate';
-import { answerTo } from '@apackdev/sdk/testing';
+import { latestAsk, resetAsks } from '../../_support/asks.ts';
 
-const sendToSystem = vi.hoisted(() => vi.fn());
-vi.mock('#generated/events.ts', () => ({ sendToSystem }));
+vi.mock('#generated/events.ts', async () => ({ tell: vi.fn(), fromAsk: (await import('../../_support/asks.ts')).fromAsk }));
 vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
   addTabToParent: vi.fn(),
   updateParentState: vi.fn(),
@@ -16,32 +15,28 @@ vi.mock('#features/code/fe/utils/parent-communication.ts', () => ({
 
 const { commitState } = await import('#features/code/fe/features/commit/state.ts');
 
-beforeEach(() => sendToSystem.mockReset());
+beforeEach(resetAsks);
 
 /** Sends the panel a status, as the backend answers its asking for one */
-function tell(actor: ReturnType<typeof createActor<typeof commitState>>, { watching, watchSilent }: { watching: boolean; watchSilent?: boolean }) {
+async function report(actor: ReturnType<typeof createActor<typeof commitState>>, { watching, watchSilent }: { watching: boolean; watchSilent?: boolean }) {
   actor.send({ type: 'commit.REFRESH_STATUS' });
-  const [, , { call }] = sendToSystem.mock.calls.at(-1) as [string, object, { call: string }];
-  actor.send(answerTo(call, {
-    type: 'commit.STATUS_RECEIVED' as const,
-    data: { files: [], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching, ...(watchSilent && { watchSilent }) },
-  }));
+  await latestAsk('commit.GET_GIT_STATUS').answer({ files: [], truncated: false, branch: 'main', hasUpstream: false, commitsAhead: 0, commitsBehind: 0, watching, ...(watchSilent && { watchSilent }) });
 }
 
-it('holds a silent watch while the statuses say it, and lets it go once one does not', () => {
+it('holds a silent watch while the statuses say it, and lets it go once one does not', async () => {
   const actor = createActor(commitState).start();
 
-  tell(actor, { watching: true, watchSilent: true });
+  await report(actor, { watching: true, watchSilent: true });
   expect(actor.getSnapshot().context).toMatchObject({ isWatchingRepository: true, isWatchSilent: true });
 
-  tell(actor, { watching: true });
+  await report(actor, { watching: true });
   expect(actor.getSnapshot().context.isWatchSilent).toBe(false);
 });
 
-it('keeps a watch that could not be opened apart from one that is not delivering', () => {
+it('keeps a watch that could not be opened apart from one that is not delivering', async () => {
   const actor = createActor(commitState).start();
 
-  tell(actor, { watching: false });
+  await report(actor, { watching: false });
 
   expect(actor.getSnapshot().context).toMatchObject({ isWatchingRepository: false, isWatchSilent: false });
 });

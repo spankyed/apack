@@ -7,8 +7,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileWhileWorking } from '@apackdev/sdk/progress';
 import { resetTestData, startApp } from '@apackdev/testing/harness';
+import { answered, refused } from './_support/asks.ts';
 
-const CODE = 'default-setup/code';
 const dirs: string[] = [];
 let app: Awaited<ReturnType<typeof startApp>> | undefined;
 afterEach(async () => {
@@ -20,7 +20,7 @@ afterEach(async () => {
 
 const git = (cwd: string, ...args: string[]) =>
   execFileWhileWorking('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', ...args], { cwd });
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 
 it('tells the window which hook refused a commit, its exit code and what it printed', async () => {
   const directory = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'code-hook-')));
@@ -42,11 +42,11 @@ it('tells the window which hook refused a commit, its exit code and what it prin
   await app.settle();
   // A hook is a program the repository has git run, so the window has trusted it, as it would be asked to
   const repository = path.join(directory, '.git');
-  await app.nextEmit('code', 'commit.REPOSITORY_TRUSTED', { answering: await app.send('code', { type: 'commit.TRUST_REPOSITORY', repository }, asWindow) });
+  await answered(app.ask('code', { type: 'commit.TRUST_REPOSITORY', repository }, asWindow));
 
-  const call = await app.send('code', { type: 'commit.COMMIT', message: 'second' }, asWindow);
+  const call = app.ask('code', { type: 'commit.COMMIT', message: 'second' }, asWindow);
 
-  expect((await app.nextEmit('code', 'commit.ERROR_RECEIVED', { answering: call })).data).toMatchObject({
+  expect(await refused(call)).toMatchObject({
     code: 'hook-refused',
     hook: { name: 'pre-commit', exitCode: 3, output: expect.stringContaining('lint: a.txt is not formatted') },
   });

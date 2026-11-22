@@ -1,7 +1,8 @@
 import { _withPerformanceEvent } from '../runtime/performance.ts';
 import type { ActionArgs, EventObject, MachineContext, Mapper, ParameterizedObject } from 'xstate';
 import { safeEvents } from '../helpers/actor-helpers.ts';
-import { _clientOf, _currentDelivery, _replyTo, type Reply } from '../events/index.ts';
+import { _answered, _askEnded, _askFailureOf, _askSignal, _clientOf, _currentDelivery, _failedAnswer, _progressed, _refuse, _replyTo, ASK_ANSWER_TYPES, ASK_CANCELLED, type AnswerPayload, type ProgressPayload, type AskAnswered, type AskDeclaration, type AskPayload, type AskFailed, type AskProgressed, type AskName, type AskEventsOf, type ContractAsks, type RefuseOf } from '../events/index.ts';
+import { reportError } from '../logger/report-error.ts';
 import type { ArrayChanges } from '../utils/change-detection.ts';
 import { eventTypes } from '../events/event-types.ts';
 
@@ -44,12 +45,21 @@ export type SystemEvents =
    * this arrives.
    */
   | { type: 'DATA_CHANGED_ELSEWHERE' }
+  /**
+   * How the answers to this system's own asks of another system travel. The ask that was made takes them (`ask`), and
+   * no machine handles one: every system may ask, so every system receives them
+   */
+  | AskAnswered
+  | AskFailed
+  | AskProgressed
+  /** An asker stopping an ask of this system's. The bus takes it, and the ask's handler's `signal` aborts */
+  | { type: typeof ASK_CANCELLED }
 
 /**
  * The event types every system accepts, as a value: a send of one to a feature that runs no system is nobody's, and
  * dropped without a warning.
  */
-export const SYSTEM_EVENT_TYPES = eventTypes<SystemEvents>()('SEND_STATE', 'CLIENT_CONNECTED', 'PACK_CHANGED', 'FEATURE_SETTINGS_UPDATED', 'DATA_REPLACED', 'DATA_CHANGED_ELSEWHERE');
+export const SYSTEM_EVENT_TYPES = eventTypes<SystemEvents>()('SEND_STATE', 'CLIENT_CONNECTED', 'PACK_CHANGED', 'FEATURE_SETTINGS_UPDATED', 'DATA_REPLACED', 'DATA_CHANGED_ELSEWHERE', ...ASK_ANSWER_TYPES, ASK_CANCELLED);
 
 /**
  * What a system's contract declares. A feature exports one as `Contract` from its `be/contract.ts`, and `apack.json`
@@ -72,6 +82,12 @@ export const SYSTEM_EVENT_TYPES = eventTypes<SystemEvents>()('SEND_STATE', 'CLIE
 export interface SystemContract {
   context?: unknown;
   incoming?: { type: string };
+  /**
+   * The asks it answers, by name: each an event an asker sends (`{ type: name, ...ask }`), answered exactly once
+   * with `answer` or with a failure of one of the kinds `refuses` declares (`AskDeclaration`). Answered by the
+   * table `defineSystem`'s `answers` builds, which has to cover every one.
+   */
+  asks?: Record<string, AskDeclaration>;
   internal?: { type: string };
   outgoing: { type: string };
 }
@@ -86,7 +102,7 @@ export interface SystemContract {
 // narrowing it to nothing.
 
 /** The events a contract says the system receives from outside itself — what a sender may write */
-export type ContractIncoming<C> = C extends { incoming: infer Events } ? Events : never;
+export type ContractIncoming<C> = (C extends { incoming: infer Events } ? Events : never) | AskEventsOf<C>;
 /** The events a contract says the system's own children send it; nobody else's to send */
 export type ContractInternal<C> = C extends { internal: infer Events } ? Events : never;
 /** The events a contract says the system sends to surfaces */
@@ -146,25 +162,24 @@ const isCreatorResult = (value: unknown): boolean =>
   typeof value === 'function' && Object.prototype.hasOwnProperty.call(value, 'resolve');
 
 /**
- * Hands a handler what the delivery it is being run in lets it answer and address, both bound at entry.
- *
- * One read, two members: `reply` for the asker, `client` for the connection they asked from. Bound rather
- * than read at use so a handler that awaits or stores either still has the right address.
+ * Hands a handler the connection the message it handles arrived on, bound at entry so a handler that awaits or
+ * stores it still has the right one: what it sends that window alone (`sendToWindow(client, …)`) goes there and
+ * nowhere else.
  */
 const handing = <F>(handler: F): F => {
   if (typeof handler !== 'function' || isCreatorResult(handler)) return handler;
   const run = handler as unknown as (args: object, params: unknown) => void;
   return ((args: object, params: unknown) => {
     const delivery = answerable(args);
-    const invoke = () => run({ ...args, reply: _replyTo(delivery), client: _clientOf(delivery) }, params);
+    const invoke = () => run({ ...args, client: _clientOf(delivery) }, params);
     const event = (args as { event?: unknown }).event;
     return _withPerformanceEvent(event, invoke);
   }) as unknown as F;
 };
 
 /**
- * The delivery a handler may answer: the one in scope when the event it handles is the message delivered (`_Delivery`'s
- * `event`), and none for an event its machine made while handling that message.
+ * The delivery a handler may answer or address: the one in scope when the event it handles is the message delivered
+ * (`_Delivery`'s `event`), and none for an event its machine made while handling that message.
  */
 const answerable = (args: object): ReturnType<typeof _currentDelivery> => {
   const delivery = _currentDelivery();
@@ -172,74 +187,151 @@ const answerable = (args: object): ReturnType<typeof _currentDelivery> => {
 };
 
 /**
- * What hands a machine's handlers their answers, for a machine that is not a feature's system.
- *
- * The seven machines under `code/be/features/` and the brain's flow and step systems are children a system
- * spawns: they declare their own context and events rather than a feature contract, so they have no
- * `defineSystem` to come from — and they are handlers like any other. `defineSystem` is this plus the
- * contract's types, so there is one implementation rather than a second shape to keep in step.
+ * What hands a machine's handlers the connection the message they handle arrived on, for a machine that is not a
+ * feature's system: a child a system spawns declares its own context and events rather than a feature contract, so it
+ * has no `defineSystem` to come from. `defineSystem` is this plus the contract's types.
  */
-export interface Handlers<TContext extends MachineContext, TEvent extends EventObject, TOut extends { type: string } = { type: string; [key: string]: unknown }> {
-  /** See `SystemSpec.actions` — this is the same wrapper, over a machine's own context and events */
+export interface Handlers<TContext extends MachineContext, TEvent extends EventObject> {
+  /** See `SystemSpec.actions` */
   actions<P extends ActionParams>(
-    defs: { [K in keyof P]: (args: Args<TContext, TEvent> & { reply?: Reply<TOut>; client?: string }, params: P[K]) => void },
+    defs: { [K in keyof P]: (args: Args<TContext, TEvent> & { client?: string }, params: P[K]) => void },
   ): { [K in keyof P]: (args: Args<TContext, TEvent>, params: P[K]) => void };
   /** See `SystemSpec.input` */
-  input<I>(build: (args: InputArgs<TContext, TEvent> & { reply?: Reply<TOut>; client?: string }) => I): Mapper<TContext, TEvent, I, TEvent>;
+  input<I>(build: (args: InputArgs<TContext, TEvent> & { client?: string }) => I): Mapper<TContext, TEvent, I, TEvent>;
+  /**
+   * The table that answers asks this machine takes itself, for a child a system forwards them to: one handler per ask
+   * of `A`, each handed the child's own context. The system that owns the contract leaves these out of its own table
+   * (`spec.answers<…>`), and the message it forwards is still the one asked, so the child's answer reaches the asker.
+   *
+   * ```ts
+   * const answers = handlers.answers<SearchAsks>({ 'search.SEARCH_FILES': async ({ args, context, signal }) => … })
+   * setup({ actions: { ...answers.actions } }).createMachine({ on: { ...answers.on } })
+   * ```
+   */
+  answers<A extends Record<string, AskDeclaration>>(
+    defs: { readonly [K in keyof A & string]: (args: ChildAnswerArgs<TContext, TEvent, A, K>) => AnswerPayload<A[K]> | PromiseLike<AnswerPayload<A[K]>> },
+  ): {
+    readonly actions: { readonly [K in keyof A & string]: (args: Args<TContext, TEvent>, params: undefined) => void };
+    readonly on: { readonly [K in keyof A & string]: { readonly actions: K } };
+  };
 }
 
 /**
- * Hands the handlers of a machine that is not a feature's system the answer for the message being handled.
- *
+ * What an ask's handler is handed, over the context and events of the machine that takes the ask: a system's
+ * (`AnswerArgs`), or a child's that a system forwards the ask to
+ */
+export interface ChildAnswerArgs<TContext extends MachineContext, TEvent extends EventObject, A, K extends keyof A & string> {
+  /** The ask, as the asker sent it */
+  readonly args: { type: K } & AskPayload<A[K]>;
+  /** The machine's context as the ask arrived: a handler reads it, and changes it by sending its machine an event */
+  readonly context: TContext;
+  /** The machine's own actor, to send it an event — a state the answer moves it into */
+  readonly self: Args<TContext, TEvent>['self'];
+  /** Aborts when the window that asked goes, and when whoever asked stops the ask */
+  readonly signal: AbortSignal;
+  /** The connection the ask arrived on, absent for one another system made */
+  readonly client?: string;
+  /**
+   * Tells whoever asked something before the answer, as the ask declares under `progress`. Only they hear it, and
+   * nothing is told once `signal` has aborted
+   */
+  readonly progress: (update: ProgressPayload<A[K]>) => void;
+  /** Builds a refusal of one of the kinds the ask declares, for the handler to throw */
+  readonly refuse: RefuseOf<A[K]>;
+}
+
+/**
  * ```ts
  * const handlers = defineHandlers<Context, Event>();
  * export const commitSystem = setup({ types: { … }, actions: handlers.actions({ … }) }).createMachine(…);
  * ```
  */
-export function defineHandlers<
-  TContext extends MachineContext,
-  TEvent extends EventObject,
-  TOut extends { type: string } = { type: string; [key: string]: unknown },
->(): Handlers<TContext, TEvent, TOut> {
+export function defineHandlers<TContext extends MachineContext, TEvent extends EventObject>(): Handlers<TContext, TEvent> {
   return {
     actions: (defs) => Object.fromEntries(
       Object.entries(defs).map(([name, handler]) => [name, handing(handler)]),
     ) as never,
-    input: (build) => (args) => {
-      const delivery = answerable(args);
-      return build({ ...args, reply: _replyTo(delivery), client: _clientOf(delivery) });
-    },
+    input: (build) => (args) => build({ ...args, client: _clientOf(answerable(args)) }),
+    answers: (defs) => answersOf(defs as unknown as Record<string, (args: object) => unknown>) as never,
   };
 }
 
+/** The actions and transitions an asks table becomes: one action per ask, run on the ask it answers */
+const answersOf = (handlers: Record<string, (args: object) => unknown>) => ({
+  actions: Object.fromEntries(Object.keys(handlers).map((asked) => [asked, (args: { event: unknown; context: unknown; self: unknown }) =>
+    _withPerformanceEvent(args.event, () => answer(asked, handlers[asked]!, args))])),
+  on: Object.fromEntries(Object.keys(handlers).map((asked) => [asked, { actions: asked }])),
+});
+
+/** What one of a system's ask handlers is handed */
+export type AnswerArgs<C extends SystemContract, K extends AskName<C>> = ChildAnswerArgs<ContractContext<C>, MachineEvents<C>, ContractAsks<C>, K>;
+
+/** One of a system's ask handlers: it returns the answer, or a promise of it, and throws a refusal */
+export type AnswerHandler<C extends SystemContract, K extends AskName<C>> =
+  (args: AnswerArgs<C, K>) => AnswerPayload<ContractAsks<C>[K]> | PromiseLike<AnswerPayload<ContractAsks<C>[K]>>;
+
+/** What `answers` makes: the actions to give `setup`, and the transitions that run each on the ask it answers */
+export interface Answers<C extends SystemContract, K extends AskName<C> = AskName<C>> {
+  readonly actions: { readonly [N in K]: (args: SystemArgs<C>, params: undefined) => void };
+  readonly on: { readonly [N in K]: { readonly actions: N } };
+}
+
 /** The definition object returned by `defineSystem()`. */
-export interface SystemSpec<C extends SystemContract> extends Handlers<ContractContext<C>, MachineEvents<C>, Extract<ContractOutgoing<C>, { type: string }>> {
+export interface SystemSpec<C extends SystemContract> extends Omit<Handlers<ContractContext<C>, MachineEvents<C>>, 'answers'> {
   types: { context: ContractContext<C>; events: MachineEvents<C> };
   typeOf: ReturnType<typeof safeEvents<MachineEvents<C>>>;
   /**
-   * The system's actions, each handed the answer for the message it is handling.
-   *
-   * `reply` is absent when that message named no sender, so a handler that answers has to say what it does
-   * when nobody asked — the question `_currentDelivery()?.replyTo === undefined` used to ask of a global.
+   * The system's actions, each handed the connection the message it handles arrived on (`client`), absent for a
+   * message no window sent. A result is not an action's to send: it is an ask's answer (`answers`).
    *
    * **It wraps the record, never `setup`.** What XState receives is exactly the type it expects, so its
    * inference, `SetupReturn.extend`/`createAction` and the prebound creators are all untouched. An action
-   * creator's result passes through whole, which gives the rule: an action that answers is a plain function.
+   * creator's result passes through whole, which gives the rule: an action that reads `client` is a plain function.
    *
    * **And it is in the record.** An action written inline in a `createMachine` config never passes through
-   * here, so it is handed nothing — five exist today and none answers, which is the arrangement to keep. A
-   * handler that comes to need an answer moves into the record and gains a name, which it wanted anyway.
+   * here, so it is handed nothing.
    */
   actions<P extends ActionParams>(
-    defs: { [K in keyof P]: (args: SystemArgs<C> & { reply?: Reply<Extract<ContractOutgoing<C>, { type: string }>>; client?: string }, params: P[K]) => void },
+    defs: { [K in keyof P]: (args: SystemArgs<C> & { client?: string }, params: P[K]) => void },
   ): { [K in keyof P]: (args: SystemArgs<C>, params: P[K]) => void };
   /**
-   * An `invoke.input`, handed the same answer, so an invoked actor receives one through its input.
+   * An `invoke.input`, handed the same `client`, so an invoked actor receives it through its input.
    *
    * `input` is evaluated while the transition is being processed — inside the delivery — which is what makes
-   * this work and what makes the answer it hands on bound rather than ambient.
+   * this work and what makes the connection it hands on bound rather than ambient.
    */
-  input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & { reply?: Reply<Extract<ContractOutgoing<C>, { type: string }>>; client?: string }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
+  input<I>(build: (args: InputArgs<ContractContext<C>, MachineEvents<C>> & { client?: string }) => I): Mapper<ContractContext<C>, MachineEvents<C>, I, MachineEvents<C>>;
+  /**
+   * The table that answers the system's asks (`asks` in its contract): one handler per ask, and it has to cover every
+   * one. **A handler returns its answer and throws its refusal; it is not handed the means to give either.**
+   *
+   * ```ts
+   * export const answers = librarySpec.answers({
+   *   GET_DOCUMENT: async ({ args, signal, refuse }) => {
+   *     const document = await libraryService.find(args.id, { signal })
+   *     if (!document) throw refuse('not-found', 'Document not found')
+   *     return { document }
+   *   },
+   * })
+   *
+   * setup({ types: librarySpec.types, actions: { ...answers.actions } })
+   *   .createMachine({ on: { ...answers.on } })
+   * ```
+   *
+   * Whoever asked is answered whichever way the handler ends, which is the point: a window that asked shows nothing
+   * until it is answered, and an answer a handler has to remember on its failure path is one a new handler forgets.
+   * What it returns is `ASK_ANSWERED`'s `answer`; what it throws is `ASK_FAILED`, of the kind `refuse` named, or
+   * for an error from the disk the kind it is where the ask declares it (`not-found`, `no-access`), or else
+   * `failed`. The work runs whether or not anybody asked, and a failure nobody asked about is reported, since no
+   * window shows it. An ask the machine's current state does not take is answered `unavailable` by the bus.
+   *
+   * A system whose children answer some of its asks names those as the type argument and leaves them out:
+   * `spec.answers<keyof SearchAsks>({ … })`. The child answers them with `handlers.answers`.
+   *
+   * `answers.on` goes wherever the asks are taken: at the root for a system that takes them in every state, under a
+   * state for one that takes them only there.
+   */
+  answers<Elsewhere extends AskName<C> = never>(defs: { readonly [K in Exclude<AskName<C>, Elsewhere>]: AnswerHandler<C, K> }): Answers<C, Exclude<AskName<C>, Elsewhere>>;
 }
 
 /**
@@ -264,7 +356,49 @@ export function defineSystem<C extends SystemContract>(): SystemSpec<C> {
     },
     typeOf: safeEvents<MachineEvents<C>>(),
     ...defineHandlers<ContractContext<C>, MachineEvents<C>>(),
+    answers: (defs) => answersOf(defs as unknown as Record<string, (args: object) => unknown>) as never,
   };
+}
+
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+  typeof (value as { then?: unknown } | null)?.then === 'function';
+
+/**
+ * Runs one ask's handler and answers its asker, whichever way the handler ends. Synchronous work is answered before
+ * this returns, so a system that answers from what it holds answers within the delivery.
+ */
+function answer(asked: string, handler: (args: object) => unknown, args: { event: unknown; context: unknown; self: unknown }): void {
+  const delivery = answerable(args);
+  // Taken: the bus answers an ask nobody took, and this one is being answered
+  if (delivery?.ask) delivery.ask.taken = true;
+  const reply = _replyTo(delivery);
+  const client = _clientOf(delivery);
+  const call = delivery?.call;
+  const signal = _askSignal(call, client);
+  const refused = (error: unknown) => {
+    _askEnded(call);
+    // Stopped by whoever asked, or their window went: nobody waits, and stopping is what the work was told to do
+    if (signal.aborted) return;
+    const failure = _askFailureOf(error, delivery?.ask?.kinds);
+    if (reply) reply(_failedAnswer(asked, failure));
+    // Nobody asked, so no window shows it: work a handler does for an applier, a migration or a timer
+    else reportError({ error, title: `${asked} failed`, source: delivery?.receiver ?? 'answers' });
+  };
+  let made: unknown;
+  try {
+    made = handler({
+      args: args.event, context: args.context, self: args.self, signal, refuse: _refuse,
+      progress: (update: unknown) => { if (!signal.aborted) reply?.(_progressed(asked, update)); },
+      ...(client === undefined ? {} : { client }),
+    });
+  } catch (error) {
+    refused(error);
+    return;
+  }
+  // Two handlers rather than a `catch` after: a throw from answering is the bus's, not the work's, and is not answered again
+  const answered = (value: unknown) => { _askEnded(call); if (!signal.aborted) reply?.(_answered(asked, value)); };
+  if (isThenable(made)) Promise.resolve(made).then(answered, refused);
+  else answered(made);
 }
 
 /**

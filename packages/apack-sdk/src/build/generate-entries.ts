@@ -21,7 +21,7 @@ import { createModuleExports, type ModuleExport, type ModuleExports } from './mo
 import { hasOwn } from '../utils/shared.ts';
 import { compareVersions } from '../utils/compare-versions.ts';
 import type { StepDefinition } from '../steps/types.ts';
-import type { RowRules } from '@apackdev/ears';
+import type { RowRules } from '@elmdb/ears';
 import type { ComponentTarget } from '../framework/surface-declaration.ts';
 import type { PackEventContracts } from '../framework/event-contracts.ts';
 
@@ -215,8 +215,8 @@ export namespace EARS {
 ${entityValue}${prototypeExport('Entity', registry.entities)}
   export type Entity = ${entityUnion};
 
-  export type EntityId<E extends string = string> = import('@apackdev/ears').EARS.EntityId<E>;
-  export type RelationId = import('@apackdev/ears').EARS.RelationId;
+  export type EntityId<E extends string = string> = import('@apackdev/sdk').EARS.EntityId<E>;
+  export type RelationId = import('@apackdev/sdk').EARS.RelationId;
 
   export namespace RelKind {
 ${relKindMembers.join('\n')}
@@ -248,15 +248,15 @@ ${roleMembers.join('\n')}
     export type Role = typeof Role;
     export const Custom = <T extends string>(k: T) => k as T & AttrKind;
   }
-  export type AttrKind = import('@apackdev/ears').EARS.AttrKind;
+  export type AttrKind = import('@apackdev/sdk').EARS.AttrKind;
 
-  export type AttributePayloads = import('@apackdev/ears').EARS.AttributePayloads;
-  export type AttributeValue<K extends AttrKind = AttrKind> = import('@apackdev/ears').EARS.AttributeValue<K>;
-  export type AttributeTypeMap = import('@apackdev/ears').EARS.AttributeTypeMap;
-  export type AttributeStore = import('@apackdev/ears').EARS.AttributeStore;
+  export type AttributePayloads = import('@apackdev/sdk').EARS.AttributePayloads;
+  export type AttributeValue<K extends AttrKind = AttrKind> = import('@apackdev/sdk').EARS.AttributeValue<K>;
+  export type AttributeTypeMap = import('@apackdev/sdk').EARS.AttributeTypeMap;
+  export type AttributeStore = import('@apackdev/sdk').EARS.AttributeStore;
 }
 
-export type BaseEntity = import('@apackdev/ears').BaseEntity;
+export type BaseEntity = import('@apackdev/sdk/ears').BaseEntity;
 
 export const AllEntities = EARS.Entity;
 export type AllEntities = EARS.Entity;
@@ -638,6 +638,18 @@ export async function generatePackFiles(
     }
   }
 
+  /** A feature's system's declared asks, each with the failure kinds its contract gives it */
+  function askKinds(feature: PackFeature): Record<string, string[]> {
+    const contract = contractTarget(feature, 'system');
+    if (!contract) return {};
+    try {
+      return moduleReader().askKindsOf(contract.file, contract.exportName);
+    } catch (err) {
+      (err as Error).message = `Feature "${feature.id}": ${(err as Error).message}`;
+      throw err;
+    }
+  }
+
   /** The event types a feature's system sends, read from its contract */
   function sentEventTypes(feature: PackFeature): string[] {
     return contractTypes(feature, 'system', outgoingEventTypesOf);
@@ -652,11 +664,16 @@ export async function generatePackFiles(
   function eventContracts(): PackEventContracts {
     return compiledEvents ??= Object.fromEntries(packFeatures(manifest)
       .filter(feature => feature.system || feature.surface).map(feature => [feature.id, {
-        ...(feature.system && { system: {
-          incoming: [...new Set([...contractTypes(feature, 'system', (file, name) => moduleReader().incomingEventTypesOf(file, name)),
-            ...(feature.system.events?.incoming ?? [])])].sort(),
-          outgoing: [...new Set(sentEventTypes(feature))].sort(),
-        } }),
+        ...(feature.system && { system: (() => {
+          const asks = askKinds(feature);
+          return {
+            // An ask is an event the system receives, so its name is among what a sender may send it
+            incoming: [...new Set([...contractTypes(feature, 'system', (file, name) => moduleReader().incomingEventTypesOf(file, name)),
+              ...(feature.system.events?.incoming ?? []), ...Object.keys(asks)])].sort(),
+            outgoing: [...new Set(sentEventTypes(feature))].sort(),
+            ...(Object.keys(asks).length > 0 && { asks }),
+          };
+        })() }),
         ...(feature.surface && { surface: { receives: receivedEventTypes(feature) } }),
       }]));
   }
@@ -1297,8 +1314,7 @@ ${regProps.join('\n')}
 // dependencies'), bound to the app's engine (\`boundEars\`). The call is pure, so bundles that only use the
 // EARS constants above drop it.
 
-import { defineEars, type EarsSchema, type ShapeOf, type ShortCode } from '@apackdev/ears';
-import { boundEars } from '@apackdev/sdk/ears';
+import { boundEars, defineEars, type EarsSchema, type ShapeOf, type ShortCode } from '@apackdev/sdk/ears';
 import type { SdkEntityShapes } from '@apackdev/sdk';
 ${ownNodes ? "import type { NodeEntity } from './types.ts';\n" : ''}${shapeImports.join('\n')}
 
@@ -1706,9 +1722,11 @@ ${views ? views.code : ''}`;
       return `  '${f.id}': ${[...ownSystem, `__accepts_${f.id}`].join(' | ')};`;
     }).join('\n');
     const systemEntries = systemFeatures.map(f => `  '${f.id}': IncomingEventsOf<__SystemContracts['${f.id}']>;`).join('\n');
+    const askEntries = systemFeatures.map(f => `  '${f.id}': ContractAsks<__SystemContracts['${f.id}']>;`).join('\n');
     const pack = `'${manifest.id}'`;
     const depSurfaces = depTypeImports('PackSurfaceEvents');
     const depSystems = depTypeImports('PackSystemEvents');
+    const depAsks = depTypeImports('PackSystemAsks');
     // Every map keyed by ref; the maps pack code sends with name the pack's own features by bare id instead (`WithOwnNames`)
     const qualifiedSurfaces = [
       `Qualified<${pack}, OwnSurfaceEvents>`,
@@ -1720,9 +1738,14 @@ ${views ? views.code : ''}`;
       ...depIds.map((depId) => `Qualified<'${depId}', ${depAlias(depId, 'PackSystemEvents')}>`),
       'HostSystemEvents',
     ].join(' & ');
+    const qualifiedAsks = [
+      `Qualified<${pack}, PackSystemAsks>`,
+      ...depIds.map((depId) => `Qualified<'${depId}', ${depAlias(depId, 'PackSystemAsks')}>`),
+      'HostSystemAsks',
+    ].join(' & ');
     return `${HEADER}
-import { defineEvents, type HostSurfaceEvents, type HostSystemEvents, type IncomingEventsOf${outgoingAliases ? ', type OutgoingEventsOf' : ''}${contracts.size > 0 ? ', type SurfaceInboxOf, type PublicSurfaceInboxOf' : ''}, type Qualified, type WithOwnNames } from '@apackdev/sdk/events';
-${hasSystems ? `import type { SystemContracts as __SystemContracts } from './system-specs.ts';\n` : ''}${acceptsImports ? `${acceptsImports}\n` : ''}${[...depSurfaces.imports, ...depSystems.imports].join('\n')}
+import { defineEvents, type ContractAsks, type HostSurfaceEvents, type HostSystemAsks, type HostSystemEvents, type IncomingEventsOf${outgoingAliases ? ', type OutgoingEventsOf' : ''}${contracts.size > 0 ? ', type SurfaceInboxOf, type PublicSurfaceInboxOf' : ''}, type Qualified, type WithOwnNames } from '@apackdev/sdk/events';
+${hasSystems ? `import type { SystemContracts as __SystemContracts } from './system-specs.ts';\n` : ''}${acceptsImports ? `${acceptsImports}\n` : ''}${[...depSurfaces.imports, ...depSystems.imports, ...depAsks.imports].join('\n')}
 ${[outgoingAliases, acceptsAliases].filter(Boolean).join('\n')}
 
 /**
@@ -1748,6 +1771,11 @@ export type PackSystemEvents = {
 ${systemEntries}
 };
 
+/** Feature id → the asks this pack's system for that feature answers, by name (dependents name it \`${manifest.id}/<feature>\`). */
+export type PackSystemAsks = {
+${askEntries}
+};
+
 /**
  * Every surface this pack's code can send to, by ref: its own, its dependencies' and the host's. A surface owned
  * elsewhere takes the inbox its own pack declares — a pack widens only its own. Actions (\`services.emitter\`)
@@ -1764,7 +1792,13 @@ export type SendableSurfaceEvents = WithOwnNames<${pack}, QualifiedSurfaceEvents
 /** The systems this pack's code sends to: \`QualifiedSystemEvents\`, with its own named by feature id instead of ref */
 export type SendableSystemEvents = WithOwnNames<${pack}, QualifiedSystemEvents>;
 
-export const { broadcastToSurface, sendToWindow, sendToSurface, sendToSystem } = /*#__PURE__*/ defineEvents<SendableSurfaceEvents, SendableSystemEvents>('${manifest.id}');
+/** Every system this pack's code can ask, by ref, with the asks each answers: its own, its dependencies' and the host's. */
+export type QualifiedSystemAsks = ${qualifiedAsks};
+
+/** The systems this pack's code asks: \`QualifiedSystemAsks\`, with its own named by feature id instead of ref */
+export type SendableSystemAsks = WithOwnNames<${pack}, QualifiedSystemAsks>;
+
+export const { broadcast, sendToWindow, sendToSurface, tell, ask, fromAsk } = /*#__PURE__*/ defineEvents<SendableSurfaceEvents, SendableSystemEvents, SendableSystemAsks>('${manifest.id}');
 `;
   }
 
@@ -1845,10 +1879,10 @@ ${nodeEntity}`;
 
     return `${HEADER}
 import type { z } from 'zod';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@apackdev/sdk';
 import type { HostServices, PackServiceAccess } from '@apackdev/sdk/services';
 import { runtimeServices } from './runtime-services.ts';
-import type { TypedSendToSurface, TypedSendToWindow, TypedSendToSystem } from '@apackdev/sdk/events';
+import type { TypedSendToSurface, TypedSendToWindow, TypedTell } from '@apackdev/sdk/events';
 import type { Repositories } from './repository.ts';
 import type { QualifiedSurfaceEvents, QualifiedSystemEvents } from './events.ts';
 ${imports.join('\n')}
@@ -1868,10 +1902,10 @@ ${entries.join('\n')}
  * feature, or nothing — where a ref that no longer fits is wrong visibly, and is refused at the bus rather
  * than doing something else.
  */
-export type PackEmitter = Omit<HostServices['emitter'], 'broadcastToSurface' | 'sendToWindow' | 'sendToSystem'> & {
-  broadcastToSurface: TypedSendToSurface<QualifiedSurfaceEvents>;
+export type PackEmitter = Omit<HostServices['emitter'], 'broadcast' | 'sendToWindow' | 'tell'> & {
+  broadcast: TypedSendToSurface<QualifiedSurfaceEvents>;
   sendToWindow: TypedSendToWindow<QualifiedSurfaceEvents>;
-  sendToSystem: TypedSendToSystem<QualifiedSystemEvents>;
+  tell: TypedTell<QualifiedSystemEvents>;
 };
 
 /**
@@ -1988,7 +2022,7 @@ export const contentRuntime: ContentRuntime = {
     const hasSurfaces = publishesSurfaceState(manifest, manifest.id);
     return `${HEADER}
 export type { PackShapes as PackEntityShapes, PackStepNodes } from './ears.ts';
-export type { PackSurfaceEvents, PackSystemEvents } from './events.ts';
+export type { PackSurfaceEvents, PackSystemAsks, PackSystemEvents } from './events.ts';
 ${hasSurfaces ? "export type { PackSurfaceState } from './fe.ts';\n" : ''}export type { Services } from './services.ts';
 export type { Repositories } from './repository.ts';
 export type { PackFeatureSettings, PackGroupSettings } from './settings.ts';

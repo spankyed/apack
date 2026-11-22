@@ -3,7 +3,7 @@
 > **Done** (`c0f7b49de`..`edd6ab382` on `AS/alias-simplification`). The text below is the plan as written,
 > with its Decision 2 and its Open decision already corrected before implementation (`73ea2deab`). For what
 > a pack's config is now, see `docs/public-facing/testing.md`; for the rule that keeps it that way,
-> `repo-checks/tests/pack-test-config.spec.ts`.
+> `internal-repo-checks/tests/pack-test-config.spec.ts`.
 
 ```
 # Goal: a pack's test config is a call, not a copy

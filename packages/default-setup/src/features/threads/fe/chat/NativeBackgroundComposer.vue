@@ -12,8 +12,7 @@
 </template>
 <script setup lang="ts">
 import {computed, onBeforeUnmount, onMounted, provide, ref, watch} from 'vue'
-import {useSelector} from '@xstate/vue'
-import {useSurface} from '@apackdev/sdk/fe'
+import {useState, useSurface} from '@apackdev/sdk/fe'
 import NativeBackgroundApproval from './NativeBackgroundApproval.vue'
 import type {ClaudeUiApprovalAnswer} from '#features/code/common/native-approval.ts'
 import NativeQuestionDrawing from './NativeQuestionDrawing.vue'
@@ -31,7 +30,8 @@ import type {ThreadsState} from '../state.ts'
 const props = defineProps<{threadId: string; target: ClaudeBackgroundUiTarget; active?: boolean; draft: string; draftSnapshot?: ClaudeAgentDraftSnapshot; disabled: boolean; send(text: string): Promise<void>}>()
 const emit = defineEmits<{leave: []; 'open-native': []; draft: [text: string]; 'draft-snapshot': [snapshot: ClaudeAgentDraftSnapshot]}>()
 const actor: ThreadsState = useSurface(), root = ref<HTMLElement>(), mountId = ref<string>()
-const context = useSelector(actor, value => value.context)
+const { state: threads, send: sendToThreads } = useState(actor)
+const context = computed(() => threads.value.data)
 const attachment = computed(() => mountId.value ? context.value.nativeUiViews[mountId.value] : undefined)
 const state = computed(() => attachment.value?.state)
 const selection = provideClaudeUiSelection(() => root.value ?? null)
@@ -40,14 +40,14 @@ provideClaudeHoverGroups(() => mountId.value && attachment.value?.attachmentId &
   ? JSON.stringify([props.threadId, mountId.value, attachment.value.attachmentId, props.target.ownerId]) : undefined)
 const identity = () => ({threadId: props.threadId, mountId: mountId.value!})
 let heartbeat: ReturnType<typeof setInterval> | undefined
-function renew() { if (mountId.value) actor.send({type: 'CLAUDE_UI_MOUNT', ...identity(), promptFocused: props.active !== false && !state.value?.question && !state.value?.approval && document.hasFocus(), backgroundView: {...props.target}}) }
+function renew() { if (mountId.value) sendToThreads({type: 'CLAUDE_UI_MOUNT', ...identity(), promptFocused: props.active !== false && !state.value?.question && !state.value?.approval && document.hasFocus(), backgroundView: {...props.target}}) }
 watch([() => props.active, () => !!state.value?.question, () => !!state.value?.approval], renew)
 function detach() {
   if (heartbeat) clearInterval(heartbeat); heartbeat = undefined
   if (mountId.value) {
     const snapshot = actor.getSnapshot(), resumeKey = snapshot.context.nativeUiViews[mountId.value]?.resumeKey
     if (resumeKey) queueClaudeUiRetirement({...identity(), resumeKey})
-    if (snapshot.status !== 'stopped') actor.send({type: 'CLAUDE_UI_UNMOUNT', ...identity()})
+    if (snapshot.status !== 'stopped') sendToThreads({type: 'CLAUDE_UI_UNMOUNT', ...identity()})
   }
   mountId.value = undefined
 }
@@ -57,7 +57,7 @@ watch(() => JSON.stringify([props.threadId, props.target]), () => {
 const actionKey = createClaudeActionKeyHandler(() => ({
   scope: props.active !== false && !props.disabled && attachment.value?.attachmentId ? `${mountId.value}:${attachment.value.attachmentId}` : undefined,
   keys: state.value?.actionKeys, result: attachment.value?.actionKeyResult,
-}), request => { if (mountId.value) actor.send({type: 'CLAUDE_UI_KEY', ...identity(), ...request}) })
+}), request => { if (mountId.value) sendToThreads({type: 'CLAUDE_UI_KEY', ...identity(), ...request}) })
 let draftRevision = 0
 function started(token: string, rendered: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
   const question = state.value?.question
@@ -65,26 +65,26 @@ function started(token: string, rendered: import('#features/code/be/services/cla
 }
 function answerApproval(frameId: string, answer: ClaudeUiApprovalAnswer) {
   const frame = state.value?.approval
-  if (mountId.value && frame?.id === frameId) actor.send({type: 'CLAUDE_UI_APPROVAL_ANSWER', ...identity(), frameId: frame.id, answer})
+  if (mountId.value && frame?.id === frameId) sendToThreads({type: 'CLAUDE_UI_APPROVAL_ANSWER', ...identity(), frameId: frame.id, answer})
 }
 function answer(value: ClaudeQuestionAnswer, identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
   const question = state.value?.question
-  if (mountId.value && question?.messageId === identity.messageId) actor.send({type: 'CLAUDE_UI_QUESTION_ANSWER', threadId: props.threadId, mountId: mountId.value, messageId: identity.messageId, token: identity.token, answer: value})
+  if (mountId.value && question?.messageId === identity.messageId) sendToThreads({type: 'CLAUDE_UI_QUESTION_ANSWER', threadId: props.threadId, mountId: mountId.value, messageId: identity.messageId, token: identity.token, answer: value})
 }
 function leaveApproval(frameId: string) { if (state.value?.approval?.id === frameId) emit('leave') }
 function openApproval(frameId: string) { if (state.value?.approval?.id === frameId) emit('open-native') }
 function rejectQuestion(identity: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) {
-  if(mountId.value&&state.value?.question?.messageId===identity.messageId)actor.send({type:'CLAUDE_UI_QUESTION_REJECT',threadId:props.threadId,mountId:mountId.value,messageId:identity.messageId,token:identity.token})
+  if(mountId.value&&state.value?.question?.messageId===identity.messageId)sendToThreads({type:'CLAUDE_UI_QUESTION_REJECT',threadId:props.threadId,mountId:mountId.value,messageId:identity.messageId,token:identity.token})
 }
 function leaveQuestion(rendered: import('#features/code/be/services/claude-code/ui-presentation.ts').ClaudeUiQuestionAnswerIdentity) { if (state.value?.question?.messageId === rendered.messageId) emit('leave') }
-function press(actionId: string, href?: string) { if (mountId.value) actor.send({type: 'CLAUDE_UI_PRESS', ...identity(), actionId, ...(href ? {href} : {})}) }
-function field(value: ClaudeUiFieldEvent) { if (mountId.value) actor.send({type: 'CLAUDE_UI_FIELD', ...identity(), ...value}) }
-function scroll(value: ClaudeUiScrollEvent) { if (mountId.value) actor.send({type: 'CLAUDE_UI_SCROLL', ...identity(), ...value}) }
-function focus(value: ClaudeUiFocusEvent) { if (mountId.value) actor.send({type: 'CLAUDE_UI_FOCUS', ...identity(), ...value}) }
-function edit(value: ClaudePromptEdit) { if (mountId.value) actor.send({type: 'CLAUDE_PROMPT_EDIT', ...identity(), ...value}) }
-function complete(value: ClaudePromptCompletionRequest) { if (mountId.value) actor.send({type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...identity(), ...value}) }
-function host(value: ClaudePromptHostResponse) { if (mountId.value) actor.send({type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity(), ...value}) }
-provide(claudeTranscriptLayout, event => { if (mountId.value) actor.send({type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT', ...identity(), ...event}) })
+function press(actionId: string, href?: string) { if (mountId.value) sendToThreads({type: 'CLAUDE_UI_PRESS', ...identity(), actionId, ...(href ? {href} : {})}) }
+function field(value: ClaudeUiFieldEvent) { if (mountId.value) sendToThreads({type: 'CLAUDE_UI_FIELD', ...identity(), ...value}) }
+function scroll(value: ClaudeUiScrollEvent) { if (mountId.value) sendToThreads({type: 'CLAUDE_UI_SCROLL', ...identity(), ...value}) }
+function focus(value: ClaudeUiFocusEvent) { if (mountId.value) sendToThreads({type: 'CLAUDE_UI_FOCUS', ...identity(), ...value}) }
+function edit(value: ClaudePromptEdit) { if (mountId.value) sendToThreads({type: 'CLAUDE_PROMPT_EDIT', ...identity(), ...value}) }
+function complete(value: ClaudePromptCompletionRequest) { if (mountId.value) sendToThreads({type: 'CLAUDE_PROMPT_AUTOCOMPLETE', ...identity(), ...value}) }
+function host(value: ClaudePromptHostResponse) { if (mountId.value) sendToThreads({type: 'CLAUDE_PROMPT_HOST_RESPONSE', ...identity(), ...value}) }
+provide(claudeTranscriptLayout, event => { if (mountId.value) sendToThreads({type: 'CLAUDE_UI_TRANSCRIPT_LAYOUT', ...identity(), ...event}) })
 onMounted(() => { window.addEventListener('focus', renew); window.addEventListener('blur', renew) })
 onBeforeUnmount(() => { window.removeEventListener('focus', renew); window.removeEventListener('blur', renew); detach() })
 </script>

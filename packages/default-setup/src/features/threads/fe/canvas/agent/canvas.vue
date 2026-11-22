@@ -4,7 +4,7 @@
       <ThreadsHeader />
       <!-- Tab Bar -->
       <div class="flex shrink-0 items-center border-b border-neutral-800 bg-neutral-900 overflow-hidden" data-onboarding-id="agent-thread-tabs">
-        <TabBar :tabs="tabs" :activeTabId="activeTabId" :tabGroups="tabGroups" />
+        <TabBar :tabs="threads.data.tabs" :activeTabId="threads.data.activeTabId" :tabGroups="threads.data.tabGroups" />
       </div>
     </template>
 
@@ -15,16 +15,15 @@
       :artifacts="currentTab?.artifacts || []"
       :selectedArtifactId="currentTab?.selectedArtifactId"
       :compact="inline"
-      @select-artifact="(artifactId: string) => actor.send({ type: 'SELECT_ARTIFACT', artifactId })"
+      @select-artifact="(artifactId: string) => send({ type: 'SELECT_ARTIFACT', artifactId })"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { computed } from 'vue';
-import { useSelector } from '@xstate/vue';
 import { type ThreadsState } from '#features/threads/fe/state.ts';
 import TabBar from '#features/threads/fe/canvas/agent/tabs/tab-bar.vue';
 import ContentViewer from '#features/threads/fe/canvas/agent/content-viewer.vue';
@@ -36,9 +35,7 @@ defineProps<{
 
 const actor: ThreadsState = useSurface();
 
-const tabs = useSelector(actor, (state) => state.context.tabs);
-const activeTabId = useSelector(actor, (state) => state.context.activeTabId);
-const tabGroups = useSelector(actor, (state) => state.context.tabGroups);
+const { state: threads, send } = useState(actor);
 
-const currentTab = computed(() => tabs.value.find(tab => tab.id === activeTabId.value));
+const currentTab = computed(() => threads.value.data.tabs.find(tab => tab.id === threads.value.data.activeTabId));
 </script>

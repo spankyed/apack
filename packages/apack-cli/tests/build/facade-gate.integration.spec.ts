@@ -70,6 +70,18 @@ describe('facade gate', () => {
     ]);
   });
 
+  // The SDK brings EARS, but a dependent depends on the SDK alone: a facade naming EARS itself fails where npm nests
+  // it. The bundler writes the root as `@apackdev/sdk/ears`; a subpath with no SDK entry stays, and is refused here
+  it('fails a facade that imports a package the SDK brings rather than the SDK', async () => {
+    const { problems } = await gate('ears-subpath', {
+      'src/data.ts': "import type { openDatabase } from '@elmdb/ears/database';\nexport const dataService = { open: (): typeof openDatabase | null => null };\n",
+      'src/__generated__/pack-types.ts': "import type { dataService } from '../data.ts';\nexport type Services = { data: typeof dataService };\n",
+    });
+    expect(problems).toEqual([
+      expect.stringMatching(/^dist\/types\/pack-types\.d\.ts:1:1 imports "@elmdb\/ears\/database", which dependents don't have: facades may import only @apackdev\/\* packages, @apackdev\/sdk's peer dependencies \([^)]*\) and Node built-ins \(reached from: Services\)$/),
+    ]);
+  });
+
   // Nothing resolves these now: a pack build compiles the published packages, so a source-only export
   // fails the rule and fails to compile, and the rule's message is what names the reason
   it('fails a facade that imports an @apackdev/* module no pack resolves', async () => {
@@ -82,8 +94,9 @@ describe('facade gate', () => {
       'src/__generated__/pack-types.ts': "import type { internalsService } from '../internals.ts';\nexport type Services = { internals: typeof internalsService };\n",
     });
     expect(problems).toEqual([
-      expect.stringMatching(/imports "@apackdev\/sdk\/runtime\/internals", which @apackdev\/sdk doesn't export to installed dependents: in a checkout it resolves only under the @apackdev\/source condition, and the published manifest drops the entry \(reached from: Services\)$/),
+      // A facade's imports are in specifier order (`forDependents`)
       expect.stringMatching(/imports "@apackdev\/host\/packs", a private package dependents can't install \(reached from: Services\)$/),
+      expect.stringMatching(/imports "@apackdev\/sdk\/runtime\/internals", which @apackdev\/sdk doesn't export to installed dependents: in a checkout it resolves only under the @apackdev\/source condition, and the published manifest drops the entry \(reached from: Services\)$/),
       expect.stringContaining("error TS2307: Cannot find module '@apackdev/sdk/runtime/internals'"),
     ]);
   });

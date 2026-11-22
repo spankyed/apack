@@ -101,21 +101,21 @@ operations and declarations; completed console case counts are the execution evi
 | [packages/apack-cli/tests/commands/scaffold.integration.spec.ts](../../../../packages/apack-cli/tests/commands/scaffold.integration.spec.ts) | 6 passed, 5 failed, 0 pending; 558.005s. | 2 |
 | [packages/apack-cli/tests/harness/dependency-runtime.integration.spec.ts](../../../../packages/apack-cli/tests/harness/dependency-runtime.integration.spec.ts) | 5 passed, 0 failed, 0 pending; 32.239s. | 6 |
 | [packages/apack-cli/tests/harness/harness-setup.integration.spec.ts](../../../../packages/apack-cli/tests/harness/harness-setup.integration.spec.ts) | 7 passed, 0 failed, 0 pending; 59.812s. | 6 |
-| [packages/repo-checks/tests/bounded-spawn.integration.spec.ts](../../../../packages/repo-checks/tests/bounded-spawn.integration.spec.ts) | 4 passed, 0 failed, 0 pending; 6.831s. | 2 |
-| [packages/repo-checks/tests/component-contracts.integration.spec.ts](../../../../packages/repo-checks/tests/component-contracts.integration.spec.ts) | 3 passed, 0 failed, 0 pending; 6.665s. | 5 |
-| [packages/repo-checks/tests/dep-files.integration.spec.ts](../../../../packages/repo-checks/tests/dep-files.integration.spec.ts) | 30 passed; 2.598s. | — |
-| [packages/repo-checks/tests/dev-pack-hmr.integration.spec.ts](../../../../packages/repo-checks/tests/dev-pack-hmr.integration.spec.ts) | 2 passed, 1 failed, 0 pending; 0.008s. | 3 |
-| [packages/repo-checks/tests/fingerprint-scope.integration.spec.ts](../../../../packages/repo-checks/tests/fingerprint-scope.integration.spec.ts) | 10 passed, 0 failed, 0 pending; 5.974s. | 2 |
-| [packages/repo-checks/tests/import-specifiers-script.integration.spec.ts](../../../../packages/repo-checks/tests/import-specifiers-script.integration.spec.ts) | 2 passed, 0 failed, 0 pending; 9.040s. | 4 |
-| [packages/repo-checks/tests/import-specifiers.integration.spec.ts](../../../../packages/repo-checks/tests/import-specifiers.integration.spec.ts) | 302 passed; 11.278s. | — |
-| [packages/repo-checks/tests/session.integration.spec.ts](../../../../packages/repo-checks/tests/session.integration.spec.ts) | 10 passed, 0 failed, 0 pending; 4.820s. | 3 |
-| [packages/repo-checks/tests/spec-durations-reporter.integration.spec.ts](../../../../packages/repo-checks/tests/spec-durations-reporter.integration.spec.ts) | 11 passed, 0 failed, 0 pending; 46.642s. | 6 |
-| [packages/publish-checks/tests/published-declarations.integration.spec.ts](../../../../packages/publish-checks/tests/published-declarations.integration.spec.ts) | 1 passed, 0 failed, 0 pending; 4.197s. | 3 |
-| [packages/publish-checks/tests/published-exports.integration.spec.ts](../../../../packages/publish-checks/tests/published-exports.integration.spec.ts) | 4 passed, 0 failed, 0 pending; 7.090s. | 5 |
-| [packages/publish-checks/tests/published-manifest-paths.integration.spec.ts](../../../../packages/publish-checks/tests/published-manifest-paths.integration.spec.ts) | 5 passed, 0 failed, 0 pending; 4.780s. | 5 |
-| [packages/publish-checks/tests/published-sdk-any.integration.spec.ts](../../../../packages/publish-checks/tests/published-sdk-any.integration.spec.ts) | 14 passed, 0 failed, 0 pending; 7.866s. | 3 |
-| [packages/publish-checks/tests/published-sdk-types.integration.spec.ts](../../../../packages/publish-checks/tests/published-sdk-types.integration.spec.ts) | 10 passed, 0 failed, 0 pending; 20.639s. | 4 |
-| [packages/publish-checks/tests/published-ui-types.integration.spec.ts](../../../../packages/publish-checks/tests/published-ui-types.integration.spec.ts) | 4 passed, 0 failed, 0 pending; 6.228s. | 5 |
+| [packages/internal-repo-checks/tests/bounded-spawn.integration.spec.ts](../../../../packages/internal-repo-checks/tests/bounded-spawn.integration.spec.ts) | 4 passed, 0 failed, 0 pending; 6.831s. | 2 |
+| [packages/internal-repo-checks/tests/component-contracts.integration.spec.ts](../../../../packages/internal-repo-checks/tests/component-contracts.integration.spec.ts) | 3 passed, 0 failed, 0 pending; 6.665s. | 5 |
+| [packages/internal-repo-checks/tests/dep-files.integration.spec.ts](../../../../packages/internal-repo-checks/tests/dep-files.integration.spec.ts) | 30 passed; 2.598s. | — |
+| [packages/internal-repo-checks/tests/dev-pack-hmr.integration.spec.ts](../../../../packages/internal-repo-checks/tests/dev-pack-hmr.integration.spec.ts) | 2 passed, 1 failed, 0 pending; 0.008s. | 3 |
+| [packages/internal-repo-checks/tests/fingerprint-scope.integration.spec.ts](../../../../packages/internal-repo-checks/tests/fingerprint-scope.integration.spec.ts) | 10 passed, 0 failed, 0 pending; 5.974s. | 2 |
+| [packages/internal-repo-checks/tests/import-specifiers-script.integration.spec.ts](../../../../packages/internal-repo-checks/tests/import-specifiers-script.integration.spec.ts) | 2 passed, 0 failed, 0 pending; 9.040s. | 4 |
+| [packages/internal-repo-checks/tests/import-specifiers.integration.spec.ts](../../../../packages/internal-repo-checks/tests/import-specifiers.integration.spec.ts) | 302 passed; 11.278s. | — |
+| [packages/internal-repo-checks/tests/session.integration.spec.ts](../../../../packages/internal-repo-checks/tests/session.integration.spec.ts) | 10 passed, 0 failed, 0 pending; 4.820s. | 3 |
+| [packages/internal-repo-checks/tests/spec-durations-reporter.integration.spec.ts](../../../../packages/internal-repo-checks/tests/spec-durations-reporter.integration.spec.ts) | 11 passed, 0 failed, 0 pending; 46.642s. | 6 |
+| [packages/internal-publish-checks/tests/published-declarations.integration.spec.ts](../../../../packages/internal-publish-checks/tests/published-declarations.integration.spec.ts) | 1 passed, 0 failed, 0 pending; 4.197s. | 3 |
+| [packages/internal-publish-checks/tests/published-exports.integration.spec.ts](../../../../packages/internal-publish-checks/tests/published-exports.integration.spec.ts) | 4 passed, 0 failed, 0 pending; 7.090s. | 5 |
+| [packages/internal-publish-checks/tests/published-manifest-paths.integration.spec.ts](../../../../packages/internal-publish-checks/tests/published-manifest-paths.integration.spec.ts) | 5 passed, 0 failed, 0 pending; 4.780s. | 5 |
+| [packages/internal-publish-checks/tests/published-sdk-any.integration.spec.ts](../../../../packages/internal-publish-checks/tests/published-sdk-any.integration.spec.ts) | 14 passed, 0 failed, 0 pending; 7.866s. | 3 |
+| [packages/internal-publish-checks/tests/published-sdk-types.integration.spec.ts](../../../../packages/internal-publish-checks/tests/published-sdk-types.integration.spec.ts) | 10 passed, 0 failed, 0 pending; 20.639s. | 4 |
+| [packages/internal-publish-checks/tests/published-ui-types.integration.spec.ts](../../../../packages/internal-publish-checks/tests/published-ui-types.integration.spec.ts) | 4 passed, 0 failed, 0 pending; 6.228s. | 5 |
 
 ## Execution setup (completed)
 
@@ -171,7 +171,7 @@ when prior timeout leakage is a plausible cause. No event, operation or cleanup 
 | 3 | `apack-cli/tests/build/frontend-resources.integration.spec.ts` | watches an external template asset in a separate directory | Whole-scenario timeout | 60.026s |
 | 3 | `apack-cli/tests/build/frontend-resources.integration.spec.ts` | watches initially empty external Tailwind content through nested directory links | Individual-operation timeout (20s rebuild wait) | 54.304s |
 | 3 | `apack-cli/tests/build/watch-external-types.native.spec.ts` | rebuilds external contracts and recovers a retargeted missing input without an authored edit | Individual-operation timeout (20s rebuild wait) | 89.473s |
-| 3 | `repo-checks/tests/dev-pack-hmr.integration.spec.ts` | a pack whose source this machine has has 'a pack outside the workspace' in the renderer's own module graph, accepting its own updates | Assertion failure | 0.006s |
+| 3 | `internal-repo-checks/tests/dev-pack-hmr.integration.spec.ts` | a pack whose source this machine has has 'a pack outside the workspace' in the renderer's own module graph, accepting its own updates | Assertion failure | 0.006s |
 | 4 | `apack-cli/tests/build/build-registry.integration.spec.ts` | a build compiles flows against the steps it loaded, and leaves the bound registry untouched | Whole-scenario timeout | 63.860s |
 | 4 | `apack-cli/tests/build/editor-declarations.integration.spec.ts` | builds declared editor members and step presentation, then discovers a copied source-free build | Whole-scenario timeout | 60.067s |
 | 4 | `apack-cli/tests/build/package-inputs.integration.spec.ts` | rebuilds the frontend when an undeclared imported package changes behind unchanged types | Whole-scenario timeout | 60.465s |
@@ -222,7 +222,7 @@ setup refuses missing generation explicitly and restores its environment overrid
 inspection now builds after the prior case creates the authored report, before capturing the files
 it promises not to modify. Production freshness/refusal rules and result assertions are unchanged.
 The 105 graph/input checks pass, including removing the fixture dependency through an exclusion
-mutation. Scripts, repo-checks and CLI typechecks and focused lint pass. Real HMR/facade execution
+mutation. Scripts, internal-repo-checks and CLI typechecks and focused lint pass. Real HMR/facade execution
 remains part of the affected-case run after the repair pass; no broad run was started.
 
 Source **`401ec05be`** fixes watcher fixture ownership in frontend-resources, package-inputs and
@@ -253,7 +253,7 @@ Both probe children are reaped. This is lifecycle evidence, not native/Electron 
 no captured runtime or addon runs locally. The existing exit-handler case now explicitly retains its
 builder, uses test cancellation and drains it through the existing fixture owner.
 
-Validation: all **57** timeout-policy, subprocess-inventory and wait checks pass; CLI and repo-checks
+Validation: all **57** timeout-policy, subprocess-inventory and wait checks pass; CLI and internal-repo-checks
 `tsc --noEmit` and correctness lint over all 23 changed TypeScript files pass. An AST comparison confirms
 the 20 changed CLI specs retain their assertion calls and event waits before the explicit exit-handler
 owner adjustment; its refusal, seal, incumbent and staging assertions remain. No normal integration or
@@ -303,7 +303,7 @@ a backstop with room for required blocked cases, not a measured healthy-run dura
 historical local cost records with CI timings would misrepresent their machine/worker conditions;
 the separate validation-feedback proposal remains proposed.
 
-Validation: 167 graph/pool/input tests, scripts and repo-checks typechecks, correctness lint over four
+Validation: 167 graph/pool/input tests, scripts and internal-repo-checks typechecks, correctness lint over four
 changed TypeScript files, workflow YAML parsing and diff whitespace checks pass. An earlier 217-case
 tooling run passed 216 and refused one chain-table metadata import through the existing compiler-runner
 guard on this daily-use Mac. It is not a proved regression or an accepted skip: the full disposable
@@ -1172,7 +1172,7 @@ or the cause of the reporting errors. No limit or input selection has been chang
 
 Raw evidence: `/private/tmp/apack-normal-integration-39312954386/_temp/normal-integration.log`,
 `/private/tmp/apack-normal-integration-39312954386-full.log`, and its retained
-`pool-reports/spec-durations-7VJSgL/apack-cli+repo-checks+publish-checks.json`. The latter records file
+`pool-reports/spec-durations-7VJSgL/apack-cli+internal-repo-checks+internal-publish-checks.json`. The latter records file
 durations, not individual test verdicts; the complete log is authoritative for executed bodies.
 
 Focused diagnostic [39325170997](https://github.com/spankyed/apack/actions/runs/39325170997)

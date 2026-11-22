@@ -5,8 +5,7 @@ import type {ClaudeUiQuestionFrame} from '#features/code/be/services/claude-code
 import type {ClaudeBackgroundUiTarget} from '#features/code/common/native-background.ts'
 const send=vi.fn()
 let context:{nativeUiViews:Record<string,{threadId:string;attachmentId?:string;state:{status:string; question?: ClaudeUiQuestionFrame}}>} , app:App|undefined
-vi.mock('@apackdev/sdk/fe',()=>({surfaceStorage:()=>({get:()=>null,set:()=>{},remove:()=>{}}),useSurface:()=>({send,getSnapshot:()=>({context,status:'active'})})}))
-vi.mock('@xstate/vue',async()=>{const{computed}=await import('vue');return{useSelector:(_actor:unknown,select:(value:unknown)=>unknown)=>computed(()=>select({context}))}})
+vi.mock('@apackdev/sdk/fe',async()=>{const { computed } = await import('vue'); return ({ useState: () => ({ state: computed(() => ({ data: context })), send: send }), surfaceStorage:()=>({get:()=>null,set:()=>{},remove:()=>{}}),useSurface:()=>({send,getSnapshot:()=>({context,status:'active'})})}) })
 vi.mock('#features/threads/fe/chat/NativeAgentComposer.vue',()=>({default:{props:['disabled','draft','audience'],emits:['field','host','draft','leave'],template:`<section><textarea aria-label="Draft" :value="draft" :disabled="disabled" @input="$emit('draft',$event.target.value)"/><button @click="$emit('field',{actionId:'action',text:'child value'})">Field</button><button @click="$emit('host',{requestId:'request',kind:'read',text:'draft',cursor:5})">Host</button><button @click="$emit('leave')">Close</button></section>`}}))
 beforeEach(()=>{send.mockClear();context=reactive({nativeUiViews:{}})})
 afterEach(()=>{app?.unmount();app=undefined;document.body.replaceChildren()})

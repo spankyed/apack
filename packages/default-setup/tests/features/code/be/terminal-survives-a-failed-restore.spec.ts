@@ -1,9 +1,9 @@
 // A restore that fails must not take the terminal system with it, which is L1.
 //
 // `restoreTerminalsActor` was invoked with `onDone` and nothing else. XState leaves a machine in the state
-// whose invoked actor rejected, and `initializing` handles no events — so one rejection meant every later
-// `terminal.CREATE_TERMINAL` and every `GET_CODE_START` for the rest of the session went nowhere and the
-// surface showed an empty list. In silence: nothing reported it and nothing recovered.
+// whose invoked actor rejected, and the terminals are asked about only once it has left `initializing` — so
+// one rejection meant every later `terminal.CREATE_TERMINAL` and `terminal.REFRESH_LIST` for the rest of the
+// session waited for a restore that never ended, and the surface showed an empty list. In silence: nothing reported it and nothing recovered.
 //
 // Restoring is best-effort — what it restores is a convenience, and the previous run's processes are gone
 // either way — so the failure is reported and the system goes on doing its job.
@@ -14,12 +14,13 @@
 // is left outside is a settings read and a query.
 import { describe, expect, it } from 'vitest'
 import { resetTestData, startApp, takeSystemErrors } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { repository } from '#generated/repository.ts'
 import { EARS, newId } from '#generated/ears.ts'
 import { defaultShell } from '#features/code/be/services/known-shells.ts'
+import { answered } from './_support/answered.ts'
+import type { TerminalInfo } from '#features/code/be/types.ts'
 
-const CODE = 'default-setup/code'
 const WINDOW = 'c-main'
 
 describe('a restore that fails', () => {
@@ -34,9 +35,7 @@ describe('a restore that fails', () => {
     await app.settle()
 
     // The system is past initializing and answers the window that asks
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'after the failure' },
-      { sender: CODE, client: WINDOW })
-    const opened = await app.nextEmit('code', 'terminal.OPENED')
+    const opened = answered<TerminalInfo>(await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title: 'after the failure' }, { client: WINDOW }))
     await app.settle()
 
     expect(opened, 'the system never left initializing, so nothing answered').toBeDefined()

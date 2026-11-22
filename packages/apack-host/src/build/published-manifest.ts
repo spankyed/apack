@@ -1,8 +1,8 @@
 /**
  * The manifest a published tarball carries, derived from the workspace one, and what it may name.
  *
- * The workspace manifest cannot be published as it stands. Every export of `@apackdev/ears`, `@apackdev/sdk` and
- * `@apackdev/ui` names `./src/**` under the `@apackdev/source` condition, which `files` does not ship — 99 targets
+ * The workspace manifest cannot be published as it stands. Every export of `@apackdev/sdk` and `@apackdev/ui`
+ * names `./src/**` under the `@apackdev/source` condition, which `files` does not ship — 99 targets
  * measured 2026-09-27 — and Node picks a matching condition and *then* requires the file, with no fallback to
  * the next branch. So a consumer that enables the condition (a pack copying a config, a monorepo using the
  * same trick for its own packages) fails to resolve at all, with a message naming neither the condition nor
@@ -11,13 +11,13 @@
  * condition against it resolves the same `dist` path as not enabling it.
  *
  * Derived at **build** time, into a staged tree the build writes. Not at publish time: `test-packaged-authoring.sh`
- * and `@app/publish-checks` both `npm pack` the tree, so a manifest written only by `npm publish` would be one
+ * and `@app/internal-publish-checks` both `npm pack` the tree, so a manifest written only by `npm publish` would be one
  * nothing ever packed, typechecked or installed. And not in a `prepack` hook: seven specs pack these packages
  * concurrently, so a hook rewriting `package.json` in place would race them.
  *
  * Here rather than in the repo's `scripts/` because four callers need it and a package may not reach into
  * `scripts/`: the two build scripts write the tree, `bundle-package.ts` checks its own generated manifest with
- * the same walk, and `@app/publish-checks` checks what `npm pack` would produce.
+ * the same walk, and `@app/internal-publish-checks` checks what `npm pack` would produce.
  */
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -34,7 +34,7 @@ export const PUBLISH_TREE = 'publish';
 /**
  * Fields a published manifest has no use for. `scripts` is the load-bearing one: with no scripts there is no
  * lifecycle hook to add, so the published manifest cannot become something that runs on install or rewrites
- * itself at pack time. `@app/publish-checks` asserts the absence rather than a list of hook names, which npm
+ * itself at pack time. `@app/internal-publish-checks` asserts the absence rather than a list of hook names, which npm
  * is free to grow.
  */
 const DROPPED_FIELDS = ['scripts', 'devDependencies'];
@@ -42,14 +42,14 @@ const DROPPED_FIELDS = ['scripts', 'devDependencies'];
 /** The manifest fields whose values are paths into the package. `files` holds globs, and is npm's business */
 const PATH_FIELDS = ['exports', 'main', 'module', 'types', 'typings', 'browser', 'bin', 'typesVersions'];
 
-/** The dependency fields, whose `file:` specs name a directory only this checkout has */
+/** The dependency fields: what a registry install of the published package asks the registry for */
 const DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependencies'];
 
 /**
  * The workspace manifest as it is published: without the source condition, without an entry that condition was
- * the whole of, and without the fields above. A dependency on a linked directory (`file:`, as `@apackdev/ears`
- * depends on the elmdb checkout `vendor/elmdb` links to) is published as the version of the package there, which is
- * what a registry install resolves; `dir` is the directory the specs are relative to, and one is refused without it.
+ * the whole of, and without the fields above. Its dependencies are published as written: a workspace manifest
+ * names every package by a version a registry holds, and only the root's `overrides` says a release's tarball or a
+ * local checkout supplies one, which a published package never sees.
  *
  * An emptied entry is dropped rather than left as `{}`, and must not be given a published target instead.
  * `@apackdev/sdk`'s `./runtime/internals` is the case: `facade-gate.ts` reports a pack whose facade imports
@@ -57,33 +57,13 @@ const DEPENDENCY_FIELDS = ['dependencies', 'optionalDependencies', 'peerDependen
  * published target. Give it one and the gate goes quiet; drop the entry and the gate still reports, because an
  * absent entry is not resolvable either.
  */
-export function publishedManifest(manifest: Manifest, dir?: string): Manifest {
+export function publishedManifest(manifest: Manifest): Manifest {
   const published: Manifest = {};
   for (const [field, value] of Object.entries(manifest)) {
     if (DROPPED_FIELDS.includes(field)) continue;
-    published[field] = field === 'exports' ? publishedExports(value)
-      : DEPENDENCY_FIELDS.includes(field) ? publishedDependencies(value as Record<string, string>, String(manifest.name), dir)
-        : value;
+    published[field] = field === 'exports' ? publishedExports(value) : value;
   }
   return published;
-}
-
-function publishedDependencies(dependencies: Record<string, string>, name: string, dir: string | undefined): Record<string, string> {
-  return Object.fromEntries(Object.entries(dependencies).map(([dependency, spec]) => {
-    if (!spec.startsWith('file:')) return [dependency, spec];
-    if (dir === undefined) throw new Error(`${name}'s dependency ${dependency} is ${spec}: publishing it needs the directory the path is relative to`);
-    return [dependency, publishedSpec(spec, dir)];
-  }));
-}
-
-/**
- * A dependency spec as a published manifest carries it: a `file:` one, relative to `dir`, as the version of the package
- * it links, and any other as it is
- */
-export function publishedSpec(spec: string, dir: string): string {
-  if (!spec.startsWith('file:')) return spec;
-  const linked = JSON.parse(fs.readFileSync(path.join(dir, spec.slice('file:'.length), 'package.json'), 'utf8')) as Manifest;
-  return String(linked.version);
 }
 
 /** A dependency a published manifest names, as a registry install of it resolves one */
@@ -96,9 +76,8 @@ export interface RegistryDependency {
 
 /**
  * What a registry install of `manifests` asks the registry for: every dependency they name but one on a package among
- * them, which the same publish puts there. A linked dependency is among these as the version it links, and a registry
- * holding no such version — a private package, as elmdb's binding is, or one never published — is what a real publish
- * refuses, since everything published depending on it would fail to install
+ * them, which the same publish puts there. A registry holding no such version — a package the root's `overrides`
+ * supplies from a checkout and that was never published — is what a real publish refuses, since everything published depending on it would fail to install
  */
 export function registryDependencies(manifests: readonly Manifest[]): RegistryDependency[] {
   const publishing = new Set(manifests.map((manifest) => String(manifest.name)));
@@ -217,7 +196,7 @@ export function packTree(dir: string, destDir: string): string {
  * `npm pack --json` over one directory, as JSON.
  *
  * Two things it gets right that are easy to leave out. `--ignore-scripts`, because anything a lifecycle script
- * printed lands on this stdout *before* npm's JSON (`@app/publish-checks`' `published-manifest-paths` holds
+ * printed lands on this stdout *before* npm's JSON (`@app/internal-publish-checks`' `published-manifest-paths` holds
  * these manifests to publishing no `scripts` at all, so this is the second door rather than the only one), and
  * the guard, which names that as the cause if some other way is ever found. And an **absolute** path, because
  * npm reads a relative one as a git shorthand and fails in `git ls-remote`.
@@ -253,7 +232,7 @@ export function treeFiles(dir: string): Set<string> {
  * `files` is kept in the derived manifest rather than dropped, so packing the staged tree is as explicit as
  * packing the source tree: without it npm would fall back to gitignore rules, and this tree sits inside a
  * gitignored directory. Then it checks the result, so a build that stages a short tree fails here rather than
- * shipping a manifest pointing at nothing — `@app/publish-checks` is the backstop, not the first line.
+ * shipping a manifest pointing at nothing — `@app/internal-publish-checks` is the backstop, not the first line.
  */
 export function stagePublishTree(pkgDir: string, manifest: Manifest): string {
   const name = String(manifest.name);
@@ -287,7 +266,7 @@ export function stagePublishTree(pkgDir: string, manifest: Manifest): string {
   }
   // After the copy, because `package.json` is in that list: this is the one file the staged tree does not share
   // with the source tree
-  const published = publishedManifest(manifest, pkgDir);
+  const published = publishedManifest(manifest);
   fs.writeFileSync(path.join(staged, 'package.json'), `${JSON.stringify(published, null, 2)}\n`);
   // Checked before the swap, never after: a tree that failed this must not be the one readers find, and
   // swapping first would leave a short tree reading as the published one

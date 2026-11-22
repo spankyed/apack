@@ -69,8 +69,8 @@ export type OutgoingBookmarksEvents =
 // src/features/bookmarks/be/system.ts
 import { setup } from 'xstate';
 import { defineSystem } from '@apackdev/sdk/framework';
-// broadcastToSurface is typed with the events each of this pack's surfaces receives
-import { broadcastToSurface } from '#generated/events.ts';
+// broadcast is typed with the events each of this pack's surfaces receives
+import { broadcast } from '#generated/events.ts';
 import type { Contract } from './contract.ts';
 
 // The spec types the machine from the same contract. Its identity is its feature's, from apack.json
@@ -81,7 +81,7 @@ export const bookmarksSystem = setup({
   types: bookmarksSpec.types,
   actions: {
     sendConnectedData: () => {
-      broadcastToSurface('bookmarks', {
+      broadcast('bookmarks', {
         type: 'BOOKMARKS_CONNECTED',
         data: [],
       });
@@ -125,7 +125,8 @@ The contract is a **declared type**, not a value, and it lives in a leaf module 
 |---|---|
 | `incoming` | what anything outside the system sends it: another system, a surface, a dependent pack. Required unless the system only broadcasts |
 | `internal` | what the system's own children send it (a `fromCallback` child telling its parent). These reach the machine's event union and nothing a dependent pack can see, so they can't be sent from outside. Optional |
-| `outgoing` | every event the system sends to surfaces, and the one place they're declared: the build types `broadcastToSurface` from it and lists what each surface receives. Required |
+| `outgoing` | every event the system sends to surfaces, and the one place they're declared: the build types `broadcast` from it and lists what each surface receives. Required |
+| `asks` | what the system answers — a read, a write, a command — each with what it takes, what it answers with and how it may fail (see [Asks](#asks)). Optional |
 | `context` | the machine's context, `{}` when omitted |
 
 The spec it returns:
@@ -134,6 +135,7 @@ The spec it returns:
 |---|---|
 | `types` | `{ context; events }`, for `setup({ types })`: the events are `incoming \| internal \| SystemEvents`. `SystemEvents` is `SEND_STATE`, `CLIENT_CONNECTED`, `PACK_CHANGED { packId }`, `DATA_REPLACED` and `FEATURE_SETTINGS_UPDATED { settings, changes }`, so no contract lists them |
 | `typeOf` | `safeEvents` over the same events, to narrow an event by type in actions |
+| `answers` | the table that answers the contract's `asks` (see [Asks](#asks)) |
 
 ### Key rules
 
@@ -141,7 +143,7 @@ The spec it returns:
 - **Always handle `SEND_STATE`, and usually nothing else** — the app asks every system for its state whenever anything could have changed what it holds: a frontend connected, a pack was installed, updated, enabled, disabled, uninstalled or rebuilt while the app runs, its content were imported from Settings, or the data was reset or restored from a backup. Answer by broadcasting the full state your surface starts from; the surface doesn't need to ask for it. Because the ask is the same whatever caused it, you write it once and stay correct as new causes are added — including ones that didn't exist when your pack was written. An installed pack with frontend code (an FE entry or surfaces) is asked once each window has tried loading that frontend, at startup, on activation and when the window reconnects, whether the load added surfaces or failed; every system of the pack is asked, those without a surface too. Every open window receives what you send, not only the one that asked.
 - **Derive rows with a projection, not a fact handler.** `defineProjections` (`features.<id>.projections`) runs in the write's own unit and catches up on what other processes commit, so it holds whoever wrote the row. `apply` and `rebuild` hold the write lock, so keep them quick.
 - **Handle a fact only for what publishing cannot fix** — `CLIENT_CONNECTED`, `PACK_CHANGED { packId }`, `DATA_REPLACED` and `DATA_CHANGED_ELSEWHERE` are delivered before the ask that follows them, for work that re-sending data cannot do: tearing down something held over rows that are gone, or tracking whether a client is attached. If your answer to one of them would be "send my data again", delete it and handle `SEND_STATE` instead.
-- **Use `broadcastToSurface()` to send to the frontend** — `broadcastToSurface(name, event)`, in a system's actions or anywhere else (services, callbacks), routes the event through the bus to the surface that name stands for, in **every** window showing it (a surface runs once per window). The renderer's own `sendToSurface(name, event)`, from the same module, goes to one window's actor instead. It's dropped while no client is connected, which is also why the app doesn't ask a system to publish until one is. It comes from `#generated/events` and accepts only the events that surface receives. Don't import it from `@apackdev/sdk/events`, whose untyped version accepts any event. Only features that have a `surface` are named there: a feature with a system and no surface has nothing to receive events, so it gets no key. A surface that should also take events from another feature or another pack declares them itself, in the `inbox` half of its `Contract` — the receiver says what it handles, so a pack widens only its own surfaces.
+- **Use `broadcast()` to send to the frontend** — `broadcast(name, event)`, in a system's actions or anywhere else (services, callbacks), routes the event through the bus to the surface that name stands for, in **every** window showing it (a surface runs once per window). The renderer's own `sendToSurface(name, event)`, from the same module, goes to one window's actor instead. It's dropped while no client is connected, which is also why the app doesn't ask a system to publish until one is. It comes from `#generated/events` and accepts only the events that surface receives. Don't import it from `@apackdev/sdk/events`, whose untyped version accepts any event. Only features that have a `surface` are named there: a feature with a system and no surface has nothing to receive events, so it gets no key. A surface that should also take events from another feature or another pack declares them itself, in the `inbox` half of its `Contract` — the receiver says what it handles, so a pack widens only its own surfaces.
 - **An event arrives exactly as you sent it** — where it goes travels beside it (`{ to, event }`), so any field name is yours to use, `surfaceId` included.
 
 ### Communication patterns
@@ -150,10 +152,10 @@ Your code names features: your own by id (`'bookmarks'`), and every other as `<p
 
 | To | Use |
 |---|---|
-| send to a surface from a system | `broadcastToSurface(name, event)` (`#generated/events`) — every window |
+| send to a surface from a system | `broadcast(name, event)` (`#generated/events`) — every window |
 | send to a surface from the frontend | `sendToSurface(name, event)` (`#generated/events`) — this window |
-| send to a system, from a surface or from another system | `sendToSystem(name, event)` (`#generated/events`), typed with the events that system declares |
-| send to whichever system plays a role | `sendToSystem({ role }, event)`: `sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType })` fires a flow event |
+| send to a system, from a surface or from another system | `tell(name, event)` (`#generated/events`), typed with the events that system declares |
+| send to whichever system plays a role | `tell({ role }, event)`: `tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType })` fires a flow event |
 | reach your surface's actor from its components | `useSurface<MyActor>()` (`@apackdev/sdk/fe`): the app renders a surface's canvas, panel, chat and settings as part of it. Name your machine's actor type — which surface a component belongs to is where it is rendered, so nothing at the call site can infer it, and an unnamed one would read a context field your machine dropped and still compile |
 | read another surface's state | `useSurfaceState(name, selector)` from `#generated/fe` in a component's setup or an effect scope, and `readSurfaceState(name, selector)` once, outside one (a machine's action). The selector takes that surface's published state, not an XState snapshot. Your own pack's surfaces are always running, so the value is never `undefined`; a dependency's frontend may still be loading, so reading one of its surfaces gives `undefined` until it arrives, and fills in when it does. For a ref that arrives as data, `useUntypedSurfaceState`/`readUntypedSurfaceState` (`@apackdev/sdk/fe`) are the untyped escape hatch |
 | declare what other surfaces may send yours | the `inbox` half of your surface's `Contract`, a declared type in a leaf module `apack.json` names at `features.<id>.surface.contract`: `export type Contract = { state: MyContext; inbox: SurfaceInbox<{ public: MyInbox }> }`. Your own feature's system needs no declaration — its outgoing events are already your surface's. The `public` half is what a pack that depends on yours may send, and what types `sendToSurface` and `openSurface`. The leaf imports no machine, so codegen can read the contract without resolving one |
@@ -162,28 +164,134 @@ Your code names features: your own by id (`'bookmarks'`), and every other as `<p
 | open a surface a piece of data names (a link's target) | `untypedOpenSurface(ref, event?)` (`@apackdev/sdk/fe`). It throws for a string that isn't a `<packId>/<featureId>`; otherwise the app opens the surface, waiting while the pack that provides it is still loading, and tells the user if no installed pack provides it |
 
 ```typescript
-import { broadcastToSurface, sendToSystem } from '#generated/events.ts';
+import { broadcast, tell } from '#generated/events.ts';
 
 // System -> Surface (via bus)
-broadcastToSurface('bookmarks', { type: 'BOOKMARK_CREATED', bookmark });
+broadcast('bookmarks', { type: 'BOOKMARK_CREATED', bookmark });
 
 // System -> System (via bus), checked against what the tags system declares it receives
-sendToSystem('tags', { type: 'SOME_EVENT' });
+tell('tags', { type: 'SOME_EVENT' });
 ```
 
-Frontend code (and backend code) sends events to systems with `sendToSystem` from `#generated/events`:
+Frontend code (and backend code) sends events to systems with `tell` from `#generated/events`:
 
 ```typescript
-import { sendToSystem } from '#generated/events.ts';
+import { tell } from '#generated/events.ts';
 
 // Surface -> System: this pack's systems by feature id, a dependency's as <dependency>/<feature>
-sendToSystem('bookmarks', { type: 'CREATE_BOOKMARK', url, title });
-sendToSystem('default-setup/notes', { type: 'EMPTY_TRASH' });
+tell('bookmarks', { type: 'CREATE_BOOKMARK', url, title });
+tell('default-setup/notes', { type: 'EMPTY_TRASH' });
 ```
 
-`sendToSystem` accepts only systems of your pack and its dependencies, and only the events each one declares (its contract's `incoming`); a missing field is reported against the event its `type` names. Each send names one system and one event type: a `systemId` or `type` typed as a union is rejected. A bare name is your own feature (`'bookmarks'` is `my-pack/bookmarks`). A dependency's system is always named with the dependency's id, so a feature of yours may share its name: `'notes'` is your own, `'default-setup/notes'` default-setup's. The app checks target and event-name membership against the accepted endpoint contract. The generated system inbox contains the contract's `incoming`, explicit `system.events.incoming` additions, and shared SDK lifecycle events. Private machine handlers do not define a public inbox; backend event diagnostics do not validate payloads or authorize senders.
+`tell` accepts only systems of your pack and its dependencies, and only the events each one declares (its contract's `incoming`); a missing field is reported against the event its `type` names. Each send names one system and one event type: a `systemId` or `type` typed as a union is rejected. A bare name is your own feature (`'bookmarks'` is `my-pack/bookmarks`). A dependency's system is always named with the dependency's id, so a feature of yours may share its name: `'notes'` is your own, `'default-setup/notes'` default-setup's. The app checks target and event-name membership against the accepted endpoint contract. The generated system inbox contains the contract's `incoming`, explicit `system.events.incoming` additions, and shared SDK lifecycle events. Private machine handlers do not define a public inbox; backend event diagnostics do not validate payloads or authorize senders.
 
 Backend code that needs the connection or every incoming event subscribes with `onConnected(callback)` and `onIncoming(callback)` from `@apackdev/sdk/events`; each returns an unsubscribe function. Log entries arrive through `onLog(callback)` from `@apackdev/sdk/logger`.
+
+### Asks
+
+**Something a surface or another system needs an answer to is an ask.** A read the engine cannot watch (a file on
+disk, the run history), a write the surface holds its views behind, a command whose outcome the user is shown: each
+is declared in the system's contract under `asks`, keyed by its event type.
+
+```typescript
+// be/contract.ts
+export type Contract = {
+  incoming: IncomingBookmarksEvents;
+  outgoing: OutgoingBookmarksEvents;
+  asks: {
+    // What it takes beside `type`, what it answers with, and the ways it may fail that an asker can act on
+    RENAME_BOOKMARK: {
+      args: { id: string; name: string };
+      answer: { name: string };
+      refuses: { 'name-taken': { existingId: string } };
+    };
+    // No `answer`: answered only that it was done
+    DELETE_BOOKMARK: { args: { id: string } };
+  };
+};
+```
+
+The system answers them with a table, one handler per ask — the compiler refuses one that is missing. **A handler
+returns its answer and throws its refusal**; it is never handed the means to send either, so no path through it can
+leave the asker waiting:
+
+```typescript
+// be/system.ts
+export const answers = bookmarksSpec.answers({
+  RENAME_BOOKMARK: ({ args, refuse }) => {
+    const existing = repository.bookmarkQueries.byName(args.name);
+    if (existing) throw refuse('name-taken', 'Another bookmark has that name', { existingId: existing.id });
+    repository.bookmarkCommands.rename(args.id, args.name);
+    return { name: args.name };
+  },
+  DELETE_BOOKMARK: ({ args }) => { repository.bookmarkCommands.delete(args.id); },
+});
+
+export const bookmarksSystem = setup({
+  types: bookmarksSpec.types,
+  actions: { ...answers.actions, ...bookmarksSpec.actions({ /* your other actions */ }) },
+}).createMachine({ on: { ...answers.on } });
+```
+
+`answers.on` goes where the asks are taken: at the root for a system that takes them in every state, or one by one
+under a state (`DELETE_BOOKMARK: answers.on.DELETE_BOOKMARK`) for one that takes them only there. A handler is handed
+`args`, `context`, `self`, `refuse`, `client` (the asking window's connection, absent for another system's ask),
+`progress`, which tells whoever asked something before the answer where the ask declares `progress`, and `signal`,
+which aborts when the window that asked goes or whoever asked stops waiting.
+
+An ask ends with its answer or with a failure: `{ kind, message }` and whatever data its kind declares. Two kinds
+every ask may fail as, declared or not: `failed`, for anything the handler did not name, and `unavailable`, for an
+ask nothing took (the system is not running, or its current state does not take that ask), which the app answers
+itself. An error from the disk is `not-found` or `no-access` where the ask declares that kind. A failure nobody asked
+about is reported to the user; a success nobody asked about goes nowhere. An ask that was stopped is not answered.
+
+| To ask | Use |
+|---|---|
+| from a surface's machine, where the UI shows it under way or a newer one replaces it | a state with `invoke: { src: fromAsk('bookmarks', 'GET_BOOKMARK'), input, onDone }` (`#generated/events`). `event.output` is an `Outcome`. Leaving the state stops the ask. What the handler tells it on the way arrives as `GET_BOOKMARK.progress` (`ProgressEventOf`, `@apackdev/sdk/events`) |
+| from a surface's machine, on an event | declare it with `makes` and make it by name (`@apackdev/sdk/fe`, below) |
+| from a component | send the surface an event, and let its machine make the ask: the component reads `making` and what the machine kept of the answer through `useState` |
+| from backend code | `await ask(name, event, { signal?, heard? })` (`#generated/events`), resolving to an `Outcome` |
+
+A surface's machine does not handle an answer as an event: the ask it invoked or spawned takes it.
+
+A machine declares the asks it makes on events once, and makes each by name:
+
+```ts
+const made = makes(({ one, each }) => ({
+  rename: one(fromAsk('bookmarks', 'RENAME_BOOKMARK')),   // one under way at a time
+  open: each(fromAsk('bookmarks', 'GET_BOOKMARK')),       // one under way per key
+}))
+
+setup({
+  types: {} as { context: { making: Making<typeof made> }; events: MyEvent | MadeEvent<typeof made> },
+  actors: made.actors,
+}).createMachine({
+  context: { making: made.none() },
+  on: {
+    [made.done]: { actions: made.settle() },
+    RENAME: { actions: enqueueActions(({ enqueue, event }) => made.make(enqueue, 'rename', { id: event.id, name: event.name })) },
+    OPEN: { actions: enqueueActions(({ enqueue, event }) => made.make(enqueue, 'open', event.id, { id: event.id })) },
+    'made.rename': { actions: … },   // event.outcome is the Outcome
+    'made.open': { actions: … },     // event.key says which
+  },
+})
+```
+
+Which are under way is `making` in the context — `making.rename`, `making.open[id]` — which a guard, an action and a
+component read alike, so a spinner or a second click ignored names no id. Making one that is under way gives up the
+one before; `made.drop(enqueue, context, name, key?)` gives one up; `freshKey()` keys one of several that have
+nothing of their own to be told apart by. The `ask-ends` pack rule refuses a transition written on
+`xstate.done.actor.<id>`.
+
+`making` is the machine's own, typed from its `makes`. For another feature to read one of a surface's asks as under
+way, the surface's contract names it with its kind, as many as it means to publish:
+`making: MakingOf<{ export: 'one'; nodeDetails: 'each' }>` (`@apackdev/sdk/fe`). A state with a `'*'` transition of its
+own carries `[made.done]: { actions: made.settle() }` beside it, or that wildcard takes every ask's end
+(`swallowed-ask-ends`).
+
+A spec driving the whole system asks with `app.ask(system, event, { client?, signal?, heard? })`, which resolves to
+the `Outcome`. The `ask-answers` pack rule refuses an `ASK_ANSWERED`, `ASK_FAILED` or `ASK_PROGRESS` written by hand
+in a pack's source: they are how an answer travels, and never a pack's to write.
 
 ### Logging and errors
 
@@ -224,7 +332,7 @@ Discovery reads these declarations without loading the machine or component modu
 | isPinned | no | Initial pinned placement |
 | hotkeys | no | `{ action, global? }` per shortcut action |
 | options | no | `{ headerClass?: string }` |
-| fallbackPanel | no | `{ label, toggle: { type }, isShown: "path#exportName" }`; the predicate executes only at runtime |
+| fallbackPanel | no | `{ label, toggle: { type }, isShown: "path#exportName" }`; the predicate is handed the surface as `useState` gives it, `{ at, data }`, and executes only at runtime |
 | contract | no | Leaf module/type export for published state and inbox |
 | default | no | Startup default claim |
 | defaultVisible | no | Initial navigation visibility before the user's override |
@@ -259,6 +367,33 @@ const bookmarksState = setup({
 
 export default bookmarksState;
 ```
+
+### Reading the machine in a component
+
+```vue
+<script setup lang="ts">
+import { useState } from '@apackdev/sdk/fe';
+import type { BookmarksState } from './state.ts';
+
+// With no argument: the surface this component is drawn in. Or pass an actor, or a getter for one
+const { state: bookmarks, send } = useState<BookmarksState>();
+</script>
+
+<template>
+  <p v-if="bookmarks.at === 'idle'">{{ bookmarks.data.items.length }} bookmarks</p>
+  <button @click="send({ type: 'BOOKMARK_CREATED', bookmark })">Add</button>
+</template>
+```
+
+`state.data` is the machine's context and `state.at` is the state it is in, as a path (`'thread.sending'` for a state
+inside another). Whatever reads a field — a template, a `computed`, a `watch(() => bookmarks.value.data.items, …)` —
+runs again when the machine replaces that field, and for no other change. A field's value is the machine's own
+object, never a copy: sent back in an event, it is the one the machine compares with. The fields are read-only, so
+a field is shown with `:value` and changed by sending, not with `v-model`.
+
+Given a getter, `useState(() => maybeActor)` follows the actor as it is replaced, and `state` is `undefined` while
+there is none. A machine is followed once however many components read it. The `machine-selectors` pack rule refuses
+`@xstate/vue` in a pack's source: a `useSelector` is a subscription of its own that runs on every snapshot.
 
 ### Useful SDK utilities
 
@@ -406,7 +541,7 @@ Other feature fields:
 | `types` | Types module re-exported from `#generated/types`; explicit pack-root-relative module path; no inferred default |
 | `references` | Inline type/category declarations and explicit function exports; see [reference declarations](manifest.md#reference-declarations) |
 
-A feature that fills a role other packs look up (`getDesignated('<role>')`, or `sendToSystem({ role }, event)`) sets `"designation"` to that role. A role is not a name: a feature `inbox` can play `notes`. `apack pack add feature bookmarks --description "Save and organize bookmarks." --designation bookmarks` writes it. One feature plays a role: `apack pack validate` reports two features of a pack claiming the same one, and the app refuses a pack claiming a role another pack plays. `apack pack validate` also reports a `settings.form`, `system.entry` or `surface.state` and component-target file that doesn't exist.
+A feature that fills a role other packs look up (`getDesignated('<role>')`, or `tell({ role }, event)`) sets `"designation"` to that role. A role is not a name: a feature `inbox` can play `notes`. `apack pack add feature bookmarks --description "Save and organize bookmarks." --designation bookmarks` writes it. One feature plays a role: `apack pack validate` reports two features of a pack claiming the same one, and the app refuses a pack claiming a role another pack plays. `apack pack validate` also reports a `settings.form`, `system.entry` or `surface.state` and component-target file that doesn't exist.
 
 ## Types dependents see
 

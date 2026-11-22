@@ -6,13 +6,13 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // connection instead, and the connection is **given** to it: a handler is handed the window it is serving
 // (`client`, beside `reply`), which is what lets the address outlive an `await`.
 //
-// The pair is the subject. `broadcastToSurface` is news every window needs; `sendToWindow` is for what only
+// The pair is the subject. `broadcast` is news every window needs; `sendToWindow` is for what only
 // the window that asked should act on, and the cases below are the same send differing in `Message.client`.
 //
 // Which window a handler is *handed* is `apack-sdk`'s `define-system-actions.spec.ts`; this file is what
 // the send does with one.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { untypedBroadcastToSurface, untypedSendToWindow, type Message } from '@apackdev/sdk/events';
+import { untypedBroadcast, untypedSendToWindow, type Message } from '@apackdev/sdk/events';
 import { startTestRuntime, testRootEvents } from '@apackdev/sdk/testing';
 import { HOST_ENTITY_TYPES } from '../../src/app-state/index.ts';
 import { deliverAs } from '../../src/bus/delivery.ts';
@@ -46,7 +46,7 @@ describe('a system serving one window', () => {
   // The pair: the same send, broadcast, names no connection — which is how the bus reaches every window
   it('reaches every window when it broadcasts instead', () => {
     deliverAs(FROM_A_WINDOW, { type: 'ASKED' }, () => {
-      untypedBroadcastToSurface(MEMOS, { type: 'MEMO_ADDED' });
+      untypedBroadcast(MEMOS, { type: 'MEMO_ADDED' });
     });
 
     expect(sent.map(({ client }) => client), 'absent means every connection').toEqual([undefined]);
@@ -138,6 +138,6 @@ describe('given no connection', () => {
   // The error names where a handler gets one, and the verb that does reach every window
   it('says where a connection comes from and what to use instead', () => {
     expect(() => untypedSendToWindow('', MEMOS, { type: 'MEMO_ADDED' }))
-      .toThrow(/handed the one it is serving as `client`[\s\S]*broadcastToSurface/);
+      .toThrow(/handed the one it is serving as `client`[\s\S]*broadcast/);
   });
 });

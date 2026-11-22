@@ -1,7 +1,7 @@
 import { ref, type Ref } from 'vue'
 
 interface ThreadDragDropOptions {
-  selectedItems: Ref<string[]>
+  selectedItems: Ref<readonly string[]>
   onReparent: (childIds: string[], parentId: string) => void
 }
 

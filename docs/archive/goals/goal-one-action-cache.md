@@ -65,7 +65,7 @@ What that costs today, measured:
 | | |
 |---|---|
 | `typecheck` | 18 legs under one fingerprint, no per-leg cache, and `scripts/typecheck.ts:33` sets its own lane count to "half the cores, because the chain runs two other lanes beside this step" — two schedulers with no shared budget, a measured 63.4s in-chain against 29.3s alone |
-| the integration half | one `vitest run` with no per-suite stamps; `repo-checks` is stale on any source edit and its half is 5.06s of a 48.2s pooled run, so the common case is 1 of 3 suites stale and all 3 running |
+| the integration half | one `vitest run` with no per-suite stamps; `internal-repo-checks` is stale on any source edit and its half is 5.06s of a 48.2s pooled run, so the common case is 1 of 3 suites stale and all 3 running |
 | outputs | 6 of 13 steps declare any; the seven that declare none include `typecheck`, both pools and `test:integration` |
 | `tier` | three values, two consumers, each using it as a *different* binary — `check-test-tiers.ts:49` splits {1,2}\|{3}, `TIER_TIMEOUT_MS` splits {1}\|{2,3}. The ordering is used nowhere, and all three tier-1 steps read the built packages, which tier 1's own definition forbids |
 | `exclusive` | a global mutex (`chain-schedule.ts:73`) standing in for conflicts neither user declares |
@@ -279,7 +279,7 @@ this on its first run.
 | `npm run chain` warm | 2.5s after against 1.5s at the base, both 80% idle — the regression above |
 | `npm run typecheck` | passes standalone, reporting per leg |
 | `npm run spec` | 2742 passed |
-| `@app/repo-checks` | 664 fast, 303 integration |
+| `@app/internal-repo-checks` | 664 fast, 303 integration |
 | `check:tiers` | 25 reach no app, 4 declare they need one |
 | `spec-cost:check` | 385 specs, each in the half its cost implies |
 | `check:specifiers`, `lint:check` | pass |

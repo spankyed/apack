@@ -127,7 +127,7 @@ export function packFixture({ at, files = {}, manifest, rawManifest, nodeModules
       imports: { '#generated/*': './src/__generated__/*', '#features/*': './src/features/*' },
     }),
     'apack.json': JSON.stringify(written),
-    'src/__generated__/events.ts': 'export const sendToSystem = 1;\n',
+    'src/__generated__/events.ts': 'export const tell = 1;\n',
     'src/sibling.ts': 'export const sibling = 1;\n',
     'src/features/memos/fe/state.ts': 'export default {}; export type P = { id: string };\n',
     'src/features/memos/be/system.ts': 'export const system = 1;\n',

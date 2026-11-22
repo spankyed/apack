@@ -63,7 +63,7 @@ describe('publishedManifest', () => {
 
   /**
    * With no scripts there is no lifecycle hook to add, so a published manifest cannot become something that runs
-   * on install or rewrites itself at pack time. `@app/publish-checks` asserts the absence rather than a list of
+   * on install or rewrites itself at pack time. `@app/internal-publish-checks` asserts the absence rather than a list of
    * hook names, which npm is free to grow.
    */
   it('drops scripts and devDependencies', () => {
@@ -80,38 +80,19 @@ describe('publishedManifest', () => {
     expect(publishedManifest(manifest)).toEqual(manifest);
   });
 
-  it('publishes a dependency on a linked directory as the version of the package there, and refuses one it cannot resolve', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'published-manifest-link-'));
-    try {
-      fs.mkdirSync(path.join(dir, 'linked'));
-      fs.writeFileSync(path.join(dir, 'linked', 'package.json'), JSON.stringify({ name: 'linked', version: '2.3.4' }));
-      const manifest = { name: '@fake/pkg', dependencies: { linked: 'file:linked', msgpackr: '^1.11.9' } };
-      expect(publishedManifest(manifest, dir).dependencies).toEqual({ linked: '2.3.4', msgpackr: '^1.11.9' });
-      expect(() => publishedManifest(manifest)).toThrow('dependency linked is file:linked: publishing it needs the directory the path is relative to');
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
-  });
 });
 
 describe('registryDependencies', () => {
-  it('asks the registry for every dependency but one the same publish puts there, a linked one as its version', () => {
-    const linkedDir = fs.mkdtempSync(path.join(os.tmpdir(), 'published-manifest-link-'));
-    try {
-      fs.mkdirSync(path.join(linkedDir, 'linked'));
-      fs.writeFileSync(path.join(linkedDir, 'linked', 'package.json'), JSON.stringify({ name: 'linked', version: '0.0.0', private: true }));
-      const engine = publishedManifest({ name: '@fake/engine', dependencies: { linked: 'file:linked', msgpackr: '^1' } }, linkedDir);
-      const sdk = { name: '@fake/sdk', dependencies: { '@fake/engine': '^1' }, peerDependencies: { vue: '^3' }, optionalDependencies: { fsevents: '^2' } };
-      const byName = (deps: Array<{ name: string }>) => [...deps].sort((a, b) => a.name.localeCompare(b.name));
-      expect(byName(registryDependencies([engine, sdk]))).toEqual([
-        { dependent: '@fake/sdk', name: 'fsevents', spec: '^2' },
-        { dependent: '@fake/engine', name: 'linked', spec: '0.0.0' },
-        { dependent: '@fake/engine', name: 'msgpackr', spec: '^1' },
-        { dependent: '@fake/sdk', name: 'vue', spec: '^3' },
-      ]);
-    } finally {
-      fs.rmSync(linkedDir, { recursive: true, force: true });
-    }
+  it('asks the registry for every dependency but one the same publish puts there', () => {
+    const engine = publishedManifest({ name: '@fake/engine', dependencies: { vendored: '0.1.0', msgpackr: '^1' } });
+    const sdk = { name: '@fake/sdk', dependencies: { '@fake/engine': '^1' }, peerDependencies: { vue: '^3' }, optionalDependencies: { fsevents: '^2' } };
+    const byName = (deps: Array<{ name: string }>) => [...deps].sort((a, b) => a.name.localeCompare(b.name));
+    expect(byName(registryDependencies([engine, sdk]))).toEqual([
+      { dependent: '@fake/sdk', name: 'fsevents', spec: '^2' },
+      { dependent: '@fake/engine', name: 'msgpackr', spec: '^1' },
+      { dependent: '@fake/engine', name: 'vendored', spec: '0.1.0' },
+      { dependent: '@fake/sdk', name: 'vue', spec: '^3' },
+    ]);
   });
 });
 

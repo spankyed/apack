@@ -7,7 +7,7 @@ props {
   categories: Category[];
   onClear-filters?: (() => any) | undefined;
   onToggle-category?: ((categoryName: string) => any) | undefined;
-  selectedCategories: string[];
+  selectedCategories: readonly string[];
 }
 emits {
   (event: "clear-filters") => void;

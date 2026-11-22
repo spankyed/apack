@@ -1,6 +1,6 @@
 import {appBuildOutput, recordBundledPackages} from '../../build/build-metadata.ts';
 import {rollupBundledPackages} from '@apackdev/host/build/bundled-packages';
-import {getChromeMajorVersion} from '@app/electron-versions';
+import {getChromeMajorVersion} from '@app/internal-electron-versions';
 import {defaultServerConditions, defineConfig} from 'vite';
 
 export default defineConfig(({mode}) => /** @type {import('vite').UserConfig} */ ({

@@ -2,7 +2,7 @@
   <Teleport to="body">
   <Transition name="quick-open">
     <div
-      v-if="isVisible"
+      v-if="code.data.isQuickOpenVisible"
       class="fixed inset-0 z-[9999] flex items-start justify-center pt-12"
       :style="overlayStyle"
       @click.self="handleClose"
@@ -29,7 +29,7 @@
           
           <!-- Results -->
           <div
-            v-if="loading"
+            v-if="code.data.quickOpenLoading"
             class="px-4 py-8 text-sm text-center text-neutral-500"
           >
             Loading files...
@@ -53,8 +53,8 @@
               :ref="el => setResultRef(el, index)"
               class="flex items-center gap-3 px-4 py-2 transition-colors cursor-pointer"
               :class="{
-                'bg-neutral-800': index === selectedIndex,
-                'bg-neutral-700/50': index === hoveredIndex && index !== selectedIndex,
+                'bg-neutral-800': index === code.data.quickOpenSelectedIndex,
+                'bg-neutral-700/50': index === hoveredIndex && index !== code.data.quickOpenSelectedIndex,
               }"
               @click="handleSelect(index)"
               @mouseenter="handleMouseEnter(index)"
@@ -140,8 +140,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { useSelector } from '@xstate/vue'
-import { useSurface, useShell } from '@apackdev/sdk/fe'
+import { useState, useSurface, useShell } from '@apackdev/sdk/fe'
 import type { CodeState, QuickOpenResult } from '#features/code/fe/state.ts'
 import { fuzzySearch, highlightMatches } from '#features/code/fe/utils/fuzzy-search.ts'
 import { getRecencyScore } from '#features/code/fe/utils/recent-files.ts'
@@ -164,13 +163,7 @@ interface EnhancedSearchResult {
 const shell = useShell()
 const codeActor: CodeState = useSurface()
 
-// State selectors
-const isVisible = useSelector(codeActor, (state) => state.context.isQuickOpenVisible)
-const results = useSelector(codeActor, (state) => state.context.quickOpenResults)
-const loading = useSelector(codeActor, (state) => state.context.quickOpenLoading)
-const selectedIndex = useSelector(codeActor, (state) => state.context.quickOpenSelectedIndex)
-const recentlyOpenedFiles = useSelector(codeActor, (state) => state.context.recentlyOpenedFiles)
-const openFiles = useSelector(codeActor, (state) => state.context.openFiles)
+const { state: code, send } = useState(codeActor)
 const panelSizes = shell.panelSizes
 
 // Local state
@@ -190,15 +183,15 @@ const hoveredIndex = ref(-1)
 const filteredResults = computed<EnhancedSearchResult[]>(() => {
   if (!searchQuery.value.trim()) {
     // When no query, show recent files first
-    const openFilePaths = openFiles.value.map(f => f.path)
+    const openFilePaths = code.value.data.openFiles.map(f => f.path)
     
     // First, add currently open files ordered by recency
     const openFileResults: EnhancedSearchResult[] = []
     
     // Order open files by their position in recentlyOpenedFiles
-    for (const recentPath of recentlyOpenedFiles.value) {
+    for (const recentPath of code.value.data.recentlyOpenedFiles) {
       if (openFilePaths.includes(recentPath)) {
-        const fileItem = results.value.find(item => item.path === recentPath)
+        const fileItem = code.value.data.quickOpenResults.find(item => item.path === recentPath)
         if (fileItem) {
           openFileResults.push({
             item: fileItem,
@@ -214,7 +207,7 @@ const filteredResults = computed<EnhancedSearchResult[]>(() => {
     // Add any open files that aren't in recent files (shouldn't happen, but just in case)
     for (const openPath of openFilePaths) {
       if (!openFileResults.some(result => result.item.path === openPath)) {
-        const fileItem = results.value.find(item => item.path === openPath)
+        const fileItem = code.value.data.quickOpenResults.find(item => item.path === openPath)
         if (fileItem) {
           openFileResults.push({
             item: fileItem,
@@ -232,11 +225,11 @@ const filteredResults = computed<EnhancedSearchResult[]>(() => {
     let recentCount = 0
     
     // Go through recent files in order (they're already sorted by recency)
-    for (const recentPath of recentlyOpenedFiles.value) {
+    for (const recentPath of code.value.data.recentlyOpenedFiles) {
       if (recentCount >= 10) break // Show max 10 recent files
       if (openFilePaths.includes(recentPath)) continue // Skip if already open
       
-      const fileItem = results.value.find(item => item.path === recentPath)
+      const fileItem = code.value.data.quickOpenResults.find(item => item.path === recentPath)
       if (fileItem) {
         recentFileResults.push({
           item: fileItem,
@@ -250,8 +243,8 @@ const filteredResults = computed<EnhancedSearchResult[]>(() => {
     }
     
     // Finally, add other files
-    const shownPaths = [...openFilePaths, ...recentlyOpenedFiles.value]
-    const otherFileResults: EnhancedSearchResult[] = results.value
+    const shownPaths = [...openFilePaths, ...code.value.data.recentlyOpenedFiles]
+    const otherFileResults: EnhancedSearchResult[] = code.value.data.quickOpenResults
       .filter(item => !shownPaths.includes(item.path))
       .slice(0, 20)
       .map(item => ({
@@ -267,7 +260,7 @@ const filteredResults = computed<EnhancedSearchResult[]>(() => {
   // Search with both full path and filename for better results
   const searchResults = fuzzySearch(
     searchQuery.value,
-    results.value,
+    code.value.data.quickOpenResults,
     (item) => item.relativePath,
     100, // Get more results initially
     (item) => item.name // Pass filename for exact match detection
@@ -289,12 +282,12 @@ const filteredResults = computed<EnhancedSearchResult[]>(() => {
       }
       
       // Add recency score
-      const recencyScore = getRecencyScore(recentlyOpenedFiles.value, result.item.path)
+      const recencyScore = getRecencyScore(code.value.data.recentlyOpenedFiles, result.item.path)
       score += recencyScore
       
       // Mark if it's a recent file
-      const isRecent = recentlyOpenedFiles.value.includes(result.item.path)
-      const isOpen = openFiles.value.some(f => f.path === result.item.path)
+      const isRecent = code.value.data.recentlyOpenedFiles.includes(result.item.path)
+      const isOpen = code.value.data.openFiles.some(f => f.path === result.item.path)
       
       return { 
         ...result, 
@@ -309,21 +302,21 @@ const filteredResults = computed<EnhancedSearchResult[]>(() => {
 
 // Methods
 const handleClose = () => {
-  codeActor.send({ type: 'HIDE_QUICK_OPEN' })
+  send({ type: 'HIDE_QUICK_OPEN' })
 }
 
 const handleSearch = () => {
-  codeActor.send({ 
+  send({ 
     type: 'UPDATE_QUICK_OPEN_QUERY', 
     query: searchQuery.value 
   })
 }
 
 const handleSelect = (index: number) => {
-  codeActor.send({ type: 'SELECT_QUICK_OPEN_RESULT', index })
+  send({ type: 'SELECT_QUICK_OPEN_RESULT', index })
   const result = filteredResults.value[index]
   if (result && result.item.type === 'file') {
-    codeActor.send({ type: 'OPEN_QUICK_OPEN_RESULT', path: result.item.path })
+    send({ type: 'OPEN_QUICK_OPEN_RESULT', path: result.item.path })
   }
 }
 
@@ -339,8 +332,8 @@ const handleKeydown = (e: KeyboardEvent) => {
       isKeyboardNavigation.value = true
       hoveredIndex.value = -1
       if (filteredResults.value.length > 0) {
-        const newIndex = Math.min(selectedIndex.value + 1, filteredResults.value.length - 1)
-        codeActor.send({ type: 'SELECT_QUICK_OPEN_RESULT', index: newIndex })
+        const newIndex = Math.min(code.value.data.quickOpenSelectedIndex + 1, filteredResults.value.length - 1)
+        send({ type: 'SELECT_QUICK_OPEN_RESULT', index: newIndex })
         scrollToSelected(newIndex)
       }
       break
@@ -350,8 +343,8 @@ const handleKeydown = (e: KeyboardEvent) => {
       isKeyboardNavigation.value = true
       hoveredIndex.value = -1
       if (filteredResults.value.length > 0) {
-        const newIndex = Math.max(selectedIndex.value - 1, 0)
-        codeActor.send({ type: 'SELECT_QUICK_OPEN_RESULT', index: newIndex })
+        const newIndex = Math.max(code.value.data.quickOpenSelectedIndex - 1, 0)
+        send({ type: 'SELECT_QUICK_OPEN_RESULT', index: newIndex })
         scrollToSelected(newIndex)
       }
       break
@@ -359,7 +352,7 @@ const handleKeydown = (e: KeyboardEvent) => {
     case 'Enter':
       e.preventDefault()
       if (filteredResults.value.length > 0) {
-        handleSelect(selectedIndex.value)
+        handleSelect(code.value.data.quickOpenSelectedIndex)
       }
       break
   }
@@ -474,7 +467,7 @@ const highlightedName = (result: any) => {
 }
 
 // Focus input when visible
-watch(isVisible, (visible) => {
+watch(() => code.value.data.isQuickOpenVisible, (visible) => {
   if (visible) {
     searchQuery.value = ''
     hoveredIndex.value = -1
@@ -487,14 +480,14 @@ watch(isVisible, (visible) => {
 
 // Reset selected index when results change
 watch(filteredResults, () => {
-  codeActor.send({ type: 'SELECT_QUICK_OPEN_RESULT', index: 0 })
+  send({ type: 'SELECT_QUICK_OPEN_RESULT', index: 0 })
   resultRefs.value = []
   hoveredIndex.value = -1
 })
 
 // Global escape key handler
 const handleGlobalKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape' && isVisible.value) {
+  if (e.key === 'Escape' && code.value.data.isQuickOpenVisible) {
     e.preventDefault()
     handleClose()
   }

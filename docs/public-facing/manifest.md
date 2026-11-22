@@ -195,7 +195,7 @@ lexically using the English locale. Authoring-source previews do not participate
 order cannot change the winner; opening waits for its matching accepted binding and actor. A saved
 selection, popout target or explicit navigation takes precedence over this startup default.
 A designation is a separately owned role, so duplicate roles across packs are errors. One role means something
-to the app itself: `brain`, which `sendToSystem({ role: 'brain' }, event)` reaches. The chat's slash commands
+to the app itself: `brain`, which `tell({ role: 'brain' }, event)` reaches. The chat's slash commands
 need no role — the app derives them from stored documents (see [Slash commands](content.md#slash-commands)).
 
 ### Feature settings

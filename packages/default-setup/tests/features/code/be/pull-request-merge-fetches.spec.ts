@@ -14,8 +14,7 @@ import { createGitHubSignIn } from '#features/code/be/services/github.ts';
 import { startGitHubApiStandIn } from './_support/github-api-stand-in.ts';
 import { startSmartHttpRemote } from './_support/smart-http-remote.ts';
 
-const CODE = 'default-setup/code';
-const asWindow = { sender: CODE, client: 'c-main' };
+const asWindow = { client: 'c-main' };
 const TOKEN = 'gho_token';
 const dirs: string[] = [];
 const stops: Array<() => Promise<void>> = [];
@@ -70,7 +69,7 @@ it('fetches the base a merge moved, and tells every window the repository change
   await app.send('code', { type: 'SET_BASE_DIRECTORY', path: checkout });
   await app.settle();
 
-  await app.nextEmit('code', 'pr.PR_MERGED', { answering: await app.send('code', { type: 'pr.MERGE_PR', number: 7 }, asWindow) });
+  expect(await app.ask('code', { type: 'pr.MERGE_PR', number: 7 }, asWindow)).toEqual({ ok: true, value: { number: 7 } });
 
   // Each announcement is a change the windows are told of; the one that matters is the fetch's
   do await app.nextEmit('code', 'pr.GIT_STATUS_REFRESHED');

@@ -1404,7 +1404,7 @@ Evidence:
 - Actual blocked-worker termination still refuses publication and retains its incumbent (35.27s):
   `/private/tmp/apack-watch-final-termination.log`. Actual frontend/probe reports contain no private
   compiler paths after disposal (30.46s): `/private/tmp/apack-watch-source-path-fixed.log`.
-- CLI, host and repo-checks types and changed-file correctness lint pass:
+- CLI, host and internal-repo-checks types and changed-file correctness lint pass:
   `/private/tmp/apack-watch-final-{cli,host,repo}-types.log`, `/private/tmp/apack-watch-final-lint.log`.
 
 The initial growing-list recorder and duplicate full-record replay caused avoidable overhead; both
@@ -1486,7 +1486,7 @@ Evidence:
   measured at 61.51s and 73.69s. No global timeout changes. These entries register measured scenario
   costs; they do not establish that compilation is efficient.
 - Focused correctness lint passes on all seven changed code files.
-- CLI, host, API test and repo-checks TypeScript checks pass. The timeout policy's 42 checks pass
+- CLI, host, API test and internal-repo-checks TypeScript checks pass. The timeout policy's 42 checks pass
   after registering the final exception: `/private/tmp/apack-generic-acceptance-types.log`,
   `/private/tmp/apack-generic-acceptance-timeouts.log`.
 
@@ -1601,7 +1601,7 @@ Focused evidence:
   `/private/tmp/apack-native-package-existing.log`.
 - Subprocess inventory and timeout policy: 53 passes in 2.19s;
   `/private/tmp/apack-native-package-tooling-final.log`.
-- CLI/repo-checks types and correctness lint pass:
+- CLI/internal-repo-checks types and correctness lint pass:
   `/private/tmp/apack-native-package-{types,repo-types,lint}.log`.
 - Actual public `runPackBuild` compiles content using the copied addon/library, seals its inputs,
   then completes compiler disposal. Passive replay detects original-library replacement and accepts
@@ -4557,7 +4557,7 @@ Final focused Windows run: `C:\apack-setup\runs\pe-application-context-final-980
 Node 23.11.1 / Windows Server 2025 x64. Three cases pass in 18.34 seconds total: Node startup
 6.201s, XML/configuration/freshness 7.859s, embedded private manifest 2.099s. Existing deadlines
 are unchanged. Local inert checks pass 57 cases (two platform skips), and the same Windows suites pass 56 (three skips); subprocess/timeout policy
-checks pass 53 cases. CLI, scripts and repo-checks types, focused lint and diff checks pass.
+checks pass 53 cases. CLI, scripts and internal-repo-checks types, focused lint and diff checks pass.
 The chain's dry plan is preserved; it is not checkpoint-wide or final strict acceptance.
 
 Failures were diagnosed separately. The first helper lacked the PowerShell `System.Xml` compiler
@@ -4633,7 +4633,7 @@ The converged scope includes both Node contexts, both private-manifest encodings
 selection and the loaded-system-name collision. Focused inert checks pass 61 locally (two skips) and
 60 on Windows (three skips); four new model cases cover context inheritance/replacement, outside
 selection and resource-3 static-import behavior. Subprocess/timeout policy checks pass 53 cases;
-CLI/repo-checks types, focused lint and diff checks pass. Existing deadlines remain unchanged.
+CLI/internal-repo-checks types, focused lint and diff checks pass. Existing deadlines remain unchanged.
 
 Preserved diagnostics distinguish control failures from product failures: a junction-based assembly
 and an application-directory-only DLL-context layout failed ordinary loading; a concrete DLL-local

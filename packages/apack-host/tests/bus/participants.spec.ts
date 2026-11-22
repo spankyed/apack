@@ -11,7 +11,7 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createActor, type AnyActorRef } from 'xstate';
 import { startTestRuntime, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
-import { untypedBroadcastToSurface, type Message } from '@apackdev/sdk/events';
+import { untypedBroadcast, type Message } from '@apackdev/sdk/events';
 import { onLog } from '@apackdev/sdk/logger';
 import { createAppBus } from '../../src/bus/index.ts';
 import { createParticipantClaims } from '../../src/bus/participants.ts';
@@ -57,7 +57,7 @@ describe('a name a connection claimed', () => {
   it('is addressed to the connection holding it', async () => {
     claims.claim(HOST.drive, 'c-driver');
 
-    untypedBroadcastToSurface(HOST.drive, { type: 'QX_RESULT', rows: 1 });
+    untypedBroadcast(HOST.drive, { type: 'QX_RESULT', rows: 1 });
     await flush();
 
     expect(toDrive()).toHaveLength(1);
@@ -68,7 +68,7 @@ describe('a name a connection claimed', () => {
   it('takes a send from a system that never asked it anything', async () => {
     claims.claim(HOST.drive, 'c-driver');
 
-    untypedBroadcastToSurface(HOST.drive, { type: 'ANYTHING_AT_ALL' });
+    untypedBroadcast(HOST.drive, { type: 'ANYTHING_AT_ALL' });
     await flush();
 
     expect(toDrive()[0].event.type, 'no declared event list to fail against').toBe('ANYTHING_AT_ALL');
@@ -85,7 +85,7 @@ describe('a name a connection claimed', () => {
   });
 
   it('is dropped, and said so, when nobody holds it', async () => {
-    untypedBroadcastToSurface(HOST.drive, { type: 'QX_RESULT' });
+    untypedBroadcast(HOST.drive, { type: 'QX_RESULT' });
     await flush();
 
     expect(toDrive(), 'an unclaimed name is not a broadcast').toHaveLength(0);

@@ -1,4 +1,4 @@
-import type { EarsAdmin, WatchReadContext } from '@apackdev/ears';
+import type { EarsAdmin, WatchReadContext } from '@elmdb/ears';
 import { ROOT_CONTEXT, SpanStatusCode, trace, type Context, type ContextManager, type Span, type SpanContext, type Attributes } from '@opentelemetry/api';
 import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { SamplingDecision, TracerProvider, type SpanProcessor } from '@opentelemetry/sdk-trace';

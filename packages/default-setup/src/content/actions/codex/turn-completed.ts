@@ -33,7 +33,7 @@ export async function action(params: Record<string, any>, services: Services) {
   if (!threadId) return { success: false, reason: 'missing threadId' };
 
   // The turn may have changed files with no file event for each: the code surface reads the repository again
-  services.emitter.sendToSystem('default-setup/code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' });
+  services.emitter.tell('default-setup/code', { type: 'CHECK_FOR_EXTERNAL_CHANGES' });
 
   // Snapshot previous state for goal token delta calculation
   const prevState = getCodexState(services, threadId);

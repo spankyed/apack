@@ -211,7 +211,7 @@ it('keeps a loaded native phase when startup hydration arrives later', () => {
   const actor=createActor(nativeState).start()
   loadChat(actor,thread.id,{forcedMode:data.forcedMode})
   expect(actor.getSnapshot().context.phase).toBe('Edit')
-  actor.send({type:'CHAT_STARTED',data:{...repository.chatQueries.chatStart(),currentThreadId:thread.id,tabs:[]}})
+  actor.send({ type: 'made.chatStart', key: 'startup', outcome: { ok: true, value: { ...repository.chatQueries.chatStart(), currentThreadId: thread.id, tabs: [] } } })
   expect(actor.getSnapshot().context.phase).toBe('Edit')
   actor.stop()
 })
@@ -226,7 +226,9 @@ it('passes the selected phase to an explicit print Send and retires leftover nat
  actor.send({type:'SET_MODE',mode:'Birth'});actor.send({type:'SET_MODE',mode:'Claude Code'})
  expect(actor.getSnapshot().context.phase).toBe('Edit')
  sent.mockClear();actor.send({type:'SEND_MESSAGE',text:'Continue in print Edit'})
- expect(sent).toHaveBeenCalledWith(expect.objectContaining({event:expect.objectContaining({type:'USER_MSG',threadId:thread.id,phase:'Edit',text:'Continue in print Edit'})}))
+ expect(sent).toHaveBeenCalledWith(expect.objectContaining({
+  event: expect.objectContaining({ type: 'USER_MSG', threadId: thread.id, phase: 'Edit', text: 'Continue in print Edit' }),
+ }), expect.any(Function))
  expect(readClaudeComposerPhase(thread.id)).toBeUndefined();expect(actor.getSnapshot().context.phase).toBe('Edit');actor.stop()
 })
 

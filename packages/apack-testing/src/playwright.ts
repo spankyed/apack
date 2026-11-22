@@ -28,7 +28,7 @@ const DRIVE_CONFIG_FILE = 'playwright.config.ts';
  *
  * Nothing in the tooling reads these back, so a pack's own word is last — pass anything Playwright takes.
  *
- * **`timeout` has to stay a literal here.** `suite-timeouts.spec.ts` (`@app/repo-checks`) reads a config's
+ * **`timeout` has to stay a literal here.** `suite-timeouts.spec.ts` (`@app/internal-repo-checks`) reads a config's
  * timeouts as *text* rather than importing one, following the delegation to this file, and holds the value
  * to the large size budget (`SIZE_MS`, `scripts/lib/unit-suites.ts`). Computing it would read as absent.
  */

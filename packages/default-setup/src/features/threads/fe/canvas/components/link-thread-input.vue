@@ -168,7 +168,7 @@ const props = defineProps<{
   lite?: boolean
   modelValue: ThreadLinkItem[]
   availableThreads: Omit<ThreadLinkItem, 'relation'>[]
-  availableTags?: ThreadTagOption[]
+  availableTags?: readonly ThreadTagOption[]
   settings?: ThreadsSettings | null
   /** Why the last save of these links was refused, shown under them */
   refusal?: string | null

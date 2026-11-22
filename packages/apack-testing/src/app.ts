@@ -5,7 +5,7 @@ import { resolveName, resolveRegistered } from '@apackdev/sdk/ids';
 import type { PackLifecycleHooks, PackRegistration, ViewRequest, ViewUpdate } from '@apackdev/sdk/framework';
 import { createViewHost } from '@apackdev/host/views';
 import { boundEars } from '@apackdev/sdk/ears';
-import { newCall, type Message } from '@apackdev/sdk/events';
+import { _askOnConnection, newCall, untypedAsk, type Message, type UntypedAskOutcome } from '@apackdev/sdk/events';
 import { testRootEvents, testRunHistory } from '@apackdev/sdk/testing';
 import type { RunNodeId } from '@apackdev/sdk/services';
 import { untypedQuery } from '@apackdev/sdk/ears';
@@ -28,7 +28,7 @@ export type TestSettingsAccess =
 
 export interface StartAppOptions {
   /**
-   * Registered systems to run, named as `sendToSystem` names them: the pack's own by feature id, a
+   * Registered systems to run, named as `tell` names them: the pack's own by feature id, a
    * dependency's as `<packId>/<featureId>` (full bus ids work too), or `'*'` for all.
    */
   systems: readonly string[] | '*';
@@ -95,7 +95,7 @@ export interface TestApp {
    */
   endConnection(client: string): Promise<void>;
   /**
-   * Sends a system an event, as a client's `sendToSystem` does (the pack's own by feature id, a dependency's as
+   * Sends a system an event, as a client's `tell` does (the pack's own by feature id, a dependency's as
    * `<packId>/<featureId>`); the bus routes it whether or not a client connected.
    *
    * `sender` is who the system should answer, and a handler that calls `reply` needs it: a real send carries one
@@ -112,7 +112,7 @@ export interface TestApp {
    * is refused because it would claim a connection while naming none.
    *
    * `call` is the call to ask under, and **the returned value is the call this ask was sent under** — given
-   * one it is that, given none it is the one minted here, exactly as `sendToSystem` behaves. Pass it to
+   * one it is that, given none it is the one minted here, exactly as `tell` behaves. Pass it to
    * `nextEmit`'s `answering` to wait for the answer to *this* ask, which is what a correlation spec asserts;
    * a test with one ask in flight can ignore both and read the answer by type alone.
    */
@@ -122,7 +122,14 @@ export interface TestApp {
     options?: { sender?: string; client?: string; call?: string; settingsAccess?: TestSettingsAccess },
   ): Promise<string>;
   /**
-   * The events delivered to one frontend surface (by `broadcastToSurface`, once connected), in order, exactly as
+   * Asks a system one of its declared asks and answers with how it ended — its answer, or why it was not done — as
+   * the app answers a window's or a system's ask: through the bus, so an ask the system's state does not take is
+   * answered `unavailable`. With `client`, the ask arrives on that connection, as a window's does, and its handler is
+   * handed it; without, it arrives as another system's would.
+   */
+  ask(systemId: string, event: { type: string; [key: string]: unknown }, options?: { client?: string; signal?: AbortSignal; heard?: (update: unknown) => void }): Promise<UntypedAskOutcome>;
+  /**
+   * The events delivered to one frontend surface (by `broadcast`, once connected), in order, exactly as
    * sent; the surface named as the pack names it (its own by feature id, any other as `<packId>/<featureId>`).
    * Readable after `stop`
    */
@@ -161,7 +168,7 @@ export interface TestApp {
   /** A running system's actor */
   system(systemId: string): AnyActorRef;
   /**
-   * Subscribes to a feature's view as a window does (`useView`), the feature named as `sendToSystem` names a
+   * Subscribes to a feature's view as a window does (`useView`), the feature named as `tell` names a
    * system. Each call is its own subscriber, so two of them stand in for two windows; subscribers asking for the
    * same view with the same arguments share one watch, as the app's do. Ended when the app stops.
    */
@@ -186,6 +193,8 @@ interface AppPacks {
   getSurfaceEventValidationMap(): Map<string, Set<string>>;
   /** And what each system accepts, so a send a system declares no event for is reported rather than ignored */
   getEventValidationMap(): Map<string, Set<string>>;
+  /** The failure kinds a system declares for one of its asks, so an ask nothing took is answered as the app answers it */
+  askKinds(ref: string, type: string): readonly string[] | undefined;
   /** What a view's code is, which the view host reads and follows */
   getPackRegistration(packId: string): PackRegistration | null;
   onRegistrationChanged(listener: (packId: string) => void): () => void;
@@ -273,12 +282,12 @@ function shutDownPacks(): void {
   if (failures.length > 0) throw new Error(`A pack's lifecycle.onShutdown failed when the test app stopped:\n  ${failures.join('\n  ')}`);
 }
 
-/** The registered system a name stands for, as the pack under test's `sendToSystem` resolves it */
+/** The registered system a name stands for, as the pack under test's `tell` resolves it */
 const resolveSystemId = (name: string, registered: ReadonlyMap<string, AnyStateMachine>): string =>
   resolveRegistered('system', name, { packId, registered: [...registered.keys()] });
 
 /**
- * The registered surface a name stands for, as the pack under test's own `broadcastToSurface` resolves it. A name no
+ * The registered surface a name stands for, as the pack under test's own `broadcast` resolves it. A name no
  * surface is registered under throws at once, rather than leaving a wait for its events to time out.
  */
 const resolveSurfaceId = (name: string): string =>
@@ -515,6 +524,12 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
       await settle();
       return sentUnder;
     }),
+    ask: (systemId, event, options) => call(async () => {
+      if (options?.client === '') throw new Error("app.ask was given client: '', which names no connection. Pass any non-empty name, or leave it out to ask as a system would.");
+      const to = resolveSystemId(systemId, systems);
+      const { client, ...asking } = options ?? {};
+      return client === undefined ? untypedAsk(to, event, asking) : _askOnConnection(client, to, event, asking);
+    }),
     emitted(surface) {
       const id = resolveSurfaceId(surface);
       return emitted.filter((message) => message.to === id).map((message) => message.event);
@@ -522,8 +537,8 @@ export async function startApp(options: StartAppOptions): Promise<TestApp> {
     nextEmit: (surface, type, { timeoutMs, answering } = {}) => call(async () => {
       const id = resolveSurfaceId(surface);
       const wanted = answering === undefined ? '' : ` answering ${answering}`;
-      // Named per send, since "a QUERY_RESULT arrived but answered something else" is the failure this option
-      // exists to tell apart from "no QUERY_RESULT arrived", and only the envelope says which
+      // Named per send, since "an answer arrived but answered something else" is the failure this option
+      // exists to tell apart from "no answer arrived", and only the envelope says which
       const describeSend = (m: Message) => `${m.to}:${m.event.type}${m.answering === undefined ? '' : ` answering ${m.answering}`}`;
       return waitForEmitted(() => {
         const index = emitted.findIndex((message, i) => !taken.has(i) && message.to === id && message.event.type === type

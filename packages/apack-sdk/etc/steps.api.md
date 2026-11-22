@@ -5,9 +5,9 @@
 ```ts
 
 import type { AnyActorRef } from 'xstate';
-import type { BaseEntity } from '@apackdev/ears';
-import { EARS as EARS_2 } from '@apackdev/ears';
-import type { ShortCode } from '@apackdev/ears';
+import type { BaseEntity } from '@elmdb/ears';
+import { EARS as EARS_2 } from '@elmdb/ears';
+import type { ShortCode } from '@elmdb/ears';
 import { z } from 'zod';
 
 // @public
@@ -462,7 +462,7 @@ export interface TriggerFacet {
 export interface TriggerRuntimeContext {
     // (undocumented)
     flowRunNodeId: EARS.EntityId;
-    sendToSystem: (target: {
+    tell: (target: {
         role: string;
     }, event: {
         type: string;

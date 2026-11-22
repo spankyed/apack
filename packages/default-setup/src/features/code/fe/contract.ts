@@ -117,7 +117,6 @@ export type CodeContext = {
   searchPrefillText: string
   panelTerminalId: string | null
   panelTerminalExpanded: boolean
-  pendingClaudeProfileSetup?: string
   claudeProfileSetupError?: string
   pendingTerminalTabIds?: string[]
   panelNavHistory: NavHistory<PanelType>

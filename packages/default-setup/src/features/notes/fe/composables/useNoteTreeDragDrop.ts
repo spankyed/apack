@@ -14,13 +14,13 @@ interface FileDropData {
 }
 
 interface NoteTreeDragDropOptions {
-  notes: Ref<NoteSummary[]>
-  selectedNoteIds: Ref<string[]>
+  notes: Ref<readonly NoteSummary[]>
+  selectedNoteIds: Ref<readonly string[]>
   currentNoteId: Ref<string | null>
   onMove: (noteIds: string[], newParentId: string | null) => void
   onReorder?: (noteId: string, newParentId: string | null, newIndex: number) => void
   onFileDrop?: (files: FileDropData[], parentId: string | null, index: number) => void
-  expandedNodeIds?: Ref<string[]>
+  expandedNodeIds?: Ref<readonly string[]>
 }
 
 export function useNoteTreeDragDrop({

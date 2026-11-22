@@ -227,8 +227,11 @@ describe('generated system sends', () => {
     expect(events).toContain("export type PackSystemEvents = {\n  'memos': IncomingEventsOf<__SystemContracts['memos']>;\n};");
     expect(events).toContain("export type QualifiedSystemEvents = Qualified<'demo-pack', PackSystemEvents> & Qualified<'base-pack', __dep_base_pack_PackSystemEvents> & ");
     expect(events).toContain("export type SendableSystemEvents = WithOwnNames<'demo-pack', QualifiedSystemEvents>;");
+    // The asks each system answers, by the same names: what types `ask` and `fromAsk`
+    expect(events).toContain("export type PackSystemAsks = {\n  'memos': ContractAsks<__SystemContracts['memos']>;\n};");
+    expect(events).toContain("export type QualifiedSystemAsks = Qualified<'demo-pack', PackSystemAsks> & Qualified<'base-pack', __dep_base_pack_PackSystemAsks> & ");
     // No table of names: the sends derive every address from the pack id (@apackdev/sdk/ids)
-    expect(events).toContain("defineEvents<SendableSurfaceEvents, SendableSystemEvents>('demo-pack');");
+    expect(events).toContain("defineEvents<SendableSurfaceEvents, SendableSystemEvents, SendableSystemAsks>('demo-pack');");
     expect(events).not.toContain('systemIds');
     // Type-only, and over the contracts: it imports no system module, because those import the generated events
     // module this one feeds — reading them here would put the machine in front of the file that describes it
@@ -236,7 +239,7 @@ describe('generated system sends', () => {
     expect(files['src/__generated__/system-specs.ts']).not.toContain('be/system');
     // Pack code names systems; it gets no module of addresses
     expect(files['src/__generated__/system-ids.ts']).toBeUndefined();
-    expect(files['src/__generated__/pack-types.ts']).toContain("export type { PackSurfaceEvents, PackSystemEvents } from './events.ts';");
+    expect(files['src/__generated__/pack-types.ts']).toContain("export type { PackSurfaceEvents, PackSystemAsks, PackSystemEvents } from './events.ts';");
   });
 
   // Pack code resolves a name with `ref`, which is bound to its pack as the sends are. `packId` is the same id as a
@@ -249,11 +252,11 @@ describe('generated system sends', () => {
     expect(files['src/__generated__/bus-ids.ts']).toBeUndefined();
   });
 
-  it("gives a pack without systems a sendToSystem for its dependencies' systems", async () => {
+  it("gives a pack without systems a tell for its dependencies' systems", async () => {
     const files = await generate({ features: [{ id: 'sidebar', surface: { label: 'Fixture', state: writeSurfaceState('src/features/sidebar/fe/surface.ts') } }] }, { 'base-pack': dependency({ features: [system('calendar')] }, baseTypes) });
     const events = files['src/__generated__/events.ts'];
     expect(events).not.toContain('system-specs');
-    expect(events).toContain("defineEvents<SendableSurfaceEvents, SendableSystemEvents>('demo-pack');");
+    expect(events).toContain("defineEvents<SendableSurfaceEvents, SendableSystemEvents, SendableSystemAsks>('demo-pack');");
     expect(files['src/__generated__/system-specs.ts']).toBeUndefined();
   });
 });

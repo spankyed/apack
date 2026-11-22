@@ -24,7 +24,7 @@ This document describes how apack executes flows at runtime. It covers the backe
 | `packages/default-setup/src/features/brain/be/execute-step.ts` | `executeStep`: runs the step type's registered runtime handler on the step's `StepInput` (`extensions/steps/<type>/runtime.ts` or its `index.ts`); a type without one completes with `{ executed: true }`. |
 | `packages/default-setup/src/features/brain/be/flow-completion.ts` | Centralizes flow completion rules. |
 | `packages/default-setup/src/features/brain/be/services/scheduler.ts` | Owns active Croner jobs for schedule nodes. |
-| `packages/apack-sdk/src/events/index.ts` (`sendToSystem`) | Sends `TRIGGER_BRAIN_EVENT` to the system playing the brain role (`sendToSystem({ role: 'brain' }, …)`, and `services.emitter.sendToSystem` from actions). |
+| `packages/apack-sdk/src/events/index.ts` (`tell`) | Sends `TRIGGER_BRAIN_EVENT` to the system playing the brain role (`tell({ role: 'brain' }, …)`, and `services.emitter.tell` from actions). |
 
 ## Brain Lifecycle
 
@@ -95,7 +95,7 @@ Schedule nodes register Croner jobs when their owning flow actor enters `active`
 The scheduler key is `${flowRunNodeId}:${scheduleNodeId}`. On each tick, the cron callback sends a synthetic event to the brain system:
 
 ```ts
-sendToSystem({ role: 'brain' }, {
+tell({ role: 'brain' }, {
   type: 'TRIGGER_BRAIN_EVENT',
   eventType: `schedule.${scheduleNodeId}`,
   targetFlowId: flowRunNodeId,
@@ -201,12 +201,14 @@ Brain kill and restart clear the event queue, pending runtime actors, schedules,
 
 ## Run Data
 
-The runtime tells the frontend about run nodes:
+The runtime tells every window about run nodes as a feed:
 
 - `RUN_NODE_SPAWNED` when flow, event, or step run nodes are created in the run history.
 - `RUN_NODE_UPDATED` when RunNodes complete or fail.
-- `RUN_NODE_OPENED` and `RECEIVE_SURFACE_DATA` when the UI requests a flow run's data.
-- `RUN_NODE_DETAILS` for details-panel data.
+
+A window asks for the rest, and the brain answers it alone (the brain's `asks`): `REQUEST_SURFACE_DATA` for a run's
+tree with the brain's state, `OPEN_RUN_NODE` and `GO_BACK_RUN_NODE` for a flow run's, and `GET_RUN_NODE_DETAILS` for
+the details panel.
 
 Run hierarchy:
 

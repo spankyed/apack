@@ -65,7 +65,7 @@ import { useNodeStyles } from '@apackdev/ui/components/node-styles';
 const { getNodeConfig } = useNodeStyles();
 
 interface Props {
-  events: EventListenerEntity[];
+  events: readonly EventListenerEntity[];
   pulsingEventType?: string;
 }
 

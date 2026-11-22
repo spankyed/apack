@@ -9,7 +9,7 @@ import { untypedQuery, untypedCreate } from '@apackdev/sdk/ears';
 import { repository } from '@apackdev/sdk/services';
 import { bindHost, unbindHost, boundHost, type HostRuntime } from '../../src/runtime/host-runtime.ts';
 import { _rootEvents } from '../../src/runtime/root-events.ts';
-import { onConnected, onIncoming, untypedBroadcastToSurface, untypedSendToSystem } from '../../src/events/index.ts';
+import { onConnected, onIncoming, untypedBroadcast, untypedTell } from '../../src/events/index.ts';
 import { createLogger, onLog, reportError } from '../../src/logger/index.ts';
 import { _createPackServices, _settingsHandle } from '../../src/services/index.ts';
 import * as serviceModule from '../../src/services/index.ts';
@@ -66,8 +66,8 @@ afterEach(() => {
 describe('with no app bound', () => {
   it('throws, naming bindHost, for what needs the app', async () => {
     const needsApp: Array<[string, () => unknown]> = [
-      ['untypedBroadcastToSurface', () => untypedBroadcastToSurface('memos', { type: 'MEMO_ADDED' })],
-      ['untypedSendToSystem', () => untypedSendToSystem('memos', { type: 'ADD_MEMO' })],
+      ['untypedBroadcast', () => untypedBroadcast('memos', { type: 'MEMO_ADDED' })],
+      ['untypedTell', () => untypedTell('memos', { type: 'ADD_MEMO' })],
       ['onConnected', () => onConnected(() => {})],
       ['onIncoming', () => onIncoming(() => {})],
       ['onLog', () => onLog(() => {})],

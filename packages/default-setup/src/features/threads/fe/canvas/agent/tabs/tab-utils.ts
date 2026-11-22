@@ -2,8 +2,8 @@ import type { Tab } from '#generated/types.ts'
 import type { ThreadTabGroup } from './types.ts'
 
 export function categorizeThreadTabs(
-  tabs: Tab[],
-  groups: ThreadTabGroup[]
+  tabs: readonly Tab[],
+  groups: readonly ThreadTabGroup[]
 ): {
   pinnedTabs: Tab[]
   pinnedGroups: { group: ThreadTabGroup; tabs: Tab[] }[]

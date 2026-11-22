@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createRequire } from 'node:module';
 import type * as TS from 'typescript';
-import { RESERVED_ATTRIBUTES, type FieldRule, type FieldType } from '@apackdev/ears';
+import { RESERVED_ATTRIBUTES, type FieldRule, type FieldType } from '@elmdb/ears';
 import type { SurfaceInboxAudiences } from '../fe/surface.ts';
 
 /** What a module exports under a name, as the TypeScript compiler resolves it */
@@ -38,6 +38,12 @@ export interface ModuleExports {
   outgoingEventTypesOf(file: string, name: string): string[];
   /** External incoming events from a declared system contract; excludes private child events. */
   incomingEventTypesOf(file: string, name: string): string[];
+  /**
+   * A system contract's declared asks, by name, each with the failure kinds its `fails` declares: what the bus reads
+   * to tell an ask from an event. Read off the property names alone, so an ask whose payload names a type codegen
+   * has not written yet still reads.
+   */
+  askKindsOf(file: string, name: string): Record<string, string[]>;
 
   /**
    * The `type` literals of the events a surface's contract says *other* surfaces may send it, read from the type
@@ -343,6 +349,21 @@ export function createModuleExports(packRoot: string, files: string[], sources: 
       if (!incoming) return [];
       checkResolved(incoming, file, `${name}'s incoming events`);
       return eventTypeLiterals(incoming, file, "its system's incoming events");
+    },
+    askKindsOf(file, name) {
+      const contract = declaredTypeOf(file, name);
+      if (!contract) throw new Error(`${path.basename(file)}: it declares no type "${name}"`);
+      const asks = propertyType(contract, 'asks');
+      if (!asks) return {};
+      checkResolved(asks, file, `${name}'s asks`);
+      const names = (type: TS.Type) => type.getProperties().map((property) => property.name);
+      return Object.fromEntries(names(asks).sort().map((ask) => {
+        const declaration = propertyType(asks, ask)!;
+        checkResolved(declaration, file, `${name}'s ask "${ask}"`);
+        const refuses = propertyType(declaration, 'refuses');
+        if (refuses) checkResolved(refuses, file, `${name}'s ask "${ask}"'s refuses`);
+        return [ask, refuses ? names(refuses).sort() : []];
+      }));
     },
     outgoingEventTypesOf(file, name) {
       const contract = declaredTypeOf(file, name);

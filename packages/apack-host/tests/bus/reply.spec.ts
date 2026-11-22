@@ -2,7 +2,8 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 // Answering whoever asked, without the handler being told who that is.
 //
 // A system's handler is given `{ context, event, self, system }` and nothing about the message's sender, so the
-// bus names the message for the duration of the delivery and `reply` reads it back. The two things that makes
+// bus names the message for the duration of the delivery and `_replyTo` reads it back — which is what an ask's
+// answer (`defineSystem`'s `answers`) is sent through, and what these fixtures call directly. The two things that makes
 // true are: the answer goes to the ref that asked rather than to a name the handler had to write, and it goes on
 // the connection it was asked from rather than to every window.
 //
@@ -12,7 +13,7 @@ import { createNativePackTestRegistry } from '@apackdev/host/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createActor, fromPromise, setup, type AnyActorRef, type AnyEventObject, type MachineContext } from 'xstate';
 import { startTestRuntime, takeSystemErrors, testRootEvents } from '@apackdev/sdk/testing';
-import { _currentDelivery, _replyTo, _runDelivery, untypedBroadcastToSurface, untypedSendToSystem, type Message, type Reply } from '@apackdev/sdk/events';
+import { _currentDelivery, _replyTo, _runDelivery, untypedBroadcast, untypedTell, type Message, type Reply } from '@apackdev/sdk/events';
 import { defineHandlers } from '@apackdev/sdk/framework';
 import { _whenSatisfied } from '@apackdev/sdk/testing/waiting';
 import { createAppBus } from '../../src/bus/index.ts';
@@ -36,14 +37,19 @@ const after = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // These fixtures declare no context, so their handlers take XState's own open `MachineContext`
 const handlers = defineHandlers<MachineContext, AnyEventObject>();
 
+/** The answer for the message being delivered, read at entry as the `answers` table reads it */
+const replyNow = (): Reply | undefined => _replyTo(_currentDelivery());
+
 const answering = setup({
   actions: handlers.actions({
-    answer: async ({ event, reply }) => {
+    answer: async ({ event }) => {
+      const reply = replyNow();
       await after((event as { wait?: number }).wait ?? 0);
       reply?.({ type: 'MEMO_ADDED', tag: (event as { tag?: string }).tag });
     },
     // Progress and then a result, which is the ordinary shape a second answer has
-    answerTwice: ({ event, reply }) => {
+    answerTwice: ({ event }) => {
+      const reply = replyNow();
       reply?.({ type: 'MEMO_ADDED', tag: `${(event as { tag?: string }).tag}-first` });
       reply?.({ type: 'MEMO_ADDED', tag: `${(event as { tag?: string }).tag}-second` });
     },
@@ -55,7 +61,7 @@ const answering = setup({
     // Names its target rather than answering, which is what every system did before `reply` existed. The
     // envelope should still say who sent it, and that stamp is `createSends`' rather than `reply`'s.
     ANNOUNCE: {
-      actions: () => { untypedBroadcastToSurface('memo-pack/memos', { type: 'MEMOS_CONNECTED' }); },
+      actions: () => { untypedBroadcast('memo-pack/memos', { type: 'MEMOS_CONNECTED' }); },
     },
   },
 });
@@ -84,7 +90,7 @@ const invoking = setup({
     working: {
       invoke: {
         src: 'answerLater',
-        input: handlers.input(({ event, reply }) => ({ tag: (event as { tag?: string }).tag, reply })),
+        input: handlers.input(({ event }) => ({ tag: (event as { tag?: string }).tag, reply: replyNow() })),
         onDone: 'idle',
         onError: 'idle',
       },
@@ -102,7 +108,7 @@ const invoking = setup({
 const answered: string[] = [];
 const asking = setup({}).createMachine({
   on: {
-    GO: { actions: () => { untypedSendToSystem('memo-pack/memos', { type: 'PING', tag: 'from-a-system' }); } },
+    GO: { actions: () => { untypedTell('memo-pack/memos', { type: 'PING', tag: 'from-a-system' }); } },
     MEMO_ADDED: { actions: ({ event }) => { answered.push(String((event as { tag?: string }).tag ?? '')); } },
   },
 });
@@ -309,7 +315,7 @@ describe('an answer names the call it answers', () => {
 describe('a send made while handling says where an answer would go', () => {
   /**
    * `reply` sets `sender` itself, so it would pass with no stamping anywhere. This covers the other half: an
-   * ordinary `broadcastToSurface` made during a delivery carries the handler's own ref, which is what lets the
+   * ordinary `broadcast` made during a delivery carries the handler's own ref, which is what lets the
    * receiver answer *it* rather than having to be told. The stamp comes from the delivery because a pack's
    * generated sends know their pack and not which of its features called them.
    */
@@ -324,7 +330,7 @@ describe('a send made while handling says where an answer would go', () => {
 
   // Outside a delivery there is nobody to answer, so the field is absent rather than guessed at
   it('stamps nothing on a send made outside any delivery', async () => {
-    untypedBroadcastToSurface('memo-pack/memos', { type: 'MEMOS_CONNECTED' });
+    untypedBroadcast('memo-pack/memos', { type: 'MEMOS_CONNECTED' });
     await untilBus(() => outgoing.some(({ event }) => event.type === 'MEMOS_CONNECTED'), 'the announcement');
 
     const announced = outgoing.filter(({ event }) => event.type === 'MEMOS_CONNECTED');

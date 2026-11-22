@@ -283,10 +283,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface, useSurfaceStorage } from '@apackdev/sdk/fe'
+import { useState, useSurface, useSurfaceStorage } from '@apackdev/sdk/fe'
 
 import { ref, computed, watch, onMounted } from 'vue';
-import { useSelector } from '@xstate/vue';
 import {
   ArrowLeft,
   HardDriveDownload,
@@ -314,10 +313,9 @@ const actor: DatabaseState = useSurface();
 const storage = useSurfaceStorage();
 
 // Get backup info from state
-const storedBackupInfo = useSelector(actor, (state) => state.context.backupInfo);
-const isExporting = useSelector(actor, (state) => state.context.exporting);
-const isImporting = useSelector(actor, (state) => state.context.importing);
-const backupResult = useSelector(actor, (state) => state.context.backupResult);
+const { state: database, send } = useState(actor);
+const isExporting = computed(() => database.value.data.making.export);
+const isImporting = computed(() => database.value.data.making.import);
 
 // Tab state
 const activeTab = ref<'export' | 'import'>('export');
@@ -355,7 +353,7 @@ const isProcessing = computed(() => {
 
 // Navigation
 function handleBack() {
-  actor.send({ type: 'BACK_TO_EXPLORER' });
+  send({ type: 'BACK_TO_EXPLORER' });
 }
 
 // Unified action handler
@@ -368,14 +366,14 @@ function handleUnifiedAction() {
 }
 
 // Watch for backup info updates
-watch(storedBackupInfo, (newInfo) => {
+watch(() => database.value.data.backupInfo, (newInfo) => {
   if (newInfo) {
     backupInfo.value = newInfo;
   }
 });
 
 // The host publishes restored state to live consumers; presentation reports the operation's result.
-watch(backupResult, (result) => {
+watch(() => database.value.data.backupResult, (result) => {
   if (!result) return;
   const operation = result.operation === 'export' ? 'Export' : 'Import';
   if (result.unknownDatabases?.length) {
@@ -419,7 +417,7 @@ function handleExport() {
     .filter(([_, selected]) => selected)
     .map(([key]) => key) as Array<'lmdb' | 'runHistory'>; // 'searchIndices' removed [SEARCH_INDEX_FF]
 
-  actor.send({
+  send({
     type: 'BACKUP.EXPORT',
     path: exportPath.value,
     name: backupName.value || undefined,
@@ -435,7 +433,7 @@ async function selectImportDirectory() {
     // Save to this surface's storage for future use
     storage.set('backup-import-path', directoryPath);
     // Get backup info for the selected directory
-    actor.send({ type: 'BACKUP.READ_INFO', path: directoryPath });
+    send({ type: 'BACKUP.READ_INFO', path: directoryPath });
   }
 }
 
@@ -445,7 +443,7 @@ function handleImport(skipUnknownDatabases = false) {
   const confirmed = confirm('Are you sure you want to import this backup? This will stop the assistant\'s brain and replace all of your current data with the imported data.');
   if (!confirmed) return;
 
-  actor.send({ type: 'BACKUP.IMPORT', path: importPath.value, skipUnknownDatabases });
+  send({ type: 'BACKUP.IMPORT', path: importPath.value, skipUnknownDatabases });
 }
 
 /** A backup from a newer apack: the user says whether to import it without what this one can't hold */
@@ -454,7 +452,7 @@ function askAboutUnknownDatabases(stores: string[]): void {
     `This backup was made by a newer apack and also holds ${stores.join(', ')}, which this version doesn't have.\n\n` +
     'Nothing has been changed yet. Import it without those, replacing your current data with the rest?',
   );
-  if (importAnyway) actor.send({ type: 'BACKUP.IMPORT', path: importPath.value, skipUnknownDatabases: true });
+  if (importAnyway) send({ type: 'BACKUP.IMPORT', path: importPath.value, skipUnknownDatabases: true });
 }
 
 // Utility functions

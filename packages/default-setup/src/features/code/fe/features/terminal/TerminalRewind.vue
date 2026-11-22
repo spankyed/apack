@@ -22,7 +22,7 @@
       <button
         class="flex-shrink-0 rounded border border-neutral-600 px-2 py-0.5 hover:bg-neutral-800"
         data-terminal-rewind-close
-        @click="terminalActor.send({ type: 'terminal.REWIND_CLOSE' })"
+        @click="send({ type: 'terminal.REWIND_CLOSE' })"
       >
         Back to now
       </button>
@@ -31,8 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
-import { useSelector } from '@xstate/vue'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { History } from 'lucide-vue-next'
 import { type CodeState } from '#features/code/fe/state.ts'
@@ -47,8 +46,9 @@ const props = defineProps<{ terminalInfo: TerminalInfo }>()
 
 const codeActor: CodeState = useSurface()
 const terminalActor = panelChild(codeActor, 'terminal')!
-const rewind = useSelector(terminalActor, (state) =>
-  state.context.rewind?.terminalId === props.terminalInfo.id ? state.context.rewind : null)
+const { state: terminals, send } = useState(terminalActor)
+const rewind = computed(() =>
+  terminals.value.data.rewind?.terminalId === props.terminalInfo.id ? terminals.value.data.rewind : null)
 const container = ref<HTMLElement>()
 
 const shown = computed(() => rewind.value ? new Date(rewind.value.at).toLocaleTimeString() : '')
@@ -63,7 +63,7 @@ watch(() => rewind.value?.session, async (session, _before, onCleanup) => {
   terminalPool.ensure({ ...props.terminalInfo, id: id as TerminalInfo['id'], session, exited: undefined, target: undefined })
   // Drawn at the grid that fits where it is shown, as a terminal is
   const attachment = terminalPool.attach(id, container.value, {
-    onResize: ({ cols, rows }) => terminalActor.send({ type: 'terminal.REWIND_RESIZE', cols, rows }),
+    onResize: ({ cols, rows }) => send({ type: 'terminal.REWIND_RESIZE', cols, rows }),
   })
   onCleanup(() => { attachment?.release() })
 }, { immediate: true })
@@ -74,13 +74,13 @@ function seek(at: number) {
   wanted = at
   waiting ??= setTimeout(() => {
     waiting = undefined
-    if (wanted !== undefined) terminalActor.send({ type: 'terminal.REWIND_SEEK', at: wanted })
+    if (wanted !== undefined) send({ type: 'terminal.REWIND_SEEK', at: wanted })
   }, SEEK_EVERY_MS)
 }
 
 // Looking back ends with the host that was showing it: a recording nobody is looking at is closed
 onBeforeUnmount(() => {
   if (waiting) clearTimeout(waiting)
-  if (rewind.value) terminalActor.send({ type: 'terminal.REWIND_CLOSE' })
+  if (rewind.value) send({ type: 'terminal.REWIND_CLOSE' })
 })
 </script>

@@ -479,14 +479,19 @@ Checks:
 | `pack-own-aliases` | `@/…`, a TypeScript-only `paths` mapping no runtime reads. Name your own modules with `#` subpath imports from your `package.json` | no |
 | `internal-package-imports` | an `@apackdev` export named `_x`: it is `@internal`, the app's own, and an app update is free to rename it | no |
 | `host-imports` | `@apackdev/host`, which is not installed for a pack | no |
-| `elmdb-imports` | `elmdb` or `@apackdev/ears/lmdb`: your data comes through the engine the app installs | no |
-| `untyped-sends` | `untypedBroadcastToSurface`, `untypedSendToSystem` — use the typed facades from `#generated/events` | yes |
+| `elmdb-imports` | `elmdb` or `@elmdb/ears/database`: your data comes through the engine the app installs | no |
+| `ears-imports` | `@elmdb/ears`: import EARS from `@apackdev/sdk/ears`, which re-exports all of it. EARS is your SDK's dependency, not your pack's, so your install need not have it where your pack resolves it | no |
+| `untyped-sends` | `untypedBroadcast`, `untypedTell` — use the typed facades from `#generated/events` | yes |
 | `raw-transport` | `_rootEvents`, `trpc.bus`, `@apackdev/sdk/rpc` | yes |
 | `backend-console` | `console.*` under `features/*/be/`, `migrations/` or `extensions/` — use `createLogger` from `@apackdev/sdk/logger` | yes |
 | `component-sends` | `sendToSurface` from a feature's `.vue`. A component runs in no delivery, so the send carries no `Message.sender` and the surface it reaches cannot answer it — emit to your own surface with `useSurface()` and let its machine send. An extension's component is exempt: it is rendered in no surface scope and by no single surface, so it addresses a surface by ref and `sendToSurface` is that route's send | no |
 | `cross-feature-imports` | a module of another feature's `fe/`, and a feature passing its own frontend on (`export … from './fe/state.ts'`). What a feature offers the rest is its surface's contract, read through `#generated/fe` and `#generated/events` | yes |
 | `window-storage` | `localStorage` or `sessionStorage` anywhere in a pack — reach your surface's own storage through `surfaceStorage`/`useSurfaceStorage` from `@apackdev/sdk/fe`, which prefixes every name with the surface's ref. A window's storage is one flat namespace, so a hand-written key is one another pack can pick — which is why this one is not switchable: allowing it takes the collision out on somebody else | no |
+| `machine-selectors` | `@xstate/vue` in a pack's source. A component reads a machine with `useState` from `@apackdev/sdk/fe`: `const { state, send } = useState(actor)`, where `state.data` is what the machine holds and `state.at` where it is. It mirrors a machine once for every component reading it and writes only what changed, where each `useSelector` is a subscription of its own that runs on every snapshot. Not switchable: a component that names the machine library is one a change of that library breaks | no |
 | `repository-casts` | `repository as unknown as …`, reading a repository through a type its owner never declared. `repository` from `#generated/repository` is already typed with your own repositories and your dependencies' | yes |
+| `ask-answers` | an object in `src` whose `type` is `ASK_ANSWERED` or `ASK_FAILED`. A system answers its declared asks with its `answers` table (`defineSystem`'s `answers`), whose handler returns the answer and throws the refusal, and which answers whoever asked however the handler ends: an answer written by hand is one a failure path can forget and a wrong ask can take. A spec driving an asking machine builds its answers with `askAnswered` and `askFailed` from `@apackdev/sdk/testing` | no |
+| `ask-ends` | a transition on `xstate.done.actor.<id>` in `src`. A machine declares the asks it makes with `makes` from `@apackdev/sdk/fe` and makes each by name; how one ended reaches it as `made.<name>`, and which are under way is `making` in its context. An actor that is not an ask is invoked, and its end taken with `onDone` | no |
+| `swallowed-ask-ends` | a `'*'` transition, in a machine that makes asks with `makes`, written without `[made.done]: { actions: made.settle() }` beside it. A state's wildcard is tried before its parent's transitions, so it would take the end of every ask made in that state, and the ask would read as under way for good | no |
 | `reserved-event-keys` | a property named `_call`, in `src` or `tests`. That key is the app's: a delivery door writes the call a message answers under it, so a field of yours by that name is overwritten on the way in and read as a correlation on the way out. Ask `answersCall(event, outstanding)` or `settleCall(pending, event)` from `@apackdev/sdk/events` instead of reading it, build an answer in a test with `answerTo` from `@apackdev/sdk/testing`, and rename a field of your own that collides | no |
 
 A rule marked switchable is a development convention a pack may allow in **`apack.json`**:
@@ -755,7 +760,7 @@ apack db script ./cleanup.ts --profile development -- --older-than 30
 | `args` | whatever follows `--` |
 | `log` | prints a line, like the script's own output |
 
-The database is handed to the script rather than left for it to open: the published CLI carries its own copy of the engine, so a script importing `@apackdev/ears` itself would get a second one, with no data in it. `--read-only` opens the database without writing, so a reporting script can run while apack is open.
+The database is handed to the script rather than left for it to open: the published CLI carries its own copy of the engine, so a script importing `@elmdb/ears` itself would get a second one, with no data in it. `--read-only` opens the database without writing, so a reporting script can run while apack is open.
 
 #### `apack db inspect [<entity-id> | --type <Entity>] [--depth <n>] [--incoming] [--outgoing]`
 

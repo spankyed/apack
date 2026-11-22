@@ -9,22 +9,23 @@ const logger = createLogger('browser');
 
 export const browserSpec = defineSystem<Contract>();
 
+export const answers = browserSpec.answers({
+  GET_SAVED_SESSION: () => {
+    const savedTabs = repository.browserQueries.allTabs();
+    const savedBookmarks = repository.browserQueries.allBookmarks();
+    logger.info('Sending browser restore payload', {
+      savedTabCount: savedTabs.length,
+      savedBookmarkCount: savedBookmarks.length,
+    });
+    return { savedTabs, savedBookmarks };
+  },
+});
+
 export const browserSystem = setup({
   types: browserSpec.types,
-  actions: browserSpec.actions({
-    sendSavedSession: ({ reply }) => {
-      const savedTabs = repository.browserQueries.allTabs();
-      const savedBookmarks = repository.browserQueries.allBookmarks();
-      logger.info('Sending browser restore payload', {
-        savedTabCount: savedTabs.length,
-        savedBookmarkCount: savedBookmarks.length,
-      });
-      reply?.({
-        type: 'SAVED_SESSION_READ',
-        savedTabs,
-        savedBookmarks,
-      });
-    },
+  actions: {
+    ...answers.actions,
+    ...browserSpec.actions({
     syncTabs: ({ event }) => {
       const ev = browserSpec.typeOf('SYNC_TABS', event);
       repository.browserCommands.syncTabs(ev.tabs);
@@ -34,14 +35,13 @@ export const browserSystem = setup({
       repository.browserCommands.syncBookmarks(ev.bookmarks);
     },
   }),
+  },
 }).createMachine({
   id: 'browser',
   initial: 'active',
   context: {},
   on: {
-    GET_SAVED_SESSION: {
-      actions: ['sendSavedSession'],
-    },
+    ...answers.on,
     SYNC_TABS: {
       actions: ['syncTabs'],
     },

@@ -30,7 +30,7 @@
             @click="toggleOption('caseSensitive')"
             :class="[
               'px-2 py-1.5 text-xs transition-colors border-r border-l border-neutral-700',
-              searchOptions.caseSensitive
+              search.data.searchOptions.caseSensitive
                 ? 'bg-blue-600 text-white'
                 : 'text-neutral-400 hover:bg-neutral-700'
             ]"
@@ -42,7 +42,7 @@
             @click="toggleOption('wholeWord')"
             :class="[
               'px-2 py-1.5 text-xs transition-colors border-r border-neutral-700',
-              searchOptions.wholeWord
+              search.data.searchOptions.wholeWord
                 ? 'bg-blue-600 text-white'
                 : 'text-neutral-400 hover:bg-neutral-700'
             ]"
@@ -54,7 +54,7 @@
             @click="toggleOption('useRegex')"
             :class="[
               'px-2 py-1.5 text-xs transition-colors',
-              searchOptions.useRegex
+              search.data.searchOptions.useRegex
                 ? 'bg-blue-600 text-white'
                 : 'text-neutral-400 hover:bg-neutral-700'
             ]"
@@ -106,16 +106,16 @@
       </div>
 
       <!-- Progress -->
-      <div v-if="searchProgress" class="p-4 text-sm text-neutral-400">
-        <div class="mb-1">Searching... {{ searchProgress.filesSearched }} files</div>
-        <div v-if="searchProgress.currentFile" class="text-xs truncate text-neutral-500">
-          {{ searchProgress.currentFile }}
+      <div v-if="search.data.searchProgress" class="p-4 text-sm text-neutral-400">
+        <div class="mb-1">Searching... {{ search.data.searchProgress.filesSearched }} files</div>
+        <div v-if="search.data.searchProgress.currentFile" class="text-xs truncate text-neutral-500">
+          {{ search.data.searchProgress.currentFile }}
         </div>
       </div>
 
       <!-- Error -->
-      <div v-else-if="searchError" class="p-4">
-        <div class="text-sm text-red-400">{{ searchError }}</div>
+      <div v-else-if="search.data.searchError" class="p-4">
+        <div class="text-sm text-red-400">{{ search.data.searchError }}</div>
       </div>
 
       <!-- Results -->
@@ -167,7 +167,7 @@
 
       <!-- No Results -->
       <EmptyState
-        v-else-if="searchQuery && !isSearching"
+        v-else-if="searchQuery && search.at !== 'searching'"
         :icon="Search"
         title="No results found"
         subtitle="Try a different search term"
@@ -187,10 +187,9 @@
 </template>
 
 <script setup lang="ts">
-import { useSurface } from '@apackdev/sdk/fe'
+import { useState, useSurface } from '@apackdev/sdk/fe'
 
 import { computed, ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { useSelector } from '@xstate/vue'
 import type { CodeState } from '#features/code/fe/state.ts'
 import { ChevronRight, ChevronsDownUp, Search } from 'lucide-vue-next'
 import CodePanelHeader from '#features/code/fe/features/CodePanelHeader.vue'
@@ -204,21 +203,17 @@ const searchActor = panelChild(codeActor, 'search')!
 
 // State selectors
 const searchQuery = ref('')
-const searchResults = useSelector(searchActor, (state) => state.context.searchResults)
-const isSearching = useSelector(searchActor, (state) => state.context.isSearching)
-const searchError = useSelector(searchActor, (state) => state.context.searchError)
-const searchProgress = useSelector(searchActor, (state) => state.context.searchProgress)
-const searchOptions = useSelector(searchActor, (state) => state.context.searchOptions)
-const baseDirectory = useSelector(codeActor, (state) => state.context.baseDirectory)
-const searchFocusTrigger = useSelector(codeActor, (state) => state.context.searchFocusTrigger)
-const searchPrefillText = useSelector(codeActor, (state) => state.context.searchPrefillText)
+const { state: code, send: sendCode } = useState(codeActor)
+const { state: search, send } = useState(searchActor)
+const searchResults = computed(() => search.value.data.searchResults)
+const baseDirectory = computed(() => code.value.data.baseDirectory)
 
 const searchInput = ref<HTMLInputElement | null>(null)
 
 onMounted(() => {
   nextTick(() => {
-    if (searchPrefillText.value) {
-      searchQuery.value = searchPrefillText.value
+    if (code.value.data.searchPrefillText) {
+      searchQuery.value = code.value.data.searchPrefillText
       performSearch()
     }
     searchInput.value?.focus()
@@ -227,9 +222,9 @@ onMounted(() => {
 })
 
 // Re-focus input (and optionally prefill) when Cmd+Shift+F is pressed while already on this panel
-watch(searchFocusTrigger, () => {
-  if (searchPrefillText.value) {
-    searchQuery.value = searchPrefillText.value
+watch(() => code.value.data.searchFocusTrigger, () => {
+  if (code.value.data.searchPrefillText) {
+    searchQuery.value = code.value.data.searchPrefillText
     nextTick(() => performSearch())
   }
   nextTick(() => {
@@ -240,8 +235,8 @@ watch(searchFocusTrigger, () => {
 
 // Local state
 const FILE_PAGE_SIZE = 50
-const includePattern = ref(searchOptions.value.includePattern)
-const excludePattern = ref(searchOptions.value.excludePattern)
+const includePattern = ref(search.value.data.searchOptions.includePattern)
+const excludePattern = ref(search.value.data.searchOptions.excludePattern)
 const expandedResults = ref(new Set<string>())
 const visibleFileCount = ref(FILE_PAGE_SIZE)
 const scrollSentinel = ref<HTMLElement | null>(null)
@@ -292,8 +287,8 @@ const performSearch = () => {
   updateOptions()
 
   if (!searchQuery.value) {
-    searchActor?.send({ type: 'search.CANCEL' })
-    searchActor?.send({ type: 'search.CLEAR' })
+    send({ type: 'search.CANCEL' })
+    send({ type: 'search.CLEAR' })
     expandedResults.value.clear()
     visibleFileCount.value = FILE_PAGE_SIZE
     return
@@ -302,16 +297,16 @@ const performSearch = () => {
   searchTimeout = setTimeout(() => {
     expandedResults.value.clear()
     visibleFileCount.value = FILE_PAGE_SIZE
-    searchActor?.send({ type: 'search.START', query: searchQuery.value })
+    send({ type: 'search.START', query: searchQuery.value })
   }, 300)
 }
 
 
 const toggleOption = (option: 'caseSensitive' | 'wholeWord' | 'useRegex') => {
-  searchActor?.send({
+  send({
     type: 'search.UPDATE_OPTIONS',
     options: {
-      [option]: !searchOptions.value[option]
+      [option]: !search.value.data.searchOptions[option]
     }
   })
   // Re-run search with updated option if there's an active query
@@ -321,7 +316,7 @@ const toggleOption = (option: 'caseSensitive' | 'wholeWord' | 'useRegex') => {
 }
 
 const updateOptions = () => {
-  searchActor?.send({
+  send({
     type: 'search.UPDATE_OPTIONS',
     options: {
       includePattern: includePattern.value,
@@ -351,7 +346,7 @@ const openMatch = (result: typeof searchResults.value[0], match: typeof result.m
   })
 
   // Tell the code surface to scroll to this line once the file is active
-  codeActor.send({
+  sendCode({
     type: 'UPDATE_STATE',
     updates: { pendingRevealLine: { filePath: result.path, line: match.line, column: match.column, lineText: match.lineText } }
   })
@@ -378,7 +373,7 @@ const getFileDirectory = (path: string) => {
 
 
 // Watch for option changes from state
-watch(searchOptions, (newOptions) => {
+watch(() => search.value.data.searchOptions, (newOptions) => {
   includePattern.value = newOptions.includePattern
   excludePattern.value = newOptions.excludePattern
 })

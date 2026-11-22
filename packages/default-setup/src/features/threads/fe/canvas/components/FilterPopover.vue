@@ -119,7 +119,7 @@ import type { ThreadStatusOption, ThreadTagOption, ChatStateConfig } from '#gene
 
 defineProps<{
   statuses: ThreadStatusOption[]
-  tags: ThreadTagOption[]
+  tags: readonly ThreadTagOption[]
   chatStateConfigs: ChatStateConfig[]
   selectedStatuses: string[]
   selectedTags: string[]

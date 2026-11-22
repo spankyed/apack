@@ -26,7 +26,7 @@
 > this one was seven files and six registration points for one function.
 >
 > **98 sites write a pack manifest, not 101, across 55 files — and the count was never the work.** Of the 98,
-> **54** are in `@apackdev/cli` and `@app/repo-checks`, and of those only **28** are a manifest
+> **54** are in `@apackdev/cli` and `@app/internal-repo-checks`, and of those only **28** are a manifest
 > written inline for a tree of their own. **11 of them, in 8 files, became `packFixture`;** the rest are four
 > shapes left alone with a reason each, listed in `packages/apack-sdk/CLAUDE.md`: a `'{}'` discovery
 > marker, a patch of a pack something else scaffolded, a manifest that *is* the subject with no tree around
@@ -106,7 +106,7 @@ published surface** — `etc/testing.api.md:140`, governed by `api:check` and `a
 tarball — for something no pack author has a use for: it materialises a pack directory to test *pack tooling*.
 Its own comment names the condition for moving: *"the first one that does is the signal to move this and
 `population` to an `@app/*` package, rather than to write a second fixture."* Two packages consume it now
-(`@app/repo-checks`, `@apackdev/cli`), so the condition is met twice over.
+(`@app/internal-repo-checks`, `@apackdev/cli`), so the condition is met twice over.
 
 ## What the survey found, and what it could not settle
 
@@ -138,10 +138,10 @@ cache ("expect few hits").
    branch** — deliberately, so a pack's run sees what a pack author sees — so every fixture edit would need
    `packages:build` first, and a fixture library with that loop gets worked around within a month.
 
-   **Not `@app/publish-checks`**, though it is cheaper (`@apackdev/cli` already depends on it): its subject is
+   **Not `@app/internal-publish-checks`**, though it is cheaper (`@apackdev/cli` already depends on it): its subject is
    what we publish, and the published rung packs `publishedTreeDirs()` from *this* checkout
    (`installPublishedPackages`, still there). A general fixture home there makes it two packages in one, which
-   is what `@app/repo-checks` was extracted from `@apackdev/cli` to undo. `@app/repo-checks` is out for the
+   is what `@app/internal-repo-checks` was extracted from `@apackdev/cli` to undo. `@app/internal-repo-checks` is out for the
    mirror reason, and because `@apackdev/cli` would then depend on a checks package.
 
 2. **`population` stays in `@apackdev/sdk/testing`.** `@app/default-setup`'s tests use it (verified: one file)
@@ -165,7 +165,7 @@ cache ("expect few hits").
 ### Phase 1 — the package, and `packFixture` moved
 
 - New `@app/pack-fixtures`: `package.json` (private, `exports: { ".": "./src/index.ts" }`, mirroring
-  `@app/publish-checks`), `tsconfig.json`, `vitest.config.ts`, `CLAUDE.md`, and an entry in
+  `@app/internal-publish-checks`), `tsconfig.json`, `vitest.config.ts`, `CLAUDE.md`, and an entry in
   `scripts/lib/unit-suites.ts`. `workspace()` picks up its chain inputs.
 - Move `packFixture` and its spec, repoint the 23 call sites, delete the source export, run `npm run api:update`
   (`etc/testing.api.md` loses a line and `typecheck` fails until it does), and rewrite the comment that
@@ -203,7 +203,7 @@ stops asserting — replacing a spawned `tsc` with an in-process one hit this on
 
 ### Phase 4 — the guardrail, which is what makes this a floor
 
-A `@app/repo-checks` spec: **no test outside `@app/pack-fixtures` materialises a pack by hand.**
+A `@app/internal-repo-checks` spec: **no test outside `@app/pack-fixtures` materialises a pack by hand.**
 
 **Derive the predicate, not just the population — this is the part that matters.** The spawn gate written
 alongside this plan had a derived population, a non-empty expected list, a mutation case and a negative
@@ -228,7 +228,7 @@ that still exists.
 
 ## Verification
 
-- Per phase: `npm run typecheck`, `npm test -w @app/repo-checks`, `npm run spec-cost:check`, and
+- Per phase: `npm run typecheck`, `npm test -w @app/internal-repo-checks`, `npm run spec-cost:check`, and
   `npm run chain` once at the end.
 - **No timing claim is part of any done-when.** This plan buys schema conformance and one edit instead of 101;
   it is expected to leave the suite's cost where it is. A regression needs a reason; an improvement is a
@@ -253,13 +253,13 @@ that still exists.
 - **A content-keyed build cache as the justification.** Same measurement, stated before any of this was built.
 - **`@apackdev/testing` as the home.** Its exports resolve `dist` with no source branch, so every fixture edit
   would need a rebuild; and the published rung needs a checkout, which an external consumer lacks.
-- **`@app/publish-checks` and `@app/repo-checks` as the home.** Cheaper by one edge each, rejected on cohesion.
+- **`@app/internal-publish-checks` and `@app/internal-repo-checks` as the home.** Cheaper by one edge each, rejected on cohesion.
 - **Folding `setupPackTests` in as a rung.** It takes a registration, not a directory. Different axis.
 
 ## Risks
 
 - **A new workspace has six registration points** — `unit-suites`, vitest config, spec-cost record,
-  CLAUDE.md, its own suite (`spec-placement` requires one), chain inputs. `packages/repo-checks/CLAUDE.md`
+  CLAUDE.md, its own suite (`spec-placement` requires one), chain inputs. `packages/internal-repo-checks/CLAUDE.md`
   records what the last extraction cost and why it was still right; read it first.
 - **Phase 3 is 46 files of mechanical change with no speed payoff**, which is the kind of work that gets
   abandoned half-done and leaves two ways to write a fixture instead of one. Phase 4 is what stops that being

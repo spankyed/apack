@@ -270,7 +270,7 @@ const props = defineProps<{
   currentThread: AgentThreadData | null
   currentMode: string
   currentPhase?: string
-  modes: AgentMode[]
+  modes: readonly AgentMode[]
   defaultMode?: string
   hotkeys?: HotkeysMap
   quickPrompts?: QuickPrompt[]

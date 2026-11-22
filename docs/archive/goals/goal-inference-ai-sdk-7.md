@@ -68,7 +68,7 @@ Pack code gets models from an `@apackdev/sdk/inference` module on AI SDK 4, thro
   - Sources: the migration guides shipped in the package (`docs/08-migration-guides/`), and its `dist/index.d.ts`.
 - **The TypeScript floor.**
   - `@apackdev/sdk` and `@apackdev/ui` declare `typescript: ">=5.3"`. `goal-review-fixes.md` Decision 2 chose 5.3 as the lowest version that compiles `@apackdev/ui`'s vue-tsc declarations (`import("vue", { with: { "resolution-mode": "import" } })`).
-  - `packages/typescript-floor` pins 5.3.3, and `apack-cli/tests/helpers/published-packages.ts:15` runs the published-types specs with it.
+  - `packages/internal-typescript-floor` pins 5.3.3, and `apack-cli/tests/helpers/published-packages.ts:15` runs the published-types specs with it.
   - The published-types specs compile with `skipLibCheck: true` (`published-sdk-types.spec.ts:22`, `published-ui-types.spec.ts:19`).
   - The rule appears in `CLAUDE.md` and `apack-sdk/TYPED-EARS.md:53`. `ears/runtime.ts:60` keeps a `NoInfer` workaround for 5.3.
 - **Zod and Node.**
@@ -109,7 +109,7 @@ Findings that shape the implementation:
 Final.
 
 1. **TypeScript floor 5.7.**
-   - `@apackdev/sdk` and `@apackdev/ui` declare `typescript: ">=5.7"`, and `packages/typescript-floor` pins 5.7.3.
+   - `@apackdev/sdk` and `@apackdev/ui` declare `typescript: ">=5.7"`, and `packages/internal-typescript-floor` pins 5.7.3.
    - The published-types specs name the floor `'5.7'`.
    - `CLAUDE.md`, `TYPED-EARS.md`'s compatibility line and `getting-started.md` say 5.7.
    - The typed EARS `NoInferType` workaround stays: those types are change-controlled.
@@ -183,7 +183,7 @@ Final.
 
 ### Phase 1 — TypeScript floor
 
-- Pin `packages/typescript-floor` to 5.7.3 and set the `typescript` peers to `>=5.7` (Decision 1).
+- Pin `packages/internal-typescript-floor` to 5.7.3 and set the `typescript` peers to `>=5.7` (Decision 1).
 - Rename the floor in `published-packages.ts` to `'5.7'`.
 - Update `CLAUDE.md`, `TYPED-EARS.md`'s compatibility line and `getting-started.md`.
 - Raise `engines.node` and the zod ranges (Decision 2).
@@ -269,7 +269,7 @@ The contract, the app implementation and the callers depend on each other. They 
 - Don't launch the app outside the test environment without isolating `APACK_USER_DATA_DIR`.
 - Never run bare tsc on `packages/preload`. Don't run `npm install` in the example pack. Don't edit monorepo version/release metadata.
 - Pack code and pack tests import only `@apackdev/sdk`, `@apackdev/ui`, `@apackdev/testing` and pure `ai` pieces; `@apackdev/host` stays host-only. The typed EARS types are change-controlled (`packages/apack-sdk/TYPED-EARS.md`).
-- `@apackdev/sdk/services`, `@apackdev/sdk/models` and `@apackdev/sdk/testing` are published: no `any` (`published-sdk-any.spec.ts`), TypeScript 5.7 (`packages/typescript-floor`), `api:update` after export changes.
+- `@apackdev/sdk/services`, `@apackdev/sdk/models` and `@apackdev/sdk/testing` are published: no `any` (`published-sdk-any.spec.ts`), TypeScript 5.7 (`packages/internal-typescript-floor`), `api:update` after export changes.
 - The CLI suite requires `npm run packages:build` after SDK source changes. default-setup's runtime (`node packages/default-setup/dev-build.mjs`) must be rebuilt before the API suites and E2E.
 - Investigate failing tests before changing assertions; mutation-check every new guard, helper and test.
 - No tests reach a real provider: no API keys in test environments. The app spec uses a local HTTP server.

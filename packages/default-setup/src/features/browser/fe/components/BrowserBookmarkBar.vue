@@ -36,7 +36,7 @@ import { ContextMenuRoot, ContextMenuTrigger, ContextMenuContent, ContextMenuIte
 import type { Bookmark } from '../state.ts';
 
 defineProps<{
-  bookmarks: Bookmark[];
+  bookmarks: readonly Bookmark[];
 }>();
 
 const emit = defineEmits<{

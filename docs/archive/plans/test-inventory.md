@@ -3,7 +3,7 @@
 > **Superseded in part** by [`docs/references/test-inventory.md`](../../references/test-inventory.md), which
 > describes the suite as it is. The text below is the survey as written, 2026-09-19 against
 > `AS/package-boundaries` at `1dd69172e`: its counts (279 spec files, 2,211 tests) predate
-> `@app/repo-checks`, the CLI suite's two halves and the cost records, and its per-file paths name specs that
+> `@app/internal-repo-checks`, the CLI suite's two halves and the cost records, and its per-file paths name specs that
 > have since moved. Read it as history.
 >
 > **Two of its conclusions were superseded rather than absorbed.** It fed

@@ -3,29 +3,25 @@
 // A leaf: no machine, no other feature, and nothing from `#generated/*` but `types` and `ears` — which is what lets
 // codegen read the contract without resolving the machine, whose imports cycle back through `#generated/events`.
 // `apack.json` names it at `features[].surface.contract`.
-import type { SurfaceInbox } from '@apackdev/sdk/fe'
+import type { MakingOf, SurfaceInbox } from '@apackdev/sdk/fe'
 import type { RunTree, RunNode } from '@apackdev/sdk/steps'
 import type { DatabaseSettings } from '#generated/types.ts'
 import type { DatabaseSchemaInfo } from '../be/types.ts'
 
 export interface DatabaseContext {
+  /**
+   * Which of the asks this window makes are under way, by the name the machine makes each under. A node's details
+   * are asked for per node, so those are the ids of the nodes being read
+   */
+  making: MakingOf<{
+    query: 'one'; transaction: 'one'; aiQuery: 'one'; flowRuns: 'one'; flowEvents: 'one'; backupInfo: 'one';
+    export: 'one'; import: 'one'; reset: 'one'; nodeDetails: 'each';
+  }>;
   schema: DatabaseSchemaInfo;
   currentQuery: string;
   queryResult: any;
-  isLoading: boolean;
   error: string | null;
   executionTime: number | null;
-  /**
-   * The call each answer has to name to be accepted, or `null` when nothing is outstanding.
-   *
-   * Two fields rather than one: the verbs are independent, and deleting a row chains a transaction into
-   * a follow-up query, so a single slot would have the query overwrite the transaction it came from.
-   *
-   * What goes in them is what `sendToSystem` returned for the ask; what reads them is `answersCall`, which
-   * refuses an empty slot — so neither the request nor the answer declares a field for it.
-   */
-  pendingQueryCall: string | null;
-  pendingTransactionCall: string | null;
   selectedSchemaItem: {
     type: 'entity' | 'attribute' | 'relation';
     value: string;
@@ -40,7 +36,6 @@ export interface DatabaseContext {
   flowEvents: RunTree[];
   expandedNodes: Set<string>;
   nodeDetails: Map<string, RunNode>;
-  isLoadingRuns: boolean;
   runPagination: {
     offset: number;
     limit: number;
@@ -48,8 +43,6 @@ export interface DatabaseContext {
   };
   // Backup fields
   backupInfo: { timestamp: number; databases: string[]; size: number; hasMedia?: boolean } | null;
-  exporting: boolean;
-  importing: boolean;
   /** The last export or import to finish, a new object each time */
   backupResult: {
     operation: 'export' | 'import';

@@ -95,7 +95,7 @@ import { useStepDeclarations } from '@apackdev/sdk/fe';
 const stepDeclarations = useStepDeclarations();
 
 interface Props {
-  runNodeTree?: RunTree[];
+  runNodeTree?: readonly RunTree[];
   flowRunNodeId?: string;
   canGoBack: boolean;
   animationsEnabled?: boolean;
@@ -187,7 +187,7 @@ const subtreeLeafCount = (runNode: RunTree): number => {
   return runNode.children.reduce((sum, child) => sum + subtreeLeafCount(child), 0);
 };
 
-const calculateNodePositions = (tracks: RunTree[]): VueFlowNode[] => {
+const calculateNodePositions = (tracks: readonly RunTree[]): VueFlowNode[] => {
   const nodes: VueFlowNode[] = [];
   let trackY = 0;
 

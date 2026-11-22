@@ -3,7 +3,7 @@ import { mockService } from '@apackdev/testing/harness';
 import { services, type Services } from '#generated/services.ts';
 import { repository } from '#generated/repository.ts';
 import { action as handleRevert } from '../../../../src/content/actions/claude-code/handle-revert.ts';
-import type { EARS } from '@apackdev/ears';
+import type { EARS } from '@apackdev/sdk';
 
 // The action runs on the harness's services: a real thread and messages in the in-memory database,
 // with the CLI and the chat, threads, settings and artifact services it drives mocked

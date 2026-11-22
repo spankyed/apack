@@ -2,13 +2,13 @@
 //
 // `code/fe/features/terminal/state.ts`'s spec covers what each window does with the two events; this covers
 // which window is sent which. The pair is the same one the flows system makes, and the case that pins it is
-// the second: an ask with nobody to answer must produce the news and no answer at all. Swap the `reply` for
-// a broadcast and that case fails.
+// the second: an ask with nobody to answer must produce the news and no answer at all. Broadcast the terminal
+// instead of answering with it and that case fails.
 //
 // The host's terminal service is mocked, so no process is spawned and nothing here is about pty.
 import { describe, expect, it } from 'vitest'
 import { startApp } from '@apackdev/testing/harness'
-import { recordingBroker } from './_support/terminal-broker.ts'
+import { recordingBroker } from './_support/recording-broker.ts'
 import { TERMINAL_COLORS } from '#features/code/be/terminal-colors.ts'
 
 /**
@@ -26,7 +26,6 @@ function mockTerminalSessions() {
   broker = recordingBroker()
 }
 
-const CODE = 'default-setup/code'
 /** The connection the ask arrived on, which is what makes it a window's */
 const WINDOW = 'c-main'
 
@@ -39,8 +38,7 @@ describe('creating a terminal', () => {
     const app = await startApp({ systems: ['code'] })
     await app.connect()
 
-    await app.send('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { sender: CODE, client: WINDOW })
-    await app.nextEmit('code', 'terminal.OPENED')
+    const opened = await app.ask('code', { type: 'terminal.CREATE_TERMINAL', title: 'one' }, { client: WINDOW })
     await app.settle()
 
     const types = sentToCode(app)
@@ -48,10 +46,10 @@ describe('creating a terminal', () => {
     expect(broker.opened.map(({ options }) => options), 'the pack asked the host for a session')
       .toEqual([expect.objectContaining({ cols: 80, rows: 24, shell: expect.any(String), cwd: expect.any(String), colors: TERMINAL_COLORS })])
     expect(types, "the news, on which every window asks for its list again").toContain('terminal.CREATED')
-    expect(types, 'and the answer, which opens it for the asker alone').toContain('terminal.OPENED')
+    expect(opened, 'and the answer, which opens it for the asker alone').toMatchObject({ ok: true, value: { id: expect.any(String) } })
   })
 
-  // The case that tells a reply from a broadcast: with nobody asking there is news and no answer
+  // The case that tells an answer from a broadcast: with nobody asking there is news and no answer
   it('still tells every window when nobody asked, and opens it for no one', async () => {
     mockTerminalSessions()
     const app = await startApp({ systems: ['code'] })
@@ -61,6 +59,6 @@ describe('creating a terminal', () => {
     await app.nextEmit('code', 'terminal.CREATED')
     await app.settle()
 
-    expect(sentToCode(app).filter((type) => type === 'terminal.OPENED'), 'nobody to answer').toEqual([])
+    expect(sentToCode(app), 'nobody to answer').toEqual(['terminal.CREATED'])
   })
 })

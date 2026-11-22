@@ -161,7 +161,7 @@ verb answering and overriding a core one. Both mutation-checked.
 - Apply D4 and D5 across `engine/server.ts`, `engine/session.ts` and the `EngineSession` interface.
 - Rename in every caller: `docs/public-facing/cli.md`'s verb table, `drive/README.md`,
   `packages/apack-testing/CLAUDE.md`, the root `CLAUDE.md`'s drive paragraph.
-- A spec in `@app/repo-checks` derived from `engineVerbs`: no POST path is a noun, no GET path is a verb,
+- A spec in `@app/internal-repo-checks` derived from `engineVerbs`: no POST path is a noun, no GET path is a verb,
   and no two verbs name one concept differently. The population is the table itself, asserted non-empty.
 
 **Done when:** the spec passes, and fails when a verb is added that breaks either rule — both directions
@@ -206,7 +206,7 @@ threads or the library is not here, and Phase 1 is where it goes.
 - **`/flow`** — see D7. Its own goal; Phase 1 makes it writable as a scaffold verb first.
 - **`/windows`** — list and focus windows. A surface runs once per window and the whole `client` routing
   exists for that, so multi-window bugs are real here; no evidence yet of an agent needing to drive two.
-- **The empty test** at `packages/repo-checks/tests/with-source.spec.ts` —
+- **The empty test** at `packages/internal-repo-checks/tests/with-source.spec.ts` —
   `it('leaves it off for a run that declared it resolves the published packages', () => {})` asserts
   nothing. It predates this work and what it was meant to pin is unknown; fix it or delete it, but not
   by guessing.

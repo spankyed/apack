@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { _PACK_VERSION_PATTERN, _validPackVersion, _validPackRange, parsePackDependency } from './dependency-source.ts';
 import { PackChecksSchema } from './pack-checks.ts';
 import { SDK_ENTITIES, SDK_REL_KINDS, SDK_ROLES, SDK_SHORT_CODES } from '../types/sdk-entities.ts';
-import { RESERVED_ATTRIBUTES, RESERVED_ENTITY_TYPES } from '@apackdev/ears';
+import { RESERVED_ATTRIBUTES, RESERVED_ENTITY_TYPES } from '@elmdb/ears';
 import { _reservedEntries } from '../types/reserved-names.ts';
 import { HOST_PACK_ID } from '../ids/refs.ts';
 import { FEATURE_ID_PATTERN, PACK_ID_PATTERN } from '../ids/refs.ts';
@@ -248,7 +248,15 @@ function checkFrontendClaims(frontend: FrontendDeclaration | undefined, ctx: z.R
 const PackVersionSchema = z.string().regex(_PACK_VERSION_PATTERN, 'Must be a complete SemVer version').refine(_validPackVersion, 'Must be a complete SemVer version');
 const EventNamesSchema = z.array(z.string().min(1)).refine(names => new Set(names).size === names.length, 'Event names must be unique');
 export const _EventContractsSchema = declarationRecord(z.string().regex(FEATURE_ID_PATTERN), z.object({
-  system: z.object({ incoming: EventNamesSchema, outgoing: EventNamesSchema }).strict().optional(),
+  system: z.object({
+    incoming: EventNamesSchema,
+    outgoing: EventNamesSchema,
+    // Each declared ask, with the failure kinds its contract gives it: an ask is an event the system receives
+    asks: declarationRecord(z.string().min(1), EventNamesSchema).optional(),
+  }).strict().refine(
+    system => Object.keys(system.asks ?? {}).every(ask => system.incoming.includes(ask)),
+    'Every ask must be among the incoming events',
+  ).optional(),
   surface: z.object({ receives: EventNamesSchema }).strict().optional(),
 }).strict());
 
@@ -667,7 +675,7 @@ const SurfaceSchema: z.ZodType<SurfaceDeclaration> = z.object({
     label: z.string().min(1).describe('Shell menu label for toggling this shared context panel.'),
     toggle: z.object({ type: z.string().min(1).describe('Event type sent to this surface machine to toggle its panel.') }).strict()
       .describe('Toggle event delivered to the panel-owning surface.'),
-    isShown: ExportTargetSchema.describe('Named predicate export that reads this surface snapshot to decide whether its fallback panel is shown.'),
+    isShown: ExportTargetSchema.describe('Named predicate export that reads where the machine of this surface is and what it holds, `{ at, data }`, to decide whether its fallback panel is shown.'),
   }).strict().describe('Offer this surface panel to surfaces without their own panel, with a toggle event and visibility predicate.').optional(),
   defaultVisible: z.boolean().describe('Default navigation visibility, independent of settings values and the startup default claim.').optional(),
   contract: ExportTargetSchema.describe('"path#exportName" of this surface\'s contract: a declared type holding the state it publishes and the inbox other surfaces may send to (SurfaceInbox, @apackdev/sdk/fe). It lives in a leaf module of its own (fe/contract.ts), which the surface\'s machine does not import, so codegen can read it without resolving the machine. Omit it for a surface that publishes nothing: it still receives its own feature\'s system events.').optional(),

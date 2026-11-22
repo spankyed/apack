@@ -169,7 +169,7 @@ A trigger (`kind: 'trigger'`) compiles a DSL track, not a step:
 | `compile(track, trackId, ts, trackKey)` | Track → trigger node entity |
 | `decompile(node)` | Node → track fields (`{ schedule: '0 * * * *' }`) |
 | `persistent?` | Keeps the flow alive after all tracks drain |
-| `register?(node, ctx)` | Runtime hooks per trigger node when the flow actor registers (cron jobs). `ctx` has `flowRunNodeId` and `sendToSystem({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType, payload?, targetFlowId? })` |
+| `register?(node, ctx)` | Runtime hooks per trigger node when the flow actor registers (cron jobs). `ctx` has `flowRunNodeId` and `tell({ role: 'brain' }, { type: 'TRIGGER_BRAIN_EVENT', eventType, payload?, targetFlowId? })` |
 | `queryFields?` | Extra entity fields loaded with the trigger's nodes (`['cronExpression']`) |
 | `validateTrack?(track)` | `{ valid, errors }` before compiling |
 | `validate?(node)` | `{ valid, errors }` for a compiled node on persist |

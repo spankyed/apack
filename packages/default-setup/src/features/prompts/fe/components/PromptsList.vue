@@ -131,7 +131,7 @@ import type { PromptEntity, EARS } from '@apackdev/sdk';
 const props = defineProps<{
   prompts: PromptEntity[];
   categories: Category[];
-  selectedCategories: string[];
+  selectedCategories: readonly string[];
   hasPrompts: boolean;
   hasMore: boolean;
   loadingMore: boolean;
