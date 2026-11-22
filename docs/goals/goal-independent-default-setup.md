@@ -86,6 +86,8 @@ Use the Phase 1 build with a differently named starter and with no starter. Move
 - Change the official selection from A in version 1 to B in version 2. A fresh version 2 profile gets B. Upgrade profiles with A active, disabled, removed or replaced by a same-ID fork. In each case verify the prior choice and data survive a restart, B is offered, and B is installed only after the user accepts.
 - A fresh empty profile and an existing profile whose last surface disappeared can both open Packs and install a pack.
 
+The packaged baseline reproduced both the empty-profile onboarding trap and silent installation of a newly shipped ID. [Starter onboarding and selection baseline](../references/evidence/starter-optional-onboarding.md)
+
 ### Phase 3. Make the external repository the production pack's authoring home
 
 Establish locked, retrievable build inputs on a clean runner. Choose a monorepo source commit and record who owns edits during the transfer so intervening fixes land in the external pack. Transfer the manifest, features, step types, content, tests, facade report, content goldens and redistribution credits. The survey counted 11 features and 13 step types; inventory the actual transfer commit. Keep official-product integration tests in the app repo. [Production manifest](../../packages/default-setup/apack.json) · [Packaged authoring acceptance](../../tests/acceptance/packaged-authoring/test-packaged-authoring-author.sh)
