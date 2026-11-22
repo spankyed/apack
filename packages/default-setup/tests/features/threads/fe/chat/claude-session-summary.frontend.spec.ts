@@ -20,7 +20,7 @@ it('shows a current authenticated terminal disconnect and clears it for a replac
   const native: ClaudeNativeTerminalState = {
     sessionId: 'session', ownerId: 'old', status: 'live', nativePid: 42, cwd: '/test', busy: false, tasks: [],
   }
-  const view = { threadId: 'thread', queueComposer: true, opening: false, output: [] }
+  const view = { threadId: 'thread', opening: false, output: [] }
   terminalViews.value = { main: { ...view, state: native } }
   const root = document.createElement('div')
   document.body.append(root)
@@ -29,7 +29,7 @@ it('shows a current authenticated terminal disconnect and clears it for a replac
   app.mount(root)
   try {
     expect(label()).toBe('Success')
-    terminalViews.value = { main: { ...view, state: { ...native, status: 'error' } } }
+    terminalViews.value = { main: { ...view, state: { ...native, status: 'error' } }, composer: { ...view, queueComposer: true } }
     await nextTick()
     expect(label()).toBe('Disconnected')
 

@@ -398,7 +398,7 @@ const stateConfig = computed(() => {
   const { sessionId, chatState, nativeContinuation } = content.value
   if (threadId && sessionId && nativeContinuation?.sessionId !== sessionId) {
     const views = Object.values(terminalViews.value ?? {}).filter(view =>
-      view.queueComposer && view.threadId === threadId && view.state?.sessionId === sessionId)
+      view.threadId === threadId && view.state?.sessionId === sessionId)
     const reconnecting = views.some(view => view.opening || view.state?.status === 'starting' || view.state?.status === 'live')
     // The last turn can succeed even when the authenticated terminal has since failed.
     if (!reconnecting && views.some(view => view.state?.status === 'error' && view.state.nativePid !== undefined)) {
